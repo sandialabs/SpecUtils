@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <title>Interactive Spectrum Development</title>
+    <script src='d3.v3.min.js'></script>
+    <script type="text/javascript" src="SpectrumChartD3.js"></script>
+    
+    <!-- cassowary JS library for the placement of peak labels - if you know you 
+        wont have any (because input files dont contain peaks), you can leave 
+        this out 
+    -->
+    <!--
+    <script src='c.min.js'></script>
+    -->
+    
+    <link rel="stylesheet" type="text/css" href="SpectrumChartD3.css">
+
+    <script>
+      //some boilerplate to load the JSON file
+      function loadJSON(callback){
+        var xobj = new XMLHttpRequest();
+        xobj.overrideMimeType("application/json");
+        xobj.open( 'GET', 'example_json_input.json', true);
+        xobj.onreadystatechange = function(){
+          if(xobj.readyState==4 /*&& xobj.status=="200"*/ ){
+            callback(xobj.responseText);
+          }
+        };
+        xobj.send(null);
+      }
+
+      function init(){
+        loadJSON(function(response){
+          var spectrum_data = JSON.parse(response);
+
+          //The following loads all spectra defined in the JSON to the same 
+          //  chart.  So if there were three records in the file, there would 
+          //  be three lines on the chart
+          var chart_data = {
+            "spectra": spectrum_data
+          };
+
+          //Maybe set the line colors of each of the spectra to a different color
+          var linecolors = ["black","blue","red"];
+          for (var i = 0; i < chart_data.spectra.length; i++) { 
+            chart_data.spectra[i].lineColor = linecolors[i%linecolors.length];
+          }
+
+          //You might want to livetime normalize all the spectra to the same live time
+          for (var i = 1; i < chart_data.spectra.length; i++) { 
+            chart_data.spectra[i].yScaleFactor = chart_data.spectra[i].liveTime / chart_data.spectra[0].liveTime;
+          }
+
+          /* Some basic chart options.  See SpectrumChartD3.js for available ones.  You can also just pass in null for defaults. */
+          var chart_options = {
+            "title": "Example Chart",
+            "xlabel": "Energy (keV)",
+            "ylabel": "Counts"
+          };
+
+          /* Instantiate the actual chart
+             "chart1" is the id of the <div> that will display this chart - it must already be in the DOM
+          */
+          graph = new SpectrumChartD3("chart1", chart_options );
+          graph.setData( chart_data );
+          graph.setLogY();
+
+          window.addEventListener('resize', function(){ graph.handleResize(); } );
+        });
+      }
+
+  </script>
+
+  </head>
+  <body onload="init()">
+    <div id="chart1" class="chart" oncontextmenu="return false;";></div>
+
+    <!-- Everything bellow here are optional controls you can offer for displaying the spectra: -->
+    <script>
+      var onyscalechange=function(e,t){var c=e.value;"lin"===c?t.setLinearY():"log"===c?t.setLogY():"sqrt"===c&&t.setSqrtY()},ongridychange=function(e,t){t.setGridY(e.checked)},ongridxchange=function(e,t){t.setGridX(e.checked)},onrefgammachange=function(e,t,c){console.log(c);for(var n=[],o=0;o<e.options.length;o++){var s=e.options[o];if(s.selected){var a=-1;c.forEach(function(e,t){e&&e.parent&&e.parent===s.value&&(a=t)}),-1!==a&&n.push(c[a])}}t.setReferenceLines(n)},setShowMouseStats=function(e,t){t.setShowMouseStats(e.checked)},setCompactXAxis=function(e,t){t.setCompactXAxis(e.checked)},setAdjustYAxisPadding=function(e,t){t.setAdjustYAxisPadding(e.checked,e.checked?5:60)},setWheelScrollYAxis=function(e,t){t.setWheelScrollYAxis(e.checked)},setShowAnimation=function(e,t){t.setShowAnimation(e.checked)},setAnimationDuration=function(e,t){t.setAnimationDuration(e)},setShowLegend=function(e,t){t.setShowLegend(e.checked)},setShowUserLabels=function(e,t){t.setShowUserLabels(e.checked)},setShowPeakLabels=function(e,t){t.setShowPeakLabels(e.checked)},setShowNuclideNames=function(e,t){t.setShowNuclideNames(e.checked)},setShowNuclideEnergies=function(e,t){t.setShowNuclideEnergies(e.checked)},setComptonEdge=function(e,t){t.setComptonEdge(e.checked)},setComptonPeaks=function(e,t){t.setComptonPeaks(e.checked)},setComptonPeakAngle=function(e,t){t.setComptonPeakAngle(e)},setEscapePeaks=function(e,t){t.setEscapePeaks(e.checked)},setSumPeaks=function(e,t){t.setSumPeaks(e.checked)},showForegroundPeaks=function(e,t){t.setShowPeaks(0,e.checked)},showTitle=function(e,t){t.setTitle(e.checked?"Example Chart":null)},setXRangeArrows=function(e,t){t.setXRangeArrows(e.checked)},setShowXAxisSliderChart=function(e,t){t.setShowXAxisSliderChart(e.checked)};
+    </script>
+
+    <div style="margin-top: 10px; display: inline-block;"><label>
+        Y Scale:
+        <select onchange="onyscalechange(this,graph)" >
+        <option value="lin" >Linear</option>
+        <option value="log" selected>Log</option>
+        <option value="sqrt">Sqrt</option>
+        </select></label>
+        
+        <label><input type="checkbox" onchange="ongridxchange(this,graph)" >Grid X</label>
+        <label><input type="checkbox" onchange="ongridychange(this,graph)" >Grid Y</label>
+        
+        <br /><label><input type="checkbox" onchange="showForegroundPeaks(this,graph)" checked>Draw foreground peaks</label>
+        <label><input type="checkbox" onchange="showTitle(this,graph)" checked>Show Title</label>
+        
+        <br /><label><input id="legendoption" type="checkbox" onchange="setShowLegend(this,graph);" checked>Draw Legend</label>
+        <label><input type="checkbox" onchange="setCompactXAxis(this,graph);" >Compact x-axis</label>
+        <label><input type="checkbox" onchange="setShowMouseStats(this,graph);" checked>Mouse Position stats</label>
+        <label><input type="checkbox" onchange="setShowAnimation(this,graph)">Show zoom animation with duration: <input type="number" size=3 value="200" min="0" id="animation-duration" oninput="setAnimationDuration(this.value,graph);"><label>ms</label></label>
+        
+        <br /> <label><input type="checkbox" onchange="setShowUserLabels(this,graph);" >Show User Labels</label>
+        <label><input type="checkbox" onchange="setShowPeakLabels(this,graph);" >Show Peak Labels</label>
+        <label><input type="checkbox" onchange="setShowNuclideNames(this,graph);" >Show Nuclide Names</label>
+        <label><input type="checkbox" onchange="setShowNuclideEnergies(this,graph);" >Show Nuclide Energies</label>
+        
+        
+        <br />
+        <label><input type="checkbox" onchange="setAdjustYAxisPadding(this,graph);" checked>Adjust for y-labels</label>
+        <label><input type="checkbox" onchange="setWheelScrollYAxis(this,graph);" checked>Scroll over y-axis zooms-y</label>
+        
+        <br />
+        <label><input type="checkbox" onchange="setComptonEdge(this,graph);" >Show compton edge</label>
+        <label><input type="checkbox" onchange="setComptonPeaks(this,graph);" >Show compton peak energy with angle: <input type="number" size=5 placeholder="180" value="180" max="180" min="0" id="angle-text" oninput="setComptonPeakAngle(this.value,graph);"><label>degrees</label></label>
+        <label><input type="checkbox" onchange="setEscapePeaks(this,graph);" >Show escape peak energies</label>
+        <label><input type="checkbox" onchange="setSumPeaks(this,graph);" >Show sum peak energies</label>
+        
+        <br />
+        <label><input type="checkbox" onchange="setShowXAxisSliderChart(this,graph);">Show x-axis slider chart</label>
+        <label><input type="checkbox" onchange="setXRangeArrows(this,graph)" checked>Show x-axis range continuse arrows</label>
+        
+        </div>
+
+    <script type="text/javascript">
+    </script>
+
+
+  </body>
+</html>
