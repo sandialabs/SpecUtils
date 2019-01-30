@@ -1921,7 +1921,7 @@ std::string get_working_path()
   free( buffer );
   return cwdtemp;
 #else
-  char buffer[MAXPATHLEN];
+  char buffer[PATH_MAX];
   return (getcwd(buffer, sizeof(buffer)) ? std::string(buffer) : std::string(""));
 #endif
 }//std::string get_working_path();
