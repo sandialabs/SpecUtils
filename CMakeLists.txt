@@ -172,7 +172,6 @@ if( SpecUtils_ENABLE_D3_CHART )
 
   list( APPEND OTHER_SUPPORT_FILES
         d3_resources/SpectrumChartD3.js
-        d3_resources/SpectrumChartD3.min.index.js
         d3_resources/SpectrumChartD3.css
   )
 endif( SpecUtils_ENABLE_D3_CHART )
