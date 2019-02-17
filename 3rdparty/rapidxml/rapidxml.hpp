@@ -8,6 +8,15 @@
 
 // A small amount of changes have been made to help implementing SpecUtils; changes are marked with a 'wcjohns'
 
+//I'm in the middle (well, hopefully the middle) of converting things so you can
+//  specify a string by length, rather than requiring the string to be null
+//  terminated to help deal with the poorly formated strings - barely tested!
+//  Needs at least a good go-back through, I'm pretty sure I did some horrible
+//  hacky things to get the MVP.
+#define RAPIDXML_USE_SIZED_INPUT_WCJOHNS 1
+//#include <stdio.h>
+
+
 // If standard library is disabled, user must provide implementations of required functions and typedefs
 #if !defined(RAPIDXML_NO_STDLIB)
     #include <cstdlib>      // For std::size_t
@@ -1425,6 +1434,47 @@ namespace rapidxml
 
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      void parse(Ch *text, Ch * const text_end )
+      {
+        assert(text);
+        
+        // Remove current contents
+        this->remove_all_nodes();
+        this->remove_all_attributes();
+        
+        // Parse BOM, if any
+        parse_bom<Flags>(text,text_end);
+        
+        // Parse children
+        while (1)
+        {
+          // Skip whitespace before node
+          skip<whitespace_pred, Flags>(text,text_end);
+          if( text==text_end || (text+1)==text_end )
+            break;
+          
+          // Parse and append new child
+          if (*text == Ch('<'))
+          {
+            ++text;     // Skip '<'
+            if( text == text_end )
+              break;
+            
+            if (xml_node<Ch> *node = parse_node<Flags>(text,text_end))
+              this->append_node(node);
+          }
+          else
+          {
+            //printf( "WE are %i from end\n", static_cast<int>(text_end-text) );
+            RAPIDXML_PARSE_ERROR("expected <", text);
+          }
+        }
+        
+      }
+#endif
         //! Clears the document by deleting all nodes and clearing the memory pool.
         //! All nodes owned by document pool are destroyed.
         void clear()
@@ -1578,6 +1628,19 @@ namespace rapidxml
             text = tmp;
         }
 
+      
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      // Skip characters until predicate evaluates to true
+      template<class StopPred, int Flags>
+      static void skip(Ch *&text, Ch * const text_end )
+      {
+        Ch *tmp = text;
+        while ( tmp != text_end && StopPred::test(*tmp))
+          ++tmp;
+        text = tmp;
+      }
+#endif
         // Skip characters until predicate evaluates to true while doing the following:
         // - replacing XML character entity references with proper characters (&apos; &amp; &quot; &lt; &gt; &#...;)
         // - condensing whitespace sequences to single space character
@@ -1732,6 +1795,160 @@ namespace rapidxml
 
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<class StopPred, class StopPredPure, int Flags>
+      static Ch *skip_and_expand_character_refs(Ch *&text, Ch * const text_end )
+      {
+        // If entity translation, whitespace condense and whitespace trimming is disabled, use plain skip
+        if (Flags & parse_no_entity_translation &&
+            !(Flags & parse_normalize_whitespace) &&
+            !(Flags & parse_trim_whitespace))
+        {
+          skip<StopPred, Flags>(text,text_end);
+          return text;
+        }
+        
+        // Use simple skip until first modification is detected
+        skip<StopPredPure, Flags>(text,text_end);
+        
+        // Use translation skip
+        Ch *src = text;
+        Ch *dest = src;
+        while ((src-text_end)>6 && StopPred::test(*src))
+        {
+          // If entity translation is enabled
+          if (!(Flags & parse_no_entity_translation))
+          {
+            // Test if replacement is needed
+            if (src[0] == Ch('&'))
+            {
+              switch (src[1])
+              {
+                  
+                  // &amp; &apos;
+                case Ch('a'):
+                  if (src[2] == Ch('m') && src[3] == Ch('p') && src[4] == Ch(';'))
+                  {
+                    *dest = Ch('&');
+                    ++dest;
+                    src += 5;
+                    continue;
+                  }
+                  if (src[2] == Ch('p') && src[3] == Ch('o') && src[4] == Ch('s') && src[5] == Ch(';'))
+                  {
+                    *dest = Ch('\'');
+                    ++dest;
+                    src += 6;
+                    continue;
+                  }
+                  break;
+                  
+                  // &quot;
+                case Ch('q'):
+                  if (src[2] == Ch('u') && src[3] == Ch('o') && src[4] == Ch('t') && src[5] == Ch(';'))
+                  {
+                    *dest = Ch('"');
+                    ++dest;
+                    src += 6;
+                    continue;
+                  }
+                  break;
+                  
+                  // &gt;
+                case Ch('g'):
+                  if (src[2] == Ch('t') && src[3] == Ch(';'))
+                  {
+                    *dest = Ch('>');
+                    ++dest;
+                    src += 4;
+                    continue;
+                  }
+                  break;
+                  
+                  // &lt;
+                case Ch('l'):
+                  if (src[2] == Ch('t') && src[3] == Ch(';'))
+                  {
+                    *dest = Ch('<');
+                    ++dest;
+                    src += 4;
+                    continue;
+                  }
+                  break;
+                  
+                  // &#...; - assumes ASCII
+                case Ch('#'):
+                  if (src[2] == Ch('x'))
+                  {
+                    unsigned long code = 0;
+                    src += 3;   // Skip &#x
+                    while (1)
+                    {
+                      unsigned char digit = internal::lookup_tables<0>::lookup_digits[static_cast<unsigned char>(*src)];
+                      if (digit == 0xFF)
+                        break;
+                      code = code * 16 + digit;
+                      ++src;
+                    }
+                    insert_coded_character<Flags>(dest, code);    // Put character in output
+                  }
+                  else
+                  {
+                    unsigned long code = 0;
+                    src += 2;   // Skip &#
+                    while (1)
+                    {
+                      unsigned char digit = internal::lookup_tables<0>::lookup_digits[static_cast<unsigned char>(*src)];
+                      if (digit == 0xFF)
+                        break;
+                      code = code * 10 + digit;
+                      ++src;
+                    }
+                    insert_coded_character<Flags>(dest, code);    // Put character in output
+                  }
+                  if (*src == Ch(';'))
+                    ++src;
+                  else
+                    RAPIDXML_PARSE_ERROR("expected ;", src);
+                  continue;
+                  
+                  // Something else
+                default:
+                  // Ignore, just copy '&' verbatim
+                  break;
+                  
+              }
+            }
+          }
+          
+          // If whitespace condensing is enabled
+          if (Flags & parse_normalize_whitespace)
+          {
+            // Test if condensing is needed
+            if (whitespace_pred::test(*src))
+            {
+              *dest = Ch(' '); ++dest;    // Put single space in dest
+              ++src;                      // Skip first whitespace char
+              // Skip remaining whitespace chars
+              while (src!=text_end && whitespace_pred::test(*src))
+                ++src;
+              continue;
+            }
+          }
+          
+          // No replacement, only copy character
+          *dest++ = *src++;
+          
+        }
+        
+        // Return new end
+        text = src;
+        return dest;
+        
+      }
+#endif
+      
         ///////////////////////////////////////////////////////////////////////
         // Internal parsing functions
         
@@ -1748,6 +1965,25 @@ namespace rapidxml
             }
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      void parse_bom(Ch *&text, Ch * const text_end )
+      {
+        if( (text_end - text) < 3 )
+          return;
+        
+        // UTF-8?
+        if (static_cast<unsigned char>(text[0]) == 0xEF &&
+            static_cast<unsigned char>(text[1]) == 0xBB &&
+            static_cast<unsigned char>(text[2]) == 0xBF)
+        {
+          text += 3;      // Skup utf-8 bom
+        }
+      }
+#endif
+
+      
         // Parse XML declaration (<?xml...)
         template<int Flags>
         xml_node<Ch> *parse_xml_declaration(Ch *&text)
@@ -1783,6 +2019,46 @@ namespace rapidxml
             return declaration;
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      xml_node<Ch> *parse_xml_declaration(Ch *&text, Ch * const text_end )
+      {
+        if( text == text_end )
+          return 0;
+        
+        // If parsing of declaration is disabled
+        if (!(Flags & parse_declaration_node))
+        {
+          // Skip until end of declaration
+          while (  (text+1)!=text_end && (text[0] != Ch('?') || text[1] != Ch('>')) )
+          {
+            if (!text[0])
+              RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+            ++text;
+          }
+          text += 2;    // Skip '?>'
+          return 0;
+        }
+        
+        // Create declaration
+        xml_node<Ch> *declaration = this->allocate_node(node_declaration);
+        
+        // Skip whitespace before attributes or ?>
+        skip<whitespace_pred, Flags>(text,text_end);
+        
+        // Parse declaration attributes
+        parse_node_attributes<Flags>(text, declaration, text_end);
+        
+        // Skip ?>
+        if ( text==text_end || (text+1)==text_end || text[0] != Ch('?') || text[1] != Ch('>'))
+          RAPIDXML_PARSE_ERROR("expected ?>", text);
+        text += 2;
+        
+        return declaration;
+      }
+#endif
+      
         // Parse XML comment (<!--...)
         template<int Flags>
         xml_node<Ch> *parse_comment(Ch *&text)
@@ -1824,6 +2100,70 @@ namespace rapidxml
             return comment;
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      // Parse XML comment (<!--...)
+      template<int Flags>
+      xml_node<Ch> *parse_comment(Ch *&text, Ch * const text_end)
+      {
+        if((text_end - text) < 3)
+        {
+          text = text_end;
+          return 0;
+        }
+        
+        // If parsing of comments is disabled
+        if (!(Flags & parse_comment_nodes))
+        {
+          // Skip until end of comment
+          while( ((text_end - text) > 3)
+                 && (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>')) )
+          {
+            if ( (text+3)==text_end )
+            {
+              if( Flags & allow_sloppy_parse )
+              {
+                text = text_end;
+                return 0;
+              }
+              RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+            }
+            ++text;
+          }
+          text += 3;     // Skip '-->'
+          return 0;      // Do not produce comment node
+        }
+        
+        // Remember value start
+        Ch *value = text;
+        
+        // Skip until end of comment
+        while ( ((text+3)!=text_end)
+               && (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>')) )
+        {
+          ++text;
+        }
+        
+        if( (text+3)==text_end )
+        {
+          if( !(Flags & allow_sloppy_parse) )
+            RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+          // we'll actually miss out on the last three characters, but wahtever
+        }
+        
+        // Create comment node
+        xml_node<Ch> *comment = this->allocate_node(node_comment);
+        comment->value(value, text - value);
+        
+        // Place zero terminator after comment value
+        if (!(Flags & parse_no_string_terminators))
+          *text = Ch('\0');
+        
+        text += 3;     // Skip '-->'
+        return comment;
+      }
+#endif
+      
         // Parse DOCTYPE
         template<int Flags>
         xml_node<Ch> *parse_doctype(Ch *&text)
@@ -1890,6 +2230,82 @@ namespace rapidxml
 
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      xml_node<Ch> *parse_doctype(Ch *&text, Ch * const text_end )
+      {
+        if( text == text_end )
+          return 0;
+        
+        // Remember value start
+        Ch *value = text;
+        
+        // Skip to >
+        while ( text!=text_end && *text != Ch('>'))
+        {
+          // Determine character type
+          switch (*text)
+          {
+              
+              // If '[' encountered, scan for matching ending ']' using naive algorithm with depth
+              // This works for all W3C test files except for 2 most wicked
+            case Ch('['):
+            {
+              ++text;     // Skip '['
+              int depth = 1;
+              while (depth > 0)
+              {
+                switch (*text)
+                {
+                  case Ch('['): ++depth; break;
+                  case Ch(']'): --depth; break;
+                }
+                ++text;
+                if( text==text_end )
+                {
+                  if( !(Flags & allow_sloppy_parse) )
+                    RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                  else
+                    return 0;
+                }
+              }
+              break;
+            }
+              
+              // Other character, skip it
+            default:
+              ++text;
+              
+          }
+        }
+        
+        if( text==text_end )  //We could try to salvage DOCTYPE, but whatever for now
+          return 0;
+        
+        // If DOCTYPE nodes enabled
+        if (Flags & parse_doctype_node)
+        {
+          // Create a new doctype node
+          xml_node<Ch> *doctype = this->allocate_node(node_doctype);
+          doctype->value(value, text - value);
+          
+          // Place zero terminator after value
+          if (!(Flags & parse_no_string_terminators))
+            *text = Ch('\0');
+          
+          text += 1;      // skip '>'
+          return doctype;
+        }
+        else
+        {
+          text += 1;      // skip '>'
+          return 0;
+        }
+        
+      }
+#endif
+      
         // Parse PI
         template<int Flags>
         xml_node<Ch> *parse_pi(Ch *&text)
@@ -1947,6 +2363,85 @@ namespace rapidxml
                 return 0;
             }
         }
+      
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      xml_node<Ch> *parse_pi(Ch *&text, Ch * const text_end )
+      {
+        if( text == text_end )
+          return 0;
+        
+        // If creation of PI nodes is enabled
+        if (Flags & parse_pi_nodes)
+        {
+          // Create pi node
+          xml_node<Ch> *pi = this->allocate_node(node_pi);
+          
+          // Extract PI target name
+          Ch *name = text;
+          skip<node_name_pred, Flags>(text, text_end);
+          if (text == name)
+            RAPIDXML_PARSE_ERROR("expected PI target", text);
+          pi->name(name, text - name);
+          
+          // Skip whitespace between pi target and pi
+          skip<whitespace_pred, Flags>(text, text_end);
+          
+          // Remember start of pi
+          Ch *value = text;
+          
+          // Skip to '?>'
+          while (text[0] != Ch('?') || text[1] != Ch('>'))
+          {
+            if ( (text+1) == text_end )
+            {
+              if( (Flags & allow_sloppy_parse) )
+              {
+                text = text_end;
+                break;
+              }else
+                RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+            }
+            ++text;
+          }
+          
+          // Set pi value (verbatim, no entity expansion or whitespace normalization)
+          pi->value(value, text - value);     
+          
+          // Place zero terminator after name and value
+          if (!(Flags & parse_no_string_terminators))
+          {
+            pi->name()[pi->name_size()] = Ch('\0');
+            pi->value()[pi->value_size()] = Ch('\0');
+          }
+          
+          text += 2;                          // Skip '?>'
+          return pi;
+        }
+        else
+        {
+          // Skip to '?>'
+          while ( (text[0] != Ch('?') || text[1] != Ch('>')) )
+          {
+            if( (text+1) == text_end )
+            {
+              if( !(Flags & allow_sloppy_parse) )
+                RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+              else
+              {
+                text = text_end;
+                return 0;
+              }
+            }
+              
+            ++text;
+          }
+          text += 2;    // Skip '?>'
+          return 0;
+        }
+      }
+#endif
 
         // Parse and append data
         // Return character that ends data.
@@ -2008,6 +2503,66 @@ namespace rapidxml
             return *text;
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      Ch parse_and_append_data(xml_node<Ch> *node, Ch *&text, Ch *contents_start, Ch * const text_end )
+      {
+        // Backup to contents start if whitespace trimming is disabled
+        if (!(Flags & parse_trim_whitespace))
+          text = contents_start;
+        
+        // Skip until end of data
+        Ch *value = text, *end;
+        if (Flags & parse_normalize_whitespace)
+          end = skip_and_expand_character_refs<text_pred, text_pure_with_ws_pred, Flags>(text, text_end);
+        else
+          end = skip_and_expand_character_refs<text_pred, text_pure_no_ws_pred, Flags>(text, text_end);
+        
+        // Trim trailing whitespace if flag is set; leading was already trimmed by whitespace skip after >
+        if (Flags & parse_trim_whitespace)
+        {
+          if (Flags & parse_normalize_whitespace)
+          {
+            // Whitespace is already condensed to single space characters by skipping function, so just trim 1 char off the end
+            if (*(end - 1) == Ch(' '))
+              --end;
+          }
+          else
+          {
+            // Backup until non-whitespace character is found
+            while (whitespace_pred::test(*(end - 1)))
+              --end;
+          }
+        }
+        
+        // If characters are still left between end and value (this test is only necessary if normalization is enabled)
+        // Create new data node
+        if (!(Flags & parse_no_data_nodes))
+        {
+          xml_node<Ch> *data = this->allocate_node(node_data);
+          data->value(value, end - value);
+          node->append_node(data);
+        }
+        
+        // Add data to parent node if no data exists yet
+        if (!(Flags & parse_no_element_values))
+          if (*node->value() == Ch('\0'))
+            node->value(value, end - value);
+        
+        // Place zero terminator after value
+        if (!(Flags & parse_no_string_terminators))
+        {
+          Ch ch = *text;
+          *end = Ch('\0');
+          return ch;      // Return character that ends data; this is required because zero terminator overwritten it
+        }
+        
+        // Return character that ends data
+        return *text;
+      }
+#endif
+      
         // Parse CDATA
         template<int Flags>
         xml_node<Ch> *parse_cdata(Ch *&text)
@@ -2046,7 +2601,68 @@ namespace rapidxml
             text += 3;      // Skip ]]>
             return cdata;
         }
+      
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      xml_node<Ch> *parse_cdata(Ch *&text, Ch * const text_end )
+      {
+        if( text == text_end || (text+1) == text_end || (text+2) == text_end )
+        {
+          text = text_end;
+          return 0;
+        }
         
+        // If CDATA is disabled
+        if (Flags & parse_no_data_nodes)
+        {
+          // Skip until end of cdata
+          while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
+          {
+            ++text;
+            if( (text+2) == text_end )
+            {
+              if( (Flags & allow_sloppy_parse) ) //wcjohns added in
+              {
+                text = text_end;
+                return 0;
+              }else
+                RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+            }
+          }
+          text += 3;      // Skip ]]>
+          return 0;       // Do not produce CDATA node
+        }
+        
+        // Skip until end of cdata
+        Ch *value = text;
+        while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
+        {
+          ++text;
+          if( (text+2) == text_end )
+          {
+            if( (Flags & allow_sloppy_parse) ) //wcjohns added in
+            {
+              text = text_end;
+              return 0;
+            }else
+              RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+          }
+        }
+        
+        // Create new cdata node
+        xml_node<Ch> *cdata = this->allocate_node(node_cdata);
+        cdata->value(value, text - value);
+        
+        // Place zero terminator after value
+        if (!(Flags & parse_no_string_terminators))
+          *text = Ch('\0');
+        
+        text += 3;      // Skip ]]>
+        return cdata;
+      }
+#endif
+      
         // Parse element node
         template<int Flags>
         xml_node<Ch> *parse_element(Ch *&text)
@@ -2100,6 +2716,101 @@ namespace rapidxml
             return element;
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      xml_node<Ch> *parse_element(Ch *&text, Ch * const text_end )
+      {
+        //assert( text[-1]=='<' );
+        // Extract element name
+        
+        //Skip over leading whitespace if we are being sloppy - this can result
+        //  in a garbage name/tag, but were already at the dump, so might as
+        //  well try to salvage things - we can always through them out later.
+        if( Flags & allow_sloppy_parse )
+          skip<whitespace_pred, Flags>(text,text_end);
+        
+        Ch *name = text;
+        skip<node_name_pred, Flags>(text,text_end);
+        if (text == name)
+        {
+          if( (Flags & allow_sloppy_parse) && (text==text_end || (text+1)==text_end) )
+          {
+            return 0;  //file got truncated right after a '<'
+          }else if( (Flags & allow_sloppy_parse) )
+          {
+            //Maybe we have something like "< 1881 1851 1875 ... >"
+            //Skip to the next '<' or '>' character, and move on...
+            while( text != text_end )
+            {
+              if( (*text)!=Ch('<') && (*text)!=Ch('>') )
+              {
+                ++text;
+                return 0;
+              }
+              ++text;
+            }
+            return 0;
+          }else
+          {
+            RAPIDXML_PARSE_ERROR("expected element name", text);
+          }
+        }
+        
+        // Create element node
+        xml_node<Ch> *element = this->allocate_node(node_element);
+        
+        element->name(name, text - name);
+        
+        // Skip whitespace between element name and attributes or >
+        skip<whitespace_pred, Flags>(text, text_end);
+        
+        // Parse attributes, if any
+        parse_node_attributes<Flags>(text, element, text_end);
+        
+        // Determine ending type
+        if (*text == Ch('>'))
+        {
+          ++text;
+          parse_node_contents<Flags>(text, element, text_end);
+        }
+        else if (*text == Ch('/'))
+        {
+          ++text;
+          
+          //Let there be a whitespace like </ TagName>.
+          if( Flags & allow_sloppy_parse )
+            skip<whitespace_pred, Flags>(text,text_end);
+          
+          if (*text != Ch('>'))
+          {
+            //printf( "text=%.*s\n", 40, text );
+            RAPIDXML_PARSE_ERROR("expected >", text);
+          }
+          ++text;
+        }
+        else
+        {
+          if( (Flags & allow_sloppy_parse) )
+          {
+            if( *text == Ch('\0') || text==text_end || (text+1)==text_end )
+              return element;
+          }
+          
+          //printf( "text=%.*s\n", 40, text );
+          RAPIDXML_PARSE_ERROR("expected >", text);
+        }
+        
+        
+        // Place zero terminator after name
+        if (!(Flags & parse_no_string_terminators))
+          element->name()[element->name_size()] = Ch('\0');
+        
+        // Return parsed element
+        return element;
+      }
+#endif
+      
         // Determine node type, and parse it
         template<int Flags>
         xml_node<Ch> *parse_node(Ch *&text)
@@ -2186,6 +2897,107 @@ namespace rapidxml
             }
         }
 
+      
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      xml_node<Ch> *parse_node(Ch *&text, Ch * const text_end )
+      {
+        //assert( text[-1] == '<' );
+        
+        if( text == text_end || (text+1)==text_end )
+          return 0;
+        
+        // Parse proper node type
+        switch (text[0])
+        {
+            
+            // <...
+          default:
+            // Parse and append element node
+            return parse_element<Flags>(text,text_end);
+            
+            // <?...
+          case Ch('?'):
+            ++text;     // Skip ?
+            if ( ((text_end - text) > 3) &&
+                (text[0] == Ch('x') || text[0] == Ch('X')) &&
+                (text[1] == Ch('m') || text[1] == Ch('M')) &&
+                (text[2] == Ch('l') || text[2] == Ch('L')) &&
+                whitespace_pred::test(text[3]))
+            {
+              // '<?xml ' - xml declaration
+              text += 4;      // Skip 'xml '
+              return parse_xml_declaration<Flags>(text,text_end);
+            }
+            else
+            {
+              // Parse PI
+              return parse_pi<Flags>(text,text_end);
+            }
+            
+            // <!...
+          case Ch('!'):
+            
+            // Parse proper subset of <! node
+            switch (text[1])
+          {
+              
+              // <!-
+            case Ch('-'):
+              if (text[2] == Ch('-'))
+              {
+                // '<!--' - xml comment
+                text += 3;     // Skip '!--'
+                return parse_comment<Flags>(text,text_end);
+              }
+              break;
+              
+              // <![
+            case Ch('['):
+              if (text[2] == Ch('C') && text[3] == Ch('D') && text[4] == Ch('A') &&
+                  text[5] == Ch('T') && text[6] == Ch('A') && text[7] == Ch('['))
+              {
+                // '<![CDATA[' - cdata
+                text += 8;     // Skip '![CDATA['
+                return parse_cdata<Flags>(text,text_end);
+              }
+              break;
+              
+              // <!D
+            case Ch('D'):
+              if (text[2] == Ch('O') && text[3] == Ch('C') && text[4] == Ch('T') &&
+                  text[5] == Ch('Y') && text[6] == Ch('P') && text[7] == Ch('E') &&
+                  whitespace_pred::test(text[8]))
+              {
+                // '<!DOCTYPE ' - doctype
+                text += 9;      // skip '!DOCTYPE '
+                return parse_doctype<Flags>(text,text_end);
+              }
+              
+          }   // switch
+            
+            // Attempt to skip other, unrecognized node types starting with <!
+            ++text;     // Skip !
+            while (*text != Ch('>'))
+            {
+              if( text == text_end )
+              {
+                if( (Flags & allow_sloppy_parse) )
+                {
+                  return 0;
+                }else
+                  RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+              }
+              ++text;
+            }
+            ++text;     // Skip '>'
+            return 0;   // No node recognized
+            
+        }
+      }
+#endif
+      
         // Parse contents of the node - children, data etc.
         template<int Flags>
         void parse_node_contents(Ch *&text, xml_node<Ch> *node)
@@ -2238,6 +3050,11 @@ namespace rapidxml
                     {
                         // Child node
                         ++text;     // Skip '<'
+                      
+                      //
+                      //if( (*text)==Ch('<') || whitespace_pred::test(*text) )
+                      //  ++text;
+                      
                         if (xml_node<Ch> *child = parse_node<Flags>(text))
                             node->append_node(child);
                     }
@@ -2260,7 +3077,116 @@ namespace rapidxml
                 }
             }
         }
+      
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      void parse_node_contents(Ch *&text, xml_node<Ch> *node, Ch * const text_end )
+      {
+        // For all children and text
+        if( text == text_end )
+          return;
         
+        while (1)
+        {
+          if( text == text_end || (text+1) == text_end )
+          {
+            if( (Flags & allow_sloppy_parse) ) //wcjohns added in
+              return;  //Make it so incomplete N42 files will still parse even if all tags are not closed...
+            else
+              RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+          }
+          
+          // Skip whitespace between > and node contents
+          Ch *contents_start = text;      // Store start of node contents before whitespace is skipped
+          skip<whitespace_pred, Flags>(text, text_end);
+          Ch next_char = *text;
+          
+          // After data nodes, instead of continuing the loop, control jumps here.
+          // This is because zero termination inside parse_and_append_data() function
+          // would wreak havoc with the above code.
+          // Also, skipping whitespace after data nodes is unnecessary.
+        after_data_node:
+          
+          // Determine what comes next: node closing, child node, data node, or 0?
+          switch (next_char)
+          {
+              
+              // Node closing or child node
+            case Ch('<'):
+              if (text[1] == Ch('/'))
+              {
+                //If sloppy parse is allowed, and closing tag name doesnt match
+                //  opening name, keep position at begging of tag, and return
+                //  - this assumes a closing tag was left out.  This happens in
+                //  html for example with <li>, <tr>, and <td>.
+                //
+                // Note that right here we dont have the context to know who
+                //  the node's parent is, so we cant walk up the chain to do a
+                //  sanity check
+                if( (Flags & allow_sloppy_parse) )
+                {
+                  Ch * const name_start = text+2;
+                  Ch *name_end = name_start;
+                  skip<node_name_pred, Flags>(name_end, text_end);
+                  if( !internal::compare(node->name(), node->name_size(), name_start, name_end - name_start, true) )
+                  {
+                    return;
+                  }
+                }//if( sloppy )
+                
+                // Node closing
+                text += 2;      // Skip '</'
+                if (Flags & parse_validate_closing_tags)
+                {
+                  // Skip and validate closing tag name
+                  //wcjohns ToDo: if sloppy parse is enabled, and the closing tag doesnt match opening tag,
+                  //              should set text to begging of '</' and return.  This way the next node up can try to close.
+                  //              This would be to handle like HTML non-requiqred closing tag elements
+                  
+                  Ch *closing_name = text;
+                  skip<node_name_pred, Flags>(text, text_end);
+                  if (!internal::compare(node->name(), node->name_size(), closing_name, text - closing_name, true))
+                    RAPIDXML_PARSE_ERROR("invalid closing tag name", text);
+                }
+                else
+                {
+                  // No validation, just skip name
+                  skip<node_name_pred, Flags>(text, text_end);
+                }
+                // Skip remaining whitespace after node name
+                skip<whitespace_pred, Flags>(text, text_end);
+                if (*text != Ch('>'))
+                {
+                  //printf( "3 text=%.*s\n", 40, text );
+                  RAPIDXML_PARSE_ERROR("expected >", text);
+                }
+                ++text;     // Skip '>'
+                return;     // Node closed, finished parsing contents
+              }
+              else
+              {
+                // Child node
+                ++text;     // Skip '<'
+                if (xml_node<Ch> *child = parse_node<Flags>(text, text_end))
+                  node->append_node(child);
+              }
+              break;
+              
+            case Ch('\0'):
+              ++text;
+              break;
+              
+              // Data node
+            default:
+              next_char = parse_and_append_data<Flags>(node, text, contents_start, text_end );
+              goto after_data_node;   // Bypass regular processing after data nodes
+              
+          }
+        }
+      }
+#endif
+      
         // Parse XML attributes of the node
         template<int Flags>
         void parse_node_attributes(Ch *&text, xml_node<Ch> *node)
@@ -2354,6 +3280,210 @@ namespace rapidxml
             }
         }
 
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+      //wcjohns added 20190213 for non-null terminated txt
+      template<int Flags>
+      void parse_node_attributes(Ch *&text, xml_node<Ch> *node, Ch * const text_end )
+      {
+        // For all attributes
+        while (text!=text_end && attribute_name_pred::test(*text))
+        {
+          // Extract attribute name
+          Ch *name = text;
+          ++text;     // Skip first character of attribute name
+          skip<attribute_name_pred, Flags>(text,text_end);
+          if (text == name || text==text_end )
+            RAPIDXML_PARSE_ERROR("expected attribute name", name);
+          
+          Ch * const name_end = text;
+          
+          // Skip whitespace after attribute name
+          skip<whitespace_pred, Flags>(text,text_end);
+          
+          //printf( "name=%.*s\n", 40, name );
+          
+          if( (Flags & allow_sloppy_parse) ) //added by wcjohns to cover case of wonky N42 files that have mal-formed attributes
+          {
+            if( *text == Ch('>') )  //For when some barbarian didnt assign a value to an attribute
+            {
+              //Note:
+              //  -attribute will not have a value - not usually the case.
+              //  -attribute name will not be null-terminated (until either next
+              //if (!(Flags & parse_no_string_terminators))
+              //attribute->name()[attribute->name_size()] = 0;
+              
+              break;
+            }
+          }
+          
+          // Skip =
+          if (*text != Ch('='))
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              continue;
+            }else
+            {
+              RAPIDXML_PARSE_ERROR("expected =", text);
+            }
+          }
+          ++text;
+          
+          if( text == text_end )
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              break;
+            }else
+            {
+              RAPIDXML_PARSE_ERROR("expected attribute value", text);
+            }
+          }
+          
+          
+          Ch *valstart = text;
+          
+          // Skip whitespace after =
+          skip<whitespace_pred, Flags>(text,text_end);
+          
+          if( text == text_end )
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              break;
+            }else
+            {
+              RAPIDXML_PARSE_ERROR("expected attribute value", text);
+            }
+          }
+          
+          // Create new attribute
+          xml_attribute<Ch> *attribute = this->allocate_attribute();
+          attribute->name(name, name_end - name);
+          node->append_attribute(attribute);
+          
+          
+          // Add terminating zero after name
+          if (!(Flags & parse_no_string_terminators))
+            attribute->name()[attribute->name_size()] = 0;
+          
+          
+          // Skip quote and remember if it was ' or "
+          Ch quote = *text;
+          
+          //Some spectrum files dont quote a simple attribute value - lets let them do this, but not allow them to have spaces or anything
+          if (quote != Ch('\'') && quote != Ch('"'))
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              if( quote == Ch('>') )
+              {
+                attribute->value(NULL, 0);
+                return;
+              }
+              
+              //If there is a whitespace immediately folowing the '=' sign, and no quote, assume they forgot to include value....
+              if( whitespace_pred::test(*valstart) )
+              {
+                text = valstart;
+                attribute->value(NULL, 0);
+                return;
+              }
+              
+            }//if( (Flags & allow_sloppy_parse) )
+            
+            if( !(Flags & allow_sloppy_parse) )
+              RAPIDXML_PARSE_ERROR("CASE 1: expected ' or \"", text);
+          }
+          
+          ++text;
+          if( text == text_end )
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              attribute->value(NULL, 0);
+              return;
+            }
+            RAPIDXML_PARSE_ERROR("expected attribute value", text);
+          }
+          
+          // Extract attribute value and expand char refs in it
+          Ch *value = text, *end;
+          const int AttFlags = Flags & ~parse_normalize_whitespace;   // No whitespace normalization in attributes
+          if (quote == Ch('\''))
+            end = skip_and_expand_character_refs<attribute_value_pred<Ch('\'')>, attribute_value_pure_pred<Ch('\'')>, AttFlags>(text,text_end);
+          else if( quote == Ch('\"') )
+            end = skip_and_expand_character_refs<attribute_value_pred<Ch('"')>, attribute_value_pure_pred<Ch('"')>, AttFlags>(text,text_end);
+          else //else, dont expand characters,
+          {
+            Ch *start_text = text;
+            //We have a poorly formed attribute value, assume first whitespace ends the attribute value...
+            while( text != text_end && !whitespace_pred::test(*text) && (*text)!=Ch('>') && (*text)!=Ch('\"') && (*text)!=Ch('\'')  )
+              ++text;
+            //printf( "Skipped ahead %i\n", static_cast<int>(text - start_text) );
+            end = text;
+          }
+          
+          
+          // Set attribute value
+          attribute->value(value, end - value);
+          
+          // Make sure that end quote is present
+          if ( (quote==Ch('\"') || quote==Ch('\'')) && ( text==text_end || (text+1)==text_end || *text != quote) )
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              if( text==text_end || (text+1)==text_end )
+              {
+                attribute->value(0, 0);
+                return;
+              }
+            }
+            
+            RAPIDXML_PARSE_ERROR("CASE 2: expected ' or \"", text);
+          }
+          
+          if( text != text_end && ((*text)==Ch('\"') || (*text)==Ch('\'')) )
+          {
+            //Normal quotes here
+            ++text;     // Skip quote
+            // Add terminating zero after value
+            if (!(Flags & parse_no_string_terminators))
+              attribute->value()[attribute->value_size()] = 0;
+          }else
+          {
+            if( attribute->value_size()==0 )
+            {
+              attribute->value(0, 0);
+            }else
+            {
+              if( text != text_end )
+              {
+                if (!(Flags & parse_no_string_terminators))
+                {
+                  if( (*text) == Ch('>') )
+                  {
+                    attribute->value()[attribute->value_size()-1] = 0;
+                  }else
+                  {
+                    ++text;
+                    attribute->value()[attribute->value_size()] = 0;
+                  }
+                }
+              }else
+              {
+                if (!(Flags & parse_no_string_terminators))
+                  attribute->value()[attribute->value_size()-1] = 0;
+              }
+            }
+          }
+          
+          // Skip whitespace after attribute value
+          skip<whitespace_pred, Flags>(text,text_end);
+        }
+      }
+#endif
+      
     };
 
     //! \cond internal

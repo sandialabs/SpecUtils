@@ -59,7 +59,26 @@ namespace rapidxml
                 throw runtime_error("error reading stream");
             m_data.push_back(0);
         }
-        
+      
+#if( !RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+        //! Added by wcjohns.  Checks up to the `max_check` leading characters
+        //!  to see if they have a value of zero, and if so, replaces them with
+        //!  `replace_char`.
+        //! This function necassary due to some N42 files having zero valued
+        //! bytes in the leading meta-data.
+        //! Will hopefully be removed once sized input is finished and tested
+        //! See refDXMA3HSRA6.
+        void check_for_premature_nulls( const size_t max_check, const char replace_char )
+        {
+          const size_t ncheck = m_data.empty() ? 0 : std::min(max_check, m_data.size()-1);
+          for( size_t i = 0; i < ncheck; ++i )
+          {
+            if( m_data[i] == 0 )
+              m_data[i] = replace_char;
+          }
+        }//
+#endif
+      
         //! Gets file data.
         //! \return Pointer to data of file.
         Ch *data()

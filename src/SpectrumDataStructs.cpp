@@ -17,7 +17,6 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-
 #include "SpecUtils_config.h"
 
 #if( USE_D3_EXPORTING )
@@ -1662,6 +1661,43 @@ bool is_candidate_n42_file( const char * data )
 }//bool is_candidate_n42_file( const char * data )
 
 
+bool is_candidate_n42_file( const char * data, const char * const data_end )
+{
+  if( !data || data_end <= data )
+    return false;
+ 
+  const size_t datalen = data_end - data;
+  
+  if( datalen < 512 )
+    return false;
+  
+  //If smaller than 512 bytes, or doesnt contain a magic_strs string, bail
+  const char *magic_strs[] = { "N42", "RadInstrumentData", "Measurement",
+    "N42InstrumentData", "ICD1", "HPRDS",
+  };
+  
+  size_t nlength = 0;
+  for( size_t i = 0; i < 512; ++i )
+  {
+    nlength += (data[i] ? 1 : 0);
+  }
+  
+  //Allow for max of 8 zero bytes...
+  if( nlength+8 < 512 )
+    return false;
+  
+  const string filebegining( data, data+512 );
+  
+  for( const char *substr : magic_strs )
+  {
+    if( UtilityFunctions::icontains( filebegining, substr ) )
+      return true;
+  }
+  
+  return false;
+}//bool is_candidate_n42_file( const char * data, const char * const data_end )
+
+
 void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
                              DetectorAnalysis &analysis )
 {
@@ -2829,7 +2865,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
     channel_data_node = datanode;
 
   
-  const bool compressed_zeros = iequals(compress_type, "CountedZeroes");
+  const bool compressed_zeros = icontains(compress_type, "CountedZeroes");
   
   //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
   UtilityFunctions::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
@@ -13986,7 +14022,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
             auto pos = lower_bound(begin(sample_nums_vec), end(sample_nums_vec), sample_num );
             sn = (pos - begin(sample_nums_vec));
           }
-          snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey %i", sn );
+          snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey %i", sn );  //xsd:ID: Spaces arent allowed!  Must start with a letter or underscore, and can only contain letters, digits, underscores, hyphens, and periods.
         }
       }else
       {
@@ -15308,7 +15344,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         UtilityFunctions::split_to_floats( char_data, char_data_len, *gamma_counts );
       
         rapidxml::xml_attribute<char> *comp_att = channel_data_node->first_attribute( "compressionCode", 15 );
-        if( comp_att && XML_VALUE_ICOMPARE(comp_att, "CountedZeroes") )
+        if( icontains( xml_value_str(comp_att), "CountedZeroes") )  //( comp_att && XML_VALUE_ICOMPARE(comp_att, "CountedZeroes") )
           expand_counted_zeros( *gamma_counts, *gamma_counts );
       }//if( channel_data_node && channel_data_node->value() )
 
@@ -15371,28 +15407,30 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
             cerr << "No calibration information for gamma spcetrum claiming to "
                  << "have calibration data '" << detnam
                  << "' skipping" << endl;
-            continue;
-          }//if( calib_iter == calibrations_ptr->end() )
-      
-          MeasurementCalibInfo &calib = calib_iter->second;
-      
-          calib.nbin = meas->gamma_counts_->size();
-          calib.fill_binning();
-      
-          if( !calib.binning )
+            if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
+              continue;
+          }else
           {
-            cerr << "Calibration somehow invalid for '" << detnam
-                 << "', skipping filling out." << endl;
-            continue;
-          }//if( !calib.binning )
+            MeasurementCalibInfo &calib = calib_iter->second;
+      
+            calib.nbin = meas->gamma_counts_->size();
+            calib.fill_binning();
+      
+            if( !calib.binning )
+            {
+              cerr << "Calibration somehow invalid for '" << detnam
+                   << "', skipping filling out." << endl;
+              continue;
+            }//if( !calib.binning )
           
-          meas->calibration_coeffs_ = calib.coefficients;
-          meas->deviation_pairs_    = calib.deviation_pairs_;
-          meas->channel_energies_   = calib.binning;
-          meas->energy_calibration_model_  = calib.equation_type;
+            meas->calibration_coeffs_ = calib.coefficients;
+            meas->deviation_pairs_    = calib.deviation_pairs_;
+            meas->channel_energies_   = calib.binning;
+            meas->energy_calibration_model_  = calib.equation_type;
           
-          if( calib.calib_id.size() )
-            meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
+            if( calib.calib_id.size() )
+              meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
+          }//if( calib_iter == calibrations_ptr->end() ) / else
         }//if( calibrations_ptr )
 
         meas->contained_neutron_ = false;
@@ -16221,7 +16259,7 @@ bool MeasurementInfo::load_micro_raider_file( const std::string &filename )
   try
   {
     reset();
-    ::rapidxml::file<char> input_file( input );
+    rapidxml::file<char> input_file( input );
     const bool success = load_from_micro_raider_from_data( input_file.data() );
     
     if( success )
@@ -16452,8 +16490,13 @@ bool MeasurementInfo::load_from_N42( std::istream &input )
   
   try
   {
-    ::rapidxml::file<char> input_file( input );
+    rapidxml::file<char> input_file( input );
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+    return MeasurementInfo::load_N42_from_data( input_file.data(), input_file.data()+input_file.size() );
+#else
+    input_file.check_for_premature_nulls( 2048, ' ' );
     return MeasurementInfo::load_N42_from_data( input_file.data() );
+#endif
   }catch( std::exception & )
   {
     input.clear();
@@ -16473,7 +16516,12 @@ bool MeasurementInfo::load_N42_file( const std::string &filename )
   try
   {
     rapidxml::file<char> input_file( filename.c_str() );  //throws runtime_error upon failure
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+    const bool loaded = MeasurementInfo::load_N42_from_data( input_file.data(), input_file.data()+input_file.size() );
+#else
+    input_file.check_for_premature_nulls( 2048, ' ' );
     const bool loaded = MeasurementInfo::load_N42_from_data( input_file.data() );
+#endif
     
     if( !loaded )
       throw runtime_error( "Failed to load" );
@@ -16517,6 +16565,36 @@ bool MeasurementInfo::load_N42_from_data( char *data )
   return true;
 }//bool load_N42_from_data( char *data )
 
+
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+bool MeasurementInfo::load_N42_from_data( char *data, char * const data_end )
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  try
+  {
+    reset();
+    
+    if( !is_candidate_n42_file(data,data_end) )
+      return false;
+    
+    rapidxml::xml_document<char> doc;
+    doc.parse<rapidxml::parse_trim_whitespace|rapidxml::allow_sloppy_parse>( data, data_end );
+    rapidxml::xml_node<char> *document_node = doc.first_node();
+    
+    const bool loaded = load_from_N42_document( document_node );
+    
+    if( !loaded )
+      throw runtime_error( "Failed to load" );
+  }catch(...)
+  {
+    reset();
+    return false;
+  }
+  
+  return true;
+}//bool load_N42_from_data(...)
+#endif
 
 
 

@@ -42,6 +42,10 @@
 #include "SpecUtils/SpecUtilsAsync.h"
 
 
+//Temporary include to pull in RAPIDXML_USE_SIZED_INPUT_WCJOHNS
+//#include "rapidxml/rapidxml.hpp"
+#define RAPIDXML_USE_SIZED_INPUT_WCJOHNS 1
+
 /*
 Shortcommings that wcjohns should be addressed
   -Many of the ICD1 fields possible are not checked for
@@ -419,6 +423,10 @@ bool likely_not_spec_file( const std::string &file );
 //Checks the first 512 bytes of data for a few magic strings that *should* be
 //  in N42 files; if it contains any of them, it returns true
 bool is_candidate_n42_file( const char * data );
+
+//Same as other version of this function, but input does not need to be null
+//  terminated.
+bool is_candidate_n42_file( const char * data, const char * const data_end );
 
 //setAnalysisInformation(...): adds to analysis the information
 //  in AnalysisResults node.  Currently only adds the NuclideAnalysis to
@@ -1387,6 +1395,13 @@ public:
  
   //load_N42_from_data(...): raw xml file data - must be 0 terminated
   virtual bool load_N42_from_data( char *data );
+  
+#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
+  /** Load data from raw xml file data specified by data begin and end - does
+      not need to be null terminated.
+   */
+  virtual bool load_N42_from_data( char *data, char * const data_end );
+#endif
   
   //load_from_iaea_spc(...) and load_from_binary_spc(...) reset the
   //  input stream to original position and sets *this to reset state upon
