@@ -1437,6 +1437,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
       "%Y%m%d%n%H%M%S",  //20100115T232115
       (middle ? "%m/%d/%Y%n%I:%M %p" : "%d/%m/%Y%n%I:%M %p"), //11/18/2018 10:04 AM
       (only ? "" : (middle ? "%d/%m/%Y%n%I:%M %p" : "%m/%d/%Y%n%I:%M %p")),
+      "%Y-%m-%d%n%H-%M-%S", //2018-10-09T19-34-31_27 (not sure what the "_27" exactly means)
       "%d-%b-%Y",           //"00-Jan-2000 "
       "%Y/%m/%d", //"2010/01/18"
       "%Y-%m-%d" //"2010-01-18"

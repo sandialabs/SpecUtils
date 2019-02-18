@@ -2771,8 +2771,6 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
       source_type_ = IntrinsicActivity;
     else
       source_type_ = UnknownSourceType;
-    
-    
   }//if( src_type_node )
   
   const rapidxml::xml_attribute<char> *id_att = spectrum->first_attribute( "ID", 2, false );
@@ -2865,7 +2863,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
     channel_data_node = datanode;
 
   
-  const bool compressed_zeros = icontains(compress_type, "CountedZeroes");
+  const bool compressed_zeros = icontains(compress_type, "CountedZeroe");
   
   //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
   UtilityFunctions::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
@@ -2873,7 +2871,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
 
   if( compressed_zeros )
     expand_counted_zeros( *contents, *contents );
-  else if( (compress_type!="") && (contents->size()>2) && !UtilityFunctions::iequals(compress_type, "None" ) )
+  else if( (compress_type!="") && (contents->size()>2) && !icontains(compress_type, "Non" ) )
   {
     stringstream msg;
     msg << SRC_LOCATION << "\n\tUnknown spectrum compression type: '"
@@ -3018,12 +3016,20 @@ void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml
     ++ncalnodes;
   }
   
+  if( !ncalnodes && doc_node && doc_node->parent() )
+  {
+    for( auto node = xml_first_node_nso(doc_node->parent(), "Calibration", xmlns); node; node = XML_NEXT_TWIN(node) )
+      ++ncalnodes;
+  }
+  
   if( cal_ids.empty() && ncalnodes != 1 )
     return;
   
-  for( const rapidxml::xml_node<char> *cal_node = xml_first_node_nso( doc_node, "Calibration", xmlns );
-       cal_node;
-       cal_node = XML_NEXT_TWIN(cal_node) )
+  auto *cal_node = xml_first_node_nso( doc_node, "Calibration", xmlns );
+  if( !cal_node && doc_node  )
+    cal_node = xml_first_node_nso(doc_node->parent(), "Calibration", xmlns);
+  
+  for( ; cal_node; cal_node = XML_NEXT_TWIN(cal_node) )
   {
     const rapidxml::xml_attribute<char> *id_att = cal_node->first_attribute( "ID", 2, false );
 
@@ -12427,10 +12433,8 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             meas->channel_energies_.reset();
           
           std::shared_ptr<const vector<float> > oldcounts = meas->gamma_counts_;
-          std::shared_ptr<vector<float> > lowerbins
-          = std::make_shared<vector<float> >( oldcounts->begin(), oldcounts->begin()+1024 );
-          std::shared_ptr<vector<float> > upperbins
-          = std::make_shared<vector<float> >( oldcounts->begin()+1024, oldcounts->end() );
+          auto lowerbins = std::make_shared<vector<float> >( oldcounts->begin(), oldcounts->begin()+1024 );
+          auto upperbins = std::make_shared<vector<float> >( oldcounts->begin()+1024, oldcounts->end() );
           
           MeasurementShrdPtr newmeas = std::make_shared<Measurement>(*meas);
           
@@ -12484,9 +12488,9 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             m->source_type_ = sourcetype;
         }//for( auto &m : measurements_this_node )
         
-       //Look for multiple spectra representing the same data, but that actually
-       // have different calibrations.
-       // See comments for #energy_cal_variants and #keep_energy_cal_variant.
+        //Look for multiple spectra representing the same data, but that actually
+        // have different calibrations.
+        // See comments for #energy_cal_variants and #keep_energy_cal_variant.
         const vector< MeasurementShrdPtr >::const_iterator datastart = measurements_this_node.begin();
         const vector< MeasurementShrdPtr >::const_iterator dataend = measurements_this_node.end();
         
@@ -15246,6 +15250,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       const rapidxml::xml_node<char> *live_time_node = spectrum_node->first_node( "LiveTimeDuration", 16 );
       if( !live_time_node )
         live_time_node = spectrum_node->first_node( "LiveTime", 8 );
+      
       const rapidxml::xml_node<char> *channel_data_node = spectrum_node->first_node( "ChannelData", 11 );
     
       for( size_t i = 0; i < remarks.size(); ++i )
@@ -15322,6 +15327,19 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       if( !use_remark_real_time )
         meas->real_time_ = real_time;
       
+      //RealTime shouldnt be under Spectrum node (should be under RadMeasurement)
+      //  but some files mess this up, so check for real time under the spectrum
+      //  node if we dont have the real time yet
+      if(  meas->real_time_ <= 0.0 )
+      {
+        const rapidxml::xml_node<char> *real_time_node = XML_FIRST_NODE(spectrum_node, "RealTimeDuration");
+        if( !real_time_node )
+          real_time_node = XML_FIRST_NODE(spectrum_node, "RealTime");
+        if( real_time_node )
+           meas->real_time_ = time_duration_in_seconds( real_time_node->value(), real_time_node->value_size() );
+      }
+      
+      
       meas->start_time_ = start_time;
       meas->source_type_ = spectra_type;
       
@@ -15334,7 +15352,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     
       if( live_time_node && live_time_node->value_size() )
         meas->live_time_ = time_duration_in_seconds( live_time_node->value(), live_time_node->value_size() );
-    
+      
       std::shared_ptr<vector<float> > gamma_counts = std::make_shared<vector<float> >();
     
       if( channel_data_node && channel_data_node->value_size() )

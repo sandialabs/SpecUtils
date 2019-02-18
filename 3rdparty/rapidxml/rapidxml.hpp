@@ -1815,7 +1815,7 @@ namespace rapidxml
         // Use translation skip
         Ch *src = text;
         Ch *dest = src;
-        while ((src-text_end)>6 && StopPred::test(*src))
+        while ((text_end-src)>6 && StopPred::test(*src))
         {
           // If entity translation is enabled
           if (!(Flags & parse_no_entity_translation))
@@ -1891,6 +1891,7 @@ namespace rapidxml
                       code = code * 16 + digit;
                       ++src;
                     }
+                    //printf( "Expanded character 1: %c,%c,%c,%c\n", src[2], src[3], src[4], src[5] );
                     insert_coded_character<Flags>(dest, code);    // Put character in output
                   }
                   else
@@ -1905,6 +1906,7 @@ namespace rapidxml
                       code = code * 10 + digit;
                       ++src;
                     }
+                    //printf( "Expanded character 2: %c,%c,%c,%c\n", src[2], src[3], src[4], src[5] );
                     insert_coded_character<Flags>(dest, code);    // Put character in output
                   }
                   if (*src == Ch(';'))
@@ -1916,6 +1918,7 @@ namespace rapidxml
                   // Something else
                 default:
                   // Ignore, just copy '&' verbatim
+                  //printf( "Ignore, just copy '&' verbatim\n" );
                   break;
                   
               }
@@ -2724,11 +2727,17 @@ namespace rapidxml
         //assert( text[-1]=='<' );
         // Extract element name
         
+        //printf( "parse_element starting with =%.*s\n", 40, text );
+        
         //Skip over leading whitespace if we are being sloppy - this can result
         //  in a garbage name/tag, but were already at the dump, so might as
         //  well try to salvage things - we can always through them out later.
         if( Flags & allow_sloppy_parse )
+        {
+          while( text!=text_end && (*text)==Ch('<') )
+            ++text;
           skip<whitespace_pred, Flags>(text,text_end);
+        }
         
         Ch *name = text;
         skip<node_name_pred, Flags>(text,text_end);
@@ -2771,7 +2780,18 @@ namespace rapidxml
         // Determine ending type
         if (*text == Ch('>'))
         {
-          ++text;
+          if( (Flags & allow_sloppy_parse) )
+          {
+            //Allow for there to be multiple closing tags  '>'.
+            //  doesnt currently allow ther eto be whitespaces between them
+            //  as this could mess up element contents
+            while( (text!=text_end) && (*text==Ch('>')) )
+              ++text;
+          }else
+          {
+            ++text;
+          }
+          
           parse_node_contents<Flags>(text, element, text_end);
         }
         else if (*text == Ch('/'))
@@ -2784,8 +2804,8 @@ namespace rapidxml
           
           if (*text != Ch('>'))
           {
-            //printf( "text=%.*s\n", 40, text );
-            RAPIDXML_PARSE_ERROR("expected >", text);
+            //printf( ">1 text=%.*s\n", 40, text );
+            RAPIDXML_PARSE_ERROR("1 expected >", text);
           }
           ++text;
         }
@@ -2797,8 +2817,8 @@ namespace rapidxml
               return element;
           }
           
-          //printf( "text=%.*s\n", 40, text );
-          RAPIDXML_PARSE_ERROR("expected >", text);
+          //printf( ">1 text=%.*s\n", 40, text );
+          RAPIDXML_PARSE_ERROR("2 expected >", text);
         }
         
         
@@ -2911,11 +2931,24 @@ namespace rapidxml
         // Parse proper node type
         switch (text[0])
         {
-            
             // <...
           default:
             // Parse and append element node
             return parse_element<Flags>(text,text_end);
+            
+          case Ch('/'):
+          {
+            if( (Flags & allow_sloppy_parse) )
+            {
+              //We were not expecting a closing tag here - lets skip over it, and return
+              while( text!=text_end && (*text)!=Ch('<') )
+                ++text;
+              return 0;
+            }else
+            {
+              RAPIDXML_PARSE_ERROR("unexpected closing tag", text);
+            }
+          }//case Ch('/'):
             
             // <?...
           case Ch('?'):
@@ -3042,7 +3075,7 @@ namespace rapidxml
                         // Skip remaining whitespace after node name
                         skip<whitespace_pred, Flags>(text);
                         if (*text != Ch('>'))
-                            RAPIDXML_PARSE_ERROR("expected >", text);
+                            RAPIDXML_PARSE_ERROR("3 expected >", text);
                         ++text;     // Skip '>'
                         return;     // Node closed, finished parsing contents
                     }
@@ -3126,7 +3159,10 @@ namespace rapidxml
                 //  sanity check
                 if( (Flags & allow_sloppy_parse) )
                 {
-                  Ch * const name_start = text+2;
+                  Ch * name_start = text+2;
+                  while( name_start!=text_end && (*name_start)==Ch('<') )
+                    ++name_start;
+                  skip<whitespace_pred, Flags>(name_start, text_end);
                   Ch *name_end = name_start;
                   skip<node_name_pred, Flags>(name_end, text_end);
                   if( !internal::compare(node->name(), node->name_size(), name_start, name_end - name_start, true) )
@@ -3139,11 +3175,6 @@ namespace rapidxml
                 text += 2;      // Skip '</'
                 if (Flags & parse_validate_closing_tags)
                 {
-                  // Skip and validate closing tag name
-                  //wcjohns ToDo: if sloppy parse is enabled, and the closing tag doesnt match opening tag,
-                  //              should set text to begging of '</' and return.  This way the next node up can try to close.
-                  //              This would be to handle like HTML non-requiqred closing tag elements
-                  
                   Ch *closing_name = text;
                   skip<node_name_pred, Flags>(text, text_end);
                   if (!internal::compare(node->name(), node->name_size(), closing_name, text - closing_name, true))
@@ -3154,14 +3185,41 @@ namespace rapidxml
                   // No validation, just skip name
                   skip<node_name_pred, Flags>(text, text_end);
                 }
-                // Skip remaining whitespace after node name
-                skip<whitespace_pred, Flags>(text, text_end);
+                
+                
+                if( (Flags & allow_sloppy_parse) )
+                {
+                  //Account for tags where the tag name has a space in it (yes, this happens in some detectors N42 files)
+                  //ex. <Intstrument Model>...</Intstrument Model>
+                  while( (text!=text_end) && (*text)!=Ch('>') )
+                    ++text;
+                }else
+                {
+                  // Skip remaining whitespace after node name
+                  skip<whitespace_pred, Flags>(text, text_end);
+                }
+                
                 if (*text != Ch('>'))
                 {
-                  //printf( "3 text=%.*s\n", 40, text );
-                  RAPIDXML_PARSE_ERROR("expected >", text);
+                  //printf( ">4 text=%.*s\n", 40, text );
+                  RAPIDXML_PARSE_ERROR("4 expected >", text);
                 }
-                ++text;     // Skip '>'
+                
+                if( (Flags & allow_sloppy_parse) )
+                {
+                  //Allow there to be multiple closing '>' characters, potentially
+                  //  sperated by white space
+                  while( (text != text_end) && ((*text)==Ch('>')) )
+                  {
+                    ++text;
+                    skip<whitespace_pred, Flags>(text, text_end);
+                  }
+                  
+                }else
+                {
+                  ++text;     // Skip '>'
+                }
+                
                 return;     // Node closed, finished parsing contents
               }
               else
@@ -3340,11 +3398,10 @@ namespace rapidxml
             }
           }
           
-          
-          Ch *valstart = text;
-          
           // Skip whitespace after =
           skip<whitespace_pred, Flags>(text,text_end);
+          
+          Ch *valstart = text;
           
           if( text == text_end )
           {
@@ -3394,9 +3451,11 @@ namespace rapidxml
             
             if( !(Flags & allow_sloppy_parse) )
               RAPIDXML_PARSE_ERROR("CASE 1: expected ' or \"", text);
+          }else
+          {
+            ++text;
           }
           
-          ++text;
           if( text == text_end )
           {
             if( (Flags & allow_sloppy_parse) )
@@ -3416,7 +3475,6 @@ namespace rapidxml
             end = skip_and_expand_character_refs<attribute_value_pred<Ch('"')>, attribute_value_pure_pred<Ch('"')>, AttFlags>(text,text_end);
           else //else, dont expand characters,
           {
-            Ch *start_text = text;
             //We have a poorly formed attribute value, assume first whitespace ends the attribute value...
             while( text != text_end && !whitespace_pred::test(*text) && (*text)!=Ch('>') && (*text)!=Ch('\"') && (*text)!=Ch('\'')  )
               ++text;
@@ -3463,7 +3521,19 @@ namespace rapidxml
                 {
                   if( (*text) == Ch('>') )
                   {
-                    attribute->value()[attribute->value_size()-1] = 0;
+                    //We dont want to overright the '>' character with a '\0', so
+                    // instead we will overight the '=' sign
+                    for( Ch *pos = value; pos != end; ++pos )
+                    {
+                      *(pos-1) = *pos;
+                    }
+                    
+                    //printf( "End char is %c\n", *end );
+                    
+                    attribute->value( value-1, (end - value) );
+                    attribute->value()[attribute->value_size()] = 0;
+                    
+                    //printf( "Value-->'%s' and has length %i\n", attribute->value(), static_cast<int>(attribute->value_size()) );
                   }else
                   {
                     ++text;
@@ -3472,11 +3542,14 @@ namespace rapidxml
                 }
               }else
               {
+                //File ended in the middle of an attribute value
                 if (!(Flags & parse_no_string_terminators))
                   attribute->value()[attribute->value_size()-1] = 0;
               }
             }
           }
+          
+          //RIght now
           
           // Skip whitespace after attribute value
           skip<whitespace_pred, Flags>(text,text_end);
