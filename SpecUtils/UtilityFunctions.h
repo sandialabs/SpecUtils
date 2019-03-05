@@ -93,7 +93,7 @@ namespace boost
 
 namespace UtilityFunctions
 {
-  //Bellow string functions are implmented here to reduce binary size over using
+  //Below string functions are implmented here to reduce binary size over using
   //  the equivalent boost::algorithm functions everywhere; also, I am trying
   //  to (slowly) remove all boost dependancies from SpectrumDataStructs.h so
   //  it will be easier on (Windows) folks to use this code in their projects.
@@ -263,10 +263,17 @@ namespace UtilityFunctions
   std::string to_extended_iso_string( const boost::posix_time::ptime &t );
 
   /** Converts the input to string in format d-mmm-YYYY HH:MM:SS AM,
-    where mmm is 3 char month name; d is day number with no leading zeros.
-    Currently (20160912) not tested well.
+      where mmm is 3 char month name; d is day number with no leading zeros.
+      Returns "not-a-date-time" if input is not valid.
+      Ex. 24hr format: "2014-Sep-9 13:02:15", AMP/PM: "2014-Sep-9 03:02:15 PM"
    */
   std::string to_common_string( const boost::posix_time::ptime &t, const bool twenty_four_hour );
+  
+  /** Converts input to the 23 character VAX format "DD-MMM-YYYY HH:MM:SS.SS".
+      Returns empty string if input is not valid.
+      Ex. "2014-Sep-19 14:12:01.62"
+   */
+  std::string to_vax_string( const boost::posix_time::ptime &t );
   
   /* Using Howard Hinnant's date library https://github.com/HowardHinnant/date
      is nearly a drop-in, header only solution for cross platform date parsing
@@ -320,7 +327,7 @@ namespace UtilityFunctions
                                                      const DateParseEndianType endian );
   
   
-  //The bellow uses home-spun methods when SpecUtils_NO_BOOST_LIB is
+  //The below uses home-spun methods when SpecUtils_NO_BOOST_LIB is
   //  true (not well tested as of 20140404, may have issues with symbolic links),
   //  and calls the equivalent boost funcitons otherwise.
   /** \brief Removes file from the filesystem, returning true if succesful. */

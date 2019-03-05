@@ -24,6 +24,7 @@
 #endif //#if( USE_D3_EXPORTING )
 
 #include <ctime>
+#include <cmath>
 #include <vector>
 #include <memory>
 #include <string>
@@ -89,14 +90,6 @@ using UtilityFunctions::time_from_string;
 #define passMessage(m,s,p) log_error_message(m,s,p)
 
 extern void log_error_message( const std::string &message, const std::string &source, const int priority );
-#endif
-
-//std::bind doesnt work well on MSVC 2012, so on 20180627 I converted bind calls
-//  over to lambdas, but until its a little better tested,
-#if( defined(_MSC_VER) && _MSC_VER <= 1700 )
-#define DONT_USE_STD_BIND 1
-#else
-#define DONT_USE_STD_BIND 1
 #endif
 
 
@@ -430,6 +423,49 @@ namespace
     return field;
   };//parse_pcf_field
   
+  
+  
+  //returns negative if invalid name
+  int pcf_det_name_to_dev_pair_index( std::string name, int &col, int &panel, int &mca )
+  {
+    col = panel = mca = -1;
+    
+    //loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
+    //  loop over panels (8) //Aa1, Ab1, Ac1
+    //    loop over MCAs (8) //Aa1, Aa2, Aa3, etc
+    //      loop over deviation pairs (20)
+    //        energy (float uncompressed, or int16_t compressed)
+    //        offset (float uncompressed, or int16_t compressed)
+    
+    if( name.size() < 2 || name.size() > 3
+       || name[name.size()-1] < '1' || name[name.size()-1] > '8' )
+    {
+      return -1;
+    }
+    
+    to_lower( name );
+    
+    const char col_char = ((name.size()==3) ? name[1] : 'a');
+    const char panel_char = name[0];
+    const char mca_char = name[name.size()-1];
+    
+    if( col_char < 'a' || col_char > 'd' || panel_char < 'a' || panel_char > 'h' )
+      return -1;
+    
+    col = col_char - 'a';
+    panel = panel_char - 'a';
+    mca = mca_char - '1';
+    
+    return col*(8*8*2*20) + panel*(8*2*20) + mca*(2*20);
+  }
+  
+  
+  int pcf_det_name_to_dev_pair_index( std::string name )
+  {
+    int col, panel, mca;
+    return pcf_det_name_to_dev_pair_index( name, col, panel, mca );
+  };//pcf_det_name_to_dev_pair_index lambda
+  
 }//anaomous namespace
 
 
@@ -500,16 +536,24 @@ namespace
     return (n && n->name_size()) ? std::string(n->name(), n->name() + n->name_size()) : std::string();
   }
   
+  template<size_t n>
+  const rapidxml::xml_node<char> *xml_first_node( const rapidxml::xml_node<char> *parent, const char (&name)[n] )
+  {
+    static_assert( n > 1, "Element name to xml_first_node must not be empty." );
+    return parent ? parent->first_node(name, n-1) : nullptr;
+  }
+  
   template<size_t n, size_t m>
   const rapidxml::xml_node<char> *xml_first_node_nso( const rapidxml::xml_node<char> *parent, const char (&name)[n], const char (&ns)[m] )
   {
+    if( !parent )
+      return nullptr;
+    
     if( m < 2 )
     {
-      return parent ? parent->first_node(name, n-1) : (const rapidxml::xml_node<char> *)0;
+      return parent->first_node(name, n-1);
     }else
     {
-      if( !parent )
-        return 0;
       const rapidxml::xml_node<char> *answer = parent->first_node(name, n-1);
       if( m>1 && !answer )
       {
@@ -917,16 +961,27 @@ struct MeasurementCalibInfo
     equation_type = meas->energy_calibration_model();
     nbin = meas->gamma_counts()->size();
     coefficients = meas->calibration_coeffs();
+    
     deviation_pairs_ = meas->deviation_pairs();
     original_binning = meas->channel_energies();
     if( meas->channel_energies() && !meas->channel_energies()->empty())
       binning = meas->channel_energies();
+    
+    if( equation_type == Measurement::InvalidEquationType
+       && !coefficients.empty() )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+      log_developer_error( BOOST_CURRENT_FUNCTION, "Found case where equation_type!=Invalid, but there are coefficients - shouldnt happen!" );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+      coefficients.clear();
+      binning.reset();
+    }//
   }//MeasurementCalibInfo constructor
 
   MeasurementCalibInfo()
   {
     nbin = 0;
-    equation_type = Measurement::UnknownEquationType;
+    equation_type = Measurement::InvalidEquationType;
   }//MeasurementCalibInfo constructor
 
   void strip_end_zero_coeff()
@@ -945,6 +1000,7 @@ struct MeasurementCalibInfo
     switch( equation_type )
     {
       case Measurement::Polynomial:
+      case Measurement::UnspecifiedUsingDefaultPolynomial:
         binning = polynomial_binning( coefficients, nbin, deviation_pairs_ );
       break;
 
@@ -982,17 +1038,13 @@ struct MeasurementCalibInfo
         break;
       }//case Measurement::LowerChannelEdge:
 
-      case Measurement::UnknownEquationType:
+      case Measurement::InvalidEquationType:
       break;
     }//switch( meas->energy_calibration_model_ )
 
 
     if( !binning )
-    {
-      cerr << SRC_LOCATION << "\n\tWarning, failed to sett binning" << endl;
-      binning.reset(); //because I never make sure biining is valid...
-    }
-
+      cerr << SRC_LOCATION << "\n\tWarning, failed to set binning" << endl;
   }//void fill_binning()
 
   bool operator<( const MeasurementCalibInfo &rhs ) const
@@ -1071,7 +1123,8 @@ bool MeasurementInfo::calibration_is_valid( const Measurement::EquationType type
   std::unique_ptr< std::vector<float> > frfeqn;
   const std::vector<float> *eqn = &ineqn;
 
-  if( type == Measurement::Polynomial )
+  if( type == Measurement::Polynomial
+     || type == Measurement::UnspecifiedUsingDefaultPolynomial )
   {
     frfeqn.reset( new vector<float>() );
     *frfeqn = polynomial_coef_to_fullrangefraction( ineqn, nbin );
@@ -1082,6 +1135,7 @@ bool MeasurementInfo::calibration_is_valid( const Measurement::EquationType type
   {
     case Measurement::Polynomial:
     case Measurement::FullRangeFraction:
+    case Measurement::UnspecifiedUsingDefaultPolynomial:
     {
       for( const float &val : (*eqn) )
       {
@@ -1135,7 +1189,7 @@ bool MeasurementInfo::calibration_is_valid( const Measurement::EquationType type
       return (!ineqn.empty() && (ineqn.size()>=nbin));
     }//case Measurement::LowerChannelEdge:
       
-    case Measurement::UnknownEquationType:
+    case Measurement::InvalidEquationType:
     break;
   }//switch( type )
   
@@ -2111,7 +2165,7 @@ size_t Measurement::memmorysize() const
 
   //now we need to take care of all the non-simple objects
   size += detector_name_.capacity()*sizeof(string::value_type);
-  size += detector_type_.capacity()*sizeof(string::value_type);
+  size += detector_description_.capacity()*sizeof(string::value_type);
 
   for( const string &r : remarks_ )
     size += r.capacity()*sizeof(string::value_type);
@@ -2163,11 +2217,11 @@ void Measurement::reset()
   speed_ = 0.0;
   detector_name_ = "";
   detector_number_ = -1;
-  detector_type_ = "";
+  detector_description_ = "";
   quality_status_ = Missing;
 
   source_type_       = UnknownSourceType;
-  energy_calibration_model_ = UnknownEquationType;
+  energy_calibration_model_ = InvalidEquationType;
 
   contained_neutron_ = false;
 
@@ -2223,6 +2277,7 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   switch( energy_calibration_model_ )
   {
     case Polynomial:
+    case UnspecifiedUsingDefaultPolynomial:
       for( size_t i = 1; i < calibration_coeffs_.size(); ++i )
         calibration_coeffs_[i] *= std::pow( float(ncombine), float(i) );
       channel_energies_ = polynomial_binning( calibration_coeffs_, nnewchann,
@@ -2235,7 +2290,7 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
       break;
       
     case LowerChannelEdge:
-    case UnknownEquationType:
+    case InvalidEquationType:
       if( !!channel_energies_ )
       {
         std::shared_ptr<vector<float> > newbinning
@@ -2551,6 +2606,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
   switch( energy_calibration_model_ )
   {
     case Polynomial:
+    case UnspecifiedUsingDefaultPolynomial:
     {
       calibration_coeffs_ = polynomial_cal_remove_first_channels( n, a );      
       channel_energies_ = polynomial_binning( calibration_coeffs_, nnewchannel,
@@ -2587,7 +2643,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
     }//case FullRangeFraction:
       
     case LowerChannelEdge:
-    case UnknownEquationType:
+    case InvalidEquationType:
       if( !!channel_energies_ )
       {
         std::shared_ptr< vector<float> > newbinning
@@ -2790,7 +2846,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
 
   const rapidxml::xml_node<char> *det_type_node = xml_first_node_nso( spectrum, "DetectorType", xmlns );
   if( det_type_node && det_type_node->value_size() )
-    detector_type_ = xml_value_str( det_type_node );
+    detector_description_ = xml_value_str( det_type_node );
 
   const rapidxml::xml_attribute<char> *quality_attrib = spectrum->first_attribute( "Quality", 7 );
   if( quality_attrib && quality_attrib->value_size() )
@@ -2917,7 +2973,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
 
   if( is_gamma )
   {
-    //The bellow handles a special case for Raytheon-Variant L-1 (see refSJHFSW1DZ4)
+    //The below handles a special case for Raytheon-Variant L-1 (see refSJHFSW1DZ4)
     const rapidxml::xml_node<char> *specsize = spectrum->first_node( "ray:SpectrumSize", 16 );
     if( !!contents && contents->size() && specsize && specsize->value_size() )
     {
@@ -2963,10 +3019,10 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
                                 calibration_coeffs_, energy_calibration_model_ );
         
         break;
-      } catch ( std::exception &e )
+      }catch( std::exception & )
       {
         calibration_coeffs_.clear();
-        energy_calibration_model_ = UnknownEquationType;
+        energy_calibration_model_ = InvalidEquationType;
       }
     }
     
@@ -3151,19 +3207,13 @@ void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml
               calibration_coeffs_.push_back( ff.second );
           }else
           {
-            //ToDo: add some annotation into the parsed result to show energy calibration was not decoded
             cerr << SRC_LOCATION << "\n\tI couldnt interpret energy calibration PointXY (not monototonically increasing)" << endl;
-            energy_calibration_model_ = FullRangeFraction;
-            calibration_coeffs_.push_back( 0.0f );
-            calibration_coeffs_.push_back( 3000.0f );
+            energy_calibration_model_ = EquationType::InvalidEquationType;
           }
         }else
         {
-          //ToDo: add some annotation into the parsed result to show energy calibration was not decoded
           cerr << SRC_LOCATION << "\n\tI couldnt interpret energy calibration PointXY (unrecognized coefficient meaning, or no channel data)" << endl;
-          energy_calibration_model_ = FullRangeFraction;
-          calibration_coeffs_.push_back( 0.0f );
-          calibration_coeffs_.push_back( 3000.0f );
+          energy_calibration_model_ = EquationType::InvalidEquationType;
         }//
 
         if( units != 1.0f )
@@ -3344,9 +3394,9 @@ void MeasurementInfo::remove_measurments(
     throw runtime_error( "MeasurementInfo::remove_measurments:"
                         " to many input measurments to remove" );
   
-  //This bellow implementation is targeted for MeasurementInfo's with lots of
+  //This below implementation is targeted for MeasurementInfo's with lots of
   //  measurements_, and empiracally is much faster than commented out
-  //  implementation bellow (which is left in because its a bit 'cleaner')
+  //  implementation below (which is left in because its a bit 'cleaner')
   vector<bool> keep( norigmeas, true );
   
   for( size_t i = 0; i < meas.size(); ++i )
@@ -3761,15 +3811,16 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
   {
     switch( type )
     {
-      case Polynomial:
+      case Measurement::Polynomial:
+      case Measurement::UnspecifiedUsingDefaultPolynomial:
         binning = polynomial_binning( eqn, gamma_counts_->size(), dev_pairs );
       break;
 
-      case FullRangeFraction:
+      case Measurement::FullRangeFraction:
         binning = fullrangefraction_binning( eqn, gamma_counts_->size(), dev_pairs );
       break;
 
-      case LowerChannelEdge:
+      case Measurement::LowerChannelEdge:
         cerr << SRC_LOCATION << "\n\tWarning, you probabhouldnt be calling "
              << "this function for EquationType==LowerChannelEdge, as its probably "
              << "not as efficient as the other version of this function"
@@ -3777,8 +3828,8 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
         binning.reset( new vector<float>(eqn) );
       break;
 
-      case UnknownEquationType:
-        throw runtime_error( "Measurement::recalibrate_by_eqn(...): Can not call with EquationType==UnknownEquationType" );
+      case Measurement::InvalidEquationType:
+        throw runtime_error( "Measurement::recalibrate_by_eqn(...): Can not call with EquationType==InvalidEquationType" );
     }//switch( type )
   }//if( !binning )
 
@@ -3824,6 +3875,7 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
   switch( type )
   {
     case Measurement::Polynomial:
+    case Measurement::UnspecifiedUsingDefaultPolynomial:
       binning = polynomial_binning( eqn, nbin, dev_pairs );
     break;
 
@@ -3835,9 +3887,9 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
       binning.reset( new vector<float>(eqn) );
     break;
 
-    case Measurement::UnknownEquationType:
+    case Measurement::InvalidEquationType:
       throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
-                                "can not be called with type==UnknownEquationType");
+                                "can not be called with type==InvalidEquationType");
     break;
   }//switch( type )
 
@@ -3852,9 +3904,9 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
 {
   rebin_by_lower_edge( binning );
 
-  if( type == UnknownEquationType )
+  if( type == InvalidEquationType )
     throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
-                              "can not be called with type==UnknownEquationType");
+                              "can not be called with type==InvalidEquationType");
 
   if( type != LowerChannelEdge )
     calibration_coeffs_ = eqn;
@@ -4186,7 +4238,7 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
     const rapidxml::xml_attribute<char> *model = equation_node->first_attribute( "Model", 5 );
     //    rapidxml::xml_attribute<char> *units = equation_node->first_attribute( "Units", 5 );
     
-    eqnmodel = UnknownEquationType;
+    eqnmodel = InvalidEquationType;
     
     string modelstr = xml_value_str(model);
     if( modelstr == "Polynomial" )
@@ -4204,7 +4256,7 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
     }//if( modelstr == ...) / if / else
     
     //Lets try to guess the equation type for Polynomial or FullRangeFraction
-    if( eqnmodel == UnknownEquationType )
+    if( eqnmodel == InvalidEquationType )
     {
       if( (coeffs.size() < 5) && (coeffs.size() > 1) )
       {
@@ -4213,12 +4265,11 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
         else if( coeffs[1] > 1000.0 )
           eqnmodel = FullRangeFraction;
       }//if( coeffs.size() < 5 )
-    }//if( eqnmodel == UnknownEquationType )
+    }//if( eqnmodel == InvalidEquationType )
     
     
-    if( eqnmodel == UnknownEquationType )
+    if( eqnmodel == InvalidEquationType )
     {
-      eqnmodel = UnknownEquationType;
       coeffs.clear();
       cerr << "Equation model is not polynomial" << endl;
       const string msg = "Equation model is not polynomial or FullRangeFraction, but is " +
@@ -4261,7 +4312,7 @@ std::vector<float> fullrangefraction_coef_to_polynomial(
 
   //Logic from from "Energy Calibration Conventions and Parameter Conversions"
   //  Dean J. Mitchell, George Lasche and John Mattingly, 6418 / MS-0791
-  //The bellow "- (0.5f*a1/nbin)" should actually be "+ (0.5f*a1/nbin)"
+  //The below "- (0.5f*a1/nbin)" should actually be "+ (0.5f*a1/nbin)"
   //  according to the paper above, I changed it to compensate for the
   //  similar hack in polynomial_coef_to_fullrangefraction.
 //  c0 = a0 + (0.5f*a1/nbin) + 0.25f*a2/(nbin*nbin) - (a3/(8.0f*nbin*nbin*nbin));
@@ -4270,7 +4321,7 @@ std::vector<float> fullrangefraction_coef_to_polynomial(
 //  c3 = a3/(nbin*nbin*nbin);
   
   //See notes in polynomial_coef_to_fullrangefraction(...) for justification
-  //  of using the bellow, instead of the above.
+  //  of using the below, instead of the above.
   c0 = a0;
   c1 = a1 / nbin;
   c2 = a2 / (nbin*nbin);
@@ -4314,7 +4365,7 @@ vector<float> mid_channel_polynomial_to_fullrangeFraction(
   
   //Logic from from "Energy Calibration Conventions and Parameter Conversions"
   //  Dean J. Mitchell, George Lasche and John Mattingly, 6418 / MS-0791
-  //The bellow "- 0.5f*c1" should actually be "+ 0.5f*c1" according to the
+  //The below "- 0.5f*c1" should actually be "+ 0.5f*c1" according to the
   //  paper above, but to agree with PeakEasy I changed this.
   a0 = c0 - 0.5f*c1 + 0.25f*c2 + (1.0f/8.0f)*c3;
   a1 = nbin*(c1 + c2 + 0.75f*c3);
@@ -4932,7 +4983,10 @@ void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
 void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
 {
   char buffer[1024];
-  if( fabs(lhs.live_time_ - rhs.live_time_) > 0.00001 )
+  
+  //Make sure live time within something reasonable
+  const double live_time_diff = fabs( double(lhs.live_time_) - double(rhs.live_time_));
+  if( (live_time_diff > (std::max(lhs.live_time_,rhs.live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
              "Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
@@ -4940,11 +4994,13 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( buffer );
   }
   
-  if( fabs(lhs.real_time_ - rhs.real_time_) > 0.00001 )
+  //Make sure real time within something reasonable
+  const double real_time_diff = fabs( double(lhs.real_time_) - double(rhs.real_time_));
+  if( (real_time_diff > (std::max(lhs.real_time_,rhs.real_time_)*1.0E-5)) && (real_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Real time of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.real_time_, rhs.real_time_ );
+             "Real time of LHS (%1.8E) doesnt match RHS (%1.8E); diff=%f",
+             lhs.real_time_, rhs.real_time_, real_time_diff );
     throw runtime_error( buffer );
   }
   
@@ -4996,6 +5052,7 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( "Detector name for LHS ('" + lhs.detector_name_
                         + "') doesnt match RHS ('" + rhs.detector_name_ + "')" );
 
+  /*
   if( lhs.detector_number_ != rhs.detector_number_ )
   {
     snprintf( buffer, sizeof(buffer),
@@ -5003,15 +5060,16 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
              lhs.detector_number_, rhs.detector_number_ );
     throw runtime_error( buffer );
   }
+   */
 
-  if( lhs.detector_type_ != rhs.detector_type_
-     && rhs.detector_type_!="Gamma and Neutron"
-     && ("NaI, " + lhs.detector_type_) != rhs.detector_type_
-     && ("LaBr3, " + lhs.detector_type_) != rhs.detector_type_
-     && ("unknown, " + lhs.detector_type_) != rhs.detector_type_
+  if( lhs.detector_description_ != rhs.detector_description_
+     && rhs.detector_description_!="Gamma and Neutron"
+     && ("NaI, " + lhs.detector_description_) != rhs.detector_description_
+     && ("LaBr3, " + lhs.detector_description_) != rhs.detector_description_
+     && ("unknown, " + lhs.detector_description_) != rhs.detector_description_
      )
-    throw runtime_error( "Detector type for LHS ('" + lhs.detector_type_
-                        + "') doesnt match RHS ('" + rhs.detector_type_ + "')" );
+    throw runtime_error( "Detector description for LHS ('" + lhs.detector_description_
+                        + "') doesnt match RHS ('" + rhs.detector_description_ + "')" );
 
   if( lhs.quality_status_ != rhs.quality_status_ )
   {
@@ -5029,14 +5087,18 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( buffer );
   }
 
+  auto lhs_cal_model = lhs.energy_calibration_model_;
+  auto rhs_cal_model = rhs.energy_calibration_model_;
+  
+  if( lhs_cal_model == Measurement::EquationType::UnspecifiedUsingDefaultPolynomial )
+    lhs_cal_model = Measurement::EquationType::Polynomial;
+  if( rhs_cal_model == Measurement::EquationType::UnspecifiedUsingDefaultPolynomial )
+    rhs_cal_model = Measurement::EquationType::Polynomial;
 
-  if( lhs.energy_calibration_model_ != rhs.energy_calibration_model_
-      && !!lhs.channel_energies_ )
+  if( lhs_cal_model != rhs_cal_model && !!lhs.channel_energies_ )
   {
-    if( (lhs.energy_calibration_model_ == Polynomial
-         && rhs.energy_calibration_model_ == FullRangeFraction)
-       || (lhs.energy_calibration_model_ == FullRangeFraction
-           && rhs.energy_calibration_model_ == Polynomial) )
+    if( (lhs_cal_model == Polynomial && rhs_cal_model == FullRangeFraction)
+       || (lhs_cal_model == FullRangeFraction && rhs_cal_model == Polynomial) )
     {
       const size_t nbin = lhs.channel_energies_->size();
       vector<float> lhscoefs = lhs.calibration_coeffs_;
@@ -5201,7 +5263,7 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
       const float lhsenergy = lhs.channel_energies_->at(i);
       const float rhsenergy = rhs.channel_energies_->at(i);
       const float diff = fabs(lhsenergy - rhsenergy );
-      if( diff > 0.00001*std::max(fabs(lhsenergy), fabs(rhsenergy)) && diff > 0.00001 )
+      if( diff > 0.00001*std::max(fabs(lhsenergy), fabs(rhsenergy)) && diff > 0.001 )
       {
         snprintf( buffer, sizeof(buffer),
                  "Energy of channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
@@ -5322,8 +5384,10 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   std::unique_lock<std::recursive_mutex> lhs_lock( lhs.mutex_, std::adopt_lock_t() );
   std::unique_lock<std::recursive_mutex> rhs_lock( rhs.mutex_, std::adopt_lock_t() );
 
-  char buffer[1024];
-  if( fabs(lhs.gamma_live_time_ - rhs.gamma_live_time_) > (0.001*std::max(fabs(lhs.gamma_live_time_),fabs(rhs.gamma_live_time_))) )
+  char buffer[8*1024];
+  
+  const double live_time_diff = fabs( double(lhs.gamma_live_time_) - double(rhs.gamma_live_time_));
+  if( (live_time_diff > (std::max(lhs.gamma_live_time_,rhs.gamma_live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
               "MeasurementInfo: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
@@ -5331,7 +5395,9 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     throw runtime_error( buffer );
   }
   
-  if( fabs(lhs.gamma_real_time_ - rhs.gamma_real_time_) > 0.001 )
+  
+  const double real_time_diff = fabs( double(lhs.gamma_real_time_) - double(rhs.gamma_real_time_));
+  if( (real_time_diff > (std::max(lhs.gamma_real_time_,rhs.gamma_real_time_)*1.0E-5)) && (real_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
              "MeasurementInfo: Real time of LHS (%1.8E) doesnt match RHS (%1.8E)",
@@ -5381,6 +5447,9 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
       || lhs.detector_numbers_.size() != lhs.detector_names_.size() )
     throw runtime_error( "MeasurementInfo: Inproper number of detector numbers - wtf" );
   
+  //Ehh, I guess since detector numbers are an internal only thing (and we
+  //  should get rid of them anyway), lets not test this anymore.
+  /*
   for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
   {
     const size_t pos = std::find( rhs.detector_names_.begin(),
@@ -5388,9 +5457,21 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
                                   lhs.detector_names_[i] )
                        - rhs.detector_names_.begin();
     if( lhs.detector_numbers_[i] != rhs.detector_numbers_[pos] )
-      throw runtime_error( "MeasurementInfo: Detector number for detector '"
-                           + lhs.detector_names_[i] + "' dont match" );
+    {
+      stringstream msg;
+      msg << "MeasurementInfo: Detector number for detector '" << lhs.detector_names_[i] << " dont match.\n\tLHS->[";
+      for( size_t i = 0; i < lhs.detector_names_.size() && i < lhs.detector_numbers_.size(); ++i )
+        msg << "{" << lhs.detector_names_[i] << "=" << lhs.detector_numbers_[i] << "}, ";
+      msg << "]\n\tRHS->[";
+      for( size_t i = 0; i < rhs.detector_names_.size() && i < rhs.detector_numbers_.size(); ++i )
+        msg << "{" << rhs.detector_names_[i] << "=" << rhs.detector_numbers_[i] << "}, ";
+      msg << "]";
+      
+      throw runtime_error( msg.str() );
+    }
   }//for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+  */
+  
   
   if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() )
   {
@@ -5537,27 +5618,44 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
 
   if( lhs.properties_flags_ != rhs.properties_flags_ )
   {
+    string failingBits;
+    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurmentPorperties p, const string label ) {
+      if( (lhs.properties_flags_ & p) != (rhs.properties_flags_ & p) ) {
+        failingBits += failingBits.empty() ? "": ", ";
+        failingBits += (lhs.properties_flags_ & p) ? "LHS" : "RHS";
+        failingBits += " has " + label;
+      }
+    };
+    
+    testBitEqual( kPassthroughOrSearchMode, "kPassthroughOrSearchMode");
+    testBitEqual( kHasCommonBinning, "kHasCommonBinning");
+    testBitEqual( kRebinnedToCommonBinning, "kRebinnedToCommonBinning");
+    testBitEqual( kAllSpectraSameNumberChannels, "kAllSpectraSameNumberChannels");
+    testBitEqual( kNotTimeSortedOrder, "kNotTimeSortedOrder");
+    testBitEqual( kNotSampleDetectorTimeSorted, "kNotSampleDetectorTimeSorted");
+    testBitEqual( kNotUniqueSampleDetectorNumbers, "kNotUniqueSampleDetectorNumbers" );
+    
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Properties flags of LHS (%x) doesnt match RHS (%x)",
+             "MeasurementInfo: Properties flags of LHS (%x) doesnt match RHS (%x) (Failing bits: %s)",
              static_cast<unsigned int>(lhs.properties_flags_),
-             static_cast<unsigned int>(rhs.properties_flags_) );
+             static_cast<unsigned int>(rhs.properties_flags_),
+             failingBits.c_str() );
     throw runtime_error( buffer );
-  
   }
   
   for( const int sample : lhs.sample_numbers_ )
   {
-    for( const int detnum : lhs.detector_numbers_ )
+    for( const string detname : lhs.detector_names_ )
     {
-      MeasurementConstShrdPtr lhsptr = lhs.measurement( sample, detnum );
-      MeasurementConstShrdPtr rhsptr = rhs.measurement( sample, detnum );
+      MeasurementConstShrdPtr lhsptr = lhs.measurement( sample, detname );
+      MeasurementConstShrdPtr rhsptr = rhs.measurement( sample, detname );
       
       if( (!lhsptr) != (!rhsptr) )
       {
         snprintf( buffer, sizeof(buffer), "MeasurementInfo: Measurment avaialblity for LHS (%s)"
-                 " doesnt match RHS (%s) for sample %i and detector number %i",
+                 " doesnt match RHS (%s) for sample %i and detector name %s",
               (!lhsptr?"missing":"available"), (!rhsptr?"missing":"available"),
-              sample, detnum  );
+              sample, detname.c_str() );
         throw runtime_error(buffer);
       }
       
@@ -5569,8 +5667,8 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
         Measurement::equalEnough( *lhsptr, *rhsptr );
       }catch( std::exception &e )
       {
-        snprintf( buffer, sizeof(buffer), "MeasurementInfo: Sample %i, Detector num %i: %s",
-                  sample, detnum, e.what() );
+        snprintf( buffer, sizeof(buffer), "MeasurementInfo: Sample %i, Detector name %s: %s",
+                  sample, detname.c_str(), e.what() );
         throw runtime_error( buffer );
       }
     }//for( const int detnum : lhs.detector_numbers_ )
@@ -5708,12 +5806,14 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     DetectorAnalysis::equalEnough( *lhs.detectors_analysis_,
                                   *rhs.detectors_analysis_ );
   
+  /*
 #if( !defined(WIN32) )
   if( lhs.uuid_ != rhs.uuid_ )
     throw runtime_error( "MeasurementInfo: UUID of LHS (" + lhs.uuid_
                         + ") doesnt match RHS (" + rhs.uuid_ + ")" );
 #endif
-
+  */
+  
 //  bool modified_;
 //  bool modifiedSinceDecode_;
 }//void equalEnough( const Measurement &lhs, const Measurement &rhs )
@@ -5820,7 +5920,7 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   speed_ = rhs.speed_;
   detector_name_ = rhs.detector_name_;
   detector_number_ = rhs.detector_number_;
-  detector_type_ = rhs.detector_type_;
+  detector_description_ = rhs.detector_description_;
   quality_status_ = rhs.quality_status_;
 
   source_type_ = rhs.source_type_;
@@ -6168,8 +6268,13 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
     vector<MeasurementShrdPtr>::iterator start, end, iter;
     for( start=end=sorted_meas.begin(); start != sorted_meas.end(); start=end )
     {
+      //Incremement sample numbers for each new start time.
+      //  Also, some files (see refMIONLOV4PS) will mix occupied/non-occupied
+      //  samples, so increment on this as well.
+      
       while( (end != sorted_meas.end())
-             && ((*end)->start_time_ == (*start)->start_time_)  )
+             && ((*end)->start_time_ == (*start)->start_time_)
+             && ((*end)->occupied_ == (*start)->occupied_) )
         ++end;
 
       typedef map<string,int> StrIntMap;
@@ -6288,7 +6393,7 @@ bool MeasurementInfo::has_unique_sample_and_detector_numbers() const
 }//bool has_unique_sample_and_detector_numbers() const
 
 
-void  MeasurementInfo::ensure_unique_sample_numbers()
+void MeasurementInfo::ensure_unique_sample_numbers()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -6300,10 +6405,9 @@ void  MeasurementInfo::ensure_unique_sample_numbers()
     set_sample_numbers_by_time_stamp();
   }
   
-  
   //XXX - TODO should validate this a little further and check performance
   //      impact!  Also, should be proactive about not needing to hit the
-  //      expensive "fix" bellow.
+  //      expensive "fix" below.
   //
   //Here we will check the first two sample number, and if they are '1' and '2'
   //  repectively, we will not do anything.  If first sample is not 1, but
@@ -6386,8 +6490,6 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
   //  MeasurementInfo::rebin_by_polunomial_eqn
   try
   {
-    recalc_total_counts();
-    
     set<string> gamma_detector_names; //can be gamma+nutron
     const set<string> det_names = find_detector_names();
     
@@ -6443,12 +6545,20 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         switch( meas->energy_calibration_model_ )
         {
           case Measurement::Polynomial:
+          case Measurement::UnspecifiedUsingDefaultPolynomial:
             if( meas->calibration_coeffs_.size() < 2
-                || fabs(meas->calibration_coeffs_[0])>1000.0 )
+                || fabs(meas->calibration_coeffs_[0])>1000.0  //1000 is arbitrary
+                || (meas->calibration_coeffs_.size()==2 && meas->calibration_coeffs_[1]<=FLT_EPSILON)
+                || (meas->calibration_coeffs_.size()>=3 && meas->calibration_coeffs_[1]<=FLT_EPSILON
+                      && meas->calibration_coeffs_[2]<=FLT_EPSILON)
+               //TODO: Could aso check that the derivative of energy polynomial does not go negative by meas->gamma_counts_->size()
+               )
             {
               allZeros = true;
               invalid_calib = true;
             }
+            break;
+            
           case Measurement::FullRangeFraction:
             if( meas->calibration_coeffs_.size() < 2
                || fabs(meas->calibration_coeffs_[0]) > 1000.0f
@@ -6463,14 +6573,15 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
             //should check that at least as many energies where provided as
             //  meas->gamma_counts_->size()
             break;
-            
-          case Measurement::UnknownEquationType:
+          
+          case Measurement::InvalidEquationType:
             //Nothing to check here.
             break;
         }//switch( meas->energy_calibration_model_ )
       }//if( !allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
       
       if( allZeros && (meas->energy_calibration_model_==Measurement::Polynomial
+           || meas->energy_calibration_model_==Measurement::UnspecifiedUsingDefaultPolynomial
            || meas->energy_calibration_model_==Measurement::FullRangeFraction)
           && meas->gamma_counts_ && meas->gamma_counts_->size() )
       {
@@ -6484,7 +6595,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           meas->remarks_.push_back( remark.str() );
         }//if( invalid_calib )
         
-        meas->energy_calibration_model_ = Measurement::UnknownEquationType;
+        meas->energy_calibration_model_ = Measurement::InvalidEquationType;
         meas->calibration_coeffs_.clear();
         meas->deviation_pairs_.clear();
         meas->channel_energies_.reset();
@@ -6492,11 +6603,8 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       
       if( allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
       {
-        //look to see if we can grab a calibration for this same detector from
-        // another sample.
-        
+        //TODO: look to see if we can grab a calibration for this same detector from another sample.
         //MeasurementShrdPtr &meas = measurements_[meas_index];
-        
         //invalid_calib
       }//if( allZeros )
       
@@ -6558,7 +6666,22 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     }else
     {
       ensure_unique_sample_numbers();
-    }
+      
+      //ToDo: we can probably add this next bit of logic to another loop so it
+      //      isnt so expensive.
+      for( size_t i = 1; i < measurements_.size(); ++i )
+      {
+        if( !measurements_[i-1]->start_time_.is_special()
+           && !measurements_[i]->start_time_.is_special()
+           && (measurements_[i-1]->start_time_ > measurements_[i]->start_time_) )
+        {
+          properties_flags_ |= kNotTimeSortedOrder;
+          break;
+        }
+      }//for( size_t i = 1; i < measurements_.size(); ++i )
+      
+    }//if( flags & DontChangeOrReorderSamples ) / else
+    
     
     detector_numbers_.clear();
     detector_names_.clear();
@@ -6612,8 +6735,6 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       }//if( a non-empty info ) / else
     }//for( auto &meas : measurements_ )
     
-    
-
     
     //If none of the Measurements that have neutrons have gammas, then lets see
     //  if it makes sense to add the neutrons to the gamma Measurement
@@ -6718,18 +6839,11 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       {
         if( meas->gamma_counts_ && !meas->gamma_counts_->empty())
         {
-          if( !n_times_guess_cal && manufacturer_!="ICx Technologies" )
-          {
-            const char * msg = "Warning, could not find a calibration, so "
-            "assuming energy range 0 to 3MeV, with equal sized bins";
-            passMessage( msg, "", 1 );
-          }
-        
           ++n_times_guess_cal;
-          meas->energy_calibration_model_ = Measurement::FullRangeFraction;
+          meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
           meas->calibration_coeffs_.resize( 2 );
           meas->calibration_coeffs_[0] = 0.0;
-          meas->calibration_coeffs_[1] = 3000.0;
+          meas->calibration_coeffs_[1] = 3000.0 / std::max(meas->gamma_counts_->size()-1, size_t(1));
           MeasurementCalibInfo info( meas );
         
           pos = calib_infos_set.find(info);
@@ -6808,7 +6922,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     if( is_passthrough )
       properties_flags_ |= kPassthroughOrSearchMode;
     
-    //XXX - as of 20121130, the bellow code which makes sure all samples
+    //XXX - as of 20121130, the below code which makes sure all samples
     //      of passthrough data has bining information (as apposed to just first
     //      detector that some of the detector manufactureers do), has not been
     //      well tested - just kinda seems to work for SAIC detectors.
@@ -6833,11 +6947,12 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         
         const string &name = meas->detector_name_;
         if( meas->gamma_counts_ && !meas->gamma_counts_->empty()
-                                   && det_meas_map.count( name )
-           && meas->calibration_coeffs_.empty()
-              && ( !meas->channel_energies_ || meas->channel_energies_->empty()
-                                               || (det_meas_map[name]->energy_calibration_model_ == Measurement::LowerChannelEdge
-                   && meas->energy_calibration_model_==Measurement::UnknownEquationType) ) )
+            && det_meas_map.count(name) && meas->calibration_coeffs_.empty()
+            && ( !meas->channel_energies_ || meas->channel_energies_->empty()
+                 || (det_meas_map[name]->energy_calibration_model_ == Measurement::LowerChannelEdge
+                     && meas->energy_calibration_model_==Measurement::InvalidEquationType )
+               )
+           )
         {
           if( !meas->channel_energies_ || meas->channel_energies_->empty())
           {
@@ -6915,6 +7030,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     }
     component_versions_.swap( component_versions_nondup );
     
+    recalc_total_counts();
     
 #if( PERFORM_DEVELOPER_CHECKS )
     //Check to make sure all neutron detector names can be found in detector names
@@ -6949,7 +7065,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     {
       char buffer[1024];
       snprintf( buffer, sizeof(buffer),
-               "Before rebinning and gamma coutn sum=%10f and afterwards its %10f\n",
+               "Before rebinning and gamma count sum=%10f and afterwards its %10f\n",
                prev_gamma_count_sum_, gamma_count_sum_ );
       log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
     }
@@ -6958,7 +7074,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     {
       char buffer[1024];
       snprintf( buffer, sizeof(buffer),
-               "Before rebinning and gamma count sum=%10f and afterwards its %10f\n",
+               "Before rebinning and neutron count sum=%10f and afterwards its %10f\n",
                prev_neutron_counts_sum_, neutron_counts_sum_ );
       log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
     }
@@ -6999,343 +7115,415 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
     }
   }//for( const auto &m : measurements_ )
   
-  if( !bogusSampleNumbers )
+  //If smaple numbers arent already properly assigned, bail
+  if( bogusSampleNumbers )
+    return;
+  
+  
+  vector<string> gamma_only_dets = detector_names_;
+  vector<string> neutron_only_dets = neutron_detector_names_;
+  for( const auto &n : neutron_only_dets )
   {
-    vector<string> gamma_only_dets = detector_names_;
-    vector<string> neutron_only_dets = neutron_detector_names_;
-    for( const auto &n : neutron_only_dets )
-    {
-      const auto pos = std::find( begin(gamma_only_dets), end(gamma_only_dets), n );
-      if( pos != end(gamma_only_dets) )
-        gamma_only_dets.erase(pos);
-    }//for( const auto &n : neutron_detector_names_ )
+    const auto pos = std::find( begin(gamma_only_dets), end(gamma_only_dets), n );
+    if( pos != end(gamma_only_dets) )
+      gamma_only_dets.erase(pos);
+  }//for( const auto &n : neutron_detector_names_ )
+  
+  const size_t ngammadet = gamma_only_dets.size();
+  const size_t nneutdet = neutron_only_dets.size();
+  
+  //If we dont have both gamma and neutron only detectors, bail
+  if( !nneutdet || !ngammadet )
+    return;
+  
+  
+  //We may need to copy the neutron data into multiple gamma measurements if
+  //  the gamma data is given mutliple times with different calibrations
+  //  See file in refDUEL9G1II9 for an example of when this happens.
+  map<string,vector<string>> neutron_to_gamma_names;
+  
+  std::sort( begin(gamma_only_dets), end(gamma_only_dets) );
+  std::sort( begin(neutron_only_dets), end(neutron_only_dets) );
+  
+  if( ngammadet == nneutdet )
+  {
+    for( size_t i = 0; i < ngammadet; ++i )
+      neutron_to_gamma_names[neutron_only_dets[i]].push_back( gamma_only_dets[i] );
+  }else if( ngammadet && (nneutdet > ngammadet) && ((nneutdet % ngammadet) == 0) )
+  {
+    const size_t mult = nneutdet / ngammadet;
+    for( size_t i = 0; i < nneutdet; ++i )
+      neutron_to_gamma_names[neutron_only_dets[i]].push_back( gamma_only_dets[i/mult] );
+  }else
+  {
+    //Use the edit distance of detector names to pair up neutron to
+    //  gamma detectors.  Only do the pairing if the minimum levenstein
+    //  distance between a neutron detector and a gamma detector is
+    //  unique (i.e., there are not two gamma detectors that both have
+    //  the minimum distance to a neutron detector).
     
-    const size_t ngammadet = gamma_only_dets.size();
-    const size_t nneutdet = neutron_only_dets.size();
-    
-    if( nneutdet && ngammadet )
+    //If the gamma data is reported in multiple energy calibrations, the
+    //  string "_intercal_$<calid>" is appended to the detector name.  We
+    //  do not want to include this in the test, however, we also dont want
+    //  to spoil the intent of 'uniquelyAssigned'
+    vector<pair<string,vector<string>>> tested_gamma_to_actual;
+    for( size_t i = 0; i < gamma_only_dets.size(); ++i )
     {
-      //We may need to copy the neutron data into multiple gamma measurements if
-      //  the gamma data is given mutliple times with different calibrations
-      //  See file in refDUEL9G1II9 for an example of when this happens.
-      map<string,vector<string>> neutron_to_gamma_names;
+      string gamname = gamma_only_dets[i];
+      const auto pos = gamname.find( "_intercal_" );
+      if( pos != string::npos )
+        gamname = gamname.substr(0,pos);
       
-      std::sort( begin(gamma_only_dets), end(gamma_only_dets) );
-      std::sort( begin(neutron_only_dets), end(neutron_only_dets) );
-      
-      if( ngammadet == nneutdet )
+      bool added = false;
+      for( auto &t : tested_gamma_to_actual )
       {
-        for( size_t i = 0; i < ngammadet; ++i )
-          neutron_to_gamma_names[neutron_only_dets[i]].push_back( gamma_only_dets[i] );
-      }else if( ngammadet && (nneutdet > ngammadet) && ((nneutdet % ngammadet) == 0) )
-      {
-        const size_t mult = nneutdet / ngammadet;
-        for( size_t i = 0; i < nneutdet; ++i )
-          neutron_to_gamma_names[neutron_only_dets[i]].push_back( gamma_only_dets[i/mult] );
-      }else
-      {
-        //Use the edit distance of detector names to pair up neutron to
-        //  gamma detectors.  Only do the pairing if the minimum levenstein
-        //  distance between a neutron detector and a gamma detector is
-        //  unique (i.e., there are not two gamma detectors that both have
-        //  the minimum distance to a neutron detector).
-#if( PERFORM_DEVELOPER_CHECKS )
-        stringstream devmsg;
-        devmsg << "Found a file where neutron and gammas are sperate measurements,"
-        " but mapping between detectors not super obvious: gamma_dets={";
-        for( size_t i = 0; i < gamma_only_dets.size(); ++i )
-          devmsg << (i ? ", ": "") << "'" << gamma_only_dets[i] << "'";
-        devmsg << "}, neut_dets={";
-        for( size_t i = 0; i < neutron_only_dets.size(); ++i )
-          devmsg << (i ? ", ": "") << "'" << neutron_only_dets[i] << "'";
-        devmsg << "}";
-        
-        log_developer_error( BOOST_CURRENT_FUNCTION, devmsg.str().c_str() );
-#endif //#if( PERFORM_DEVELOPER_CHECKS )
-        
-        //If the gamma data is reported in multiple energy calibrations, the
-        //  string "_intercal_$<calid>" is appended to the detector name.  We
-        //  do not want to include this in the test, however, we also dont want
-        //  to spoil the intent of 'uniquelyAssigned'
-        vector<pair<string,vector<string>>> tested_gamma_to_actual;
-        for( size_t i = 0; i < gamma_only_dets.size(); ++i )
+        if( t.first == gamname )
         {
-          string gamname = gamma_only_dets[i];
-          const auto pos = gamname.find( "_intercal_" );
-          if( pos != string::npos )
-            gamname = gamname.substr(0,pos);
-          
-          bool added = false;
-          for( auto &t : tested_gamma_to_actual )
-          {
-            if( t.first == gamname )
-            {
-              t.second.push_back( gamma_only_dets[i] );
-              added = true;
-              break;
-            }
-          }//for( check if we already have a detector with name 'gamname' )
-          
-          if( !added )
-		  {
+          t.second.push_back( gamma_only_dets[i] );
+          added = true;
+          break;
+        }
+      }//for( check if we already have a detector with name 'gamname' )
+      
+      if( !added )
+      {
 #if( defined(_MSC_VER) && _MSC_VER <= 1700 )
-		    tested_gamma_to_actual.emplace_back( gamname, vector<string>(1,gamma_only_dets[i]) );
+        tested_gamma_to_actual.emplace_back( gamname, vector<string>(1,gamma_only_dets[i]) );
 #else
-            tested_gamma_to_actual.emplace_back( gamname, vector<string>{gamma_only_dets[i]} );
+        tested_gamma_to_actual.emplace_back( gamname, vector<string>{gamma_only_dets[i]} );
 #endif
-		  }//if( !added )
-        }//for( size_t i = 0; i < gamma_only_dets.size(); ++i )
-        
-        
-        bool uniquelyAssigned = true;
-        for( size_t neutindex = 0; uniquelyAssigned && (neutindex < nneutdet); ++neutindex )
-        {
-          const string &neutname = neutron_only_dets[neutindex];
-
-          vector<unsigned int> distances( tested_gamma_to_actual.size() );
-          
-          for( size_t detnameindex = 0; detnameindex < tested_gamma_to_actual.size(); ++detnameindex )
-          {
-            const string &gammaname = tested_gamma_to_actual[detnameindex].first;
-            distances[detnameindex] = UtilityFunctions::levenshtein_distance( neutname, gammaname );
-            if( distances[detnameindex] > 3 )
-            {
-              if( UtilityFunctions::icontains( neutname, "Neutron") )
-              {
-                string neutnamelowercase = neutname;
-                UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "Gamma");
-                if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
-                {
-                  distances[detnameindex] = 0;
-                }else
-                {
-                  neutnamelowercase = neutname;
-                  UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "");
-                  if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
-                    distances[detnameindex] = 0;
-                }
-              }else if( UtilityFunctions::iends_with( neutname, "Ntr") )
-              {
-                string neutnamelowercase = neutname.substr( 0, neutname.size() - 3 );
-                if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
-                  distances[detnameindex] = 0;
-              }
-            }//if( distances[i] > 3 )
-          }//for( size_t i = 0; uniquelyAssigned && i < ngammadet; ++i )
-          
-          auto positer = std::min_element(begin(distances), end(distances) );
-          auto index = positer - begin(distances);
-          assert( index >= 0 && index < distances.size() );
-          unsigned int mindist = distances[index];
-          uniquelyAssigned = (1 == std::count(begin(distances),end(distances),mindist));
-          
-          if( uniquelyAssigned )
-          {
-            neutron_to_gamma_names[neutname] = tested_gamma_to_actual[index].second;
-            //cout << "Assigning neut(" << neutname << ") -> {";
-            //for( size_t i = 0; i < neutron_to_gamma_names[neutname].size(); ++i )
-            //  cout << (i ? ", " : "") << neutron_to_gamma_names[neutname][i];
-            //cout << "}" << endl;
-          }
-        }//for( size_t neutindex = 0; uniquelyAssigned && (neutindex < nneutdet); ++neutindex )
-        
-        //uniquelyAssigned doesnt catch the case where multiple neutron detectors
-        //  are mapped to a gamma detector, but then some gamma detectors dont have
-        //  any assigned neutron detectors that should
-        
-        if( !uniquelyAssigned )
-        {
-          neutron_to_gamma_names.clear();
-#if( PERFORM_DEVELOPER_CHECKS )
-          log_developer_error( BOOST_CURRENT_FUNCTION, "Unable to uniquly map neutron to gamma detector names" );
-#endif  //PERFORM_DEVELOPER_CHECKS
-        }//if( uniquelyAssigned )
-      }//if( figure out how to assign neutron to gamma detectors ) / else
+      }//if( !added )
+    }//for( size_t i = 0; i < gamma_only_dets.size(); ++i )
+    
+    
+    bool uniquelyAssigned = true;
+    for( size_t neutindex = 0; uniquelyAssigned && (neutindex < nneutdet); ++neutindex )
+    {
+      const string &neutname = neutron_only_dets[neutindex];
       
-      if( neutron_to_gamma_names.size() /* == nneutdet*/ )
+      vector<unsigned int> distances( tested_gamma_to_actual.size() );
+      
+      for( size_t detnameindex = 0; detnameindex < tested_gamma_to_actual.size(); ++detnameindex )
       {
-        set<string> new_neut_det_names;
-        set<string> new_all_det_names;
-        vector<std::shared_ptr<Measurement>> meas_to_delete;
-        
-        for( size_t measindex = 0; measindex < measurements_.size(); ++measindex )
+        const string &gammaname = tested_gamma_to_actual[detnameindex].first;
+        distances[detnameindex] = UtilityFunctions::levenshtein_distance( neutname, gammaname );
+        if( distances[detnameindex] > 3 )
         {
-          std::shared_ptr<Measurement> meas = measurements_[measindex];
-          
-          if( !meas->contained_neutron_ )
+          if( UtilityFunctions::icontains( neutname, "Neutron") )
           {
-            new_all_det_names.insert( meas->detector_name_ );
-            continue;
-          }
-          
-          if( meas->gamma_counts_ && meas->gamma_counts_->size() )
-          {
-#if( PERFORM_DEVELOPER_CHECKS )
-            log_developer_error( BOOST_CURRENT_FUNCTION, "Found a nuetron detector Measurement that had gamma data - shouldnt have happened here." );
-#endif  //PERFORM_DEVELOPER_CHECKS
-            new_all_det_names.insert( meas->detector_name_ );
-            new_neut_det_names.insert( meas->detector_name_ );
-            continue;
-          }
-          
-          auto namepos = neutron_to_gamma_names.find(meas->detector_name_);
-          if( namepos == end(neutron_to_gamma_names) )
-          {
-#if( PERFORM_DEVELOPER_CHECKS )
-            log_developer_error( BOOST_CURRENT_FUNCTION, "Found a nuetron detector Measurement I couldnt map to a gamma meas - should investigate." );
-#endif  //PERFORM_DEVELOPER_CHECKS
-            new_all_det_names.insert( meas->detector_name_ );
-            new_neut_det_names.insert( meas->detector_name_ );
-            continue;
-          }//
-          
-          const vector<string> &gamma_names = namepos->second;
-          
-          const size_t nmeas = measurements_.size();
-          const size_t max_search_dist = 2*gamma_names.size()*(nneutdet+ngammadet);
-          
-          for( size_t gamma_name_index = 0; gamma_name_index < gamma_names.size(); ++gamma_name_index )
-          {
-            std::shared_ptr<Measurement> gamma_meas;
-            const string &gamma_name = gamma_names[gamma_name_index];
-            
-            for( size_t i = measindex; !gamma_meas && (i > 0) && ((measindex-i) < max_search_dist); --i )
+            string neutnamelowercase = neutname;
+            UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "Gamma");
+            if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
             {
-              if( measurements_[i-1]->detector_name_ == gamma_name
-                 && measurements_[i-1]->sample_number_ == meas->sample_number_)
-                gamma_meas = measurements_[i-1];
-            }
-          
-            for( size_t i = measindex+1; !gamma_meas && (i < nmeas) && ((i-measindex) < max_search_dist); ++i )
-            {
-              if( measurements_[i]->detector_name_ == gamma_name
-                 && measurements_[i]->sample_number_ == meas->sample_number_ )
-                gamma_meas = measurements_[i];
-            }
-          
-            if( !gamma_meas )
-            {
-#if( PERFORM_DEVELOPER_CHECKS )
-              stringstream errmsg;
-              errmsg << "Found a nuetron detector Measurement (DetName='" << meas->detector_name_
-              << "', SampleNumber=" << meas->sample_number_
-              << ", StartTime=" << UtilityFunctions::to_iso_string(meas->start_time_)
-              <<") I couldnt find a gamma w/ DetName='"
-              << gamma_name << "' and SampleNumber=" << meas->sample_number_ << ".";
-              log_developer_error( BOOST_CURRENT_FUNCTION, errmsg.str().c_str() );
-#endif  //PERFORM_DEVELOPER_CHECKS
-              meas->detector_name_ = gamma_name;
-              auto numpos = std::find( begin(detector_names_), end(detector_names_), gamma_name );
-              auto numindex = numpos - begin(detector_names_);
-              if( (numpos != end(detector_names_)) && (numindex < detector_numbers_.size()) )
-              {
-                meas->detector_number_ = detector_numbers_[numindex];
-              }else
-              {
-#if( PERFORM_DEVELOPER_CHECKS )
-                log_developer_error( BOOST_CURRENT_FUNCTION,
-                                  ("Failed to be able to find detector number for DetName=" + gamma_name).c_str() );
-#endif
-              }
-            
-              new_all_det_names.insert( meas->detector_name_ );
-              new_neut_det_names.insert( meas->detector_name_ );
-              continue;
-            }//if( !gamma_meas )
-          
-          
-            //TODO: should check and handle real time being different, as well
-            //      as start time.  Should also look into propogating detecor
-            //      information and other quantities over.
-          
-            gamma_meas->contained_neutron_ = true;
-            gamma_meas->neutron_counts_.insert( end(gamma_meas->neutron_counts_),
-                                             begin(meas->neutron_counts_), end(meas->neutron_counts_) );
-            gamma_meas->neutron_counts_sum_ += meas->neutron_counts_sum_;
-            gamma_meas->remarks_.insert( end(gamma_meas->remarks_),
-                                      begin(meas->remarks_), end(meas->remarks_) );
-          
-            //Do not add meas->detector_name_ to new_all_det_names - we are getting rid of meas
-            new_neut_det_names.insert( gamma_meas->detector_name_ );
-          
-            meas_to_delete.push_back( meas );
-          }//for( size_t gamma_name_index = 0; gamma_name_index < gamma_names.size(); gamma_name_index )
-        }//for( size_t measindex = 0; measindex < measurements_.size(); ++measindex )
-        
-        size_t nremoved = 0;
-        for( size_t i = 0; i < meas_to_delete.size(); ++i )
-        {
-          auto pos = std::find( begin(measurements_), end(measurements_), meas_to_delete[i] );
-          if( pos != end(measurements_) )
-          {
-            ++nremoved;
-            measurements_.erase( pos );
-          }else
-          {
-            //if there are multiple energy calibrations, meas_to_delete may 
-          }
-        }//for( size_t i = 0; i < meas_to_delete.size(); ++i )
-        
-        //Before this function is called, detector_names_ and detector_numbers_
-        // should have been filled out, and we havent modified them, so lets
-        // preserve detector number to name mapping, but remove detectors that
-        // no longer exist
-        
-        try
-        {
-          if( detector_names_.size() != detector_numbers_.size() )
-            throw runtime_error( "Unequal number of detector names and numbers" );
-        
-          for( const auto &name : new_all_det_names )
-            if( std::find(begin(detector_names_),end(detector_names_),name) == end(detector_names_) )
-              throw runtime_error( "Is there a new detector name?" );
-          
-          //If we are here we wont loop through measurements_ and change the
-          //  detector numbers of the measurements and keep the same mapping
-          //  of names to numbers
-          
-          map<string,int> detnames_to_number;
-          for( size_t i = 0; i < detector_names_.size(); ++i )
-            detnames_to_number[detector_names_[i]] = detector_numbers_[i];
-          
-          detector_numbers_.clear();
-          for( const auto &s : new_all_det_names )
-            detector_numbers_.push_back( detnames_to_number[s] );
-        }catch( std::exception & )
-        {
-          //If we are here we will go through and force everyrthing to be consistent
-          detector_numbers_.clear();
-          for( size_t i = 0; i < new_all_det_names.size(); ++i )
-            detector_numbers_.push_back( static_cast<int>(i) );
-          const vector<string> new_all_det_names_vec( begin(new_all_det_names), end(new_all_det_names) );
-          for( auto &meas : measurements_ )
-          {
-            const auto iter = std::find( begin(new_all_det_names_vec), end(new_all_det_names_vec), meas->detector_name_ );
-            if( iter != end(new_all_det_names_vec) )
-            {
-              const auto index = iter - begin(new_all_det_names_vec);
-              meas->detector_number_ = detector_numbers_[index];
+              distances[detnameindex] = 0;
             }else
             {
-#if( PERFORM_DEVELOPER_CHECKS )
-              log_developer_error( BOOST_CURRENT_FUNCTION, "Unexpected Detector name found!" );
-#endif
-              //hope for the best....
+              neutnamelowercase = neutname;
+              UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "");
+              if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+                distances[detnameindex] = 0;
             }
-          }//
-        }//try / catch update
+          }else if( UtilityFunctions::iends_with( neutname, "Ntr") )
+          {
+            string neutnamelowercase = neutname.substr( 0, neutname.size() - 3 );
+            if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+              distances[detnameindex] = 0;
+          }else if( UtilityFunctions::iends_with( neutname, "N") )
+          {
+            string neutnamelowercase = neutname.substr( 0, neutname.size() - 1 );
+            if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+              distances[detnameindex] = 0;
+          }
+        }//if( distances[i] > 3 )
+      }//for( size_t i = 0; uniquelyAssigned && i < ngammadet; ++i )
+      
+      auto positer = std::min_element(begin(distances), end(distances) );
+      auto index = positer - begin(distances);
+      assert( index >= 0 && index < distances.size() );
+      unsigned int mindist = distances[index];
+      uniquelyAssigned = (1 == std::count(begin(distances),end(distances),mindist));
+      
+      if( uniquelyAssigned )
+      {
+        neutron_to_gamma_names[neutname] = tested_gamma_to_actual[index].second;
+        //cout << "Assigning neut(" << neutname << ") -> {";
+        //for( size_t i = 0; i < neutron_to_gamma_names[neutname].size(); ++i )
+        //  cout << (i ? ", " : "") << neutron_to_gamma_names[neutname][i];
+        //cout << "}" << endl;
+      }
+    }//for( size_t neutindex = 0; uniquelyAssigned && (neutindex < nneutdet); ++neutindex )
+    
+    //ToDo: uniquelyAssigned doesnt catch the case where multiple neutron detectors
+    //  are mapped to a gamma detector, but then some gamma detectors dont have
+    //  any assigned neutron detectors that should
+    
+    if( !uniquelyAssigned )
+    {
+      neutron_to_gamma_names.clear();
+      
+#if( PERFORM_DEVELOPER_CHECKS )
+      stringstream devmsg;
+      devmsg << "Unable to uniquly map neutron to gamma detector names; neutron"
+                " and gammas are seperate measurements, but mapping between"
+                " detectors not not unique: gamma_dets={";
+      for( size_t i = 0; i < gamma_only_dets.size(); ++i )
+        devmsg << (i ? ", ": "") << "'" << gamma_only_dets[i] << "'";
+      devmsg << "}, neut_dets={";
+      for( size_t i = 0; i < neutron_only_dets.size(); ++i )
+        devmsg << (i ? ", ": "") << "'" << neutron_only_dets[i] << "'";
+      devmsg << "}";
+      
+      log_developer_error( BOOST_CURRENT_FUNCTION, devmsg.str().c_str() );
+#endif //#if( PERFORM_DEVELOPER_CHECKS )
+    }//if( uniquelyAssigned )
+  }//if( figure out how to assign neutron to gamma detectors ) / else
+  
+  
+  //If we cant map the neutron detectors to gamma detectors, lets bail.
+  if( neutron_to_gamma_names.empty() /* || neutron_to_gamma_names.size() != nneutdet*/ )
+    return;
+  
+#if( PERFORM_DEVELOPER_CHECKS )
+  set<size_t> gammas_we_added_neutron_to;
+#endif
+  set<string> new_neut_det_names;
+  set<string> new_all_det_names;
+  vector<std::shared_ptr<Measurement>> meas_to_delete;
+  
+  for( size_t measindex = 0; measindex < measurements_.size(); ++measindex )
+  {
+    std::shared_ptr<Measurement> meas = measurements_[measindex];
+    
+    if( !meas->contained_neutron_ )
+    {
+      new_all_det_names.insert( meas->detector_name_ );
+      continue;
+    }
+    
+    
+    if( meas->gamma_counts_ && meas->gamma_counts_->size() )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+      if( !gammas_we_added_neutron_to.count(measindex) )
+        log_developer_error( BOOST_CURRENT_FUNCTION, "Found a nuetron detector Measurement that had gamma data - shouldnt have happened here." );
+#endif  //PERFORM_DEVELOPER_CHECKS
+      new_all_det_names.insert( meas->detector_name_ );
+      new_neut_det_names.insert( meas->detector_name_ );
+      continue;
+    }
+    
+    //IF we are hear, this `meas` only contains neutron data.
+    
+    auto namepos = neutron_to_gamma_names.find(meas->detector_name_);
+    if( namepos == end(neutron_to_gamma_names) )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+      log_developer_error( BOOST_CURRENT_FUNCTION, "Found a nuetron detector Measurement I couldnt map to a gamma meas - should investigate." );
+#endif  //PERFORM_DEVELOPER_CHECKS
+      new_all_det_names.insert( meas->detector_name_ );
+      new_neut_det_names.insert( meas->detector_name_ );
+      continue;
+    }//
+    
+    const vector<string> &gamma_names = namepos->second;
+    
+    const size_t nmeas = measurements_.size();
+    const size_t max_search_dist = 2*gamma_names.size()*(nneutdet+ngammadet);
+    
+    //We may actually have multiple gamma detectors that we want to assign this
+    //  neutron information to (ex, neutron detector is 'VD1N', and related
+    //  gamma detectors are 'VD1', 'VD1_intercal_CmpEnCal', and
+    //  'VD1_intercal_LinEnCal' - this can possible result in duplication of
+    //  neutron counts, but I havent seen any cases where this happens in an
+    //  unintended way (e.g., other than multiple calibrations).
+    for( const string &gamma_name : gamma_names )
+    {
+      std::shared_ptr<Measurement> gamma_meas;
+      for( size_t i = measindex; !gamma_meas && (i > 0) && ((measindex-i) < max_search_dist); --i )
+      {
+        if( measurements_[i-1]->detector_name_ == gamma_name
+           && measurements_[i-1]->sample_number_ == meas->sample_number_)
+        {
+#if( PERFORM_DEVELOPER_CHECKS )
+          gammas_we_added_neutron_to.insert( i-1 );
+#endif
+          gamma_meas = measurements_[i-1];
+        }
+      }
+      
+      for( size_t i = measindex+1; !gamma_meas && (i < nmeas) && ((i-measindex) < max_search_dist); ++i )
+      {
+        if( measurements_[i]->detector_name_ == gamma_name
+           && measurements_[i]->sample_number_ == meas->sample_number_ )
+        {
+#if( PERFORM_DEVELOPER_CHECKS )
+          gammas_we_added_neutron_to.insert( i );
+#endif
+          gamma_meas = measurements_[i];
+        }
+      }
+      
+      if( !gamma_meas )
+      {
+        //TODO: if we are here we should in principle create a measurement for
+        //  each of the entries in 'gamma_names' - however for now I guess
+        //  we'll just assign the neutron data to a single gamma detector; I
+        //  think this will only cause issues for files that had multiple
+        //  calibrations for the same data, of which we'll make the neutron data
+        //  belong to just the non calibration variant detector (if it exists).
         
-        detector_names_.clear();
-        detector_names_.insert( end(detector_names_), begin(new_all_det_names), end(new_all_det_names) );
+        bool aDetNotInterCal = false;
+        for( size_t i = 0; !aDetNotInterCal && i < gamma_names.size(); ++i )
+          aDetNotInterCal = (gamma_names[i].find("_intercal_") != string::npos);
         
-        neutron_detector_names_.clear();
-        neutron_detector_names_.insert( end(neutron_detector_names_), begin(new_neut_det_names), end(new_neut_det_names) );
+        if( aDetNotInterCal && (gamma_name.find("_intercal_") == string::npos) )
+          continue;
         
-        //Could map the detector names to Aa1, etc. here.
-      }//if( neutron_to_gamma_names.size() )
-    }//if( nneutdet && ngammadet )
-  }//if( !bogusSampleNumbers )
+#if( PERFORM_DEVELOPER_CHECKS )
+        if( gamma_names.size() != 1 && (meas->detector_name_ != gamma_name) )
+        {
+          stringstream errmsg;
+          errmsg << "Found a nuetron detector Measurement (DetName='" << meas->detector_name_
+                 << "', SampleNumber=" << meas->sample_number_
+                 << ", StartTime=" << UtilityFunctions::to_iso_string(meas->start_time_)
+                 << ") I couldnt find a gamma w/ DetName='"
+                 << gamma_name << "' and SampleNumber=" << meas->sample_number_ << ".";
+          log_developer_error( BOOST_CURRENT_FUNCTION, errmsg.str().c_str() );
+        }
+#endif  //PERFORM_DEVELOPER_CHECKS
+        
+        
+        meas->detector_name_ = gamma_name;
+
+        //ToDo: Uhhg, later on when we write things to XML we need to make sure
+        //  the detector description will be consistently written out and read
+        //  back in, so we have to make sure to update this info too in 'meas'.
+        //  We *should* make detector information be an object shared among
+        //  measurements, but oh well for now.
+        std::shared_ptr<Measurement> same_gamma_meas;
+        for( size_t i = 0; !same_gamma_meas && i < measurements_.size(); ++i )
+        {
+          if( measurements_[i]->detector_name_ == meas->detector_name_ )
+            same_gamma_meas = measurements_[i];
+        }
+        
+        if( same_gamma_meas )
+        {
+          meas->detector_description_ = same_gamma_meas->detector_description_;
+          meas->detector_number_ = same_gamma_meas->detector_number_;
+        }else
+        {
+          auto numpos = std::find( begin(detector_names_), end(detector_names_), gamma_name );
+          auto numindex = numpos - begin(detector_names_);
+          if( (numpos != end(detector_names_)) && (numindex < detector_numbers_.size()) )
+          {
+            meas->detector_number_ = detector_numbers_[numindex];
+          }else
+          {
+#if( PERFORM_DEVELOPER_CHECKS )
+            log_developer_error( BOOST_CURRENT_FUNCTION,
+                                ("Failed to be able to find detector number for DetName=" + gamma_name).c_str() );
+#endif
+          }
+        }//if( same_gamma_meas ) / else
+        
+        new_all_det_names.insert( meas->detector_name_ );
+        new_neut_det_names.insert( meas->detector_name_ );
+        continue;
+      }//if( !gamma_meas )
+      
+      
+      //TODO: should check and handle real time being different, as well
+      //      as start time.  Should also look into propogating detecor
+      //      information and other quantities over.
+      
+      gamma_meas->contained_neutron_ = true;
+      gamma_meas->neutron_counts_.insert( end(gamma_meas->neutron_counts_),
+                                         begin(meas->neutron_counts_), end(meas->neutron_counts_) );
+      gamma_meas->neutron_counts_sum_ += meas->neutron_counts_sum_;
+      gamma_meas->remarks_.insert( end(gamma_meas->remarks_),
+                                  begin(meas->remarks_), end(meas->remarks_) );
+      
+      //Do not add meas->detector_name_ to new_all_det_names - we are getting rid of meas
+      new_neut_det_names.insert( gamma_meas->detector_name_ );
+      
+      meas_to_delete.push_back( meas );
+    }//for( size_t gamma_name_index = 0; gamma_name_index < gamma_names.size(); gamma_name_index )
+  }//for( size_t measindex = 0; measindex < measurements_.size(); ++measindex )
+  
+  size_t nremoved = 0;
+  for( size_t i = 0; i < meas_to_delete.size(); ++i )
+  {
+    auto pos = std::find( begin(measurements_), end(measurements_), meas_to_delete[i] );
+    if( pos != end(measurements_) )
+    {
+      ++nremoved;
+      measurements_.erase( pos );
+    }else
+    {
+      //if there are multiple energy calibrations, meas_to_delete may
+    }
+  }//for( size_t i = 0; i < meas_to_delete.size(); ++i )
+  
+  //Before this function is called, detector_names_ and detector_numbers_
+  // should have been filled out, and we havent modified them, so lets
+  // preserve detector number to name mapping, but remove detectors that
+  // no longer exist
+  
+  try
+  {
+    if( detector_names_.size() != detector_numbers_.size() )
+      throw runtime_error( "Unequal number of detector names and numbers" );
+    
+    for( const auto &name : new_all_det_names )
+      if( std::find(begin(detector_names_),end(detector_names_),name) == end(detector_names_) )
+        throw runtime_error( "Is there a new detector name?" );
+    
+    //If we are here we wont loop through measurements_ and change the
+    //  detector numbers of the measurements and keep the same mapping
+    //  of names to numbers
+    
+    map<string,int> detnames_to_number;
+    for( size_t i = 0; i < detector_names_.size(); ++i )
+      detnames_to_number[detector_names_[i]] = detector_numbers_[i];
+    
+    detector_numbers_.clear();
+    for( const auto &s : new_all_det_names )
+      detector_numbers_.push_back( detnames_to_number[s] );
+  }catch( std::exception & )
+  {
+    //If we are here we will go through and force everyrthing to be consistent
+    detector_numbers_.clear();
+    for( size_t i = 0; i < new_all_det_names.size(); ++i )
+      detector_numbers_.push_back( static_cast<int>(i) );
+    const vector<string> new_all_det_names_vec( begin(new_all_det_names), end(new_all_det_names) );
+    for( auto &meas : measurements_ )
+    {
+      const auto iter = std::find( begin(new_all_det_names_vec), end(new_all_det_names_vec), meas->detector_name_ );
+      if( iter != end(new_all_det_names_vec) )
+      {
+        const auto index = iter - begin(new_all_det_names_vec);
+        meas->detector_number_ = detector_numbers_[index];
+      }else
+      {
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( BOOST_CURRENT_FUNCTION, "Unexpected Detector name found!" );
+#endif
+        //hope for the best....
+      }
+    }//
+  }//try / catch update
+  
+  detector_names_.clear();
+  detector_names_.insert( end(detector_names_), begin(new_all_det_names), end(new_all_det_names) );
+  
+  neutron_detector_names_.clear();
+  neutron_detector_names_.insert( end(neutron_detector_names_), begin(new_neut_det_names), end(new_neut_det_names) );
+  
+  //Could map the detector names to Aa1, etc. here.
 }//void merge_neutron_meas_into_gamma_meas()
+
+
 
 void MeasurementInfo::set_detector_type_from_other_info()
 {
@@ -8008,7 +8196,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
             result.remark_ = line.substr(info_pos); //just in case
           }else
           {
-            //Leaving bellow line in because I only tested above parsing on a handfull of files (20161010).
+            //Leaving below line in because I only tested above parsing on a handfull of files (20161010).
             cerr << "Unknown radiation type in ana  result: '" << result.nuclide_type_ << "'" << endl;
             result.nuclide_ = line.substr(info_pos);
           }
@@ -8586,7 +8774,8 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     return false;
   
   //  if( summed->energy_calibration_model() != Measurement::FullRangeFraction
-  //     && summed->energy_calibration_model() != Measurement::Polynomial )
+  //     && summed->energy_calibration_model() != Measurement::Polynomial
+  //     && summed->energy_calibration_model() != Measurement::UnspecifiedUsingDefaultPolynomial)
   //    return false;
   
   //require the number of channels to be a power of two.
@@ -8926,7 +9115,8 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     vector<float> calib_coef = summed->calibration_coeffs();
     if( summed->energy_calibration_model() == Measurement::FullRangeFraction )
       calib_coef = fullrangefraction_coef_to_polynomial( calib_coef, n_channel );
-    else if( summed->energy_calibration_model() != Measurement::Polynomial )
+    else if( summed->energy_calibration_model() != Measurement::Polynomial
+             && summed->energy_calibration_model() != Measurement::UnspecifiedUsingDefaultPolynomial )
       calib_coef.clear();
     
     if( calib_coef.size() > 0 )
@@ -9249,7 +9439,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
     bool foundNeutronDet = false;
     string latitudeStr, longitudeStr;
     
-    //As painful as this is, I will read in each variable bellow individually
+    //As painful as this is, I will read in each variable below individually
     //  rather than using a struct, because packing may be an issue
     //  see http://stackoverflow.com/questions/7789668/why-would-the-size-of-a-packed-structure-be-different-on-linux-and-windows-when
     int16_t wINFTYP; // Must be 1
@@ -10420,22 +10610,22 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
         meas->real_time_ = 0.0f;
       
       if( is130v0 )
-        meas->detector_type_ = "";
+        meas->detector_description_ = "";
       else if( is135v1 )
-        meas->detector_type_ = "";
+        meas->detector_description_ = "";
       
       if( is130v0 )
-         meas->detector_type_ = "GR-130";
+         meas->detector_description_ = "GR-130";
       else if( is135v1 )
-         meas->detector_type_ = "GR-135 v1";  // {Serial #'+SerialNumber+', '}  {Fnot invariant for same file}
+         meas->detector_description_ = "GR-135 v1";  // {Serial #'+SerialNumber+', '}  {Fnot invariant for same file}
       else if( is135v2 )
-         meas->detector_type_ = "GR-135 v2";
+         meas->detector_description_ = "GR-135 v2";
       if( dtCzt )
-        meas->detector_type_ += ", CZT";
+        meas->detector_description_ += ", CZT";
     
       snprintf( charbuff, sizeof(charbuff),
                 ", RecordSize: %i bytes", int(record_size) );
-      meas->title_ += meas->detector_type_ + charbuff;
+      meas->title_ += meas->detector_description_ + charbuff;
       
       meas->detector_number_ = dtCzt;
       meas->sample_number_ = static_cast<int>( j+1 );
@@ -10494,6 +10684,8 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
         float EgyCal[3] = { 0.0f };
         const float nbin = static_cast<float>( nchannels );
         
+        bool usingGuessedVal = false;
+        
         if( is135v1 || is135v2 )
         {
           if( dtCzt )
@@ -10501,6 +10693,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
             EgyCal[1] = (122.06f - 14.4f)/(126.0f - 10.0f);
             EgyCal[0] = 14.4f - EgyCal[1]*10.0f;
             EgyCal[2] = 0.0f;
+            usingGuessedVal = true;
             warnings.insert( "Warning. Default GR135 energy calibration for CZT"
                              " has been assumed" );
           }else
@@ -10508,6 +10701,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
             EgyCal[0] = 0.11533801f;
             EgyCal[1] = 2.8760445f;
             EgyCal[2] = 0.0006023737f;
+            usingGuessedVal = true;
             warnings.insert( "Warning. Default GR135 energy calibration for NaI"
                              " has been assumed." );
           }
@@ -10516,6 +10710,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
           EgyCal[0] = -21.84f;
           EgyCal[1] = 3111.04f/(nbin+1.0f);
           EgyCal[2] = 432.84f/(nbin+1.0f)/(nbin+1.0f);
+          usingGuessedVal = true;
           warnings.insert( "Warning. Default GR130 energy calibration for NaI"
                            " has been assumed." );
         }
@@ -10523,7 +10718,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
         meas->calibration_coeffs_.push_back( EgyCal[0] );
         meas->calibration_coeffs_.push_back( EgyCal[1] );
         meas->calibration_coeffs_.push_back( EgyCal[2] );
-        meas->energy_calibration_model_ = Measurement::Polynomial;
+        meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
       }//if( meas->calibration_coeffs_.empty() )
       
       if( j == 0 )
@@ -10958,7 +11153,8 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
     }//if( counts.size() )
     
     vector<float> coefs;
-    if( summed->energy_calibration_model_ == Measurement::Polynomial )
+    if( summed->energy_calibration_model_ == Measurement::Polynomial
+       || summed->energy_calibration_model_ == Measurement::UnspecifiedUsingDefaultPolynomial )
       coefs = summed->calibration_coeffs_;
     else if( summed->energy_calibration_model_ == Measurement::FullRangeFraction )
       coefs = fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, counts.size() );
@@ -12048,7 +12244,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     //Note that this is a hack to read in deviation pairs saved from this code,
     //  and I havent seen any simple spectrometer style files actually use this.
     //Also, it is completely untested if it actually works.
-    //For the ref8TINMQY7PF, the bellow index based matching up shows this
+    //For the ref8TINMQY7PF, the below index based matching up shows this
     //  approach may not always be correct...
     for( size_t i = 0; i < instInfoNodes.size(); ++i )
     {
@@ -12061,7 +12257,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     
   }else
   {
-    //This bellow loop could be parallized a bit more, in terms of all
+    //This below loop could be parallized a bit more, in terms of all
     //  <Spectrum> tags of all <Measurement>'s being put in the queue to work
     //  on asyncronously.  In practice though this isnt necassarry since it
     //  looks like most passthrough files only have one <Measurement> tag anyway
@@ -12594,12 +12790,12 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               //Check if calibration is valid, and if not, fill it in from the
               //  next spectrum... seems a little sketch but works on all the
               //  example files I have.
-              if( Measurement::UnknownEquationType == meas->energy_calibration_model_
+              if( Measurement::InvalidEquationType == meas->energy_calibration_model_
                   && meas->calibration_coeffs_.empty()
                  && (i < (measurements_this_node.size()-1))
                  && measurements_this_node[i+1]
                  && !measurements_this_node[i+1]->calibration_coeffs_.empty()
-                 && measurements_this_node[i+1]->energy_calibration_model_ != Measurement::UnknownEquationType )
+                 && measurements_this_node[i+1]->energy_calibration_model_ != Measurement::InvalidEquationType )
               {
                 meas->energy_calibration_model_ = measurements_this_node[i+1]->energy_calibration_model_;
                 meas->calibration_coeffs_ = measurements_this_node[i+1]->calibration_coeffs_;
@@ -12813,7 +13009,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
   }//if( is_spectrometer ) / else
  
   
-  //Some HPRDS files will have Instrument information right bellow the document node.
+  //Some HPRDS files will have Instrument information right below the document node.
   //  For example see refR96VUZSYYM
   //  (I dont think checking here will ever overide info found for a specific
   //  spectrum, but not totally sure, so will leave in a warning, which can be taken out after running the tests)
@@ -12952,7 +13148,8 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
 //    if( (manufacturer_=="ICx Technologies" && instrument_model_=="identiFINDER") )
 //    {
 //    }
-    
+    //In priniciple we should add all of these following detectors to the
+    //  DetectorType enum, but being lazy for now.
     if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
         && !(manufacturer_=="ICx Technologies" && instrument_model_=="")
         && !(manufacturer_=="Radiation Solutions Inc." /* && instrument_model_=="RS-701"*/)
@@ -12967,13 +13164,13 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
        && !(manufacturer_=="Berkeley Nucleonics Corp." && instrument_model_=="SAM 945")
        && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
        && !(manufacturer_=="Smiths Detection" && instrument_model_=="RadSeeker_DL")
+       && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
        && !(manufacturer_=="" && instrument_model_=="")
        )
       cerr << "Unknown detector type: maufacturer=" << manufacturer_ << ", ins_model=" << instrument_model_ << endl;
     
     //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_CS
     //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_DL
-    //Unknown detector type: maufacturer=RSL/SPAWAR, ins_model=Multipod MPS
     //Unknown detector type: maufacturer=Princeton Gamma-Tech Instruments, Inc., ins_model=RIIDEye, Ext2x2
   }
   
@@ -13000,6 +13197,7 @@ void Measurement::popuplate_channel_energies_from_coeffs()
   switch( energy_calibration_model_ )
   {
     case Measurement::Polynomial:
+    case Measurement::UnspecifiedUsingDefaultPolynomial:
       channel_energies_ = polynomial_binning( calibration_coeffs_, 
                                               nbin, deviation_pairs_ );
       break;
@@ -13013,7 +13211,7 @@ void Measurement::popuplate_channel_energies_from_coeffs()
       channel_energies_.reset( new vector<float>(calibration_coeffs_) );
       break;
         
-    case Measurement::UnknownEquationType:
+    case Measurement::InvalidEquationType:
       throw runtime_error( "popuplate_channel_energies_from_coeffs():"
                            " unknown equation type" );
       break;
@@ -13045,6 +13243,7 @@ void Measurement::add_calibration_to_2012_N42_xml(
       coefs = fullrangefraction_coef_to_polynomial( coefs, nbin );
       //note intential fallthrough
     case Measurement::Polynomial:
+    case Measurement::UnspecifiedUsingDefaultPolynomial:
     {
       coefname = "CoefficientValues";
       
@@ -13061,7 +13260,7 @@ void Measurement::add_calibration_to_2012_N42_xml(
     }//case Measurement::Polynomial:
       
     case Measurement::LowerChannelEdge:
-    case Measurement::UnknownEquationType:  //Taking a guess here (we should alway capture FRF, Poly, and LowrBinEnergy correctly,
+    case Measurement::InvalidEquationType:  //Taking a guess here (we should alway capture FRF, Poly, and LowrBinEnergy correctly,
       if( !!channel_energies_ || calibration_coeffs().size() )
       {
         coefname = "EnergyBoundaryValues";
@@ -13586,17 +13785,10 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     RadInstrumentData->append_attribute( attr );
   }
   
-#if( DONT_USE_STD_BIND )
+
   workerpool.post( [this,RadInstrumentData,&xmldocmutex,&calToSpecMap](){
     insert_N42_calibration_nodes( measurements_ , RadInstrumentData, xmldocmutex, calToSpecMap );
   });
-#else
-  workerpool.post( std::bind( &insert_N42_calibration_nodes,
-                               std::cref(measurements_),
-                               RadInstrumentData,
-                               std::ref(xmldocmutex),
-                               std::ref(calToSpecMap) ) );
-#endif
   
   string original_creator;
   for( size_t i = 0; i < remarks_.size(); ++i )
@@ -13855,7 +14047,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     {
       if( detector_names_[i] == measurements_[j]->detector_name_ )
       {
-        rad_det_desc = measurements_[j]->detector_type_;
+        rad_det_desc = measurements_[j]->detector_description_;
         break;
       }
     }
@@ -13958,7 +14150,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     boost::posix_time::ptime starttime = smeas[0]->start_time();
     float rtime = smeas[0]->real_time();
 
-    //Bellow allows up to (an arbitrarily chosen) 50 ms difference in start and
+    //Below allows up to (an arbitrarily chosen) 50 ms difference in start and
     //  real times to allow rounding errors during parsing; There are also some
     //  multi-detector systems (ex Anthony NM HPGe)  where the various
     //  sub-detectors arnet perfectly synced, but they are close enough to
@@ -14043,15 +14235,9 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
         RadMeasurement->append_attribute( attr );
       }
       
-#if( DONT_USE_STD_BIND )
-	   workerpool.post( [this,&xmldocmutex,RadMeasurement,smeas,calid](){
-	     add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
-	   } );
-#else
-      workerpool.post( std::bind( &MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml,
-                                    RadMeasurement, smeas, calid,
-                                   std::ref(xmldocmutex) ) );
-#endif
+	    workerpool.post( [this,&xmldocmutex,RadMeasurement,smeas,calid](){
+	      add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
+	    } );
     }else //if( allsame )
     {
       for( size_t i = 0; i < smeas.size(); ++i )
@@ -14073,14 +14259,8 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
           RadMeasurement->append_attribute( attr );
         }
         
-#if( DONT_USE_STD_BIND )
 		workerpool.post( [this,RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
 			add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex ); } );
-#else
-        workerpool.post( std::bind( &MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml,
-                                     RadMeasurement, thismeas, thiscalid,
-                                     std::ref(xmldocmutex) ) );
-#endif
       }//for( loop over measuremtns for this sample number )
     }//if( allsame ) / else
   }//for( )
@@ -14280,7 +14460,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
 
       const string detnam = !m->detector_name_.empty() ? m->detector_name_ : s_unnamed_det_placeholder;
       
-      //Bellow choice of zero compressing if the gamma sum is less than 15 times the
+      //Below choice of zero compressing if the gamma sum is less than 15 times the
       //  number of gamma channels is arbitrarily chosen, and has not been
       //  benchmarked or checked it is a reasonable value
       const bool zerocompressed = (!!m->gamma_counts_ && (m->gamma_count_sum_<15.0*m->gamma_counts_->size()));
@@ -14347,7 +14527,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
     
       std::lock_guard<std::mutex> lock( xmldocmutex );
   
-      if( !!m->gamma_counts_ && !m->gamma_counts_->empty())
+      if( m->gamma_counts_ && !m->gamma_counts_->empty())
       {
         xml_node<char> *Spectrum = doc->allocate_node( node_element, "Spectrum" );
         spectrum_nodes.push_back( Spectrum );
@@ -14409,7 +14589,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
           if( zerocompressed )
             ChannelData->append_attribute( doc->allocate_attribute( "compressionCode", "CountedZeroes" ) );
         }//if( channeldata.size() )
-      }//if( !!gamma_counts_ && gamma_counts_->size() )
+      }//if( gamma_counts_ && gamma_counts_->size() )
     
       if( m->contained_neutron_ )
       {
@@ -15087,7 +15267,7 @@ void MeasurementInfo::decode_2012_N42_detector_state_and_quality( MeasurementShr
     
     //This is vestigial for MeasurementInfo_2012N42_VERSION==1
     rapidxml::xml_node<char> *type_node = extension_node->first_node( "InterSpec:DetectorType", 22 );
-    meas->detector_type_ = xml_value_str( type_node );
+    meas->detector_description_ = xml_value_str( type_node );
   }//if( detector_type_.size() || title_.size() )
 }//void decode_2012_N42_detector_state_and_quality(...)
 
@@ -15100,21 +15280,11 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
                                      std::mutex &meas_mutex,
                                      std::mutex &calib_mutex )
 {
-//  static std::mutex cerrmutex;
+  assert( id_to_dettype_ptr );
+  assert( calibrations_ptr );
   
   try
   {
-//  const IdToDetectorType *id_to_dettype_ptr
-//               = boost::any_cast< const IdToDetectorType * >( id_to_dettypeany );
-//  DetectorToCalibInfo *calibrations_ptr
-//             = boost::any_cast< DetectorToCalibInfo *>( calibrations_any );
-  
-//  if( !id_to_dettype_ptr && !id_to_dettypeany.empty() )
-//    throw logic_error( "decode_2012_N42_rad_measurment_node(...): invalid id_to_dettypeany" );
-//    
-//  if( !calibrations_ptr && !calibrations_any.empty() )
-//    throw logic_error( "decode_2012_N42_rad_measurment_node(...): invalid calibrations_any" );
-  
     vector<string> remarks;
     float real_time = 0.0;
     boost::posix_time::ptime start_time;
@@ -15135,9 +15305,13 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           && !UtilityFunctions::icontains(meas_id_att_str,"Sample") )
       {
         sample_num_from_meas_node = 0;
+      }else if( sscanf( meas_id_att_str.c_str(), "Sample%i", &(sample_num_from_meas_node)) == 1 )
+      {
       }else if( sscanf( meas_id_att_str.c_str(), "Survey %i", &(sample_num_from_meas_node)) == 1 )
       {
-      }else if( sscanf( meas_id_att_str.c_str(), "Sample%i", &(sample_num_from_meas_node)) == 1 )
+      }else if( sscanf( meas_id_att_str.c_str(), "Survey_%i", &(sample_num_from_meas_node)) == 1 )
+      {
+      }else if( sscanf( meas_id_att_str.c_str(), "Survey%i", &(sample_num_from_meas_node)) == 1 )
       {
       }//else ... another format I dont recall seeing.
     }//if( samp_det_str.size() )
@@ -15146,8 +15320,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         remark_node;
         remark_node = XML_NEXT_TWIN(remark_node) )
     {
-      string remark = xml_value_str( remark_node );
-      trim( remark );
+      string remark = UtilityFunctions::trim_copy( xml_value_str(remark_node) );
       if( remark.size() )
         remarks.push_back( remark );
     }//for( loop over remarks _
@@ -15191,9 +15364,9 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     rapidxml::xml_node<char> *occupancy_node = meas_node->first_node( "OccupancyIndicator", 18 );
     if( occupancy_node && occupancy_node->value_size() )
     {
-      if( XML_VALUE_ICOMPARE(occupancy_node, "true") )
+      if( XML_VALUE_ICOMPARE(occupancy_node, "true") || XML_VALUE_ICOMPARE(occupancy_node, "1") )
         occupied = Measurement::Occupied;
-      else if( XML_VALUE_ICOMPARE(occupancy_node, "false") )
+      else if( XML_VALUE_ICOMPARE(occupancy_node, "false") || XML_VALUE_ICOMPARE(occupancy_node, "0") )
         occupied = Measurement::NotOccupied;
     }//if( occupancy_node && occupancy_node->value_size() )
 
@@ -15205,7 +15378,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     vector< pair<std::shared_ptr<Measurement>,string> > meas_to_cal_id;
     
     
-    for( const rapidxml::xml_node<char> *spectrum_node = meas_node->first_node( "Spectrum", 8 );
+    for( const rapidxml::xml_node<char> *spectrum_node = XML_FIRST_NODE(meas_node, "Spectrum");
          spectrum_node;
          spectrum_node = XML_NEXT_TWIN(spectrum_node) )
     {
@@ -15222,7 +15395,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "totalEfficiencyCalibrationReference", 35 );
 
     
-      std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
+      auto meas = std::make_shared<Measurement>();
       DetectionType det_type = GammaDetection;
     
       //Get the detector name from the XML det_info_att if we have it, otherwise
@@ -15230,22 +15403,19 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       //  this spetrum is from that.
       if( det_info_att && det_info_att->value_size() )
         meas->detector_name_ = xml_value_str( det_info_att );
-      else if( id_to_dettype_ptr && id_to_dettype_ptr->size()==1 )
+      else if( id_to_dettype_ptr->size()==1 )
         meas->detector_name_ = id_to_dettype_ptr->begin()->first;
     
       if( meas->detector_name_ == s_unnamed_det_placeholder )
         meas->detector_name_.clear();
     
-      if( id_to_dettype_ptr )
+  
+      auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
+      if( det_iter != end(*id_to_dettype_ptr) )
       {
-        map<string,pair<DetectionType,string> >::const_iterator det_iter
-                              = id_to_dettype_ptr->find( meas->detector_name_ );
-        if( det_iter != id_to_dettype_ptr->end() )
-        {
-          det_type = det_iter->second.first;
-          meas->detector_type_ = det_iter->second.second; //e.x. "HPGe 50%"
-        }//if( det_iter != id_to_dettype_ptr->end() )
-      }//if( id_to_dettype_ptr )
+        det_type = det_iter->second.first;
+        meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
+      }//if( det_iter != id_to_dettype_ptr->end() )
 
       const rapidxml::xml_node<char> *live_time_node = spectrum_node->first_node( "LiveTimeDuration", 16 );
       if( !live_time_node )
@@ -15273,16 +15443,14 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           //  accurate RealTime may be recorded in the remark if necassary...
           //  see notes in create_2012_N42_xml() and add_spectra_to_measurment_node_in_2012_N42_xml()
           //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
-          remark = remark.substr( 9 );
-          UtilityFunctions::trim( remark );
+          remark = UtilityFunctions::trim_copy( remark.substr(9) );
           meas->real_time_ = time_duration_in_seconds( remark );
           
           use_remark_real_time = (meas->real_time_ > 0.0);
         }else if( UtilityFunctions::istarts_with( remark, "Title:") )
         {
           //Starting with MeasurementInfo_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
-          remark = remark.substr( 6 );
-          UtilityFunctions::trim( remark );
+          remark = UtilityFunctions::trim_copy( remark.substr(6) );
           meas->title_ += remark;
         }else if( remark.size() )
         {
@@ -15299,9 +15467,13 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         if( UtilityFunctions::istarts_with(samp_det_str, "background") )
         { 
           meas->sample_number_ = 0;
+        }else if( sscanf( samp_det_str.c_str(), "Sample%i", &(meas->sample_number_)) == 1 )
+        {
         }else if( sscanf( samp_det_str.c_str(), "Survey %i", &(meas->sample_number_)) == 1 )
         {
-        }else if( sscanf( samp_det_str.c_str(), "Sample%i", &(meas->sample_number_)) == 1 )
+        }else if( sscanf( samp_det_str.c_str(), "Survey_%i", &(meas->sample_number_)) == 1 )
+        {
+        }else if( sscanf( samp_det_str.c_str(), "Survey%i", &(meas->sample_number_)) == 1 )
         {
         }else if( sample_num_from_meas_node != -999 )
         {
@@ -15330,7 +15502,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       //RealTime shouldnt be under Spectrum node (should be under RadMeasurement)
       //  but some files mess this up, so check for real time under the spectrum
       //  node if we dont have the real time yet
-      if(  meas->real_time_ <= 0.0 )
+      if(  meas->real_time_ <= 0.0f )
       {
         const rapidxml::xml_node<char> *real_time_node = XML_FIRST_NODE(spectrum_node, "RealTimeDuration");
         if( !real_time_node )
@@ -15353,7 +15525,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       if( live_time_node && live_time_node->value_size() )
         meas->live_time_ = time_duration_in_seconds( live_time_node->value(), live_time_node->value_size() );
       
-      std::shared_ptr<vector<float> > gamma_counts = std::make_shared<vector<float> >();
+      auto gamma_counts = std::make_shared<vector<float>>();
     
       if( channel_data_node && channel_data_node->value_size() )
       {
@@ -15386,73 +15558,87 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         continue;
 
       bool is_gamma = (det_type == GammaDetection);
+      bool is_neutron = ((det_type == NeutronDetection) || (det_type == GammaAndNeutronDetection));
       if( det_type == GammaAndNeutronDetection )
       {
         const string att_val = xml_value_str( id_att );
-        is_gamma = !icontains( att_val, "Neutron" );
+        is_gamma = !(icontains(att_val,"Neutron") || icontains(att_val,"Ntr"));
+        
+        //If no calibration info is given, then assume it is not a gamma measurement
         if( !calib_att || !calib_att->value_size() )
           is_gamma = false;
       }//if( det_type == GammaAndNeutronDetection )
     
-      if( is_gamma )
+      //Sometimes a gamma and neutron detector will have only neutron counts
+      
+      if( is_gamma && gamma_counts && !gamma_counts->empty() )
       {
         meas->gamma_counts_ = gamma_counts;
       
         if( !calib_att || !calib_att->value_size() )
         {
-          cerr << "Found a gamma spectrum without calibration "
-               << "information, skipping it" << endl;
-          continue;
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( BOOST_CURRENT_FUNCTION, "Found a gamma spectrum without calibration information" );
+#endif
+          //continue;
         }//if( !calib_att || !calib_att->value_size() )
       
-        if( !gamma_counts || gamma_counts->empty() )
-        {
-          cerr << "Found a gamma spectrum with no channel data, skipping" << endl;
-          continue;
-        }//if( !meas->gamma_counts_ || meas->gamma_counts_.empty() )
-
-        if( calibrations_ptr )
-        {//begin code block to deal with calibrations
-          std::lock_guard<std::mutex> lock( calib_mutex );
-
-          const string detnam = xml_value_str(calib_att);
+      
+        const string detnam = xml_value_str(calib_att);
         
-          map<string,MeasurementCalibInfo>::iterator calib_iter
+        std::lock_guard<std::mutex> lock( calib_mutex );
+
+        map<string,MeasurementCalibInfo>::iterator calib_iter
                                              = calibrations_ptr->find( detnam );
     
-          if( calib_iter == calibrations_ptr->end() )
+        //If there is only one energy calibration, use it, even if names dont
+        //  match up.  IF more than one calibration then use default
+        if( calib_iter == end(*calibrations_ptr) )
+        {
+          if( calibrations_ptr->size() == 1 )
           {
-            cerr << "No calibration information for gamma spcetrum claiming to "
-                 << "have calibration data '" << detnam
-                 << "' skipping" << endl;
-            if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
-              continue;
+            calib_iter = calibrations_ptr->begin();
           }else
           {
-            MeasurementCalibInfo &calib = calib_iter->second;
-      
-            calib.nbin = meas->gamma_counts_->size();
-            calib.fill_binning();
-      
-            if( !calib.binning )
+            const string defCalName = "DidntHaveCalSoUsingDefCal_" + std::to_string( meas->gamma_counts_->size() );
+            calib_iter = calibrations_ptr->find( defCalName );
+            if( calib_iter == end(*calibrations_ptr) )
             {
-              cerr << "Calibration somehow invalid for '" << detnam
-                   << "', skipping filling out." << endl;
-              continue;
-            }//if( !calib.binning )
+              DetectorToCalibInfo::value_type info( defCalName, MeasurementCalibInfo() );
+              info.second.equation_type = Measurement::UnspecifiedUsingDefaultPolynomial;
+              info.second.nbin = meas->gamma_counts_->size();
+              info.second.coefficients.push_back( 0.0f );
+              info.second.coefficients.push_back( 3000.0f / std::max(info.second.nbin-1,size_t(1)) );
+              //info.second.calib_id = defCalName;  //Leave commented out so wont get put into meas_to_cal_id
+              calib_iter = calibrations_ptr->insert( std::move(info) ).first;
+            }//if( we havent yet created a default calibration )
+          }//if( we have a single calibration we can use ) / else
+        }//if( no calibration present already )
+        
+        assert( calib_iter != calibrations_ptr->end() );
+        
+        MeasurementCalibInfo &calib = calib_iter->second;
+    
+        calib.nbin = meas->gamma_counts_->size();
+        calib.fill_binning();
+      
+        if( !calib.binning )
+        {
+          cerr << "Calibration somehow invalid for '" << detnam
+               << "', skipping filling out." << endl;
+          continue;
+        }//if( !calib.binning )
           
-            meas->calibration_coeffs_ = calib.coefficients;
-            meas->deviation_pairs_    = calib.deviation_pairs_;
-            meas->channel_energies_   = calib.binning;
-            meas->energy_calibration_model_  = calib.equation_type;
+        meas->calibration_coeffs_ = calib.coefficients;
+        meas->deviation_pairs_    = calib.deviation_pairs_;
+        meas->channel_energies_   = calib.binning;
+        meas->energy_calibration_model_  = calib.equation_type;
           
-            if( calib.calib_id.size() )
-              meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
-          }//if( calib_iter == calibrations_ptr->end() ) / else
-        }//if( calibrations_ptr )
-
+        if( calib.calib_id.size() )
+          meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
+        
         meas->contained_neutron_ = false;
-      }else
+      }else if( is_neutron && meas->gamma_counts_ && meas->gamma_counts_->size() < 6 && meas->gamma_counts_->size() > 0 )
       {
         meas->neutron_counts_sum_ = meas->gamma_count_sum_;
         meas->gamma_count_sum_ = 0.0;
@@ -15461,7 +15647,10 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         meas->contained_neutron_ = true;
       //        if( gamma_counts )
       //          meas->neutron_counts_.swap( *gamma_counts );
-      }//if( is_gamma ) / else
+      }else
+      {
+        continue;
+      }//if( is_gamma ) / else if ( neutron ) / else
     //      const rapidxml::xml_node<char> *extension_node = meas_node->first_node( "SpectrumExtension", 17 );
     
       decode_2012_N42_detector_state_and_quality( meas, meas_node );
@@ -15473,9 +15662,11 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     // checks if there is a min, max, and total neutron <GrossCounts> node
     //  for this <RadMeasurement> node.
     bool min_neut = false, max_neut = false, total_neut = false, has_other = false;
-    for( rapidxml::xml_node<char> *node = meas_node->first_node( "GrossCounts", 11 );
-        node;
-        node = XML_NEXT_TWIN(node) )
+    
+    //XML_FOREACH_DAUGHTER( node, meas_node, "GrossCounts" )
+    for( auto node = XML_FIRST_NODE( meas_node, "GrossCounts" );
+         node;
+         node = XML_NEXT_TWIN(node) )
     {
       const rapidxml::xml_attribute<char> *att = node->first_attribute( "radDetectorInformationReference", 31, false );
       const bool is_min = XML_VALUE_ICOMPARE(att, "minimumNeutrons");
@@ -15490,7 +15681,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     
     const bool has_min_max_total_neutron = ((min_neut && max_neut && total_neut) && !has_other);
     
-    for( rapidxml::xml_node<char> *gross_counts_node = meas_node->first_node( "GrossCounts", 11 );
+    for( auto gross_counts_node = XML_FIRST_NODE( meas_node, "GrossCounts" );
          gross_counts_node;
          gross_counts_node = XML_NEXT_TWIN(gross_counts_node) )
     {
@@ -15521,28 +15712,39 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       if( meas->detector_name_ == s_unnamed_det_placeholder )
         meas->detector_name_.clear();
     
-      if( id_to_dettype_ptr )
-      {
-        map<string,pair<DetectionType,string> >::const_iterator det_iter
-                             = id_to_dettype_ptr->find( meas->detector_name_ );
-        if( det_iter == id_to_dettype_ptr->end() )
-        {
-          cerr << "No detector information for '" << meas->detector_name_
-               << "' so skipping" << endl;
-          continue;
-        }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
       
-        det_type = det_iter->second.first;
-        meas->detector_type_ = det_iter->second.second; //e.x. "HPGe 50%"
-      }//if( id_to_dettype_ptr )
-
+      auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
+      if( det_iter == end(*id_to_dettype_ptr) )
+      {
+        cerr << "No detector information for '" << meas->detector_name_
+             << "' so skipping" << endl;
+        continue;
+      }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
+      
+      
+      det_type = det_iter->second.first;
+      meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
+      
       if( icontains( det_info_ref, "Neutrons" ) )
         det_type = NeutronDetection;
     
-      if( det_type != NeutronDetection
-          && (det_type != GammaAndNeutronDetection || !meas_node->first_node("Spectrum",8) ) )
+      if( (det_type != NeutronDetection)
+          && (det_type != GammaAndNeutronDetection) )
       {
-        cerr << "Found a non neutron GrossCount node, skipping" << endl;
+#if(PERFORM_DEVELOPER_CHECKS)
+        auto  det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
+        if( det_iter == id_to_dettype_ptr->end() )
+        {
+          stringstream msg;
+          msg << "Found a non neutron GrossCount node (det info ref attrib='"
+              << det_info_ref << "'); child nodes are: {";
+          for( auto el = meas_node->first_node(); el; el = el->next_sibling() )
+            msg << xml_name_str(el) << ", ";
+          msg << "}. Skipping!!!";
+          log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+          cerr << endl;
+        }//if( det_iter == id_to_dettype_ptr->end() )
+#endif
         continue;
       }
     
@@ -15554,9 +15756,13 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         if( UtilityFunctions::istarts_with(sample_det_att, "background") )
         {
           meas->sample_number_ = 0;
+        }else if( sscanf( sample_det_att.c_str(), "Sample%i", &(meas->sample_number_) ) == 1 )
+        {
+        }else if( sscanf( sample_det_att.c_str(), "Survey%i", &(meas->sample_number_) ) == 1 )
+        {
         }else if( sscanf( sample_det_att.c_str(), "Survey %i", &(meas->sample_number_) ) == 1 )
         {
-        }else if( sscanf( sample_det_att.c_str(), "Sample%i", &(meas->sample_number_) ) == 1 )
+        }else if( sscanf( sample_det_att.c_str(), "Survey_%i", &(meas->sample_number_) ) == 1 )
         {
         }else if( sample_num_from_meas_node != -999 )
         {
@@ -15577,29 +15783,24 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       for( size_t i = 0; i < remarks.size(); ++i )
         meas->remarks_.push_back( remarks[i] );
     
-      for( rapidxml::xml_node<char> *remark_node = gross_counts_node->first_node( "Remark", 6 );
+      
+      for( auto remark_node = XML_FIRST_NODE(gross_counts_node, "Remark");
            remark_node;
            remark_node = XML_NEXT_TWIN(remark_node) )
       {
-        string remark = xml_value_str( remark_node );
-        trim( remark );
-        if( remark.empty() )
-          continue;
+        string remark = UtilityFunctions::trim_copy( xml_value_str(remark_node) );
         
         if( UtilityFunctions::istarts_with( remark, "RealTime:") )
         {
           //See notes in equivalent portion of code for the <Spectrum> tag
-          remark = remark.substr( 9 );
-          UtilityFunctions::trim( remark );
+          remark = UtilityFunctions::trim_copy( remark.substr(9) );
           meas->real_time_ = time_duration_in_seconds( remark );
-          use_remark_real_time = (meas->real_time_ > 0.0);
+          use_remark_real_time = (meas->real_time_ > 0.0f);
         }else if( UtilityFunctions::istarts_with( remark, "Title:") )
         {
           //See notes in equivalent portion of code for the <Spectrum> tag
-          remark = remark.substr( 6 );
-          UtilityFunctions::trim( remark );
-          meas->title_ += remark;
-        }else if( remark.size() )
+          meas->title_ += UtilityFunctions::trim_copy( remark.substr(6) );
+        }else if( !remark.empty() )
         {
           meas->remarks_.push_back( remark );
         }
@@ -15613,11 +15814,10 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     
       if( live_time_node && live_time_node->value_size() )
         meas->live_time_ = time_duration_in_seconds( live_time_node->value(), live_time_node->value_size() );
-    
       
-      const rapidxml::xml_node<char> *RadItemState = meas_node->first_node( "RadItemState", 12 );
-      const rapidxml::xml_node<char> *StateVector = (RadItemState ? RadItemState->first_node( "StateVector", 11 ) : (const rapidxml::xml_node<char> *)0);
-      const rapidxml::xml_node<char> *SpeedValue = (StateVector ? StateVector->first_node( "SpeedValue", 10 ) : (const rapidxml::xml_node<char> *)0);
+      const rapidxml::xml_node<char> *RadItemState = XML_FIRST_NODE(meas_node, "RadItemState");
+      const rapidxml::xml_node<char> *StateVector  = xml_first_node( RadItemState, "StateVector" );
+      const rapidxml::xml_node<char> *SpeedValue   = xml_first_node( StateVector, "SpeedValue" );
       
       if( SpeedValue && SpeedValue->value_size() )
       {
@@ -15625,7 +15825,6 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         if( !(stringstream(val) >> (meas->speed_)) )
           cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
       }//if( speed_ > 0 )
-      
       
       meas->contained_neutron_ = true;
 
@@ -15726,7 +15925,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           meas_to_add.push_back( neutron_meas[i] );
     }//
     
-  //XXX - todo - should implement the bellow
+  //XXX - todo - should implement the below
   //    rapidxml::xml_node<char> *dose_rate_node = meas_node->first_node( "DoseRate", 8 );
   //    rapidxml::xml_node<char> *total_dose_node = meas_node->first_node( "TotalDose", 9 );
   //    rapidxml::xml_node<char> *exposure_rate_node = meas_node->first_node( "ExposureRate", 12 );
@@ -15794,10 +15993,14 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
   if( !XML_NAME_ICOMPARE(data_node, "RadInstrumentData") )
     throw runtime_error( "load_2012_N42_from_doc: Unable to get RadInstrumentData node" );
   
-  rapidxml::xml_attribute<char> *uuid_att = data_node->first_attribute( "n42DocUUID", 10 );
+  
+  auto uuid_att = XML_FIRST_ATTRIB(data_node, "n42DocUUID");
   if( uuid_att && uuid_att->value_size() )
     uuid_ = xml_value_str(uuid_att);
 
+  //In the next call, the location in memory pointed to by 'data_node' may be
+  //  changed to point to somewhere in a newly created rapidxml::xml_document
+  //  so the returned result must be kept in scope so 'data_node' will be valid.
   auto spirdoc = spir_mobile_2012_n42_hack( data_node );
   
   /*
@@ -15976,8 +16179,6 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
       id_to_dettype[name] = pair<DetectionType,string>(type,descrip);
   }//for( loop over "RadDetectorInformation" nodes )
 
-  
-  
   rapidxml::xml_node<char> *analysis_node = data_node->first_node( "AnalysisResults", 15 );
   if( analysis_node )
   {
@@ -15994,35 +16195,20 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
   vector< std::shared_ptr< vector<std::shared_ptr<Measurement> > > > measurements_each_meas;
   
   std::mutex meas_mutex, calib_mutex;
-  //vector< boost::function<void()> > rad_meas_queue;
   
-  for( const rapidxml::xml_node<char> *meas_node = data_node->first_node( "RadMeasurement", 14 );
+  for( auto meas_node = XML_FIRST_NODE(data_node, "RadMeasurement");
       meas_node;
       meas_node = XML_NEXT_TWIN(meas_node) )
   {
     std::shared_ptr<std::mutex> mutexptr = std::make_shared<std::mutex>();
-    std::shared_ptr< vector<std::shared_ptr<Measurement> > > these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
+    auto these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
     
     meas_mutexs.push_back( mutexptr );
     measurements_each_meas.push_back( these_meas );
     
-    //auto worker = [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-      //MeasurementInfo::decode_2012_N42_rad_measurment_node( &these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
-    //};
-    //workerpool.post( worker );
-#if( DONT_USE_STD_BIND )
-	 workerpool.post( [this,these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-		 decode_2012_N42_rad_measurment_node( *these_meas,meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
-	 } );
-#else
-    workerpool.post( std::bind( &MeasurementInfo::decode_2012_N42_rad_measurment_node,
-                std::ref(*these_meas),
-                meas_node,
-                &id_to_dettype,
-                &calibrations,
-                std::ref(*mutexptr),
-                std::ref(calib_mutex) ) );
-#endif
+	  workerpool.post( [this,these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
+		  decode_2012_N42_rad_measurment_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+	  } );
   }//for( loop over "RadMeasurement" nodes )
 
   workerpool.join();
@@ -16030,7 +16216,6 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
   for( size_t i = 0; i < measurements_each_meas.size(); ++i )
     for( size_t j = 0; j < measurements_each_meas[i]->size(); ++j )
       measurements_.push_back( (*measurements_each_meas[i])[j] );
-  
   
   //test for files like "file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42"
   if( measurements_.size() == 2
@@ -16070,7 +16255,7 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
   if( measurements_.empty() )
     throw runtime_error( "No valid measurments in 2012 N42 file." );
   
-  cleanup_after_load();  //DontChangeOrReorderSamples
+  cleanup_after_load();
 }//bool load_2012_N42_from_doc( rapidxml::xml_node<char> *document_node )
 
 
@@ -16125,7 +16310,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
         
         for( int i = 0; i < 2; ++i )
         {
-          const string &dettype = measurements_[i]->detector_type_;
+          const string &dettype = measurements_[i]->detector_description_;
           if( UtilityFunctions::icontains( dettype, "Gamma" ) )
             gamma = measurements_[i];
           else if( UtilityFunctions::icontains( dettype, "Neutron" ) )
@@ -16391,7 +16576,7 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
       const float doseunit = dose_units_usvPerH( DoseRate->value(),
                                                  DoseRate->value_size() );
       
-      //Avoidable allocation here bellow
+      //Avoidable allocation here below
       float dose;
       if( (stringstream(xml_value_str(DoseRate)) >> dose) )
         detanares.dose_rate_ = dose * doseunit;
@@ -16645,14 +16830,7 @@ void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
     }//if( !new_binning )
 
     if( !noRecalNeeded )
-    {
-#if( DONT_USE_STD_BIND )
-	  threadpool.post( [m,&new_binning](){ m->rebin_by_lower_edge(new_binning); });
-#else
-      threadpool.post( std::bind( &Measurement::rebin_by_lower_edge,
-                                          m, std::cref(new_binning)  ) );
-#endif
-    }//if( !noRecalNeeded )
+	    threadpool.post( [m,&new_binning](){ m->rebin_by_lower_edge(new_binning); });
   }//for( auto &m : measurements_ )
 
   threadpool.join();
@@ -16769,14 +16947,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
     {
     SpecUtilsAsync::ThreadPool threadpool;
     for( auto &m : rebinned )
-    {
-#if( DONT_USE_STD_BIND )
-		threadpool.post( [m,&new_binning](){ m->rebin_by_lower_edge(new_binning); } );
-#else
-      threadpool.post( std::bind( &Measurement::rebin_by_lower_edge, m,
-                                    std::cref(new_binning) ) );
-#endif
-    }
+		  threadpool.post( [m,&new_binning](){ m->rebin_by_lower_edge(new_binning); } );
     threadpool.join();
     }else
     {
@@ -17165,7 +17336,7 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sampl
     dataH->speed_ = specs[0][0]->speed_;
     dataH->detector_name_ = specs[0][0]->detector_name_;
     dataH->detector_number_ = specs[0][0]->detector_number_;
-    dataH->detector_type_ = specs[0][0]->detector_type_;
+    dataH->detector_description_ = specs[0][0]->detector_description_;
     dataH->quality_status_ = specs[0][0]->quality_status_;
   }//if( current_total_sample_num == 1 )
   
@@ -17179,13 +17350,9 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sampl
       SpecUtilsAsync::ThreadPool threadpool;
       for( size_t i = 0; i < num_thread; ++i )
       {
-#if( DONT_USE_STD_BIND )
         vector<float> *dest = &(results[i]);
         const vector< std::shared_ptr<const vector<float> > > *spec = &(spectrums[i]);
         threadpool.post( [dest,spec](){ add_to(*dest, *spec); } );
-#else
-        threadpool.post( std::bind( &add_to, std::ref(results[i]), std::cref(spectrums[i]) ) );
-#endif
       }
       threadpool.join();
     
@@ -17224,7 +17391,7 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sampl
         const float *spec_array = &(spectra[i]->operator[](0));
       
         //Using size_t to get around possible variable size issues.
-        //  In principle I would expect this bellow loop to get vectorized by the
+        //  In principle I would expect this below loop to get vectorized by the
         //  compiler - but I havent actually checked for this.
         for( size_t bin = 0; bin < spec_size && bin < len; ++bin )
           result_vec_raw[bin] += spec_array[bin];
@@ -17240,13 +17407,9 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sampl
     SpecUtilsAsync::ThreadPool threadpool;
     for( size_t i = 0; i < num_thread; ++i )
 	  {
-#if( DONT_USE_STD_BIND )
       vector<float> *dest = &(results[i]);
       const vector< std::shared_ptr<const Measurement> > *measvec = &(specs[i]);
       threadpool.post( [dest,&dataH,measvec](){ sum_with_rebin( *dest, dataH, *measvec ); } );
-#else
-      threadpool.post( std::bind( &sum_with_rebin, std::ref(results[i]), std::cref(dataH), std::cref(specs[i]) ) );
-#endif
 	  }
     
 	  threadpool.join();
@@ -17996,6 +18159,197 @@ size_t MeasurementInfo::write_lower_channel_energies_to_pcf( std::ostream &ostr,
 }//size_t write_lower_channel_energies_to_pcf()
 
 
+void MeasurementInfo::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
+{
+  //Find the deviation pairs to use in this file, for each detector.  PCF
+  //  format assumes each detector only has one set of deviation pairs in the
+  //  file, so we'll take just the first ones we find foreach detector.
+  map<std::string, vector<pair<float,float>>> dev_pairs;
+  set<string> detnames( begin(detector_names_), end(detector_names_) );  //may have neutron only detector names too
+  
+  bool has_some_dev_pairs = false, need_compress_pairs = false;
+  
+  for( size_t i = 0; !detnames.empty() && i < measurements_.size(); ++i )
+  {
+    const auto &meas = measurements_[i];
+    const auto &name = meas->detector_name_;
+    
+    //Assume measurement with a gamma detector name, will also have gamma counts,
+    //  so erase detector name from `detnames` now to make sure to get rid of
+    //  neutron only detector names as well.
+    detnames.erase( name );
+    
+    if( dev_pairs.find(name) != end(dev_pairs) ) //only get the first dev pairs we find for the detector.
+      continue;
+    
+    //Make sure its actually a gamma detector
+    if( meas->gamma_counts_ && !meas->gamma_counts_->empty())
+    {
+      has_some_dev_pairs |= (!meas->deviation_pairs_.empty());
+      if( name.size() >= 3
+         && (name[1]=='c' || name[1]=='C' || name[1]=='d' || name[1]=='D')
+         && (name[0]>='a' && name[0]<='g')
+         && (name[2]>'0' && name[2]<'9') )
+        need_compress_pairs = true;
+      
+      dev_pairs[name] = meas->deviation_pairs_;
+    }
+  }//for( size_t i = 0; !detnames.empty() && i < measurements_.size(); ++i )
+  
+  //cerr << "Put " << dev_pairs.size() << " dev pairs in, with " << detnames.size()
+  //     << " detnames remaining. has_some_dev_pairs=" << has_some_dev_pairs << endl;
+  
+  if( !has_some_dev_pairs )
+    dev_pairs.clear();
+  
+  //cerr << "DetNames we have pairs for are: {";
+  //for( const auto &n : dev_pairs )
+  //  cerr << n.first << ", ";
+  //cerr << "}" << endl;
+  
+  
+  if( dev_pairs.empty() )
+  {
+#if(PERFORM_DEVELOPER_CHECKS && !defined(WIN32) )
+    assert( ostr.tellp() == 256 );
+#endif
+    return;
+  }
+  
+  std::string header = need_compress_pairs ? "DeviationPairsInFileCompressed" : "DeviationPairsInFile";
+  header.resize( 256, ' ' );
+  ostr.write( &header[0], header.size() );
+  
+  const size_t nDevBytes = 4*8*8*20*2*2;    //20,480 bytes
+  const size_t nDevInts = nDevBytes / 2;    //10,240 ints
+  const size_t nDevFloats = nDevBytes / 4;  //5,120 floats
+  
+  uint8_t dev_pair_data[nDevBytes] = { uint8_t(0) };
+  
+  const size_t valsize = need_compress_pairs ? 2 : 4;
+  const size_t maxnvals = need_compress_pairs ? nDevInts : nDevFloats;
+  
+  
+  set<string> unwritten_dets;
+  set<int> written_index;
+  for( const auto &det_devs : dev_pairs )
+  {
+    const string &name = det_devs.first;
+    const auto &pairs = det_devs.second;
+    
+    int index = pcf_det_name_to_dev_pair_index( name );
+    
+    if( index < 0 || (index+39) > maxnvals )
+    {
+      unwritten_dets.insert( name );
+      continue;
+    }
+    
+    //cerr << "DetName=" << name << " gave index " << index << ", (maxnvals="
+    //     << maxnvals << "), pairs.size=" << pairs.size() << " vals={";
+    //for( size_t i = 0; i < pairs.size() && i < 20; ++i )
+    //  cerr << "{" << pairs[i].first << "," << pairs[i].second << "}, ";
+    //cerr << "}" << endl;
+    
+    written_index.insert( index );
+    for( size_t i = 0; i < pairs.size() && i < 20; ++i )
+    {
+      const size_t bytepos = (index + 2*i)*valsize;
+      
+      if( need_compress_pairs )
+      {
+#if( defined(_MSC_VER) && _MSC_VER <= 1700 )
+        const int16_t energy = static_cast<int16_t>( (pairs[i].first<0.0f) ? pairs[i].first-0.5f : pairs[i].first+0.5f );
+        const int16_t offset = static_cast<int16_t>( (pairs[i].second<0.0f) ? pairs[i].second-0.5f : pairs[i].second+0.5f );
+#else
+        const int16_t energy = static_cast<int16_t>( roundf(pairs[i].first) );
+        const int16_t offset = static_cast<int16_t>( roundf(pairs[i].second) );
+#endif
+        memcpy( &(dev_pair_data[bytepos + 0]), &energy, 2 );
+        memcpy( &(dev_pair_data[bytepos + 2]), &offset, 2 );
+      }else
+      {
+        memcpy( &(dev_pair_data[bytepos + 0]), &(pairs[i].first), 4 );
+        memcpy( &(dev_pair_data[bytepos + 4]), &(pairs[i].second), 4 );
+      }
+    }
+  }//for( const auto &det_devs : dev_pairs )
+  
+  //cout << "Didnt write dev pairs for " << unwritten_dets.size()
+  //     << " detectors out of dev_pairs.size()=" << dev_pairs.size()
+  //     << " detnames.size=" << detector_names_.size() << endl;
+    
+  //If we havent written some detectors deviation pairs, put them into the
+  //  first available spots... This isnt actually correct, but will work
+  //  in the case its not an RPM at all.
+  if( unwritten_dets.size() )
+  {
+    if( unwritten_dets.size() != dev_pairs.size() )
+    {
+      cerr << "Warning: " << unwritten_dets.size() << " of the "
+           << dev_pairs.size() << " gamma detectors didnt have conforming"
+           << " names, so they are being written in the first available"
+           << " spot in the PCF file." << endl;
+    }
+      
+    for( const auto &name : unwritten_dets )
+    {
+#if(PERFORM_DEVELOPER_CHECKS)
+      bool found_spot = false;
+#endif
+      for( int index = 0; index < maxnvals; index += 40 )
+      {
+        if( !written_index.count(index) )
+        {
+          const auto &dpairs = dev_pairs[name];
+          for( size_t i = 0; i < dpairs.size() && i < 20; ++i )
+          {
+            const size_t bytepos = (index + 2*i)*valsize;
+            
+            if( need_compress_pairs )
+            {
+#if( defined(_MSC_VER) && _MSC_VER <= 1700 )
+              const int16_t energy = static_cast<int16_t>( (dpairs[i].first<0.0f) ? dpairs[i].first-0.5f : dpairs[i].first+0.5f );
+              const int16_t offset = static_cast<int16_t>( (dpairs[i].second<0.0f) ? dpairs[i].second-0.5f : dpairs[i].second+0.5f );
+#else
+              const int16_t energy = static_cast<int16_t>( roundf(dpairs[i].first) );
+              const int16_t offset = static_cast<int16_t>( roundf(dpairs[i].second) );
+#endif
+              memcpy( &(dev_pair_data[bytepos + 0]), &energy, 2 );
+              memcpy( &(dev_pair_data[bytepos + 2]), &offset, 2 );
+            }else
+            {
+              memcpy( &(dev_pair_data[bytepos + 0]), &(dpairs[i].first), 4 );
+              memcpy( &(dev_pair_data[bytepos + 4]), &(dpairs[i].second), 4 );
+            }
+          }//for( loop over deviation pairs )
+          
+#if(PERFORM_DEVELOPER_CHECKS)
+          found_spot = true;
+#endif
+          written_index.insert( index );
+          break;
+        }//if( index hasnt been used )
+      }//for( indexs to try )
+        
+      //In principle we may not have written the deviation pairs if we
+      //  couldnt find a spot, but at this point, oh well.
+#if(PERFORM_DEVELOPER_CHECKS)
+      if( !found_spot )
+        log_developer_error( BOOST_CURRENT_FUNCTION, ("MeasurementInfo::write_deviation_pairs_to_pcf: "
+                    "Couldnt find spot to write deviation pairs for detector " + name + "!!!").c_str() );
+#endif
+    }//for( const auto &name : detectors_not_written )
+  }//if( detectors_not_written.size() )
+    
+#if(PERFORM_DEVELOPER_CHECKS && !defined(WIN32) )
+  assert( ostr.tellp() == 512 );
+#endif
+  ostr.write( (char *)dev_pair_data, sizeof(dev_pair_data) );
+}//void write_deviation_pairs_to_pcf( std::ostream &outputstrm ) const
+
+
+
 bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
 {
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -18123,59 +18477,9 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
     fileid.resize( 256, ' ' );
     ostr.write( &fileid[0], fileid.size() );
     
-    //Find the deviation pairs to use in this file; we'll use the first onese
-    //  we find.
-    vector< pair<float,float> > dev_pairs;
-    for( const auto &meas : measurements_ )
-    {
-      if( !!meas->gamma_counts_ && !meas->gamma_counts_->empty()
-         && !!meas->channel_energies() && !meas->channel_energies()->empty() )
-      {
-        dev_pairs = meas->deviation_pairs_;
-        break;
-      }
-    }//for( const auto &meas, measurements_ )
+    //
+    write_deviation_pairs_to_pcf( ostr );
     
-    if( dev_pairs.empty() )
-    {
-#if(PERFORM_DEVELOPER_CHECKS)
-      assert( ostr.tellp() == 256 );
-#endif
-    }else
-    {
-      //Each detector can have 20 deviation pairs.
-      //  There can be 128 different detectors defined by their column index,
-      //   panel index, and MCA index. The pseudo-code for parsing order is:
-      //loop over columns (2)  //col 1 is Aa1, col two is Ba1
-      //  loop over panels (8) //Aa1, Ab1, Ac1
-      //    loop over MCAs (8) //Aa1, Aa2, Aa3, etc
-      //      loop over deviation pairs (20)
-      //        parse energy (4-byte floating point)
-      //        parse offset (4-byte floating point)
-
-      std::basic_string<char> header; //has some structure ( eg says 'DeviationPairsInFile')
-      header = "DeviationPairsInFile";
-      header.resize( 256, ' ' );
-    
-      ostr.write( &header[0], header.size() );
-      const size_t npairs = 80*256/sizeof(float);
-      float dev_pair_data[npairs] = { 0.0f };
-      for( size_t i = 0; i < dev_pairs.size() && i < npairs/2; ++i )
-      {
-        dev_pair_data[2*i] = dev_pairs[i].first;
-        dev_pair_data[2*i+1] = dev_pairs[i].second;
-      }//for( size_t i = 0; i < dev_pairs.size(); ++i )
-    
-      if( dev_pairs.size() )
-        cerr << "MeasurementInfo::write_pcf: currently am not writing deviation pairs to PCF file coorectly" << endl;
-      
-#if(PERFORM_DEVELOPER_CHECKS)
-      assert( ostr.tellp() == 512 );
-#endif
-      ostr.write( (char *)dev_pair_data, sizeof(dev_pair_data) );
-    }//if( dev_pairs.empty() ) / else
-    
-  
     //For files with energy calibration defined by lower channel energies, the
     //  first record in the file will have a title of "Energy" with the channel
     //  counts equal to the channel lower energies
@@ -18343,9 +18647,9 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }//if( we can used fixed title/desc/source placement ) else ( use truncation )
       
       if( !meas->start_time_.is_special() )
-        collection_time = UtilityFunctions::to_common_string( meas->start_time(),true );
+        collection_time = UtilityFunctions::to_vax_string( meas->start_time() );
       else
-        collection_time = "01-Jan-1900 00:00:00.00";
+        collection_time = "                       "; //"01-Jan-1900 00:00:00.00";  //23 characters
       
       character_tag = ' ';//meas->cambio_tag_char(); //prev to 20181121 was '\0'
       
@@ -18367,7 +18671,8 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }
       
       vector<float> calib_coef = meas->calibration_coeffs_;
-      if( meas->energy_calibration_model_ == Measurement::Polynomial )
+      if( meas->energy_calibration_model_ == Measurement::Polynomial
+          || meas->energy_calibration_model_ == Measurement::UnspecifiedUsingDefaultPolynomial)
         calib_coef = polynomial_coef_to_fullrangefraction( calib_coef, meas->gamma_counts_->size() );
       
       offset         = (calib_coef.size() > 0) ? calib_coef[0] : 0.0f;
@@ -18413,23 +18718,23 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       ostr.write( (char *)&neutron_counts, 4 ); //
       ostr.write( (char *)&num_channel, 4 );
       
-      if( meas->deviation_pairs_ == dev_pairs )
-      {
+      //if( meas->deviation_pairs_ == dev_pairs )
+      //{
         ostr.write( (char *)&(meas->gamma_counts_->operator[](0)), 4*num_channel );
-      }else
-      {
-        //PCF files apply the deviation pairs to the whole file
-        vector<float> new_counts;
-        ShrdConstFVecPtr origbinning = meas->channel_energies_;
-        if( !origbinning )
-          origbinning = fullrangefraction_binning( calib_coef, num_channel,
-                                                  meas->deviation_pairs_ );
-        ShrdConstFVecPtr newbinning = fullrangefraction_binning( calib_coef,
-                                                                num_channel, dev_pairs );
-        rebin_by_lower_edge( *origbinning, *(meas->gamma_counts_),
-                            *newbinning, new_counts );
-        ostr.write( (char *)&(new_counts[0]), 4*num_channel );
-      }
+      //}else
+      //{
+      //  //PCF files apply the deviation pairs to the whole file
+      //  vector<float> new_counts;
+      //  ShrdConstFVecPtr origbinning = meas->channel_energies_;
+      //  if( !origbinning )
+      //    origbinning = fullrangefraction_binning( calib_coef, num_channel,
+      //                                            meas->deviation_pairs_ );
+      //  ShrdConstFVecPtr newbinning = fullrangefraction_binning( calib_coef,
+      //                                                          num_channel, dev_pairs );
+      //  rebin_by_lower_edge( *origbinning, *(meas->gamma_counts_),
+      //                      *newbinning, new_counts );
+      //  ostr.write( (char *)&(new_counts[0]), 4*num_channel );
+      //}
       
       //Incase this spectrum has less channels than 'nchannel_file'
       if( nchannel_file != num_channel )
@@ -18647,18 +18952,22 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
     case UnknownSourceType: break;
   }//switch( source_type_ )
   
-  if(!detector_type_.empty())
-    ostr << "      <DetectorType>" << detector_type_ << "</DetectorType>" << endline;
+  if(!detector_description_.empty())
+    ostr << "      <DetectorType>" << detector_description_ << "</DetectorType>" << endline;
   
   ostr << "      <Calibration Type=\"Energy\" EnergyUnits=\"keV\">" << endline
        << "        <Equation Model=\"";
 
   switch( energy_calibration_model_ )
   {
-    case Polynomial:           ostr << "Polynomial";        break;
+    case Polynomial:
+    case UnspecifiedUsingDefaultPolynomial:
+      ostr << "Polynomial";
+    break;
+      
     case FullRangeFraction:    ostr << "FullRangeFraction"; break;
     case LowerChannelEdge:     ostr << "LowerChannelEdge";  break;
-    case UnknownEquationType:  ostr << "Unknown";           break;
+    case InvalidEquationType:  ostr << "Unknown";           break;
   }//switch( energy_calibration_model_ )
 
   ostr << "\">" << endline;
@@ -18931,12 +19240,9 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
     if( filelen && (filelen < 512) )
       throw runtime_error( "File to small" );
 
-    
-    std::basic_string<char> fileid;  //There looks to be some structure in this, ex 'DHS       84567b0f-baa9-4176-9b8c-a066426063a9Secondary       Measured Data             SpecPortal                  ORTEC                       OSASP             Serial #10000033                      Anthony New Mexi                ?'
+    string fileid, header;
     fileid.resize( 256 );
-    std::basic_string<char> header; //has some structure ( eg says 'DeviationPairsInFile')
     header.resize( 256 );
-    
     
     input.read( &(fileid[0]), fileid.size() ); //256
     
@@ -18949,7 +19255,6 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       char buff[256];
       snprintf( buff, sizeof(buff), "Invalid number 256 segments per records, NRPS=%i", int(NRPS) );
       throw runtime_error( buff );
-      //      throw runtime_error( "Invalid number 256 segments per records" );
     }
     
     //Usually expect fileid[2]=='D', fileid[3]=='H' fileid[4]=='S'
@@ -18963,81 +19268,86 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       //something like '783 - 03/06/15 18:10:28'
       const size_t pos = fileid.find( " - " );
       goodheader = (pos != string::npos && pos < 20
-                     && fileid[pos+5]=='/' && fileid[pos+7]=='/'
-                     && fileid[pos+9]=='/' && fileid[pos+11]==' ');
+                     && ((fileid[pos+5]=='/' && fileid[pos+7]=='/'
+                         && fileid[pos+9]=='/' && fileid[pos+11]==' ')
+                         || (fileid[pos+5]=='/' && fileid[pos+8]=='/'
+                             && fileid[pos+11]==' ' && fileid[pos+14]==':'))
+                    );
     }//if( !goodheader )
     
     if( !goodheader )
       throw runtime_error( "Unexpected fileID: '" + string( &fileid[0], &fileid[3] ) + "'" );
 
     input.read( &(header[0]), header.size() );  //512
-    std::vector< std::pair<float,float> > deviation_pairs;
     
-    if( header.find("DeviationPairsInFile") != string::npos )
+    //Now read in deviation pairs from the file; we'll add these to the
+    //  appropriate records late.
+    //loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
+    //  loop over panels (8) //Aa1, Ab1, Ac1
+    //    loop over MCAs (8) //Aa1, Aa2, Aa3, etc
+    //      loop over deviation pairs (20)
+    //        energy (float uncompressed, or int16_t compressed)
+    //        offset (float uncompressed, or int16_t compressed)
+    set<string> detector_names;
+    std::vector< std::pair<float,float> > deviation_pairs[4][8][8];
+    bool have_deviation_pairs = (header.find("DeviationPairsInFile") != string::npos);
+    const bool compressed_devpair = (header.find("DeviationPairsInFileCompressed") != string::npos);
+    
+    if( have_deviation_pairs )
     {
-      if( header.find("DeviationPairsInFileCompressed") != string::npos )
+      const size_t nDevBytes = 4*8*8*20*2*2;    //20,480 bytes
+      uint8_t dev_pair_bytes[nDevBytes];
+      
+      input.read( (char *)dev_pair_bytes, nDevBytes );
+      
+      
+      const int val_size = compressed_devpair ? 2 : 4;
+      
+      //A lot of times all of the deviation pairs are zero, so we will check
+      //  if this is the case
+      have_deviation_pairs = false;
+      
+      for( int row_index = 0; row_index < (compressed_devpair ? 4 : 2); ++row_index )
       {
-        //loop over columns (4)
-        //  loop over panels (8)
-        //    loop over MCAs (8)
-        //      loop over deviation pairs (20)
-        //         parse energy (4-byte floating point)
-        //         parse offset (4-byte floating point)
-
-        int16_t dev_pair_data[2*80*256/sizeof(float)];
-        input.read( (char *)dev_pair_data, sizeof(dev_pair_data) );
-        size_t last_pair = 0;
-        const size_t devpairsize = sizeof(dev_pair_data)/sizeof(dev_pair_data[0]);
-        for( size_t i = 0; i < devpairsize; ++i )
-          if( dev_pair_data[i] != 0 )
-            last_pair = i;
-        if( (last_pair%2) == 1 )
-          ++last_pair;
-        for( size_t i = 0; i < last_pair; i+=2 )
-          deviation_pairs.push_back( make_pair( dev_pair_data[i], dev_pair_data[i+1] ) );
-        
-        if( last_pair )
+        for( int panel_index = 0; panel_index < 8; ++panel_index )
         {
-          remarks_.push_back( "MeasurementInfo::load_from_pcf: deviation pairs are currently not being parsed from PCF files correctly" );
-#if(PERFORM_DEVELOPER_CHECKS)
-          log_developer_error( BOOST_CURRENT_FUNCTION, "MeasurementInfo::load_from_pcf: deviation pairs are currently not being parsed from PCF files correctly" );
-#endif
-        }
-      }else
-      {
-        //There can be 128 different detectors defined by their column index, panel index, and MCA index
-        //Each detector can have 20 deviation pairs.
-        //loop over columns (2)   {these are portal columns - see N42 standard for which one where}
-        //  loop over panels (8)  {panels in each column - see N42 standard for which one where}
-        //    loop over MCAs (8)  {individual detectors in each panel}
-        //      loop over deviation pairs (20)
-        //         parse energy (4-byte floating point)
-        //         parse offset (4-byte floating point)
-        // float dev_pair_data[2/*columns*/][8/*panels*/][8/*MCAs*/][20/*pairs*/][2]  //5120
-        
-        float dev_pair_data[80*256/sizeof(float)];  //Is this entire region for deviation pairs?
-                                                  //This region only here when header contains 'DeviationPairsInFile'
-
-        input.read( (char *)dev_pair_data, sizeof(dev_pair_data) );
-
-        size_t last_pair = 0;
-        const size_t devpairsize = sizeof(dev_pair_data)/sizeof(dev_pair_data[0]);
-        for( size_t i = 0; i < devpairsize; ++i )
-          if( dev_pair_data[i] != 0.0 )
-            last_pair = i;
-        if( (last_pair%2) == 1 )
-          ++last_pair;
-        for( size_t i = 0; i < last_pair; i+=2 )
-          deviation_pairs.push_back( make_pair( dev_pair_data[i], dev_pair_data[i+1] ) );
-        
-        if( last_pair )
-        {
-          remarks_.push_back( "MeasurementInfo::load_from_pcf: deviation pairs are currently not being parsed from PCF files correctly" );
-#if(PERFORM_DEVELOPER_CHECKS)
-          log_developer_error( BOOST_CURRENT_FUNCTION, "MeasurementInfo::load_from_pcf: deviation pairs are currently not being parsed from PCF files correctly" );
-#endif
-        }
-      }
+          for( int mca_index = 0; mca_index < 8; ++mca_index )
+          {
+            const int byte_pos = row_index*8*8*20*2*val_size + panel_index*8*20*2*val_size + mca_index*20*2*val_size;
+            bool hasNonZero = false;
+            for( int pos = byte_pos; !hasNonZero && pos < (byte_pos + 40*val_size); ++pos )
+              hasNonZero = dev_pair_bytes[pos];
+            if( !hasNonZero )
+              continue;
+            
+            int last_nonzero = 0;
+            auto &devpairs = deviation_pairs[row_index][panel_index][mca_index];
+            if( compressed_devpair )
+            {
+              int16_t vals[40];
+              memcpy( vals, &(dev_pair_bytes[byte_pos]), 80 );
+              for( int i = 0; i < 20; ++i )
+              {
+                last_nonzero = (vals[2*i] || vals[2*i+1]) ? i+1 : last_nonzero;
+                devpairs.push_back( pair<float,float>(vals[2*i],vals[2*i+1]) );
+              }
+            }else
+            {
+              float vals[40];
+              memcpy( vals, &(dev_pair_bytes[byte_pos]), 160 );
+              for( int i = 0; i < 20; ++i )
+              {
+                last_nonzero = (vals[2*i] || vals[2*i+1]) ? i+1 : last_nonzero;
+                devpairs.push_back( pair<float,float>(vals[2*i],vals[2*i+1]) );
+              }
+            }//if( compressed ) / else
+            
+            devpairs.erase( begin(devpairs) + last_nonzero, end(devpairs) );
+            
+            have_deviation_pairs = (have_deviation_pairs || !devpairs.empty());
+          }//for( int mca_index = 0; mca_index < 8; ++mca_index )
+        }//for( int panel_index = 0; panel_index < 8; ++panel_index )
+      }//for( int row_index = 0; row_index < (compressed ? 4 : 2); ++row_index )
     }else
     {
       //If this is not the "DHS" version of a PCF file with the extended header
@@ -19113,9 +19423,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
         remarks_.push_back( "CargoType: " + cargo_type );
     }//if( is_dhs_version )
     
-    /* XXX: TODO: we should try to parse detector name from the title, and
-     set had neutrons based on that
-    */
+    
     bool any_contained_neutron = false, all_contained_neutron = true;
     
     bool allSamplesHaveNumbers = true, someSamplesHaveNumbers = false;
@@ -19192,15 +19500,6 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       trim( spectrum_desc );
       trim( source_list );
       
-      //Look for Det=...
-      //Look for "Survey" or "Sample"
-    
-      //for( size_t i = 0; i < title_description_source.size(); ++i )
-      //  cout << "\t" << i << "\t" << title_description_source[i] << "\t" << int(title_description_source[i]) << endl;
-      //cerr << "spectrum_title='" << spectrum_title << "'" << endl;
-      //cerr << "spectrum_desc='" << spectrum_desc << "'" << endl;
-      //cerr << "source_list='" << source_list << "'" << endl;
-      
 //      static_assert( sizeof(float) == 4, "Float must be 4 bytes" );
 //      static_assert(std::numeric_limits<float>::digits >= 32);
 
@@ -19241,8 +19540,6 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
           break;
       }//if( num_channel == 0 )
 
-      
-      //XXX - bellow, we are assuming we shouldnt ever get zero channels
       if( num_channel < 0 || num_channel>65536 )
       {
         char buffer[64];
@@ -19273,7 +19570,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
           input.seekg( 0 + specstart + bytes_per_record, ios::beg );
       }//if( speclen != (4*NRPS) )
 
-      if( spectrum_multiplier > 1.0 )
+      if( spectrum_multiplier > 1.0f )
       {
         for( float &f : *channel_data )
           f *= spectrum_multiplier;
@@ -19295,13 +19592,12 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
         }//if( increasing )
       }//if( record_number == 1 and title=="Energy" )
       
-      MeasurementShrdPtr meas = std::make_shared<Measurement>();
+      auto meas = std::make_shared<Measurement>();
       measurements_.push_back( meas );
-      meas->reset();
 
       meas->live_time_ = live_time;
       meas->real_time_ = true_time;
-      meas->latitude_ = latitude;
+      meas->latitude_  = latitude;
       meas->longitude_ = longitude;
       
       const bool has_neutrons = (neutron_counts > 0.00000001);
@@ -19365,10 +19661,11 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       {
         meas->energy_calibration_model_ = Measurement::FullRangeFraction;
         meas->calibration_coeffs_ = energy_cal_terms;
-        meas->deviation_pairs_ = deviation_pairs; //this is not correct if there is more than one detector in the file!
       }
       
       meas->gamma_counts_ = channel_data;
+      
+      detector_names.insert( meas->detector_name_ );
     }//while( stream.good() && stream.tellg() < size )
 
     if( any_contained_neutron && !all_contained_neutron )
@@ -19484,15 +19781,96 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
     }
     */
     
+    if( have_deviation_pairs )
+    {
+      map<string,vector<pair<float,float>>> det_name_to_devs;
+      bool used_deviation_pairs[4][8][8] = {}; //iniitalizes tp zero/false
+      
+      //Assign deviation pairs to detectors with names like "Aa1", "Ab2", etc.
+      for( const string &name : detector_names )
+      {
+        int col, panel, mca;
+        pcf_det_name_to_dev_pair_index( name, col, panel, mca );
+        if( col < 0 || panel < 0 || mca < 0 || col > (compressed_devpair ? 1 : 3) || panel > 7 || mca > 7 )
+          continue;
+        
+        det_name_to_devs[name] = deviation_pairs[col][panel][mca];
+        used_deviation_pairs[col][panel][mca] = true;
+      }//for( string name : detector_names )
+      
+      //Now assign dev pairs to remaining detectors, assuming they were put
+      //  in the first available location
+      //  TODO: Check with GADRAS team to see how this should actually be handled
+      for( const string &name : detector_names )
+      {
+        if( det_name_to_devs.count(name) )
+          continue;
+        for( int col = 0; col < (compressed_devpair ? 4 : 2); ++col )
+        {
+          for( int panel = 0; panel < 8; ++panel )
+          {
+            for( int mca = 0; mca < 8; ++mca )
+            {
+              if( !used_deviation_pairs[col][panel][mca] )
+              {
+                used_deviation_pairs[col][panel][mca] = true;
+                det_name_to_devs[name] = deviation_pairs[col][panel][mca];
+                col = panel = mca = 10;
+              }//if( we found a dev pairs we havent used yet )
+            }//for( int panel = 0; panel < 8; ++panel )
+          }//for( int panel = 0; panel < 8; ++panel )
+        }//for( int col = 0; col < (compressed_devpair ? 4 : 2); ++col )
+      }//for( const string &name : detector_names )
+      
+#if(PERFORM_DEVELOPER_CHECKS)
+      bool unused_dev_pairs = false;
+      for( int col = 0; col < (compressed_devpair ? 4 : 2); ++col )
+      {
+        for( int panel = 0; panel < 8; ++panel )
+        {
+          for( int mca = 0; mca < 8; ++mca )
+          {
+            if( !deviation_pairs[col][panel][mca].empty()
+               && !used_deviation_pairs[col][panel][mca] )
+              unused_dev_pairs = true;
+          }
+        }
+      }//for( int col = 0; col < (compressed_devpair ? 4 : 2); ++col )
+      
+      if( unused_dev_pairs )
+      {
+        log_developer_error( BOOST_CURRENT_FUNCTION, "Read in deviation pairs that did not get assigned to a detector" );
+      }//if( unused_dev_pairs )
+#endif
+      
+      for( auto &m : measurements_ )
+      {
+        auto dev_pos = det_name_to_devs.find(m->detector_name_);
+        if( dev_pos != end(det_name_to_devs) )
+        {
+          m->deviation_pairs_ = dev_pos->second;
+          
+          stringstream msg;
+          msg << "Assigning Det=" << m->detector_name_ << " deviation pairs: ";
+          for( auto p : m->deviation_pairs_ )
+            msg << "{" << p.first << "," << p.second << "}, ";
+          cout << msg.str() << endl;
+        }
+      }//for( auto &m : measurements_ )
+    }//if( have_deviation_pairs )
+    
+    
     //if( any_contained_neutron && !all_contained_neutron )
 
     
     cleanup_after_load( DontChangeOrReorderSamples );
-  }catch( std::exception & /*e*/ )
+  }catch( std::exception & )
   {
     input.clear();
     input.seekg( orig_pos, ios::beg );
-//    cerr << SRC_LOCATION << "\n\tCaught:" << e.what() << endl;
+    
+    //cerr << SRC_LOCATION << "\n\tCaught:" << e.what() << endl;
+    
     reset();
     return false;
   }//try / catch
@@ -19605,7 +19983,9 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
     const istream::pos_type current_pos = input.tellg();
     const size_t bytes_left = static_cast<size_t>( 0 + eof_pos - current_pos );
 
-
+	if( !bytes_left )
+	  throw runtime_error( "File to small" );
+	
     buffer.resize( bytes_left );
     if( !input.read( &buffer[0], bytes_left ) )
       throw runtime_error( SRC_LOCATION + " Error reading from file stream" );
@@ -19848,18 +20228,19 @@ bool MeasurementInfo::write_integer_chn( ostream &ostr, set<int> sample_nums,
   switch( summed->energy_calibration_model() )
   {
     case Measurement::Polynomial:
+    case Measurement::UnspecifiedUsingDefaultPolynomial:
       break;
     case Measurement::FullRangeFraction:
       calibcoef = fullrangefraction_coef_to_polynomial( calibcoef, fgammacounts->size() );
       break;
     case Measurement::LowerChannelEdge:
-    case Measurement::UnknownEquationType:
+    case Measurement::InvalidEquationType:
       calibcoef.clear();
       break;
   }//switch( summed->energy_calibration_model() )
   
-  while( calibcoef.size() < 3 )
-    calibcoef.push_back( 0.0f );
+  if( calibcoef.size() < 3 )
+    calibcoef.resize( 3, 0.0f );
   
   int16_t chntype = -102;
   ostr.write( (const char *)&chntype, 2 );
@@ -20328,10 +20709,10 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           //nothing to do here
         }else
         {
-          energy_calibration_model_ = Polynomial;
+          energy_calibration_model_ = UnspecifiedUsingDefaultPolynomial;
           calibration_coeffs_.resize( 2 );
           calibration_coeffs_[0] = 0.0f;
-          calibration_coeffs_[1] = 3000.0f / counts->size();
+          calibration_coeffs_[1] = 3000.0f / std::max( counts->size()-1, size_t(1) );
 //        channel_energies_ = polynomial_binning( calibration_coeffs_, counts->size(),
 //                                                           DeviationPairVec() );
         }
@@ -20363,7 +20744,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
             energy_units = 1000.0f;
         }else if( starts_with( fields[i], "counts" )
                   || starts_with( fields[i], "data" )
-                  || starts_with( fields[i], "selection" ) )
+                  || starts_with( fields[i], "selection" )
+                  || starts_with( fields[i], "signal" )
+                 )
         {
 //          bool hasRecordOne = false;
 //          for( map<size_t,int>::const_iterator iter = column_map.begin();
@@ -20493,7 +20876,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       ++nlines_used;
       
       if( nfields > 1 )
-        detector_type_ = fields[1];
+        detector_description_ = fields[1];
     }else if( starts_with( fields[0], "title" ) )
     {
       ++nlines_used;
@@ -21511,6 +21894,8 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                || starts_with(line,"$PRESETS:")
                || starts_with(line,"$ICD_TYPE:")
                || starts_with(line,"$TEMPERATURE:")
+               || starts_with(line,"$CPS:" )
+               || starts_with(line,"$PEC_ID:")
               )
       {
         //Burn off things we dont care about
@@ -21767,7 +22152,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
       
       //Some default calibration coefficients that are kinda sorta close
 //      meas->calibration_type_ = Measurement::GuesedCalibration;
-      meas->energy_calibration_model_ = Measurement::Polynomial;
+      meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
       meas->calibration_coeffs_.push_back( 0 );
       meas->calibration_coeffs_.push_back( 3.0 );
       
@@ -22206,7 +22591,7 @@ namespace SpectroscopicDailyFile
       cerr << "parse_s1_info(): warning, couldnt find calibration coeffecicents"
            << endl;
       info.calibcoefs.push_back( 0.0f );
-      info.calibcoefs.push_back( 3000.0f / info.nchannels );
+      info.calibcoefs.push_back( 3000.0f / std::max(info.nchannels-1, 1) );
     }//if( info.calibcoefs.empty() )
 
     info.success = true;
@@ -22566,7 +22951,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
   
   
   
-  //TODO 20180817 - only niavely addressed bellow:
+  //TODO 20180817 - only niavely addressed below:
   //Files like refRA2PVFVA5I look a lot like these types of files because they
   //  are text and start with GB or NB, but instead have formats of
   //NB,000002,000002,000002,000002,00-00-04.841
@@ -23052,7 +23437,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
   
 
 #if( DO_SDF_MULTITHREAD )
-  //The bellow two loops are probably quite wasteful, and not necassary
+  //The below two loops are probably quite wasteful, and not necassary
   for( map<int,vector<std::shared_ptr<DailyFileGammaBackground> > >::const_iterator i = gamma_backgrounds.begin();
       i != gamma_backgrounds.end(); ++i )
   {
@@ -23617,7 +24002,8 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
           for( size_t i = 0; i < line_data.size(); ++i )
             neutron_counts[i].push_back(line_data[i]);
         }else if( UtilityFunctions::icontains(key, "Low")
-                 || UtilityFunctions::icontains(key, "High") )
+                 || UtilityFunctions::icontains(key, "High")
+                 || UtilityFunctions::icontains(key, "_Neutron") )
         {
           //Meh, ignore this I guess
         }else
@@ -23667,7 +24053,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       m->detector_number_ = static_cast<int>( i );
       m->real_time_ = realtime;
       m->live_time_ = livetime;
-      m->detector_type_ = "PVT";
+      m->detector_description_ = "PVT";
       m->gamma_counts_ = std::make_shared<vector<float>>( gammacount );
       if( i < neutron_counts.size() )
         m->neutron_counts_ = neutron_counts[i];
@@ -24225,7 +24611,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
     meas->speed_ = 0.0;  //in m/s
     meas->detector_name_ = ((lmstyle==1) ? "digiBASE" : "digiBASE-E");
     meas->detector_number_ = 0;
-    meas->detector_type_ = meas->detector_name_ + " ListMode data";
+    meas->detector_description_ = meas->detector_name_ + " ListMode data";
     meas->quality_status_ = Measurement::Missing;
     meas->source_type_ = Measurement::UnknownSourceType;
     meas->energy_calibration_model_ = Measurement::Polynomial;
@@ -24572,8 +24958,7 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
         if( !input.read( (char *)&neutroncount, sizeof(neutroncount) ) )
           throw runtime_error( "Failed read 29" );
       
-      
-        MeasurementShrdPtr m( new Measurement() );
+        auto m = std::make_shared<Measurement>();
         m->live_time_ = livetime / 6250.0f;
         m->real_time_ = realtime / 6250.0f;
         m->contained_neutron_ = (((i%2)!=1) || neutroncount);
@@ -24925,7 +25310,7 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   ostr << "RealTime " << real_time_ << " seconds" << endline;
   ostr << "SampleNumber " << sample_number_ << endline;
   ostr << "DetectorName " << detector_name_ << endline;
-  ostr << "DetectorType " << detector_type_ << endline;
+  ostr << "DetectorType " << detector_description_ << endline;
   
   if( has_gps_info() )
   {
@@ -24939,10 +25324,13 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   ostr << "EquationType ";
   switch( energy_calibration_model_ )
   {
-    case Polynomial:          ostr << "Polynomial"; break;
+    case Polynomial:
+    case UnspecifiedUsingDefaultPolynomial:
+      ostr << "Polynomial";
+      break;
     case FullRangeFraction:   ostr << "FullRangeFraction"; break;
     case LowerChannelEdge:    ostr << "LowerChannelEdge"; break;
-    case UnknownEquationType: ostr << "Unknown"; break;
+    case InvalidEquationType: ostr << "Unknown"; break;
   }//switch( energy_calibration_model_ )
   
   

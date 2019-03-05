@@ -128,7 +128,7 @@ namespace
     const std::locale &m_loc;
   };
   
-  //The bellow may not be instrinsic friendly; might be interesting to look and
+  //The below may not be instrinsic friendly; might be interesting to look and
   // see if we could get better machine code by making instrinic friendly (maybe
   // even have the float parsing functions inline)
   inline bool is_in( const char val, const char *delim )
@@ -155,6 +155,26 @@ namespace
       ++input;
     return input;
   }
+  
+  const char *month_number_to_Str( const int month )
+  {
+    switch( month )
+    {
+      case 1: return "Jan";
+      case 2: return "Feb";
+      case 3: return "Mar";
+      case 4: return "Apr";
+      case 5: return "May";
+      case 6: return "Jun";
+      case 7: return "Jul";
+      case 8: return "Aug";
+      case 9: return "Sep";
+      case 10: return "Oct";
+      case 11: return "Nov";
+      case 12: return "Dec";
+    }
+    return "";
+  }//const char *month_number_to_Str( const int month )
 }//namespace
 
 
@@ -504,7 +524,7 @@ std::string trim_copy( std::string str )
   {
     resutls.clear();
     
-    //The bellow implementation is not well tested, but in principle might be faster
+    //The below implementation is not well tested, but in principle might be faster
     //  than boost::algorithm::split (should be tested more and them used)
     //It would aslso reduce final binary size by about 9 kb
     size_t prev_delim_end = 0;
@@ -968,6 +988,8 @@ std::string trim_copy( std::string str )
     return iter - str;
   }
   
+  
+  
 
   std::string to_common_string( const boost::posix_time::ptime &t, const bool twenty_four_hour )
   {
@@ -990,22 +1012,7 @@ std::string trim_copy( std::string str )
         hour = 12;
     }
     
-    const char *month = "";
-    switch( t.date().month() )
-    {
-      case 1: month = "Jan"; break;
-      case 2: month = "Feb"; break;
-      case 3: month = "Mar"; break;
-      case 4: month = "Apr"; break;
-      case 5: month = "May"; break;
-      case 6: month = "Jun"; break;
-      case 7: month = "Jul"; break;
-      case 8: month = "Aug"; break;
-      case 9: month = "Sep"; break;
-      case 10: month = "Oct"; break;
-      case 11: month = "Nov"; break;
-      case 12: month = "Dec"; break;
-    }
+    const char * const month = month_number_to_Str( t.date().month() );
     
     char buffer[64];
     snprintf( buffer, sizeof(buffer), "%i-%s-%04i %02i:%02i:%02i%s",
@@ -1014,6 +1021,39 @@ std::string trim_copy( std::string str )
     return buffer;
   }//to_common_string
 
+  
+  std::string to_vax_string( const boost::posix_time::ptime &t )
+  {
+    //Ex. "2014-Sep-19 14:12:01.62"
+    if( t.is_special() )
+      return "";
+    
+    const int year = static_cast<int>( t.date().year() );
+    const char * const month = month_number_to_Str( t.date().month() );
+    const int day = static_cast<int>( t.date().day() );
+    const int hour = static_cast<int>( t.time_of_day().hours() );
+    const int mins = static_cast<int>( t.time_of_day().minutes() );
+    const int secs = static_cast<int>( t.time_of_day().seconds() );
+    const int hundreth = static_cast<int>( 0.5 + ((t.time_of_day().total_milliseconds() % 1000) / 10.0) ); //round to neares hundreth of a second
+    
+    char buffer[32];
+    snprintf( buffer, sizeof(buffer), "%02i-%s-%04i %02i:%02i:%02i.%02i",
+             day, month, year, hour, mins, secs, hundreth );
+    
+#if(PERFORM_DEVELOPER_CHECKS)
+    if( strlen(buffer) != 23 )
+    {
+      char errormsg[1024];
+      snprintf( errormsg, sizeof(errormsg),
+               "Vax format of '%s' is '%s' which is not the expected length of 23, but %i",
+                to_extended_iso_string(t).c_str(), buffer, static_cast<int>(strlen(buffer)) );
+      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    }
+#endif
+    
+    return buffer;
+  }//std::string to_vax_string( const boost::posix_time::ptime &t );
+  
   
   std::string print_to_iso_str( const boost::posix_time::ptime &t,
                                const bool extended )
@@ -1268,7 +1308,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
       const size_t signpos = time_string.find_first_of( "-+", offsetcolon+1 );
       if( signpos != string::npos )
       {
-        //Note: the + and - symbols are in the bellow for dates like:
+        //Note: the + and - symbols are in the below for dates like:
         //  '3-07-31T14:25:30-03:-59'
         const size_t endoffset = time_string.find_first_not_of( ":0123456789+-", signpos+1 );
         const string offset = endoffset==string::npos ? time_string.substr(signpos)
@@ -2139,7 +2179,7 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
  */
 int check_if_symlink_is_to_parent( const string &filename )
 {
-  //Need to make sure symbolic link doesnt point to somethign bellow the
+  //Need to make sure symbolic link doesnt point to somethign below the
   //  current directory to avoid goign in a circle
   struct stat sb;
   

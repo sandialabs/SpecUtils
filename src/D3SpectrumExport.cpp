@@ -53,10 +53,7 @@ namespace
   const unsigned char * const ns_cssFiles[] = {
     SPECTRUM_CHART_D3_CSS  // For spectrum stylesheet
   };//D3SpectrumChartOptions::cssFiles[]
-#endif
-  
-  const char * SPECTRUM_CHART_SETUP_JS = "var ondatachange=function(e,t,c){\"data\"===e.value?t.setData(c,!0):t.setData(null,!0)},onyscalechange=function(e,t){var c=e.value;\"lin\"===c?t.setLinearY():\"log\"===c?t.setLogY():\"sqrt\"===c&&t.setSqrtY()},ongridychange=function(e,t){t.setGridY(e.checked)},ongridxchange=function(e,t){t.setGridX(e.checked)},onrefgammachange=function(e,t,c){console.log(c);for(var n=[],o=0;o<e.options.length;o++){var s=e.options[o];if(s.selected){var a=-1;c.forEach(function(e,t){e&&e.parent&&e.parent===s.value&&(a=t)}),-1!==a&&n.push(c[a])}}t.setReferenceLines(n)},setShowMouseStats=function(e,t){t.setShowMouseStats(e.checked)},setCompactXAxis=function(e,t){t.setCompactXAxis(e.checked)},setAdjustYAxisPadding=function(e,t){t.setAdjustYAxisPadding(e.checked,e.checked?5:60)},setWheelScrollYAxis=function(e,t){t.setWheelScrollYAxis(e.checked)},setShowAnimation=function(e,t){t.setShowAnimation(e.checked)},setAnimationDuration=function(e,t){t.setAnimationDuration(e)},setShowLegend=function(e,t){t.setShowLegend(e.checked)},setShowUserLabels=function(e,t){t.setShowUserLabels(e.checked)},setShowPeakLabels=function(e,t){t.setShowPeakLabels(e.checked)},setShowNuclideNames=function(e,t){t.setShowNuclideNames(e.checked)},setShowNuclideEnergies=function(e,t){t.setShowNuclideEnergies(e.checked)},setComptonEdge=function(e,t){t.setComptonEdge(e.checked)},setComptonPeaks=function(e,t){t.setComptonPeaks(e.checked)},setComptonPeakAngle=function(e,t){t.setComptonPeakAngle(e)},setEscapePeaks=function(e,t){t.setEscapePeaks(e.checked)},setSumPeaks=function(e,t){t.setSumPeaks(e.checked)},showForegroundPeaks=function(e,t){t.setShowPeaks(0,e.checked)},showTitle=function(e,t){t.setTitle(e.checked?\"Simple Chart\":null)},setXRangeArrows=function(e,t){t.setXRangeArrows(e.checked)},setShowXAxisSliderChart=function(e,t){t.setShowXAxisSliderChart(e.checked)},setSpectrumScaleFactorWidget=function(e,t){t.setSpectrumScaleFactorWidget(e.checked)},setDropDownSpectrumScaleFactor=function(e,t){t.setDropDownSpectrumScaleFactor(e.value)},setSpectrumScaleFactor=function(e,t){t.setSpectrumScaleFactor(e.value)},setMaxScaleFactor=function(e,t){t.setMaxScaleFactor(e.value)},setBackgroundSubtract=function(e,t){t.setBackgroundSubtract(e.checked)};";
-  
+#else
   string file_to_string( const char *filename )
   {
     std::ifstream t( filename );
@@ -65,8 +62,11 @@ namespace
       throw runtime_error( "file_to_string: Failed to open '" + string(filename) + "'" );
     
     return std::string((std::istreambuf_iterator<char>(t)),
-                    std::istreambuf_iterator<char>());
+                       std::istreambuf_iterator<char>());
   }
+#endif
+  
+  const char * SPECTRUM_CHART_SETUP_JS = "var ondatachange=function(e,t,c){\"data\"===e.value?t.setData(c,!0):t.setData(null,!0)},onyscalechange=function(e,t){var c=e.value;\"lin\"===c?t.setLinearY():\"log\"===c?t.setLogY():\"sqrt\"===c&&t.setSqrtY()},ongridychange=function(e,t){t.setGridY(e.checked)},ongridxchange=function(e,t){t.setGridX(e.checked)},onrefgammachange=function(e,t,c){console.log(c);for(var n=[],o=0;o<e.options.length;o++){var s=e.options[o];if(s.selected){var a=-1;c.forEach(function(e,t){e&&e.parent&&e.parent===s.value&&(a=t)}),-1!==a&&n.push(c[a])}}t.setReferenceLines(n)},setShowMouseStats=function(e,t){t.setShowMouseStats(e.checked)},setCompactXAxis=function(e,t){t.setCompactXAxis(e.checked)},setAdjustYAxisPadding=function(e,t){t.setAdjustYAxisPadding(e.checked,e.checked?5:60)},setWheelScrollYAxis=function(e,t){t.setWheelScrollYAxis(e.checked)},setShowAnimation=function(e,t){t.setShowAnimation(e.checked)},setAnimationDuration=function(e,t){t.setAnimationDuration(e)},setShowLegend=function(e,t){t.setShowLegend(e.checked)},setShowUserLabels=function(e,t){t.setShowUserLabels(e.checked)},setShowPeakLabels=function(e,t){t.setShowPeakLabels(e.checked)},setShowNuclideNames=function(e,t){t.setShowNuclideNames(e.checked)},setShowNuclideEnergies=function(e,t){t.setShowNuclideEnergies(e.checked)},setComptonEdge=function(e,t){t.setComptonEdge(e.checked)},setComptonPeaks=function(e,t){t.setComptonPeaks(e.checked)},setComptonPeakAngle=function(e,t){t.setComptonPeakAngle(e)},setEscapePeaks=function(e,t){t.setEscapePeaks(e.checked)},setSumPeaks=function(e,t){t.setSumPeaks(e.checked)},showForegroundPeaks=function(e,t){t.setShowPeaks(0,e.checked)},showTitle=function(e,t){t.setTitle(e.checked?\"Simple Chart\":null)},setXRangeArrows=function(e,t){t.setXRangeArrows(e.checked)},setShowXAxisSliderChart=function(e,t){t.setShowXAxisSliderChart(e.checked)},setSpectrumScaleFactorWidget=function(e,t){t.setSpectrumScaleFactorWidget(e.checked)},setDropDownSpectrumScaleFactor=function(e,t){t.setDropDownSpectrumScaleFactor(e.value)},setSpectrumScaleFactor=function(e,t){t.setSpectrumScaleFactor(e.value)},setMaxScaleFactor=function(e,t){t.setMaxScaleFactor(e.value)},setBackgroundSubtract=function(e,t){t.setBackgroundSubtract(e.checked)};";
   
   //Taken from the rapidxml.hpp that Wt uses
   template <class Ch>
@@ -692,7 +692,8 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     const Measurement::EquationType caltype = meas.energy_calibration_model();
     if( (caltype == Measurement::EquationType::Polynomial
-         || caltype == Measurement::EquationType::FullRangeFraction)
+         || caltype == Measurement::EquationType::FullRangeFraction
+         || caltype == Measurement::EquationType::UnspecifiedUsingDefaultPolynomial )
        && meas.deviation_pairs().empty() )
     {
       std::vector<float> calcoefs = meas.calibration_coeffs();

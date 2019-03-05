@@ -51,21 +51,22 @@ Shortcommings that wcjohns should be addressed
   -Many of the ICD1 fields possible are not checked for
     -comments for multiple different tags, ...
  -Energy calibration should be made its own object and shared between 
-  Measurments, and better indicated when cant be parsed/understood from file.
+  Measurments.
  -Neutron meausruemtns should have their own live and real time
  -Neutron counts are typically merged into a gamma detectors Measurement if a
   reasonable pairing can be made. When and if this is done needs to be clearly
   specified, and either stopped of facilities added to keep neutron det. info.
+  (should probably instead make own neutron info object that can be associated
+   with a Measurement, maybe multiple neutron to a Measurement)
  -Should add a DetectorInfo object that Measurement objects point to and share.
    -Should add things like dimention and RadDetectorKindCode to this object,
     as well as characteristics (as defined in N42-2012, but in a few other file
     formats)
-   -Can probably get rid of detector number, and just keep name
+   -Should probably get rid of detector number, and just keep name
  -Should eliminate the <InterSpec:DetectorType> tag in written N42 2012 files.
  -Should consider adding explicit dead_time field 
  -Should add elevation and uncertainties to GPS coordinates
  -Should add detector and item orientation/positions
- -Should change Measurement::detector_type_ to detector_description_
  -Should consider removing measurment_operator and inspection and make location 
   part of detector location object
  -Should implement tracking N42 MeasurementGroupReferences to link Analysis
@@ -197,41 +198,54 @@ const char *descriptionText( const SaveSpectrumAsType type );
 enum DetectorType
 {
   kGR135Detector,
-  kIdentiFinderDetector,       //First gen identiFINDER with smaller crystal
-                               //than NGs; note sometimes called identiFINDER-N.
-                               // I dont have any examples of this
-  kIdentiFinderNGDetector,     //Used for both the NG and NGH since same crystal
-                               //  size (NGH has neutron tube)
-  kIdentiFinderLaBr3Detector,  // Probably not detected (ever?)
+  /** First gen identiFINDER with smaller crystal than NGs; note sometimes
+      called identiFINDER-N.
+   */
+  kIdentiFinderDetector,
   
-  //The kDetectiveDetector is a default for when the type of detective cant be
-  //  determined, not an actual detector type.  This enum doesnt consider the
-  //  difference between the EX and DX series; the DX are same gamma crystal,
-  //  but do not have a neutron detector.
+  /** Used for both the NG and NGH since same crystal size (NGH has neutron
+      tube)
+  */
+  kIdentiFinderNGDetector,
+  
+  kIdentiFinderLaBr3Detector,
+  
+  /** The kDetectiveDetector is a default for when the type of detective cant be
+      determined, not an actual detector type.  This enum doesnt consider the
+      difference between the EX and DX series; the DX are same gamma crystal,
+      but do not have a neutron detector.
+   */
   kDetectiveDetector,          
   kDetectiveExDetector,
   kDetectiveEx100Detector,
-  kDetectiveEx200Detector,     //There are a number of variants, a self contained model, a portal, etc
-  kSAIC8Detector,              //only identified from N42 files
+  /** There are a number of variants, a self contained model, a portal, etc */
+  kDetectiveEx200Detector,
+  /** only identified from N42 files */
+  kSAIC8Detector,
   kFalcon5000,
-  kUnknownDetector,  //Why isnt the the last one?  It used to be because of binary serialization, but since that isnt used anymore...
   kMicroDetectiveDetector,
   kMicroRaiderDetector,
   kRadHunterNaI,
   kRadHunterLaBr3,
   kRsi701,
   kRsi705,
-  kAvidRsi, //unspecified RSI/Avid system, usually model is stated as RS???
+  /** Unspecified RSI/Avid system, usually model is stated as RS??? */
+  kAvidRsi,
   kOrtecRadEagleNai,
   kOrtecRadEagleCeBr2Inch,
   kOrtecRadEagleCeBr3Inch,
   kOrtecRadEagleLaBr,
-  kSam940LaBr3,  //The LaBr3 may not always be detector, and then it will be assigned kSame940
+  /** The LaBr3 may not always be detector, and then it will be assigned
+      kSame940
+   */
+  kSam940LaBr3,
   kSam940,
   kSam945,
-  kSrpm210
+  kSrpm210,
   //RadSeekerLaBr1.5x1.5
   //RadSeekerNaI2x2 (although should check for this, see MeasurementInfo::set_n42_2006_instrument_info_node_info
+  
+  kUnknownDetector
 };//enum DetectorType
 
 
@@ -488,14 +502,32 @@ public:
     NotOccupied, Occupied, UnknownOccupancyStatus
   };
 
+  /** The energy (or FWHM) calibration type that the calibration coefficients
+      should be interpreted as; typically also the type in the file.
+   */
   enum EquationType
   {
-    //The energy (or FWHM) calibration type that the calibration coefficients
-    //  should be interpreted as; typically also the type in the file.
-    // ToDo: Make it so 'UnknownEquationType' will indicate a equation
-    //       could not be parsed/determined from the file, but then have
-    //       the energy bins run from zero to 3 MeV.
-    Polynomial, FullRangeFraction, LowerChannelEdge, UnknownEquationType
+    /** for bin i, Energy_i = coef[0] + i*coef[1] + i*i*coef[2] + ... */
+    Polynomial,
+    
+    /** */
+    FullRangeFraction,
+    
+    /** The lower energies of each channel is specified. */
+    LowerChannelEdge,
+    
+    /** Used for files that do not specify a energy calibration (that could be
+        parsed).  For these files a polynomial energy calibration of 0 to 3 MeV
+        is used unless a guess of values for the specfic detector being parsed
+        is known (in which case the known energy range is used).
+     */
+    UnspecifiedUsingDefaultPolynomial,
+    
+    /** A placeholder to indicate an invalid calibration type.  After sucessfuly
+        parsing a spectrum file, no gamma spectrum will have this equation type.
+     ToDo: Could rename to NumberEquationTypes
+     */
+    InvalidEquationType
   };
   
   enum SourceType
@@ -602,7 +634,7 @@ public:
   inline SourceType source_type() const;
   
   //energy_calibration_model(): returns calibration model used for energy
-  //  binning.  If a value of 'UnknownEquationType' is returned, then
+  //  binning.  If a value of 'InvalidEquationType' is returned, then
   //  channel_energies() may or may not return a valid pointer; otherwise, if
   //  this Measurment is part of a MeasurmentInfo object constructed by parsing
   //  a file, then channel_energies() pointer _should_ be valid.
@@ -667,7 +699,7 @@ public:
   //  detector_number_, then by start_time_, then source_type_
   static bool compare_by_sample_det_time( const MeasurementConstShrdPtr &lhs,
                                           const MeasurementConstShrdPtr &rhs );
-
+  
   //set_title(): sets the title property.
   inline void set_title( const std::string &title );
   
@@ -694,7 +726,7 @@ public:
   //  write_2006_N42_xml() and then restored using
   //  set_2006_N42_spectrum_node_info().
   //Throws if gamma_counts_ or calibration_coeffs_ is empty, or if 
-  //  channel_energies_ is already populated, or if UnknownEquationType.
+  //  channel_energies_ is already populated, or if InvalidEquationType.
   //channel_energies_ is garunteed to be valid after calling this function.
   void popuplate_channel_energies_from_coeffs();
 
@@ -719,7 +751,7 @@ public:
   inline bool CheckBinRange( int bin ) const;  //depreciated
 
   //I want to get rid of all the CERN ROOT inspired functions (who uses 1 based
-  //  indexing?), so I am slowly re-writing them in a (more) sane manner bellow.
+  //  indexing?), so I am slowly re-writing them in a (more) sane manner below.
   
   //num_gamma_channels(): returns the minimum number of channels of either
   //  this->channel_energies_ or this->gamma_counts_; if either is not defined
@@ -727,7 +759,7 @@ public:
   inline size_t num_gamma_channels() const;
   
   //find_gamma_channel(): returns gamma channel containing 'energy'.  If
-  //  'energy' is bellow the zeroth channel energy, 0 is returned; if 'energy'
+  //  'energy' is below the zeroth channel energy, 0 is returned; if 'energy'
   //  is above last channels energy, the index for the last channel is returned.
   //  If this->channel_energies_ is not defined, an exception is thrown.
   inline size_t find_gamma_channel( const float energy ) const;
@@ -865,7 +897,7 @@ protected:
   //  If gamma_counts_ is undefined or empty, nothing will be done.
   void combine_gamma_channels( const size_t nchann );
   
-  //truncate_gamma_channels(): removes channels bellow 'keep_first_channel'
+  //truncate_gamma_channels(): removes channels below 'keep_first_channel'
   //  and above 'keep_last_channel'.  If 'keep_under_over_flow' is true, then
   //  adds the removed gamma counts to the first/last remaining bin.
   //Throws exception if keep_first_channel>=keep_last_channel, or if
@@ -916,8 +948,8 @@ protected:
   //  peaks stay at same energy).
   //  Does not store the eqn for the case of LowerChannelEdge binning
   //  Will throw std:runtime_error(...) if gamma_counts_ is not defined.
-  //  or called with UnknownEquationType
-  //Throws exception if 'type' is UnknownEquationType, or gamma_counts_ is empty
+  //  or called with InvalidEquationType
+  //Throws exception if 'type' is InvalidEquationType, or gamma_counts_ is empty
   //  or not defined, or potentialy (but not necassirly) if input equation is
   //  ill-specified.
   void rebin_by_eqn( const std::vector<float> &eqn,
@@ -929,7 +961,7 @@ protected:
   //  values, and also possibly save memmorry by sharing the vector among many
   //  Measurement objects.
   //No checks are made that new_binning is consistent with eqn!!!
-  //Throws exception if 'type' is UnknownEquationType, or gamma_counts_ is empty
+  //Throws exception if 'type' is InvalidEquationType, or gamma_counts_ is empty
   //  or not defined, or potentialy (but not necassirly) if input equation is
   //  ill-specified.
   void rebin_by_eqn( const std::vector<float> &eqn,
@@ -943,7 +975,7 @@ protected:
   //  checks are performed to make sure 'eqn' actually cooresponds to 'binning'
   //  For type==LowerChannelEdge, eqn should coorespond to the energies of the
   //  lower edges of the bin.
-  //Throws exception if 'type' is UnknownEquationType, or potentially (but not
+  //Throws exception if 'type' is InvalidEquationType, or potentially (but not
   //  necassirily) if input is ill-specified, or if the passed in binning doesnt
   //  have the proper number of channels.
   void recalibrate_by_eqn( const std::vector<float> &eqn,
@@ -987,7 +1019,7 @@ protected:
   float speed_;  //in m/s
   std::string detector_name_;
   int detector_number_;
-  std::string detector_type_;  //e.x. "HPGe 50%". Roughly the equivalent N42 2012 "RadDetectorDescription" node
+  std::string detector_description_;  //e.x. "HPGe 50%". Roughly the equivalent N42 2012 "RadDetectorDescription" node
   //ToDo: add something like:
   //  struct Characteristic{std::string name, value, unit, data_class;};
   //  std::vector<Characteristic> detector_characteristics;
@@ -1001,6 +1033,9 @@ protected:
 
   std::vector<std::string>  remarks_;
   boost::posix_time::ptime  start_time_;
+  
+  //ToDo: switch from ptime, to std::chrono::time_point
+  //std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::milliseconds> start_timepoint_;
 
   std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
   DeviationPairVec          deviation_pairs_;     //<energy,offset>
@@ -1233,7 +1268,7 @@ public:
   void combine_gamma_channels( const size_t ncombine,
                                const std::shared_ptr<const Measurement> &m );
   
-  //truncate_gamma_channels(): removes all channels bellow 'keep_first_channel'
+  //truncate_gamma_channels(): removes all channels below 'keep_first_channel'
   //  and above 'keep_last_channel', for every measurment that has 'nchannels'.
   //  If keep_under_over_flow is true, then removed channel counts will be added
   //  to the first/last channel of the remaing data.
@@ -1245,7 +1280,7 @@ public:
                                   const size_t nchannels,
                                   const bool keep_under_over_flow );
   
-  //truncate_gamma_channels(): removes all channels bellow 'keep_first_channel'
+  //truncate_gamma_channels(): removes all channels below 'keep_first_channel'
   //  and above 'keep_last_channel', for specified measurment.
   //  If keep_under_over_flow is true, then removed channel counts will be added
   //  to the first/last channel of the remaing data.
@@ -1555,7 +1590,7 @@ public:
   //  that energy of the first two and last two bins are increasing left to
   //  right. LowerChannelEdge type is check that each bin is increasing over
   //  previous, and that it has at least as many bins as nbin.
-  //  UnknownEquationType always returns false.
+  //  InvalidEquationType always returns false.
   static bool calibration_is_valid( const Measurement::EquationType type,
                                   const std::vector<float> &eqn,
                           const std::vector< std::pair<float,float> > &devpairs,
@@ -1824,17 +1859,23 @@ protected:
   void set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
                             std::vector<MeasurementShrdPtr> &measurs_to_update );
   
-  //ensure_unique_sample_numbers(): unsures uniqu detector-name samplenumber
-  //  combos
-  //  -Not stable in terms of garunteeing measurments started at same time
-  //   will have same sample number
-  //  -ensures measurments_ sorted according to Measurement::compare_by_sample_det_time
-  //  -if UUID is empty will generate a deterministic pseudo-UUID
-  //Called from cleanup_after_load()
-  //TODO: function should be parralized for measurments with many samples
-  //      - currently measurments with large numbers of measurments (>500)
-  //        dont ensure dense sample numbers as a computationally fast
-  //        workaround.
+  /** Ensures unique detector-name sample-number combos.
+   
+    If measurements_ already has unique sample and detector numbers, then
+    if will be sorted according to #compare_by_sample_det_time (necassary
+    so we can retrieve Measurements by sample number and detector name/number)
+    and potentially set the #kNotTimeSortedOrder flag.
+   
+    If measurements_ is not already unique by sample and detector numbers, the,
+    they will be set according to Measurement start times.
+   
+    Currently assumed to only be called from #cleanup_after_load.
+   
+    TODO: function should be parralized for measurments with many samples
+        - currently measurments with large numbers of measurments (>500)
+          dont ensure dense sample numbers as a computational workaround.
+        - Function probably also use other work as well
+   */
   void ensure_unique_sample_numbers();
   
   //has_unique_sample_and_detector_numbers(): checks to make sure 
@@ -1884,13 +1925,10 @@ protected:
   static std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node );
   
   //decode_2012_N42_rad_measurment_node: a function to help decode 2012 N42
-  //  RadMeasurment nodes in a mutlithreaded fashion.  To avoid having to put
-  //  some class definitions in this header, I am using boost::any, which is
-  //  horrble and lame, but in the end is typesafe.  Also, this helper function
+  //  RadMeasurment nodes in a mutlithreaded fashion. This helper function
   //  has to be a member function in order to access the member variables.
   //  I would preffer you didnt awknowledge the existence of this function.
-  //id_to_dettypeany and calibrations_any can be empty, but you wont get the
-  //  information for calibration
+  //  id_to_dettypeany_ptr and calibrations_ptr must be valid.
   static void decode_2012_N42_rad_measurment_node(
                                 std::vector< MeasurementShrdPtr > &measurments,
                                 const rapidxml::xml_node<char> *meas_node,
@@ -1935,6 +1973,17 @@ protected:
   size_t write_lower_channel_energies_to_pcf( std::ostream &ostr,
               std::shared_ptr<const std::vector<float>> lower_channel_energies,
               const size_t nchannels_using ) const;
+  
+  /** Writes the deviation pairs portion of the PCF file to the output stream,
+      if there are any deviation pairs.
+   
+   Note: its not well specified how to deal with detectors that have names
+         not conforming to the "Aa1", "Aa2", ... "Ba1", ... convention, and
+         were there are more than one detector, so currenly just write these
+         other detector in the first location available in the PCF, where the
+         detectors are ordered alphabetically by their name.
+   */
+  void write_deviation_pairs_to_pcf( std::ostream &outputstrm ) const;
   
   
   /** Determines number of channels we should use for writing PCF files, and
@@ -2536,7 +2585,7 @@ int Measurement::detector_number() const
 
 const std::string &Measurement::detector_type() const
 {
-  return detector_type_;
+  return detector_description_;
 }
 
 Measurement::QualityStatus Measurement::quality_status() const

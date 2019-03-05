@@ -1246,7 +1246,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   if( this.xaxistitle )
     xtitleh = this.xaxistitle.node().getBBox().height;
   
-  /*Bellow isnt quite working, so stick with estimate of 22 above */
+  /*Below isnt quite working, so stick with estimate of 22 above */
   /*self.xAxisBody.selectAll('g.tick').forEach( function(t){ */
       /*console.log( t[0].getBBox().height );  /*sometimes gives 22.21875, sometimes 4 */
    /*}); */
@@ -1988,7 +1988,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*  This is just an example, and likely needs changed, or just removed. */
     if( self.wheeltimer ){
      /*This is not the first wheel event of the current user wheel action, */
-     /*  lets clear the previous timeout (we'll reset a little bellow).  */
+     /*  lets clear the previous timeout (we'll reset a little below).  */
      window.clearTimeout(self.wheeltimer);
     } else {
      /*This is the first wheel event of this user wheel action, lets record */
@@ -3583,7 +3583,7 @@ SpectrumChartD3.prototype.yticks = function() {
 
     if( this.options.yscale === "log" )
     {
-      /*Get the power of 10 just bellow or equal to rendermin. */
+      /*Get the power of 10 just below or equal to rendermin. */
       var minpower = (renderymin > 0.0) ? Math.floor( Math.log10(renderymin) ) : -1;
 
       /*Get the power of 10 just above or equal to renderymax.  If renderymax */
@@ -3610,7 +3610,7 @@ SpectrumChartD3.prototype.yticks = function() {
 
 
       /*numdecades: number of decades the data covers, including the decade */
-      /*  above and bellow the data. */
+      /*  above and below the data. */
       var numdecades = maxpower - minpower + 1;
 
       /*minpxdecade: minimum number of pixels we need per decade. */
@@ -3943,7 +3943,7 @@ SpectrumChartD3.prototype.xticks = function() {
   var range = rendermax - rendermin;
   
   /*ndigstart makes up for larger numbers taking more pixels to render, so */
-  /* it keeps numbers from overlapping.  Bellow uses 15 to kinda rpresent the */
+  /* it keeps numbers from overlapping.  Below uses 15 to kinda rpresent the */
   /*  width of numbers in pixels. */
   var ndigstart = rendermin > 0 ? Math.floor(Math.log10(rendermin)) : 1;
   ndigstart = Math.max(1,Math.min(ndigstart,5));
@@ -6850,7 +6850,7 @@ SpectrumChartD3.prototype.runRealTimePeakFit = function() {
     /*  area, and the actual data area.  */
 
     
-    /*A function to integrate the area bellow the continuum between x0 and x1  */
+    /*A function to integrate the area below the continuum between x0 and x1  */
     /*  for a given refrence energy */
     function offset_eqn_integral(coeffs,refEnergy,x0,x1) {
       x0 -= refEnergy;
@@ -10256,7 +10256,7 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   if (!peak) 
     return null;
 
-  /*A function to integrate the area bellow the continuum between x0 and x1  */
+  /*A function to integrate the area below the continuum between x0 and x1  */
   /*  for a given refrence energy */
   function offset_eqn_integral(coeffs,refEnergy,x0,x1) {
     x0 -= refEnergy;

@@ -143,9 +143,12 @@ int main( int argc, char **argv )
   //      equalEnough(...) test.
   
   //test_base_directory: the directory where the test file structure is based.
-  string test_base_directory = "/Users/wcjohns/rad_ana/InterSpec/testing/file_format_test_spectra";
+#if( !defined(WIN32) )
+  string test_base_directory = "/Users/wcjohns/rad_ana/InterSpec/testing/SpectrumFileFormats/file_format_test_spectra";
+#else
+  string test_base_directory = "Z:\\wcjohns\\rad_ana\\InterSpec\\testing\\SpectrumFileFormats\\file_format_test_spectra";
+#endif
 
-  
   po::options_description desc("Allowed options");
   
   desc.add_options()
@@ -222,9 +225,15 @@ int main( int argc, char **argv )
   if( actions.empty() )
   {
     if( g_automated_mode )
+	{
       actions.push_back( "test" );
-    else
-      actions = {"addfiles", "test", "timing", "n42test"};
+	}else
+	{
+	  actions.push_back( "addfiles" );
+	  actions.push_back( "test" );
+	  actions.push_back( "timing" );
+	  actions.push_back( "n42test" );
+	}
   }//if( vm.count("action") ) / else
   
   for( string action : actions )
@@ -506,7 +515,7 @@ void check_files_with_truth_n42( const string basedir )
     }
     
     MeasurementInfo truth;
-    const bool truthstat = truth.load_file( tpath.c_str(), K2012ICD1Parser, "" );
+    const bool truthstat = truth.load_file( tpath.string<string>().c_str(), K2012ICD1Parser, "" );
     
     if( !truthstat )
     {
@@ -667,7 +676,7 @@ void check_serialization_to_n42( const string basedir )
     }//if( !status )
     
     
-    const string tempname = UtilityFunctions::temp_file_name( filename, tempdir.c_str() );
+    const string tempname = UtilityFunctions::temp_file_name( filename, tempdir.string<string>().c_str() );
     
     {//Begin codeblock to serialize to temporary file
       ofstream output( tempname.c_str() );
@@ -823,7 +832,7 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
     
     MeasurementInfo reloadedinfo;
     const bool reloadstatus
-                 = reloadedinfo.load_file( truth_n42.c_str(), K2012ICD1Parser, "" );
+                 = reloadedinfo.load_file( truth_n42.string<string>().c_str(), K2012ICD1Parser, "" );
     if( !reloadstatus )
       throw runtime_error( "Failed to read in written n42 file" );
   
