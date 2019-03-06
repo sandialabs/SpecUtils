@@ -27,6 +27,7 @@
 #include <string>
 #include <memory>
 #include <fstream>
+#include <assert.h>
 #include <iostream>
 #include <algorithm>
 #include <functional>

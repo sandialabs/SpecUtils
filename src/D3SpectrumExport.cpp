@@ -19,9 +19,11 @@
 
 #include "SpecUtils_config.h"
 
+#include <stack>
 #include <limits>
 #include <sstream>
 #include <fstream>
+#include <cstddef>
 #include <streambuf>
 
 #include "rapidxml/rapidxml.hpp"

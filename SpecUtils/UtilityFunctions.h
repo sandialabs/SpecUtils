@@ -32,7 +32,6 @@
 #include <exception>
 
 #if( !SpecUtils_NO_BOOST_LIB )
-#include <boost/filesystem.hpp>
 #include <boost/version.hpp>
 #endif
 
