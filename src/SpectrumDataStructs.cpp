@@ -18701,6 +18701,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       ostr.write( &(title_source_description[0]), title_source_description.size() );
       
       collection_time.resize( 23, ' ' );
+      
       ostr.write( &(collection_time[0]), collection_time.size() );
       
       ostr.write( &character_tag, 1 );
@@ -19503,9 +19504,13 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
 //      static_assert( sizeof(float) == 4, "Float must be 4 bytes" );
 //      static_assert(std::numeric_limits<float>::digits >= 32);
 
-      string collection_time;  //Formatted like: '2010-02-24T00:08:24.82Z'
+      string collection_time;  //VAX Formatted like: "2014-Sep-19 14:12:01.62"
       collection_time.resize(23);
       input.read( &(collection_time[0]), collection_time.size() ); //203
+      
+      //cout << "The date/time characters read are:" << endl;
+      //for( size_t i = 0; i < collection_time.size(); ++i )
+      //  cout << "\t" << i+1 << ": " << collection_time[i] << ", " << int(collection_time[i]) << endl;
       
       
       int32_t num_channel;
@@ -21251,8 +21256,9 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               coefs.clear();
               if( allZeros )
               {
-                passMessage( "Calibration in file is {0, 0, 0}; not using.",
-                             "", 1 );
+                //passMessage( "Calibration in file is {0, 0, 0}; not using.",
+                //             "", 1 );
+                meas->energy_calibration_model_ = Measurement::EquationType::UnspecifiedUsingDefaultPolynomial;
               }else
               {
                 stringstream msg;
