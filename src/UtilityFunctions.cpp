@@ -1862,6 +1862,37 @@ size_t file_size( const std::string &path )
   return st.st_size;
 }
   
+bool is_absolute_path( const std::string &path )
+{
+  cerr << "Warning, is_absolute_path() untested" << endl;
+    
+#if( SpecUtils_NO_BOOST_LIB )
+#ifdef WIN32
+  return !PathIsRelativeA( path.c_str() );
+#else
+  return (path.size() && (path[0]=='/'));
+#endif
+#else //SpecUtils_NO_BOOST_LIB
+  return boost::filesystem::path(path).is_absolute();
+#endif
+}
+  
+std::string get_working_path()
+{
+  cerr << "Warning, get_working_path() untested" << endl;
+#ifdef WIN32
+  char *buffer = _getcwd(nullptr, 0);
+  if( !buffer )
+    return "";
+  const std::string cwdtemp = buffer;
+  free( buffer );
+  return cwdtemp;
+#else
+  char buffer[PATH_MAX];
+  return (getcwd(buffer, sizeof(buffer)) ? std::string(buffer) : std::string(""));
+#endif
+}//std::string get_working_path();
+  
   
 #if( SpecUtils_NO_BOOST_LIB )
 std::string temp_file_name( std::string base, std::string directory )
@@ -1936,37 +1967,9 @@ std::string temp_file_name( std::string bases, std::string temppaths )
 }//path temp_file_name( path base )
 
 
-bool is_absolute_path( const std::string &path )
-{
-  cerr << "Warning, is_absolute_path() untested" << endl;
+
   
-#if( SpecUtils_NO_BOOST_LIB )
-#ifdef WIN32
-  return !PathIsRelativeA( path.c_str() );
-#else
-  return (path.size() && (path[0]=='/'));
-#endif
-#else //SpecUtils_NO_BOOST_LIB
-  return boost::filesystem::path(path).is_absolute();
-#endif
-}
-  
-std::string get_working_path()
-{
-  cerr << "Warning, get_working_path() untested" << endl;
-#ifdef WIN32
-  char *buffer = _getcwd(nullptr, 0);
-  if( !buffer )
-    return "";
-  const std::string cwdtemp = buffer;
-  free( buffer );
-  return cwdtemp;
-#else
-  char buffer[PATH_MAX];
-  return (getcwd(buffer, sizeof(buffer)) ? std::string(buffer) : std::string(""));
-#endif
-}//std::string get_working_path();
-  
+
   
 #if( SpecUtils_NO_BOOST_LIB || BOOST_VERSION >= 104500 )
 bool make_canonical_path( std::string &path, const std::string &cwd )

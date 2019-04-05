@@ -13490,10 +13490,21 @@ void add_analysis_results_to_2012_N42(
   if( ana.algorithm_version_.size() )
   {
     std::lock_guard<std::mutex> lock( xmldocmutex );
-    val = doc->allocate_string( ana.algorithm_version_.c_str(), ana.algorithm_version_.size()+1 );
-    xml_node<char> *version = doc->allocate_node( node_element, "AnalysisAlgorithmVersion", val );
+    xml_node<char> *version = doc->allocate_node( node_element, "AnalysisAlgorithmVersion" );
     AnalysisResults->append_node( version );
-  }
+    
+    string compname = ana.algorithm_name_;
+    if( compname.empty() )
+      compname = "main";
+    
+    val = doc->allocate_string( compname.c_str(), compname.size()+1 );
+    xml_node<char> *component_name = doc->allocate_node( node_element, "AnalysisAlgorithmComponentName", val );
+    version->append_node( component_name );
+    
+    val = doc->allocate_string( ana.algorithm_version_.c_str(), ana.algorithm_version_.size()+1 );
+    xml_node<char> *component_version = doc->allocate_node( node_element, "AnalysisAlgorithmComponentVersion", val );
+    version->append_node( component_version );
+  }//
   
   //<AnalysisAlgorithmSetting>
   //<AnalysisResultStatusCode>

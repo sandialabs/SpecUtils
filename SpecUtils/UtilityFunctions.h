@@ -425,6 +425,20 @@ namespace UtilityFunctions
    */
   std::string temp_dir();
   
+  /** Determines is the path passed in is absolute or not.
+   */
+  bool is_absolute_path( const std::string &path );
+  
+  /** Get the current working directory.
+   
+   Becareful if using multiple threads, and another thread could change the
+   current working directory;
+   
+   Returns empty string on error.
+   */
+  std::string get_working_path();
+  
+  
   /** \brief Gives a unique file name.
    
    \param filebasename If not empty, then the returned file name will
@@ -442,19 +456,6 @@ namespace UtilityFunctions
   std::string temp_file_name( std::string filebasename, std::string directory );
 #else
   std::string temp_file_name( std::string filebasename, std::string directory );
-  
-  /** Get the current working directory.
-   
-   Becareful if using multiple threads, and another thread could change the
-   current working directory;
-   
-   Returns empty string on error.
-   */
-  std::string get_working_path();
-  
-  /** Determines is the path passed in is absolute or not.
-   */
-  bool is_absolute_path( const std::string &path );
   
   //Boost 1.44 doesnt support boost::filesystem::canonical, so we'll leave this
   //  function out because nothing I compile with the ancient Boosts use it; see
