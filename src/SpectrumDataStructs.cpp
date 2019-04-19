@@ -19661,7 +19661,17 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       if( !source_list.empty() )
         meas->remarks_.push_back( "Source: " + source_list );
       
-//      meas->cambio_tag_char_ = character_tag;
+      if( character_tag == '-' )
+      {
+        meas->occupied_ = Measurement::NotOccupied;
+      }else if( character_tag == ' ' )
+      {
+        meas->occupied_ = Measurement::Occupied;
+      }else
+      {
+        //Go with whatever the occupancy_flag indicated
+        //  ...waiting on answer from Dean about priority list...
+      }
       
       while( energy_cal_terms.size() && (energy_cal_terms.back()==0.0f) )
         energy_cal_terms.erase( energy_cal_terms.begin() + energy_cal_terms.size() - 1 );
