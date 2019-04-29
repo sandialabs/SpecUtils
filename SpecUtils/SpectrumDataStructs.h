@@ -1019,7 +1019,10 @@ protected:
   //sample_number_: first sample is typically 1 (not zero like in c++)
   int sample_number_;
   
-  OccupancyStatus  occupied_;
+  //occupied_: for portal data indicates if vehicle in RPM.  If non-portal data
+  //  then will probably usually be OccupancyStatus::UnknownOccupancyStatus.
+  OccupancyStatus occupied_;
+  
   double gamma_count_sum_;
   double neutron_counts_sum_;
   float speed_;  //in m/s

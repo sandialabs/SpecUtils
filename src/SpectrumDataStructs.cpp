@@ -1714,6 +1714,7 @@ bool is_candidate_n42_file( const char * data )
   return false;
 }//bool is_candidate_n42_file( const char * data )
 
+
 char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end )
 {
   if( !data || data_end <= data )
@@ -1723,10 +1724,12 @@ char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end )
   if( datalen < 512 )
     return data_end;
   
-  
+  //Look to see how often we alternate between a zero-byte, and non-zero byte
   size_t num_zero_alternations = 0;
   
   //First do a quick check of just the first 64 bytes, being a little loose.
+  // (note, we could increment i by two each time, but I was too lazy to test
+  //  for now)
   for( size_t i = 1; i < 64; ++i )
     num_zero_alternations += (((!data[i-1]) == (!data[i])) ? 0 : 1);
   
@@ -2896,9 +2899,10 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
 
   try
   {
-    if( is_occupied( uccupied_node ) ) occupied_ = Occupied;
-    else                               occupied_ = NotOccupied;
-  }catch(...){                         occupied_ = UnknownOccupancyStatus; }
+    if( !uccupied_node )                  occupied_ = UnknownOccupancyStatus;
+    else if( is_occupied(uccupied_node) ) occupied_ = Occupied;
+    else                                  occupied_ = NotOccupied;
+  }catch(...){                            occupied_ = UnknownOccupancyStatus; }
 
   const rapidxml::xml_node<char> *det_type_node = xml_first_node_nso( spectrum, "DetectorType", xmlns );
   if( det_type_node && det_type_node->value_size() )
@@ -2954,7 +2958,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
   //XXX Things we should look for!
   //Need to handle case <Calibration Type="FWHM" FWHMUnits="Channels"> instead of right now only handling <Calibration Type="Energy" EnergyUnits="keV">
 
-  const rapidxml::xml_node<char> *channel_data_node = xml_first_node_nso( spectrum, "ChannelData", xmlns );  //can have attribute Compression, Start(The channel number (one-based) of the first value in this element), ListMode(string)
+  const rapidxml::xml_node<char> *channel_data_node = xml_first_node_nso( spectrum, "ChannelData", xmlns );  //can have attribute comsion, Start(The channel number (one-based) of the first value in this element), ListMode(string)
   
   if( !channel_data_node )
   {
@@ -11932,7 +11936,9 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
   }catch(...){}
 
   try{
-    if( is_occupied( occupancy_node ) )
+    if( !occupancy_node )
+      occupied = Measurement::UnknownOccupancyStatus;
+    else if( is_occupied( occupancy_node ) )
       occupied = Measurement::Occupied;
     else
       occupied = Measurement::NotOccupied;
@@ -18720,7 +18726,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       else
         collection_time = "                       "; //"01-Jan-1900 00:00:00.00";  //23 characters
       
-      character_tag = ' ';//meas->cambio_tag_char(); //prev to 20181121 was '\0'
+      character_tag = ' ';
       
       //From phone conversation with Dean 20170816:
       //  The meaning of the 'tag' character is highly overloaded, and can mean,
@@ -18733,10 +18739,13 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       
       if( passthrough() )
       {
-        if( meas->occupied() == Measurement::NotOccupied )
+        if( (meas->occupied() == Measurement::NotOccupied)
+            && (meas->source_type() != Measurement::Background) )
           character_tag = '-';
         else if( meas->occupied() == Measurement::Occupied )
           character_tag = ' ';
+        //else if this is background and we know what isotope we are calibrating
+        //  from, then could put 'K' or 'T'
       }
       
       vector<float> calib_coef = meas->calibration_coeffs_;
@@ -18759,11 +18768,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
         quadratic = cubic = low_energy = 0.0f;
       }//if( lower_channel_energies && lower_channel_energies->size() > 7 )
       
-      const float occupied = (meas->occupied()==Measurement::Occupied ? 1.0f : 0.0f);
-      
-      //Isnt there more terms in newer PCF files?  Or are those only in the
-      //  Detector.dat files
-      
+      const float dummy_float = 0.0f;
       neutron_counts = static_cast<float>( meas->neutron_counts_sum_ );
     
       title_source_description.resize( 180, ' ' ); //JIC
@@ -18784,7 +18789,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       ostr.write( (char *)&quadratic, 4 );
       ostr.write( (char *)&cubic, 4 );
       ostr.write( (char *)&low_energy, 4 );
-      ostr.write( (char *)&occupied, 4 ); //4-byte floating point, Occupancy flag (0 = unoccupied, 1 = occupied)
+      ostr.write( (char *)&dummy_float, 4 );
       ostr.write( (char *)&neutron_counts, 4 ); //
       ostr.write( (char *)&num_channel, 4 );
       
@@ -19586,7 +19591,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       char character_tag;
       vector<float> energy_cal_terms( 5, 0.0f );
       float live_time, true_time, halflife, molecular_weight,
-            spectrum_multiplier, occupancy_flag, neutron_counts;
+            spectrum_multiplier, unused_float, neutron_counts;
       
       input.read( &character_tag, 1 );                            //204
       input.read( (char *)&live_time, 4 );                        //208
@@ -19599,7 +19604,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       input.read( (char *)&energy_cal_terms[2], 4 );              //236
       input.read( (char *)&energy_cal_terms[3], 4 );              //240
       input.read( (char *)&energy_cal_terms[4], 4 );              //244
-      input.read( (char *)&occupancy_flag, 4 );                   //248
+      input.read( (char *)&unused_float, 4 );                     //248
       input.read( (char *)&neutron_counts, 4 );                   //252
       input.read( (char *)&num_channel, 4 );                      //256
 
@@ -19687,12 +19692,6 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       meas->speed_ = speed_from_remark( spectrum_title );
       meas->detector_name_ = detector_name_from_remark( spectrum_title );
 
-      if( occupancy_flag == 0.0f )  //should be zero or one, but lets be loose
-        meas->occupied_ = Measurement::NotOccupied;
-      else if( occupancy_flag == 1.0f )
-        meas->occupied_ = Measurement::Occupied;
-      else
-        meas->occupied_ = Measurement::UnknownOccupancyStatus;  //shouldnt ever get here, but file values are whack sometimes.
 
       meas->sample_number_ = sample_num_from_remark( spectrum_title );
       
@@ -19724,11 +19723,16 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
         meas->occupied_ = Measurement::NotOccupied;
       }else if( character_tag == ' ' )
       {
+        //If the data isnt portal data, then will change to UnknownOccupancyStatus
         meas->occupied_ = Measurement::Occupied;
+        
+        //Background spectra should not have the tag character be a dash, as the
+        //  tag chacter could indicate calibration isotope.
+        if( meas->source_type_ == Measurement::Background )
+          meas->occupied_ = Measurement::NotOccupied;
       }else
       {
-        //Go with whatever the occupancy_flag indicated
-        //  ...waiting on answer from Dean about priority list...
+        meas->occupied_ = Measurement::UnknownOccupancyStatus;
       }
       
       while( energy_cal_terms.size() && (energy_cal_terms.back()==0.0f) )
@@ -19945,9 +19949,17 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
     
     
     //if( any_contained_neutron && !all_contained_neutron )
-
     
     cleanup_after_load( DontChangeOrReorderSamples );
+    
+    
+    //We dont want it indicate occupied/not-occupied for non portal data, but
+    //  since the tag character is a little ambiguous, we'll try a cleanup here.
+    if( !passthrough() )
+    {
+      for( auto &m : measurements_ )
+        m->occupied_ = Measurement::UnknownOccupancyStatus;
+    }//if( !passthrough() )
   }catch( std::exception & )
   {
     input.clear();
