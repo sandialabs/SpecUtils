@@ -20084,61 +20084,64 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
     const istream::pos_type current_pos = input.tellg();
     const size_t bytes_left = static_cast<size_t>( 0 + eof_pos - current_pos );
 
-	if( !bytes_left )
-	  throw runtime_error( "File to small" );
-	
-    buffer.resize( bytes_left );
-    if( !input.read( &buffer[0], bytes_left ) )
-      throw runtime_error( SRC_LOCATION + " Error reading from file stream" );
+    int16_t chntype = 0;
+	  if( bytes_left > 1 )
+    {
+      buffer.resize( bytes_left );
+      if( !input.read( &buffer[0], bytes_left ) )
+        throw runtime_error( SRC_LOCATION + " Error reading from file stream" );
 
-    int16_t chntype;
-    memcpy( &chntype, &(buffer[0]), sizeof(int16_t) );
+      memcpy( &chntype, &(buffer[0]), sizeof(int16_t) );
     
 #if(PERFORM_DEVELOPER_CHECKS)
-    //Files such as ref985OS89O82 can have value chntype=-1
-    if( chntype != -102 && chntype != -101 )
-    {
-      stringstream msg;
-      msg << "Found a chntype with unexpected value: " << chntype;
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
-    }
+      //Files such as ref985OS89O82 can have value chntype=-1
+      if( chntype != -102 && chntype != -101 )
+      {
+        stringstream msg;
+        msg << "Found a chntype with unexpected value: " << chntype;
+        log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+      }
 #endif
+    }//if( bytes_left > 1 )
     
     float calibcoefs[3] = { 0.0f, 0.0f, 0.0f };
-    if( bytes_left >= 12 )
-    {
-      if( chntype == -102 )
-        memcpy( calibcoefs, &(buffer[4]), 3*sizeof(float) );
-      else
-        memcpy( calibcoefs, &(buffer[4]), 2*sizeof(float) );
+    if( chntype == -102 && bytes_left >= 16 )
+      memcpy( calibcoefs, &(buffer[4]), 3*sizeof(float) );
+    else if( bytes_left >= 12 )
+      memcpy( calibcoefs, &(buffer[4]), 2*sizeof(float) );
 //      float FWHM_Zero_32767 = *(float *)(&(buffer[16]));
 //      float FWHM Slope = *(float *)(&(buffer[20]));
-    }//if( we potentially have calibration info )
 
     //at 256 we have 1 byte for DetDescLength, and then 63 bytes for DetDesc
     string detdesc;
-    uint8_t DetDescLength;
-    memcpy( &DetDescLength, &(buffer[256]), 1 );
-    const size_t det_desc_index = 257;
-    const size_t enddet_desc = det_desc_index + DetDescLength;
-    if( DetDescLength && enddet_desc < bytes_left && DetDescLength < 64 )
+    if( bytes_left >= 257 )
     {
-      detdesc = string( &(buffer[det_desc_index]), &(buffer[enddet_desc]) );
-      trim( detdesc );
-    }//if( title_index < bytes_left )
+      uint8_t DetDescLength;
+      memcpy( &DetDescLength, &(buffer[256]), 1 );
+      const size_t det_desc_index = 257;
+      const size_t enddet_desc = det_desc_index + DetDescLength;
+      if( DetDescLength && enddet_desc < bytes_left && DetDescLength < 64 )
+      {
+        detdesc = string( &(buffer[det_desc_index]), &(buffer[enddet_desc]) );
+        trim( detdesc );
+      }//if( title_index < bytes_left )
+    }//if( bytes_left >= 257 )
     
     
     string title;
-    uint8_t SampleDescLength;
-    memcpy( &SampleDescLength, &(buffer[320]), 1 );
-    const size_t title_index = 321;
-    const size_t endtitle = title_index + SampleDescLength;
-    if( SampleDescLength && endtitle < bytes_left && SampleDescLength < 64 )
+    if( bytes_left >= 322 )
     {
-      title = string( &(buffer[title_index]), &(buffer[endtitle]) );
-      trim( title );
-    }//if( title_index < bytes_left )
-
+      uint8_t SampleDescLength;
+      memcpy( &SampleDescLength, &(buffer[320]), 1 );
+      const size_t title_index = 321;
+      const size_t endtitle = title_index + SampleDescLength;
+      if( SampleDescLength && endtitle < bytes_left && SampleDescLength < 64 )
+      {
+        title = string( &(buffer[title_index]), &(buffer[endtitle]) );
+        trim( title );
+      }//if( title_index < bytes_left )
+    }//if( bytes_left >= 322 )
+    
     MeasurementShrdPtr meas = std::make_shared<Measurement>();
     meas->live_time_ = liveTime;
     meas->real_time_ = realTime;
