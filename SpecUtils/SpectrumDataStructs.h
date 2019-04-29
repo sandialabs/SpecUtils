@@ -436,11 +436,17 @@ bool likely_not_spec_file( const std::string &file );
 
 //Checks the first 512 bytes of data for a few magic strings that *should* be
 //  in N42 files; if it contains any of them, it returns true
-bool is_candidate_n42_file( const char * data );
+bool is_candidate_n42_file( const char *data );
 
 //Same as other version of this function, but input does not need to be null
 //  terminated.
-bool is_candidate_n42_file( const char * data, const char * const data_end );
+bool is_candidate_n42_file( const char * const data, const char * const data_end );
+
+//Checks if the input data might be a N42 file, and if it might be UTF16 instead
+//  of UTF8, and if so, uses a very niave/horrible approach of just eliminating
+//  '\0' bytes from the input data.  Returns new data_end (or if no changes, the
+//  one passed in)
+char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end );
 
 //setAnalysisInformation(...): adds to analysis the information
 //  in AnalysisResults node.  Currently only adds the NuclideAnalysis to
@@ -1435,7 +1441,7 @@ public:
   /** Load data from raw xml file data specified by data begin and end - does
       not need to be null terminated.
    */
-  virtual bool load_N42_from_data( char *data, char * const data_end );
+  virtual bool load_N42_from_data( char *data, char *data_end );
 #endif
   
   //load_from_iaea_spc(...) and load_from_binary_spc(...) reset the
