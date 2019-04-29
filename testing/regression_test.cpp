@@ -30,6 +30,7 @@
 #include <iostream>
 #include <algorithm>
 
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 #include "SpecUtils/UtilityFunctions.h"
