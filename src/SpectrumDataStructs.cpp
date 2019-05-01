@@ -517,6 +517,15 @@ namespace
        nodename; \
        nodename = nodename->next_sibling(daughternamestr,lengthof(daughternamestr),true) )
   
+  template<class Ch,size_t n>
+  bool xml_value_compare( const rapidxml::xml_base<Ch> *node, const char (&value)[n] )
+  {
+    if( !node )
+      return false;
+    if( n<=1 && !node->value_size() )  //They are both empty.
+      return true;
+    return rapidxml::internal::compare((node)->value(), (node)->value_size(), value, n-1, true);
+  }
   
   template<class Ch>
   std::string xml_value_str( const rapidxml::xml_base<Ch> *n )
@@ -5585,6 +5594,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
 
   if( lhs.sample_numbers_.size() != rhs.sample_numbers_.size() )
   {
+    /*
     cout << "lhs.measurements_.size()=" << lhs.measurements_.size() << endl;
     cout << "rhs.measurements_.size()=" << rhs.measurements_.size() << endl;
     
@@ -5613,6 +5623,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
       << ", StarTime=" << rhs.measurements_[i]->start_time_
       << endl;
     }
+     */
     
     snprintf( buffer, sizeof(buffer),
              "MeasurementInfo: Number of sample numbers in LHS (%i) doesnt match RHS (%i)",
@@ -6766,14 +6777,21 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     //  calib_infos_set.
     map<string,MeasurementCalibInfo> detname_to_calib_map;
     
+    int numNeutronAndGamma = 0, numWithGammas = 0, numWithNeutrons = 0;
     bool neutronMeasDoNotHaveGamma = true, haveNeutrons = false, haveGammas = false;
     
     //Need to go through and set binning on spectrums here
     for( auto &meas : measurements_ )
     {
-      haveGammas = (haveGammas || (meas->gamma_counts_ && !meas->gamma_counts_->empty()));
+      const bool thisMeasHasGamma = (meas->gamma_counts_ && !meas->gamma_counts_->empty());
+      haveGammas = (haveGammas || thisMeasHasGamma);
       haveNeutrons = (haveNeutrons || meas->contained_neutron_);
-      if( meas->contained_neutron_ && meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+      
+      numWithGammas += thisMeasHasGamma;
+      numWithNeutrons += meas->contained_neutron_;
+      numNeutronAndGamma += (meas->contained_neutron_ && thisMeasHasGamma);
+      
+      if( meas->contained_neutron_ && thisMeasHasGamma )
         neutronMeasDoNotHaveGamma = false;
       
       if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
@@ -6798,11 +6816,11 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     
     //If none of the Measurements that have neutrons have gammas, then lets see
     //  if it makes sense to add the neutrons to the gamma Measurement
+    //if( numNeutronAndGamma < (numWithGammas/10) )
     if( haveNeutrons && haveGammas && neutronMeasDoNotHaveGamma )
     {
       merge_neutron_meas_into_gamma_meas();
     }
-  
     
     int n_times_guess_cal = 0;
     size_t nbins = 0;
@@ -16053,7 +16071,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     cerr << "Error decoding MeasurementInfo::decode2012N42SpectrumNode(...): "
          << e.what() << endl;
   }//try / catch
-}//void MeasurementInfo::decode2012N42SpectrumNode( const rapidxml::xml_node<char> *spectrum )
+}//void decode_2012_N42_rad_measurment_node( const rapidxml::xml_node<char> *spectrum )
 
 
 void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *data_node )
@@ -16267,15 +16285,23 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
   vector<std::shared_ptr<std::mutex> > meas_mutexs;
   vector< std::shared_ptr< vector<std::shared_ptr<Measurement> > > > measurements_each_meas;
   
+  size_t numRadMeasNodes = 0;
   std::mutex meas_mutex, calib_mutex;
   
   for( auto meas_node = XML_FIRST_NODE(data_node, "RadMeasurement");
       meas_node;
       meas_node = XML_NEXT_TWIN(meas_node) )
   {
+    //see ref3Z3LPD6CY6
+    if( numRadMeasNodes > 32 && xml_value_compare(meas_node->first_attribute("id"), "ForegroundMeasureSum") )
+    {
+      continue;
+    }
+    
     std::shared_ptr<std::mutex> mutexptr = std::make_shared<std::mutex>();
     auto these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
     
+    ++numRadMeasNodes;
     meas_mutexs.push_back( mutexptr );
     measurements_each_meas.push_back( these_meas );
     
@@ -18438,6 +18464,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
   
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+  double nneutron_written = 0.0;
   try
   {
     size_t nchannel_file = 0;
@@ -18584,8 +18611,10 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       
       MeasurementConstShrdPtr meas = measurements_[i];
       
-      if( !meas || !meas->gamma_counts_ || meas->gamma_counts_->empty() )
+      if( !meas || ((!meas->gamma_counts_ || meas->gamma_counts_->empty()) && !meas->contained_neutron() ) )
+      {
         continue;
+      }
       
       
       string spectrum_title;  //ex: 'Survey 1 Det=Aa1 Background @250cm'
@@ -18595,7 +18624,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       float live_time, true_time, halflife = 0.0, molecular_weight = 0.0,
       spectrum_multiplier = 0.0, offset, gain, quadratic, cubic, low_energy,
       neutron_counts;
-      const int32_t num_channel = static_cast<int32_t>( meas->gamma_counts_->size() );
+      const int32_t num_channel = static_cast<int32_t>( meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0) );
       
       live_time = meas->live_time_;
       true_time = meas->real_time_;
@@ -18749,8 +18778,8 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }
       
       vector<float> calib_coef = meas->calibration_coeffs_;
-      if( meas->energy_calibration_model_ == Measurement::Polynomial
-          || meas->energy_calibration_model_ == Measurement::UnspecifiedUsingDefaultPolynomial)
+      if( num_channel && (meas->energy_calibration_model_ == Measurement::Polynomial
+          || meas->energy_calibration_model_ == Measurement::UnspecifiedUsingDefaultPolynomial) )
         calib_coef = polynomial_coef_to_fullrangefraction( calib_coef, meas->gamma_counts_->size() );
       
       offset         = (calib_coef.size() > 0) ? calib_coef[0] : 0.0f;
@@ -18771,6 +18800,8 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       const float dummy_float = 0.0f;
       neutron_counts = static_cast<float>( meas->neutron_counts_sum_ );
     
+      nneutron_written += neutron_counts;
+      
       title_source_description.resize( 180, ' ' ); //JIC
       ostr.write( &(title_source_description[0]), title_source_description.size() );
       
@@ -18793,23 +18824,8 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       ostr.write( (char *)&neutron_counts, 4 ); //
       ostr.write( (char *)&num_channel, 4 );
       
-      //if( meas->deviation_pairs_ == dev_pairs )
-      //{
+      if( num_channel )
         ostr.write( (char *)&(meas->gamma_counts_->operator[](0)), 4*num_channel );
-      //}else
-      //{
-      //  //PCF files apply the deviation pairs to the whole file
-      //  vector<float> new_counts;
-      //  ShrdConstFVecPtr origbinning = meas->channel_energies_;
-      //  if( !origbinning )
-      //    origbinning = fullrangefraction_binning( calib_coef, num_channel,
-      //                                            meas->deviation_pairs_ );
-      //  ShrdConstFVecPtr newbinning = fullrangefraction_binning( calib_coef,
-      //                                                          num_channel, dev_pairs );
-      //  rebin_by_lower_edge( *origbinning, *(meas->gamma_counts_),
-      //                      *newbinning, new_counts );
-      //  ostr.write( (char *)&(new_counts[0]), 4*num_channel );
-      //}
       
       //Incase this spectrum has less channels than 'nchannel_file'
       if( nchannel_file != num_channel )
@@ -18821,6 +18837,8 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }//if( nchannel_file != num_channel )
       
     }//for( auto meas, measurements_ )
+    
+    cout << "WRote " << nneutron_written << " neutrons from input " << neutron_counts_sum() << " (" << deep_neutron_count_sum() << ")" << endl;
     
 #if(PERFORM_DEVELOPER_CHECKS)
     if( !ostr.bad() )
