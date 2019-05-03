@@ -18838,8 +18838,6 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       
     }//for( auto meas, measurements_ )
     
-    cout << "WRote " << nneutron_written << " neutrons from input " << neutron_counts_sum() << " (" << deep_neutron_count_sum() << ")" << endl;
-    
 #if(PERFORM_DEVELOPER_CHECKS)
     if( !ostr.bad() )
     {
