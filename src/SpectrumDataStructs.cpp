@@ -8856,11 +8856,13 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   //     && summed->energy_calibration_model() != Measurement::UnspecifiedUsingDefaultPolynomial)
   //    return false;
   
+  const size_t ngammachan = summed->gamma_counts()->size();
+
+  const uint16_t n_channel = static_cast<uint16_t>( std::min( ngammachan, static_cast<size_t>(std::numeric_limits<uint16_t>::max()) ) ); // Number of Channels;
   //require the number of channels to be a power of two.
-  const uint16_t n_channel = static_cast<uint16_t>( summed->gamma_counts()->size() ); // Number of Channels;
-  const bool isPowerOfTwo = ((n_channel != 0) && !(n_channel & (n_channel - 1)));
-  if( !isPowerOfTwo )
-    return false;
+  //const bool isPowerOfTwo = ((n_channel != 0) && !(n_channel & (n_channel - 1)));
+  //if( !isPowerOfTwo )
+  //  return false;
   
   //see http://www.ortec-online.com/download/ortec-software-file-structure-manual.pdf
   const int16_t wINFTYP = 1; // Must be 1
@@ -9280,6 +9282,16 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   {
     output.write( (const char *)&channel_data[0], 4*n_channel );
   }//if( file is integer channel data ) / else float data
+  
+  //If the number of channels was not a multiple of 32, write zeroes to finish
+  //  filling out the 128 byte record.
+  const uint16_t n_leftover = (n_channel % 32);
+  for( uint16_t i = 0; i < n_leftover; ++i )
+  {
+    const uint32_t dummy = 0;
+    output.write( (const char *)&dummy, 4 );
+  }//for( uint16_t i = 0; i < n_leftover; ++i )
+  
   
   if( firstReportPtr > 0 )
   {
