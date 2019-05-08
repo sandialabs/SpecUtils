@@ -8851,19 +8851,11 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   if( !summed || !summed->gamma_counts() )
     return false;
   
-  //  if( summed->energy_calibration_model() != Measurement::FullRangeFraction
-  //     && summed->energy_calibration_model() != Measurement::Polynomial
-  //     && summed->energy_calibration_model() != Measurement::UnspecifiedUsingDefaultPolynomial)
-  //    return false;
-  
   const size_t ngammachan = summed->gamma_counts()->size();
 
-  const uint16_t n_channel = static_cast<uint16_t>( std::min( ngammachan, static_cast<size_t>(std::numeric_limits<uint16_t>::max()) ) ); // Number of Channels;
-  //require the number of channels to be a power of two.
-  //const bool isPowerOfTwo = ((n_channel != 0) && !(n_channel & (n_channel - 1)));
-  //if( !isPowerOfTwo )
-  //  return false;
-  
+  const uint16_t n_channel = static_cast<uint16_t>( std::min( ngammachan, static_cast<size_t>(std::numeric_limits<uint16_t>::max()) ) );
+  size_t pos = 0;
+
   //see http://www.ortec-online.com/download/ortec-software-file-structure-manual.pdf
   const int16_t wINFTYP = 1; // Must be 1
   const int16_t wFILTYP = (type==IntegerSpcType ? 1 : 5);
@@ -8915,67 +8907,68 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   const int16_t reserved[5] = { 0, 0, 0, 0, 0 }; // 57-62                 Reserved (must be 0)
   const float RRSFCT = 0.0;//  R*4     Total random summing factor
   const int16_t zeroword = 0;
+  const uint32_t zero_dword = 0;
   //word number
-  writeBinaryData( output, wINFTYP );            //1
-  writeBinaryData( output, wFILTYP );            //2
+  pos += writeBinaryData( output, wINFTYP );            //1
+  pos += writeBinaryData( output, wFILTYP );            //2
   output.write( (const char *)&wSkip1[0], 2*2 ); //4
-  writeBinaryData( output, wACQIRP );            //5
-  writeBinaryData( output, wSAMDRP );            //6
-  writeBinaryData( output, wDETDRP );            //7
+  pos += 4;
+  pos += writeBinaryData( output, wACQIRP );            //5
+  pos += writeBinaryData( output, wSAMDRP );            //6
+  pos += writeBinaryData( output, wDETDRP );            //7
   output.write( (const char *)&wSKIP2[0], 2*9 ); //8
-  writeBinaryData( output, wCALDES );            //17
-  writeBinaryData( output, wCALRP1 );            //18
-  writeBinaryData( output, wCALRP2 );            //19
-  writeBinaryData( output, wEFFPRP );            //20
-  writeBinaryData( output, wROIRP1 );            //21
-  writeBinaryData( output, wEPRP );              //22
-  writeBinaryData( output, wEPN );               //23
+  pos += 2*9;
+  pos += writeBinaryData( output, wCALDES );            //17
+  pos += writeBinaryData( output, wCALRP1 );            //18
+  pos += writeBinaryData( output, wCALRP2 );            //19
+  pos += writeBinaryData( output, wEFFPRP );            //20
+  pos += writeBinaryData( output, wROIRP1 );            //21
+  pos += writeBinaryData( output, wEPRP );              //22
+  pos += writeBinaryData( output, wEPN );               //23
   output.write( (const char *)&wSkip3[0], 2*6 ); //24
-  writeBinaryData( output, wEFFPNM );            //30
-  writeBinaryData( output, wSPCTRP );            //31
-  writeBinaryData( output, wSPCRCN );            //32
-  writeBinaryData( output, n_channel );          //33
-  writeBinaryData( output, wABSTCHN );           //34
-  writeBinaryData( output, sACQTIM );            //35
-  writeBinaryData( output, dACQTI8 );            //37
+  pos += 2*6;
+  pos += writeBinaryData( output, wEFFPNM );            //30
+  pos += writeBinaryData( output, wSPCTRP );            //31
+  pos += writeBinaryData( output, wSPCRCN );            //32
+  pos += writeBinaryData( output, n_channel );          //33
+  pos += writeBinaryData( output, wABSTCHN );           //34
+  pos += writeBinaryData( output, sACQTIM );            //35
+  pos += writeBinaryData( output, dACQTI8 );            //37
   
   output.write( (const char *)&wSkip4[0], 2*4 ); //41
-  writeBinaryData( output, wCHNSRT );            //45
-  writeBinaryData( output, sRLTMDT );            //46
-  writeBinaryData( output, sLVTMDT );            //48
-  writeBinaryData( output, wSkip50 );            //50
-  writeBinaryData( output, framRecords );        //51
+  pos += 2*4;
+  pos += writeBinaryData( output, wCHNSRT );            //45
+  pos += writeBinaryData( output, sRLTMDT );            //46
+  pos += writeBinaryData( output, sLVTMDT );            //48
+  pos += writeBinaryData( output, wSkip50 );            //50
+  pos += writeBinaryData( output, framRecords );        //51
   
   //writeBinaryData( output, zeroword );           //52
   
-  writeBinaryData( output, TRIFID );             //53
-  writeBinaryData( output, NaI );                //54
+  pos += writeBinaryData( output, TRIFID );             //53
+  pos += writeBinaryData( output, NaI );                //54
   
-  writeBinaryData( output, Location );           //
-  writeBinaryData( output, MCSdata );            //
-  writeBinaryData( output, expansionHeader );    //
+  pos += writeBinaryData( output, Location );           //
+  pos += writeBinaryData( output, MCSdata );            //
+  pos += writeBinaryData( output, expansionHeader );    //
   output.write( (const char *)&reserved[0], 2*5 ); //55
-  
+  pos += 2*5;
+
   //output.write( (const char *)&reserved[0], 2*3 ); //60
   
   //  output.write( (const char *)&reserved[0], 2*5 ); //
-  writeBinaryData( output, RRSFCT ); //63
+  pos += writeBinaryData( output, RRSFCT ); //63
   
   //20160915: we're actually at pos 126 right now, so lets write in
-  writeBinaryData( output, zeroword );
+  pos += writeBinaryData( output, zeroword );
   
   const uint8_t zero_byte = 0;
   
   //Write expansion header information
-  size_t pos = 128;
   size_t poswanted = (expansionHeader-1)*128;
   while( pos < poswanted )
-  {
-    ++pos;
-    output.write( (const char *)&zero_byte, 1 );
     pos += writeBinaryData( output, zero_byte );
-  }
-  
+
   int16_t firstReportPtr = 0;
   
   {
@@ -9008,7 +9001,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   assert( (expansionHeader == 0) || (wACQIRP > expansionHeader) );
   while( pos < poswanted )
     pos += writeBinaryData( output, zero_byte );
-  
+
   const char *defaultname = 0;
   switch( detector_type_ )
   {
@@ -9033,15 +9026,14 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   
   pos += 16;
   output.write( defaultname, 16 );
-  
-  
+
   string datestr;
   if( summed->start_time().date().is_special() )
   {
-    datestr = "01-Jan-001\0\0\0";
+	datestr = "01-Jan-001";
   }else
   {
-    const int daynum = summed->start_time().date().day();
+	const int daynum = summed->start_time().date().day();
     if( daynum < 10 )
       datestr += "0";
     datestr += std::to_string(daynum);
@@ -9071,19 +9063,25 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       datestr += "0";
     datestr += std::to_string(yearnum);
     datestr += (summed->start_time().date().year() > 1999 ? "1" : "0");
-    datestr.resize( 13, '\0' );
   }
-  
+  datestr.resize( 13, '\0' );
+
   pos += 12;
   output.write( &datestr[0], 12 );
   
-  char timestr[11] = { '\0' };
-  const int hournum = summed->start_time().time_of_day().hours();
-  const int minutenum = summed->start_time().time_of_day().minutes();
-  const int secondnum = summed->start_time().time_of_day().seconds();
-  snprintf( timestr, sizeof(timestr), "%02d:%02d:%02d",
-           hournum, minutenum, secondnum );
-  
+  char timestr[12] = { '\0' };
+  if( summed->start_time().is_special() )
+  {
+    strcpy( timestr, "00:00:00" );
+  }else
+  {
+    const int hournum = summed->start_time().time_of_day().hours();
+    const int minutenum = summed->start_time().time_of_day().minutes();
+    const int secondnum = summed->start_time().time_of_day().seconds();
+    snprintf( timestr, sizeof(timestr)-1, "%02d:%02d:%02d",
+              hournum, minutenum, secondnum );
+  }
+
   pos += 10;
   output.write( timestr, 10 );
   
@@ -9098,7 +9096,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   output.write( &ltIntStr[0], 10 );
   pos += 10;
   output.write( &rtIntStr[0], 10 );
-  
+
   for( int i = 0; i < 32; ++i )
     pos += writeBinaryData( output, zero_byte );
   
@@ -9118,8 +9116,6 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   pos += 8;
   output.write( stop_time_of_sample_collection, 8 );
   
-  
-  
   //Write Sample description record (only works if input file format was SPC)
   poswanted = (wSAMDRP-1)*128;
   while( pos < poswanted )
@@ -9137,7 +9133,6 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   pos += 128;
   output.write( &sampledescrip[0], 128 );
   
-  
   //Write Detector description record pointer
   poswanted = (wDETDRP-1)*128;
   assert( wDETDRP > wSAMDRP );
@@ -9147,7 +9142,6 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   descrip.resize( 128, '\0' );
   pos += 128;
   output.write( &descrip[0], 128 );
-  
   
   //First calibration data record
   poswanted = (wCALRP1-1)*128;
@@ -9242,8 +9236,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     pos += writeBinaryData( output, sR10 ); // Polynomial coefficient 10
   }//end codeblock to write energy calibration information
   
-  
-  
+
   //Second calibration data record
   if( wCALRP2 > 0 )
   {
@@ -9264,7 +9257,6 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       pos += writeBinaryData( output, zero_byte );
   }//if( wCALDES > 0 )
   
-  
   //Write spectrum information
   poswanted = (wSPCTRP-1)*128;
   while( pos < poswanted )
@@ -9275,7 +9267,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   if( type == IntegerSpcType )
   {
     vector<uint32_t> int_channel_data( n_channel );
-    for( int16_t i = 0; i < n_channel; ++i )
+    for( uint16_t i = 0; i < n_channel; ++i )
       int_channel_data[i] = static_cast<uint32_t>( channel_data[i] );  //should we round instead of truncate?
     output.write( (const char *)&int_channel_data[0], 4*n_channel );
   }else
@@ -9286,16 +9278,13 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   //If the number of channels was not a multiple of 32, write zeroes to finish
   //  filling out the 128 byte record.
   const uint16_t n_leftover = (n_channel % 32);
-  for( uint16_t i = 0; i < n_leftover; ++i )
-  {
-    const uint32_t dummy = 0;
-    output.write( (const char *)&dummy, 4 );
-  }//for( uint16_t i = 0; i < n_leftover; ++i )
   
+  for( uint16_t i = 0; i < n_leftover; ++i )
+	pos += writeBinaryData( output, zero_dword );
   
   if( firstReportPtr > 0 )
   {
-    assert( firstReportPtr>0 && static_cast<size_t>(128*(firstReportPtr-1)) >= pos );
+    assert( static_cast<size_t>(128*(firstReportPtr-1)) >= pos );
     while( pos < poswanted )
       pos += writeBinaryData( output, zero_byte );
     
@@ -9310,8 +9299,8 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       val = 60.0*(val - minutes);
       seconds = static_cast<int>( floor( val + 0.5 ) );
       
-      char buffer[128];
-      snprintf( buffer, sizeof(buffer), "Latitude %d %d %d %s\n",
+	  char buffer[128] = { '\0' };
+      snprintf( buffer, sizeof(buffer)-1, "Latitude %d %d %d %s\n",
                degrees, minutes, seconds, (summed->latitude()>0 ? "N" : "S") );
       information += buffer;
       
@@ -9322,7 +9311,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       val = 60.0*(val - minutes);
       seconds = static_cast<int>( floor( val + 0.5 ) );
       
-      snprintf( buffer, sizeof(buffer), "Longitude %d %d %d %s\n",
+      snprintf( buffer, sizeof(buffer)-1, "Longitude %d %d %d %s\n",
                degrees, minutes, seconds, (summed->longitude()>0 ? "E" : "W") );
       information += buffer;
     }//if( summed->has_gps_info() )
@@ -9330,9 +9319,9 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     
     if( summed->contained_neutron() )
     {
-      char buffer[256];
+		char buffer[256] = { '\0' };
       const int nneut = static_cast<int>( floor(summed->neutron_counts_sum()+0.5) );
-      snprintf( buffer, sizeof(buffer), "Total neutron counts = %d\n", nneut );
+      snprintf( buffer, sizeof(buffer)-1, "Total neutron counts = %d\n", nneut );
       information += buffer;
       
       for( const string &s : remarks_ )
@@ -9343,7 +9332,6 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     }//if( summed->contained_neutron() )
     
     //Should consider adding: "Total neutron count time = ..."
-    
     
     if( information.size() >= 2048 )
       information.resize( 2047 );
@@ -9372,8 +9360,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     //"Version"
     //"ID Report"
   }//if( firstReportPtr > 0 )
-  
-  
+
   return true;
 }//bool write_binary_spc(...)
 
@@ -9594,15 +9581,8 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
     readBinaryData( input, wSPCRCN ); // number of records in sp
     readBinaryData( input, n_channel ); // Number of Channels;
     
-    bool isPowerOfTwo = ((n_channel != 0) && !(n_channel & (n_channel - 1)));
-    
-    //check if it is one channel less than a power of two - Simon Labov emailed
-    //  wcjohns an example file like this on 20131216
-    if( !isPowerOfTwo && n_channel>=255 )
-      isPowerOfTwo = !((n_channel+1) & n_channel);
-    
-    if( !isPowerOfTwo )
-      throw runtime_error( "loadBinarySpcFile(...) - unexpected number of data channels" );
+    if( (32u*static_cast<uint32_t>(wSPCRCN)) < n_channel )
+      throw runtime_error( "Not enough records for claimed number of channels" );
     
     readBinaryData( input, wABSTCHN ); // Physical start channel for data
     readBinaryData( input, sACQTIM ); // Date and time acquisition start in DECDAY format
