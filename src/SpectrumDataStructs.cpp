@@ -20162,13 +20162,24 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
       meas->calibration_coeffs_.clear();
 //      meas->calibration_coeffs_.push_back( 0.0f );
 //      meas->calibration_coeffs_.push_back( 1.0f );
-    }else
+    }else if( calibcoefs[1] > 1000 && calibcoefs[1] < 16000 )
+    {
+      meas->energy_calibration_model_ = Measurement::FullRangeFraction;
+      meas->calibration_coeffs_.push_back( calibcoefs[0] );
+      meas->calibration_coeffs_.push_back( calibcoefs[1] );
+      if( calibcoefs[2] != 0.0f )
+        meas->calibration_coeffs_.push_back( calibcoefs[2] );
+    }else if( calibcoefs[1] < 1000 )
     {
       meas->energy_calibration_model_ = Measurement::Polynomial;
       meas->calibration_coeffs_.push_back( calibcoefs[0] );
       meas->calibration_coeffs_.push_back( calibcoefs[1] );
       if( calibcoefs[2] != 0.0f )
         meas->calibration_coeffs_.push_back( calibcoefs[2] );
+    }else
+    {
+      calibcoefs[0] = calibcoefs[1] = calibcoefs[2] = 0.0;
+      meas->calibration_coeffs_.clear();
     }//if( calibcoefs[0]==0.0 && calibcoefs[1]==1.0 )
 
 
