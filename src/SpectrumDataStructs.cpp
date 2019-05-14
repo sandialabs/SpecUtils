@@ -20162,12 +20162,16 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
       meas->calibration_coeffs_.clear();
 //      meas->calibration_coeffs_.push_back( 0.0f );
 //      meas->calibration_coeffs_.push_back( 1.0f );
-    }else if( calibcoefs[1] > 1000 && calibcoefs[1] < 16000 )
+    }else if( calibcoefs[1] > 1000 && calibcoefs[1] < 16000
+             && fabs(calibcoefs[0]) < 100 )
     {
+      //This is a guess at how to detect when FWHM is specified in the CHN file;
+      //  probably will fail to detect it sometimes, and falsely detect others.
       meas->energy_calibration_model_ = Measurement::FullRangeFraction;
       meas->calibration_coeffs_.push_back( calibcoefs[0] );
       meas->calibration_coeffs_.push_back( calibcoefs[1] );
-      if( calibcoefs[2] != 0.0f )
+      if( (calibcoefs[2] != 0.0f)
+          && (fabs(calibcoefs[2]) < 0.25*calibcoefs[1]) )
         meas->calibration_coeffs_.push_back( calibcoefs[2] );
     }else if( calibcoefs[1] < 1000 )
     {
