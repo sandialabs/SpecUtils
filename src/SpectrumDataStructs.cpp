@@ -1129,6 +1129,9 @@ bool MeasurementInfo::calibration_is_valid( const Measurement::EquationType type
                          const std::vector< std::pair<float,float> > &devpairs,
                          size_t nbin )
 {
+  //ToDo: also check that the energy range is halfway reasonable...
+  //ToDo: its pretty easy to check polynomial algebraicly...
+  
   std::unique_ptr< std::vector<float> > frfeqn;
   const std::vector<float> *eqn = &ineqn;
 
@@ -1152,6 +1155,7 @@ bool MeasurementInfo::calibration_is_valid( const Measurement::EquationType type
           return false;
       }
       
+      //ToDo:
       const float nearend   = fullrangefraction_energy( float(nbin-2), *eqn, nbin, devpairs );
       const float end       = fullrangefraction_energy( float(nbin-1), *eqn, nbin, devpairs );
       const float begin     = fullrangefraction_energy( 0.0f,      *eqn, nbin, devpairs );
@@ -6618,11 +6622,13 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           case Measurement::Polynomial:
           case Measurement::UnspecifiedUsingDefaultPolynomial:
             if( meas->calibration_coeffs_.size() < 2
-                || fabs(meas->calibration_coeffs_[0])>1000.0  //1000 is arbitrary
+                || fabs(meas->calibration_coeffs_[0])>150.0  //150 is arbitrary
+                || fabs(meas->calibration_coeffs_[1])>250.0  //250 is arbitrary, lets 12 channels span 3000 keV
                 || (meas->calibration_coeffs_.size()==2 && meas->calibration_coeffs_[1]<=FLT_EPSILON)
                 || (meas->calibration_coeffs_.size()>=3 && meas->calibration_coeffs_[1]<=FLT_EPSILON
                       && meas->calibration_coeffs_[2]<=FLT_EPSILON)
                //TODO: Could aso check that the derivative of energy polynomial does not go negative by meas->gamma_counts_->size()
+               //      Could call calibration_is_valid(...)
                )
             {
               allZeros = true;
