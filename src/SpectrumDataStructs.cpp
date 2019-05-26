@@ -7684,7 +7684,8 @@ void MeasurementInfo::set_detector_type_from_other_info()
   }
   
   
-  if( icontains(model,"RadEagle") || icontains(model,"RE 3") || icontains(model,"RE 2") )
+  if( (icontains(model,"Rad") && icontains(model,"Eagle"))
+      || istarts_with(model, "RE-") || istarts_with(model, "RE ") )
   {
     if( UtilityFunctions::icontains(model,"3SG") ) //RADEAGLE NaI(Tl) 3x1, GM Handheld RIID
     {
@@ -11554,25 +11555,42 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
     
     if( fields.size() == 1 )
     {
-      trim( fields[0] );
-      const size_t gamma_pos = fields[0].find( "Gamma Detector:" );
-      const size_t neut_pos = fields[0].find( "Neutron Detector:" );
+      //identiFINDER 2 NGH make it here
+      //  "Gamma Detector: NaI 35x51 Neutron Detector: ³He tube 3He3/608/15NS"
+      //RadEagle will also:
+      //  "Gamma Detector: NaI 3x1 GM Tube: 6x25 Type 716 Neutron: He3"
       
-      if( gamma_pos != string::npos && neut_pos != string::npos
-          && neut_pos > gamma_pos )
+      trim( fields[0] );
+      string lowered = fields[0];  //We will make searches case independent
+      UtilityFunctions::to_lower( lowered ); //We are relying on to_lower() not adding/removing bytes from string, which it doesnt since it is dumb (e.g., ASCII).
+      
+      size_t gamma_pos = lowered.find( "gamma detector:" );
+      if( gamma_pos == string::npos )
+        gamma_pos = lowered.find( "gamma:" );
+      size_t neut_pos = lowered.find( "neutron detector:" );
+      if( neut_pos == string::npos )
+        neut_pos = lowered.find( "neutron:" );
+      const size_t gm_pos = lowered.find( "gm tube:" );
+      
+      vector<size_t> posvec;
+      if( gamma_pos != string::npos )
+        posvec.push_back( gamma_pos );
+      if( neut_pos != string::npos )
+        posvec.push_back( neut_pos );
+      if( gm_pos != string::npos )
+        posvec.push_back( gm_pos );
+      
+      std::sort( begin(posvec), end(posvec) );
+      
+      for( size_t i = 0; i < posvec.size(); ++i )
       {
-        //identiFINDER 2 NGH make it here
-        //"Gamma Detector: NaI 35x51 Neutron Detector: ³He tube 3He3/608/15NS"
-        string gamma = fields[0].substr( 0, neut_pos );
-        string neutron = fields[0].substr( neut_pos );
-        
-        UtilityFunctions::trim( gamma );
-        UtilityFunctions::trim( neutron );
-        
-        remarks_.push_back( gamma );
-        remarks_.push_back( neutron );
-//        contained_neutron_ = true;
-      }else
+        size_t len = string::npos;
+        if( (i+1) < posvec.size() )
+          len = posvec[i+1] - posvec[i];
+        remarks_.push_back( UtilityFunctions::trim_copy( fields[0].substr( posvec[i], len ) ) );
+      }
+      
+      if( posvec.empty() )
       {
         //identiFINDER 2 NG makes it here. "Gamma Detector: NaI 35x51"
         remarks_.push_back( fields[0] );
@@ -13221,6 +13239,10 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     if( manufacturer_.size() < 2 )
       manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
     detector_type_ = kSrpm210;
+  }else if( (icontains(instrument_type_,"innoRIID") || icontains(instrument_type_,"ortec"))
+           && istarts_with(instrument_model_, "RE ") )
+  {
+    
   }else if( manufacturer_.size() || instrument_model_.size() )
   {
 //    if( (manufacturer_=="ICx Technologies" && instrument_model_=="identiFINDER") )

@@ -2783,7 +2783,7 @@ namespace rapidxml
           if( (Flags & allow_sloppy_parse) )
           {
             //Allow for there to be multiple closing tags  '>'.
-            //  doesnt currently allow ther eto be whitespaces between them
+            //  doesnt currently allow there to be whitespaces between them
             //  as this could mess up element contents
             while( (text!=text_end) && (*text==Ch('>')) )
               ++text;
@@ -2814,11 +2814,32 @@ namespace rapidxml
           if( (Flags & allow_sloppy_parse) )
           {
             if( *text == Ch('\0') || text==text_end || (text+1)==text_end )
+            {
+              // Place zero terminator after name
+              if (!(Flags & parse_no_string_terminators))
+              {
+                if( text==text_end )
+                  *(text_end-1) = Ch('\0');
+                else
+                  element->name()[element->name_size()] = Ch('\0');
+              }
+
               return element;
+            }else
+            {
+              //RAPIDXML_PARSE_ERROR("2a expected >", text);
+
+              //One situation that gets here is 
+              //<Spectrum 3 1 0 2 1 0 3 1 1 ...</Data></ChannelData></Spectrum>
+              //  (should have been: <Spectrum>...<ChannelData><Data>3 1 0 2 1 0 3 1 1 ...</Data></ChannelData></Spectrum> )
+              //Lets live dangerously and try to parse it anyway....
+              parse_node_contents<Flags>(text, element, text_end);
+            }
+          }else  //no sloppy parse
+          {
+            //printf( ">1 text=%.*s\n", 40, text );
+            RAPIDXML_PARSE_ERROR("2b expected >", text);
           }
-          
-          //printf( ">1 text=%.*s\n", 40, text );
-          RAPIDXML_PARSE_ERROR("2 expected >", text);
         }
         
         
