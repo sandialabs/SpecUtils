@@ -9775,7 +9775,6 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
     
   
     boost::posix_time::ptime meas_time;
-    string title;
     string manufacturer = "Ortec";
     string inst_model = "Detective";
     string type_instrument = "RadionuclideIdentifier";
