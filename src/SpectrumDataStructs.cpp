@@ -8880,7 +8880,17 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   const int16_t wEPN = 0;    // Number of energy pairs records
   const int16_t wSkip3[6] = { 0, 0, 0, 0, 0, 0 };
   const int16_t wEFFPNM = 0; // Number of efficiency pairs records  256
-  const int16_t wSPCTRP = 9; //was 25 for example file //could probably be wCALDES // pointer to spectrum
+  int16_t wSPCTRP = 9; //was 25 for example file //could probably be wCALDES // pointer to spectrum
+  
+  int16_t firstReportPtr = 0;
+  if( summed->contained_neutron() || summed->has_gps_info()
+     || (detectors_analysis_ && !detectors_analysis_->results_.empty()) )
+  {
+    firstReportPtr = 9;
+    wSPCTRP = 25;  //we will allow a max fo 2048 bytes in expansion header, which is 16*128.  16+9=25
+  }
+  
+  
   //n_channel
   //We can fit 32 floats per 128 byte record
   const int16_t wSPCRCN = (n_channel / 32) + (((n_channel%32)!=0) ? 1 : 0); // Number records for the spectrum
@@ -8913,8 +8923,10 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   const int16_t expansionHeader = 2;//     Pointer to expansion header record (i.e. second header record)
   const int16_t reserved[5] = { 0, 0, 0, 0, 0 }; // 57-62                 Reserved (must be 0)
   const float RRSFCT = 0.0;//  R*4     Total random summing factor
+  const uint8_t zero_byte = 0;
   const int16_t zeroword = 0;
   const uint32_t zero_dword = 0;
+  
   //word number
   pos += writeBinaryData( output, wINFTYP );            //1
   pos += writeBinaryData( output, wFILTYP );            //2
@@ -8969,21 +8981,16 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   //20160915: we're actually at pos 126 right now, so lets write in
   pos += writeBinaryData( output, zeroword );
   
-  const uint8_t zero_byte = 0;
   
   //Write expansion header information
   size_t poswanted = (expansionHeader-1)*128;
   while( pos < poswanted )
     pos += writeBinaryData( output, zero_byte );
-
-  int16_t firstReportPtr = 0;
+  
   
   {
     const int16_t recordID = 111;
     const int16_t gpsPointer = 0;  //I havent been able to reliable decode files with a GPS record, so we wont write this record
-    
-    if( summed->contained_neutron() || summed->has_gps_info() )
-      firstReportPtr = wSPCTRP + wSPCRCN;
     
     pos += writeBinaryData( output, recordID );
     pos += writeBinaryData( output, gpsPointer );
@@ -9150,6 +9157,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   pos += 128;
   output.write( &descrip[0], 128 );
   
+  
   //First calibration data record
   poswanted = (wCALRP1-1)*128;
   assert( wCALRP1 > wDETDRP );
@@ -9264,38 +9272,50 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       pos += writeBinaryData( output, zero_byte );
   }//if( wCALDES > 0 )
   
-  //Write spectrum information
-  poswanted = (wSPCTRP-1)*128;
-  while( pos < poswanted )
-    pos += writeBinaryData( output, zero_byte );
-  
-  pos += 4*n_channel;
-  const vector<float> &channel_data = *summed->gamma_counts();
-  if( type == IntegerSpcType )
-  {
-    vector<uint32_t> int_channel_data( n_channel );
-    for( uint16_t i = 0; i < n_channel; ++i )
-      int_channel_data[i] = static_cast<uint32_t>( channel_data[i] );  //should we round instead of truncate?
-    output.write( (const char *)&int_channel_data[0], 4*n_channel );
-  }else
-  {
-    output.write( (const char *)&channel_data[0], 4*n_channel );
-  }//if( file is integer channel data ) / else float data
-  
-  //If the number of channels was not a multiple of 32, write zeroes to finish
-  //  filling out the 128 byte record.
-  const uint16_t n_leftover = (n_channel % 32);
-  
-  for( uint16_t i = 0; i < n_leftover; ++i )
-	pos += writeBinaryData( output, zero_dword );
   
   if( firstReportPtr > 0 )
   {
-    assert( static_cast<size_t>(128*(firstReportPtr-1)) >= pos );
+    poswanted = 128*(firstReportPtr-1);
+    assert( poswanted >= pos );
     while( pos < poswanted )
       pos += writeBinaryData( output, zero_byte );
     
     string information;
+    
+    set<string> nuclides;
+    map<string,int> nuclide_types;
+    if( detectors_analysis_ && !detectors_analysis_->results_.empty() )
+    {
+      for( const auto &res : detectors_analysis_->results_ )
+      {
+        if( !res.nuclide_type_.empty() )
+          nuclide_types[res.nuclide_type_] += 1;
+        if( !res.nuclide_.empty() )
+          nuclides.insert( res.nuclide_ );
+      }
+    }//if( we have analysis results )
+    
+    //If we have the nuclide catagories (ex, NORM, SNM, Industrial), we will put
+    //  all the info at the begining of information.
+    //Else if we only have nuclide types, we will put after neutron info.  This
+    // seems to be how, at least the files I have, do it; I'm sure theres some
+    // logic I'm missing...
+    if( !nuclide_types.empty() )
+    {
+      information += "Found: ";
+      for( auto iter = begin(nuclide_types); iter != end(nuclide_types); ++iter )
+      {
+        if( iter != begin(nuclide_types) )
+          information += '\t';
+        information += iter->first + "(" + std::to_string(iter->second) + ")";
+      }
+      information += "\r\n";
+      for( const auto &n : nuclides )
+        information += "\t" + n;
+      information += "\r\n";
+      information += string("\0",1);
+    }
+    
     if( summed->has_gps_info() )
     {
       int degrees, minutes, seconds;
@@ -9306,7 +9326,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       val = 60.0*(val - minutes);
       seconds = static_cast<int>( floor( val + 0.5 ) );
       
-	  char buffer[128] = { '\0' };
+      char buffer[128] = { '\0' };
       snprintf( buffer, sizeof(buffer)-1, "Latitude %d %d %d %s\n",
                degrees, minutes, seconds, (summed->latitude()>0 ? "N" : "S") );
       information += buffer;
@@ -9326,7 +9346,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     
     if( summed->contained_neutron() )
     {
-		char buffer[256] = { '\0' };
+      char buffer[256] = { '\0' };
       const int nneut = static_cast<int>( floor(summed->neutron_counts_sum()+0.5) );
       snprintf( buffer, sizeof(buffer)-1, "Total neutron counts = %d\n", nneut );
       information += buffer;
@@ -9339,6 +9359,14 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     }//if( summed->contained_neutron() )
     
     //Should consider adding: "Total neutron count time = ..."
+    
+    if( nuclide_types.empty() && !nuclides.empty() )
+    {
+      information += string("Found Nuclides\0\r\n",17);
+      for( const auto &nuc : nuclides )
+        information += nuc + "\r\n";
+      information += string("\0",1);
+    }//if( nuclide_types.empty() && !nuclides.empty() )
     
     if( information.size() >= 2048 )
       information.resize( 2047 );
@@ -9367,6 +9395,33 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     //"Version"
     //"ID Report"
   }//if( firstReportPtr > 0 )
+  
+  
+  //Write spectrum information
+  poswanted = (wSPCTRP-1)*128;
+  assert( poswanted >= pos );
+  while( pos < poswanted )
+    pos += writeBinaryData( output, zero_byte );
+  
+  pos += 4*n_channel;
+  const vector<float> &channel_data = *summed->gamma_counts();
+  if( type == IntegerSpcType )
+  {
+    vector<uint32_t> int_channel_data( n_channel );
+    for( uint16_t i = 0; i < n_channel; ++i )
+      int_channel_data[i] = static_cast<uint32_t>( channel_data[i] );  //should we round instead of truncate?
+    output.write( (const char *)&int_channel_data[0], 4*n_channel );
+  }else
+  {
+    output.write( (const char *)&channel_data[0], 4*n_channel );
+  }//if( file is integer channel data ) / else float data
+  
+  //If the number of channels was not a multiple of 32, write zeroes to finish
+  //  filling out the 128 byte record.
+  const uint16_t n_leftover = (n_channel % 32);
+  
+  for( uint16_t i = 0; i < n_leftover; ++i )
+	pos += writeBinaryData( output, zero_dword );
 
   return true;
 }//bool write_binary_spc(...)
@@ -9912,7 +9967,9 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
       
       if( firstReportPtr > 0 )
       {
-        input.seekg( 128*(firstReportPtr-1) + orig_pos, ios::beg );
+        const auto curr_pos = 128*(firstReportPtr-1) + orig_pos;
+        
+        input.seekg( curr_pos, ios::beg );
         if( !input.good() )
         {
           stringstream msg;
@@ -9926,7 +9983,10 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
         readBinaryData( input, ntxtbytes );
         readBinaryData( input, sourcecode );
 
-        if( ntxtbytes > 2048 )
+        if( (size > (curr_pos+4)) && (ntxtbytes > (size - curr_pos - 4)) )
+          ntxtbytes = (size - curr_pos - 4);
+        
+        if( ntxtbytes > 2048 )  //20190604: is 2048 a randomly picked number, or the expansion header max size
           ntxtbytes = 0;
           
         if( ntxtbytes > 0 )
