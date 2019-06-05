@@ -57,7 +57,7 @@ bool g_automated_mode = false;
 string g_sub_test_dir = "";
 
 //g_parse_time_filename: the name of the file written to the test base directory
-//  that stores the parse times for files.  Not added to SVN.
+//  that stores the parse times for files.  Not added to GIT.
 const string g_parse_time_filename = "parsetimes.txt";
 
 //open_spec_file(): uses the OS X 'open' command to open the spectrum file
@@ -105,7 +105,7 @@ void check_serialization_to_n42( const string basedir );
 //  passed in.  Will fail if a truth n42 file already exists, unless force is
 //  specified to be true.  Checks the created n42 file to be sure it can be read
 //  back in and pass the 'equalEnough(...)' test, otherwise wont add truth n42
-//  file.  Will add resulting added file (and possibly directory) to SVN.
+//  file.  Will add resulting added file (and possibly directory) to GIT.
 //  Returns true if the truth N42 file was created.
 bool add_truth_n42( const MeasurementInfo &m, const path &p, const bool force );
 
@@ -805,11 +805,11 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
       try
       {
         boost::filesystem::create_directory( truthdir );
-        const string command = "svn add '" + truthdir.string<string>() + "'";
+        const string command = "git add '" + truthdir.string<string>() + "'";
         const int val = system( command.c_str() );
         if( val != 0 )
           cerr << "\n\nThere may have been an issue adding " << truthdir
-               << " to the SVN repository.  Return code " << val << "\n";
+               << " to the GIT repository.  Return code " << val << "\n";
       }catch( std::exception &e )
       {
         throw runtime_error( "Couldnt create directory "
@@ -864,11 +864,11 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
     if( !old_n42.empty() )
       try{ boost::filesystem::remove( old_n42 ); }catch(...){}
     
-    const string command = "svn add '" + truth_n42.string<string>() + "'";
+    const string command = "git add '" + truth_n42.string<string>() + "'";
     const int rval = system( command.c_str() );
     if( rval != 0 )
       cerr << "\n\nThere may have been an issue adding " << truth_n42
-           << " to the SVN repository.  Return code " << rval << "\n";
+           << " to the GIT repository.  Return code " << rval << "\n";
     
     cout << "Added truth n42 file: " << truth_n42 << "\n\n\n";
     

@@ -2221,8 +2221,12 @@ public:
   /** A unique name of the analysis algorithm. */
   std::string algorithm_name_;
   
-  /** Information describing the version of a particular analysis algorithm component. */
-  std::string algorithm_version_;
+  /** Information describing the version of a particular analysis algorithm
+   component.
+   If file type only gives one version, then the component name "main" is
+   assigned.
+   */
+  std::vector<std::pair<std::string,std::string>> algorithm_component_versions_;
   
   /** Creator or implementer of the analysis algorithm. */
   std::string algorithm_creator_;

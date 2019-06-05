@@ -1884,15 +1884,45 @@ void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
   const rapidxml::xml_node<char> *algo_version_node = XML_FIRST_NODE( analysis_node, "AnalysisAlgorithmVersion" );
   if( !algo_version_node && algo_info_node )
     algo_version_node = XML_FIRST_NODE( algo_info_node, "AlgorithmVersion" );
-  analysis.algorithm_version_ = xml_value_str(algo_version_node);
   
-  if( analysis.algorithm_version_.empty() && nuc_ana_node )
+  if( algo_version_node && algo_version_node->value_size() )
+    analysis.algorithm_component_versions_.push_back( make_pair("main",xml_value_str(algo_version_node)) );
+
+  
+  //N42-2012 should actually fall into this next loop
+  XML_FOREACH_DAUGHTER( versionnode, analysis_node, "AnalysisAlgorithmVersion")
+  {
+    auto component_node = XML_FIRST_NODE( versionnode, "AnalysisAlgorithmComponentName" );
+    auto version_node = XML_FIRST_NODE( versionnode, "AnalysisAlgorithmComponentVersion" );
+    string name = xml_value_str(component_node);
+    string version = xml_value_str(version_node);
+    
+    if( !version.empty() )
+    {
+      if( name.empty() )
+        name = "main";
+      analysis.algorithm_component_versions_.push_back( make_pair(name, version) );
+    }
+  }//foreach( AnalysisAlgorithmVersion 0
+  
+  
+  if( analysis.algorithm_component_versions_.empty() && nuc_ana_node )
   {
     const rapidxml::xml_attribute<char> *algorithm_version_att = nuc_ana_node->first_attribute( "AlgorithmVersion", 16 );
-    analysis.algorithm_version_ = xml_value_str(algorithm_version_att);
+    if( algorithm_version_att && algorithm_version_att->value_size() )
+      analysis.algorithm_component_versions_.push_back( make_pair("main", xml_value_str(algorithm_version_att) ) );
   }
   
-  trim( analysis.algorithm_version_ ); //RadEagle has a new line in it...
+  auto &versions = analysis.algorithm_component_versions_;
+  
+  for( auto &cv : versions ) //RadEagle has a new line in it...
+  {
+    trim( cv.first );
+    trim( cv.second );
+  }
+  
+  versions.erase( std::remove_if( begin(versions), end(versions),
+                                 [](const pair<string,string> &p) -> bool { return p.second.empty(); } ), end(versions) );
   
   const rapidxml::xml_node<char> *algo_creator_node = XML_FIRST_NODE( analysis_node, "AnalysisAlgorithmCreatorName" );
   if( !algo_creator_node && algo_info_node )
@@ -4985,10 +5015,30 @@ void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
     }
   }//for( size_t i = 0; i < rhsremarks.size(); ++i )
   
-  if( lhs.algorithm_version_ != rhs.algorithm_version_ )
-    throw runtime_error( "Analysis algorithm version for LHS ('"
-                        + lhs.algorithm_version_ + "') doesnt match RHS ('"
-                        + rhs.algorithm_version_ + "')" );
+  auto lhsap = lhs.algorithm_component_versions_;
+  auto rhsap = rhs.algorithm_component_versions_;
+  
+  if( lhsap.size() != rhsap.size() )
+  {
+    throw runtime_error( "Number of analysis algorithm versions for LHS ('"
+                        + std::to_string(lhsap.size()) + "') doesnt match RHS ('"
+                        + std::to_string(rhsap.size()) + "')" );
+  }
+  
+  std::sort( begin(lhsap), end(lhsap) );
+  std::sort( begin(rhsap), end(rhsap) );
+  for( size_t i = 0; i < lhsap.size(); ++i )
+  {
+    if( lhsap[i].first != rhsap[i].first )
+      throw runtime_error( "Analysis algorithm version compnent name for LHS ('"
+                        + lhsap[i].first + "') doesnt match RHS ('"
+                        + lhsap[i].first + "')" );
+    if( lhsap[i].second != rhsap[i].second )
+      throw runtime_error( "Analysis algorithm version compnent version for LHS ('"
+                          + lhsap[i].second + "') doesnt match RHS ('"
+                          + lhsap[i].second + "')" );
+  }//for( size_t i = 0; i < rhs.lhsap.size(); ++i )
+    
   
   if( lhs.algorithm_name_ != rhs.algorithm_name_ )
     throw runtime_error( "Analysis algorithm name for LHS ('"
@@ -13645,14 +13695,15 @@ void add_analysis_results_to_2012_N42(
     xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisAlgorithmDescription", val );
     AnalysisResults->append_node( desc );
   }
+
   
-  if( ana.algorithm_version_.size() )
+  for( const auto &component : ana.algorithm_component_versions_ )
   {
     std::lock_guard<std::mutex> lock( xmldocmutex );
     xml_node<char> *version = doc->allocate_node( node_element, "AnalysisAlgorithmVersion" );
     AnalysisResults->append_node( version );
     
-    string compname = ana.algorithm_name_;
+    string compname = component.first;
     if( compname.empty() )
       compname = "main";
     
@@ -13660,7 +13711,7 @@ void add_analysis_results_to_2012_N42(
     xml_node<char> *component_name = doc->allocate_node( node_element, "AnalysisAlgorithmComponentName", val );
     version->append_node( component_name );
     
-    val = doc->allocate_string( ana.algorithm_version_.c_str(), ana.algorithm_version_.size()+1 );
+    val = doc->allocate_string( component.second.c_str(), component.second.size()+1 );
     xml_node<char> *component_version = doc->allocate_node( node_element, "AnalysisAlgorithmComponentVersion", val );
     version->append_node( component_version );
   }//
@@ -17927,7 +17978,7 @@ void DetectorAnalysis::reset()
 {
   remarks_.clear();
   algorithm_name_.clear();
-  algorithm_version_.clear();
+  algorithm_component_versions_.clear();
   algorithm_creator_.clear();
   algorithm_description_.clear();
   algorithm_result_description_.clear();
