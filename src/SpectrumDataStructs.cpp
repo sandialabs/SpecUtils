@@ -6142,6 +6142,10 @@ bool MeasurementInfo::load_file( const std::string &filename,
       success = load_ortec_listmode_file( filename );
     break;
       
+    case kLsrmSpe:
+      success = load_lsrm_spe_file( filename );
+      break;
+      
     case kMicroRaider:
       success = load_micro_raider_file( filename );
     break;
@@ -6150,8 +6154,8 @@ bool MeasurementInfo::load_file( const std::string &filename,
     {
       bool triedPcf = false, triedSpc = false,
           triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
-          triedChn = false, triedIaea = false, triedCnf = false,
-          triedMps = false, triedSPM = false, triedMCA = false,
+          triedChn = false, triedIaea = false, triedLsrmSpe = false,
+          triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false;
       if( !orig_file_ending.empty() )
       {
@@ -6200,6 +6204,10 @@ bool MeasurementInfo::load_file( const std::string &filename,
         {
           triedIaea = true;
           success = load_iaea_file( filename );
+          if( success ) break;
+          
+          triedLsrmSpe = true;
+          success = load_lsrm_spe_file( filename );
           if( success ) break;
         }//if( orig_file_ending=="chn" )
         
@@ -6299,6 +6307,10 @@ bool MeasurementInfo::load_file( const std::string &filename,
       
       if( !success && !triedAram )
         success = load_aram_file( filename );
+      
+      if( !success && !triedLsrmSpe )
+        success = load_lsrm_spe_file( filename );
+      
       
       if( !success && !triedOrtecLM )
         success = load_ortec_listmode_file( filename );
@@ -22646,6 +22658,22 @@ bool MeasurementInfo::load_ortec_listmode_file( const std::string &filename )
 }
 
 
+bool MeasurementInfo::load_lsrm_spe_file( const std::string &filename )
+{
+  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+  
+  if( !input.is_open() )
+    return false;
+  
+  const bool success = load_from_lsrm_spe( input );
+  
+  if( success )
+    filename_ = filename;
+  
+  return success;
+}//bool load_lsrm_spe_file( const std::string &filename );
+
+
 bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
 {
   try
@@ -24948,6 +24976,125 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
   
   return false;
 }//bool load_from_ortec_listmode( std::istream &input )
+
+
+bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
+{
+  if( !input.good() )
+    return false;
+  
+  const istream::pos_type orig_pos = input.tellg();
+  
+  try
+  {
+    input.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = input.tellg();
+    input.seekg( orig_pos, ios::beg );
+    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
+    if( filesize > 512*1024 )
+      throw runtime_error( "File to large to be LSRM SPE" );
+    
+    const size_t initial_read = std::min( filesize, size_t(2048) );
+    string data( initial_read, '\0' );
+    input.read( &(data[0]), initial_read );
+    
+    const size_t spec_tag_pos = data.find("SPECTR=");
+    if( spec_tag_pos == string::npos )
+      throw runtime_error( "Couldnt find SPECTR" );
+  
+    const size_t spec_start_pos = spec_tag_pos + 7;
+    const size_t nchannel = (filesize - spec_start_pos) / 4;
+    if( nchannel < 128 )
+      throw runtime_error( "Not enough channels" );
+    
+    if( nchannel > 68000 )
+      throw runtime_error( "To many channels" );
+    
+    //We could have the next test, but lets be loose right now.
+    //if( ((filesize - spec_start_pos) % 4) != 0 )
+    //  throw runtime_error( "Spec size not multiple of 4" );
+    
+    auto getval = [&data]( const string &tag ) -> string {
+      const size_t pos = data.find( tag );
+      if( pos == string::npos )
+        return "";
+      
+      const size_t value_start = pos + tag.size();
+      const size_t endline = data.find_first_of( "\r\n", value_start );
+      if( endline == string::npos )
+        return "";
+      
+      const string value = data.substr( pos+tag.size(), endline - value_start );
+      return UtilityFunctions::trim_copy( value );
+    };//getval
+    
+    auto meas = make_shared<Measurement>();
+    
+    string startdate = getval( "MEASBEGIN=" );
+    if( startdate.empty() )
+    {
+      startdate = getval( "DATE=" );
+      startdate += getval( "TIME=" );
+    }
+    
+    meas->start_time_ = UtilityFunctions::time_from_string( startdate.c_str() );
+    
+    if( !toFloat( getval("TLIVE="), meas->live_time_ ) )
+      meas->live_time_ = 0.0f;
+    
+    if( !toFloat( getval("TREAL="), meas->real_time_ ) )
+      meas->live_time_ = 0.0f;
+    
+    instrument_id_ = getval( "DETECTOR=" );
+    
+    const string energy = getval( "ENERGY=" );
+    if( UtilityFunctions::split_to_floats( energy, meas->calibration_coeffs_ ) )
+      meas->energy_calibration_model_ = Measurement::EquationType::Polynomial;
+    
+    const string comment = getval( "COMMENT=" );
+    if( !comment.empty() )
+      remarks_.push_back( comment );
+    
+    const string fwhm = getval( "FWHM=" );
+    if( !fwhm.empty() )
+      remarks_.push_back( "FWHM=" + fwhm );
+    
+    //Other things we could look for:
+    //"SHIFR=", "NOMER=", "CONFIGNAME=", "PREPBEGIN=", "PREPEND=", "OPERATOR=",
+    //"GEOMETRY=", "SETTYPE=", "CONTTYPE=", "MATERIAL=", "DISTANCE=", "VOLUME="
+    
+    if( initial_read < filesize )
+    {
+      data.resize( filesize, '\0' );
+      input.read( &(data[initial_read]), filesize-initial_read );
+    }
+    
+    vector<int32_t> spectrumint( nchannel, 0 );
+    memcpy( &(spectrumint[0]), &(data[spec_start_pos]), 4*nchannel );
+    
+    meas->gamma_count_sum_ = 0.0f;
+    auto channel_counts = make_shared<vector<float>>(nchannel);
+    for( size_t i = 0; i < nchannel; ++i )
+    {
+      (*channel_counts)[i] = spectrumint[i];
+      meas->gamma_count_sum_ += spectrumint[i];
+    }
+    meas->gamma_counts_ = channel_counts;
+    
+    measurements_.push_back( meas );
+    
+    cleanup_after_load();
+    
+    return true;
+  }catch( std::exception &e )
+  {
+    reset();
+    input.clear();
+    input.seekg( orig_pos, ios::beg );
+  }//try / catch to parse
+  
+  return false;
+}//bool load_from_lsrm_spe( std::istream &input );
 
 
 bool MeasurementInfo::load_cnf_file( const std::string &filename )
