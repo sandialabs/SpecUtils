@@ -21263,6 +21263,15 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         break;
     }//while( UtilityFunctions::safe_get_line( istr, line ) )
 
+    
+    //If someone opened the file up in a Windows text editor, the file may have
+    //  gotten converted to UTF16, in which case the first two bytes will be
+    //  ByteOrderMarker [0xFF,0xFE] (if using little endian order, or could be
+    //  other way around); UTF8 is [0xEF,0xBB,0xBF].
+    //In principle could detect and account for this, but whatever for now.
+    //  istr.imbue(std::locale(istr.getloc(), new std::codecvt_utf16<wchar_t, 0x10ffff, std::consume_header>));
+    //https://en.wikipedia.org/wiki/Byte_order_mark
+    
     if( line.empty() || line[0]!='$' )
       throw runtime_error( "IAEA file first line must start with a '$'" );
 
