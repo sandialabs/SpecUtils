@@ -15654,6 +15654,16 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       if( !live_time_node )
         live_time_node = spectrum_node->first_node( "LiveTime", 8 );
       
+      //Some detectors mistakenly put the <LiveTimeDuration> tag under the
+      //  <RadMeasurement> tag
+      if( !live_time_node && spectrum_node->parent() )
+      {
+        live_time_node = XML_FIRST_NODE(spectrum_node->parent(), "LiveTimeDuration");
+        if( !live_time_node )
+          live_time_node = XML_FIRST_NODE(spectrum_node->parent(), "LiveTime");
+      }
+        
+      
       const rapidxml::xml_node<char> *channel_data_node = spectrum_node->first_node( "ChannelData", 11 );
     
       for( size_t i = 0; i < remarks.size(); ++i )
