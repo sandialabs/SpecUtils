@@ -14468,7 +14468,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
         RadMeasurement->append_attribute( attr );
       }
       
-	    workerpool.post( [this,&xmldocmutex,RadMeasurement,smeas,calid](){
+	    workerpool.post( [&xmldocmutex,RadMeasurement,smeas,calid](){
 	      add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
 	    } );
     }else //if( allsame )
@@ -14492,7 +14492,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
           RadMeasurement->append_attribute( attr );
         }
         
-		workerpool.post( [this,RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
+		workerpool.post( [RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
 			add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex ); } );
       }//for( loop over measuremtns for this sample number )
     }//if( allsame ) / else
