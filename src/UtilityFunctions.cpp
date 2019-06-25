@@ -2385,7 +2385,8 @@ std::vector<std::string> recursive_ls( const std::string &sourcedir,
 #ifndef _WIN32
   return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
 #else
-  return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
+  return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
+  //return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
 #endif
 }
   
@@ -2437,6 +2438,81 @@ std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
 #endif
 }//ls_files_in_directory(...)
   
+  
+vector<string> ls_directories_in_directory( const std::string &src )
+{
+  vector<string> answer;
+  
+#ifndef _WIN32
+  errno = 0;
+  DIR *dir = opendir( src.c_str() );
+  if( !dir )
+  {
+#if(PERFORM_DEVELOPER_CHECKS)
+    char buff[1024], errormsg[1024];
+    strerror_r( errno, buff, sizeof(buff)-1 );
+    snprintf( errormsg, sizeof(errormsg), "ls dir failed to open directory '%s' with error: %s", src.c_str(), buff );
+    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+#endif
+    return answer;
+  }//if( couldnt open directory )
+  
+  errno = 0;
+  struct dirent *dent = nullptr;
+  
+  while( (dent = readdir(dir)) && ((answer.size()) < sm_ls_max_results) )
+  {
+    if( !strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..") )
+      continue;
+    
+    const string filename = UtilityFunctions::append_path( src, dent->d_name );
+    
+    //handling (dent->d_type == DT_UNKNOWN) is probably unecassary, but we'll
+    //  do it anyway since the cost is cheap.
+    //We dont want to bother calling is_diretory() or is_file() (or stat in
+    //  general) since these operations are kinda expensive, so we will only
+    //  do it if necassary.
+    
+    const bool follow_sym_links = true;
+    bool is_dir = (dent->d_type == DT_DIR) || ((dent->d_type == DT_UNKNOWN) && UtilityFunctions::is_directory(filename));
+    if( !is_dir && follow_sym_links && (dent->d_type == DT_LNK) && UtilityFunctions::is_directory(filename) )
+    {
+      is_dir = (0==check_if_symlink_is_to_parent(filename));
+    }//if( a symbolic link that doesnt resolve to a file )
+    
+    if( is_dir )
+      answer.push_back( dent->d_name );
+  }//while( dent )
+  
+  closedir( dir ); //Should we bother checking/handling errors
+#else
+  using namespace boost::filesystem;
+  directory_iterator end_itr; // default construction yields past-the-end
+  
+  directory_iterator itr;
+  try
+  {
+    itr = directory_iterator( src );
+  }catch( std::exception & )
+  {
+    //ex: boost::filesystem::filesystem_error: boost::filesystem::directory_iterator::construct: Permission denied: "..."
+    return answer;
+  }
+  
+  for( ; itr != end_itr; ++itr )
+  {
+    const boost::filesystem::path &p = itr->path();
+    const string pstr = p.string<string>();
+    const bool isdir = UtilityFunctions::is_directory( pstr );
+    
+    if( isdir )
+      answer.push_back( p.filename().string<string>() );
+  }//for( loop over
+  
+#endif  //ifndef windows / else
+  
+  return answer;
+}//std::vector<std::string> ls_directories_in_directory( const std::string &src )
   
   
 #if( BOOST_VERSION < 106501 )

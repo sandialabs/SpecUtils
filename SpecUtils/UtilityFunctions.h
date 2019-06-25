@@ -539,7 +539,7 @@ namespace UtilityFunctions
   std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
                                         const std::string &ending = "" );
   
-  /** \brief Lists files only (not irectories) in the specified source directory 
+  /** \brief Lists files only (not directories) in the specified source directory
        that match match_fcn criteria, returning the full path to each file 
        found.
    
@@ -554,6 +554,21 @@ namespace UtilityFunctions
   std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
                                                   file_match_function_t match_fcn,
                                                   void *match_data );
+  
+  /** \brief List the directories inside a specific directory.  Not recursive.
+   
+       \param src The base directory to look in.
+   
+       \returns directories in src directory.  the "." and ".." directories are
+                not included in results.  If src is not a directory, an empty
+                answer is returned.  Returned answers do not include 'src' in
+                them (i.e. if src contains directors "a", "b", "c", you will
+                get back {"a", "b", "c"}.
+   
+      As of 20190625 only briefly checked that this function sorta-kinda seemed okay.
+   */
+  std::vector<std::string> ls_directories_in_directory( const std::string &src );
+  
   
   /** Get a relative path from 'from_path' to 'to_path'
       Note: resolves files, so may throw exception
