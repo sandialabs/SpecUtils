@@ -261,7 +261,8 @@ SpectrumChartD3 = function(elem, options) {
       .attr("width", this.size.width)
       .attr("height", this.size.height)
       .attr("id", "chartarea"+this.chart.id )
-      .style("fill", "#EEEEEE");
+      //.style("fill", "#EEEEEE")
+      ;
       /*.attr("pointer-events", "all"); */
 
   this.svg = d3.select(self.chart).select('svg');
@@ -896,7 +897,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   this.updateLegend();
   this.drawScalerBackgroundSecondary();
-  
+
   this.redraw()();
 }
 
@@ -983,7 +984,7 @@ SpectrumChartD3.prototype.redraw = function() {
         if (label.text().trim()) {  // If this y-label tick is a major tick
           label.style("cursor", "ns-resize")
             .on("mouseover", function(d) { d3.select(this).style("font-weight", "bold");})
-            .on("mouseout",  function(d) { d3.select(this).style("font-weight", "normal");})
+            .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
             .on("mousedown.drag",  self.yaxisDrag());
 
           if (self.isTouchDevice())
@@ -1817,6 +1818,9 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
 
     /* Figure out right clicks */
     if (d3.event.button === 2 && !self.rightClickDrag && !d3.event.ctrlKey) {
+      if( self.highlightedPeak ){
+        console.log("Should alter context menu for the highlighted peak" );  
+      }
       console.log("Emit RIGHT CLICK (ON PLOT) signal!\nenergy = ", energy, ", count = ", count, ", pageX = ", pageX, ", pageY = ", pageY );
       self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY);
       return;
@@ -2901,7 +2905,9 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   /*Now update the height of all the lines.  If we did this in the gye.append("line") */
   /*  line above then the values for existing lines wouldnt be updated (only */
   /*  the new lines would have correct height) */
-  gy.select("line").attr("y2", function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2) ; } );
+  gy.select("line")
+    .attr("y2", function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2) ; } )
+    .attr("y1", h );  //needed for initial load sometimes
 }
 
 SpectrumChartD3.prototype.refreshRefGammaLines = function() {
@@ -3351,8 +3357,15 @@ SpectrumChartD3.prototype.updateLegend = function() {
     this.legendHeaderClose.append("path")
         .attr("style", "stroke: white; stroke-width: 1.5px;" )
         .attr("d", "M 2,2 L 10,10 M 10,2 L 2,10");
-    this.legendHeaderClose.on("click", function(){ self.options.showLegend = false; self.updateLegend(); } )
-                          .on("touchend", function(){ self.options.showLegend = false; self.updateLegend(); } );   
+    this.legendHeaderClose.on("click", function(){ 
+      self.options.showLegend = false; 
+      self.updateLegend(); 
+      self.WtEmit(self.chart.id, {name: 'legendClosed'} );
+    } ).on("touchend", function(){ 
+      self.options.showLegend = false; 
+      self.updateLegend(); 
+      self.WtEmit(self.chart.id, {name: 'legendClosed'} );
+    } );   
                
     /*this.legendHeader.append("text") */
     /*      .text("Legend") */
@@ -4108,7 +4121,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   const majorticksText = majorticks.selectAll('text')
     .style("cursor", "ew-resize")
     .on("mouseover", function(d, i) { d3.select(this).style("font-weight", "bold");})
-    .on("mouseout",  function(d) { d3.select(this).style("font-weight", "normal");})
+    .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
     .on("mousedown.drag",  self.xaxisDrag());
 
   // Add touch event listeners for touch devices
@@ -5686,6 +5699,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     return Math.max( answer, 0.0 );
   }
 
+  /* Returns an array of paths.  
+     - The first path will be an underline of entire ROI
+     - The next roi.peaks.length entries are the fills for each of the peaks
+     - The next roi.peaks.length entries are the path of the peak, that sits on the ROI
+   */
   function roiPath(roi,points,bgsubtractpoints,scaleFactor,background){
     var yl, yr;
     var lpx = self.xScale(roi.lowerEnergy), rpx = self.xScale(roi.upperEnergy);
@@ -5698,7 +5716,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     // Boolean to signify whether to subtract points from background
     const useBackgroundSubtract = self.options.backgroundSubtract && background;
 
-    if( xstartind>= (points.length-2) )
+    if( xstartind >= (points.length-2) )
       return paths;
       
     if( xendind >= (points.length-2) )
@@ -5721,9 +5739,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     }
     
     paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
-    for( var j = 0; j < roi.peaks.length; ++j )
+    for( var j = 0; j < 2*roi.peaks.length; ++j )
       paths[j+1] = "";
 
+      
+    //Go from left to right and create lower path for each of the outlines that sit on the continuum
     for( var i = xstartind; i < xendind; ++i ) {
       thisx = 0.5*(points[i].x + points[i+1].x);
       thisy = offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
@@ -5735,17 +5755,19 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
 
       paths[0] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+      
       for( var j = 0; j < roi.peaks.length; ++j ) {
         m = roi.peaks[j].Centroid[0];
         s = roi.peaks[j].Width[0];
-        if( thisx > (m - 5*s) && thisx < (m+5*s) ){
-          if( !paths[j+1].length )
-            paths[j+1] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
-          else
-            paths[j+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+        if( roi.peaks.length===1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
+          if( !paths[j+1].length ){
+            paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
+          }else{
+            paths[j+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+          }
         }
       }
-    }
+    }//for( var i = xstartind; i < xendind; ++i )
 
     function erf(x) {
       /*http:/*stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function */
@@ -5768,13 +5790,25 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     };
 
     var bisector = d3.bisector(function(d){return d.x;});
-    for( var i = xendind - 1; i >= xstartind; --i ) {
+
+    var peakamplitudes = [];  //The peak amplitudes for each bin
+
+    var leftMostLineValue = [];
+
+    //Go from right to left drawing the peak lines that sit on the continuum.
+    //  we will also 
+    for( var xindex = xendind - 1; xindex >= xstartind; --xindex ) {
+      peakamplitudes[xindex] = [];
       peak_area = 0.0;
-      thisx = 0.5*(points[i].x + points[i+1].x);
-      cont_area = offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
+      thisx = 0.5*(points[xindex].x + points[xindex+1].x);
+      cont_area = offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
-      if (useBackgroundSubtract) cont_area -= background.points[bisector.left(background.points, points[i].x)].y;
+      if( useBackgroundSubtract ) 
+        cont_area -= background.points[bisector.left(background.points, points[xindex].x)].y;
+
+      peakamplitudes[xindex][0] = cont_area;
+      peakamplitudes[xindex][1] = thisx;
 
       roi.peaks.forEach( function(peak,peakn){
         if( peak.type !== 'GaussianDefined' ){
@@ -5783,105 +5817,147 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         }
         if( peak.skewType !== 'NoSkew' )
           console.log( 'Need to implement peak skew type ' + peak.skewType );
-        var area = gaus_integral( peak, points[i].x, points[i+1].x );
-        peak_area += area * scaleFactor;
-
+        var area = gaus_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
+        peak_area += area;
+        
         m = peak.Centroid[0];
         s = peak.Width[0];
-        if( thisx > (m - 5*s) && thisx < (m+5*s) ){
-          paths[peakn+1] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + area);
+        if( roi.peaks.length==1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
+          peakamplitudes[xindex][peakn+2] = area;
+          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + area);
+          leftMostLineValue[peakn] = {x : thisx, y: cont_area};
+        }else{
+          peakamplitudes[xindex][peakn+2] = 0.0;
         }
       });
+    }//for( go right to left over 'xindex' drawing peak outlines )
 
-      paths[0] += " " + self.xScale(thisx) + "," + self.yScale( peak_area + cont_area);
+    
+    //Make sure the peak line top connects with the continuum
+    for( var j = 0; j < roi.peaks.length; ++j ) {
+      var pathnum = j+1+roi.peaks.length;
+      if( leftMostLineValue[j] && paths[pathnum] && paths[pathnum].length )
+        paths[pathnum] += " " + self.xScale(leftMostLineValue[j].x) + "," + self.yScale(leftMostLineValue[j].y);
     }
+    
 
-    for( var i = 0; i < paths.length; ++i ) {
-      var ind = paths[i].indexOf("L");
-      if( ind > 2 )
-        paths[i] += " " + paths[i].substr(1,ind-2);
+    var leftMostFillValue = [];
+    //go from left to right, drawing fill area bottom
+    peakamplitudes.forEach( function(peakamps,xindex){
+      var cont = peakamps[0];
+      var thisx = peakamps[1];
+
+      peakamps.forEach( function( peakamp, peakindex ){
+        if( peakindex < 2 )
+          return;
+        var peaknum = (peakindex - 2);
+        var peak = roi.peaks[peaknum];
+        var m = peak.Centroid[0];
+        var s = peak.Width[0];
+        if( roi.peaks.length>1 && (thisx < (m - 5*s) || thisx > (m+5*s)) )
+          return;
+        
+        var thisy = cont;
+        for( var j = 2; j < peakindex; ++j )
+          thisy += peakamps[j];
+
+        if( !paths[peaknum+1].length ){
+          leftMostFillValue[peaknum] = { x: self.xScale(thisx), y: self.yScale(thisy) };
+          paths[peaknum+1] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
+        }else{
+          paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+        }
+      } );
+    });
+
+    //go right to left and draw the fill areas top
+    peakamplitudes.reverse().forEach( function(peakamps,xindex){
+      var cont = peakamps[0];
+      var thisx = peakamps[1];
+      
+      peakamps.forEach( function( peakamp, peakindex ){
+        if( peakindex < 2 )
+          return;
+
+        var peaknum = (peakindex - 2);
+        var peak = roi.peaks[peaknum];
+        var m = peak.Centroid[0];
+        var s = peak.Width[0];
+        if( roi.peaks.length>1 && (thisx < (m - 5*s) || thisx > (m+5*s)) )
+          return;
+        
+        var thisy = cont;
+        for( var j = 2; j <= peakindex; ++j )
+          thisy += peakamps[j];
+
+        paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+      } );
+    });
+
+    for( var peaknum = 0; peaknum < roi.peaks.length; ++peaknum ){
+      if( leftMostFillValue[peaknum] && paths[peaknum+1].length )
+        paths[peaknum+1] += " " + leftMostFillValue[peaknum].x + "," + leftMostFillValue[peaknum].y;
     }
-    /*path += " " + self.xScale(points[xstartind].x) + "," + self.yScale(firsty); */
 
     return paths;
   }/*function roiPath(roi) */
 
   function draw_roi(roi,specindex,spectrum) {
-      /* roi:
-      {
-        type:'Linear',
-        lowerEnergy:164.878,
-        upperEnergy:203.311,
-        referenceEnergy:164.878,
-        coeffs:[49.2491,-0.365196],
-        coeffUncerts:[2.88764,0.13389],
-        fitForCoeff:[true,true],
-        peaks: [
-          {
-            type:'GaussianDefined',
-            skewType:'NoSkew',
-            Centroid:[182.846,1.80707,true],
-            Width:[7.17482,0.979233,true],
-            Amplitude:[288.679,44.8641,true],
-            LandauAmplitude:[0,-1,false],
-            LandauMode:[0,-1,false],
-            LandauSigma:[0,-1,false],
-            Chi2:[0.573405,-1,false],
-            forCalibration:true,
-            forSourceFit:true,
-            type:'NormalGamma',
-            nuclide: {
-              name: 'Mo99',
-              decayParent:'Mo99',
-              decayChild:'Tc99',
-              DecayGammaEnergy:181.063
-            }
-          }]
-        }
-        */
+    if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
+        && roi.type !== 'Linear' && roi.type !== 'Quardratic'
+        && roi.type !==  'Cubic'  ){
+      console.log( 'unrecognized roi.type: ' + roi.type );
+      return;
+    }
 
-        if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
-            && roi.type !== 'Linear' && roi.type !== 'Quardratic'
-            && roi.type !==  'Cubic'  ){
-          console.log( 'unrecognized roi.type: ' + roi.type );
-          return;
-        }
+    if( roi.lowerEnergy > maxx || roi.upperEnergy < minx )
+      return;
 
-        if( roi.lowerEnergy > maxx || roi.upperEnergy < minx )
-          return;
+    if (!spectrum) {
+      console.log("No spectrum specified to draw peaks");
+      return;
+    }
 
-        if (!spectrum) {
-          console.log("No spectrum specified to draw peaks");
-          return;
-        }
+    let scaleFactor = spectrum.type !== self.spectrumTypes.FOREGROUND ? spectrum.yScaleFactor * 1.0 : 1.0;
+    if (typeof scaleFactor === 'undefined' || scaleFactor === null) scaleFactor = 1.0;
 
-        let scaleFactor = spectrum.type !== self.spectrumTypes.FOREGROUND ? spectrum.yScaleFactor * 1.0 : 1.0;
-        if (typeof scaleFactor === 'undefined' || scaleFactor === null) scaleFactor = 1.0;
+    var paths = roiPath( roi, spectrum.points, spectrum.bgsubtractpoints, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
 
-        var paths = roiPath( roi, spectrum.points, spectrum.bgsubtractpoints, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
-        paths.forEach( function(p,num){
-          if( num===1 && paths.length===2 )
-            return;
-          var path = self.peakVis.append("path")
-            .attr("d", p );
+    /* Draw label, set fill colors */
+    paths.forEach( function(p,num){
 
-          var labels = [],
-              labelAlreadyAdded = false;
+      /* - The first path will be an underline of entire ROI
+         - The next roi.peaks.length entries are the fills for each of the peaks
+         - The next roi.peaks.length entries are the path of the peak, that sits on the ROI
+      */
+      if( num === 0 )
+        return;
 
-          if (!self.peakLabelArray)                       /* This is a hack for gettng the correct highlighted peak to correspond with its label. */
-            self.peakLabelArray = [];                     /* Declare an array of tuples that have a corresponding peak DOM with a label text*/
-          if (!self.leftoverPeakLabels)
-            self.leftoverPeakLabels = [];
+      //If only a single peak in a ROI, we will use the same path for outline and fill
+      if( roi.peaks.length==1 && num > roi.peaks.length )
+        return;
+      
+        let isOutline = ((num > (roi.peaks.length)) || (roi.peaks.length==1));
+      let isFill  = (num <= (roi.peaks.length));
 
-          if (self.leftoverPeakLabels.length > 0) {                                                    /* If there are still leftover labels not corresponding with a peak, then it */
-            self.peakLabelArray.push( { "path": path, "label": self.leftoverPeakLabels.shift() } );  /* is the current peak's label */
-            labelAlreadyAdded = true;
-          }
-          else
-            for (i = 0; i < roi.peaks.length; i++) {                                                      /* Draw a label for each peak inside an ROI, put it in the label vector */
-              var peak = roi.peaks[i],
-                  label = self.drawPeakLabelCassowary(peak, path);
-              self.peakLabelData.push({
+      var path = self.peakVis.append("path").attr("d", p );
+
+      var labels = [],
+          labelAlreadyAdded = false;
+
+      if (!self.peakLabelArray)                       /* This is a hack for gettng the correct highlighted peak to correspond with its label. */
+        self.peakLabelArray = [];                     /* Declare an array of tuples that have a corresponding peak DOM with a label text*/
+      if (!self.leftoverPeakLabels)
+        self.leftoverPeakLabels = [];
+
+      if (self.leftoverPeakLabels.length > 0) {                                                    /* If there are still leftover labels not corresponding with a peak, then it */
+        self.peakLabelArray.push( { "path": path, "label": self.leftoverPeakLabels.shift() } );  /* is the current peak's label */
+        labelAlreadyAdded = true;
+      }else{
+        for (let i = 0; i < roi.peaks.length; i++) {                                                      /* Draw a label for each peak inside an ROI, put it in the label vector */
+          var peak = roi.peaks[i],
+              label = self.drawPeakLabelCassowary(peak, path);
+          self.peakLabelData.push({
                 specindex: specindex,
                 path: path,
                 paths: paths,
@@ -5889,107 +5965,72 @@ SpectrumChartD3.prototype.drawPeaks = function() {
                 peak: peak,
                 lowerEnergy: roi.lowerEnergy,
                 upperEnergy: roi.upperEnergy,
-              })
-              if (label)
-                labels.push(label);
-            }
+          });
+          if (label)
+            labels.push(label);
+        }//for (i = 0; i < roi.peaks.length; i++)
+      }
 
-          if (labels.length > 0 && !labelAlreadyAdded)                                  /* The first element inside the labels vector is the current peak's label */
-            self.peakLabelArray.push( { "path": path, "label": labels.shift() } );
+      if (labels.length > 0 && !labelAlreadyAdded)                                  /* The first element inside the labels vector is the current peak's label */
+        self.peakLabelArray.push( { "path": path, "label": labels.shift() } );
 
-          self.leftoverPeakLabels = self.leftoverPeakLabels.concat(labels);         /* Any leftover peaks are put inside this array */
+      self.leftoverPeakLabels = self.leftoverPeakLabels.concat(labels);         /* Any leftover peaks are put inside this array */
 
-          /* Highlights a specified peak (darken the context) */
-          function highlightPeak(d, peak) {
-            if (self.zooming_plot)
-              return;
+      self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, paths);
+      self.highlightPeakFunc = self.highlightPeak.bind(self, null, null, paths, path); 
 
-            if (self.highlightedPeak)
-              unhighlightPeak(0, self.highlightedPeak);
+      function onRightClickOnPeak() {
+        console.log("Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
+      }
 
-            var thePeak = this;
-            console.log(thePeak);
-            if (d3.event == null || d3.event.touches) {
-              thePeak = peak;
-              if (!thePeak || thePeak.attr("fill-opacity") != 0.6)
-                return;
-            }
+      var peakind = (num-1) % roi.peaks.length;
+      var peak = roi.peaks[peakind];
+      var peakColor = peak && peak.lineColor && peak.lineColor.length ? peak.lineColor : spectrum.peakColor;
 
-            if (d3.select(thePeak).attr("fill-opacity") != 0.6)
-              return;
-
-            if (self.leftMouseDown || self.rightClickDown)
-              return;
-
-            if (!peak) {
-              if (paths.length === 2) 
-                d3.select(thePeak).attr("fill-opacity",0.8);
-              else
-                d3.select(thePeak).attr("stroke-width",2).attr("fill-opacity",0.8);
-
-            } else {
-              if (paths.length === 2) 
-                peak.attr("fill-opacity",0.8);
-              else
-                peak.attr("stroke-width",2).attr("fill-opacity",0.8);
-            }
-
-            if (d3.select(thePeak)[0].parentNode) {    /* if the 'this' pointer is the path for the peak, then declare the highlighted peak to be that */
-              self.highlightedPeak = thePeak;
-            } else if (peak)
-              self.highlightedPeak = peak;
-
-            for (i = 0; i < self.peakLabelArray.length; i++)
-              if (self.peakLabelArray[i].path === (peak ? peak : path)) {
-                self.peakLabelArray[i].label.attr('stroke', 'black')
-                  .attr("z-index", 100);
-                self.highlightedLabel = self.peakLabelArray[i].label;
-              }
-          }
-
-          self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, paths);
-          self.highlightPeakFunc = self.highlightPeak.bind(self, null, null, paths, path); 
-
-          function onRightClickOnPeak() {
-            console.log("Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
-          }
-
-          self.peakPaths.push({
+      self.peakPaths.push({
             path: path,
             paths: paths,
             roi: roi,
             lowerEnergy: roi.lowerEnergy,
             upperEnergy: roi.upperEnergy,
-          });
+            isOutline: isOutline,
+            isFill: isFill
+      });
 
-          if( num === 0 ){
-            path.attr("class", "roi spectrum-peak-" + specindex)
-              .style("fill", spectrum.peakColor)
-              .attr("fill-opacity",0.6);
+      path/* .attr("class", "peak") */
+          .attr("class", "spectrum-peak-" + specindex)
+          .attr("stroke-width",1)
+          .attr("stroke", peakColor );
+            
+      path.attr("fill-opacity", ((isOutline && !isFill) ? 0.0 : 0.6) );
 
-            if( paths.length === 2 ){
-              path.attr("stroke-width",1)
-                .attr("stroke", spectrum.peakColor )
-                .on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, paths, roi, path) } )
-                .on("mousemove", self.handleMouseMovePeak())
-                .on("touchend", self.highlightPeak.bind(self, null, null, paths, path))
-                .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, paths); } );
-            }
+      if( isFill ){
+        path.style("fill", peakColor );
+      }
+        
+      if( isOutline ){
+        path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, paths, roi, path) } )
+            .on("mousemove", self.handleMouseMovePeak())
+            .on("touchend", self.highlightPeak.bind(self, null, null, paths, path))
+            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, paths); } );
+      }
+      
 
-          } else {
-            path/* .attr("class", "peak") */
-            .attr("class", "spectrum-peak-" + specindex)
-              .style("fill", spectrum.peakColor )
-              .attr("fill-opacity",0.0)
-              .attr("stroke-width",1)
-              .attr("stroke", spectrum.peakColor );
+      /* For right-clicking on a peak */
+      path.on("contextmenu", onRightClickOnPeak);
+    });//paths.forEach( function(p,num){
 
-          }
+    if( paths.length > 0 && roi.peaks.length > 1 ){
+      var path = self.peakVis.append("path").attr("d", paths[0] );  //ToDo: is there a better way to draw a SVG path?
+      path.attr("class", "spectrum-peak-" + specindex)
+          .attr("stroke-width",1)
+          .attr("fill-opacity",0)
+          .attr("stroke", spectrum.peakColor );
+    }
+      
 
-          /* For right-clicking on a peak */
-          path.on("contextmenu", onRightClickOnPeak);
-        });
-  };
+  };//function draw_roi(roi,specindex,spectrum)
+
 
   self.peakPaths = [];
   self.peakLabelData = [];
@@ -6047,7 +6088,7 @@ SpectrumChartD3.prototype.drawPeakLabelCassowary = function(peak,path) {
 
       /* Main label DOM */
       label = chart.append("text");
-      label.attr('class', 'label')
+      label.attr('class', 'peaklabel')
         .attr("text-anchor", "start")
         .attr("x", pathX)
         .attr("y", pathY - 10 )
@@ -6399,7 +6440,7 @@ SpectrumChartD3.prototype.drawPeakLabelCassowary = function(peak,path) {
               .style('z-index', 0)
               .style('cursor', 'default')
               .attr('stroke', 'none')
-              .attr('font-weight', 'normal');
+              .attr('font-weight', null);
 
             /* delete the pointer line from the label to the peak */
             if (self.peakLabelLine) {
@@ -8631,7 +8672,7 @@ SpectrumChartD3.prototype.redrawYAxis = function() {
     self.yAxisBody.call(self.yAxis);
     self.yAxisBody.selectAll("text").style("cursor", "ns-resize")
         .on("mouseover", function(d) { d3.select(this).style("font-weight", "bold");})
-        .on("mouseout",  function(d) { d3.select(this).style("font-weight", "normal");})
+        .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
         .on("mousedown.drag",  self.yaxisDrag())
         .on("touchstart.drag", self.yaxisDrag());
 
@@ -9044,7 +9085,7 @@ SpectrumChartD3.prototype.handleTouchEndZoomInY = function() {
     self.yAxisBody.call(self.yAxis);
     self.yAxisBody.selectAll("text").style("cursor", "ns-resize")
         .on("mouseover", function(d) { d3.select(this).style("font-weight", "bold");})
-        .on("mouseout",  function(d) { d3.select(this).style("font-weight", "normal");})
+        .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
         .on("mousedown.drag",  self.yaxisDrag())
         .on("touchstart.drag", self.yaxisDrag());
 
@@ -9266,7 +9307,8 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
         .attr("class", path.attr("class"))
         .attr("d", path.attr("d"))
         .attr("fill-opacity", 0.4)
-        .style("fill", path.style("fill"));
+        .style("fill", path.style("fill"))
+        ;
     });
   }
 
@@ -10184,7 +10226,7 @@ SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
  */
 SpectrumChartD3.prototype.handleMouseOverPeak = function(peakElem, d, peakIndex, paths, roi, path) {
   var self = this;
-
+console.log( 'handleMouseOverPeak' );
   self.highlightPeak(peakElem, peakIndex, paths, path);
   // self.displayPeakInfo(info, d3.event.x);
 }
@@ -10403,29 +10445,31 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
 
   var thePeak = peakElem;
   if (d3.event == null || d3.event.touches) {
-    if (!thePeak || thePeak.attr("fill-opacity") != 0.6)
+    if (!thePeak /*|| thePeak.attr("fill-opacity") != 0.6 */ ){
+       console.log( 'Here 0' );
       return;
+    }
   }
 
   var thePeakSelected = d3.select(thePeak);
-  if (Array.isArray(thePeakSelected[0][0])) thePeakSelected = thePeak;
-  if (thePeakSelected.attr("fill-opacity") != 0.6)
-    return;
+  if (Array.isArray(thePeakSelected[0][0])) 
+    thePeakSelected = thePeak;
 
   if (self.leftMouseDown || self.rightClickDown)
     return;
 
   if (!peakIndex) {
-    if (paths.length === 2) 
-      thePeakSelected.attr("fill-opacity",0.8);
-    else
-      thePeakSelected.attr("stroke-width",2).attr("fill-opacity",0.8);
-
+  //  if (paths.length === 2) 
+  //    thePeakSelected.attr("fill-opacity",0.8);
+  //  else
+  //    thePeakSelected.attr("stroke-width",2).attr("fill-opacity",0.8);
+    thePeakSelected.attr("stroke-width",2);
   } else {
-    if (paths.length === 2) 
-      peakIndex.attr("fill-opacity",0.8);
-    else
-      peakIndex.attr("stroke-width",2).attr("fill-opacity",0.8);
+    //if (paths.length === 2) 
+    //  peakIndex.attr("fill-opacity",0.8);
+    //else
+    //  peakIndex.attr("stroke-width",2).attr("fill-opacity",0.8);
+    peakIndex.attr("stroke-width",2);
   }
 
   if (thePeakSelected[0].parentNode) {    /* if the 'peakElem' pointer is the path for the peak, then declare the highlighted peak to be that */
@@ -10459,13 +10503,15 @@ SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) 
   if (!highlightedPeak) {
     if (!Array.isArray(self.highlightedPeak)) 
       peak = d3.select(self.highlightedPeak);
-    if (paths.length === 2)  peak.attr("fill-opacity",0.6);
-    else                     peak.attr("stroke-width",1).attr("fill-opacity",0.6);
+    //if (paths.length === 2)  peak.attr("fill-opacity",0.6);
+    //else                     peak.attr("stroke-width",1).attr("fill-opacity",0.6);
+    peak.attr("stroke-width",1);
   } else {
     if (!Array.isArray(highlightedPeak)) 
       highlightedPeak = d3.select(highlightedPeak);
-    if (paths.length === 2)  highlightedPeak.attr("fill-opacity",0.6);
-    else                     highlightedPeak.attr("stroke-width",1).attr("fill-opacity",0.6);
+    //if (paths.length === 2)  highlightedPeak.attr("fill-opacity",0.6);
+    //else                     highlightedPeak.attr("stroke-width",1).attr("fill-opacity",0.6);
+    highlightedPeak.attr("stroke-width",1);
   }
 
 

@@ -1,7 +1,7 @@
 
 body { font: 13px sans-serif; }
 rect { fill: #fff; }
-label{ margin-left: 5px; }
+.peaklabel{ margin-left: 5px; }
 
 .referenceGammaSelectDiv { display: inline-block; margin-left: 25px; }
 .referenceGammaSelect { width: 200px; height: 130px; }
