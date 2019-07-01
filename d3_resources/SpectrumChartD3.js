@@ -17,13 +17,14 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
 
    
 Feature TODO list (created 20160220):
-  -Fix intermitten issue of zooming in messes up (especially aver dragging starting from the y-axis title)
-  -Make it so x-axis binning is given seperately for each histogram
-  -Add statistical error bars
-  -Add ability to support polynomial binning with deviation pairs (instead of just lower edge energy)
-  -Customize mouse point to zoom-in/zoom-out where appropriate
-  -Optimize frequency of rebinning of data (prevent extra rebinned data from being drawn)
-  -Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
+  - Fix intermitten issue of zooming in messes up (especially aver dragging starting from the y-axis title)
+  - Make it so x-axis binning is given seperately for each histogram
+  - Add statistical error bars
+  - Add ability to support polynomial binning with deviation pairs (instead of just lower edge energy)
+  - Customize mouse point to zoom-in/zoom-out where appropriate
+  - Optimize frequency of rebinning of data (prevent extra rebinned data from being drawn)
+  - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
+  - x-axis slider chart doesnt work in InterSpec because it adds to the height, not a "in-place" thing - maybe change this
 */
 
 SpectrumChartD3 = function(elem, options) {
@@ -40,14 +41,18 @@ SpectrumChartD3 = function(elem, options) {
   this.options = options || {}; 
   
   //if( options.yscale !== "lin" && options.yscale !== "linear" && options.yscale !== "log" && options.yscale !== "sqrt" )
-  this.options.yscale = "lin";
-  this.options.gridx = false;
-  this.options.gridy = false;
-  this.options.compactXAxis = false; 
-  this.options.adjustYAxisPadding = true;
-  this.options.wheelScrollYAxis = true;
-  this.options.showAnimation = false;
-  this.options.showXAxisSliderChart = false;
+  if( (typeof this.options.yscale) !== 'string' ) this.options.yscale = "lin";
+  if( (typeof this.options.gridx) !== 'boolean' ) this.options.gridx = false;
+  if( (typeof this.options.gridy) !== 'boolean' ) this.options.gridy = false;
+  if( (typeof this.options.compactXAxis) !== 'boolean' ) this.options.compactXAxis = false;
+  if( (typeof this.options.adjustYAxisPadding) !== 'boolean' ) this.options.adjustYAxisPadding = true;
+  if( (typeof this.options.wheelScrollYAxis) !== 'boolean' ) this.options.wheelScrollYAxis = true;
+  
+  //if( (typeof this.options.) !== '' ) this.options. = ;
+  
+  if(typeof options.animationDuration !== 'number' || options.animationDuration < 0) this.options.animationDuration = 1000;
+  this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
+  if( (typeof this.options.showXAxisSliderChart) !== 'boolean' ) this.options.showXAxisSliderChart = false;
 
   this.options.allowPeakFit = /*(typeof options.allowPeakFit == 'boolean') ? options.allowPeakFit :*/ false;
 
@@ -56,8 +61,9 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showNuclideNames = (typeof options.showNuclideNames == 'boolean') ? options.showNuclideNames : false;
   this.options.showNuclideEnergies = (typeof options.showNuclideEnergies == 'boolean') ? options.showNuclideEnergies : false;
   
-  this.options.showLegend = true;
-  this.options.scaleBackgroundSecondary = (typeof options.scaleBackgroundSecondary == 'boolean') ? options.scaleBackgroundSecondary : false;
+  if( (typeof this.options.showLegend) !== 'boolean' ) this.options.showLegend = true;
+  if( (typeof this.options.scaleBackgroundSecondary) !== 'boolean' ) this.options.scaleBackgroundSecondary = false;
+
 
   this.options.refLineTopPad = 30;
   
@@ -80,7 +86,7 @@ SpectrumChartD3 = function(elem, options) {
   // Set which spectrums to draw peaks for
   this.options.drawPeaksFor = {
     FOREGROUND: true,
-    BACKGROUND: false,
+    BACKGROUND: true,
     SECONDARY: false,
   };
 
@@ -110,11 +116,6 @@ SpectrumChartD3 = function(elem, options) {
     "height": Math.max(0, this.cy - this.padding.topComputed  - this.padding.bottomComputed),
     "sliderChartHeight": (this.cy - this.padding.topComputed  - this.padding.bottomComputed) / 10,
     "sliderChartWidth": this.cx - this.padding.leftComputed - this.padding.right - 30,
-  };
-
-  this.animation = {
-    "duration": 200,
-    "frames": 6
   };
 
   /**
@@ -1483,12 +1484,14 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     }
      
     /* Set the mouse and chart parameters */
-    var m, x0px, x1px;
+    var m;
 
     m = d3.mouse(self.vis[0][0]);
     x0_min = self.xScale.range()[0];
     x1_max = self.xScale.range()[1];
     self.lastMouseMovePos = m;
+
+    var x = m[0], y = m[1];
 
     /* Adjust the last mouse move position in case user starts draggin from out of bounds */
     if (self.lastMouseMovePos[1] < 0)
@@ -1554,8 +1557,59 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
       return;
 
-    } else if ( self.rightClickDown )  /* Right Click Dragging: pans the chart left and right */
+    } else if ( self.rightClickDown ){
+      /* Right Click Dragging: pans the chart left and right */
       self.handlePanChart();
+    } else if( self.rawData.spectra && self.rawData.spectra.length > 0 
+               && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width ) ) {
+//Also check if we are between ymin and ymax of ROI....  This is where 
+      //var energy = self.xScale.invert(x);
+      //var counts = self.yScale.invert(y);
+      var onRoiEdge = false;
+      self.rawData.spectra[0].peaks.forEach( function(roi){
+        var lpx = self.xScale(roi.lowerEnergy);
+        var upx = self.xScale(roi.upperEnergy);
+        var isOnLower = Math.abs(lpx-x) < 5;
+        var isOnUpper = Math.abs(upx-x) < 5;
+        if( !isOnLower && !isOnUpper )
+          return;
+        
+        onRoiEdge = true;
+        if( !self.roiDragBox ){
+          self.roiDragBox = self.vis.append("rect")
+            .attr("id", "roiDragBox" )
+            .attr("class", "roiDragBox")
+            .attr("rx", 2)
+            .attr("ry", 2)
+            .attr("width", 10)
+            .attr("height", 20);
+
+          self.roiDragLine = self.vis.append("line")
+                                   .attr("id", "roiDragLine" )
+                                   .attr("class", "roiDragLine");
+
+          d3.select('body').style("cursor", "ew-resize");
+        }
+
+        self.roiDragBox
+            .attr("x", (isOnLower ? lpx : upx) - 5)
+            .attr("y", -10 + y);
+
+        self.roiDragLine.attr("x1", (isOnLower ? lpx : upx) - 0.5)
+            .attr("x2", (isOnLower ? lpx : upx) - 0.5)
+            .attr("y1", 0)
+            .attr("y2", self.size.height);
+          console.log( 'x=' + x + ", y=" + y + ", roi.lowerEnergy=" + roi.lowerEnergy + ", roi.upperEnergy=" + roi.upperEnergy );
+      });
+      
+      if( !onRoiEdge && self.roiDragBox ){
+        self.roiDragBox.remove();
+        self.roiDragLine.remove();
+        self.roiDragBox = null;
+        self.roiDragLine = null;
+        d3.select('body').style("cursor", "default");
+      }
+    }
     
 
     self.updateFeatureMarkers(-1);
@@ -1948,26 +2002,26 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*Make sure within chart area */
     if( m[0] < 0 || m[0] > self.size.width || m[1] < 0 || m[1] > self.size.height ){
 
-    /* If wheeling in y-axis labels, zoom in the y-axis range */
-    if (m[0] < 0 && m[1] > 0 && m[1] < self.size.height && self.options.wheelScrollYAxis && self.rawData && self.rawData.spectra && self.rawData.spectra.length) {
-      self.handleYAxisWheel();
-      return;
-    }
+      /* If wheeling in y-axis labels, zoom in the y-axis range */
+      if (m[0] < 0 && m[1] > 0 && m[1] < self.size.height && self.options.wheelScrollYAxis && self.rawData && self.rawData.spectra && self.rawData.spectra.length) {
+        self.handleYAxisWheel();
+        return;
+      }
 
-     console.log( "Scroll outside of vis, ignoring mousewheel" );
-     return;
+      console.log( "Scroll outside of vis, ignoring mousewheel" );
+      return;
     }  
 
     /*If we are doing any other actions with the chart, then to bad. */
     if( self.dragging_plot || self.zoominbox || self.fittingPeak ){
-     console.log( "Plot is being dragged, zoomed, or peak fit, ignoring mousewheel" );
-     return;
+      console.log( "Plot is being dragged, zoomed, or peak fit, ignoring mousewheel" );
+      return;
     }
 
     /*Dont do anything if there is no data */
     if( !self.rawData || !self.rawData.spectra || self.rawData.spectra.length < 1 ){
-     console.log( "No data, ignoring mousewheel" );
-     return;
+      console.log( "No data, ignoring mousewheel" );
+      return;
     }
 
     var mindatax, maxdatax, bounds, foreground;
@@ -1976,13 +2030,31 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     mindatax = bounds[0];
     maxdatax = bounds[1];
 
+    /*Function to clear out any variables assigned during scrolling, or finish */
+    /*  up any actions that should be done  */
+    function wheelcleanup(e){
+      console.log( "mousewheel, stopped" );
+      self.wheeltimer = null;
+      self.scroll_start_x = null;
+      self.scroll_start_y = null;
+      self.scroll_start_domain = null;
+      self.scroll_start_raw_channel = null;
+      self.scroll_total_x = null;
+      self.scroll_total_y = null;
+    }
+
     //
     if ((self.xScale.domain()[0] <= mindatax && self.xScale.domain()[1] >= maxdatax && e.deltaX > 0)
         || (self.xScale.domain()[1] >= maxdatax && self.xScale.domain()[0] <= maxdatax && e.deltaX < 0)) {
-      //Should put in some sort of last seen deltaX so that if the user starts goign in the otehr direction
-      //  than the zoom in that direction can start immediately, instead of when the user scrolls al the way
-      //  back through zero.
       console.log("Cannot scroll past the minimum/maximum data from chart, ignoring mousewheel")
+
+      //If user has scrolled farther than allowed in either direction, cancel scrolling so that
+      //  if they start going the other way, it will immediately react (if we didnt cancel
+      //  things, they would have to go past the amount of scrolling they have already done
+      //  before they would see any effect)
+      window.clearTimeout(self.wheeltimer);
+      wheelcleanup();
+      
       return;
     }
 
@@ -1991,33 +2063,33 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*  fresh. */
     /*  This is just an example, and likely needs changed, or just removed. */
     if( self.wheeltimer ){
-     /*This is not the first wheel event of the current user wheel action, */
-     /*  lets clear the previous timeout (we'll reset a little below).  */
-     window.clearTimeout(self.wheeltimer);
+      /*This is not the first wheel event of the current user wheel action, */
+      /*  lets clear the previous timeout (we'll reset a little below).  */
+      window.clearTimeout(self.wheeltimer);
     } else {
-     /*This is the first wheel event of this user wheel action, lets record */
-     /*  initial mouse energy, counts, as well as the initial x-axis range. */
-     self.scroll_start_x = self.xScale.invert(m[0]);
-     self.scroll_start_y = self.yScale.invert(m[1]);
-     self.scroll_start_domain = self.xScale.domain();
-     self.scroll_start_raw_channel = d3.bisector(function(d){return d;}).left(foreground.x, self.scroll_start_x);
-     self.scroll_start_raw_channel = Math.max(0,self.scroll_start_raw_channel);
-     self.scroll_start_raw_channel = Math.min(foreground.x.length-1,self.scroll_start_raw_channel);
-     self.scroll_total_x = 0;
-     self.scroll_total_y = 0;
+      /*This is the first wheel event of this user wheel action, lets record */
+      /*  initial mouse energy, counts, as well as the initial x-axis range. */
+      self.scroll_start_x = self.xScale.invert(m[0]);
+      self.scroll_start_y = self.yScale.invert(m[1]);
+      self.scroll_start_domain = self.xScale.domain();
+      self.scroll_start_raw_channel = d3.bisector(function(d){return d;}).left(foreground.x, self.scroll_start_x);
+      self.scroll_start_raw_channel = Math.max(0,self.scroll_start_raw_channel);
+      self.scroll_start_raw_channel = Math.min(foreground.x.length-1,self.scroll_start_raw_channel);
+      self.scroll_total_x = 0;
+      self.scroll_total_y = 0;
     }
 
     /*Function to clear out any variables assigned during scrolling, or finish */
     /*  up any actions that should be done  */
     function wheelcleanup(e){
-     console.log( "mousewheel, stopped" );
-     self.wheeltimer = null;
-     self.scroll_start_x = null;
-     self.scroll_start_y = null;
-     self.scroll_start_domain = null;
-     self.scroll_start_raw_channel = null;
-     self.scroll_total_x = null;
-     self.scroll_total_y = null;
+      console.log( "mousewheel, stopped" );
+      self.wheeltimer = null;
+      self.scroll_start_x = null;
+      self.scroll_start_y = null;
+      self.scroll_start_domain = null;
+      self.scroll_start_raw_channel = null;
+      self.scroll_total_x = null;
+      self.scroll_total_y = null;
     }
 
     /*Set a timeout to call wheelcleanup after a little time of not resieving  */
@@ -4130,8 +4202,8 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   }
 
   if( this.options.compactXAxis ){
-    /*We have to check every tick to see if it overlaps with the title */
-    var xtitlex = this.xaxistitle.attr("x" );
+    /* We have to check every tick to see if it overlaps with the title */
+    var xtitlex = self.xaxistitle.attr("x" );
     majorticks[0].forEach( function(tick){
       var txt = d3.select(tick).select('text')[0][0]; 
       if( (txt.getCTM().e + txt.getBBox().width) + 30 > xtitlex )  /*Not sure why we need this 30, but its in positioning of the x-axis title too */
@@ -4215,7 +4287,8 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   var self = this;
 
   // Cancel if the chart or raw data are not present
-  if (!self.chart || d3.select(self.chart).empty() || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) {
+  if (!self.chart || d3.select(self.chart).empty() || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
+    || self.size.height<=0 ) {
     self.cancelXAxisSliderChart();
     return;
   }
@@ -4453,7 +4526,7 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
 
   // Delete the data lines if they are present
   for (let i = 0; i < self.rawData.spectra.length; ++i) {
-    console.log(self['sliderLine' + i]);
+    //console.log(self['sliderLine' + i]);
     if (self['sliderLine' + i])
       self['sliderLine' + i].remove();
   }
@@ -4461,7 +4534,8 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
   for (let i = 0; i < self.rawData.spectra.length; ++i) {
     let spectrum = self.rawData.spectra[i];
     if (self.options.backgroundSubtract && spectrum.type == self.spectrumTypes.BACKGROUND) continue;
-    if (self['line'+i])
+
+    if (self['line'+i] && self.size.height>0 && self.size.sliderChartHeight>0 )
       self['sliderLine'+i] = self.sliderChartBody.append("path")
         .attr("id", 'sliderLine'+i)
         .attr("class", 'sline sliderLine')
@@ -4473,6 +4547,10 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
 
 SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   var self = this;
+
+  if (!self.sliderChart)
+    return;
+    
   self.size.sliderChartHeight = self.size.height / 10;
 
   var height = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
@@ -8339,7 +8417,7 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
     }
 
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
-    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.animation.duration), 1 );
+    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
     /* Set x-axis domain to new values */
     self.setXAxisRange(
@@ -8374,7 +8452,7 @@ SpectrumChartD3.prototype.redrawZoomInYAnimation = function(targetDomain,redraw)
     }
 
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
-    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.animation.duration), 1 );
+    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
     /* Set y-axis domain to new values */
     self.yScale.domain([ 
@@ -8409,7 +8487,7 @@ SpectrumChartD3.prototype.redrawZoomOutYAnimation = function(targetDomain, redra
     }
 
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
-    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.animation.duration), 1 );
+    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
     /* Set y-axis domain to new values */
     self.yScale.domain([ 
@@ -8429,7 +8507,7 @@ SpectrumChartD3.prototype.setShowAnimation = function(d) {
 }
 
 SpectrumChartD3.prototype.setAnimationDuration = function(d) {
-  this.animation.duration = d;
+  this.options.animationDuration = d;
 }
 
 SpectrumChartD3.prototype.handleCancelAnimationZoom = function() {
