@@ -1,3 +1,31 @@
+/*******************/
+.roiDragBox {
+  fill: #666;
+  fill-opacity: 0.4;
+  stroke-opacity: 0.3;
+  stroke: black;
+  stroke-width: 1px;
+  user-select: none;
+  -moz-user-select: none;
+}
+
+.roiDragLine {
+  fill: none;
+  stroke: black;     /* SHould maybe set line color to be same as axis liens. */  
+  stroke-opacity: 0.1; 
+  stroke-width: 1px;
+}
+
+.roiDragLine .active {
+  stroke-opacity: 0.4;
+}
+
+.roiDragBox .active {
+  stroke-opacity: 0.3;
+}
+
+/*******************/
+
 
 body { font: 13px sans-serif; }
 rect { fill: #fff; }
