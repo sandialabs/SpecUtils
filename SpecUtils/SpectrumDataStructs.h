@@ -2808,9 +2808,10 @@ size_t Measurement::num_gamma_channels() const
 size_t Measurement::find_gamma_channel( const float x ) const
 {
   if( !channel_energies_ || channel_energies_->empty() )
+  {
     throw std::runtime_error( "Measurement::find_gamma_channel(): "
                               "channel_energies_ not defined" );
-  
+  }
   //Using upper_bound instead of lower_bound to properly handle the case
   //  where x == bin lower energy.
   const std::vector<float>::const_iterator pos_iter

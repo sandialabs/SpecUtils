@@ -527,6 +527,8 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
     return;
   }
 
+  //console.log( 'Emitting Wt event "' + ((event && event.name) ? event.name : 'null') + '", with ' + SpectrumChartD3.prototype.WtEmit.length + " arguments");
+
   // To support ES5 syntax in IE11, we replace spread operator with this
   var args = Array.prototype.slice.call(arguments, SpectrumChartD3.prototype.WtEmit.length);
 
@@ -1008,6 +1010,7 @@ SpectrumChartD3.prototype.redraw = function() {
     /*self.plot.call(d3.behavior.zoom().x(self.xScale).y(self.yScale).on("zoom", self.redraw()));     */
     
     self.drawPeaks();
+    self.drawSearchRanges();
     self.drawRefGammaLines();
     self.updateMouseCoordText();
 
@@ -1533,41 +1536,35 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       /* If erasing peaks */
       if( self.fittingPeak ) {          /* If fitting peaks */
         self.handleMouseMovePeakFit();
-
       } else if (self.isDeletingPeaks) {   /* If deleting peaks */
         self.handleMouseMoveDeletePeak();
-
       } else if (self.isCountingGammas) {   /* If counting gammas */
         self.handleMouseMoveCountGammas();
-
       } else if (self.isRecalibrating) {      /* If recalibrating the chart */
         self.handleMouseMoveRecalibration();
-
       } else if (self.isZoomingInYAxis) {        /* If zooming in y-axis */
         self.handleMouseMoveZoomInY();
-
       } else if (self.isUndefinedMouseAction) {   /* If undefined mouse action */
-        /* Do nothing, save for future feature */
-        self.handleCancelAllMouseEvents()();
-
+        self.handleCancelAllMouseEvents()();      /* Do nothing, save for future feature */
       } else if (isZoomingInXAxis) {    /* If zooming in x-axis */
         self.handleMouseMoveZoomInX();
-
       } else if( self.roiIsBeingDragged ){
         self.handleRoiDrag();
-      }else {
+      } else {
         self.handleCancelAllMouseEvents()();
       }
 
       return;
     } else if ( self.rightClickDown ){
       
-      self.clearRoiDrag();
+      self.handleCancelRoiDrag();
 
       /* Right Click Dragging: pans the chart left and right */
       self.handlePanChart();
     } else if( self.rawData.spectra && self.rawData.spectra.length > 0 
-               && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width ) ) {
+               && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width 
+              &&  !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey 
+              && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
                  
 //Also check if we are between ymin and ymax of ROI....  This is where 
       var onRoiEdge = false;
@@ -1577,6 +1574,11 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
         var lpx = self.xScale(roi.lowerEnergy);
         var upx = self.xScale(roi.upperEnergy);
+
+        //Dont create handles for to narrow of a range (make user zoom in a bit more)
+        if( (upx-lpx) < 15 )
+          return;
+
         var isOnLower = Math.abs(lpx-x) < 5;
         var isOnUpper = Math.abs(upx-x) < 5;
         if( !isOnLower && !isOnUpper )
@@ -1587,7 +1589,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       });
       
       if( !onRoiEdge && self.roiDragBox && !self.roiIsBeingDragged ){
-        self.clearRoiDrag();
+        self.handleCancelRoiDrag();
         d3.select('body').style("cursor", "default");
       }
     }
@@ -1642,7 +1644,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(roi){
       .attr("y1", 0)
       .attr("y2", self.size.height);
 
-  console.log( 'x=' + x + ", y=" + y + ", roi.lowerEnergy=" + roi.lowerEnergy + ", roi.upperEnergy=" + roi.upperEnergy );
+  //console.log( 'x=' + x + ", y=" + y + ", roi.lowerEnergy=" + roi.lowerEnergy + ", roi.upperEnergy=" + roi.upperEnergy );
 };//showRoiDragOption()
 
 
@@ -1674,24 +1676,20 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
   self.roiDragLine.attr("x1", xcenter + 0.5).attr("x2", xcenter + 0.5);
   self.roiDragBox.attr("x", xcenter - 5);
 
-  
-  //if ROI to small, delete it
-
-    
 
   //Emit current position, no more often than twice per second, or if there
   //  are no requests pending.
-  let emitFcn = function(){  
-    console.log( roi );
+  let emitFcn = function(){
     self.roiDragRequestTime = new Date();
     window.clearTimeout(self.roiDragRequestTimeout);
     self.roiDragRequestTimeout = null;
+    self.roiDragRequestTimeoutFcn = null;
 
     let new_lower_energy = lowerEdgeDrag ? energy : roi.lowerEnergy;
     let new_upper_energy = lowerEdgeDrag ? roi.upperEnergy : energy;
-    let new_lower_px = lowerEdgeDrag ? xcenter : self.xScale.invert(roi.lowerEnergy);
-    let new_upper_px = lowerEdgeDrag ? xcenter : self.xScale.invert(roi.upperEnergy);
-
+    let new_lower_px = lowerEdgeDrag ? xcenter : self.xScale(roi.lowerEnergy);
+    let new_upper_px = lowerEdgeDrag ? self.xScale(roi.upperEnergy) : xcenter;
+    
     self.WtEmit(self.chart.id, {name: 'roiDrag'}, new_lower_energy, new_upper_energy, new_lower_px, new_upper_px, roi.lowerEnergy, false );
   };
 
@@ -1701,7 +1699,11 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
   } else {
     let dt = Math.min( 500, Math.max(0, 500 - (timenow - self.roiDragRequestTime)) );
     window.clearTimeout( self.roiDragRequestTimeout );
-    self.roiDragRequestTimeout = window.setTimeout( emitFcn, dt );
+    self.roiDragRequestTimeoutFcn = emitFcn;
+    self.roiDragRequestTimeout = window.setTimeout( function(){ 
+      if(self.roiDragRequestTimeoutFcn) 
+        self.roiDragRequestTimeoutFcn();
+    }, dt );
   }
 
 };//SpectrumChartD3.prototype.handleRoiDrag = ...
@@ -1745,7 +1747,7 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(){
 };//
 
 
-SpectrumChartD3.prototype.clearRoiDrag = function(){
+SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
   let self = this;
   if( !self.roiDragBox )
     return;
@@ -1760,6 +1762,7 @@ SpectrumChartD3.prototype.clearRoiDrag = function(){
   self.roiIsBeingDragged = false;
   window.clearTimeout(self.roiDragRequestTimeout);
   self.roiDragRequestTimeout = null;
+  self.roiDragRequestTimeoutFcn = null;
 };
 
 
@@ -1776,19 +1779,18 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function(){
 
   let mdx = self.roiDragMouseDown; // [m[0], roiPx, energy, isLowerEdge];
   let xcenter = x + mdx[1] - mdx[0];
-
-  let energy = self.xScale.invert(x);
+  let energy = self.xScale.invert(xcenter);
   //let counts = self.self.yScale.invert(y);
 
   let lowerEdgeDrag = mdx[3];
   let new_lower_energy = lowerEdgeDrag ? energy : roi.lowerEnergy;
   let new_upper_energy = lowerEdgeDrag ? roi.upperEnergy : energy;
-  let new_lower_px = lowerEdgeDrag ? xcenter : self.xScale.invert(roi.lowerEnergy);
-  let new_upper_px = lowerEdgeDrag ? self.xScale.invert(roi.upperEnergy) : xcenter;
+  let new_lower_px = lowerEdgeDrag ? xcenter : self.xScale(roi.lowerEnergy);
+  let new_upper_px = lowerEdgeDrag ? self.xScale(roi.upperEnergy) : xcenter;
 
   self.WtEmit(self.chart.id, {name: 'roiDrag'}, new_lower_energy, new_upper_energy, new_lower_px, new_upper_px, roi.lowerEnergy, true );
 
-  self.clearRoiDrag();
+  self.handleCancelRoiDrag();
   d3.select('body').style("cursor", "default");
 };//SpectrumChartD3.prototype.handleMouseUpDraggingRoi
 
@@ -1799,11 +1801,18 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function(){
 */
 SpectrumChartD3.prototype.updateRoiBeingDragged = function( newroi ){
   let self = this;
+  
   if( !self.roiIsBeingDragged )
     return;
 
+  console.log( 'updateRoiBeingDragged - it would be nice to emit any pending drag requests' );
   window.clearTimeout(self.roiDragRequestTimeout);
   self.roiDragRequestTimeout = null;
+  if( self.roiDragRequestTimeoutFcn ){
+    self.roiDragRequestTimeoutFcn();
+    self.roiDragRequestTimeoutFcn = null;
+  }
+
   self.roiDragRequestTime = null;
 
   self.roiBeingDrugUpdate = newroi;
@@ -2148,7 +2157,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     let domain = self.xScale.domain();
     if( !self.origdomain || !domain || self.origdomain[0]!==domain[0] || self.origdomain[1]!==domain[1] ){
       console.log( 'Mouseup xrangechanged' );
-      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1]);
+      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height );
     }
 
     /* Delete any other mouse actions going on */
@@ -2265,7 +2274,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
          what, so I think its okay.
       */
       let domain = self.xScale.domain();
-      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1]);
+      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height);
     };
 
     //
@@ -3024,7 +3033,6 @@ SpectrumChartD3.prototype.keydown = function () {
           self.handleCancelMousePeakFit();
         }
         self.fittingPeak = false;
-        self.clearRoiDrag();
         self.handleCancelAllMouseEvents()();
         self.handleCancelAnimationZoom();
       }
@@ -3127,6 +3135,77 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
   }
 }
 
+SpectrumChartD3.prototype.drawSearchRanges = function() {
+  var self = this;
+
+  if( !self.searchEnergyWindows || !self.searchEnergyWindows.length ){
+    self.vis.selectAll("g.searchRange").remove();
+    return;
+  }
+
+  let domain = self.xScale.domain();
+  let lx = domain[0], ux = domain[1];
+
+  let inrange = [];
+  
+  self.searchEnergyWindows.forEach( function(w){
+    let lw = w.energy - w.window;
+    let uw = w.energy + w.window;
+
+    if( (uw > lx && uw < ux) || (lw > lx && lw < ux) || (lw <= lx && uw >= ux) )
+      inrange.push(w);
+  } );
+
+  var tx = function(d) { return "translate(" + self.xScale(Math.max(lx,d.energy-d.window)) + ",0)"; };
+  var gy = self.vis.selectAll("g.searchRange")
+            .data( inrange, function(d){return d.energy;} )
+            .attr("transform", tx)
+            .attr("stroke-width",1);
+
+  var gye = gy.enter().insert("g", "a")
+    .attr("class", "searchRange")
+    .attr("transform", tx);
+
+  let h = self.size.height;
+  
+  gye.append("rect")
+    //.attr("class", "d3closebut")
+    .attr('y', '0' /*function(d){ return self.options.refLineTopPad;}*/ )
+    .attr("x", "0" )
+    .style("fill", 'rgba(255, 204, 204, 0.4)')
+     ;
+     
+  var stroke = function(d) { return d.energy>=lx && d.energy<=ux ? '#4C4C4C' : 'rgba(0,0,0,0);'; };
+
+  gye.append("line")
+    .attr("y1", h )
+    .style("stroke-dasharray","4,8")
+     ;
+
+  /* Remove old elements as needed. */
+  gy.exit().remove();
+
+  gy.select("rect")
+    .attr('height', h /*-self.options.refLineTopPad*/ )
+    .attr('width', function(d){ 
+      let le = Math.max( lx, d.energy - d.window );
+      let ue = Math.min( ux, d.energy + d.window );
+      return self.xScale(ue) - self.xScale(le); 
+    } );
+ 
+  
+  let linepos = function(d){ 
+    let le = Math.max( lx, d.energy - d.window );
+    return self.xScale(d.energy) - self.xScale(le) /* - 0.5*/; 
+  };
+
+  gy.select("line")
+    .attr("stroke", stroke )
+    .attr("x1", linepos )
+    .attr("x2", linepos )
+    .attr("y1", h )  //needed for initial load sometimes
+    .attr("y2", '0' /*function(d){ return self.options.refLineTopPad; }*/ );
+}//drawSearchRanges(...)
 
 /**
  * -------------- Reference Gamma Lines Functions --------------
@@ -4045,6 +4124,12 @@ SpectrumChartD3.prototype.drawYTicks = function() {
         .attr("class","minorgrid");
     }
 
+    //If self.yScale(d) will return a NaN, then exit this function anyway
+    if( self.yScale.domain()[0]===self.yScale.domain()[1] ){
+      self.vis.selectAll("g.y").remove();
+      return;
+    }
+
     var ty = function(d) { return "translate(0," + self.yScale(d) + ")"; };
     var gy;
 
@@ -4327,6 +4412,7 @@ SpectrumChartD3.prototype.xaxisDrag = function() {
     /*This function is called once when you click on an x-axis label (which you can then start dragging it) */
     /*  And NOT when you click on the chart and drag it to pan */
     console.log( 'xaxisDrag work' );
+
     document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
 
@@ -4471,7 +4557,7 @@ SpectrumChartD3.prototype.setXAxisRange = function( minimum, maximum, doEmit ) {
   self.xScale.domain([minimum, maximum]);
 
   if( doEmit )
-    self.WtEmit(self.chart.id, {name: 'xrangechanged'}, minimum, maximum);
+    self.WtEmit(self.chart.id, {name: 'xrangechanged'}, minimum, maximum, self.size.width, self.size.height);
 }
 
 SpectrumChartD3.prototype.setXAxisMinimum = function( minimum ) {
@@ -5977,6 +6063,60 @@ SpectrumChartD3.prototype.handleTouchMoveAdjustSpectrumScale = function() {
 }
 
 
+SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
+  if( roi.type === 'NoOffset' || x0===x1 )
+    return 0.0;
+  
+  
+    if( roi.type === 'External' ){
+      //console.log( roi );
+
+      let energies = roi.continuumEnergies;
+      let counts = roi.continuumCounts;
+
+      if( !energies || !energies.length || !counts || !counts.length ){
+        console.warn( 'External continuum does not have continuumEnergies or continuumCounts' );
+        return 0.0;
+      }
+
+      let bisector = d3.bisector(function(d){return d;});
+      let cstartind = bisector.left( energies, Math.max(roi.lowerEnergy,x0) );
+      let cendind = bisector.right( energies, Math.min(roi.upperEnergy,x1) );
+      
+      if( cstartind >= (energies.length-1) )
+        return 0.0;  //shouldnt ever happen
+      if( cendind >= (energies.length-1) )
+        cendind = cendind - 1;
+
+      if( cstartind > 0 && energies[cstartind] > x0 )
+        cstartind = cstartind - 1;
+      if( cendind > 0 && energies[cendind] > x1 )
+        cendind = cendind - 1;
+
+      if( cstartind === cendind ){
+        return counts[cstartind] * (x1-x0) / (energies[cstartind+1] - energies[cstartind]);
+      }
+
+      //figure out fraction of first bin
+      let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
+      let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
+      
+      //console.log( 'x0=' + x0 + ', cstartind=' + cstartind + ', energy={' + energies[cstartind] + ',' + energies[cstartind+1] + '}, frac_first=' + frac_first );
+      //console.log( 'x1=' + x1 + ', cendind=' + cendind + ', energy={' + energies[cendind] + ',' + energies[cendind+1] + '}, frac_last=' + frac_last); 
+
+      let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
+      for( let i = cstartind+1; i < cendind; ++i )
+        sum += counts[i];
+      return sum;
+  }
+
+  x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
+  var answer = 0.0;
+  for( var i = 0; i < roi.coeffs.length; ++i )
+    answer += (roi.coeffs[i]/(i+1)) * (Math.pow(x1,i+1) - Math.pow(x0,i+1));
+  return Math.max( answer, 0.0 );
+}
+
 /**
  * -------------- Peak ROI/Label Rendering Functions --------------
  */
@@ -5990,20 +6130,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
   var minx = self.xScale.domain()[0], maxx = self.xScale.domain()[1];
 
-  function offset_integral(roi,x0,x1){
-    if( roi.type === 'NoOffset' )
-      return 0.0;
-    if( roi.type === 'External' ){
-      console.log( 'External contrinuum not supported yet' );
-      return 0.0;
-    }
-
-    x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
-    var answer = 0.0;
-    for( var i = 0; i < roi.coeffs.length; ++i )
-      answer += (roi.coeffs[i]/(i+1)) * (Math.pow(x1,i+1) - Math.pow(x0,i+1));
-    return Math.max( answer, 0.0 );
-  }
 
   /* Returns an array of paths.  
      - The first path will be an underline of entire ROI
@@ -6037,7 +6163,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     //var minyval_px = self.size.height
     //    , maxyval_py = 0;
     
-    var firsty = offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
+    var firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
 
     // Background Subtract - Subtract the initial y-value with the corresponding background point
     if (useBackgroundSubtract) {
@@ -6053,7 +6179,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
     for( var i = xstartind; i < xendind; ++i ) {
       thisx = 0.5*(points[i].x + points[i+1].x);
-      thisy = offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
+      thisy = self.offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
       if (useBackgroundSubtract) {
@@ -6108,7 +6234,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
       thisx = 0.5*(points[xindex].x + points[xindex+1].x);
-      cont_area = offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
+      cont_area = self.offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
       if( useBackgroundSubtract ) 
@@ -6118,24 +6244,34 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       peakamplitudes[xindex][1] = thisx;
 
       roi.peaks.forEach( function(peak,peakn){
-        if( peak.type !== 'GaussianDefined' ){
+        if( peak.type === 'GaussianDefined' ){
+          let area = gaus_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
+          peak_area += area;
+
+          if( peak.skewType !== 'NoSkew' )
+            console.log( 'Need to implement peak skew type ' + peak.skewType );
+
+          m = peak.Centroid[0];
+          s = peak.Width[0];
+          if( roi.peaks.length==1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
+            peakamplitudes[xindex][peakn+2] = area;
+            paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + area);
+            leftMostLineValue[peakn] = {x : thisx, y: cont_area};
+          }else{
+            peakamplitudes[xindex][peakn+2] = 0.0;
+          }
+        } else if( peak.type === 'DataDefined' ) {
+          let area = points[xindex].y - cont_area;
+          peakamplitudes[xindex][peakn+2] = (area > 0 ? area : 0);
+          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + (area >= 0 ? area : 0.0));
+          leftMostLineValue[peakn] = {x : thisx, y: cont_area};
+        } else {
           console.log( 'Need to implement peak.type==' + peak.type );
           return;
         }
-        if( peak.skewType !== 'NoSkew' )
-          console.log( 'Need to implement peak skew type ' + peak.skewType );
-        var area = gaus_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
-        peak_area += area;
+
         
-        m = peak.Centroid[0];
-        s = peak.Width[0];
-        if( roi.peaks.length==1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
-          peakamplitudes[xindex][peakn+2] = area;
-          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + area);
-          leftMostLineValue[peakn] = {x : thisx, y: cont_area};
-        }else{
-          peakamplitudes[xindex][peakn+2] = 0.0;
-        }
+        
       });
     }//for( go right to left over 'xindex' drawing peak outlines )
 
@@ -6212,7 +6348,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
   function draw_roi(roi,specindex,spectrum) {
     if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
         && roi.type !== 'Linear' && roi.type !== 'Quardratic'
-        && roi.type !==  'Cubic'  ){
+        && roi.type !==  'Cubic' && roi.type !==  'External' ){
       console.log( 'unrecognized roi.type: ' + roi.type );
       return;
     }
@@ -6222,6 +6358,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
     if (!spectrum) {
       console.log("No spectrum specified to draw peaks");
+      return;
+    }
+    
+    if( self.yScale.domain()[0] === self.yScale.domain()[1] ){
+      console.log( 'Y-domain not valid; not drawing ROI' );
       return;
     }
 
@@ -7204,19 +7345,6 @@ SpectrumChartD3.prototype.runRealTimePeakFit = function() {
     /*  area, and the actual data area.  */
 
     
-    /*A function to integrate the area below the continuum between x0 and x1  */
-    /*  for a given refrence energy */
-    function offset_eqn_integral(coeffs,refEnergy,x0,x1) {
-      x0 -= refEnergy;
-      x1 -= refEnergy;
-      var answer = 0.0;
-      for( var order = 0; order < coeffs.length; ++order ) {
-        var exp = order + 1.0;
-        answer += (coeffs[order]/exp) * (Math.pow(x1,exp) - Math.pow(x0,exp));
-      }
-      return answer;
-    };
-    
     /*A function to get linear continuum coeficients using the hights of the first */
     /*  and last bin - this is only an example function!  do not use in real code, */
     /*  it can fail in many ways. */
@@ -7269,19 +7397,23 @@ SpectrumChartD3.prototype.runRealTimePeakFit = function() {
     var numPeaks = (params.length - (polyd + 1)) / 3;
     var sumdata = counts.reduce(function(a,b){return a+b;}, 0);
     var continuumCoefs = params.slice(0,polyd+1);
-    var sumcontinuum = offset_eqn_integral(continuumCoefs,roi_ref_energy,lbin_lower_energy,rbin_upper_energy);
 
     var poly_type;
     switch (polyd) {
-      case 0:
-        poly_type = 'Constant';
-      case 1:
-        poly_type = 'Linear';
-      case 2:
-        poly_type = 'Quadratic';
-      case 3:
-      poly_type = 'Cubic';
+      case 0: poly_type = 'Constant'; break;
+      case 1: poly_type = 'Linear'; break;
+      case 2: poly_type = 'Quadratic'; break;
+      case 3: poly_type = 'Cubic'; break;
     }
+
+    let partial_roi = {
+      lowerEnergy: lbin_lower_energy,
+      upperEnergy: rbin_upper_energy,
+      referenceEnergy: roi_ref_energy,
+      coeffs: continuumCoefs
+    };
+
+    var sumcontinuum = self.offset_integral( partial_roi, lbin_lower_energy, rbin_upper_energy);
 
     self.current_fitting_peak =  { 
         type: poly_type,                       /*options for you are are: 'NoOffset', 'Constant', 'Linear', 'Quardratic', 'Cubic' */
@@ -8637,6 +8769,21 @@ SpectrumChartD3.prototype.setSumPeaks = function(d) {
 }
 
 
+
+SpectrumChartD3.prototype.setSearchWindows = function(ranges) {
+  var self = this;
+
+  if( !Array.isArray(ranges) || ranges.length===0 ){
+    self.searchEnergyWindows = null;
+  } else {
+    self.searchEnergyWindows = ranges;
+    self.searchEnergyWindows.sort( function(l,r){ return l.energy < r.energy }  )
+  }
+
+  self.redraw()();
+}
+
+
 /**
  * -------------- Chart Animation Functions --------------
  */
@@ -9741,6 +9888,11 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   /* Cancel the count gammas mode */
   self.handleCancelMouseCountGammas();
 
+  self.handleCancelRoiDrag();
+
+  self.erasePeakFitReferenceLines();
+  
+
   if (!self.deletePeaksMouse)
     return;
 
@@ -10624,19 +10776,6 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   if (!peak) 
     return null;
 
-  /*A function to integrate the area below the continuum between x0 and x1  */
-  /*  for a given refrence energy */
-  function offset_eqn_integral(coeffs,refEnergy,x0,x1) {
-    x0 -= refEnergy;
-    x1 -= refEnergy;
-    var answer = 0.0;
-    for( var order = 0; order < coeffs.length; ++order ) {
-      var exp = order + 1.0;
-      answer += (coeffs[order]/exp) * (Math.pow(x1,exp) - Math.pow(x0,exp));
-    }
-    return answer;
-  };
-
   const coeffs = roi.coeffs;
   const referenceEnergy = roi.referenceEnergy;
   const lowerEnergy = roi.lowerEnergy;
@@ -10648,7 +10787,9 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const chi2 = peak.Chi2[0].toFixed(2);
   const area = peak.Amplitude[0].toFixed(1);
   const areaUncert = peak.Amplitude[1].toFixed(1);
-  const contArea = offset_eqn_integral(coeffs, referenceEnergy, lowerEnergy, upperEnergy).toFixed(1);
+
+
+  const contArea = self.offset_integral(roi,lowerEnergy, upperEnergy).toFixed(1);
 
   const info = {
     mean: mean, 
