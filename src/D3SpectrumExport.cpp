@@ -273,6 +273,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions(  string title,
   m_showComptonEdgeMarker( showComptonEdgeMarker ),
   m_showSumPeakMarker( showSumPeakMarker ),
   m_backgroundSubtract( backgroundSubtract ),
+  m_allowDragRoiExtent( false ),
   m_xMin( xMin ), m_xMax( xMax ),
   m_reference_lines_json( refernce_lines_json )
 {

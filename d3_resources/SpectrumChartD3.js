@@ -82,7 +82,9 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showSumPeaks = (typeof options.showSumPeaks == 'boolean') ? options.showSumPeaks : false;
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
   this.options.enableColorPicker = (typeof options.enableColorPicker == 'boolean') ? options.enableColorPicker : false;
-
+  this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
+  
+  
   // Set which spectrums to draw peaks for
   this.options.drawPeaksFor = {
     FOREGROUND: true,
@@ -701,7 +703,7 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   let index = -1;
   spectrumData = spectrumData.spectra[0];
 
-  console.log('setting ', spectrumData);
+  //console.log('setting ', spectrumData);
 
   // Set the ID if it was specified
   if (typeof id !== 'undefined') spectrumData.id = id;
@@ -779,11 +781,12 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   try
   {
     if( !data || !data.spectra ) throw null;
-    if( !Array.isArray(data.spectra) || data.spectra.length < 1 ) throw 'No spectrum-data specified';
+    if( !Array.isArray(data.spectra) || data.spectra.length < 1 )
+      throw 'No spectrum-data specified';
     /*check that x is same length or one longer than y. */
     /*Check that all specified y's are the same length */
   }catch(e){
-    if(e) console.log(e);
+    //if(e) console.log(e);
 
     // Christian [05122018]: Added other necessary display render methods to ensure consistency even when chart has no data
     this.options.scaleBackgroundSecondary = false;
@@ -1556,17 +1559,16 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
       return;
     } else if ( self.rightClickDown ){
-      
       self.handleCancelRoiDrag();
 
       /* Right Click Dragging: pans the chart left and right */
       self.handlePanChart();
-    } else if( self.rawData.spectra && self.rawData.spectra.length > 0 
-               && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width 
-              &&  !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey 
-              && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
-                 
-//Also check if we are between ymin and ymax of ROI....  This is where 
+    } else if( self.options.allowDragRoiExtent
+               && self.rawData.spectra && self.rawData.spectra.length > 0
+               && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width
+               && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey
+               && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
+      //Also check if we are between ymin and ymax of ROI....
       var onRoiEdge = false;
       self.rawData.spectra[0].peaks.forEach( function(roi){
         if( onRoiEdge )
@@ -1574,7 +1576,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
         var lpx = self.xScale(roi.lowerEnergy);
         var upx = self.xScale(roi.upperEnergy);
-
+        
         //Dont create handles for to narrow of a range (make user zoom in a bit more)
         if( (upx-lpx) < 15 )
           return;
@@ -1592,8 +1594,8 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         self.handleCancelRoiDrag();
         d3.select('body').style("cursor", "default");
       }
-    }
-    
+    }//if / else {what to do}
+      
 
     self.updateFeatureMarkers(-1);
   }
@@ -1603,6 +1605,13 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 SpectrumChartD3.prototype.showRoiDragOption = function(roi){
   let self = this;
 
+  if( d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
+      || d3.event.shiftKey || self.escapeKeyPressed )
+  {
+    self.handleCancelRoiDrag();
+    return;
+  }
+  
   let m = d3.mouse(self.vis[0][0]);
   let x = m[0], y = m[1];
 
@@ -1657,7 +1666,15 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
   let m = d3.mouse(self.vis[0][0]);
   let x = m[0], y = m[1];
 
-  console.log( 'handleRoiDrag' + self.roiDragMouseDown );
+  
+  if( d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
+     || d3.event.shiftKey || self.escapeKeyPressed )
+  {
+    self.handleCancelRoiDrag();
+    return;
+  }
+  
+  //console.log( 'handleRoiDrag' + self.roiDragMouseDown );
 
   if( self.roiDragLastCoord && Math.abs(x-self.roiDragLastCoord[0]) < 1 )
     return;
@@ -1805,7 +1822,6 @@ SpectrumChartD3.prototype.updateRoiBeingDragged = function( newroi ){
   if( !self.roiIsBeingDragged )
     return;
 
-  console.log( 'updateRoiBeingDragged - it would be nice to emit any pending drag requests' );
   window.clearTimeout(self.roiDragRequestTimeout);
   self.roiDragRequestTimeout = null;
   if( self.roiDragRequestTimeoutFcn ){
@@ -1950,7 +1966,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
   var self = this;
 
   return function () {
-    console.log("mousedown on plot function!"); 
+    //console.log("mousedown on plot function!");
     self.dragging_plot = true;
 
     self.updateFeatureMarkers(null);
@@ -1986,7 +2002,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       The d3.event.button condition is saved for other browsers, including Safari.
     */
     if( (d3.event.buttons === 1 || d3.event.button === 0) && m[0] >= 0 && m[0] < self.size.width && m[1] >= 0 && m[1] < self.size.height ) {    /* if left click-and-drag and mouse is in bounds */
-      console.log("left mousedown");
+      //console.log("left mousedown");
 
       /* Initially set the escape key flag false */
       self.escapeKeyPressed = false;
@@ -2037,8 +2053,8 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       return false;
 
     } else if ( d3.event.button === 2 ) {    /* listen to right-click mouse down event */
-      console.log("Right mouse down!");
-      console.log(d3.event);
+      //console.log("Right mouse down!");
+      //console.log(d3.event);
       self.rightClickDown = d3.mouse(document.body);
       self.rightClickDrag = false;
       self.origdomain = self.xScale.domain();
@@ -2056,7 +2072,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
   var self = this;
 
   return function () {
-    console.log("mouseup on vis!");
+    //console.log("mouseup on vis!");
 
     if (!d3.event)
       return;
@@ -2156,7 +2172,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
 
     let domain = self.xScale.domain();
     if( !self.origdomain || !domain || self.origdomain[0]!==domain[0] || self.origdomain[1]!==domain[1] ){
-      console.log( 'Mouseup xrangechanged' );
+      //console.log( 'Mouseup xrangechanged' );
       self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height );
     }
 
@@ -2215,8 +2231,9 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*If the user is doing anything else, return */
     /*Note that if you do a two finger pinch on a mac book pro, you get e.ctrlKey==true and e.composed==true  */
     if( !e || e.altKey || (e.ctrlKey && !e.composed) || e.shiftKey || e.metaKey || e.button != 0 /*|| e.buttons != 0*/ ) {
-     console.log( "Special condition with wheel, ignoring mousewheel e=" + e + ", e.altKey=" + e.altKey + ", e.ctrlKey=" + e.ctrlKey + ", e.shiftKey=" + e.shiftKey + ", e.metaKey=" + e.metaKey + ", e.button=" + e.button + ", e.buttons=" + e.buttons );
-     console.log( e );
+     console.log( "Special condition with wheel, ignoring mousewheel e=" + e + ", e.altKey="
+                  + e.altKey + ", e.ctrlKey=" + e.ctrlKey + ", e.shiftKey=" + e.shiftKey
+                  + ", e.metaKey=" + e.metaKey + ", e.button=" + e.button + ", e.buttons=" + e.buttons );
      return;
     }
 
@@ -3025,6 +3042,16 @@ SpectrumChartD3.prototype.keydown = function () {
 
     /*if (!self.selected) return; */
 
+    
+    if( self.roiDragBox && (d3.event.ctrlKey || d3.event.altKey || d3.event.metaKey || d3.event.shiftKey) ){
+      let needredraw = self.roiBeingDragged;
+      self.handleCancelRoiDrag();
+      d3.select('body').style("cursor", "default");
+      if( needredraw )
+        self.redraw()();
+    }
+    
+    
     switch (d3.event.keyCode) {
       case 27: { /*escape */
         self.escapeKeyPressed = true;
@@ -3035,8 +3062,10 @@ SpectrumChartD3.prototype.keydown = function () {
         self.fittingPeak = false;
         self.handleCancelAllMouseEvents()();
         self.handleCancelAnimationZoom();
+        self.handleCancelRoiDrag();
+        self.redraw()();
       }
-
+      
       case 8: /* backspace */
       case 46: { /* delete */
         break;
@@ -7007,7 +7036,7 @@ SpectrumChartD3.prototype.setShowUserLabels = function(d) {
 }
 
 SpectrumChartD3.prototype.setShowPeakLabels = function(d) {
-  console.log('calling show peak labels = ', d);
+  //console.log('calling show peak labels = ', d);
   this.options.showPeakLabels = d;
   this.redraw()();
 }
@@ -7962,8 +7991,12 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
   /* Christian: Just catching this weird error whenever user initially clicks the checkbox for one of the feature markers.
                 I'm guessing it is thrown because the mouse does not exist for the vis element, so we don't update the feature markers.
    */
-  try { d3.mouse(self.vis[0][0]) }                        
-  catch (error) { console.log( "Error thrown: source event is null" ); return; }  /* to catch and log certain error thrown in initial check of feature markers */
+  try {
+    d3.mouse(self.vis[0][0])
+  } catch (error) {
+    console.log( "Error thrown: source event is null" );
+    return;
+  }
 
   /* Positional variables (for mouse and touch) */
   var m = d3.mouse(self.vis[0][0]),
@@ -8796,7 +8829,7 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
   return function() {
     /* Cancel the animation once reached desired target domain */
     if (self.currentDomain == null || targetDomain == null || (self.currentDomain[0] == targetDomain[0] && self.currentDomain[1] == targetDomain[1])) {
-      console.log("Time for animation = ", Math.floor(Date.now()) - self.startAnimationZoomTime, " ms");
+      //console.log("Time for animation = ", Math.floor(Date.now()) - self.startAnimationZoomTime, " ms");
       self.handleCancelAnimationZoom();
       return;
     }
@@ -10073,6 +10106,63 @@ SpectrumChartD3.prototype.handleCancelTouchDeletePeak = function() {
 /**
  * -------------- Count Gammas Functions --------------
  */
+
+SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
+  let self = this;
+  var sum = 0.0;
+  
+  if( !spectrum || !spectrum.x || !spectrum.y )
+    return sum;
+  
+  var bounds = self.min_max_x_values();
+  var maxX = bounds[1];
+  var minX = bounds[0];
+  
+  lowerX = Math.min( maxX, Math.max(lowerX, minX) );
+  upperX = Math.max( minX, Math.min(upperX, maxX) );
+  
+  if (lowerX == upperX)
+    return sum;
+  
+  if (lowerX > upperX) {  /* swap the two values */
+    upperX = [lowerX, lowerX = upperX][0];
+  }
+  
+  var maxChannel = spectrum.x.length - 1;
+  var lowerChannel = d3.bisector(function(d){return d;}).left(spectrum.x,lowerX,1) - 1;
+  var upperChannel = d3.bisector(function(d){return d;}).left(spectrum.x,upperX,1) - 1;
+  
+  var lowerLowEdge = spectrum.x[lowerChannel];
+  var lowerBinWidth = lowerChannel < maxChannel ? spectrum.x[lowerChannel+1] - spectrum.x[lowerChannel]
+                                                : spectrum.x[lowerChannel] - spectrum.x[lowerChannel-1];
+  var lowerUpEdge = lowerLowEdge + lowerBinWidth;
+  
+  if (lowerChannel === upperChannel) {
+    var frac = (upperX - lowerX) / lowerBinWidth;
+    //console.log("lowerChannel == upper channel, counts = ", frac * spectrum.y[lowerChannel]);
+    return frac * spectrum.y[lowerChannel];
+  }
+  
+  var fracLowBin = (lowerUpEdge - lowerX) / lowerBinWidth;
+  sum += fracLowBin * spectrum.y[lowerChannel];
+  
+  var upperLowEdge = spectrum.x[upperChannel];
+  var upperBinWidth = upperChannel < maxChannel ? spectrum.x[upperChannel+1] - spectrum.x[upperChannel]
+                                                : spectrum.x[upperChannel] - spectrum.x[upperChannel-1];
+  var fracUpBin = (upperX - upperLowEdge) / upperBinWidth;
+  sum += fracUpBin * spectrum.y[upperChannel];
+  
+  
+  for (var channel = lowerChannel + 1; channel < upperChannel; channel++) {
+    sum += spectrum.y[channel];
+  }
+  
+  return sum;
+}
+
+/**
+ This function is really similar to SpectrumChartD3.prototype.handleTouchMoveCountGammas; they should be compined as much as possible.
+ */
 SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   var self = this
 
@@ -10093,72 +10183,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
 
   if (!self.countGammasMouse || !self.lastMouseMovePos || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
     return;
-
-  function maxChannelSpectrum() {
-    var result;
-    self.rawData.spectra.forEach(function(spectrum) {
-      if (!spectrum.points || !spectrum.points.length)
-        return;
-      if (!result || spectrum.points[spectrum.points.length-1].x > result.points[result.points.length-1].x)
-        result = spectrum;
-    });
-    return result;
-  }
-
-  function gammaIntegral(spectrum, lowerX, upperX) {
-    var sum = 0.0;
-    var countGammasBox = d3.select("#countGammasBox");
-
-    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || countGammasBox.empty() || !spectrum)
-      return sum;
-
-    var bounds = self.min_max_x_values();
-    var maxX = bounds[1];
-    var minX = bounds[0];
-
-    lowerX = Math.min( maxX, Math.max(lowerX, minX) );
-    upperX = Math.max( minX, Math.min(upperX, maxX) );
-
-    if (lowerX == upperX)
-      return sum;
-
-    if (lowerX > upperX) {  /* swap the two values */
-      var tmp = lowerX;
-      lowerX = upperX;
-      upperX = tmp;
-    }
-
-    var maxChannel = spectrum.points.length - 1;
-    var lowerChannel = d3.bisector(function(d){return d.x;}).left(spectrum.points,lowerX,1) - 1;
-    var upperChannel = d3.bisector(function(d){return d.x;}).left(spectrum.points,upperX,1) - 1;
-
-    var lowerLowEdge = spectrum.points[lowerChannel].x;
-    var lowerBinWidth = lowerChannel < spectrum.points.length - 1 ? spectrum.points[lowerChannel+1].x - spectrum.points[lowerChannel].x : 
-                                                                spectrum.points[lowerChannel].x - spectrum.points[lowerChannel-1].x;
-    var lowerUpEdge = lowerLowEdge + lowerBinWidth;
-
-    if (lowerChannel === upperChannel) {
-      var frac = (upperX - lowerX) / lowerBinWidth;
-      console.log("lowerChannel == upper channel, counts = ", frac * spectrum.points[lowerChannel].y);
-      return frac * spectrum.points[lowerChannel].y;
-    }
-
-    var fracLowBin = (lowerUpEdge - lowerX) / lowerBinWidth;
-    sum += fracLowBin * spectrum.points[lowerChannel].y;
-
-    var upperLowEdge = spectrum.points[upperChannel].x;
-    var upperBinWidth = upperChannel < spectrum.points.length - 1 ? spectrum.points[upperChannel+1].x - spectrum.points[upperChannel].x : 
-                                                                spectrum.points[upperChannel].x - spectrum.points[upperChannel-1].x;
-
-    var fracUpBin = (upperX - upperLowEdge) / upperBinWidth;
-    sum += fracUpBin * spectrum.points[upperChannel].y;
-
-    for (var channel = lowerChannel + 1; channel < upperChannel; channel++) {
-      sum += spectrum.points[channel].y;
-    }
-
-    return sum;
-  }
+  
   function needsDecimal(num) {
     return num % 1 != 0;
   }
@@ -10169,25 +10194,29 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   else if (self.lastMouseMovePos[0] > self.size.width)
     self.lastMouseMovePos[0] = self.size.width;
 
+  let startx = self.countGammasMouse[0];
+  let nowx = self.lastMouseMovePos[0];
+    
+    
   var countGammasBox = d3.select("#countGammasBox"),
       countGammasText = d3.select("#countGammasText"),
       countGammaRangeText = d3.select("#countGammaRangeText"),
       sigmaCount = d3.select("#sigmaCount");
   var countGammasRange = [ 
-      Number(self.xScale.invert(Number(self.countGammasMouse[0]).toFixed(1))), 
-      Number(self.xScale.invert(Number(self.lastMouseMovePos[0]).toFixed(1)))
+      Number(self.xScale.invert(Number(startx).toFixed(1))),
+      Number(self.xScale.invert(Number(nowx).toFixed(1)))
   ];
 
   /* Create the yellow box and text associated with it */
   if (countGammasBox.empty()) { 
     countGammasBox = self.vis.append("rect")
       .attr("id", "countGammasBox")
-      .attr("width", Math.abs( self.countGammasMouse[0] - self.lastMouseMovePos[0] ))
+      .attr("width", Math.abs( startx - nowx ))
       .attr("height", self.size.height)
       .attr("y", 0);
 
   } else {  /* Adjust the width of the erase peaks box */
-    countGammasBox.attr("width", Math.abs( self.countGammasMouse[0] - self.lastMouseMovePos[0] ));
+    countGammasBox.attr("width", Math.abs( startx - nowx ));
   }
   if (countGammasText.empty()) {
     countGammasText = self.vis.append("text")
@@ -10199,10 +10228,10 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   var ypos = Number(countGammasBox.attr("height"))/2 + 15;   /* signifies the y-position of the text displayed */
 
   /* Mouse position to the left of initial starting point of count gammas box */
-  if (self.lastMouseMovePos[0]  <= self.countGammasMouse[0]) {
+  if (nowx <= startx) {
     d3.selectAll('.asterickText').remove();
     countGammasBox.attr("class", "deletePeaksBox")
-      .attr("x", self.lastMouseMovePos[0]);
+      .attr("x", nowx);
     countGammasText.text("Will remove gamma count range");
 
     /* Move the count gammas text in the middle of the count gammas box */
@@ -10221,7 +10250,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
 
   } else {
     countGammasBox.attr("class", "countGammasBoxForward")
-      .attr("x", self.lastMouseMovePos[0] < self.countGammasMouse[0] ? self.lastMouseMovePos[0] : self.countGammasMouse[0]);
+      .attr("x", nowx < startx ? nowx : startx);
     countGammasText.text("Gamma Counts");
 
     if (countGammaRangeText.empty())
@@ -10256,7 +10285,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
     var spectrumSelector = 'Spectrum-' + spectrum.id;
     var spectrumCountsText = d3.select("#" + spectrumSelector + "CountsText");
     var spectrumScaleFactor = spectrum.yScaleFactor;
-    var nspectrum = gammaIntegral(spectrum, countGammasRange[0], countGammasRange[1]);
+    var nspectrum = self.gammaIntegral(spectrum, countGammasRange[0], countGammasRange[1]);
     var spectrumGammaCount = Number((spectrumScaleFactor * nspectrum).toFixed(2));
     var countsText;
 
@@ -10341,8 +10370,8 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
     d3.selectAll(".countGammasText").attr("fill-opacity", 0);
   else
     d3.selectAll(".countGammasText").attr("fill-opacity", 1);
-
 }
+
 
 SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
   var self = this;
@@ -10409,60 +10438,8 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
     return;
   }
 
-  function gammaIntegral(spectrum, lowerX, upperX) {
-    var sum = 0.0;
-    var countGammasBox = d3.select("#countGammasBox");
-
-    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || countGammasBox.empty() || !spectrum)
-      return sum;
-
-    var bounds = self.min_max_x_values();
-    var maxX = bounds[1];
-    var minX = bounds[0];
-
-    lowerX = Math.min( maxX, Math.max(lowerX, minX) );
-    upperX = Math.max( minX, Math.min(upperX, maxX) );
-
-    if (lowerX == upperX)
-      return sum;
-
-    if (lowerX > upperX) {  /* swap the two values */
-      var tmp = lowerX;
-      lowerX = upperX;
-      upperX = tmp;
-    }
-
-    var maxChannel = spectrum.points.length - 1;
-    var lowerChannel = d3.bisector(function(d){return d.x;}).left(spectrum.points,lowerX,1) - 1;
-    var upperChannel = d3.bisector(function(d){return d.x;}).left(spectrum.points,upperX,1) - 1;
-
-    var lowerLowEdge = spectrum.points[lowerChannel].x;
-    var lowerBinWidth = lowerChannel < spectrum.points.length - 1 ? spectrum.points[lowerChannel+1].x - spectrum.points[lowerChannel].x : 
-                                                                spectrum.points[lowerChannel].x - spectrum.points[lowerChannel-1].x;
-    var lowerUpEdge = lowerLowEdge + lowerBinWidth;
-
-    if (lowerChannel === upperChannel) {
-      var frac = (upperX - lowerX) / lowerBinWidth;
-      console.log("lowerChannel == upper channel, counts = ", frac * spectrum.points[lowerChannel].y);
-      return frac * spectrum.points[lowerChannel].y;
-    }
-
-    var fracLowBin = (lowerUpEdge - lowerX) / lowerBinWidth;
-    sum += fracLowBin * spectrum.points[lowerChannel].y;
-
-    var upperLowEdge = spectrum.points[upperChannel].x;
-    var upperBinWidth = upperChannel < spectrum.points.length - 1 ? spectrum.points[upperChannel+1].x - spectrum.points[upperChannel].x : 
-                                                                spectrum.points[upperChannel].x - spectrum.points[upperChannel-1].x;
-
-    var fracUpBin = (upperX - upperLowEdge) / upperBinWidth;
-    sum += fracUpBin * spectrum.points[upperChannel].y;
-
-    for (var channel = lowerChannel + 1; channel < upperChannel; channel++) {
-      sum += spectrum.points[channel].y;
-    }
-
-    return sum;
-  }
+ 
+  
   function needsDecimal(num) {
     return num % 1 != 0;
   }
@@ -10488,17 +10465,20 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
       self.xScale.invert(leftStartTouch[0]), 
       Math.min(self.xScale.invert(rightTouch[0]), self.xScale.domain()[1])
   ];
+  
+  let startx = leftStartTouch[0];
+  let nowx = rightTouch[0];
 
   /* Create the yellow box and text associated with it */
   if (countGammasBox.empty()) { 
     countGammasBox = self.vis.append("rect")
       .attr("id", "countGammasBox")
-      .attr("width", Math.min( Math.abs( leftStartTouch[0] - rightTouch[0] ) , Math.abs( self.xScale.range()[1] - leftStartTouch[0] ) ))
+      .attr("width", Math.min( Math.abs( startx - nowx ) , Math.abs( self.xScale.range()[1] - startx ) ))
       .attr("height", self.size.height)
       .attr("y", 0);
 
   } else {  /* Adjust the width of the erase peaks box */
-    countGammasBox.attr("width", Math.min( Math.abs( leftStartTouch[0] - rightTouch[0] ) , Math.abs( self.xScale.range()[1] - leftStartTouch[0] ) ));
+    countGammasBox.attr("width", Math.min( Math.abs( startx - nowx ) , Math.abs( self.xScale.range()[1] - startx ) ));
   }
   if (countGammasText.empty()) {
     countGammasText = self.vis.append("text")
@@ -10510,9 +10490,9 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
   var ypos = Number(countGammasBox.attr("height"))/2 + 15;   /* signifies the y-position of the text displayed */
 
   /* Mouse position to the left of initial starting point of count gammas box */
-  if (rightTouch[0]  <= leftStartTouch[0]) {
+  if (nowx  <= startx) {
     countGammasBox.attr("class", "deletePeaksBox")
-      .attr("x", rightTouch[0]);
+      .attr("x", nowx);
     countGammasText.text("Will remove gamma count range");
 
     /* Move the count gammas text in the middle of the count gammas box */
@@ -10532,7 +10512,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
 
   } else {
     countGammasBox.attr("class", "countGammasBoxForward")
-      .attr("x", rightTouch[0] < leftStartTouch[0] ? rightTouch[0] : leftStartTouch[0]);
+      .attr("x", nowx < startx ? nowx : startx);
     countGammasText.text("Gamma Counts");
 
     if (countGammaRangeText.empty())
@@ -10567,7 +10547,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
     var spectrumSelector = 'Spectrum-' + spectrum.id;
     var spectrumCountsText = d3.select("#" + spectrumSelector + "CountsText");
     var spectrumScaleFactor = spectrum.yScaleFactor;
-    var nspectrum = gammaIntegral(spectrum, countGammasRange[0], countGammasRange[1]);
+    var nspectrum = self.gammaIntegral(spectrum, countGammasRange[0], countGammasRange[1]);
     var spectrumGammaCount = Number((spectrumScaleFactor * nspectrum).toFixed(2));
     var countsText;
 

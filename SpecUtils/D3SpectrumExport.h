@@ -155,6 +155,7 @@ namespace D3SpectrumExport
     bool m_showPeakUserLabels, m_showPeakEnergyLabels, m_showPeakNuclideLabels, m_showPeakNuclideEnergyLabels;
     bool m_showEscapePeakMarker, m_showComptonPeakMarker, m_showComptonEdgeMarker, m_showSumPeakMarker;
     bool m_backgroundSubtract;
+    bool m_allowDragRoiExtent;
     
     float m_xMin, m_xMax; // energy range user is zoomed into
     
