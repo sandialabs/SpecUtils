@@ -40,7 +40,7 @@ SpectrumChartD3 = function(elem, options) {
 
   this.options = options || {}; 
   
-  //if( options.yscale !== "lin" && options.yscale !== "linear" && options.yscale !== "log" && options.yscale !== "sqrt" )
+  //if( (typeof this.options.yscale) !== 'string' || (['lin', 'log', 'sqrt'].indexOf(this.options.yscale) < 0) ) this.options.yscale = "lin";
   if( (typeof this.options.yscale) !== 'string' ) this.options.yscale = "lin";
   if( (typeof this.options.gridx) !== 'boolean' ) this.options.gridx = false;
   if( (typeof this.options.gridy) !== 'boolean' ) this.options.gridy = false;
@@ -78,6 +78,7 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showMouseStats = (typeof options.showMouseStats == 'boolean') ? options.showMouseStats : true;
   this.options.showComptonEdge = (typeof options.showComptonEdge == 'boolean') ? options.showComptonEdge : false;
   this.options.showComptonPeaks = (typeof options.showComptonPeaks == 'boolean') ? options.showComptonPeaks : false;
+  this.options.comptonPeakAngle = (typeof options.comptonPeakAngle == 'number' && !isNaN(options.comptonPeakAngle)) ? options.comptonPeakAngle : 180;
   this.options.showEscapePeaks = (typeof options.showEscapePeaks == 'boolean') ? options.showEscapePeaks : false;
   this.options.showSumPeaks = (typeof options.showSumPeaks == 'boolean') ? options.showSumPeaks : false;
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
@@ -154,13 +155,17 @@ SpectrumChartD3 = function(elem, options) {
   /* drag x-axis logic */
   this.downx = Math.NaN;
 
-  /* y-scale (inverted domain) */
-  this.yScale = d3.scale.linear()
-      .domain([0, 100])
-      .nice()
-      .range([0, this.size.height])
-      .nice();
-
+  if( this.options.yscale === "log" ) {
+    this.yScale = d3.scale.log().clamp(true).domain([0, 100]).nice().range([1, this.size.height]).nice();
+  } else if( this.options.yscale === "sqrt" ) {
+    this.yScale = d3.scale.pow().exponent(0.5).domain([0, 100]).range([0, this.size.height]);
+  } else {
+    this.yScale = d3.scale.linear().domain([0, 100]).nice().range([0, this.size.height]).nice();
+  }
+  
+  if( this.yGrid )
+    this.yGrid.scale( this.yScale );
+      
   this.downy = Math.NaN;
 
   /* Finds distance between two points */
@@ -1014,6 +1019,7 @@ SpectrumChartD3.prototype.redraw = function() {
     
     self.drawPeaks();
     self.drawSearchRanges();
+    self.drawHighlightRegions();
     self.drawRefGammaLines();
     self.updateMouseCoordText();
 
@@ -3235,6 +3241,64 @@ SpectrumChartD3.prototype.drawSearchRanges = function() {
     .attr("y1", h )  //needed for initial load sometimes
     .attr("y2", '0' /*function(d){ return self.options.refLineTopPad; }*/ );
 }//drawSearchRanges(...)
+
+
+
+SpectrumChartD3.prototype.drawHighlightRegions = function(){
+  var self = this;
+  
+  if( !Array.isArray(self.highlightRegions) || self.highlightRegions.length===0 )
+    return;
+  
+  //highlightRegions is array of form: [{lowerEnergy,upperEnergy,fill,hash}]
+ 
+  if( !self.highlightRegions || !self.highlightRegions.length ){
+    self.vis.selectAll("g.highlight").remove();
+    return;
+  }
+ 
+  let domain = self.xScale.domain();
+  let lx = domain[0], ux = domain[1];
+ 
+  let inrange = [];
+ 
+  self.highlightRegions.forEach( function(w){
+    let lw = w.lowerEnergy;
+    let uw = w.upperEnergy;
+   
+    if( (uw > lx && uw < ux) || (lw > lx && lw < ux) || (lw <= lx && uw >= ux) )
+      inrange.push(w);
+  } );
+ 
+  var tx = function(d) { return "translate(" + self.xScale(Math.max(lx,d.lowerEnergy)) + ",0)"; };
+  var gy = self.vis.selectAll("g.highlight")
+               .data( inrange, function(d){return d;} )
+               .attr("transform", tx);
+ 
+  var gye = gy.enter().insert("g", "a")
+               .attr("class", "highlight")
+               .attr("transform", tx);
+ 
+  let h = self.size.height;
+ 
+  gye.append("rect")
+   //.attr("class", "d3closebut")
+     .attr('y', '0' /*function(d){ return self.options.refLineTopPad;}*/ )
+     .attr("x", "0" )
+     .style("fill", function(d){return d.fill;} );
+ 
+  /* Remove old elements as needed. */
+  gy.exit().remove();
+ 
+  gy.select("rect")
+    .attr('height', h /*-self.options.refLineTopPad*/ )
+    .attr('width', function(d){
+      let le = Math.max( lx, d.lowerEnergy );
+      let ue = Math.min( ux, d.upperEnergy );
+      return self.xScale(ue) - self.xScale(le);
+ } );
+}//drawHighlightRegions(...)
+
 
 /**
  * -------------- Reference Gamma Lines Functions --------------
@@ -8352,7 +8416,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
   function updateComptonPeaks() {
 
-    var compAngleRad = self.comptonPeakAngle * (3.14159265/180.0)   /* calculate radians of compton peak angle */
+    var compAngleRad = self.options.comptonPeakAngle * (3.14159265/180.0)   /* calculate radians of compton peak angle */
     var comptonPeakEnergy = energy / (1 + ((energy/510.99891)*(1-Math.cos(compAngleRad)))); /* get energy value from angle and current energy position */
     var comptonPeakPix = self.xScale(comptonPeakEnergy);
 
@@ -8395,7 +8459,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
         .attr("class", "peakText")
         .attr( "x", comptonPeakPix + xmax/200 )
         .attr( "y", self.size.height/10)
-        .text( self.comptonPeakAngle + "° Compton Peak" );
+        .text( self.options.comptonPeakAngle + "° Compton Peak" );
       self.comptonPeakMeas = self.vis.append("text")
         .attr("class", "peakText")
         .attr( "x", comptonPeakPix + xmax/125 )
@@ -8411,7 +8475,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       self.comptonPeakText
         .attr("x", comptonPeakPix + xmax/200 )
         .attr( "y", self.size.height/10)
-        .text( self.comptonPeakAngle + "° Compton Peak" );
+        .text( self.options.comptonPeakAngle + "° Compton Peak" );
       self.comptonPeakMeas
         .attr( "x", comptonPeakPix + xmax/125 )
         .attr( "y", self.size.height/7.8)
@@ -8771,17 +8835,15 @@ SpectrumChartD3.prototype.setComptonEdge = function(d) {
 SpectrumChartD3.prototype.setComptonPeakAngle = function(d) {
   var value = Number(d);
   if (!isNaN(value) && 0 <= value && value <= 180 ) 
-    this.comptonPeakAngle = value;
+    this.options.comptonPeakAngle = value;
   else {
-    this.comptonPeakAngle = 180;  /* default angle is set to 180 degrees */
+    this.options.comptonPeakAngle = 180;  /* default angle is set to 180 degrees */
   }
   this.updateFeatureMarkers();
 }
 
 SpectrumChartD3.prototype.setComptonPeaks = function(d) {
   this.options.showComptonPeaks = d;
-  if ( !this.comptonPeakAngle )
-    this.comptonPeakAngle = 180;
   if ( d ) {
     this.updateFeatureMarkers();
   }
@@ -8813,6 +8875,23 @@ SpectrumChartD3.prototype.setSearchWindows = function(ranges) {
     self.searchEnergyWindows.sort( function(l,r){ return l.energy < r.energy }  )
   }
 
+  self.redraw()();
+}
+
+//Function that takes regions to draw in a solid fill.
+//[{lowerEnergy: 90, upperEnergy: 112, fill: 'rgba(23,53,12,0.1)', hash: 123112319}, ...]
+SpectrumChartD3.prototype.setHighlightRegions = function(ranges) {
+  var self = this;
+  
+  if( !Array.isArray(ranges) || ranges.length===0 ){
+    self.highlightRegions = null;
+    self.vis.selectAll("g.highlight").remove(); //drawHighlightRegions() returns immediatelt if self.highlightRegions is null.
+  } else {
+    //ToDo: add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
+    self.highlightRegions = ranges;
+    self.highlightRegions.sort( function(l,r){ return l.lowerEnergy < r.lowerEnergy }  )
+  }
+  
   self.redraw()();
 }
 
