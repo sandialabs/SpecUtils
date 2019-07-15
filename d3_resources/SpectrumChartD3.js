@@ -56,6 +56,9 @@ SpectrumChartD3 = function(elem, options) {
   if(typeof options.animationDuration !== 'number' || options.animationDuration < 0) this.options.animationDuration = 1000;
   this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
   if( (typeof this.options.showXAxisSliderChart) !== 'boolean' ) this.options.showXAxisSliderChart = false;
+  
+  if( (typeof options.sliderChartHeightFraction !== 'number') || options.sliderChartHeightFraction <= 0 || options.sliderChartHeightFraction > 0.75 )
+    this.options.sliderChartHeightFraction = 0.1;
 
   this.options.allowPeakFit = /*(typeof options.allowPeakFit == 'boolean') ? options.allowPeakFit :*/ false;
 
@@ -86,6 +89,7 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showSumPeaks = (typeof options.showSumPeaks == 'boolean') ? options.showSumPeaks : false;
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
   this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
+  
   
   
   // Set which spectrums to draw peaks for
@@ -119,8 +123,8 @@ SpectrumChartD3 = function(elem, options) {
   this.size = {
     "width":  Math.max(0, this.cx - this.padding.leftComputed - this.padding.right),
     "height": Math.max(0, this.cy - this.padding.topComputed  - this.padding.bottomComputed),
-    "sliderChartHeight": (this.cy - this.padding.topComputed  - this.padding.bottomComputed) / 10,
-    "sliderChartWidth": this.cx - this.padding.leftComputed - this.padding.right - 30,
+    "sliderChartHeight": 0,
+    "sliderChartWidth": 0,
   };
 
   /**
@@ -1250,11 +1254,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   
   this.cx = this.chart.clientWidth;
   this.cy = this.chart.clientHeight;
-
-  if (self.sliderChartPlot) {
-    this.cy -= self.size.sliderChartHeight + self.padding.sliderChart + 
-      (self.xaxistitle != null && !d3.select(self.xaxistitle).empty() ? self.xaxistitle[0][0].clientHeight + 20 : 20); 
-  }
   
   var titleh = 0, xtitleh = 0, xlabelh = 7 + 22;
   if( this.options.title ) {
@@ -1281,15 +1280,18 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.padding.bottomComputed = -12 + this.padding.bottom + xlabelh + (xtitleh > 0 ? this.padding.xTitlePad : 0) + xtitleh; 
   }
   
-  
-  /* console.log("height beore") */
-  this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed);
-  this.size.sliderChartHeight = this.size.height / 10;
- 
   this.calcLeftPadding( false );
+  
+  if( self.sliderChartPlot ) {
+    let ypad = self.padding.sliderChart + this.padding.topComputed + this.padding.bottomComputed;
+    this.size.sliderChartHeight = Math.max( 0, self.options.sliderChartHeightFraction*(this.cy - ypad) );
+    this.size.sliderChartWidth = this.cx - this.padding.leftComputed - this.padding.right - 30;
+  } else {
+    this.size.sliderChartHeight = 0;
+  }
  
   this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right);
-  this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed);
+  this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed - this.size.sliderChartHeight);
 
   this.xScale.range([0, this.size.width]);
   this.vis.attr("width",  this.size.width)
@@ -1388,10 +1390,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.scalerWidget.attr("transform", "translate(" + Math.max(0,scalerx) + "," + Math.max(scalery,0) + ")" );
   }
 
-  if (!self.sliderChartWidthFactor) self.sliderChartWidthFactor = this.svg[0][0].clientWidth - self.size.sliderChartWidth;
-  if (!self.sliderChartHeightFactor) self.sliderChartHeightFactor = self.size.sliderChartHeight / this.svg[0][0].clientHeight;
-  self.size.sliderChartWidth = this.svg[0][0].clientWidth - self.sliderChartWidthFactor;
-  self.size.sliderChartHeight = self.sliderChartHeightFactor * this.svg[0][0].clientHeight;
   if (this.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
   else                                   { self.cancelXAxisSliderChart(); }
   
@@ -4748,13 +4746,14 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   var self = this;
 
   // Cancel if the chart or raw data are not present
-  if (!self.chart || d3.select(self.chart).empty() || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
-    || self.size.height<=0 ) {
+  if (!self.chart || d3.select(self.chart).empty() || !self.rawData
+    || !self.rawData.spectra || !self.rawData.spectra.length || self.size.height<=0 ) {
     self.cancelXAxisSliderChart();
     return;
   }
+    
   // Cancel the action and clean up if the option for the slider chart is not checked
-  if (!self.options.showXAxisSliderChart && self.origBBox && self.origHeight) {
+  if( !self.options.showXAxisSliderChart ) {
     self.cancelXAxisSliderChart();
     return;
   }
@@ -4803,38 +4802,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     }
   }
 
-  // Ensure that the slider chart height is always 1/10 of the chart height (for resizes)
-  self.size.sliderChartHeight = self.size.height / 10;
-
-  // Starting height of the chart (in px)
-  var startingHeight = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
-
-  // Extra padding calculated if x-axis title is present
-  var extraPadding = self.xaxistitle != null && !d3.select(self.xaxistitle).empty() ? self.xaxistitle[0][0].clientHeight + 20 : 20;
-
-  // Store the original bounding box and height of the chart without the x-axis slider chart
-  if (!self.origBBox || !self.origHeight) {
-    self.origBBox = d3.select(self.chart).select('svg').attr("viewBox");
-    self.origHeight = d3.select(self.chart).select('svg').attr("height");
-  }
-  self.origBBox = d3.select(self.chart).select('svg').attr("viewBox");
-
-  // Calculate the final chart height and position for storing the slider chart
-  var height = (Number(self.origHeight) + self.size.sliderChartHeight + extraPadding + self.padding.sliderChart);
-
-  // Set the chart svg viewBox and height accordingly to store the slider chart
-  d3.select(self.chart).select('svg')
-    .attr("viewBox", function() {
-      var viewBox = self.origBBox.split(' ');
-      return viewBox[0] + " " + viewBox[1] + " " + viewBox[2] + " " + height;
-    })
-    .attr("height", height);
-
-  // Set the chart style height to have room for the slider chart
-  if (startingHeight.toFixed() != (Number(self.origHeight) + self.size.sliderChartHeight + extraPadding + self.padding.sliderChart).toFixed()) {
-    d3.select(this.chart)[0][0].style.height = height + "px";
-  }
-
   // Store the original x and y-axis domain (we'll use these to draw the slider lines and position the slider box)
   var origdomain = self.xScale.domain();
   var origdomainrange = self.xScale.range();
@@ -4851,11 +4818,11 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   self.yScale.domain(self.getYAxisDomain());
 
   // Draw the elements for the slider chart
-  if (d3.select("#sliderChart").empty()) {
+  if( !self.sliderChart ) {
 
     // G element of the slider chart
-    self.sliderChart = d3.select("svg").append("g").attr("id", "sliderChart")
-      .attr("transform", "translate(" + self.padding.leftComputed + "," + (480 + extraPadding + self.padding.sliderChart) + ")")
+    self.sliderChart = d3.select("svg").append("g")
+      .attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
       // .on("mousemove", self.handleMouseMoveSliderChart());
       .on("touchstart", self.handleTouchStartSliderChart())
       .on("touchmove", self.handleTouchMoveSliderChart());
@@ -4882,7 +4849,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
 
     // For adding peaks into slider chart 
-    // self.sliderPeakVis = d3.select("#sliderChart").append('g')
+    // self.sliderPeakVis = self.sliderChart.append('g')
     //   .attr("id", "sliderPeakVis")
     //   .attr("class", "peakVis")
     //   .attr("transform", "translate(0,0)")
@@ -4890,6 +4857,13 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
   } else {
     // Adjust the width, height, and transform for the slider chart elements (for resizing)
+    //console.log( 'self.chart.clientHeight=' + self.chart.clientHeight
+    //             + ', self.size.sliderChartHeight=' + self.size.sliderChartHeight
+    //            + ', self.size.height=' + self.size.height
+    //            + ', self.padding.sliderChart=' + self.padding.sliderChart );
+    
+    self.sliderChart.attr("transform", "translate(" + self.padding.leftComputed + "," + (self.chart.clientHeight - self.size.sliderChartHeight) + ")")
+    
     self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
       .attr("height", self.size.sliderChartHeight);
     self.sliderChartClipPath.attr("width", self.size.sliderChartWidth)
@@ -4917,9 +4891,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   if (!self.sliderBox) {
     // Slider box
     self.sliderBox = self.sliderChart.append("rect")
-      .attr("id", "sliderBox")
       .attr("class", "sliderBox")
-      .attr("height", self.size.sliderChartHeight)
       .on("mousedown", self.handleMouseDownSliderBox())
       .on("touchstart", self.handleTouchStartSliderBox())
       .on("touchmove", self.handleTouchMoveSliderChart());
@@ -4950,11 +4922,12 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   }
 
   var sliderBoxX = self.xScale(origdomain[0]);
-  var sliderBoxWidth = self.xScale(origdomain[1]) - self.xScale(origdomain[0]);
+  var sliderBoxWidth = self.xScale(origdomain[1]) - sliderBoxX;
 
   // Adjust the position of the slider box to the particular zoom region
   self.sliderBox.attr("x", sliderBoxX)
-    .attr("width", sliderBoxWidth);
+    .attr("width", sliderBoxWidth)
+    .attr("height", self.size.sliderChartHeight);
     // .on("mousemove", self.handleMouseMoveSliderChart());
 
   self.sliderDragLeft.attr("width", self.size.sliderChartWidth/100)
@@ -5009,17 +4982,12 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
 SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   var self = this;
 
-  if (!self.sliderChart)
+  if( !self.sliderChart )
     return;
-    
-  self.size.sliderChartHeight = self.size.height / 10;
 
   var height = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
 
-  if (!self.origBBox || !self.origHeight) {
-    return;
-  }
-
+  
   if (self.sliderChart) {
     self.sliderChart.remove();
     self.sliderChartBody.remove();
@@ -5042,27 +5010,19 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
     self.sliderBox = null;
   }
 
-  d3.select(self.chart)[0][0].style.height = self.origHeight + "px";
-  this.svg.attr("viewBox", function() {
-    var viewBoxAttrs = self.origBBox.split(' ');
-    viewBoxAttrs[3] = self.origHeight.toString();
-    return viewBoxAttrs.join(' ');
-  });
-  this.svg.attr("height", self.origHeight);
-
-  self.origBBox = null;
-  self.origHeight = null;
-
   self.sliderBoxDown = false;
   self.leftDragRegionDown = false;
   self.rightDragRegionDown = false;
   self.sliderChartMouse = null;
   self.savedSliderMouse = null;
+  
+  this.handleResize( false );
 }
 
 SpectrumChartD3.prototype.setShowXAxisSliderChart = function(d) {
   this.options.showXAxisSliderChart = d;
   this.drawXAxisSliderChart();
+  this.handleResize( false );
 }
 
 SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
