@@ -395,7 +395,6 @@
     var setXRangeArrows = function(sel) { graph.setXRangeArrows(sel.checked); };
     var setShowXAxisSliderChart = function(sel) { graph.setShowXAxisSliderChart(sel.checked); }
     var setBackgroundSubtract = function(sel){ graph.setBackgroundSubtract(sel.checked); }
-    var setEnableColorPicker = function(sel) { graph.setEnableColorPicker(sel.checked); }
 
     var setSpectrumScaleFactorWidget = function(sel) { graph.setSpectrumScaleFactorWidget(sel.checked); }
     var setDropDownSpectrumScaleFactor = function(sel) { graph.setDropDownSpectrumScaleFactor(sel.value); }
@@ -477,8 +476,6 @@
 <br />
 <label><input type="checkbox" onchange="setAdjustYAxisPadding(this);" checked>Adjust for y-labels</label>
 <label><input type="checkbox" onchange="setWheelScrollYAxis(this);" checked>Scroll over y-axis zooms-y</label>
-<label><input type="checkbox" onchange="setEnableColorPicker(this);">Enable Color Picker</label>
-
 
 <br />
 <label><input type="checkbox" onchange="setComptonEdge(this);">Show compton edge</label>

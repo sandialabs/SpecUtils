@@ -25,6 +25,9 @@ Feature TODO list (created 20160220):
   - Optimize frequency of rebinning of data (prevent extra rebinned data from being drawn)
   - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
   - x-axis slider chart doesnt work in InterSpec because it adds to the height, not a "in-place" thing - maybe change this
+  - Move to using D3 v5 with modules to minimize code sizes and such.
+  - Start compiling with babel to take care of all the poly fills.
+  - lots of other issues
 */
 
 SpectrumChartD3 = function(elem, options) {
@@ -82,7 +85,6 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showEscapePeaks = (typeof options.showEscapePeaks == 'boolean') ? options.showEscapePeaks : false;
   this.options.showSumPeaks = (typeof options.showSumPeaks == 'boolean') ? options.showSumPeaks : false;
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
-  this.options.enableColorPicker = (typeof options.enableColorPicker == 'boolean') ? options.enableColorPicker : false;
   this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
   
   
@@ -153,7 +155,7 @@ SpectrumChartD3 = function(elem, options) {
       .range([0, this.size.width]);
 
   /* drag x-axis logic */
-  this.downx = Math.NaN;
+  this.xaxisdown = null;
 
   if( this.options.yscale === "log" ) {
     this.yScale = d3.scale.log().clamp(true).domain([0, 100]).nice().range([1, this.size.height]).nice();
@@ -166,7 +168,7 @@ SpectrumChartD3 = function(elem, options) {
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
       
-  this.downy = Math.NaN;
+  this.yaxisdown = Math.NaN;
 
   /* Finds distance between two points */
   this.dist = function (a, b) {
@@ -243,7 +245,7 @@ SpectrumChartD3 = function(elem, options) {
   this.do_rebin();
 
   this.setYAxisDomain = function(){
-    if( !isNaN(self.downy) )
+    if( !isNaN(self.yaxisdown) )
       return;
     var yaxisDomain = self.getYAxisDomain(),
         y1 = yaxisDomain[0],
@@ -254,7 +256,7 @@ SpectrumChartD3 = function(elem, options) {
 
 
   /* drag y-axis logic */
-  this.downy = Math.NaN;
+  this.yaxisdown = Math.NaN;
 
   this.dragged = this.selected = null;
 
@@ -366,7 +368,13 @@ SpectrumChartD3 = function(elem, options) {
   this.xAxisBody = this.vis.append("g")
     .attr("class", "xaxis" )
     .attr("transform", "translate(0," + this.size.height + ")")
-    .call(this.xAxis);
+    .style("cursor", "ew-resize")
+    //.on("mouseover", function(d, i) { /*d3.select(this).style("font-weight", "bold");*/})
+    //.on("mouseout",  function(d) { /*d3.select(this).style("font-weight", null);*/ })
+    .on("mousedown.drag",  self.xaxisDrag())
+    .on("touchstart.drag", self.xaxisDrag())
+    .call(this.xAxis)
+    ;
 
   this.vis.append("svg:clipPath")
     .attr("id", "clip" + this.chart.id )
@@ -798,7 +806,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     this.removeSpectrumScaleFactorWidget();
     this.updateLegend();
     this.drawXAxisSliderChart();
-    this.updateColorPickerItems();
 
     this.redraw()();
     return;
@@ -903,7 +910,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     });
   }
 
-  this.updateColorPickerItems();
   this.addMouseInfoBox();
 
   this.updateLegend();
@@ -1479,7 +1485,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     self.mousemove()();
 
     /* If no data is detected, then stop updating other mouse move parameters */
-    if(!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || !isNaN(self.downx) || !isNaN(self.downy) || self.legdown || self.scalerdown) 
+    if(!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown || self.scalerdown)
       return;
 
     /* Prevent and stop default events from ocurring */
@@ -1889,8 +1895,8 @@ SpectrumChartD3.prototype.handleChartMouseUp = function() {
   var self = this;
 
   return function () {
-    self.downx = Math.NaN;
-    self.downy = Math.NaN;
+    self.xaxisdown = null;
+    self.yaxisdown = Math.NaN;
     d3.select(document.body).style("cursor", "default");
 
     /* Here we can decide to either zoom-in or not after we let go of the left-mouse button from zooming in on the CHART.
@@ -1982,9 +1988,9 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 
     registerKeyboardHandler(self.keydown());
 
-    if( !isNaN(self.downx) || !isNaN(self.downy) || self.legdown || self.scalerdown )
+    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown || self.scalerdown )
     {
-        console.log( "Is null down" )
+      console.log( "Is null down" )
       return;
     }
 
@@ -2151,7 +2157,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
       }
     }
 
-    if( !isNaN(self.downx) || !isNaN(self.downy) || self.legdown || self.scalerdown )
+    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown || self.scalerdown )
       return;
 
     /* Handle fitting peaks (if needed) */
@@ -2964,24 +2970,36 @@ SpectrumChartD3.prototype.mousemove = function () {
       /*self.dragged.y = self.yScale.invert(Math.max(0, Math.min(self.size.height, p[1]))); */
       self.update(false); /* boolean set to false to indicate no animation needed */
     };
-    if (!isNaN(self.downx) && self.xScale.invert(p[0]) > 0) {       /* make sure that xaxisDrag does not go lower than 0 (buggy behavior) */
-
-      /* We make it here when a x-axis label is clicked on, and has been dragged a bit */
+    if( self.xaxisdown && self.xScale.invert(p[0]) > 0) {       /* make sure that xaxisDrag does not go lower than 0 (buggy behavior) */
+      /* We make it here when a x-axis is clicked on, and has been dragged a bit */
       d3.select('body').style("cursor", "ew-resize");
-      var rupx = self.xScale.invert(p[0]),
-          xaxis1 = self.xScale.domain()[0],
-          xaxis2 = self.xScale.domain()[1],
-          xextent = xaxis2 - xaxis1;
-      if (rupx != 0) {
-        var changex, new_domain;
-        changex = self.downx / rupx;
-        new_domain = [xaxis1, xaxis1 + (xextent * changex)];
-
-        if( self.rawData && self.rawData.spectra && self.rawData.spectra.length && new_domain[1] > self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1] )
-          new_domain[1] = self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1];
-
+      
+      let newenergy = self.xScale.invert(p[0]);
+      
+      if ( self.rawData && self.rawData.spectra && self.rawData.spectra.length ) {
+        let origxmin = self.xaxisdown[1];
+        let origxmax = self.xaxisdown[2];
+        let e_width = origxmax - origxmin;
+        
+        let newEnergyFrac = (newenergy - self.xScale.domain()[0]) / (origxmax - origxmin);
+        let newX0 = self.xaxisdown[0] - newEnergyFrac*e_width;
+        let newX1 = self.xaxisdown[0] + (1-newEnergyFrac)*e_width;
+ 
+        let lowerData = self.rawData.spectra[0].x[0];
+        let upperData = self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1];
+       
+        if( newX0 < lowerData ){
+          newX1 = Math.min( upperData, newX1 + (lowerData - newX0) );
+          newX0 = lowerData;
+        }
+       
+        if( newX1 > upperData ){
+          newX0 = Math.max( lowerData, newX0 - (newX1 - upperData) );
+          newX1 = upperData;
+        }
+       
         //we'll emit on mouse up - ToDo: set a timer to periodically emit 'xrangechanged' while dragging.
-        self.setXAxisRange(new_domain[0], new_domain[1], false); 
+        self.setXAxisRange(newX0, newX1, false);
         self.redraw()();
       }
 
@@ -2989,17 +3007,64 @@ SpectrumChartD3.prototype.mousemove = function () {
       d3.event.stopPropagation();
     };
 
-    if (!isNaN(self.downy)) {
+    if (!isNaN(self.yaxisdown)) {
+      let olddomain = self.getYAxisDomain();
+      let old_ymax = olddomain[0];
+      let old_ymin = olddomain[1];
+      
       d3.select('body').style("cursor", "ns-resize");
       var rupy = self.yScale.invert(p[1]),
           yaxis1 = self.yScale.domain()[1],
           yaxis2 = self.yScale.domain()[0],
           yextent = yaxis2 - yaxis1;
+          
       if (rupy > 0) {
         var changey, new_domain;
-        changey = self.downy / rupy;
-        new_domain = [yaxis1 + (yextent * changey), yaxis1];
+        changey = self.yaxisdown / rupy;
 
+        new_domain = [yaxis1 + (yextent * changey), yaxis1];
+        
+        let ydatarange = self.getYAxisDataDomain();
+        let newYmin = new_domain[1];
+        let newYmax = new_domain[0];
+        let y0 = ydatarange[0];
+        let y1 = ydatarange[1];
+        
+        if( self.options.yscale == "log" ) {
+          if( newYmin > 0 && newYmax > newYmin && y1 > 0 ){
+            let logY0 = ((y0<=0) ? -1 : Math.log10(y0));
+            let logY1 = ((y1<=0) ? 0 : Math.log10(y1));
+          
+            let newLogLowerY = Math.log10(newYmin);
+            let newLogUpperY = Math.log10(newYmax);
+            
+            if( newLogUpperY < logY1 ) {
+              self.options.logYFracTop = 0;  //make sure we can at least see the whole chart.
+            } else {
+              let newfrac = (newLogUpperY - logY1) / (logY1 - logY0);
+              if( !isNaN(newfrac) && isFinite(newfrac) && newfrac>=0 && newfrac<50 ){
+                self.options.logYFracTop = (newLogUpperY - logY1) / (logY1 - logY0);
+                //Should emit something noting we changed something
+              }
+            }
+            
+            //Dragging on the y-axis only adjusts the top fraction, not the bottom, so we wont set the bottom here (since it shouldnt change)
+            //self.options.logYFracBottom should be between about 0 and 10
+            //self.options.logYFracBottom = (logY1 - logY0) / (newYmin - logY0);
+          }//if( new limits are reasonable )
+        } else if( self.options.yscale == "lin" ) {
+          let newfrac = (newYmax / y1) - 1.0;
+          
+          console.log( 'newfrac=' + newfrac );
+          if( !isNaN(newfrac) && isFinite(newfrac) && newfrac>=0 && newfrac<50 ){
+            self.options.linYFracTop = newfrac;
+          }
+        } else if( self.options.yscale == "sqrt" ) {
+          //self.options.sqrtYFracBottom = 1 - (newYmin / y0);  //Shouldnt change though
+          self.options.sqrtYFracTop = -1 + (newYmax / y1);
+        }
+      
+        
         self.yScale.domain(new_domain);
         self.redraw()();
       }
@@ -3016,16 +3081,16 @@ SpectrumChartD3.prototype.mouseup = function () {
     document.onselectstart = function() { return true; };
     d3.select('body').style("cursor", "auto");
     d3.select('body').style("cursor", "auto");
-    if (!isNaN(self.downx)) {
+    if( self.xaxisdown ) {
       self.redraw()();
-      self.downx = Math.NaN;
+      self.xaxisdown = null;
 
       /*d3.event.preventDefault(); */
       /*d3.event.stopPropagation(); */
     };
-    if (!isNaN(self.downy)) {
+    if (!isNaN(self.yaxisdown)) {
       self.redraw()();
-      self.downy = Math.NaN;
+      self.yaxisdown = Math.NaN;
       /*d3.event.preventDefault(); */
       /*d3.event.stopPropagation(); */
     }
@@ -3123,8 +3188,8 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
   return function () {
 
     d3.select(document.body).style("cursor", "default");
-    self.downx = Math.NaN;
-    self.downy = Math.NaN;
+    self.xaxisdown = null;
+    self.yaxisdown = Math.NaN;
 
     /* Cancel recalibration */
     self.handleCancelMouseRecalibration();
@@ -3762,11 +3827,8 @@ SpectrumChartD3.prototype.updateLegend = function() {
       this.legendBox = null;
       this.legBody = null;
       this.legendHeaderClose = null;
-      var legendoption = document.getElementById("legendoption");
-      if (legendoption && self.rawData && self.rawData.spectra && self.rawData.spectra.length) {
-        legendoption.checked = false;
-      }
-      console.log( 'Should emit legend closed' );
+      //Not emmitting 'legendClosed' since self.options.showLegend is not being changed.
+      //self.WtEmit(self.chart.id, {name: 'legendClosed'} );
     }
     return;
   }
@@ -4183,7 +4245,7 @@ SpectrumChartD3.prototype.yaxisDrag = function(d) {
     console.log('yaxisDrag work');
     document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
-    self.downy = self.yScale.invert(p[1]);
+    self.yaxisdown = self.yScale.invert(p[1]);
   }
 }
 
@@ -4330,6 +4392,7 @@ SpectrumChartD3.prototype.setSqrtY = function(){
   this.redraw(this.options.showAnimation)();
 }
 
+
 SpectrumChartD3.prototype.handleYAxisWheel = function() {
   /*This function doesnt have the best behaviour in the world, but its a start */
   var self = this;
@@ -4382,14 +4445,10 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
     if( self.options.logYFracTop < 0 ){
       self.options.logYFracBottom += -self.options.logYFracTop;
       self.options.logYFracBottom = Math.min( self.options.logYFracBottom, 2.505 );
-      console.log( 'self.options.logYFracBottom=' +  self.options.logYFracBottom );
       self.options.logYFracTop = 0;
     }
-    
-    
+  
     self.options.logYFracTop = Math.max( self.options.logYFracTop, -0.95 );
-    console.log( 'self.options.logYFracTop=' + self.options.logYFracTop );
-    /* */
   } else if( self.options.yscale == "lin" ) {
     self.options.linYFracTop += mult;
     self.options.linYFracTop = Math.min( self.options.linYFracTop, 0.85 );
@@ -4500,27 +4559,18 @@ SpectrumChartD3.prototype.xticks = function() {
 
 /* Sets x-axis drag for the chart. These are actions done by clicking and dragging one of the labels of the x-axis. */
 SpectrumChartD3.prototype.xaxisDrag = function() {
+  
   var self = this;
   return function(d) {
     /*This function is called once when you click on an x-axis label (which you can then start dragging it) */
     /*  And NOT when you click on the chart and drag it to pan */
-    console.log( 'xaxisDrag work' );
 
     document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
 
-    if (self.xScale.invert(p[0]) > 0)           /* set self.downx equal to value of your mouse pos */
-      self.downx = self.xScale.invert(p[0]);
-
-    // Christian [05122018]: Commented out to prevent buggy drawing of chart when dragging ticks <= 0
-    /*
-    else                                        // if mouse pos < 0, use 0.1 as the value (value of 0 is buggy)
-      self.downx = 0.1;
-    */
-   
-    /*console.log("p=" + p ); */
-    /*console.log("self.downx=" + self.downx); */
-    /*console.log("self.vis[0][0]=" + self.vis[0][0]); */
+    if (self.xScale.invert(p[0]) > 0){           /* set self.xaxisdown equal to value of your mouse pos */
+      self.xaxisdown = [self.xScale.invert(p[0]), self.xScale.domain()[0], self.xScale.domain()[1]];
+    }
   }
 }
 
@@ -4595,16 +4645,16 @@ SpectrumChartD3.prototype.drawXTicks = function() {
    * by assigning the styles and event listeners to ticks that are actually displayed. Noticable improvements seen
    * when using w/InterSpec.
    */
-  const majorticksText = majorticks.selectAll('text')
-    .style("cursor", "ew-resize")
-    .on("mouseover", function(d, i) { d3.select(this).style("font-weight", "bold");})
-    .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
-    .on("mousedown.drag",  self.xaxisDrag());
+  //const majorticksText = majorticks.selectAll('text')
+  //  .style("cursor", "ew-resize")
+  //  .on("mouseover", function(d, i) { d3.select(this).style("font-weight", "bold");})
+  //  .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
+  //  .on("mousedown.drag",  self.xaxisDrag());
 
   // Add touch event listeners for touch devices
-  if (self.isTouchDevice()) {
-    majorticksText.on("touchstart.drag", self.xaxisDrag());
-  }
+  //if (self.isTouchDevice()) {
+  //  majorticksText.on("touchstart.drag", self.xaxisDrag());
+  //}
 
   if( this.options.compactXAxis ){
     /* We have to check every tick to see if it overlaps with the title */
@@ -4617,6 +4667,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
     });
   } else {
     /*We only need to check the last tick to see if it goes off the chart */
+    const majorticksText = majorticks.selectAll('text');
     var lastmajor = majorticks[0].length ? majorticks[0][majorticks[0].length-1] : null; 
     if( lastmajor ) {
       lastmajor = d3.select(lastmajor).select('text')[0][0];
@@ -8887,7 +8938,7 @@ SpectrumChartD3.prototype.setHighlightRegions = function(ranges) {
     self.highlightRegions = null;
     self.vis.selectAll("g.highlight").remove(); //drawHighlightRegions() returns immediatelt if self.highlightRegions is null.
   } else {
-    //ToDo: add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
+    //ToDo add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
     self.highlightRegions = ranges;
     self.highlightRegions.sort( function(l,r){ return l.lowerEnergy < r.lowerEnergy }  )
   }
@@ -9477,8 +9528,9 @@ SpectrumChartD3.prototype.handleMouseUpZoomInY = function () {
           maxY = 3000;
 
         } else {                                  /* Get the min, max y values from the data */
-          minY = self.getYAxisDomain()[1];
-          maxY = self.getYAxisDomain()[0];
+          let ydomain = self.getYAxisDomain();
+          minY = ydomain[1];
+          maxY = ydomain[0];
         }
 
         /* Set the values for the new y-domain */
@@ -11106,139 +11158,6 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
 }
 
 
-/**
- * -------------- Color Picker Functions --------------
- */
-SpectrumChartD3.prototype.initializeColorPicker = function() {
-  var self = this;
-
-  if (!self.colorPickerTable) {
-    self.colorPickerTable = document.createElement('table');
-    self.colorPickerTable.id = 'color-picker-table';
-    self.colorPickerTable.style.marginTop = '10px';
-  }
-
-  document.body.appendChild(self.colorPickerTable);
-}
-
-SpectrumChartD3.prototype.setEnableColorPicker = function(enable) {
-  var self = this;
-
-  self.options.enableColorPicker = enable;
-
-  if (!enable) self.destroyColorPicker();
-  else {
-    self.initializeColorPicker();
-    self.updateColorPickerItems();
-  }
-}
-
-SpectrumChartD3.prototype.updateColorPickerItems = function() {
-  var self = this;
-
-  if (!self.options.enableColorPicker) return;
-
-  d3.selectAll('.colorPickerItem').remove();
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
-
-  const div = d3.select('#color-picker-table');
-  let colorTester, color;
-  let lineColorInput, peakColorInput;
-  
-  self.rawData.spectra.forEach(function(spectrum, index) {
-    let row = div.append('tr')
-      .attr('class', 'colorPickerItem');
-
-    let item = row.append('td').attr('align', 'right');
-
-    // Get the hex-computed line color 
-    colorTester = document.createElement('div');
-    colorTester.style.color = spectrum.lineColor;
-    document.body.appendChild(colorTester)
-    color = window.getComputedStyle(colorTester).color;
-    colorTester.remove();
-
-    // Add labels and input for line color
-    item.append('label')
-      .attr('for', 'spec-' + index + '-line')
-      .style('margin-right', '10px')
-      .text(spectrum.title + ' Line Color:');
-
-    lineColorInput = item.append('input')
-      .attr('id', 'spec-' + index + '-line')
-      .attr('type', 'color')
-      .attr('value', self.getRGBToHexColor(color))
-      .style('margin-right', '10px');
-
-    // Get the hex-computed peak color 
-    colorTester = document.createElement('div');
-    colorTester.style.color = spectrum.peakColor;
-    document.body.appendChild(colorTester)
-    color = window.getComputedStyle(colorTester).color;
-    colorTester.remove();
-
-    item = row.append('td').attr('align', 'right');
-
-    // Add labels and input for peak color
-    item.append('label')
-      .attr('for', 'spec-' + index + '-peak')
-      .style('margin-right', '10px')
-      .text(spectrum.title + ' Peak Color:');
-
-    peakColorInput = item.append('input')
-      .attr('id', 'spec-' + index + '-peak')
-      .attr('type', 'color')
-      .attr('value', self.getRGBToHexColor(color));
-
-
-    // Set on-change listeners for the input fields
-    lineColorInput.node().onchange = function(e) { self.handleChangeSpectrumLineColor(spectrum, index, e.target.value) };
-    peakColorInput.node().onchange = function(e) { self.handleChangeSpectrumPeakColor(spectrum, index, e.target.value) };
-  });
-}
-
-SpectrumChartD3.prototype.destroyColorPicker = function() {
-  var self = this;
-
-  if (self.colorPickerTable) self.colorPickerTable.remove();
-  self.colorPickerTable = null;
-}
-
-SpectrumChartD3.prototype.handleChangeSpectrumLineColor = function(spectrum, index, color) {
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) return;
-
-  let line;
- 
-  spectrum.lineColor = color;
-
-  // Update the data line on the chart
-  line = self.vis.select("#spectrumline" + index);
-  line.style("stroke", spectrum.lineColor ? spectrum.lineColor : 'black');
-
-  // Update the data line on the legend
-  if (self.legBody) {
-    line = d3.select("#spectrum-legend-line-" + index);
-    line.style("stroke", spectrum.lineColor ? spectrum.lineColor : 'black');
-  }
-}
-
-SpectrumChartD3.prototype.handleChangeSpectrumPeakColor = function(spectrum, index, color) {
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) return;
-
-  let peaks = d3.selectAll('.spectrum-peak-' + index);
-  console.log('spectrum-peak-' + index, peaks);
-
-  spectrum.peakColor = color;
-  peaks.style('stroke', spectrum.peakColor)
-    .style('fill', spectrum.peakColor);
-}
-
 
 /**
  * -------------- Helper Functions --------------
@@ -11352,14 +11271,11 @@ SpectrumChartD3.prototype.getCountsForEnergy = function(spectrum, energy) {
   return counts;
 }
 
-/**
- * Returns the Y-axis domain based on the current set of zoomed-in data, ensuring that all data is visible within that range.
- */
-SpectrumChartD3.prototype.getYAxisDomain = function(){
-  var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return [3000,0];
+
+/* Returns the data y-range for the currently viewed x-range. */
+SpectrumChartD3.prototype.getYAxisDataDomain = function(){
+  var self = this;
   
   var key = self.options.backgroundSubtract ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
   var y0, y1;
@@ -11367,16 +11283,16 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
   var foreground = self.rawData.spectra[0];
   var firstData = self.displayed_start(foreground);
   var lastData = self.displayed_end(foreground);
-
+  
   if( firstData >= 0 ){
     y0 = y1 = foreground[key][firstData].y;
-
+    
     self.rawData.spectra.forEach(function(spectrum) {
       // Don't consider background spectrum if we're viewing the Background Subtract
       if (self.options.backgroundSubtract && spectrum.type === self.spectrumTypes.BACKGROUND) return;
       firstData = self.displayed_start(spectrum);
       lastData = self.displayed_end(spectrum);
-
+      
       for (var i = firstData; i < lastData; i++) {
         if (spectrum[key][i]) {
           y0 = Math.min( y0, spectrum[key][i].y );
@@ -11388,11 +11304,28 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
     y0 = 0;
     y1 = 3000;
   }
-
+  
   if( y0 > y1 ) { y1 = [y0, y0 = y1][0]; }
   if( y0 == y1 ){ y0 -=1; y1 += 1; }
 
+  return [y0, y1];
+}
 
+/**
+ * Returns the Y-axis domain based on the current set of zoomed-in data, with user preffered padding amounts accounted for.
+ */
+SpectrumChartD3.prototype.getYAxisDomain = function(){
+  var self = this;
+
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return [3000,0];
+    
+  let yrange, y0, y1;
+  yrange = self.getYAxisDataDomain();
+  y0 = yrange[0];
+  y1 = yrange[1];
+  
+  
   if( self.options.yscale == "log" ) {
     /*Specify the (approx) fraction of the chart that the scale should extend */
     /*  past where the data where hit. */
