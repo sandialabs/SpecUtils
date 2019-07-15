@@ -1288,8 +1288,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
  
   this.calcLeftPadding( false );
  
-  if (!this.origWidth)
-    this.origWidth = this.size.width;
   this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right);
   this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed);
 
@@ -1319,9 +1317,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   /*Fix the text position */
   this.svg.selectAll(".title")
       .attr("x", this.cx/2);
-
-      /* Christian: To keep the title from shifting during redraw, we translate the position of the label to stay in its place. */
-      /* .attr("transform", "translate(" + ((this.size.width/2) - (this.origWidth/2)) + "," + 0 + ")"); */
 
   if( this.xaxistitle ){
     if( !this.options.compactXAxis ){
@@ -1371,8 +1366,16 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   if( this.legend ) {
     var trans = d3.transform(this.legend.attr("transform")).translate;
     var bb = this.legendBox.node().getBBox();
-    var legx = ((trans[0]+bb.width) > this.cx) ? (this.cx-bb.width) : trans[0];
-    var legy = ((trans[1]+bb.height) > this.cy) ? (this.cy-bb.height) : trans[1];
+    
+    //If legend is closer to left side, keep distance to left of chart the same, else right.
+    //Same for top/bottom.  Usses upper left of legend, and not center... oh well.
+    var legx = (trans[0] < 0.5*prevCx) ? trans[0] : this.cx - (prevCx - trans[0]);
+    var legy = (trans[1] < 0.5*prevCy) ? trans[1] : this.cy - (prevCy - trans[1]);
+    
+    //Make sure legend is visible
+    legx = ((legx+bb.width) > this.cx) ? (this.cx-bb.width) : legx;
+    legy = ((legy+bb.height) > this.cy) ? (this.cy-bb.height) : legy;
+    
     this.legend.attr("transform", "translate(" + Math.max(0,legx) + "," + Math.max(legy,0) + ")" );
   }
 
@@ -3848,7 +3851,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
 
         if ( calculated_x >= -self.padding.leftComputed && y >= 0 && 
              calculated_x <= self.cx && y <= self.cy ) {
-          console.log("change pos");
+          //console.log("change pos");
           var tx = (x - self.legdown.x) + self.legdown.x0;
           var ty = (y - self.legdown.y) + self.legdown.y0; 
           self.legend.attr("transform", "translate(" + tx + "," + ty + ")");
@@ -3913,7 +3916,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       .on("wheel", function(d){d3.event.preventDefault(); d3.event.stopPropagation();} );
     
     function mousedownleg(){
-      console.log("mouse down on legend");
+      //console.log("mouse down on legend");
       if (d3.event.defaultPrevented) return;
       if( self.dragging_plot || self.zooming_plot ) return;
       d3.event.preventDefault();
