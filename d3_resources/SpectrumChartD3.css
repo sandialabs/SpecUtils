@@ -1,56 +1,50 @@
+
+/* In order to dynamically set color values from within Wt, we cant specify colors
+   in the CSS file; so this fil is the same as SpectrumChartD3.js, just without
+   color values for things we will want to maybe dynamically change.
+*/
+
 /*******************/
 .roiDragBox {
   fill: #666;
-  fill-opacity: 0.4;
-  stroke-opacity: 0.3;
+  fill-opacity: 0.7;
   stroke: black;
   stroke-width: 1px;
   user-select: none;
   -moz-user-select: none;
 }
 
-.roiDragLine {
+.roiDragLine{
   fill: none;
-  stroke: black;     /* SHould maybe set line color to be same as axis liens. */  
-  stroke-opacity: 0.1; 
+  stroke: black;
   stroke-width: 1px;
 }
-
-.roiDragLine .active {
-  stroke-opacity: 0.4;
-}
-
-.roiDragBox .active {
-  stroke-opacity: 0.3;
-}
-
 /*******************/
 
 
-body { font: 13px sans-serif; }
-rect { fill: #fff; }
+
+
+.yaxis, .yaxislabel { font: sans-serif; font-size: 0.9em; font-weight: lighter; }
+.xaxis { font: sans-serif; font-size: 0.9em; font-weight: lighter; }
+
+.xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke-width: 1px; }
+
+.xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
+.minorgrid { stroke-opacity: 50%; }
+
 .peaklabel{ margin-left: 5px; }
+
+.peakLine{ font-size: 0.8em; stroke-width: 2; }
+.escapeLineForward { font-size: 0.8em; stroke-width: 2; stroke-dasharray: 2; }
+  
+.mouseLine      { font-size: 0.8em; stroke-width: 2; }
+.secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
+.lightMouseLine { font-size: 0.8em; stroke-width: 0.5;  stroke: gray }
 
 .referenceGammaSelectDiv { display: inline-block; margin-left: 25px; }
 .referenceGammaSelect { width: 200px; height: 130px; }
-.yaxis, .yaxislabel { font-size: 1em; }
-.xaxis { font-size: 1em; font-weight: normal; }
-
-.xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke: black; stroke-width: 1px; }
-.xgrid > .tick, .ygrid > .tick{ stroke: #b3b3b3; stroke-opacity: 80%; }
-.minorgrid { stroke: #e6e6e6; stroke-opacity: 50%; }
-
-.xaxistitle{}
-.yaxistitle{}
 
 .touchLine{  stroke-width: 2; stroke: gray; stroke-dasharray: 3;  }
-
-.mouseLine      { font-size: 0.8em; stroke-width: 2;  stroke: black }
-.secondaryMouseLine { font-size: 0.8em; stroke-width: 1;  stroke: black }
-.lightMouseLine { font-size: 0.8em; stroke-width: 0.5;  stroke: gray }
-
-.peakLine{ font-size: 0.8em; stroke-width: 2; stroke: black;  }
-.escapeLineForward { font-size: 0.8em; stroke-width: 2; stroke-dasharray: 2; stroke: black;  }
 
 .createPeakMouseLine { fill: none; stroke: black;  stroke-width: 1.5px; }
 .createPeakArrowLine { fill: none; stroke: black;  stroke-width: 1px; }
@@ -59,13 +53,6 @@ rect { fill: #fff; }
 .createPeakRightTouchPoint { fill: black; }
 .createPeakTouchLine { stroke-width: 2; stroke: grey; stroke-dasharray: 4; }
 
-.chartLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.mouseLineText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.deletePeaksText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.countGammasText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.peakText{ font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.contEstLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey;  }
-.createPeakTouchText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey; fill: grey; }
 
 .refLineInfo{ font-size: 0.8em; }
 .mouseInfo{ font-size: 0.85em;  }
@@ -89,6 +76,14 @@ rect { fill: #fff; }
 .activeLegend > g > .legendHeader{ fill: #909090; fill-opacity: 0.95; }
 .d3closebut{ fill: #909090; }
 /* .d3closebut:hover{ fill: #4d4d4d; } */
+
+.chartLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.mouseLineText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.deletePeaksText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.countGammasText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.peakText{ font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.contEstLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey;  }
+.createPeakTouchText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey; fill: grey; }
 
 .scalerwidget{ font-size: 1em; }
 .scalerEntry{}
