@@ -1583,12 +1583,14 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
                && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
       //Also check if we are between ymin and ymax of ROI....
       var onRoiEdge = false;
-      self.rawData.spectra[0].peaks.forEach( function(roi){
+      
+      //self.rawData.spectra[0].peaks.forEach( function(roi){
+      self.peakPaths.forEach( function(info){
         if( onRoiEdge )
           return;
 
-        var lpx = self.xScale(roi.lowerEnergy);
-        var upx = self.xScale(roi.upperEnergy);
+        var lpx = self.xScale(info.lowerEnergy);
+        var upx = self.xScale(info.upperEnergy);
         
         //Dont create handles for to narrow of a range (make user zoom in a bit more)
         if( (upx-lpx) < 15 )
@@ -1599,14 +1601,21 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         if( !isOnLower && !isOnUpper )
           return;
         
+        //Make mouse be within ROI in y.   Should draw handles/lines appropriately using roi.color
+        if( info.yRangePx && info.yRangePx.length==2 && (y < (info.yRangePx[0]-10) || y > (0,info.yRangePx[1]+1)) )
+          return;
+        
         onRoiEdge = true;
-        self.showRoiDragOption(roi);
+        self.showRoiDragOption(info);
       });
       
       if( !onRoiEdge && self.roiDragBox && !self.roiIsBeingDragged ){
         self.handleCancelRoiDrag();
         d3.select('body').style("cursor", "default");
       }
+    } else if( self.roiDragBox ){
+      self.handleCancelRoiDrag();
+      d3.select('body').style("cursor", "default");
     }//if / else {what to do}
       
 
@@ -1615,10 +1624,12 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 }
 
 
-SpectrumChartD3.prototype.showRoiDragOption = function(roi){
+SpectrumChartD3.prototype.showRoiDragOption = function(info){
   let self = this;
 
-  if( d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
+  let roi = info.roi;
+  
+  if( !roi || d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
       || d3.event.shiftKey || self.escapeKeyPressed )
   {
     self.handleCancelRoiDrag();
@@ -1632,7 +1643,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(roi){
   let upx = self.xScale(roi.upperEnergy);
   let isOnLower = Math.abs(lpx-x) < 5;
 
-  self.roiBeingDragged = roi;
+  self.roiBeingDragged = { roi: roi, yRangePx: info.yRangePx, color: (info.color ? info.color : 'black') };
   
   if( !self.roiDragBox ){
     
@@ -1642,29 +1653,49 @@ SpectrumChartD3.prototype.showRoiDragOption = function(roi){
     // .attr("height", 10 )
     // .attr("class", "roiDragBox" )
     // .attr("transform", "translate(" + ((isOnLower ? lpx : upx) - 5) + "," + this.size.height + ")")
-
+    
+    const tickElement = document.querySelector('.tick');
+    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+    let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    self.roiBeingDragged.axiscolor = axiscolor;
+    
     self.roiDragBox = self.vis.append("rect")
-            .attr("id", "roiDragBox" )
             .attr("class", "roiDragBox")
             .attr("rx", 2)
             .attr("ry", 2)
             .attr("width", 10)
-            .attr("height", 20);
+            .attr("height", 20)
+            .attr("stroke", axiscolor )
+            .attr("fill", axiscolor )
+            ;
 
+    //ToDo: make self.roiDragBox a <g> element, and then also add in the little lines for texture to g
+    //self.roiDragBox = self.vis.append("g").attr("transform","translate(" + (isOnLower ? lpx : upx) - 0.5) + "," + + ")");
+    //self.roiDragBox.append("rect").attr("class", "roiDragBox").attr("rx", 2).attr("ry", 2).attr("width", 10).attr("height", 20).attr("stroke", axiscolor ).attr("fill", axiscolor ).attr("x",-5).attr("y", -10);
+    ;
+    
     self.roiDragLine = self.vis.append("line")
-            .attr("id", "roiDragLine" )
             .attr("class", "roiDragLine");
   }
 
   d3.select('body').style("cursor", "ew-resize");
 
+  let y1 = 0;
+  let y2 = self.size.height
+  
+  if( info.yRangePx && info.yRangePx.length==2 ){
+    y1 = Math.max(0,info.yRangePx[0]-10);
+    y2 = Math.min(y2,info.yRangePx[1]+10);
+  }
+  
   self.roiDragBox.attr("x", (isOnLower ? lpx : upx) - 5)
-      .attr("y", -10 + y);
-
+      .attr("y", -10 + y1 + 0.5*(y2-y1));
+      
   self.roiDragLine.attr("x1", (isOnLower ? lpx : upx) - 0.5)
       .attr("x2", (isOnLower ? lpx : upx) - 0.5)
-      .attr("y1", 0)
-      .attr("y2", self.size.height);
+      .attr("y1", y1)
+      .attr("y2", y2)
+      .attr("stroke", self.roiBeingDragged.color );
 
   //console.log( 'x=' + x + ", y=" + y + ", roi.lowerEnergy=" + roi.lowerEnergy + ", roi.upperEnergy=" + roi.upperEnergy );
 };//showRoiDragOption()
@@ -1687,24 +1718,41 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
     return;
   }
   
-  //console.log( 'handleRoiDrag' + self.roiDragMouseDown );
+  //console.log( 'handleRoiDrag roiDragMouseDown ' + self.roiDragMouseDown );
 
   if( self.roiDragLastCoord && Math.abs(x-self.roiDragLastCoord[0]) < 1 )
     return;
         
   d3.select('body').style("cursor", "ew-resize");
 
-  let roi = self.roiBeingDragged;
+  let roiinfo = self.roiBeingDragged;
+  let roi = roiinfo.roi;
   let mdx = self.roiDragMouseDown; // [m[0], roiPx, energy, isLowerEdge];
-  let xcenter = x + mdx[1] - mdx[0];
+  let xcenter = x + mdx[1] - mdx[0];  //having issue
   let energy = self.xScale.invert(xcenter);
   let counts = self.yScale.invert(y);
   let lowerEdgeDrag = mdx[3];
         
   self.roiDragLastCoord = [x,y,energy,counts];
-        
-  self.roiDragLine.attr("x1", xcenter + 0.5).attr("x2", xcenter + 0.5);
-  self.roiDragBox.attr("x", xcenter - 5);
+  
+  
+  let y1 = 0;
+  let y2 = self.size.height
+  
+  if( roiinfo.yRangePx && roiinfo.yRangePx.length==2 ){
+    y1 = Math.max(0,roiinfo.yRangePx[0]-10);
+    y2 = Math.min(y2,roiinfo.yRangePx[1]+10);
+  }
+  
+  self.roiDragBox
+      .attr("x", xcenter - 5)
+      .attr("y", -10 + y1 + 0.5*(y2-y1));
+  
+  self.roiDragLine
+      .attr("x1", xcenter + 0.5)
+      .attr("x2", xcenter + 0.5)
+      .attr("y1", y1)
+      .attr("y2", y2);
 
 
   //Emit current position, no more often than twice per second, or if there
@@ -1741,7 +1789,7 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
 
 
 SpectrumChartD3.prototype.handleStartDragRoi = function(){
-  console.log( 'In handleStartDragRoi()');
+  //console.log( 'In handleStartDragRoi()');
 
   let self = this;
   if( !self.roiDragLine )
@@ -1753,24 +1801,37 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(){
   self.roiIsBeingDragged = true;
   var energy = self.xScale.invert(m[0]);
   //var counts = self.self.yScale.invert(m[1]);
-  var lpx = self.xScale(self.roiBeingDragged.lowerEnergy);
-  var upx = self.xScale(self.roiBeingDragged.upperEnergy);
+  var lpx = self.xScale(self.roiBeingDragged.roi.lowerEnergy);
+  var upx = self.xScale(self.roiBeingDragged.roi.upperEnergy);
   var isOnLower = Math.abs(lpx-m[0]) < 5;
   var isOnUpper = Math.abs(upx-m[0]) < 5;
   if( !isOnLower && !isOnUpper ){
     console.log( 'not on ROI edge when down? lpx=' + lpx + ", m[0]=" + m[0] );
     return;
   }
+  
+  let roiinfo = self.roiBeingDragged;
   var roiPx = (isOnLower ? lpx : upx);
   self.roiDragMouseDown = [m[0], roiPx, energy, isOnLower];
+  console.log( 'self.roiDragMouseDown ', self.roiDragMouseDown );
+  
+  let y1 = 0;
+  let y2 = self.size.height
+  
+  if( roiinfo && roiinfo.yRangePx && roiinfo.yRangePx.length==2 ){
+    y1 = Math.max(0,roiinfo.yRangePx[0]-10);
+    y2 = Math.min(y2,roiinfo.yRangePx[1]+10);
+  }
   
   var dPx =  m[0] - roiPx;
-  self.roiDragBox.attr("x", m[0] - dPx - 5);
+  self.roiDragBox
+      .attr("x", m[0] - dPx - 5)
+      .attr("y", -10 + y1 + 0.5*(y2-y1));;
 
   self.roiDragLine.attr("x1", roiPx - 0.5)
       .attr("x2", roiPx - 0.5)
-      .attr("y1", 0)
-      .attr("y2", self.size.height);
+      .attr("y1", y1)
+      .attr("y2", y2);
 
   self.roiDragBox.attr("class", "roiDragBox active");
   self.roiDragLine.attr("class", "roiDragLine active");
@@ -1803,7 +1864,7 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function(){
 
   console.log( 'Will finish dragging ROI.' );
 
-  let roi = self.roiBeingDragged;
+  let roi = self.roiBeingDragged.roi;
   let m = d3.mouse(self.vis[0][0]);
   let x = m[0], y = m[1];
 
@@ -2827,8 +2888,9 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
                   /* Highlight peaks where tap position falls */
                   if (self.peakPaths) {
+                    const xen = self.xScale.invert(x);
                     for (i = self.peakPaths.length-1; i >= 0; i--) {
-                      if (self.xScale.invert(x) >= self.peakPaths[i].lowerEnergy && self.xScale.invert(x) <= self.peakPaths[i].upperEnergy) {
+                      if (xen >= self.peakPaths[i].lowerEnergy && xen <= self.peakPaths[i].upperEnergy) {
                         const path = self.peakPaths[i].path;
                         const paths = self.peakPaths[i].paths;
                         const roi = self.peakPaths[i].roi;
@@ -3210,6 +3272,9 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
     /* Cancel peak fitting */
     self.erasePeakFitReferenceLines();
 
+    /* Cancel dragging of ROI. */
+    self.handleCancelRoiDrag();
+    
     /* Canceling out all mouse events for chart */
     self.zooming_plot = false;
     self.dragging_plot = false;
@@ -6253,7 +6318,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     const useBackgroundSubtract = self.options.backgroundSubtract && background;
 
     if( xstartind >= (points.length-2) )
-      return paths;
+      return { paths: paths };
       
     if( xendind >= (points.length-2) )
       xendind = points.length - 2;
@@ -6335,6 +6400,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
     var leftMostLineValue = [];
 
+    var minypx = self.size.height, maxypx = 0;
+    
     //Go from right to left drawing the peak lines that sit on the continuum.
     //  we will also 
     for( var xindex = xendind - 1; xindex >= xstartind; --xindex ) {
@@ -6362,7 +6429,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           s = peak.Width[0];
           if( roi.peaks.length==1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
             peakamplitudes[xindex][peakn+2] = area;
-            paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + area);
+            let yvalpx = self.yScale(cont_area + area);
+            minypx = Math.min(minypx,yvalpx);
+            maxypx = Math.max(maxypx,yvalpx);
+            paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
             leftMostLineValue[peakn] = {x : thisx, y: cont_area};
           }else{
             peakamplitudes[xindex][peakn+2] = 0.0;
@@ -6370,15 +6440,15 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         } else if( peak.type === 'DataDefined' ) {
           let area = points[xindex].y - cont_area;
           peakamplitudes[xindex][peakn+2] = (area > 0 ? area : 0);
-          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + (area >= 0 ? area : 0.0));
+          let yvalpx = self.yScale(cont_area + (area >= 0 ? area : 0.0));
+          minypx = Math.min(minypx,yvalpx);
+          maxypx = Math.max(maxypx,yvalpx);
+          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
           leftMostLineValue[peakn] = {x : thisx, y: cont_area};
         } else {
           console.log( 'Need to implement peak.type==' + peak.type );
           return;
         }
-
-        
-        
       });
     }//for( go right to left over 'xindex' drawing peak outlines )
 
@@ -6410,16 +6480,23 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         var thisy = cont;
         for( var j = 2; j < peakindex; ++j )
           thisy += peakamps[j];
-
+          
+        let yvalpx = self.yScale(thisy);
+        let xvalpx = self.xScale(thisx);
+        minypx = Math.min(minypx,yvalpx);
+        maxypx = Math.max(maxypx,yvalpx);
+          
         if( !paths[peaknum+1].length ){
-          leftMostFillValue[peaknum] = { x: self.xScale(thisx), y: self.yScale(thisy) };
-          paths[peaknum+1] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
+          leftMostFillValue[peaknum] = { x: xvalpx, y: yvalpx };
+          paths[peaknum+1] = "M" + xvalpx + "," + yvalpx + " L";
         }else{
-          paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+          paths[peaknum+1] += " " + xvalpx + "," + yvalpx;
         }
       } );
     });
 
+    //console.log( 'minypx=' + minypx + ', maxypx=' + maxypx + ' height=' + self.size.height );
+    
     //go right to left and draw the fill areas top
     peakamplitudes.reverse().forEach( function(peakamps,xindex){
       var cont = peakamps[0];
@@ -6449,7 +6526,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         paths[peaknum+1] += " " + leftMostFillValue[peaknum].x + "," + leftMostFillValue[peaknum].y;
     }
 
-    return paths;
+    
+    return {paths: paths, yRangePx: [minypx,maxypx] };
   }/*function roiPath(roi) */
 
   function draw_roi(roi,specindex,spectrum) {
@@ -6476,10 +6554,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     let scaleFactor = spectrum.type !== self.spectrumTypes.FOREGROUND ? spectrum.yScaleFactor * 1.0 : 1.0;
     if (typeof scaleFactor === 'undefined' || scaleFactor === null) scaleFactor = 1.0;
 
-    var paths = roiPath( roi, spectrum.points, spectrum.bgsubtractpoints, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
+    var pathsAndRange = roiPath( roi, spectrum.points, spectrum.bgsubtractpoints, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
 
     /* Draw label, set fill colors */
-    paths.forEach( function(p,num){
+    pathsAndRange.paths.forEach( function(p,num){
 
       /* - The first path will be an underline of entire ROI
          - The next roi.peaks.length entries are the fills for each of the peaks
@@ -6515,7 +6593,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           self.peakLabelData.push({
                 specindex: specindex,
                 path: path,
-                paths: paths,
+                paths: pathsAndRange.paths,
                 roi: roi,
                 peak: peak,
                 lowerEnergy: roi.lowerEnergy,
@@ -6531,8 +6609,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       self.leftoverPeakLabels = self.leftoverPeakLabels.concat(labels);         /* Any leftover peaks are put inside this array */
 
-      self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, paths);
-      self.highlightPeakFunc = self.highlightPeak.bind(self, null, null, paths, path); 
+      self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, pathsAndRange.paths);
+      self.highlightPeakFunc = self.highlightPeak.bind(self, null, null, pathsAndRange.paths, path);
 
       function onRightClickOnPeak() {
         console.log("Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
@@ -6544,10 +6622,12 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       self.peakPaths.push({
             path: path,
-            paths: paths,
+            paths: pathsAndRange.paths,
             roi: roi,
             lowerEnergy: roi.lowerEnergy,
             upperEnergy: roi.upperEnergy,
+            yRangePx: pathsAndRange.yRangePx,
+            color: peakColor,
             isOutline: isOutline,
             isFill: isFill
       });
@@ -6564,19 +6644,20 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
         
       if( isOutline ){
-        path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, paths, roi, path) } )
+        path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, pathsAndRange.paths, roi, path) } )
             .on("mousemove", self.handleMouseMovePeak())
-            .on("touchend", self.highlightPeak.bind(self, null, null, paths, path))
-            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, paths); } );
+            .on("touchend", self.highlightPeak.bind(self, null, null, pathsAndRange.paths, path))
+            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, pathsAndRange.paths); } );
       }
       
 
       /* For right-clicking on a peak */
       path.on("contextmenu", onRightClickOnPeak);
-    });//paths.forEach( function(p,num){
+    });//pathsAndRange.paths.forEach( function(p,num){
 
-    if( paths.length > 0 && roi.peaks.length > 1 ){
-      var path = self.peakVis.append("path").attr("d", paths[0] );  //ToDo: is there a better way to draw a SVG path?
+    if( pathsAndRange.paths.length > 0 && roi.peaks.length > 1 ){
+      //Draw the continuum line for multiple peak ROIs
+      var path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );  //ToDo: is there a better way to draw a SVG path?
       path.attr("class", "spectrum-peak-" + specindex)
           .attr("stroke-width",1)
           .attr("fill-opacity",0)
@@ -6601,7 +6682,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       continue;
 
     this.rawData.spectra[i].peaks.forEach( function(roi){
-      if( self.roiIsBeingDragged && roi == self.roiBeingDragged )
+      if( self.roiIsBeingDragged && roi == self.roiBeingDragged.roi )
       {
         if( self.roiBeingDrugUpdate )
           draw_roi(self.roiBeingDrugUpdate,i,self.rawData.spectra[spectrumi]);
@@ -7382,186 +7463,6 @@ SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
   d3.select("#createPeakMouseText").remove();
 }
 
-// Christian [05262018]: Function hook for real-time peak fitting implementation.
-//  Otherwise, nothing happens.
-SpectrumChartD3.prototype.runRealTimePeakFit = function() {
-  var self = this;
-
-  if ( typeof peakFit === 'undefined' ) {
-    console.warn('Peak fit not found, canceling peak fitting.');
-    return;
-  }
-  
-  /*Get the initial energy the user 'clicked-down on' */
-  var x0_energy = self.zoominx0;
-  /* var y0_energy = self.zoominy0; */
-  
-  /*Get the current energy the mouse is at */
-  var x_energy = self.peakFitTouchMove.length == 0 ? self.xScale.invert(d3.mouse(self.vis[0][0])[0]) : self.xScale.invert(rightTouch[0]);
-  /*var y_counts = self.xScale.invert(mouse_pos_px[1]); */
-  
-  console.log( "x0_energy=" + x0_energy + ", x_energy=" + x_energy );
-  
-  /*Make sure x0_energy is less than x_energy */
-  if( x0_energy > x_energy )
-    x_energy = [x0_energy, x0_energy = x_energy][0];
-  
-  var need_redraw_on_cancel = !!self.current_fitting_peak;
-  self.current_fitting_peak = null;
-
-  if ( self.options.allowPeakFit ) {
-    /*Get rid of currently fit peak  */
-    self.current_fitting_peak = null;
-    
-    /*Get the bins for the range we're fitting */
-    var foreground = self.rawData.spectra[0];
-    var bisector = d3.bisector(function(d){return d;}); 
-    var lbin = bisector.left(foreground.x, x0_energy);
-    var rbin = bisector.right(foreground.x, x_energy);
-    
-    if( rbin < (foreground.x.length - 2) )
-      rbin += 1;
-    
-    /*Make sure we have at least a few bins   */
-    if( rbin < (lbin + 4) ){
-      console.log( 'Not enough bins yet: ' + (rbin - lbin) );
-      if( need_redraw_on_cancel )     
-        self.redraw()();
-      return;
-    }
-                    
-    /*Now get the actual energy range we are fitting (the lowere energy of left  */
-    /*  bin, and upper energy of right bin) */
-    var lbin_lower_energy = foreground.x[lbin];
-    var rbin_upper_energy = foreground.x[rbin + 1];  /*FIXME: +1 will cause problem for last bin... */
-    
-    /*The polynomial continuum should be evalueated relative to a reference energy. */
-    /*  Lets pick the middle of the ROI for this. */
-    var roi_ref_energy = 0.5*(rbin_upper_energy + lbin_lower_energy); 
-    
-    /*Get the actual counts in the bins.  Note that energies is one longer than */
-    /*  counts, so you can can access the end of the fitting range. */
-    var energies = foreground.x.slice(lbin,rbin+1); /*FIXME: +1 dangerous on last bin! */
-    var counts = foreground.y.slice(lbin,rbin);
-    
-    /*Here is where you would fit for your peaks.  As an example, I make a linear */
-    /*  continuum based on first/last bin height (to provide an example of how  */
-    /*  InterSpec defines the continuum as a density per keV, hence you have to  */
-    /*  integrate over a bins width to get the bins continuum height), and then */
-    /*  add a peak with an amplitude equal to the difference between the continuum */
-    /*  area, and the actual data area.  */
-
-    
-    /*A function to get linear continuum coeficients using the hights of the first */
-    /*  and last bin - this is only an example function!  do not use in real code, */
-    /*  it can fail in many ways. */
-    /*Function assumes xvals has one more element than the range to be fitted, and  */
-    /*  yvals has exactly the number of bins to be fitted */
-    function linear_eqn_from_first_last_data( xvals, yvals, refenergy ) {
-      var x1 = xvals[0];
-      var dx1 = xvals[1] - x1;
-      
-      var x2 = xvals[xvals.length-2];
-      var dx2 = xvals[xvals.length-1] - x2;
-      
-      x1 -= refenergy;
-      x2 -= refenergy;
-    
-      var y1 = yvals[0];
-      var y2 = yvals[yvals.length-1];
-
-      var c = (2.0*x2*dx2 + dx2*dx2)/(2.0*x1*dx1 + dx1*dx1);
-      var b = (y2-y1*c)/(dx2-dx1*c);
-      var m = 2.0*(y1-b*dx1)/(2.0*x1*dx1+dx1*dx1);
-      
-      return [b,m];
-    };
-
-    function gaus_integral(mean, width, amp, x0, x1) {
-        var peak_mean = mean, peak_sigma = width, peak_amplitude = amp;
-          /*peak.LandauAmplitude, peak.LandauMode, peak.LandauSigma, */
-        var sqrt2 = 1.414213562373095;
-        var erflowarg = (x0-peak_mean)/(sqrt2*peak_sigma);
-        var erfhigharg = (x1-peak_mean)/(sqrt2*peak_sigma);
-        return peak_amplitude * 0.5 * (erf(erfhigharg) - erf(erflowarg));
-    };
-
-    function erf(x) {
-        /*http:/*stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function */
-        var sign = (x >= 0) ? 1 : -1; /* save the sign of x */
-        x = Math.abs(x);
-        var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027
-            a5 = 1.061405429, p  = 0.3275911;
-        var t = 1.0/(1.0 + p*x);
-        var y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
-        return sign * y; /* erf(-x) = -erf(x); */
-    };
-
-    var fit = peakFit.run(numeric.sub(energies, roi_ref_energy), counts);
-    var params = fit.params;
-    var polyd = fit.polyd;
-    var peakchi2 = fit.chi2;
-    var numPeaks = (params.length - (polyd + 1)) / 3;
-    var sumdata = counts.reduce(function(a,b){return a+b;}, 0);
-    var continuumCoefs = params.slice(0,polyd+1);
-
-    var poly_type;
-    switch (polyd) {
-      case 0: poly_type = 'Constant'; break;
-      case 1: poly_type = 'Linear'; break;
-      case 2: poly_type = 'Quadratic'; break;
-      case 3: poly_type = 'Cubic'; break;
-    }
-
-    let partial_roi = {
-      lowerEnergy: lbin_lower_energy,
-      upperEnergy: rbin_upper_energy,
-      referenceEnergy: roi_ref_energy,
-      coeffs: continuumCoefs
-    };
-
-    var sumcontinuum = self.offset_integral( partial_roi, lbin_lower_energy, rbin_upper_energy);
-
-    self.current_fitting_peak =  { 
-        type: poly_type,                       /*options for you are are: 'NoOffset', 'Constant', 'Linear', 'Quardratic', 'Cubic' */
-        lowerEnergy: lbin_lower_energy,
-        upperEnergy: rbin_upper_energy,
-        referenceEnergy: roi_ref_energy,
-        coeffs: continuumCoefs,  /*Linear should have 2 coeficients, Quadratic 3, Cubic 4, constant 1 */
-        coeffUncerts:[0,0],                  /*you can put in actual values of uncertainties here */
-        fitForCoeff: Array.apply(null, Array(polyd + 1)).map(function(){return true}), /*Same number of entries as coeffs; each entry should be true for now  */
-        peaks:[]
-    };
-
-    for (var i=polyd+1; i<params.length; i+=3) {
-      var peakamp = Math.abs(sumdata - sumcontinuum);
-      var gausmean = params[i+1] + roi_ref_energy;
-      var peaksigma = Math.abs(params[i+2]);
-      var gaus_sum = 0;
-      for (var j=0; j<counts.length; j++) {
-        var x0 = energies[j];
-        var x1 = energies[j+1];
-        gaus_sum += gaus_integral(gausmean, peaksigma, peakamp, x0, x1);
-      }
-      peakamp = Math.abs(gaus_sum - sumcontinuum);
-      self.current_fitting_peak.peaks.push({
-          type:'GaussianDefined',
-          skewType:'NoSkew',
-          Centroid:[gausmean,0,true],        /*second element is uncertainty, third alsways true */
-          Width:[peaksigma,0.00431738,true], /*second element is uncertainty, third alsways true */
-          Amplitude:[peakamp,0,true],        /*second element is uncertainty, third alsways true */
-          LandauAmplitude:[0,-1,false],      /*always this value */
-          LandauMode:[0,-1,false],           /*always this value */
-          LandauSigma:[0,-1,false],          /*always this value */
-          Chi2:[peakchi2,-1,false],          /*second and third elemtn always 1 and false          */
-          forCalibration:false,              /*always this value */
-          forSourceFit:false,                /*always this value */
-          sourceType:'NotSpecified'          /*always this value  */
-          }
-      );
-    }
-  }
-}
 
 SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   var self = this;
@@ -7603,7 +7504,6 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   }
 
   // Do real-time peak fit rendering
-  self.runRealTimePeakFit();
 
   self.redraw()();
 }
@@ -11358,27 +11258,5 @@ SpectrumChartD3.prototype.getRandomColor = function() {
   for (let i = 0; i < 6; i++)
     hex += letters.charAt(Math.floor(Math.random() * 15));
   
-  return hex;
-}
-
-/**
- * Returns the hexadecimal value for an RGB color.
- * Input takes in an RGB string in the form rgb(INPUT1, INPUT2, INPUT3) where "INPUT#" are the corresponding integer values.
- * If an error occurrs, returns the original RGB color passed in.
- */
-SpectrumChartD3.prototype.getRGBToHexColor = function(rgb) {
-  if (!rgb) return '#000000';
-
-  rgb = rgb.substring(4, rgb.length - 1);
-  rgb = rgb.split(',');
-
-  if (rgb.length !== 3) return rgb;
-  
-  let hex = '#';
-  for (let i = 0; i < 3; i++) {
-    let c = Number(rgb[i]).toString(16);
-    hex += c.length === 1 ? ('0' + c) : c;
-  }
-
   return hex;
 }
