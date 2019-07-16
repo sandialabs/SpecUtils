@@ -6146,6 +6146,10 @@ bool MeasurementInfo::load_file( const std::string &filename,
       success = load_lsrm_spe_file( filename );
       break;
       
+    case kTka:
+      success = load_tka_file( filename );
+      break;
+      
     case kMicroRaider:
       success = load_micro_raider_file( filename );
     break;
@@ -6156,7 +6160,8 @@ bool MeasurementInfo::load_file( const std::string &filename,
           triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
           triedChn = false, triedIaea = false, triedLsrmSpe = false,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
-          triedOrtecLM = false, triedMicroRaider = false, triedAram = false;
+          triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
+          triedTka = false;
       if( !orig_file_ending.empty() )
       {
         const size_t period_pos = orig_file_ending.find_last_of( '.' );
@@ -6210,6 +6215,14 @@ bool MeasurementInfo::load_file( const std::string &filename,
           success = load_lsrm_spe_file( filename );
           if( success ) break;
         }//if( orig_file_ending=="chn" )
+        
+        if( orig_file_ending=="tka" )
+        {
+          triedTka = true;
+          success = load_tka_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending=="chn" )
+        
         
         if( orig_file_ending=="txt" )
         {
@@ -6311,6 +6324,8 @@ bool MeasurementInfo::load_file( const std::string &filename,
       if( !success && !triedLsrmSpe )
         success = load_lsrm_spe_file( filename );
       
+      if( !success && !triedLsrmSpe )
+        success = load_tka_file( filename );
       
       if( !success && !triedOrtecLM )
         success = load_ortec_listmode_file( filename );
@@ -22693,6 +22708,22 @@ bool MeasurementInfo::load_lsrm_spe_file( const std::string &filename )
 }//bool load_lsrm_spe_file( const std::string &filename );
 
 
+bool MeasurementInfo::load_tka_file( const std::string &filename )
+{
+  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+  
+  if( !input.is_open() )
+    return false;
+  
+  const bool success = load_from_tka( input );
+  
+  if( success )
+    filename_ = filename;
+  
+  return success;
+}//bool load_tka_file( const std::string &filename )
+
+
 bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
 {
   try
@@ -25114,6 +25145,108 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
   
   return false;
 }//bool load_from_lsrm_spe( std::istream &input );
+
+
+bool MeasurementInfo::load_from_tka( std::istream &input )
+{
+/*
+ Simple file with one number on each line with format:
+   Live time
+   Real time
+   counts first channel
+   .
+   .
+   .
+   counts last channel
+ */
+  if( !input.good() )
+    return false;
+  
+  const istream::pos_type orig_pos = input.tellg();
+  
+  try
+  {
+    input.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = input.tellg();
+    input.seekg( orig_pos, ios::beg );
+    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
+    if( filesize > 512*1024 )
+      throw runtime_error( "File to large to be TKA" );
+    
+    //ToDo: check UTF16 ByteOrderMarker [0xFF,0xFE] as first two bytes.
+    
+    
+    const size_t max_len = 128;
+    auto get_next_number = [&input]( float &val ) -> int {
+      string line;
+      if( !UtilityFunctions::safe_get_line( input, line, max_len ) )
+        return -1;
+      if( line.length() > 32 )
+        throw runtime_error( "Invalid line length" );
+      UtilityFunctions::trim(line);
+      if( line.empty() )
+        return 0;
+      if( line.find_first_not_of("+-.0123456789") != string::npos )
+        throw runtime_error( "Invalid char" );
+      if( !(stringstream(line) >> val) )
+        throw runtime_error( "Failed to convert '" + line + "' into number" );
+      return 1;
+    };
+    
+    int rval;
+    float realtime, livetime, dummy;
+    
+    while( (rval = get_next_number(livetime)) != 1 )
+    {
+      if( rval == -1 )
+        throw runtime_error( "unexpected end of file" );
+    }
+    
+    while( (rval = get_next_number(realtime)) != 1 )
+    {
+      if( rval == -1 )
+        throw runtime_error( "unexpected end of file" );
+    }
+    
+    if( livetime > (realtime+FLT_EPSILON) || livetime<0.0f || realtime<0.0f || livetime>2592000.0f || realtime>2592000.0f )
+      throw runtime_error( "Livetime or realtime invalid" );
+    
+    double countssum = 0.0;
+    auto channel_counts = make_shared<vector<float>>();
+    while( (rval = get_next_number(dummy)) != -1 )
+    {
+      if( rval == 1 )
+      {
+        countssum += dummy;
+        channel_counts->push_back( dummy );
+      }
+    }
+    
+    if( channel_counts->size() < 16 )
+      throw runtime_error( "Not enough counts" );
+    
+    auto meas = make_shared<Measurement>();
+    
+    meas->real_time_ = realtime;
+    meas->live_time_ = livetime;
+    meas->gamma_count_sum_ = countssum;
+    meas->gamma_counts_ = channel_counts;
+    
+    measurements_.push_back( meas );
+    
+    cleanup_after_load();
+    
+    return true;
+  }catch( std::exception & )
+  {
+    reset();
+    input.clear();
+    input.seekg( orig_pos, ios::beg );
+  }//try / catch
+  
+  
+  return false;
+}//bool load_from_tka( std::istream &input );
 
 
 bool MeasurementInfo::load_cnf_file( const std::string &filename )

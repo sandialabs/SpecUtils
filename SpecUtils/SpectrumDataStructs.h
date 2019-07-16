@@ -116,6 +116,7 @@ enum ParserType
   kMicroRaider,
   kOrtecListMode,
   kLsrmSpe,
+  kTka,
   kAutoParser
 };//enum ParserType
 
@@ -1433,6 +1434,7 @@ public:
   bool load_amptek_file( const std::string &filename );
   bool load_ortec_listmode_file( const std::string &filename );
   bool load_lsrm_spe_file( const std::string &filename );
+  bool load_tka_file( const std::string &filename );
   
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1502,6 +1504,9 @@ public:
   
   /** Load LSRM SPE file. */
   bool load_from_lsrm_spe( std::istream &input );
+  
+  /** Load TKA file */
+  bool load_from_tka( std::istream &input );
   
   //bool load_from_iaea(...): an ASCII format standardized by the IAEA; not all
   //  portions of the standard have been implemented, since they are either
