@@ -10862,9 +10862,20 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const area = peak.Amplitude[0].toFixed(1);
   const areaUncert = peak.Amplitude[1].toFixed(1);
 
+  let nuc = null;
+  if( peak.nuclide && peak.nuclide.name ){
+    //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", DecayGammaEnergy: 1408.01}
+    nuc = peak.nuclide.name + " (";
+    if( peak.nuclide.decayParent !== peak.nuclide.name )
+      nuc = nuc + peak.nuclide.decayParent + ", ";
+    if( peak.nuclide.DecayGammaEnergy )
+      nuc = nuc + peak.nuclide.DecayGammaEnergy.toFixed(2) + " keV";
+    nuc = nuc + ")";
+  }
+  
 
   const contArea = self.offset_integral(roi,lowerEnergy, upperEnergy).toFixed(1);
-
+  
   const info = {
     mean: mean, 
     fwhm: fwhm, 
@@ -10874,6 +10885,7 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
     areaUncert: areaUncert, 
     contArea: contArea, 
     spectrumIndex: spectrumIndex,
+    nuclide: nuc
   };
   return info;
 }
@@ -10933,30 +10945,46 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
 
   self.hidePeakInfo();
 
+  let boxy = areMultipleSpectrumPeaksShown ? -7.1 : -6.1;
+  let boxheight = areMultipleSpectrumPeaksShown ? 6.5 : 5.5;
+  if( info.nuclide ){
+    boxy -= 1;
+    boxheight += 1;
+  }
+  
   self.peakInfo = self.vis.append("g")
     .attr("class", "peakInfo")
     .attr("transform","translate(" + self.size.width + "," + (self.size.height - 40) + ")");
 
   var rect = self.peakInfo.append('rect')
     .attr("class", "peakInfoBox")
-    .attr('height', areMultipleSpectrumPeaksShown ? "6.5em" : "5.5em")
+    .attr('height', boxheight + "em")
     .attr('x', "-14em")
-    .attr('y', areMultipleSpectrumPeaksShown ? "-7.1em" : "-6.1em")
+    .attr('y', boxy + "em")
     .attr('rx', "5px")
     .attr('ry', "5px");
 
   var text = self.peakInfo.append("g")
     .append("text")
     .attr("dy", "-2em");
-
+  
+  if( info.nuclide ){
+    text.append("tspan")
+        .style('font-weight', "normal")
+        .attr('x', "-13.5em")
+        .attr('dy', "-1em")
+        .text( info.nuclide );
+  }
+    
   createPeakInfoText(text, "cont. area", info.contArea);
   createPeakInfoText(text, "peak area", info.area + String.fromCharCode(0x00B1) + info.areaUncert);
   createPeakInfoText(text, String.fromCharCode(0x03C7) + "2/dof", info.chi2);
   createPeakInfoText(text, "FWHM", info.fwhm + " keV (" + info.fwhmPerc + "%)");
   createPeakInfoText(text, "mean", info.mean + " keV");
+  
   if (areMultipleSpectrumPeaksShown)
     createPeakInfoText(text, "Spectrum", self.rawData.spectra[info.spectrumIndex].title);
-
+    
   const width = text.node().getBoundingClientRect().width + 10; // + 10 for padding right
   rect.attr('width', width);
 
