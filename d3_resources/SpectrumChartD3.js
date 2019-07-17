@@ -24,7 +24,6 @@ Feature TODO list (created 20160220):
   - Customize mouse point to zoom-in/zoom-out where appropriate
   - Optimize frequency of rebinning of data (prevent extra rebinned data from being drawn)
   - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
-  - x-axis slider chart doesnt work in InterSpec because it adds to the height, not a "in-place" thing - maybe change this
   - Move to using D3 v5 with modules to minimize code sizes and such.
   - Start compiling with babel to take care of all the poly fills.
   - lots of other issues
@@ -1285,7 +1284,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   if( self.sliderChartPlot ) {
     let ypad = self.padding.sliderChart + this.padding.topComputed + this.padding.bottomComputed;
     this.size.sliderChartHeight = Math.max( 0, self.options.sliderChartHeightFraction*(this.cy - ypad) );
-    this.size.sliderChartWidth = this.cx - this.padding.leftComputed - this.padding.right - 30;
+    this.size.sliderChartWidth = Math.max(0.85*this.cx,this.cx-100);
   } else {
     this.size.sliderChartHeight = 0;
   }
@@ -1648,7 +1647,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
   if( !self.roiDragBox ){
     
     //ToDo: put line and box inside of a <g> element and move it
-    //self.roiDragBox = this.vis.insert("g" /*, ".refLineInfo"*/ )
+    self.roiDragBox = this.vis.append("g");
     // .attr("width", 10 )
     // .attr("height", 10 )
     // .attr("class", "roiDragBox" )
@@ -1659,20 +1658,25 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
     let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
     self.roiBeingDragged.axiscolor = axiscolor;
     
-    self.roiDragBox = self.vis.append("rect")
+    self.roiDragBox.append("rect")
             .attr("class", "roiDragBox")
             .attr("rx", 2)
             .attr("ry", 2)
+            .attr("x", 0)
+            .attr("y", 0)
             .attr("width", 10)
             .attr("height", 20)
             .attr("stroke", axiscolor )
-            .attr("fill", axiscolor )
-            ;
+            .attr("fill", axiscolor );
 
-    //ToDo: make self.roiDragBox a <g> element, and then also add in the little lines for texture to g
-    //self.roiDragBox = self.vis.append("g").attr("transform","translate(" + (isOnLower ? lpx : upx) - 0.5) + "," + + ")");
-    //self.roiDragBox.append("rect").attr("class", "roiDragBox").attr("rx", 2).attr("ry", 2).attr("width", 10).attr("height", 20).attr("stroke", axiscolor ).attr("fill", axiscolor ).attr("x",-5).attr("y", -10);
-    ;
+    //Add some lines inside the box for a little bit of texture
+    for( x of [3,7] ){
+      self.roiDragBox.append("line")
+          .attr("class", "roiDragBoxLine")
+          .attr("stroke-width", 0.85)
+          .attr("x1", x).attr("x2", x)
+          .attr("y1", 4).attr("y2", 16);
+    }
     
     self.roiDragLine = self.vis.append("line")
             .attr("class", "roiDragLine");
@@ -1688,8 +1692,15 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
     y2 = Math.min(y2,info.yRangePx[1]+10);
   }
   
-  self.roiDragBox.attr("x", (isOnLower ? lpx : upx) - 5)
-      .attr("y", -10 + y1 + 0.5*(y2-y1));
+  self.roiDragBox.attr("transform", "translate(" + ((isOnLower ? lpx : upx) - 5.5) + "," + (-10 + y1 + 0.5*(y2-y1)) + ")");
+  
+  d3.selectAll('.roiDragBoxLine').forEach( function(line){
+    for( var i = 0; i < line.length; ++i)
+      d3.select(line[i]).attr("stroke", self.roiBeingDragged.color );
+  } );
+  
+  //self.roiDragBox.attr("x", (isOnLower ? lpx : upx) - 5)
+      //.attr("y", -10 + y1 + 0.5*(y2-y1));
       
   self.roiDragLine.attr("x1", (isOnLower ? lpx : upx) - 0.5)
       .attr("x2", (isOnLower ? lpx : upx) - 0.5)
@@ -1744,13 +1755,14 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
     y2 = Math.min(y2,roiinfo.yRangePx[1]+10);
   }
   
-  self.roiDragBox
-      .attr("x", xcenter - 5)
-      .attr("y", -10 + y1 + 0.5*(y2-y1));
+  //self.roiDragBox
+  //    .attr("x", xcenter - 5)
+  //    .attr("y", -10 + y1 + 0.5*(y2-y1));
+  self.roiDragBox.attr("transform", "translate(" + (xcenter - 5.5) + "," + (-10 + y1 + 0.5*(y2-y1)) + ")");
   
   self.roiDragLine
-      .attr("x1", xcenter + 0.5)
-      .attr("x2", xcenter + 0.5)
+      .attr("x1", xcenter - 0.5)
+      .attr("x2", xcenter - 0.5)
       .attr("y1", y1)
       .attr("y2", y2);
 
@@ -1813,7 +1825,7 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(){
   let roiinfo = self.roiBeingDragged;
   var roiPx = (isOnLower ? lpx : upx);
   self.roiDragMouseDown = [m[0], roiPx, energy, isOnLower];
-  console.log( 'self.roiDragMouseDown ', self.roiDragMouseDown );
+  //console.log( 'self.roiDragMouseDown ', self.roiDragMouseDown );
   
   let y1 = 0;
   let y2 = self.size.height
@@ -1824,9 +1836,10 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(){
   }
   
   var dPx =  m[0] - roiPx;
-  self.roiDragBox
-      .attr("x", m[0] - dPx - 5)
-      .attr("y", -10 + y1 + 0.5*(y2-y1));;
+  //self.roiDragBox
+  //    .attr("x", m[0] - dPx - 5)
+  //    .attr("y", -10 + y1 + 0.5*(y2-y1));;
+  self.roiDragBox.attr("transform", "translate(" + (m[0] - dPx - 5.5) + "," + (-10 + y1 + 0.5*(y2-y1)) + ")");
 
   self.roiDragLine.attr("x1", roiPx - 0.5)
       .attr("x2", roiPx - 0.5)
@@ -4887,7 +4900,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
     // G element of the slider chart
     self.sliderChart = d3.select("svg").append("g")
-      .attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
+      //.attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
       // .on("mousemove", self.handleMouseMoveSliderChart());
       .on("touchstart", self.handleTouchStartSliderChart())
       .on("touchmove", self.handleTouchMoveSliderChart());
@@ -4927,8 +4940,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     //            + ', self.size.height=' + self.size.height
     //            + ', self.padding.sliderChart=' + self.padding.sliderChart );
     
-    self.sliderChart.attr("transform", "translate(" + self.padding.leftComputed + "," + (self.chart.clientHeight - self.size.sliderChartHeight) + ")")
-    
     self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
       .attr("height", self.size.sliderChartHeight);
     self.sliderChartClipPath.attr("width", self.size.sliderChartWidth)
@@ -4937,6 +4948,10 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     // self.sliderChart.attr("transform", "translate(0," + (self.size.height + extraPadding + self.padding.sliderChart) + ")");
   }
 
+  
+  self.sliderChart
+      .attr("transform", "translate(" + 0.5*(self.cx - self.size.sliderChartWidth) + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")");
+  
   // Commented out for adding peaks into slider chart sometime later
   // self.sliderPeakVis.selectAll('*').remove();
   // self.peakVis.select(function() {
@@ -6311,8 +6326,12 @@ SpectrumChartD3.prototype.drawPeaks = function() {
   function roiPath(roi,points,bgsubtractpoints,scaleFactor,background){
     var paths = [];
     var bisector = d3.bisector(function(d){return d.x;});
-    var xstartind = bisector.left( points, Math.max(roi.lowerEnergy,minx) );
-    var xendind = bisector.right( points, Math.min(roi.upperEnergy,maxx) );
+    
+    let roiLB = Math.max(roi.lowerEnergy,minx);
+    let roiUB = Math.min(roi.upperEnergy,maxx);
+    
+    var xstartind = bisector.left( points, roiLB );
+    var xendind = bisector.right( points, roiUB );
 
     // Boolean to signify whether to subtract points from background
     const useBackgroundSubtract = self.options.backgroundSubtract && background;
@@ -6323,6 +6342,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( xendind >= (points.length-2) )
       xendind = points.length - 2;
 
+    //console.log( 'roi.lowerEnergy=', roi.lowerEnergy, ', xstartind=', points[xstartind] );
+    //console.log( 'roi.upperEnergy=', roi.upperEnergy, ', xendind=', points[xendind] );
+      
     /*The continuum values used for the first and last bin of the ROI are fudged */
     /*  for now...  To be fixed */
 
@@ -6343,14 +6365,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       firsty -= background.points[bi] ? background.points[bi].y : 0;
     }
     
-    paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
+    //paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
+    paths[0] = "M" + self.xScale(roiLB) + "," + self.yScale(firsty) + " L";
+    
     for( var j = 0; j < 2*roi.peaks.length; ++j )
       paths[j+1] = "";
 
       
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
     for( var i = xstartind; i < xendind; ++i ) {
-      thisx = 0.5*(points[i].x + points[i+1].x);
+      thisx = ((i===xstartind) ? roiLB : ((i===(xendind-1)) ? roiUB : (0.5*(points[i].x + points[i+1].x))));
       thisy = self.offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
@@ -6407,7 +6431,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     for( var xindex = xendind - 1; xindex >= xstartind; --xindex ) {
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
-      thisx = 0.5*(points[xindex].x + points[xindex+1].x);
+      //thisx = 0.5*(points[xindex].x + points[xindex+1].x);
+      thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(points[xindex].x + points[xindex+1].x))));
+      
+      
       cont_area = self.offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
@@ -9672,17 +9699,29 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   var recalibrationPeakVis = d3.select("#recalibrationPeakVis");
 
   /* Set the line that symbolizes where user initially began right-click-and-drag */
+  //.mouseLine      { font-size: 0.8em; stroke-width: 2; }
+  //.secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
+  
+  //ToDo: get exiscolor
+  let axiscolor = 'black'
   if (recalibrationStartLine.empty()) {
+    
+    const tickElement = document.querySelector('.tick');
+    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    
     recalibrationStartLine = self.vis.append("line")
       .attr("id", "recalibrationStartLine")
       .attr("class", "mouseLine")
       .attr("x1", self.recalibrationMousePos[0])
       .attr("x2", self.recalibrationMousePos[0])
       .attr("y1", 0)
-      .attr("y2", self.size.height);
+      .attr("y2", self.size.height)
+      .attr("stroke",axiscolor);
   }
 
   if (recalibrationText.empty()) {                       /* Right-click-and-drag text to say where recalibration ranges are */
+    //ToDo: make sure this text same color as chart text.  Also, put on translucent background
     recalibrationText = self.vis.append("text")
       .attr("id", "recalibrationText")
       .attr("class", "mouseLineText")
@@ -9694,14 +9733,15 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
     recalibrationText.text( "Recalibrate data from " + self.xScale.invert(recalibrationStartLine.attr("x1")).toFixed(2) + " to " + self.xScale.invert(self.lastMouseMovePos[0]).toFixed(2) + " keV" )
   
 
-  /* Draw the distance lines from the right-click-and-drag line to mouse position */
+  // Draw the distance lines from the right-click-and-drag line to mouse position
+/*
   if (!self.recalibrationDistanceLines) {
     var distanceLine;
     self.recalibrationDistanceLines = [];
 
     var lineSpacing = self.size.height / 5;
 
-    /* Create 4 lines that draw from the right-click-and-drag initial starting point to where the mouse is */
+    //Create 4 lines that draw from the right-click-and-drag initial starting point to where the mouse is
     for (i = 0; i < 4; i++) {
       distanceLine = self.vis.append("line")
                             .attr("class", "secondaryMouseLine")
@@ -9709,8 +9749,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
                             .attr("x2", self.lastMouseMovePos[0])
                             .attr("y1", lineSpacing)
                             .attr("y2", lineSpacing);
-
-      /* This is to add the the arrowhead end to the distance lines */
+       //This is to add the the arrowhead end to the distance lines
       var arrow = self.vis.append('svg:defs')
         .attr("id", "recalibrationArrowDef")
         .append("svg:marker")
@@ -9731,43 +9770,47 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       lineSpacing += self.size.height / 5;
     }
 
-  } else {    /* Distance lines have already been drawn */
+  } else {    // Distance lines have already been drawn
     for (i = 0; i < self.recalibrationDistanceLines.length; i++) {
       var x2 = self.lastMouseMovePos[0];
 
-      /* If mouse position is to the left of the right-click-and-drag line */
+      // If mouse position is to the left of the right-click-and-drag line
       if (self.lastMouseMovePos[0] < recalibrationStartLine.attr("x1")) {
-        self.recalibrationDistanceLines[i].attr("x2", x2);     /* Adjust the x-position of the line */
+        self.recalibrationDistanceLines[i].attr("x2", x2);     //Adjust the x-position of the line
 
-        d3.selectAll("#rightClickDragArrow > path").each(function(){            /* Flip the arrowhead to face towards the negative x-axis */
+        d3.selectAll("#rightClickDragArrow > path").each(function(){            //Flip the arrowhead to face towards the negative x-axis
           d3.select(this).attr("transform", "translate(8,14) rotate(180)");
         });
       }
       else {
-        /* To adjust for the length of the line with respect to its arrowhead */
+        //To adjust for the length of the line with respect to its arrowhead
         if (self.recalibrationDistanceLines[i].attr("x2") > 0)
-          x2 -= 8;  /* Minus 8 to account for the arrow width connected to the line */
+          x2 -= 8;  //Minus 8 to account for the arrow width connected to the line
         else
           x2 = 0;
 
-        /* Adjust the x-position of the line */
+        // Adjust the x-position of the line
         self.recalibrationDistanceLines[i].attr("x2", x2);
 
-        /* Un-flip the arrowhead (if it was flipped) back to pointing towards the positive x-axis */
+        // Un-flip the arrowhead (if it was flipped) back to pointing towards the positive x-axis
         d3.selectAll("#rightClickDragArrow > path").each(function(){
           d3.select(this).attr("transform", null);
         });
       }
     }
   }
+ */
 
   /* Draw the line to represent the mouse position for recalibration */
   if (recalibrationMousePosLines.empty())
     recalibrationMousePosLines = self.vis.append("line")
       .attr("id", "recalibrationMousePosLines")
-      .attr("class", "lightMouseLine")
       .attr("y1", 0)
-      .attr("y2", self.size.height);
+      .attr("y2", self.size.height)
+      .attr("stroke",axiscolor)
+      .style("opacity", 0.75)
+      .attr("stroke-width",0.5);
+      ;
    
   /* Update the mouse position line for recalibration */
   recalibrationMousePosLines.attr("x1", self.lastMouseMovePos[0])
@@ -9871,12 +9914,14 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
   });
 
   /* Remove the right-click-and-drag end-point line */
+  /*
   if (self.recalibrationDistanceLines) {
     for (i = 0; i < self.recalibrationDistanceLines.length; i++) {
       self.recalibrationDistanceLines[i].remove();
     }
     self.recalibrationDistanceLines = null;
   }
+   */
 
   /* Remove the right-click-and-drag mouse line */
   recalibrationMousePosLines.remove();

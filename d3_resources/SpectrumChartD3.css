@@ -36,7 +36,6 @@
   
 .mouseLine      { font-size: 0.8em; stroke-width: 2; }
 .secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
-.lightMouseLine { font-size: 0.8em; stroke-width: 0.5;  stroke: gray }
 
 .referenceGammaSelectDiv { display: inline-block; margin-left: 25px; }
 .referenceGammaSelect { width: 200px; height: 130px; }
