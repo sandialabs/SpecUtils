@@ -6324,7 +6324,7 @@ bool MeasurementInfo::load_file( const std::string &filename,
       if( !success && !triedLsrmSpe )
         success = load_lsrm_spe_file( filename );
       
-      if( !success && !triedLsrmSpe )
+      if( !success && !triedTka )
         success = load_tka_file( filename );
       
       if( !success && !triedOrtecLM )
