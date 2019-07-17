@@ -8024,6 +8024,18 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
   var cursorIsOutOfBounds = (t && t.length > 0) ? (t[0][0] < 0 || t[0][0] > xmax) : (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
 
+  
+  let axiscolor = 'black', txtcolor = 'black';
+  const tickElement = document.querySelector('.tick');
+  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+  
+  const titleElement = document.querySelector('.xaxistitle');
+  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
+  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
+  
+  //Spacing between lines of text
+  let linehspace = 13;
 
   /* Mouse-edge Helpers: These are global helpers for feature markers that update the mouse edge position.
   */
@@ -8062,17 +8074,21 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
     /* Update the mouse edge and corresponding text position  */
     if ( self.mouseEdge ) {
         self.mouseEdge
+          .attr("stroke", axiscolor)
           .attr("x1", m[0])
-          .attr("x2", m[0]);
+          .attr("x2", m[0])
+          .attr("y2", self.size.height);
         self.mouseEdgeText
-          .attr("x", m[0] + xmax/125 )
+          .attr( "fill", txtcolor )
+          .attr( "y", self.size.height/4)
+          .attr( "x", m[0] + xmax/125 )
           .text( energy.toFixed(1) + " keV");
     } else {  
         /* Create the mouse edge (and text next to it) */
         self.mouseEdge = self.vis.append("line")
           .attr("class", "mouseLine")
           .attr("stroke-width", 2)
-          .attr("stroke", "black")
+          .attr("stroke", axiscolor)
           .attr("x1", m[0])
           .attr("x2", m[0])
           .attr("y1", 0)
@@ -8080,10 +8096,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         self.mouseEdgeText = self.vis.append("text")
           .attr("class", "mouseLineText")
+          .attr( "fill", txtcolor )
           .attr( "x", m[0] + xmax/125 )
           .attr( "y", self.size.height/4)
           .text( energy.toFixed(1) + " keV");
     }
+    
+    self.mouseEdge.attr("stroke", axiscolor);
   }
 
 
@@ -8200,19 +8219,22 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if( !self.singleEscapeForward && singleEscapeForwardEnergy >= 0 ) {  
         self.singleEscapeForward = self.vis.append("line")    /* create single forward escape line */
         .attr("class", "escapeLineForward")
+        .attr("stroke", axiscolor)
         .attr("x1", singleEscapeForwardPix)
         .attr("x2", singleEscapeForwardPix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
       self.singleEscapeForwardText = self.vis.append("text") /* create Single Forward Escape label beside line */
             .attr("class", "peakText")
+            .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
             .text( "Single Escape" );
       self.singleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
             .attr("class", "peakText")
+            .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/4.5)
+            .attr( "y", self.size.height/5.3 + linehspace)
             .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
       } else {
         if ( singleEscapeForwardEnergy < 0 && self.singleEscapeForward && self.singleEscapeForwardText && self.singleEscapeForwardMeas ) {
@@ -8220,11 +8242,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         } else if ( self.singleEscapeForward ) {      /* Move everything to where mouse is */
           self.singleEscapeForward
+            .attr("stroke", axiscolor)
+            .attr("y2", self.size.height)
             .attr("x1", singleEscapeForwardPix)
             .attr("x2", singleEscapeForwardPix);
           self.singleEscapeForwardText
-            .attr("x", singleEscapeForwardPix + xmax/200 );
+            .attr( "fill", txtcolor )
+            .attr( "y", self.size.height/5.3)
+            .attr( "x", singleEscapeForwardPix + xmax/200 );
           self.singleEscapeForwardMeas
+            .attr( "fill", txtcolor )
+            .attr( "y", self.size.height/5.3 + linehspace)
             .attr( "x", singleEscapeForwardPix + xmax/125 )
             .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
         }
@@ -8235,19 +8263,22 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if( !self.doubleEscapeForward && doubleEscapeForwardEnergy >= 0 ) {  
         self.doubleEscapeForward = self.vis.append("line")    /* create double forward escape line */
         .attr("class", "escapeLineForward")
+        .attr("stroke", axiscolor)
         .attr("x1", doubleEscapeForwardPix)
         .attr("x2", doubleEscapeForwardPix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
       self.doubleEscapeForwardText = self.vis.append("text") /* create double Forward Escape label beside line */
             .attr("class", "peakText")
+            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
             .text( "Double Escape" );
       self.doubleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under double Escape label */
             .attr("class", "peakText")
+            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/4.5)
+            .attr( "y", self.size.height/5.3 + linehspace)
             .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
       } else {
         if ( doubleEscapeForwardEnergy < 0 && self.doubleEscapeForward && self.doubleEscapeForwardText && self.doubleEscapeForwardMeas ) {
@@ -8255,12 +8286,18 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         } else if ( self.doubleEscapeForward ) {      /* Move everything to where mouse is */
           self.doubleEscapeForward
+            .attr("stroke", axiscolor)
+            .attr("y2", self.size.height)
             .attr("x1", doubleEscapeForwardPix)
             .attr("x2", doubleEscapeForwardPix);
           self.doubleEscapeForwardText
+            .attr( "fill", txtcolor )
+            .attr( "y", self.size.height/5.3)
             .attr("x", doubleEscapeForwardPix + xmax/200 );
           self.doubleEscapeForwardMeas
+            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/125 )
+            .attr( "y", self.size.height/5.3 + linehspace)
             .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
         }
       }
@@ -8273,19 +8310,22 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
     if( !self.singleEscape && singleEscapeEnergy >= 0 ) {  
       self.singleEscape = self.vis.append("line")    /* create single escape line */
       .attr("class", "peakLine")
+      .attr("stroke", axiscolor)
       .attr("x1", singleEscapePix)
       .attr("x2", singleEscapePix)
       .attr("y1", 0)
       .attr("y2", self.size.height);
     self.singleEscapeText = self.vis.append("text") /* create Single Escape label beside line */
           .attr("class", "peakText")
+          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
           .text( "Single Escape" );
     self.singleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
           .attr("class", "peakText")
+          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/4.5)
+          .attr( "y", self.size.height/5.3 + linehspace)
           .text( singleEscapeEnergy.toFixed(1) + " keV" );
     } else {
       if ( singleEscapeEnergy < 0 && self.singleEscape && self.singleEscapeText && self.singleEscapeMeas ) {
@@ -8298,12 +8338,18 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
       } else if ( self.singleEscape ) {      /* Move everything to where mouse is */
         self.singleEscape
+          .attr("stroke", axiscolor)
+          .attr("y2", self.size.height)
           .attr("x1", singleEscapePix)
           .attr("x2", singleEscapePix);
         self.singleEscapeText
-          .attr("x", singleEscapePix + xmax/200 );
+          .attr( "fill", txtcolor )
+          .attr( "y", self.size.height/5.3)
+          .attr( "x", singleEscapePix + xmax/200 );
         self.singleEscapeMeas
+          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/125 )
+          .attr( "y", self.size.height/5.3 + linehspace)
           .text( singleEscapeEnergy.toFixed(1) + " keV" );
       }
     }
@@ -8317,20 +8363,22 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       self.doubleEscape = self.vis.append("line")  /* create double escape line */
       .attr("class", "peakLine")
       .attr("stroke-width", 2)
-      .attr("stroke", "black")
+      .attr("stroke", axiscolor)
       .attr("x1", doubleEscapePix)
       .attr("x2", doubleEscapePix)
       .attr("y1", 0)
       .attr("y2", self.size.height);
     self.doubleEscapeText = self.vis.append("text") /* create Double Escape label beside line */
           .attr("class", "peakText")
+          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
           .text( "Double Escape" );
     self.doubleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Double Escape label */
           .attr("class", "peakText")
+          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/4.5)
+          .attr( "y", self.size.height/5.3 + linehspace)
           .text( doubleEscapeEnergy.toFixed(1) + " keV" );
     } else {
       if ( (doubleEscapeEnergy < 0) && self.doubleEscape && self.doubleEscapeText && self.doubleEscapeMeas ) {
@@ -8344,11 +8392,15 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       } else if ( self.doubleEscape ) {    /* Move everything to where mouse is */
 
         self.doubleEscape
+          .attr("stroke", axiscolor)
+          .attr("y2", self.size.height)
           .attr("x1", doubleEscapePix)
           .attr("x2", doubleEscapePix);
         self.doubleEscapeText
+          .attr( "fill", txtcolor )
           .attr("x", doubleEscapePix + xmax/200 );
         self.doubleEscapeMeas
+          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/125 )
           .text( doubleEscapeEnergy.toFixed(1) + " keV" );
       }
@@ -8391,37 +8443,31 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       self.comptonPeak = self.vis.append("line")
         .attr("class", "peakLine")
         .attr("stroke-width", 2)
-        .attr("stroke", "black")
-        .attr("x1", comptonPeakPix)
-        .attr("x2", comptonPeakPix)
-        .attr("y1", 0)
-        .attr("y2", self.size.height);
+        .attr("y1", 0);
       self.comptonPeakText = self.vis.append("text")
         .attr("class", "peakText")
-        .attr( "x", comptonPeakPix + xmax/200 )
-        .attr( "y", self.size.height/10)
-        .text( self.options.comptonPeakAngle + "° Compton Peak" );
+        .attr( "y", self.size.height/10);
       self.comptonPeakMeas = self.vis.append("text")
         .attr("class", "peakText")
-        .attr( "x", comptonPeakPix + xmax/125 )
-        .attr( "y", self.size.height/7.8)
-        .text( comptonPeakEnergy.toFixed(1) + " keV" );
-    } else {
-      /* update the compton peak edge line */
-      self.comptonPeak
-        .attr("x1", comptonPeakPix)
-        .attr("x2", comptonPeakPix)
-        .attr("y1", 0)
-        .attr("y2", self.size.height);
-      self.comptonPeakText
-        .attr("x", comptonPeakPix + xmax/200 )
-        .attr( "y", self.size.height/10)
-        .text( self.options.comptonPeakAngle + "° Compton Peak" );
-      self.comptonPeakMeas
-        .attr( "x", comptonPeakPix + xmax/125 )
-        .attr( "y", self.size.height/7.8)
-        .text( comptonPeakEnergy.toFixed(1) + " keV" );
+        .attr( "y", self.size.height/10 + linehspace);
     }
+    
+    self.comptonPeak
+        .attr("stroke", axiscolor)
+        .attr("y2", self.size.height)
+        .attr("x1", comptonPeakPix)
+        .attr("x2", comptonPeakPix);
+      
+    self.comptonPeakText
+        .attr( "fill", txtcolor )
+        .attr( "x", comptonPeakPix + xmax/200 )
+        .text( self.options.comptonPeakAngle + "° Compton Peak" )
+        
+    self.comptonPeakMeas
+        .attr( "fill", txtcolor )
+        .attr( "x", comptonPeakPix + xmax/125 )
+        .text( comptonPeakEnergy.toFixed(1) + " keV" );
+    
     updateMouseEdge();
   }
 
@@ -8458,36 +8504,30 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       /* draw compton edge line here */
       self.comptonEdge = self.vis.append("line")
         .attr("class", "peakLine")
-        .attr("stroke-width", 2)
-        .attr("stroke", "black")
-        .attr("x1", compEdgePix)
-        .attr("x2", compEdgePix)
-        .attr("y1", 0)
-        .attr("y2", self.size.height);
+        .attr("stroke-width", 2);
       self.comptonEdgeText = self.vis.append("text")
         .attr("class", "peakText")
-        .attr( "x", compEdgePix + xmax/200 )
-        .attr( "y", self.size.height/22)
         .text( "Compton Edge" );
       self.comptonEdgeMeas = self.vis.append("text")
-        .attr("class", "peakText")
-        .attr( "x", compEdgePix + xmax/125 )
-        .attr( "y", self.size.height/14)
-        .text( compedge.toFixed(1) + " keV" );
-    } else {
-      self.comptonEdge
+        .attr("class", "peakText");
+    }
+    
+    self.comptonEdge
+        .attr("stroke", axiscolor)
         .attr("x1", compEdgePix)
         .attr("x2", compEdgePix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
-      self.comptonEdgeText
+    self.comptonEdgeText
+        .attr( "fill", txtcolor )
         .attr("x", compEdgePix + xmax/200 )
         .attr("y", self.size.height/22);
-      self.comptonEdgeMeas
+    self.comptonEdgeMeas
+        .attr( "fill", txtcolor )
         .attr( "x", compEdgePix + xmax/125 )
-        .attr( "y", self.size.height/14)
+        .attr( "y", self.size.height/22 + linehspace)
         .text( compedge.toFixed(1) + " keV" );
-    }
+    
     updateMouseEdge();
   }
 
@@ -8596,35 +8636,29 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if (clickedEdgeOutOfBounds) {
         self.savedClickEnergy = clickedEnergy;
         deleteClickedPeakMarker();
-      }
-      else if( !self.clickedPeak ) {
-        /* draw compton edge line here */
-        self.clickedPeak = self.vis.append("line")
-          .attr("class", "peakLine")
-          .attr("stroke-width", 2)
-          .attr("stroke", "black")
-          .attr("x1", clickedEdgePix)
-          .attr("x2", clickedEdgePix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height)
-          .attr("energy", clickedEnergy);
-        self.clickedPeakMeas = self.vis.append("text")
-          .attr("class", "peakText")
-          .attr( "x", clickedEdgePix + xmax/125 )
-          .attr( "y", self.size.height/4)
-          .text( clickedEnergy.toFixed(1) + " keV" );
       } else {
+        if( !self.clickedPeak ){
+          /* draw compton edge line here */
+          self.clickedPeak = self.vis.append("line")
+              .attr("class", "peakLine")
+              .attr("stroke-width", 2);
+          self.clickedPeakMeas = self.vis.append("text")
+              .attr("class", "peakText");
+        }
+        
 
         self.clickedPeak
-          .attr("x1", clickedEdgePix)
-          .attr("x2", clickedEdgePix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height)
-          .attr("energy", clickedEnergy);
+            .attr("stroke", axiscolor)
+            .attr("x1", clickedEdgePix)
+            .attr("x2", clickedEdgePix)
+            .attr("y1", 0)
+            .attr("y2", self.size.height)
+            .attr("energy", clickedEnergy);
         self.clickedPeakMeas
-          .attr( "x", clickedEdgePix + xmax/125 )
-          .attr( "y", self.size.height/4)
-          .text( clickedEnergy.toFixed(1) + " keV" );
+            .attr( "fill", txtcolor )
+            .attr( "x", clickedEdgePix + xmax/125 )
+            .attr( "y", self.size.height/4)
+            .text( clickedEnergy.toFixed(1) + " keV" );
       }
     }  
 
@@ -8634,18 +8668,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if ( !self.sumPeakHelpText ) {
         /* create the sum peak help text */
         self.sumPeakHelpText = self.vis.append("text")
-          .attr("class", "peakText")
-          .attr("fill", "red")
-          .attr( "x", m[0] + xmax/125 )
-          .attr( "y", self.size.height/3.5)
-              .text( "Click to set sum peak first energy." );
-      } else {
-        /* update the sum peak help text position */
-        self.sumPeakHelpText
-          .attr( "x", m[0] + xmax/125 )
-          .attr( "y", self.size.height/3.5)
+            .attr("class", "peakText")
+            .attr("fill", "red")
+            .text( "Click to set sum peak first energy." );
       }
-
+      
+      self.sumPeakHelpText
+          .attr( "x", m[0] + xmax/125 )
+          .attr( "y", self.size.height/3.5)
     } else {
         /* delete sum peak help text */
         if ( self.sumPeakHelpText ) {
@@ -8663,41 +8693,33 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
         /* draw left-sum peak line here */
         self.leftSumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2)
-          .attr("stroke", "black")
-          .attr("x1", leftSumPix)
-          .attr("x2", leftSumPix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height);
+          .attr("stroke-width", 2);
         self.leftSumPeakText = self.vis.append("text")
           .attr("class", "peakText")
-          .attr( "x", leftSumPix + xmax/200 )
-          .attr( "y", self.size.height/3.4)
           .text( "Clicked Peak" );
         self.leftSumPeakMeas = self.vis.append("text")
-          .attr("class", "peakText")
-          .attr( "x", leftSumPix + xmax/125 )
-          .attr( "y", self.size.height/3.0)
-          .text( energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV" );
-      } else {
-        /* update the left sum peak line here */
-        self.leftSumPeak
+          .attr("class", "peakText");
+      }
+      
+      /* update the left sum peak line here */
+      self.leftSumPeak
+          .attr("stroke", axiscolor)
           .attr("x1", leftSumPix)
           .attr("x2", leftSumPix)
           .attr("y1", 0)
           .attr("y2", self.size.height); 
-        self.leftSumPeakText
-          .attr("class", "peakText")
+      self.leftSumPeakText
+          .attr( "fill", txtcolor )
           .attr( "x", leftSumPix + xmax/125 )
           .attr( "y", self.size.height/3.4);
-        self.leftSumPeakMeas
+      self.leftSumPeakMeas
+          .attr( "fill", txtcolor )
           .attr( "x", leftSumPix + xmax/125 )
-          .attr( "y", self.size.height/3.0)
+          .attr( "y", self.size.height/3.4 + linehspace)
           .text( energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV" );
-        }
 
-        if (leftSumOutOfBounds)
-          deleteLeftSumPeakMarker();
+      if( leftSumOutOfBounds )
+        deleteLeftSumPeakMarker();
 
     } else
       deleteLeftSumPeakMarker();
@@ -8720,43 +8742,31 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
         /* draw sum peak line here */
         self.sumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2)
-          .attr("stroke", "black")
-          .attr("x1", sumPix)
-          .attr("x2", sumPix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height);
+          .attr("stroke-width", 2);
       self.sumPeakText = self.vis.append("text")
           .attr("class", "peakText")
-          .attr( "x", sumPix + xmax/200 )
-          .attr( "y", self.size.height/4)
           .text( "Sum Peak" );
-      self.sumPeakMeas = self.vis.append("text")
-          .attr("class", "peakText")
-          .attr( "x", sumPix + xmax/125 )
-          .attr( "y", self.size.height/3.7)
-          .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
-      } else {
-        if (!self.sumPeakMeas)
-          self.sumPeakMeas = self.vis.append("text")
-                .attr("class", "peakText")
-                .attr( "x", sumPix + xmax/125 )
-                .attr( "y", self.size.height/3.7)
-                .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
+      }
+      
+      if( !self.sumPeakMeas )
+        self.sumPeakMeas = self.vis.append("text")
+                .attr("class", "peakText");
 
-        self.sumPeak
+      self.sumPeak
+          .attr("stroke", axiscolor)
           .attr("x1", sumPix)
           .attr("x2", sumPix)
           .attr("y1", 0)
           .attr("y2", self.size.height);
-        self.sumPeakText
+      self.sumPeakText
+          .attr( "fill", txtcolor )
           .attr( "x", sumPix + xmax/125 )
           .attr( "y", self.size.height/4);
-        self.sumPeakMeas
+      self.sumPeakMeas
+          .attr( "fill", txtcolor )
           .attr( "x", sumPix + xmax/125 )
-          .attr( "y", self.size.height/3.7)
+          .attr( "y", self.size.height/4 +  + linehspace)
           .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
-      }
     }
   }
 
