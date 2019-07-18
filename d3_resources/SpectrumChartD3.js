@@ -5584,7 +5584,7 @@ SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
  */
 SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var self = this;
-
+  
   function hasYScaleFactors() {
     if (!self.rawData || !self.rawData.spectra) return false;
     var result = false;
@@ -5620,12 +5620,12 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     
     /* Display proper error messages */
     if (self.options.scaleBackgroundSecondary) {
-      if (!self.rawData || !self.rawData.spectra)
-        alert("No data specified for graph!");
-      else if (!graphHasYScaleFactors)
-        alert("No y-scale factors detected for any graph!");
-      else if (onlyForegroundPresentInGraph)
-        alert("Only chart foreground detected. Please specify a background/other chart for scaling y-values.");
+      //if (!self.rawData || !self.rawData.spectra)
+      //  alert("No data specified for graph!");
+      //else if (!graphHasYScaleFactors)
+      //  alert("No y-scale factors detected for any graph!");
+      //else if (onlyForegroundPresentInGraph)
+      //  alert("Only chart foreground detected. Please specify a background/other chart for scaling y-values.");
     }
 
     return;
@@ -5657,7 +5657,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         }
       }
     }
-
+    
     self.scalerWidget = d3.select(this.chart).select("svg").append("g")
       .attr("class", "scalerwidget")
       .attr("transform","translate(" + (this.cx - (this.cx/2) - this.padding.right) + ","+ (this.padding.topComputed + 10) + ")");
@@ -5760,6 +5760,13 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     if (i == 0 || spectrum.type === self.spectrumTypes.FOREGROUND)   /* Don't add scaling functionality for foreground */
       return;
 
+    //Blah blah blah
+    //Search for padding.right, and everywhere add an extra ~20px padding.right for each spectrum.scaleAxis
+    //Draw sliders vertical to right of chart; get rid of all dragging logic and such, and convert everything.
+    //Have it so when let go, circle goes back to middle;
+    //Have scale factor be logorithmic (e.g., from 0.001 to 1000) when log, and 0.1 to 100 when linear.
+    //Implement emitting signal back to C++ when let go
+      
     if (spectrumScaleFactor != null && spectrumScaleFactor >= 0) {
       spectrum.scale = d3.scale.linear()
         .domain([0, self.options.maxScaleFactor]) /* TODO: Have global max scale factor */

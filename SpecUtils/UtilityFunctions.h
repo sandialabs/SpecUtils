@@ -247,6 +247,15 @@ namespace UtilityFunctions
   size_t utf8_str_size_limit( const char *str,
                               size_t strlen, const size_t max_bytes );
   
+  /* Convert between UTF-16 and UTF-8 strings.  This is used on Windows as
+     all the file path functions encode everything as UTF-8, however on Windows
+     you must call the "wide" version of functions related to file paths to work
+     correctly (the narrow versions use the current code range, not UTF-8).
+   
+     (all of this wide/narrow stuff is a work on progress 20190717)
+   */
+  std::string convert_from_utf16_to_utf8(const std::wstring &wstr);
+  std::wstring convert_from_utf8_to_utf16( const std::string &str );
   
   //to_iso_string(...) and to_extended_iso_string(...) are implemented here
   //  to avoid having to link to the boost datetime library
@@ -429,6 +438,7 @@ namespace UtilityFunctions
    */
   bool is_absolute_path( const std::string &path );
   
+#ifndef _WIN32
   /** Get the current working directory.
    
    Becareful if using multiple threads, and another thread could change the
@@ -437,7 +447,11 @@ namespace UtilityFunctions
    Returns empty string on error.
    */
   std::string get_working_path();
-  
+#else
+  //Not implemented for windows since there seems to be some trouble of the path
+  //  contains some non-ascii characters - should use wstring - but dont want to re-write everything...
+  //Maybe it will be good enough to widen strings?
+#endif
   
   /** \brief Gives a unique file name.
    

@@ -30,6 +30,7 @@
 #include <locale>
 #include <limits>
 #include <time.h>
+#include <codecvt>
 #include <ctype.h>
 #include <stdio.h>
 #include <fstream>
@@ -111,6 +112,12 @@
 #if( defined(_MSC_VER) && _MSC_VER <= 1700 )
 #define strtoll _strtoi64
 #endif
+
+
+#ifdef _WIN32
+static_assert( defined(UNICODE) || defined(_UNICODE), "UNICODE must be defined to compile on windows" );
+#endif
+
 
 using namespace std;
 
@@ -988,7 +995,41 @@ std::string trim_copy( std::string str )
     return iter - str;
   }
   
+  std::string convert_from_utf16_to_utf8(const std::wstring &winput)
+  {
+#ifdef _WIN32
+    std::string answer;
+    int requiredSize = WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, 0, 0, 0, 0);
+    if(requiredSize > 0)
+    {
+      std::vector<char> buffer(requiredSize);
+      WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, &buffer[0], requiredSize, 0, 0);
+      answer.assign(buffer.begin(), buffer.end() - 1);
+    }
+    return answer;
+#else
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes( winput );
+#endif
+  }//std::string convert_from_utf16_to_utf8(const std::wstring &winput)
   
+  
+  std::wstring convert_from_utf8_to_utf16( const std::string &input )
+  {
+#ifdef _WIN32
+    std::wstring answer;
+    int requiredSize = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, 0, 0);
+    if(requiredSize > 0)
+    {
+      std::vector<wchar_t> buffer(requiredSize);
+      MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, &buffer[0], requiredSize);
+      answer.assign(buffer.begin(), buffer.end() - 1);
+    }
+    
+    return answer;
+#else
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(input);
+#endif
+  }//std::wstring convert_from_utf8_to_utf16( const std::string &str );
   
 
   std::string to_common_string( const boost::posix_time::ptime &t, const bool twenty_four_hour )
@@ -1588,23 +1629,8 @@ std::string temp_dir()
     return "C:\\Temp";
   }
   
-#if( defined(UNICODE) || defined(_UNICODE) )
-  // TCHAR type is wchar_t
-  const size_t utf8len = wcstombs( NULL, &buf[0], len );
-  if( utf8len == 0 || static_cast<size_t>( int(-1) ) == utf8len )
-  {
-#if(PERFORM_DEVELOPER_CHECKS)
-    log_developer_error( BOOST_CURRENT_FUNCTION, "Error converting temp path to UTF8 on Windows" );
-#endif
-    return "C:\\Temp";
-  }
-  vector<char> thepath( utf8len );
-  wcstombs( &thepath[0], &buf[0], len );
-  return string( thepath.begin(), thepath.end() );
-#else
-  // TCHAR type is char
-  return string(buf.begin(), buf.end());
-#endif
+  return convert_from_utf16_to_utf8( std::wstring( buf.begin(), buf.end() ) );
+  
   
 #else
   
@@ -1624,8 +1650,11 @@ std::string temp_dir()
   
 bool remove_file( const std::string &name )
 {
-#if( SpecUtils_NO_BOOST_LIB )
-  return (0 == unlink(name.c_str()) );
+#ifdef _WIN32
+  const std::wstring wname = convert_from_utf8_to_utf16( name );
+  return (0 == _wunlink( wname.c_str()) );
+#elif( SpecUtils_NO_BOOST_LIB )
+  return (0 == unlink( name.c_str()) );
 #else
   try{ boost::filesystem::remove( name ); } catch(...){ return false; }
   return true;
@@ -1636,8 +1665,13 @@ bool rename_file( const std::string &source, const std::string &destination )
 {
   if( !is_file(source) || is_file(destination) || is_directory(destination) )
     return false;
-#if( SpecUtils_NO_BOOST_LIB )
-  //from Windows: BOOL MoveFile( LPCTSTR lpExistingFileName, LPCTSTR lpNewFileName );
+  
+#ifdef _WIN32
+  const std::wstring wsource = convert_from_utf8_to_utf16( source );
+  const std::wstring wdestination = convert_from_utf8_to_utf16( destination );
+  return MoveFileW( wsource.c_str(), destination.c_str() );
+#elif( SpecUtils_NO_BOOST_LIB )
+  
   const int result = rename( source.c_str(), destination.c_str() );
   return (result==0);
 #else
@@ -1650,6 +1684,11 @@ bool rename_file( const std::string &source, const std::string &destination )
   
 bool is_file( const std::string &name )
 {
+#ifdef _WIN32
+  const std::wstring wname = convert_from_utf8_to_utf16( name );
+  ifstream file( wname.c_str() );
+  return file.good();
+#endif
 #if( SpecUtils_NO_BOOST_LIB )
 //  struct stat fileInfo;
 //  const int status = stat( name.c_str(), &fileInfo );
@@ -1673,7 +1712,12 @@ bool is_file( const std::string &name )
 
 bool is_directory( const std::string &name )
 {
-#if( SpecUtils_NO_BOOST_LIB )
+#ifdef _WIN32
+  const std::wstring wname = convert_from_utf8_to_utf16( name );
+  struct stat statbuf;
+  _wstat( wname.c_str(), &statbuf);
+  return S_ISDIR(statbuf.st_mode);
+#elif( SpecUtils_NO_BOOST_LIB )
   struct stat statbuf;
   stat( name.c_str(), &statbuf);
   return S_ISDIR(statbuf.st_mode);
@@ -1691,7 +1735,8 @@ int create_directory( const std::string &name )
   
   int nError = 0;
 #if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
-  nError = _mkdir(name.c_str()); // can be used on Windows
+  const std::wstring wname = convert_from_utf8_to_utf16( name );
+  nError = _wmkdir(wname.c_str()); // can be used on Windows
 #else
   mode_t nMode = 0733; // UNIX style permissions
   nError = mkdir(name.c_str(),nMode); // can be used on non-Windows
@@ -1710,7 +1755,8 @@ bool can_rw_in_directory( const std::string &name )
     return false;
     
 #if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
-  const int can_access = _access( name.c_str(), 06 );
+  const std::wstring wname = convert_from_utf8_to_utf16( name );
+  const int can_access = _waccess( wname.c_str(), 06 );
 #else
   const int can_access = access( name.c_str(), R_OK | W_OK | X_OK );  
 #endif
@@ -1794,13 +1840,14 @@ std::string parent_path( const std::string &path )
 #if( SpecUtils_NO_BOOST_LIB )
 #ifdef _WIN32
   #error "UtilityFunctions::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once"
-  char path_buffer[_MAX_PATH];
-  char drive[_MAX_DRIVE];
-  char dir[_MAX_DIR];
-  char fname[_MAX_FNAME];
-  char ext[_MAX_EXT];
+  std::wstring wpath = convert_from_utf8_to_utf16( path );
+  wchar_t path_buffer[_MAX_PATH];
+  wchar_t drive[_MAX_DRIVE];
+  wchar_t dir[_MAX_DIR];
+  wchar_t fname[_MAX_FNAME];
+  wchar_t ext[_MAX_EXT];
   
-  errno_t err = _splitpath_s( path.c_str(), drive, dir, fname, ext );
+  errno_t err = _wsplitpath_s( wpath.c_str(), drive, dir, fname, ext );
   
   if( err != 0 )
     throw runtime_error( "Failed to get parent-path" );
@@ -1810,7 +1857,7 @@ std::string parent_path( const std::string &path )
   if( err != 0 )
     throw runtime_error( "Failed to makepathin parent_path" );
   
-  return path_buffer;
+  return convert_from_utf16_to_utf8( path_buffer );
 #else
   //dirname from libgen.h
   //"/usr/lib" -> "/usr"
@@ -1868,7 +1915,8 @@ bool is_absolute_path( const std::string &path )
     
 #if( SpecUtils_NO_BOOST_LIB )
 #ifdef WIN32
-  return !PathIsRelativeA( path.c_str() );
+  std::wstring wpath = convert_from_utf8_to_utf16( path );
+  return !PathIsRelativeW( wpath.c_str() );
 #else
   return (path.size() && (path[0]=='/'));
 #endif
@@ -1881,18 +1929,19 @@ std::string get_working_path()
 {
   cerr << "Warning, get_working_path() untested" << endl;
 #ifdef WIN32
-  char *buffer = _getcwd(nullptr, 0);
+  wchar_t *buffer = _wgetcwd(nullptr, 0);
   if( !buffer )
     return "";
-  const std::string cwdtemp = buffer;
+  
+  const std::wstring cwdtemp = buffer;
   free( buffer );
-  return cwdtemp;
+  
+  return convert_from_utf16_to_utf8(cwdtemp);
 #else
   char buffer[PATH_MAX];
   return (getcwd(buffer, sizeof(buffer)) ? std::string(buffer) : std::string(""));
 #endif
 }//std::string get_working_path();
-  
   
 #if( SpecUtils_NO_BOOST_LIB )
 std::string temp_file_name( std::string base, std::string directory )
@@ -2126,7 +2175,12 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   directory_iterator itr;
   try
   {
+#ifdef _WIN32
+    const std::wstring wsourcedir = convert_from_utf8_to_utf16( sourcedir );
+    itr = directory_iterator( wsourcedir );
+#else
     itr = directory_iterator( sourcedir );
+#endif
   }catch( std::exception & )
   {
     //ex: boost::filesystem::filesystem_error: boost::filesystem::directory_iterator::construct: Permission denied: "..."
@@ -2136,7 +2190,12 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   for( ; (itr != end_itr) && ((files.size()+numfiles) < sm_ls_max_results); ++itr )
   {
     const boost::filesystem::path &p = itr->path();
+#ifdef _WIN32
+    const string wpstr = p.string<std::wstring>();
+    const string pstr = convert_from_utf16_to_utf8( wpstr );
+#else
     const string pstr = p.string<string>();
+#endif
     
     const bool isdir = UtilityFunctions::is_directory( pstr );
     
