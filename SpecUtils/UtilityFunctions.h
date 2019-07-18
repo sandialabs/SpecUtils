@@ -438,7 +438,6 @@ namespace UtilityFunctions
    */
   bool is_absolute_path( const std::string &path );
   
-#ifndef _WIN32
   /** Get the current working directory.
    
    Becareful if using multiple threads, and another thread could change the
@@ -447,12 +446,7 @@ namespace UtilityFunctions
    Returns empty string on error.
    */
   std::string get_working_path();
-#else
-  //Not implemented for windows since there seems to be some trouble of the path
-  //  contains some non-ascii characters - should use wstring - but dont want to re-write everything...
-  //Maybe it will be good enough to widen strings?
-#endif
-  
+
   /** \brief Gives a unique file name.
    
    \param filebasename If not empty, then the returned file name will

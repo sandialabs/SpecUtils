@@ -114,9 +114,9 @@
 #endif
 
 
-#ifdef _WIN32
-static_assert( defined(UNICODE) || defined(_UNICODE), "UNICODE must be defined to compile on windows" );
-#endif
+//#ifdef _WIN32
+//static_assert( defined(UNICODE) || defined(_UNICODE), "UNICODE must be defined to compile on windows" );
+//#endif
 
 
 using namespace std;
@@ -1612,16 +1612,16 @@ std::string temp_dir()
 #if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
   //Completely un-tested
   const DWORD len = GetTempPathW( 0, NULL );
-  vector<TCHAR> buf( len );
+  vector<wchar_t> buf( len );
   
-  if( !len || !GetTempPath( len, &buf[0] ) )
+  if( !len )
   {
-    const char *val = 0;
-    (val = std::getenv("temp" )) ||
-    (val = std::getenv("TEMP"));
+    const wchar_t *val = 0;
+    (val = _wgetenv(L"temp" )) ||
+    (val = _wgetenv(L"TEMP"));
     
     if( val )
-      return val;
+      return convert_from_utf16_to_utf8( val );
     
 #if(PERFORM_DEVELOPER_CHECKS)
     log_developer_error( BOOST_CURRENT_FUNCTION, "Couldnt find temp path on Windows" );
@@ -1669,7 +1669,7 @@ bool rename_file( const std::string &source, const std::string &destination )
 #ifdef _WIN32
   const std::wstring wsource = convert_from_utf8_to_utf16( source );
   const std::wstring wdestination = convert_from_utf8_to_utf16( destination );
-  return MoveFileW( wsource.c_str(), destination.c_str() );
+  return MoveFileW( wsource.c_str(), wdestination.c_str() );
 #elif( SpecUtils_NO_BOOST_LIB )
   
   const int result = rename( source.c_str(), destination.c_str() );
@@ -1713,8 +1713,12 @@ bool is_file( const std::string &name )
 bool is_directory( const std::string &name )
 {
 #ifdef _WIN32
+  // Copied from linux libc sys/stat.h:
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+
   const std::wstring wname = convert_from_utf8_to_utf16( name );
-  struct stat statbuf;
+  struct _stat statbuf;
   _wstat( wname.c_str(), &statbuf);
   return S_ISDIR(statbuf.st_mode);
 #elif( SpecUtils_NO_BOOST_LIB )
@@ -1927,7 +1931,6 @@ bool is_absolute_path( const std::string &path )
   
 std::string get_working_path()
 {
-  cerr << "Warning, get_working_path() untested" << endl;
 #ifdef WIN32
   wchar_t *buffer = _wgetcwd(nullptr, 0);
   if( !buffer )
@@ -1935,7 +1938,8 @@ std::string get_working_path()
   
   const std::wstring cwdtemp = buffer;
   free( buffer );
-  
+ 
+  cout << "get_working_path()='" << convert_from_utf16_to_utf8( cwdtemp ) << "'" << std::endl;
   return convert_from_utf16_to_utf8(cwdtemp);
 #else
   char buffer[PATH_MAX];
@@ -2022,13 +2026,12 @@ std::string temp_file_name( std::string bases, std::string temppaths )
   
 #if( SpecUtils_NO_BOOST_LIB || BOOST_VERSION >= 104500 )
 bool make_canonical_path( std::string &path, const std::string &cwd )
-{
-cerr << "Warning, make_canonical_path() untested" << endl;
-  
+{  
   //filesystem::canonical was added some time after boost 1.44, so if we want canonicla
   //(BOOST_VERSION < 104500)
   
 #if( SpecUtils_NO_BOOST_LIB ) //I dont know when filesystem::canonical was added
+  cerr << "Warning, make_canonical_path() untested" << endl;
   if( !is_absolute_path(path) )
   {
     if( cwd.empty() )
@@ -2044,12 +2047,13 @@ cerr << "Warning, make_canonical_path() untested" << endl;
   }//if( !is_absolute_path(path) )
   
 #ifdef WIN32
-  //char full[_MAX_PATH];
-  //if( _fullpath( full, partialPath, _MAX_PATH ) != NULL )
+  //wchar_t full[_MAX_PATH];
+  //if( _wfullpath( full, partialPath, _MAX_PATH ) != NULL )
   //{
   //}
-  char buffer[MAX_PATH];
-  if( PathCanonicalizeA( buffer, path.c_str() ) )
+  wchar_t buffer[MAX_PATH];
+  const std::wstring wpath = convert_from_utf8_to_utf16( path );
+  if( PathCanonicalizeW( buffer, wpath.c_str() ) )
   {
     path = buffer;
     return true;
@@ -2065,9 +2069,24 @@ cerr << "Warning, make_canonical_path() untested" << endl;
 #endif
 #else //SpecUtils_NO_BOOST_LIB
   boost::system::error_code ec;
-  const auto result = boost::filesystem::canonical(path, cwd, ec);
+
+#ifdef WIN32
+  const std::wstring wpath = convert_from_utf8_to_utf16( path );
+  const std::wstring wcwd = convert_from_utf8_to_utf16( cwd );
+
+  const auto result = boost::filesystem::canonical(wpath, wcwd, ec);
+
+  cout << "make_canonical_path: '" << path << "'  --> '";
+  if( !ec )
+    path = convert_from_utf16_to_utf8( result.string<wstring>() );
+  cout << path << "'" << endl;
+#else
+  const auto result = boost::filesystem::canonical( path, cwd, ec );
+
   if( !ec )
     path = result.string<string>();
+#endif //#ifdef WIN32
+
   return !ec;
 #endif
 }//bool make_canonical_path( std::string &path )
@@ -2191,7 +2210,7 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   {
     const boost::filesystem::path &p = itr->path();
 #ifdef _WIN32
-    const string wpstr = p.string<std::wstring>();
+    const wstring wpstr = p.string<std::wstring>();
     const string pstr = convert_from_utf16_to_utf8( wpstr );
 #else
     const string pstr = p.string<string>();
@@ -2441,8 +2460,8 @@ std::vector<std::string> recursive_ls( const std::string &sourcedir,
                                         file_match_function_t match_fcn,
                                         void *match_data )
 {
-#ifndef _WIN32
-  return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
+#ifdef _WIN32
+  return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
 #else
   return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
   //return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );

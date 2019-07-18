@@ -25175,9 +25175,8 @@ bool MeasurementInfo::load_from_tka( std::istream &input )
     
     //ToDo: check UTF16 ByteOrderMarker [0xFF,0xFE] as first two bytes.
     
-    
-    const size_t max_len = 128;
     auto get_next_number = [&input]( float &val ) -> int {
+      const size_t max_len = 128;
       string line;
       if( !UtilityFunctions::safe_get_line( input, line, max_len ) )
         return -1;
