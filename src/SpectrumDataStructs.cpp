@@ -77,6 +77,7 @@ using UtilityFunctions::icontains;
 using UtilityFunctions::starts_with;
 using UtilityFunctions::istarts_with;
 using UtilityFunctions::ireplace_all;
+using UtilityFunctions::convert_from_utf8_to_utf16;
 
 using UtilityFunctions::time_from_string;
 

@@ -1952,7 +1952,7 @@ std::string get_working_path()
   const std::wstring cwdtemp = buffer;
   free( buffer );
  
-  cout << "get_working_path()='" << convert_from_utf16_to_utf8( cwdtemp ) << "'" << std::endl;
+  //cout << "get_working_path()='" << convert_from_utf16_to_utf8( cwdtemp ) << "'" << std::endl;
   return convert_from_utf16_to_utf8(cwdtemp);
 #else
   char buffer[PATH_MAX];
@@ -2091,7 +2091,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
 
   const auto result = boost::filesystem::canonical(wpath, wcwd, ec);
 
-  cout << "make_canonical_path: '" << path << "'  --> '";
+  //cout << "make_canonical_path: '" << path << "'  --> '";
   if( !ec )
     path = convert_from_utf16_to_utf8( result.string<wstring>() );
   cout << path << "'" << endl;
