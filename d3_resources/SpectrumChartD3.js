@@ -5582,6 +5582,22 @@ SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
 /**
  * -------------- Scale Factor Functions --------------
  */
+SpectrumChartD3.prototype.numYScalers = function() {
+  var self = this;
+  
+  if( !this.options.scaleBackgroundSecondary || !self.rawData || !self.rawData.spectra )
+    return 0;
+  
+  let nonFore = 0;
+  self.rawData.spectra.forEach(function (spectrum) {
+    if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND )
+    nonFore += 1;
+  });
+  
+  return nonFore;
+}
+
+
 SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var self = this;
   
@@ -5606,7 +5622,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     if (!self.rawData || !self.rawData.spectra) return false;
     var result = true;
     self.rawData.spectra.forEach(function (spectrum) { 
-      if (spectrum && spectrum.title && spectrum.title.toUpperCase() != "FOREGROUND")
+      if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND )
         result = false;
     });
     return result;
@@ -5760,7 +5776,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     if (i == 0 || spectrum.type === self.spectrumTypes.FOREGROUND)   /* Don't add scaling functionality for foreground */
       return;
 
-    //Blah blah blah
     //Search for padding.right, and everywhere add an extra ~20px padding.right for each spectrum.scaleAxis
     //Draw sliders vertical to right of chart; get rid of all dragging logic and such, and convert everything.
     //Have it so when let go, circle goes back to middle;

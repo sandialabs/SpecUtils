@@ -58,7 +58,12 @@ namespace
 #else
   string file_to_string( const char *filename )
   {
+#ifdef _WIN32
+    const std::wstring wfilename = UtilityFunctions::convert_from_utf8_to_utf16(filename);
+    std::ifstream t( wfilename );
+#else
     std::ifstream t( filename );
+#endif
     
     if( !t.is_open() )
       throw runtime_error( "file_to_string: Failed to open '" + string(filename) + "'" );

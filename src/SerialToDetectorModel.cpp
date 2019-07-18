@@ -104,7 +104,12 @@ namespace SerialToDetectorModel
     if( filename.empty() )
       return nullptr;
     
+#ifdef _WIN32
+    const std::wstring wfilename = UtilityFunctions::convert_from_utf8_to_utf16(filename);
     ifstream input( filename.c_str() );
+#else
+    ifstream input( filename.c_str() );
+#endif
     
     if( !input.is_open() )
     {

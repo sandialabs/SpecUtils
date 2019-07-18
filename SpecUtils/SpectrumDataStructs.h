@@ -1135,6 +1135,8 @@ public:
   //  and uses the file ending to effect the order of parsers tried, example
   //  values for this mught be: "n24", "pcf", "chn", etc. The entire filename
   //  can be passed in since only the letters after the last period are used
+  //  Note: on Windows the filename must be UTF-8, and not whatever the current
+  //        codepoint is.
   bool load_file( const std::string &filename,
                   ParserType parser_type,
                   std::string file_ending_hint

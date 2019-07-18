@@ -601,6 +601,17 @@ namespace UtilityFunctions
   
 #endif //#if( !SpecUtils_NO_BOOST_LIB )
 
+  /** Loads data from specified file on filesystem into the `data` vector and
+      terminate with a null character.
+   
+      Similar functionality to rapidxml::file<char>, but takes UTF-8 filename
+      as input.
+   
+      Throws exception on failure.
+   */
+  void load_file_data( const char * const filename, std::vector<char> &data );
+  
+  
 
   /** \brief Gives the CPU time in seconds.
    

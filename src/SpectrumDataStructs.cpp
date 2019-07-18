@@ -7982,7 +7982,11 @@ bool MeasurementInfo::load_spc_file( const std::string &filename )
   reset();
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
 
@@ -8018,7 +8022,11 @@ bool MeasurementInfo::load_chn_file( const std::string &filename )
   reset();
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
 
@@ -8047,7 +8055,11 @@ bool MeasurementInfo::load_iaea_file( const std::string &filename )
   reset();
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
 
@@ -10517,7 +10529,12 @@ bool MeasurementInfo::load_binary_exploranium_file( const std::string &filename 
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
+  
   if( !file.is_open() )
     return false;
   
@@ -11398,8 +11415,11 @@ bool MeasurementInfo::load_pcf_file( const std::string &filename )
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
 
-
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
 
@@ -16720,7 +16740,11 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
 
 bool MeasurementInfo::load_micro_raider_file( const std::string &filename )
 {
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   
   if( !input.is_open() )
     return false;
@@ -16984,12 +17008,14 @@ bool MeasurementInfo::load_N42_file( const std::string &filename )
   
   try
   {
-    rapidxml::file<char> input_file( filename.c_str() );  //throws runtime_error upon failure
+    std::vector<char> data;
+    UtilityFunctions::load_file_data( filename.c_str(), data );
+    
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
-    const bool loaded = MeasurementInfo::load_N42_from_data( input_file.data(), input_file.data()+input_file.size() );
+    const bool loaded = MeasurementInfo::load_N42_from_data( &data.front(), (&data.front())+data.size() );
 #else
     input_file.check_for_premature_nulls( 2048, ' ' );
-    const bool loaded = MeasurementInfo::load_N42_from_data( input_file.data() );
+    const bool loaded = MeasurementInfo::load_N42_from_data( &data.front() );
 #endif
     
     if( !loaded )
@@ -18049,7 +18075,11 @@ void MeasurementInfo::write_to_file( const std::string name,
   if( UtilityFunctions::is_file(name) || UtilityFunctions::is_directory(name) )
     throw runtime_error( "File (" + name + ") already exists, not overwriting" );
   
+#ifdef _WIN32
+  std::ofstream output( convert_from_utf8_to_utf16(name).c_str(), ios::out | ios::binary );
+#else
   std::ofstream output( name.c_str(), ios::out | ios::binary );
+#endif
 
   if( !output )
     throw runtime_error( "Failed to open file (" + name + ") for writing" );
@@ -22591,7 +22621,11 @@ bool MeasurementInfo::load_from_txt_or_csv( std::istream &istr )
 
 bool MeasurementInfo::load_spectroscopic_daily_file( const std::string &filename )
 {
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   
   if( !input.is_open() )
     return false;
@@ -22662,7 +22696,11 @@ bool MeasurementInfo::load_spectroscopic_daily_file( const std::string &filename
 
 bool MeasurementInfo::load_amptek_file( const std::string &filename )
 {
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   
   if( !input.is_open() )
     return false;
@@ -22678,7 +22716,11 @@ bool MeasurementInfo::load_amptek_file( const std::string &filename )
 
 bool MeasurementInfo::load_ortec_listmode_file( const std::string &filename )
 {
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   
   if( !input.is_open() )
     return false;
@@ -22694,7 +22736,11 @@ bool MeasurementInfo::load_ortec_listmode_file( const std::string &filename )
 
 bool MeasurementInfo::load_lsrm_spe_file( const std::string &filename )
 {
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   
   if( !input.is_open() )
     return false;
@@ -22710,7 +22756,11 @@ bool MeasurementInfo::load_lsrm_spe_file( const std::string &filename )
 
 bool MeasurementInfo::load_tka_file( const std::string &filename )
 {
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   
   if( !input.is_open() )
     return false;
@@ -22728,7 +22778,11 @@ bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
 {
   try
   {
+#ifdef _WIN32
+    std::unique_ptr<ifstream> input( new ifstream( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in ) );
+#else
     std::unique_ptr<ifstream> input( new ifstream( filename.c_str(), ios_base::binary|ios_base::in ) );
+#endif
 
     if( !input->is_open() )
       return false;
@@ -22782,7 +22836,11 @@ bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
       if( success )
         return true;
       
+#ifdef _WIN32
+      input.reset( new ifstream( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in ) );
+#else
       input.reset( new ifstream( filename.c_str(), ios_base::binary|ios_base::in ) );
+#endif
     }//if( isSDF )
     
     
@@ -25253,7 +25311,11 @@ bool MeasurementInfo::load_cnf_file( const std::string &filename )
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
   
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
   const bool loaded = load_from_cnf( file );
@@ -25279,7 +25341,11 @@ bool MeasurementInfo::load_tracs_mps_file( const std::string &filename )
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
   
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
   const bool loaded = load_from_tracs_mps( file );
@@ -25590,7 +25656,11 @@ bool MeasurementInfo::load_aram_file( const std::string &filename )
   if( UtilityFunctions::file_size(filename) > 25*1024*1024 )
     return false;
   
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
   ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
   if( !file.is_open() )
     return false;
   const bool loaded = load_from_aram( file );

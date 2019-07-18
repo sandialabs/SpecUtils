@@ -113,6 +113,12 @@
 #define strtoll _strtoi64
 #endif
 
+#ifdef _WIN32
+// Copied from linux libc sys/stat.h:
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#endif
+
 
 //#ifdef _WIN32
 //static_assert( defined(UNICODE) || defined(_UNICODE), "UNICODE must be defined to compile on windows" );
@@ -1601,7 +1607,11 @@ std::string temp_dir()
 #if( !SpecUtils_NO_BOOST_LIB && BOOST_VERSION >= 104700)
   try
   {
-    return boost::filesystem::temp_directory_path().generic_string();
+#ifdef _WIN32
+    return convert_from_utf16_to_utf8( boost::filesystem::temp_directory_path().string<std::wstring>() );
+#else
+    return boost::filesystem::temp_directory_path().string<std::string>();
+#endif
   }catch( std::exception &e )
   {
     cerr << "Warning, unable to get a temporary directory...: " << e.what()
@@ -1713,10 +1723,6 @@ bool is_file( const std::string &name )
 bool is_directory( const std::string &name )
 {
 #ifdef _WIN32
-  // Copied from linux libc sys/stat.h:
-#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
-#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
-
   const std::wstring wname = convert_from_utf8_to_utf16( name );
   struct _stat statbuf;
   _wstat( wname.c_str(), &statbuf);
@@ -1895,14 +1901,20 @@ std::string file_extension( const std::string &path )
   return fn.substr(pos);
 }
   
-#if defined(WIN32) || defined(WIN64)
-  // Copied from linux libc sys/stat.h:
-  #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
-  #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
-#endif
-  
+
 size_t file_size( const std::string &path )
 {
+#ifdef _WIN32
+  std::wstring wpath = convert_from_utf8_to_utf16( path );
+  struct _stat st;
+  if( _wstat( wpath.c_str(), &st) < 0 )
+    return 0;
+  
+  if( S_ISDIR(st.st_mode) )
+    return 0;
+  
+  return st.st_size;
+#else
   struct stat st;
   if( stat(path.c_str(), &st) < 0 )
     return 0;
@@ -1911,6 +1923,7 @@ size_t file_size( const std::string &path )
     return 0;
   
   return st.st_size;
+#endif
 }
   
 bool is_absolute_path( const std::string &path )
@@ -2013,10 +2026,12 @@ std::string temp_file_name( std::string bases, std::string temppaths )
     bases += "%%%%-%%%%-%%%%-%%%%";
   }
   
-  
   temppath /= bases;
-
+#ifdef _WIN32
+  return convert_from_utf16_to_utf8( unique_path(temppath).string<std::wstring>() );
+#else
   return unique_path( temppath ).string<std::string>();
+#endif
 }//path temp_file_name( path base )
 
 
@@ -2640,14 +2655,49 @@ namespace
   
 std::string fs_relative( const std::string &from_path, const std::string &to_path )
 {
+#ifdef _WIN32
+#if( BOOST_VERSION < 106501 )
+  return convert_from_utf16_to_utf8( make_relative( from_path, to_path ).string<std::wstring>() );
+#else
+  return convert_from_utf16_to_utf8( boost::filesystem::relative(to_path,from_path).string<std::wstring>() );
+#endif
+#else
 #if( BOOST_VERSION < 106501 )
   return make_relative( from_path, to_path ).string<std::string>();
 #else
   return boost::filesystem::relative( to_path, from_path ).string<std::string>();
 #endif
+#endif
 }//std::string fs_relative( const std::string &target, const std::string &base )
   
 #endif //if( !SpecUtils_NO_BOOST_LIB )
+  
+  
+void load_file_data( const char * const filename, std::vector<char> &data )
+{
+  data.clear();
+  
+#ifdef _WIN32
+  const std::wstring wfilename = convert_from_utf8_to_utf16(filename);
+  basic_ifstream<char> stream(wfilename.c_str(), ios::binary);
+#else
+  basic_ifstream<char> stream(filename, ios::binary);
+#endif
+  
+  if (!stream)
+    throw runtime_error(string("cannot open file ") + filename);
+  stream.unsetf(ios::skipws);
+  
+  // Determine stream size
+  stream.seekg(0, ios::end);
+  size_t size = static_cast<size_t>( stream.tellg() );
+  stream.seekg(0);
+  
+  // Load data and add terminating 0
+  data.resize(size + 1);
+  stream.read(&data.front(), static_cast<streamsize>(size));
+  data[size] = 0;
+}//void load_file_data( const std::string &filename, std::vector<char> &data )
   
 //  Windows
 #ifdef _WIN32
