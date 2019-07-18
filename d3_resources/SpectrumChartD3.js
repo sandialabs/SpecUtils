@@ -314,6 +314,8 @@ SpectrumChartD3 = function(elem, options) {
   /* Vis interactions */
   this.vis
     .call(this.zoom)
+    //.on("click", function(){ console.log( 'Single CLick!' ); } )
+    //.on("dblclick", function(){ console.log( 'DOuble CLick!' ); } )  //ToDo: Use 'dblclick' signal rahter than custom one
     .on("mousedown", self.handleVisMouseDown())
     .on("mouseup", self.handleVisMouseUp())
     .on("wheel", self.handleVisWheel())
@@ -920,6 +922,26 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   this.redraw()();
 }
+
+/** Sets (replacing any existing) peak data for first spectrum matching spectrumType
+  Input should be like [{...},{...}]
+ */
+SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
+  let self = this;
+  let hasset = false;
+  
+  this.rawData.spectra.forEach( function(spectrum, i) {
+    if( hasset || !spectrum || spectrum.type !== spectrumType )
+      return;
+    
+    self.handleCancelRoiDrag();
+    self.current_fitting_peak = null;
+    spectrum.peaks = peak_data;
+    hasset = true;
+  } );
+  
+  this.redraw()();
+};
 
 
 /**
@@ -2201,7 +2223,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     
     /* Figure out clicks and double clicks */
     var nowtime = new Date();
-    var clickDelay = 200;
+    var clickDelay = 500;
 
     if (self.mousedownpos && self.dist(self.mousedownpos, d3.mouse(document.body)) < 5) {    /* user clicked on screen */
       if( nowtime - self.mousedowntime < clickDelay ) {
@@ -2851,7 +2873,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
           /* Set the double tap setting parameters */
           var tapRadius = 35,                   /* Radius area for where a double-tap is valid (anything outside this considered a single tap) */
-              doubleTapTimeInterval = 200;      /* Time interval for double tap */
+              doubleTapTimeInterval = 500;      /* Time interval for double tap */
 
           /* Update the feature marker positions (argument added for sum peaks) */
           self.updateFeatureMarkers(self.xScale.invert(x));
@@ -4822,7 +4844,7 @@ SpectrumChartD3.prototype.setCompactXAxis = function( compact ) {
  */
 SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   var self = this;
-
+  
   // Cancel if the chart or raw data are not present
   if (!self.chart || d3.select(self.chart).empty() || !self.rawData
     || !self.rawData.spectra || !self.rawData.spectra.length || self.size.height<=0 ) {
@@ -4856,6 +4878,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     for (var i = 1; i < numberOfLines; i++) {
       self.sliderChart.append('line')
         .attr("class", "sliderDragRegionLine")
+        .style("fill", "#444")
+        .attr("stroke", "#444" )
+        .attr("stroke-width", "0.08%")
         .attr("x1", leftX + (i*leftWidth)/numberOfLines)
         .attr("x2", leftX + (i*leftWidth)/numberOfLines)
         .attr("y1", leftY + (leftHeight/4))
@@ -4868,6 +4893,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
       self.sliderChart.append('line')
         .attr("class", "sliderDragRegionLine")
+        .style("fill", "#444")
+        .attr("stroke", "#444" )
+        .attr("stroke-width", "0.08%")
         .attr("x1", rightX + (i*rightWidth)/numberOfLines)
         .attr("x2", rightX + (i*rightWidth)/numberOfLines)
         .attr("y1", rightY + (rightHeight/4))
@@ -4895,9 +4923,15 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   self.rebinForBackgroundSubtract();
   self.yScale.domain(self.getYAxisDomain());
 
+  let axiscolor = null;
+  
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
-
+    axiscolor = 'black';
+    const tickElement = document.querySelector('.tick');
+    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    
     // G element of the slider chart
     self.sliderChart = d3.select("svg").append("g")
       //.attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
@@ -4908,9 +4942,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     // Plot area for data lines in slider chart
     self.sliderChartPlot = self.sliderChart.append("rect")
       .attr("id", "sliderchartarea"+self.chart.id )
-      .attr("width", self.size.sliderChartWidth)
-      .attr("height", self.size.sliderChartHeight)
-      .style("fill", "#EEEEEE");
+      .style("opacity","0.1")
+      .style("fill", axiscolor);
+      //.style("fill", "#EEEEEE");
 
     // Chart body for slider (keeps the data lines)
     self.sliderChartBody = self.sliderChart.append("g")
@@ -4921,10 +4955,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .attr("id", "sliderclip" + self.chart.id )
         .append("svg:rect")
         .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", self.size.sliderChartWidth)
-        .attr("height", self.size.sliderChartHeight);
-
+        .attr("y", 0);
 
     // For adding peaks into slider chart 
     // self.sliderPeakVis = self.sliderChart.append('g')
@@ -4933,22 +4964,12 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     //   .attr("transform", "translate(0,0)")
     //   .attr("clip-path", "url(#sliderclip" + this.chart.id + ")");
 
-  } else {
-    // Adjust the width, height, and transform for the slider chart elements (for resizing)
-    //console.log( 'self.chart.clientHeight=' + self.chart.clientHeight
-    //             + ', self.size.sliderChartHeight=' + self.size.sliderChartHeight
-    //            + ', self.size.height=' + self.size.height
-    //            + ', self.padding.sliderChart=' + self.padding.sliderChart );
-    
-    self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
-      .attr("height", self.size.sliderChartHeight);
-    self.sliderChartClipPath.attr("width", self.size.sliderChartWidth)
-      .attr("height", self.size.sliderChartHeight);
-
-    // self.sliderChart.attr("transform", "translate(0," + (self.size.height + extraPadding + self.padding.sliderChart) + ")");
   }
 
-  
+  self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
+      .attr("height", self.size.sliderChartHeight);
+  self.sliderChartClipPath.attr("width", self.size.sliderChartWidth)
+      .attr("height", self.size.sliderChartHeight);
   self.sliderChart
       .attr("transform", "translate(" + 0.5*(self.cx - self.size.sliderChartWidth) + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")");
   
@@ -4969,9 +4990,20 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
   // Add the slider draggable box and edges
   if (!self.sliderBox) {
+    if( !axiscolor ){
+      axiscolor = 'black';
+      const tickElement = document.querySelector('.tick');
+      const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+      axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    }
+    
     // Slider box
     self.sliderBox = self.sliderChart.append("rect")
       .attr("class", "sliderBox")
+      .style("fill-opacity","0.5")
+      .style("fill", axiscolor)
+      .attr("stroke", axiscolor)
+      .attr("stroke-width", "0.2%" )
       .on("mousedown", self.handleMouseDownSliderBox())
       .on("touchstart", self.handleTouchStartSliderBox())
       .on("touchmove", self.handleTouchMoveSliderChart());
@@ -4982,6 +5014,10 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       .attr("class", "sliderDragRegion")
       .attr("rx", 2)
       .attr("ry", 2)
+      .style("fill-opacity","0.1")
+      .style("fill", axiscolor)
+      .attr("stroke",axiscolor)
+      .attr("stroke-width", "0.1%" )
       .on("mousedown", self.handleMouseDownLeftSliderDrag())
       .on("mousemove", self.handleMouseMoveLeftSliderDrag(false))
       .on("mouseout", self.handleMouseOutLeftSliderDrag())
@@ -4994,6 +5030,10 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       .attr("class", "sliderDragRegion")
       .attr("rx", 2)
       .attr("ry", 2)
+      .style("fill-opacity","0.1")
+      .style("fill", axiscolor)
+      .attr("stroke",axiscolor)
+      .attr("stroke-width", "0.1%" )
       .on("mousedown", self.handleMouseDownRightSliderDrag())
       .on("mousemove", self.handleMouseMoveRightSliderDrag(false))
       .on("mouseout", self.handleMouseOutRightSliderDrag())
@@ -5595,6 +5635,8 @@ SpectrumChartD3.prototype.numYScalers = function() {
   });
   
   return nonFore;
+  
+  //blah blah blah
 }
 
 
@@ -5776,6 +5818,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     if (i == 0 || spectrum.type === self.spectrumTypes.FOREGROUND)   /* Don't add scaling functionality for foreground */
       return;
 
+      //blah blah blah
     //Search for padding.right, and everywhere add an extra ~20px padding.right for each spectrum.scaleAxis
     //Draw sliders vertical to right of chart; get rid of all dragging logic and such, and convert everything.
     //Have it so when let go, circle goes back to middle;

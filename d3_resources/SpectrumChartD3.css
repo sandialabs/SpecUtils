@@ -117,23 +117,12 @@
 }
 
 .sliderBox {
-  fill: #666;
-  fill-opacity: 0.7;
-  stroke: black;
-  stroke-width: 0.2%;
   user-select: none;
   -moz-user-select: none;
 }
 .sliderDragRegion {
-  fill: rgba(185,185,185,0.80);
-  fill-opacity: 1;
-  stroke: #666;
-  stroke-width: 0.1%;
 }
 .sliderDragRegionLine {
-  fill: #444;
-  stroke: #444;
-  stroke-width: 0.08%;
 }
 .line {
   fill: none;
