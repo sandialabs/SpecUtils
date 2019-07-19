@@ -807,7 +807,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     //if(e) console.log(e);
 
     // Christian [05122018]: Added other necessary display render methods to ensure consistency even when chart has no data
-    this.options.scaleBackgroundSecondary = false;
+    //this.options.scaleBackgroundSecondary = false;
     this.removeSpectrumScaleFactorWidget();
     this.updateLegend();
     this.drawXAxisSliderChart();
@@ -1311,7 +1311,9 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.size.sliderChartHeight = 0;
   }
  
-  this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right);
+  let scalerwidth = 20*this.numYScalers();
+ 
+  this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right - scalerwidth);
   this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed - this.size.sliderChartHeight);
 
   this.xScale.range([0, this.size.width]);
@@ -1417,6 +1419,8 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.xScale.range([0, this.size.width]);
   this.yScale.range([0, this.size.height]);
 
+  this.drawScalerBackgroundSecondary();
+  
   /* this.zoom.x(this.xScale); */
   /* this.zoom.y(this.yScale); */
 
@@ -5635,13 +5639,14 @@ SpectrumChartD3.prototype.numYScalers = function() {
   });
   
   return nonFore;
-  
-  //blah blah blah
 }
 
 
 SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var self = this;
+  
+  if( self.numYScalers() === 0 )
+    return;
   
   function hasYScaleFactors() {
     if (!self.rawData || !self.rawData.spectra) return false;
@@ -5770,16 +5775,20 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
       self.scalerdown = {x: x, y: y, x0: trans[0], y0: trans[1]};
     }
     
-    self.scalerWidgetHeader.on("mouseover", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler");} )
-      .on("touchstart", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
-      .on("mouseout",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
-      .on("touchend",  function(d) { if (self.scalerWidget) self.scalerWidget.attr("class", "scalerwidget"); } )
-      .on("mousedown.drag",  mousedownscaler )
-      .on("touchstart.drag",  mousedownscaler )
-      .on("touchend.drag", function() {self.scalerdown = null;})
-      .on("mouseup.drag", function(){self.scalerdown = null;} )
-      .on("mousemove.drag", moveScalerWidget)
-      .on("mouseout.drag", moveScalerWidget);
+    self.scalerWidgetHeader
+        .on("mouseover", function(d) {
+          if( !self.dragging_plot && !self.zooming_plot )
+            self.scalerWidget.attr("class", "scalerwidget activescaler");
+          } )
+        .on("touchstart", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
+        .on("mouseout",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
+        .on("touchend",  function(d) { if (self.scalerWidget) self.scalerWidget.attr("class", "scalerwidget"); } )
+        .on("mousedown.drag",  mousedownscaler )
+        .on("touchstart.drag",  mousedownscaler )
+        .on("touchend.drag", function() {self.scalerdown = null;} )
+        .on("mouseup.drag", function(){ self.scalerdown = null; } )
+        .on("mousemove.drag", moveScalerWidget)
+        .on("mouseout.drag", moveScalerWidget);
 
     self.scalerWidget.on("touchstart", function(d) { mousedownscaler(); if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidgetHeader.style("display", null); } )
       .on("touchend.drag",  function() 
@@ -5855,6 +5864,29 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("width", scalerWidth)
         .attr("height", "1%");
 
+      let endChanging = function(){
+        if( self.currentlyAdjustingSpectrumScale === null )
+          return;
+          
+        var scale = null;
+        for (var i = 0; i < self.rawData.spectra.length; ++i) {
+          if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale ) {
+            scale = self.rawData.spectra[i].yScaleFactor;
+            break;
+          }
+        }
+          
+        if( scale !== null ){
+          self.WtEmit(self.chart.id, {name: 'yscaled'}, scale, self.currentlyAdjustingSpectrumScale );
+          console.log('Emmitted yscaled scale=' + scale + ', type=' + self.currentlyAdjustingSpectrumScale );
+        } else {
+          console.log('Failed to find scale factor being adjusted');
+        }
+          
+        self.currentlyAdjustingSpectrumScale = null;
+      };
+      
+        
       spectrum.sliderToggle = spectrumSliderArea.append("circle")
         .attr("class", "scalertoggle")
         .attr("cx", Math.min(spectrum.scale(spectrumScaleFactor), scalerWidth))
@@ -5862,15 +5894,15 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("r", toggleRadius)
         .style("cursor", "pointer")
         .on("mousedown", function(){ 
-          self.currentlyAdjustingSpectrumScale = spectrum.title;
+          self.currentlyAdjustingSpectrumScale = spectrum.type;
           d3.event.preventDefault();
           d3.event.stopPropagation();
         })
         .on("mousemove", self.handleMouseMoveScaleFactorSlider())
-        .on("mouseup", function(){ self.currentlyAdjustingSpectrumScale = null; })
-        .on("touchstart", function(){ self.currentlyAdjustingSpectrumScale = spectrum.title; })
+        .on("mouseup", endChanging )
+        .on("touchstart", function(){ self.currentlyAdjustingSpectrumScale = spectrum.type; })
         .on("touchmove", self.handleMouseMoveScaleFactorSlider())
-        .on("touchend", function(){ self.currentlyAdjustingSpectrumScale = null; });
+        .on("touchend", endChanging );
 
       ypos += 60;
     }
@@ -5939,7 +5971,7 @@ SpectrumChartD3.prototype.setSpectrumScaleFactor = function(d) {
   var spectrumToBeAdjusted = null;
   var linei = null;
   self.rawData.spectra.forEach(function(spectrum,i) {
-    if (spectrum.title && spectrum.title.toUpperCase() == spectrumToCheck.toUpperCase() && spectrumToBeAdjusted == null) {
+    if (spectrum.title && spectrum.type == spectrumToCheck && spectrumToBeAdjusted == null) {
       spectrumToBeAdjusted = spectrum;
       linei = i;
       return;
@@ -6151,7 +6183,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     var linei = null;
     var spectrum = null;
     for (var i = 0; i < self.rawData.spectra.length; ++i) {
-      if (self.rawData.spectra[i].title.toUpperCase() == self.currentlyAdjustingSpectrumScale.toUpperCase()) {
+      if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale) {
         linei = i;
         spectrum = self.rawData.spectra[i];
         break;
@@ -6249,7 +6281,7 @@ SpectrumChartD3.prototype.handleTouchMoveAdjustSpectrumScale = function() {
     var linei = null;
     var spectrum = null;
     for (var i = 0; i < self.rawData.spectra.length; ++i) {
-      if (self.rawData.spectra[i].title.toUpperCase() == self.currentlyAdjustingSpectrumScale.toUpperCase()) {
+      if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale) {
         linei = i;
         spectrum = self.rawData.spectra[i];
         break;
