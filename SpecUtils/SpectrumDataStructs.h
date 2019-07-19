@@ -117,6 +117,7 @@ enum ParserType
   kOrtecListMode,
   kLsrmSpe,
   kTka,
+  kMultiAct, //only partially supported
   kAutoParser
 };//enum ParserType
 
@@ -1437,6 +1438,7 @@ public:
   bool load_ortec_listmode_file( const std::string &filename );
   bool load_lsrm_spe_file( const std::string &filename );
   bool load_tka_file( const std::string &filename );
+  bool load_multiact_file( const std::string &filename );
   
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1509,6 +1511,11 @@ public:
   
   /** Load TKA file */
   bool load_from_tka( std::istream &input );
+  
+  /** Load MultiAct SPM file - only barely supported (currently only extracts
+   channel counts)
+   */
+  bool load_from_multiact( std::istream &input );
   
   //bool load_from_iaea(...): an ASCII format standardized by the IAEA; not all
   //  portions of the standard have been implemented, since they are either

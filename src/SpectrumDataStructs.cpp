@@ -6151,6 +6151,10 @@ bool MeasurementInfo::load_file( const std::string &filename,
       success = load_tka_file( filename );
       break;
       
+    case kMultiAct:
+      success = load_multiact_file( filename );
+      break;
+      
     case kMicroRaider:
       success = load_micro_raider_file( filename );
     break;
@@ -6162,7 +6166,7 @@ bool MeasurementInfo::load_file( const std::string &filename,
           triedChn = false, triedIaea = false, triedLsrmSpe = false,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
-          triedTka = false;
+          triedTka = false, triedMultiAct = false;
       if( !orig_file_ending.empty() )
       {
         const size_t period_pos = orig_file_ending.find_last_of( '.' );
@@ -6224,6 +6228,12 @@ bool MeasurementInfo::load_file( const std::string &filename,
           if( success ) break;
         }//if( orig_file_ending=="chn" )
         
+        if( orig_file_ending=="spm" )
+        {
+          triedMultiAct = true;
+          success = load_multiact_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending=="chn" )
         
         if( orig_file_ending=="txt" )
         {
@@ -6327,6 +6337,9 @@ bool MeasurementInfo::load_file( const std::string &filename,
       
       if( !success && !triedTka )
         success = load_tka_file( filename );
+      
+      if( !success && !triedMultiAct )
+        success = load_multiact_file( filename );
       
       if( !success && !triedOrtecLM )
         success = load_ortec_listmode_file( filename );
@@ -22775,6 +22788,26 @@ bool MeasurementInfo::load_tka_file( const std::string &filename )
 }//bool load_tka_file( const std::string &filename )
 
 
+bool MeasurementInfo::load_multiact_file( const std::string &filename )
+{
+#ifdef _WIN32
+  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
+  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
+  
+  if( !input.is_open() )
+    return false;
+  
+  const bool success = load_from_multiact( input );
+  
+  if( success )
+    filename_ = filename;
+  
+  return success;
+}//bool load_multiact_file( const std::string &filename );
+
+
 bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
 {
   try
@@ -25306,6 +25339,94 @@ bool MeasurementInfo::load_from_tka( std::istream &input )
   return false;
 }//bool load_from_tka( std::istream &input );
 
+
+bool MeasurementInfo::load_from_multiact( std::istream &input )
+{
+  if( !input.good() )
+    return false;
+  
+  const istream::pos_type orig_pos = input.tellg();
+  
+  try
+  {
+    input.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = input.tellg();
+    input.seekg( orig_pos, ios::beg );
+    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
+    if( filesize > 512*1024 )  //The files I've seen are a few kilobytes
+      throw runtime_error( "File to large to be MultiAct" );
+    
+    if( filesize < (128 + 24 + 48) )
+      throw runtime_error( "File to small to be MultiAct" );
+    
+    string start = "                ";
+    
+    if( !input.read(&start[0], 8) )
+      throw runtime_error( "Failed to read header" );
+    
+    if( !UtilityFunctions::istarts_with( start, "MultiAct") )
+      throw runtime_error( "File must start with word 'MultiAct'" );
+    
+    double countssum = 0.0;
+    auto channel_counts = make_shared<vector<float>>();
+    
+    vector<char> data;
+    data.resize( filesize - 8, '\0' );
+    input.read(&data.front(), static_cast<streamsize>(filesize-8) );
+    
+    //103: potentially channel counts (int of some sort)
+    //107: real time in seconds (int of some sort)
+    //111: real time in seconds (int of some sort)
+    //115: live time in seconds (int of some sort)
+    
+    uint32_t numchannels, realtime, livetime;
+    memcpy( &numchannels, (&(data[103])), 4 );
+    memcpy( &realtime, (&(data[107])), 4 );
+    memcpy( &livetime, (&(data[115])), 4 );
+  
+    if( realtime < livetime || livetime > 3600*24*5 )
+    {
+#if(PERFORM_DEVELOPER_CHECKS)
+      log_developer_error( BOOST_CURRENT_FUNCTION, ("Got real time (" + std::to_string(realtime)
+                                                    + ") less than (" + std::to_string(livetime) + ") livetime").c_str() );
+#endif
+      throw runtime_error( "Invalid live/real time values" );
+    }
+    
+    for( size_t i = 128; i < (data.size()-21); i += 3 )
+    {
+      //ToDo: make sure channel counts are reasonable...
+      uint32_t threebyte = 0;
+      memcpy( &threebyte, (&(data[i])), 3 );
+      channel_counts->push_back( threebyte );
+      countssum += threebyte;
+    }
+    
+    if( channel_counts->size() < 16 )
+      throw runtime_error( "Not enough channels" );
+    
+    auto meas = make_shared<Measurement>();
+    
+    meas->real_time_ = realtime;
+    meas->live_time_ = livetime;
+    meas->gamma_count_sum_ = countssum;
+    meas->gamma_counts_ = channel_counts;
+    
+    measurements_.push_back( meas );
+    
+    cleanup_after_load();
+    
+    return true;
+  }catch( std::exception & )
+  {
+    reset();
+    input.clear();
+    input.seekg( orig_pos, ios::beg );
+  }//try / catch
+  
+  
+  return false;
+}//bool load_from_tka( std::istream &input );
 
 bool MeasurementInfo::load_cnf_file( const std::string &filename )
 {
