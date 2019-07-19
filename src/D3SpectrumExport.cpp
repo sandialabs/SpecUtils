@@ -73,7 +73,7 @@ namespace
   }
 #endif
   
-  const char * SPECTRUM_CHART_SETUP_JS = "var ondatachange=function(e,t,c){\"data\"===e.value?t.setData(c,!0):t.setData(null,!0)},onyscalechange=function(e,t){var c=e.value;\"lin\"===c?t.setLinearY():\"log\"===c?t.setLogY():\"sqrt\"===c&&t.setSqrtY()},ongridychange=function(e,t){t.setGridY(e.checked)},ongridxchange=function(e,t){t.setGridX(e.checked)},onrefgammachange=function(e,t,c){console.log(c);for(var n=[],o=0;o<e.options.length;o++){var s=e.options[o];if(s.selected){var a=-1;c.forEach(function(e,t){e&&e.parent&&e.parent===s.value&&(a=t)}),-1!==a&&n.push(c[a])}}t.setReferenceLines(n)},setShowMouseStats=function(e,t){t.setShowMouseStats(e.checked)},setCompactXAxis=function(e,t){t.setCompactXAxis(e.checked)},setAdjustYAxisPadding=function(e,t){t.setAdjustYAxisPadding(e.checked,e.checked?5:60)},setWheelScrollYAxis=function(e,t){t.setWheelScrollYAxis(e.checked)},setShowAnimation=function(e,t){t.setShowAnimation(e.checked)},setAnimationDuration=function(e,t){t.setAnimationDuration(e)},setShowLegend=function(e,t){t.setShowLegend(e.checked)},setShowUserLabels=function(e,t){t.setShowUserLabels(e.checked)},setShowPeakLabels=function(e,t){t.setShowPeakLabels(e.checked)},setShowNuclideNames=function(e,t){t.setShowNuclideNames(e.checked)},setShowNuclideEnergies=function(e,t){t.setShowNuclideEnergies(e.checked)},setComptonEdge=function(e,t){t.setComptonEdge(e.checked)},setComptonPeaks=function(e,t){t.setComptonPeaks(e.checked)},setComptonPeakAngle=function(e,t){t.setComptonPeakAngle(e)},setEscapePeaks=function(e,t){t.setEscapePeaks(e.checked)},setSumPeaks=function(e,t){t.setSumPeaks(e.checked)},showForegroundPeaks=function(e,t){t.setShowPeaks(0,e.checked)},showTitle=function(e,t){t.setTitle(e.checked?\"Simple Chart\":null)},setXRangeArrows=function(e,t){t.setXRangeArrows(e.checked)},setShowXAxisSliderChart=function(e,t){t.setShowXAxisSliderChart(e.checked)},setSpectrumScaleFactorWidget=function(e,t){t.setSpectrumScaleFactorWidget(e.checked)},setDropDownSpectrumScaleFactor=function(e,t){t.setDropDownSpectrumScaleFactor(e.value)},setSpectrumScaleFactor=function(e,t){t.setSpectrumScaleFactor(e.value)},setMaxScaleFactor=function(e,t){t.setMaxScaleFactor(e.value)},setBackgroundSubtract=function(e,t){t.setBackgroundSubtract(e.checked)};";
+  const char * SPECTRUM_CHART_SETUP_JS = "var ondatachange=function(e,t,c){\"data\"===e.value?t.setData(c,!0):t.setData(null,!0)},onyscalechange=function(e,t){var c=e.value;\"lin\"===c?t.setLinearY():\"log\"===c?t.setLogY():\"sqrt\"===c&&t.setSqrtY()},ongridychange=function(e,t){t.setGridY(e.checked)},ongridxchange=function(e,t){t.setGridX(e.checked)},onrefgammachange=function(e,t,c){console.log(c);for(var n=[],o=0;o<e.options.length;o++){var s=e.options[o];if(s.selected){var a=-1;c.forEach(function(e,t){e&&e.parent&&e.parent===s.value&&(a=t)}),-1!==a&&n.push(c[a])}}t.setReferenceLines(n)},setShowMouseStats=function(e,t){t.setShowMouseStats(e.checked)},setCompactXAxis=function(e,t){t.setCompactXAxis(e.checked)},setAdjustYAxisPadding=function(e,t){t.setAdjustYAxisPadding(e.checked,e.checked?5:60)},setWheelScrollYAxis=function(e,t){t.setWheelScrollYAxis(e.checked)},setShowAnimation=function(e,t){t.setShowAnimation(e.checked)},setAnimationDuration=function(e,t){t.setAnimationDuration(e)},setShowLegend=function(e,t){t.setShowLegend(e.checked)},setShowUserLabels=function(e,t){t.setShowUserLabels(e.checked)},setShowPeakLabels=function(e,t){t.setShowPeakLabels(e.checked)},setShowNuclideNames=function(e,t){t.setShowNuclideNames(e.checked)},setShowNuclideEnergies=function(e,t){t.setShowNuclideEnergies(e.checked)},setComptonEdge=function(e,t){t.setComptonEdge(e.checked)},setComptonPeaks=function(e,t){t.setComptonPeaks(e.checked)},setComptonPeakAngle=function(e,t){t.setComptonPeakAngle(e)},setEscapePeaks=function(e,t){t.setEscapePeaks(e.checked)},setSumPeaks=function(e,t){t.setSumPeaks(e.checked)},showForegroundPeaks=function(e,t){t.setShowPeaks(0,e.checked)},showTitle=function(e,t){t.setTitle(e.checked?\"Simple Chart\":null)},setXRangeArrows=function(e,t){t.setXRangeArrows(e.checked)},setShowXAxisSliderChart=function(e,t){t.setShowXAxisSliderChart(e.checked)},setShowSpectrumScaleFactorWidget=function(e,t){t.setShowSpectrumScaleFactorWidget(e.checked)},setBackgroundSubtract=function(e,t){t.setBackgroundSubtract(e.checked)};";
   
   //Taken from the rapidxml.hpp that Wt uses
   template <class Ch>
@@ -551,16 +551,13 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     ostr << "<br />" << endline
     << "<label><input type=\"checkbox\" onchange=\"setBackgroundSubtract(this,spec_chart_" << div_id << ")\" " << (options.m_backgroundSubtract ? "checked" : "") << ">Background subtract</label>" << endline  // Set up option for background subtract
-    << "<label><input id=\"scaleroption\" type=\"checkbox\" onchange=\"setSpectrumScaleFactorWidget(this,spec_chart_" << div_id << ")\">Enable scale background and secondary</label>" << endline // Set up option for spectrum y-scaler widget
+    << "<label><input id=\"scaleroption\" type=\"checkbox\" onchange=\"setShowSpectrumScaleFactorWidget(this,spec_chart_" << div_id << ")\">Enable scale background and secondary</label>" << endline // Set up option for spectrum y-scaler widget
     << "<label><input type=\"checkbox\" onchange=\"setShowXAxisSliderChart(this,spec_chart_" << div_id << ");\">Show x-axis slider chart</label>" << endline  // Set up option for x-axis slider chart widget
     << "<label><input type=\"checkbox\" onchange=\"setXRangeArrows(this,spec_chart_" << div_id << ")\" checked>Show x-axis range continuse arrows</label>" << endline << endline; // Set up option for x-axis range arrows
     
     // Set up option for spectrum scale factor widget
     ostr << "<br />" << endline
-    << "<label>Choose Spectrum to Scale: <select id=\"current-sf-title\" onchange=\"setDropDownSpectrumScaleFactor(this,spec_chart_" << div_id << ")\">" << endline
-    << "<option value=\"None\">none</option></select></label>" << endline
-    << "<label>Current Scale Factor: <input type=\"number\" min=\"0\" size=\"4\" id=\"current-sf\" oninput=\"setSpectrumScaleFactor(this,spec_chart_" << div_id << ");\"></label>" << endline
-    << "<label>Max Scale Factor: <input id=\"max-sf\" type=\"number\" min=\"0.1\" id=\"bg-msf\" oninput=\"setMaxScaleFactor(this,spec_chart_" << div_id << ");\"></label>" << endline << endline
+    << endline
     << "</div>";
     
     // Set up inline div element for reference gamma selection
@@ -622,15 +619,6 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "<script>onrefgammachange(document.getElementById('referenceGammaSelect"
            << div_id << "'),spec_chart_" << div_id << ",reference_lines_" << div_id << ");</script>" << endline;
     
-    
-    // Set up spectra options for scale factor widget
-    ostr << "<script type=\"text/javascript\">"
-    << "if (currentsftitle = document.getElementById('current-sf-title')) {"
-    << "var titles = spec_chart_" << div_id << ".getSpectrumTitles();"
-    << "currentsftitle.options.length = titles.length;"
-    << "titles.forEach(function(title,i) {"
-    << "if (i == 0) currentsftitle.options[i] = new Option('None', '', true, false);"
-    << "else currentsftitle.options[i] = new Option(title, title, false, false);   });}</script>";
     
     ostr << "</body>" << endline;
     ostr << "</html>" << endline;

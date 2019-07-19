@@ -808,10 +808,8 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
     // Christian [05122018]: Added other necessary display render methods to ensure consistency even when chart has no data
     //this.options.scaleBackgroundSecondary = false;
-    this.removeSpectrumScaleFactorWidget();
     this.updateLegend();
-    this.drawXAxisSliderChart();
-
+   
     this.redraw()();
     return;
   }
@@ -1005,6 +1003,11 @@ SpectrumChartD3.prototype.redraw = function() {
   var self = this;
 
   return function() {
+    
+    if( this.size && (this.size.nYScalers !== this.numYScalers()) ) {
+      this.handleResize( true );
+    }
+    
     self.do_rebin();
     self.rebinForBackgroundSubtract();  // Get the points for background subtract
     self.setYAxisDomain();
@@ -1311,9 +1314,8 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.size.sliderChartHeight = 0;
   }
  
-  let scalerwidth = 20*this.numYScalers();
- 
-  this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right - scalerwidth);
+  this.size.nYScalers = this.numYScalers();
+  this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right - 20*this.size.nYScalers);
   this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed - this.size.sliderChartHeight);
 
   this.xScale.range([0, this.size.width]);
@@ -1388,7 +1390,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   }
   
   /*Make sure the legend stays visible */
-  if( this.legend ) {
+  if( this.legend && this.size.height > 50 && this.size.width > 100 && prevCx > 50 && prevCy > 50 ) {
     var trans = d3.transform(this.legend.attr("transform")).translate;
     var bb = this.legendBox.node().getBBox();
     
@@ -1398,19 +1400,10 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     var legy = (trans[1] < 0.5*prevCy) ? trans[1] : this.cy - (prevCy - trans[1]);
     
     //Make sure legend is visible
-    legx = ((legx+bb.width) > this.cx) ? (this.cx-bb.width) : legx;
-    legy = ((legy+bb.height) > this.cy) ? (this.cy-bb.height) : legy;
+    legx = ((legx+bb.width) > this.cx) ? (this.cx - bb.width - this.padding.right - 20*this.size.nYScalers) : legx;
+    legy = ((legy+bb.height) > this.cy) ? (this.cy - bb.height) : legy;
     
     this.legend.attr("transform", "translate(" + Math.max(0,legx) + "," + Math.max(legy,0) + ")" );
-  }
-
-  /* Make sure the scaler stays visible */
-  if( this.scalerWidget ) {
-    var trans = d3.transform(this.scalerWidget.attr("transform")).translate;
-    var bb = this.scalerWidgetBox.node().getBBox();
-    var scalerx = ((trans[0]+bb.width) > this.cx) ? (this.cx-bb.width) : trans[0];
-    var scalery = ((trans[1]+bb.height) > this.cy) ? (this.cy-bb.height) : trans[1];
-    this.scalerWidget.attr("transform", "translate(" + Math.max(0,scalerx) + "," + Math.max(scalery,0) + ")" );
   }
 
   if (this.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
@@ -1511,7 +1504,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     self.mousemove()();
 
     /* If no data is detected, then stop updating other mouse move parameters */
-    if(!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown || self.scalerdown)
+    if(!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
       return;
 
     /* Prevent and stop default events from ocurring */
@@ -2089,7 +2082,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 
     registerKeyboardHandler(self.keydown());
 
-    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown || self.scalerdown )
+    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
     {
       console.log( "Is null down" )
       return;
@@ -2258,7 +2251,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
       }
     }
 
-    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown || self.scalerdown )
+    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
       return;
 
     /* Handle fitting peaks (if needed) */
@@ -2283,6 +2276,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* HAndle counting gammas (if needed) */
     self.handleMouseUpCountGammas();
 
+    self.endYAxisScalingAction()();
+    
     let domain = self.xScale.domain();
     if( !self.origdomain || !domain || self.origdomain[0]!==domain[0] || self.origdomain[1]!==domain[1] ){
       //console.log( 'Mouseup xrangechanged' );
@@ -2742,7 +2737,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
         self.handleTouchMoveZoomInY();
 
       } else if (self.currentlyAdjustingSpectrumScale) {
-        self.handleTouchMoveAdjustSpectrumScale()();
+        self.handleMouseMoveScaleFactorSlider()();
 
       } else {
         self.handleCancelTouchCountGammas();
@@ -3023,23 +3018,6 @@ SpectrumChartD3.prototype.mousemove = function () {
       }
     }
 
-    if (self.scalerdown) {
-      d3.event.preventDefault();
-      d3.event.stopPropagation();
-
-      var x = d3.event.x ? d3.event.x : d3.event.touches ?  d3.event.touches[0].clientX : d3.event.clientX,
-          y = d3.event.y ? d3.event.y : d3.event.touches ?  d3.event.touches[0].clientY : d3.event.clientY,
-          calculated_x = d3.mouse(self.vis[0][0])[0]; /* current mouse x position */
-
-      if ( calculated_x >= -self.padding.leftComputed && y >= 0 && 
-           calculated_x <= self.cx && y <= self.cy ) {
-        /* console.log("change legend pos"); */
-        var tx = (x - self.scalerdown.x) + self.scalerdown.x0;
-        var ty = (y - self.scalerdown.y) + self.scalerdown.y0; 
-        self.scalerWidget.attr("transform", "translate(" + tx + "," + ty + ")");
-      }
-    }
-
     if (self.adjustingBackgroundScale || self.adjustingSecondaryScale) {
       d3.event.preventDefault();
       d3.event.stopPropagation();
@@ -3233,6 +3211,7 @@ SpectrumChartD3.prototype.keydown = function () {
           self.handleCancelMousePeakFit();
         }
         self.fittingPeak = false;
+        self.cancelYAxisScalingAction();
         self.handleCancelAllMouseEvents()();
         self.handleCancelAnimationZoom();
         self.handleCancelRoiDrag();
@@ -3327,16 +3306,13 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
     /* Cancel all legend interactions */
     self.legdown = null;
 
-    /* Cancel scaler interactions */
-    self.scalerdown = null;
-
     /* Cancel all slider drag region interactions */
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
 
     /* Cancel all scaler widget interactions */
-    self.currentlyAdjustingSpectrumScale = null;
+    self.endYAxisScalingAction()();
   }
 }
 
@@ -5634,7 +5610,8 @@ SpectrumChartD3.prototype.numYScalers = function() {
   
   let nonFore = 0;
   self.rawData.spectra.forEach(function (spectrum) {
-    if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND )
+    if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND
+      && spectrum.yScaleFactor != null && spectrum.yScaleFactor >= 0.0 )
     nonFore += 1;
   });
   
@@ -5642,171 +5619,101 @@ SpectrumChartD3.prototype.numYScalers = function() {
 }
 
 
+SpectrumChartD3.prototype.cancelYAxisScalingAction = function() {
+  var self = this;
+  
+  if( !self.rawData || !self.rawData.spectra || self.currentlyAdjustingSpectrumScale === null )
+    return;
+  
+  console.log( 'cancelYAxisScalingAction');
+  
+  var scale = null;
+  for (var i = 0; i < self.rawData.spectra.length; ++i) {
+    let spectrum = self.rawData.spectra[i];
+    
+    if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
+      spectrum.yScaleFactor = spectrum.startingYScaleFactor;
+      spectrum.startingYScaleFactor = null;
+      self.endYAxisScalingAction()();
+      self.redraw()();
+      return;
+    }
+  }
+}
+
+SpectrumChartD3.prototype.endYAxisScalingAction = function() {
+  var self = this;
+  
+  return function(){
+    if( self.currentlyAdjustingSpectrumScale === null )
+      return;
+
+    console.log( 'endYAxisScalingAction');
+    
+    var scale = null;
+  
+    for( var i = 0; i < self.rawData.spectra.length; ++i ) {
+    
+      let spectrum = self.rawData.spectra[i];
+    
+      if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
+        spectrum.sliderText.style( "display", "none" );
+        spectrum.sliderToggle.attr("cy", Number(spectrum.sliderRect.attr("y"))
+                                          + Number(spectrum.sliderRect.attr("height"))/2);
+                                          
+        spectrum.sliderRect.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.3);
+        spectrum.sliderToggle.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.7);
+                                          
+        spectrum.startingYScaleFactor = null;
+        scale = spectrum.yScaleFactor;
+        break;
+      }
+    }
+  
+    if( scale !== null ){
+      self.WtEmit(self.chart.id, {name: 'yscaled'}, scale, self.currentlyAdjustingSpectrumScale );
+      console.log('Emmitted yscaled scale=' + scale + ', type=' + self.currentlyAdjustingSpectrumScale );
+    } else {
+      console.log('Failed to find scale factor being adjusted');
+    }
+  
+    self.currentlyAdjustingSpectrumScale = null;
+  }
+}
+
+
 SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var self = this;
   
-  if( self.numYScalers() === 0 )
-    return;
+  //This function called from setData() and handleResize(), so not too often.
+  //  (ToDo: it also gets needlessly called occasitonally when zooming - should fix)
   
-  function hasYScaleFactors() {
-    if (!self.rawData || !self.rawData.spectra) return false;
-    var result = false;
-    self.rawData.spectra.forEach(function (spectrum) { 
-      if (spectrum.yScaleFactor != null)
-        result = true;
-    });
-    return result;
-  }
-  function allNegativeYScaleFactors() {
-    var result = true;
-    self.rawData.spectra.forEach(function (spectrum) { 
-      if (spectrum.yScaleFactor && spectrum.yScaleFactor >= 0)
-        result = false;
-    });
-    return result;
-  }
-  function onlyForegroundPresent() {
-    if (!self.rawData || !self.rawData.spectra) return false;
-    var result = true;
-    self.rawData.spectra.forEach(function (spectrum) { 
-      if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND )
-        result = false;
-    });
-    return result;
-  }
-
-  var onlyForegroundPresentInGraph = onlyForegroundPresent();
-  var graphHasYScaleFactors = hasYScaleFactors();
-
-  if (!self.rawData || !self.rawData.spectra || !graphHasYScaleFactors || onlyForegroundPresentInGraph || !self.options.scaleBackgroundSecondary) {
-    self.removeSpectrumScaleFactorWidget();
-    
-    /* Display proper error messages */
-    if (self.options.scaleBackgroundSecondary) {
-      //if (!self.rawData || !self.rawData.spectra)
-      //  alert("No data specified for graph!");
-      //else if (!graphHasYScaleFactors)
-      //  alert("No y-scale factors detected for any graph!");
-      //else if (onlyForegroundPresentInGraph)
-      //  alert("Only chart foreground detected. Please specify a background/other chart for scaling y-values.");
-    }
-
+  //console.log( 'drawScalerBackgroundSecondary' );
+  
+  //ToDo: - Instead of using spectrum.type to identify which spectrum is being scaled, use spectrum.id (but make sure id is always unique)
+  
+  const nScalers = self.numYScalers();
+  if( nScalers === 0 || self.size.height < 35 ){
+    if( self.scalerWidget )
+      self.removeSpectrumScaleFactorWidget();
     return;
   }
 
-  if (allNegativeYScaleFactors()) {
-    self.removeSpectrumScaleFactorWidget();
-    return;
-  }
-
-  if (!self.scalerWidget) {
-
-    function moveScalerWidget(){
-      if( self.scalerdown && !self.adjustingBackgroundScale && !self.adjustingSecondaryScale ) {
-        d3.event.preventDefault();
-        d3.event.stopPropagation();
-
-        var x = d3.event.x ? d3.event.x : d3.event.touches ?  d3.event.touches[0].clientX : d3.event.clientX;
-        var y = d3.event.y ? d3.event.y : d3.event.touches ?  d3.event.touches[0].clientY : d3.event.clientY;
-
-        var calculated_x = d3.mouse(self.vis[0][0])[0];
-
-        if ( calculated_x >= -self.padding.leftComputed && y >= 0 && 
-             calculated_x <= self.cx && y <= self.cy ) {
-          console.log("change pos");
-          var tx = (x - self.scalerdown.x) + self.scalerdown.x0;
-          var ty = (y - self.scalerdown.y) + self.scalerdown.y0; 
-          self.scalerWidget.attr("transform", "translate(" + tx + "," + ty + ")");
-        }
-      }
-    }
-    
+  if( !self.scalerWidget ){
     self.scalerWidget = d3.select(this.chart).select("svg").append("g")
       .attr("class", "scalerwidget")
-      .attr("transform","translate(" + (this.cx - (this.cx/2) - this.padding.right) + ","+ (this.padding.topComputed + 10) + ")");
+      .attr("transform","translate(" + (this.cx - 20*nScalers) + "," + this.padding.topComputed + ")");
 
-    self.scalerWidgetBox = self.scalerWidget.append('rect')
-      .attr("class", "scalerback")
-      .attr('width', "100px")
-      .attr('height', "5px")
-      .attr( "rx", "5px")
-      .attr( "ry", "5px");
     self.scalerWidgetBody = self.scalerWidget.append("g")
-      .attr("transform","translate(8,17)");
-
-    self.scalerWidgetHeader = self.scalerWidget.append("g"); 
-    self.scalerWidgetHeader.style("display", "none")
-      .append('rect')
-      .attr("class", "scalerheader")
-      .attr('width', "100px")
-      .attr('height', "1.5em")
-      .attr( "rx", "5px")
-      .attr( "ry", "5px")
-      .style("cursor", "pointer");
-    
-    /*Add a close button to get rid of the scaler widget */
-    self.scalerWidgetClose = self.scalerWidgetHeader.append('g').attr("transform","translate(4,4)");
-    self.scalerWidgetClose.append("rect")
-      .attr("class", "d3closebut")
-      .attr('height', "12")
-      .attr('width', "12");
-    self.scalerWidgetClose.append("path")
-      .attr("style", "stroke: white; stroke-width: 1.5px;" )
-      .attr("d", "M 2,2 L 10,10 M 10,2 L 2,10");
-    self.scalerWidgetClose.on("click", function(){ self.options.scaleBackgroundSecondary = false; self.drawScalerBackgroundSecondary(); } )
-                          .on("touchend", function(){ self.options.scaleBackgroundSecondary = false; self.drawScalerBackgroundSecondary(); } );   
-    
-    self.scalerWidget.on("mouseover", function(d){if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidgetHeader.style("display", null);} )
-      .on("mouseout", function(d){self.scalerWidgetHeader.style("display", "none");} )
-      .on("mousemove", moveScalerWidget)
-      .on("touchmove", moveScalerWidget)
-      .on("wheel", function(d){d3.event.preventDefault(); d3.event.stopPropagation();} );
-    
-    function mousedownscaler(){
-      console.log("mouse down on scaler");
-      if (d3.event.defaultPrevented) return;
-      if( self.dragging_plot || self.zooming_plot ) return;
-      d3.event.preventDefault();
-      d3.event.stopPropagation();
-      var trans = d3.transform(self.scalerWidget.attr("transform")).translate;
-
-      var x = d3.event.x ? d3.event.x : d3.event.touches ?  d3.event.touches[0].clientX : d3.event.clientX;
-      var y = d3.event.y ? d3.event.y : d3.event.touches ?  d3.event.touches[0].clientY : d3.event.clientY;
-      self.scalerdown = {x: x, y: y, x0: trans[0], y0: trans[1]};
-    }
-    
-    self.scalerWidgetHeader
-        .on("mouseover", function(d) {
-          if( !self.dragging_plot && !self.zooming_plot )
-            self.scalerWidget.attr("class", "scalerwidget activescaler");
-          } )
-        .on("touchstart", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
-        .on("mouseout",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
-        .on("touchend",  function(d) { if (self.scalerWidget) self.scalerWidget.attr("class", "scalerwidget"); } )
-        .on("mousedown.drag",  mousedownscaler )
-        .on("touchstart.drag",  mousedownscaler )
-        .on("touchend.drag", function() {self.scalerdown = null;} )
-        .on("mouseup.drag", function(){ self.scalerdown = null; } )
-        .on("mousemove.drag", moveScalerWidget)
-        .on("mouseout.drag", moveScalerWidget);
-
-    self.scalerWidget.on("touchstart", function(d) { mousedownscaler(); if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidgetHeader.style("display", null); } )
-      .on("touchend.drag",  function() 
-      {
-      if (!self.scalerWidget || !self.scalerWidgetHeader) {
-        self.scalerdown = null;
-        return; 
-      }
-      self.scalerWidget.attr("class", "scalerwidget"); 
-      window.setTimeout(function() { self.scalerWidgetHeader.style("display", "none"); }, 1500) 
-      self.scalerdown = null; 
-      });
+      .attr("transform","translate(0,0)");
   }
 
-  var origtrans = d3.transform(self.scalerWidget.attr("transform")).translate;
-  var bb = self.scalerWidget.node().getBBox();
-  var fromRight = self.cx - origtrans[0] - self.scalerWidgetBox.attr('width').replace("px","");
-
+  //The number of scalers may have changed since we created self.scalerWidget,
+  //  so update its position.
+  self.scalerWidget
+      .attr("transform","translate(" + (this.cx - 20*nScalers) + "," + this.padding.topComputed + ")");
+  
+  
   self.scalerWidgetBody.selectAll("g").remove();
 
   function is_touch_device() {
@@ -5814,129 +5721,96 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         || (navigator && navigator.maxTouchPoints);       /* works on IE10/11 and Surface */
   };
 
-  var scalerWidth = 300;
+  var scalerHeight = self.size.height - 30;
   var toggleRadius = is_touch_device() ? 10 : 7;
-  var xpos = 10;
-  var ypos = 25;
-  var scalerAdded = false;
+  var ypos = 15;
 
+  //Get axis color, text color and spec
+  let axiscolor = 'black', txtcolor = 'black';
+  const tickElement = document.querySelector('.tick');
+  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+  
+  const titleElement = document.querySelector('.xaxistitle');
+  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
+  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
+  
+  
+  var scalenum = 0;
   self.rawData.spectra.forEach(function(spectrum,i) {
     var spectrumScaleFactor = spectrum.yScaleFactor;
     var spectrumSelector = 'Spectrum-' + spectrum.id;
 
     if (i == 0 || spectrum.type === self.spectrumTypes.FOREGROUND)   /* Don't add scaling functionality for foreground */
-      return;
-
-      //blah blah blah
-    //Search for padding.right, and everywhere add an extra ~20px padding.right for each spectrum.scaleAxis
-    //Draw sliders vertical to right of chart; get rid of all dragging logic and such, and convert everything.
-    //Have it so when let go, circle goes back to middle;
-    //Have scale factor be logorithmic (e.g., from 0.001 to 1000) when log, and 0.1 to 100 when linear.
-    //Implement emitting signal back to C++ when let go
+    return;
       
     if (spectrumScaleFactor != null && spectrumScaleFactor >= 0) {
-      spectrum.scale = d3.scale.linear()
-        .domain([0, self.options.maxScaleFactor]) /* TODO: Have global max scale factor */
-        .range([0, scalerWidth]);
-
-      spectrum.scaleAxis = d3.svg.axis().scale(spectrum.scale)
-        .orient("bottom")
-        .innerTickSize(is_touch_device() ? 27 : 19)
-        .outerTickSize(0)
-        .ticks(5,'f');
-
+      scalenum += 1;
+      
+      let speccolor = spectrum.lineColor ? spectrum.lineColor : 'black';
+      
       var spectrumSliderArea = self.scalerWidgetBody.append("g")
         .attr("id", spectrumSelector + "SliderArea")
-        .attr("transform","translate(" + xpos + "," + ypos + ")")
-        .call(spectrum.scaleAxis);
+        .attr("transform","translate(" + 20*(scalenum-1) + "," + ypos + ")");
 
       spectrum.sliderText = spectrumSliderArea.append("text")
         .attr("x", 0)
-        .attr("y", 0)
+        .attr("y", self.size.height-15)
         .attr("text-anchor", "start")
-        .text(spectrum.title + " Scale Factor: " + spectrumScaleFactor.toFixed(3));
+        .attr("fill", txtcolor )
+        .style( "display", "none" )
+        .text( "" + spectrumScaleFactor.toFixed(3));
 
       spectrum.sliderRect = spectrumSliderArea.append("rect")
         .attr("class", "scaleraxis")
-        .attr("y", Number(spectrum.sliderText.attr("y")) + 10 + (is_touch_device() ? 5 : 0))
+        .attr("y", 0 /* + (is_touch_device() ? 5 : 0)*/ )
+        .attr("x", 8)
         .attr("rx", 5)
         .attr("ry", 5)
-        .attr("width", scalerWidth)
-        .attr("height", "1%");
+        .attr("stroke", axiscolor )
+        .attr("stroke-opacity", 0.8)
+        .attr("fill", speccolor )
+        .attr("fill-opacity", 0.3)
+        .attr("width", "4px")
+        .attr("height", scalerHeight );
+ 
 
-      let endChanging = function(){
-        if( self.currentlyAdjustingSpectrumScale === null )
-          return;
-          
-        var scale = null;
-        for (var i = 0; i < self.rawData.spectra.length; ++i) {
-          if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale ) {
-            scale = self.rawData.spectra[i].yScaleFactor;
-            break;
-          }
-        }
-          
-        if( scale !== null ){
-          self.WtEmit(self.chart.id, {name: 'yscaled'}, scale, self.currentlyAdjustingSpectrumScale );
-          console.log('Emmitted yscaled scale=' + scale + ', type=' + self.currentlyAdjustingSpectrumScale );
-        } else {
-          console.log('Failed to find scale factor being adjusted');
-        }
-          
-        self.currentlyAdjustingSpectrumScale = null;
-      };
-      
-        
       spectrum.sliderToggle = spectrumSliderArea.append("circle")
         .attr("class", "scalertoggle")
-        .attr("cx", Math.min(spectrum.scale(spectrumScaleFactor), scalerWidth))
-        .attr("cy", Number(spectrum.sliderRect.attr("y")) + toggleRadius/2)
+        .attr("cx", Number(spectrum.sliderRect.attr("x")) + toggleRadius/2 - 1)
+        .attr("cy", Number(spectrum.sliderRect.attr("y")) + scalerHeight/2)
         .attr("r", toggleRadius)
+        .attr("stroke", axiscolor )
+        .attr("stroke-opacity", 0.8)
+        .attr("fill", speccolor )
+        .attr("fill-opacity", 0.7)
         .style("cursor", "pointer")
-        .on("mousedown", function(){ 
+        .on("mousedown", function(){
+          self.handleMouseMoveScaleFactorSlider();
+          registerKeyboardHandler(self.keydown());
+          spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
+          spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
+          spectrum.startingYScaleFactor = spectrum.yScaleFactor;
           self.currentlyAdjustingSpectrumScale = spectrum.type;
+          spectrum.sliderText.style( "display", null )
           d3.event.preventDefault();
           d3.event.stopPropagation();
         })
         .on("mousemove", self.handleMouseMoveScaleFactorSlider())
-        .on("mouseup", endChanging )
-        .on("touchstart", function(){ self.currentlyAdjustingSpectrumScale = spectrum.type; })
+        .on("mouseup", self.endYAxisScalingAction() )
+        .on("touchstart", function(){
+          self.handleMouseMoveScaleFactorSlider();
+          registerKeyboardHandler(self.keydown());
+          spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
+          spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
+          spectrum.startingYScaleFactor = spectrum.yScaleFactor;
+          self.currentlyAdjustingSpectrumScale = spectrum.type;
+          spectrum.sliderText.style( "display", null )
+        })
         .on("touchmove", self.handleMouseMoveScaleFactorSlider())
-        .on("touchend", endChanging );
-
-      ypos += 60;
+        .on("touchend", self.endYAxisScalingAction() );
     }
   });
-
-  /*Resize the box to match the text size */
-  var w = self.scalerWidgetBody.node().getBBox().width + 15 + (2*xpos); 
-  self.scalerWidgetHeader.attr("width", w)
-  self.scalerWidgetBox.attr('width', w);
-  self.scalerWidgetBox.attr('height', self.scalerWidgetBody.node().getBBox().height + 40 );
-  self.scalerWidgetClose.attr("transform","translate(" + (w-16) + ",4)");
-
-  if (!self.scalerWidgetTitle)
-    self.scalerWidgetTitle = self.scalerWidget.append('text')
-      .attr("x", w/2)
-      .attr("text-anchor", "middle")
-      .attr("transform", "translate(0," + 16 + ")")
-      .attr("cursor", "pointer")
-      .on("touchstart", function(d) { mousedownscaler();  if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
-      .on("mousemove", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
-      .on("mouseout",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
-      .on("touchend",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
-      .on("mousedown.drag",  mousedownscaler )
-      .on("touchstart.drag",  mousedownscaler )
-      .on("touchend.drag", function() {self.scalerdown = null;})
-      .on("mouseup.drag", function(){self.scalerdown = null;} )
-      .on("mousemove.drag", moveScalerWidget)
-      .text("Spectrum Y-Value Scaler")
-  
-  self.scalerWidgetHeader.select('rect').attr('width', w );
-  self.scalerWidgetHeader.select('text').attr("x", w/2);
-
-  /*Set the transform so the space on the right of the legend stays the same */
-  self.scalerWidget.attr("transform", "translate(" + (this.cx - fromRight - w) + "," + origtrans[1] + ")" );
 }
 
 SpectrumChartD3.prototype.removeSpectrumScaleFactorWidget = function() {
@@ -5945,211 +5819,20 @@ SpectrumChartD3.prototype.removeSpectrumScaleFactorWidget = function() {
   if (self.scalerWidget) {
     self.scalerWidget.remove();
     self.scalerWidget = null;
-    self.scalerWidgetBox = null;
-    self.scalerWidgetHeader = null;
     self.scalerWidgetBody = null;
-    self.scalerWidgetClose = null;
-    self.scalerWidgetTitle = null;
-    self.backgroundScale = null;
-    var scaleroption;
-    if (scaleroption = document.getElementById("scaleroption"))
-      scaleroption.checked = false;
-    console.log( 'Should emit scaler widget closed' );
+    
+    self.rawData.spectra.forEach( function(spectrum,i) {
+      spectrum.sliderText = null;
+      spectrum.sliderRect = null;
+      spectrum.sliderToggle = null;
+    } );
   }
 }
 
-SpectrumChartD3.prototype.setSpectrumScaleFactor = function(d) {
-  var self = this;
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
-  if (!self.currentlyAdjustingSpectrumScale && !self.currentDropDownScaleFactorSpectrum)
-    return;
 
-  var spectrumToCheck = self.currentlyAdjustingSpectrumScale ? self.currentlyAdjustingSpectrumScale : self.currentDropDownScaleFactorSpectrum;
-
-  /* Check for the which corresponding spectrum line is the to be adjusted */
-  var spectrumToBeAdjusted = null;
-  var linei = null;
-  self.rawData.spectra.forEach(function(spectrum,i) {
-    if (spectrum.title && spectrum.type == spectrumToCheck && spectrumToBeAdjusted == null) {
-      spectrumToBeAdjusted = spectrum;
-      linei = i;
-      return;
-    }
-  });
-
-  if (spectrumToBeAdjusted == null || linei == null)
-    return;
-  if (!self['line'+linei] || self.vis.select("#spectrumline"+linei).empty())
-    return;
-
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
-  /* Here is a modified, slightly more efficient version of redraw 
-    specific to changing the scale factors for spectrums. 
-  */
-  function scaleFactorChangeRedraw(spectrum, linei) {
-    self.updateLegend();
-    self.rebinSpectrum(spectrum, linei);
-    self.do_rebin();
-    self.setYAxisDomain();
-    self.drawYTicks();
-    self.update();
-    self.drawPeaks();
-  }
-
-  var spectrumScaleFactor = Math.min(Number(d), self.options.maxScaleFactor);
-  spectrumToBeAdjusted.yScaleFactor = spectrumScaleFactor;
-  scaleFactorChangeRedraw(spectrumToBeAdjusted, linei);
-
-  if (spectrumToBeAdjusted.sliderText)
-    spectrumToBeAdjusted.sliderText.text(spectrumToBeAdjusted.title + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
-  if (spectrumToBeAdjusted.sliderToggle && spectrumToBeAdjusted.scale)
-    spectrumToBeAdjusted.sliderToggle.attr("cx", Math.max( Math.min(spectrumToBeAdjusted.scale(spectrumScaleFactor), spectrumToBeAdjusted.scale.range()[1]), spectrumToBeAdjusted.scale.range()[0] ));
-
-  /* Update the slider chart if needed */
-  if (self["sliderLine"+linei]) {
-    var origdomain = self.xScale.domain();
-    var origdomainrange = self.xScale.range();
-    var origrange = self.yScale.domain();
-    var bounds = self.min_max_x_values();
-    var maxX = bounds[1];
-    var minX = bounds[0];
-
-    /* Change the x and y-axis domain to the full range (for slider lines) */
-    self.xScale.domain([minX, maxX]);
-    self.xScale.range([0, self.size.sliderChartWidth]);
-    self.do_rebin();
-    self.yScale.domain(self.getYAxisDomain());
-
-    self["sliderLine"+linei].attr("d", self["line"+linei](spectrumToBeAdjusted.points));
-
-    /* Restore the original x and y-axis domain */
-    self.xScale.domain(origdomain);
-    self.xScale.range(origdomainrange);
-    self.do_rebin();
-    self.yScale.domain(origrange);
-  }
-}
-
-SpectrumChartD3.prototype.setMaxScaleFactor = function(d) {
-  var self = this;
-
-  d = Math.max(Number(d), 0.1);
-
-  if (self.options)
-    this.options.maxScaleFactor = d;
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
-
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
-  /* Here is a modified, slightly more efficient version of redraw 
-    specific to changing the scale factors for spectrums. 
-  */
-  function scaleFactorChangeRedraw(spectrum, linei) {
-    self.updateLegend();
-    self.rebinSpectrum(spectrum, linei);
-    self.do_rebin();
-    self.setYAxisDomain();
-    self.drawYTicks();
-    self.update();
-    self.drawPeaks();
-  }
-
-  self.rawData.spectra.forEach(function(spectrum,i) {
-    /* Don't scale the foreground */
-    if (i == 0)
-      return;
-
-
-    var spectrumScaleFactor = Math.min(spectrum.yScaleFactor, self.options.maxScaleFactor);
-    var spectrumSelector = 'Spectrum-' + spectrum.id;
-    spectrum.yScaleFactor = spectrumScaleFactor;
-
-    var domain;
-    if (!spectrum.scale || !spectrum.scaleAxis)
-      return;
-
-    domain = spectrum.scale.domain();
-    spectrum.scale.domain([ domain[0], d ]);
-    spectrum.scaleAxis.scale(spectrum.scale)
-      .orient("bottom")
-      .ticks(5,'f');
-    d3.select("#" + spectrumSelector + "SliderArea").call(spectrum.scaleAxis);
-
-    if (spectrum.sliderText)
-      spectrum.sliderText.text(spectrum.title + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
-    if (spectrum.sliderToggle)
-      spectrum.sliderToggle.attr("cx", Math.min(spectrum.scale(spectrum.yScaleFactor), spectrum.scale.range()[1]));
-
-    scaleFactorChangeRedraw(spectrum, i);
-
-    if (!self.vis.select("#spectrumline"+i).empty()) {
-      self.vis.select("#spectrumline"+i).attr("d", self['line'+i](spectrum.points));
-    }
-
-    /* Update the slider chart if needed */
-    if (self["sliderLine"+i]) {
-      var origdomain = self.xScale.domain();
-      var origdomainrange = self.xScale.range();
-      var origrange = self.yScale.domain();
-      var bounds = self.min_max_x_values();
-      var maxX = bounds[1];
-      var minX = bounds[0];
-
-      /* Change the x and y-axis domain to the full range (for slider lines) */
-      self.xScale.domain([minX, maxX]);
-      self.xScale.range([0, self.size.sliderChartWidth]);
-      self.do_rebin();
-      self.yScale.domain(self.getYAxisDomain());
-
-      self["sliderLine"+i].attr("d", self["line"+i](spectrum.points));
-
-      /* Restore the original x and y-axis domain */
-      self.xScale.domain(origdomain);
-      self.xScale.range(origdomainrange);
-      self.do_rebin();
-      self.yScale.domain(origrange);
-    }
-  });
-}
-
-SpectrumChartD3.prototype.setDropDownSpectrumScaleFactor = function(d) {
-  var self = this;
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
-
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
-  self.currentDropDownScaleFactorSpectrum = d == "None" ? null : d;
-
-  if (d != "None") {
-    var valueChanged = false;
-    self.rawData.spectra.forEach(function(spectrum) {
-      if (spectrum.title && spectrum.title.toUpperCase() == self.currentDropDownScaleFactorSpectrum.toUpperCase() && d != "None" && !valueChanged) {
-        valueChanged = true;
-
-      var currentsfinput;
-      var spectrumScaleFactor = spectrum.yScaleFactor;
-
-      if (currentsfinput = document.getElementById("current-sf"))
-        currentsfinput.value = needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed();
-      return;
-    }
-    });
-  }
-}
-
-SpectrumChartD3.prototype.setSpectrumScaleFactorWidget = function(d) {
+SpectrumChartD3.prototype.setShowSpectrumScaleFactorWidget = function(d) {
   this.options.scaleBackgroundSecondary = d;
-  this.drawScalerBackgroundSecondary();
+  this.handleResize( false );
 }
 
 SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
@@ -6193,30 +5876,53 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
 
-    if (linei == null || spectrum == null)
+    if (linei === null || spectrum === null)
       return;
 
     d3.select(document.body).style("cursor", "pointer");
 
     var m = d3.mouse(spectrum.sliderRect[0][0]);
-    var minrange = spectrum.scale.range()[0], maxrange = spectrum.scale.range()[1];
-    var min = spectrum.scale.domain()[0];
-    var max = spectrum.scale.domain()[1];
+    if( !m ){
+      //ToDo: test that this works, and is necassary on touch devices!
+      //console.log( 'Using touches!' );
+      m = d3.touches(spectrum.sliderRect[0][0]);
+      if( m.length !== 1 )
+        return;
+      m = m[0];
+    }
+    
+    
+    let scalerHeight = Number(spectrum.sliderRect.attr("height"));
+    let rad = Number(spectrum.sliderToggle.attr("r"));
+    let newTogglePos = Math.min(Math.max(0,m[1]+rad/2),scalerHeight);
+    
+    let fracOnScale = 1.0 - newTogglePos/scalerHeight;
+    
+    
+    var sf = 1.0;
+    if( self.options.yscale === "log" ) {
+      //[0.001*scale, 1000*scale]
+      sf = Math.exp( Math.log(0.001) + fracOnScale*(Math.log(1000) - Math.log(0.001)) );
+    } else if( self.options.yscale === "sqrt" ) {
+      //ToDo: make so sf will go from 0.01 to 100 with 0.5 giving 1
+      sf = 1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1;
+    } else {
+      //ToDo: make so when fracOnScale is zero, want scale=0.1, when 0.5 want scale=1.0, when 1.0 want scale=10
+      //from 0.1 to 1.9
+      //sf = 1.8*fracOnScale + 0.1;
+      sf = 1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1;
+    }
+    
+    var spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
 
-    var spectrumScaleFactor = Math.min(Math.max(min, spectrum.scale.invert(m[0])), max);
-    var spectrumTitle = spectrum.title ? spectrum.title : "Spectrum " + i;  /* If spectrum doesn't have a title, use the format "Spectrum #" instead */
-
-    spectrum.sliderToggle.attr("cx", spectrum.scale(spectrumScaleFactor));
-    spectrum.sliderText.text(spectrumTitle + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
+    spectrum.sliderToggle.attr("cy", newTogglePos );
+    spectrum.sliderText.text( (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
     self.rawData.spectra[linei].yScaleFactor = spectrumScaleFactor;
 
     // If we are using background subtract, we have to redraw the entire chart if we update the scale factors
     if (self.options.backgroundSubtract) self.redraw()();
     else scaleFactorChangeRedraw(spectrum, linei);
 
-    var currentsfinput;
-    if (self.currentDropDownScaleFactorSpectrum == spectrumTitle && (currentsfinput = document.getElementById("current-sf")))
-      currentsfinput.value = needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed();
 
     /* Update the slider chart if needed */
     if (self["sliderLine"+linei]) {
@@ -6245,102 +5951,6 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
       self.xScale.range(origdomainrange);
       self.do_rebin();
       self.rebinForBackgroundSubtract();
-      self.yScale.domain(origrange);
-    }
-  }
-}
-
-SpectrumChartD3.prototype.handleTouchMoveAdjustSpectrumScale = function() {
-  var self = this;
-
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
-  /* Here is a modified, slightly more efficient version of redraw 
-    specific to changing the scale factors for spectrums. 
-  */
-  function scaleFactorChangeRedraw(spectrum, linei) {
-    self.updateLegend();
-    self.rebinSpectrum(spectrum, linei);
-    self.do_rebin();
-    self.setYAxisDomain();
-    self.drawYTicks();
-    self.update();
-    self.drawPeaks();
-  }
-
-  return function() {
-    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
-      return;
-    if (!self.currentlyAdjustingSpectrumScale)
-      return;
-
-
-    /* Check for the which corresponding spectrum line is the background */
-    var linei = null;
-    var spectrum = null;
-    for (var i = 0; i < self.rawData.spectra.length; ++i) {
-      if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale) {
-        linei = i;
-        spectrum = self.rawData.spectra[i];
-        break;
-      }
-    }
-
-    if (linei == null || spectrum == null)
-      return;
-
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
-
-    var t = d3.touches(spectrum.sliderRect[0][0]);;
-
-    if (t.length !== 1)
-      return;
-    t = t[0];
-
-    var minrange = spectrum.scale.range()[0], maxrange = spectrum.scale.range()[1];
-    var min = spectrum.scale.domain()[0];
-    var max = spectrum.scale.domain()[1];
-
-    var spectrumScaleFactor = Math.min(Math.max(min, spectrum.scale.invert(m[0])), max);
-    var spectrumTitle = spectrum.title ? spectrum.title : "Spectrum " + (i + 1);  /* If spectrum doesn't have a title, use the format "Spectrum #" instead */
-
-    spectrum.sliderToggle.attr("cx", spectrum.scale(spectrumScaleFactor));
-    spectrum.sliderText.text(spectrumTitle + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
-    self.rawData.spectra[linei].yScaleFactor = spectrumScaleFactor;
-
-    scaleFactorChangeRedraw(spectrum, linei);
-
-    var currentsfinput;
-    if (self.currentDropDownScaleFactorSpectrum == spectrumTitle && (currentsfinput = document.getElementById("current-sf")))
-      currentsfinput.value = needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed();
-
-    /* Update the slider chart if needed */
-    if (self["sliderLine"+linei]) {
-      var origdomain = self.xScale.domain();
-      var origdomainrange = self.xScale.range();
-      var origrange = self.yScale.domain();
-      var bounds = self.min_max_x_values();
-      var maxX = bounds[1];
-      var minX = bounds[0];
-
-      /* Change the x and y-axis domain to the full range (for slider lines) */
-      self.xScale.domain([minX, maxX]);
-      self.xScale.range([0, self.size.sliderChartWidth]);
-      self.do_rebin();
-      self.yScale.domain(self.getYAxisDomain());
-
-      self.rawData.spectra.forEach(function(spec, speci) {
-        if (self["sliderLine"+speci])
-          self["sliderLine"+speci].attr("d", self["line"+speci](spec.points));
-      })
-
-      /* Restore the original x and y-axis domain */
-      self.xScale.domain(origdomain);
-      self.xScale.range(origdomainrange);
-      self.do_rebin();
       self.yScale.domain(origrange);
     }
   }
@@ -8080,6 +7690,7 @@ SpectrumChartD3.prototype.handleCancelMousePeakFit = function() {
   this.fittingPeak = null;
   this.current_fitting_peak = null;
   this.erasePeakFitReferenceLines();
+  this.cancelYAxisScalingAction();
   this.redraw()();
 }
 
@@ -8114,7 +7725,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       ymax = self.size.height;
 
   /* Do not update feature markers if legend being dragged or energy value is undefined */
-  if ((t && self.legdown) || (t && self.scalerdown) || isNaN(energy))
+  if ((t && self.legdown) || isNaN(energy))
     return;
   if (self.currentlyAdjustingSpectrumScale)
     return;
