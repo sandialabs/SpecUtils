@@ -223,6 +223,7 @@ enum DetectorType
   kDetectiveEx100Detector,
   /** There are a number of variants, a self contained model, a portal, etc */
   kDetectiveEx200Detector,
+  kDetectiveX,
   /** only identified from N42 files */
   kSAIC8Detector,
   kFalcon5000,

@@ -64,6 +64,7 @@ namespace SerialToDetectorModel
     static const std::string MicroDetective_str( "MicroDetective" );
     static const std::string DetectiveEx100_str( "DetectiveEx100" );
     static const std::string Detective200_str( "Detective200" );
+    static const std::string DetectiveX_str( "DetectiveX" );
     
     switch( model )
     {
@@ -74,6 +75,7 @@ namespace SerialToDetectorModel
       case DetectorModel::MicroDetective: return MicroDetective_str;
       case DetectorModel::DetectiveEx100: return DetectiveEx100_str;
       case DetectorModel::Detective200: return Detective200_str;
+      case DetectorModel::DetectiveX: return DetectiveX_str;
     }//switch( model )
     
     return invalid_str;
@@ -203,6 +205,8 @@ namespace SerialToDetectorModel
         info.model = DetectorModel::DetectiveEx100;
       else if( fields[1] == "Detective200" )
         info.model = DetectorModel::Detective200;
+      else if( fields[1] == "DetectiveX" )
+        info.model = DetectorModel::DetectiveX;
       else
       {
         std::cerr << "Error: invalid detector model: '" << fields[1] << "'" << std::endl;
@@ -338,6 +342,10 @@ namespace SerialToDetectorModel
     
     //The case independance does not appear to be necassarry, but JIC
     // if( UtilityFunctions::icontains( instrument_id, "EX100" ) || UtilityFunctions::icontains( instrument_id, "EX 100" ) )
+    if( UtilityFunctions::icontains( instrument_id, "Detective X" )
+       || UtilityFunctions::iequals( instrument_id, "DetectiveX" ))
+      return DetectorModel::DetectiveX;
+    
     if( UtilityFunctions::icontains( instrument_id, "100" ) )
       return DetectorModel::DetectiveEx100;
     

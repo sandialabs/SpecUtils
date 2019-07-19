@@ -2160,6 +2160,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_DetectiveExDetectorStr       = "Detective-EX";
   static const string sm_DetectiveEx100DetectorStr    = "Detective-EX100";
   static const string sm_OrtecIDMPortalDetectorStr    = "Detective-EX200";
+  static const string sm_OrtecDetectiveXStr           = "Detective X";
   static const string sm_SAIC8DetectorStr             = "SAIC8";
   static const string sm_Falcon5kDetectorStr          = "Falcon 5000";
   static const string sm_UnknownDetectorStr           = "Unknown";
@@ -2203,6 +2204,8 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_DetectiveEx100DetectorStr;
     case kDetectiveEx200Detector:
       return sm_OrtecIDMPortalDetectorStr;
+    case kDetectiveX:
+      return sm_OrtecDetectiveXStr;
     case kSAIC8Detector:
       return sm_SAIC8DetectorStr;
     case kFalcon5000:
@@ -9136,7 +9139,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
       
     case kDetectiveDetector:      case kDetectiveExDetector:
     case kDetectiveEx100Detector: case kDetectiveEx200Detector:
-    case kMicroDetectiveDetector:
+    case kMicroDetectiveDetector: case kDetectiveX:
       defaultname = "DetectiveEX.SPC";
       break;
   }//switch( detector_type_ )
@@ -10427,6 +10430,11 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
         case SerialToDetectorModel::DetectorModel::Detective200:
           type_detector = kDetectiveEx200Detector;
           inst_model = "Detective200";
+          break;
+          
+        case SerialToDetectorModel::DetectorModel::DetectiveX:
+          type_detector = kDetectiveX;
+          inst_model = "Detective X";
           break;
       }//switch( model )
       

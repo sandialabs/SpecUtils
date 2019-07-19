@@ -134,7 +134,10 @@ namespace SerialToDetectorModel
     DetectiveEx100,
     
     /** */
-    Detective200
+    Detective200,
+    
+    /** */
+    DetectiveX
   };//enum class DetectorModel
   
   
