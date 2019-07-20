@@ -53,16 +53,17 @@ namespace
   };//ns_jsFiles[]
   
   const unsigned char * const ns_cssFiles[] = {
-    SPECTRUM_CHART_D3_CSS  // For spectrum stylesheet
+    SPECTRUM_CHART_D3_CSS,  // For spectrum stylesheet
+    SPECTRUM_CHART_D3_STANDALONE_CSS
   };//D3SpectrumChartOptions::cssFiles[]
 #else
-  string file_to_string( const char *filename )
+  string file_to_string( const std::string &filename )
   {
 #ifdef _WIN32
     const std::wstring wfilename = UtilityFunctions::convert_from_utf8_to_utf16(filename);
-    std::ifstream t( wfilename );
+    std::ifstream t( wfilename.c_str() );
 #else
-    std::ifstream t( filename );
+    std::ifstream t( filename.c_str() );
 #endif
     
     if( !t.is_open() )
@@ -231,12 +232,14 @@ namespace D3SpectrumExport
   const unsigned char *d3_js(){ return D3_MIN_JS; }
   const unsigned char *spectrum_chart_d3_js(){ return SPECTRUM_CHART_D3_JS; }
   const unsigned char *spectrum_char_d3_css(){ return SPECTRUM_CHART_D3_CSS; }
+  const unsigned char *spectrum_chart_d3_standalone_css(){ return SPECTRUM_CHART_D3_STANDALONE_CSS; }
   
   const unsigned char *cassowary_js(){ return CASSOWARY_MIN_JS; }
 #else
   const char *d3_js_filename(){ return D3_MIN_JS_FILENAME; }
   const char *spectrum_chart_d3_js_filename(){ return SPECTRUM_CHART_D3_JS_FILENAME; }
-  const char *spectrum_char_d3_css_filename(){ return SPECTRUM_CHART_D3_CSS_FILENAME; }
+  const char *spectrum_chart_d3_css_filename(){ return SPECTRUM_CHART_D3_CSS_FILENAME; }
+  const char *spectrum_chart_d3_css_standalone_filename(){ return SPECTRUM_CHART_D3_STANDALONE_CSS_FILENAME; }
   
   const char *cassowary_js_filename(){ return CASSOWARY_MIN_JS_FILENAME; }
 #endif
@@ -336,12 +339,17 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
 #else
     //could also:
     //ostr << "include(\"" << D3_MIN_JS_FILENAME << "\");" << endline;
-    ostr << "<script>" << file_to_string( D3_MIN_JS_FILENAME ) << "</script>" << endline;
-    ostr << "<script>" << file_to_string( CASSOWARY_MIN_JS_FILENAME ) << "</script>" << endline;
+    using UtilityFunctions::append_path;
+    const std::string basdir = D3_SCRIPT_RUNTIME_DIR;
     
-    ostr << "<script>" << file_to_string( SPECTRUM_CHART_D3_JS_FILENAME ) << "</script>" << endline;
+    ostr << "<script>" << file_to_string( append_path(basdir, D3_MIN_JS_FILENAME) ) << "</script>" << endline;
+    ostr << "<script>" << file_to_string( append_path(basdir, CASSOWARY_MIN_JS_FILENAME) ) << "</script>" << endline;
+    
+    ostr << "<script>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_JS_FILENAME) ) << "</script>" << endline;
     ostr << "<script>" << SPECTRUM_CHART_SETUP_JS << "</script>" << endline;
-    ostr << "<style>" << file_to_string( SPECTRUM_CHART_D3_CSS_FILENAME ) << "</style>" << endline;
+    ostr << "<style>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_CSS_FILENAME) ) << "</style>" << endline;
+    ostr << "<style>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_STANDALONE_CSS_FILENAME) ) << "</style>" << endline;
+    
     //ostr << "<link rel=\"stylesheet\" type=\"text/css\" href=\"" << SPECTRUM_CHART_D3_CSS_FILENAME << "\">" << endline;
 #endif
     ostr << "</head>" << endline;

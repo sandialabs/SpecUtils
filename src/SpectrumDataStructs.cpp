@@ -1437,7 +1437,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case kExploraniumGr135v2SpectrumFile: return "GR135v2 DAT";
     case kIaeaSpeSpectrumFile:            return "IAEA SPE";
 #if( SpecUtils_ENABLE_D3_CHART )
-    case kD3HtmlSpectrumFile:             return "D3 HTML";
+    case kD3HtmlSpectrumFile:             return "HTML";
 #endif
     case kNumSaveSpectrumAsType:          return "";
   }

@@ -121,10 +121,11 @@ if( SpecUtils_ENABLE_D3_CHART )
 # IMPORTANT: These 2 lists below must be of same length, corresponding with each index
 #   For outputting necessary library in D3 HTML files
   set( D3_SUPPORT_FILES
-       d3_resources/d3.v3.min.js
-       d3_resources/c.min.js
-       d3_resources/SpectrumChartD3.js
-       d3_resources/SpectrumChartD3.css
+       d3.v3.min.js
+       c.min.js
+       SpectrumChartD3.js
+       SpectrumChartD3.css
+       SpectrumChartD3StandAlone.css
   )
 
   set( D3_SUPPORT_FILE_MACROS
@@ -132,6 +133,7 @@ if( SpecUtils_ENABLE_D3_CHART )
        CASSOWARY_MIN_JS
        SPECTRUM_CHART_D3_JS
        SPECTRUM_CHART_D3_CSS
+       SPECTRUM_CHART_D3_STANDALONE_CSS
   )
 
 # https://stackoverflow.com/questions/7932205/parallel-iteration-over-lists-in-makefile-or-cmake-file
@@ -145,7 +147,7 @@ if( SpecUtils_ENABLE_D3_CHART )
 
     if( SpecUtils_D3_SUPPORT_FILE_STATIC )
       #Read file into hex array reads source file contents as hex string
-      file(READ ${D3_SUPPORT_FILE_NAME} hexString HEX)
+      file(READ "d3_resources/${D3_SUPPORT_FILE_NAME}" hexString HEX)
       string(LENGTH ${hexString} hexStringLength)
       set(hexString "${hexString}00")
       math(EXPR arraySize "${hexStringLength} / 2")
@@ -159,7 +161,9 @@ if( SpecUtils_ENABLE_D3_CHART )
       set( ${D3_SUPPORT_FILE_MACRO_NAME}_ARR "const unsigned char ${D3_SUPPORT_FILE_MACRO_NAME}[] = { ${arrayValues} };")
       set( ${D3_SUPPORT_FILE_MACRO_NAME}_LEN "const size_t ${D3_SUPPORT_FILE_MACRO_NAME}_SIZE = ${arraySize};")
     else( SpecUtils_D3_SUPPORT_FILE_STATIC )
-      set( ${D3_SUPPORT_FILE_MACRO_NAME}_FILE "const char * const ${D3_SUPPORT_FILE_MACRO_NAME}_FILENAME = \"${CMAKE_CURRENT_SOURCE_DIR}/${D3_SUPPORT_FILE_NAME}\";" )
+       set( SpecUtils_D3_SCRIPTS_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "Directory to read D3 JS and CSS files from at runtime" )
+       set( D3_SUPPORT_FILE_RUNTIME_DIR "const char * const D3_SCRIPT_RUNTIME_DIR = \"${SpecUtils_D3_SCRIPTS_RUNTIME_DIR}\";" )
+       set( ${D3_SUPPORT_FILE_MACRO_NAME}_FILE "const char * const ${D3_SUPPORT_FILE_MACRO_NAME}_FILENAME = \"${D3_SUPPORT_FILE_NAME}\";" )
     endif( SpecUtils_D3_SUPPORT_FILE_STATIC )
   endforeach()
 
@@ -173,6 +177,7 @@ if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND OTHER_SUPPORT_FILES
         d3_resources/SpectrumChartD3.js
         d3_resources/SpectrumChartD3.css
+        d3_resources/SpectrumChartD3StandAlone.css
   )
 endif( SpecUtils_ENABLE_D3_CHART )
 

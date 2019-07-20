@@ -278,6 +278,7 @@ SpectrumChartD3 = function(elem, options) {
       .attr("width", this.size.width)
       .attr("height", this.size.height)
       .attr("id", "chartarea"+this.chart.id )
+      .attr("class", "chartarea" )
       //.style("fill", "#EEEEEE")
       ;
       /*.attr("pointer-events", "all"); */
