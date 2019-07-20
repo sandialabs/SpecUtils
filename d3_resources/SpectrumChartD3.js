@@ -17,6 +17,10 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
 
    
 Feature TODO list (created 20160220):
+  - For the y-axis scalers, should add some padding on either side of that area
+    and also make the width of each slider more than 20px if a touch device and
+    also increase radius of sliderToggle.
+  - 
   - Fix intermitten issue of zooming in messes up (especially aver dragging starting from the y-axis title)
   - Make it so x-axis binning is given seperately for each histogram
   - Add statistical error bars
@@ -2445,7 +2449,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     self.scroll_total_x += e.deltaX;
     self.scroll_total_y += e.deltaY;
 
-    var MAX_SCROLL_TOTAL = 200;
+    var MAX_SCROLL_TOTAL = 1500;
 
     /*Zoom all the way out by the time we get self.scroll_total_y = +200, */
     /*  or, zoom in to 3 bins by the time self.scroll_total_y = -200; */
@@ -5722,7 +5726,8 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   };
 
   var scalerHeight = self.size.height - 30;
-  var toggleRadius = is_touch_device() ? 10 : 7;
+  //var toggleRadius = is_touch_device() ? 10 : 7;  //ToDo: For touch devices if we go to 10 px, then it isnt centered on spectrum.sliderRect, and also it hangs off the screen (or at least would got to very edge.
+  var toggleRadius = 7;
   var ypos = 15;
 
   //Get axis color, text color and spec
