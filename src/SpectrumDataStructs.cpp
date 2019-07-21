@@ -13989,7 +13989,7 @@ std::string MeasurementInfo::determine_rad_detector_kind_code() const
   {
     case kDetectiveDetector: case kDetectiveExDetector:
     case kDetectiveEx100Detector: case kDetectiveEx200Detector:
-    case kFalcon5000: case kMicroDetectiveDetector:
+    case kFalcon5000: case kMicroDetectiveDetector: case kDetectiveX:
       det_kind = "HPGe";
       break;
       
