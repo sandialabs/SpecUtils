@@ -283,13 +283,16 @@ namespace
         case kChnParser: type = "CHN"; break;
         case kIaeaParser: type = "IAEA"; break;
         case kTxtOrCsvParser: type = "TXT or CSV"; break;
-        case kCanberraCnfParser: type = "CNF"; break;
+        case kCnfParser: type = "CNF"; break;
         case kTracsMpsParser: type = "MPS"; break;
         case kSPMDailyFile: type = "SpectroscopicPortalMonitor"; break;
         case kAmptekMca: type = "Amptek MCA"; break;
         case kMicroRaider: type = "Micro Raider"; break;
         case kAramParser: type = "Aram"; break;
         case kOrtecListMode: type = "Ortec Listmode"; break;
+        case kLsrmSpe: type = "LSRM"; break;
+        case kTka: type = "TKA"; break;
+        case kMultiAct: type = "MultiAct"; break;
         case kAutoParser: type = ""; break;
       }//switch( parser_type )
       
@@ -511,12 +514,15 @@ BOOST_PYTHON_MODULE(SpecUtils)
   .value( "kChnParser", kChnParser )
   .value( "kIaeaParser", kIaeaParser )
   .value( "kTxtOrCsvParser", kTxtOrCsvParser )
-  .value( "kCanberraCnfParser", kCanberraCnfParser )
+  .value( "kCnfParser", kCnfParser )
   .value( "kTracsMpsParser", kTracsMpsParser )
   .value( "kSPMDailyFile", kSPMDailyFile )
   .value( "kAmptekMca", kAmptekMca )
   .value( "kMicroRaider", kMicroRaider )
   .value( "kOrtecListMode", kOrtecListMode )
+  .value( "kLsrmSpe", kLsrmSpe )
+  .value( "kTka", kTka )
+  .value( "kMultiAct", kMultiAct )
   .value( "kAutoParser", kAutoParser );
   
 
@@ -608,7 +614,8 @@ enum_<DetectorType>( "DetectorType" )
     .value( "Polynomial", Measurement::Polynomial )
     .value( "FullRangeFraction", Measurement::FullRangeFraction )
     .value( "LowerChannelEdge", Measurement::LowerChannelEdge )
-    .value( "UnknownEquationType", Measurement::UnknownEquationType )
+    .value( "InvalidEquationType", Measurement::InvalidEquationType )
+    .value( "UnspecifiedUsingDefaultPolynomial", Measurement::UnspecifiedUsingDefaultPolynomial )
     .export_values();
     
     enum_<Measurement::QualityStatus>( "QualityStatus" )
