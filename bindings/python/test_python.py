@@ -121,7 +121,7 @@ savetoname = "Cal_pyconverted.n42"
 f = open( savetoname, 'w' );
 
 try:
-    info.write2011N42Xml( f )
+    info.write2012N42Xml( f )
 except RuntimeError as e:
     print "Error writing 2011 N42 file: {0}.".format( e )
     exit( 1 )
