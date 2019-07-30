@@ -94,6 +94,7 @@ SpectrumChartD3 = function(elem, options) {
   this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
   
   
+  self.options.spectrumLineWidth = (typeof options.spectrumLineWidth == 'number' && options.spectrumLineWidth>0 && options.spectrumLineWidth < 15) ? options.spectrumLineWidth : 1.0;
   
   // Set which spectrums to draw peaks for
   this.options.drawPeaksFor = {
@@ -867,9 +868,32 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   for (var i = 0; i < this.rawData.spectra.length; ++i)
     this.rawData.spectra[i].dataSum = 0;
 
-  /* Create the lines */
-  for (var i = 0; i < data.spectra.length; ++i) {
-    var spectrumi = i;
+  /* Create the lines
+    We want to draw the background first, then the secondary spectrum, then the primaries. There is probably a better way to do this,
+    but for the moment well just brute force it.
+  */
+  let dataindexes = [[],[],[],[]], drawindexes = [];
+  for( let i = 0; i < data.spectra.length; ++i ) {
+    var type = data.spectra[i].type;
+    if( type === self.spectrumTypes.BACKGROUND ){
+      dataindexes[0].push(i);
+    }else if( type === self.spectrumTypes.SECONDARY ){
+      dataindexes[1].push(i);
+    }else if( type === self.spectrumTypes.FOREGROUND ){
+      dataindexes[3].push(i);
+    }else {
+      dataindexes[2].push(i);
+    }
+  }
+  //flaten out dataindexes into a single 1D array.
+  for( let i = 0; i < 4; ++i ) {
+    for( let j = 0; j < dataindexes[i].length; ++j ){
+      drawindexes.push(dataindexes[i][j]);
+    }
+  }
+  
+  for( let ind = 0; ind < drawindexes.length; ++ind ) {
+    let i = drawindexes[ind];
     var spectrum = data.spectra[i];
     if (!spectrum.lineColor) spectrum.lineColor = self.getRandomColor();  // Set line color if not yet set
     if (!spectrum.peakColor) spectrum.peakColor = self.getRandomColor();  // Set peak color if not yet set
@@ -886,7 +910,8 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
       this.chartBody.append("path")
         .attr("id", "spectrumline"+i)
-        .attr("class", 'line')
+        .attr("stroke-width", self.options.spectrumLineWidth)
+        .attr("fill", 'none' )
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : 'black')
         .attr("d", this['line' + i](spectrum.points));
 
@@ -1697,7 +1722,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
     for( x of [3,7] ){
       self.roiDragBox.append("line")
           .attr("class", "roiDragBoxLine")
-          .attr("stroke-width", 0.85)
+          .attr("stroke-width", 0.85*self.options.spectrumLineWidth)
           .attr("x1", x).attr("x2", x)
           .attr("y1", 4).attr("y2", 16);
     }
