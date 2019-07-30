@@ -590,7 +590,7 @@ SpectrumChartD3.prototype.do_rebin = function() {
 
     var npoints = lastRaw - firstRaw;
     if( npoints > 1 && self.size.width > 2 ) {
-      newRebin = Math.ceil( npoints / (self.size.width) );
+      newRebin = Math.ceil( self.options.spectrumLineWidth * npoints / (self.size.width) );
     }
 
     if( newRebin != spectrum.rebinFactor || self.firstRaw !== firstRaw || self.lastRaw !== lastRaw ){
