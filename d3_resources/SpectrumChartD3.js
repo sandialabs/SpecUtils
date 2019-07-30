@@ -776,6 +776,8 @@ SpectrumChartD3.prototype.removeSpectrumData = function( resetdomain, spectrumTy
 
   if (index >= 0) {  // spectrum found of this type, so delete it
     spectra.splice(index, 1);
+    if( this['line'+index] )
+      this.vis.selectAll("#spectrumline"+index).remove();
   }
 
   // Call primary function for setting data
