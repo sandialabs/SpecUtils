@@ -2070,7 +2070,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   const std::wstring wpath = convert_from_utf8_to_utf16( path );
   if( PathCanonicalizeW( buffer, wpath.c_str() ) )
   {
-    path = buffer;
+    path = convert_from_utf16_to_utf8( buffer );
     return true;
   }
   return false;
