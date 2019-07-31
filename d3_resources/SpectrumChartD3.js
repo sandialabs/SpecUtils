@@ -6449,10 +6449,12 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       continue;
 
     this.rawData.spectra[i].peaks.forEach( function(roi){
-      if( self.roiIsBeingDragged && roi == self.roiBeingDragged.roi )
+      //We test for self.roiBeingDrugUpdate below, even if self.roiIsBeingDragged is true, to make sure the server has
+      //  actually returned a updated ROI, and if it hasnt, we'll draw the original ROI.
+      //  This prevents to ROI disapearing after the user clicks down, but before they have moved the mouse.
+      if( self.roiIsBeingDragged && self.roiBeingDrugUpdate && roi == self.roiBeingDragged.roi )
       {
-        if( self.roiBeingDrugUpdate )
-          draw_roi(self.roiBeingDrugUpdate,i,self.rawData.spectra[spectrumi]);
+        draw_roi(self.roiBeingDrugUpdate,i,self.rawData.spectra[spectrumi]);
       }else
       {
         draw_roi(roi,i,self.rawData.spectra[spectrumi]);

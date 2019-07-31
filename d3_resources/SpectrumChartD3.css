@@ -16,6 +16,16 @@
   fill: none;
   stroke-width: 1px;
 }
+
+
+.roiDragBox.active {
+  /* This class doesnt seem to have any effect... maybe just do it in JS.*/
+  /* fill-opacity: 0.5; */
+}
+.roiDragLine.active {
+  stroke-width: 1.5px;
+}
+
 /*******************/
 
 .chartarea{
