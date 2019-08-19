@@ -134,6 +134,12 @@ namespace SpecUtilsAsync
       }
     }
     
+    if( m_nonPostedWorkers.size() )
+    {
+      do_asyncronous_work( m_nonPostedWorkers, false );
+      m_nonPostedWorkers.clear();
+    }
+    
     std::lock_guard<std::mutex> lock( m_exception_mutex );
     if( m_exception )
       std::rethrow_exception( m_exception );
