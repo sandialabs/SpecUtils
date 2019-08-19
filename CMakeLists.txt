@@ -210,6 +210,11 @@ set_target_properties( SpecUtils PROPERTIES
 #target_link_libraries( SpecUtils PUBLIC Boost::date_time Boost::system Boost::filesystem )
 target_link_libraries( SpecUtils PUBLIC ${Boost_LIBRARIES} ${Boost_DATE_TIME_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} )
 
+if( SpecUtils_USE_WT_THREADPOOL )
+  include( ${CMAKE_SOURCE_DIR}/cmake/FindWt.cmake)
+  target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+endif( SpecUtils_USE_WT_THREADPOOL )
+
 
 if( SpecUtils_PYTHON_BINDINGS )
   #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
