@@ -5677,7 +5677,8 @@ SpectrumChartD3.prototype.endYAxisScalingAction = function() {
   var self = this;
   
   return function(){
-    if( self.currentlyAdjustingSpectrumScale === null )
+    if( self.currentlyAdjustingSpectrumScale === null
+      || !self.rawData || !self.rawData.spectra )
       return;
 
     console.log( 'endYAxisScalingAction');
