@@ -24,13 +24,26 @@
 // warning C4996: function call with parameters that may be unsafe -
 #pragma warning(disable:4996)
 
+//#include <boost/config.hpp>
+//BOOST_NO_CXX11_HDR_CODECVT
+#if( defined(__clang__) || !defined(__GNUC__) || __GNUC__ > 4 || __GNUC_MINOR__ > 8 )
+#define HAS_STD_CODECVT 1
+#else
+#define HAS_STD_CODECVT 0
+#endif
+
 #include <ctime>
 #include <string>
 #include <vector>
 #include <locale>
 #include <limits>
 #include <time.h>
+//GCC 4.8 doesnt have codecvt, so we'll use boost for utf8<-->utf16
+#if( HAS_STD_CODECVT )
 #include <codecvt>
+#else
+#include <boost/locale/encoding_utf.hpp>
+#endif
 #include <ctype.h>
 #include <stdio.h>
 #include <fstream>
@@ -1014,7 +1027,11 @@ std::string trim_copy( std::string str )
     }
     return answer;
 #else
+#if( HAS_STD_CODECVT )
     return std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes( winput );
+#else
+    return boost::locale::conv::utf_to_utf<char>(winput.c_str(), winput.c_str() + winput.size());
+#endif
 #endif
   }//std::string convert_from_utf16_to_utf8(const std::wstring &winput)
   
@@ -1033,7 +1050,11 @@ std::string trim_copy( std::string str )
     
     return answer;
 #else
+#if( HAS_STD_CODECVT )
     return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(input);
+#else
+    return boost::locale::conv::utf_to_utf<wchar_t>(input.c_str(), input.c_str() + input.size());
+#endif
 #endif
   }//std::wstring convert_from_utf8_to_utf16( const std::string &str );
   
