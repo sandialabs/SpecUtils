@@ -3512,7 +3512,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
 
   var tx = function(d) { return "translate(" + self.xScale(d.e) + ",0)"; };
   var gy = self.vis.selectAll("g.ref")
-            .data( reflines,function(d){return d.e;} )
+            .data( reflines, function(d){return d.id;} )
             .attr("transform", tx)
             .attr("stroke-width",1);
 
@@ -3589,6 +3589,7 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
  
   var default_colors = ["#0000FF","#006600", "#006666", "#0099FF","#9933FF", "#FF66FF", "#CC3333", "#FF6633","#FFFF99", "#CCFFCC", "#0000CC", "#666666", "#003333"];
 
+  var index = 0;
   if( !data ){
     this.refLines = null;
   } else {
@@ -3602,6 +3603,8 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
          if( !a.lines || !Array.isArray(a.lines) )
            throw "Reference lines does not contain an array of lines";
          a.lines.forEach( function(d){
+           d.id = ++index;  //We need to assign an ID to use as D3 data, that is unique (energy may not be unique)
+           
            /*{e:30.27,h:6.22e-05,particle:'xray',decay:'xray',el:'barium'} */
            /*particle in ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture"]; */
            if( (typeof d.e !== "number") || (typeof d.h !== "number") || (typeof d.particle !== "string") )
