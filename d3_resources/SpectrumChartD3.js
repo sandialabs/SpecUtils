@@ -793,10 +793,12 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   var self = this;
 
-  if (data && data.spectra && data.spectra.length)
-    for (var i = 0; i < data.spectra.length; ++i)
-      if (this['line'+i])
+  if (this.rawData && this.rawData.spectra && this.rawData.spectra.length){
+    for (var i = 0; i < this.rawData.spectra.length; ++i){
+      if (this['line'+i])  //ToDo: just add a single class for each spectrum line to make selector easier for removing all of them
         this.vis.selectAll("#spectrumline"+i).remove();
+    }
+  }
 
   this.vis.selectAll('path.line').remove();
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove(); // Clear x-axis slider chart lines if present
@@ -5173,6 +5175,7 @@ SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
     self.rightDragRegionDown = false;
 
     /* Initially set the escape key flag false */
+    /* ToDo: record initial range so if escape is pressed, can reset to it */
     self.escapeKeyPressed = false;    
 
     d3.select(document.body).style("cursor", "move");
@@ -5858,11 +5861,13 @@ SpectrumChartD3.prototype.removeSpectrumScaleFactorWidget = function() {
     self.scalerWidget = null;
     self.scalerWidgetBody = null;
     
-    self.rawData.spectra.forEach( function(spectrum,i) {
-      spectrum.sliderText = null;
-      spectrum.sliderRect = null;
-      spectrum.sliderToggle = null;
-    } );
+    if( self.rawData && self.rawData.spectra ) {
+      self.rawData.spectra.forEach( function(spectrum,i) {
+        spectrum.sliderText = null;
+        spectrum.sliderRect = null;
+        spectrum.sliderToggle = null;
+      } );
+    }
   }
 }
 
