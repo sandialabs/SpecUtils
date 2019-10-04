@@ -41,7 +41,7 @@ using namespace std;
 namespace SerialToDetectorModel
 {
   static std::mutex sm_data_mutex;  //protects sm_data_filename and sm_data
-  static std::string sm_data_filename = "data/OUO_detective_serial_to_type.csv";
+  static std::string sm_data_filename = "";
 
   /** For initial implementation will use a shared_ptr and protect accessing it
       with a mutex.  This is a bit heavy handed, but wont even hit the profiler
@@ -115,7 +115,7 @@ namespace SerialToDetectorModel
     
     if( !input.is_open() )
     {
-      cerr << "Error: Unable to open detector serial number to model file '" << sm_data_filename << "'" << endl;
+      //cerr << "Error: Unable to open detector serial number to model file '" << filename << "'" << endl;
       return nullptr;
     }//if( !input.is_open() )
     
@@ -186,7 +186,7 @@ namespace SerialToDetectorModel
         }else
         {
           cerr << "Warning: Detector serial number '" << fields[0]
-               << "' on line '" << line << "' of file '" << sm_data_filename
+               << "' on line '" << line << "' of file '" << filename
                << "' was not a valid unsigned integer" << endl;
           
           continue;
