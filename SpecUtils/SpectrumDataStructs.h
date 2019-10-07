@@ -118,6 +118,7 @@ enum ParserType
   kLsrmSpe,
   kTka,
   kMultiAct, //only partially supported
+  kPhd,
   kAutoParser
 };//enum ParserType
 
@@ -1433,13 +1434,13 @@ public:
   bool load_cnf_file( const std::string &filename );
   bool load_tracs_mps_file( const std::string &filename );
   bool load_aram_file( const std::string &filename );
-  
   bool load_spectroscopic_daily_file( const std::string &filename );
   bool load_amptek_file( const std::string &filename );
   bool load_ortec_listmode_file( const std::string &filename );
   bool load_lsrm_spe_file( const std::string &filename );
   bool load_tka_file( const std::string &filename );
   bool load_multiact_file( const std::string &filename );
+  bool load_phd_file( const std::string &filename );
   
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1517,6 +1518,11 @@ public:
    channel counts)
    */
   bool load_from_multiact( std::istream &input );
+  
+  /** Load from PHD file.
+   As of 20191005 only tested on a limited number of files.
+   */
+  bool load_from_phd( std::istream &input );
   
   //bool load_from_iaea(...): an ASCII format standardized by the IAEA; not all
   //  portions of the standard have been implemented, since they are either
