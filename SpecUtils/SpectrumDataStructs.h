@@ -1243,6 +1243,16 @@ public:
   void set_contained_neutrons( const bool contained, const float counts,
                                const MeasurementConstShrdPtr measurment );
 
+  /** Changes the detector, both as returned by #detector_names, and for each
+      Measurement.
+   
+   @param original_name The original name of the detector.  Throws exception if
+          a detector with this name did not exist.
+   @param new_name The new name of the detector.  Throws exception if a detector
+          with this name already exists.
+   */
+  void change_detector_name( const std::string &original_name,
+                             const std::string &new_name );
   
   //add_measurment(...): adds the measurment to this MeasurmentInfo object and
   //  if 'doCleanup' is specified, then all sums will be recalculated, and

@@ -3752,6 +3752,41 @@ void MeasurementInfo::set_contained_neutrons( const bool contained,
 }//void set_containtained_neutrons(...)
 
 
+void MeasurementInfo::change_detector_name( const string &origname,
+                                            const string &newname )
+{
+  if( origname == newname )
+    return;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  auto pos = find( begin(detector_names_), end(detector_names_), origname );
+  if( pos == end(detector_names_) )
+    throw runtime_error( "change_detector_name: '" + origname + "'"
+                         " not a valid detector name" );
+  
+  const auto newnamepos = find( begin(detector_names_), end(detector_names_), newname );
+  if( newnamepos != end(detector_names_) )
+    throw runtime_error( "change_detector_name: '" + newname + "'"
+                        " is already a detector name" );
+  
+  *pos = newname;
+  
+  auto neutpos = find( begin(neutron_detector_names_), end(neutron_detector_names_), origname );
+  if( neutpos != end(neutron_detector_names_) )
+    *neutpos = newname;
+  
+  
+  for( auto &m : measurements_ )
+  {
+    if( m && (m->detector_name_ == origname) )
+      m->detector_name_ = newname;
+  }
+  
+  modified_ = modifiedSinceDecode_ = true;
+}//change_detector_name(...)
+
+
 int MeasurementInfo::occupancy_number_from_remarks() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -18036,6 +18071,8 @@ void MeasurementInfo::reset()
   measurements_.clear();
   detector_numbers_.clear();
   modified_ = modifiedSinceDecode_ = false;
+  component_versions_.clear();
+  detectors_analysis_.reset();
 }//void MeasurementInfo::reset()
 
   
