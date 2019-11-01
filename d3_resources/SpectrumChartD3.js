@@ -6520,8 +6520,7 @@ SpectrumChartD3.prototype.drawPeakLabelCassowary = function(peak,path) {
           userLabel.attr("class", "userLabel")
             .attr("x", pathX)
             .attr("dy", 0)
-            .text(userLabelText)
-            .style('font-size', '7.5px');
+            .text(userLabelText);
         }
       }
 
@@ -6530,8 +6529,7 @@ SpectrumChartD3.prototype.drawPeakLabelCassowary = function(peak,path) {
           peakEnergyLabel.attr("class", "peakEnergyLabel")
             .attr("x", pathX)
             .attr("dy", userLabel ?  "1em" : 0)              /* If user label is not present, then this is the top-most element */
-            .text(peakEnergy)
-            .style('font-size', '7.5px');
+            .text(peakEnergy);
 
           /* if (userLabel) */
           /*   peakEnergyLabel.attr("dx", -userLabel.node().getBBox().width/2); */
@@ -6543,8 +6541,7 @@ SpectrumChartD3.prototype.drawPeakLabelCassowary = function(peak,path) {
           .attr("x", pathX)
           .attr("dy", self.options.showUserLabels && self.options.showPeakLabels ? "1em" : self.options.showUserLabels || self.options.showPeakLabels ?  "1em" : 0)
           /* .attr("dx", -label.node().getBBox().width/2)                */
-          .text(nuclide.name)
-          .style('font-size', '7.5px');
+          .text(nuclide.name);
       }
 
       if ( !userLabel && !peakEnergyLabel && !nuclideNameLabel) {      /* Do not display an label if the user label, peak label, or nuclide name label are not displayed */

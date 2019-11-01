@@ -41,7 +41,7 @@
 .xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
 .minorgrid { stroke-opacity: 50%; }
 
-.peaklabel{ margin-left: 5px; }
+.peaklabel{ margin-left: 5px; font-size: 1em; }
 
 .peakLine{ font-size: 0.8em; stroke-width: 2; }
 .escapeLineForward { font-size: 0.8em; stroke-width: 2; stroke-dasharray: 2; }
