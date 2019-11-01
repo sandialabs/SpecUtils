@@ -12591,12 +12591,13 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
       const rapidxml::xml_attribute<char> *uuid_attrib = measurement->first_attribute( "UUID", 4 );
       if( uuid_attrib && uuid_attrib->value_size() )
       {
-        const string thisuuid = xml_value_str( uuid_attrib );
+        string thisuuid = xml_value_str( uuid_attrib );
+        UtilityFunctions::trim( thisuuid );
         
         if( uuid_.empty() )
           uuid_ = thisuuid;
-        else if( uuid_.length() < 32 )
-          uuid_ += (uuid_.empty() ? "" : " ") + thisuuid;
+        else if( uuid_.length() < 32 && !thisuuid.empty() )
+          uuid_ += " " + thisuuid;
       }//if( uuid_attrib && uuid_attrib->value_size() )
       
       for( const rapidxml::xml_node<char> *remark = xml_first_node_nso(measurement, "Remark", xmlns );
@@ -16344,8 +16345,14 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
   
   auto uuid_att = XML_FIRST_ATTRIB(data_node, "n42DocUUID");
   if( uuid_att && uuid_att->value_size() )
+  {
     uuid_ = xml_value_str(uuid_att);
-
+    
+    //A certain HPGe detector always writes the same UUID, making it not unique...
+    //  See ref3J9DRAPSZ1
+    if( UtilityFunctions::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" ) )
+      uuid_ = "";
+  }
   //In the next call, the location in memory pointed to by 'data_node' may be
   //  changed to point to somewhere in a newly created rapidxml::xml_document
   //  so the returned result must be kept in scope so 'data_node' will be valid.
