@@ -41,15 +41,7 @@
 .xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
 .minorgrid { stroke-opacity: 50%; }
 
-/* The box that holds the peak label text */
-.peaklabel{ margin-left: 5px; font-size: 1em; }
-/* The tspan that holds the user entered label within the peaklabel box */
-.userLabel{ }
-/* The tspan that holds peak energy within the peaklabel box */
-.peakEnergyLabel{}
-/* The tspan that holds the nuclide information within the peaklabel box */
-.nuclideLabel{}
-
+.peaklabel{ margin-left: 5px; }
 
 .peakLine{ font-size: 0.8em; stroke-width: 2; }
 .escapeLineForward { font-size: 0.8em; stroke-width: 2; stroke-dasharray: 2; }
