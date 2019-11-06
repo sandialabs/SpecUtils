@@ -1,0 +1,26 @@
+{
+  "name": "SpecUtils",
+  "version": "1",
+  "description": "Spectrum file parsing and converting library",
+  "homepage": "https://github.com/sandialabs/InterSpec",
+  "private": true,
+  "main": "example.js",
+  "repository": {
+    "url": "https://github.com/sandialabs/SpecUtils",
+    "type": "git"
+  },
+  "scripts": {
+    "make": "cmake-js build --out=build --target install",
+    "example": "node ./build/example/"
+  },
+  "author": {
+    "name": "William Johnson",
+    "email": "wcjohns@sandia.gov"
+  },
+  "license": "LGPL-2.1-only",
+  "dependencies": {},
+  "devDependencies": {
+    "cmake-js": "^6.0.0",
+    "node-addon-api": "^1.7.1"
+  }
+}
