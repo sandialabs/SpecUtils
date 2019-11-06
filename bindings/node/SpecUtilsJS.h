@@ -28,32 +28,55 @@ public:
   
   static Napi::FunctionReference constructor;
   
+  /** Returns String detector name. */
+  Napi::Value detector_name(const Napi::CallbackInfo& info);
+  /** Returns Number detector name. */
+  Napi::Value detector_number(const Napi::CallbackInfo& info);
+  /** Returns the integer sample number. */
+  Napi::Value sample_number(const Napi::CallbackInfo& info);
+  /** Returns string indicating source type.  WIll be one of the following values:
+       "IntrinsicActivity", "Calibration", "Background", "Foreground", "UnknownSourceType"
+   */
+  Napi::Value source_type(const Napi::CallbackInfo& info);
+  /** Live time in seconds of measurement */
   Napi::Value live_time(const Napi::CallbackInfo& info);
+  /** Real time in seconds of measurement */
   Napi::Value real_time(const Napi::CallbackInfo& info);
+  /** Returns start time of measurement start, as number of milliseconds since January 1970 00:00:00 UTC, if avaialble, otherwise null. */
+  Napi::Value start_time(const Napi::CallbackInfo& info);
+  
+  /** Returns the String title.  Not supported by all input spectrum file formats, in which case will be emty string. */
+  Napi::Value title(const Napi::CallbackInfo& info);
+  /** Returns a string thats one of the follwoing: "NotOccupied", "Occupied", "UnknownOccupancyStatus" */
+  Napi::Value occupied(const Napi::CallbackInfo& info);
+  /** Returns float sum of gamma counts. */
+  Napi::Value gamma_count_sum(const Napi::CallbackInfo& info);
+  /** Returns boolean indicating if neutron data is available. */
+  Napi::Value contained_neutron(const Napi::CallbackInfo& info);
+  /** Returns float sum of neutron counts. Will return null if neutron data not avaiable. */
+  Napi::Value neutron_counts_sum(const Napi::CallbackInfo& info);
+  /** Returns boolean indicating if GPS is available. */
+  Napi::Value has_gps_info(const Napi::CallbackInfo& info);
+  /** Returns Number latitidue if available, otherwise null. */
+  Napi::Value latitude(const Napi::CallbackInfo& info);
+  /** Returns Number longitude if available, otherwise null. */
+  Napi::Value longitude(const Napi::CallbackInfo& info);
+  /** Returns date/time of GPS fix, as milliseconds since Epoch.  Null if not avaialble. */
+  Napi::Value position_time(const Napi::CallbackInfo& info);
+  
+  /* Returns an array of numbers representign the lower energy, in keV, of each gamma channel.
+   If this SpecRecord did not have gamma data associated with it, will return null.
+   */
+  Napi::Value gamma_channel_energies(const Napi::CallbackInfo& info);
+  
+  /* Returns an array of numbers representign the gamma channel counts.
+   If this SpecRecord did not have gamma data associated with it, will return null.
+   */
+  Napi::Value gamma_channel_contents(const Napi::CallbackInfo& info);
   
   /*
-  inline bool contained_neutron() const;
-  inline int sample_number() const;
-  inline const std::string &title() const;
-  inline OccupancyStatus occupied() const;
-  inline double gamma_count_sum() const;
-  inline double neutron_counts_sum() const;
-  inline float speed() const;
-  inline double latitude() const;
-  inline double longitude() const;
-  inline bool has_gps_info() const;
-  static bool valid_longitude( const double longitude );
-  static bool valid_latitude( const double latitude );
-  inline const boost::posix_time::ptime &position_time() const;
-  inline const std::string &detector_name() const;
-  inline int detector_number() const;
-  inline const std::string &detector_type() const;
-  inline QualityStatus quality_status() const;
-  inline SourceType source_type() const;
   inline EquationType energy_calibration_model() const;
   inline const std::vector<std::string> &remarks() const;
-  inline const boost::posix_time::ptime &start_time() const;
-  inline const boost::posix_time::ptime start_time_copy() const;
   inline const std::vector<float> &calibration_coeffs() const;
   inline const DeviationPairVec &deviation_pairs() const;
   inline const std::shared_ptr< const std::vector<float> > &channel_energies() const;
@@ -72,8 +95,11 @@ public:
   inline const std::shared_ptr< const std::vector<float> > &gamma_channel_contents() const;
   inline float gamma_energy_min() const;
   inline float gamma_energy_max() const;
-  */
+*/
   
+  //inline float speed() const;
+  //inline const std::string &detector_type() const;
+  //inline QualityStatus quality_status() const;
   
   
 protected:

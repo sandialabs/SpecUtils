@@ -1,6 +1,7 @@
 #include <string>
 
 #include <napi.h>
+#include <napi-inl.h>
 
 #include "SpecUtilsJS.h"
 #include "SpecUtils/SpectrumDataStructs.h"
@@ -24,6 +25,22 @@ void SpecRecord::Init( Napi::Env &env, Napi::Object &exports )
   Napi::Function func = DefineClass(env, "SpecRecord", {
     InstanceMethod("liveTime", &SpecRecord::live_time),
     InstanceMethod("realTime", &SpecRecord::real_time),
+    InstanceMethod("detectorName", &SpecRecord::detector_name),
+    InstanceMethod("detectorNumber", &SpecRecord::detector_number),
+    InstanceMethod("sampleNumber", &SpecRecord::sample_number),
+    InstanceMethod("sourceType", &SpecRecord::source_type),
+    InstanceMethod("startTime", &SpecRecord::start_time),
+    InstanceMethod("title", &SpecRecord::title),
+    InstanceMethod("occupied", &SpecRecord::occupied),
+    InstanceMethod("gammaCountSum", &SpecRecord::gamma_count_sum),
+    InstanceMethod("containedNeutron", &SpecRecord::contained_neutron),
+    InstanceMethod("neutronCountsSum", &SpecRecord::neutron_counts_sum),
+    InstanceMethod("hasGpsInfo", &SpecRecord::has_gps_info),
+    InstanceMethod("latitude", &SpecRecord::latitude),
+    InstanceMethod("longitude", &SpecRecord::longitude),
+    InstanceMethod("positionTime", &SpecRecord::position_time),
+    InstanceMethod("gammaChannelEnergies", &SpecRecord::gamma_channel_energies),
+    InstanceMethod("gammaChannelContents", &SpecRecord::gamma_channel_contents),
   });
   
   constructor = Napi::Persistent(func);
@@ -53,6 +70,184 @@ Napi::Value SpecRecord::real_time(const Napi::CallbackInfo& info)
     return Napi::Value();
   return Napi::Number::New( info.Env(), m_meas->real_time() );
 }
+
+/** Returns String detector name. */
+Napi::Value SpecRecord::detector_name(const Napi::CallbackInfo& info)
+{
+  return Napi::String::New( info.Env(), m_meas->detector_name() );
+}
+
+
+/** Returns Number detector name. */
+Napi::Value SpecRecord::detector_number(const Napi::CallbackInfo& info)
+{
+  return Napi::Number::New( info.Env(), m_meas->detector_number() );
+}
+
+
+/** Returns the integer sample number. */
+Napi::Value SpecRecord::sample_number(const Napi::CallbackInfo& info)
+{
+  return Napi::Number::New( info.Env(), m_meas->sample_number() );
+}
+
+/** Returns string indicating source type.  WIll be one of the following values:
+ "IntrinsicActivity", "Calibration", "Background", "Foreground", "UnknownSourceType"
+ */
+Napi::Value SpecRecord::source_type(const Napi::CallbackInfo& info)
+{
+  const char *val = nullptr;
+  
+  switch( m_meas->source_type() )
+  {
+    case Measurement::Background:        val = "Background"; break;
+    case Measurement::Calibration:       val = "Calibration"; break;
+    case Measurement::Foreground:        val = "Foreground"; break;
+    case Measurement::IntrinsicActivity: val = "IntrinsicActivity"; break;
+    case Measurement::UnknownSourceType: val = "UnknownSourceType"; break;
+  }//switch( m_meas->source_type() )
+  
+  assert( val );
+  
+  return Napi::String::New( info.Env(), val );
+}
+
+
+/** Returns start time, as a Date object of measurement start, if avaialble, otherwise null. */
+Napi::Value SpecRecord::start_time(const Napi::CallbackInfo& info)
+{
+  if( m_meas->start_time().is_special() )
+    return Napi::Value();
+  
+  const boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
+  const auto x = (m_meas->start_time() - epoch).total_milliseconds();
+  
+  //return Napi::Date::New( info.Env(), static_cast<double>(x) );
+  return Napi::Number::New( info.Env(), static_cast<double>(x) );
+}
+
+/** Returns the String title.  Not supported by all input spectrum file formats. */
+Napi::Value SpecRecord::title(const Napi::CallbackInfo& info)
+{
+  return Napi::String::New( info.Env(), m_meas->title() );
+}
+
+/** Returns a string thats one of the follwoing: "NotOccupied", "Occupied", "UnknownOccupancyStatus" */
+Napi::Value SpecRecord::occupied(const Napi::CallbackInfo& info)
+{
+  const char *val = nullptr;
+  
+  switch( m_meas->occupied() )
+  {
+    case Measurement::Occupied:                val = "Occupied"; break;
+    case Measurement::NotOccupied:             val = "NotOccupied"; break;
+    case Measurement::UnknownOccupancyStatus:  val = "UnknownOccupancyStatus"; break;
+  }//switch( m_meas->source_type() )
+  
+  assert( val );
+  
+  return Napi::String::New( info.Env(), val );
+}
+
+
+/** Returns float sum of gamma counts. */
+Napi::Value SpecRecord::gamma_count_sum(const Napi::CallbackInfo& info)
+{
+  return Napi::Number::New( info.Env(), m_meas->gamma_count_sum() );
+}
+
+
+/** Returns boolean indicating if neutron data is available. */
+Napi::Value SpecRecord::contained_neutron(const Napi::CallbackInfo& info)
+{
+  return Napi::Boolean::New( info.Env(), m_meas->contained_neutron() );
+}
+
+/** Returns float sum of neutron counts. Will return null if neutron data not avaiable. */
+Napi::Value SpecRecord::neutron_counts_sum(const Napi::CallbackInfo& info)
+{
+  if( !m_meas->contained_neutron() )
+    return Napi::Value();
+  
+  return Napi::Number::New( info.Env(), m_meas->neutron_counts_sum() );
+}
+
+
+/** Returns boolean indicating if GPS is available. */
+Napi::Value SpecRecord::has_gps_info(const Napi::CallbackInfo& info)
+{
+  return Napi::Boolean::New( info.Env(), m_meas->has_gps_info() );
+}
+
+/** Returns Number latitidue if available, otherwise null. */
+Napi::Value SpecRecord::latitude(const Napi::CallbackInfo& info)
+{
+  if( !m_meas->has_gps_info() )
+    return Napi::Value();
+  
+  return Napi::Number::New( info.Env(), m_meas->latitude() );
+}
+
+
+/** Returns Number longitude if available, otherwise null. */
+Napi::Value SpecRecord::longitude(const Napi::CallbackInfo& info)
+{
+  if( !m_meas->has_gps_info() )
+    return Napi::Value();
+  
+  return Napi::Number::New( info.Env(), m_meas->longitude() );
+}
+
+
+/** Returns Date object of GPS fix.  Null if not avaialble. */
+Napi::Value SpecRecord::position_time(const Napi::CallbackInfo& info)
+{
+  if( !m_meas->has_gps_info() || m_meas->position_time().is_special() )
+    return Napi::Value();
+  
+  const boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
+  const auto x = (m_meas->position_time() - epoch).total_milliseconds();
+  
+  //return Napi::Date::New( info.Env(), static_cast<double>(x) );
+  return Napi::Number::New( info.Env(), static_cast<double>(x) );
+}
+
+/* Returns an array of numbers representign the lower energy, in keV, of each gamma channel.
+ If this SpecRecord did not have gamma data associated with it, will return null.
+ */
+Napi::Value SpecRecord::gamma_channel_energies(const Napi::CallbackInfo& info)
+{
+  const auto &energies = m_meas->channel_energies();
+  
+  if( !energies || energies->empty() )
+    return Napi::Value();
+  
+  auto arr = Napi::Array::New( info.Env() );
+  
+  for( uint32_t i = 0; i < energies->size(); ++i )
+    arr.Set( i, Napi::Number::New(info.Env(), (*energies)[i]) );
+  
+  return arr;
+}
+
+/* Returns an array of numbers representign the gamma channel counts.
+ If this SpecRecord did not have gamma data associated with it, will return null.
+ */
+Napi::Value SpecRecord::gamma_channel_contents(const Napi::CallbackInfo& info)
+{
+  const auto &counts = m_meas->gamma_counts();
+  
+  if( !counts || counts->empty() )
+  return Napi::Value();
+  
+  auto arr = Napi::Array::New( info.Env() );
+  
+  for( uint32_t i = 0; i < counts->size(); ++i )
+  arr.Set( i, Napi::Number::New(info.Env(), (*counts)[i]) );
+  
+  return arr;
+}
+
 
 
 

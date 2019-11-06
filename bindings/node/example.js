@@ -1,8 +1,13 @@
-const specutils = require('./build/Release/Debug/SpecUtilsJS.node');
+const specutils = require('SpecUtilsJS.node');
 
-const inputfile = "/Users/wcjohns/Downloads/Foreground.spc";
-const outputfile = "./temp.n42";
-const outputformat = "N42-2012";  //Other possible formats: "TXT", "CSV", "PCF", "N42-2006", N42-2012", "CHN", "SPC-int", "SPC" (or equiv "SPC-float"), "SPC-ascii", "GR130v0", "GR135v2", "SPE" (or equiv "IAEA"), "HTML".
+/* This script demonstrates parsing a spectrum file, printing out information about
+ the file, then looping over all records in the file and printing out information
+ about them.
+ */
+
+const inputfile = "example.n42";
+const outputfile = "./temp.pcf";
+const outputformat = "PCF";  //Other possible formats: "TXT", "CSV", "PCF", "N42-2006", N42-2012", "CHN", "SPC-int", "SPC" (or equiv "SPC-float"), "SPC-ascii", "GR130v0", "GR135v2", "SPE" (or equiv "IAEA"), "HTML".
 
 let spec;
 try
@@ -109,12 +114,42 @@ else
   console.log( "No GPS information available." );
 
 console.log( "Number Spectrum Records = " + spec.numSpecRecords() );
+
+/* Lets get an array of SpecRecord objects and loop over them.
+ A SpecRecord object represents a measurement from a single detection element; e.g., a spectrum, or a neutron count.
+ If a gamma and neutron detector are unambigously grouped together, the record may contain both gamma spectrum and neutron counts.
+ */
 let records = spec.records();
 for( let i = 0; i < records.length; ++i)
 {
   let record = records[i];
-  console.log( "\tRecord " + i + " has LT=" + record.liveTime() + " s, ");
   
+  console.log( "\tRecord " + i );
+  /* sourceType() will be one of the following strings: "IntrinsicActivity", "Calibration", "Background", "Foreground", "UnknownSourceType"
+     occupied() will be one of the following strings: "NotOccupied", "Occupied", "UnknownOccupancyStatus"
+   */
+  console.log( "\t\tSource Type=" + record.sourceType() + ", OccStatus=" + record.occupied() );
+  
+  /* The sample number together with either the detector name or number is a unique combination
+   that identifies this record within the spectrum file.
+   All records with the same sample number represent data from the same time period.
+   A file may contain data from multiple detector elements.
+   */
+  console.log( "\t\tDetName=" + record.detectorName() + ", DetNum=" + record.detectorNumber() + ", SampleNum=" + record.sampleNumber() );
+  console.log( "\t\tLT=" + record.liveTime() + " s, RT=" + record.realTime() + ", StartTime=" + (new Date(record.startTime())) );
+  
+  console.log( "\t\tHasNeutron=" + record.containedNeutron() + ", SumNeutrons=" + record.neutronCountsSum() );
+  if( record.hasGpsInfo()  )
+    console.log( "\t\tLatitude=" + record.latitude() + ", Longitude=" + record.longitude() + ", fix at " + (new Date(record.positionTime())) );
+  
+  /* Get array of Numbers giving the lower energies for each channel.
+    Will return null if record does not have gamma data (e.g., only neutron)
+   */
+  console.log( "\t\tGamma Channel Energies: " + record.gammaChannelEnergies() );
+  /* Get array of Numbers giving the channel counts for each channel.
+   Will return null if record does not have gamma data (e.g., only neutron)
+   */
+  console.log( "\t\tGamma Channel Counts: " + record.gammaChannelContents() );
 }//for( loop over records )
 
 
