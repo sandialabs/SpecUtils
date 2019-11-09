@@ -731,6 +731,7 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
 
   // Set the ID if it was specified
   if (typeof id !== 'undefined') spectrumData.id = id;
+  if( spectrumData.id === 'undefined' || spectrumData.id === null ) spectrumData.id = Math.random();
 
   // Set the background ID if it was specified
   if (backgroundID) spectrumData.backgroundID = backgroundID;
@@ -754,51 +755,44 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   self.setData( self.rawData, resetdomain );
 }
 
-/**
- * Removes the first spectrum seen with the passed-in type in the raw data.
- */
-SpectrumChartD3.prototype.removeSpectrumData = function( resetdomain, spectrumType ) {
+/** Removes all spectra seen with the passed-in type in the raw data. */
+SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spectrumType ) {
   var self = this;
 
   if (!spectrumType || !(spectrumType in self.spectrumTypes)) return;
   if (!self.rawData) self.rawData = { spectra: [] };
 
   let spectra = self.rawData.spectra;
-  let index = -1;
 
   // Find index of first spectrum of this type
-  for (let i = 0; i < spectra.length; i++) {
-    if (spectra[i].type === spectrumType) {
-      index = i;
-      break;
+  let havemore = true;
+  while( havemore && spectra.length > 0 ) {
+    havemore = false;
+    for (let i = 0; i < spectra.length; i++) {
+      if (spectra[i].type === spectrumType) {
+        havemore = true;
+        spectra.splice(i, 1);
+        break;
+      }
     }
   }
-
-  if (index >= 0) {  // spectrum found of this type, so delete it
-    spectra.splice(index, 1);
-    if( this['line'+index] )
-      this.vis.selectAll("#spectrumline"+index).remove();
-  }
-
+  
   // Call primary function for setting data
   self.setData( self.rawData, resetdomain );
 }
 
 SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
-  // need to make some consistency checks on data here
-  /*  -Has all necassary variables */
-  /*  -Energy is monotonically increasing */
-  /*  -All y's are the same length, and consistent with x. */
-  /*  -No infs or nans. */
+  // ToDo: need to make some consistency checks on data here
+  /*  - Has all necassary variables */
+  /*  - Energy is monotonically increasing */
+  /*  - All y's are the same length, and consistent with x. */
+  /*  - No infs or nans. */
 
   var self = this;
 
-  if (this.rawData && this.rawData.spectra && this.rawData.spectra.length){
-    for (var i = 0; i < this.rawData.spectra.length; ++i){
-      if (this['line'+i])  //ToDo: just add a single class for each spectrum line to make selector easier for removing all of them
-        this.vis.selectAll("#spectrumline"+i).remove();
-    }
-  }
+  
+  //Remove all the lines for the current drawn histograms
+  this.vis.selectAll(".speclinepath").remove();
 
   this.vis.selectAll('path.line').remove();
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove(); // Clear x-axis slider chart lines if present
@@ -914,6 +908,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
       this.chartBody.append("path")
         .attr("id", "spectrumline"+i)
+        .attr("class", "speclinepath")
         .attr("stroke-width", self.options.spectrumLineWidth)
         .attr("fill", 'none' )
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : 'black')
