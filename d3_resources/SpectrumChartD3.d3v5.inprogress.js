@@ -17,10 +17,6 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
 
    
 Feature TODO list (created 20160220):
-  - For the y-axis scalers, should add some padding on either side of that area
-    and also make the width of each slider more than 20px if a touch device and
-    also increase radius of sliderToggle.
-  - 
   - Fix intermitten issue of zooming in messes up (especially aver dragging starting from the y-axis title)
   - Make it so x-axis binning is given seperately for each histogram
   - Add statistical error bars
@@ -28,9 +24,7 @@ Feature TODO list (created 20160220):
   - Customize mouse point to zoom-in/zoom-out where appropriate
   - Optimize frequency of rebinning of data (prevent extra rebinned data from being drawn)
   - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
-  - Move to using D3 v5 with modules to minimize code sizes and such.
-  - Start compiling with babel to take care of all the poly fills.
-  - lots of other issues
+  - x-axis slider chart doesnt work in InterSpec because it adds to the height, not a "in-place" thing - maybe change this
 */
 
 SpectrumChartD3 = function(elem, options) {
@@ -59,9 +53,6 @@ SpectrumChartD3 = function(elem, options) {
   if(typeof options.animationDuration !== 'number' || options.animationDuration < 0) this.options.animationDuration = 1000;
   this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
   if( (typeof this.options.showXAxisSliderChart) !== 'boolean' ) this.options.showXAxisSliderChart = false;
-  
-  if( (typeof options.sliderChartHeightFraction !== 'number') || options.sliderChartHeightFraction <= 0 || options.sliderChartHeightFraction > 0.75 )
-    this.options.sliderChartHeightFraction = 0.1;
 
   this.options.allowPeakFit = /*(typeof options.allowPeakFit == 'boolean') ? options.allowPeakFit :*/ false;
 
@@ -91,10 +82,9 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showEscapePeaks = (typeof options.showEscapePeaks == 'boolean') ? options.showEscapePeaks : false;
   this.options.showSumPeaks = (typeof options.showSumPeaks == 'boolean') ? options.showSumPeaks : false;
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
+  this.options.enableColorPicker = (typeof options.enableColorPicker == 'boolean') ? options.enableColorPicker : false;
   this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
   
-  
-  self.options.spectrumLineWidth = (typeof options.spectrumLineWidth == 'number' && options.spectrumLineWidth>0 && options.spectrumLineWidth < 15) ? options.spectrumLineWidth : 1.0;
   
   // Set which spectrums to draw peaks for
   this.options.drawPeaksFor = {
@@ -127,8 +117,8 @@ SpectrumChartD3 = function(elem, options) {
   this.size = {
     "width":  Math.max(0, this.cx - this.padding.leftComputed - this.padding.right),
     "height": Math.max(0, this.cy - this.padding.topComputed  - this.padding.bottomComputed),
-    "sliderChartHeight": 0,
-    "sliderChartWidth": 0,
+    "sliderChartHeight": (this.cy - this.padding.topComputed  - this.padding.bottomComputed) / 10,
+    "sliderChartWidth": this.cx - this.padding.leftComputed - this.padding.right - 30,
   };
 
   /**
@@ -158,25 +148,25 @@ SpectrumChartD3 = function(elem, options) {
   this.refLines = [];
 
   /* x-scale */
-  this.xScale = d3.scale.linear()
+  this.xScale = d3.scaleLinear()
       .domain(this.options.xScaleDomain ? this.options.xScaleDomain : [0, 3000])
       .range([0, this.size.width]);
 
   /* drag x-axis logic */
-  this.xaxisdown = null;
+  this.downx = Math.NaN;
 
   if( this.options.yscale === "log" ) {
-    this.yScale = d3.scale.log().clamp(true).domain([0, 100]).nice().range([1, this.size.height]).nice();
+    this.yScale = d3.scaleLog().clamp(true).domain([0, 100]).nice().range([1, this.size.height]).nice();
   } else if( this.options.yscale === "sqrt" ) {
-    this.yScale = d3.scale.pow().exponent(0.5).domain([0, 100]).range([0, this.size.height]);
+    this.yScale = d3.scalePow().exponent(0.5).domain([0, 100]).range([0, this.size.height]);
   } else {
-    this.yScale = d3.scale.linear().domain([0, 100]).nice().range([0, this.size.height]).nice();
+    this.yScale = d3.scaleLinear().domain([0, 100]).nice().range([0, this.size.height]).nice();
   }
   
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
       
-  this.yaxisdown = Math.NaN;
+  this.downy = Math.NaN;
 
   /* Finds distance between two points */
   this.dist = function (a, b) {
@@ -253,7 +243,7 @@ SpectrumChartD3 = function(elem, options) {
   this.do_rebin();
 
   this.setYAxisDomain = function(){
-    if( !isNaN(self.yaxisdown) )
+    if( !isNaN(self.downy) )
       return;
     var yaxisDomain = self.getYAxisDomain(),
         y1 = yaxisDomain[0],
@@ -264,7 +254,7 @@ SpectrumChartD3 = function(elem, options) {
 
 
   /* drag y-axis logic */
-  this.yaxisdown = Math.NaN;
+  this.downy = Math.NaN;
 
   this.dragged = this.selected = null;
 
@@ -279,7 +269,6 @@ SpectrumChartD3 = function(elem, options) {
       .attr("width", this.size.width)
       .attr("height", this.size.height)
       .attr("id", "chartarea"+this.chart.id )
-      .attr("class", "chartarea" )
       //.style("fill", "#EEEEEE")
       ;
       /*.attr("pointer-events", "all"); */
@@ -311,17 +300,16 @@ SpectrumChartD3 = function(elem, options) {
         This does NOT affect the behavior for other mouse events.
         Restoring the zoom behavior allows pinch zooming/panning with touch interactions.
   */
-  this.zoom = d3.behavior.zoom()
-    .x(self.xScale)
-    .y(self.yScale)
+  this.zoom = d3.zoom()
+    //.x(self.xScale)
+    //.y(self.yScale)
     .on("zoom", self.handleZoom())
-    .on("zoomend", self.handleZoomEnd());
+    //.on("zoomend", self.handleZoomEnd())
+    ;
 
   /* Vis interactions */
   this.vis
     .call(this.zoom)
-    //.on("click", function(){ console.log( 'Single CLick!' ); } )
-    //.on("dblclick", function(){ console.log( 'DOuble CLick!' ); } )  //ToDo: Use 'dblclick' signal rahter than custom one
     .on("mousedown", self.handleVisMouseDown())
     .on("mouseup", self.handleVisMouseUp())
     .on("wheel", self.handleVisWheel())
@@ -359,10 +347,9 @@ SpectrumChartD3 = function(elem, options) {
   /*
   To allow markers to be updated while mouse is outside of the chart, but still inside the visual.
   */
-  this.yAxis = d3.svg.axis().scale(this.yScale)
-   .orient("left")
-   .innerTickSize(7)
-   .outerTickSize(1)
+  this.yAxis = d3.axisLeft(this.yScale)
+   .tickSizeInner(7)
+   .tickSizeOuter(1)
    .ticks(0);
 
   this.yAxisBody = this.vis.append("g")
@@ -370,22 +357,16 @@ SpectrumChartD3 = function(elem, options) {
     .attr("transform", "translate(0,0)")
     .call(this.yAxis);
 
-  this.xAxis = d3.svg.axis().scale(this.xScale)
-   .orient("bottom")
-   .innerTickSize(7)
-   .outerTickSize(1)
+  this.xAxis = d3.axisBottom(this.xScale)
+   //.orient("bottom")
+   .tickSizeInner(7)
+   .tickSizeOuter(1)
    .ticks(20, "f");
 
   this.xAxisBody = this.vis.append("g")
     .attr("class", "xaxis" )
     .attr("transform", "translate(0," + this.size.height + ")")
-    .style("cursor", "ew-resize")
-    //.on("mouseover", function(d, i) { /*d3.select(this).style("font-weight", "bold");*/})
-    //.on("mouseout",  function(d) { /*d3.select(this).style("font-weight", null);*/ })
-    .on("mousedown.drag",  self.xaxisDrag())
-    .on("touchstart.drag", self.xaxisDrag())
-    .call(this.xAxis)
-    ;
+    .call(this.xAxis);
 
   this.vis.append("svg:clipPath")
     .attr("id", "clip" + this.chart.id )
@@ -590,7 +571,7 @@ SpectrumChartD3.prototype.do_rebin = function() {
 
     var npoints = lastRaw - firstRaw;
     if( npoints > 1 && self.size.width > 2 ) {
-      newRebin = Math.ceil( self.options.spectrumLineWidth * npoints / (self.size.width) );
+      newRebin = Math.ceil( npoints / (self.size.width) );
     }
 
     if( newRebin != spectrum.rebinFactor || self.firstRaw !== firstRaw || self.lastRaw !== lastRaw ){
@@ -731,7 +712,6 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
 
   // Set the ID if it was specified
   if (typeof id !== 'undefined') spectrumData.id = id;
-  if( spectrumData.id === 'undefined' || spectrumData.id === null ) spectrumData.id = Math.random();
 
   // Set the background ID if it was specified
   if (backgroundID) spectrumData.backgroundID = backgroundID;
@@ -755,44 +735,47 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   self.setData( self.rawData, resetdomain );
 }
 
-/** Removes all spectra seen with the passed-in type in the raw data. */
-SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spectrumType ) {
+/**
+ * Removes the first spectrum seen with the passed-in type in the raw data.
+ */
+SpectrumChartD3.prototype.removeSpectrumData = function( resetdomain, spectrumType ) {
   var self = this;
 
   if (!spectrumType || !(spectrumType in self.spectrumTypes)) return;
   if (!self.rawData) self.rawData = { spectra: [] };
 
   let spectra = self.rawData.spectra;
+  let index = -1;
 
   // Find index of first spectrum of this type
-  let havemore = true;
-  while( havemore && spectra.length > 0 ) {
-    havemore = false;
-    for (let i = 0; i < spectra.length; i++) {
-      if (spectra[i].type === spectrumType) {
-        havemore = true;
-        spectra.splice(i, 1);
-        break;
-      }
+  for (let i = 0; i < spectra.length; i++) {
+    if (spectra[i].type === spectrumType) {
+      index = i;
+      break;
     }
   }
-  
+
+  if (index >= 0) {  // spectrum found of this type, so delete it
+    spectra.splice(index, 1);
+  }
+
   // Call primary function for setting data
   self.setData( self.rawData, resetdomain );
 }
 
 SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
-  // ToDo: need to make some consistency checks on data here
-  /*  - Has all necassary variables */
-  /*  - Energy is monotonically increasing */
-  /*  - All y's are the same length, and consistent with x. */
-  /*  - No infs or nans. */
+  // need to make some consistency checks on data here
+  /*  -Has all necassary variables */
+  /*  -Energy is monotonically increasing */
+  /*  -All y's are the same length, and consistent with x. */
+  /*  -No infs or nans. */
 
   var self = this;
 
-  
-  //Remove all the lines for the current drawn histograms
-  this.vis.selectAll(".speclinepath").remove();
+  if (data && data.spectra && data.spectra.length)
+    for (var i = 0; i < data.spectra.length; ++i)
+      if (this['line'+i])
+        this.vis.selectAll("#spectrumline"+i).remove();
 
   this.vis.selectAll('path.line').remove();
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove(); // Clear x-axis slider chart lines if present
@@ -811,9 +794,12 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     //if(e) console.log(e);
 
     // Christian [05122018]: Added other necessary display render methods to ensure consistency even when chart has no data
-    //this.options.scaleBackgroundSecondary = false;
+    this.options.scaleBackgroundSecondary = false;
+    this.removeSpectrumScaleFactorWidget();
     this.updateLegend();
-   
+    this.drawXAxisSliderChart();
+    this.updateColorPickerItems();
+
     this.redraw()();
     return;
   }
@@ -866,32 +852,9 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   for (var i = 0; i < this.rawData.spectra.length; ++i)
     this.rawData.spectra[i].dataSum = 0;
 
-  /* Create the lines
-    We want to draw the background first, then the secondary spectrum, then the primaries. There is probably a better way to do this,
-    but for the moment well just brute force it.
-  */
-  let dataindexes = [[],[],[],[]], drawindexes = [];
-  for( let i = 0; i < data.spectra.length; ++i ) {
-    var type = data.spectra[i].type;
-    if( type === self.spectrumTypes.BACKGROUND ){
-      dataindexes[0].push(i);
-    }else if( type === self.spectrumTypes.SECONDARY ){
-      dataindexes[1].push(i);
-    }else if( type === self.spectrumTypes.FOREGROUND ){
-      dataindexes[3].push(i);
-    }else {
-      dataindexes[2].push(i);
-    }
-  }
-  //flaten out dataindexes into a single 1D array.
-  for( let i = 0; i < 4; ++i ) {
-    for( let j = 0; j < dataindexes[i].length; ++j ){
-      drawindexes.push(dataindexes[i][j]);
-    }
-  }
-  
-  for( let ind = 0; ind < drawindexes.length; ++ind ) {
-    let i = drawindexes[ind];
+  /* Create the lines */
+  for (var i = 0; i < data.spectra.length; ++i) {
+    var spectrumi = i;
     var spectrum = data.spectra[i];
     if (!spectrum.lineColor) spectrum.lineColor = self.getRandomColor();  // Set line color if not yet set
     if (!spectrum.peakColor) spectrum.peakColor = self.getRandomColor();  // Set peak color if not yet set
@@ -908,9 +871,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
       this.chartBody.append("path")
         .attr("id", "spectrumline"+i)
-        .attr("class", "speclinepath")
-        .attr("stroke-width", self.options.spectrumLineWidth)
-        .attr("fill", 'none' )
+        .attr("class", 'line')
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : 'black')
         .attr("d", this['line' + i](spectrum.points));
 
@@ -942,6 +903,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     });
   }
 
+  this.updateColorPickerItems();
   this.addMouseInfoBox();
 
   this.updateLegend();
@@ -949,26 +911,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   this.redraw()();
 }
-
-/** Sets (replacing any existing) peak data for first spectrum matching spectrumType
-  Input should be like [{...},{...}]
- */
-SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
-  let self = this;
-  let hasset = false;
-  
-  this.rawData.spectra.forEach( function(spectrum, i) {
-    if( hasset || !spectrum || spectrum.type !== spectrumType )
-      return;
-    
-    self.handleCancelRoiDrag();
-    self.current_fitting_peak = null;
-    spectrum.peaks = peak_data;
-    hasset = true;
-  } );
-  
-  this.redraw()();
-};
 
 
 /**
@@ -1032,11 +974,6 @@ SpectrumChartD3.prototype.redraw = function() {
   var self = this;
 
   return function() {
-    
-    if( this.size && (this.size.nYScalers !== this.numYScalers()) ) {
-      this.handleResize( true );
-    }
-    
     self.do_rebin();
     self.rebinForBackgroundSubtract();  // Get the points for background subtract
     self.setYAxisDomain();
@@ -1103,7 +1040,7 @@ SpectrumChartD3.prototype.calcLeftPadding = function( updategeom ){
   var labels = this.vis.selectAll("g.y").selectAll("text");
   
   var labelw = 4;
-  labels.forEach( function(label){
+  labels.each( function(i,j,label){
     labelw = Math.max( labelw, label.parentNode.getBBox().width );
   });
   
@@ -1307,11 +1244,16 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   
   this.cx = this.chart.clientWidth;
   this.cy = this.chart.clientHeight;
+
+  if (self.sliderChartPlot) {
+    this.cy -= self.size.sliderChartHeight + self.padding.sliderChart + 
+      (self.xaxistitle != null && !d3.select(self.xaxistitle).empty() ? self.xaxistitle[0][0].clientHeight + 20 : 20); 
+  }
   
   var titleh = 0, xtitleh = 0, xlabelh = 7 + 22;
   if( this.options.title ) {
-    this.svg.selectAll(".title").forEach( function(t){
-      titleh = t[0].getBBox().height;  
+    this.svg.selectAll(".title").each( function(t,j,k){
+      titleh = k[0].getBBox().height;
    });
   }
   
@@ -1333,19 +1275,17 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.padding.bottomComputed = -12 + this.padding.bottom + xlabelh + (xtitleh > 0 ? this.padding.xTitlePad : 0) + xtitleh; 
   }
   
-  this.calcLeftPadding( false );
   
-  if( self.sliderChartPlot ) {
-    let ypad = self.padding.sliderChart + this.padding.topComputed + this.padding.bottomComputed;
-    this.size.sliderChartHeight = Math.max( 0, self.options.sliderChartHeightFraction*(this.cy - ypad) );
-    this.size.sliderChartWidth = Math.max(0.85*this.cx,this.cx-100);
-  } else {
-    this.size.sliderChartHeight = 0;
-  }
+  /* console.log("height beore") */
+  this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed);
+  this.size.sliderChartHeight = this.size.height / 10;
  
-  this.size.nYScalers = this.numYScalers();
-  this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right - 20*this.size.nYScalers);
-  this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed - this.size.sliderChartHeight);
+  this.calcLeftPadding( false );
+ 
+  if (!this.origWidth)
+    this.origWidth = this.size.width;
+  this.size.width = Math.max(0, this.cx - this.padding.leftComputed - this.padding.right);
+  this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed);
 
   this.xScale.range([0, this.size.width]);
   this.vis.attr("width",  this.size.width)
@@ -1373,6 +1313,9 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   /*Fix the text position */
   this.svg.selectAll(".title")
       .attr("x", this.cx/2);
+
+      /* Christian: To keep the title from shifting during redraw, we translate the position of the label to stay in its place. */
+      /* .attr("transform", "translate(" + ((this.size.width/2) - (this.origWidth/2)) + "," + 0 + ")"); */
 
   if( this.xaxistitle ){
     if( !this.options.compactXAxis ){
@@ -1419,30 +1362,33 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   }
   
   /*Make sure the legend stays visible */
-  if( this.legend && this.size.height > 50 && this.size.width > 100 && prevCx > 50 && prevCy > 50 ) {
+  if( this.legend ) {
     var trans = d3.transform(this.legend.attr("transform")).translate;
     var bb = this.legendBox.node().getBBox();
-    
-    //If legend is closer to left side, keep distance to left of chart the same, else right.
-    //Same for top/bottom.  Usses upper left of legend, and not center... oh well.
-    var legx = (trans[0] < 0.5*prevCx) ? trans[0] : this.cx - (prevCx - trans[0]);
-    var legy = (trans[1] < 0.5*prevCy) ? trans[1] : this.cy - (prevCy - trans[1]);
-    
-    //Make sure legend is visible
-    legx = ((legx+bb.width) > this.cx) ? (this.cx - bb.width - this.padding.right - 20*this.size.nYScalers) : legx;
-    legy = ((legy+bb.height) > this.cy) ? (this.cy - bb.height) : legy;
-    
+    var legx = ((trans[0]+bb.width) > this.cx) ? (this.cx-bb.width) : trans[0];
+    var legy = ((trans[1]+bb.height) > this.cy) ? (this.cy-bb.height) : trans[1];
     this.legend.attr("transform", "translate(" + Math.max(0,legx) + "," + Math.max(legy,0) + ")" );
   }
 
+  /* Make sure the scaler stays visible */
+  if( this.scalerWidget ) {
+    var trans = d3.transform(this.scalerWidget.attr("transform")).translate;
+    var bb = this.scalerWidgetBox.node().getBBox();
+    var scalerx = ((trans[0]+bb.width) > this.cx) ? (this.cx-bb.width) : trans[0];
+    var scalery = ((trans[1]+bb.height) > this.cy) ? (this.cy-bb.height) : trans[1];
+    this.scalerWidget.attr("transform", "translate(" + Math.max(0,scalerx) + "," + Math.max(scalery,0) + ")" );
+  }
+
+  if (!self.sliderChartWidthFactor) self.sliderChartWidthFactor = this.svg[0][0].clientWidth - self.size.sliderChartWidth;
+  if (!self.sliderChartHeightFactor) self.sliderChartHeightFactor = self.size.sliderChartHeight / this.svg[0][0].clientHeight;
+  self.size.sliderChartWidth = this.svg[0][0].clientWidth - self.sliderChartWidthFactor;
+  self.size.sliderChartHeight = self.sliderChartHeightFactor * this.svg[0][0].clientHeight;
   if (this.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
   else                                   { self.cancelXAxisSliderChart(); }
   
   this.xScale.range([0, this.size.width]);
   this.yScale.range([0, this.size.height]);
 
-  this.drawScalerBackgroundSecondary();
-  
   /* this.zoom.x(this.xScale); */
   /* this.zoom.y(this.yScale); */
 
@@ -1533,7 +1479,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     self.mousemove()();
 
     /* If no data is detected, then stop updating other mouse move parameters */
-    if(!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
+    if(!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || !isNaN(self.downx) || !isNaN(self.downy) || self.legdown || self.scalerdown) 
       return;
 
     /* Prevent and stop default events from ocurring */
@@ -1630,14 +1576,12 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
                && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
       //Also check if we are between ymin and ymax of ROI....
       var onRoiEdge = false;
-      
-      //self.rawData.spectra[0].peaks.forEach( function(roi){
-      self.peakPaths.forEach( function(info){
+      self.rawData.spectra[0].peaks.forEach( function(roi){
         if( onRoiEdge )
           return;
 
-        var lpx = self.xScale(info.lowerEnergy);
-        var upx = self.xScale(info.upperEnergy);
+        var lpx = self.xScale(roi.lowerEnergy);
+        var upx = self.xScale(roi.upperEnergy);
         
         //Dont create handles for to narrow of a range (make user zoom in a bit more)
         if( (upx-lpx) < 15 )
@@ -1648,21 +1592,14 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         if( !isOnLower && !isOnUpper )
           return;
         
-        //Make mouse be within ROI in y.   Should draw handles/lines appropriately using roi.color
-        if( info.yRangePx && info.yRangePx.length==2 && (y < (info.yRangePx[0]-10) || y > (0,info.yRangePx[1]+1)) )
-          return;
-        
         onRoiEdge = true;
-        self.showRoiDragOption(info);
+        self.showRoiDragOption(roi);
       });
       
       if( !onRoiEdge && self.roiDragBox && !self.roiIsBeingDragged ){
         self.handleCancelRoiDrag();
         d3.select('body').style("cursor", "default");
       }
-    } else if( self.roiDragBox ){
-      self.handleCancelRoiDrag();
-      d3.select('body').style("cursor", "default");
     }//if / else {what to do}
       
 
@@ -1671,12 +1608,10 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 }
 
 
-SpectrumChartD3.prototype.showRoiDragOption = function(info){
+SpectrumChartD3.prototype.showRoiDragOption = function(roi){
   let self = this;
 
-  let roi = info.roi;
-  
-  if( !roi || d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
+  if( d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
       || d3.event.shiftKey || self.escapeKeyPressed )
   {
     self.handleCancelRoiDrag();
@@ -1690,71 +1625,39 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
   let upx = self.xScale(roi.upperEnergy);
   let isOnLower = Math.abs(lpx-x) < 5;
 
-  self.roiBeingDragged = { roi: roi, yRangePx: info.yRangePx, color: (info.color ? info.color : 'black') };
+  self.roiBeingDragged = roi;
   
   if( !self.roiDragBox ){
     
     //ToDo: put line and box inside of a <g> element and move it
-    self.roiDragBox = this.vis.append("g");
+    //self.roiDragBox = this.vis.insert("g" /*, ".refLineInfo"*/ )
     // .attr("width", 10 )
     // .attr("height", 10 )
     // .attr("class", "roiDragBox" )
     // .attr("transform", "translate(" + ((isOnLower ? lpx : upx) - 5) + "," + this.size.height + ")")
-    
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-    self.roiBeingDragged.axiscolor = axiscolor;
-    
-    self.roiDragBox.append("rect")
+
+    self.roiDragBox = self.vis.append("rect")
+            .attr("id", "roiDragBox" )
             .attr("class", "roiDragBox")
             .attr("rx", 2)
             .attr("ry", 2)
-            .attr("x", 0)
-            .attr("y", 0)
             .attr("width", 10)
-            .attr("height", 20)
-            .attr("stroke", axiscolor )
-            .attr("fill", axiscolor );
+            .attr("height", 20);
 
-    //Add some lines inside the box for a little bit of texture
-    for( x of [3,7] ){
-      self.roiDragBox.append("line")
-          .attr("class", "roiDragBoxLine")
-          .attr("stroke-width", 0.85*self.options.spectrumLineWidth)
-          .attr("x1", x).attr("x2", x)
-          .attr("y1", 4).attr("y2", 16);
-    }
-    
     self.roiDragLine = self.vis.append("line")
+            .attr("id", "roiDragLine" )
             .attr("class", "roiDragLine");
   }
 
   d3.select('body').style("cursor", "ew-resize");
 
-  let y1 = 0;
-  let y2 = self.size.height
-  
-  if( info.yRangePx && info.yRangePx.length==2 ){
-    y1 = Math.max(0,info.yRangePx[0]-10);
-    y2 = Math.min(y2,info.yRangePx[1]+10);
-  }
-  
-  self.roiDragBox.attr("transform", "translate(" + ((isOnLower ? lpx : upx) - 5.5) + "," + (-10 + y1 + 0.5*(y2-y1)) + ")");
-  
-  d3.selectAll('.roiDragBoxLine').forEach( function(line){
-    for( var i = 0; i < line.length; ++i)
-      d3.select(line[i]).attr("stroke", self.roiBeingDragged.color );
-  } );
-  
-  //self.roiDragBox.attr("x", (isOnLower ? lpx : upx) - 5)
-      //.attr("y", -10 + y1 + 0.5*(y2-y1));
-      
+  self.roiDragBox.attr("x", (isOnLower ? lpx : upx) - 5)
+      .attr("y", -10 + y);
+
   self.roiDragLine.attr("x1", (isOnLower ? lpx : upx) - 0.5)
       .attr("x2", (isOnLower ? lpx : upx) - 0.5)
-      .attr("y1", y1)
-      .attr("y2", y2)
-      .attr("stroke", self.roiBeingDragged.color );
+      .attr("y1", 0)
+      .attr("y2", self.size.height);
 
   //console.log( 'x=' + x + ", y=" + y + ", roi.lowerEnergy=" + roi.lowerEnergy + ", roi.upperEnergy=" + roi.upperEnergy );
 };//showRoiDragOption()
@@ -1777,42 +1680,24 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
     return;
   }
   
-  //console.log( 'handleRoiDrag roiDragMouseDown ' + self.roiDragMouseDown );
+  //console.log( 'handleRoiDrag' + self.roiDragMouseDown );
 
   if( self.roiDragLastCoord && Math.abs(x-self.roiDragLastCoord[0]) < 1 )
     return;
         
   d3.select('body').style("cursor", "ew-resize");
 
-  let roiinfo = self.roiBeingDragged;
-  let roi = roiinfo.roi;
+  let roi = self.roiBeingDragged;
   let mdx = self.roiDragMouseDown; // [m[0], roiPx, energy, isLowerEdge];
-  let xcenter = x + mdx[1] - mdx[0];  //having issue
+  let xcenter = x + mdx[1] - mdx[0];
   let energy = self.xScale.invert(xcenter);
   let counts = self.yScale.invert(y);
   let lowerEdgeDrag = mdx[3];
         
   self.roiDragLastCoord = [x,y,energy,counts];
-  
-  
-  let y1 = 0;
-  let y2 = self.size.height
-  
-  if( roiinfo.yRangePx && roiinfo.yRangePx.length==2 ){
-    y1 = Math.max(0,roiinfo.yRangePx[0]-10);
-    y2 = Math.min(y2,roiinfo.yRangePx[1]+10);
-  }
-  
-  //self.roiDragBox
-  //    .attr("x", xcenter - 5)
-  //    .attr("y", -10 + y1 + 0.5*(y2-y1));
-  self.roiDragBox.attr("transform", "translate(" + (xcenter - 5.5) + "," + (-10 + y1 + 0.5*(y2-y1)) + ")");
-  
-  self.roiDragLine
-      .attr("x1", xcenter - 0.5)
-      .attr("x2", xcenter - 0.5)
-      .attr("y1", y1)
-      .attr("y2", y2);
+        
+  self.roiDragLine.attr("x1", xcenter + 0.5).attr("x2", xcenter + 0.5);
+  self.roiDragBox.attr("x", xcenter - 5);
 
 
   //Emit current position, no more often than twice per second, or if there
@@ -1849,7 +1734,7 @@ SpectrumChartD3.prototype.handleRoiDrag = function(){
 
 
 SpectrumChartD3.prototype.handleStartDragRoi = function(){
-  //console.log( 'In handleStartDragRoi()');
+  console.log( 'In handleStartDragRoi()');
 
   let self = this;
   if( !self.roiDragLine )
@@ -1861,38 +1746,24 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(){
   self.roiIsBeingDragged = true;
   var energy = self.xScale.invert(m[0]);
   //var counts = self.self.yScale.invert(m[1]);
-  var lpx = self.xScale(self.roiBeingDragged.roi.lowerEnergy);
-  var upx = self.xScale(self.roiBeingDragged.roi.upperEnergy);
+  var lpx = self.xScale(self.roiBeingDragged.lowerEnergy);
+  var upx = self.xScale(self.roiBeingDragged.upperEnergy);
   var isOnLower = Math.abs(lpx-m[0]) < 5;
   var isOnUpper = Math.abs(upx-m[0]) < 5;
   if( !isOnLower && !isOnUpper ){
     console.log( 'not on ROI edge when down? lpx=' + lpx + ", m[0]=" + m[0] );
     return;
   }
-  
-  let roiinfo = self.roiBeingDragged;
   var roiPx = (isOnLower ? lpx : upx);
   self.roiDragMouseDown = [m[0], roiPx, energy, isOnLower];
-  //console.log( 'self.roiDragMouseDown ', self.roiDragMouseDown );
-  
-  let y1 = 0;
-  let y2 = self.size.height
-  
-  if( roiinfo && roiinfo.yRangePx && roiinfo.yRangePx.length==2 ){
-    y1 = Math.max(0,roiinfo.yRangePx[0]-10);
-    y2 = Math.min(y2,roiinfo.yRangePx[1]+10);
-  }
   
   var dPx =  m[0] - roiPx;
-  //self.roiDragBox
-  //    .attr("x", m[0] - dPx - 5)
-  //    .attr("y", -10 + y1 + 0.5*(y2-y1));;
-  self.roiDragBox.attr("transform", "translate(" + (m[0] - dPx - 5.5) + "," + (-10 + y1 + 0.5*(y2-y1)) + ")");
+  self.roiDragBox.attr("x", m[0] - dPx - 5);
 
   self.roiDragLine.attr("x1", roiPx - 0.5)
       .attr("x2", roiPx - 0.5)
-      .attr("y1", y1)
-      .attr("y2", y2);
+      .attr("y1", 0)
+      .attr("y2", self.size.height);
 
   self.roiDragBox.attr("class", "roiDragBox active");
   self.roiDragLine.attr("class", "roiDragLine active");
@@ -1925,7 +1796,7 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function(){
 
   console.log( 'Will finish dragging ROI.' );
 
-  let roi = self.roiBeingDragged.roi;
+  let roi = self.roiBeingDragged;
   let m = d3.mouse(self.vis[0][0]);
   let x = m[0], y = m[1];
 
@@ -2018,8 +1889,8 @@ SpectrumChartD3.prototype.handleChartMouseUp = function() {
   var self = this;
 
   return function () {
-    self.xaxisdown = null;
-    self.yaxisdown = Math.NaN;
+    self.downx = Math.NaN;
+    self.downy = Math.NaN;
     d3.select(document.body).style("cursor", "default");
 
     /* Here we can decide to either zoom-in or not after we let go of the left-mouse button from zooming in on the CHART.
@@ -2111,9 +1982,9 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 
     registerKeyboardHandler(self.keydown());
 
-    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
+    if( !isNaN(self.downx) || !isNaN(self.downy) || self.legdown || self.scalerdown )
     {
-      console.log( "Is null down" )
+        console.log( "Is null down" )
       return;
     }
 
@@ -2249,7 +2120,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     
     /* Figure out clicks and double clicks */
     var nowtime = new Date();
-    var clickDelay = 500;
+    var clickDelay = 200;
 
     if (self.mousedownpos && self.dist(self.mousedownpos, d3.mouse(document.body)) < 5) {    /* user clicked on screen */
       if( nowtime - self.mousedowntime < clickDelay ) {
@@ -2280,7 +2151,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
       }
     }
 
-    if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
+    if( !isNaN(self.downx) || !isNaN(self.downy) || self.legdown || self.scalerdown )
       return;
 
     /* Handle fitting peaks (if needed) */
@@ -2305,8 +2176,6 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* HAndle counting gammas (if needed) */
     self.handleMouseUpCountGammas();
 
-    self.endYAxisScalingAction()();
-    
     let domain = self.xScale.domain();
     if( !self.origdomain || !domain || self.origdomain[0]!==domain[0] || self.origdomain[1]!==domain[1] ){
       //console.log( 'Mouseup xrangechanged' );
@@ -2474,7 +2343,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     self.scroll_total_x += e.deltaX;
     self.scroll_total_y += e.deltaY;
 
-    var MAX_SCROLL_TOTAL = 1500;
+    var MAX_SCROLL_TOTAL = 200;
 
     /*Zoom all the way out by the time we get self.scroll_total_y = +200, */
     /*  or, zoom in to 3 bins by the time self.scroll_total_y = -200; */
@@ -2766,7 +2635,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
         self.handleTouchMoveZoomInY();
 
       } else if (self.currentlyAdjustingSpectrumScale) {
-        self.handleMouseMoveScaleFactorSlider()();
+        self.handleTouchMoveAdjustSpectrumScale()();
 
       } else {
         self.handleCancelTouchCountGammas();
@@ -2901,7 +2770,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
           /* Set the double tap setting parameters */
           var tapRadius = 35,                   /* Radius area for where a double-tap is valid (anything outside this considered a single tap) */
-              doubleTapTimeInterval = 500;      /* Time interval for double tap */
+              doubleTapTimeInterval = 200;      /* Time interval for double tap */
 
           /* Update the feature marker positions (argument added for sum peaks) */
           self.updateFeatureMarkers(self.xScale.invert(x));
@@ -2951,13 +2820,12 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
                   /* Highlight peaks where tap position falls */
                   if (self.peakPaths) {
-                    const xen = self.xScale.invert(x);
                     for (i = self.peakPaths.length-1; i >= 0; i--) {
-                      if (xen >= self.peakPaths[i].lowerEnergy && xen <= self.peakPaths[i].upperEnergy) {
+                      if (self.xScale.invert(x) >= self.peakPaths[i].lowerEnergy && self.xScale.invert(x) <= self.peakPaths[i].upperEnergy) {
                         const path = self.peakPaths[i].path;
                         const paths = self.peakPaths[i].paths;
                         const roi = self.peakPaths[i].roi;
-                        self.handleMouseOverPeak(path, null, null, paths, roi, path);
+                        self.handleMouseOverPeak(path, null, 0, paths, roi, path);
                         break;
                       }
                     }
@@ -3047,6 +2915,23 @@ SpectrumChartD3.prototype.mousemove = function () {
       }
     }
 
+    if (self.scalerdown) {
+      d3.event.preventDefault();
+      d3.event.stopPropagation();
+
+      var x = d3.event.x ? d3.event.x : d3.event.touches ?  d3.event.touches[0].clientX : d3.event.clientX,
+          y = d3.event.y ? d3.event.y : d3.event.touches ?  d3.event.touches[0].clientY : d3.event.clientY,
+          calculated_x = d3.mouse(self.vis[0][0])[0]; /* current mouse x position */
+
+      if ( calculated_x >= -self.padding.leftComputed && y >= 0 && 
+           calculated_x <= self.cx && y <= self.cy ) {
+        /* console.log("change legend pos"); */
+        var tx = (x - self.scalerdown.x) + self.scalerdown.x0;
+        var ty = (y - self.scalerdown.y) + self.scalerdown.y0; 
+        self.scalerWidget.attr("transform", "translate(" + tx + "," + ty + ")");
+      }
+    }
+
     if (self.adjustingBackgroundScale || self.adjustingSecondaryScale) {
       d3.event.preventDefault();
       d3.event.stopPropagation();
@@ -3079,36 +2964,24 @@ SpectrumChartD3.prototype.mousemove = function () {
       /*self.dragged.y = self.yScale.invert(Math.max(0, Math.min(self.size.height, p[1]))); */
       self.update(false); /* boolean set to false to indicate no animation needed */
     };
-    if( self.xaxisdown && self.xScale.invert(p[0]) > 0) {       /* make sure that xaxisDrag does not go lower than 0 (buggy behavior) */
-      /* We make it here when a x-axis is clicked on, and has been dragged a bit */
+    if (!isNaN(self.downx) && self.xScale.invert(p[0]) > 0) {       /* make sure that xaxisDrag does not go lower than 0 (buggy behavior) */
+
+      /* We make it here when a x-axis label is clicked on, and has been dragged a bit */
       d3.select('body').style("cursor", "ew-resize");
-      
-      let newenergy = self.xScale.invert(p[0]);
-      
-      if ( self.rawData && self.rawData.spectra && self.rawData.spectra.length ) {
-        let origxmin = self.xaxisdown[1];
-        let origxmax = self.xaxisdown[2];
-        let e_width = origxmax - origxmin;
-        
-        let newEnergyFrac = (newenergy - self.xScale.domain()[0]) / (origxmax - origxmin);
-        let newX0 = self.xaxisdown[0] - newEnergyFrac*e_width;
-        let newX1 = self.xaxisdown[0] + (1-newEnergyFrac)*e_width;
- 
-        let lowerData = self.rawData.spectra[0].x[0];
-        let upperData = self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1];
-       
-        if( newX0 < lowerData ){
-          newX1 = Math.min( upperData, newX1 + (lowerData - newX0) );
-          newX0 = lowerData;
-        }
-       
-        if( newX1 > upperData ){
-          newX0 = Math.max( lowerData, newX0 - (newX1 - upperData) );
-          newX1 = upperData;
-        }
-       
+      var rupx = self.xScale.invert(p[0]),
+          xaxis1 = self.xScale.domain()[0],
+          xaxis2 = self.xScale.domain()[1],
+          xextent = xaxis2 - xaxis1;
+      if (rupx != 0) {
+        var changex, new_domain;
+        changex = self.downx / rupx;
+        new_domain = [xaxis1, xaxis1 + (xextent * changex)];
+
+        if( self.rawData && self.rawData.spectra && self.rawData.spectra.length && new_domain[1] > self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1] )
+          new_domain[1] = self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1];
+
         //we'll emit on mouse up - ToDo: set a timer to periodically emit 'xrangechanged' while dragging.
-        self.setXAxisRange(newX0, newX1, false);
+        self.setXAxisRange(new_domain[0], new_domain[1], false); 
         self.redraw()();
       }
 
@@ -3116,64 +2989,17 @@ SpectrumChartD3.prototype.mousemove = function () {
       d3.event.stopPropagation();
     };
 
-    if (!isNaN(self.yaxisdown)) {
-      let olddomain = self.getYAxisDomain();
-      let old_ymax = olddomain[0];
-      let old_ymin = olddomain[1];
-      
+    if (!isNaN(self.downy)) {
       d3.select('body').style("cursor", "ns-resize");
       var rupy = self.yScale.invert(p[1]),
           yaxis1 = self.yScale.domain()[1],
           yaxis2 = self.yScale.domain()[0],
           yextent = yaxis2 - yaxis1;
-          
       if (rupy > 0) {
         var changey, new_domain;
-        changey = self.yaxisdown / rupy;
-
+        changey = self.downy / rupy;
         new_domain = [yaxis1 + (yextent * changey), yaxis1];
-        
-        let ydatarange = self.getYAxisDataDomain();
-        let newYmin = new_domain[1];
-        let newYmax = new_domain[0];
-        let y0 = ydatarange[0];
-        let y1 = ydatarange[1];
-        
-        if( self.options.yscale == "log" ) {
-          if( newYmin > 0 && newYmax > newYmin && y1 > 0 ){
-            let logY0 = ((y0<=0) ? -1 : Math.log10(y0));
-            let logY1 = ((y1<=0) ? 0 : Math.log10(y1));
-          
-            let newLogLowerY = Math.log10(newYmin);
-            let newLogUpperY = Math.log10(newYmax);
-            
-            if( newLogUpperY < logY1 ) {
-              self.options.logYFracTop = 0;  //make sure we can at least see the whole chart.
-            } else {
-              let newfrac = (newLogUpperY - logY1) / (logY1 - logY0);
-              if( !isNaN(newfrac) && isFinite(newfrac) && newfrac>=0 && newfrac<50 ){
-                self.options.logYFracTop = (newLogUpperY - logY1) / (logY1 - logY0);
-                //Should emit something noting we changed something
-              }
-            }
-            
-            //Dragging on the y-axis only adjusts the top fraction, not the bottom, so we wont set the bottom here (since it shouldnt change)
-            //self.options.logYFracBottom should be between about 0 and 10
-            //self.options.logYFracBottom = (logY1 - logY0) / (newYmin - logY0);
-          }//if( new limits are reasonable )
-        } else if( self.options.yscale == "lin" ) {
-          let newfrac = (newYmax / y1) - 1.0;
-          
-          console.log( 'newfrac=' + newfrac );
-          if( !isNaN(newfrac) && isFinite(newfrac) && newfrac>=0 && newfrac<50 ){
-            self.options.linYFracTop = newfrac;
-          }
-        } else if( self.options.yscale == "sqrt" ) {
-          //self.options.sqrtYFracBottom = 1 - (newYmin / y0);  //Shouldnt change though
-          self.options.sqrtYFracTop = -1 + (newYmax / y1);
-        }
-      
-        
+
         self.yScale.domain(new_domain);
         self.redraw()();
       }
@@ -3190,16 +3016,16 @@ SpectrumChartD3.prototype.mouseup = function () {
     document.onselectstart = function() { return true; };
     d3.select('body').style("cursor", "auto");
     d3.select('body').style("cursor", "auto");
-    if( self.xaxisdown ) {
+    if (!isNaN(self.downx)) {
       self.redraw()();
-      self.xaxisdown = null;
+      self.downx = Math.NaN;
 
       /*d3.event.preventDefault(); */
       /*d3.event.stopPropagation(); */
     };
-    if (!isNaN(self.yaxisdown)) {
+    if (!isNaN(self.downy)) {
       self.redraw()();
-      self.yaxisdown = Math.NaN;
+      self.downy = Math.NaN;
       /*d3.event.preventDefault(); */
       /*d3.event.stopPropagation(); */
     }
@@ -3240,7 +3066,6 @@ SpectrumChartD3.prototype.keydown = function () {
           self.handleCancelMousePeakFit();
         }
         self.fittingPeak = false;
-        self.cancelYAxisScalingAction();
         self.handleCancelAllMouseEvents()();
         self.handleCancelAnimationZoom();
         self.handleCancelRoiDrag();
@@ -3298,8 +3123,8 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
   return function () {
 
     d3.select(document.body).style("cursor", "default");
-    self.xaxisdown = null;
-    self.yaxisdown = Math.NaN;
+    self.downx = Math.NaN;
+    self.downy = Math.NaN;
 
     /* Cancel recalibration */
     self.handleCancelMouseRecalibration();
@@ -3319,9 +3144,6 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
     /* Cancel peak fitting */
     self.erasePeakFitReferenceLines();
 
-    /* Cancel dragging of ROI. */
-    self.handleCancelRoiDrag();
-    
     /* Canceling out all mouse events for chart */
     self.zooming_plot = false;
     self.dragging_plot = false;
@@ -3335,13 +3157,16 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
     /* Cancel all legend interactions */
     self.legdown = null;
 
+    /* Cancel scaler interactions */
+    self.scalerdown = null;
+
     /* Cancel all slider drag region interactions */
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
 
     /* Cancel all scaler widget interactions */
-    self.endYAxisScalingAction()();
+    self.currentlyAdjustingSpectrumScale = null;
   }
 }
 
@@ -3509,7 +3334,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
 
   var tx = function(d) { return "translate(" + self.xScale(d.e) + ",0)"; };
   var gy = self.vis.selectAll("g.ref")
-            .data( reflines, function(d){return d.id;} )
+            .data( reflines,function(d){return d.e;} )
             .attr("transform", tx)
             .attr("stroke-width",1);
 
@@ -3586,7 +3411,6 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
  
   var default_colors = ["#0000FF","#006600", "#006666", "#0099FF","#9933FF", "#FF66FF", "#CC3333", "#FF6633","#FFFF99", "#CCFFCC", "#0000CC", "#666666", "#003333"];
 
-  var index = 0;
   if( !data ){
     this.refLines = null;
   } else {
@@ -3600,8 +3424,6 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
          if( !a.lines || !Array.isArray(a.lines) )
            throw "Reference lines does not contain an array of lines";
          a.lines.forEach( function(d){
-           d.id = ++index;  //We need to assign an ID to use as D3 data, that is unique (energy may not be unique)
-           
            /*{e:30.27,h:6.22e-05,particle:'xray',decay:'xray',el:'barium'} */
            /*particle in ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture"]; */
            if( (typeof d.e !== "number") || (typeof d.h !== "number") || (typeof d.particle !== "string") )
@@ -3940,8 +3762,11 @@ SpectrumChartD3.prototype.updateLegend = function() {
       this.legendBox = null;
       this.legBody = null;
       this.legendHeaderClose = null;
-      //Not emmitting 'legendClosed' since self.options.showLegend is not being changed.
-      //self.WtEmit(self.chart.id, {name: 'legendClosed'} );
+      var legendoption = document.getElementById("legendoption");
+      if (legendoption && self.rawData && self.rawData.spectra && self.rawData.spectra.length) {
+        legendoption.checked = false;
+      }
+      console.log( 'Should emit legend closed' );
     }
     return;
   }
@@ -3961,7 +3786,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
 
         if ( calculated_x >= -self.padding.leftComputed && y >= 0 && 
              calculated_x <= self.cx && y <= self.cy ) {
-          //console.log("change pos");
+          console.log("change pos");
           var tx = (x - self.legdown.x) + self.legdown.x0;
           var ty = (y - self.legdown.y) + self.legdown.y0; 
           self.legend.attr("transform", "translate(" + tx + "," + ty + ")");
@@ -4026,7 +3851,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       .on("wheel", function(d){d3.event.preventDefault(); d3.event.stopPropagation();} );
     
     function mousedownleg(){
-      //console.log("mouse down on legend");
+      console.log("mouse down on legend");
       if (d3.event.defaultPrevented) return;
       if( self.dragging_plot || self.zooming_plot ) return;
       d3.event.preventDefault();
@@ -4358,7 +4183,7 @@ SpectrumChartD3.prototype.yaxisDrag = function(d) {
     console.log('yaxisDrag work');
     document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
-    self.yaxisdown = self.yScale.invert(p[1]);
+    self.downy = self.yScale.invert(p[1]);
   }
 }
 
@@ -4505,7 +4330,6 @@ SpectrumChartD3.prototype.setSqrtY = function(){
   this.redraw(this.options.showAnimation)();
 }
 
-
 SpectrumChartD3.prototype.handleYAxisWheel = function() {
   /*This function doesnt have the best behaviour in the world, but its a start */
   var self = this;
@@ -4558,10 +4382,14 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
     if( self.options.logYFracTop < 0 ){
       self.options.logYFracBottom += -self.options.logYFracTop;
       self.options.logYFracBottom = Math.min( self.options.logYFracBottom, 2.505 );
+      console.log( 'self.options.logYFracBottom=' +  self.options.logYFracBottom );
       self.options.logYFracTop = 0;
     }
-  
+    
+    
     self.options.logYFracTop = Math.max( self.options.logYFracTop, -0.95 );
+    console.log( 'self.options.logYFracTop=' + self.options.logYFracTop );
+    /* */
   } else if( self.options.yscale == "lin" ) {
     self.options.linYFracTop += mult;
     self.options.linYFracTop = Math.min( self.options.linYFracTop, 0.85 );
@@ -4672,18 +4500,27 @@ SpectrumChartD3.prototype.xticks = function() {
 
 /* Sets x-axis drag for the chart. These are actions done by clicking and dragging one of the labels of the x-axis. */
 SpectrumChartD3.prototype.xaxisDrag = function() {
-  
   var self = this;
   return function(d) {
     /*This function is called once when you click on an x-axis label (which you can then start dragging it) */
     /*  And NOT when you click on the chart and drag it to pan */
+    console.log( 'xaxisDrag work' );
 
     document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
 
-    if (self.xScale.invert(p[0]) > 0){           /* set self.xaxisdown equal to value of your mouse pos */
-      self.xaxisdown = [self.xScale.invert(p[0]), self.xScale.domain()[0], self.xScale.domain()[1]];
-    }
+    if (self.xScale.invert(p[0]) > 0)           /* set self.downx equal to value of your mouse pos */
+      self.downx = self.xScale.invert(p[0]);
+
+    // Christian [05122018]: Commented out to prevent buggy drawing of chart when dragging ticks <= 0
+    /*
+    else                                        // if mouse pos < 0, use 0.1 as the value (value of 0 is buggy)
+      self.downx = 0.1;
+    */
+   
+    /*console.log("p=" + p ); */
+    /*console.log("self.downx=" + self.downx); */
+    /*console.log("self.vis[0][0]=" + self.vis[0][0]); */
   }
 }
 
@@ -4758,16 +4595,16 @@ SpectrumChartD3.prototype.drawXTicks = function() {
    * by assigning the styles and event listeners to ticks that are actually displayed. Noticable improvements seen
    * when using w/InterSpec.
    */
-  //const majorticksText = majorticks.selectAll('text')
-  //  .style("cursor", "ew-resize")
-  //  .on("mouseover", function(d, i) { d3.select(this).style("font-weight", "bold");})
-  //  .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
-  //  .on("mousedown.drag",  self.xaxisDrag());
+  const majorticksText = majorticks.selectAll('text')
+    .style("cursor", "ew-resize")
+    .on("mouseover", function(d, i) { d3.select(this).style("font-weight", "bold");})
+    .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
+    .on("mousedown.drag",  self.xaxisDrag());
 
   // Add touch event listeners for touch devices
-  //if (self.isTouchDevice()) {
-  //  majorticksText.on("touchstart.drag", self.xaxisDrag());
-  //}
+  if (self.isTouchDevice()) {
+    majorticksText.on("touchstart.drag", self.xaxisDrag());
+  }
 
   if( this.options.compactXAxis ){
     /* We have to check every tick to see if it overlaps with the title */
@@ -4780,7 +4617,6 @@ SpectrumChartD3.prototype.drawXTicks = function() {
     });
   } else {
     /*We only need to check the last tick to see if it goes off the chart */
-    const majorticksText = majorticks.selectAll('text');
     var lastmajor = majorticks[0].length ? majorticks[0][majorticks[0].length-1] : null; 
     if( lastmajor ) {
       lastmajor = d3.select(lastmajor).select('text')[0][0];
@@ -4856,16 +4692,15 @@ SpectrumChartD3.prototype.setCompactXAxis = function( compact ) {
  */
 SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   var self = this;
-  
+
   // Cancel if the chart or raw data are not present
-  if (!self.chart || d3.select(self.chart).empty() || !self.rawData
-    || !self.rawData.spectra || !self.rawData.spectra.length || self.size.height<=0 ) {
+  if (!self.chart || d3.select(self.chart).empty() || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
+    || self.size.height<=0 ) {
     self.cancelXAxisSliderChart();
     return;
   }
-    
   // Cancel the action and clean up if the option for the slider chart is not checked
-  if( !self.options.showXAxisSliderChart ) {
+  if (!self.options.showXAxisSliderChart && self.origBBox && self.origHeight) {
     self.cancelXAxisSliderChart();
     return;
   }
@@ -4890,9 +4725,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     for (var i = 1; i < numberOfLines; i++) {
       self.sliderChart.append('line')
         .attr("class", "sliderDragRegionLine")
-        .style("fill", "#444")
-        .attr("stroke", "#444" )
-        .attr("stroke-width", "0.08%")
         .attr("x1", leftX + (i*leftWidth)/numberOfLines)
         .attr("x2", leftX + (i*leftWidth)/numberOfLines)
         .attr("y1", leftY + (leftHeight/4))
@@ -4905,9 +4737,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
       self.sliderChart.append('line')
         .attr("class", "sliderDragRegionLine")
-        .style("fill", "#444")
-        .attr("stroke", "#444" )
-        .attr("stroke-width", "0.08%")
         .attr("x1", rightX + (i*rightWidth)/numberOfLines)
         .attr("x2", rightX + (i*rightWidth)/numberOfLines)
         .attr("y1", rightY + (rightHeight/4))
@@ -4918,6 +4747,38 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .on("touchstart", self.handleTouchStartRightSliderDrag())
         .on("touchmove", self.handleTouchMoveRightSliderDrag(false));
     }
+  }
+
+  // Ensure that the slider chart height is always 1/10 of the chart height (for resizes)
+  self.size.sliderChartHeight = self.size.height / 10;
+
+  // Starting height of the chart (in px)
+  var startingHeight = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
+
+  // Extra padding calculated if x-axis title is present
+  var extraPadding = self.xaxistitle != null && !d3.select(self.xaxistitle).empty() ? self.xaxistitle[0][0].clientHeight + 20 : 20;
+
+  // Store the original bounding box and height of the chart without the x-axis slider chart
+  if (!self.origBBox || !self.origHeight) {
+    self.origBBox = d3.select(self.chart).select('svg').attr("viewBox");
+    self.origHeight = d3.select(self.chart).select('svg').attr("height");
+  }
+  self.origBBox = d3.select(self.chart).select('svg').attr("viewBox");
+
+  // Calculate the final chart height and position for storing the slider chart
+  var height = (Number(self.origHeight) + self.size.sliderChartHeight + extraPadding + self.padding.sliderChart);
+
+  // Set the chart svg viewBox and height accordingly to store the slider chart
+  d3.select(self.chart).select('svg')
+    .attr("viewBox", function() {
+      var viewBox = self.origBBox.split(' ');
+      return viewBox[0] + " " + viewBox[1] + " " + viewBox[2] + " " + height;
+    })
+    .attr("height", height);
+
+  // Set the chart style height to have room for the slider chart
+  if (startingHeight.toFixed() != (Number(self.origHeight) + self.size.sliderChartHeight + extraPadding + self.padding.sliderChart).toFixed()) {
+    d3.select(this.chart)[0][0].style.height = height + "px";
   }
 
   // Store the original x and y-axis domain (we'll use these to draw the slider lines and position the slider box)
@@ -4935,18 +4796,12 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   self.rebinForBackgroundSubtract();
   self.yScale.domain(self.getYAxisDomain());
 
-  let axiscolor = null;
-  
   // Draw the elements for the slider chart
-  if( !self.sliderChart ) {
-    axiscolor = 'black';
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-    
+  if (d3.select("#sliderChart").empty()) {
+
     // G element of the slider chart
-    self.sliderChart = d3.select("svg").append("g")
-      //.attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
+    self.sliderChart = d3.select("svg").append("g").attr("id", "sliderChart")
+      .attr("transform", "translate(" + self.padding.leftComputed + "," + (480 + extraPadding + self.padding.sliderChart) + ")")
       // .on("mousemove", self.handleMouseMoveSliderChart());
       .on("touchstart", self.handleTouchStartSliderChart())
       .on("touchmove", self.handleTouchMoveSliderChart());
@@ -4954,9 +4809,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     // Plot area for data lines in slider chart
     self.sliderChartPlot = self.sliderChart.append("rect")
       .attr("id", "sliderchartarea"+self.chart.id )
-      .style("opacity","0.1")
-      .style("fill", axiscolor);
-      //.style("fill", "#EEEEEE");
+      .attr("width", self.size.sliderChartWidth)
+      .attr("height", self.size.sliderChartHeight)
+      .style("fill", "#EEEEEE");
 
     // Chart body for slider (keeps the data lines)
     self.sliderChartBody = self.sliderChart.append("g")
@@ -4967,24 +4822,28 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .attr("id", "sliderclip" + self.chart.id )
         .append("svg:rect")
         .attr("x", 0)
-        .attr("y", 0);
+        .attr("y", 0)
+        .attr("width", self.size.sliderChartWidth)
+        .attr("height", self.size.sliderChartHeight);
+
 
     // For adding peaks into slider chart 
-    // self.sliderPeakVis = self.sliderChart.append('g')
+    // self.sliderPeakVis = d3.select("#sliderChart").append('g')
     //   .attr("id", "sliderPeakVis")
     //   .attr("class", "peakVis")
     //   .attr("transform", "translate(0,0)")
     //   .attr("clip-path", "url(#sliderclip" + this.chart.id + ")");
 
+  } else {
+    // Adjust the width, height, and transform for the slider chart elements (for resizing)
+    self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
+      .attr("height", self.size.sliderChartHeight);
+    self.sliderChartClipPath.attr("width", self.size.sliderChartWidth)
+      .attr("height", self.size.sliderChartHeight);
+
+    // self.sliderChart.attr("transform", "translate(0," + (self.size.height + extraPadding + self.padding.sliderChart) + ")");
   }
 
-  self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
-      .attr("height", self.size.sliderChartHeight);
-  self.sliderChartClipPath.attr("width", self.size.sliderChartWidth)
-      .attr("height", self.size.sliderChartHeight);
-  self.sliderChart
-      .attr("transform", "translate(" + 0.5*(self.cx - self.size.sliderChartWidth) + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")");
-  
   // Commented out for adding peaks into slider chart sometime later
   // self.sliderPeakVis.selectAll('*').remove();
   // self.peakVis.select(function() {
@@ -5002,20 +4861,11 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
   // Add the slider draggable box and edges
   if (!self.sliderBox) {
-    if( !axiscolor ){
-      axiscolor = 'black';
-      const tickElement = document.querySelector('.tick');
-      const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-      axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-    }
-    
     // Slider box
     self.sliderBox = self.sliderChart.append("rect")
+      .attr("id", "sliderBox")
       .attr("class", "sliderBox")
-      .style("fill-opacity","0.5")
-      .style("fill", axiscolor)
-      .attr("stroke", axiscolor)
-      .attr("stroke-width", "0.2%" )
+      .attr("height", self.size.sliderChartHeight)
       .on("mousedown", self.handleMouseDownSliderBox())
       .on("touchstart", self.handleTouchStartSliderBox())
       .on("touchmove", self.handleTouchMoveSliderChart());
@@ -5026,10 +4876,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       .attr("class", "sliderDragRegion")
       .attr("rx", 2)
       .attr("ry", 2)
-      .style("fill-opacity","0.1")
-      .style("fill", axiscolor)
-      .attr("stroke",axiscolor)
-      .attr("stroke-width", "0.1%" )
       .on("mousedown", self.handleMouseDownLeftSliderDrag())
       .on("mousemove", self.handleMouseMoveLeftSliderDrag(false))
       .on("mouseout", self.handleMouseOutLeftSliderDrag())
@@ -5042,10 +4888,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       .attr("class", "sliderDragRegion")
       .attr("rx", 2)
       .attr("ry", 2)
-      .style("fill-opacity","0.1")
-      .style("fill", axiscolor)
-      .attr("stroke",axiscolor)
-      .attr("stroke-width", "0.1%" )
       .on("mousedown", self.handleMouseDownRightSliderDrag())
       .on("mousemove", self.handleMouseMoveRightSliderDrag(false))
       .on("mouseout", self.handleMouseOutRightSliderDrag())
@@ -5054,12 +4896,11 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   }
 
   var sliderBoxX = self.xScale(origdomain[0]);
-  var sliderBoxWidth = self.xScale(origdomain[1]) - sliderBoxX;
+  var sliderBoxWidth = self.xScale(origdomain[1]) - self.xScale(origdomain[0]);
 
   // Adjust the position of the slider box to the particular zoom region
   self.sliderBox.attr("x", sliderBoxX)
-    .attr("width", sliderBoxWidth)
-    .attr("height", self.size.sliderChartHeight);
+    .attr("width", sliderBoxWidth);
     // .on("mousemove", self.handleMouseMoveSliderChart());
 
   self.sliderDragLeft.attr("width", self.size.sliderChartWidth/100)
@@ -5114,12 +4955,17 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
 SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   var self = this;
 
-  if( !self.sliderChart )
+  if (!self.sliderChart)
     return;
+    
+  self.size.sliderChartHeight = self.size.height / 10;
 
   var height = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
 
-  
+  if (!self.origBBox || !self.origHeight) {
+    return;
+  }
+
   if (self.sliderChart) {
     self.sliderChart.remove();
     self.sliderChartBody.remove();
@@ -5142,19 +4988,27 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
     self.sliderBox = null;
   }
 
+  d3.select(self.chart)[0][0].style.height = self.origHeight + "px";
+  this.svg.attr("viewBox", function() {
+    var viewBoxAttrs = self.origBBox.split(' ');
+    viewBoxAttrs[3] = self.origHeight.toString();
+    return viewBoxAttrs.join(' ');
+  });
+  this.svg.attr("height", self.origHeight);
+
+  self.origBBox = null;
+  self.origHeight = null;
+
   self.sliderBoxDown = false;
   self.leftDragRegionDown = false;
   self.rightDragRegionDown = false;
   self.sliderChartMouse = null;
   self.savedSliderMouse = null;
-  
-  this.handleResize( false );
 }
 
 SpectrumChartD3.prototype.setShowXAxisSliderChart = function(d) {
   this.options.showXAxisSliderChart = d;
   this.drawXAxisSliderChart();
-  this.handleResize( false );
 }
 
 SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
@@ -5170,7 +5024,6 @@ SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
     self.rightDragRegionDown = false;
 
     /* Initially set the escape key flag false */
-    /* ToDo: record initial range so if escape is pressed, can reset to it */
     self.escapeKeyPressed = false;    
 
     d3.select(document.body).style("cursor", "move");
@@ -5635,119 +5488,164 @@ SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
 /**
  * -------------- Scale Factor Functions --------------
  */
-SpectrumChartD3.prototype.numYScalers = function() {
-  var self = this;
-  
-  if( !this.options.scaleBackgroundSecondary || !self.rawData || !self.rawData.spectra )
-    return 0;
-  
-  let nonFore = 0;
-  self.rawData.spectra.forEach(function (spectrum) {
-    if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND
-      && spectrum.yScaleFactor != null && spectrum.yScaleFactor >= 0.0 )
-    nonFore += 1;
-  });
-  
-  return nonFore;
-}
-
-
-SpectrumChartD3.prototype.cancelYAxisScalingAction = function() {
-  var self = this;
-  
-  if( !self.rawData || !self.rawData.spectra || self.currentlyAdjustingSpectrumScale === null )
-    return;
-  
-  console.log( 'cancelYAxisScalingAction');
-  
-  var scale = null;
-  for (var i = 0; i < self.rawData.spectra.length; ++i) {
-    let spectrum = self.rawData.spectra[i];
-    
-    if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
-      spectrum.yScaleFactor = spectrum.startingYScaleFactor;
-      spectrum.startingYScaleFactor = null;
-      self.endYAxisScalingAction()();
-      self.redraw()();
-      return;
-    }
-  }
-}
-
-SpectrumChartD3.prototype.endYAxisScalingAction = function() {
-  var self = this;
-  
-  return function(){
-    if( self.currentlyAdjustingSpectrumScale === null
-      || !self.rawData || !self.rawData.spectra )
-      return;
-
-    console.log( 'endYAxisScalingAction');
-    
-    var scale = null;
-  
-    for( var i = 0; i < self.rawData.spectra.length; ++i ) {
-    
-      let spectrum = self.rawData.spectra[i];
-    
-      if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
-        spectrum.sliderText.style( "display", "none" );
-        spectrum.sliderToggle.attr("cy", Number(spectrum.sliderRect.attr("y"))
-                                          + Number(spectrum.sliderRect.attr("height"))/2);
-                                          
-        spectrum.sliderRect.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.3);
-        spectrum.sliderToggle.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.7);
-                                          
-        spectrum.startingYScaleFactor = null;
-        scale = spectrum.yScaleFactor;
-        break;
-      }
-    }
-  
-    if( scale !== null ){
-      self.WtEmit(self.chart.id, {name: 'yscaled'}, scale, self.currentlyAdjustingSpectrumScale );
-      console.log('Emmitted yscaled scale=' + scale + ', type=' + self.currentlyAdjustingSpectrumScale );
-    } else {
-      console.log('Failed to find scale factor being adjusted');
-    }
-  
-    self.currentlyAdjustingSpectrumScale = null;
-  }
-}
-
-
 SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var self = this;
-  
-  //This function called from setData() and handleResize(), so not too often.
-  //  (ToDo: it also gets needlessly called occasitonally when zooming - should fix)
-  
-  //console.log( 'drawScalerBackgroundSecondary' );
-  
-  //ToDo: - Instead of using spectrum.type to identify which spectrum is being scaled, use spectrum.id (but make sure id is always unique)
-  
-  const nScalers = self.numYScalers();
-  if( nScalers === 0 || self.size.height < 35 ){
-    if( self.scalerWidget )
-      self.removeSpectrumScaleFactorWidget();
+
+  function hasYScaleFactors() {
+    if (!self.rawData || !self.rawData.spectra) return false;
+    var result = false;
+    self.rawData.spectra.forEach(function (spectrum) { 
+      if (spectrum.yScaleFactor != null)
+        result = true;
+    });
+    return result;
+  }
+  function allNegativeYScaleFactors() {
+    var result = true;
+    self.rawData.spectra.forEach(function (spectrum) { 
+      if (spectrum.yScaleFactor && spectrum.yScaleFactor >= 0)
+        result = false;
+    });
+    return result;
+  }
+  function onlyForegroundPresent() {
+    if (!self.rawData || !self.rawData.spectra) return false;
+    var result = true;
+    self.rawData.spectra.forEach(function (spectrum) { 
+      if (spectrum && spectrum.title && spectrum.title.toUpperCase() != "FOREGROUND")
+        result = false;
+    });
+    return result;
+  }
+
+  var onlyForegroundPresentInGraph = onlyForegroundPresent();
+  var graphHasYScaleFactors = hasYScaleFactors();
+
+  if (!self.rawData || !self.rawData.spectra || !graphHasYScaleFactors || onlyForegroundPresentInGraph || !self.options.scaleBackgroundSecondary) {
+    self.removeSpectrumScaleFactorWidget();
+    
+    /* Display proper error messages */
+    if (self.options.scaleBackgroundSecondary) {
+      if (!self.rawData || !self.rawData.spectra)
+        alert("No data specified for graph!");
+      else if (!graphHasYScaleFactors)
+        alert("No y-scale factors detected for any graph!");
+      else if (onlyForegroundPresentInGraph)
+        alert("Only chart foreground detected. Please specify a background/other chart for scaling y-values.");
+    }
+
     return;
   }
 
-  if( !self.scalerWidget ){
-    self.scalerWidget = d3.select(this.chart).select("svg").append("g")
-      .attr("class", "scalerwidget")
-      .attr("transform","translate(" + (this.cx - 20*nScalers) + "," + this.padding.topComputed + ")");
-
-    self.scalerWidgetBody = self.scalerWidget.append("g")
-      .attr("transform","translate(0,0)");
+  if (allNegativeYScaleFactors()) {
+    self.removeSpectrumScaleFactorWidget();
+    return;
   }
 
-  //The number of scalers may have changed since we created self.scalerWidget,
-  //  so update its position.
-  self.scalerWidget
-      .attr("transform","translate(" + (this.cx - 20*nScalers) + "," + this.padding.topComputed + ")");
-  
-  
+  if (!self.scalerWidget) {
+
+    function moveScalerWidget(){
+      if( self.scalerdown && !self.adjustingBackgroundScale && !self.adjustingSecondaryScale ) {
+        d3.event.preventDefault();
+        d3.event.stopPropagation();
+
+        var x = d3.event.x ? d3.event.x : d3.event.touches ?  d3.event.touches[0].clientX : d3.event.clientX;
+        var y = d3.event.y ? d3.event.y : d3.event.touches ?  d3.event.touches[0].clientY : d3.event.clientY;
+
+        var calculated_x = d3.mouse(self.vis[0][0])[0];
+
+        if ( calculated_x >= -self.padding.leftComputed && y >= 0 && 
+             calculated_x <= self.cx && y <= self.cy ) {
+          console.log("change pos");
+          var tx = (x - self.scalerdown.x) + self.scalerdown.x0;
+          var ty = (y - self.scalerdown.y) + self.scalerdown.y0; 
+          self.scalerWidget.attr("transform", "translate(" + tx + "," + ty + ")");
+        }
+      }
+    }
+
+    self.scalerWidget = d3.select(this.chart).select("svg").append("g")
+      .attr("class", "scalerwidget")
+      .attr("transform","translate(" + (this.cx - (this.cx/2) - this.padding.right) + ","+ (this.padding.topComputed + 10) + ")");
+
+    self.scalerWidgetBox = self.scalerWidget.append('rect')
+      .attr("class", "scalerback")
+      .attr('width', "100px")
+      .attr('height', "5px")
+      .attr( "rx", "5px")
+      .attr( "ry", "5px");
+    self.scalerWidgetBody = self.scalerWidget.append("g")
+      .attr("transform","translate(8,17)");
+
+    self.scalerWidgetHeader = self.scalerWidget.append("g"); 
+    self.scalerWidgetHeader.style("display", "none")
+      .append('rect')
+      .attr("class", "scalerheader")
+      .attr('width', "100px")
+      .attr('height', "1.5em")
+      .attr( "rx", "5px")
+      .attr( "ry", "5px")
+      .style("cursor", "pointer");
+    
+    /*Add a close button to get rid of the scaler widget */
+    self.scalerWidgetClose = self.scalerWidgetHeader.append('g').attr("transform","translate(4,4)");
+    self.scalerWidgetClose.append("rect")
+      .attr("class", "d3closebut")
+      .attr('height', "12")
+      .attr('width', "12");
+    self.scalerWidgetClose.append("path")
+      .attr("style", "stroke: white; stroke-width: 1.5px;" )
+      .attr("d", "M 2,2 L 10,10 M 10,2 L 2,10");
+    self.scalerWidgetClose.on("click", function(){ self.options.scaleBackgroundSecondary = false; self.drawScalerBackgroundSecondary(); } )
+                          .on("touchend", function(){ self.options.scaleBackgroundSecondary = false; self.drawScalerBackgroundSecondary(); } );   
+    
+    self.scalerWidget.on("mouseover", function(d){if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidgetHeader.style("display", null);} )
+      .on("mouseout", function(d){self.scalerWidgetHeader.style("display", "none");} )
+      .on("mousemove", moveScalerWidget)
+      .on("touchmove", moveScalerWidget)
+      .on("wheel", function(d){d3.event.preventDefault(); d3.event.stopPropagation();} );
+    
+    function mousedownscaler(){
+      console.log("mouse down on scaler");
+      if (d3.event.defaultPrevented) return;
+      if( self.dragging_plot || self.zooming_plot ) return;
+      d3.event.preventDefault();
+      d3.event.stopPropagation();
+      var trans = d3.transform(self.scalerWidget.attr("transform")).translate;
+
+      var x = d3.event.x ? d3.event.x : d3.event.touches ?  d3.event.touches[0].clientX : d3.event.clientX;
+      var y = d3.event.y ? d3.event.y : d3.event.touches ?  d3.event.touches[0].clientY : d3.event.clientY;
+      self.scalerdown = {x: x, y: y, x0: trans[0], y0: trans[1]};
+    }
+    
+    self.scalerWidgetHeader.on("mouseover", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler");} )
+      .on("touchstart", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
+      .on("mouseout",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
+      .on("touchend",  function(d) { if (self.scalerWidget) self.scalerWidget.attr("class", "scalerwidget"); } )
+      .on("mousedown.drag",  mousedownscaler )
+      .on("touchstart.drag",  mousedownscaler )
+      .on("touchend.drag", function() {self.scalerdown = null;})
+      .on("mouseup.drag", function(){self.scalerdown = null;} )
+      .on("mousemove.drag", moveScalerWidget)
+      .on("mouseout.drag", moveScalerWidget);
+
+    self.scalerWidget.on("touchstart", function(d) { mousedownscaler(); if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidgetHeader.style("display", null); } )
+      .on("touchend.drag",  function() 
+      {
+      if (!self.scalerWidget || !self.scalerWidgetHeader) {
+        self.scalerdown = null;
+        return; 
+      }
+      self.scalerWidget.attr("class", "scalerwidget"); 
+      window.setTimeout(function() { self.scalerWidgetHeader.style("display", "none"); }, 1500) 
+      self.scalerdown = null; 
+      });
+  }
+
+  var origtrans = d3.transform(self.scalerWidget.attr("transform")).translate;
+  var bb = self.scalerWidget.node().getBBox();
+  var fromRight = self.cx - origtrans[0] - self.scalerWidgetBox.attr('width').replace("px","");
+
   self.scalerWidgetBody.selectAll("g").remove();
 
   function is_touch_device() {
@@ -5755,97 +5653,99 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         || (navigator && navigator.maxTouchPoints);       /* works on IE10/11 and Surface */
   };
 
-  var scalerHeight = self.size.height - 30;
-  //var toggleRadius = is_touch_device() ? 10 : 7;  //ToDo: For touch devices if we go to 10 px, then it isnt centered on spectrum.sliderRect, and also it hangs off the screen (or at least would got to very edge.
-  var toggleRadius = 7;
-  var ypos = 15;
+  var scalerWidth = 300;
+  var toggleRadius = is_touch_device() ? 10 : 7;
+  var xpos = 10;
+  var ypos = 25;
+  var scalerAdded = false;
 
-  //Get axis color, text color and spec
-  let axiscolor = 'black', txtcolor = 'black';
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
-  const titleElement = document.querySelector('.xaxistitle');
-  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
-  
-  
-  var scalenum = 0;
   self.rawData.spectra.forEach(function(spectrum,i) {
     var spectrumScaleFactor = spectrum.yScaleFactor;
     var spectrumSelector = 'Spectrum-' + spectrum.id;
 
     if (i == 0 || spectrum.type === self.spectrumTypes.FOREGROUND)   /* Don't add scaling functionality for foreground */
-    return;
-      
+      return;
+
     if (spectrumScaleFactor != null && spectrumScaleFactor >= 0) {
-      scalenum += 1;
-      
-      let speccolor = spectrum.lineColor ? spectrum.lineColor : 'black';
-      
+      spectrum.scale = d3.scale.linear()
+        .domain([0, self.options.maxScaleFactor]) /* TODO: Have global max scale factor */
+        .range([0, scalerWidth]);
+
+      spectrum.scaleAxis = d3.svg.axis().scale(spectrum.scale)
+        .orient("bottom")
+        .innerTickSize(is_touch_device() ? 27 : 19)
+        .outerTickSize(0)
+        .ticks(5,'f');
+
       var spectrumSliderArea = self.scalerWidgetBody.append("g")
         .attr("id", spectrumSelector + "SliderArea")
-        .attr("transform","translate(" + 20*(scalenum-1) + "," + ypos + ")");
+        .attr("transform","translate(" + xpos + "," + ypos + ")")
+        .call(spectrum.scaleAxis);
 
       spectrum.sliderText = spectrumSliderArea.append("text")
         .attr("x", 0)
-        .attr("y", self.size.height-15)
+        .attr("y", 0)
         .attr("text-anchor", "start")
-        .attr("fill", txtcolor )
-        .style( "display", "none" )
-        .text( "" + spectrumScaleFactor.toFixed(3));
+        .text(spectrum.title + " Scale Factor: " + spectrumScaleFactor.toFixed(3));
 
       spectrum.sliderRect = spectrumSliderArea.append("rect")
         .attr("class", "scaleraxis")
-        .attr("y", 0 /* + (is_touch_device() ? 5 : 0)*/ )
-        .attr("x", 8)
+        .attr("y", Number(spectrum.sliderText.attr("y")) + 10 + (is_touch_device() ? 5 : 0))
         .attr("rx", 5)
         .attr("ry", 5)
-        .attr("stroke", axiscolor )
-        .attr("stroke-opacity", 0.8)
-        .attr("fill", speccolor )
-        .attr("fill-opacity", 0.3)
-        .attr("width", "4px")
-        .attr("height", scalerHeight );
- 
+        .attr("width", scalerWidth)
+        .attr("height", "1%");
 
       spectrum.sliderToggle = spectrumSliderArea.append("circle")
         .attr("class", "scalertoggle")
-        .attr("cx", Number(spectrum.sliderRect.attr("x")) + toggleRadius/2 - 1)
-        .attr("cy", Number(spectrum.sliderRect.attr("y")) + scalerHeight/2)
+        .attr("cx", Math.min(spectrum.scale(spectrumScaleFactor), scalerWidth))
+        .attr("cy", Number(spectrum.sliderRect.attr("y")) + toggleRadius/2)
         .attr("r", toggleRadius)
-        .attr("stroke", axiscolor )
-        .attr("stroke-opacity", 0.8)
-        .attr("fill", speccolor )
-        .attr("fill-opacity", 0.7)
         .style("cursor", "pointer")
-        .on("mousedown", function(){
-          self.handleMouseMoveScaleFactorSlider();
-          registerKeyboardHandler(self.keydown());
-          spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.startingYScaleFactor = spectrum.yScaleFactor;
-          self.currentlyAdjustingSpectrumScale = spectrum.type;
-          spectrum.sliderText.style( "display", null )
+        .on("mousedown", function(){ 
+          self.currentlyAdjustingSpectrumScale = spectrum.title;
           d3.event.preventDefault();
           d3.event.stopPropagation();
         })
         .on("mousemove", self.handleMouseMoveScaleFactorSlider())
-        .on("mouseup", self.endYAxisScalingAction() )
-        .on("touchstart", function(){
-          self.handleMouseMoveScaleFactorSlider();
-          registerKeyboardHandler(self.keydown());
-          spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.startingYScaleFactor = spectrum.yScaleFactor;
-          self.currentlyAdjustingSpectrumScale = spectrum.type;
-          spectrum.sliderText.style( "display", null )
-        })
+        .on("mouseup", function(){ self.currentlyAdjustingSpectrumScale = null; })
+        .on("touchstart", function(){ self.currentlyAdjustingSpectrumScale = spectrum.title; })
         .on("touchmove", self.handleMouseMoveScaleFactorSlider())
-        .on("touchend", self.endYAxisScalingAction() );
+        .on("touchend", function(){ self.currentlyAdjustingSpectrumScale = null; });
+
+      ypos += 60;
     }
   });
+
+  /*Resize the box to match the text size */
+  var w = self.scalerWidgetBody.node().getBBox().width + 15 + (2*xpos); 
+  self.scalerWidgetHeader.attr("width", w)
+  self.scalerWidgetBox.attr('width', w);
+  self.scalerWidgetBox.attr('height', self.scalerWidgetBody.node().getBBox().height + 40 );
+  self.scalerWidgetClose.attr("transform","translate(" + (w-16) + ",4)");
+
+  if (!self.scalerWidgetTitle)
+    self.scalerWidgetTitle = self.scalerWidget.append('text')
+      .attr("x", w/2)
+      .attr("text-anchor", "middle")
+      .attr("transform", "translate(0," + 16 + ")")
+      .attr("cursor", "pointer")
+      .on("touchstart", function(d) { mousedownscaler();  if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
+      .on("mousemove", function(d) { if( !self.dragging_plot && !self.zooming_plot ) self.scalerWidget.attr("class", "scalerwidget activescaler"); } )
+      .on("mouseout",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
+      .on("touchend",  function(d) { self.scalerWidget.attr("class", "scalerwidget"); } )
+      .on("mousedown.drag",  mousedownscaler )
+      .on("touchstart.drag",  mousedownscaler )
+      .on("touchend.drag", function() {self.scalerdown = null;})
+      .on("mouseup.drag", function(){self.scalerdown = null;} )
+      .on("mousemove.drag", moveScalerWidget)
+      .text("Spectrum Y-Value Scaler")
+  
+  self.scalerWidgetHeader.select('rect').attr('width', w );
+  self.scalerWidgetHeader.select('text').attr("x", w/2);
+
+  /*Set the transform so the space on the right of the legend stays the same */
+  self.scalerWidget.attr("transform", "translate(" + (this.cx - fromRight - w) + "," + origtrans[1] + ")" );
 }
 
 SpectrumChartD3.prototype.removeSpectrumScaleFactorWidget = function() {
@@ -5854,22 +5754,211 @@ SpectrumChartD3.prototype.removeSpectrumScaleFactorWidget = function() {
   if (self.scalerWidget) {
     self.scalerWidget.remove();
     self.scalerWidget = null;
+    self.scalerWidgetBox = null;
+    self.scalerWidgetHeader = null;
     self.scalerWidgetBody = null;
-    
-    if( self.rawData && self.rawData.spectra ) {
-      self.rawData.spectra.forEach( function(spectrum,i) {
-        spectrum.sliderText = null;
-        spectrum.sliderRect = null;
-        spectrum.sliderToggle = null;
-      } );
-    }
+    self.scalerWidgetClose = null;
+    self.scalerWidgetTitle = null;
+    self.backgroundScale = null;
+    var scaleroption;
+    if (scaleroption = document.getElementById("scaleroption"))
+      scaleroption.checked = false;
+    console.log( 'Should emit scaler widget closed' );
   }
 }
 
+SpectrumChartD3.prototype.setSpectrumScaleFactor = function(d) {
+  var self = this;
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return;
+  if (!self.currentlyAdjustingSpectrumScale && !self.currentDropDownScaleFactorSpectrum)
+    return;
 
-SpectrumChartD3.prototype.setShowSpectrumScaleFactorWidget = function(d) {
+  var spectrumToCheck = self.currentlyAdjustingSpectrumScale ? self.currentlyAdjustingSpectrumScale : self.currentDropDownScaleFactorSpectrum;
+
+  /* Check for the which corresponding spectrum line is the to be adjusted */
+  var spectrumToBeAdjusted = null;
+  var linei = null;
+  self.rawData.spectra.forEach(function(spectrum,i) {
+    if (spectrum.title && spectrum.title.toUpperCase() == spectrumToCheck.toUpperCase() && spectrumToBeAdjusted == null) {
+      spectrumToBeAdjusted = spectrum;
+      linei = i;
+      return;
+    }
+  });
+
+  if (spectrumToBeAdjusted == null || linei == null)
+    return;
+  if (!self['line'+linei] || self.vis.select("#spectrumline"+linei).empty())
+    return;
+
+  function needsDecimal(num) {
+    return num % 1 != 0;
+  }
+
+  /* Here is a modified, slightly more efficient version of redraw 
+    specific to changing the scale factors for spectrums. 
+  */
+  function scaleFactorChangeRedraw(spectrum, linei) {
+    self.updateLegend();
+    self.rebinSpectrum(spectrum, linei);
+    self.do_rebin();
+    self.setYAxisDomain();
+    self.drawYTicks();
+    self.update();
+    self.drawPeaks();
+  }
+
+  var spectrumScaleFactor = Math.min(Number(d), self.options.maxScaleFactor);
+  spectrumToBeAdjusted.yScaleFactor = spectrumScaleFactor;
+  scaleFactorChangeRedraw(spectrumToBeAdjusted, linei);
+
+  if (spectrumToBeAdjusted.sliderText)
+    spectrumToBeAdjusted.sliderText.text(spectrumToBeAdjusted.title + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
+  if (spectrumToBeAdjusted.sliderToggle && spectrumToBeAdjusted.scale)
+    spectrumToBeAdjusted.sliderToggle.attr("cx", Math.max( Math.min(spectrumToBeAdjusted.scale(spectrumScaleFactor), spectrumToBeAdjusted.scale.range()[1]), spectrumToBeAdjusted.scale.range()[0] ));
+
+  /* Update the slider chart if needed */
+  if (self["sliderLine"+linei]) {
+    var origdomain = self.xScale.domain();
+    var origdomainrange = self.xScale.range();
+    var origrange = self.yScale.domain();
+    var bounds = self.min_max_x_values();
+    var maxX = bounds[1];
+    var minX = bounds[0];
+
+    /* Change the x and y-axis domain to the full range (for slider lines) */
+    self.xScale.domain([minX, maxX]);
+    self.xScale.range([0, self.size.sliderChartWidth]);
+    self.do_rebin();
+    self.yScale.domain(self.getYAxisDomain());
+
+    self["sliderLine"+linei].attr("d", self["line"+linei](spectrumToBeAdjusted.points));
+
+    /* Restore the original x and y-axis domain */
+    self.xScale.domain(origdomain);
+    self.xScale.range(origdomainrange);
+    self.do_rebin();
+    self.yScale.domain(origrange);
+  }
+}
+
+SpectrumChartD3.prototype.setMaxScaleFactor = function(d) {
+  var self = this;
+
+  d = Math.max(Number(d), 0.1);
+
+  if (self.options)
+    this.options.maxScaleFactor = d;
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return;
+
+  function needsDecimal(num) {
+    return num % 1 != 0;
+  }
+
+  /* Here is a modified, slightly more efficient version of redraw 
+    specific to changing the scale factors for spectrums. 
+  */
+  function scaleFactorChangeRedraw(spectrum, linei) {
+    self.updateLegend();
+    self.rebinSpectrum(spectrum, linei);
+    self.do_rebin();
+    self.setYAxisDomain();
+    self.drawYTicks();
+    self.update();
+    self.drawPeaks();
+  }
+
+  self.rawData.spectra.forEach(function(spectrum,i) {
+    /* Don't scale the foreground */
+    if (i == 0)
+      return;
+
+
+    var spectrumScaleFactor = Math.min(spectrum.yScaleFactor, self.options.maxScaleFactor);
+    var spectrumSelector = 'Spectrum-' + spectrum.id;
+    spectrum.yScaleFactor = spectrumScaleFactor;
+
+    var domain;
+    if (!spectrum.scale || !spectrum.scaleAxis)
+      return;
+
+    domain = spectrum.scale.domain();
+    spectrum.scale.domain([ domain[0], d ]);
+    spectrum.scaleAxis.scale(spectrum.scale)
+      .orient("bottom")
+      .ticks(5,'f');
+    d3.select("#" + spectrumSelector + "SliderArea").call(spectrum.scaleAxis);
+
+    if (spectrum.sliderText)
+      spectrum.sliderText.text(spectrum.title + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
+    if (spectrum.sliderToggle)
+      spectrum.sliderToggle.attr("cx", Math.min(spectrum.scale(spectrum.yScaleFactor), spectrum.scale.range()[1]));
+
+    scaleFactorChangeRedraw(spectrum, i);
+
+    if (!self.vis.select("#spectrumline"+i).empty()) {
+      self.vis.select("#spectrumline"+i).attr("d", self['line'+i](spectrum.points));
+    }
+
+    /* Update the slider chart if needed */
+    if (self["sliderLine"+i]) {
+      var origdomain = self.xScale.domain();
+      var origdomainrange = self.xScale.range();
+      var origrange = self.yScale.domain();
+      var bounds = self.min_max_x_values();
+      var maxX = bounds[1];
+      var minX = bounds[0];
+
+      /* Change the x and y-axis domain to the full range (for slider lines) */
+      self.xScale.domain([minX, maxX]);
+      self.xScale.range([0, self.size.sliderChartWidth]);
+      self.do_rebin();
+      self.yScale.domain(self.getYAxisDomain());
+
+      self["sliderLine"+i].attr("d", self["line"+i](spectrum.points));
+
+      /* Restore the original x and y-axis domain */
+      self.xScale.domain(origdomain);
+      self.xScale.range(origdomainrange);
+      self.do_rebin();
+      self.yScale.domain(origrange);
+    }
+  });
+}
+
+SpectrumChartD3.prototype.setDropDownSpectrumScaleFactor = function(d) {
+  var self = this;
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return;
+
+  function needsDecimal(num) {
+    return num % 1 != 0;
+  }
+
+  self.currentDropDownScaleFactorSpectrum = d == "None" ? null : d;
+
+  if (d != "None") {
+    var valueChanged = false;
+    self.rawData.spectra.forEach(function(spectrum) {
+      if (spectrum.title && spectrum.title.toUpperCase() == self.currentDropDownScaleFactorSpectrum.toUpperCase() && d != "None" && !valueChanged) {
+        valueChanged = true;
+
+      var currentsfinput;
+      var spectrumScaleFactor = spectrum.yScaleFactor;
+
+      if (currentsfinput = document.getElementById("current-sf"))
+        currentsfinput.value = needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed();
+      return;
+    }
+    });
+  }
+}
+
+SpectrumChartD3.prototype.setSpectrumScaleFactorWidget = function(d) {
   this.options.scaleBackgroundSecondary = d;
-  this.handleResize( false );
+  this.drawScalerBackgroundSecondary();
 }
 
 SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
@@ -5903,7 +5992,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     var linei = null;
     var spectrum = null;
     for (var i = 0; i < self.rawData.spectra.length; ++i) {
-      if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale) {
+      if (self.rawData.spectra[i].title.toUpperCase() == self.currentlyAdjustingSpectrumScale.toUpperCase()) {
         linei = i;
         spectrum = self.rawData.spectra[i];
         break;
@@ -5913,53 +6002,30 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
 
-    if (linei === null || spectrum === null)
+    if (linei == null || spectrum == null)
       return;
 
     d3.select(document.body).style("cursor", "pointer");
 
     var m = d3.mouse(spectrum.sliderRect[0][0]);
-    if( !m ){
-      //ToDo: test that this works, and is necassary on touch devices!
-      //console.log( 'Using touches!' );
-      m = d3.touches(spectrum.sliderRect[0][0]);
-      if( m.length !== 1 )
-        return;
-      m = m[0];
-    }
-    
-    
-    let scalerHeight = Number(spectrum.sliderRect.attr("height"));
-    let rad = Number(spectrum.sliderToggle.attr("r"));
-    let newTogglePos = Math.min(Math.max(0,m[1]+rad/2),scalerHeight);
-    
-    let fracOnScale = 1.0 - newTogglePos/scalerHeight;
-    
-    
-    var sf = 1.0;
-    if( self.options.yscale === "log" ) {
-      //[0.001*scale, 1000*scale]
-      sf = Math.exp( Math.log(0.001) + fracOnScale*(Math.log(1000) - Math.log(0.001)) );
-    } else if( self.options.yscale === "sqrt" ) {
-      //ToDo: make so sf will go from 0.01 to 100 with 0.5 giving 1
-      sf = 1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1;
-    } else {
-      //ToDo: make so when fracOnScale is zero, want scale=0.1, when 0.5 want scale=1.0, when 1.0 want scale=10
-      //from 0.1 to 1.9
-      //sf = 1.8*fracOnScale + 0.1;
-      sf = 1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1;
-    }
-    
-    var spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
+    var minrange = spectrum.scale.range()[0], maxrange = spectrum.scale.range()[1];
+    var min = spectrum.scale.domain()[0];
+    var max = spectrum.scale.domain()[1];
 
-    spectrum.sliderToggle.attr("cy", newTogglePos );
-    spectrum.sliderText.text( (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
+    var spectrumScaleFactor = Math.min(Math.max(min, spectrum.scale.invert(m[0])), max);
+    var spectrumTitle = spectrum.title ? spectrum.title : "Spectrum " + i;  /* If spectrum doesn't have a title, use the format "Spectrum #" instead */
+
+    spectrum.sliderToggle.attr("cx", spectrum.scale(spectrumScaleFactor));
+    spectrum.sliderText.text(spectrumTitle + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
     self.rawData.spectra[linei].yScaleFactor = spectrumScaleFactor;
 
     // If we are using background subtract, we have to redraw the entire chart if we update the scale factors
     if (self.options.backgroundSubtract) self.redraw()();
     else scaleFactorChangeRedraw(spectrum, linei);
 
+    var currentsfinput;
+    if (self.currentDropDownScaleFactorSpectrum == spectrumTitle && (currentsfinput = document.getElementById("current-sf")))
+      currentsfinput.value = needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed();
 
     /* Update the slider chart if needed */
     if (self["sliderLine"+linei]) {
@@ -5988,6 +6054,102 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
       self.xScale.range(origdomainrange);
       self.do_rebin();
       self.rebinForBackgroundSubtract();
+      self.yScale.domain(origrange);
+    }
+  }
+}
+
+SpectrumChartD3.prototype.handleTouchMoveAdjustSpectrumScale = function() {
+  var self = this;
+
+  function needsDecimal(num) {
+    return num % 1 != 0;
+  }
+
+  /* Here is a modified, slightly more efficient version of redraw 
+    specific to changing the scale factors for spectrums. 
+  */
+  function scaleFactorChangeRedraw(spectrum, linei) {
+    self.updateLegend();
+    self.rebinSpectrum(spectrum, linei);
+    self.do_rebin();
+    self.setYAxisDomain();
+    self.drawYTicks();
+    self.update();
+    self.drawPeaks();
+  }
+
+  return function() {
+    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+      return;
+    if (!self.currentlyAdjustingSpectrumScale)
+      return;
+
+
+    /* Check for the which corresponding spectrum line is the background */
+    var linei = null;
+    var spectrum = null;
+    for (var i = 0; i < self.rawData.spectra.length; ++i) {
+      if (self.rawData.spectra[i].title.toUpperCase() == self.currentlyAdjustingSpectrumScale.toUpperCase()) {
+        linei = i;
+        spectrum = self.rawData.spectra[i];
+        break;
+      }
+    }
+
+    if (linei == null || spectrum == null)
+      return;
+
+    d3.event.preventDefault();
+    d3.event.stopPropagation();
+
+    var t = d3.touches(spectrum.sliderRect[0][0]);;
+
+    if (t.length !== 1)
+      return;
+    t = t[0];
+
+    var minrange = spectrum.scale.range()[0], maxrange = spectrum.scale.range()[1];
+    var min = spectrum.scale.domain()[0];
+    var max = spectrum.scale.domain()[1];
+
+    var spectrumScaleFactor = Math.min(Math.max(min, spectrum.scale.invert(m[0])), max);
+    var spectrumTitle = spectrum.title ? spectrum.title : "Spectrum " + (i + 1);  /* If spectrum doesn't have a title, use the format "Spectrum #" instead */
+
+    spectrum.sliderToggle.attr("cx", spectrum.scale(spectrumScaleFactor));
+    spectrum.sliderText.text(spectrumTitle + " Scale Factor: " + (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
+    self.rawData.spectra[linei].yScaleFactor = spectrumScaleFactor;
+
+    scaleFactorChangeRedraw(spectrum, linei);
+
+    var currentsfinput;
+    if (self.currentDropDownScaleFactorSpectrum == spectrumTitle && (currentsfinput = document.getElementById("current-sf")))
+      currentsfinput.value = needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed();
+
+    /* Update the slider chart if needed */
+    if (self["sliderLine"+linei]) {
+      var origdomain = self.xScale.domain();
+      var origdomainrange = self.xScale.range();
+      var origrange = self.yScale.domain();
+      var bounds = self.min_max_x_values();
+      var maxX = bounds[1];
+      var minX = bounds[0];
+
+      /* Change the x and y-axis domain to the full range (for slider lines) */
+      self.xScale.domain([minX, maxX]);
+      self.xScale.range([0, self.size.sliderChartWidth]);
+      self.do_rebin();
+      self.yScale.domain(self.getYAxisDomain());
+
+      self.rawData.spectra.forEach(function(spec, speci) {
+        if (self["sliderLine"+speci])
+          self["sliderLine"+speci].attr("d", self["line"+speci](spec.points));
+      })
+
+      /* Restore the original x and y-axis domain */
+      self.xScale.domain(origdomain);
+      self.xScale.range(origdomainrange);
+      self.do_rebin();
       self.yScale.domain(origrange);
     }
   }
@@ -6055,19 +6217,13 @@ SpectrumChartD3.prototype.drawPeaks = function() {
   var self = this;
 
   self.peakVis.selectAll("*").remove();
-  self.peakPaths = [];
-  self.labelinfo = null;
-  
-  
+
   if( !this.rawData || !this.rawData.spectra ) 
     return;
 
   var minx = self.xScale.domain()[0], maxx = self.xScale.domain()[1];
 
-  let labelinfo = [];
-  let showlabels = (self.options.showUserLabels || self.options.showPeakLabels || self.options.showNuclideNames);
-  
-  
+
   /* Returns an array of paths.  
      - The first path will be an underline of entire ROI
      - The next roi.peaks.length entries are the fills for each of the peaks
@@ -6075,27 +6231,19 @@ SpectrumChartD3.prototype.drawPeaks = function() {
    */
   function roiPath(roi,points,bgsubtractpoints,scaleFactor,background){
     var paths = [];
-    var labels = showlabels ? [] : null;
     var bisector = d3.bisector(function(d){return d.x;});
-    
-    let roiLB = Math.max(roi.lowerEnergy,minx);
-    let roiUB = Math.min(roi.upperEnergy,maxx);
-    
-    var xstartind = bisector.left( points, roiLB );
-    var xendind = bisector.right( points, roiUB );
+    var xstartind = bisector.left( points, Math.max(roi.lowerEnergy,minx) );
+    var xendind = bisector.right( points, Math.min(roi.upperEnergy,maxx) );
 
     // Boolean to signify whether to subtract points from background
     const useBackgroundSubtract = self.options.backgroundSubtract && background;
 
     if( xstartind >= (points.length-2) )
-      return { paths: paths };
+      return paths;
       
     if( xendind >= (points.length-2) )
       xendind = points.length - 2;
 
-    //console.log( 'roi.lowerEnergy=', roi.lowerEnergy, ', xstartind=', points[xstartind] );
-    //console.log( 'roi.upperEnergy=', roi.upperEnergy, ', xendind=', points[xendind] );
-      
     /*The continuum values used for the first and last bin of the ROI are fudged */
     /*  for now...  To be fixed */
 
@@ -6116,16 +6264,14 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       firsty -= background.points[bi] ? background.points[bi].y : 0;
     }
     
-    //paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
-    paths[0] = "M" + self.xScale(roiLB) + "," + self.yScale(firsty) + " L";
-    
+    paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
     for( var j = 0; j < 2*roi.peaks.length; ++j )
       paths[j+1] = "";
 
       
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
     for( var i = xstartind; i < xendind; ++i ) {
-      thisx = ((i===xstartind) ? roiLB : ((i===(xendind-1)) ? roiUB : (0.5*(points[i].x + points[i+1].x))));
+      thisx = 0.5*(points[i].x + points[i+1].x);
       thisy = self.offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
@@ -6136,25 +6282,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       paths[0] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
       
-      for( let j = 0; j < roi.peaks.length; ++j ) {
+      for( var j = 0; j < roi.peaks.length; ++j ) {
         m = roi.peaks[j].Centroid[0];
         s = roi.peaks[j].Width[0];
-        
-        if( labels && m>=points[i].x && m<points[i+1].x ) {
-          //This misses any peaks with means not on the chart
-          if( !labels[j] )
-            labels[j] = {};
-          //ToDo: optimize what we actually need in these objects
-          labels[j].xindex = i;
-          labels[j].roiPeakIndex = j;
-          labels[j].roi = roi;
-          labels[j].peak = roi.peaks[j];
-          labels[j].centroidXPx = self.xScale(m);
-          labels[j].centroidMinYPx = self.yScale(thisy);
-          labels[j].energy = m;
-          labels[j].userLabel = roi.peaks[j].userLabel;
-        }//if( the centroid of this peak is in this bin )
-        
         if( roi.peaks.length===1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
           if( !paths[j+1].length ){
             paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
@@ -6191,17 +6321,12 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
     var leftMostLineValue = [];
 
-    var minypx = self.size.height, maxypx = 0;
-    
     //Go from right to left drawing the peak lines that sit on the continuum.
     //  we will also 
     for( var xindex = xendind - 1; xindex >= xstartind; --xindex ) {
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
-      //thisx = 0.5*(points[xindex].x + points[xindex+1].x);
-      thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(points[xindex].x + points[xindex+1].x))));
-      
-      
+      thisx = 0.5*(points[xindex].x + points[xindex+1].x);
       cont_area = self.offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
@@ -6212,8 +6337,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       peakamplitudes[xindex][1] = thisx;
 
       roi.peaks.forEach( function(peak,peakn){
-        const ispeakcenter = (labels && labels[peakn] && labels[peakn].xindex===xindex);
-        
         if( peak.type === 'GaussianDefined' ){
           let area = gaus_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
           peak_area += area;
@@ -6223,15 +6346,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
           m = peak.Centroid[0];
           s = peak.Width[0];
-          
           if( roi.peaks.length==1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
             peakamplitudes[xindex][peakn+2] = area;
-            let yvalpx = self.yScale(cont_area + area);
-            minypx = Math.min(minypx,yvalpx);
-            maxypx = Math.max(maxypx,yvalpx);
-            if( ispeakcenter )
-              labels[peakn].centroidMaxYPx = yvalpx;
-            paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
+            paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + area);
             leftMostLineValue[peakn] = {x : thisx, y: cont_area};
           }else{
             peakamplitudes[xindex][peakn+2] = 0.0;
@@ -6239,17 +6356,15 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         } else if( peak.type === 'DataDefined' ) {
           let area = points[xindex].y - cont_area;
           peakamplitudes[xindex][peakn+2] = (area > 0 ? area : 0);
-          let yvalpx = self.yScale(cont_area + (area >= 0 ? area : 0.0));
-          minypx = Math.min(minypx,yvalpx);
-          maxypx = Math.max(maxypx,yvalpx);
-          if( ispeakcenter && labels[peakn] )
-            labels[peakn].centroidMaxYPx = yvalpx;
-          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
+          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(cont_area + (area >= 0 ? area : 0.0));
           leftMostLineValue[peakn] = {x : thisx, y: cont_area};
         } else {
           console.log( 'Need to implement peak.type==' + peak.type );
           return;
         }
+
+        
+        
       });
     }//for( go right to left over 'xindex' drawing peak outlines )
 
@@ -6281,23 +6396,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         var thisy = cont;
         for( var j = 2; j < peakindex; ++j )
           thisy += peakamps[j];
-          
-        let yvalpx = self.yScale(thisy);
-        let xvalpx = self.xScale(thisx);
-        minypx = Math.min(minypx,yvalpx);
-        maxypx = Math.max(maxypx,yvalpx);
-          
+
         if( !paths[peaknum+1].length ){
-          leftMostFillValue[peaknum] = { x: xvalpx, y: yvalpx };
-          paths[peaknum+1] = "M" + xvalpx + "," + yvalpx + " L";
+          leftMostFillValue[peaknum] = { x: self.xScale(thisx), y: self.yScale(thisy) };
+          paths[peaknum+1] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
         }else{
-          paths[peaknum+1] += " " + xvalpx + "," + yvalpx;
+          paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
         }
       } );
     });
 
-    //console.log( 'minypx=' + minypx + ', maxypx=' + maxypx + ' height=' + self.size.height );
-    
     //go right to left and draw the fill areas top
     peakamplitudes.reverse().forEach( function(peakamps,xindex){
       var cont = peakamps[0];
@@ -6326,10 +6434,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       if( leftMostFillValue[peaknum] && paths[peaknum+1].length )
         paths[peaknum+1] += " " + leftMostFillValue[peaknum].x + "," + leftMostFillValue[peaknum].y;
     }
-    
-    //console.log( 'roiPath labels=', labels );
-    
-    return {paths: paths, yRangePx: [minypx,maxypx], labelinfo: labels };
+
+    return paths;
   }/*function roiPath(roi) */
 
   function draw_roi(roi,specindex,spectrum) {
@@ -6356,13 +6462,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     let scaleFactor = spectrum.type !== self.spectrumTypes.FOREGROUND ? spectrum.yScaleFactor * 1.0 : 1.0;
     if (typeof scaleFactor === 'undefined' || scaleFactor === null) scaleFactor = 1.0;
 
-    var pathsAndRange = roiPath( roi, spectrum.points, spectrum.bgsubtractpoints, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
+    var paths = roiPath( roi, spectrum.points, spectrum.bgsubtractpoints, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
 
-    if( pathsAndRange.labelinfo )
-      Array.prototype.push.apply(labelinfo,pathsAndRange.labelinfo);
-    
     /* Draw label, set fill colors */
-    pathsAndRange.paths.forEach( function(p,num){
+    paths.forEach( function(p,num){
 
       /* - The first path will be an underline of entire ROI
          - The next roi.peaks.length entries are the fills for each of the peaks
@@ -6380,10 +6483,42 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       var path = self.peakVis.append("path").attr("d", p );
 
-      /* blah blah blah
-       Check on this unhiglightPeakFunc....
-       */
-      self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, pathsAndRange.paths);
+      var labels = [],
+          labelAlreadyAdded = false;
+
+      if (!self.peakLabelArray)                       /* This is a hack for gettng the correct highlighted peak to correspond with its label. */
+        self.peakLabelArray = [];                     /* Declare an array of tuples that have a corresponding peak DOM with a label text*/
+      if (!self.leftoverPeakLabels)
+        self.leftoverPeakLabels = [];
+
+      if (self.leftoverPeakLabels.length > 0) {                                                    /* If there are still leftover labels not corresponding with a peak, then it */
+        self.peakLabelArray.push( { "path": path, "label": self.leftoverPeakLabels.shift() } );  /* is the current peak's label */
+        labelAlreadyAdded = true;
+      }else{
+        for (let i = 0; i < roi.peaks.length; i++) {                                                      /* Draw a label for each peak inside an ROI, put it in the label vector */
+          var peak = roi.peaks[i],
+              label = self.drawPeakLabelCassowary(peak, path);
+          self.peakLabelData.push({
+                specindex: specindex,
+                path: path,
+                paths: paths,
+                roi: roi,
+                peak: peak,
+                lowerEnergy: roi.lowerEnergy,
+                upperEnergy: roi.upperEnergy,
+          });
+          if (label)
+            labels.push(label);
+        }//for (i = 0; i < roi.peaks.length; i++)
+      }
+
+      if (labels.length > 0 && !labelAlreadyAdded)                                  /* The first element inside the labels vector is the current peak's label */
+        self.peakLabelArray.push( { "path": path, "label": labels.shift() } );
+
+      self.leftoverPeakLabels = self.leftoverPeakLabels.concat(labels);         /* Any leftover peaks are put inside this array */
+
+      self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, paths);
+      self.highlightPeakFunc = self.highlightPeak.bind(self, null, null, paths, path); 
 
       function onRightClickOnPeak() {
         console.log("Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
@@ -6395,12 +6530,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       self.peakPaths.push({
             path: path,
-            paths: pathsAndRange.paths,
+            paths: paths,
             roi: roi,
             lowerEnergy: roi.lowerEnergy,
             upperEnergy: roi.upperEnergy,
-            yRangePx: pathsAndRange.yRangePx,
-            color: peakColor,
             isOutline: isOutline,
             isFill: isFill
       });
@@ -6417,28 +6550,31 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
         
       if( isOutline ){
-        path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, pathsAndRange.paths, roi, path) } )
+        path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, paths, roi, path) } )
             .on("mousemove", self.handleMouseMovePeak())
-            .on("touchend", self.highlightPeak.bind(self, null, null, pathsAndRange.paths, path))
-            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, pathsAndRange.paths); } );
+            .on("touchend", self.highlightPeak.bind(self, null, null, paths, path))
+            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, paths); } );
       }
       
 
       /* For right-clicking on a peak */
       path.on("contextmenu", onRightClickOnPeak);
-    });//pathsAndRange.paths.forEach( function(p,num){
+    });//paths.forEach( function(p,num){
 
-    
-    if( pathsAndRange.paths.length > 0 && roi.peaks.length > 1 ){
-      //Draw the continuum line for multiple peak ROIs
-      var path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );  //ToDo: is there a better way to draw a SVG path?
+    if( paths.length > 0 && roi.peaks.length > 1 ){
+      var path = self.peakVis.append("path").attr("d", paths[0] );  //ToDo: is there a better way to draw a SVG path?
       path.attr("class", "spectrum-peak-" + specindex)
           .attr("stroke-width",1)
           .attr("fill-opacity",0)
           .attr("stroke", spectrum.peakColor );
     }
+      
+
   };//function draw_roi(roi,specindex,spectrum)
 
+
+  self.peakPaths = [];
+  self.peakLabelData = [];
   for (let i = 0; i < this.rawData.spectra.length; i++) {
     let spectrumi = i;
     if (!this.rawData.spectra[i] || !this.rawData.spectra[i].peaks || !this.rawData.spectra[i].peaks.length)
@@ -6451,12 +6587,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       continue;
 
     this.rawData.spectra[i].peaks.forEach( function(roi){
-      //We test for self.roiBeingDrugUpdate below, even if self.roiIsBeingDragged is true, to make sure the server has
-      //  actually returned a updated ROI, and if it hasnt, we'll draw the original ROI.
-      //  This prevents to ROI disapearing after the user clicks down, but before they have moved the mouse.
-      if( self.roiIsBeingDragged && self.roiBeingDrugUpdate && roi == self.roiBeingDragged.roi )
+      if( self.roiIsBeingDragged && roi == self.roiBeingDragged )
       {
-        draw_roi(self.roiBeingDrugUpdate,i,self.rawData.spectra[spectrumi]);
+        if( self.roiBeingDrugUpdate )
+          draw_roi(self.roiBeingDrugUpdate,i,self.rawData.spectra[spectrumi]);
       }else
       {
         draw_roi(roi,i,self.rawData.spectra[spectrumi]);
@@ -6467,512 +6601,436 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( self.current_fitting_peak )
       draw_roi( self.current_fitting_peak, 0, self.rawData.spectra[0] /* foreground */ );
   }
-  
-  self.drawPeakLabels( labelinfo );
 }
 
-SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
+SpectrumChartD3.prototype.drawPeakLabelCassowary = function(peak,path) {
   var self = this;
-  
-  //console.log( "labelinfos=", labelinfos );
-  
-  /*
-   Order to do things:
-     - loop over input labels and draw them centered over peak.
-     - Make sure label highlight and un-highlight when moused over, and when peaks is moused over (search for 'self.peakLabelArray' to start on this)
-     - Implement overlap checking
-     - Remove all references to the cassowary library (in JS and C++)
-     - Start laying out the labels properly.
-     - Add user labels not associated with peaks.
-     - Add right click menu to edit label (both for non-peak labels, and normal labels)
-   */
-  
 
-  if( !labelinfos || labelinfos.length===0 )
-    return;
-    
-  if( !self.options.showUserLabels && !self.options.showPeakLabels && !self.options.showNuclideNames )
-    return null;
-    
-    
-  //if (!self.peakLabelArray){
-    /* This is a hack for getting the correct highlighted peak to correspond with its label. */
-    /* Declare an array of tuples that have a corresponding peak DOM with a label text */
-    //self.peakLabelArray = [];
-  //}
-    
-  var chart = self.peakVis;
-  var chartBox = d3.select("#chartarea"+self.chart.id)[0][0].getBBox();    /* box coordinates for the chart area */
+  if ( self.options.showUserLabels || self.options.showPeakLabels || self.options.showNuclideNames ) {
+      var chartBox = d3.select("#chartarea"+self.chart.id)[0][0].getBBox();    /* box coordinates for the chart area */
 
-  // Don't draw peak label if chart isn't set up yet
-  if( !chartBox.width || !chartBox.height )
-    return null;
-  
-  /*
-   labelinfos is an array of objects that look like:
-   {
-   centroidMaxYPx: 33.6
-   centroidMinYPx: 43.0
-   centroidXPx: 111.4
-   energy: 244.162
-   peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), …}
-   roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2), …}
-   roiPeakIndex: 0
-   userLabel: undefined
-   }
-   */
-  
-  for( let index = 0; index < labelinfos.length; ++index ){
-    let info = labelinfos[index];
-    if( !info || typeof(info)==='undefined' || !info.peak )
-      continue;
-    
-    let nuclide = info.peak.nuclide;
-  
-    //If we wont draw any text, just return now
-    //  (ToDo: I think this case has already been filetered out, check, and if so remove next lines)
-    if( !(self.options.showUserLabels && info.userLabel)
-        && !self.options.showPeakLabels
-        && !(self.options.showNuclideNames && nuclide) ){
-      continue;
-    }
-    
-    let peak_x = info.centroidXPx;
-    let peak_ly = info.centroidMinYPx;
-    let peak_uy = info.centroidMaxYPx;
-    if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined' )
-    {
-      console.log( 'Got peak_uy=' + peak_uy + ' for energy ' + info.energy, info );
-      continue;
-    }
-    
-    if( peak_ly===null || Number.isNaN(peak_ly) || typeof(peak_ly)==='undefined' )
-    {
-      console.log( 'Got peak_ly=' + peak_ly + ' for energy ' + info.energy, info );
-      continue;
-    }
-    
-    
-    let peakEnergy = info.energy.toFixed(2) + " keV";
-    
-    
-    var label, userLabel, peakEnergyLabel, nuclideNameLabel;
-    
-    /* Main label DOM */
-    label = chart.append("text");
-    label.attr('class', 'peaklabel')
-    .attr("text-anchor", "start")
-    .attr("x", peak_x)
-    .attr("y", peak_uy - 10 )
-    .attr("energy", peakEnergy);
-    
-    if( self.options.showUserLabels && info.userLabel ){
-      /* T-span element for the user label */
-      /* Gets priority for top-most text in label */
-      userLabel = label.append("tspan");
-      userLabel.attr("class", "userLabel")
-      .attr("dy", 0)
-      .attr("x", peak_x)
-      .text(info.userLabel);
-    }
-    
-    if( self.options.showPeakLabels ) {
-      /* T-span element for the peak label */
-      /* Gets second in priority for top-most text in label */
-      peakEnergyLabel = label.append("tspan");
-      peakEnergyLabel.attr("class", "peakEnergyLabel")
-      .attr("dy", userLabel ?  "1em" : 0)   /* If user label is not present, then this is the top-most element */
-      .attr("x", peak_x)
-      .text(peakEnergy);
-    }
-    
-    if( self.options.showNuclideNames && nuclide ) {
-      /* T-span element for nuclide label */
-      /* Third in priority for top-most text in label */
-      nuclideNameLabel = label.append("tspan");
-      nuclideNameLabel.attr("class", "nuclideLabel")
-      .attr("dy", self.options.showUserLabels && self.options.showPeakLabels ? "1em" : self.options.showUserLabels || self.options.showPeakLabels ?  "1em" : 0)
-      .attr("x", peak_x)
-      .text(nuclide.name);
-      
-      /* Nuclide energy label displayed only if nuclide name labels are displayed! */
-      if( self.options.showNuclideEnergies && info.nuclideEnergy )
-      nuclideNameLabel.text(nuclide.name + ", " + info.nuclideEnergy.toFixed(2).toString() + " keV" );
-    }
-  }//labelinfos.foreach(...)
-  
-  
-  return;
-  
-  self.solver = new c.SimplexSolver();        /* Initialize a default, new solver for each label creation */
-  var chart = self.peakVis;
-  //var pathNode = path.node();                 /* node for the peak element */
+      // Don't draw peak label if chart isn't set up yet
+      if (!chartBox.width || !chartBox.height)
+        return;
 
-  /* The path box coordinates are the box coordinates for the peak.
-     These are used for positioning the label properly with respect to the peak.
-  */
- 
+      self.solver = new c.SimplexSolver();        /* Initialize a default, new solver for each label creation */
+      var chart = self.peakVis;
+      var pathNode = path.node();                 /* node for the peak element */
 
-  /* Inequality constants for constraints */
-  var greaterThan = c.GEQ,
-      lessThan = c.LEQ;
+      /*
+      The path box coordinates are the box coordinates for the peak. These are used for positioning the label properly
+      with respect to the peak.
+      */
+      var pathX = pathNode.getBBox().x,
+          pathY = pathNode.getBBox().y,
+          pathBoxHeight = pathNode.getBBox().height,
+          pathBoxWidth = pathNode.getBBox().width,
+          pathBoxMiddle = (pathX + pathBoxWidth) / 2;
 
-  /* Strengths of constraints: These determine the prioirity of which constraints are given for a specific label.
-     A required constraint means it must be followed, or else a Constraint Error is thrown.
-     A strong constraint isn't required, but has priority over weaker constraints. (and so on for the weaker consraints.
-  */
-  var weak = c.Strength.weak,
-      medium = c.Strength.medium,
-      strong = c.Strength.strong,
-      required = c.Strength.required;
+      var peakEnergy = peak.Centroid[0].toFixed(2) + " keV";
+      var nuclide = peak.nuclide;
+      var userLabelText = peak.userLabel;
 
-  /* Create variable values for the Constraint Solver to handle. In particular, for centering each label at
-     the center of the peak, we want to capture the left-x value, the mid-point x-value, the width of the label,
-     and the middle x-value for the path box of a peak.
+      var label, userLabel, peakEnergyLabel, nuclideNameLabel;
 
-     Initially, we provided the starting coordiantes for the labels and initialized their values in their variable creation.
-     What we want to get in the end of adding all the constraints are different values for these positions so that the label placement
-     is exactly where we want it to be.
-  */
-  var labelLeftX = new c.Variable ( { value : pathX - 0.5*label.node().getBBox().width } ),                    /* Left coordinate for label */
-      labelRightY = new c.Variable ( { value : pathX + 0.5*label.node().getBBox().width } ),                   /* Right coordinate for label */
-      labelTopY = new c.Variable ( { value : label.node().getBBox().y } ),                                     /* Top coordinate for label */
-      labelBottomY = new c.Variable ( { value : label.node().getBBox().y + label.node().getBBox().height } ),  /* Bottom coordinate for label */
-      labelMid = new c.Variable( { value : pathX } ),                                                          /* Mid-point coordinate for label (in terms of x) */
-      labelHeight = new c.Variable( { value : label.node().getBBox().height } ),                               /* Height of label */
-      labelWidth = new c.Variable( { value : label.node().getBBox().width } ),                                 /* Width of label */
-      peakMid = new c.Variable( { value : pathX } );                                      /* Mid-point for the box for the peak element */
+      /* Main label DOM */
+      label = chart.append("text");
+      label.attr('class', 'peaklabel')
+        .attr("text-anchor", "start")
+        .attr("x", pathX)
+        .attr("y", pathY - 10 )
+        .attr("energy", peakEnergy);
 
-  var cle;  /* These are reusable variables for creating equations for constraints. */
+      if (self.options.showUserLabels) {                      /* T-span element for the user label */
+        if (userLabelText) {                                  /* Gets priority for top-most text in label */
+          userLabel = label.append("tspan");
+          userLabel.attr("class", "userLabel")
+            .attr("x", pathX)
+            .attr("dy", 0)
+            .text(userLabelText)
+            .style('font-size', '7.5px');
+        }
+      }
 
-  /* Christian:
+      if (self.options.showPeakLabels) {                      /* T-span element for the peak label */
+          peakEnergyLabel = label.append("tspan");            /* Gets second in priority for top-most text in label */
+          peakEnergyLabel.attr("class", "peakEnergyLabel")
+            .attr("x", pathX)
+            .attr("dy", userLabel ?  "1em" : 0)              /* If user label is not present, then this is the top-most element */
+            .text(peakEnergy)
+            .style('font-size', '7.5px');
+
+          /* if (userLabel) */
+          /*   peakEnergyLabel.attr("dx", -userLabel.node().getBBox().width/2); */
+      }
+
+      if (self.options.showNuclideNames && nuclide) {         /* T-span element for nuclide label */
+        nuclideNameLabel = label.append("tspan");             /* Third in priority for top-most text in label */
+        nuclideNameLabel.attr("class", "nuclideLabel")
+          .attr("x", pathX)
+          .attr("dy", self.options.showUserLabels && self.options.showPeakLabels ? "1em" : self.options.showUserLabels || self.options.showPeakLabels ?  "1em" : 0)
+          /* .attr("dx", -label.node().getBBox().width/2)                */
+          .text(nuclide.name)
+          .style('font-size', '7.5px');
+      }
+
+      if ( !userLabel && !peakEnergyLabel && !nuclideNameLabel) {      /* Do not display an label if the user label, peak label, or nuclide name label are not displayed */
+        label.remove();                                                     /* This means that although nuclide energy label option is selected, it is not displayed! */
+        return;
+      }
+
+      if (self.options.showNuclideEnergies && nuclide) {                    /* Nuclide energy label displayed only if nuclide name labels are displayed! */
+        if (self.options.showNuclideNames)
+          nuclideNameLabel.text(nuclide.name + ", " + nuclide.DecayGammaEnergy.toString() + " keV" );
+      }
+
+      /* Inequality constants for constraints */
+      var greaterThan = c.GEQ,
+          lessThan = c.LEQ;
+
+      /*
+      Strengths of constraints: These determine the prioirity of which constraints are given for a specific label.
+      A required constraint means it must be followed, or else a Constraint Error is thrown.
+      A strong constraint isn't required, but has priority over weaker constraints. (and so on for the weaker consraints.
+      */
+      var weak = c.Strength.weak,
+          medium = c.Strength.medium,
+          strong = c.Strength.strong,
+          required = c.Strength.required;
+
+      /*
+      Create variable values for the Constraint Solver to handle. In particular, for centering each label at 
+      the center of the peak, we want to capture the left-x value, the mid-point x-value, the width of the label,
+      and the middle x-value for the path box of a peak.
+
+      Initially, we provided the starting coordiantes for the labels and initialized their values in their variable creation.
+      What we want to get in the end of adding all the constraints are different values for these positions so that the label placement
+      is exactly where we want it to be.
+      */
+      var labelLeftX = new c.Variable ( { value : pathX } ),                                                       /* Left coordinate for label */
+          labelRightY = new c.Variable ( { value : pathX + label.node().getBBox().width } ),                       /* Right coordinate for label */
+          labelTopY = new c.Variable ( { value : label.node().getBBox().y } ),                                     /* Top coordinate for label */
+          labelBottomY = new c.Variable ( { value : label.node().getBBox().y + label.node().getBBox().height } ),  /* Bottom coordinate for label */
+          labelMid = new c.Variable( { value : (pathX + (label.node().getBBox().width) / 2) } ),                   /* Mid-point coordinate for label (in terms of x) */
+          labelHeight = new c.Variable( { value : label.node().getBBox().height } ),                               /* Height of label */
+          labelWidth = new c.Variable( { value : label.node().getBBox().width } ),                                 /* Width of label */
+          peakMid = new c.Variable( { value : pathX + (pathBoxWidth / 2) } );                                      /* Mid-point for the box for the peak element */
+
+      var cle;  /* These are reusable variables for creating equations for constraints. */
+
+      /*
+      Christian:
       The mid-point x-value of a peak and the width of the label will be staying constant throughout each added constraint.
       Add these constraints into the Constraint Solver.
-  */
-  /* mid-point of the box for the peak element stays constant (you're not moving the peak!) */
-  self.solver.addConstraint(new c.StayConstraint( peakMid, medium ) );
-  /* keep height constant */
-  self.solver.addConstraint(new c.StayConstraint( labelHeight, required  ) );
-  /* keep width constant */
-  self.solver.addConstraint(new c.StayConstraint( labelWidth, required  ) );
-  /* try to keep initial y-position constant (right above the peak) */
-  self.solver.addConstraint(new c.StayConstraint( labelTopY, weak ) );
+      */
+      self.solver.addConstraint(new c.StayConstraint( peakMid, required  ) );           /* mid-point of the box for the peak element stays constant (you're not moving the peak!) */
+      self.solver.addConstraint(new c.StayConstraint( labelHeight, required  ) );       /* keep height constant */
+      self.solver.addConstraint(new c.StayConstraint( labelWidth, required  ) );        /* keep width constant */
+      self.solver.addConstraint(new c.StayConstraint( labelTopY, weak ) );             /* try to keep initial y-position constant (right above the peak) */
 
 
-  /* Label assertions for the mid-point, width, and height values for a label.
-     These keep the internal size of a label consistent of what it currently is.
-  */
-  cle = c.plus(labelLeftX, c.divide(labelWidth, 2));
-  var labelMidPointAssertion = new c.Equation( labelMid, cle );      /* peak mean == mid-point */
 
-  cle = c.plus(labelLeftX, labelWidth);
-  var labelWidthAssertion = new c.Equation( labelRightY, cle );      /* left-x + width == right-x */
+      /*
+      Label assertions for the mid-point, width, and height values for a label. 
+      These keep the internal size of a label consistent of what it currently is.
+      */
+      cle = c.plus(labelLeftX, c.divide(labelWidth, 2));                   
+      var labelMidPointAssertion = new c.Equation( labelMid, cle );      /* Left-x + (width/2) == mid-point */
 
-  cle = c.plus(labelTopY, labelHeight);
-  var labelHeightAssertion = new c.Equation( labelBottomY, cle );    /* top-y + height == bottom-y */
+      cle = c.plus(labelLeftX, labelWidth);
+      var labelWidthAssertion = new c.Equation( labelRightY, cle );      /* left-x + width == right-x */
 
-  /* var original_area = labelHeight.value * labelWidth.values */
+      cle = c.plus(labelTopY, labelHeight);     
+      var labelHeightAssertion = new c.Equation( labelBottomY, cle );    /* top-y + height == bottom-y */
 
-  self.solver.addConstraint( labelMidPointAssertion );
-  self.solver.addConstraint( labelWidthAssertion );
-  self.solver.addConstraint( labelHeightAssertion );
+      /* var original_area = labelHeight.value * labelWidth.values */
 
-  /* Label position assertions.
-     These are added again to keep the size of the label consistent and accurate for collision detection with other elements.
-     For example, the bottom coordinate of a label is always equal to the top_coordinate + height.
-     Although many of these are obvious, it is important for consistency in collision detection.
-  */
-  self.solver.addConstraint( new c.Equation(labelTopY, c.minus(labelBottomY, labelHeight) ) );         /* labelTopY = labelBottomY - label height */
-  self.solver.addConstraint( new c.Equation(labelBottomY, c.plus(labelTopY, labelHeight) ) );          /* label bottom y = label top y + label height */
-  self.solver.addConstraint( new c.Equation(labelLeftX, c.minus(labelRightY, labelWidth) ) );          /* label left x = label right x - label width */
-  self.solver.addConstraint( new c.Equation(labelRightY, c.plus(labelLeftX, labelWidth) ) );           /* label right x = label left x + label width */
+      self.solver.addConstraint( labelMidPointAssertion );           
+      self.solver.addConstraint( labelWidthAssertion );
+      self.solver.addConstraint( labelHeightAssertion );
 
-  self.solver.addConstraint( new c.Equation(labelHeight, c.minus(labelBottomY, labelTopY) ) );         /* label height = labelBottomY - labelTopY */
-  self.solver.addConstraint( new c.Equation(labelWidth, c.minus(labelRightY, labelLeftX) ) );          /* label width = labelRightY - labelLeftX   */
-  self.solver.addConstraint( new c.Equation(labelMid, c.plus(labelLeftX, c.divide(labelWidth, 2) ) ) ); /* label mid-point = lable_leftX + (labelWidth/2) */
+      /*
+      Label position assertions. These are added again to keep the size of the label consistent and accurate for collision detection with other elements.
+      For example, the bottom coordinate of a label is always equal to the top_coordinate + height.
+      Although many of these are obvious, it is important for consistency in collision detection.
+      */
+      self.solver.addConstraint( new c.Equation(labelTopY, c.minus(labelBottomY, labelHeight) ) );         /* labelTopY = labelBottomY - label height */
+      self.solver.addConstraint( new c.Equation(labelBottomY, c.plus(labelTopY, labelHeight) ) );          /* label bottom y = label top y + label height */
+      self.solver.addConstraint( new c.Equation(labelLeftX, c.minus(labelRightY, labelWidth) ) );          /* label left x = label right x - label width */
+      self.solver.addConstraint( new c.Equation(labelRightY, c.plus(labelLeftX, labelWidth) ) );           /* label right x = label left x + label width */
 
-  self.solver.addConstraint( new c.Inequality( labelMid, greaterThan, labelLeftX ) );     /* mid-point coordinate > left coordinate */
-  self.solver.addConstraint( new c.Inequality( labelRightY, greaterThan, labelLeftX) );  /* right coordinate > left coordinate */
-  self.solver.addConstraint( new c.Inequality( labelBottomY, greaterThan, labelTopY ) ); /* bottom coordinate > top coordinate */
+      self.solver.addConstraint( new c.Equation(labelHeight, c.minus(labelBottomY, labelTopY) ) );         /* label height = labelBottomY - labelTopY */
+      self.solver.addConstraint( new c.Equation(labelWidth, c.minus(labelRightY, labelLeftX) ) );          /* label width = labelRightY - labelLeftX   */
+      self.solver.addConstraint( new c.Equation(labelMid, c.plus(labelLeftX, c.divide(labelWidth, 2) ) ) ); /* label mid-point = lable_leftX + (labelWidth/2) */
 
-  /* Label does not fall out of bounds - constraints */
-  /* Left coordinate does not fall out of bounds to the left */
-  self.solver.addConstraint( new c.Inequality(labelLeftX, greaterThan, 0) );
-  /* Top coordinate does not fall out of bounds from the top */
-  self.solver.addConstraint( new c.Inequality(labelTopY, greaterThan, self.padding.top*2) );
-  /* Right coordinate does not exceed right bounds of chart */
-  self.solver.addConstraint( new c.Inequality( labelRightY, lessThan, chartBox.x + chartBox.width ) );
-  /* Bottom coordinate does not exceed bottom bounds of chart */
-  self.solver.addConstraint( new c.Inequality( labelBottomY, lessThan, chartBox.y + chartBox.height ) );
-  /* Bottom coordinates does not fall out of bounds from the top */
-  self.solver.addConstraint( new c.Inequality(labelBottomY, greaterThan, self.padding.top*2) );
+      self.solver.addConstraint( new c.Inequality( labelMid, greaterThan, labelLeftX ) );     /* mid-point coordinate > left coordinate */
+      self.solver.addConstraint( new c.Inequality( labelRightY, greaterThan, labelLeftX) );  /* right coordinate > left coordinate */
+      self.solver.addConstraint( new c.Inequality( labelBottomY, greaterThan, labelTopY ) ); /* bottom coordinate > top coordinate */
 
-  /* self.solver.addConstraint( new c.Inequality( labelBottomY, lessThan, pathY, weak) );   /* bottom y for label is above peak box */
+      /* Label does not fall out of bounds - constraints */
+      self.solver.addConstraint( new c.Inequality(labelLeftX, greaterThan, 0) );                      /* Left coordinate does not fall out of bounds to the left */
+      self.solver.addConstraint( new c.Inequality(labelTopY, greaterThan, self.padding.top*2) );      /* Top coordinate does not fall out of bounds from the top */
+      self.solver.addConstraint( new c.Inequality( labelRightY, lessThan, chartBox.x + chartBox.width ) );        /* Right coordinate does not exceed right bounds of chart */
+      self.solver.addConstraint( new c.Inequality( labelBottomY, lessThan, chartBox.y + chartBox.height ) );      /* Bottom coordinate does not exceed bottom bounds of chart */
+      self.solver.addConstraint( new c.Inequality(labelBottomY, greaterThan, self.padding.top*2) );   /* Bottom coordinates does not fall out of bounds from the top */
+
+      /* self.solver.addConstraint( new c.Inequality( labelBottomY, lessThan, pathY, weak) );   /* bottom y for label is above peak box */
 
 
-  /* To align the label properly with the peak, we try to keep the mid-point x-coordinate of a label
-     aligned with the middle of the box for a peak element. To do this, we try to set the mid-point value
-     for the label equal to the mid-point value for a peak's box.
-  */
-  var labelMidAtPeakMid = new c.Equation(labelMid, peakMid, strong, 5);
-  self.solver.addConstraint( labelMidAtPeakMid );
+      /*
+      To align the label properly with the peak, we try to keep the mid-point x-coordinate of a label
+      aligned with the middle of the box for a peak element. To do this, we try to set the mid-point value
+      for the label equal to the mid-point value for a peak's box.
+      */
+      var labelMidAtPeakMid = new c.Equation(labelMid, peakMid, strong, 5)
+      self.solver.addConstraint( labelMidAtPeakMid );
 
-  var numberOfSamePeaks = 1,                       /* keeps track of the number of the same peak labels */
-      ypadding = 10,                                  /* y-padding between labels */
-      xpadding = 20;                                  /* x-padding between labels */
 
-  /* Returns true if another label overlaps the current label from the top. */
-  function overlapFromTop(topY, otherLabel) {
-    otherLabelSelect = d3.select(otherLabel);
+      var numberOfSamePeaks = 1,                       /* keeps track of the number of the same peak labels */
+          ypadding = 10,                                  /* y-padding between labels */
+          xpadding = 20;                                  /* x-padding between labels */
 
-    var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
-    var otherLabelBottomY = otherLabelTopY + otherLabel.getBBox().height;
-    return otherLabelTopY < topY && otherLabelBottomY >= topY;
-  }
-  
-  /* Returns true if another label overlaps the current label from the bottom. */
-  function overlapFromBottom(topY, bottomY, otherLabel) {
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
-    return otherLabelTopY > topY && otherLabelTopY <= bottomY;
-  }
-  
-  /* Returns true if another label overlaps the current label from the left side. */
-  function overlapFromLeftSide(leftX, rightX, otherLabel){
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
-    var otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width;
-    return otherLabelRightY >= leftX && otherLabelRightY <= rightX;
-  }
-  
-  /* Returns true if another label overlaps the current label from the right side. */
-  function overlapFromRightSide(leftX, rightX, otherLabel){
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
-    var otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width;
-    return otherLabelLeftX <= rightX && otherLabelLeftX >= leftX;
-  }
-  
-  /* Returns true if another label overlaps the current label directly. (Same left and top coordinates) */
-  function overlapDirectly(leftX, topY, otherLabel){
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
-    var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
-    return otherLabelTopY == topY && otherLabelLeftX == leftX;
-  }
-  
-  /* Returns true if another label overlaps the current label from anywhere. */
-  function overlap( leftX, rightX, topY, bottomY, otherLabel  ) {
-    var overlapFromSide = overlapFromLeftSide(leftX, rightX, otherLabel) || overlapFromRightSide(leftX, rightX, otherLabel);
+      /* Returns true if another label overlaps the current label from the top. */
+      function overlapFromTop(topY, otherLabel) {
+        otherLabelSelect = d3.select(otherLabel);
 
-    return (overlapFromTop(topY, otherLabel) && overlapFromSide) ||
+        var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
+        var otherLabelBottomY = otherLabelTopY + otherLabel.getBBox().height;
+        return otherLabelTopY < topY && otherLabelBottomY >= topY;
+      }
+      /* Returns true if another label overlaps the current label from the bottom. */
+      function overlapFromBottom(topY, bottomY, otherLabel) {
+        otherLabelSelect = d3.select(otherLabel);
+        var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
+        return otherLabelTopY > topY && otherLabelTopY <= bottomY;
+      }
+      /* Returns true if another label overlaps the current label from the left side. */
+      function overlapFromLeftSide(leftX, rightX, otherLabel){
+        otherLabelSelect = d3.select(otherLabel);
+        var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
+        var otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width;
+        return otherLabelRightY >= leftX && otherLabelRightY <= rightX;
+      }
+      /* Returns true if another label overlaps the current label from the right side. */
+      function overlapFromRightSide(leftX, rightX, otherLabel){
+        otherLabelSelect = d3.select(otherLabel);
+        var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
+        var otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width;
+        return otherLabelLeftX <= rightX && otherLabelLeftX >= leftX;
+      }
+      /* Returns true if another label overlaps the current label directly. (Same left and top coordinates) */
+      function overlapDirectly(leftX, topY, otherLabel){
+        otherLabelSelect = d3.select(otherLabel);
+        var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
+        var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
+        return otherLabelTopY == topY && otherLabelLeftX == leftX;
+      }
+      /* Returns true if another label overlaps the current label from anywhere. */
+      function overlap( leftX, rightX, topY, bottomY, otherLabel  ) {
+        var overlapFromSide = overlapFromLeftSide(leftX, rightX, otherLabel) || overlapFromRightSide(leftX, rightX, otherLabel);
+
+        return (overlapFromTop(topY, otherLabel) && overlapFromSide) || 
                (overlapFromBottom(topY, bottomY, otherLabel) && overlapFromSide) ||
                (overlapFromSide && topY == Number(otherLabelSelect.attr('y'))) ||
                overlapDirectly(leftX, topY, otherLabel);
-  }
-  
-  /* Adds a required inequality to the constraint solver. If an error is thrown and te required inequality cannot be added,
-    then the inequality is changed to have a "strong" strength
-  */
-  function addRequiredInequality( variable, inequality, value, otherLabel ) {
-    try {
-      self.solver.addConstraint( new c.Inequality( variable, inequality, value, required ), required );
-    } catch( e ) {
-      console.log("Failed to make a constraint 'required', so making it 'strong'. Constraint was for ", peakEnergy, " on ", otherLabel.textContent);
-      self.solver.addConstraint( new c.Inequality( variable, inequality, value, strong, 100 ), required );
-    }
-  }
-  
-  
-  /* Main function called for fixing the overlaps for a label. To sum up how this function works:
-     1. For each of the previous peaks drawn before this current label being drawn
+      }
+      /* Adds a required inequality to the constraint solver. If an error is thrown and te required inequality cannot be added,
+         then the inequality is changed to have a "strong" strength 
+      */
+      function addRequiredInequality( variable, inequality, value, otherLabel ) {
+        try { self.solver.addConstraint( new c.Inequality( variable, inequality, value, required ), required ); }
+        catch (e) { 
+          console.log("Failed to make a constraint 'required', so making it 'strong'. Constraint was for ", peakEnergy, " on ", otherLabel.textContent);
+          self.solver.addConstraint( new c.Inequality( variable, inequality, value, strong, 100 ), required ); 
+        }
+      }
+
+
+
+      /*
+      Main function called for fixing the overlaps for a label. To sum up how this function works:
+
+        1. For each of the previous peaks drawn before this current label being drawn
+
           a.  If that box for a peak overlaps the current label from the side (but have the same top-coordinate values)
             i)  Move the current label to the right and down
+
           b.  Else if the box for a peak overlaps the current label from the top and to the side
             i)  Move the current label down
+
           c.  Else if the box for a peak overlaps the current label from the bottom and to the side
             i)  Move the current label up.
-     2. For each of the previous labels drawn before this current label being drawn
+
+        2. For each of the previous labels drawn before this current label being drawn
+
           a.  If that other label overlaps the current label directly (same left and top coordiantes)
             i)  Move the current label down
+
           b.  Else if the other label overlaps the current label from the side, but the top coordinate values are the same
             i)  Move the current label to the right
             ii) Move the current label down
+
           c.  Else if the other label overlaps the current label from the side and the top
             i)  Move the current label down
+
           d.  Else if the other label overlaps the current label from the bottom and the side
             i)  Move the current label up
-  */
-  function fixOverlaps() {
-    var overlappedLabels = [];
+      */
+      function fixOverlaps() {
+        var overlappedLabels = [];
 
-    /* For overlapping peaks - not yet finsihed! */
-    self.peakVis.selectAll("path").each(function(d, i) {
-      var peak = d3.select(this),
-          peakBox = peak.node().getBBox();
+        /* For overlapping peaks - not yet finsihed! */
+        self.peakVis.selectAll("path").each(function(d, i) {
+          var peak = d3.select(this),
+              peakBox = peak.node().getBBox();
 
-      var peakLeftX =  peakBox.x,
-          peakRightX = peakLeftX + peakBox.width,
-          peakTopY = peakBox.y,
-          peakBottomY = peakTopY + peakBox.height;
+          var peakLeftX =  peakBox.x,
+              peakRightX = peakLeftX + peakBox.width,
+              peakTopY = peakBox.y,
+              peakBottomY = peakTopY + peakBox.height;
 
-      var peakOverlapsFromTop = overlapFromTop(labelTopY.value, peak.node()),
-          peakOverlapsFromBottom = overlapFromBottom(labelTopY.value, labelBottomY.value, peak.node()),
-          peakOverlapsFromSide = overlapFromLeftSide( labelLeftX.value, labelRightY.value, peak.node() )
-                                 || overlapFromRightSide(labelLeftX.value, labelRightY.value, peak.node()),
-          overlapping = overlap(labelLeftX.value, labelRightY.value, labelTopY.value, labelBottomY.value, peak.node());
+          var peakOverlapsFromTop = overlapFromTop(labelTopY.value, peak.node()),
+              peakOverlapsFromBottom = overlapFromBottom(labelTopY.value, labelBottomY.value, peak.node()),
+              peakOverlapsFromSide = overlapFromLeftSide( labelLeftX.value, labelRightY.value, peak.node() ) || 
+                                        overlapFromRightSide(labelLeftX.value, labelRightY.value, peak.node()),
+              overlapping = overlap(labelLeftX.value, labelRightY.value, labelTopY.value, labelBottomY.value, peak.node());
 
-      if( overlapping ) {
-        /* console.log(peakEnergy, " overlaps the peak ", peak.node()); */
+          if (overlapping) {
+            /* console.log(peakEnergy, " overlaps the peak ", peak.node()); */
 
-        if (peakOverlapsFromSide && labelTopY.value == peakTopY) {
-          /* console.log(otherLabel.textContent, " is overlapping ", text, " from side, so moving ", text, " down."); */
-          /* move label to the right */
-          addRequiredInequality( labelLeftX, greaterThan, peakRightX+xpadding, peak );
-          /* move label down */
-          addRequiredInequality( labelTopY, greaterThan, peakBottomY+ypadding, peak );
-        } else if( peakOverlapsFromTop && peakOverlapsFromSide ) {
-          /* console.log(otherLabel.textContent, " is overlapping ", text, " from top, so moving ", text, " down."); */
-          /* move label down */
-          addRequiredInequality( labelTopY, greaterThan, peakBottomY+ypadding, peak );
-        } else if( peakOverlapsFromBottom && peakOverlapsFromSide ) {
-          /* console.log(otherLabel.textContent, " is overlapping ", text, " from bottom, so moving ", text, " up."); */
-          /* move label up */
-          addRequiredInequality( labelBottomY, lessThan, peakTopY-ypadding, peak );
-        }
-      }
-    });
-
-    self.peakVis.selectAll("text").each(function(d, i){
-      otherLabel = d3.select(this).node();
-
-      if( otherLabel != label.node() && otherLabel.textContent == label.node().textContent ) {
-        /* delete duplicate labels */
-        /* removel label if overlapping directly and same text content */
-        if( !(self.options.showNuclideNames && !self.options.showPeakLabels && !self.options.showNuclideEnergies)
-             || overlapDirectly( labelLeftX.value, labelTopY.value, otherLabel) ) {
-          /* If showing only nuclide name, don't delete duplicates */
-          otherLabel.remove();
-        }
-        ++numberOfSamePeaks;
-      }else if( otherLabel != label.node() ) {
-        otherLabelSelect = d3.select(otherLabel);
-
-        var otherLabelLeftX =  Number(otherLabelSelect.attr('x')),
-            otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width,
-            otherLabelTopY = Number(otherLabelSelect.attr('y')),
-            otherLabelBottomY = otherLabelTopY + otherLabel.getBBox().height;
-
-        /* Get booleans for overlap from other label */
-        var otherLabelOverlapsFromTop = overlapFromTop(labelTopY.value, otherLabel),
-            otherLabelOverlapsFromBottom = overlapFromBottom(labelTopY.value, labelBottomY.value, otherLabel),
-            otherLabelOverlapsFromSide = overlapFromLeftSide( labelLeftX.value, labelRightY.value, otherLabel ) || overlapFromRightSide(labelLeftX.value, labelRightY.value, otherLabel),
-            directOverlap = overlapDirectly( labelLeftX.value, labelTopY.value, otherLabel),
-            overlapping = overlap(labelLeftX.value, labelRightY.value, labelTopY.value, labelBottomY.value, otherLabel);
-
-        if( overlapping ) {
-          overlappedLabels.push( otherLabel );
-
-          if( directOverlap ) {
-            addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
-          } else if( otherLabelOverlapsFromSide && labelTopY.value == otherLabelTopY ) {
-            /* console.log(otherLabel.textContent, " is overlapping ", text, " from side, so moving ", text, " down."); */
-            addRequiredInequality( labelLeftX, greaterThan, otherLabelRightY+xpadding, otherLabel );                         /* move label to the right */
-            addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
-          } else if( otherLabelOverlapsFromTop && otherLabelOverlapsFromSide ) {
-            /* console.log(otherLabel.textContent, " is overlapping ", text, " from top, so moving ", text, " down."); */
-            addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
-          } else if( otherLabelOverlapsFromBottom && otherLabelOverlapsFromSide ) {
-            /* console.log(otherLabel.textContent, " is overlapping ", text, " from bottom, so moving ", text, " up."); */
-            addRequiredInequality( labelBottomY, lessThan, otherLabelTopY-ypadding, otherLabel );                            /* move label up */
+            if (peakOverlapsFromSide && labelTopY.value == peakTopY) {
+              /* console.log(otherLabel.textContent, " is overlapping ", text, " from side, so moving ", text, " down."); */
+              addRequiredInequality( labelLeftX, greaterThan, peakRightX+xpadding, peak );                         /* move label to the right */
+              addRequiredInequality( labelTopY, greaterThan, peakBottomY+ypadding, peak );                         /* move label down */
+            }
+            else if (peakOverlapsFromTop && peakOverlapsFromSide) {
+              /* console.log(otherLabel.textContent, " is overlapping ", text, " from top, so moving ", text, " down."); */
+              addRequiredInequality( labelTopY, greaterThan, peakBottomY+ypadding, peak );                         /* move label down */
+            }
+            else if (peakOverlapsFromBottom && peakOverlapsFromSide) {
+              /* console.log(otherLabel.textContent, " is overlapping ", text, " from bottom, so moving ", text, " up."); */
+              addRequiredInequality( labelBottomY, lessThan, peakTopY-ypadding, peak );                            /* move label up */
+            }
           }
-          /* Do something with the font size here */
-          /* I tried increasing the font size as much as it can without hitting the other labels, but it seems that it keeps the font at 1vw here. */
-          /* self.solver.addConstraint( new c.Inequality( labelHeight, greaterThan, labelHeight.value + 2, strong ) );       /* label height > 1 */
-          /* self.solver.addConstraint( new c.Inequality( labelWidth, greaterThan, labelWidth.value + 2, strong ) );  */
-        }
+        });
+
+        self.peakVis.selectAll("text").each(function(d, i){
+          otherLabel = d3.select(this).node();
+
+          if (otherLabel != label.node() && otherLabel.textContent == label.node().textContent) {                           /* delete duplicate labels */
+
+                                                                                                                          /* removel label if overlapping directly and same text content */
+            if ( !(self.options.showNuclideNames && !self.options.showPeakLabels && !self.options.showNuclideEnergies) || overlapDirectly( labelLeftX.value, labelTopY.value, otherLabel) ) {
+              otherLabel.remove();                /* If showing only nuclide name, don't delete duplicates */
+
+            }
+            ++numberOfSamePeaks;
+          }
+          else if ( otherLabel != label.node() ) {
+            otherLabelSelect = d3.select(otherLabel);
+
+            var otherLabelLeftX =  Number(otherLabelSelect.attr('x')),
+                otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width,
+                otherLabelTopY = Number(otherLabelSelect.attr('y')),
+                otherLabelBottomY = otherLabelTopY + otherLabel.getBBox().height;
+
+            /* Get booleans for overlap from other label */
+            var otherLabelOverlapsFromTop = overlapFromTop(labelTopY.value, otherLabel),
+                otherLabelOverlapsFromBottom = overlapFromBottom(labelTopY.value, labelBottomY.value, otherLabel),
+                otherLabelOverlapsFromSide = overlapFromLeftSide( labelLeftX.value, labelRightY.value, otherLabel ) || overlapFromRightSide(labelLeftX.value, labelRightY.value, otherLabel),
+                directOverlap = overlapDirectly( labelLeftX.value, labelTopY.value, otherLabel),
+                overlapping = overlap(labelLeftX.value, labelRightY.value, labelTopY.value, labelBottomY.value, otherLabel);
+
+            if ( overlapping ) {
+              overlappedLabels.push( otherLabel );
+
+              if (directOverlap) {
+                addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
+              }
+              else if (otherLabelOverlapsFromSide && labelTopY.value == otherLabelTopY) {
+                /* console.log(otherLabel.textContent, " is overlapping ", text, " from side, so moving ", text, " down."); */
+                addRequiredInequality( labelLeftX, greaterThan, otherLabelRightY+xpadding, otherLabel );                         /* move label to the right */
+                addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
+              }
+              else if (otherLabelOverlapsFromTop && otherLabelOverlapsFromSide) {
+                /* console.log(otherLabel.textContent, " is overlapping ", text, " from top, so moving ", text, " down."); */
+                addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
+              }
+              else if (otherLabelOverlapsFromBottom && otherLabelOverlapsFromSide) {
+                /* console.log(otherLabel.textContent, " is overlapping ", text, " from bottom, so moving ", text, " up."); */
+                addRequiredInequality( labelBottomY, lessThan, otherLabelTopY-ypadding, otherLabel );                            /* move label up */
+              }
+              /* Do something with the font size here */
+              /* I tried increasing the font size as much as it can without hitting the other labels, but it seems that it keeps the font at 1vw here. */
+              /* self.solver.addConstraint( new c.Inequality( labelHeight, greaterThan, labelHeight.value + 2, strong ) );       /* label height > 1 */
+              /* self.solver.addConstraint( new c.Inequality( labelWidth, greaterThan, labelWidth.value + 2, strong ) );  */
+
+            }
+          }
+          return overlappedLabels;
+        });
       }
-      
-      return overlappedLabels;
-    });
-  }//function fixOverlaps()
 
-  var overlappedLabels = fixOverlaps();
-  // fixOverlaps();          /* can uncomment to run fixOverlaps twice, which may optimize how the labels overlap, with the sacrifice for performance */
+      var overlappedLabels = fixOverlaps();
+      /* fixOverlaps();          /* can uncomment to run fixOverlaps twice, which may optimize how the labels overlap, with the sacrifice for performance */
 
-  /* Return label back to its original style.
-    This means:
+      /*
+      Return label back to its original style.
+      This means:
         - Label gets unbolded (if it was already bolded)
         - Label z-index goes back to default instead of being shown at the very top.
         - If an arrow/line is shown from the label to its corresponding peak, then that line/arrow is deleted.
-  */
-  function normalizeLabel(labelToNormalize) {
-    /* Return label back to original style on mouse-out. */
-    d3.select(labelToNormalize ? labelToNormalize : this)
-      .style('z-index', 0)
-      .style('cursor', 'default')
-      .attr('stroke', 'none')
-      .attr('font-weight', null);
+      */
+      function normalizeLabel(labelToNormalize) {                     /* Return label back to original style on mouse-out. */
 
-    /* delete the pointer line from the label to the peak */
-    if( self.peakLabelLine ) {
-      self.peakLabelLine.remove();
-      self.peakLabelLine = null;
-    }
-  }//function normalizeLabel(...)
+            d3.select(labelToNormalize ? labelToNormalize : this)
+              .style('z-index', 0)
+              .style('cursor', 'default')
+              .attr('stroke', 'none')
+              .attr('font-weight', null);
 
-  /* Highlight a selected label.
-     This means:
+            /* delete the pointer line from the label to the peak */
+            if (self.peakLabelLine) {
+              self.peakLabelLine.remove();
+              self.peakLabelLine = null;
+            }
+        }
+
+      /*
+      Highlight a selected label.
+      This means:
         - Label becomes bold
         - Label's z-index goes to very top (so that the whole text is shown)
         - A line is drawn from the label to its corresponding peak
-  */
-  function highlightLabel() {
-    if( !self.dragging_plot ) {
-      /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
-      if( self.labelToNormalize )
-        normalizeLabel(self.labelToNormalize);
+      */
+      function highlightLabel() {
+            if ( !self.dragging_plot ) {                          /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
+              if ( self.labelToNormalize )
+                normalizeLabel(self.labelToNormalize);
 
-      d3.select(this)
-        .style('cursor', 'default')
-        .attr('stroke', 'black')
-        .attr('font-weight', 'bold')
-        .attr("z-index", 100);
+              d3.select(this)
+                .style('cursor', 'default')
+                .attr('stroke', 'black')
+                .attr('font-weight', 'bold')
+                .attr("z-index", 100);
 
-      var x1, x2, y1, y2;
+              var x1, x2, y1, y2;
 
-      if( labelLeftX.value > peakMid.value ) {
-        x1 = labelLeftX.value;
-      } else if( labelRightY.value < peakMid.value ) {
-        x1 = labelRightY.value;
-      } else {
-        x1 = labelMid.value;
-      }
+              if ( labelLeftX.value > peakMid.value ) { x1 = labelLeftX.value; }
+              else if ( labelRightY.value < peakMid.value ) {  x1 = labelRightY.value; }
+              else { x1 = labelMid.value; }
 
-      /* label heights are sometimes 1, mostly 18 --> look into the constraints why */
-      if( labelBottomY.value < pathY ) {
-        /* if label is on top of peak */
-        y1 = labelBottomY.value - (self.options.showNuclideNames && self.options.showNuclideEnergies ? 12 : 0);
-      } else if( labelTopY.value > (pathY + pathBoxHeight) ) {
-        /* if label is on bottom of peak */
-        /* To give some space between label and line */
-        y1 = labelTopY.value - 12;
-      }else
-      {
-        if( Math.abs(labelTopY.value - pathY) > Math.abs(labelTopY.value - pathY - pathBoxHeight) ){
-          y1 = labelTopY.value - 12;
-        }else{
-          y1 = labelBottomY.value - (self.options.showNuclideNames && self.options.showNuclideEnergies ? 12 : 0);
-        }
-      }
-              
-      x2 = pathX;
-      y2 = pathY-2 + 0.5*pathBoxHeight;  //peakinfo.centroidMinYPx  peakinfo.centroidMaxYPx
+              /* label heights are sometimes 1, mostly 18 --> look into the constraints why */
+              if ( labelTopY.value > pathY && labelBottomY.value > pathY ) {  y1 = labelTopY.value+(labelHeight.value - 10);  }    /* if label is under peak */
+              else {  y1 = labelBottomY.value-labelHeight.value + (self.options.showNuclideNames && self.options.showNuclideEnergies ? 10 : 0);  }
+                                                                      /* To give some space between label and line */
 
-      /* Here I am trying to draw an arrow marker for the line from the label to a peak */
-      /*
-        if (!self.peakLabelArrow)
-          self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
+              x2 = pathX + pathBoxWidth/2; 
+              y2 = pathY-2;
+
+               /* Here I am trying to draw an arrow marker for the line from the label to a peak */
+               if (!self.peakLabelArrow)
+                self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
                               .attr("id", "triangle")
                               .attr('class', 'peaklabelarrow')
                               .attr('viewbox', "0 -5 10 10")
@@ -6985,46 +7043,50 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
                                 .attr("d", "M 0 0 20 6 0 12 3 6")
                                 .attr("transform", "scale(0.4,0.4)")
                                 .style("stroke", "black");
-*/
-               
-      self.peakLabelLine = self.peakVis.append('line')
+
+              self.peakLabelLine = self.peakVis.append('line')
                             .attr('class', 'peaklabelarrow')
                             .attr('x1', x1)
                             .attr('y1', y1)
                             .attr('x2', x2)
                             .attr('y2', y2)
                             .attr("marker-end", "url(#triangle)");
-    }
 
-    self.labelToNormalize = this;
-  }//function highlightLabel()
 
-  label.attr("x", labelLeftX.value)
-       .attr("y", labelTopY.value)
-  /* Set the font-size here */
-  /* .style("font-size", ((labelWidth.value * labelHeight.value) / original_area) + "vw") */
-       .on("mouseover", highlightLabel)
-       .on("mouseout",  normalizeLabel);
+            } 
 
-  if( self.isTouchDevice() )
-    label.on("touchstart", highlightLabel);
+            self.labelToNormalize = this;
+          }
 
-  if( userLabel )
-    userLabel.attr("x", labelLeftX.value);
-  if( peakEnergyLabel )
-    peakEnergyLabel.attr("x", labelLeftX.value);
-  if( nuclideNameLabel )
-    nuclideNameLabel.attr("x", labelLeftX.value);
+      label
+        .attr("x", labelLeftX.value)
+        .attr("y", labelTopY.value)
 
-  return label;
-  
-  /* Possible algorithm: Get list of all text nodes. Have a new array of grouped text nodes by overlapped text labels. This array will hold an array
+        /* Set the font-size here */
+        /* .style("font-size", ((labelWidth.value * labelHeight.value) / original_area) + "vw") */
+
+        .on("mouseover", highlightLabel)
+        .on("mouseout",  normalizeLabel);
+
+      if (self.isTouchDevice())
+          label.on("touchstart", highlightLabel);
+
+      if (userLabel)
+        userLabel.attr("x", labelLeftX.value);
+      if (peakEnergyLabel)
+        peakEnergyLabel.attr("x", labelLeftX.value);
+      if (nuclideNameLabel)
+        nuclideNameLabel.attr("x", labelLeftX.value);
+  }
+
+    return label;
+
+      /* Possible algorithm: Get list of all text nodes. Have a new array of grouped text nodes by overlapped text labels. This array will hold an array 
          of grouped nodes, and once this array has been created and filled, start doing stuff with it. Specifically, replace all those labels with something like
          "5 peaks from 100-200 kEV". Individual nodes will just be outputted normally ("500 kEV"). However, user may lose some information when zoomed all the
          way out of the graph. They would have to zoom-in further to see the peaks.
-  */
-}//SpectrumChartD3.prototype.drawPeakLabels = ...
-
+      */  
+}
 
 /* Sets whether or not peaks are highlighted */
 SpectrumChartD3.prototype.setShowPeaks = function(spectrum,show) {
@@ -7306,6 +7368,186 @@ SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
   d3.select("#createPeakMouseText").remove();
 }
 
+// Christian [05262018]: Function hook for real-time peak fitting implementation.
+//  Otherwise, nothing happens.
+SpectrumChartD3.prototype.runRealTimePeakFit = function() {
+  var self = this;
+
+  if ( typeof peakFit === 'undefined' ) {
+    console.warn('Peak fit not found, canceling peak fitting.');
+    return;
+  }
+  
+  /*Get the initial energy the user 'clicked-down on' */
+  var x0_energy = self.zoominx0;
+  /* var y0_energy = self.zoominy0; */
+  
+  /*Get the current energy the mouse is at */
+  var x_energy = self.peakFitTouchMove.length == 0 ? self.xScale.invert(d3.mouse(self.vis[0][0])[0]) : self.xScale.invert(rightTouch[0]);
+  /*var y_counts = self.xScale.invert(mouse_pos_px[1]); */
+  
+  console.log( "x0_energy=" + x0_energy + ", x_energy=" + x_energy );
+  
+  /*Make sure x0_energy is less than x_energy */
+  if( x0_energy > x_energy )
+    x_energy = [x0_energy, x0_energy = x_energy][0];
+  
+  var need_redraw_on_cancel = !!self.current_fitting_peak;
+  self.current_fitting_peak = null;
+
+  if ( self.options.allowPeakFit ) {
+    /*Get rid of currently fit peak  */
+    self.current_fitting_peak = null;
+    
+    /*Get the bins for the range we're fitting */
+    var foreground = self.rawData.spectra[0];
+    var bisector = d3.bisector(function(d){return d;}); 
+    var lbin = bisector.left(foreground.x, x0_energy);
+    var rbin = bisector.right(foreground.x, x_energy);
+    
+    if( rbin < (foreground.x.length - 2) )
+      rbin += 1;
+    
+    /*Make sure we have at least a few bins   */
+    if( rbin < (lbin + 4) ){
+      console.log( 'Not enough bins yet: ' + (rbin - lbin) );
+      if( need_redraw_on_cancel )     
+        self.redraw()();
+      return;
+    }
+                    
+    /*Now get the actual energy range we are fitting (the lowere energy of left  */
+    /*  bin, and upper energy of right bin) */
+    var lbin_lower_energy = foreground.x[lbin];
+    var rbin_upper_energy = foreground.x[rbin + 1];  /*FIXME: +1 will cause problem for last bin... */
+    
+    /*The polynomial continuum should be evalueated relative to a reference energy. */
+    /*  Lets pick the middle of the ROI for this. */
+    var roi_ref_energy = 0.5*(rbin_upper_energy + lbin_lower_energy); 
+    
+    /*Get the actual counts in the bins.  Note that energies is one longer than */
+    /*  counts, so you can can access the end of the fitting range. */
+    var energies = foreground.x.slice(lbin,rbin+1); /*FIXME: +1 dangerous on last bin! */
+    var counts = foreground.y.slice(lbin,rbin);
+    
+    /*Here is where you would fit for your peaks.  As an example, I make a linear */
+    /*  continuum based on first/last bin height (to provide an example of how  */
+    /*  InterSpec defines the continuum as a density per keV, hence you have to  */
+    /*  integrate over a bins width to get the bins continuum height), and then */
+    /*  add a peak with an amplitude equal to the difference between the continuum */
+    /*  area, and the actual data area.  */
+
+    
+    /*A function to get linear continuum coeficients using the hights of the first */
+    /*  and last bin - this is only an example function!  do not use in real code, */
+    /*  it can fail in many ways. */
+    /*Function assumes xvals has one more element than the range to be fitted, and  */
+    /*  yvals has exactly the number of bins to be fitted */
+    function linear_eqn_from_first_last_data( xvals, yvals, refenergy ) {
+      var x1 = xvals[0];
+      var dx1 = xvals[1] - x1;
+      
+      var x2 = xvals[xvals.length-2];
+      var dx2 = xvals[xvals.length-1] - x2;
+      
+      x1 -= refenergy;
+      x2 -= refenergy;
+    
+      var y1 = yvals[0];
+      var y2 = yvals[yvals.length-1];
+
+      var c = (2.0*x2*dx2 + dx2*dx2)/(2.0*x1*dx1 + dx1*dx1);
+      var b = (y2-y1*c)/(dx2-dx1*c);
+      var m = 2.0*(y1-b*dx1)/(2.0*x1*dx1+dx1*dx1);
+      
+      return [b,m];
+    };
+
+    function gaus_integral(mean, width, amp, x0, x1) {
+        var peak_mean = mean, peak_sigma = width, peak_amplitude = amp;
+          /*peak.LandauAmplitude, peak.LandauMode, peak.LandauSigma, */
+        var sqrt2 = 1.414213562373095;
+        var erflowarg = (x0-peak_mean)/(sqrt2*peak_sigma);
+        var erfhigharg = (x1-peak_mean)/(sqrt2*peak_sigma);
+        return peak_amplitude * 0.5 * (erf(erfhigharg) - erf(erflowarg));
+    };
+
+    function erf(x) {
+        /*http:/*stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function */
+        var sign = (x >= 0) ? 1 : -1; /* save the sign of x */
+        x = Math.abs(x);
+        var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027
+            a5 = 1.061405429, p  = 0.3275911;
+        var t = 1.0/(1.0 + p*x);
+        var y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+        return sign * y; /* erf(-x) = -erf(x); */
+    };
+
+    var fit = peakFit.run(numeric.sub(energies, roi_ref_energy), counts);
+    var params = fit.params;
+    var polyd = fit.polyd;
+    var peakchi2 = fit.chi2;
+    var numPeaks = (params.length - (polyd + 1)) / 3;
+    var sumdata = counts.reduce(function(a,b){return a+b;}, 0);
+    var continuumCoefs = params.slice(0,polyd+1);
+
+    var poly_type;
+    switch (polyd) {
+      case 0: poly_type = 'Constant'; break;
+      case 1: poly_type = 'Linear'; break;
+      case 2: poly_type = 'Quadratic'; break;
+      case 3: poly_type = 'Cubic'; break;
+    }
+
+    let partial_roi = {
+      lowerEnergy: lbin_lower_energy,
+      upperEnergy: rbin_upper_energy,
+      referenceEnergy: roi_ref_energy,
+      coeffs: continuumCoefs
+    };
+
+    var sumcontinuum = self.offset_integral( partial_roi, lbin_lower_energy, rbin_upper_energy);
+
+    self.current_fitting_peak =  { 
+        type: poly_type,                       /*options for you are are: 'NoOffset', 'Constant', 'Linear', 'Quardratic', 'Cubic' */
+        lowerEnergy: lbin_lower_energy,
+        upperEnergy: rbin_upper_energy,
+        referenceEnergy: roi_ref_energy,
+        coeffs: continuumCoefs,  /*Linear should have 2 coeficients, Quadratic 3, Cubic 4, constant 1 */
+        coeffUncerts:[0,0],                  /*you can put in actual values of uncertainties here */
+        fitForCoeff: Array.apply(null, Array(polyd + 1)).map(function(){return true}), /*Same number of entries as coeffs; each entry should be true for now  */
+        peaks:[]
+    };
+
+    for (var i=polyd+1; i<params.length; i+=3) {
+      var peakamp = Math.abs(sumdata - sumcontinuum);
+      var gausmean = params[i+1] + roi_ref_energy;
+      var peaksigma = Math.abs(params[i+2]);
+      var gaus_sum = 0;
+      for (var j=0; j<counts.length; j++) {
+        var x0 = energies[j];
+        var x1 = energies[j+1];
+        gaus_sum += gaus_integral(gausmean, peaksigma, peakamp, x0, x1);
+      }
+      peakamp = Math.abs(gaus_sum - sumcontinuum);
+      self.current_fitting_peak.peaks.push({
+          type:'GaussianDefined',
+          skewType:'NoSkew',
+          Centroid:[gausmean,0,true],        /*second element is uncertainty, third alsways true */
+          Width:[peaksigma,0.00431738,true], /*second element is uncertainty, third alsways true */
+          Amplitude:[peakamp,0,true],        /*second element is uncertainty, third alsways true */
+          LandauAmplitude:[0,-1,false],      /*always this value */
+          LandauMode:[0,-1,false],           /*always this value */
+          LandauSigma:[0,-1,false],          /*always this value */
+          Chi2:[peakchi2,-1,false],          /*second and third elemtn always 1 and false          */
+          forCalibration:false,              /*always this value */
+          forSourceFit:false,                /*always this value */
+          sourceType:'NotSpecified'          /*always this value  */
+          }
+      );
+    }
+  }
+}
 
 SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   var self = this;
@@ -7347,6 +7589,7 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   }
 
   // Do real-time peak fit rendering
+  self.runRealTimePeakFit();
 
   self.redraw()();
 }
@@ -7799,7 +8042,6 @@ SpectrumChartD3.prototype.handleCancelMousePeakFit = function() {
   this.fittingPeak = null;
   this.current_fitting_peak = null;
   this.erasePeakFitReferenceLines();
-  this.cancelYAxisScalingAction();
   this.redraw()();
 }
 
@@ -7834,25 +8076,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       ymax = self.size.height;
 
   /* Do not update feature markers if legend being dragged or energy value is undefined */
-  if ((t && self.legdown) || isNaN(energy))
+  if ((t && self.legdown) || (t && self.scalerdown) || isNaN(energy))
     return;
   if (self.currentlyAdjustingSpectrumScale)
     return;
 
   var cursorIsOutOfBounds = (t && t.length > 0) ? (t[0][0] < 0 || t[0][0] > xmax) : (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
 
-  
-  let axiscolor = 'black', txtcolor = 'black';
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
-  const titleElement = document.querySelector('.xaxistitle');
-  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
-  
-  //Spacing between lines of text
-  let linehspace = 13;
 
   /* Mouse-edge Helpers: These are global helpers for feature markers that update the mouse edge position.
   */
@@ -7891,21 +8121,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
     /* Update the mouse edge and corresponding text position  */
     if ( self.mouseEdge ) {
         self.mouseEdge
-          .attr("stroke", axiscolor)
           .attr("x1", m[0])
-          .attr("x2", m[0])
-          .attr("y2", self.size.height);
+          .attr("x2", m[0]);
         self.mouseEdgeText
-          .attr( "fill", txtcolor )
-          .attr( "y", self.size.height/4)
-          .attr( "x", m[0] + xmax/125 )
+          .attr("x", m[0] + xmax/125 )
           .text( energy.toFixed(1) + " keV");
     } else {  
         /* Create the mouse edge (and text next to it) */
         self.mouseEdge = self.vis.append("line")
           .attr("class", "mouseLine")
           .attr("stroke-width", 2)
-          .attr("stroke", axiscolor)
+          .attr("stroke", "black")
           .attr("x1", m[0])
           .attr("x2", m[0])
           .attr("y1", 0)
@@ -7913,13 +8139,10 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         self.mouseEdgeText = self.vis.append("text")
           .attr("class", "mouseLineText")
-          .attr( "fill", txtcolor )
           .attr( "x", m[0] + xmax/125 )
           .attr( "y", self.size.height/4)
           .text( energy.toFixed(1) + " keV");
     }
-    
-    self.mouseEdge.attr("stroke", axiscolor);
   }
 
 
@@ -8036,22 +8259,19 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if( !self.singleEscapeForward && singleEscapeForwardEnergy >= 0 ) {  
         self.singleEscapeForward = self.vis.append("line")    /* create single forward escape line */
         .attr("class", "escapeLineForward")
-        .attr("stroke", axiscolor)
         .attr("x1", singleEscapeForwardPix)
         .attr("x2", singleEscapeForwardPix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
       self.singleEscapeForwardText = self.vis.append("text") /* create Single Forward Escape label beside line */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
             .text( "Single Escape" );
       self.singleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/5.3 + linehspace)
+            .attr( "y", self.size.height/4.5)
             .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
       } else {
         if ( singleEscapeForwardEnergy < 0 && self.singleEscapeForward && self.singleEscapeForwardText && self.singleEscapeForwardMeas ) {
@@ -8059,17 +8279,11 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         } else if ( self.singleEscapeForward ) {      /* Move everything to where mouse is */
           self.singleEscapeForward
-            .attr("stroke", axiscolor)
-            .attr("y2", self.size.height)
             .attr("x1", singleEscapeForwardPix)
             .attr("x2", singleEscapeForwardPix);
           self.singleEscapeForwardText
-            .attr( "fill", txtcolor )
-            .attr( "y", self.size.height/5.3)
-            .attr( "x", singleEscapeForwardPix + xmax/200 );
+            .attr("x", singleEscapeForwardPix + xmax/200 );
           self.singleEscapeForwardMeas
-            .attr( "fill", txtcolor )
-            .attr( "y", self.size.height/5.3 + linehspace)
             .attr( "x", singleEscapeForwardPix + xmax/125 )
             .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
         }
@@ -8080,22 +8294,19 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if( !self.doubleEscapeForward && doubleEscapeForwardEnergy >= 0 ) {  
         self.doubleEscapeForward = self.vis.append("line")    /* create double forward escape line */
         .attr("class", "escapeLineForward")
-        .attr("stroke", axiscolor)
         .attr("x1", doubleEscapeForwardPix)
         .attr("x2", doubleEscapeForwardPix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
       self.doubleEscapeForwardText = self.vis.append("text") /* create double Forward Escape label beside line */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
             .text( "Double Escape" );
       self.doubleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under double Escape label */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/5.3 + linehspace)
+            .attr( "y", self.size.height/4.5)
             .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
       } else {
         if ( doubleEscapeForwardEnergy < 0 && self.doubleEscapeForward && self.doubleEscapeForwardText && self.doubleEscapeForwardMeas ) {
@@ -8103,18 +8314,12 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         } else if ( self.doubleEscapeForward ) {      /* Move everything to where mouse is */
           self.doubleEscapeForward
-            .attr("stroke", axiscolor)
-            .attr("y2", self.size.height)
             .attr("x1", doubleEscapeForwardPix)
             .attr("x2", doubleEscapeForwardPix);
           self.doubleEscapeForwardText
-            .attr( "fill", txtcolor )
-            .attr( "y", self.size.height/5.3)
             .attr("x", doubleEscapeForwardPix + xmax/200 );
           self.doubleEscapeForwardMeas
-            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/5.3 + linehspace)
             .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
         }
       }
@@ -8127,22 +8332,19 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
     if( !self.singleEscape && singleEscapeEnergy >= 0 ) {  
       self.singleEscape = self.vis.append("line")    /* create single escape line */
       .attr("class", "peakLine")
-      .attr("stroke", axiscolor)
       .attr("x1", singleEscapePix)
       .attr("x2", singleEscapePix)
       .attr("y1", 0)
       .attr("y2", self.size.height);
     self.singleEscapeText = self.vis.append("text") /* create Single Escape label beside line */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
           .text( "Single Escape" );
     self.singleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
+          .attr( "y", self.size.height/4.5)
           .text( singleEscapeEnergy.toFixed(1) + " keV" );
     } else {
       if ( singleEscapeEnergy < 0 && self.singleEscape && self.singleEscapeText && self.singleEscapeMeas ) {
@@ -8155,18 +8357,12 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
       } else if ( self.singleEscape ) {      /* Move everything to where mouse is */
         self.singleEscape
-          .attr("stroke", axiscolor)
-          .attr("y2", self.size.height)
           .attr("x1", singleEscapePix)
           .attr("x2", singleEscapePix);
         self.singleEscapeText
-          .attr( "fill", txtcolor )
-          .attr( "y", self.size.height/5.3)
-          .attr( "x", singleEscapePix + xmax/200 );
+          .attr("x", singleEscapePix + xmax/200 );
         self.singleEscapeMeas
-          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
           .text( singleEscapeEnergy.toFixed(1) + " keV" );
       }
     }
@@ -8180,22 +8376,20 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       self.doubleEscape = self.vis.append("line")  /* create double escape line */
       .attr("class", "peakLine")
       .attr("stroke-width", 2)
-      .attr("stroke", axiscolor)
+      .attr("stroke", "black")
       .attr("x1", doubleEscapePix)
       .attr("x2", doubleEscapePix)
       .attr("y1", 0)
       .attr("y2", self.size.height);
     self.doubleEscapeText = self.vis.append("text") /* create Double Escape label beside line */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
           .text( "Double Escape" );
     self.doubleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Double Escape label */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
+          .attr( "y", self.size.height/4.5)
           .text( doubleEscapeEnergy.toFixed(1) + " keV" );
     } else {
       if ( (doubleEscapeEnergy < 0) && self.doubleEscape && self.doubleEscapeText && self.doubleEscapeMeas ) {
@@ -8209,15 +8403,11 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       } else if ( self.doubleEscape ) {    /* Move everything to where mouse is */
 
         self.doubleEscape
-          .attr("stroke", axiscolor)
-          .attr("y2", self.size.height)
           .attr("x1", doubleEscapePix)
           .attr("x2", doubleEscapePix);
         self.doubleEscapeText
-          .attr( "fill", txtcolor )
           .attr("x", doubleEscapePix + xmax/200 );
         self.doubleEscapeMeas
-          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/125 )
           .text( doubleEscapeEnergy.toFixed(1) + " keV" );
       }
@@ -8260,31 +8450,37 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       self.comptonPeak = self.vis.append("line")
         .attr("class", "peakLine")
         .attr("stroke-width", 2)
-        .attr("y1", 0);
+        .attr("stroke", "black")
+        .attr("x1", comptonPeakPix)
+        .attr("x2", comptonPeakPix)
+        .attr("y1", 0)
+        .attr("y2", self.size.height);
       self.comptonPeakText = self.vis.append("text")
         .attr("class", "peakText")
-        .attr( "y", self.size.height/10);
+        .attr( "x", comptonPeakPix + xmax/200 )
+        .attr( "y", self.size.height/10)
+        .text( self.options.comptonPeakAngle + "° Compton Peak" );
       self.comptonPeakMeas = self.vis.append("text")
         .attr("class", "peakText")
-        .attr( "y", self.size.height/10 + linehspace);
-    }
-    
-    self.comptonPeak
-        .attr("stroke", axiscolor)
-        .attr("y2", self.size.height)
-        .attr("x1", comptonPeakPix)
-        .attr("x2", comptonPeakPix);
-      
-    self.comptonPeakText
-        .attr( "fill", txtcolor )
-        .attr( "x", comptonPeakPix + xmax/200 )
-        .text( self.options.comptonPeakAngle + "° Compton Peak" )
-        
-    self.comptonPeakMeas
-        .attr( "fill", txtcolor )
         .attr( "x", comptonPeakPix + xmax/125 )
+        .attr( "y", self.size.height/7.8)
         .text( comptonPeakEnergy.toFixed(1) + " keV" );
-    
+    } else {
+      /* update the compton peak edge line */
+      self.comptonPeak
+        .attr("x1", comptonPeakPix)
+        .attr("x2", comptonPeakPix)
+        .attr("y1", 0)
+        .attr("y2", self.size.height);
+      self.comptonPeakText
+        .attr("x", comptonPeakPix + xmax/200 )
+        .attr( "y", self.size.height/10)
+        .text( self.options.comptonPeakAngle + "° Compton Peak" );
+      self.comptonPeakMeas
+        .attr( "x", comptonPeakPix + xmax/125 )
+        .attr( "y", self.size.height/7.8)
+        .text( comptonPeakEnergy.toFixed(1) + " keV" );
+    }
     updateMouseEdge();
   }
 
@@ -8321,30 +8517,36 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       /* draw compton edge line here */
       self.comptonEdge = self.vis.append("line")
         .attr("class", "peakLine")
-        .attr("stroke-width", 2);
-      self.comptonEdgeText = self.vis.append("text")
-        .attr("class", "peakText")
-        .text( "Compton Edge" );
-      self.comptonEdgeMeas = self.vis.append("text")
-        .attr("class", "peakText");
-    }
-    
-    self.comptonEdge
-        .attr("stroke", axiscolor)
+        .attr("stroke-width", 2)
+        .attr("stroke", "black")
         .attr("x1", compEdgePix)
         .attr("x2", compEdgePix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
-    self.comptonEdgeText
-        .attr( "fill", txtcolor )
+      self.comptonEdgeText = self.vis.append("text")
+        .attr("class", "peakText")
+        .attr( "x", compEdgePix + xmax/200 )
+        .attr( "y", self.size.height/22)
+        .text( "Compton Edge" );
+      self.comptonEdgeMeas = self.vis.append("text")
+        .attr("class", "peakText")
+        .attr( "x", compEdgePix + xmax/125 )
+        .attr( "y", self.size.height/14)
+        .text( compedge.toFixed(1) + " keV" );
+    } else {
+      self.comptonEdge
+        .attr("x1", compEdgePix)
+        .attr("x2", compEdgePix)
+        .attr("y1", 0)
+        .attr("y2", self.size.height);
+      self.comptonEdgeText
         .attr("x", compEdgePix + xmax/200 )
         .attr("y", self.size.height/22);
-    self.comptonEdgeMeas
-        .attr( "fill", txtcolor )
+      self.comptonEdgeMeas
         .attr( "x", compEdgePix + xmax/125 )
-        .attr( "y", self.size.height/22 + linehspace)
+        .attr( "y", self.size.height/14)
         .text( compedge.toFixed(1) + " keV" );
-    
+    }
     updateMouseEdge();
   }
 
@@ -8453,29 +8655,35 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if (clickedEdgeOutOfBounds) {
         self.savedClickEnergy = clickedEnergy;
         deleteClickedPeakMarker();
+      }
+      else if( !self.clickedPeak ) {
+        /* draw compton edge line here */
+        self.clickedPeak = self.vis.append("line")
+          .attr("class", "peakLine")
+          .attr("stroke-width", 2)
+          .attr("stroke", "black")
+          .attr("x1", clickedEdgePix)
+          .attr("x2", clickedEdgePix)
+          .attr("y1", 0)
+          .attr("y2", self.size.height)
+          .attr("energy", clickedEnergy);
+        self.clickedPeakMeas = self.vis.append("text")
+          .attr("class", "peakText")
+          .attr( "x", clickedEdgePix + xmax/125 )
+          .attr( "y", self.size.height/4)
+          .text( clickedEnergy.toFixed(1) + " keV" );
       } else {
-        if( !self.clickedPeak ){
-          /* draw compton edge line here */
-          self.clickedPeak = self.vis.append("line")
-              .attr("class", "peakLine")
-              .attr("stroke-width", 2);
-          self.clickedPeakMeas = self.vis.append("text")
-              .attr("class", "peakText");
-        }
-        
 
         self.clickedPeak
-            .attr("stroke", axiscolor)
-            .attr("x1", clickedEdgePix)
-            .attr("x2", clickedEdgePix)
-            .attr("y1", 0)
-            .attr("y2", self.size.height)
-            .attr("energy", clickedEnergy);
+          .attr("x1", clickedEdgePix)
+          .attr("x2", clickedEdgePix)
+          .attr("y1", 0)
+          .attr("y2", self.size.height)
+          .attr("energy", clickedEnergy);
         self.clickedPeakMeas
-            .attr( "fill", txtcolor )
-            .attr( "x", clickedEdgePix + xmax/125 )
-            .attr( "y", self.size.height/4)
-            .text( clickedEnergy.toFixed(1) + " keV" );
+          .attr( "x", clickedEdgePix + xmax/125 )
+          .attr( "y", self.size.height/4)
+          .text( clickedEnergy.toFixed(1) + " keV" );
       }
     }  
 
@@ -8485,14 +8693,18 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       if ( !self.sumPeakHelpText ) {
         /* create the sum peak help text */
         self.sumPeakHelpText = self.vis.append("text")
-            .attr("class", "peakText")
-            .attr("fill", "red")
-            .text( "Click to set sum peak first energy." );
-      }
-      
-      self.sumPeakHelpText
+          .attr("class", "peakText")
+          .attr("fill", "red")
           .attr( "x", m[0] + xmax/125 )
           .attr( "y", self.size.height/3.5)
+              .text( "Click to set sum peak first energy." );
+      } else {
+        /* update the sum peak help text position */
+        self.sumPeakHelpText
+          .attr( "x", m[0] + xmax/125 )
+          .attr( "y", self.size.height/3.5)
+      }
+
     } else {
         /* delete sum peak help text */
         if ( self.sumPeakHelpText ) {
@@ -8510,33 +8722,41 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
         /* draw left-sum peak line here */
         self.leftSumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2);
+          .attr("stroke-width", 2)
+          .attr("stroke", "black")
+          .attr("x1", leftSumPix)
+          .attr("x2", leftSumPix)
+          .attr("y1", 0)
+          .attr("y2", self.size.height);
         self.leftSumPeakText = self.vis.append("text")
           .attr("class", "peakText")
+          .attr( "x", leftSumPix + xmax/200 )
+          .attr( "y", self.size.height/3.4)
           .text( "Clicked Peak" );
         self.leftSumPeakMeas = self.vis.append("text")
-          .attr("class", "peakText");
-      }
-      
-      /* update the left sum peak line here */
-      self.leftSumPeak
-          .attr("stroke", axiscolor)
+          .attr("class", "peakText")
+          .attr( "x", leftSumPix + xmax/125 )
+          .attr( "y", self.size.height/3.0)
+          .text( energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV" );
+      } else {
+        /* update the left sum peak line here */
+        self.leftSumPeak
           .attr("x1", leftSumPix)
           .attr("x2", leftSumPix)
           .attr("y1", 0)
           .attr("y2", self.size.height); 
-      self.leftSumPeakText
-          .attr( "fill", txtcolor )
+        self.leftSumPeakText
+          .attr("class", "peakText")
           .attr( "x", leftSumPix + xmax/125 )
           .attr( "y", self.size.height/3.4);
-      self.leftSumPeakMeas
-          .attr( "fill", txtcolor )
+        self.leftSumPeakMeas
           .attr( "x", leftSumPix + xmax/125 )
-          .attr( "y", self.size.height/3.4 + linehspace)
+          .attr( "y", self.size.height/3.0)
           .text( energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV" );
+        }
 
-      if( leftSumOutOfBounds )
-        deleteLeftSumPeakMarker();
+        if (leftSumOutOfBounds)
+          deleteLeftSumPeakMarker();
 
     } else
       deleteLeftSumPeakMarker();
@@ -8559,31 +8779,43 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
         /* draw sum peak line here */
         self.sumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2);
-      self.sumPeakText = self.vis.append("text")
-          .attr("class", "peakText")
-          .text( "Sum Peak" );
-      }
-      
-      if( !self.sumPeakMeas )
-        self.sumPeakMeas = self.vis.append("text")
-                .attr("class", "peakText");
-
-      self.sumPeak
-          .attr("stroke", axiscolor)
+          .attr("stroke-width", 2)
+          .attr("stroke", "black")
           .attr("x1", sumPix)
           .attr("x2", sumPix)
           .attr("y1", 0)
           .attr("y2", self.size.height);
-      self.sumPeakText
-          .attr( "fill", txtcolor )
+      self.sumPeakText = self.vis.append("text")
+          .attr("class", "peakText")
+          .attr( "x", sumPix + xmax/200 )
+          .attr( "y", self.size.height/4)
+          .text( "Sum Peak" );
+      self.sumPeakMeas = self.vis.append("text")
+          .attr("class", "peakText")
+          .attr( "x", sumPix + xmax/125 )
+          .attr( "y", self.size.height/3.7)
+          .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
+      } else {
+        if (!self.sumPeakMeas)
+          self.sumPeakMeas = self.vis.append("text")
+                .attr("class", "peakText")
+                .attr( "x", sumPix + xmax/125 )
+                .attr( "y", self.size.height/3.7)
+                .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
+
+        self.sumPeak
+          .attr("x1", sumPix)
+          .attr("x2", sumPix)
+          .attr("y1", 0)
+          .attr("y2", self.size.height);
+        self.sumPeakText
           .attr( "x", sumPix + xmax/125 )
           .attr( "y", self.size.height/4);
-      self.sumPeakMeas
-          .attr( "fill", txtcolor )
+        self.sumPeakMeas
           .attr( "x", sumPix + xmax/125 )
-          .attr( "y", self.size.height/4 +  + linehspace)
+          .attr( "y", self.size.height/3.7)
           .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
+      }
     }
   }
 
@@ -8655,7 +8887,7 @@ SpectrumChartD3.prototype.setHighlightRegions = function(ranges) {
     self.highlightRegions = null;
     self.vis.selectAll("g.highlight").remove(); //drawHighlightRegions() returns immediatelt if self.highlightRegions is null.
   } else {
-    //ToDo add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
+    //ToDo: add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
     self.highlightRegions = ranges;
     self.highlightRegions.sort( function(l,r){ return l.lowerEnergy < r.lowerEnergy }  )
   }
@@ -9245,9 +9477,8 @@ SpectrumChartD3.prototype.handleMouseUpZoomInY = function () {
           maxY = 3000;
 
         } else {                                  /* Get the min, max y values from the data */
-          let ydomain = self.getYAxisDomain();
-          minY = ydomain[1];
-          maxY = ydomain[0];
+          minY = self.getYAxisDomain()[1];
+          maxY = self.getYAxisDomain()[0];
         }
 
         /* Set the values for the new y-domain */
@@ -9526,29 +9757,17 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   var recalibrationPeakVis = d3.select("#recalibrationPeakVis");
 
   /* Set the line that symbolizes where user initially began right-click-and-drag */
-  //.mouseLine      { font-size: 0.8em; stroke-width: 2; }
-  //.secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
-  
-  //ToDo: get exiscolor
-  let axiscolor = 'black'
   if (recalibrationStartLine.empty()) {
-    
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-    
     recalibrationStartLine = self.vis.append("line")
       .attr("id", "recalibrationStartLine")
       .attr("class", "mouseLine")
       .attr("x1", self.recalibrationMousePos[0])
       .attr("x2", self.recalibrationMousePos[0])
       .attr("y1", 0)
-      .attr("y2", self.size.height)
-      .attr("stroke",axiscolor);
+      .attr("y2", self.size.height);
   }
 
   if (recalibrationText.empty()) {                       /* Right-click-and-drag text to say where recalibration ranges are */
-    //ToDo: make sure this text same color as chart text.  Also, put on translucent background
     recalibrationText = self.vis.append("text")
       .attr("id", "recalibrationText")
       .attr("class", "mouseLineText")
@@ -9560,15 +9779,14 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
     recalibrationText.text( "Recalibrate data from " + self.xScale.invert(recalibrationStartLine.attr("x1")).toFixed(2) + " to " + self.xScale.invert(self.lastMouseMovePos[0]).toFixed(2) + " keV" )
   
 
-  // Draw the distance lines from the right-click-and-drag line to mouse position
-/*
+  /* Draw the distance lines from the right-click-and-drag line to mouse position */
   if (!self.recalibrationDistanceLines) {
     var distanceLine;
     self.recalibrationDistanceLines = [];
 
     var lineSpacing = self.size.height / 5;
 
-    //Create 4 lines that draw from the right-click-and-drag initial starting point to where the mouse is
+    /* Create 4 lines that draw from the right-click-and-drag initial starting point to where the mouse is */
     for (i = 0; i < 4; i++) {
       distanceLine = self.vis.append("line")
                             .attr("class", "secondaryMouseLine")
@@ -9576,7 +9794,8 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
                             .attr("x2", self.lastMouseMovePos[0])
                             .attr("y1", lineSpacing)
                             .attr("y2", lineSpacing);
-       //This is to add the the arrowhead end to the distance lines
+
+      /* This is to add the the arrowhead end to the distance lines */
       var arrow = self.vis.append('svg:defs')
         .attr("id", "recalibrationArrowDef")
         .append("svg:marker")
@@ -9597,47 +9816,43 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       lineSpacing += self.size.height / 5;
     }
 
-  } else {    // Distance lines have already been drawn
+  } else {    /* Distance lines have already been drawn */
     for (i = 0; i < self.recalibrationDistanceLines.length; i++) {
       var x2 = self.lastMouseMovePos[0];
 
-      // If mouse position is to the left of the right-click-and-drag line
+      /* If mouse position is to the left of the right-click-and-drag line */
       if (self.lastMouseMovePos[0] < recalibrationStartLine.attr("x1")) {
-        self.recalibrationDistanceLines[i].attr("x2", x2);     //Adjust the x-position of the line
+        self.recalibrationDistanceLines[i].attr("x2", x2);     /* Adjust the x-position of the line */
 
-        d3.selectAll("#rightClickDragArrow > path").each(function(){            //Flip the arrowhead to face towards the negative x-axis
+        d3.selectAll("#rightClickDragArrow > path").each(function(){            /* Flip the arrowhead to face towards the negative x-axis */
           d3.select(this).attr("transform", "translate(8,14) rotate(180)");
         });
       }
       else {
-        //To adjust for the length of the line with respect to its arrowhead
+        /* To adjust for the length of the line with respect to its arrowhead */
         if (self.recalibrationDistanceLines[i].attr("x2") > 0)
-          x2 -= 8;  //Minus 8 to account for the arrow width connected to the line
+          x2 -= 8;  /* Minus 8 to account for the arrow width connected to the line */
         else
           x2 = 0;
 
-        // Adjust the x-position of the line
+        /* Adjust the x-position of the line */
         self.recalibrationDistanceLines[i].attr("x2", x2);
 
-        // Un-flip the arrowhead (if it was flipped) back to pointing towards the positive x-axis
+        /* Un-flip the arrowhead (if it was flipped) back to pointing towards the positive x-axis */
         d3.selectAll("#rightClickDragArrow > path").each(function(){
           d3.select(this).attr("transform", null);
         });
       }
     }
   }
- */
 
   /* Draw the line to represent the mouse position for recalibration */
   if (recalibrationMousePosLines.empty())
     recalibrationMousePosLines = self.vis.append("line")
       .attr("id", "recalibrationMousePosLines")
+      .attr("class", "lightMouseLine")
       .attr("y1", 0)
-      .attr("y2", self.size.height)
-      .attr("stroke",axiscolor)
-      .style("opacity", 0.75)
-      .attr("stroke-width",0.5);
-      ;
+      .attr("y2", self.size.height);
    
   /* Update the mouse position line for recalibration */
   recalibrationMousePosLines.attr("x1", self.lastMouseMovePos[0])
@@ -9741,14 +9956,12 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
   });
 
   /* Remove the right-click-and-drag end-point line */
-  /*
   if (self.recalibrationDistanceLines) {
     for (i = 0; i < self.recalibrationDistanceLines.length; i++) {
       self.recalibrationDistanceLines[i].remove();
     }
     self.recalibrationDistanceLines = null;
   }
-   */
 
   /* Remove the right-click-and-drag mouse line */
   recalibrationMousePosLines.remove();
@@ -10548,10 +10761,10 @@ SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
 /**
  * -------------- Peak Info and Display Functions --------------
  */
-SpectrumChartD3.prototype.handleMouseOverPeak = function(peakElem, d, peak, paths, roi, path) {
+SpectrumChartD3.prototype.handleMouseOverPeak = function(peakElem, d, peakIndex, paths, roi, path) {
   var self = this;
-  console.log( 'handleMouseOverPeak' );
-  self.highlightPeak(peakElem, peak, paths, path);
+console.log( 'handleMouseOverPeak' );
+  self.highlightPeak(peakElem, peakIndex, paths, path);
   // self.displayPeakInfo(info, d3.event.x);
 }
 
@@ -10634,20 +10847,9 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const area = peak.Amplitude[0].toFixed(1);
   const areaUncert = peak.Amplitude[1].toFixed(1);
 
-  let nuc = null;
-  if( peak.nuclide && peak.nuclide.name ){
-    //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", DecayGammaEnergy: 1408.01}
-    nuc = peak.nuclide.name + " (";
-    if( peak.nuclide.decayParent !== peak.nuclide.name )
-      nuc = nuc + peak.nuclide.decayParent + ", ";
-    if( peak.nuclide.DecayGammaEnergy )
-      nuc = nuc + peak.nuclide.DecayGammaEnergy.toFixed(2) + " keV";
-    nuc = nuc + ")";
-  }
-  
 
   const contArea = self.offset_integral(roi,lowerEnergy, upperEnergy).toFixed(1);
-  
+
   const info = {
     mean: mean, 
     fwhm: fwhm, 
@@ -10657,7 +10859,6 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
     areaUncert: areaUncert, 
     contArea: contArea, 
     spectrumIndex: spectrumIndex,
-    nuclide: nuc
   };
   return info;
 }
@@ -10717,46 +10918,30 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
 
   self.hidePeakInfo();
 
-  let boxy = areMultipleSpectrumPeaksShown ? -7.1 : -6.1;
-  let boxheight = areMultipleSpectrumPeaksShown ? 6.5 : 5.5;
-  if( info.nuclide ){
-    boxy -= 1;
-    boxheight += 1;
-  }
-  
   self.peakInfo = self.vis.append("g")
     .attr("class", "peakInfo")
     .attr("transform","translate(" + self.size.width + "," + (self.size.height - 40) + ")");
 
   var rect = self.peakInfo.append('rect')
     .attr("class", "peakInfoBox")
-    .attr('height', boxheight + "em")
+    .attr('height', areMultipleSpectrumPeaksShown ? "6.5em" : "5.5em")
     .attr('x', "-14em")
-    .attr('y', boxy + "em")
+    .attr('y', areMultipleSpectrumPeaksShown ? "-7.1em" : "-6.1em")
     .attr('rx', "5px")
     .attr('ry', "5px");
 
   var text = self.peakInfo.append("g")
     .append("text")
     .attr("dy", "-2em");
-  
-  if( info.nuclide ){
-    text.append("tspan")
-        .style('font-weight', "normal")
-        .attr('x', "-13.5em")
-        .attr('dy', "-1em")
-        .text( info.nuclide );
-  }
-    
+
   createPeakInfoText(text, "cont. area", info.contArea);
   createPeakInfoText(text, "peak area", info.area + String.fromCharCode(0x00B1) + info.areaUncert);
   createPeakInfoText(text, String.fromCharCode(0x03C7) + "2/dof", info.chi2);
   createPeakInfoText(text, "FWHM", info.fwhm + " keV (" + info.fwhmPerc + "%)");
   createPeakInfoText(text, "mean", info.mean + " keV");
-  
   if (areMultipleSpectrumPeaksShown)
     createPeakInfoText(text, "Spectrum", self.rawData.spectra[info.spectrumIndex].title);
-    
+
   const width = text.node().getBoundingClientRect().width + 10; // + 10 for padding right
   rect.attr('width', width);
 
@@ -10775,11 +10960,8 @@ SpectrumChartD3.prototype.hidePeakInfo = function() {
   self.peakInfo = null;
 }
 
-
 SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, path) {
   var self = this;
-  
-  //peakIndex is either the peak, or null... it looks like.
 
   if (self.zooming_plot)
     return;
@@ -10787,16 +10969,17 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
   if (self.highlightedPeak)
     self.unhighlightPeak(0, self.highlightedPeak, paths);
 
+  var thePeak = peakElem;
   if (d3.event == null || d3.event.touches) {
-    if (!peakElem /*|| peakElem.attr("fill-opacity") != 0.6 */ ){
+    if (!thePeak /*|| thePeak.attr("fill-opacity") != 0.6 */ ){
        console.log( 'Here 0' );
       return;
     }
   }
 
-  var thePeakSelected = d3.select(peakElem);
+  var thePeakSelected = d3.select(thePeak);
   if (Array.isArray(thePeakSelected[0][0])) 
-    thePeakSelected = peakElem;
+    thePeakSelected = thePeak;
 
   if (self.leftMouseDown || self.rightClickDown)
     return;
@@ -10806,8 +10989,7 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
   //    thePeakSelected.attr("fill-opacity",0.8);
   //  else
   //    thePeakSelected.attr("stroke-width",2).attr("fill-opacity",0.8);
-    if( thePeakSelected )
-      thePeakSelected.attr("stroke-width",2);
+    thePeakSelected.attr("stroke-width",2);
   } else {
     //if (paths.length === 2) 
     //  peakIndex.attr("fill-opacity",0.8);
@@ -10816,25 +10998,18 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
     peakIndex.attr("stroke-width",2);
   }
 
-  if (thePeakSelected[0].parentNode) {
-    /* if the 'peakElem' pointer is the path for the peak, then declare the highlighted peak to be that */
-    self.highlightedPeak = peakElem;
-  } else if (peakIndex) {
+  if (thePeakSelected[0].parentNode) {    /* if the 'peakElem' pointer is the path for the peak, then declare the highlighted peak to be that */
+    self.highlightedPeak = thePeak;
+  } else if (peakIndex)
     self.highlightedPeak = peakIndex;
-  }
-  
-  //peakPaths
-  //blah blah blah
-  for (i = 0; i < self.peakLabelArray && self.peakLabelArray.length; i++){
-    if( self.peakLabelArray[i].path === (peakIndex ? peakIndex : path) ) {
-      self.peakLabelArray[i]
-          .label
-          .attr('stroke', 'black')
-          .attr("z-index", 100);
+
+  for (i = 0; i < self.peakLabelArray.length; i++)
+    if (self.peakLabelArray[i].path === (peakIndex ? peakIndex : path)) {
+      self.peakLabelArray[i].label.attr('stroke', 'black')
+        .attr("z-index", 100);
       self.highlightedLabel = self.peakLabelArray[i].label;
     }
-  }//
-}//SpectrumChartD3.prototype.highlightPeak = ...
+}
 
 SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) {
   var self = this;
@@ -10930,6 +11105,139 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   });
 }
 
+
+/**
+ * -------------- Color Picker Functions --------------
+ */
+SpectrumChartD3.prototype.initializeColorPicker = function() {
+  var self = this;
+
+  if (!self.colorPickerTable) {
+    self.colorPickerTable = document.createElement('table');
+    self.colorPickerTable.id = 'color-picker-table';
+    self.colorPickerTable.style.marginTop = '10px';
+  }
+
+  document.body.appendChild(self.colorPickerTable);
+}
+
+SpectrumChartD3.prototype.setEnableColorPicker = function(enable) {
+  var self = this;
+
+  self.options.enableColorPicker = enable;
+
+  if (!enable) self.destroyColorPicker();
+  else {
+    self.initializeColorPicker();
+    self.updateColorPickerItems();
+  }
+}
+
+SpectrumChartD3.prototype.updateColorPickerItems = function() {
+  var self = this;
+
+  if (!self.options.enableColorPicker) return;
+
+  d3.selectAll('.colorPickerItem').remove();
+
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return;
+
+  const div = d3.select('#color-picker-table');
+  let colorTester, color;
+  let lineColorInput, peakColorInput;
+  
+  self.rawData.spectra.forEach(function(spectrum, index) {
+    let row = div.append('tr')
+      .attr('class', 'colorPickerItem');
+
+    let item = row.append('td').attr('align', 'right');
+
+    // Get the hex-computed line color 
+    colorTester = document.createElement('div');
+    colorTester.style.color = spectrum.lineColor;
+    document.body.appendChild(colorTester)
+    color = window.getComputedStyle(colorTester).color;
+    colorTester.remove();
+
+    // Add labels and input for line color
+    item.append('label')
+      .attr('for', 'spec-' + index + '-line')
+      .style('margin-right', '10px')
+      .text(spectrum.title + ' Line Color:');
+
+    lineColorInput = item.append('input')
+      .attr('id', 'spec-' + index + '-line')
+      .attr('type', 'color')
+      .attr('value', self.getRGBToHexColor(color))
+      .style('margin-right', '10px');
+
+    // Get the hex-computed peak color 
+    colorTester = document.createElement('div');
+    colorTester.style.color = spectrum.peakColor;
+    document.body.appendChild(colorTester)
+    color = window.getComputedStyle(colorTester).color;
+    colorTester.remove();
+
+    item = row.append('td').attr('align', 'right');
+
+    // Add labels and input for peak color
+    item.append('label')
+      .attr('for', 'spec-' + index + '-peak')
+      .style('margin-right', '10px')
+      .text(spectrum.title + ' Peak Color:');
+
+    peakColorInput = item.append('input')
+      .attr('id', 'spec-' + index + '-peak')
+      .attr('type', 'color')
+      .attr('value', self.getRGBToHexColor(color));
+
+
+    // Set on-change listeners for the input fields
+    lineColorInput.node().onchange = function(e) { self.handleChangeSpectrumLineColor(spectrum, index, e.target.value) };
+    peakColorInput.node().onchange = function(e) { self.handleChangeSpectrumPeakColor(spectrum, index, e.target.value) };
+  });
+}
+
+SpectrumChartD3.prototype.destroyColorPicker = function() {
+  var self = this;
+
+  if (self.colorPickerTable) self.colorPickerTable.remove();
+  self.colorPickerTable = null;
+}
+
+SpectrumChartD3.prototype.handleChangeSpectrumLineColor = function(spectrum, index, color) {
+  var self = this;
+
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) return;
+
+  let line;
+ 
+  spectrum.lineColor = color;
+
+  // Update the data line on the chart
+  line = self.vis.select("#spectrumline" + index);
+  line.style("stroke", spectrum.lineColor ? spectrum.lineColor : 'black');
+
+  // Update the data line on the legend
+  if (self.legBody) {
+    line = d3.select("#spectrum-legend-line-" + index);
+    line.style("stroke", spectrum.lineColor ? spectrum.lineColor : 'black');
+  }
+}
+
+SpectrumChartD3.prototype.handleChangeSpectrumPeakColor = function(spectrum, index, color) {
+  var self = this;
+
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) return;
+
+  let peaks = d3.selectAll('.spectrum-peak-' + index);
+  console.log('spectrum-peak-' + index, peaks);
+
+  spectrum.peakColor = color;
+  peaks.style('stroke', spectrum.peakColor)
+    .style('fill', spectrum.peakColor);
+}
 
 
 /**
@@ -11044,11 +11352,14 @@ SpectrumChartD3.prototype.getCountsForEnergy = function(spectrum, energy) {
   return counts;
 }
 
-
-
-/* Returns the data y-range for the currently viewed x-range. */
-SpectrumChartD3.prototype.getYAxisDataDomain = function(){
+/**
+ * Returns the Y-axis domain based on the current set of zoomed-in data, ensuring that all data is visible within that range.
+ */
+SpectrumChartD3.prototype.getYAxisDomain = function(){
   var self = this;
+
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return [3000,0];
   
   var key = self.options.backgroundSubtract ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
   var y0, y1;
@@ -11056,16 +11367,16 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   var foreground = self.rawData.spectra[0];
   var firstData = self.displayed_start(foreground);
   var lastData = self.displayed_end(foreground);
-  
+
   if( firstData >= 0 ){
     y0 = y1 = foreground[key][firstData].y;
-    
+
     self.rawData.spectra.forEach(function(spectrum) {
       // Don't consider background spectrum if we're viewing the Background Subtract
       if (self.options.backgroundSubtract && spectrum.type === self.spectrumTypes.BACKGROUND) return;
       firstData = self.displayed_start(spectrum);
       lastData = self.displayed_end(spectrum);
-      
+
       for (var i = firstData; i < lastData; i++) {
         if (spectrum[key][i]) {
           y0 = Math.min( y0, spectrum[key][i].y );
@@ -11077,28 +11388,11 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
     y0 = 0;
     y1 = 3000;
   }
-  
+
   if( y0 > y1 ) { y1 = [y0, y0 = y1][0]; }
   if( y0 == y1 ){ y0 -=1; y1 += 1; }
 
-  return [y0, y1];
-}
 
-/**
- * Returns the Y-axis domain based on the current set of zoomed-in data, with user preffered padding amounts accounted for.
- */
-SpectrumChartD3.prototype.getYAxisDomain = function(){
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return [3000,0];
-    
-  let yrange, y0, y1;
-  yrange = self.getYAxisDataDomain();
-  y0 = yrange[0];
-  y1 = yrange[1];
-  
-  
   if( self.options.yscale == "log" ) {
     /*Specify the (approx) fraction of the chart that the scale should extend */
     /*  past where the data where hit. */
@@ -11140,5 +11434,27 @@ SpectrumChartD3.prototype.getRandomColor = function() {
   for (let i = 0; i < 6; i++)
     hex += letters.charAt(Math.floor(Math.random() * 15));
   
+  return hex;
+}
+
+/**
+ * Returns the hexadecimal value for an RGB color.
+ * Input takes in an RGB string in the form rgb(INPUT1, INPUT2, INPUT3) where "INPUT#" are the corresponding integer values.
+ * If an error occurrs, returns the original RGB color passed in.
+ */
+SpectrumChartD3.prototype.getRGBToHexColor = function(rgb) {
+  if (!rgb) return '#000000';
+
+  rgb = rgb.substring(4, rgb.length - 1);
+  rgb = rgb.split(',');
+
+  if (rgb.length !== 3) return rgb;
+  
+  let hex = '#';
+  for (let i = 0; i < 3; i++) {
+    let c = Number(rgb[i]).toString(16);
+    hex += c.length === 1 ? ('0' + c) : c;
+  }
+
   return hex;
 }
