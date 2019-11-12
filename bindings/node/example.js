@@ -269,13 +269,58 @@ try
 {
   /* Filtering for SpecFile.sumRecords() is same as for SpecFile.records() */
   let summedForeground = spec.sumRecords(null,null,["Foreground", "UnknownSourceType"]);
-  let summedBackground = spec.sumRecords(null,null,["IntrinsicActivity"]);
-  console.log( "All foreground (and unknown SourceType) spectrum have LiveTime=" + summedForeground.liveTime()
-               + "s, while summed instrinsic activities have LiveTime=" + summedBackground.liveTime() + "s" );
+  console.log( "All foreground (and unknown SourceType) spectrum have summed LiveTime=" + summedForeground.liveTime() + "s" );
 }catch(e)
 {
-  console.log( "Couldnt sum specified records: " + e );
-  return;
+  console.log( "Couldnt sum foreground records: " + e );
+}
+
+try
+{
+  let summedBackground = spec.sumRecords(null,null,"Background");
+  console.log( "All background spectra have summed LiveTime=" + summedBackground.liveTime() + "s" );
+}catch(e)
+{
+  console.log( "Couldnt sum background records (likely there were no background): " + e );
+}
+
+/* If you are looking to make some plots to show to users as a preview of file
+   contents, you should handle a different possible types of input files.
+ */
+if( spec.isSearchMode() ){
+  /* The detector(s) took data in successive time intervals; for example there
+   are many 0.5 second spectra, one taken immediately after the other.
+   */
+  let backgroundSampleNums = spec.sampleNumbers('Background');
+  let foregroundSampleNums = spec.sampleNumbers(['Foreground','UnknownSourceType']);
+  
+  try{
+    let sumFore = spec.sumRecords(null,foregroundSampleNums);
+    console.log( 'Would plot search-mode data as all foreground spectra plotted together');
+    //plotForeground( sumFore.gammaChannelContents(), sumFore.gammaChannelEnergies() );
+  }catch(e){
+    console.log( 'Would not plot search-mode datas foreground - this probably shouldnt happen' );
+  }
+  
+  try{
+    let sumBack = spec.sumRecords(null,backgroundSampleNums);
+    console.log( 'Would plot search-mode data background summed together');
+    //plotBackground( sumBack.gammaChannelContents(), sumBack.gammaChannelEnergies() );
+  }catch(e){
+    console.log( 'Would not plot search-mode datas background - maybe file didnt specify this.' );
+  }
+  
+} else {
+  //If we are here, we may have:
+  //  - File contained a single spectrum.
+  //  - File contained a foreground, a background, maybe an intrinsic activity spectrum
+  //  - File contained multiple foregrounds, and zero, one, or many background samples.
+  //    - You probably shouldnt sum the foregrounds together for plotting - they may be distinctly different measurements
+  let foregroundSampleNums = spec.sampleNumbers(['Foreground','UnknownSourceType']);
+  let backgroundSampleNums = spec.sampleNumbers('Background');
+  console.log( 'Would give user option to scroll through ' + foregroundSampleNums.length
+               + ' foreground spectra, and would sum ' + backgroundSampleNums.length + ' spectra for the background' );
+  
 }
 
 

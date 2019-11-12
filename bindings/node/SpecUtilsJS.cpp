@@ -937,15 +937,37 @@ Napi::Value SpecFile::detector_names(const Napi::CallbackInfo& info)
 Napi::Value SpecFile::sample_numbers(const Napi::CallbackInfo& info)
 {
   assert( m_spec );
-  const std::set<int> &samples = m_spec->sample_numbers();
+  const int nargs = info.Length();
   
-  auto arr = Napi::Array::New( info.Env() );
-  uint32_t index = 0;
-  for( const int sn : samples )
-    arr.Set( index++, Napi::Number::New(info.Env(), static_cast<double>(sn)) );
+  if( nargs != 0 && nargs != 1 )
+    Napi::TypeError::New(info.Env(), "SpecFile.sampleNumbers only accepts 0 or 1 arguments").ThrowAsJavaScriptException();
   
-  return arr;
-}
+  //Convert std::set<int> to Napi::Array
+  auto tojsarr = [&]( const std::set<int> &input ) -> Napi::Array {
+    auto arr = Napi::Array::New( info.Env() );
+    uint32_t index = 0;
+    for( const int sn : input )
+      arr.Set( index++, Napi::Number::New(info.Env(), static_cast<double>(sn)) );
+    
+    return arr;
+  };//tojsarr(...)
+  
+  if( nargs == 0 )
+    return tojsarr( m_spec->sample_numbers() );
+  
+  std::set<int> samplenums;
+  const std::set<std::string> sourcetypes = to_valid_source_types( info[0], info.Env() );
+  
+  std::vector< std::shared_ptr<const Measurement> > meass = m_spec->measurements();
+  for( const auto &m : meass )
+  {
+    if( m && !samplenums.count(m->sample_number()) && sourcetypes.count(to_str(m->source_type())) )
+      samplenums.insert(m->sample_number());
+  }
+  
+  return tojsarr( samplenums );
+}//sample_numbers(...)
+
 
 
 std::set<std::string> SpecFile::to_valid_det_names( Napi::Value value, const Napi::Env &env )
