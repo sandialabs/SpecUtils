@@ -206,7 +206,12 @@ let wantedDetectors = spec.detectorNames();  //Equivalent to passing null for wa
 let wantedSamples = spec.sampleNumbers();    //Equivalent to passing null for wantedSamples
 let wantedSourceTypes = ["Background", "Calibration", "Foreground", "IntrinsicActivity", "UnknownSourceType"];  //Equivalent to null
 
+/* The SourceType strings are also defined as static class values like: */
+//wantedSourceTypes = [specutils.SourceType.Background, specutils.SourceType.Calibration, ...];
+
+
 let records = spec.records( wantedDetectors, wantedSamples, wantedSourceTypes );
+
 
 for( let i = 0; i < records.length; ++i)
 {
@@ -278,7 +283,7 @@ try
 //Finally write the file to a different format.
 try
 {
-  /* You can add an optional third Boolean argument to force overwriting file (but that isnt done atomically) */
+  /* You can add argumenst similar to records() to filter what records gets saved to file. */
   spec.writeToFile( outputfile, outputformat );
   console.log( "Wrote input file to '" + outputfile + "', format " + outputformat );
 }catch( err )

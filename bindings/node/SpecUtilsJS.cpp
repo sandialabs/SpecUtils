@@ -639,6 +639,8 @@ Napi::Value SpecRecord::gamma_channel_energies(const Napi::CallbackInfo& info)
   if( !energies || energies->empty() )
     return Napi::Value();
   
+  //Napi::Value::Value(info.Env(), napi_value::
+  
   auto arr = Napi::Array::New( info.Env() );
   
   for( uint32_t i = 0; i < energies->size(); ++i )
@@ -960,7 +962,7 @@ std::set<std::string> SpecFile::to_valid_det_names( Napi::Value value, const Nap
     }
   };//check_name lambda
   
-  if( value.IsNull() )
+  if( value.IsNull() || value.IsUndefined() )
   {
     std::set<std::string> names;
     for( const std::string &n : m_spec->detector_names() )
@@ -1016,7 +1018,7 @@ std::set<int> SpecFile::to_valid_sample_numbers( Napi::Value value, const Napi::
     }
   };//check_name lambda
   
-  if( value.IsNull() )
+  if( value.IsNull() || value.IsUndefined() )
     return m_spec->sample_numbers();
   
   if( value.IsNumber() )
@@ -1069,7 +1071,7 @@ std::set<std::string> SpecFile::to_valid_source_types( Napi::Value value, const 
                      ).ThrowAsJavaScriptException();
   };//check_source_type lambda
   
-  if( value.IsNull() )
+  if( value.IsNull() || value.IsUndefined() )
   {
     return std::set<std::string>{ to_str(Measurement::Background),
       to_str(Measurement::Calibration), to_str(Measurement::Foreground),
@@ -1250,15 +1252,22 @@ Napi::Value SpecFile::riid_analysis(const Napi::CallbackInfo& info)
 
 Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
 {
-  int length = info.Length();
+  const int length = info.Length();
   
-  if (length < 2 || !info[0].IsString() || !info[1].IsString() || (length>=3 && !info[2].IsBoolean()) ) {
+  if (length < 2 || !info[0].IsString() || !info[1].IsString() || (length>=6 && !info[5].IsBoolean()) ) {
     Napi::TypeError::New(info.Env(), "Expected path to save to, and format").ThrowAsJavaScriptException();
   }
   
   const std::string path = info[0].ToString().Utf8Value();
   const std::string format = info[1].ToString().Utf8Value();
-  const bool force = length<3 ? false : info[2].ToBoolean().Value();
+  
+  const std::set<std::string> detnames = SpecFile::to_valid_det_names( (length >= 3 ? info[2]  : Napi::Value()), info.Env() );
+  const std::vector<std::string> detnamesvec( std::begin(detnames), std::end(detnames) );
+  const std::set<int> samplenums = SpecFile::to_valid_sample_numbers( (length >= 4 ? info[3]  : Napi::Value()), info.Env() );
+  const std::set<std::string> source_types = SpecFile::to_valid_source_types( (length >= 5 ? info[4]  : Napi::Value()), info.Env() );
+  
+  
+  const bool force = length>=6 ? false : info[5].ToBoolean().Value();
   
   
   SaveSpectrumAsType type = kNumSaveSpectrumAsType;
@@ -1302,7 +1311,8 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
   
   try
   {
-    m_spec->write_to_file( path, type );
+    //m_spec->write_to_file( path, type );
+    m_spec->write_to_file( path, samplenums, detnamesvec, type );
   }catch( std::exception &e )
   {
     Napi::Error::New(info.Env(), e.what()).ThrowAsJavaScriptException();

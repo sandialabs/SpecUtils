@@ -13,8 +13,7 @@ class MeasurementInfo;
 class DetectorAnalysis;
 
 /**
- 
- Current shortcommings:
+ Current known shortcommings:
    - Defining the SourceType, OccupancyStatus, and EquationType as classes with
      static string values to represent the C++ enum values.  I dont like this.
      Would be better to have somethign like specutils.SpecRecord.Foreground,
@@ -38,6 +37,7 @@ class DetectorAnalysis;
    - Add in D3 code saving.
    - Document (in markdown)
    - Make things mutable? (E.g., allow file re-calibration)
+   - Add symbols for SaveSpectrumAsType
  */
 
 
@@ -74,7 +74,7 @@ public:
    */
   Napi::Value id_confidence(const Napi::CallbackInfo& info);
   
-  /* Returns String giving remark.  Returns one is not provided in spectrum file. */
+  /* Returns String giving remark.  Returns null if one is not provided in spectrum file. */
   Napi::Value remark(const Napi::CallbackInfo& info);
   
   
@@ -83,7 +83,7 @@ public:
   Napi::Value dose_rate(const Napi::CallbackInfo& info);
   
   /* Returns the name of the detector this result corresponds to.  If null or
-   blank then you should assum it is for all detectors in the file.
+   blank then you should assume it is for all detectors in the file.
    */
   Napi::Value detector(const Napi::CallbackInfo& info);
   

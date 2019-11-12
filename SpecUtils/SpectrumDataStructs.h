@@ -1690,6 +1690,14 @@ public:
                       const std::vector<int> det_nums,
                       const SaveSpectrumAsType format ) const;
   
+  /** Convience function for calling #write_to_file with detector names, instead
+   of detector numbers.  If any names are invalid, will throw exception.
+   */
+  void write_to_file( const std::string &filename,
+                     const std::set<int> &sample_nums,
+                     const std::vector<std::string> &det_names,
+                     const SaveSpectrumAsType format ) const;
+  
   //write(...): Wites the specified sample and detector numbers to the provided
   //  stream, in the format specified.  If the output format allows multiple
   //  records, each Measurement will be placed in its own record.  If the output

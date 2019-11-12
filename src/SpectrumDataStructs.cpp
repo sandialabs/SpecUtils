@@ -18195,15 +18195,41 @@ void MeasurementInfo::write_to_file( const std::string name,
                    const std::vector<int> det_nums_vector,
                    const SaveSpectrumAsType format ) const
 {
-    //copy vectors into sets 
-   const std::set<int> sample_nums_set( sample_nums_vector.begin(),
+  //copy vectors into sets
+  const std::set<int> sample_nums_set( sample_nums_vector.begin(),
                                         sample_nums_vector.end() );
-   const std::set<int> det_nums_set( det_nums_vector.begin(),
+  const std::set<int> det_nums_set( det_nums_vector.begin(),
                                      det_nums_vector.end() );
-    //write the file
-    write_to_file( name, sample_nums_set, det_nums_set, format);
+  //write the file
+  write_to_file( name, sample_nums_set, det_nums_set, format);
 }//write_to_file(...)
 
+
+void MeasurementInfo::write_to_file( const std::string &filename,
+                   const std::set<int> &sample_nums,
+                   const std::vector<std::string> &det_names,
+                   const SaveSpectrumAsType format ) const
+{
+  set<int> det_nums_set;
+  
+  {//begin lock on mutex_
+    std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+    for( const std::string &name : det_names )
+    {
+      const vector<string>::const_iterator pos = std::find( begin(detector_names_),
+                                                         end(detector_names_),
+                                                         name );
+      if( pos == end(detector_names_) )
+        throw runtime_error( "MeasurementInfo::write_to_file(): invalid detector name in the input" );
+    
+      const size_t index = pos - detector_names_.begin();
+      det_nums_set.insert( detector_numbers_[index] );
+    }//for( const int num : det_nums )
+  }//end lock on mutex_
+  
+  write_to_file( filename, sample_nums, det_nums_set, format);
+}//void write_to_file(...)
 
 
 void MeasurementInfo::write( std::ostream &strm,
