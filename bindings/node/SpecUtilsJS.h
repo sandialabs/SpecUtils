@@ -8,7 +8,159 @@
 // Forward declarations
 class SpecFile;
 class Measurement;
+class RiidAnalysis;
 class MeasurementInfo;
+class DetectorAnalysis;
+
+/**
+ 
+ Current shortcommings:
+   - Defining the SourceType, OccupancyStatus, and EquationType as classes with
+     static string values to represent the C++ enum values.  I dont like this.
+     Would be better to have somethign like specutils.SpecRecord.Foreground,
+     but I couldnt figure out how to give SpecRecord a const static SourceType
+     object (and also didnt know how to do stuff in the most JavaScript way).
+   - The SpecRecord, RiidAnalysis, and RiidAnaResult classes should not be
+     allowed to be created outside of C++ (didnt spend any time on this).
+   - modifying (ex recalibrating), or assembling spectrum files from scratch not
+     implemented.
+   - Can probably replace many InstanceMethod definitions with InstanceAccessor
+     isntead to make things a more JavaScripty...
+   - Strings are assumed UTF-8 encoded everywhere but this isnt (yet) enforced
+     by SpecUtils when parsing, meaning we may get exceptions when creating
+     JavaScript strings.
+   - Things could be made more efficient in general.  Ex. there are a lot of
+     string comparisons where integer enum comparisons would be good, or a lot
+     of objects are created where the dont have to be, or general arrays are
+     copied from JavaScript to C++, etc.
+ 
+ ToDo:
+   - Add in D3 code saving.
+   - Document (in markdown)
+   - Make things mutable? (E.g., allow file re-calibration)
+ */
+
+
+
+
+class RiidAnaResult : public Napi::ObjectWrap<RiidAnaResult>
+{
+public:
+  static void Init(Napi::Env &env, Napi::Object &exports);
+  
+  RiidAnaResult() = delete;
+  
+  RiidAnaResult( const Napi::CallbackInfo& info );
+  
+  static Napi::FunctionReference constructor;
+
+  /* Returns String giving nuclide.
+   May not strictly be a nuclide, but may be something like: "U-238", "U-ore",
+   "HEU", "nuclear", "neutron", "Unknown", "Ind.", etc.
+   Will return null if no identification is given (most commonly happens when
+   this RiidAnaResult is to give an activity or doe rate)
+   )
+   */
+  Napi::Value nuclide(const Napi::CallbackInfo& info);
+  
+  /* Returns String giving type of nuclide, usually somethign like "Industrial",
+   "Medical", etc.  Will return null when not provided in the spectrum file.
+   */
+  Napi::Value nuclide_type(const Napi::CallbackInfo& info);
+  
+  /* Returns String describing nuclide confidence.  May be a number (ex. "9"),
+   a word (ex "High"), a letter (ex 'L'), or a phrase.
+   Will return null if not available.
+   */
+  Napi::Value id_confidence(const Napi::CallbackInfo& info);
+  
+  /* Returns String giving remark.  Returns one is not provided in spectrum file. */
+  Napi::Value remark(const Napi::CallbackInfo& info);
+  
+  
+  /* Returns dose rate in micro-sievert.  Returns null if not avaialble.
+   */
+  Napi::Value dose_rate(const Napi::CallbackInfo& info);
+  
+  /* Returns the name of the detector this result corresponds to.  If null or
+   blank then you should assum it is for all detectors in the file.
+   */
+  Napi::Value detector(const Napi::CallbackInfo& info);
+  
+protected:
+  size_t m_index;
+  std::shared_ptr<const DetectorAnalysis> m_ana;
+  
+  friend class RiidAnalysis;
+};//struct RiidAnaResult
+
+
+/** A class that aims to eventually be about equivalent of the N42 2012
+ <AnalysisResults> tag.
+ */
+class RiidAnalysis : public Napi::ObjectWrap<RiidAnalysis>
+{
+public:
+  
+  static void Init(Napi::Env &env, Napi::Object &exports);
+  
+  RiidAnalysis() = delete;
+  
+  RiidAnalysis( const Napi::CallbackInfo& info );
+  
+  static Napi::FunctionReference constructor;
+  
+  /* Returns Array of Strings representing remarks provided in the spectrum file.
+   Returns null if no remarks are provided.
+  */
+  Napi::Value remarks(const Napi::CallbackInfo& info);
+  
+  /* A a String giving the unique name of the analysis algorithm.
+   Returns null if not provided in the spectrum file.
+   */
+  Napi::Value algorithm_name(const Napi::CallbackInfo& info);
+  
+  /* Creator or implementer of the analysis algorithm.
+   Will return null if not provided in the file.
+   */
+  Napi::Value algorithm_creator(const Napi::CallbackInfo& info);
+  
+  /* Free-form String describing the analysis algorithm. Will be null if not
+   provided in the spectrum file.
+   */
+  Napi::Value algorithm_description(const Napi::CallbackInfo& info);
+  
+  /** Returns free-form String describing the overall conclusion of the analysis regarding
+   the source of concern.  Equivalent to <AnalysisResultDescription> or
+   <ThreatDescription> tag of N42 2012 or 2006 respectively.
+   Will return null if not provided in the file.
+   */
+  Napi::Value algorithm_result_description(const Napi::CallbackInfo& info);
+  
+  /* Returns array of RiidAnaResult objects contained in this analysis.  May be
+   empty (but wont be null)
+   */
+  Napi::Value results(const Napi::CallbackInfo& info);
+  
+  
+  //ToDo: return algorithm_component_versions.
+  /* Information describing the version of a particular analysis algorithm
+   component.
+   If file type only gives one version, then the component name "main" is
+   assigned.
+   */
+  //std::vector<std::pair<std::string,std::string>> algorithm_component_versions_;
+
+  
+protected:
+  std::shared_ptr<const DetectorAnalysis> m_ana;
+  
+  
+  friend class SpecFile;
+};//struct RiidAnalysis
+
+
+
 
 
 
@@ -34,8 +186,10 @@ public:
   Napi::Value detector_number(const Napi::CallbackInfo& info);
   /** Returns the integer sample number. */
   Napi::Value sample_number(const Napi::CallbackInfo& info);
+  
   /** Returns string indicating source type.  WIll be one of the following values:
-       "IntrinsicActivity", "Calibration", "Background", "Foreground", "UnknownSourceType"
+       "IntrinsicActivity", "Calibration", "Background", "Foreground", "UnknownSourceType",
+       See the SourceType class defined in cpp for possible values.
    */
   Napi::Value source_type(const Napi::CallbackInfo& info);
   /** Live time in seconds of measurement */
@@ -47,6 +201,10 @@ public:
   
   /** Returns the String title.  Not supported by all input spectrum file formats, in which case will be emty string. */
   Napi::Value title(const Napi::CallbackInfo& info);
+  /** Returns an array of strings representing the 'remarks' for this specific spectrum record.
+   Returns null if no remarks.
+   */
+  Napi::Value remarks(const Napi::CallbackInfo& info);
   /** Returns a string thats one of the follwoing: "NotOccupied", "Occupied", "UnknownOccupancyStatus" */
   Napi::Value occupied(const Napi::CallbackInfo& info);
   /** Returns float sum of gamma counts. */
@@ -74,13 +232,25 @@ public:
    */
   Napi::Value gamma_channel_contents(const Napi::CallbackInfo& info);
   
-  /*
-  inline EquationType energy_calibration_model() const;
-  inline const std::vector<std::string> &remarks() const;
-  inline const std::vector<float> &calibration_coeffs() const;
-  inline const DeviationPairVec &deviation_pairs() const;
-  inline const std::shared_ptr< const std::vector<float> > &channel_energies() const;
-  inline const std::shared_ptr< const std::vector<float> > &gamma_counts() const;
+  /* Returns a string in EquationType, i.e.
+   ["Polynomial","FullRangeFraction","LowerChannelEdge",
+    "UnspecifiedUsingDefaultPolynomial","InvalidEquationType"]
+   */
+  Napi::Value energy_calibration_model(const Napi::CallbackInfo& info);
+  /* Aray of numbers representing the energy calibration coefficients.
+   Returned value may have zero entries.
+   Interpretation is dependant on the energy_calibration_model.
+   */
+  Napi::Value energy_calibration_coeffs(const Napi::CallbackInfo& info);
+  
+  /* Array of deviation pairs.
+   Returned value may have zero entries, but each sub-array will always have
+   exactly two values (energy and offset, both in keV).
+   Ex. [[0,0],[122,15],661,-13],[2614,0]]
+   */
+  Napi::Value deviation_pairs(const Napi::CallbackInfo& info);
+  
+  /* Unimplemented functions:
   inline const std::vector<float> &neutron_counts() const;
   inline size_t num_gamma_channels() const;
   inline size_t find_gamma_channel( const float energy ) const;
@@ -91,15 +261,13 @@ public:
   inline float gamma_channel_width( const size_t channel ) const;
   double gamma_integral( float lower_energy, float upper_energy ) const;
   double gamma_channels_sum( size_t startbin, size_t endbin ) const;
-  inline const std::shared_ptr< const std::vector<float> > & gamma_channel_energies() const;
-  inline const std::shared_ptr< const std::vector<float> > &gamma_channel_contents() const;
   inline float gamma_energy_min() const;
   inline float gamma_energy_max() const;
+  inline float speed() const;
+  inline const std::string &detector_type() const;
+  inline QualityStatus quality_status() const;
 */
   
-  //inline float speed() const;
-  //inline const std::string &detector_type() const;
-  //inline QualityStatus quality_status() const;
   
   
 protected:
@@ -119,6 +287,8 @@ class SpecFile : public Napi::ObjectWrap<SpecFile>
   
   
   SpecFile(const Napi::CallbackInfo& info);
+  virtual ~SpecFile();
+  //virtual void Finalize( Napi::Env env );  //Doesnt seem to get called, so not implementing
   
   private:
   static Napi::FunctionReference constructor;
@@ -166,12 +336,17 @@ class SpecFile : public Napi::ObjectWrap<SpecFile>
   Napi::Value filename(const Napi::CallbackInfo& info);
   Napi::Value remarks(const Napi::CallbackInfo& info);
   Napi::Value detector_names(const Napi::CallbackInfo& info);
+  Napi::Value sample_numbers(const Napi::CallbackInfo& info);
   
   Napi::Value measurements(const Napi::CallbackInfo& info);
+  
+  Napi::Value sum_measurements(const Napi::CallbackInfo& info);
   
   Napi::Value has_gps_info(const Napi::CallbackInfo& info);
   Napi::Value mean_latitude(const Napi::CallbackInfo& info);
   Napi::Value mean_longitude(const Napi::CallbackInfo& info);
+  
+  Napi::Value riid_analysis(const Napi::CallbackInfo& info);
   
   /* Takes two arguments.
        First is a string giving the path to save to.
@@ -185,21 +360,21 @@ class SpecFile : public Napi::ObjectWrap<SpecFile>
    */
   Napi::Value write_to_file(const Napi::CallbackInfo& info);
   
-  /*
+  /* Unimplemented functions:
   inline const std::vector<int> &detector_numbers() const;
   inline const std::vector<std::string> &neutron_detector_names() const;
-  inline const std::vector<std::string> &remarks() const;
   inline int lane_number() const;
   inline const std::string &measurement_location_name() const;
   inline const std::string &inspection() const;
   inline const std::string &measurment_operator() const;
-  inline const std::set<int> &sample_numbers() const;
-   
   
-  inline std::vector< std::shared_ptr<const Measurement> > measurements() const;
   inline std::shared_ptr<const Measurement> measurement( size_t num ) const;
-  inline std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   */
+  
+  std::set<std::string> to_valid_det_names( Napi::Value value, const Napi::Env &env );
+  std::set<int> to_valid_sample_numbers( Napi::Value value, const Napi::Env &env );
+  std::set<std::string> to_valid_source_types( Napi::Value value, const Napi::Env &env );
+  
   
   std::shared_ptr<const MeasurementInfo> m_spec;
 };//class SpecFile

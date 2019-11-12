@@ -1,4 +1,4 @@
-const specutils = require('SpecUtilsJS.node');
+const specutils = require('./SpecUtilsJS.node');
 
 /* This script demonstrates parsing a spectrum file, printing out information about
  the file, then looping over all records in the file and printing out information
@@ -113,20 +113,115 @@ if( spec.hasGpsInfo() )
 else
   console.log( "No GPS information available." );
 
-console.log( "Number Spectrum Records = " + spec.numSpecRecords() );
+/* Get RIID analysis results, if included in the file. */
+let ana = spec.riidAnalysis();
+if( ana ){
+  console.log( "RIID Analysis Results Info:" );
+  
+  /* String giving algorithm name, or null if not provided in file. */
+  let algoName = ana.algorithmName();
+  if( algoName )
+    console.log( "\tAlgorthm Name: " + algoName );
+  
+  /* Creator of analysis algorithm. Null if not provided in the file. */
+  let creator = ana.algorithmCreator();
+  if( creator )
+    console.log( "\tAlgorithm Creator: " + creator );
+  
+  /* Algorithm description (as String) if provided in file, null otherwise. */
+  let algoDescrip = ana.algorithmDescription();
+  if( algoDescrip )
+    console.log( "\tAlgorthm Description: " + algoDescrip );
+  
+  /** Result description (as String) if provided in file, null otherwise. */
+  let resultDescrip = ana.algorithmResultDescription();
+  if( resultDescrip )
+    console.log( "\tResult Description: " + resultDescrip );
+  
+  /* Array of Strings representing remarks about RIID analysis given in spectrum
+   file, or null if none are provided.
+   */
+  let remarks = ana.remarks();
+  if( remarks )
+    console.log( "\tRemarks: " + remarks );
+  
+  
+  /* Returns array of RiidAnaResult objects contained in this analysis. */
+  let nuclides = ana.results();
+  for( let i = 0; i < nuclides.length; ++i)
+  {
+    /* Get the i'th RiidAnaResult */
+    let result = nuclides[i];
+    
+    /* Get nuclide (as String); may be null if not provided in the file (ex. if
+     dose rate is provided instead)
+    */
+    let nuc = result.nuclide();
+    
+    /* Get String giving type of nuclide, usually somethign like "Industrial",
+     "Medical", etc.  Will be null when not provided in the spectrum file.
+     */
+    let nuc_type = result.nuclideType();
+
+    /* String describing nuclide confidence.  May be a number (ex. "9"),
+     a word (ex "High"), a letter (ex 'L'), or a phrase.  Will be null if not
+     provided in file
+     */
+    let id_conf = result.idConfidence();
+    
+    /* String giving remark, or null if one was not provided in spectrum file. */
+    let remark = result.remark();
+    
+    /* Returns Number giving dose rate in micro-sievert, or null if not avaialble. */
+    let doseRate = result.doseRate();
+    
+    /* Get the name (as a String) of the detector this result corresponds to.
+     If null or blank then you should assum it is for all detectors in the file.
+     */
+    let detName = result.detector();
+    
+    console.log( "\t\tResult " + i + ":"
+                 + " nuc=" + (nuc ? nuc : "NotSpecified")
+                 + ", nuc_type=" + (nuc_type ? nuc_type : "NotSpecified")
+                 + (id_conf ? ", Confidence="+id_conf : "NotSpecified")
+                 + (remark ? ", Remark="+remark : "")
+                 + (doseRate ? ", DoseRate="+doseRate+"uSv" : "")
+                 + (detName ? ", Detector="+detName : "")
+                 );
+  }//for( let i = 0; i < nuclides.length; ++i)
+  
+}else{
+  console.log( "No RIID analysis results given in file." );
+}
+
+
+console.log( "Total Number Spectrum Records = " + spec.numSpecRecords() );
 
 /* Lets get an array of SpecRecord objects and loop over them.
- A SpecRecord object represents a measurement from a single detection element; e.g., a spectrum, or a neutron count.
- If a gamma and neutron detector are unambigously grouped together, the record may contain both gamma spectrum and neutron counts.
+ We can optionally filter what SpecRecord's are returned.  We can filter
+ by detector names, sample numbers, and source types.  For any of these three
+ quantities if null is passed in, no filtering will be done on that quantity.
  */
-let records = spec.records();
+let wantedDetectors = spec.detectorNames();  //Equivalent to passing null for wantedDetectors
+let wantedSamples = spec.sampleNumbers();    //Equivalent to passing null for wantedSamples
+let wantedSourceTypes = ["Background", "Calibration", "Foreground", "IntrinsicActivity", "UnknownSourceType"];  //Equivalent to null
+
+let records = spec.records( wantedDetectors, wantedSamples, wantedSourceTypes );
+
 for( let i = 0; i < records.length; ++i)
 {
+  /* A SpecRecord object represents a measurement from a single detection element; e.g., a spectrum, or a neutron count.
+     If a gamma and neutron detector are unambigously grouped together, the record may contain both gamma spectrum and neutron counts.
+   */
   let record = records[i];
   
-  console.log( "\tRecord " + i );
-  /* sourceType() will be one of the following strings: "IntrinsicActivity", "Calibration", "Background", "Foreground", "UnknownSourceType"
-     occupied() will be one of the following strings: "NotOccupied", "Occupied", "UnknownOccupancyStatus"
+  console.log( "\tRecord " + i + " (SampleNumber " + record.sampleNumber() + " DetectorName '" + record.detectorName() + "'):" );
+  /* sourceType() will be one of the following strings: ["IntrinsicActivity",
+       "Calibration", "Background", "Foreground", "UnknownSourceType"]
+       (Defined by static members of the SourceType class)
+     occupied() will be one of the following strings: ["NotOccupied", "Occupied",
+         "UnknownOccupancyStatus"]
+       (Defined by static members of the OccupancyStatus class)
    */
   console.log( "\t\tSource Type=" + record.sourceType() + ", OccStatus=" + record.occupied() );
   
@@ -142,7 +237,15 @@ for( let i = 0; i < records.length; ++i)
   if( record.hasGpsInfo()  )
     console.log( "\t\tLatitude=" + record.latitude() + ", Longitude=" + record.longitude() + ", fix at " + (new Date(record.positionTime())) );
   
-  /* Get array of Numbers giving the lower energies for each channel.
+  /* If you care about the underlying energy calibration, you can access the
+   info given in the file using:
+   */
+  console.log( "\t\tEnergy calibration of type " + record.energyCalibrationModel()
+               + " with coefficients: " + record.energyCalibrationCoeffs()
+               + " and deviation pairs: " + record.deviationPairs() );
+  
+  /* If you only care about the actual energies of the gamma channels, you can
+     instead get an array of Numbers giving the lower energies for each channel.
     Will return null if record does not have gamma data (e.g., only neutron)
    */
   console.log( "\t\tGamma Channel Energies: " + record.gammaChannelEnergies() );
@@ -153,9 +256,29 @@ for( let i = 0; i < records.length; ++i)
 }//for( loop over records )
 
 
+/* You can also sum specified measurements into a SpecRecord.
+ This is useful, for example, to display a single spectrum to users of all
+ foreground measurements in a file.
+ */
+try
+{
+  /* Filtering for SpecFile.sumRecords() is same as for SpecFile.records() */
+  let summedForeground = spec.sumRecords(null,null,["Foreground", "UnknownSourceType"]);
+  let summedBackground = spec.sumRecords(null,null,["IntrinsicActivity"]);
+  console.log( "All foreground (and unknown SourceType) spectrum have LiveTime=" + summedForeground.liveTime()
+               + "s, while summed instrinsic activities have LiveTime=" + summedBackground.liveTime() + "s" );
+}catch(e)
+{
+  console.log( "Couldnt sum specified records: " + e );
+  return;
+}
+
+
+
 //Finally write the file to a different format.
 try
 {
+  /* You can add an optional third Boolean argument to force overwriting file (but that isnt done atomically) */
   spec.writeToFile( outputfile, outputformat );
   console.log( "Wrote input file to '" + outputfile + "', format " + outputformat );
 }catch( err )

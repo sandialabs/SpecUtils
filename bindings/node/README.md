@@ -31,14 +31,6 @@ cmake --build build_dir --config Release
 ninja -C build_dir
 
 
-# Then to actually run things
-npm start
-
-
-# To create a packaged version of InterSpec, you
-# need to install electron-packager
-npm install electron-packager
-
 # And also copy all the InterSpec resources to the 
 # 'app' sub-directory of your build dir
 cmake-js build --out=build_dir --target install
@@ -46,14 +38,6 @@ cmake-js build --out=build_dir --target install
 cmake --build build_dir --target install --config Release
 # Or
 ninja -C build_dir install
-
-
-# Then to actually create the distributable package, run on of the following
-# (assuming your build directory is 'build_macos', 'build_win', or 'build_linux', 
-#  otherwise you need to edit path in package.json)
-npm run package-mac
-npm run package-win
-npm run package-linux
 ```
 
 

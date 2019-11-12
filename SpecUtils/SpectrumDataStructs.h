@@ -1369,6 +1369,15 @@ public:
   MeasurementShrdPtr sum_measurements( const std::set<int> &sample_numbers,
                                     const std::vector<int> &det_numbers ) const;
   
+  /** A convienience function for calling the the other form of this function.
+   If an invalid sample number or detector name is specified an exception will
+   be thrown.
+   Requires the selected samples and detectors to have at least one spectrum
+   that can serve as gamma binning, or else nullptr will be returned.
+   */
+  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
+                                      const std::vector<std::string> &det_names ) const;
+  
   //sum_measurements(...): sums measurments similar to the other variants by
   //  the same name, but uses the 'binTo' Measurment passed in as the bassis
   //  for the energy calibration binning.

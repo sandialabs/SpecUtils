@@ -17487,6 +17487,29 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
 }//suggested_gamma_binning_index(...)
 
 
+
+std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<int> &sample_numbers,
+                                     const std::vector<std::string> &det_names ) const
+{
+  vector<bool> det_to_use( detector_numbers_.size(), false );
+  
+  for( const std::string name : det_names )
+  {
+    const vector<string>::const_iterator pos = std::find( begin(detector_names_),
+                                                end(detector_names_),
+                                                name );
+    if( pos == end(detector_names_) )
+      throw runtime_error( "MeasurementInfo::sum_measurements(): invalid detector name in the input" );
+    
+    const size_t index = pos - detector_names_.begin();
+    det_to_use[index] = true;
+  }//for( const int num : det_nums )
+  
+  return sum_measurements( sample_numbers, det_to_use );
+}//MeasurementShrdPtr sum_measurements(...)
+
+
+
 MeasurementShrdPtr MeasurementInfo::sum_measurements( const set<int> &sample_num,
                                             const vector<int> &det_nums ) const
 {
