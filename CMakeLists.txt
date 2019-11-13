@@ -122,7 +122,6 @@ if( SpecUtils_ENABLE_D3_CHART )
 #   For outputting necessary library in D3 HTML files
   set( D3_SUPPORT_FILES
        d3.v3.min.js
-       c.min.js
        SpectrumChartD3.js
        SpectrumChartD3.css
        SpectrumChartD3StandAlone.css
@@ -130,7 +129,6 @@ if( SpecUtils_ENABLE_D3_CHART )
 
   set( D3_SUPPORT_FILE_MACROS
        D3_MIN_JS
-       CASSOWARY_MIN_JS
        SPECTRUM_CHART_D3_JS
        SPECTRUM_CHART_D3_CSS
        SPECTRUM_CHART_D3_STANDALONE_CSS

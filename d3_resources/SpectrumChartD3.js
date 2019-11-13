@@ -6481,7 +6481,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
      - loop over input labels and draw them centered over peak.
      - Make sure label highlight and un-highlight when moused over, and when peaks is moused over (search for 'self.peakLabelArray' to start on this)
      - Implement overlap checking
-     - Remove all references to the cassowary library (in JS and C++)
+     X - Remove all references to the cassowary library (in JS and C++)
      - Start laying out the labels properly.
      - Add user labels not associated with peaks.
      - Add right click menu to edit label (both for non-peak labels, and normal labels)
@@ -6494,19 +6494,20 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   if( !self.options.showUserLabels && !self.options.showPeakLabels && !self.options.showNuclideNames )
     return null;
     
-    
-  //if (!self.peakLabelArray){
-    /* This is a hack for getting the correct highlighted peak to correspond with its label. */
-    /* Declare an array of tuples that have a corresponding peak DOM with a label text */
-    //self.peakLabelArray = [];
-  //}
-    
-  var chart = self.peakVis;
-  var chartBox = d3.select("#chartarea"+self.chart.id)[0][0].getBBox();    /* box coordinates for the chart area */
-
+  let chart = self.peakVis;
+  let chartBox = d3.select("#chartarea"+self.chart.id)[0][0].getBBox();    /* box coordinates for the chart area */
+  
   // Don't draw peak label if chart isn't set up yet
   if( !chartBox.width || !chartBox.height )
     return null;
+  
+  const chartw = chartBox.width;
+  const charth = chartBox.height;
+  
+  const tickElement = document.querySelector('.tick');
+  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+  const axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+  
   
   /*
    labelinfos is an array of objects that look like:
@@ -6521,6 +6522,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
    userLabel: undefined
    }
    */
+  
+  let drawnlabels = [];
   
   for( let index = 0; index < labelinfos.length; ++index ){
     let info = labelinfos[index];
@@ -6540,21 +6543,18 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     let peak_x = info.centroidXPx;
     let peak_ly = info.centroidMinYPx;
     let peak_uy = info.centroidMaxYPx;
-    if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined' )
-    {
-      console.log( 'Got peak_uy=' + peak_uy + ' for energy ' + info.energy, info );
-      continue;
-    }
     
-    if( peak_ly===null || Number.isNaN(peak_ly) || typeof(peak_ly)==='undefined' )
+    
+    //This next check doesnt appear to be necassary anymore.
+    if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined'
+       || peak_ly===null || Number.isNaN(peak_ly) || typeof(peak_ly)==='undefined' )
     {
-      console.log( 'Got peak_ly=' + peak_ly + ' for energy ' + info.energy, info );
+      console.log( 'Got peak_uy=' + peak_uy + ', peak_ly=' + peak_ly + ' for energy ' + info.energy, info );
       continue;
     }
     
     
     let peakEnergy = info.energy.toFixed(2) + " keV";
-    
     
     var label, userLabel, peakEnergyLabel, nuclideNameLabel;
     
@@ -6562,9 +6562,11 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     label = chart.append("text");
     label.attr('class', 'peaklabel')
     .attr("text-anchor", "start")
-    .attr("x", peak_x)
     .attr("y", peak_uy - 10 )
-    .attr("energy", peakEnergy);
+    .attr("x", peak_x)           //Doesnt seem to be needed since we are using all <tspan>s
+    .attr("energy", peakEnergy)  //Dont think this is needed
+    .attr("labelindex", index)  //Is there a better way to associate the labelinfos object with this label?  Probably, but whatever for now.
+    .attr("fill", axiscolor );
     
     if( self.options.showUserLabels && info.userLabel ){
       /* T-span element for the user label */
@@ -6599,430 +6601,294 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       if( self.options.showNuclideEnergies && info.nuclideEnergy )
       nuclideNameLabel.text(nuclide.name + ", " + info.nuclideEnergy.toFixed(2).toString() + " keV" );
     }
-  }//labelinfos.foreach(...)
-  
-  
-  return;
-  
-  self.solver = new c.SimplexSolver();        /* Initialize a default, new solver for each label creation */
-  var chart = self.peakVis;
-  //var pathNode = path.node();                 /* node for the peak element */
-
-  /* The path box coordinates are the box coordinates for the peak.
-     These are used for positioning the label properly with respect to the peak.
-  */
- 
-
-  /* Inequality constants for constraints */
-  var greaterThan = c.GEQ,
-      lessThan = c.LEQ;
-
-  /* Strengths of constraints: These determine the prioirity of which constraints are given for a specific label.
-     A required constraint means it must be followed, or else a Constraint Error is thrown.
-     A strong constraint isn't required, but has priority over weaker constraints. (and so on for the weaker consraints.
-  */
-  var weak = c.Strength.weak,
-      medium = c.Strength.medium,
-      strong = c.Strength.strong,
-      required = c.Strength.required;
-
-  /* Create variable values for the Constraint Solver to handle. In particular, for centering each label at
-     the center of the peak, we want to capture the left-x value, the mid-point x-value, the width of the label,
-     and the middle x-value for the path box of a peak.
-
-     Initially, we provided the starting coordiantes for the labels and initialized their values in their variable creation.
-     What we want to get in the end of adding all the constraints are different values for these positions so that the label placement
-     is exactly where we want it to be.
-  */
-  var labelLeftX = new c.Variable ( { value : pathX - 0.5*label.node().getBBox().width } ),                    /* Left coordinate for label */
-      labelRightY = new c.Variable ( { value : pathX + 0.5*label.node().getBBox().width } ),                   /* Right coordinate for label */
-      labelTopY = new c.Variable ( { value : label.node().getBBox().y } ),                                     /* Top coordinate for label */
-      labelBottomY = new c.Variable ( { value : label.node().getBBox().y + label.node().getBBox().height } ),  /* Bottom coordinate for label */
-      labelMid = new c.Variable( { value : pathX } ),                                                          /* Mid-point coordinate for label (in terms of x) */
-      labelHeight = new c.Variable( { value : label.node().getBBox().height } ),                               /* Height of label */
-      labelWidth = new c.Variable( { value : label.node().getBBox().width } ),                                 /* Width of label */
-      peakMid = new c.Variable( { value : pathX } );                                      /* Mid-point for the box for the peak element */
-
-  var cle;  /* These are reusable variables for creating equations for constraints. */
-
-  /* Christian:
-      The mid-point x-value of a peak and the width of the label will be staying constant throughout each added constraint.
-      Add these constraints into the Constraint Solver.
-  */
-  /* mid-point of the box for the peak element stays constant (you're not moving the peak!) */
-  self.solver.addConstraint(new c.StayConstraint( peakMid, medium ) );
-  /* keep height constant */
-  self.solver.addConstraint(new c.StayConstraint( labelHeight, required  ) );
-  /* keep width constant */
-  self.solver.addConstraint(new c.StayConstraint( labelWidth, required  ) );
-  /* try to keep initial y-position constant (right above the peak) */
-  self.solver.addConstraint(new c.StayConstraint( labelTopY, weak ) );
-
-
-  /* Label assertions for the mid-point, width, and height values for a label.
-     These keep the internal size of a label consistent of what it currently is.
-  */
-  cle = c.plus(labelLeftX, c.divide(labelWidth, 2));
-  var labelMidPointAssertion = new c.Equation( labelMid, cle );      /* peak mean == mid-point */
-
-  cle = c.plus(labelLeftX, labelWidth);
-  var labelWidthAssertion = new c.Equation( labelRightY, cle );      /* left-x + width == right-x */
-
-  cle = c.plus(labelTopY, labelHeight);
-  var labelHeightAssertion = new c.Equation( labelBottomY, cle );    /* top-y + height == bottom-y */
-
-  /* var original_area = labelHeight.value * labelWidth.values */
-
-  self.solver.addConstraint( labelMidPointAssertion );
-  self.solver.addConstraint( labelWidthAssertion );
-  self.solver.addConstraint( labelHeightAssertion );
-
-  /* Label position assertions.
-     These are added again to keep the size of the label consistent and accurate for collision detection with other elements.
-     For example, the bottom coordinate of a label is always equal to the top_coordinate + height.
-     Although many of these are obvious, it is important for consistency in collision detection.
-  */
-  self.solver.addConstraint( new c.Equation(labelTopY, c.minus(labelBottomY, labelHeight) ) );         /* labelTopY = labelBottomY - label height */
-  self.solver.addConstraint( new c.Equation(labelBottomY, c.plus(labelTopY, labelHeight) ) );          /* label bottom y = label top y + label height */
-  self.solver.addConstraint( new c.Equation(labelLeftX, c.minus(labelRightY, labelWidth) ) );          /* label left x = label right x - label width */
-  self.solver.addConstraint( new c.Equation(labelRightY, c.plus(labelLeftX, labelWidth) ) );           /* label right x = label left x + label width */
-
-  self.solver.addConstraint( new c.Equation(labelHeight, c.minus(labelBottomY, labelTopY) ) );         /* label height = labelBottomY - labelTopY */
-  self.solver.addConstraint( new c.Equation(labelWidth, c.minus(labelRightY, labelLeftX) ) );          /* label width = labelRightY - labelLeftX   */
-  self.solver.addConstraint( new c.Equation(labelMid, c.plus(labelLeftX, c.divide(labelWidth, 2) ) ) ); /* label mid-point = lable_leftX + (labelWidth/2) */
-
-  self.solver.addConstraint( new c.Inequality( labelMid, greaterThan, labelLeftX ) );     /* mid-point coordinate > left coordinate */
-  self.solver.addConstraint( new c.Inequality( labelRightY, greaterThan, labelLeftX) );  /* right coordinate > left coordinate */
-  self.solver.addConstraint( new c.Inequality( labelBottomY, greaterThan, labelTopY ) ); /* bottom coordinate > top coordinate */
-
-  /* Label does not fall out of bounds - constraints */
-  /* Left coordinate does not fall out of bounds to the left */
-  self.solver.addConstraint( new c.Inequality(labelLeftX, greaterThan, 0) );
-  /* Top coordinate does not fall out of bounds from the top */
-  self.solver.addConstraint( new c.Inequality(labelTopY, greaterThan, self.padding.top*2) );
-  /* Right coordinate does not exceed right bounds of chart */
-  self.solver.addConstraint( new c.Inequality( labelRightY, lessThan, chartBox.x + chartBox.width ) );
-  /* Bottom coordinate does not exceed bottom bounds of chart */
-  self.solver.addConstraint( new c.Inequality( labelBottomY, lessThan, chartBox.y + chartBox.height ) );
-  /* Bottom coordinates does not fall out of bounds from the top */
-  self.solver.addConstraint( new c.Inequality(labelBottomY, greaterThan, self.padding.top*2) );
-
-  /* self.solver.addConstraint( new c.Inequality( labelBottomY, lessThan, pathY, weak) );   /* bottom y for label is above peak box */
-
-
-  /* To align the label properly with the peak, we try to keep the mid-point x-coordinate of a label
-     aligned with the middle of the box for a peak element. To do this, we try to set the mid-point value
-     for the label equal to the mid-point value for a peak's box.
-  */
-  var labelMidAtPeakMid = new c.Equation(labelMid, peakMid, strong, 5);
-  self.solver.addConstraint( labelMidAtPeakMid );
-
-  var numberOfSamePeaks = 1,                       /* keeps track of the number of the same peak labels */
-      ypadding = 10,                                  /* y-padding between labels */
-      xpadding = 20;                                  /* x-padding between labels */
-
-  /* Returns true if another label overlaps the current label from the top. */
-  function overlapFromTop(topY, otherLabel) {
-    otherLabelSelect = d3.select(otherLabel);
-
-    var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
-    var otherLabelBottomY = otherLabelTopY + otherLabel.getBBox().height;
-    return otherLabelTopY < topY && otherLabelBottomY >= topY;
-  }
-  
-  /* Returns true if another label overlaps the current label from the bottom. */
-  function overlapFromBottom(topY, bottomY, otherLabel) {
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
-    return otherLabelTopY > topY && otherLabelTopY <= bottomY;
-  }
-  
-  /* Returns true if another label overlaps the current label from the left side. */
-  function overlapFromLeftSide(leftX, rightX, otherLabel){
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
-    var otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width;
-    return otherLabelRightY >= leftX && otherLabelRightY <= rightX;
-  }
-  
-  /* Returns true if another label overlaps the current label from the right side. */
-  function overlapFromRightSide(leftX, rightX, otherLabel){
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
-    var otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width;
-    return otherLabelLeftX <= rightX && otherLabelLeftX >= leftX;
-  }
-  
-  /* Returns true if another label overlaps the current label directly. (Same left and top coordinates) */
-  function overlapDirectly(leftX, topY, otherLabel){
-    otherLabelSelect = d3.select(otherLabel);
-    var otherLabelLeftX =  Number( ( otherLabelSelect.attr('x') == null ? otherLabel.getBBox().x : otherLabelSelect.attr('x') ) );
-    var otherLabelTopY = Number( ( otherLabelSelect.attr('y') == null ? otherLabel.getBBox().y : otherLabelSelect.attr('y') ) );
-    return otherLabelTopY == topY && otherLabelLeftX == leftX;
-  }
-  
-  /* Returns true if another label overlaps the current label from anywhere. */
-  function overlap( leftX, rightX, topY, bottomY, otherLabel  ) {
-    var overlapFromSide = overlapFromLeftSide(leftX, rightX, otherLabel) || overlapFromRightSide(leftX, rightX, otherLabel);
-
-    return (overlapFromTop(topY, otherLabel) && overlapFromSide) ||
-               (overlapFromBottom(topY, bottomY, otherLabel) && overlapFromSide) ||
-               (overlapFromSide && topY == Number(otherLabelSelect.attr('y'))) ||
-               overlapDirectly(leftX, topY, otherLabel);
-  }
-  
-  /* Adds a required inequality to the constraint solver. If an error is thrown and te required inequality cannot be added,
-    then the inequality is changed to have a "strong" strength
-  */
-  function addRequiredInequality( variable, inequality, value, otherLabel ) {
-    try {
-      self.solver.addConstraint( new c.Inequality( variable, inequality, value, required ), required );
-    } catch( e ) {
-      console.log("Failed to make a constraint 'required', so making it 'strong'. Constraint was for ", peakEnergy, " on ", otherLabel.textContent);
-      self.solver.addConstraint( new c.Inequality( variable, inequality, value, strong, 100 ), required );
+    
+    //h
+    
+    const lbb = label.node().getBBox();
+    const labelh = Math.max(lbb.height,8);
+    const labelw = Math.max(lbb.width,10);
+    
+    //ToDo: if( (peak_uy - 0.5*labelh) < 0 ), then try moving left or right to avoid overlapping with the peak.
+    let labely = Math.max( 2+0.5*labelh, peak_uy - 0.5*labelh - 10 );
+    let labelx = Math.min( Math.max(2, peak_x-0.5*labelw+5), chartw-labelw-2 );
+    
+    label.attr("y", labely ).attr("x", labelx );
+    label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", labelx);});
+    
+    
+    
+    //Dont bother doing overlap checking for left-most peak.
+    if( drawnlabels.length === 0 ){
+      drawnlabels.push( label );
+      continue;
     }
-  }
-  
-  
-  /* Main function called for fixing the overlaps for a label. To sum up how this function works:
-     1. For each of the previous peaks drawn before this current label being drawn
-          a.  If that box for a peak overlaps the current label from the side (but have the same top-coordinate values)
-            i)  Move the current label to the right and down
-          b.  Else if the box for a peak overlaps the current label from the top and to the side
-            i)  Move the current label down
-          c.  Else if the box for a peak overlaps the current label from the bottom and to the side
-            i)  Move the current label up.
-     2. For each of the previous labels drawn before this current label being drawn
-          a.  If that other label overlaps the current label directly (same left and top coordiantes)
-            i)  Move the current label down
-          b.  Else if the other label overlaps the current label from the side, but the top coordinate values are the same
-            i)  Move the current label to the right
-            ii) Move the current label down
-          c.  Else if the other label overlaps the current label from the side and the top
-            i)  Move the current label down
-          d.  Else if the other label overlaps the current label from the bottom and the side
-            i)  Move the current label up
-  */
-  function fixOverlaps() {
-    var overlappedLabels = [];
-
-    /* For overlapping peaks - not yet finsihed! */
-    self.peakVis.selectAll("path").each(function(d, i) {
-      var peak = d3.select(this),
-          peakBox = peak.node().getBBox();
-
-      var peakLeftX =  peakBox.x,
-          peakRightX = peakLeftX + peakBox.width,
-          peakTopY = peakBox.y,
-          peakBottomY = peakTopY + peakBox.height;
-
-      var peakOverlapsFromTop = overlapFromTop(labelTopY.value, peak.node()),
-          peakOverlapsFromBottom = overlapFromBottom(labelTopY.value, labelBottomY.value, peak.node()),
-          peakOverlapsFromSide = overlapFromLeftSide( labelLeftX.value, labelRightY.value, peak.node() )
-                                 || overlapFromRightSide(labelLeftX.value, labelRightY.value, peak.node()),
-          overlapping = overlap(labelLeftX.value, labelRightY.value, labelTopY.value, labelBottomY.value, peak.node());
-
-      if( overlapping ) {
-        /* console.log(peakEnergy, " overlaps the peak ", peak.node()); */
-
-        if (peakOverlapsFromSide && labelTopY.value == peakTopY) {
-          /* console.log(otherLabel.textContent, " is overlapping ", text, " from side, so moving ", text, " down."); */
-          /* move label to the right */
-          addRequiredInequality( labelLeftX, greaterThan, peakRightX+xpadding, peak );
-          /* move label down */
-          addRequiredInequality( labelTopY, greaterThan, peakBottomY+ypadding, peak );
-        } else if( peakOverlapsFromTop && peakOverlapsFromSide ) {
-          /* console.log(otherLabel.textContent, " is overlapping ", text, " from top, so moving ", text, " down."); */
-          /* move label down */
-          addRequiredInequality( labelTopY, greaterThan, peakBottomY+ypadding, peak );
-        } else if( peakOverlapsFromBottom && peakOverlapsFromSide ) {
-          /* console.log(otherLabel.textContent, " is overlapping ", text, " from bottom, so moving ", text, " up."); */
-          /* move label up */
-          addRequiredInequality( labelBottomY, lessThan, peakTopY-ypadding, peak );
-        }
-      }
-    });
-
-    self.peakVis.selectAll("text").each(function(d, i){
-      otherLabel = d3.select(this).node();
-
-      if( otherLabel != label.node() && otherLabel.textContent == label.node().textContent ) {
-        /* delete duplicate labels */
-        /* removel label if overlapping directly and same text content */
-        if( !(self.options.showNuclideNames && !self.options.showPeakLabels && !self.options.showNuclideEnergies)
-             || overlapDirectly( labelLeftX.value, labelTopY.value, otherLabel) ) {
-          /* If showing only nuclide name, don't delete duplicates */
-          otherLabel.remove();
-        }
-        ++numberOfSamePeaks;
-      }else if( otherLabel != label.node() ) {
-        otherLabelSelect = d3.select(otherLabel);
-
-        var otherLabelLeftX =  Number(otherLabelSelect.attr('x')),
-            otherLabelRightY = otherLabelLeftX + otherLabel.getBBox().width,
-            otherLabelTopY = Number(otherLabelSelect.attr('y')),
-            otherLabelBottomY = otherLabelTopY + otherLabel.getBBox().height;
-
-        /* Get booleans for overlap from other label */
-        var otherLabelOverlapsFromTop = overlapFromTop(labelTopY.value, otherLabel),
-            otherLabelOverlapsFromBottom = overlapFromBottom(labelTopY.value, labelBottomY.value, otherLabel),
-            otherLabelOverlapsFromSide = overlapFromLeftSide( labelLeftX.value, labelRightY.value, otherLabel ) || overlapFromRightSide(labelLeftX.value, labelRightY.value, otherLabel),
-            directOverlap = overlapDirectly( labelLeftX.value, labelTopY.value, otherLabel),
-            overlapping = overlap(labelLeftX.value, labelRightY.value, labelTopY.value, labelBottomY.value, otherLabel);
-
-        if( overlapping ) {
-          overlappedLabels.push( otherLabel );
-
-          if( directOverlap ) {
-            addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
-          } else if( otherLabelOverlapsFromSide && labelTopY.value == otherLabelTopY ) {
-            /* console.log(otherLabel.textContent, " is overlapping ", text, " from side, so moving ", text, " down."); */
-            addRequiredInequality( labelLeftX, greaterThan, otherLabelRightY+xpadding, otherLabel );                         /* move label to the right */
-            addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
-          } else if( otherLabelOverlapsFromTop && otherLabelOverlapsFromSide ) {
-            /* console.log(otherLabel.textContent, " is overlapping ", text, " from top, so moving ", text, " down."); */
-            addRequiredInequality( labelTopY, greaterThan, otherLabelBottomY+ypadding, otherLabel );                         /* move label down */
-          } else if( otherLabelOverlapsFromBottom && otherLabelOverlapsFromSide ) {
-            /* console.log(otherLabel.textContent, " is overlapping ", text, " from bottom, so moving ", text, " up."); */
-            addRequiredInequality( labelBottomY, lessThan, otherLabelTopY-ypadding, otherLabel );                            /* move label up */
-          }
-          /* Do something with the font size here */
-          /* I tried increasing the font size as much as it can without hitting the other labels, but it seems that it keeps the font at 1vw here. */
-          /* self.solver.addConstraint( new c.Inequality( labelHeight, greaterThan, labelHeight.value + 2, strong ) );       /* label height > 1 */
-          /* self.solver.addConstraint( new c.Inequality( labelWidth, greaterThan, labelWidth.value + 2, strong ) );  */
-        }
-      }
+    
+    //Check for overlaps between two BBoxs.
+    const xoverlap = function(rect1,rect2){
+      return Math.max(0, Math.min(rect1.x+rect1.width, rect2.x+rect2.width) - Math.max(rect1.x, rect2.x));
+    };
+    
+    const yoverlap = function(rect1,rect2){
+      return Math.max(0, Math.min(rect1.y+rect1.height, rect2.y+rect2.height) - Math.max(rect1.y, rect2.y));
+    };
+    
+    const checkoverlap = function(rect1,rect2){
+      //overlapArea = xoverlap() * yoverlap();
+      return ((xoverlap(rect1,rect2) > 0) && (yoverlap(rect1,rect2) > 0))
+    };//checkoverlap
+    
+    const origy = labely;
+    const origx = labelx;
+    
+    //First, lets try making the label go higher until we either have no collisions, or we reach the top
+    let reachedTop = false;
+    for( let otherindex = 0; !reachedTop && otherindex < drawnlabels.length; ++otherindex ){
+      let otherlabel = drawnlabels[otherindex];
+      let othernode = otherlabel.node();
       
-      return overlappedLabels;
-    });
-  }//function fixOverlaps()
-
-  var overlappedLabels = fixOverlaps();
-  // fixOverlaps();          /* can uncomment to run fixOverlaps twice, which may optimize how the labels overlap, with the sacrifice for performance */
-
-  /* Return label back to its original style.
-    This means:
-        - Label gets unbolded (if it was already bolded)
-        - Label z-index goes back to default instead of being shown at the very top.
-        - If an arrow/line is shown from the label to its corresponding peak, then that line/arrow is deleted.
-  */
-  function normalizeLabel(labelToNormalize) {
-    /* Return label back to original style on mouse-out. */
-    d3.select(labelToNormalize ? labelToNormalize : this)
+      const leftw = othernode.getBBox().width;
+      
+      let x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox()),
+          y_overlap = yoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+      
+      if( x_overlap > 0 && y_overlap > 0  ){
+        let newy = otherlabel.node().getBBox().y - 0.5*labelh - 2;
+        if( newy > labely )  //Make sure we only move the label up, so the loop will be garunteed to terminate
+          newy = labely - 0.5*labelh;
+         
+        reachedTop = (newy < (2+0.5*labelh));
+       
+        if( !reachedTop ){
+          labely = newy;
+          label.attr("y", labely );
+          
+          //Now we have to start back over and make sure we havent started overlapping
+          //  with any peaks before 'otherindex'.
+          otherindex = -1;
+          continue;
+        }
+      }//if( x_overlap > 0 && y_overlap > 0  )
+    }//for( let otherindex = 0; otherindex < drawnlabels.length; ++otherindex )
+    
+    //If we reached the top of the chart, lets reset our height, and try a
+    //  different approach
+    if( reachedTop )
+      label.attr("y", origy );
+    
+    //If reachedTop is true, then we still have an overlap
+    let haveOverlap = reachedTop;
+    
+    //Lets try moving the overlapping label to the left, left, up to 50% of its width
+    //  (from its original x), but only if this movement wont also cause an overlap.
+    if( haveOverlap ){
+      haveOverlap = false;
+      for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
+        let otherlabel = drawnlabels[otherindex];
+        if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
+          haveOverlap = true;
+          const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+          let otherinfo = labelinfos[parseInt(otherlabel.attr('labelindex'))];
+          let otherPeakXpx = otherinfo.centroidXPx;
+          const otherWidth = otherlabel.node().getBBox().width;
+          const otherNominalX = Math.min( Math.max(2, otherPeakXpx-0.5*otherWidth+5), chartw-otherWidth-2 );
+          const otherCurrentX = parseFloat(otherlabel.attr("x"));
+          const newOtherX = otherCurrentX - x_overlap - 2;
+          if( (newOtherX > (2+0.5*otherWidth)) && (newOtherX >= (otherPeakXpx-otherWidth-10)) ){
+            haveOverlap = false;
+            
+            otherlabel.attr("x", newOtherX );
+            otherlabel.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", newOtherX);});
+            
+            for( let testindex = 0; !haveOverlap && testindex < drawnlabels.length; ++testindex ){
+              if( testindex !== otherindex )
+                haveOverlap = checkoverlap(otherlabel.node().getBBox(),drawnlabels[testindex].node().getBBox());
+            }
+            
+            if( haveOverlap ){
+              // Move otherlabel back to its original position; haveOverlap being true will stop the loop over otherindex
+              otherlabel.attr("x", otherCurrentX );
+              otherlabel.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", otherCurrentX);});
+              //console.log( 'For collision with ' + label.attr("energy") + ' couldnt fix by moving '
+              //             + otherlabel.attr("energy") + ' to left by ' + x_overlap + 'px');
+            } else {
+              //console.log( 'Did fix collision between ' + label.attr("energy") + ' and '
+              //             + otherlabel.attr("energy") + ' by moving to left by ' + x_overlap + 'px');
+            }
+          }//if( moving the label to the left enough is a possibility )
+        }//if( overlap )
+      }//for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex )
+    } else {
+      if( origy != label.attr("y") ){
+        //We did adjust peak label height
+        //ToDo: see if peak immediately to the left is higher or lower than this one, and see if
+        //      we can make sure the relative label heights are lower/higher to coorespond by possibly
+        //      doing doing a swap of y-coordinates, and then checking if this caused any overlaps.
+      }
+    }//if( moving label up didnt work ) / else
+    
+    
+    //Try moving this label to the right, by up to 50% of its width, but only if this doesnt cause it to go over the next peak
+    if( haveOverlap ){
+      haveOverlap = false;
+      
+      let maxxpx = Math.min( peak_x+0.5*labelw+5, chartw-labelw-2 );
+      if( (index+1) < labelinfos.length )
+        maxxpx = Math.min( maxxpx, labelinfos[index+1].centroidXPx-0.5*labelw-5 );
+      
+      for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
+        let otherlabel = drawnlabels[otherindex];
+        if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
+          haveOverlap = true;
+          const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+          let newx = parseFloat(label.attr("x")) + x_overlap + 2;
+          if( newx <= maxxpx ){
+            haveOverlap = false;
+            label.attr("x", newx );
+            label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", newx);});
+            for( let testindex = 0; !haveOverlap && testindex < drawnlabels.length; ++testindex ){
+              haveOverlap = checkoverlap(otherlabel.node().getBBox(),label.node().getBBox());
+            }
+          }//
+        }//if( overlap )
+      }//for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex )
+      
+      if( haveOverlap ){
+        label.attr("x", labelx = origx );
+        label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", origx);});
+        //console.log( 'Moving label right didnt help.' );
+      } else {
+        //console.log( 'Moving label right did help.' );
+      }
+    }//if( haveOverlap - try moving label to right )
+    
+    
+    //If > 25% of chart height is avaiable under the chart - put the label down there if we can
+    if( haveOverlap && (peak_ly < 0.75*charth) && ((peak_ly + labelh + 30) < charth) ){
+      const starty = label.attr("y");
+      let trial_y = peak_ly + 25;
+      
+      while( haveOverlap && ((trial_y + labelh + 5) < charth) ){
+        haveOverlap = false;
+        labely = trial_y;
+        label.attr("y", trial_y );
+        
+        for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
+          let otherlabel = drawnlabels[otherindex];
+          if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
+            haveOverlap = true;
+            trial_y += 5 + yoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+            //ToDo: could try moving to the right (up to 50% label width), and
+            //      if that is less than some percentage of the total change in y to avoid the overlap,
+            //      than we could do that
+          }
+        }
+      }//while( lowering label until no overlap )
+      
+      if( haveOverlap ){
+        label.attr("y", starty );
+      }
+    }//if( haveOverlap - try putting label under spectrum )
+    
+    if( haveOverlap ){
+      //I guess we're out of luck here, we couldnt find a place to put the label
+      //  without it overlapping.
+      console.log( 'Failed to find a non-overlapping spot for ' + + ' label' );
+    }
+    
+    
+    function normalizeLabel(labelToNormalize) {
+      /* Return label back to original style on mouse-out. */
+      d3.select(labelToNormalize ? labelToNormalize : this)
       .style('z-index', 0)
       .style('cursor', 'default')
-      .attr('stroke', 'none')
+      //.attr('stroke', 'none')
       .attr('font-weight', null);
-
-    /* delete the pointer line from the label to the peak */
-    if( self.peakLabelLine ) {
-      self.peakLabelLine.remove();
-      self.peakLabelLine = null;
-    }
-  }//function normalizeLabel(...)
-
-  /* Highlight a selected label.
+      
+      /* delete the pointer line from the label to the peak */
+      if( self.peakLabelLine ) {
+        self.peakLabelLine.remove();
+        self.peakLabelLine = null;
+      }
+    }//function normalizeLabel(...)
+    
+    /* Highlight a selected label.
      This means:
-        - Label becomes bold
-        - Label's z-index goes to very top (so that the whole text is shown)
-        - A line is drawn from the label to its corresponding peak
-  */
-  function highlightLabel() {
-    if( !self.dragging_plot ) {
-      /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
-      if( self.labelToNormalize )
+     - Label becomes bold
+     - Label's z-index goes to very top (so that the whole text is shown)
+     - A line is drawn from the label to its corresponding peak
+     */
+    function highlightLabel() {
+      
+      if( self.labelToNormalize ){
         normalizeLabel(self.labelToNormalize);
-
-      d3.select(this)
+        self.labelToNormalize = null;
+      }
+      
+      if( self.dragging_plot )
+        return;
+      
+      /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
+      self.labelToNormalize = this;
+      
+      let thislabel = d3.select(this);
+      thislabel
         .style('cursor', 'default')
-        .attr('stroke', 'black')
         .attr('font-weight', 'bold')
+        //.attr("stroke", axiscolor )
         .attr("z-index", 100);
-
-      var x1, x2, y1, y2;
-
-      if( labelLeftX.value > peakMid.value ) {
-        x1 = labelLeftX.value;
-      } else if( labelRightY.value < peakMid.value ) {
-        x1 = labelRightY.value;
-      } else {
-        x1 = labelMid.value;
-      }
-
-      /* label heights are sometimes 1, mostly 18 --> look into the constraints why */
-      if( labelBottomY.value < pathY ) {
-        /* if label is on top of peak */
-        y1 = labelBottomY.value - (self.options.showNuclideNames && self.options.showNuclideEnergies ? 12 : 0);
-      } else if( labelTopY.value > (pathY + pathBoxHeight) ) {
-        /* if label is on bottom of peak */
-        /* To give some space between label and line */
-        y1 = labelTopY.value - 12;
-      }else
-      {
-        if( Math.abs(labelTopY.value - pathY) > Math.abs(labelTopY.value - pathY - pathBoxHeight) ){
-          y1 = labelTopY.value - 12;
-        }else{
-          y1 = labelBottomY.value - (self.options.showNuclideNames && self.options.showNuclideEnergies ? 12 : 0);
-        }
-      }
-              
-      x2 = pathX;
-      y2 = pathY-2 + 0.5*pathBoxHeight;  //peakinfo.centroidMinYPx  peakinfo.centroidMaxYPx
-
+        
+      const labelbbox = thislabel.node().getBBox();
+      const labelTop = labelbbox.y,
+            labelBottom = labelbbox.y + labelbbox.height;
+      const peakMidYpx = 0.5*(peak_ly + peak_uy);
+      
+      const x1 = labelbbox.x + 0.5*labelbbox.width;
+      const x2 = info.centroidXPx;
+      const y1 = ((labelTop < peakMidYpx) ? labelBottom : labelTop);
+      const y2 = peakMidYpx;
+      
+      //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
+      
       /* Here I am trying to draw an arrow marker for the line from the label to a peak */
       /*
-        if (!self.peakLabelArrow)
-          self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
-                              .attr("id", "triangle")
-                              .attr('class', 'peaklabelarrow')
-                              .attr('viewbox', "0 -5 10 10")
-                              .attr("refX", 2.5)
-                              .attr("refY", 2.5)
-                              .attr("markerWidth", 30)
-                              .attr("markerHeight", 30)
-                              .attr("orient", "auto")
-                              .append("path")
-                                .attr("d", "M 0 0 20 6 0 12 3 6")
-                                .attr("transform", "scale(0.4,0.4)")
-                                .style("stroke", "black");
-*/
-               
+         if (!self.peakLabelArrow)
+         self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
+         .attr("id", "triangle")
+         .attr('class', 'peaklabelarrow')
+         .attr('viewbox', "0 -5 10 10")
+         .attr("refX", 2.5)
+         .attr("refY", 2.5)
+         .attr("markerWidth", 30)
+         .attr("markerHeight", 30)
+         .attr("orient", "auto")
+         .append("path")
+         .attr("d", "M 0 0 20 6 0 12 3 6")
+         .attr("transform", "scale(0.4,0.4)")
+         .style("stroke", "black");
+        */
+        
       self.peakLabelLine = self.peakVis.append('line')
-                            .attr('class', 'peaklabelarrow')
-                            .attr('x1', x1)
-                            .attr('y1', y1)
-                            .attr('x2', x2)
-                            .attr('y2', y2)
-                            .attr("marker-end", "url(#triangle)");
-    }
+        .attr('class', 'peaklabelarrow')
+        .attr('x1', x1)
+        .attr('y1', y1)
+        .attr('x2', x2)
+        .attr('y2', y2)
+        .attr('stroke', axiscolor)
+        .attr("marker-end", "url(#triangle)");
+        
+        //Could highlight-peak here
+    }//function highlightLabel()
+    
+    
+    label.on("mouseover", highlightLabel)
+         .on("mouseout",  normalizeLabel);
+    
+    if( self.isTouchDevice() )
+      label.on("touchstart", highlightLabel);
 
-    self.labelToNormalize = this;
-  }//function highlightLabel()
-
-  label.attr("x", labelLeftX.value)
-       .attr("y", labelTopY.value)
-  /* Set the font-size here */
-  /* .style("font-size", ((labelWidth.value * labelHeight.value) / original_area) + "vw") */
-       .on("mouseover", highlightLabel)
-       .on("mouseout",  normalizeLabel);
-
-  if( self.isTouchDevice() )
-    label.on("touchstart", highlightLabel);
-
-  if( userLabel )
-    userLabel.attr("x", labelLeftX.value);
-  if( peakEnergyLabel )
-    peakEnergyLabel.attr("x", labelLeftX.value);
-  if( nuclideNameLabel )
-    nuclideNameLabel.attr("x", labelLeftX.value);
-
-  return label;
+    drawnlabels.push( label );
+  }//labelinfos.foreach(...)
   
-  /* Possible algorithm: Get list of all text nodes. Have a new array of grouped text nodes by overlapped text labels. This array will hold an array
-         of grouped nodes, and once this array has been created and filled, start doing stuff with it. Specifically, replace all those labels with something like
-         "5 peaks from 100-200 kEV". Individual nodes will just be outputted normally ("500 kEV"). However, user may lose some information when zoomed all the
-         way out of the graph. They would have to zoom-in further to see the peaks.
-  */
 }//SpectrumChartD3.prototype.drawPeakLabels = ...
 
 
@@ -10798,6 +10664,11 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
   if (Array.isArray(thePeakSelected[0][0])) 
     thePeakSelected = peakElem;
 
+  //console.log( 'thePeakSelected=', thePeakSelected );
+  // console.log( 'peakIndex=', peakIndex );
+  // console.log( 'paths=', paths );
+  //console.log( 'path=', path );
+    
   if (self.leftMouseDown || self.rightClickDown)
     return;
 
@@ -10823,17 +10694,20 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
     self.highlightedPeak = peakIndex;
   }
   
-  //peakPaths
-  //blah blah blah
-  for (i = 0; i < self.peakLabelArray && self.peakLabelArray.length; i++){
-    if( self.peakLabelArray[i].path === (peakIndex ? peakIndex : path) ) {
-      self.peakLabelArray[i]
-          .label
-          .attr('stroke', 'black')
-          .attr("z-index", 100);
-      self.highlightedLabel = self.peakLabelArray[i].label;
-    }
-  }//
+  self.peakVis.select('.peaklabel').forEach( function(t){
+    const energy = parseFloat(d3.select(t[0]).attr('energy'));
+    if( isNaN(energy) )
+      return;
+      
+    //Need to figure out some way to get the peak energy here so we can match the label up.  Maybe just assign label as member of peak?
+    //if( Math.abs(energy - ) < 0.01 ){
+    //  t.attr('stroke', 'green');
+    //  self.highlightedLabel = t;
+      
+      //ToDo: Should combine self.highlightedLabel and self.labelToNormalize, as well as the function that does the actual highlighting
+      
+    //}
+  } );
 }//SpectrumChartD3.prototype.highlightPeak = ...
 
 SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) {

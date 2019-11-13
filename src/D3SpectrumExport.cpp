@@ -44,8 +44,7 @@ namespace
   //  usefull outside of this file
 #if( SpecUtils_D3_SUPPORT_FILE_STATIC )
   const unsigned char * const ns_libJsFiles[] = {
-    D3_MIN_JS, // D3.js library
-    CASSOWARY_MIN_JS, // Library for smart label-placement on chart
+    D3_MIN_JS // D3.js library
   };//ns_libJsFiles[]
   
   const unsigned char * const ns_jsFiles[] = {
@@ -233,15 +232,10 @@ namespace D3SpectrumExport
   const unsigned char *spectrum_chart_d3_js(){ return SPECTRUM_CHART_D3_JS; }
   const unsigned char *spectrum_char_d3_css(){ return SPECTRUM_CHART_D3_CSS; }
   const unsigned char *spectrum_chart_d3_standalone_css(){ return SPECTRUM_CHART_D3_STANDALONE_CSS; }
-  
-  const unsigned char *cassowary_js(){ return CASSOWARY_MIN_JS; }
 #else
   const char *d3_js_filename(){ return D3_MIN_JS_FILENAME; }
   const char *spectrum_chart_d3_js_filename(){ return SPECTRUM_CHART_D3_JS_FILENAME; }
   const char *spectrum_chart_d3_css_filename(){ return SPECTRUM_CHART_D3_CSS_FILENAME; }
-  const char *spectrum_chart_d3_css_standalone_filename(){ return SPECTRUM_CHART_D3_STANDALONE_CSS_FILENAME; }
-  
-  const char *cassowary_js_filename(){ return CASSOWARY_MIN_JS_FILENAME; }
 #endif
   
   const char *spectrum_chart_setup_js(){ return SPECTRUM_CHART_SETUP_JS; }
@@ -343,7 +337,6 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     const std::string basdir = D3_SCRIPT_RUNTIME_DIR;
     
     ostr << "<script>" << file_to_string( append_path(basdir, D3_MIN_JS_FILENAME) ) << "</script>" << endline;
-    ostr << "<script>" << file_to_string( append_path(basdir, CASSOWARY_MIN_JS_FILENAME) ) << "</script>" << endline;
     
     ostr << "<script>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_JS_FILENAME) ) << "</script>" << endline;
     ostr << "<script>" << SPECTRUM_CHART_SETUP_JS << "</script>" << endline;

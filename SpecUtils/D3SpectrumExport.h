@@ -94,14 +94,11 @@ namespace D3SpectrumExport
   const unsigned char *spectrum_chart_d3_js(); // For chart interactions, animations, etc.
   const unsigned char *spectrum_char_d3_css();
   const unsigned char *spectrum_chart_d3_standalone_css();
-  
-  const unsigned char *cassowary_js(); // Library for smart label-placement on chart
 #else
   const char *d3_js_filename();
   const char *spectrum_chart_d3_js_filename(); // For chart interactions, animations, etc.
   const char *spectrum_chart_d3_css_filename();
   const char *spectrum_chart_d3_css_standalone_filename();
-  const char *cassowary_js_filename(); // Library for smart label-placement on chart
 #endif
   const char *spectrum_chart_setup_js();
   
