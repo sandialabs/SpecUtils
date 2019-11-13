@@ -6477,12 +6477,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   //console.log( "labelinfos=", labelinfos );
   
   /*
-   Order to do things:
-     - loop over input labels and draw them centered over peak.
-     - Make sure label highlight and un-highlight when moused over, and when peaks is moused over (search for 'self.peakLabelArray' to start on this)
-     - Implement overlap checking
-     X - Remove all references to the cassowary library (in JS and C++)
-     - Start laying out the labels properly.
+   ToDo items w.r.t. labels:
+     - Peak labels can overlap peaks - should be fixed.
      - Add user labels not associated with peaks.
      - Add right click menu to edit label (both for non-peak labels, and normal labels)
    */
@@ -6602,8 +6598,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       nuclideNameLabel.text(nuclide.name + ", " + info.nuclideEnergy.toFixed(2).toString() + " keV" );
     }
     
-    //h
-    
+
     const lbb = label.node().getBBox();
     const labelh = Math.max(lbb.height,8);
     const labelw = Math.max(lbb.width,10);
@@ -6632,6 +6627,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       return Math.max(0, Math.min(rect1.y+rect1.height, rect2.y+rect2.height) - Math.max(rect1.y, rect2.y));
     };
     
+    // ToDo: implement checking for text overlapping peak areas...
     const checkoverlap = function(rect1,rect2){
       //overlapArea = xoverlap() * yoverlap();
       return ((xoverlap(rect1,rect2) > 0) && (yoverlap(rect1,rect2) > 0))
@@ -6792,9 +6788,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     if( haveOverlap ){
       //I guess we're out of luck here, we couldnt find a place to put the label
       //  without it overlapping.
-      console.log( 'Failed to find a non-overlapping spot for ' + + ' label' );
+      //console.log( 'Failed to find a non-overlapping spot for ' + + ' label' );
     }
-    
     
     function normalizeLabel(labelToNormalize) {
       /* Return label back to original style on mouse-out. */
@@ -6816,6 +6811,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
      - Label becomes bold
      - Label's z-index goes to very top (so that the whole text is shown)
      - A line is drawn from the label to its corresponding peak
+     
+     ToDo: Make highlightLabel a member function and combine functionality with with self.highlightedLabel
      */
     function highlightLabel() {
       
