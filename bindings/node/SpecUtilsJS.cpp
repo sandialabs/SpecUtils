@@ -836,14 +836,14 @@ Napi::Value SpecFile::neutron_counts_sum(const Napi::CallbackInfo& info)
 Napi::Value SpecFile::num_gamma_channels(const Napi::CallbackInfo& info)
 {
   assert( m_spec );
-  return Napi::Number::New( info.Env(), m_spec->num_gamma_channels() );
+  return Napi::Number::New( info.Env(), static_cast<double>(m_spec->num_gamma_channels()) );
 }
 
 
 Napi::Value SpecFile::num_spec_records(const Napi::CallbackInfo& info)
 {
   assert( m_spec );
-  return Napi::Number::New( info.Env(), m_spec->num_measurements() );
+  return Napi::Number::New( info.Env(), static_cast<double>(m_spec->num_measurements()) );
 }
 
 
