@@ -1390,7 +1390,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
         try
         {
           gmtoffset = boost::posix_time::duration_from_string(offset);
-        }catch( std::exception &e )
+        }catch( std::exception & )
         {
           cerr << "Failed to convert '" << offset << "' to time duration, from string '" << time_string << "'" << endl;
         }
@@ -1437,21 +1437,32 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
         //Assume microsecond resolution at the best (note
         //  boost::posix_time::nanosecond isnt available on my OS X install)
         const size_t ndigits = 9;
-        const size_t invfrac = 1E9;
-        const size_t nticks = boost::posix_time::time_duration::ticks_per_second();
+//        const uint64_t invfrac = static_cast<uint64_t>(1E9);
+        const auto nticks = boost::posix_time::time_duration::ticks_per_second();
         
         if( fracstr.size() < ndigits )
           fracstr.resize( ndigits, '0' );
         else if( fracstr.size() > ndigits )
           fracstr.insert( ndigits, "." );
         
-        int numres = 0;  //using int will get rounding wrong
+        
+        double numres = 0.0;
         if( (stringstream(fracstr) >> numres) )
         {
-          //fraction_nano_sec = numres;
-          fraction = boost::posix_time::time_duration(0,0,0, numres*nticks/invfrac);
+          const double frac = std::round( numres * nticks * 1.0E-9 );
+          const auto fractions = static_cast<boost::posix_time::time_duration::fractional_seconds_type>( frac );
+          fraction = boost::posix_time::time_duration(0,0,0,fractions);
         }else
           cerr << "Failed to convert fraction '" << fracstr << "' to double" << endl;
+        
+        //int64_t numres = 0;  //using int will get rounding wrong
+        //if( (stringstream(fracstr) >> numres) )
+//        {
+//          //fraction_nano_sec = numres;
+//          boost::posix_time::time_duration::fractional_seconds_type fractions = numres*nticks/invfrac;
+//          fraction = boost::posix_time::time_duration(0,0,0,fractions);
+//        }else
+//          cerr << "Failed to convert fraction '" << fracstr << "' to double" << endl;
         
         string normal = time_string.substr(0,period);
         if( last != string::npos )

@@ -307,7 +307,7 @@ namespace
   {
     static const boost::gregorian::date ole_zero(1899,12,30);
     
-    boost::gregorian::days d(static_cast<int64_t>(ole_dt) );
+    boost::gregorian::days d( static_cast<long>(ole_dt) );
     boost::posix_time::ptime pt(ole_zero + d);
     
     ole_dt -= d.days();
@@ -2048,7 +2048,7 @@ void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
         }//if( activity_units_att && activity_units_att->value() )
       
         xml_value_to_flt(nuc_activity_node, result.activity_);
-        result.activity_ *= activity_units;
+        result.activity_ *= static_cast<float>( activity_units );
       }//if( nuc_activity_node && nuc_activity_node->value_size() )
     
       if( position_node )
@@ -7068,8 +7068,8 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           ++n_times_guess_cal;
           meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
           meas->calibration_coeffs_.resize( 2 );
-          meas->calibration_coeffs_[0] = 0.0;
-          meas->calibration_coeffs_[1] = 3000.0 / std::max(meas->gamma_counts_->size()-1, size_t(1));
+          meas->calibration_coeffs_[0] = 0.0f;
+          meas->calibration_coeffs_[1] = 3000.0f / std::max(meas->gamma_counts_->size()-1, size_t(1));
           MeasurementCalibInfo info( meas );
         
           pos = calib_infos_set.find(info);
@@ -7640,7 +7640,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
         }else
         {
           auto numpos = std::find( begin(detector_names_), end(detector_names_), gamma_name );
-          auto numindex = numpos - begin(detector_names_);
+          auto numindex = static_cast<size_t>(numpos - begin(detector_names_));
           if( (numpos != end(detector_names_)) && (numindex < detector_numbers_.size()) )
           {
             meas->detector_number_ = detector_numbers_[numindex];
@@ -9243,9 +9243,9 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     strcpy( timestr, "00:00:00" );
   }else
   {
-    const int hournum = summed->start_time().time_of_day().hours();
-    const int minutenum = summed->start_time().time_of_day().minutes();
-    const int secondnum = summed->start_time().time_of_day().seconds();
+    const int hournum = static_cast<int>( summed->start_time().time_of_day().hours() );
+    const int minutenum = static_cast<int>( summed->start_time().time_of_day().minutes() );
+    const int secondnum = static_cast<int>( summed->start_time().time_of_day().seconds() );
     snprintf( timestr, sizeof(timestr)-1, "%02d:%02d:%02d",
               hournum, minutenum, secondnum );
   }
@@ -10121,7 +10121,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
       
       if( firstReportPtr > 0 )
       {
-        const auto curr_pos = 128*(firstReportPtr-1) + orig_pos;
+        const auto curr_pos = 128*static_cast<int>(firstReportPtr-1) + orig_pos;
         
         input.seekg( curr_pos, ios::beg );
         if( !input.good() )
@@ -10137,7 +10137,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
         readBinaryData( input, ntxtbytes );
         readBinaryData( input, sourcecode );
 
-        if( (size > (curr_pos+4)) && (ntxtbytes > (size - curr_pos - 4)) )
+        if( (static_cast<istream::pos_type>(size) > (curr_pos+4)) && (static_cast<int>(ntxtbytes) > (size - curr_pos - 4)) )
           ntxtbytes = (size - curr_pos - 4);
         
         if( ntxtbytes > 2048 )  //20190604: is 2048 a randomly picked number, or the expansion header max size
@@ -11156,7 +11156,7 @@ bool MeasurementInfo::write_binary_exploranium_gr130v0( std::ostream &output ) c
       const vector<float> &gammcounts = *meas.gamma_counts_;
       vector<uint16_t> channelcounts( gammcounts.size(), 0 );
       for( size_t i = 0; i < gammcounts.size(); ++i )
-        channelcounts[i] = gammcounts[i];
+        channelcounts[i] = static_cast<uint16_t>( static_cast<uint32_t>(gammcounts[i]) );  //ToDo: check if we want the wrap-around behaviour, or just take uint16_t
       
       if( gammcounts.size() <= 256 )
         memcpy( buffer + 51, &channelcounts[2], (2*gammcounts.size() - 6) );
@@ -11175,7 +11175,7 @@ bool MeasurementInfo::write_binary_exploranium_gr130v0( std::ostream &output ) c
     
     if( !nwrote )
       throw runtime_error("Failed to write any spectrums");
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     return false;
   }
@@ -11312,7 +11312,7 @@ bool MeasurementInfo::write_binary_exploranium_gr135v2( std::ostream &output ) c
     
     if( !nwrote )
       throw runtime_error("Failed to write any spectrums");
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     return false;
   }
@@ -11354,7 +11354,7 @@ bool MeasurementInfo::write_d3_html( ostream &ostr,
     measurements.push_back( pair<const Measurement *,D3SpectrumExport::D3SpectrumOptions>(summed.get(),spec_options) );
     
     return D3SpectrumExport::write_d3_html( ostr, measurements, options );
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
      return false;
   }
@@ -11420,12 +11420,12 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
     if( !summed->start_time_.is_special() )
     {
       // mm/dd/yyyy hh:mm:ss "02/29/2016 14:31:47"
-      const int year = summed->start_time_.date().year();
-      const int month = summed->start_time_.date().month();
-      const int day = summed->start_time_.date().day();
-      const int hour = summed->start_time_.time_of_day().hours();
-      const int mins = summed->start_time_.time_of_day().minutes();
-      const int secs = summed->start_time_.time_of_day().seconds();
+      const int year =  static_cast<int>( summed->start_time_.date().year() );
+      const int month = static_cast<int>( summed->start_time_.date().month() );
+      const int day =   static_cast<int>( summed->start_time_.date().day() );
+      const int hour =  static_cast<int>( summed->start_time_.time_of_day().hours() );
+      const int mins =  static_cast<int>( summed->start_time_.time_of_day().minutes() );
+      const int secs =  static_cast<int>( summed->start_time_.time_of_day().seconds() );
       //double frac = summed->start_time_.time_of_day().fractional_seconds()
         //             / double(boost::posix_time::time_duration::ticks_per_second());
       
@@ -14555,7 +14555,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
           if( first_sample_was_back )
           {
             auto pos = lower_bound(begin(sample_nums_vec), end(sample_nums_vec), sample_num );
-            sn = (pos - begin(sample_nums_vec));
+            sn = static_cast<int>( pos - begin(sample_nums_vec) );
           }
           snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey %i", sn );  //xsd:ID: Spaces arent allowed!  Must start with a letter or underscore, and can only contain letters, digits, underscores, hyphens, and periods.
         }
@@ -17487,6 +17487,29 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
 }//suggested_gamma_binning_index(...)
 
 
+
+std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<int> &sample_numbers,
+                                     const std::vector<std::string> &det_names ) const
+{
+  vector<bool> det_to_use( detector_numbers_.size(), false );
+  
+  for( const std::string name : det_names )
+  {
+    const vector<string>::const_iterator pos = std::find( begin(detector_names_),
+                                                end(detector_names_),
+                                                name );
+    if( pos == end(detector_names_) )
+      throw runtime_error( "MeasurementInfo::sum_measurements(): invalid detector name in the input" );
+    
+    const size_t index = pos - detector_names_.begin();
+    det_to_use[index] = true;
+  }//for( const int num : det_nums )
+  
+  return sum_measurements( sample_numbers, det_to_use );
+}//MeasurementShrdPtr sum_measurements(...)
+
+
+
 MeasurementShrdPtr MeasurementInfo::sum_measurements( const set<int> &sample_num,
                                             const vector<int> &det_nums ) const
 {
@@ -18172,15 +18195,41 @@ void MeasurementInfo::write_to_file( const std::string name,
                    const std::vector<int> det_nums_vector,
                    const SaveSpectrumAsType format ) const
 {
-    //copy vectors into sets 
-   const std::set<int> sample_nums_set( sample_nums_vector.begin(),
+  //copy vectors into sets
+  const std::set<int> sample_nums_set( sample_nums_vector.begin(),
                                         sample_nums_vector.end() );
-   const std::set<int> det_nums_set( det_nums_vector.begin(),
+  const std::set<int> det_nums_set( det_nums_vector.begin(),
                                      det_nums_vector.end() );
-    //write the file
-    write_to_file( name, sample_nums_set, det_nums_set, format);
+  //write the file
+  write_to_file( name, sample_nums_set, det_nums_set, format);
 }//write_to_file(...)
 
+
+void MeasurementInfo::write_to_file( const std::string &filename,
+                   const std::set<int> &sample_nums,
+                   const std::vector<std::string> &det_names,
+                   const SaveSpectrumAsType format ) const
+{
+  set<int> det_nums_set;
+  
+  {//begin lock on mutex_
+    std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+    for( const std::string &name : det_names )
+    {
+      const vector<string>::const_iterator pos = std::find( begin(detector_names_),
+                                                         end(detector_names_),
+                                                         name );
+      if( pos == end(detector_names_) )
+        throw runtime_error( "MeasurementInfo::write_to_file(): invalid detector name in the input" );
+    
+      const size_t index = pos - detector_names_.begin();
+      det_nums_set.insert( detector_numbers_[index] );
+    }//for( const int num : det_nums )
+  }//end lock on mutex_
+  
+  write_to_file( filename, sample_nums, det_nums_set, format);
+}//void write_to_file(...)
 
 
 void MeasurementInfo::write( std::ostream &strm,
@@ -18911,7 +18960,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       if( passthrough() && (meas->source_type() != Measurement::Background && (meas->source_type() != Measurement::Calibration)) )
       {
         auto pos = std::lower_bound( begin(passthrough_samples), end(passthrough_samples), meas->sample_number_ );
-        sample_num = (pos - passthrough_samples.begin()) + 1;
+        sample_num = static_cast<int>(pos - passthrough_samples.begin()) + 1;
         if( pos == end(passthrough_samples) || ((pos != end(passthrough_samples)) && ((*pos) != meas->sample_number_)) )
         {
           //Will almost always be an insertion at the end - so its not the worst possible...
@@ -20489,7 +20538,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
     measurements_.push_back( meas );
 
     cleanup_after_load();
-  }catch( std::runtime_error &e )
+  }catch( std::runtime_error & )
   {
     input.clear();
     input.seekg( orig_pos, ios::beg );
@@ -24555,9 +24604,9 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       
       float livetime = 0.0f, realtime = 0.0f;
       if( i < live_times.size() )
-        livetime = 1.0E-6 * live_times[i];
+        livetime = 1.0E-6f * live_times[i];
       if( i < real_times.size() )
-        realtime = 1.0E-6 * real_times[i];
+        realtime = 1.0E-6f * real_times[i];
       
       //JIC something is whack getting time, hack it! (shouldnt happen that I'm aware of)
       if( livetime==0.0f && realtime!=0.0f )
@@ -24620,7 +24669,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
     //measurment_operator_ = "";
     
     cleanup_after_load();
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     reset();
     return false;
@@ -24959,7 +25008,8 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
           
           if( amplitude >= histogram->size() )
           {
-            const size_t next_power_of_two = std::pow(2, std::ceil(log(amplitude)/log(2)));
+            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude)/log(2)) );
+            const size_t next_power_of_two = static_cast<size_t>( std::pow( 2u, powexp ) );
             histogram->resize( next_power_of_two, 0.0f );
           }
             
@@ -24989,10 +25039,10 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
       }//for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
       
       
-      if( realtime == 0.0 )
-        realtime = 1.0E-6*(lasttimestamp - firsttimestamp);
-      if( livetime == 0.0 )
-        livetime = 1.0E-6*(lasttimestamp - firsttimestamp);
+      if( realtime == 0.0f )
+        realtime = 1.0E-6f*(lasttimestamp - firsttimestamp);
+      if( livetime == 0.0f )
+        livetime = 1.0E-6f*(lasttimestamp - firsttimestamp);
     }else if( lmstyle == 4 )
     {
       uint32_t firstlivetimes[2] = { 0 }, firstrealtimes[2] = { 0 };
@@ -25058,7 +25108,8 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
           
           if( amplitude >= histogram->size() )
           {
-            const size_t next_power_of_two = std::pow(2, std::ceil(log(amplitude)/log(2)));
+            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude)/log(2.0)) );
+            const size_t next_power_of_two = static_cast<size_t>( std::pow( 2u, powexp ) );
             histogram->resize( next_power_of_two, 0.0f );
           }
           
@@ -25099,11 +25150,11 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
       //cout << "realtime=" << realtime << ", from hits->" << (1.0E-9*(lasttimestamp - firsttimestamp)) << endl;
       //cout << "livetime=" << realtime << ", from hits->" << (1.0E-9*(livetime_ns - (10*1000000 * uint64_t(firstlivetimes[0])))) << endl;
       
-      if( realtime == 0.0 ) //not exact, but close enough
-        realtime = 1.0E-9*(lasttimestamp - firsttimestamp);
+      if( realtime == 0.0f ) //not exact, but close enough
+        realtime = 1.0E-9f*(lasttimestamp - firsttimestamp);
       
       if( livetime == 0.0 ) //get us within ~20ms live time calc, close enough!
-        livetime = 1.0E-9*(livetime_ns - (10*1000000 * uint64_t(firstlivetimes[0])));
+        livetime = 1.0E-9f*(livetime_ns - (10*1000000 * uint64_t(firstlivetimes[0])));
     }else if( lmstyle == 2 )
     {
       assert( 0 );
@@ -25303,7 +25354,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
     auto channel_counts = make_shared<vector<float>>(nchannel);
     for( size_t i = 0; i < nchannel; ++i )
     {
-      (*channel_counts)[i] = spectrumint[i];
+      (*channel_counts)[i] = static_cast<float>( spectrumint[i] );
       meas->gamma_count_sum_ += spectrumint[i];
     }
     meas->gamma_counts_ = channel_counts;
@@ -25313,7 +25364,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
     cleanup_after_load();
     
     return true;
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     reset();
     input.clear();
@@ -25483,7 +25534,7 @@ bool MeasurementInfo::load_from_multiact( std::istream &input )
       //ToDo: make sure channel counts are reasonable...
       uint32_t threebyte = 0;
       memcpy( &threebyte, (&(data[i])), 3 );
-      channel_counts->push_back( threebyte );
+      channel_counts->push_back( static_cast<float>(threebyte) );
       countssum += threebyte;
     }
     
@@ -25492,8 +25543,8 @@ bool MeasurementInfo::load_from_multiact( std::istream &input )
     
     auto meas = make_shared<Measurement>();
     
-    meas->real_time_ = realtime;
-    meas->live_time_ = livetime;
+    meas->real_time_ = static_cast<float>( realtime );
+    meas->live_time_ = static_cast<float>( livetime );
     meas->gamma_count_sum_ = countssum;
     meas->gamma_counts_ = channel_counts;
     
@@ -25604,7 +25655,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
           throw runtime_error( "Line after #g_Spectrum not as expected" );
         
         const float upper_energy = (fields.size()>1 && fields[1]>500.0f && fields[1]<13000.0f) ? fields[1] : 0.0f;
-        const size_t nchannel = fields[0];
+        const size_t nchannel = static_cast<size_t>( fields[0] );
         auto counts = std::make_shared< vector<float> >(nchannel,0.0f);
         
         double channelsum = 0.0;
@@ -25628,7 +25679,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
           if( (floorf(fields[0]) != fields[0]) || (fields[0] < 0.0f) )
             throw runtime_error( "First col of spectrum data must be positive integer" );
           
-          const size_t start_channel = fields[0];
+          const size_t start_channel = static_cast<size_t>( fields[0] );
           
           if( (start_channel <= last_channel) || (start_channel > nchannel) )
             throw runtime_error( "Channels not ordered as expected" );
@@ -26040,7 +26091,7 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
     
     if( measurements_.empty() )
       throw std::runtime_error( "no measurments" );
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     //cerr << SRC_LOCATION << "\n\tCaught: " << e.what() << endl;
     input.clear();
