@@ -6407,8 +6407,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       path/* .attr("class", "peak") */
           .attr("class", "spectrum-peak-" + specindex)
-          .attr("stroke-width",1)
-          .attr("stroke", peakColor );
+          .attr("stroke-width", 1)
+          .attr("stroke", peakColor )
+          .attr("data-energy", ((peak && peak.Centroid) ? peak.Centroid[0].toFixed(2) : 0) )
+          ;
             
       path.attr("fill-opacity", ((isOutline && !isFill) ? 0.0 : 0.6) );
 
@@ -6561,8 +6563,13 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     .attr("y", peak_uy - 10 )
     .attr("x", peak_x)           //Doesnt seem to be needed since we are using all <tspan>s
     .attr("energy", peakEnergy)  //Dont think this is needed
-    .attr("labelindex", index)  //Is there a better way to associate the labelinfos object with this label?  Probably, but whatever for now.
-    .attr("fill", axiscolor );
+    .attr("fill", axiscolor )
+    .attr("data-labelindex", index)  //Is there a better way to associate the labelinfos object with this label?  Probably, but whatever for now.
+    .attr("data-peak-energy", info.energy.toFixed(2) )
+    .attr("data-peak-x-px", peak_x.toFixed(1) )
+    .attr("data-peak-lower-y-px", peak_ly.toFixed(1) )
+    .attr("data-peak-upper-y-px", peak_uy.toFixed(1) )
+    ;
     
     if( self.options.showUserLabels && info.userLabel ){
       /* T-span element for the user label */
@@ -6683,7 +6690,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
         if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
           haveOverlap = true;
           const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
-          let otherinfo = labelinfos[parseInt(otherlabel.attr('labelindex'))];
+          let otherinfo = labelinfos[parseInt(otherlabel.attr('data-labelindex'))];
           let otherPeakXpx = otherinfo.centroidXPx;
           const otherWidth = otherlabel.node().getBBox().width;
           const otherNominalX = Math.min( Math.max(2, otherPeakXpx-0.5*otherWidth+5), chartw-otherWidth-2 );
@@ -6791,97 +6798,15 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       //console.log( 'Failed to find a non-overlapping spot for ' + + ' label' );
     }
     
-    function normalizeLabel(labelToNormalize) {
-      /* Return label back to original style on mouse-out. */
-      d3.select(labelToNormalize ? labelToNormalize : this)
-      .style('z-index', 0)
-      .style('cursor', 'default')
-      //.attr('stroke', 'none')
-      .attr('font-weight', null);
-      
-      /* delete the pointer line from the label to the peak */
-      if( self.peakLabelLine ) {
-        self.peakLabelLine.remove();
-        self.peakLabelLine = null;
-      }
-    }//function normalizeLabel(...)
-    
-    /* Highlight a selected label.
-     This means:
-     - Label becomes bold
-     - Label's z-index goes to very top (so that the whole text is shown)
-     - A line is drawn from the label to its corresponding peak
-     
-     ToDo: Make highlightLabel a member function and combine functionality with with self.highlightedLabel
-     */
-    function highlightLabel() {
-      
-      if( self.labelToNormalize ){
-        normalizeLabel(self.labelToNormalize);
-        self.labelToNormalize = null;
-      }
-      
-      if( self.dragging_plot )
-        return;
-      
-      /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
-      self.labelToNormalize = this;
-      
-      let thislabel = d3.select(this);
-      thislabel
-        .style('cursor', 'default')
-        .attr('font-weight', 'bold')
-        //.attr("stroke", axiscolor )
-        .attr("z-index", 100);
-        
-      const labelbbox = thislabel.node().getBBox();
-      const labelTop = labelbbox.y,
-            labelBottom = labelbbox.y + labelbbox.height;
-      const peakMidYpx = 0.5*(peak_ly + peak_uy);
-      
-      const x1 = labelbbox.x + 0.5*labelbbox.width;
-      const x2 = info.centroidXPx;
-      const y1 = ((labelTop < peakMidYpx) ? labelBottom : labelTop);
-      const y2 = peakMidYpx;
-      
-      //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
-      
-      /* Here I am trying to draw an arrow marker for the line from the label to a peak */
-      /*
-         if (!self.peakLabelArrow)
-         self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
-         .attr("id", "triangle")
-         .attr('class', 'peaklabelarrow')
-         .attr('viewbox', "0 -5 10 10")
-         .attr("refX", 2.5)
-         .attr("refY", 2.5)
-         .attr("markerWidth", 30)
-         .attr("markerHeight", 30)
-         .attr("orient", "auto")
-         .append("path")
-         .attr("d", "M 0 0 20 6 0 12 3 6")
-         .attr("transform", "scale(0.4,0.4)")
-         .style("stroke", "black");
-        */
-        
-      self.peakLabelLine = self.peakVis.append('line')
-        .attr('class', 'peaklabelarrow')
-        .attr('x1', x1)
-        .attr('y1', y1)
-        .attr('x2', x2)
-        .attr('y2', y2)
-        .attr('stroke', axiscolor)
-        .attr("marker-end", "url(#triangle)");
-        
-        //Could highlight-peak here
-    }//function highlightLabel()
     
     
-    label.on("mouseover", highlightLabel)
-         .on("mouseout",  normalizeLabel);
+    
+    
+    label.on("mouseover", function(){ self.highlightLabel(this,false); } )
+         .on("mouseout",  function(){ self.unHighlightLabel(); } );
     
     if( self.isTouchDevice() )
-      label.on("touchstart", highlightLabel);
+      label.on("touchstart", function(){ self.highlightLabel(this,false); } );
 
     drawnlabels.push( label );
   }//labelinfos.foreach(...)
@@ -10656,15 +10581,10 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
       return;
     }
   }
-
+  
   var thePeakSelected = d3.select(peakElem);
   if (Array.isArray(thePeakSelected[0][0])) 
     thePeakSelected = peakElem;
-
-  //console.log( 'thePeakSelected=', thePeakSelected );
-  // console.log( 'peakIndex=', peakIndex );
-  // console.log( 'paths=', paths );
-  //console.log( 'path=', path );
     
   if (self.leftMouseDown || self.rightClickDown)
     return;
@@ -10691,33 +10611,29 @@ SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, p
     self.highlightedPeak = peakIndex;
   }
   
-  self.peakVis.select('.peaklabel').forEach( function(t){
-    const energy = parseFloat(d3.select(t[0]).attr('energy'));
-    if( isNaN(energy) )
-      return;
-      
-    //Need to figure out some way to get the peak energy here so we can match the label up.  Maybe just assign label as member of peak?
-    //if( Math.abs(energy - ) < 0.01 ){
-    //  t.attr('stroke', 'green');
-    //  self.highlightedLabel = t;
-      
-      //ToDo: Should combine self.highlightedLabel and self.labelToNormalize, as well as the function that does the actual highlighting
-      
-    //}
+  
+  //Dont waste time selecting for label elements if there is no possibility of having them - not sure this saves anything...
+  if( !this.options.showUserLabels && !this.options.showPeakLabels && !this.options.showNuclideNames )
+    return;
+  
+  //ToDo: I dont think we need to check if peakElem.dataset.energy is valid - it should always be - I think
+  const peakEnergy = peakElem.dataset && peakElem.dataset.energy ? parseFloat(peakElem.dataset.energy) : 0;
+  
+  self.peakVis.selectAll('.peaklabel').each( function(){
+    const label = this;
+    const energy = parseFloat( label.dataset.peakEnergy );
+    if( Math.abs(energy - peakEnergy) < 0.01 )
+      self.highlightLabel(label,true);
+    
   } );
 }//SpectrumChartD3.prototype.highlightPeak = ...
+
 
 SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) {
   var self = this;
 
-  if (self.highlightedLabel) {
-    self.highlightedLabel.attr('stroke', 'none')
-          .attr("z-index", 0);
-  }
-
   if (!highlightedPeak && !self.highlightedPeak) {
     self.highlightedPeak = null;
-    self.highlightedLabel = null;
     return;
   }
 
@@ -10736,10 +10652,125 @@ SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) 
     highlightedPeak.attr("stroke-width",1);
   }
 
+  if( self.highlightedLabel )
+    self.unHighlightLabel();
 
   self.highlightedPeak = null;
-  self.highlightedLabel = null;
 }
+
+
+/* Highlight a selected label.
+ This means:
+ - Label becomes bold
+ - Label's z-index goes to very top (so that the whole text is shown)
+ - A line is drawn from the label to its corresponding peak
+ */
+SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
+  let self = this;
+  
+  if( self.highlightedLabel )
+    self.unHighlightLabel();
+  
+  if( self.dragging_plot )
+    return;
+  
+  /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
+  self.highlightedLabel = labelEl;
+  
+  let thislabel = d3.select(labelEl);
+  thislabel
+  .style('cursor', 'default')
+  .attr('font-weight', 'bold')
+  //.attr("stroke", axiscolor )
+  .attr("z-index", 100);
+  
+  //blah blah blah
+  //ToDo: Make a border around text (maybe add some padding), make background translucent
+  //      Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
+
+  
+  
+  //ToDo: set peak upper and lower y-pixel values as element data, as well as peak centroid, and centroid x pixel location.
+  //      This way when we highlight a peak, we can also highlight the label, and also make this function not need to capture
+  //      any information.
+  //console.log( 'thislabel.peakEnergy=', labelEl.dataset.peakEnergy );
+  //console.log( 'thislabel.peakXPx=', labelEl.dataset.peakXPx );
+  //console.log( 'thislabel.peakLowerYPx=', labelEl.dataset.peakLowerYPx );
+  //console.log( 'thislabel.peakUpperYPx=', labelEl.dataset.peakUpperYPx );
+  
+  
+  const labelbbox = thislabel.node().getBBox();
+  const labelTop = labelbbox.y,
+  labelBottom = labelbbox.y + labelbbox.height;
+  
+  const x1 = labelbbox.x + 0.5*labelbbox.width;
+  const x2 = labelEl.dataset.peakXPx;
+  const y1 = ((labelTop > labelEl.dataset.peakLowerYPx) ? labelTop : labelBottom);
+  let y2 = 0.5*(parseFloat(labelEl.dataset.peakLowerYPx) + parseFloat(labelEl.dataset.peakUpperYPx));
+  if( toTopOrBottom )
+    y2 = (labelbbox.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
+  
+  //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
+  
+  const tickElement = document.querySelector('.tick');
+  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
+  let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+  
+  /* ToDo: Try to draw an arrow marker for the line from the label to a peak */
+  /*
+   if (!self.peakLabelArrow)
+   self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
+   .attr("id", "triangle")
+   .attr('class', 'peaklabelarrow')
+   .attr('viewbox', "0 -5 10 10")
+   .attr("refX", 2.5)
+   .attr("refY", 2.5)
+   .attr("markerWidth", 30)
+   .attr("markerHeight", 30)
+   .attr("orient", "auto")
+   .append("path")
+   .attr("d", "M 0 0 20 6 0 12 3 6")
+   .attr("transform", "scale(0.4,0.4)")
+   .style("stroke", "black");
+   */
+  
+  self.peakLabelLine = self.peakVis.append('line')
+  .attr('class', 'peaklabelarrow')
+  .attr('x1', x1)
+  .attr('y1', y1)
+  .attr('x2', x2)
+  .attr('y2', y2)
+  .attr('stroke', axiscolor)
+  .attr("marker-end", "url(#triangle)");
+  
+  //Could highlight-peak here
+}//function highlightLabel()
+
+
+SpectrumChartD3.prototype.unHighlightLabel = function( labelToNormalize ) {
+  let self = this;
+  
+  if( !self.highlightedLabel )
+    return;
+  
+  /* Return label back to original style on mouse-out. */
+  d3.select(self.highlightedLabel)
+  .style('z-index', 0)
+  .style('cursor', 'default')
+  //.attr('stroke', 'none')
+  .attr('font-weight', null);
+  
+  /* delete the pointer line from the label to the peak */
+  if( self.peakLabelLine ) {
+    self.peakLabelLine.remove();
+    self.peakLabelLine = null;
+  }
+  
+  self.highlightedLabel = null;
+}//function unHighlightLabel(...)
+
+
+
 
 
 /**
