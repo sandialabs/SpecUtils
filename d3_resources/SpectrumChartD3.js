@@ -755,6 +755,11 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   self.setData( self.rawData, resetdomain );
 }
 
+SpectrumChartD3.prototype.removeSpectrumData = function( resetdomain, spectrumType ) {
+  /* Temporary depreciated function. */
+  this.removeSpectrumDataByType( resetdomain, spectrumType );
+}
+
 /** Removes all spectra seen with the passed-in type in the raw data. */
 SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spectrumType ) {
   var self = this;
@@ -6409,15 +6414,15 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           .attr("class", "spectrum-peak-" + specindex)
           .attr("stroke-width", 1)
           .attr("stroke", peakColor )
-          .attr("data-energy", ((peak && peak.Centroid) ? peak.Centroid[0].toFixed(2) : 0) )
           ;
             
       path.attr("fill-opacity", ((isOutline && !isFill) ? 0.0 : 0.6) );
 
       if( isFill ){
-        path.style("fill", peakColor );
+        path.style("fill", peakColor )
+            .attr("data-energy", ((peak && peak.Centroid) ? peak.Centroid[0].toFixed(2) : 0) );
       }
-        
+      
       if( isOutline ){
         path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, pathsAndRange.paths, roi, path) } )
             .on("mousemove", self.handleMouseMovePeak())
@@ -6529,6 +6534,10 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       continue;
     
     let nuclide = info.peak.nuclide;
+    if( !nuclide )
+      nuclide = info.peak.xray
+    if( !nuclide )
+      nuclide = info.peak.reaction
   
     //If we wont draw any text, just return now
     //  (ToDo: I think this case has already been filetered out, check, and if so remove next lines)
@@ -6600,12 +6609,24 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       .attr("x", peak_x)
       .text(nuclide.name);
       
+      
       /* Nuclide energy label displayed only if nuclide name labels are displayed! */
-      if( self.options.showNuclideEnergies && info.nuclideEnergy )
-      nuclideNameLabel.text(nuclide.name + ", " + info.nuclideEnergy.toFixed(2).toString() + " keV" );
-    }
+      //console.log( 'nuclide: ', nuclide );
+      if( self.options.showNuclideEnergies )
+        nuclideNameLabel.text( nuclide.name + ", " + nuclide.energy.toFixed(2).toString() + " keV"
+                               + (nuclide.type ? " " + nuclide.type : "") );
+    }//if( show nuclide name and we have a nuclide )
     
 
+    // Add handlers to make text bold when you mouse over the label.
+    label.on("mouseover", function(){ self.highlightLabel(this,false); } )
+         .on("mouseout",  function(){ self.unHighlightLabel(); } );
+    
+    if( self.isTouchDevice() )
+    label.on("touchstart", function(){ self.highlightLabel(this,false); } );
+
+    
+    //Reposition label niavely.
     const lbb = label.node().getBBox();
     const labelh = Math.max(lbb.height,8);
     const labelw = Math.max(lbb.width,10);
@@ -6616,8 +6637,6 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     
     label.attr("y", labely ).attr("x", labelx );
     label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", labelx);});
-    
-    
     
     //Dont bother doing overlap checking for left-most peak.
     if( drawnlabels.length === 0 ){
@@ -6798,16 +6817,6 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       //console.log( 'Failed to find a non-overlapping spot for ' + + ' label' );
     }
     
-    
-    
-    
-    
-    label.on("mouseover", function(){ self.highlightLabel(this,false); } )
-         .on("mouseout",  function(){ self.unHighlightLabel(); } );
-    
-    if( self.isTouchDevice() )
-      label.on("touchstart", function(){ self.highlightLabel(this,false); } );
-
     drawnlabels.push( label );
   }//labelinfos.foreach(...)
   
@@ -8461,9 +8470,11 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
   /* Cancel animation if showAnimation option not checked */
   if (!self.options.showAnimation) { return; }
 
+  //blah blah blah: It looks like we are sometimes getting stuck calling this function when we dont need too; I think the ending condition is to tight.
   return function() {
     /* Cancel the animation once reached desired target domain */
-    if (self.currentDomain == null || targetDomain == null || (self.currentDomain[0] == targetDomain[0] && self.currentDomain[1] == targetDomain[1])) {
+    if( self.currentDomain == null || targetDomain == null
+        || (self.currentDomain[0] == targetDomain[0] && self.currentDomain[1] == targetDomain[1]) ) {
       //console.log("Time for animation = ", Math.floor(Date.now()) - self.startAnimationZoomTime, " ms");
       self.handleCancelAnimationZoom();
       return;
@@ -10424,12 +10435,14 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
 
   let nuc = null;
   if( peak.nuclide && peak.nuclide.name ){
-    //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", DecayGammaEnergy: 1408.01}
+    //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", energy: 1408.01}
     nuc = peak.nuclide.name + " (";
     if( peak.nuclide.decayParent !== peak.nuclide.name )
       nuc = nuc + peak.nuclide.decayParent + ", ";
-    if( peak.nuclide.DecayGammaEnergy )
-      nuc = nuc + peak.nuclide.DecayGammaEnergy.toFixed(2) + " keV";
+    if( peak.nuclide.energy )
+      nuc = nuc + peak.nuclide.energy.toFixed(2) + " keV";
+    if( peak.nuclide.type )
+      nuc = nuc + " " + peak.nuclide.type;
     nuc = nuc + ")";
   }
   
@@ -10668,6 +10681,9 @@ SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) 
 SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   let self = this;
   
+  if( self.highlightedLabel === labelEl )
+    return;
+    
   if( self.highlightedLabel )
     self.unHighlightLabel();
   
@@ -10679,29 +10695,36 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   
   let thislabel = d3.select(labelEl);
   thislabel
-  .style('cursor', 'default')
-  .attr('font-weight', 'bold')
   //.attr("stroke", axiscolor )
-  .attr("z-index", 100);
+  .attr('class', 'peakLabelBold')
+  ;
+  
   
   //blah blah blah
-  //ToDo: Make a border around text (maybe add some padding), make background translucent
-  //      Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
+  //ToDo: X - Fix that nuclide energies dont seem to be showing.
+  //      X - Some labels dont seem to be responding to mouse-over
+  //      X - Make it so the "energy" data is only stored on the path that traces the outline of the peak
+  //      - Make a border around text (maybe add some padding, maybe make border same color as peak), make background translucent.
+  //      - Make it so when you hover over a label, it also highlights the peak.
+  //      - If line between label and peak will be less than, say 15px, then dont draw it maybe.
+  //      - handleMouseOverPeak() seems to somtimes get called repeadedly when mouse sits over label...
+  //      - Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
+  
 
-  
-  
-  //ToDo: set peak upper and lower y-pixel values as element data, as well as peak centroid, and centroid x pixel location.
-  //      This way when we highlight a peak, we can also highlight the label, and also make this function not need to capture
-  //      any information.
-  //console.log( 'thislabel.peakEnergy=', labelEl.dataset.peakEnergy );
-  //console.log( 'thislabel.peakXPx=', labelEl.dataset.peakXPx );
-  //console.log( 'thislabel.peakLowerYPx=', labelEl.dataset.peakLowerYPx );
-  //console.log( 'thislabel.peakUpperYPx=', labelEl.dataset.peakUpperYPx );
-  
   
   const labelbbox = thislabel.node().getBBox();
   const labelTop = labelbbox.y,
   labelBottom = labelbbox.y + labelbbox.height;
+  
+  /*
+   //I think we have to make the rect right before the <text>....  Should put <rect> and <text> within a <g> (and use a transform to place everything)
+  self.peakVis.append("rect")
+  .attr("width", labelbbox.width)
+  .attr("height", labelbbox.height)
+  .attr("x", labelbbox.x)
+  .attr("y", labelbbox.y)
+  .attr("class", 'peakLabelBorder' );
+  */
   
   const x1 = labelbbox.x + 0.5*labelbbox.width;
   const x2 = labelEl.dataset.peakXPx;
@@ -10754,11 +10777,7 @@ SpectrumChartD3.prototype.unHighlightLabel = function( labelToNormalize ) {
     return;
   
   /* Return label back to original style on mouse-out. */
-  d3.select(self.highlightedLabel)
-  .style('z-index', 0)
-  .style('cursor', 'default')
-  //.attr('stroke', 'none')
-  .attr('font-weight', null);
+  d3.select(self.highlightedLabel).attr('class', 'peaklabel');
   
   /* delete the pointer line from the label to the peak */
   if( self.peakLabelLine ) {

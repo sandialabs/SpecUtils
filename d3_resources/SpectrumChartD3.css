@@ -42,7 +42,23 @@
 .minorgrid { stroke-opacity: 50%; }
 
 /* The box that holds the peak label text */
-.peaklabel{ margin-left: 5px; font-size: 1em; }
+.peaklabel, .peakLabelBold {
+  font-size: 1em;
+  cursor: default;
+}
+
+/*
+.peakLabelBorder {
+  z-index: 99;
+  fill: red;
+}
+*/
+
+.peakLabelBold {
+  font-weight: bold;
+  z-index: 100;
+}
+
 /* The tspan that holds the user entered label within the peaklabel box */
 .userLabel{ }
 /* The tspan that holds peak energy within the peaklabel box */
