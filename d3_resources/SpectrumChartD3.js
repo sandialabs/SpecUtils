@@ -2417,7 +2417,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*Function to clear out any variables assigned during scrolling, or finish */
     /*  up any actions that should be done  */
     function wheelcleanup(e){
-      //console.log( "mousewheel, stopped" );
+      console.log( "mousewheel, stopped" );
 
       self.wheeltimer = null;
       self.scroll_start_x = null;
@@ -2439,7 +2439,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     //
     if ((currentdomain[0] <= (mindatax+0.00001) && currentdomain[1] >= (maxdatax-0.00001) && e.deltaX > 0)
         || (currentdomain[1] >= (maxdatax-0.00001) && currentdomain[0] <= (maxdatax+0.00001) && e.deltaX < 0)) {
-      //console.log( 'Skipping dealing with mouse wheel' );
+      //console.log( 'Skipping dealing with mouse wheel - outside data range' );
 
       //If user has scrolled farther than allowed in either direction, cancel scrolling so that
       //  if they start going the other way, it will immediately react (if we didnt cancel
@@ -2462,6 +2462,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
       /*  lets clear the previous timeout (we'll reset a little below).  */
       window.clearTimeout(self.wheeltimer);
     } else {
+      console.log( 'Starting mousewheel action' );
       /*This is the first wheel event of this user wheel action, lets record */
       /*  initial mouse energy, counts, as well as the initial x-axis range. */
       self.scroll_start_x = self.xScale.invert(m[0]);
@@ -2533,19 +2534,21 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
      new_x_max = maxdatax;
     }
    
+   /*Set a timeout to call wheelcleanup after a little time of not resieving  */
+   /*  any user wheel actions. */
+   self.wheeltimer = window.setTimeout( wheelcleanup, 250 );
+   
+   
     if( Math.abs(new_x_min - currentdomain[0]) < 0.000001 
         && Math.abs(new_x_max - currentdomain[1]) < 0.000001 )
     {
       /* We get here when we are fully zoomed out and e.deltaX==0. */
+      //console.log( 'We are fully in/out' );
       return;
     }
 
     //console.log( 'new_x_min=' + new_x_min + ', currentdomain[0]=' + currentdomain[0] 
     //  + "; new_x_max=" + new_x_max + ", currentdomain[1]=" + currentdomain[1] );
-
-    /*Set a timeout to call wheelcleanup after a little time of not resieving  */
-    /*  any user wheel actions. */
-    self.wheeltimer = window.setTimeout( wheelcleanup, 250 );
 
     /*Finally set the new x domain, and redraw the chart (which will take care */
     /*  of setting the y-domain). */
@@ -8487,6 +8490,8 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
       self.setXAxisRange( targetDomain[0], targetDomain[1], true );  //do emit range change
       self.handleCancelAnimationZoom();
       self.redraw()();
+      /* Update the peak markers */
+      self.updateFeatureMarkers(-1);
       return;
     }
     
@@ -8783,15 +8788,13 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
           corx1 -= p;
           
           console.log( 'changing x0=' + x0 + ' and x1=' + x1 + " will set domain to " + (x0+(x1-x0)) + " through " + (x1+(x1-x0)) + " m[0]=" + m[0] + " self.zoominmouse[0]=" + self.zoominmouse[0] );
-          self.setXAxisRange(Math.max(corx0+(x1-x0), mindatax),Math.min(corx1+(x1-x0), maxdatax),true);
-        } else {
-          self.setXAxisRange(x0,x1,true);
-        }  
+          x0 = Math.max(corx0+(x1-x0), mindatax);
+          x1 = Math.min(corx1+(x1-x0), maxdatax);
+        }
 
-        /* Update the peak markers */
-        self.updateFeatureMarkers(-1);
         
-        if (self.options.showAnimation) {     /* Draw zoom animations if option is checked */
+        /* Draw zoom animations if option is checked */
+        if( self.options.showAnimation ) {
 
           /* Cancel any current zoom animations */
           self.handleCancelAnimationZoom();
@@ -8800,10 +8803,14 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
           self.currentDomain = self.savedDomain = oldXScale;
           self.zoomAnimationID = requestAnimationFrame(self.redrawZoomXAnimation([x0,x1]));
           self.startAnimationZoomTime = Math.floor(Date.now());
-
         } else { 
           /* Zoom animation unchecked; draw new x-axis range */
-          self.redraw()(); 
+          self.setXAxisRange(x0,x1,true);
+          
+          self.redraw()();
+          
+          /* Update the peak markers */
+          self.updateFeatureMarkers(-1);
         }   
       }
     }
@@ -10707,6 +10714,8 @@ SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) 
 SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   let self = this;
   
+  console.log( 'Highlighting label ' + labelEl.dataset.peakXPx + ' keV' );
+  
   if( self.highlightedLabel === labelEl )
     return;
     
@@ -10720,10 +10729,7 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   self.highlightedLabel = labelEl;
   
   let thislabel = d3.select(labelEl);
-  thislabel
-  //.attr("stroke", axiscolor )
-  .attr('class', 'peakLabelBold')
-  ;
+  thislabel.attr('class', 'peakLabelBold');
   
   
   //blah blah blah
