@@ -8468,12 +8468,12 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
   var self = this;
 
   /* Cancel animation if showAnimation option not checked */
-  if (!self.options.showAnimation) { return; }
+  if( !self.options.showAnimation )
+    return;
 
-  //blah blah blah: It looks like we are sometimes getting stuck calling this function when we dont need too; I think the ending condition is to tight.
   return function() {
     /* Cancel the animation once reached desired target domain */
-    if( self.currentDomain == null || targetDomain == null
+    if( self.currentDomain === null || targetDomain === null
         || (self.currentDomain[0] == targetDomain[0] && self.currentDomain[1] == targetDomain[1]) ) {
       //console.log("Time for animation = ", Math.floor(Date.now()) - self.startAnimationZoomTime, " ms");
       self.handleCancelAnimationZoom();
@@ -8483,11 +8483,18 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
     var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
+    if( animationFractionTimeElapsed >= 0.999 ){
+      self.setXAxisRange( targetDomain[0], targetDomain[1], true );  //do emit range change
+      self.handleCancelAnimationZoom();
+      self.redraw()();
+      return;
+    }
+    
     /* Set x-axis domain to new values */
     self.setXAxisRange(
       Math.min( self.savedDomain[0] + (animationFractionTimeElapsed * (targetDomain[0] - self.savedDomain[0])), targetDomain[0] ),
       Math.max( self.savedDomain[1] - (animationFractionTimeElapsed * (self.savedDomain[1] - targetDomain[1])), targetDomain[1] ),
-      false
+      false /* dont emit x-range change. */
     );
     self.currentDomain = self.xScale.domain();
 
@@ -8519,6 +8526,14 @@ SpectrumChartD3.prototype.redrawZoomInYAnimation = function(targetDomain,redraw)
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
     var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
+    if( animationFractionTimeElapsed >= 0.999 ){
+      self.yScale.domain( [targetDomain[0],targetDomain[1]] );
+      self.handleCancelAnimationZoom();
+      //self.WtEmit(self.chart.id, {name: 'yrangechanged'}, targetDomain[0], targetDomain[1], self.size.width, self.size.height);
+      redraw();
+      return;
+    }
+    
     /* Set y-axis domain to new values */
     self.yScale.domain([ 
       Math.max( self.savedDomain[0] - (animationFractionTimeElapsed * (self.savedDomain[0] - targetDomain[0])), targetDomain[0] ),
@@ -8546,7 +8561,7 @@ SpectrumChartD3.prototype.redrawZoomOutYAnimation = function(targetDomain, redra
       (roundTo3DecimalPlaces(self.currentDomain[0]) == roundTo3DecimalPlaces(targetDomain[0]) && 
         roundTo3DecimalPlaces(self.currentDomain[1]) == roundTo3DecimalPlaces(targetDomain[1]))) {
 
-      console.log("Time for animation = ", Math.floor(Date.now()) - self.startAnimationZoomTime, " ms");
+      //console.log("Time for animation = ", Math.floor(Date.now()) - self.startAnimationZoomTime, " ms");
       self.handleCancelAnimationZoom();
       return;
     }
@@ -8554,6 +8569,14 @@ SpectrumChartD3.prototype.redrawZoomOutYAnimation = function(targetDomain, redra
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
     var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
+    if( animationFractionTimeElapsed >= 0.999 ){
+      self.yScale.domain( [targetDomain[0],targetDomain[1]] );
+      self.handleCancelAnimationZoom();
+      //self.WtEmit(self.chart.id, {name: 'yrangechanged'}, targetDomain[0], targetDomain[1], self.size.width, self.size.height);
+      redraw();
+      return;
+    }
+    
     /* Set y-axis domain to new values */
     self.yScale.domain([ 
       Math.min( self.savedDomain[0] + (animationFractionTimeElapsed * (targetDomain[0] - self.savedDomain[0])), targetDomain[0] ),
@@ -8994,8 +9017,11 @@ SpectrumChartD3.prototype.handleMouseUpZoomInY = function () {
         self.zoomAnimationID = requestAnimationFrame(self.redrawZoomInYAnimation([y2,y1], self.redrawYAxis()));
         self.startAnimationZoomTime = Math.floor(Date.now());
 
-      } else { self.yScale.domain([y2,y1]); self.redrawYAxis()(); }
-
+      } else {
+        self.yScale.domain([y2,y1]);
+        self.redrawYAxis()();
+        //self.WtEmit(self.chart.id, {name: 'yrangechanged'}, targetDomain[0], targetDomain[1], self.size.width, self.size.height);
+      }
     } else {  /* we are zooming out */
 
       if (zoomInYText.empty()) {
@@ -10709,6 +10735,8 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   //      - If line between label and peak will be less than, say 15px, then dont draw it maybe.
   //      - handleMouseOverPeak() seems to somtimes get called repeadedly when mouse sits over label...
   //      - Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
+  //      - The neutron counts in the (D3) legend arent scaled for live time like the spectrum; should be fixed.
+
   
 
   
