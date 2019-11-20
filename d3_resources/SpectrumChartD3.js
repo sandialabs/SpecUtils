@@ -2275,8 +2275,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
               console.log( "Emit CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", pageX = ", pageX, ", pageY = ", pageY );
               self.WtEmit(self.chart.id, {name: 'leftclicked'}, energy, count, pageX, pageY);
 
-              if( self.unhighlightPeakFunc )
-                self.unhighlightPeakFunc(); /* need to look into if unhighlightPeakFunc should always be defined (currently not - was throwing exception) */
+              self.unhighlightPeak(null);
               self.mousewait = null;
             }
           })(d3.event), clickDelay);
@@ -2417,7 +2416,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*Function to clear out any variables assigned during scrolling, or finish */
     /*  up any actions that should be done  */
     function wheelcleanup(e){
-      console.log( "mousewheel, stopped" );
+      //console.log( "mousewheel, stopped" );
 
       self.wheeltimer = null;
       self.scroll_start_x = null;
@@ -2462,7 +2461,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
       /*  lets clear the previous timeout (we'll reset a little below).  */
       window.clearTimeout(self.wheeltimer);
     } else {
-      console.log( 'Starting mousewheel action' );
+      //console.log( 'Starting mousewheel action' );
       /*This is the first wheel event of this user wheel action, lets record */
       /*  initial mouse energy, counts, as well as the initial x-axis range. */
       self.scroll_start_x = self.xScale.invert(m[0]);
@@ -2604,8 +2603,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
           if (self.touchStart && self.dist([pageX, pageY], self.touchPageStart) < 5 && !self.touchHoldEmitted) {
             console.log( "Emit TAP HOLD (RIGHT TAP) signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y );
             self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY);
-            if(self.unhighlightPeakFunc)
-              self.unhighlightPeakFunc(); /* need to look into if unhighlightPeakFunc should always be defined (currently not - was throwing exception) */
+            self.unhighlightPeak(null);
             self.touchHoldEmitted = true;
           }
 
@@ -2934,9 +2932,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
               console.log("Emit DOUBLE TAP signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y);
               self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count);
               deleteTouchLine();
-              if( self.unhighlightPeakFunc )
-                self.unhighlightPeakFunc(); /* need to look into if unhighlightPeakFunc should always be defined (currently not - was throwing exception) */
-
+              self.unhighlightPeak(null);
             } else {
 
               /* Create the single-tap wait emit action in case there is no more taps within double tap time interval */
@@ -2953,8 +2949,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
                   /* Emit the tap signal, unhighlight any peaks that are highlighted */
                   console.log( "Emit TAP signal!", "\nx = ", x, ", y = ", y, ", pageX = ", pageX, ", pageY = ", pageY );
-                  if( self.unhighlightPeakFunc )
-                    self.unhighlightPeakFunc(); /* need to look into if unhighlightPeakFunc should always be defined (currently not - was throwing exception) */
+                  self.unhighlightPeak(null);
                   var touchStartPosition = self.touchStart;
 
                   /* Highlight peaks where tap position falls */
@@ -2965,7 +2960,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
                         const path = self.peakPaths[i].path;
                         const paths = self.peakPaths[i].paths;
                         const roi = self.peakPaths[i].roi;
-                        self.handleMouseOverPeak(path, null, null, paths, roi, path);
+                        self.handleMouseOverPeak(path);
                         break;
                       }
                     }
@@ -6388,10 +6383,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       var path = self.peakVis.append("path").attr("d", p );
 
-      /* blah blah blah
-       Check on this unhiglightPeakFunc....
-       */
-      self.unhighlightPeakFunc = self.unhighlightPeak.bind(self, null, null, pathsAndRange.paths);
 
       function onRightClickOnPeak() {
         console.log("Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
@@ -6414,23 +6405,26 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       });
 
       path/* .attr("class", "peak") */
-          .attr("class", "spectrum-peak-" + specindex)
+          /* .attr("class", "spectrum-peak-" + specindex) */
           .attr("stroke-width", 1)
           .attr("stroke", peakColor )
           ;
             
-      path.attr("fill-opacity", ((isOutline && !isFill) ? 0.0 : 0.6) );
+      path.attr("fill-opacity", ((isOutline && !isFill) ? 0.0 : 0.6) )
+          .attr("data-energy", ((peak && peak.Centroid) ? peak.Centroid[0].toFixed(2) : 0) );
 
       if( isFill ){
         path.style("fill", peakColor )
-            .attr("data-energy", ((peak && peak.Centroid) ? peak.Centroid[0].toFixed(2) : 0) );
+            .attr("class", "peakFill" )
+      } else if( isOutline ) {
+        path.attr("class", "peakOutline" )
       }
       
       if( isOutline ){
-        path.on("mouseover", function(d, peak) { self.handleMouseOverPeak(this, d, peak, pathsAndRange.paths, roi, path) } )
+        path.on("mouseover", function(){ self.handleMouseOverPeak(this); } )
             .on("mousemove", self.handleMouseMovePeak())
-            .on("touchend", self.highlightPeak.bind(self, null, null, pathsAndRange.paths, path))
-            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, d, peak, pathsAndRange.paths); } );
+            .on("touchend", function(){ self.handleMouseOverPeak(this);} )
+            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, peak, pathsAndRange.paths); } );
       }
       
 
@@ -6442,7 +6436,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( pathsAndRange.paths.length > 0 && roi.peaks.length > 1 ){
       //Draw the continuum line for multiple peak ROIs
       var path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );  //ToDo: is there a better way to draw a SVG path?
-      path.attr("class", "spectrum-peak-" + specindex)
+      path/*.attr("class", "spectrum-peak-" + specindex)*/
           .attr("stroke-width",1)
           .attr("fill-opacity",0)
           .attr("stroke", spectrum.peakColor );
@@ -6623,7 +6617,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
 
     // Add handlers to make text bold when you mouse over the label.
     label.on("mouseover", function(){ self.highlightLabel(this,false); } )
-         .on("mouseout",  function(){ self.unHighlightLabel(); } );
+         .on("mouseout",  function(){ self.unHighlightLabel(true); } );
     
     if( self.isTouchDevice() )
     label.on("touchstart", function(){ self.highlightLabel(this,false); } );
@@ -10380,14 +10374,13 @@ SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
 /**
  * -------------- Peak Info and Display Functions --------------
  */
-SpectrumChartD3.prototype.handleMouseOverPeak = function(peakElem, d, peak, paths, roi, path) {
-  var self = this;
-  console.log( 'handleMouseOverPeak' );
-  self.highlightPeak(peakElem, peak, paths, path);
+SpectrumChartD3.prototype.handleMouseOverPeak = function( peakElem ) {
+  //console.log( 'handleMouseOverPeak' );
+  this.highlightPeak(peakElem,true);
   // self.displayPeakInfo(info, d3.event.x);
 }
 
-SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, d, highlightedPeak, paths) {
+SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, highlightedPeak, paths) {
   var self = this;
 
   var event = d3.event;
@@ -10405,7 +10398,7 @@ SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, d, highlighted
     return self.handleMouseMovePeak()();
   }
 
-  self.unhighlightPeak(d, highlightedPeak, paths);
+  self.unhighlightPeak(highlightedPeak);
 }
 
 SpectrumChartD3.prototype.handleMouseMovePeak = function() {
@@ -10609,118 +10602,85 @@ SpectrumChartD3.prototype.hidePeakInfo = function() {
   self.peakInfo = null;
 }
 
-
-SpectrumChartD3.prototype.highlightPeak = function(peakElem, peakIndex, paths, path) {
+/**
+ @param peakElem The HTML peak path that
+ */
+SpectrumChartD3.prototype.highlightPeak = function( peakElem, highlightLabelTo ) {
   var self = this;
-  
-  //peakIndex is either the peak, or null... it looks like.
 
-  if (self.zooming_plot)
+  if( self.zooming_plot || !peakElem || self.leftMouseDown || self.rightClickDown )
     return;
 
-  if (self.highlightedPeak)
-    self.unhighlightPeak(0, self.highlightedPeak, paths);
-
-  if (d3.event == null || d3.event.touches) {
-    if (!peakElem /*|| peakElem.attr("fill-opacity") != 0.6 */ ){
-       console.log( 'Here 0' );
-      return;
-    }
-  }
-  
-  var thePeakSelected = d3.select(peakElem);
-  if (Array.isArray(thePeakSelected[0][0])) 
-    thePeakSelected = peakElem;
+  if( self.highlightedPeak )
+    self.unhighlightPeak(null);
     
-  if (self.leftMouseDown || self.rightClickDown)
-    return;
+  var peak = d3.select(peakElem);
+  if( Array.isArray(peak[0][0]) )
+    peak = peakElem;
 
-  if (!peakIndex) {
-  //  if (paths.length === 2) 
-  //    thePeakSelected.attr("fill-opacity",0.8);
-  //  else
-  //    thePeakSelected.attr("stroke-width",2).attr("fill-opacity",0.8);
-    if( thePeakSelected )
-      thePeakSelected.attr("stroke-width",2);
-  } else {
-    //if (paths.length === 2) 
-    //  peakIndex.attr("fill-opacity",0.8);
-    //else
-    //  peakIndex.attr("stroke-width",2).attr("fill-opacity",0.8);
-    peakIndex.attr("stroke-width",2);
-  }
-
-  if (thePeakSelected[0].parentNode) {
-    /* if the 'peakElem' pointer is the path for the peak, then declare the highlighted peak to be that */
-    self.highlightedPeak = peakElem;
-  } else if (peakIndex) {
-    self.highlightedPeak = peakIndex;
-  }
+  if( peak )
+    peak.attr("stroke-width",2);
   
+  self.highlightedPeak = peakElem;
+  
+  if( !highlightLabelTo )
+    return;
   
   //Dont waste time selecting for label elements if there is no possibility of having them - not sure this saves anything...
   if( !this.options.showUserLabels && !this.options.showPeakLabels && !this.options.showNuclideNames )
     return;
   
-  //ToDo: I dont think we need to check if peakElem.dataset.energy is valid - it should always be - I think
-  const peakEnergy = peakElem.dataset && peakElem.dataset.energy ? parseFloat(peakElem.dataset.energy) : 0;
-  
-  self.peakVis.selectAll('.peaklabel').each( function(){
-    const label = this;
-    const energy = parseFloat( label.dataset.peakEnergy );
-    if( Math.abs(energy - peakEnergy) < 0.01 )
-      self.highlightLabel(label,true);
-    
-  } );
+  self.peakVis.select('text[data-peak-energy="' + peakElem.dataset.energy + '"].peaklabel').each( function(){
+    self.highlightLabel(this,true);
+  });
 }//SpectrumChartD3.prototype.highlightPeak = ...
 
 
-SpectrumChartD3.prototype.unhighlightPeak = function(d, highlightedPeak, paths) {
+SpectrumChartD3.prototype.unhighlightPeak = function(highlightedPeak) {
   var self = this;
 
-  if (!highlightedPeak && !self.highlightedPeak) {
-    self.highlightedPeak = null;
+  if( !highlightedPeak )
+    highlightedPeak = self.highlightedPeak;
+  
+  if( !highlightedPeak )
     return;
-  }
-
-  var peak = self.highlightedPeak;
-  if (!highlightedPeak) {
-    if (!Array.isArray(self.highlightedPeak)) 
-      peak = d3.select(self.highlightedPeak);
-    //if (paths.length === 2)  peak.attr("fill-opacity",0.6);
-    //else                     peak.attr("stroke-width",1).attr("fill-opacity",0.6);
-    peak.attr("stroke-width",1);
-  } else {
-    if (!Array.isArray(highlightedPeak)) 
-      highlightedPeak = d3.select(highlightedPeak);
-    //if (paths.length === 2)  highlightedPeak.attr("fill-opacity",0.6);
-    //else                     highlightedPeak.attr("stroke-width",1).attr("fill-opacity",0.6);
-    highlightedPeak.attr("stroke-width",1);
-  }
-
-  if( self.highlightedLabel )
-    self.unHighlightLabel();
-
+    
+  if( !Array.isArray(highlightedPeak) )
+    highlightedPeak = d3.select(highlightedPeak);
+  
+  highlightedPeak.attr("stroke-width",1);
   self.highlightedPeak = null;
+  
+  if( self.highlightedLabel )
+    self.unHighlightLabel(false);
 }
 
 
-/* Highlight a selected label.
+/* Highlight a peaks label.
+ 
  This means:
  - Label becomes bold
  - Label's z-index goes to very top (so that the whole text is shown)
  - A line is drawn from the label to its corresponding peak
+ 
+ @param labelEl The HTML the <text> element of the label to highlight.
+ @param isFromPeakBeingHighlighted Boolean telling whether we are highlighting the
+        label because the peak is being moused-over, or the label is being moused-over.
+        If label is being moused over, we will also highlight the peak, and make a
+        line that goes from the label to middle of peak.  If its the peak being
+        moused over, we wont highlight the peak (because that is already being done),
+        and we will draw a line to either the top or bottom of peak (whichever is closer)
  */
-SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
+SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHighlighted ) {
   let self = this;
   
-  console.log( 'Highlighting label ' + labelEl.dataset.peakXPx + ' keV' );
+  //console.log( 'Highlighting label ' + labelEl.dataset.peakXPx + ' keV' );
   
   if( self.highlightedLabel === labelEl )
     return;
     
   if( self.highlightedLabel )
-    self.unHighlightLabel();
+    self.unHighlightLabel(true);
   
   if( self.dragging_plot )
     return;
@@ -10737,15 +10697,13 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   //      X - Some labels dont seem to be responding to mouse-over
   //      X - Make it so the "energy" data is only stored on the path that traces the outline of the peak
   //      - Make a border around text (maybe add some padding, maybe make border same color as peak), make background translucent.
-  //      - Make it so when you hover over a label, it also highlights the peak.
-  //      - If line between label and peak will be less than, say 15px, then dont draw it maybe.
-  //      - handleMouseOverPeak() seems to somtimes get called repeadedly when mouse sits over label...
+  //      X - Make it so when you hover over a label, it also highlights the peak.
+  //      X - If line between label and peak will be less than, say 15px, then dont draw it maybe.
+  //      X [I think] - handleMouseOverPeak() seems to somtimes get called repeadedly when mouse sits over label...
   //      - Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
   //      - The neutron counts in the (D3) legend arent scaled for live time like the spectrum; should be fixed.
+  //      X - Fix the horrible this.highlightPeak function to be called somewhat consistently and okay
 
-  
-
-  
   const labelbbox = thislabel.node().getBBox();
   const labelTop = labelbbox.y,
   labelBottom = labelbbox.y + labelbbox.height;
@@ -10764,7 +10722,7 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
   const x2 = labelEl.dataset.peakXPx;
   const y1 = ((labelTop > labelEl.dataset.peakLowerYPx) ? labelTop : labelBottom);
   let y2 = 0.5*(parseFloat(labelEl.dataset.peakLowerYPx) + parseFloat(labelEl.dataset.peakUpperYPx));
-  if( toTopOrBottom )
+  if( isFromPeakBeingHighlighted )
     y2 = (labelbbox.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
   
   //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
@@ -10791,24 +10749,43 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, toTopOrBottom ) {
    .style("stroke", "black");
    */
   
-  self.peakLabelLine = self.peakVis.append('line')
-  .attr('class', 'peaklabelarrow')
-  .attr('x1', x1)
-  .attr('y1', y1)
-  .attr('x2', x2)
-  .attr('y2', y2)
-  .attr('stroke', axiscolor)
-  .attr("marker-end", "url(#triangle)");
+  //Only draw line between label and peak if it will be at least 10 pixels.
+  if( Math.sqrt( Math.pow(x1-x2,2) + Math.pow(y1-y2,2) ) > 10 )
+    self.peakLabelLine = self.peakVis.append('line')
+        .attr('class', 'peaklabelarrow')
+        .attr('x1', x1)
+        .attr('y1', y1)
+        .attr('x2', x2)
+        .attr('y2', y2)
+        .attr('stroke', axiscolor)
+        .attr("marker-end", "url(#triangle)");
   
-  //Could highlight-peak here
+  if( isFromPeakBeingHighlighted )
+    return;
+  
+  //Highlight peak cooresponding to this label
+  self.peakVis.select('path[data-energy="' + labelEl.dataset.peakEnergy + '"].peakFill').each( function(){
+    self.highlightPeak(this,false);
+  });
 }//function highlightLabel()
 
-
-SpectrumChartD3.prototype.unHighlightLabel = function( labelToNormalize ) {
+/** Un-highlight the currently highlighted peak (pointed to by self.highlightedLabel)
+ 
+ @param unHighlightPeakTo Boolean describing if the peak cooresponding to this
+        label should also be un-highlighted.
+ */
+SpectrumChartD3.prototype.unHighlightLabel = function( unHighlightPeakTo ) {
   let self = this;
   
   if( !self.highlightedLabel )
     return;
+  
+  if( unHighlightPeakTo ){
+    const peakEnergy = self.highlightedLabel.dataset.peakEnergy;
+    self.peakVis.select('path[data-energy="' + peakEnergy + '"].peakFill').each( function(){
+      self.unhighlightPeak(this);
+    });
+  }
   
   /* Return label back to original style on mouse-out. */
   d3.select(self.highlightedLabel).attr('class', 'peaklabel');
