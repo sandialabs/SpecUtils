@@ -20,16 +20,20 @@ Feature TODO list (created 20160220):
   - For the y-axis scalers, should add some padding on either side of that area
     and also make the width of each slider more than 20px if a touch device and
     also increase radius of sliderToggle.
-  - 
+    - The number given at bottom of scaler while adjusting is cut off on the right side
+  - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
+  - When changing x-range with x-axis slider chart, it constantly calls back to C++ - this should be changed so it only happens when you you stop adjusting this
   - Fix intermitten issue of zooming in messes up (especially aver dragging starting from the y-axis title)
+    - (was this maybe fixed by ensuring getting animation frames is terminated?)
   - Make it so x-axis binning is given seperately for each histogram
   - Add statistical error bars
-  - Add ability to support polynomial binning with deviation pairs (instead of just lower edge energy)
+  - Add support for deviation pairs with polynomial energy calibration (instead of just lower edge energy)
   - Customize mouse point to zoom-in/zoom-out where appropriate
   - Optimize frequency of rebinning of data (prevent extra rebinned data from being drawn)
-  - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
   - Move to using D3 v5 with modules to minimize code sizes and such.
   - Start compiling with babel to take care of all the poly fills.
+  - For peak labels, make a border around text (maybe add some padding, maybe make border same color as peak), make background translucent so you can read the text even if in a cluttered area.
+  - Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
   - lots of other issues
 */
 
@@ -4079,39 +4083,78 @@ SpectrumChartD3.prototype.updateLegend = function() {
       if( !spectrum || !spectrum.y.length )
         return;
       
-      var sf = spectrum.yScaleFactor;
-      var title = spectrum.title;
-      var lt = spectrum.liveTime;
-      var rt = spectrum.realTime;
-      var neut = spectrum.neutrons;
-      title = title ? title : ("Spectrum " + (i+1));
-      var nsum = spectrum.dataSum;
-      title += " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)"; 
+      
+      const sf = ((typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor: 1);
+      const lt = spectrum.liveTime;
+      const rt = spectrum.realTime;
+      let neut = spectrum.neutrons;
+      
+      const nsum = sf*spectrum.dataSum;
+      const title = (spectrum.title ? spectrum.title : ("Spectrum " + (i+1)))
+                    + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)";
     
-      var thisentry = self.legBody.append("g")
+      let thisentry = self.legBody.append("g")
         .attr("transform","translate(0," + ypos + ")");
       
       thisentry.append("path")
-        .attr("id", "spectrum-legend-line-" + i)  // reference for when updating color
-        .attr("class", "line" )
+        //.attr("id", "spectrum-legend-line-" + i)  // reference for when updating color
+        //.attr("class", "line" )
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : "black")
+        .attr("stroke-width", self.options.spectrumLineWidth )
+        .attr("fill", 'none' )
         .attr("d", "M0,-5 L12,-5");
-      var thistxt = thisentry.append("text")
+      
+      let thistxt = thisentry.append("text")
         .attr("class", "legentry")
         .attr( "x", 15 )
         .text(title);
+      
       if( typeof lt === "number" )
-        thistxt.append('svg:tspan').attr('x', "20").attr('y', thisentry.node().getBBox().height)
-                      .text( "Live Time " + lt.toPrecision(4) );
+        thistxt.append('svg:tspan')
+          .attr('x', "20")
+          .attr('y', thisentry.node().getBBox().height)
+          .text( "Live Time " + (sf*lt).toPrecision(4) );
+      
       if( typeof rt === "number" )
-        thistxt.append('svg:tspan').attr('x', "20").attr('y', thisentry.node().getBBox().height)
-                      .text( "Real Time " + rt.toPrecision(4) );
-      if( typeof neut === "number" )
-        thistxt.append('svg:tspan').attr('x', "20").attr('y', thisentry.node().getBBox().height)
-                      .text( "Neutron Count " + neut );
-      if( typeof sf === "number" && sf != 1 )
-        thistxt.append('svg:tspan').attr('x', "20").attr('y', thisentry.node().getBBox().height)
-                      .text( "Scaled by " + sf.toPrecision(4) );
+        thistxt.append('svg:tspan')
+          .attr('x', "20")
+          .attr('y', thisentry.node().getBBox().height)
+          .text( "Real Time " + (sf*rt).toPrecision(4) );
+          
+      if( typeof neut === "number" ){
+        neut *= sf;
+        
+        // Lets print the neutron counts as a human friendly number, to roughly
+        //   the precision we would care about.  Could probably do a much better
+        //   with less code, but whatever for now.
+        // Note: could get 10's power using: Math.floor(Math.log10(Math.abs(neut)))
+        let neuttxt;
+        if( Number.isInteger(neut) )
+          neuttxt = '' + neut;
+        else if( neut < 0.01 )
+          neuttxt = neut.toExponential(3);
+        else if( neut < 0.1 )
+          neuttxt = neut.toFixed(4);
+        else if( neut < 1 )
+          neuttxt = neut.toFixed(3);
+        else if( neut < 10 )
+          neuttxt = neut.toFixed(2);
+        else if( neut < 100 )
+          neuttxt = neut.toFixed(1);
+        else
+          neuttxt = neut.toFixed(0);
+        
+        thistxt.append('svg:tspan')
+               .attr('x', "20")
+               .attr('y', thisentry.node().getBBox().height)
+               .text( "Neutron Count " + neuttxt );
+      }
+      
+      if( sf != 1 )
+        thistxt.append('svg:tspan')
+          .attr('x', "20")
+          .attr('y', thisentry.node().getBBox().height)
+          .text( "Scaled by " + sf.toPrecision(4) );
                       
       ypos += thisentry.node().getBBox().height + 5;
     });
@@ -10691,25 +10734,14 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   let thislabel = d3.select(labelEl);
   thislabel.attr('class', 'peakLabelBold');
   
-  
-  //blah blah blah
-  //ToDo: X - Fix that nuclide energies dont seem to be showing.
-  //      X - Some labels dont seem to be responding to mouse-over
-  //      X - Make it so the "energy" data is only stored on the path that traces the outline of the peak
-  //      - Make a border around text (maybe add some padding, maybe make border same color as peak), make background translucent.
-  //      X - Make it so when you hover over a label, it also highlights the peak.
-  //      X - If line between label and peak will be less than, say 15px, then dont draw it maybe.
-  //      X [I think] - handleMouseOverPeak() seems to somtimes get called repeadedly when mouse sits over label...
-  //      - Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
-  //      - The neutron counts in the (D3) legend arent scaled for live time like the spectrum; should be fixed.
-  //      X - Fix the horrible this.highlightPeak function to be called somewhat consistently and okay
-
   const labelbbox = thislabel.node().getBBox();
   const labelTop = labelbbox.y,
   labelBottom = labelbbox.y + labelbbox.height;
   
   /*
-   //I think we have to make the rect right before the <text>....  Should put <rect> and <text> within a <g> (and use a transform to place everything)
+   //I think we have to make the rect right before the <text>....
+   // Should put <rect> and <text> within a <g> (and use a transform to place
+   // everything), if we want to draw a border around the text.
   self.peakVis.append("rect")
   .attr("width", labelbbox.width)
   .attr("height", labelbbox.height)
@@ -10731,28 +10763,10 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
   let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
   
-  /* ToDo: Try to draw an arrow marker for the line from the label to a peak */
-  /*
-   if (!self.peakLabelArrow)
-   self.peakLabelArrow = self.peakVis.append('svg:defs').append("svg:marker")
-   .attr("id", "triangle")
-   .attr('class', 'peaklabelarrow')
-   .attr('viewbox', "0 -5 10 10")
-   .attr("refX", 2.5)
-   .attr("refY", 2.5)
-   .attr("markerWidth", 30)
-   .attr("markerHeight", 30)
-   .attr("orient", "auto")
-   .append("path")
-   .attr("d", "M 0 0 20 6 0 12 3 6")
-   .attr("transform", "scale(0.4,0.4)")
-   .style("stroke", "black");
-   */
-  
   //Only draw line between label and peak if it will be at least 10 pixels.
   if( Math.sqrt( Math.pow(x1-x2,2) + Math.pow(y1-y2,2) ) > 10 )
     self.peakLabelLine = self.peakVis.append('line')
-        .attr('class', 'peaklabelarrow')
+        .attr('class', 'peaklabelline')
         .attr('x1', x1)
         .attr('y1', y1)
         .attr('x2', x2)

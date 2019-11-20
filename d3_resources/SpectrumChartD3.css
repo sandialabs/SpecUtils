@@ -59,6 +59,12 @@
   z-index: 100;
 }
 
+.peaklabelline {
+  stroke-width: 1.5;
+  z-index: 100;
+}
+
+
 /* The tspan that holds the user entered label within the peaklabel box */
 .userLabel{ }
 /* The tspan that holds peak energy within the peaklabel box */
@@ -129,10 +135,6 @@
 .scaleraxis{  }
 .scalertoggle{  }
 
-.peaklabelarrow {
-  stroke-width: 1.5;
-  z-index: 100;
-}
 
 .leftbuttonzoombox {
   fill: #666;
