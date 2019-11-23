@@ -23,6 +23,7 @@ Feature TODO list (created 20160220):
     - The number given at bottom of scaler while adjusting is cut off on the right side
   - Need some way to filter reference gamma lines to not draw insignificant lines.  Ex, Th232 gives ~900 dom elements, which can slow things down
   - When changing x-range with x-axis slider chart, it constantly calls back to C++ - this should be changed so it only happens when you you stop adjusting this
+    - Could make it so its emmitted only when self.sliderBoxDown changes from true to false, and similar for touch and edges of box
   - Fix intermitten issue of zooming in messes up (especially aver dragging starting from the y-axis title)
     - (was this maybe fixed by ensuring getting animation frames is terminated?)
   - Make it so x-axis binning is given seperately for each histogram
@@ -6044,48 +6045,47 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
   if( roi.type === 'NoOffset' || x0===x1 )
     return 0.0;
   
-  
-    if( roi.type === 'External' ){
-      //console.log( roi );
+  if( roi.type === 'External' ){
+    //console.log( roi );
 
-      let energies = roi.continuumEnergies;
-      let counts = roi.continuumCounts;
+    let energies = roi.continuumEnergies;
+    let counts = roi.continuumCounts;
 
-      if( !energies || !energies.length || !counts || !counts.length ){
-        console.warn( 'External continuum does not have continuumEnergies or continuumCounts' );
-        return 0.0;
-      }
+    if( !energies || !energies.length || !counts || !counts.length ){
+      console.warn( 'External continuum does not have continuumEnergies or continuumCounts' );
+      return 0.0;
+    }
 
-      let bisector = d3.bisector(function(d){return d;});
-      let cstartind = bisector.left( energies, Math.max(roi.lowerEnergy,x0) );
-      let cendind = bisector.right( energies, Math.min(roi.upperEnergy,x1) );
+    let bisector = d3.bisector(function(d){return d;});
+    let cstartind = bisector.left( energies, Math.max(roi.lowerEnergy,x0) );
+    let cendind = bisector.right( energies, Math.min(roi.upperEnergy,x1) );
+    
+    if( cstartind >= (energies.length-1) )
+      return 0.0;  //shouldnt ever happen
+    if( cendind >= (energies.length-1) )
+      cendind = cendind - 1;
+
+    if( cstartind > 0 && energies[cstartind] > x0 )
+      cstartind = cstartind - 1;
+    if( cendind > 0 && energies[cendind] > x1 )
+      cendind = cendind - 1;
+
+    if( cstartind === cendind ){
+      return counts[cstartind] * (x1-x0) / (energies[cstartind+1] - energies[cstartind]);
+    }
+
+    //figure out fraction of first bin
+    let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
+    let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
       
-      if( cstartind >= (energies.length-1) )
-        return 0.0;  //shouldnt ever happen
-      if( cendind >= (energies.length-1) )
-        cendind = cendind - 1;
+    //console.log( 'x0=' + x0 + ', cstartind=' + cstartind + ', energy={' + energies[cstartind] + ',' + energies[cstartind+1] + '}, frac_first=' + frac_first );
+    //console.log( 'x1=' + x1 + ', cendind=' + cendind + ', energy={' + energies[cendind] + ',' + energies[cendind+1] + '}, frac_last=' + frac_last);
 
-      if( cstartind > 0 && energies[cstartind] > x0 )
-        cstartind = cstartind - 1;
-      if( cendind > 0 && energies[cendind] > x1 )
-        cendind = cendind - 1;
-
-      if( cstartind === cendind ){
-        return counts[cstartind] * (x1-x0) / (energies[cstartind+1] - energies[cstartind]);
-      }
-
-      //figure out fraction of first bin
-      let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
-      let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
-      
-      //console.log( 'x0=' + x0 + ', cstartind=' + cstartind + ', energy={' + energies[cstartind] + ',' + energies[cstartind+1] + '}, frac_first=' + frac_first );
-      //console.log( 'x1=' + x1 + ', cendind=' + cendind + ', energy={' + energies[cendind] + ',' + energies[cendind+1] + '}, frac_last=' + frac_last); 
-
-      let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
-      for( let i = cstartind+1; i < cendind; ++i )
-        sum += counts[i];
-      return sum;
-  }
+    let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
+    for( let i = cstartind+1; i < cendind; ++i )
+      sum += counts[i];
+    return sum;
+  }//if( roi.type === 'External' )
 
   x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
   var answer = 0.0;
@@ -6153,9 +6153,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     //  so we can draw the line in only the ROI's y-domain
     //var minyval_px = self.size.height
     //    , maxyval_py = 0;
-    
     var firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
-
+    
     // Background Subtract - Subtract the initial y-value with the corresponding background point
     if (useBackgroundSubtract) {
       var bi = bisector.left(background.points, points[xstartind-(xstartind?1:0)].x);
@@ -6167,13 +6166,12 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     
     for( var j = 0; j < 2*roi.peaks.length; ++j )
       paths[j+1] = "";
-
       
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
     for( var i = xstartind; i < xendind; ++i ) {
       thisx = ((i===xstartind) ? roiLB : ((i===(xendind-1)) ? roiUB : (0.5*(points[i].x + points[i+1].x))));
       thisy = self.offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
-
+      
       // Background Subtract - Subtract the current y-value with the corresponding background point
       if (useBackgroundSubtract) {
         var bi = bisector.left(background.points, points[i].x);
@@ -6380,8 +6378,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
   function draw_roi(roi,specindex,spectrum) {
     if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
-        && roi.type !== 'Linear' && roi.type !== 'Quardratic'
-        && roi.type !==  'Cubic' && roi.type !==  'External' ){
+        && roi.type !== 'Linear' && roi.type !== 'Quadratic'
+        && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
+        && roi.type !== 'Cubic' && roi.type !== 'External' ){
       console.log( 'unrecognized roi.type: ' + roi.type );
       return;
     }
