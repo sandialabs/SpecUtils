@@ -14557,7 +14557,8 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
             auto pos = lower_bound(begin(sample_nums_vec), end(sample_nums_vec), sample_num );
             sn = static_cast<int>( pos - begin(sample_nums_vec) );
           }
-          snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey %i", sn );  //xsd:ID: Spaces arent allowed!  Must start with a letter or underscore, and can only contain letters, digits, underscores, hyphens, and periods.
+          
+          snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey%i", sn );
         }
       }else
       {
