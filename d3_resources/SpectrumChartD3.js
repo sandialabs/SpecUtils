@@ -2477,6 +2477,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
       self.scroll_start_raw_channel = Math.min(foreground.x.length-1,self.scroll_start_raw_channel);
       self.scroll_total_x = 0;
       self.scroll_total_y = 0;
+      self.handleCancelRoiDrag();
     }
 
     /*scroll_total_x/y is the total number of scroll units the mouse has done */
