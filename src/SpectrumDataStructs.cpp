@@ -57,6 +57,7 @@
 #include "rapidxml/rapidxml_utils.hpp"
 
 #include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/SpectrumDataStructs.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
@@ -206,7 +207,7 @@ namespace
       }else if( channel_counts->size() > 3 )
       {
         vector<float> resulting_counts;
-        rebin_by_lower_edge( *dataenergies, *channel_counts,
+        SpecUtils::rebin_by_lower_edge( *dataenergies, *channel_counts,
                             *wantedenergies, resulting_counts );
         
         assert( resulting_counts.size() == nbin );
@@ -956,7 +957,7 @@ struct MeasurementInfoLessThan
 
 struct MeasurementCalibInfo
 {
-  Measurement::EquationType equation_type;
+  SpecUtils::EnergyCalType equation_type;
 
   size_t nbin;
   vector<float> coefficients;
@@ -977,7 +978,7 @@ struct MeasurementCalibInfo
     if( meas->channel_energies() && !meas->channel_energies()->empty())
       binning = meas->channel_energies();
     
-    if( equation_type == Measurement::InvalidEquationType
+    if( equation_type == SpecUtils::EnergyCalType::InvalidEquationType
        && !coefficients.empty() )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
@@ -991,7 +992,7 @@ struct MeasurementCalibInfo
   MeasurementCalibInfo()
   {
     nbin = 0;
-    equation_type = Measurement::InvalidEquationType;
+    equation_type = SpecUtils::EnergyCalType::InvalidEquationType;
   }//MeasurementCalibInfo constructor
 
   void strip_end_zero_coeff()
@@ -1009,16 +1010,16 @@ struct MeasurementCalibInfo
 
     switch( equation_type )
     {
-      case Measurement::Polynomial:
-      case Measurement::UnspecifiedUsingDefaultPolynomial:
-        binning = polynomial_binning( coefficients, nbin, deviation_pairs_ );
+      case SpecUtils::EnergyCalType::Polynomial:
+      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+        binning = SpecUtils::polynomial_binning( coefficients, nbin, deviation_pairs_ );
       break;
 
-      case Measurement::FullRangeFraction:
-        binning = fullrangefraction_binning( coefficients, nbin, deviation_pairs_ );
+      case SpecUtils::EnergyCalType::FullRangeFraction:
+        binning = SpecUtils::fullrangefraction_binning( coefficients, nbin, deviation_pairs_ );
       break;
 
-      case Measurement::LowerChannelEdge:
+      case SpecUtils::EnergyCalType::LowerChannelEdge:
       {
         std::shared_ptr< vector<float> > energies
                                         = std::make_shared< vector<float> >();
@@ -1046,9 +1047,9 @@ struct MeasurementCalibInfo
         binning = energies;
         
         break;
-      }//case Measurement::LowerChannelEdge:
+      }//case SpecUtils::EnergyCalType::LowerChannelEdge:
 
-      case Measurement::InvalidEquationType:
+      case SpecUtils::EnergyCalType::InvalidEquationType:
       break;
     }//switch( meas->energy_calibration_model_ )
 
@@ -1125,90 +1126,6 @@ struct MeasurementCalibInfo
   }
 };//struct MeasurementCalibInfo
 
-bool MeasurementInfo::calibration_is_valid( const Measurement::EquationType type,
-                         const std::vector<float> &ineqn,
-                         const std::vector< std::pair<float,float> > &devpairs,
-                         size_t nbin )
-{
-  //ToDo: also check that the energy range is halfway reasonable...
-  //ToDo: its pretty easy to check polynomial algebraicly...
-  
-  std::unique_ptr< std::vector<float> > frfeqn;
-  const std::vector<float> *eqn = &ineqn;
-
-  if( type == Measurement::Polynomial
-     || type == Measurement::UnspecifiedUsingDefaultPolynomial )
-  {
-    frfeqn.reset( new vector<float>() );
-    *frfeqn = polynomial_coef_to_fullrangefraction( ineqn, nbin );
-    eqn = frfeqn.get();
-  }//if( type == Measurement::Polynomial )
-  
-  switch( type )
-  {
-    case Measurement::Polynomial:
-    case Measurement::FullRangeFraction:
-    case Measurement::UnspecifiedUsingDefaultPolynomial:
-    {
-      for( const float &val : (*eqn) )
-      {
-        if( IsInf(val) || IsNan(val) )
-          return false;
-      }
-      
-      //ToDo:
-      const float nearend   = fullrangefraction_energy( float(nbin-2), *eqn, nbin, devpairs );
-      const float end       = fullrangefraction_energy( float(nbin-1), *eqn, nbin, devpairs );
-      const float begin     = fullrangefraction_energy( 0.0f,      *eqn, nbin, devpairs );
-      const float nearbegin = fullrangefraction_energy( 1.0f,      *eqn, nbin, devpairs );
- 
-      const bool valid = !( (nearend >= end) || (begin >= nearbegin) );
-      
-#if( PERFORM_DEVELOPER_CHECKS )
-      if( valid )
-      {
-        ShrdConstFVecPtr binning = fullrangefraction_binning( *eqn, nbin, devpairs );
-        for( size_t i = 1; i < binning->size(); ++i )
-        {
-          if( (*binning)[i] <= (*binning)[i-1] )
-          {
-            char buffer[512];
-            snprintf( buffer, sizeof(buffer),
-                      "Energy of bin %i is lower or equal to the one before it",
-                      int(i) );
-            stringstream msg;
-            msg << "Energy of bin " << i << " is lower or equal to the one before it"
-                << " for coefficients {";
-            for( size_t j = 0; j < eqn->size(); ++j )
-              msg << (j ? ", " : "") << (*eqn)[j];
-            msg << "} and deviation pairs {";
-            
-            for( size_t j = 0; j < devpairs.size(); ++j )
-              msg << (j ? ", {" : "{") << devpairs[j].first << ", " << devpairs[j].second << "}";
-            msg << "}";
-            
-            log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
-          }
-        }//for( size_t i = 1; i < binning->size(); ++i )
-      }//if( valid )
-#endif
-      return valid;
-    }//case Measurement::FullRangeFraction:
-      
-    case Measurement::LowerChannelEdge:
-    {
-      for( size_t i = 1; i < ineqn.size(); ++i )
-        if( ineqn[i-1] >= ineqn[i] )
-          return false;
-      return (!ineqn.empty() && (ineqn.size()>=nbin));
-    }//case Measurement::LowerChannelEdge:
-      
-    case Measurement::InvalidEquationType:
-    break;
-  }//switch( type )
-  
-  return false;
-}//checkFullRangeFractionCoeffsValid
 
 
 
@@ -2327,7 +2244,7 @@ void Measurement::reset()
   quality_status_ = Missing;
 
   source_type_       = UnknownSourceType;
-  energy_calibration_model_ = InvalidEquationType;
+  energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
 
   contained_neutron_ = false;
 
@@ -2382,21 +2299,21 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   
   switch( energy_calibration_model_ )
   {
-    case Polynomial:
-    case UnspecifiedUsingDefaultPolynomial:
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
       for( size_t i = 1; i < calibration_coeffs_.size(); ++i )
         calibration_coeffs_[i] *= std::pow( float(ncombine), float(i) );
-      channel_energies_ = polynomial_binning( calibration_coeffs_, nnewchann,
+      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, nnewchann,
                                               deviation_pairs_ );
       break;
       
-    case FullRangeFraction:
-      channel_energies_ = fullrangefraction_binning( calibration_coeffs_,
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+      channel_energies_ = SpecUtils::fullrangefraction_binning( calibration_coeffs_,
                                                    nnewchann, deviation_pairs_ );
       break;
       
-    case LowerChannelEdge:
-    case InvalidEquationType:
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
+    case SpecUtils::EnergyCalType::InvalidEquationType:
       if( !!channel_energies_ )
       {
         std::shared_ptr<vector<float> > newbinning
@@ -2580,61 +2497,6 @@ void MeasurementInfo::combine_gamma_channels( const size_t ncombine,
 
 
 
-std::vector<float> polynomial_cal_remove_first_channels( const int nchannel,
-                                                  const std::vector<float> &a )
-{
-  const float n = static_cast<float>( nchannel );  //to avoid integer overflow
-  std::vector<float> answer( a.size() );
-  
-  if( a.size() == 2 )
-  {
-    answer[0] = a[0] + n*a[1];
-    answer[1] = a[1];
-  }else if( a.size() == 3 )
-  {
-    answer[0] = a[0] + n*a[1] + n*n*a[2];
-    answer[1] = a[1] + 2.0f*n*a[2];
-    answer[2] = a[2];
-  }else if( a.size() == 4 )
-  {
-    answer[0] = n*n*n*a[3] + n*n*a[2] + n*a[1] + a[0];
-    answer[1] = 3.0f*n*n*a[3] + 2.0f*n*a[2] + a[1];
-    answer[2] = 3.0f*n*a[3] + a[2];
-    answer[3] = a[3];
-  }else if( a.size() == 5 )
-  {
-    answer[0] = n*n*n*n*a[4] + n*n*n*a[3] + n*n*a[2] + n*a[1] + a[0];
-    answer[1] = 4.0f*n*n*n*a[4] + 3.0f*n*n*a[3] + 2.0f*n*a[2] + a[1];
-    answer[2] = 6.0f*n*n*a[4] + 3.0f*n*a[3] + a[2];
-    answer[3] = 4.0f*n*a[4] + a[3];
-    answer[4] = a[4];
-  }else if( a.size() >= 6 )
-  {
-    //Ignore anything past the 6th coefficient (its questionalble if we even
-    //  need to go up this high).
-    /*
-     //Sage code to solve for the coefficients.
-     %var S, x, n, a0, a1, a2, a3, a4, a5, b0, b1, b2, b3, b4, b5
-     S = b0 + b1*(x-n) + b2*(x-n)^2 + b3*(x-n)^3 + b4*(x-n)^4 + b5*(x-n)^5
-     
-     r5 = (a5 == S.expand().coefficients(x)[5][0]).solve(b5)
-     r4 = (a4 == S.expand().coefficients(x)[4][0]).subs_expr(r5[0]).solve(b4)
-     r3 = (a3 == S.expand().coefficients(x)[3][0]).subs_expr(r4[0],r5[0]).solve(b3)
-     r2 = (a2 == S.expand().coefficients(x)[2][0]).subs_expr(r3[0],r4[0],r5[0]).solve(b2)
-     r1 = (a1 == S.expand().coefficients(x)[1][0]).subs_expr(r2[0],r3[0],r4[0],r5[0]).solve(b1)
-     r0 = (a0 == S.expand().coefficients(x)[0][0]).subs_expr(r1[0],r2[0],r3[0],r4[0],r5[0]).solve(b0)
-     */
-    answer.resize( 6, 0.0f );
-    answer[0] = pow(n,5.0f)*a[5] + pow(n,4.0f)*a[4] + pow(n,3.0f)*a[3] + pow(n,2.0f)*a[2] + n*a[1] + a[0];
-    answer[1] = 5*pow(n,4.0f)*a[5] + 4*pow(n,3.0f)*a[4] + 3*pow(n,2.0f)*a[3] + 2.0f*n*a[2] + a[1];
-    answer[2] = 10*pow(n,3.0f)*a[5] + 6*pow(n,2.0f)*a[4] + 3*n*a[3] + a[2];
-    answer[3] = 10*pow(n,2.0f)*a[5] + 4*n*a[4] + a[3];
-    answer[4] = 5*n*a[5] + a[4];
-    answer[5] = a[5];
-  }
-  
-  return answer;
-}//polynomial_cal_remove_first_channels(...)
 
 
 
@@ -2711,24 +2573,24 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
   
   switch( energy_calibration_model_ )
   {
-    case Polynomial:
-    case UnspecifiedUsingDefaultPolynomial:
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
-      calibration_coeffs_ = polynomial_cal_remove_first_channels( n, a );      
-      channel_energies_ = polynomial_binning( calibration_coeffs_, nnewchannel,
+      calibration_coeffs_ = SpecUtils::polynomial_cal_remove_first_channels( n, a );      
+      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, nnewchannel,
                                               deviation_pairs_ );
       break;
     }//case Polynomial:
       
-    case FullRangeFraction:
+    case SpecUtils::EnergyCalType::FullRangeFraction:
     {
-      const vector<float> oldpoly = fullrangefraction_coef_to_polynomial( a,
+      const vector<float> oldpoly = SpecUtils::fullrangefraction_coef_to_polynomial( a,
                                                               nprevchannel );
       
-      const vector<float> newpoly = polynomial_cal_remove_first_channels( n,
+      const vector<float> newpoly = SpecUtils::polynomial_cal_remove_first_channels( n,
                                                                     oldpoly );
       
-      vector<float> newfwf = polynomial_coef_to_fullrangefraction(
+      vector<float> newfwf = SpecUtils::polynomial_coef_to_fullrangefraction(
                                                         newpoly, nnewchannel );
       
       if( a.size() > 4 )
@@ -2743,13 +2605,13 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
       }//if( a.size() > 4 )
       
       calibration_coeffs_ = newfwf;
-      channel_energies_ = fullrangefraction_binning( calibration_coeffs_,
+      channel_energies_ = SpecUtils::fullrangefraction_binning( calibration_coeffs_,
                                             nnewchannel, deviation_pairs_ );
       break;
     }//case FullRangeFraction:
       
-    case LowerChannelEdge:
-    case InvalidEquationType:
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
+    case SpecUtils::EnergyCalType::InvalidEquationType:
       if( !!channel_energies_ )
       {
         std::shared_ptr< vector<float> > newbinning
@@ -3129,7 +2991,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
       }catch( std::exception & )
       {
         calibration_coeffs_.clear();
-        energy_calibration_model_ = InvalidEquationType;
+        energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
       }
     }
     
@@ -3296,7 +3158,7 @@ void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml
         if( npoints > 0 && npoints < 3 )  //3 is arbitrary, the cases I've seen has been ==1
         {
           //FLIR identiFINDER style
-          energy_calibration_model_ = Polynomial;
+          energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
           calibration_coeffs_.push_back( 0.0f );
           calibration_coeffs_.push_back( points[0].second );
         }else if( (nchannel>7) && ::abs_diff(npoints,nchannel)<3 ) //The files I've seen have (npoints==nchannel)
@@ -3309,18 +3171,18 @@ void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml
           
           if( increasing_bin )
           {
-            energy_calibration_model_ = EquationType::LowerChannelEdge;
+            energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
             for( const auto &ff : points )
               calibration_coeffs_.push_back( ff.second );
           }else
           {
             cerr << SRC_LOCATION << "\n\tI couldnt interpret energy calibration PointXY (not monototonically increasing)" << endl;
-            energy_calibration_model_ = EquationType::InvalidEquationType;
+            energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
           }
         }else
         {
           cerr << SRC_LOCATION << "\n\tI couldnt interpret energy calibration PointXY (unrecognized coefficient meaning, or no channel data)" << endl;
-          energy_calibration_model_ = EquationType::InvalidEquationType;
+          energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
         }//
 
         if( units != 1.0f )
@@ -3944,7 +3806,7 @@ vector<MeasurementConstShrdPtr> MeasurementInfo::sample_measurements( const int 
 
 void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
                                       const DeviationPairVec &dev_pairs,
-                                      Measurement::EquationType type,
+                                      SpecUtils::EnergyCalType type,
                                       ShrdConstFVecPtr binning )
 {
   // Note: this will run multiple times per calibration
@@ -3953,16 +3815,16 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
   {
     switch( type )
     {
-      case Measurement::Polynomial:
-      case Measurement::UnspecifiedUsingDefaultPolynomial:
-        binning = polynomial_binning( eqn, gamma_counts_->size(), dev_pairs );
+      case SpecUtils::EnergyCalType::Polynomial:
+      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+        binning = SpecUtils::polynomial_binning( eqn, gamma_counts_->size(), dev_pairs );
       break;
 
-      case Measurement::FullRangeFraction:
-        binning = fullrangefraction_binning( eqn, gamma_counts_->size(), dev_pairs );
+      case SpecUtils::EnergyCalType::FullRangeFraction:
+        binning = SpecUtils::fullrangefraction_binning( eqn, gamma_counts_->size(), dev_pairs );
       break;
 
-      case Measurement::LowerChannelEdge:
+      case SpecUtils::EnergyCalType::LowerChannelEdge:
         cerr << SRC_LOCATION << "\n\tWarning, you probabhouldnt be calling "
              << "this function for EquationType==LowerChannelEdge, as its probably "
              << "not as efficient as the other version of this function"
@@ -3970,14 +3832,14 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
         binning.reset( new vector<float>(eqn) );
       break;
 
-      case Measurement::InvalidEquationType:
+      case SpecUtils::EnergyCalType::InvalidEquationType:
         throw runtime_error( "Measurement::recalibrate_by_eqn(...): Can not call with EquationType==InvalidEquationType" );
     }//switch( type )
   }//if( !binning )
 
 
   if( !binning || ((binning->size() != gamma_counts_->size())
-      && (type!=LowerChannelEdge || gamma_counts_->size()>binning->size())) )
+      && (type!=SpecUtils::EnergyCalType::LowerChannelEdge || gamma_counts_->size()>binning->size())) )
   {
     stringstream msg;
     msg << "Measurement::recalibrate_by_eqn(...): "
@@ -3990,14 +3852,14 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
 
 
   channel_energies_   = binning;
-  if( type != Measurement::LowerChannelEdge )
+  if( type != SpecUtils::EnergyCalType::LowerChannelEdge )
     calibration_coeffs_ = eqn;
   else
     calibration_coeffs_.clear();
   energy_calibration_model_  = type;
   deviation_pairs_ = dev_pairs;
   
-  if( type == LowerChannelEdge )
+  if( type == SpecUtils::EnergyCalType::LowerChannelEdge )
     deviation_pairs_.clear();
   
 }//void recalibrate_by_eqn( const std::vector<float> &eqn )
@@ -4005,7 +3867,7 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
 
 void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
                                 const DeviationPairVec &dev_pairs,
-                                Measurement::EquationType type )
+                                SpecUtils::EnergyCalType type )
 {
   if( !gamma_counts_ || gamma_counts_->empty() )
     throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
@@ -4016,20 +3878,20 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
 
   switch( type )
   {
-    case Measurement::Polynomial:
-    case Measurement::UnspecifiedUsingDefaultPolynomial:
-      binning = polynomial_binning( eqn, nbin, dev_pairs );
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+      binning = SpecUtils::polynomial_binning( eqn, nbin, dev_pairs );
     break;
 
-    case Measurement::FullRangeFraction:
-      binning = fullrangefraction_binning( eqn, nbin, dev_pairs );
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+      binning = SpecUtils::fullrangefraction_binning( eqn, nbin, dev_pairs );
     break;
 
-    case Measurement::LowerChannelEdge:
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
       binning.reset( new vector<float>(eqn) );
     break;
 
-    case Measurement::InvalidEquationType:
+    case SpecUtils::EnergyCalType::InvalidEquationType:
       throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
                                 "can not be called with type==InvalidEquationType");
     break;
@@ -4042,15 +3904,15 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
 void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
                                 const DeviationPairVec &dev_pairs,
                                 ShrdConstFVecPtr binning,
-                                Measurement::EquationType type )
+                                SpecUtils::EnergyCalType type )
 {
   rebin_by_lower_edge( binning );
 
-  if( type == InvalidEquationType )
+  if( type == SpecUtils::EnergyCalType::InvalidEquationType )
     throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
                               "can not be called with type==InvalidEquationType");
 
-  if( type != LowerChannelEdge )
+  if( type != SpecUtils::EnergyCalType::LowerChannelEdge )
     calibration_coeffs_ = eqn;
   else
     calibration_coeffs_.clear();
@@ -4061,203 +3923,6 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
 
 
 
-void rebin_by_lower_edge( const std::vector<float> &original_energies,
-                         const std::vector<float> &original_counts,
-                         const std::vector<float> &new_energies,
-                         std::vector<float> &resulting_counts )
-{
-  const size_t old_nbin = min( original_energies.size(), original_counts.size());
-  const size_t new_nbin = new_energies.size();
-  
-  if( old_nbin < 4 )
-    throw runtime_error( "rebin_by_lower_edge: input must have more than 3 bins" );
-  
-  if( original_energies.size() < original_counts.size() )
-    throw runtime_error( "rebin_by_lower_edge: input energies and gamma counts"
-                        " have mismatched number of channels" );
-  
-  if( new_nbin < 4 )
-    throw runtime_error( "rebin_by_lower_edge: output have more than 3 bins" );
-  
-  resulting_counts.resize( new_nbin, 0.0f );
-  
-  size_t newbinnum = 0;
-  while( new_energies[newbinnum] < original_energies[0] && newbinnum < (new_nbin-1) )
-    resulting_counts[newbinnum++] = 0.0f;
-  
-  //new_energies[newbinnum] is now >= original_energies[0]
-  if( newbinnum && (new_energies[newbinnum] > original_energies[0]) )
-  {
-    if(new_energies[newbinnum] >= original_energies[1])
-    {
-      resulting_counts[newbinnum-1] = original_counts[0];
-      resulting_counts[newbinnum-1] += static_cast<float>( original_counts[1]
-           * (double(new_energies[newbinnum]) - double(original_energies[1]))
-             / (double(original_energies[2]) - double(original_energies[1])) );
-    }else
-    {
-      resulting_counts[newbinnum-1] = static_cast<float>( original_counts[0]
-              * (double(new_energies[newbinnum]) - double(original_energies[0]))
-              / (double(original_energies[1]) - double(original_energies[0])) );
-    }
-  }
-  
-  size_t oldbinlow = 0, oldbinhigh = 0;
-  for( ; newbinnum < new_nbin; ++newbinnum )
-  {
-    const double newbin_lower = new_energies[newbinnum];
-    const double newbin_upper = ( ((newbinnum+1)<new_nbin)
-                                 ? new_energies[newbinnum+1]
-                                 : (2.0*new_energies[new_nbin-1] - new_energies[new_nbin-2]));
-    
-    double old_lower_low, old_lower_up, old_upper_low, old_upper_up;
-    
-    for( ; oldbinlow < old_nbin; ++oldbinlow )
-    {
-      old_lower_low = original_energies[oldbinlow];
-      if( (oldbinlow+1) < old_nbin )
-        old_lower_up = original_energies[oldbinlow+1];
-      else
-        old_lower_up = 2.0*original_energies[oldbinlow]-original_energies[oldbinlow-1];
-      
-      if( newbin_lower >= old_lower_low && newbin_lower < old_lower_up )
-        break;
-    }
-    
-    double sum_lower_to_upper = 0.0;
-    for( oldbinhigh = oldbinlow; oldbinhigh < old_nbin; ++oldbinhigh )
-    {
-      old_upper_low = original_energies[oldbinhigh];
-      if( (oldbinhigh+1) < old_nbin )
-        old_upper_up = original_energies[oldbinhigh+1];
-      else
-        old_upper_up = 2.0*original_energies[oldbinhigh]-original_energies[oldbinhigh-1];
-      
-      if( newbin_upper >= old_upper_low && newbin_upper < old_upper_up )
-        break;
-      sum_lower_to_upper += original_counts[oldbinhigh];
-    }
-    
-    //new binning goes higher than old binning, lets take care of the last
-    //  fraction of a bin, and zero everything else out
-    if( oldbinhigh == old_nbin )
-    {
-      old_upper_low = original_energies[old_nbin-1];
-      old_upper_up = 2.0*original_energies[old_nbin-1]-original_energies[old_nbin-2];
-      
-      //maybe more numerically accurate if we remove the next line, and uncomment
-      //  the next two commented lines.  Didnt do because I didnt want to test
-      resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper );
-      
-      if( oldbinlow != old_nbin )
-      {
-        const double lower_old_width = old_lower_up - old_lower_low;
-        const double lower_bin_delta_counts = original_counts[oldbinlow];
-        const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
-        const double lower_frac_energy = lower_delta_energy/lower_old_width;
-        
-//        sum_lower_to_upper -= lower_bin_delta_counts*lower_frac_energy;
-        resulting_counts[newbinnum] -= static_cast<float>(lower_bin_delta_counts*lower_frac_energy);
-      }
-      
-//      resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper );
-      
-      newbinnum++;
-      while( newbinnum < new_nbin )
-        resulting_counts[newbinnum++] = 0.0f;
-      break;
-    }
-    
-    const double lower_old_width = old_lower_up - old_lower_low;
-    const double lower_bin_delta_counts = original_counts[oldbinlow];
-    const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
-    const double lower_frac_energy = lower_delta_energy/lower_old_width;
-    
-    const double upper_old_width = old_upper_up - old_upper_low;
-    const double upper_bin_delta_counts = original_counts[oldbinhigh];
-    const double upper_delta_energy = double(newbin_upper)-double(original_energies[oldbinhigh]);
-    const double upper_frac_energy = upper_delta_energy/upper_old_width;
-    
-    //interpolate sum height at newbin_lower
-    resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper + upper_bin_delta_counts*upper_frac_energy-lower_bin_delta_counts*lower_frac_energy );
-  }//for( ; newbinnum < (new_nbin-1); ++newbinnum )
-  
-  
-  //capture case where new energies starts higher than the original energies, so
-  //  we should put the contents of the lower energy bins into the first bin
-  //  of the new counts
-  if( original_energies[0] < new_energies[0] )
-  {
-    size_t i = 0;
-    while( (original_energies[i+1]<new_energies[0]) && (i<(old_nbin-1)) )
-      resulting_counts[0] += original_counts[i++];
-    
-    //original_energies[i] is now >= new_energies[0]
-    
-    if( i < old_nbin )
-      resulting_counts[0] += static_cast<float>( original_counts[i]*(double(new_energies[0])-double(original_energies[i]))/(double(original_energies[i+1])-original_energies[i]) );
-  }//if( original_energies[0] < new_energies[0] )
-  
-  //Now capture the case where the old binning extends further than new binning
-  const float upper_old_energy = 2.0f*original_energies[old_nbin-1] - original_energies[old_nbin-2];
-  const float upper_new_energy = 2.0f*new_energies[new_nbin-1] - new_energies[new_nbin-2];
-  if( upper_old_energy > upper_new_energy )
-  {
-    if( oldbinhigh < (old_nbin-1) )
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh] * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh+1]-original_energies[oldbinhigh]);
-    else
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh] * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh]-original_energies[oldbinhigh-1]);
-    
-    for( ; oldbinhigh < old_nbin; ++oldbinhigh )
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh];
-  }//if( original_energies.back() > new_energies.back() )
-  
-  
-  
-#if( PERFORM_DEVELOPER_CHECKS )
-  double oldsum = 0.0, newsum = 0.0;
-  for( const float f : original_counts )
-    oldsum += f;
-  for( const float f : resulting_counts )
-    newsum += f;
-  
-  if( (fabs(oldsum - newsum) > (old_nbin*0.1/16384.0)) && (fabs(oldsum - newsum) > 1.0E-7*oldsum) )
-  {
-    static std::mutex m;
-    
-    {
-      std::lock_guard<std::mutex> loc(m);
-      ofstream output( "rebin_by_lower_edge_error.txt", ios::app );
-      output << "  std::vector<float> original_energies{" << std::setprecision(9);
-      for( size_t i = 0; i < original_energies.size(); ++i )
-          output << (i?", ":"") << original_energies[i];
-      output << "};" << endl;
-    
-      output << "  std::vector<float> original_counts{" << std::setprecision(9);
-      for( size_t i = 0; i < original_counts.size(); ++i )
-          output << (i?", ":"") << original_counts[i];
-      output << "};" << endl;
-    
-      output << "  std::vector<float> new_energies{" << std::setprecision(9);
-      for( size_t i = 0; i < new_energies.size(); ++i )
-          output << (i?", ":"") << new_energies[i];
-      output << "};" << endl << endl;
-      
-      output << "  std::vector<float> new_counts{" << std::setprecision(9);
-      for( size_t i = 0; i < resulting_counts.size(); ++i )
-        output << (i?", ":"") << resulting_counts[i];
-      output << "};" << endl << endl;
-    }
-
-  
-    char buffer[1024];
-    snprintf( buffer, sizeof(buffer),
-              "rebin_by_lower_edge gives %1.8E vs pre rebin of %1.8E, an unacceptable error.\n",
-              newsum, oldsum );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
-  }
-#endif
-}//void rebin_by_lower_edge(...)
 
 
 void Measurement::rebin_by_lower_edge( ShrdConstFVecPtr new_binning_shrd )
@@ -4278,7 +3943,7 @@ void Measurement::rebin_by_lower_edge( ShrdConstFVecPtr new_binning_shrd )
     const size_t new_nbin = new_binning_shrd->size();
     ShrdFVecPtr rebinned_gamma_counts( new vector<float>(new_nbin) );
     
-    ::rebin_by_lower_edge( *channel_energies_, *gamma_counts_,
+    SpecUtils::rebin_by_lower_edge( *channel_energies_, *gamma_counts_,
                             *new_binning_shrd, *rebinned_gamma_counts );
     
     channel_energies_ = new_binning_shrd;
@@ -4286,7 +3951,7 @@ void Measurement::rebin_by_lower_edge( ShrdConstFVecPtr new_binning_shrd )
     
     deviation_pairs_.clear();
     calibration_coeffs_.clear();
-    energy_calibration_model_ = LowerChannelEdge;
+    energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
   }//end codeblock to do works
 }//void rebin_by_lower_edge(...)
 
@@ -4294,7 +3959,7 @@ void Measurement::rebin_by_lower_edge( ShrdConstFVecPtr new_binning_shrd )
 
 void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *calibration_node,
                                     vector<float> &coeffs,
-                                    Measurement::EquationType &eqnmodel )
+                                    SpecUtils::EnergyCalType &eqnmodel )
 {
   coeffs.clear();
 
@@ -4380,37 +4045,37 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
     const rapidxml::xml_attribute<char> *model = equation_node->first_attribute( "Model", 5 );
     //    rapidxml::xml_attribute<char> *units = equation_node->first_attribute( "Units", 5 );
     
-    eqnmodel = InvalidEquationType;
+    eqnmodel = SpecUtils::EnergyCalType::InvalidEquationType;
     
     string modelstr = xml_value_str(model);
     if( modelstr == "Polynomial" )
-      eqnmodel = Polynomial;
+      eqnmodel = SpecUtils::EnergyCalType::Polynomial;
     else if( modelstr == "FullRangeFraction" )
-      eqnmodel = FullRangeFraction;
+      eqnmodel = SpecUtils::EnergyCalType::FullRangeFraction;
     else if( modelstr == "LowerChannelEdge" || modelstr == "LowerBinEdge")
-      eqnmodel = LowerChannelEdge;
+      eqnmodel = SpecUtils::EnergyCalType::LowerChannelEdge;
     else if( modelstr == "Other" )
     {
       rapidxml::xml_attribute<char> *form = equation_node->first_attribute( "Form", 4 );
       const string formstr = xml_value_str(form);
       if( icontains(formstr, "Lower edge") )
-        eqnmodel = LowerChannelEdge;
+        eqnmodel = SpecUtils::EnergyCalType::LowerChannelEdge;
     }//if( modelstr == ...) / if / else
     
     //Lets try to guess the equation type for Polynomial or FullRangeFraction
-    if( eqnmodel == InvalidEquationType )
+    if( eqnmodel == SpecUtils::EnergyCalType::InvalidEquationType )
     {
       if( (coeffs.size() < 5) && (coeffs.size() > 1) )
       {
         if( coeffs[1] < 10.0 )
-          eqnmodel = Polynomial;
+          eqnmodel = SpecUtils::EnergyCalType::Polynomial;
         else if( coeffs[1] > 1000.0 )
-          eqnmodel = FullRangeFraction;
+          eqnmodel = SpecUtils::EnergyCalType::FullRangeFraction;
       }//if( coeffs.size() < 5 )
     }//if( eqnmodel == InvalidEquationType )
     
     
-    if( eqnmodel == InvalidEquationType )
+    if( eqnmodel == SpecUtils::EnergyCalType::InvalidEquationType )
     {
       coeffs.clear();
       cerr << "Equation model is not polynomial" << endl;
@@ -4427,435 +4092,6 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
 
 }//void decode_n42_2006_binning(...)
 
-
-
-std::vector<float> fullrangefraction_coef_to_polynomial(
-                                            const std::vector<float> &coeffs,
-                                            const size_t nbinint )
-{
-  if( !nbinint || coeffs.empty() )
-    return std::vector<float>();
-  
-  //nbin needs to be a float, not an integer, or else integer overflow 
-  //  can happen on 32 bit systems when its cubed.
-  const float nbin = static_cast<float>( nbinint );
-  const size_t npars = coeffs.size();
-  float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
-  float c0 = 0.0f, c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-
-  if( npars > 0 )
-    a0 = coeffs[0];
-  if( npars > 1 )
-    a1 = coeffs[1];
-  if( npars > 2 )
-    a2 = coeffs[2];
-  if( npars > 3 )
-    a3 = coeffs[3];
-
-  //Logic from from "Energy Calibration Conventions and Parameter Conversions"
-  //  Dean J. Mitchell, George Lasche and John Mattingly, 6418 / MS-0791
-  //The below "- (0.5f*a1/nbin)" should actually be "+ (0.5f*a1/nbin)"
-  //  according to the paper above, I changed it to compensate for the
-  //  similar hack in polynomial_coef_to_fullrangefraction.
-//  c0 = a0 + (0.5f*a1/nbin) + 0.25f*a2/(nbin*nbin) - (a3/(8.0f*nbin*nbin*nbin));
-//  c1 = (a1/nbin) - (a2/(nbin*nbin)) + 0.75f*(a3/(nbin*nbin*nbin));
-//  c2 = (a2/(nbin*nbin)) - 1.5f*(a3/(nbin*nbin*nbin));
-//  c3 = a3/(nbin*nbin*nbin);
-  
-  //See notes in polynomial_coef_to_fullrangefraction(...) for justification
-  //  of using the below, instead of the above.
-  c0 = a0;
-  c1 = a1 / nbin;
-  c2 = a2 / (nbin*nbin);
-  c3 = a3 / (nbin*nbin*nbin);
-
-  vector<float> answer;
-  if( c0!=0.0f || c1!=0.0f || c2!=0.0f || c3!=0.0f )
-  {
-    answer.push_back( c0 );
-    if( c1!=0.0f || c2!=0.0f || c3!=0.0f )
-    {
-      answer.push_back( c1 );
-      if( c2 != 0.0f || c3!=0.0f )
-      {
-        answer.push_back( c2 );
-        if( c3!=0.0f )
-          answer.push_back( c3 );
-      }
-    }//if( p1!=0.0 || p2!=0.0 )
-  }//if( p0!=0.0 || p1!=0.0 || p2!=0.0 )
-
-  return answer;
-}//std::vector<float> fullrangefraction_coef_to_polynomial( const std::vector<float> &coeffs, const size_t nbin )
-
-
-vector<float> mid_channel_polynomial_to_fullrangeFraction(
-                               const vector<float> &coeffs, const size_t nbini )
-{
-  const float nbin = static_cast<float>( nbini );
-  float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
-  float c0 = 0.0f, c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-  
-  if( coeffs.size() > 0 )
-    c0 = coeffs[0];
-  if( coeffs.size() > 1 )
-    c1 = coeffs[1];
-  if( coeffs.size() > 2 )
-    c2 = coeffs[2];
-  if( coeffs.size() > 3 )
-    c3 = coeffs[3];
-  
-  //Logic from from "Energy Calibration Conventions and Parameter Conversions"
-  //  Dean J. Mitchell, George Lasche and John Mattingly, 6418 / MS-0791
-  //The below "- 0.5f*c1" should actually be "+ 0.5f*c1" according to the
-  //  paper above, but to agree with PeakEasy I changed this.
-  a0 = c0 - 0.5f*c1 + 0.25f*c2 + (1.0f/8.0f)*c3;
-  a1 = nbin*(c1 + c2 + 0.75f*c3);
-  a2 = nbin*nbin*(c2 + 1.5f*c3);
-  a3 = nbin*nbin*nbin*c3;
-  
-  vector<float> answer;
-  answer.push_back( a0 );
-  answer.push_back( a1 );
-  if( a2 != 0.0f || a3 != 0.0f )
-    answer.push_back( a2 );
-  if( a3 != 0.0f )
-    answer.push_back( a3 );
-  
-  return answer;
-}//mid_channel_polynomial_to_fullrangeFraction()
-
-
-vector<float> polynomial_coef_to_fullrangefraction( const vector<float> &coeffs,
-                                                    const size_t nbin )
-{
-  float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
-  float c0 = 0.0f, c1 = 0.0f, c2 = 0.0f, c3 = 0.0f;
-
-  if( coeffs.size() > 0 )
-    c0 = coeffs[0];
-  if( coeffs.size() > 1 )
-    c1 = coeffs[1];
-  if( coeffs.size() > 2 )
-    c2 = coeffs[2];
-  if( coeffs.size() > 3 )
-    c3 = coeffs[3];
-
-  //See refKMZF7EBVUT
-//  a0 = c0 - 0.5f*c1 + 0.25f*c2 + (1.0f/8.0f)*c3;
-//  a1 = nbin*(c1 + c2 + 0.75f*c3);
-//  a2 = nbin*nbin*(c2 + 1.5f*c3);
-//  a3 = nbin*nbin*nbin*c3;
-  
-  //See ref9CDCULKVGZ, but basically some vendors implementations
-  a0 = c0;
-  a1 = nbin*c1;
-  a2 = nbin*nbin*c2;
-  a3 = nbin*nbin*nbin*c3;
-  
-  
-  vector<float> answer;
-  answer.push_back( a0 );
-  answer.push_back( a1 );
-  if( a2 != 0.0f || a3 != 0.0f )
-    answer.push_back( a2 );
-  if( a3 != 0.0f )
-    answer.push_back( a3 );
-
-  return answer;
-}//vector<float> polynomial_coeef_to_fullrangefraction( const vector<float> &coeffs )
-
-
-ShrdConstFVecPtr polynomial_binning( const vector<float> &coeffs,
-                                     const size_t nbin,
-                                     const DeviationPairVec &dev_pairs )
-{
-  ShrdFVecPtr answer( new vector<float>(nbin, 0.0) );
-  const size_t ncoeffs = coeffs.size();
-  
-  for( size_t i = 0; i < nbin; i++ )
-  {
-    float val = 0.0;
-    for( size_t c = 0; c < ncoeffs; ++c ) 
-      val += coeffs[c] * pow( static_cast<float>(i), static_cast<float>(c) );
-    answer->operator[](i) = val;
-  }//for( loop over bins, i )
-  
-  return apply_deviation_pair( answer, dev_pairs );
-  //  const vector<float> fff_coef = polynomial_coef_to_fullrangefraction( coeffs, nbin );
-  //  return fullrangefraction_binning( fff_coef, nbin, dev_pairs );
-}//ShrdConstFVecPtr polynomial_binning( const vector<float> &coefficients, size_t nbin )
-
-
-ShrdConstFVecPtr fullrangefraction_binning( const vector<float> &coeffs,
-                                            const size_t nbin,
-                                            const DeviationPairVec &dev_pairs  )
-{
-  ShrdFVecPtr answer( new vector<float>(nbin, 0.0f) );
-  const size_t ncoeffs = std::min( coeffs.size(), size_t(4) );
-  const float low_e_coef = (coeffs.size() > 4) ? coeffs[4] : 0.0f;
-  
-  for( size_t i = 0; i < nbin; i++ )
-  {
-    const float x = static_cast<float>(i)/static_cast<float>(nbin);
-    float &val = answer->operator[](i);
-    for( size_t c = 0; c < ncoeffs; ++c )
-      val += coeffs[c] * pow(x,static_cast<float>(c) );
-    val += low_e_coef / (1.0f+60.0f*x);
-  }//for( loop over bins, i )
-
-  return apply_deviation_pair( answer, dev_pairs );
-}//ShrdConstFVecPtr fullrangefraction_binning(...)
-
-
-float find_bin_fullrangefraction( const double energy,
-                                  const std::vector<float> &coeffs,
-                                  const size_t nbin,
-                                  const DeviationPairVec &devpair,
-                                  const double accuracy )
-{
-  size_t ncoefs = 0;
-  for( size_t i = 0; i < coeffs.size(); ++i )
-    if( fabs(coeffs[i]) > std::numeric_limits<float>::epsilon() )
-      ncoefs = i+1;
-
-  if( ncoefs < 2  )
-    throw std::runtime_error( "find_bin_fullrangefraction(...): must pass"
-                              " in at least two coefficients" );
-  
-  if( ncoefs < 4 && devpair.empty() )
-  {
-    if( ncoefs == 2  )
-    {
-      //  energy =  coeffs[0] + coeffs[1]*(bin/nbins)
-      return static_cast<float>( nbin * (energy - coeffs[0]) / coeffs[1] );
-    }//if( coeffs.size() == 2  )
-    
-    //Note purposeful use of double precision
-    
-    const double a = double(coeffs[0]) - double(energy);
-    const double b = coeffs[1];
-    const double c = coeffs[2];
-    
-    //energy = coeffs[0] + coeffs[1]*(bin/nbin) + coeffs[2]*(bin/nbin)*(bin/nbin)
-    //--> 0 = a + b*(bin/nbin) + c*(bin/nbin)*(bin/nbin)
-    //roots at (-b +- sqrt(b*b-4*a*c))/(2c)
-    
-    const double sqrtarg = b*b-4.0f*a*c;
-    
-    if( sqrtarg >= 0.0 )
-    {
-      const double root_1 = (-b + sqrt(sqrtarg))/(2.0f*c);
-      const double root_2 = (-b - sqrt(sqrtarg))/(2.0f*c);
-    
-      vector<double> roots;
-      if( root_1 > 0.0 && root_1 < static_cast<double>(nbin) )
-        roots.push_back( root_1 );
-      if( root_2 > 0.0 && root_2 < static_cast<double>(nbin) )
-        roots.push_back( root_2 );
-
-      if( roots.size() == 1 )
-        return static_cast<float>( nbin * roots[0] );
-    
-      if( roots.size() == 2 )
-      {
-        const double e1 = coeffs[0] + coeffs[1]*root_1 + coeffs[2]*root_1*root_1;
-        const double e2 = coeffs[0] + coeffs[1]*root_2 + coeffs[2]*root_2*root_2;
-        if( fabs(e1-e2) < static_cast<double>(accuracy) )
-          return static_cast<float>( nbin * root_1 );
-      }//if( roots.size() == 2 )
-    
-#if( PERFORM_DEVELOPER_CHECKS )
-      stringstream msg;
-      msg << "find_bin_fullrangefraction(): found " << roots.size()
-          << " energy solutions, shouldnt have happened: "
-          << root_1 << " and " << root_2 << " for " << energy << " keV"
-          << " so root coorespond to "
-          << coeffs[0] + coeffs[1]*root_1 + coeffs[2]*root_1*root_1
-          << " and "
-          << coeffs[0] + coeffs[1]*root_2 + coeffs[2]*root_2*root_2
-          << ". I will attempt to recover, but please check results of operation.";
-//    passMessage( msg.str(), "", 3 );
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
-#endif
-      cerr << SRC_LOCATION << "\n\tWarning, couldnt algebraicly find bin number\n"
-           << "\tcoeffs[0]=" << coeffs[0] << ", coeffs[1]=" << coeffs[1]
-           << ", coeffs[2]=" << coeffs[2] << ", energy=" << energy << endl;
-    }//if( sqrtarg >= 0.0f )
-  }//if( ncoefs < 4 && devpair.empty() )
-    
-  
-  float lowbin = 0.0;
-  float highbin = static_cast<float>( nbin );
-  float testenergy = fullrangefraction_energy( highbin, coeffs, nbin, devpair );
-  while( testenergy < energy )
-  {
-    highbin *= 2.0f;
-    testenergy = fullrangefraction_energy( highbin, coeffs, nbin, devpair );
-  }//while( testenergy < energy )
-  
-  testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, devpair );
-  while( testenergy > energy )
-  {
-    lowbin -= nbin;
-    testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, devpair );
-  }//while( testenergy < energy )
-  
-  
-  float bin = lowbin + ((highbin-lowbin)/2.0f);
-  testenergy = fullrangefraction_energy( bin, coeffs, nbin, devpair );
-  float dx = static_cast<float>( fabs(testenergy-energy) );
-  
-  while( dx > accuracy )
-  {
-    if( highbin == lowbin )
-    {
-      cerr << "Possible error in find_bin_fullrangefraction... check out" << endl;
-      throw runtime_error( "find_bin_fullrangefraction(...): error finding bin coorespongin to deired energy (this shouldnt happen)" );
-    }
-
-    if( testenergy == energy )
-      return bin;
-    if( testenergy > energy )
-      highbin = bin;
-    else
-      lowbin = bin;
-
-    bin = lowbin + ((highbin-lowbin)/2.0f);
-    testenergy = fullrangefraction_energy( bin, coeffs, nbin, devpair );
-    dx = static_cast<float>( fabs(testenergy-energy) );
-  }//while( dx > accuracy )
-  
-  return bin;
-}//float find_bin_fullrangefraction(...)
-
-
-float fullrangefraction_energy( float bin_number,
-                                const std::vector<float> &coeffs,
-                                const size_t nbin,
-                                const DeviationPairVec &deviation_pairs )
-{
-  const float x = bin_number/static_cast<float>(nbin);
-  float val = 0.0;
-  for( size_t c = 0; c < coeffs.size(); ++c )
-    val += coeffs[c] * pow(x,static_cast<float>(c) );
-  return val + offset_due_to_deviation_pairs( val, deviation_pairs );
-}//float fullrangefraction_energy(...)
-
-
-float offset_due_to_deviation_pairs( float energy, const DeviationPairVec &dps )
-{
-  if( dps.empty() )
-    return 0.0;
-  
-  const size_t ndev_pair = dps.size() - 1;
-
-  float answer = 0.0f;
-  for( size_t dev_pairn = 0; dev_pairn < ndev_pair; ++dev_pairn )
-  {
-    const float lower_e = dps[dev_pairn].first;
-    const float upper_e = dps[dev_pairn+1].first;
-    const float lower_shift = dps[dev_pairn].second;
-    const float upper_shift = dps[dev_pairn+1].second;
-    const float residual_shift = (upper_shift -lower_shift)/(upper_e - lower_e);
-
-    if( (energy >= lower_e) && (energy < upper_e) )
-      answer += (energy - lower_e)*residual_shift;
-    else if( energy >= upper_e )
-      answer += (upper_shift - lower_shift);
-  }//for( size_t dev_pairn = 0; dev_pairn < ndev_pair; ++dev_pairn )
-  
-  return answer;
-}//float offset_due_to_deviation_pairs(...)
-
-
-ShrdConstFVecPtr apply_deviation_pair( ShrdConstFVecPtr binning,
-                             const std::vector< std::pair<float,float> > &dps )
-{
-  //This function adapted by wcjohns from a previous TRB sub-project, and has
-  //  not been tested.  Further, it linearly interpolates between deviation
-  //  pairs, causing bad artifacts in data; a spline interpolation should be
-  //  used.
-  //ToDo - XXX - convert to using a spline interpolation of deviation pairs
-
-  if( dps.empty() )
-    return binning;
-  
-  ShrdFVecPtr answer( new vector<float>( *binning ) );
-  vector<float> &Ex = *answer;
-  const vector<float> &Ex_org = *binning;
-  const size_t nchannel = binning->size();
-  const size_t ndev_pair = dps.size() - 1;
-
-  // Offset prior to the first Deviation pair
-  size_t ch = upper_bound( Ex.begin(), Ex.end(), dps[0].first ) - Ex.begin();
-
-  for( size_t dev_pairn = 0; dev_pairn < ndev_pair; ++dev_pairn )
-  {
-    const float lower_e = dps[dev_pairn].first;
-    const float upper_e = dps[dev_pairn+1].first;
-    const float lower_shift = dps[dev_pairn].second;
-    const float upper_shift = dps[dev_pairn+1].second;
-    const float residual_shift = (upper_shift -lower_shift)/(upper_e - lower_e);
-
-    for( size_t channel = ch; channel < nchannel; ++channel )
-    {
-      const float this_orig_e = Ex_org[channel];
-
-      if( (this_orig_e >= lower_e) && (this_orig_e < upper_e) )
-      {
-        const float shift = (this_orig_e - lower_e)*residual_shift;
-        Ex[channel] += shift;
-        
-        ch = channel;
-      }//if( (this_orig_e >= lower_e) && (this_orig_e < upper_e) )
-    }//for( size_t f = ch; f < nchannel; ++f )
-
-    for( size_t channel = ch+1; channel < nchannel; ++channel )
-      Ex[channel] += (upper_shift - lower_shift);
-  }//for( size_t dev_pairn = 0; dev_pairn < ndev_pair; ++dev_pairn )
-  
-  return answer;
-}//std::vector<float> apply_deviation_pair(...)
-
-
-
-float bin_number_to_energy_polynomial( const float bin,
-                                       const std::vector<float> &coeffs,
-                                       const size_t nbin )
-{
-  if( coeffs.empty() )
-    return 0.0;
-
-  const int npars = static_cast<int>( coeffs.size() );
-
-  if( npars > 3 )
-    cerr << "Warning: bin_number_to_energy_polynomial(...) only uses first three "
-            "coefficients right now, ignoring higher order terms" << endl;
-
-  double a0 = 0.0, a1 = 0.0, a2 = 0.0;
-
-  if( npars > 0)
-  {
-    a0 += coeffs[0];
-
-    if( npars > 1 )
-    {
-      a0 += coeffs[1]/2.0 + coeffs[2]/4.0;
-      a1 += nbin*coeffs[1];
-
-      if( npars > 2 )
-      {
-        a0 += coeffs[2]/4.0;
-        a1 += nbin*coeffs[2];
-        a2 += nbin*nbin*coeffs[2];
-      }//if( npars > 2 )
-    }//if( npars > 1 )
-  }//if( npars > 0)
-
-  const float x = bin / static_cast<float>(nbin);
-  return float( a0 + a1*x + a2*x*x );
-}//float bin_number_to_energy_polynomial(...)
 
 
 void expand_counted_zeros( const vector<float> &data, vector<float> &return_answer )
@@ -5252,24 +4488,26 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
   auto lhs_cal_model = lhs.energy_calibration_model_;
   auto rhs_cal_model = rhs.energy_calibration_model_;
   
-  if( lhs_cal_model == Measurement::EquationType::UnspecifiedUsingDefaultPolynomial )
-    lhs_cal_model = Measurement::EquationType::Polynomial;
-  if( rhs_cal_model == Measurement::EquationType::UnspecifiedUsingDefaultPolynomial )
-    rhs_cal_model = Measurement::EquationType::Polynomial;
+  if( lhs_cal_model == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+    lhs_cal_model = SpecUtils::EnergyCalType::Polynomial;
+  if( rhs_cal_model == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+    rhs_cal_model = SpecUtils::EnergyCalType::Polynomial;
 
   if( lhs_cal_model != rhs_cal_model && !!lhs.channel_energies_ )
   {
-    if( (lhs_cal_model == Polynomial && rhs_cal_model == FullRangeFraction)
-       || (lhs_cal_model == FullRangeFraction && rhs_cal_model == Polynomial) )
+    if( (lhs_cal_model == SpecUtils::EnergyCalType::Polynomial
+         && rhs_cal_model == SpecUtils::EnergyCalType::FullRangeFraction)
+       || (lhs_cal_model == SpecUtils::EnergyCalType::FullRangeFraction
+           && rhs_cal_model == SpecUtils::EnergyCalType::Polynomial) )
     {
       const size_t nbin = lhs.channel_energies_->size();
       vector<float> lhscoefs = lhs.calibration_coeffs_;
       vector<float> rhscoefs = rhs.calibration_coeffs_;
       
-      if( rhs.energy_calibration_model_ == Polynomial )
-        rhscoefs = polynomial_coef_to_fullrangefraction( rhscoefs, nbin );
-      if( lhs.energy_calibration_model_ == Polynomial )
-        lhscoefs = polynomial_coef_to_fullrangefraction( lhscoefs, nbin );
+      if( rhs.energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
+        rhscoefs = SpecUtils::polynomial_coef_to_fullrangefraction( rhscoefs, nbin );
+      if( lhs.energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
+        lhscoefs = SpecUtils::polynomial_coef_to_fullrangefraction( lhscoefs, nbin );
       
       if( rhscoefs.size() != lhscoefs.size() )
         throw runtime_error( "Calibration coefficients LHS and RHS do not match size after converting to be same type" );
@@ -6761,8 +5999,8 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       {
         switch( meas->energy_calibration_model_ )
         {
-          case Measurement::Polynomial:
-          case Measurement::UnspecifiedUsingDefaultPolynomial:
+          case SpecUtils::EnergyCalType::Polynomial:
+          case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
             if( meas->calibration_coeffs_.size() < 2
                 || fabs(meas->calibration_coeffs_[0])>150.0  //150 is arbitrary
                 || fabs(meas->calibration_coeffs_[1])>250.0  //250 is arbitrary, lets 12 channels span 3000 keV
@@ -6778,7 +6016,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
             }
             break;
             
-          case Measurement::FullRangeFraction:
+          case SpecUtils::EnergyCalType::FullRangeFraction:
             if( meas->calibration_coeffs_.size() < 2
                || fabs(meas->calibration_coeffs_[0]) > 1000.0f
                || meas->calibration_coeffs_[1] < (FLT_EPSILON*meas->gamma_counts_->size()) )
@@ -6788,20 +6026,20 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
             }
             break;
             
-          case Measurement::LowerChannelEdge:
+          case SpecUtils::EnergyCalType::LowerChannelEdge:
             //should check that at least as many energies where provided as
             //  meas->gamma_counts_->size()
             break;
           
-          case Measurement::InvalidEquationType:
+          case SpecUtils::EnergyCalType::InvalidEquationType:
             //Nothing to check here.
             break;
         }//switch( meas->energy_calibration_model_ )
       }//if( !allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
       
-      if( allZeros && (meas->energy_calibration_model_==Measurement::Polynomial
-           || meas->energy_calibration_model_==Measurement::UnspecifiedUsingDefaultPolynomial
-           || meas->energy_calibration_model_==Measurement::FullRangeFraction)
+      if( allZeros && (meas->energy_calibration_model_==SpecUtils::EnergyCalType::Polynomial
+           || meas->energy_calibration_model_==SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial
+           || meas->energy_calibration_model_==SpecUtils::EnergyCalType::FullRangeFraction)
           && meas->gamma_counts_ && meas->gamma_counts_->size() )
       {
         if( invalid_calib )
@@ -6814,7 +6052,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           meas->remarks_.push_back( remark.str() );
         }//if( invalid_calib )
         
-        meas->energy_calibration_model_ = Measurement::InvalidEquationType;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
         meas->calibration_coeffs_.clear();
         meas->deviation_pairs_.clear();
         meas->channel_energies_.reset();
@@ -7059,14 +6297,14 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           throw runtime_error( "" );
           
         //Force calibration_coeffs_ to free the memory for LowerChannelEdge
-        if( pos->equation_type == Measurement::LowerChannelEdge )
+        if( pos->equation_type == SpecUtils::EnergyCalType::LowerChannelEdge )
           vector<float>().swap( meas->calibration_coeffs_ );
       }catch( std::exception & )
       {
         if( meas->gamma_counts_ && !meas->gamma_counts_->empty())
         {
           ++n_times_guess_cal;
-          meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
           meas->calibration_coeffs_.resize( 2 );
           meas->calibration_coeffs_[0] = 0.0f;
           meas->calibration_coeffs_[1] = 3000.0f / std::max(meas->gamma_counts_->size()-1, size_t(1));
@@ -7175,8 +6413,8 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         if( meas->gamma_counts_ && !meas->gamma_counts_->empty()
             && det_meas_map.count(name) && meas->calibration_coeffs_.empty()
             && ( !meas->channel_energies_ || meas->channel_energies_->empty()
-                 || (det_meas_map[name]->energy_calibration_model_ == Measurement::LowerChannelEdge
-                     && meas->energy_calibration_model_==Measurement::InvalidEquationType )
+                 || (det_meas_map[name]->energy_calibration_model_ == SpecUtils::EnergyCalType::LowerChannelEdge
+                     && meas->energy_calibration_model_==SpecUtils::EnergyCalType::InvalidEquationType )
                )
            )
         {
@@ -7227,7 +6465,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         {
           if( meas->gamma_counts_->size() > 16 )//dont rebin SAIC or LUDLUMS
           {
-            rebin_by_eqn( poly_eqn, DeviationPairVec(), Measurement::Polynomial );
+            rebin_by_eqn( poly_eqn, DeviationPairVec(), SpecUtils::EnergyCalType::Polynomial );
             break;
           }//if( meas->gamma_counts_->size() > 16 )
         }//for( const auto &meas : measurements_ )
@@ -8376,7 +7614,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
 //             << " wcjohns should check into this although he thinks it should "
 //             << "be okay" << endl;
 
-      meas->energy_calibration_model_ = Measurement::Polynomial;
+      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
       meas->calibration_coeffs_.resize( 2 );
       meas->calibration_coeffs_[0] = b;
       meas->calibration_coeffs_[1] = c;
@@ -8833,10 +8071,10 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
   
   vector<float> calcoefs;
   
-  if( summed->energy_calibration_model_ == Measurement::Polynomial )
+  if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
     calcoefs = summed->calibration_coeffs_;
-  else if( summed->energy_calibration_model_ == Measurement::FullRangeFraction )
-    calcoefs = fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, summed->gamma_counts_->size() );
+  else if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
+    calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, summed->gamma_counts_->size() );
   
   const size_t ncoef = calcoefs.size();
   const float a = 0.0f, b = (ncoef ? calcoefs[0] : 0.0f),
@@ -9356,10 +8594,10 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
     
     
     vector<float> calib_coef = summed->calibration_coeffs();
-    if( summed->energy_calibration_model() == Measurement::FullRangeFraction )
-      calib_coef = fullrangefraction_coef_to_polynomial( calib_coef, n_channel );
-    else if( summed->energy_calibration_model() != Measurement::Polynomial
-             && summed->energy_calibration_model() != Measurement::UnspecifiedUsingDefaultPolynomial )
+    if( summed->energy_calibration_model() == SpecUtils::EnergyCalType::FullRangeFraction )
+      calib_coef = SpecUtils::fullrangefraction_coef_to_polynomial( calib_coef, n_channel );
+    else if( summed->energy_calibration_model() != SpecUtils::EnergyCalType::Polynomial
+             && summed->energy_calibration_model() != SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
       calib_coef.clear();
     
     if( calib_coef.size() > 0 )
@@ -10549,7 +9787,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
     meas->gamma_count_sum_ = sum_gamma;
 
     meas->calibration_coeffs_ = calib_coefs;
-    meas->energy_calibration_model_ = Measurement::Polynomial; //Measurement::FullRangeFraction
+    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial; //SpecUtils::EnergyCalType::FullRangeFraction
     
     //File ref9HTGHJ9SXR has the neutron information in it, but
     //  the serial number claims this is a micro-DX (no neutron detector), and
@@ -10823,7 +10061,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
       {
         meas->calibration_coeffs_.resize( 3 );
         memcpy( &(meas->calibration_coeffs_[0]), data + calpos, 3*4 );
-        meas->energy_calibration_model_ = Measurement::Polynomial;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
       }//if( calpos )
       
       size_t datapos;
@@ -10969,7 +10207,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
           const bool valid = (x > -100.0f) && (x < 100.0f) && (y > 400.0f) && (y < 4000.0f);
           if( valid )
           {
-            meas->energy_calibration_model_ = Measurement::Polynomial;
+            meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
             meas->calibration_coeffs_.push_back( cal[0] );
             meas->calibration_coeffs_.push_back( cal[1] );
             meas->calibration_coeffs_.push_back( cal[2] );
@@ -11018,7 +10256,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
         meas->calibration_coeffs_.push_back( EgyCal[0] );
         meas->calibration_coeffs_.push_back( EgyCal[1] );
         meas->calibration_coeffs_.push_back( EgyCal[2] );
-        meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
       }//if( meas->calibration_coeffs_.empty() )
       
       if( j == 0 )
@@ -11094,11 +10332,11 @@ bool MeasurementInfo::write_binary_exploranium_gr130v0( std::ostream &output ) c
         coeffs.push_back( delta_e / noutchannel );
         
         std::shared_ptr<const vector<float> > new_binning =
-        polynomial_binning( coeffs, noutchannel, DeviationPairVec() );
+        SpecUtils::polynomial_binning( coeffs, noutchannel, DeviationPairVec() );
         
         meas.rebin_by_lower_edge( new_binning );
         meas.recalibrate_by_eqn( coeffs, DeviationPairVec(),
-                                Measurement::Polynomial, new_binning );
+                                SpecUtils::EnergyCalType::Polynomial, new_binning );
       }//
       
       //Lets write to a buffer before writing to the stream to make things a
@@ -11219,11 +10457,11 @@ bool MeasurementInfo::write_binary_exploranium_gr135v2( std::ostream &output ) c
         coeffs.push_back( delta_e / noutchannel );
         
         std::shared_ptr<const vector<float> > new_binning =
-             polynomial_binning( coeffs, noutchannel, DeviationPairVec() );
+             SpecUtils::polynomial_binning( coeffs, noutchannel, DeviationPairVec() );
         
         meas.rebin_by_lower_edge( new_binning );
         meas.recalibrate_by_eqn( coeffs, DeviationPairVec(),
-                                Measurement::Polynomial, new_binning );
+                                SpecUtils::EnergyCalType::Polynomial, new_binning );
       }//
       
       
@@ -11453,11 +10691,11 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
     }//if( counts.size() )
     
     vector<float> coefs;
-    if( summed->energy_calibration_model_ == Measurement::Polynomial
-       || summed->energy_calibration_model_ == Measurement::UnspecifiedUsingDefaultPolynomial )
+    if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial
+       || summed->energy_calibration_model_ == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
       coefs = summed->calibration_coeffs_;
-    else if( summed->energy_calibration_model_ == Measurement::FullRangeFraction )
-      coefs = fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, counts.size() );
+    else if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
+      coefs = SpecUtils::fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, counts.size() );
     
     if( coefs.size() )
     {
@@ -12945,7 +12183,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
           //Sanity check to make sure doing this matches the example data I have
           //  where this bizare fix is needed.
           if( !meas->gamma_counts_ || meas->gamma_counts_->size()!=2048
-             || meas->energy_calibration_model_!=Measurement::Polynomial )
+             || meas->energy_calibration_model_!=SpecUtils::EnergyCalType::Polynomial )
             continue;
           
           if( meas->channel_energies_ && meas->channel_energies_->size() )
@@ -13113,12 +12351,12 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               //Check if calibration is valid, and if not, fill it in from the
               //  next spectrum... seems a little sketch but works on all the
               //  example files I have.
-              if( Measurement::InvalidEquationType == meas->energy_calibration_model_
+              if( SpecUtils::EnergyCalType::InvalidEquationType == meas->energy_calibration_model_
                   && meas->calibration_coeffs_.empty()
                  && (i < (measurements_this_node.size()-1))
                  && measurements_this_node[i+1]
                  && !measurements_this_node[i+1]->calibration_coeffs_.empty()
-                 && measurements_this_node[i+1]->energy_calibration_model_ != Measurement::InvalidEquationType )
+                 && measurements_this_node[i+1]->energy_calibration_model_ != SpecUtils::EnergyCalType::InvalidEquationType )
               {
                 meas->energy_calibration_model_ = measurements_this_node[i+1]->energy_calibration_model_;
                 meas->calibration_coeffs_ = measurements_this_node[i+1]->calibration_coeffs_;
@@ -13523,22 +12761,22 @@ void Measurement::popuplate_channel_energies_from_coeffs()
     
   switch( energy_calibration_model_ )
   {
-    case Measurement::Polynomial:
-    case Measurement::UnspecifiedUsingDefaultPolynomial:
-      channel_energies_ = polynomial_binning( calibration_coeffs_, 
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_,
                                               nbin, deviation_pairs_ );
       break;
         
-    case Measurement::FullRangeFraction:
-      channel_energies_ = fullrangefraction_binning( calibration_coeffs_, 
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+      channel_energies_ = SpecUtils::fullrangefraction_binning( calibration_coeffs_,
                                                     nbin, deviation_pairs_ );
       break;
         
-    case Measurement::LowerChannelEdge:
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
       channel_energies_.reset( new vector<float>(calibration_coeffs_) );
       break;
         
-    case Measurement::InvalidEquationType:
+    case SpecUtils::EnergyCalType::InvalidEquationType:
       throw runtime_error( "popuplate_channel_energies_from_coeffs():"
                            " unknown equation type" );
       break;
@@ -13566,11 +12804,11 @@ void Measurement::add_calibration_to_2012_N42_xml(
   
   switch( energy_calibration_model() )
   {
-    case Measurement::FullRangeFraction:
-      coefs = fullrangefraction_coef_to_polynomial( coefs, nbin );
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+      coefs = SpecUtils::fullrangefraction_coef_to_polynomial( coefs, nbin );
       //note intential fallthrough
-    case Measurement::Polynomial:
-    case Measurement::UnspecifiedUsingDefaultPolynomial:
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
       coefname = "CoefficientValues";
       
@@ -13584,10 +12822,10 @@ void Measurement::add_calibration_to_2012_N42_xml(
       }
      
       break;
-    }//case Measurement::Polynomial:
+    }//case SpecUtils::EnergyCalType::Polynomial:
       
-    case Measurement::LowerChannelEdge:
-    case Measurement::InvalidEquationType:  //Taking a guess here (we should alway capture FRF, Poly, and LowrBinEnergy correctly,
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
+    case SpecUtils::EnergyCalType::InvalidEquationType:  //Taking a guess here (we should alway capture FRF, Poly, and LowrBinEnergy correctly,
       if( !!channel_energies_ || calibration_coeffs().size() )
       {
         coefname = "EnergyBoundaryValues";
@@ -15431,7 +14669,7 @@ void get_2012_N42_energy_calibrations( map<string,MeasurementCalibInfo> &calibra
     MeasurementCalibInfo info;
     if( coef_val_node && coef_val_node->value_size() )
     {
-      info.equation_type = Measurement::Polynomial;
+      info.equation_type = SpecUtils::EnergyCalType::Polynomial;
       vector<string> fields;
       const char *data = coef_val_node->value();
       const size_t len = coef_val_node->value_size();
@@ -15495,7 +14733,7 @@ void get_2012_N42_energy_calibrations( map<string,MeasurementCalibInfo> &calibra
       
     }else if( energy_boundry_node )
     {
-      info.equation_type = Measurement::LowerChannelEdge;
+      info.equation_type = SpecUtils::EnergyCalType::LowerChannelEdge;
       
       const char *data = energy_boundry_node->value();
       const size_t len = energy_boundry_node->value_size();
@@ -15955,7 +15193,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
             if( calib_iter == end(*calibrations_ptr) )
             {
               DetectorToCalibInfo::value_type info( defCalName, MeasurementCalibInfo() );
-              info.second.equation_type = Measurement::UnspecifiedUsingDefaultPolynomial;
+              info.second.equation_type = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
               info.second.nbin = meas->gamma_counts_->size();
               info.second.coefficients.push_back( 0.0f );
               info.second.coefficients.push_back( 3000.0f / std::max(info.second.nbin-1,size_t(1)) );
@@ -17175,7 +16413,7 @@ bool MeasurementInfo::load_N42_from_data( char *data, char *data_end )
 
 void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
                                     const DeviationPairVec &dev_pairs,
-                                    Measurement::EquationType type )
+                                    SpecUtils::EnergyCalType type )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17189,8 +16427,8 @@ void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
       continue;
 
     const bool noRecalNeeded = ( m->energy_calibration_model_ == type
-                                 && ((type==Measurement::LowerChannelEdge && m->channel_energies_ && (*(m->channel_energies_)==eqn))
-                                     || (type!=Measurement::LowerChannelEdge && m->calibration_coeffs_ == eqn) )
+                                 && ((type==SpecUtils::EnergyCalType::LowerChannelEdge && m->channel_energies_ && (*(m->channel_energies_)==eqn))
+                                     || (type!=SpecUtils::EnergyCalType::LowerChannelEdge && m->calibration_coeffs_ == eqn) )
                                  && m->channel_energies_->size() > 0
                                  && m->deviation_pairs_ == dev_pairs );
 
@@ -17226,7 +16464,7 @@ void MeasurementInfo::recalibrate_by_lower_edge( ShrdConstFVecPtr binning )
 
   for( auto &m : measurements_ )
     if( m->gamma_counts_ && !m->gamma_counts_->empty() )
-      m->recalibrate_by_eqn( vector<float>(), DeviationPairVec(), Measurement::LowerChannelEdge, binning );
+      m->recalibrate_by_eqn( vector<float>(), DeviationPairVec(), SpecUtils::EnergyCalType::LowerChannelEdge, binning );
   
   modified_ = modifiedSinceDecode_ = true;
 }//void recalibrate_by_lower_edge( const std::vector<float> &binning )
@@ -17235,7 +16473,7 @@ void MeasurementInfo::recalibrate_by_lower_edge( ShrdConstFVecPtr binning )
 
 void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
                                           const DeviationPairVec &dev_pairs,
-                                          Measurement::EquationType type )
+                                          SpecUtils::EnergyCalType type )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17267,7 +16505,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
 //  recalibrated, and the other detectors will be rebinned.
 void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
                                           const DeviationPairVec &dev_pairs,
-                                          Measurement::EquationType type,
+                                          SpecUtils::EnergyCalType type,
                                           const vector<string> &detectors,
                                           const bool rebin_other_detectors )
 {
@@ -18378,7 +17616,7 @@ void MeasurementInfo::pcf_file_channel_info( size_t &nchannel,
       nchannel = std::max( nchannel, nmeaschann );
       
       if( (these_energies->size()+1)<nmeaschann
-         || meas->energy_calibration_model() != Measurement::EquationType::LowerChannelEdge )
+         || meas->energy_calibration_model() != SpecUtils::EnergyCalType::LowerChannelEdge )
       {
         use_lower_channel = false;
       }
@@ -18461,7 +17699,7 @@ std::shared_ptr<const std::vector<float>> MeasurementInfo::lower_channel_energie
       continue;
     
     if( (these_energies->size()+1)<nchannel_file
-       || meas->energy_calibration_model() != Measurement::EquationType::LowerChannelEdge )
+       || meas->energy_calibration_model() != SpecUtils::EnergyCalType::LowerChannelEdge )
     {
       return 0;
     }
@@ -19104,16 +18342,16 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }
       
       vector<float> calib_coef = meas->calibration_coeffs_;
-      if( num_channel && (meas->energy_calibration_model_ == Measurement::Polynomial
-          || meas->energy_calibration_model_ == Measurement::UnspecifiedUsingDefaultPolynomial) )
-        calib_coef = polynomial_coef_to_fullrangefraction( calib_coef, meas->gamma_counts_->size() );
+      if( num_channel && (meas->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial
+          || meas->energy_calibration_model_ == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial) )
+        calib_coef = SpecUtils::polynomial_coef_to_fullrangefraction( calib_coef, meas->gamma_counts_->size() );
       
       offset         = (calib_coef.size() > 0) ? calib_coef[0] : 0.0f;
       gain           = (calib_coef.size() > 1) ? calib_coef[1] : 0.0f;
       quadratic      = (calib_coef.size() > 2) ? calib_coef[2] : 0.0f;
       cubic          = (calib_coef.size() > 3) ? calib_coef[3] : 0.0f;
       low_energy     = 0.0f;
-      if( meas->energy_calibration_model_ == Measurement::FullRangeFraction )
+      if( meas->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
         low_energy   = (calib_coef.size() > 4) ? calib_coef[4] : 0.0f;
       
       if( lower_channel_energies && lower_channel_energies->size() > 7 )
@@ -19377,14 +18615,14 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
 
   switch( energy_calibration_model_ )
   {
-    case Polynomial:
-    case UnspecifiedUsingDefaultPolynomial:
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
       ostr << "Polynomial";
     break;
       
-    case FullRangeFraction:    ostr << "FullRangeFraction"; break;
-    case LowerChannelEdge:     ostr << "LowerChannelEdge";  break;
-    case InvalidEquationType:  ostr << "Unknown";           break;
+    case SpecUtils::EnergyCalType::FullRangeFraction:    ostr << "FullRangeFraction"; break;
+    case SpecUtils::EnergyCalType::LowerChannelEdge:     ostr << "LowerChannelEdge";  break;
+    case SpecUtils::EnergyCalType::InvalidEquationType:  ostr << "Unknown";           break;
   }//switch( energy_calibration_model_ )
 
   ostr << "\">" << endline;
@@ -19394,8 +18632,10 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
     ostr << (i ? " " : "") << calibration_coeffs_[i];
  
   //Not certain we need this next loop, but JIC
-  if( energy_calibration_model_ == LowerChannelEdge && calibration_coeffs_.empty()
-      && !!channel_energies_ && !channel_energies_->empty())
+  if( energy_calibration_model_ == SpecUtils::EnergyCalType::LowerChannelEdge
+      && calibration_coeffs_.empty()
+      && !!channel_energies_
+      && !channel_energies_->empty())
   {
     for( size_t i = 0; i < channel_energies_->size(); ++i )
       ostr << (i ? " " : "") << (*channel_energies_)[i];
@@ -20084,12 +19324,12 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       {
         //Note: at least for DB.pcf I checked:
         //  (lower_channel_energies->back()==(energy_cal_terms[0]+energy_cal_terms[1]))
-        meas->energy_calibration_model_ = Measurement::LowerChannelEdge;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
         meas->calibration_coeffs_.clear();
         meas->channel_energies_ = lower_channel_energies;
       }else
       {
-        meas->energy_calibration_model_ = Measurement::FullRangeFraction;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
         meas->calibration_coeffs_ = energy_cal_terms;
       }
       
@@ -20501,7 +19741,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
     {
       //This is a guess at how to detect when FWHM is specified in the CHN file;
       //  probably will fail to detect it sometimes, and falsely detect others.
-      meas->energy_calibration_model_ = Measurement::FullRangeFraction;
+      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
       meas->calibration_coeffs_.push_back( calibcoefs[0] );
       meas->calibration_coeffs_.push_back( calibcoefs[1] );
       if( (calibcoefs[2] != 0.0f)
@@ -20509,7 +19749,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
         meas->calibration_coeffs_.push_back( calibcoefs[2] );
     }else if( calibcoefs[1] < 1000 )
     {
-      meas->energy_calibration_model_ = Measurement::Polynomial;
+      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
       meas->calibration_coeffs_.push_back( calibcoefs[0] );
       meas->calibration_coeffs_.push_back( calibcoefs[1] );
       if( calibcoefs[2] != 0.0f )
@@ -20688,14 +19928,14 @@ bool MeasurementInfo::write_integer_chn( ostream &ostr, set<int> sample_nums,
   
   switch( summed->energy_calibration_model() )
   {
-    case Measurement::Polynomial:
-    case Measurement::UnspecifiedUsingDefaultPolynomial:
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
       break;
-    case Measurement::FullRangeFraction:
-      calibcoef = fullrangefraction_coef_to_polynomial( calibcoef, fgammacounts->size() );
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+      calibcoef = SpecUtils::fullrangefraction_coef_to_polynomial( calibcoef, fgammacounts->size() );
       break;
-    case Measurement::LowerChannelEdge:
-    case Measurement::InvalidEquationType:
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
+    case SpecUtils::EnergyCalType::InvalidEquationType:
       calibcoef.clear();
       break;
   }//switch( summed->energy_calibration_model() )
@@ -20856,7 +20096,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     
     const vector< pair<float,float> > devpairs;
     const bool validcalib
-           = MeasurementInfo::calibration_is_valid( Polynomial, eqn, devpairs,
+           = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn, devpairs,
                                                     nchannel );
     if( !validcalib )
       throw runtime_error( "" ); //"Invalid calibration"
@@ -20866,7 +20106,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     contained_neutron_ = false;
     deviation_pairs_.clear();
     calibration_coeffs_ = eqn;
-    energy_calibration_model_ = Polynomial;
+    energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     neutron_counts_.clear();
     gamma_counts_ = counts;
     neutron_counts_sum_ = gamma_count_sum_ = 0.0;
@@ -21002,15 +20242,15 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                   ++nlines_used;
                   const size_t nchan = channels->size();
                   const bool validCalib
-                         = MeasurementInfo::calibration_is_valid( Polynomial, eqn,
+                         = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn,
                                                               devpairs, nchan );
                   
                   if( validCalib && nchan >= 128 )
                   {
                     gamma_counts_ = channels;
-                    energy_calibration_model_ = Polynomial;
+                    energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
                     calibration_coeffs_ = eqn;
-                    channel_energies_ = polynomial_binning( eqn, nchan, devpairs );
+                    channel_energies_ = SpecUtils::polynomial_binning( eqn, nchan, devpairs );
                     
                     break;
                   }//if( some reasonalbe number of channels )
@@ -21046,7 +20286,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                   if( !!channels )
                   {
                     const bool validCalib
-                      = MeasurementInfo::calibration_is_valid( Polynomial, eqn, devpairs,
+                      = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn, devpairs,
                                                               channels->size() );
                     
                     if( validCalib && channels->size() >= 64 )
@@ -21055,12 +20295,12 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                       
                       live_time_ = cals[0];
                       gamma_counts_ = channels;
-                      energy_calibration_model_ = Polynomial;
+                      energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
                       const size_t ncalcoef = size_t((cals[3]==0.0f) ? 2 : 3);
                       calibration_coeffs_.resize( ncalcoef );
                       for( size_t i = 0; i < ncalcoef; ++i )
                         calibration_coeffs_[i] = cals[1+i];
-                      channel_energies_ = polynomial_binning( calibration_coeffs_,
+                      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_,
                                                              channels->size(),
                                                              DeviationPairVec() );
                       
@@ -21159,22 +20399,22 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
 
       if( energies->size() && (energies->back()!=0.0f) )
       {
-        energy_calibration_model_ = LowerChannelEdge;
+        energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
         calibration_coeffs_ = *energies;
 //        channel_energies_ = energies;
       }else //if( channels->size() && (channels->back()!=0) )
       {
-        if( (energy_calibration_model_ == Polynomial)
+        if( (energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial)
             && (calibration_coeffs_.size() > 1) && (calibration_coeffs_.size() < 10) )
         {
           //nothing to do here
         }else
         {
-          energy_calibration_model_ = UnspecifiedUsingDefaultPolynomial;
+          energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
           calibration_coeffs_.resize( 2 );
           calibration_coeffs_[0] = 0.0f;
           calibration_coeffs_[1] = 3000.0f / std::max( counts->size()-1, size_t(1) );
-//        channel_energies_ = polynomial_binning( calibration_coeffs_, counts->size(),
+//        channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, counts->size(),
 //                                                           DeviationPairVec() );
         }
       }//if( energies ) / else channels
@@ -21370,7 +20610,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         
       if( c > 0 )
       {
-        energy_calibration_model_ = Measurement::Polynomial;
+        energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
         calibration_coeffs_.resize( 2 );
         calibration_coeffs_[0] = b;
         calibration_coeffs_[1] = c;
@@ -21652,7 +20892,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             throw runtime_error( "Error reading ENER_FIT section of IAEA file" );
 
           trim(line);
-          meas->energy_calibration_model_ = Measurement::Polynomial;
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
 
           vector<float> coefs;
           if( UtilityFunctions::split_to_floats( line.c_str(), line.size(), coefs ) )
@@ -21689,7 +20929,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           if( !UtilityFunctions::safe_get_line( istr, line ) )
             throw runtime_error("Error reading MCA_CAL section of IAEA file");
           trim(line);
-          meas->energy_calibration_model_ = Measurement::Polynomial;
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
 
           vector<float> coefs;
           try
@@ -21723,7 +20963,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               {
                 //passMessage( "Calibration in file is {0, 0, 0}; not using.",
                 //             "", 1 );
-                meas->energy_calibration_model_ = Measurement::EquationType::UnspecifiedUsingDefaultPolynomial;
+                meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
               }else
               {
                 stringstream msg;
@@ -22298,7 +21538,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         
         if( calibcoefs.size() && !meas->calibration_coeffs_.size() )
         {
-          meas->energy_calibration_model_ = Measurement::Polynomial;
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
           meas->calibration_coeffs_ = calibcoefs;
         }
       }else if( starts_with(line,"$NON_LINEAR_DEVIATIONS:") )
@@ -22623,7 +21863,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
       
       //Some default calibration coefficients that are kinda sorta close
 //      meas->calibration_type_ = Measurement::GuesedCalibration;
-      meas->energy_calibration_model_ = Measurement::UnspecifiedUsingDefaultPolynomial;
+      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
       meas->calibration_coeffs_.push_back( 0 );
       meas->calibration_coeffs_.push_back( 3.0 );
       
@@ -24110,7 +23350,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->sample_number_      = 1000*endrecord.occupancyNumber;
       meas->source_type_        = Measurement::Background;
       meas->occupied_           = Measurement::NotOccupied;
-      meas->energy_calibration_model_  = Measurement::Polynomial;
+      meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
       meas->calibration_coeffs_ = sinfo.calibcoefs;
       meas->remarks_.push_back( "Analyzed Background (sum over all detectors" );
       meas->real_time_ = meas->live_time_ = 0.1f*detNameToNum.size()*gammaback->realTime;
@@ -24211,7 +23451,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->sample_number_      = 1000*endrecord.occupancyNumber + gamma.timeChunkNumber;
       meas->source_type_        = Measurement::Foreground;
       meas->occupied_           = Measurement::Occupied;
-      meas->energy_calibration_model_  = Measurement::Polynomial;
+      meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
       meas->calibration_coeffs_ = sinfo.calibcoefs;
       meas->speed_              = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
       meas->start_time_         = endrecord.lastStartTime;
@@ -24340,7 +23580,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->detector_number_    = detNameToNum[back.detectorName];
       meas->gamma_counts_       = back.spectrum;
       meas->start_time_         = timestamp;
-      meas->energy_calibration_model_  = Measurement::Polynomial;
+      meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
       meas->calibration_coeffs_ = sinfo.calibcoefs;
       meas->occupied_           = Measurement::NotOccupied;
       
@@ -24641,7 +23881,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       float speed_;  //in m/s
       QualityStatus quality_status_;
       SourceType     source_type_;
-      EquationType   energy_calibration_model_;
+      SpecUtils::EnergyCalType   energy_calibration_model_;
       std::vector<std::string>  remarks_;
       boost::posix_time::ptime  start_time_;
       std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
@@ -24746,7 +23986,7 @@ bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
       {
         meas->calibration_coeffs_.push_back( 0.0f );
         meas->calibration_coeffs_.push_back( gain );
-        meas->energy_calibration_model_ = Measurement::Polynomial;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
       }
     }//if( !lineinfo.empty() )
   
@@ -25187,7 +24427,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
     meas->detector_description_ = meas->detector_name_ + " ListMode data";
     meas->quality_status_ = Measurement::Missing;
     meas->source_type_ = Measurement::UnknownSourceType;
-    meas->energy_calibration_model_ = Measurement::Polynomial;
+    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     
     //std::vector<std::string>  remarks_;
     
@@ -25204,7 +24444,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
     
     //Should check energyunits=="keV"
     if( energy_cal_valid && (gain != 0 || quadratic != 0)
-       && calibration_is_valid( Measurement::Polynomial, energycoef, devpairs, histogram->size() ) )
+       && calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, energycoef, devpairs, histogram->size() ) )
     {
       meas->calibration_coeffs_ = energycoef;
     }
@@ -25328,7 +24568,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
     
     const string energy = getval( "ENERGY=" );
     if( UtilityFunctions::split_to_floats( energy, meas->calibration_coeffs_ ) )
-      meas->energy_calibration_model_ = Measurement::EquationType::Polynomial;
+      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     
     const string comment = getval( "COMMENT=" );
     if( !comment.empty() )
@@ -25701,7 +24941,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
           //  so rarely see this file format, I'm not bothering with parsing it.
           meas->calibration_coeffs_.push_back( 0.0f );
           meas->calibration_coeffs_.push_back( upper_energy );
-          meas->energy_calibration_model_ = Measurement::EquationType::FullRangeFraction;
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
         }
       }//if( UtilityFunctions::istarts_with( line, "#g_Spectrum") )
       
@@ -26060,7 +25300,7 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
 //        m->detector_type_ = "";
         m->quality_status_ = (status==0 ? Measurement::Good : Measurement::Suspect);
         m->source_type_  = Measurement::UnknownSourceType;
-        m->energy_calibration_model_ = Measurement::Polynomial;
+        m->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
 //        m->start_time_ = ;
         m->calibration_coeffs_.push_back( 0.0f );
 //        m->calibration_coeffs_.push_back( 3.0 );
@@ -26296,11 +25536,11 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
       
       if( coefs.size() > 1 && coefs.size() < 10 )
       {
-        fore_meas->energy_calibration_model_ = Measurement::Polynomial;
+        fore_meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
         fore_meas->calibration_coeffs_ = coefs;
         if( back_meas )
         {
-          back_meas->energy_calibration_model_ = Measurement::Polynomial;
+          back_meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
           back_meas->calibration_coeffs_ = coefs;
         }
       }
@@ -26416,13 +25656,13 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   ostr << "EquationType ";
   switch( energy_calibration_model_ )
   {
-    case Polynomial:
-    case UnspecifiedUsingDefaultPolynomial:
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
       ostr << "Polynomial";
       break;
-    case FullRangeFraction:   ostr << "FullRangeFraction"; break;
-    case LowerChannelEdge:    ostr << "LowerChannelEdge"; break;
-    case InvalidEquationType: ostr << "Unknown"; break;
+    case SpecUtils::EnergyCalType::FullRangeFraction:   ostr << "FullRangeFraction"; break;
+    case SpecUtils::EnergyCalType::LowerChannelEdge:    ostr << "LowerChannelEdge"; break;
+    case SpecUtils::EnergyCalType::InvalidEquationType: ostr << "Unknown"; break;
   }//switch( energy_calibration_model_ )
   
   
@@ -26430,8 +25670,10 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   for( size_t i = 0; i < calibration_coeffs_.size(); ++i )
     ostr << (i ? " " : "") << calibration_coeffs_[i];
   
-  if( energy_calibration_model_ == LowerChannelEdge && calibration_coeffs_.empty()
-     && !!channel_energies_ && channel_energies_->size() )
+  if( energy_calibration_model_ == SpecUtils::EnergyCalType::LowerChannelEdge
+     && calibration_coeffs_.empty()
+     && !!channel_energies_
+     && channel_energies_->size() )
   {
     for( size_t i = 0; i < channel_energies_->size(); ++i )
       ostr << (i ? " " : "") << (*channel_energies_)[i];

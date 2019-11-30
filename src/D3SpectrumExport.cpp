@@ -32,6 +32,7 @@
 
 #include "SpecUtils/D3SpectrumExport.h"
 #include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/SpectrumDataStructs.h"
 #include "D3SpectrumExportResources.h"
 
@@ -687,21 +688,21 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "null";
     ostr << ",";
     
-    const Measurement::EquationType caltype = meas.energy_calibration_model();
-    if( (caltype == Measurement::EquationType::Polynomial
-         || caltype == Measurement::EquationType::FullRangeFraction
-         || caltype == Measurement::EquationType::UnspecifiedUsingDefaultPolynomial )
+    const SpecUtils::EnergyCalType caltype = meas.energy_calibration_model();
+    if( (caltype == SpecUtils::EnergyCalType::Polynomial
+         || caltype == SpecUtils::EnergyCalType::FullRangeFraction
+         || caltype == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
        && meas.deviation_pairs().empty() )
     {
       std::vector<float> calcoefs = meas.calibration_coeffs();
-      if( caltype == Measurement::EquationType::FullRangeFraction )
-        calcoefs = fullrangefraction_coef_to_polynomial( calcoefs, meas.num_gamma_channels() );
+      if( caltype == SpecUtils::EnergyCalType::FullRangeFraction )
+        calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( calcoefs, meas.num_gamma_channels() );
       
       ostr << "\n\t" << q << "xeqn" << q << ": [";
       for( size_t i = 0; i < calcoefs.size(); ++i )
           ostr << (i ? "," : "") << calcoefs[i];
       ostr << "],";
-    }else// if( caltype == Measurement::EquationType::LowerChannelEdge )
+    }else// if( caltype == SpecUtils::EnergyCalType::LowerChannelEdge )
     {
       // foreground x-point values
       ostr << "\n\t" << q << "x" << q << ": [";

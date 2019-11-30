@@ -40,7 +40,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "SpecUtils/SpecUtilsAsync.h"
-
+#include "SpecUtils/EnergyCalibration.h"
 
 //Temporary include to pull in RAPIDXML_USE_SIZED_INPUT_WCJOHNS
 //#include "rapidxml/rapidxml.hpp"
@@ -309,107 +309,6 @@ void expand_counted_zeros( const std::vector<float> &data,
 void compress_to_counted_zeros( const std::vector<float> &data,
                                 std::vector<float> &results );
 
-//polynomial_coef_to_fullrangefraction(..): only works for up to the first
-//  four coefficints, as the fifth one for FRF doesnt translate easily.
-std::vector<float> polynomial_coef_to_fullrangefraction(
-                          const std::vector<float> &coeffs, const size_t nbin );
-
-//fullrangefraction_coef_to_polynomial(..): only considers the first four
-//  coefficients, as the fifth coefficient of FRF coorespods to a
-//  a term like: C_4 / (1.0f+60.0*x)
-//  If coeffs is empty or nbin is zero, returns and empty vector.
-std::vector<float> fullrangefraction_coef_to_polynomial(
-                          const std::vector<float> &coeffs, const size_t nbin );
-
-
-//mid_channel_polynomial_to_fullrangeFraction(): converts coefficients from
-//  polynomial equation, which uses the convention the energy given by the
-//  equation is the middle of the channel, to standard full range fraction.
-std::vector<float> mid_channel_polynomial_to_fullrangeFraction(
-                          const std::vector<float> &coeffs, const size_t nbin );
-
-//polynomial_cal_remove_first_channels(): changes the polynomial calibration
-//  coefficients, 'orig_coefs' to remove the first 'n' channels of the binning.
-//  Would probably work for adding channels, but untested.
-//Truncates binning to 6th order polynomial.
-std::vector<float> polynomial_cal_remove_first_channels( const int n,
-                                        const std::vector<float> &orig_coefs );
-
-//polynomial_binning(...): returns lower channel energies from input polynomial
-//  calibration equation and deviation pairs.  Note that this function uses
-//  the convention that the energy of the lower edge of the channel is given by:
-//  E_i = C_0 + i*C_1 + i*i*C_2 + ...
-//Note that Canberra and Raytheon ASP systems may use the convention that
-//  the energy given by the polynomial for the bin mid-point.
-std::shared_ptr< const std::vector<float> >
-                 polynomial_binning( const std::vector<float> &coeffs,
-                                     const size_t nbin,
-                                     const DeviationPairVec &deviation_pairs );
-
-//fullrangefraction_binning(...): returns lower channel energies from input
-//  full width fraction calibration equation and deviation pairs.
-//Uses the definition for the i'th channel:
-//  x = i / nbin;
-//  E_i = C_0 + x*C_1 + x*x*C_2 + x*x*x*C_3 + C_4/(1+60*x);
-std::shared_ptr< const std::vector<float> >
-                 fullrangefraction_binning( const std::vector<float> &coeffs,
-                                            const size_t nbin,
-                                            const DeviationPairVec &dev_pairs );
-
-//fullrangefraction_energy(...): returns the energy cooresponding to the
-//  passed in bin number; note that the bin_number may be non-integer. An
-//  integer value gives you the energy of lower edge of that channel.
-float fullrangefraction_energy( float bin_number,
-                                const std::vector<float> &coeffs,
-                                const size_t nbin,
-                                const DeviationPairVec &deviation_pairs );
-
-//find_bin_fullrangefraction(...):  returns the bin (including fractional
-//  portion) corresponding to 'energy'.  If deviation_pairs is empty then a
-//  algabraic approach is used, otherwise a binary search is performed to find
-//  the bin that comes within 'accuracy' of 'energy'
-float find_bin_fullrangefraction( const double energy,
-                                  const std::vector<float> &coeffs,
-                                  const size_t nbin,
-                                  const DeviationPairVec &deviation_pairs,
-                                  const double accuracy = 0.001 );
-
-float offset_due_to_deviation_pairs( float original_energy,
-                                     const DeviationPairVec &dps );
-
-std::shared_ptr< const std::vector<float> > apply_deviation_pair(
-                       std::shared_ptr< const std::vector<float> > binning,
-                       const std::vector< std::pair<float,float> > &dev_pairs );
-
-
-//rebin_by_lower_edge(...): not incredably well testted, but appears to be
-//  better than the previous Measurment::rebin_by_lower_edge(...), but it
-//  so it currently used.  There is some code in the function that
-//  does test this function if PERFORM_DEVELOPER_CHECKS is true.
-//  Also, a timing benchmark should be done between the alternate
-//  implementations to decide which to use (although
-//  Measurment::rebin_by_lower_edge does have some potential known bugs...)
-//  There are some tests started for this function in
-//  testing/testRebinByLowerEnergy.cpp.
-void rebin_by_lower_edge( const std::vector<float> &original_energies,
-                          const std::vector<float> &original_counts,
-                          const std::vector<float> &new_energies,
-                          std::vector<float> &resulting_counts );
-
-/*
-//returns _fractional_ bin energy belowngs in.
-//Depreciated since it doesnt take into account DeviationPairs
-float find_bin_from_polynomial( const float energy,
-                                const std::vector<float> &coeffs,
-                                const size_t nbin );
-*/
-
-
-//returns energy of _fractional_ channel number; an integer channel number
-//  cooresponds to the lower edge of the channel.
-float bin_number_to_energy_polynomial( const float bin,
-                                       const std::vector<float> &coeffs,
-                                       const size_t nbin );
 
 int sample_num_from_remark( std::string remark ); //returns -1 on error
 float speed_from_remark( std::string remark );
@@ -513,33 +412,7 @@ public:
     NotOccupied, Occupied, UnknownOccupancyStatus
   };
 
-  /** The energy (or FWHM) calibration type that the calibration coefficients
-      should be interpreted as; typically also the type in the file.
-   */
-  enum EquationType
-  {
-    /** for bin i, Energy_i = coef[0] + i*coef[1] + i*i*coef[2] + ... */
-    Polynomial,
-    
-    /** */
-    FullRangeFraction,
-    
-    /** The lower energies of each channel is specified. */
-    LowerChannelEdge,
-    
-    /** Used for files that do not specify a energy calibration (that could be
-        parsed).  For these files a polynomial energy calibration of 0 to 3 MeV
-        is used unless a guess of values for the specfic detector being parsed
-        is known (in which case the known energy range is used).
-     */
-    UnspecifiedUsingDefaultPolynomial,
-    
-    /** A placeholder to indicate an invalid calibration type.  After sucessfuly
-        parsing a spectrum file, no gamma spectrum will have this equation type.
-     ToDo: Could rename to NumberEquationTypes
-     */
-    InvalidEquationType
-  };
+  
   
   enum SourceType
   {
@@ -649,7 +522,7 @@ public:
   //  channel_energies() may or may not return a valid pointer; otherwise, if
   //  this Measurment is part of a MeasurmentInfo object constructed by parsing
   //  a file, then channel_energies() pointer _should_ be valid.
-  inline EquationType energy_calibration_model() const;
+  inline SpecUtils::EnergyCalType energy_calibration_model() const;
   
   //remarks(): the list of remarks found while parsing this record from the file
   //  that pertain to this record specifically.  See also
@@ -925,7 +798,7 @@ protected:
   //Throws exception if an invalid node, or un-recognized calibration type.
   static void decode_n42_2006_binning( const rapidxml::xml_node<char> *calibration_node,
                              std::vector<float> &coeffs,
-                             Measurement::EquationType &eqnmodel );
+                             SpecUtils::EnergyCalType &eqnmodel );
   
   //set_n42_2006_detector_data_node_info(): silently returns if information isnt found
   static void set_n42_2006_detector_data_node_info(
@@ -965,7 +838,7 @@ protected:
   //  ill-specified.
   void rebin_by_eqn( const std::vector<float> &eqn,
                     const DeviationPairVec &dev_pairs,
-                    EquationType type );
+                    SpecUtils::EnergyCalType type );
   
   //If the new binning has already been calculated when rebinning by polynomial
   //  equation, you can use this to save re-caclulating the lower edeg energy
@@ -978,7 +851,7 @@ protected:
   void rebin_by_eqn( const std::vector<float> &eqn,
                     const DeviationPairVec &dev_pairs,
                     ShrdConstFVecPtr new_binning,
-                    EquationType type );
+                    SpecUtils::EnergyCalType type );
   
   
   //recalibrate_by_eqn(...) passing in a valid binning
@@ -991,7 +864,7 @@ protected:
   //  have the proper number of channels.
   void recalibrate_by_eqn( const std::vector<float> &eqn,
                           const DeviationPairVec &dev_pairs,
-                          Measurement::EquationType type,
+                          SpecUtils::EnergyCalType type,
                           ShrdConstFVecPtr binning
 #if( !SpecUtils_JAVA_SWIG )
                           = ShrdConstFVecPtr()  //todo: fix this more better
@@ -1043,7 +916,7 @@ protected:
   //The following objects are for the energy calibration, note that there are
   //  similar quantities for resolution and such, that arent kept track of
   SourceType     source_type_;
-  EquationType   energy_calibration_model_;
+  SpecUtils::EnergyCalType   energy_calibration_model_;
 
   std::vector<std::string>  remarks_;
   boost::posix_time::ptime  start_time_;
@@ -1614,7 +1487,7 @@ public:
   //  Necassarily information losing, so use sparingly and dont compound calls.
   void rebin_by_eqn( const std::vector<float> &eqn,
                      const DeviationPairVec &dev_pairs,
-                     Measurement::EquationType type );
+                     SpecUtils::EnergyCalType type );
 
   //Recalibrate the spectrum so the existing channel counts coorespond
   //  to the energies of the new binning - note: does not alter bin contents.
@@ -1622,7 +1495,7 @@ public:
   void recalibrate_by_lower_edge( ShrdConstFVecPtr binning );
   void recalibrate_by_eqn( const std::vector<float> &eqn,
                            const DeviationPairVec &dev_pairs,
-                           Measurement::EquationType type );
+                           SpecUtils::EnergyCalType type );
   
   //If only certain detectors are specified, then those detectors will be
   //  recalibrated (channel contents not changed).  If rebin_other_detectors
@@ -1634,20 +1507,10 @@ public:
   //  both likely a mistakes
   void recalibrate_by_eqn( const std::vector<float> &eqn,
                            const DeviationPairVec &dev_pairs,
-                           Measurement::EquationType type,
+                           SpecUtils::EnergyCalType type,
                            const std::vector<std::string> &detectors,
                            const bool rebin_other_detectors );
 
-  //calibration_is_valid(...): checks to make sure passed in calibration is
-  //  valid.  Polynomial and FullRangeFraction types are checked to make sure
-  //  that energy of the first two and last two bins are increasing left to
-  //  right. LowerChannelEdge type is check that each bin is increasing over
-  //  previous, and that it has at least as many bins as nbin.
-  //  InvalidEquationType always returns false.
-  static bool calibration_is_valid( const Measurement::EquationType type,
-                                  const std::vector<float> &eqn,
-                          const std::vector< std::pair<float,float> > &devpairs,
-                                  size_t nbin );
   
   //Functions to export to various file formats
 
@@ -2019,7 +1882,7 @@ protected:
   /** If this MeasurementInfo is calibrated by lower channel energy, then this
    function will write a record (and it should be the first record) to the
    output with title "Energy" and channel counts equal to the energies of the
-   channels.  Does not write the record if not EquationType::LowerChannelEdge
+   channels.  Does not write the record if not SpecUtils::EnergyCalType::LowerChannelEdge
    or if all gamma spectra do not share an energy calibration.
   
    @param ostr The stream to write the record to
@@ -2664,7 +2527,7 @@ Measurement::SourceType Measurement::source_type() const
 }
 
 
-Measurement::EquationType Measurement::energy_calibration_model() const
+SpecUtils::EnergyCalType Measurement::energy_calibration_model() const
 {
   return energy_calibration_model_;
 }

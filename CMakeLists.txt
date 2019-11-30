@@ -90,6 +90,7 @@ set( sources
      src/UtilityFunctions.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
+     src/EnergyCalibration.cpp
      README.md
 )
 
@@ -99,6 +100,7 @@ set( headers
      SpecUtils/SpecUtilsAsync.h
      SpecUtils/SpecUtils_config.h.in
      SpecUtils/SerialToDetectorModel.h
+     SpecUtils/EnergyCalibration.h
 )
 
 
