@@ -40,7 +40,6 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "SpecUtils/SpecUtilsAsync.h"
-#include "SpecUtils/EnergyCalibration.h"
 
 //Temporary include to pull in RAPIDXML_USE_SIZED_INPUT_WCJOHNS
 //#include "rapidxml/rapidxml.hpp"
@@ -96,6 +95,12 @@ Shortcommings that wcjohns should be addressed
   SpectrumDataStructs_2012N42.cpp, etc.
  -Should add in "Characteristics" a few places (for detectors, system,
 */
+
+//A forward declaration
+namespace SpecUtils
+{
+  enum class EnergyCalType : int;
+}
 
 
 enum ParserType
@@ -1489,6 +1494,7 @@ public:
                      const DeviationPairVec &dev_pairs,
                      SpecUtils::EnergyCalType type );
 
+  
   //Recalibrate the spectrum so the existing channel counts coorespond
   //  to the energies of the new binning - note: does not alter bin contents.
   //  Also not that the recalibration is applied to all gamma detectors

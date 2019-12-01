@@ -46,7 +46,7 @@ namespace SpecUtils
   /** The energy (or FWHM) calibration type that the calibration coefficients
    should be interpreted as; typically also the type in the file.
    */
-  enum class EnergyCalType
+  enum class EnergyCalType : int
   {
     /** for bin i, Energy_i = coef[0] + i*coef[1] + i*i*coef[2] + ... */
     Polynomial,
@@ -137,6 +137,13 @@ namespace SpecUtils
      For example, if there is a 10 keV offset defined at 1460 keV, and you pass
      in 1450, this function will return 1460.
    
+     An example use is:
+     \code{.cpp}
+     size_t channel_num = 100;
+     float polynomial_energy = C_0 + C_1*channel_num + C_2*channel_num*channel_num;
+     float correct_energy = polynomial_energy + deviation_pair_correction(polynomial_energy, deviation_pairs);
+     \endcode
+   
      A cubic interpolation is used for energies between deviation pairs.
    
      @param polynomial_energy The energy produced by the polynomial or FRF
@@ -155,8 +162,27 @@ namespace SpecUtils
      be set at 1460 keV
    - Deviation pairs set to zero would be defined for 239 keV and 2614 keV
    */
-  float offset_due_to_deviation_pairs( const float polynomial_energy,
+  float deviation_pair_correction( const float polynomial_energy,
                                       const std::vector<std::pair<float,float>> &dev_pairs );
+  
+  
+  /** For a given actual energy, tells you how much contribution the deviation
+   pairs gave over the polynomial/FRF calibration.
+   
+   Example usage to find channel correspoding to a peak at 511 keV:
+   \code{.cpp}
+   const size_t nchannel = 1024;
+   float obs_energy = 511.0f;
+   float frf_energy = obs_energy - correction_due_to_dev_pairs(obs_energy,deviation_pairs);
+   float channel = find_fullrangefraction_channel( frf_energy, frf_coeffs, nchannel, {} );
+   \endcode
+   
+   ToDo: Currently will return answer accurate within about 0.01 keV, but in the
+         future this should be able to be made exactly accuate (within numerical
+         limits anyway).
+   */
+  float correction_due_to_dev_pairs( const float true_energy,
+                                     const std::vector<std::pair<float,float>> &dev_pairs );
   
   
   /** Takes an input vector of lower channel energies, applies the deviation
@@ -168,7 +194,7 @@ namespace SpecUtils
    @returns The channel energies with deviation pairs applies.  Will always
             return a valid pointer.
    
-   See discussion for #offset_due_to_deviation_pairs for how deviation pairs
+   See discussion for #deviation_pair_correction for how deviation pairs
    are applied.
    */
   std::shared_ptr<const std::vector<float>>
@@ -269,22 +295,16 @@ namespace SpecUtils
    If deviation_pairs is empty then an algabraic approach is used, otherwise a
    binary search is performed to find the bin that comes within the specified
    accuracy.
+   
+   ToDo: Use #correction_due_to_dev_pairs to make it so algabraic approach can
+         always be used.
 */
-  float find_bin_fullrangefraction( const double energy,
+  float find_fullrangefraction_channel( const double energy,
                                    const std::vector<float> &coeffs,
                                    const size_t nchannel,
                                    const std::vector<std::pair<float,float>> &deviation_pairs,
                                    const double accuracy = 0.001 );
   
-  /** \deprecated
-   returns energy of _fractional_ channel number; an integer channel number
-   cooresponds to the lower edge of the channel.
-   Depreciated since it doesnt take into account deviation pairs
-   */
-  float bin_number_to_energy_polynomial( const float bin,
-                                        const std::vector<float> &coeffs,
-                                        const size_t nbin );
-
   
   /** Converts channel counts defined by one set of channel lower energies, to
    instead be defined by a different set of lower energies.
