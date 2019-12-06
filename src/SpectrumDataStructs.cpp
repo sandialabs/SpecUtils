@@ -1003,56 +1003,69 @@ struct MeasurementCalibInfo
   }//void strip_end_zero_coeff()
 
 
-  void fill_binning() const
+  void fill_binning()
   {
     if( binning && !binning->empty())
       return;
 
-    switch( equation_type )
+    try
     {
-      case SpecUtils::EnergyCalType::Polynomial:
-      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-        binning = SpecUtils::polynomial_binning( coefficients, nbin, deviation_pairs_ );
-      break;
-
-      case SpecUtils::EnergyCalType::FullRangeFraction:
-        binning = SpecUtils::fullrangefraction_binning( coefficients, nbin, deviation_pairs_ );
-      break;
-
-      case SpecUtils::EnergyCalType::LowerChannelEdge:
+      switch( equation_type )
       {
-        std::shared_ptr< vector<float> > energies
-                                        = std::make_shared< vector<float> >();
-        
-        *energies  = coefficients;
-        
-        if( (nbin > 2) && (energies->size() == nbin) )
-        {
-          energies->push_back(2.0f*((*energies)[nbin-1]) - (*energies)[nbin-2]);
-        }else if( energies->size() < nbin )
-        {
-          //Deal with error
-          cerr << "fill_binning(): warning, not enough cahnnel energies to be"
-                  " valid; expected at least " << nbin << ", but only got "
-               << energies->size() << endl;
-          energies.reset();
-        }else if( energies->size() > (nbin+1) )
-        {
-          //Make it so
-          cerr << "fill_binning(): warning, removing channel energy values!" << endl;
-          energies->resize( nbin + 1 );
-        }
+        case SpecUtils::EnergyCalType::Polynomial:
+        case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          binning = SpecUtils::polynomial_binning( coefficients, nbin, deviation_pairs_ );
+          break;
           
-        
-        binning = energies;
-        
-        break;
-      }//case SpecUtils::EnergyCalType::LowerChannelEdge:
-
-      case SpecUtils::EnergyCalType::InvalidEquationType:
-      break;
-    }//switch( meas->energy_calibration_model_ )
-
+        case SpecUtils::EnergyCalType::FullRangeFraction:
+          binning = SpecUtils::fullrangefraction_binning( coefficients, nbin, deviation_pairs_ );
+          break;
+          
+        case SpecUtils::EnergyCalType::LowerChannelEdge:
+        {
+          std::shared_ptr< vector<float> > energies
+          = std::make_shared< vector<float> >();
+          
+          *energies  = coefficients;
+          
+          if( (nbin > 2) && (energies->size() == nbin) )
+          {
+            energies->push_back(2.0f*((*energies)[nbin-1]) - (*energies)[nbin-2]);
+          }else if( energies->size() < nbin )
+          {
+            //Deal with error
+            cerr << "fill_binning(): warning, not enough cahnnel energies to be"
+            " valid; expected at least " << nbin << ", but only got "
+            << energies->size() << endl;
+            energies.reset();
+          }else if( energies->size() > (nbin+1) )
+          {
+            //Make it so
+            cerr << "fill_binning(): warning, removing channel energy values!" << endl;
+            energies->resize( nbin + 1 );
+          }
+          
+          
+          binning = energies;
+          
+          break;
+        }//case SpecUtils::EnergyCalType::LowerChannelEdge:
+          
+        case SpecUtils::EnergyCalType::InvalidEquationType:
+          break;
+      }//switch( meas->energy_calibration_model_ )
+    }catch( std::exception &e )
+    {
+      cerr << "An invalid binning was specified, goign to default binning" << endl;
+      if( nbin > 0 )
+      {
+        equation_type = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
+        deviation_pairs_.clear();
+        coefficients.resize(2);
+        coefficients[0] = 0.0f;
+        coefficients[1] = 3000.0f / std::max(nbin-1, size_t(1));
+      }
+    }//try / catch
 
     if( !binning )
       cerr << SRC_LOCATION << "\n\tWarning, failed to set binning" << endl;
@@ -6188,6 +6201,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       if( info.coefficients.size()
          || (info.binning && info.binning->size()) )
       {
+        info.fill_binning();
         calib_infos_set.insert( info );
         
         const string &name = meas->detector_name_;
@@ -6273,21 +6287,19 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       }//if( a candidate for a passthrough spectrum )
       
       MeasurementCalibInfo thisinfo( meas );
-      set<MeasurementCalibInfo>::const_iterator pos;
-      pos = calib_infos_set.find(thisinfo); //
+      set<MeasurementCalibInfo>::const_iterator pos = calib_infos_set.find(thisinfo); //
       
       //If this Measurement doesnt have a calibration, see if another one for
       //  the same detector exists.
       if( pos == calib_infos_set.end() )
         pos = calib_infos_set.find(detname_to_calib_map[meas->detector_name_]);
       
-      
       try
       {
         if( pos == calib_infos_set.end() )
           throw runtime_error( "" );
       
-        pos->fill_binning();
+        //pos->fill_binning();
         meas->channel_energies_ = pos->binning;
         meas->calibration_coeffs_ = pos->coefficients;
         meas->deviation_pairs_ = pos->deviation_pairs_;
@@ -6314,18 +6326,17 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         
           if( pos == calib_infos_set.end() )
           {
+            info.fill_binning();
             calib_infos_set.insert( info );
             pos = calib_infos_set.find(info);
           }//if( pos == calib_infos_set.end() )
         
           if( pos != calib_infos_set.end() )
           {
-            pos->fill_binning();
             meas->channel_energies_ = pos->binning;
           }else
           {
             //shouldnt ever get here! - but JIC
-            info.fill_binning();
             meas->channel_energies_ = info.binning;
           }//if( pos != calib_infos_set.end() )  e;se
         }//if( meas->gamma_counts_ && meas->gamma_counts_->size() )
@@ -14787,9 +14798,11 @@ void MeasurementInfo::decode_2012_N42_detector_state_and_quality( MeasurementShr
   }//if( detector_state_node )
 
 
-  const rapidxml::xml_node<char> *inst_state_node = meas_node->first_node( "RadInstrumentState", 18 );
+  const rapidxml::xml_node<char> *inst_state_node = XML_FIRST_NODE(meas_node, "RadInstrumentState" );
   if( !inst_state_node )
-    inst_state_node = meas_node->first_node( "RadItemState", 12 );  //bubbletech portal stotes gps info under this tag
+    inst_state_node = XML_FIRST_NODE(meas_node, "RadItemState" );
+  if( !inst_state_node )
+    inst_state_node = XML_FIRST_NODE(meas_node, "RadDetectorState");
   
   if( inst_state_node )
   {
