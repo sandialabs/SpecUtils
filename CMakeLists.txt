@@ -103,17 +103,6 @@ set( headers
      SpecUtils/EnergyCalibration.h
 )
 
-
-#check if we have CNF implementation files; if so use them
-file( GLOB SpecUtils_CNF_IMP_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/*_cnf_imp.inc" )
-if( SpecUtils_CNF_IMP_FILE )
-  set( SpecUtils_HAS_CNF_IMP_FILE ON )
-else()
-  set( SpecUtils_HAS_CNF_IMP_FILE OFF )
-endif()
-
-
-
 if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND sources src/D3SpectrumExport.cpp )
   list( APPEND headers SpecUtils/D3SpectrumExport.h
