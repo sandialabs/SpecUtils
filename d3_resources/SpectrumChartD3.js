@@ -5166,7 +5166,7 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
 SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   var self = this;
 
-  if( !self.sliderChart || !self.rawData || !self.rawData.spectra )
+  if( !self.sliderChart )
     return;
 
   var height = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
