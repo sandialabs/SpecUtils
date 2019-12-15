@@ -967,6 +967,9 @@ SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
   let self = this;
   let hasset = false;
   
+  if( !this.rawData || !this.rawData.spectra )
+    return;
+  
   this.rawData.spectra.forEach( function(spectrum, i) {
     if( hasset || !spectrum || spectrum.type !== spectrumType )
       return;
