@@ -967,7 +967,7 @@ SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
   let self = this;
   let hasset = false;
   
-  if( !this.rawData || !this.rawData.spectra )
+  if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra )
     return;
   
   this.rawData.spectra.forEach( function(spectrum, i) {
@@ -5139,7 +5139,8 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
   var self = this;
 
   // Cancel the action and clean up if the option for the slider chart is not checked or there is no slider chart displayed
-  if (!self.options.showXAxisSliderChart || !self.sliderChartBody) return;
+  if( !self.options.showXAxisSliderChart || !self.sliderChartBody || !self.rawData || !self.rawData.spectra )
+    return;
 
   // Delete the data lines if they are present
   for (let i = 0; i < self.rawData.spectra.length; ++i) {
@@ -5165,7 +5166,7 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
 SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   var self = this;
 
-  if( !self.sliderChart )
+  if( !self.sliderChart || !self.rawData || !self.rawData.spectra )
     return;
 
   var height = Number(d3.select(this.chart)[0][0].style.height.substring(0, d3.select(this.chart)[0][0].style.height.length - 2));
@@ -7604,7 +7605,7 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
 SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
   var self = this;
 
-  if( !self.fittingPeak )
+  if( !self.fittingPeak || !self.rawData || !self.rawData.spectra )
     return;
 
   console.log( 'Mouse up during peak fit' );
@@ -9523,7 +9524,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   }
 
   /* Add the foreground, background, and secondary lines for recalibration animation */
-  for (var i = 0; i < self.rawData.spectra.length; ++i) {
+  for (var i = 0; i < ((self.rawData && self.rawData.spectra) ? self.rawData.spectra.length : 0); ++i) {
     var spectrum = self.rawData.spectra[i];
     var recalibrationLine = d3.select("#recalibrationLine"+i);
 
@@ -9557,7 +9558,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   recalibrationPeakVis.attr("transform", "translate(" + (self.lastMouseMovePos[0] - self.recalibrationMousePos[0]) + ",0)");
 
   /* Move the foreground, background, and secondary lines for recalibration animation with relation to mouse position */
-  for (var i = 0; i < self.rawData.spectra.length; ++i) {
+  for (var i = 0; i < ((self.rawData && self.rawData.spectra) ? self.rawData.spectra.length : 0); ++i) {
     var recalibrationLine = d3.select("#recalibrationLine"+i);
 
     if (!recalibrationLine.empty())
@@ -10171,7 +10172,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
 
   var t = d3.touches(self.vis[0][0]);
 
-  if (t.length !== 2 || !self.countGammasStartTouches) {
+  if (t.length !== 2 || !self.countGammasStartTouches || !self.rawData || !self.rawData.spectra ) {
     self.handleCancelTouchCountGammas();
     return;
   }
@@ -10826,6 +10827,7 @@ SpectrumChartD3.prototype.unHighlightLabel = function( unHighlightPeakTo ) {
 SpectrumChartD3.prototype.setBackgroundSubtract = function( subtract ) {
   var self = this;
 
+/*
   var checkbox = document.getElementById('background-subtract-option');
 
   if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) {
@@ -10839,7 +10841,8 @@ SpectrumChartD3.prototype.setBackgroundSubtract = function( subtract ) {
     if (checkbox) checkbox.checked = false;
     return;
   }
-
+*/
+  
   self.options.backgroundSubtract = Boolean(subtract);
   self.redraw()();
 }
@@ -10848,7 +10851,8 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   var self = this;
 
   // Don't do anything if no data exists
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) return;
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return;
 
   // Don't do anything else if option is not toggled
   if (!self.options.backgroundSubtract)
@@ -10923,7 +10927,8 @@ SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
 SpectrumChartD3.prototype.getSpectrumByID = function(id) {
   var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) return;
+  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    return;
 
   for (let i = 0; i < self.rawData.spectra.length; i++) {
     if (self.rawData.spectra[i].id === id)
@@ -10998,6 +11003,9 @@ SpectrumChartD3.prototype.getCountsForEnergy = function(spectrum, energy) {
 /* Returns the data y-range for the currently viewed x-range. */
 SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   var self = this;
+  
+  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+    return [0, 3000];
   
   var key = self.options.backgroundSubtract ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
   var y0, y1;
