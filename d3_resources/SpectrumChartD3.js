@@ -975,7 +975,6 @@ SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
       return;
     
     self.handleCancelRoiDrag();
-    self.current_fitting_peak = null;
     spectrum.peaks = peak_data;
     hasset = true;
   } );
@@ -1914,17 +1913,21 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(){
 
 SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
   let self = this;
-  if( !self.roiDragBox )
+  if( !self.roiDragBox && !self.fittingPeak )
     return;
-  self.roiDragBox.remove();
-  self.roiDragLine.remove();
+  if( self.roiDragBox )
+    self.roiDragBox.remove();
   self.roiDragBox = null;
+  if( self.roiDragLine )
+    self.roiDragLine.remove();
   self.roiDragLine = null;
   self.roiBeingDragged = null;
   self.roiDragLastCoord = null;
   self.roiDragRequestTime = null;
   self.roiBeingDrugUpdate = null;
   self.roiIsBeingDragged = false;
+  self.fittingPeak = null;
+  //self.forcedFitRoiNumPeaks = -1;
   window.clearTimeout(self.roiDragRequestTimeout);
   self.roiDragRequestTimeout = null;
   self.roiDragRequestTimeoutFcn = null;
@@ -1967,7 +1970,7 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function(){
 SpectrumChartD3.prototype.updateRoiBeingDragged = function( newroi ){
   let self = this;
   
-  if( !self.roiIsBeingDragged )
+  if( !self.roiIsBeingDragged && !self.fittingPeak )
     return;
 
   window.clearTimeout(self.roiDragRequestTimeout);
@@ -2164,13 +2167,13 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.origdomain = self.xScale.domain();
       self.zoominaltereddomain = false;
       self.zoominx0 = self.xScale.invert(m[0]);
-      self.zoominy0 = self.xScale.invert(m[1]);
 
       self.recalibrationStartEnergy = [ self.xScale.invert(m[0]), self.xScale.invert(m[1]) ];
       self.isRecalibrating = false;
 
       /* We are fitting peaks (if alt-key held) */
       self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey && d3.event.keyCode !== 27;
+      //self.forcedFitRoiNumPeaks = -1;
 
       if( self.roiDragLine ){
         self.handleStartDragRoi();
@@ -2329,7 +2332,6 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     self.leftMouseDown = null;
     self.zoominbox = null;
     self.zoominx0 = null;
-    self.zoominy0 = null;
     self.zoominmouse = null;
     self.fittingPeak = null;
     self.escapeKeyPressed = false;
@@ -3234,7 +3236,6 @@ SpectrumChartD3.prototype.keydown = function () {
 
     /*if (!self.selected) return; */
 
-    
     if( self.roiDragBox && (d3.event.ctrlKey || d3.event.altKey || d3.event.metaKey || d3.event.shiftKey) ){
       let needredraw = self.roiBeingDragged;
       self.handleCancelRoiDrag();
@@ -3247,11 +3248,6 @@ SpectrumChartD3.prototype.keydown = function () {
     switch (d3.event.keyCode) {
       case 27: { /*escape */
         self.escapeKeyPressed = true;
-
-        if( self.fittingPeak ) {
-          self.handleCancelMousePeakFit();
-        }
-        self.fittingPeak = false;
         self.cancelYAxisScalingAction();
         self.handleCancelAllMouseEvents()();
         self.handleCancelAnimationZoom();
@@ -3264,6 +3260,20 @@ SpectrumChartD3.prototype.keydown = function () {
         break;
       }
     }
+    
+    /* if the user is cntl/alt-dragging a ROI, they can force the number of peaks
+     they would like in it by hitting the 1 through 9 keys.
+     A value of self.forcedFitRoiNumPeaks equal or less (default) than zero means the fitting code should decide how many peaks
+     (currently not enforcing
+     */
+    //if( self.fittingPeak && d3.event.keyCode >= 49 && d3.event.keyCode <= 57 ){
+    //  self.forcedFitRoiNumPeaks = d3.event.keyCode - 48;
+    //  const roi = self.roiBeingDrugUpdate;
+    //  if( roi ){
+    //    window.clearTimeout(self.roiDragRequestTimeout);
+    //    self.WtEmit(self.chart.id, {name: 'fitRoiDrag'}, roi.lowerEnergy, roi.upperEnergy, self.forcedFitRoiNumPeaks, false, d3.event.pageX, d3.event.pageY );
+    //  }
+    //}
   }
 }
 
@@ -6215,13 +6225,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     }//for( var i = xstartind; i < xendind; ++i )
 
     function erf(x) {
-      /*http:/*stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function */
-      var sign = (x >= 0) ? 1 : -1; /* save the sign of x */
+      /* http://stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function
+         Error is less than 1.5 * 10-7 for all inputs
+         (from Handbook of Mathematical Functions)
+       */
+      const sign = (x >= 0) ? 1 : -1; /* save the sign of x */
       x = Math.abs(x);
-      var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027
+      const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027,
           a5 = 1.061405429, p  = 0.3275911;
-      var t = 1.0/(1.0 + p*x);
-      var y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+      const t = 1.0/(1.0 + p*x);
+      const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
       return sign * y; /* erf(-x) = -erf(x); */
     }
 
@@ -6491,32 +6504,30 @@ SpectrumChartD3.prototype.drawPeaks = function() {
   };//function draw_roi(roi,specindex,spectrum)
 
   for (let i = 0; i < this.rawData.spectra.length; i++) {
-    let spectrumi = i;
-    if (!this.rawData.spectra[i] || !this.rawData.spectra[i].peaks || !this.rawData.spectra[i].peaks.length)
+    const spectrum = this.rawData.spectra[i];
+    
+    if ((spectrum.type === self.spectrumTypes.FOREGROUND && !this.options.drawPeaksFor.FOREGROUND))
       continue;
-    if ((this.rawData.spectra[i].type === 'FOREGROUND' && !this.options.drawPeaksFor.FOREGROUND))
+    if ((spectrum.type === self.spectrumTypes.BACKGROUND && (!this.options.drawPeaksFor.BACKGROUND || this.options.backgroundSubtract)))
       continue;
-    if ((this.rawData.spectra[i].type === 'BACKGROUND' && (!this.options.drawPeaksFor.BACKGROUND || this.options.backgroundSubtract)))
-      continue;
-    if ((this.rawData.spectra[i].type === 'SECONDARY' && !this.options.drawPeaksFor.SECONDARY))
+    if ((spectrum.type === self.spectrumTypes.SECONDARY && !this.options.drawPeaksFor.SECONDARY))
       continue;
 
-    this.rawData.spectra[i].peaks.forEach( function(roi){
-      //We test for self.roiBeingDrugUpdate below, even if self.roiIsBeingDragged is true, to make sure the server has
-      //  actually returned a updated ROI, and if it hasnt, we'll draw the original ROI.
-      //  This prevents to ROI disapearing after the user clicks down, but before they have moved the mouse.
-      if( self.roiIsBeingDragged && self.roiBeingDrugUpdate && roi == self.roiBeingDragged.roi )
-      {
-        draw_roi(self.roiBeingDrugUpdate,i,self.rawData.spectra[spectrumi]);
-      }else
-      {
-        draw_roi(roi,i,self.rawData.spectra[spectrumi]);
-      }
-      /*console.log( 'There are ' + (peaks ? peaks.length : 'null') + " peaks" ); */
-    });
+    const peaks = spectrum.peaks;
+    if( peaks ){
+      peaks.forEach( function(roi){
+        //We test for self.roiBeingDrugUpdate below, even if self.roiIsBeingDragged is true, to make sure the server has
+        //  actually returned a updated ROI, and if it hasnt, we'll draw the original ROI.
+        //  This prevents to ROI disapearing after the user clicks down, but before they have moved the mouse.
+        if( self.roiIsBeingDragged && self.roiBeingDrugUpdate && roi == self.roiBeingDragged.roi )
+          draw_roi(self.roiBeingDrugUpdate,i,spectrum);
+        else
+          draw_roi(roi,i,spectrum);
+      });
+    }//if( this.rawData.spectra[i].peaks )
     
-    if( self.current_fitting_peak )
-      draw_roi( self.current_fitting_peak, 0, self.rawData.spectra[0] /* foreground */ );
+    if( self.fittingPeak && self.roiBeingDrugUpdate && (this.rawData.spectra[i].type === self.spectrumTypes.FOREGROUND) )
+      draw_roi(self.roiBeingDrugUpdate,i,spectrum);
   }
   
   self.drawPeakLabels( labelinfo );
@@ -6897,215 +6908,7 @@ SpectrumChartD3.prototype.setShowNuclideEnergies = function(d) {
 
 /**
  * -------------- Peak Fit Functions --------------
- * 
- * Liza: This function gets called whenever you press and hold the option key  */
-/* (alt on non-macs) then click and hold down with the left mouse button,  */
-/* and drag to the right.
  */
-SpectrumChartD3.prototype.drawPeakFitReferenceLines = function() {
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra)
-    return;
-
-  /* Cancel the function if no mouse position detected */
-  if (!self.lastMouseMovePos || !self.leftMouseDown)
-    return;
-
-  /* Adjust the mouse move position with respect to the bounds of the vis */
-  if (self.lastMouseMovePos[0] < 0)
-    self.lastMouseMovePos[0] = 0;
-  else if (self.lastMouseMovePos[0] > self.size.width)
-    self.lastMouseMovePos[0] = self.size.width;
-
-  /* Set the length of the arrows */
-  var arrowLength = 25,
-      arrowPadding = 7;
-
-  /* To keep track of some of the line objects being drawn */
-  var createPeakMouseCurrentLine,
-      startLineArrowLine, currentLineArrowLine,
-      startLineArrow, currentLineArrow,
-      createPeakMouseText,
-      contEstLine, contEstText;
-
-  /* Create the leftmost starting point line  */
-  if (d3.select("#createPeakMouseStartLine").empty()) {
-    self.vis.append("line")
-      .attr("id", "createPeakMouseStartLine")
-      .attr("class", "createPeakMouseLine")
-      .attr("x1", self.leftMouseDown[0])
-      .attr("x2", self.leftMouseDown[0])
-      .attr("y1", 0)
-      .attr("y2", self.size.height);
-  }
-
-  /* Create/refer the rightmost current point line */
-  if (d3.select("#createPeakMouseCurrentLine").empty()) {
-    createPeakMouseCurrentLine = self.vis.append("line")
-      .attr("id", "createPeakMouseCurrentLine")
-      .attr("class", "createPeakMouseLine")
-      .attr("x1", self.lastMouseMovePos[0])
-      .attr("x2", self.lastMouseMovePos[0])
-      .attr("y1", 0)
-      .attr("y2", self.size.height);
-
-  } else 
-    createPeakMouseCurrentLine = d3.select("#createPeakMouseCurrentLine");
-
-  createPeakMouseCurrentLine.attr("x1", self.lastMouseMovePos[0])
-    .attr("x2", self.lastMouseMovePos[0]);
-
-  /* Create the start arrow point of the leftmost line (staticly positioned) */
-  if (d3.select("#startLineArrowLine").empty()) {
-    startLineArrowLine = self.vis.append("line")
-      .attr("id", "startLineArrowLine")
-      .attr("class", "createPeakArrowLine")
-      .attr("x1", self.leftMouseDown[0] - arrowLength - arrowPadding)
-      .attr("x2", self.leftMouseDown[0] - arrowPadding)
-      .attr("y1", self.size.height / 2)
-      .attr("y2", self.size.height / 2);
-
-    startLineArrow = self.vis.append('svg:defs').attr("id", "createPeakStartArrowDef")
-                          .append("svg:marker")
-                          .attr("id", "createPeakStartArrow")
-                          .attr('class', 'createPeakArrow')
-                          .attr("refX", 2)
-                          .attr("refY", 7)
-                          .attr("markerWidth", 25)
-                          .attr("markerHeight", 25)
-                          .attr("orient", 0)
-                          .append("path")
-                            .attr("d", "M2,2 L2,13 L8,7 L2,2")
-                            .style("stroke", "black");
-
-    startLineArrowLine.attr("marker-end", "url(#createPeakStartArrow)");
-  }
-
-  /* Create the arrow pointing to the rightmost line, or refer to it if itdoesn't exist */
-  if (d3.select("#currentLineArrowLine").empty()) {
-    currentLineArrowLine = self.vis.append("line")
-      .attr("id", "currentLineArrowLine")
-      .attr("class", "createPeakArrowLine")
-      .attr("y1", self.size.height / 2)
-      .attr("y2", self.size.height / 2);
-
-    currentLineArrow = self.vis.append('svg:defs').attr("id", "createPeakCurrentArrowDef")
-                          .append("svg:marker")
-                          .attr("id", "createPeakCurrentArrow")
-                          .attr('class', 'createPeakArrow')
-                          .attr("refX", 2)
-                          .attr("refY", 7)
-                          .attr("markerWidth", 25)
-                          .attr("markerHeight", 25)
-                          .attr("orient", 180)
-                          .append("path")
-                            .attr("d", "M2,2 L2,13 L8,7 L2,2")
-                            .style("stroke", "black");              
-
-    currentLineArrowLine.attr("marker-start", "url(#createPeakCurrentArrow)");
-  }
-  else
-    currentLineArrowLine = d3.select("#currentLineArrowLine");
-
-  /* Update the position of the rightmost arrow */
-  currentLineArrowLine.attr("x1", self.lastMouseMovePos[0] + arrowPadding)
-    .attr("x2", self.lastMouseMovePos[0] + arrowPadding + arrowLength);
-
-
-  /* Create/refer to the text for the approx continuum */
-  if (d3.select("#contEstText").empty()) {
-    contEstText = self.vis.append("text")
-      .attr("id", "contEstText")
-      .attr("class", "contEstLineText")
-      .text("approx continuum to use");
-
-  } else
-    contEstText = d3.select("#contEstText");
-
-
-  /* Get pixelated coordinates of mouse/starting positions of lines and coordinates */
-  var coordsX0 = self.xScale.invert(self.leftMouseDown[0]),
-      coordsY0 = self.getCountsForEnergy(self.rawData.spectra[0], coordsX0),
-      coordsX1 = self.xScale.invert(self.lastMouseMovePos[0]),
-      coordsY1 = self.getCountsForEnergy(self.rawData.spectra[0], coordsX1),
-      x0 = self.leftMouseDown[0],
-      x1 = self.lastMouseMovePos[0],
-      y0 = self.yScale( coordsY0 ),
-      y1 = self.yScale( coordsY1 ),
-      dy = coordsY1 - coordsY0,
-      lineAngle = (180/Math.PI) * Math.atan( (y1-y0)/(x1-x0) );
-
-  /* Update the position and rotation of the continuum text using the pixelated coordinates */
-  contEstText.attr("x", Math.min(self.lastMouseMovePos[0], self.leftMouseDown[0]) + (Math.abs(self.leftMouseDown[0]-self.lastMouseMovePos[0])/2) - Number(contEstText[0][0].getBoundingClientRect().width)/2 )
-    .attr("y", y0-15)
-    .attr("transform", "rotate(" + (!isNaN(lineAngle) ? lineAngle : 0) + ", " + (x0 + ((x1-x0)/2)) + ", " + y0 + ")");
-
-
-  /* Create/refer to the reference text for creating a peak */
-  if (d3.select("#createPeakMouseText").empty())
-    createPeakMouseText = self.vis.append("text")
-      .attr("id", "createPeakMouseText")
-      .attr("class", "mouseLineText")
-      .attr("y", self.size.height/5)
-      .text("Will create peak Inside");
-  else
-    createPeakMouseText = d3.select("#createPeakMouseText");
-
-  /* Move the create peaks text in the middle of the create peak mouse lines */
-  createPeakMouseText.attr("x", Math.min(self.lastMouseMovePos[0], self.leftMouseDown[0]) + (Math.abs(self.leftMouseDown[0]-self.lastMouseMovePos[0])/2) - Number(createPeakMouseText[0][0].getBoundingClientRect().width)/2 );
-
-
-  /* Remove the continuum estimation line (lines in this case, we create the effect using a numver of shorter 5px lines) */
-  d3.selectAll(".createPeakContEstLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
-  /* Get the end coordinates of the first (5px) line in the estimated continuum */
-  var xpix = x0+5,
-      ypix = self.yScale( coordsY0+dy*(xpix-x0)/(x1-x0) );
-
-  /* Stop updating if the y-coordinate could not be found for the line */
-  if (isNaN(ypix))
-    return;
-
-  /* Create the first 5px line for the estimated continuum */
-  if (x1 > x0)
-    contEstLine = self.vis.append("line")
-      .attr("id", "contEstLine")
-      .attr("class", "createPeakContEstLine")
-      .attr("x1", x0)
-      .attr("y1", y0)
-      .attr("x2", xpix)
-      .attr("y2", ypix);
-
-  /* Create and update the next 5px lines until you reach the end for the estimated continuum */
-  while (xpix < x1) {
-    x0 = xpix;
-    y0 = ypix;
-    xpix += 5;
-    ypix = self.yScale( coordsY0+dy*(xpix-self.leftMouseDown[0])/(x1-self.leftMouseDown[0]) );
-
-    contEstLine = self.vis.append("line")
-      .attr("id", "contEstLine")
-      .attr("class", "createPeakContEstLine")
-      .attr("x1", x0)
-      .attr("y1", y0)
-      .attr("x2", xpix)
-      .attr("y2", ypix);
-  }
-
-  /* Create the last 5px line for the estimated continuum line */
-  contEstLine = self.vis.append("line")
-    .attr("id", "contEstLine")
-    .attr("class", "createPeakContEstLine")
-    .attr("x1", x0)
-    .attr("y1", y0)
-    .attr("x2", x1-2)
-    .attr("y2", y1);
-}
 
 SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
   var self = this;
@@ -7149,48 +6952,101 @@ SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
 
 
 SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
+/* ToDo:
+     - implement if you hit the 1,2,3,4,... key while doing this, then it will force that many peaks to be fit for.
+     - implement choosing different order polynomials while fitting, maybe l,c,q?
+     - implement returning zero amplitude peak when fit fails in c++
+     - cleanup naming of the temporary ROI and such to be consistent with handleRoiDrag and updateRoiBeingDragged
+     - could maybe generalize the debounce mechanism
+     - get this code working with touches (and in fact get touch code to just call this function)
+     - remove/cleanup a number of functions like: erasePeakFitReferenceLines, handleTouchMovePeakFit, handleCancelTouchPeakFit
+ */
+
   var self = this;
+  
+  //console.log( "In handleMouseMovePeakFit + " + d3.mouse(self.vis[0][0])[0] );
 
-  console.log( "In handleMouseMovePeakFit + " + d3.mouse(self.vis[0][0])[0] );
-
+  /* If no spectra - bail */
+  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
+      || self.rawData.spectra[0].y.length == 0 || this.rawData.spectra[0].y.length < 10 ) {
+    return;
+  }
+  
+  d3.select('body').style("cursor", "ew-resize");
+  
   self.peakFitMouseMove = d3.mouse(self.vis[0][0]);
   self.peakFitTouchMove = d3.touches(self.vis[0][0]);
-
-  var leftTouch, rightTouch;
-  if (self.peakFitTouchMove.length > 0) {
-    leftTouch = self.peakFitTouchMove[0][0] < self.peakFitTouchMove[1][0] ? self.peakFitTouchMove[0] : self.peakFitTouchMove[1];
-    rightTouch = leftTouch === self.peakFitTouchMove[0] ? self.peakFitTouchMove[1] : self.peakFitTouchMove[0];
+  
+  let leftpospx, rightpospx;
+  if( self.peakFitTouchMove.length > 0 ) {
+    leftpospx = self.peakFitTouchMove[0][0] < self.peakFitTouchMove[1][0] ? self.peakFitTouchMove[0][0] : self.peakFitTouchMove[1][0];
+    rightpospx = leftTouch === self.peakFitTouchMove[0] ? self.peakFitTouchMove[1][0] : self.peakFitTouchMove[0][0];
+  } else {
+    if( !self.leftMouseDown || !self.peakFitMouseMove ) {
+      console.log( 'Hit condition I didnt think would happen fitting roi as dragging.' );
+      return;
+    }
+    
+    leftpospx = self.leftMouseDown[0];  //self.peakFitMouseDown[0]  //I think we can eliminate self.peakFitMouseDown now
+    rightpospx = self.peakFitMouseMove[0];
+    if( rightpospx < leftpospx )
+      leftpospx = [rightpospx, rightpospx=leftpospx][0];
   }
 
+  const lowerEnergy = self.xScale.invert(leftpospx);
+  const upperEnergy = self.xScale.invert(rightpospx);
+  
   self.zooming_plot = false;
 
-  /* We don't want to redraw the reference lines if we are using touches */
-  if (self.peakFitTouchMove.length == 0)
-    self.drawPeakFitReferenceLines();
-
-  if (!self.zoominx0 && self.peakFitTouchMove.length > 0)
-    self.zoominx0 = self.xScale.invert(leftTouch[0]);
-
+  if( typeof self.zoominx0 !== 'number' )
+    self.zoominx0 = self.xScale.invert(leftpospx);
+  
   /* Set the original X-domain if it does not exist */
-  if (!self.origdomain)
+  if( !self.origdomain )
     self.origdomain = self.xScale.domain();
   
   /*This next line is a hack to get around how D3 is managing the zoom, but we highkacked it for the peak fitting  */
   self.xScale.domain( self.origdomain );
   
-  /*If we arent displaying a spectrum, remove the current_fitting_peak and return  */
-  /*  TODO: Have peak fitting for other spectra?? */
-  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
-      || self.rawData.spectra[0].y.length == 0 || this.rawData.spectra[0].y.length < 10 ) {
-    if( need_redraw_on_cancel )     
-      self.redraw()();
-    return;
+  let pageX = d3.event.pageX; //((d3.event && d3.event.pageX) ? d3.event.pageX : window.pageXOffset + leftpospx + ;
+  let pageY = d3.event.pageY;
+  //if( ){
+  //  var bodyRect = document.body.getBoundingClientRect(),
+  //  elemRect = element.getBoundingClientRect(),
+  //  offset   = elemRect.top - bodyRect.top;
+  //}
+  
+  //Emit current position, no more often than every 2.5 seconds, or if there
+  //  are no requests pending.
+  let emitFcn = function(){
+    self.roiDragRequestTime = new Date();
+    window.clearTimeout(self.roiDragRequestTimeout);
+    self.roiDragRequestTimeout = null;
+    self.roiDragRequestTimeoutFcn = null;
+    
+    //(window.pageXOffset + matrix.e + 15) + "px")
+    //(window.pageYOffset + matrix.f - 30)
+    
+    console.log( 'd3.event.pageX=' + pageX + ', d3.event.pageY=' + pageY );
+    self.WtEmit(self.chart.id, {name: 'fitRoiDrag'},
+                lowerEnergy, upperEnergy, -1 /*self.forcedFitRoiNumPeaks*/, false, pageX, pageY );
+  };
+  
+  let timenow = new Date();
+  if( self.roiDragRequestTime === null || (timenow-self.roiDragRequestTime) > 2500 ){
+    emitFcn();
+  } else {
+    let dt = Math.min( 2500, Math.max(0, 2500 - (timenow - self.roiDragRequestTime)) );
+    window.clearTimeout( self.roiDragRequestTimeout );
+    self.roiDragRequestTimeoutFcn = emitFcn;
+    self.roiDragRequestTimeout = window.setTimeout( function(){
+      if(self.roiDragRequestTimeoutFcn)
+      self.roiDragRequestTimeoutFcn();
+    }, dt );
   }
+}//handleMouseMovePeakFit
 
-  // Do real-time peak fit rendering
 
-  self.redraw()();
-}
 
 SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   var self = this;
@@ -7232,8 +7088,11 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
 
   rightTouch[0] = Math.min(rightTouch[0], self.xScale.range()[1]);
 
-  self.isCreatingPeaks = true;
+  //if( !self.fittingPeak )
+  //  self.forcedFitRoiNumPeaks = -1;
+  
   self.fittingPeak = true;
+  
 
   self.setYAxisDomain();
   if (!self.yAxisZoomedOutFully) {
@@ -7605,43 +7464,35 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
 SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
   var self = this;
 
-  if( !self.fittingPeak || !self.rawData || !self.rawData.spectra )
+  const roi = self.roiBeingDrugUpdate;
+  if( !self.fittingPeak || !self.rawData || !self.rawData.spectra || !roi )
     return;
 
   console.log( 'Mouse up during peak fit' );
 
   self.fittingPeak = null;
   
-  var keep_peaks = true;  /*Do what you want here to decide if you should keep the peak(s) or not */
-  
-  if( keep_peaks && this.current_fitting_peak ) {
-    self.rawData.spectra[0].peaks.push( this.current_fitting_peak ); 
-  }
-
-  if (self.peakFitMouseMove && self.peakFitMouseDown) {
-    const x0 = self.peakFitMouseDown[0],
-          x1 = d3.mouse(self.vis.node())[0],
-          energyx0 = self.xScale.invert(x0),
-          energyx1 = self.xScale.invert(x1);
-    console.log("Emit CREATE PEAK signal from x0 = ", x0, "(", energyx0, 
-      " kEV) to x1 = ", x1, "(", energyx1, 
-      " kEV)");
-    self.WtEmit(self.chart.id, {name: 'controlkeydragged'}, energyx0, energyx1, d3.event.pageX, d3.event.pageY);
-  }  
-  
-  self.current_fitting_peak = null;
-  self.erasePeakFitReferenceLines();
   self.redraw()();
+  self.handleCancelRoiDrag();
+  
+  if( self.leftMouseDown ) {
+    const pageX = d3.event.pageX;
+    const pageY = d3.event.pageY;
+    //const x0 = self.leftMouseDown[0],
+    //      x1 = d3.mouse(self.vis.node())[0];
+    //self.WtEmit(self.chart.id, {name: 'fitRoiDrag'}, x0, x1, -1, true );
+    //Instead of updating with any movements the mouse may have made, leaving the final fit result
+    //  different than whats currently showing; should re-evaluate after using for a while
+    console.log( 'd3.event.pageX=' + pageX + ", d3.event.pageY=" + pageY );
+    self.WtEmit( self.chart.id, {name: 'fitRoiDrag'},
+                 roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
+  }
 }
 
 /*Function called when you hit escape while fitting peak */
 SpectrumChartD3.prototype.handleCancelMousePeakFit = function() {
   console.log( 'Canceled peakfit' );
-  this.fittingPeak = null;
-  this.current_fitting_peak = null;
-  this.erasePeakFitReferenceLines();
-  this.cancelYAxisScalingAction();
-  this.redraw()();
+  this.handleCancelRoiDrag();
 }
 
 
