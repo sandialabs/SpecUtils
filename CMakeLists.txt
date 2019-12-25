@@ -91,6 +91,7 @@ set( sources
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp
+     src/CubicSpline.cpp
      README.md
 )
 
@@ -101,6 +102,7 @@ set( headers
      SpecUtils/SpecUtils_config.h.in
      SpecUtils/SerialToDetectorModel.h
      SpecUtils/EnergyCalibration.h
+     SpecUtils/CubicSpline.h
 )
 
 if( SpecUtils_ENABLE_D3_CHART )

@@ -41,8 +41,6 @@
  */
 namespace SpecUtils
 {
-  void test_spline();
-  
   /** The energy (or FWHM) calibration type that the calibration coefficients
    should be interpreted as; typically also the type in the file.
    */
@@ -326,13 +324,6 @@ namespace SpecUtils
                            const std::vector<float> &original_counts,
                            const std::vector<float> &new_energies,
                            std::vector<float> &resulting_counts );
-  
-  namespace details
-  {
-    
-
-  }//namespace details
-  
 }//namespace SpecUtils
 
 #endif

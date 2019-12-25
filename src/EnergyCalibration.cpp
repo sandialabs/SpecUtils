@@ -33,306 +33,15 @@
 #include <boost/current_function.hpp>
 #endif
 
-
+#include "SpecUtils/CubicSpline.h"
 #include "SpecUtils/EnergyCalibration.h"
 
 
 using namespace std;
 
-namespace
-{
-  struct SplineNode
-  {
-    double a, b, c, d, x;
-  };
-  
-  
-  vector<SplineNode> create_cubic_spline( const vector<pair<float,float>> &xy )
-  {
-    // https://en.wikipedia.org/wiki/Spline_(mathematics)#Algorithm_for_computing_natural_cubic_splines
-    // The natural cubic spline uses contraint that the second derivative is zero at each end.
-    //   We actuallyprobably want a clamped cubic spline where the first derivative is zero at each end;
-    //   so this is on my todo list to implement.
-    //
-    // It would be nice to use the Akima spline, but that requires at least 5 points, but a lot
-    //   of times there wont be that many deviation pairs (we could probably falsly create that
-    //   many points, but that would require investigating behaviour)
-    
-    if( xy.size() < 2 )
-      return vector<SplineNode>{};
-    
-    const size_t n = xy.size() - 1;
-    vector<double> b( n ), d( n ), h( n ), alpha( n );
-    vector<double> c(n+1), l(n+1), mu(n+1), z(n+1);
-    
-    alpha[0] = 0.0;
-    l[0] = 1.0;
-    mu[0] = z[0] = 0.0;
-    
-    for( size_t i = 0; i < n; ++i )
-      h[i] = xy[i+1].first - xy[i].first;
-    
-    for( size_t i = 1; i < n; ++i )
-      alpha[i] = 3.0*(xy[i+1].second - xy[i].second)/h[i] - 3.0*(xy[i].second - xy[i-1].second)/h[i-1];
-  
-    for( size_t i = 1; i < n; ++i)
-    {
-      l[i] = 2.0*(xy[i+1].first - xy[i-1].first) - h[i-1]*mu[i-1];
-      mu[i] = h[i] / l[i];
-      z[i] = (alpha[i] - h[i-1]*z[i-1]) / l[i];
-    }
-    
-    l[n] = 1;
-    z[n] = c[n] = 0;
-    
-    for( int j = n-1; j >= 0; --j )
-    {
-      c[j] = z[j] - mu[j] * c[j+1];
-      b[j] = (xy[j+1].second - xy[j].second)/h[j] - h[j]*(c[j+1]+2*c[j])/3;
-      d[j] = (c[j+1] - c[j])/3/h[j];
-    }
-    
-    vector<SplineNode> output_set(n+1);
-    for(int i = 0; i < n; ++i)
-    {
-      //ToDo: check for infs and NaNs
-      output_set[i].a = xy[i].second;
-      output_set[i].b = b[i];
-      output_set[i].c = c[i];
-      output_set[i].d = d[i];
-      output_set[i].x = xy[i].first;
-    }
-    
-    output_set[n].a = xy[n].second;
-    output_set[n].b = output_set[n].c = output_set[n].d = 0.0f;
-    output_set[n].x = xy[n].first;
-    
-    
-    return output_set;
-  }//create_cubic_spline(...)
-  
-  
-  float eval_cubic_spline( const float x, const vector<SplineNode> &spline )
-  {
-    const auto pos = std::upper_bound( begin(spline), end(spline), x,
-              []( const float energy, const SplineNode &node ) -> bool { return energy < node.x; });
-    
-    if( pos == begin(spline) )
-      return 0.0f;
-    if( pos == end(spline) )
-      return static_cast<float>(spline.back().a);
-    
-    const SplineNode &node = *(pos-1);
-    const double dx = x - node.x;
-    
-    assert( x < pos->x );
-    assert( x >= node.x );
-    assert( dx >= 0.0 );
-    
-    //ToDo: check for infs and NaNs
-    
-    return static_cast<float>( node.a + node.b*dx + node.c*dx*dx + node.d*dx*dx*dx );
-  }//eval_cubic_spline(...)
-  
-  
-  vector<SplineNode> create_cubic_spline_for_dev_pairs( const std::vector<std::pair<float,float>> &dps )
-  {
-    if( dps.empty() )
-      return vector<SplineNode>{};
-    
-    if( dps.size() == 1 && dps[0].first < 0.1 )
-      return vector<SplineNode>{};
-    
-    vector<pair<float,float>> offsets = dps;
-    
-    //Make sure ordered correctly.
-    std::sort( begin(offsets), end(offsets) );
-    
-    //Remove duplicate energies (could do much better here)
-    for( int i = 0; i < static_cast<int>(offsets.size()-1); ++i )
-    {
-      if( fabs(offsets[i].first-offsets[i+1].first) < 0.01 )
-      {
-        offsets.erase( begin(offsets) + i );
-        i = -1;
-      }
-    }
-    
-    for( size_t i = 0; i < offsets.size(); ++i )
-      offsets[i].first -= dps[i].second;
-    
-    if( dps.size() < 2 )  //Should be a very rare occarunce, like actually never
-      offsets.insert( begin(offsets), std::make_pair(0.0f,0.0f) );
-    
-    return create_cubic_spline( offsets );
-  }//create_cubic_spline_for_dev_pairs(...)
-  
-  /** Currently gives a spline that transforms back from the correct energy, to
-   the calibration before deviation pairs are defined.
-   
-   Currently gives a result accurate to within a few keV - I'm not to sure if
-   this method of correction is just fundamentally incorrect, or just an issue
-   with boundary conditions or something... I need to find some paper...
-   */
-  vector<SplineNode> create_inverse_dev_pairs_cubic_spline( const std::vector<std::pair<float,float>> &dps )
-  {
-    if( dps.empty() )
-      return vector<SplineNode>{};
-    
-    if( dps.size() == 1 && dps[0].first < 0.1 )
-      return vector<SplineNode>{};
-    
-    if( dps.size() < 2 )  //Should be a very rare occarunce, like actually never
-    {
-      vector<pair<float,float>> offsets = dps;
-      offsets.insert( begin(offsets), std::make_pair(0.0f,0.0f) );
-      return create_cubic_spline( offsets );
-    }
-    
-    return create_cubic_spline( dps );
-  }//create_inverse_dev_pairs_cubic_spline(...)
-}//aunonomous namespace
-
-
 namespace SpecUtils
 {
-  
-  void test_spline()
-  {
-    /*
-    vector<pair<float,float>> dev_pairs(20);
-    for(int i = 0; i < dev_pairs.size(); ++i)
-    {
-      dev_pairs[i].first = i;
-      dev_pairs[i].second = sin(i);
-    }
-    
-    const vector<SplineNode> cs = create_cubic_spline( dev_pairs );
-    //for(int i = 0; i < cs.size(); ++i)
-    //  cout << cs[i].d << "\t" << cs[i].c << "\t" << cs[i].b << "\t" << cs[i].a << endl;
-    //cout << endl << endl;
-    
-    
-    for(int i = 0; i < (dev_pairs.size()-1); ++i)
-    {
-      for( float a = 0.0f; a < 1.0f; a += 0.1f )
-        cout << i+a << "," << eval_cubic_spline(i+a,cs) << "," << sin(i+a) << endl;
-    }
-    */
-    
-    // For this test I created an artifical nuclide, with gammas cooresponding
-    //  to 'gamma_energies', and then created a Deviation.gadras file with
-    //  deviation pairs cooresponding to 'devpairs', and then created an HPGe
-    //  inject for the fake nuclide, making sure to check "include Deviation Pairs".
-    //  Then I stripped the resulting PCF of deviation pairs, imported to InterSpec,
-    //  and fit for peaks; their means coorespond to 'no_dev_pairs_peak_means'.
-    //  This all should allow testing for proper application of deviation pairs.
-    //
-    // Currently works well except for the 1200 through 2400 keV peaks (which
-    // attests that the boundary conditions used for spline creation are wrong).
-    
-    {//Begin artificaial nuclide test
-      const vector<float> gamma_energies{ 59.5, 70, 80, 90, 100, 125, 150, 175, 200, 250,
-        300, 400, 500, 600, 700, 800, 900, 1000, 1200, 1400, 1600, 1800, 2000, 2400, 2800
-      };
-      
-      const vector<float> no_dev_pairs_peak_means{ 49.02, 58.05, 66.79, 75.74, 84.96, 109.27, 134.95,
-        161.23, 188.12, 244.93, 305.82, 404.95, 499.93, 594.94, 699.94, 779.94, 899.92, 1019.92,
-        1246.84, 1454.88, 1651.64, 1841.82, 2028.85, 2404.85, 2799.91
-      };
-      
-      const vector<pair<float,float>> devpairs = {
-        {0,0.00}, {100,15.00}, {150,15.00}, {250,5.00}, {400,-5.00}, {425,0},
-        {450,0}, {500,0}, {550,-5.0}, {600,5}, {700,0}, {725,5}, {750,10}, {775,15},
-        {800,20}, {900,0}, {950,-10}, {1000,-20}, {2614,0.00}
-      };
-      
-      assert( gamma_energies.size() == no_dev_pairs_peak_means.size() );
-      
-      const size_t ngammas = gamma_energies.size();
-      
-      const vector<SplineNode> spline = create_cubic_spline_for_dev_pairs( devpairs );
-      
-      
-      shared_ptr<const vector<float>> from_apply_dev = apply_deviation_pair( no_dev_pairs_peak_means, devpairs );
-      assert( from_apply_dev );
-      assert( from_apply_dev->size() == ngammas );
-      
-      cout << "GammaEnergy, NoDevPairEnergy, WithDevPair, AsBinning, InvCorrected, RealInv" << endl;
-      for( size_t i = 0; i < ngammas; ++i )
-      {
-        const float corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], spline );
-        const float inv_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
-        const float inv_corrected_real = gamma_energies[i] - correction_due_to_dev_pairs( gamma_energies[i], devpairs );
-        
-        cout << gamma_energies[i]
-        << ", " << no_dev_pairs_peak_means[i]
-        << ", " << corrected
-        << ", " << (*from_apply_dev)[i]
-        << ", " << inv_corrected
-        << ", " << inv_corrected_real
-        << endl;
-      }
-    }//End artificaial nuclide test
-    
-    //Need to test some more edgecases to be sure #apply_deviation_pair and #eval_cubic_spline
-    //  both agree, and that values above bellow the dev pair ranges are handled correctly.
-    //  Then test results show up coorectly to the GUI actually.
-    //  Also make function to remove effect of deviation pairs.
-    //  And then put this test as a unit test.
-    
-    
-    {//Begin Th232 test
-      const vector<float> gamma_energies{ 74.82, 77.11, 129.06, 153.98, 209.25,
-        238.63, 240.99, 270.25, 300.09, 328.00, 338.32, 340.96, 409.46, 463.00,
-        562.50, 583.19, 727.33, 772.29, 794.95, 830.49, 835.71, 840.38, 860.56,
-        911.20, 964.77, 968.97, 1078.62, 1110.61, 1247.08, 1459.14, 1495.91,
-        1501.57, 1512.70, 1580.53, 1620.50, 1630.63, 2614.53
-      };
-      
-      const vector<float> no_dev_pairs_peak_means{ 69.61, 71.93, 122.39, 144.71,
-        193.13, 219.20, 221.36, 247.72, 275.08, 301.02, 310.72, 313.15, 378.92,
-        431.67, 532.93, 554.55, 708.14, 757.06, 781.74, 820.66, 826.33, 831.46,
-        853.52, 908.81, 967.06, 971.60, 1089.04, 1123.04, 1265.02, 1481.66,
-        1517.46, 1523.05, 1534.45, 1601.87, 1641.55, 1651.61, 2614.54
-      };
-      
-      const vector<pair<float,float>> devpairs = {
-        {0,0.00}, {50,5}, {100,5.00}, {200,15.00}, {1000,-5.00}, {2614,0.00}, {3000,0}
-      };
-      
-      assert( gamma_energies.size() == no_dev_pairs_peak_means.size() );
-      
-      const size_t ngammas = gamma_energies.size();
-      
-      const vector<SplineNode> spline = create_cubic_spline_for_dev_pairs( devpairs );
-      
-      
-      shared_ptr<const vector<float>> from_apply_dev = apply_deviation_pair( no_dev_pairs_peak_means, devpairs );
-      assert( from_apply_dev );
-      assert( from_apply_dev->size() == ngammas );
-      
-      cout << "GammaEnergy, NoDevPairEnergy, WithDevPair, AsBinning, InvCorrected, RealInv" << endl;
-      for( size_t i = 0; i < ngammas; ++i )
-      {
-        const float corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], spline );
-        const float inv_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
-        const float inv_corrected_real = gamma_energies[i] - correction_due_to_dev_pairs( gamma_energies[i], devpairs );
-        
-        cout << gamma_energies[i]
-        << ", " << no_dev_pairs_peak_means[i]
-        << ", " << corrected
-        << ", " << (*from_apply_dev)[i]
-        << ", " << inv_corrected
-        << ", " << inv_corrected_real
-        << endl;
-      }
-    }//End Th232 test
-    
-  }//void test_spline()
-  
-  
-  
+
 std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<float> &coeffs,
                                                                  const size_t nbin,
                                                                  const std::vector<std::pair<float,float>> &dev_pairs )
@@ -410,14 +119,14 @@ shared_ptr<const vector<float>> apply_deviation_pair( const vector<float> &binni
   if( dps.empty() || binning.empty() )
     return answer;
   
-  const vector<SplineNode> spline = create_cubic_spline_for_dev_pairs( dps );
+  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( dps );
   if( spline.empty() )
     return answer;
   
   vector<float> &ex = *answer;
   
   
-  const auto lessThanUB = []( const float energy, const SplineNode &node ) -> bool {
+  const auto lessThanUB = []( const float energy, const CubicSplineNode &node ) -> bool {
     return energy < node.x;
   };
   
@@ -430,22 +139,18 @@ shared_ptr<const vector<float>> apply_deviation_pair( const vector<float> &binni
     while( (spline_pos != end(spline)) && (ex[i] > spline_pos->x) )
       ++spline_pos;
     
-    if( spline_pos == end(spline) )
-    {
-      --spline_pos;
-      for( ; i < ex.size(); ++i )
-        ex[i] += spline_pos->a;
-      return answer;
-    }
-    
     if( spline_pos == begin(spline) )
-      continue;
-    
-    const SplineNode &node = *(spline_pos-1);
-    const double dx = ex[i] - node.x;
-    
-    ex[i] += static_cast<float>( node.a + node.b*dx + node.c*dx*dx + node.d*dx*dx*dx );
-    
+    {
+      ex[i] += static_cast<float>( spline_pos->y );
+    }else if( spline_pos == end(spline) )
+    {
+      ex[i] += static_cast<float>( (spline_pos-1)->y );
+    }else
+    {
+      const CubicSplineNode &node = *(spline_pos-1);
+      const double h = ex[i] - node.x;
+      ex[i] += static_cast<float>( ((node.a*h + node.b)*h + node.c)*h + node.y );
+    }
     //ToDo: Check for infs and NaNs here
   }//for( size_t i = 0; i < ex.size(); ++i )
   
@@ -458,7 +163,7 @@ float deviation_pair_correction( const float energy, const std::vector<std::pair
   if( dps.empty() )
     return 0.0f;
   
-  const vector<SplineNode> spline = create_cubic_spline_for_dev_pairs( dps );
+  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( dps );
   
   return eval_cubic_spline( energy, spline );
 }//float deviation_pair_correction(...)
@@ -470,8 +175,8 @@ float correction_due_to_dev_pairs( const float true_energy,
   if( dev_pairs.empty() )
     return 0.0f;
   
-  const vector<SplineNode> spline = create_cubic_spline_for_dev_pairs( dev_pairs );
-  const vector<SplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( dev_pairs );
+  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( dev_pairs );
+  const vector<CubicSplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( dev_pairs );
   
   const float initial_answer = eval_cubic_spline( true_energy, inv_spline );
   
@@ -496,7 +201,7 @@ float correction_due_to_dev_pairs( const float true_energy,
   float check = initial_check;
   float diff = answer - check;
   
-  //This loop seems to converge within 3 iterations.
+  //This loop seems to converge within 3 iterations, pretty much always.
   while( fabs(diff) > tolerance )
   {
     answer -= diff;
