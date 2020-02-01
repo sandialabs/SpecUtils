@@ -124,6 +124,7 @@ enum ParserType
   kTka,
   kMultiAct, //only partially supported
   kPhd,
+  kLzs,
   kAutoParser
 };//enum ParserType
 
@@ -1338,6 +1339,7 @@ public:
   bool load_tka_file( const std::string &filename );
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
+  bool load_lzs_file( const std::string &filename );
   
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1420,6 +1422,11 @@ public:
    As of 20191005 only tested on a limited number of files.
    */
   bool load_from_phd( std::istream &input );
+  
+  /** Load from lzs file format.
+   As of 20200131 only tested on a few files.
+   */
+  bool load_from_lzs( std::istream &input );
   
   //bool load_from_iaea(...): an ASCII format standardized by the IAEA; not all
   //  portions of the standard have been implemented, since they are either

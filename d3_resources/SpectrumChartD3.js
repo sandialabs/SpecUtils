@@ -3677,7 +3677,8 @@ SpectrumChartD3.prototype.setGridX = function( onstate ) {
         .attr("transform", "translate(0," + this.size.height + ")")
         .call( this.xGrid );
   } else {
-    this.xGridBody.remove();
+    if( this.xGridBody )
+      this.xGridBody.remove();
     this.xGrid = null;
     this.xGridBody = null;
   }

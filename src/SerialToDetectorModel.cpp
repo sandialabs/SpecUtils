@@ -394,7 +394,6 @@ namespace SerialToDetectorModel
     timeinfo = localtime( &rawtime );
     strftime( datebuffer, sizeof(datebuffer), "%Y%m%d %H:%M:%S", timeinfo);
     
-    strm << "#Serialized " << datebuffer << " using binary compiled on " << COMPILE_DATE_AS_INT << eol_char;
     strm << "SerialToDetectorModelVersion,"
          << SerialToDetectorModel_CURRENT_MAJOR_VERSION
          << "," << SerialToDetectorModel_CURRENT_MINOR_VERSION << eol_char;
