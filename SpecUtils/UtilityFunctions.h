@@ -357,9 +357,8 @@ namespace UtilityFunctions
     system.
    
    ex. append_path("path/to","file.txt") return "path/to/file.txt" on UNIX
-   or "path/to\file.txt" on Windows. 
-   May, or may not convert seperators in the rest of the path to the OS 
-   preffered (depending if SpecUtils_NO_BOOST_LIB is defined).
+   or "path\to\file.txt" on Windows.
+   On Windows will convert all '/' characters to '\'.
    */
   std::string append_path( const std::string &base, const std::string &name );
   
@@ -446,7 +445,9 @@ namespace UtilityFunctions
 #if( SpecUtils_NO_BOOST_LIB || BOOST_VERSION >= 104500 )
   /** Converts path to a canonical absolute path (no dot, dot-dot or symbolic
       links). If the path is not an absolute path, it is first made absolute.
-      The path must exist.
+   
+      The file/path pointed to must exist.
+   
       If the current working directory is not specified, then the directory
       returned by cwd() will be used, if the path is not already absolute.
    
