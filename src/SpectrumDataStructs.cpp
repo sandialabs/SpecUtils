@@ -25098,10 +25098,10 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     rapidxml::xml_document<char> doc;
     doc.parse<rapidxml::parse_non_destructive|rapidxml::allow_sloppy_parse>( &(filedata[0]) );
     
-    //<nanoMCA>
-    //  <tag>nanoMCA with Ortec HPGE-TRP, Model GEM-10195-PLUS, SN 24-P-12RA, 3000V-PLUS</tag>
+    //<nanoMCA>  //But some files dont have this tag, but start with <spectrum>
     //  <serialnumber>28001</serialnumber>
     //  <spectrum>
+    //    <tag>nanoMCA with Ortec HPGE-TRP, Model GEM-10195-PLUS, SN 24-P-12RA, 3000V-PLUS</tag>
     //    <hardsize>16384</hardsize>
     //    <softsize>16384</hardsize>
     //    <data>...this is spectrum...</data>
@@ -25129,14 +25129,10 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     //</nanoMCA>
     
     const rapidxml::xml_node<char> *nano_mca_node = XML_FIRST_NODE((&doc),"nanoMCA");
-    if( !nano_mca_node )
+    if( !nano_mca_node )  //Account for files that start with <spectrum> tag instead of nesting it under <nanoMCA>
       nano_mca_node = &doc;
-    
-    //if( !nano_mca_node )
-    //  throw runtime_error( "Failed to get nanoMCA node, even though it really should be there" );
 
     const rapidxml::xml_node<char> *spectrum_node = XML_FIRST_NODE(nano_mca_node,"spectrum");
-    
     if( !spectrum_node )
       throw runtime_error( "Failed to get spectrum node" );
     
@@ -25152,6 +25148,7 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
       throw runtime_error( "Failed to parse spectrum to floats" );
     
     auto meas = std::make_shared<Measurement>();
+    meas->contained_neutron_ = false;
     meas->gamma_counts_ = spec;
     meas->gamma_count_sum_ = std::accumulate(begin(*spec), end(*spec), 0.0 );
     
@@ -25252,13 +25249,11 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     measurements_.push_back( meas );
   }catch( std::exception & )
   {
-    //cerr  << SRC_LOCATION << "caught: " << e.what() << endl;
     reset();
     input.clear();
     input.seekg( start_pos, ios::beg );
     return false;
-  }
-  
+  }//try / catch
   
   cleanup_after_load();
   
