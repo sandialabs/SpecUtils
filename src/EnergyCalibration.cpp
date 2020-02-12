@@ -221,7 +221,7 @@ float correction_due_to_dev_pairs( const float true_energy,
           << " (current diff=" << diff << "), so returning with "
           << "(" << (initial_is_closer ? "initial" : "current") << ") diff of " << final_answer << endl;
       cout << msg.str() << endl;
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+      log_developer_error( __func__, msg.str().c_str() );
 #endif
 
       return final_answer;
@@ -436,7 +436,7 @@ bool calibration_is_valid( const EnergyCalType type,
               msg << (j ? ", {" : "{") << devpairs[j].first << ", " << devpairs[j].second << "}";
             msg << "}";
             
-            log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+            log_developer_error( __func__, msg.str().c_str() );
           }
         }//for( size_t i = 1; i < binning->size(); ++i )
       }//if( valid )
@@ -589,9 +589,9 @@ float find_fullrangefraction_channel( const double energy,
       << coeffs[0] + coeffs[1]*root_2 + coeffs[2]*root_2*root_2
       << ". I will attempt to recover, but please check results of operation.";
       //    passMessage( msg.str(), "", 3 );
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+      log_developer_error( __func__, msg.str().c_str() );
 #endif
-      cerr << BOOST_CURRENT_FUNCTION << "\n\tWarning, couldnt algebraicly find bin number\n"
+      cerr << __func__ << "\n\tWarning, couldnt algebraicly find bin number\n"
       << "\tcoeffs[0]=" << coeffs[0] << ", coeffs[1]=" << coeffs[1]
       << ", coeffs[2]=" << coeffs[2] << ", energy=" << energy << endl;
     }//if( sqrtarg >= 0.0f )
@@ -838,7 +838,7 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
     snprintf( buffer, sizeof(buffer),
              "rebin_by_lower_edge gives %1.8E vs pre rebin of %1.8E, an unacceptable error.\n",
              newsum, oldsum );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }
 #endif
 }//void rebin_by_lower_edge(...)

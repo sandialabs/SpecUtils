@@ -412,7 +412,7 @@ namespace
 #if(PERFORM_DEVELOPER_CHECKS)
     if( offset+len > header.size() )
     {
-      log_developer_error( BOOST_CURRENT_FUNCTION, "Logic error in parse_pcf_field" );
+      log_developer_error( __func__, "Logic error in parse_pcf_field" );
       throw runtime_error( "Logic error in parse_pcf_field" );
     }
 #endif
@@ -982,7 +982,7 @@ struct MeasurementCalibInfo
        && !coefficients.empty() )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
-      log_developer_error( BOOST_CURRENT_FUNCTION, "Found case where equation_type!=Invalid, but there are coefficients - shouldnt happen!" );
+      log_developer_error( __func__, "Found case where equation_type!=Invalid, but there are coefficients - shouldnt happen!" );
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
       coefficients.clear();
       binning.reset();
@@ -1204,7 +1204,7 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
               "Gamma Integral using new method varied from old methodology;"
               " %f (old) vs %f (new); lowBin=%i, highBin=%i" ,
               check_sum, gamma_sum, lowBin, highBin );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }//if( check_sum != gamma_sum )
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 
@@ -2353,7 +2353,7 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
     snprintf( buffer, sizeof(buffer),
              "Gamma sum changed from %f to %f while combining channels.",
               pre_gammasum, post_gammasum );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }//if( gamma sum changed )
   
   if( fabs(post_lower_e - pre_lower_e) > 0.0001 )
@@ -2361,7 +2361,7 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
     char buffer[512];
     snprintf( buffer, sizeof(buffer), "Lower energy of spectrum changed from "
               "%f to %f while combining channels.", pre_lower_e, post_lower_e );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }//if( lower energy changed )
   
   
@@ -2370,7 +2370,7 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
     char buffer[512];
     snprintf( buffer, sizeof(buffer), "Upper energy of spectrum changed from %f"
              " to %f while combining channels.", pre_upper_e, post_upper_e );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }//if( lower energy changed )
   
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
@@ -2561,7 +2561,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
                "Cropping channel counts resulted gamma sum disagreement, "
                 "expected new sum to equal old sum, but instead got %f (new) vs"
                 " %f (old).", newsum, gamma_count_sum_ );
-      log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+      log_developer_error( __func__, buffer );
     }
   }//if( keep_under_over_flow )
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
@@ -2654,7 +2654,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
                   " energies by old channel %i which had energy %f but now has"
                   " energy %f (new channel number %i)",
                   int(i), oldval, newval, int(i-keep_first_channel) );
-        log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+        log_developer_error( __func__, buffer );
         break;
       }//if( fabs(newval-oldval) > 0.001f )
     }//for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
@@ -2980,7 +2980,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
                     "Reducing channel data from %i to %i channels on advice of"
                     " <ray:SpectrumSize>; note that this is throwing away %i"
                     " channels", int(origlen), int(newlen), int(origlen-newlen) );
-          log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+          log_developer_error( __func__, buffer );
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
         }
       }//if( UtilityFunctions::split_to_ints( str, strsize, sizes ) )
@@ -3626,6 +3626,23 @@ void MeasurementInfo::set_contained_neutrons( const bool contained,
   modified_ = modifiedSinceDecode_ = true;
 }//void set_containtained_neutrons(...)
 
+
+void MeasurementInfo::set_detectors_analysis( const DetectorAnalysis &ana )
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  const bool newIsEmpty = ana.is_empty();
+  
+  if( newIsEmpty && !detectors_analysis_ )
+    return;
+  
+  if( newIsEmpty )
+    detectors_analysis_.reset();
+  else
+    detectors_analysis_ = std::make_shared<DetectorAnalysis>( ana );
+  
+  modified_ = modifiedSinceDecode_ = true;
+}//void set_detectors_analysis( const DetectorAnalysis &ana )
 
 void MeasurementInfo::change_detector_name( const string &origname,
                                             const string &newname )
@@ -5994,7 +6011,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         snprintf( buffer, sizeof(buffer),
                  "Spectrum contained %f neutrons, but neutron_counts_sum_ was not set. File=\"%s\"",
                  meas->neutron_counts_sum_, filename_.c_str() );
-        log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+        log_developer_error( __func__, buffer );
       }
 #endif
       
@@ -6520,7 +6537,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           snprintf( buffer, sizeof(buffer),
                    "Found a neutron detector name not in the list of all detector names: %s\n",
                    ndet.c_str() );
-          log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+          log_developer_error( __func__, buffer );
         }
       }
     }
@@ -6542,7 +6559,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       snprintf( buffer, sizeof(buffer),
                "Before rebinning and gamma count sum=%10f and afterwards its %10f\n",
                prev_gamma_count_sum_, gamma_count_sum_ );
-      log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+      log_developer_error( __func__, buffer );
     }
     
     if( fabs(neutron_counts_sum_ - prev_neutron_counts_sum_) > 0.01 )
@@ -6551,7 +6568,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       snprintf( buffer, sizeof(buffer),
                "Before rebinning and neutron count sum=%10f and afterwards its %10f\n",
                prev_neutron_counts_sum_, neutron_counts_sum_ );
-      log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+      log_developer_error( __func__, buffer );
     }
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
   }catch( std::exception &e )
@@ -6583,7 +6600,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
     {
       bogusSampleNumbers = true;
 #if( PERFORM_DEVELOPER_CHECKS )
-      log_developer_error( BOOST_CURRENT_FUNCTION, "Found a file where neutron"
+      log_developer_error( __func__, "Found a file where neutron"
                           " and gammas are sperate measurements, but sample numbers not assigned." );
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
       break;
@@ -6748,7 +6765,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
         devmsg << (i ? ", ": "") << "'" << neutron_only_dets[i] << "'";
       devmsg << "}";
       
-      log_developer_error( BOOST_CURRENT_FUNCTION, devmsg.str().c_str() );
+      log_developer_error( __func__, devmsg.str().c_str() );
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
     }//if( uniquelyAssigned )
   }//if( figure out how to assign neutron to gamma detectors ) / else
@@ -6780,7 +6797,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
     {
 #if( PERFORM_DEVELOPER_CHECKS )
       if( !gammas_we_added_neutron_to.count(measindex) )
-        log_developer_error( BOOST_CURRENT_FUNCTION, "Found a nuetron detector Measurement that had gamma data - shouldnt have happened here." );
+        log_developer_error( __func__, "Found a nuetron detector Measurement that had gamma data - shouldnt have happened here." );
 #endif  //PERFORM_DEVELOPER_CHECKS
       new_all_det_names.insert( meas->detector_name_ );
       new_neut_det_names.insert( meas->detector_name_ );
@@ -6793,7 +6810,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
     if( namepos == end(neutron_to_gamma_names) )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
-      log_developer_error( BOOST_CURRENT_FUNCTION, "Found a nuetron detector Measurement I couldnt map to a gamma meas - should investigate." );
+      log_developer_error( __func__, "Found a nuetron detector Measurement I couldnt map to a gamma meas - should investigate." );
 #endif  //PERFORM_DEVELOPER_CHECKS
       new_all_det_names.insert( meas->detector_name_ );
       new_neut_det_names.insert( meas->detector_name_ );
@@ -6863,7 +6880,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
                  << ", StartTime=" << UtilityFunctions::to_iso_string(meas->start_time_)
                  << ") I couldnt find a gamma w/ DetName='"
                  << gamma_name << "' and SampleNumber=" << meas->sample_number_ << ".";
-          log_developer_error( BOOST_CURRENT_FUNCTION, errmsg.str().c_str() );
+          log_developer_error( __func__, errmsg.str().c_str() );
         }
 #endif  //PERFORM_DEVELOPER_CHECKS
         
@@ -6896,7 +6913,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
           }else
           {
 #if( PERFORM_DEVELOPER_CHECKS )
-            log_developer_error( BOOST_CURRENT_FUNCTION,
+            log_developer_error( __func__,
                                 ("Failed to be able to find detector number for DetName=" + gamma_name).c_str() );
 #endif
           }
@@ -6982,7 +6999,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
       }else
       {
 #if( PERFORM_DEVELOPER_CHECKS )
-        log_developer_error( BOOST_CURRENT_FUNCTION, "Unexpected Detector name found!" );
+        log_developer_error( __func__, "Unexpected Detector name found!" );
 #endif
         //hope for the best....
       }
@@ -7093,7 +7110,7 @@ void MeasurementInfo::set_detector_type_from_other_info()
     }else
     {
 #if(PERFORM_DEVELOPER_CHECKS)
-      log_developer_error( BOOST_CURRENT_FUNCTION, ("Unrecognized RadEagle Model: " + model).c_str() );
+      log_developer_error( __func__, ("Unrecognized RadEagle Model: " + model).c_str() );
 #endif
     }
     
@@ -7181,7 +7198,7 @@ void MeasurementInfo::recalc_total_counts()
              "recalc_total_counts() found a discrepance for sum gammas depending"
             " on if a shallow or deep count was done: %9f for shallow, %9f for"
             " deep\n", gamma_count_sum_, deep_gamma_sum );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }
   
   if( fabs(deep_neutron_sum - neutron_counts_sum_) > 0.1 )
@@ -7191,7 +7208,7 @@ void MeasurementInfo::recalc_total_counts()
               "recalc_total_counts() found a discrepance for sum nuetrons depending"
               " on if a shallow or deep count was done: %9f for shallow, %9f for"
               " deep\n", neutron_counts_sum_, deep_neutron_sum );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }
   
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
@@ -10300,7 +10317,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
     {
       passMessage( msg, "load_binary_exploranium_file(...)", 1 );
 #if(PERFORM_DEVELOPER_CHECKS)
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg );
+      log_developer_error( __func__, msg );
 #endif
     }
   }//if( success )
@@ -10888,7 +10905,7 @@ struct SpectrumNodeDecodeWorker
       {
         char buffer[256];
         snprintf( buffer, sizeof(buffer), "Caught: %s", e.what() );
-        log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+        log_developer_error( __func__, buffer );
       }//if( !UtilityFunctions::icontains( e.what(), "didnt find <ChannelData>" ) )
     }//try / catch
 #else
@@ -11791,7 +11808,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
       
 //#if(PERFORM_DEVELOPER_CHECKS)
 //      if( !addedCountDose )
-//        log_developer_error( BOOST_CURRENT_FUNCTION, "Failed to add count dose data!" );
+//        log_developer_error( __func__, "Failed to add count dose data!" );
 //#endif
     }//for( size_t i = 0; i < countdoseNodes.size(); ++i )
     
@@ -12232,7 +12249,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
           }else
           {
 #if(PERFORM_DEVELOPER_CHECKS)
-            log_developer_error( BOOST_CURRENT_FUNCTION, "Failed to split second energy calibration coefficents into floats" );
+            log_developer_error( __func__, "Failed to split second energy calibration coefficents into floats" );
 #endif
           }//if( second_coefs contained arrray of floats )
         }//for( multiple_cals )
@@ -15093,7 +15110,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
                   "Found a case where RadMeasurement id ('%s') gave a different"
                   " sample number than Spectrum id ('%s').",
                   meas_id_att_str.c_str(), samp_det_str.c_str() );
-        log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+        log_developer_error( __func__, buffer );
       }
 #endif
     
@@ -15179,7 +15196,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         if( !calib_att || !calib_att->value_size() )
         {
 #if(PERFORM_DEVELOPER_CHECKS)
-          log_developer_error( BOOST_CURRENT_FUNCTION, "Found a gamma spectrum without calibration information" );
+          log_developer_error( __func__, "Found a gamma spectrum without calibration information" );
 #endif
           //continue;
         }//if( !calib_att || !calib_att->value_size() )
@@ -15342,7 +15359,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           for( auto el = meas_node->first_node(); el; el = el->next_sibling() )
             msg << xml_name_str(el) << ", ";
           msg << "}. Skipping!!!";
-          log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+          log_developer_error( __func__, msg.str().c_str() );
           cerr << endl;
         }//if( det_iter == id_to_dettype_ptr->end() )
 #endif
@@ -15374,7 +15391,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           char buffer[256];
           snprintf( buffer, sizeof(buffer),
                    "Unrecognized 'id' attribute of Spectrum node: '%s'", sample_det_att.c_str() );
-          log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+          log_developer_error( __func__, buffer );
 #endif
         }
       }//if( sample_det_att.size() )
@@ -16721,7 +16738,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
                    static_cast<int>(binning_ptr->size()),
                    static_cast<int>(i),
                    static_cast<int>(thisbinning->size() ) );
-          log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+          log_developer_error( __func__, buffer );
         }
         
         index = i;
@@ -17404,6 +17421,17 @@ void DetectorAnalysis::reset()
 }//void DetectorAnalysis::reset()
 
 
+bool DetectorAnalysis::is_empty() const
+{
+  return (remarks_.empty()
+   && algorithm_name_.empty()
+   && algorithm_component_versions_.empty()
+   && algorithm_creator_.empty()
+   && algorithm_description_.empty()
+   && algorithm_result_description_.empty()
+   && results_.empty());
+}
+
 
 void MeasurementInfo::write_to_file( const std::string filename,
                                      const SaveSpectrumAsType format ) const
@@ -17829,7 +17857,7 @@ size_t MeasurementInfo::write_lower_channel_energies_to_pcf( std::ostream &ostr,
              " orig_pos=%i at start of spectrum final_pos=%i at end, with a diff of %i."
              " All those should be multiples of 256",
              int(orig_pos), int(final_pos), int(nwritten) );
-    log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+    log_developer_error( __func__, buffer );
   }
 #endif
   
@@ -18014,7 +18042,7 @@ void MeasurementInfo::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
       //  couldnt find a spot, but at this point, oh well.
 #if(PERFORM_DEVELOPER_CHECKS)
       if( !found_spot )
-        log_developer_error( BOOST_CURRENT_FUNCTION, ("MeasurementInfo::write_deviation_pairs_to_pcf: "
+        log_developer_error( __func__, ("MeasurementInfo::write_deviation_pairs_to_pcf: "
                     "Couldnt find spot to write deviation pairs for detector " + name + "!!!").c_str() );
 #endif
     }//for( const auto &name : detectors_not_written )
@@ -18182,7 +18210,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
         char buffer[256];
         snprintf( buffer, sizeof(buffer),
                  "When writing PCF file, at file position %i at start of spectrum %i when should be at a multiple of 256", int(file_pos), int(i) );
-        log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+        log_developer_error( __func__, buffer );
       }
 #endif
       
@@ -19075,7 +19103,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
           char buffer[256];
           snprintf( buffer, sizeof(buffer),
                    "PCF file had non empty coordinates string '%s', but didnt return valid coordinates", meas_coords.c_str() );
-          log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+          log_developer_error( __func__, buffer );
 #endif
         }
       }//if( meas_coords_components.size() > 2 )
@@ -19382,7 +19410,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
         if( first_sample >= measurements_.size() )  //SHouldnt ever happen
         {
 #if( PERFORM_DEVELOPER_CHECKS )
-          log_developer_error( BOOST_CURRENT_FUNCTION, "Logic error: someSamplesHaveNumbers is true, but could find meas now!" );
+          log_developer_error( __func__, "Logic error: someSamplesHaveNumbers is true, but could find meas now!" );
 #endif //PERFORM_DEVELOPER_CHECKS
           throw runtime_error( "someSamplesHaveNumbers was a lie!" );
         }//if( first_sample >= measurements_.size() )
@@ -19522,7 +19550,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       
       if( unused_dev_pairs )
       {
-        log_developer_error( BOOST_CURRENT_FUNCTION, "Read in deviation pairs that did not get assigned to a detector" );
+        log_developer_error( __func__, "Read in deviation pairs that did not get assigned to a detector" );
       }//if( unused_dev_pairs )
 #endif
       
@@ -19625,7 +19653,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
       char buffer[256];
       snprintf( buffer, sizeof(buffer),
                 "Found a first channel offset of %i", int(firstchannel) );
-      log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+      log_developer_error( __func__, buffer );
       if( firstchannel != 1 )
         cerr << "firstchannel==" << firstchannel << endl;  //I've never ran into this, at least in the corpus of files I have
     }
@@ -19694,7 +19722,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
       {
         stringstream msg;
         msg << "Found a chntype with unexpected value: " << chntype;
-        log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+        log_developer_error( __func__, msg.str().c_str() );
       }
 #endif
     }//if( bytes_left > 1 )
@@ -20059,8 +20087,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
       throw runtime_error( "" ); //"Invalid second line"
     
     //If we got here, this is probably a valid file
-    std::shared_ptr< vector<float> > counts
-                                       = std::make_shared< vector<float> >();
+    auto counts = std::make_shared< vector<float> >();
     
     if( fline.size() >= 127 )
     {
@@ -20128,7 +20155,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
   }catch( std::exception &e )
   {
     istr.seekg( orig_pos, ios::beg );
-    throw e;
+    throw;
   }
 }//void set_info_from_avid_mobile_txt( std::istream& istr )
 
@@ -20776,7 +20803,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                       line.c_str() );
             cerr << buffer << endl;
 #if(PERFORM_DEVELOPER_CHECKS)
-            log_developer_error( BOOST_CURRENT_FUNCTION, buffer );
+            log_developer_error( __func__, buffer );
 #endif
             continue;
           }//if( !ok )
@@ -21820,7 +21847,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
       meas->start_time_ = time_from_string( timestampStr.c_str() );
 #if(PERFORM_DEVELOPER_CHECKS)
       if( meas->start_time_.is_special() )
-        log_developer_error( BOOST_CURRENT_FUNCTION, ("Failed to extract measurment start time from: '" + header  + "' timestampStr='" + timestampStr + "'").c_str() );
+        log_developer_error( __func__, ("Failed to extract measurment start time from: '" + header  + "' timestampStr='" + timestampStr + "'").c_str() );
 #endif
       
       pos = header.find( "Live time (s)" );
@@ -21957,7 +21984,7 @@ bool MeasurementInfo::load_from_txt_or_csv( std::istream &istr )
   {
     try
     {
-      MeasurementShrdPtr m = std::make_shared<Measurement>();
+      auto m = std::make_shared<Measurement>();
       m->set_info_from_txt_or_csv( istr );
       
       measurements_.push_back( m );
@@ -23759,7 +23786,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
     
 #if(PERFORM_DEVELOPER_CHECKS)
     if( header_names_check.size() != header_names_check.size() )
-      log_developer_error( BOOST_CURRENT_FUNCTION, ("There was a duplicate detector name in SRPM CSV file: '" + line + "' - who knows what will happen").c_str() );
+      log_developer_error( __func__, ("There was a duplicate detector name in SRPM CSV file: '" + line + "' - who knows what will happen").c_str() );
 #endif
     
     
@@ -23797,7 +23824,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       if( !UtilityFunctions::split_to_floats(line, line_data) )
       {
 #if(PERFORM_DEVELOPER_CHECKS)
-        log_developer_error( BOOST_CURRENT_FUNCTION, ("Failed in parsing line of SRPM file: '" + line + "'").c_str() );
+        log_developer_error( __func__, ("Failed in parsing line of SRPM file: '" + line + "'").c_str() );
 #endif
         continue;
       }
@@ -23833,13 +23860,13 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
         }else
         {
 #if(PERFORM_DEVELOPER_CHECKS)
-          log_developer_error( BOOST_CURRENT_FUNCTION, ("Unrecognized neutron type in SRPM file: '" + key + "'").c_str() );
+          log_developer_error( __func__, ("Unrecognized neutron type in SRPM file: '" + key + "'").c_str() );
 #endif
         }
       }else
       {
 #if(PERFORM_DEVELOPER_CHECKS)
-        log_developer_error( BOOST_CURRENT_FUNCTION, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
+        log_developer_error( __func__, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
 #endif
       }//if( key is specific value ) / else
     }//while( UtilityFunctions::safe_get_line(input, line) )
@@ -24662,30 +24689,35 @@ bool MeasurementInfo::load_from_tka( std::istream &input )
       string line;
       if( !UtilityFunctions::safe_get_line( input, line, max_len ) )
         return -1;
+      
       if( line.length() > 32 )
         throw runtime_error( "Invalid line length" );
+      
       UtilityFunctions::trim(line);
       if( line.empty() )
         return 0;
+      
       if( line.find_first_not_of("+-.0123456789") != string::npos )
         throw runtime_error( "Invalid char" );
+      
       if( !(stringstream(line) >> val) )
         throw runtime_error( "Failed to convert '" + line + "' into number" );
+      
       return 1;
-    };
+    };//get_next_number lambda
     
     int rval;
     float realtime, livetime, dummy;
     
     while( (rval = get_next_number(livetime)) != 1 )
     {
-      if( rval == -1 )
+      if( rval <= -1 )
         throw runtime_error( "unexpected end of file" );
     }
     
     while( (rval = get_next_number(realtime)) != 1 )
     {
-      if( rval == -1 )
+      if( rval <= -1 )
         throw runtime_error( "unexpected end of file" );
     }
     
@@ -24694,7 +24726,7 @@ bool MeasurementInfo::load_from_tka( std::istream &input )
     
     double countssum = 0.0;
     auto channel_counts = make_shared<vector<float>>();
-    while( (rval = get_next_number(dummy)) != -1 )
+    while( (rval = get_next_number(dummy)) >= 0 )
     {
       if( rval == 1 )
       {
@@ -24777,7 +24809,7 @@ bool MeasurementInfo::load_from_multiact( std::istream &input )
     if( realtime < livetime || livetime > 3600*24*5 )
     {
 #if(PERFORM_DEVELOPER_CHECKS)
-      log_developer_error( BOOST_CURRENT_FUNCTION, ("Got real time (" + std::to_string(realtime)
+      log_developer_error( __func__, ("Got real time (" + std::to_string(realtime)
                                                     + ") less than (" + std::to_string(livetime) + ") livetime").c_str() );
 #endif
       throw runtime_error( "Invalid live/real time values" );

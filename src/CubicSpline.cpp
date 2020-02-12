@@ -22,6 +22,7 @@
 #include <cmath>
 #include <array>
 #include <vector>
+#include <cassert>
 #include <algorithm>
 
 #include "SpecUtils/CubicSpline.h"

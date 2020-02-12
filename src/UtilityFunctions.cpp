@@ -232,7 +232,7 @@ bool istarts_with( const std::string &line, const char *label )
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), label, line.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -258,7 +258,7 @@ bool istarts_with( const std::string &line, const std::string &label )
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), label.c_str(), line.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -285,7 +285,7 @@ bool starts_with( const std::string &line, const char *label )
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), label, line.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -314,7 +314,7 @@ bool iends_with( const std::string &line, const std::string &label )
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), label.c_str(), line.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -357,7 +357,7 @@ bool icontains( const char *line, const size_t length,
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), cpplabel.c_str(), cppstr.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -390,7 +390,7 @@ bool contains( const std::string &line, const char *label )
     snprintf( errormsg, sizeof(errormsg),
               "Got %i when should have got %i for label '%s' and string '%s'",
               int(answer), int(correctAnswer), label, line.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
     
@@ -410,7 +410,7 @@ bool iequals( const char *str, const char *test )
     snprintf( errormsg, sizeof(errormsg),
               "Got %i when should have got %i for label '%s' and string '%s'",
               int(answer), int(correctAnswer), test, str );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
     
@@ -430,7 +430,7 @@ bool iequals( const std::string &str, const char *test )
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), test, str.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -450,7 +450,7 @@ bool iequals( const std::string &str, const std::string &test )
     snprintf( errormsg, sizeof(errormsg),
              "Got %i when should have got %i for label '%s' and string '%s'",
              int(answer), int(correctAnswer), test.c_str(), str.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }//if( answer != correctAnswer )
 #endif
   
@@ -534,7 +534,7 @@ void trim( std::string &s )
     snprintf( errormsg, sizeof(errormsg),
              "Trimmed strings not equal expect: '%s' (len %i), got: '%s' (len %i, from boost)",
              s.c_str(), int(s.size()), copystr.c_str(), int(copystr.size()) );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
   }
 #endif
 }//trim(...)
@@ -614,7 +614,7 @@ std::string trim_copy( std::string str )
       }
       errormsg << "]";
       
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg.str().c_str() );
+      log_developer_error( __func__, errormsg.str().c_str() );
     }//if( resutls != coorectResults )
 #endif
   }//void split(...)
@@ -692,7 +692,7 @@ std::string trim_copy( std::string str )
       }
       errormsg << "]";
       
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg.str().c_str() );
+      log_developer_error( __func__, errormsg.str().c_str() );
     }//if( resutls != coorectResults )
 #endif
   }//void split_no_delim_compress(...)
@@ -715,7 +715,7 @@ std::string trim_copy( std::string str )
       snprintf( errormsg, sizeof(errormsg),
                "Failed to lowercase string.  Expected: '%s', got: '%s'",
                strcopy.c_str(), input.c_str() );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }
 #endif
   }//to_lower(...)
@@ -743,7 +743,7 @@ std::string trim_copy( std::string str )
       snprintf( errormsg, sizeof(errormsg),
                "Failed to uppercase string.  Expected: '%s', got: '%s'",
                strcopy.c_str(), input.c_str() );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }
 #endif
   }//void to_upper( string &input )
@@ -813,7 +813,7 @@ std::string trim_copy( std::string str )
         msg << "\\x" << hex << int(input[i]);
       msg << "' (length " << input.size() << ").";
       
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+      log_developer_error( __func__, msg.str().c_str() );
     }
 #endif
   }//void ireplace_all(...)
@@ -907,7 +907,7 @@ std::string trim_copy( std::string str )
         msg << "\\x" << hex << int(result[i]);
       msg << "' (length " << result.size() << ").";
       
-      log_developer_error( BOOST_CURRENT_FUNCTION, msg.str().c_str() );
+      log_developer_error( __func__, msg.str().c_str() );
     }
 #endif
     
@@ -1038,7 +1038,7 @@ std::string trim_copy( std::string str )
   
   std::wstring convert_from_utf8_to_utf16( const std::string &input )
   {
-#ifdef _WIN32
+#if( defined(_WIN32) && defined(_MSC_VER) )
     std::wstring answer;
     int requiredSize = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, 0, 0);
     if(requiredSize > 0)
@@ -1115,7 +1115,7 @@ std::string trim_copy( std::string str )
       snprintf( errormsg, sizeof(errormsg),
                "Vax format of '%s' is '%s' which is not the expected length of 23, but %i",
                 to_extended_iso_string(t).c_str(), buffer, static_cast<int>(strlen(buffer)) );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }
 #endif
     
@@ -1157,7 +1157,7 @@ std::string trim_copy( std::string str )
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
                "Expected there to be a '.' in iso date time: '%s'", buffer );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }
 #endif
 
@@ -1194,7 +1194,7 @@ std::string trim_copy( std::string str )
                "Failed to format date correctly for %sextended iso format. Expected: '%s', got: '%s'",
                (extended ? "" : "non-"),
                correctAnswer.c_str(), buffer );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }
 #endif
     
@@ -1293,7 +1293,8 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
   //  takes 302188us to run, vs the c++11 version taking 4113835us.
   //  ~10 times slower, so preffer native strptime where available.
 //#if( defined(_MSC_VER) && _MSC_VER < 1800 )
-#if( defined(_MSC_VER) )  //Doesnt look like MSVS 2017 has strptime.
+//#if( defined(_MSC_VER) )  //Doesnt look like MSVS 2017 has strptime.
+#if( defined(WIN32) )
   #define HAS_NATIVE_STRPTIME 0
 #else
   #define HAS_NATIVE_STRPTIME 1
@@ -1403,7 +1404,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
       }//if( signpos != string::npos )
     }//if( offsetcolon != string::npos )
     
-#if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#if( defined(_WIN32) && defined(_MSC_VER) )
 	//Right now everything is uppercase; for at least MSVC 2012, abreviated months, such as
 	//  "Jan", "Feb", etc must start with a capital, and be followed by lowercase
 	//  We could probably use some nice regex, but whatever for now
@@ -1524,7 +1525,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
       (only ? "" : (middle ? "%d/%m/%Y%n%H:%M:%S" : "%m/%d/%Y%n%H:%M:%S")),
       (middle ? "%m-%d-%Y%n%H:%M:%S" : "%d-%m-%Y%n%H:%M:%S"), //14-10-2014 16:15:52
       (only ? "" : (middle ? "%d-%m-%Y%n%H:%M:%S" : "%m-%d-%Y%n%H:%M:%S" )),
-#if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#if( defined(_WIN32) && defined(_MSC_VER) )
       (middle ? "%m %d %Y %H:%M:%S" : "%d %m %Y %H:%M:%S"), //14 10 2014 16:15:52
       (only ? "" : (middle ? "%d %m %Y %H:%M:%S" : "%m %d %Y %H:%M:%S")),
 #else
@@ -1612,7 +1613,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
     if( develop_orig_str.size() > 5 //5 is arbitrary
        && develop_orig_str.find("NA")==string::npos
        && std::count( begin(develop_orig_str), end(develop_orig_str), '0') < 8 )
-      log_developer_error( BOOST_CURRENT_FUNCTION, ("Failed to parse dat/time from: '" + develop_orig_str  + "' which was massaged into '" + time_string + "'").c_str() );
+      log_developer_error( __func__, ("Failed to parse dat/time from: '" + develop_orig_str  + "' which was massaged into '" + time_string + "'").c_str() );
 #endif
     return boost::posix_time::ptime();
   }//boost::posix_time::ptime time_from_string_strptime( std::string time_string )
@@ -1666,7 +1667,7 @@ std::string temp_dir()
       return convert_from_utf16_to_utf8( val );
     
 #if(PERFORM_DEVELOPER_CHECKS)
-    log_developer_error( BOOST_CURRENT_FUNCTION, "Couldnt find temp path on Windows" );
+    log_developer_error( __func__, "Couldnt find temp path on Windows" );
 #endif
     return "C:\\Temp";
   }
@@ -1809,29 +1810,41 @@ bool can_rw_in_directory( const std::string &name )
   
 std::string append_path( const std::string &base, const std::string &name )
 {
-#if( SpecUtils_NO_BOOST_LIB )
-#if( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
-  if( base.size() && (base[base.size()-1]=='\\'||base[base.size()-1]=='/') )
+  if( base.empty() || name.empty() )
     return base + name;
-  if( name.size() && (name[0]=='\\'||name[0]=='/') )
-    return base + name;
-  return base + '\\' + name;
+
+#if( defined(_WIN32) )
+  const char separator = '\\';
+  const bool base_ends = (base[base.size()-1]==separator || base[base.size()-1]=='/');
+  const bool name_starts = (name[0]==separator || name[0]=='/');
 #else
-  if( base.size() && base[base.size()-1]=='/' )
-    return base + name;
-  if( name.size() && name[0]=='/' )
-    return base + name;
-  return base + '/' + name;
+  const char separator = '/';
+  const bool base_ends = (base[base.size()-1]==separator);
+  const bool name_starts = (name[0]==separator);
 #endif
-#else
-  boost::filesystem::path p(base);
-  p /= name;
-#if( BOOST_VERSION < 106501 )
-  return p.make_preferred().string<string>();
-#else
-  return p.make_preferred().lexically_normal().string<string>();
+  
+  string answer;
+  if( !base_ends && !name_starts )
+    answer = base + separator + name;
+  else if( base_ends != name_starts ) //base end ins separator, or name starts with separator, but not both.
+    answer = base + name;
+  else //base ends in '/' and name starts with '/'
+    answer = base + name.substr(1);
+  
+#if( defined(_WIN32) )
+  UtilityFunctions::ireplace_all( answer, "/", "\\" );
 #endif
-#endif
+  
+  return answer;
+//#else
+//  boost::filesystem::path p(base);
+//  p /= name;
+//#if( BOOST_VERSION < 106501 )
+//  return p.make_preferred().string<string>();
+//#else
+//  return p.make_preferred().lexically_normal().string<string>();
+//#endif
+//#endif
 }//std::string append_path( const std::string &base, const std::string &name )
   
 
@@ -1839,7 +1852,23 @@ std::string filename( const std::string &path_and_name )
 {
 #if( SpecUtils_NO_BOOST_LIB )
 #ifdef _WIN32
-  #error "UtilityFunctions::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once"
+
+  /*
+   errno_t _wsplitpath_s(
+   const wchar_t * path,
+   wchar_t * drive,
+   size_t driveNumberOfElements,
+   wchar_t *dir,
+   size_t dirNumberOfElements,
+   wchar_t * fname,
+   size_t nameNumberOfElements,
+   wchar_t * ext,
+   size_t extNumberOfElements
+   );
+   */
+  
+
+#error "UtilityFunctions::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once - and need to switch to doing wide"
   char path_buffer[_MAX_PATH];
   char drive[_MAX_DRIVE];
   char dir[_MAX_DIR];
@@ -2100,6 +2129,27 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   //}
   wchar_t buffer[MAX_PATH];
   const std::wstring wpath = convert_from_utf8_to_utf16( path );
+  
+  /*
+   ToDo: Switch to using the bellow implementation to handle longer filepaths.
+         Bellow is untested.
+   const ULONG flags = PATHCCH_ALLOW_LONG_PATHS;
+   const size_t pathlen = std::max( std::max( MAX_PATH, 2048 ), 2*wpath )
+   wchar_t *buffer = (wchar_t *)malloc( pathlen*sizeof(wchar_t) );
+   if( !buffer )
+     return false;
+   
+  if( PathCchCanonicalizeEx( buffer, pathlen, wpath.c_str(), flags ) == S_OK )
+   {
+   path = convert_from_utf16_to_utf8( buffer );
+   free( buffer );
+   return true;
+   }else
+   {
+   path.reset();
+   }
+  */
+  
   if( PathCanonicalizeW( buffer, wpath.c_str() ) )
   {
     path = convert_from_utf16_to_utf8( buffer );
@@ -2317,7 +2367,7 @@ int check_if_symlink_is_to_parent( const string &filename )
     char buff[1024], errormsg[1024];
     strerror_r( errno, buff, sizeof(buff)-1 );
     snprintf( errormsg, sizeof(errormsg), "Warning: couldnt lstat '%s' error msg: %s", filename.c_str(), buff );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
 #endif
     
     return -1;
@@ -2331,7 +2381,7 @@ int check_if_symlink_is_to_parent( const string &filename )
 #if(PERFORM_DEVELOPER_CHECKS)
     char errormsg[1024];
     snprintf( errormsg, sizeof(errormsg), "Warning: For file '%s' the symlink contents changed during operations", filename.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
 #endif
     return -1;
   }//if( r > sb.st_size )
@@ -2359,7 +2409,7 @@ int check_if_symlink_is_to_parent( const string &filename )
 #if(PERFORM_DEVELOPER_CHECKS)
     char errormsg[1024];
     snprintf( errormsg, sizeof(errormsg), "Warning: Couldnt resolve real path for '%s' or %s ", linkfull.c_str(), filename.c_str() );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
 #endif
     return -1;
   }
@@ -2390,7 +2440,7 @@ vector<std::string> recursive_ls_internal_unix( const std::string &sourcedir,
     char buff[1024], errormsg[1024];
     strerror_r( errno, buff, sizeof(buff)-1 );
     snprintf( errormsg, sizeof(errormsg), "Failed to open directory '%s' with error: %s", sourcedir.c_str(), buff );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
 #endif
     return files;
   }//if( couldnt open directory )
@@ -2476,7 +2526,7 @@ vector<std::string> recursive_ls_internal_unix( const std::string &sourcedir,
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg), "Didnt get same files from UNIX vs Boost recursive search; nUnix=%i, nBoost=%i",
                 static_cast<int>(from_native.size()), static_cast<int>(from_boost.size())  );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }
   }
 #endif //#if(PERFORM_DEVELOPER_CHECKS)
@@ -2577,7 +2627,7 @@ vector<string> ls_directories_in_directory( const std::string &src )
     char buff[1024], errormsg[1024];
     strerror_r( errno, buff, sizeof(buff)-1 );
     snprintf( errormsg, sizeof(errormsg), "ls dir failed to open directory '%s' with error: %s", src.c_str(), buff );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
 #endif
     return answer;
   }//if( couldnt open directory )
@@ -2955,7 +3005,7 @@ bool split_to_floats( const char *input, const size_t length,
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg), "Parsing failed: '%s'",
                string(begin,end).c_str() );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }//if( *input && isdigit(*input) )
   }else
   {
@@ -2964,7 +3014,7 @@ bool split_to_floats( const char *input, const size_t length,
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg), "Trailing unpased string '%s'",
                string(begin,end).c_str() );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }//if( begin != end )
   
   
@@ -2986,7 +3036,7 @@ bool split_to_floats( const char *input, const size_t length,
                    "Out of tolerance diffence for floats %.9g using "
                    "boost::spirit vs %.9g using alternative split_to_float on float %i",
                     a, b, int(i) );
-          log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+          log_developer_error( __func__, errormsg );
         }
       }//for( size_t i = 0; i < results.size(); ++i )
     }else
@@ -2997,7 +3047,7 @@ bool split_to_floats( const char *input, const size_t length,
                 "using strtok for '%s'",
                  int(results.size()), int(checked_result.size()),
                string(input,end).c_str() );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
     }//if( checked_result.size() == results.size() ) / else
   } //if( ok ) / else
 #endif
@@ -3042,7 +3092,7 @@ bool split_to_floats( const char *input, vector<float> &contents,
   {
     char errormsg[1024];
     snprintf( errormsg, sizeof(errormsg), "Invalid delimiter: '%s'", delims );
-    log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+    log_developer_error( __func__, errormsg );
     return false;
   }
 #endif
@@ -3097,7 +3147,7 @@ bool split_to_floats( const char *input, vector<float> &contents,
       snprintf( errormsg, sizeof(errormsg),
                "Couldnt convert string '%s' to a float using strtod(), error %i",
                 strpart, errno );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
 #endif
       return false;
     }//if( errno )
@@ -3143,7 +3193,7 @@ bool split_to_floats( const char *input, vector<float> &contents,
         char errormsg[1024];
         snprintf( errormsg, sizeof(errormsg), "Parsing failed: '%s'",
                   string(start_pos, end).c_str() );
-        log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+        log_developer_error( __func__, errormsg );
       }
     }else
     {
@@ -3152,7 +3202,7 @@ bool split_to_floats( const char *input, vector<float> &contents,
         char errormsg[1024];
         snprintf( errormsg, sizeof(errormsg), "Trailing unpased string '%s'",
                  string(pos,end).c_str() );
-        log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+        log_developer_error( __func__, errormsg );
       }//if( begin != end )
       
       const float a = static_cast<float>( value );
@@ -3164,7 +3214,7 @@ bool split_to_floats( const char *input, vector<float> &contents,
                  "Out of tolerance diffence for floats %.9g using "
                  "boost::spirit vs %.9g using alternative split_to_float on float %i",
                  a, b, int(contents.size()) );
-        log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+        log_developer_error( __func__, errormsg );
       }
     }//if( !ok )
 #endif //PERFORM_DEVELOPER_CHECKS
@@ -3231,7 +3281,7 @@ bool split_to_floats( const char *input, vector<float> &contents,
       snprintf( errormsg, sizeof(errormsg),
                 "Couldnt convert string '%s' to a float using atof(), error %i",
                 value_str, errno );
-      log_developer_error( BOOST_CURRENT_FUNCTION, errormsg );
+      log_developer_error( __func__, errormsg );
 #endif
       return false;
     }//if( errno )

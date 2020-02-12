@@ -1121,6 +1121,15 @@ public:
   void set_contained_neutrons( const bool contained, const float counts,
                                const MeasurementConstShrdPtr measurment );
 
+  /** Sets the detectors analysis.
+   
+   If the passed in analysis is empty (e.g., default DetectorAnalysis) then the
+   internal analysis will be made null (e.g., answer returned by
+   #detectors_analysis will be nullptr); else a deep copy of the analysis passed
+   in is made.
+   */
+  void set_detectors_analysis( const DetectorAnalysis &ana );
+  
   /** Changes the detector, both as returned by #detector_names, and for each
       Measurement.
    
@@ -2181,6 +2190,7 @@ public:
   
   DetectorAnalysis();
   void reset();
+  bool is_empty() const;
   
 #if( PERFORM_DEVELOPER_CHECKS )
   static void equalEnough( const DetectorAnalysis &lhs,
