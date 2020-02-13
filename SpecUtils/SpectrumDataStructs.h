@@ -1300,6 +1300,13 @@ public:
   //  doesnt remove neutron detectors
   size_t keep_n_bin_spectra_only( size_t nbin );
 
+  /** Returns true if the spectrum file contained data from a neutron detector.
+   
+   Calls Measurement::contained_neutron() for each measurement until one turns
+   true, or all measurements have been queried, so may not be a cheap call.
+   */
+  bool contained_neutron() const;
+  
   
   //energy_cal_variants(): Some N42 files may have the same spectra, binned
   //  differently multiple times (ex. "Lin" and "Sqrt"), and when this is

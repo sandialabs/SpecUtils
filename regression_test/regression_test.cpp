@@ -1005,7 +1005,8 @@ void print_summary( const MeasurementInfo &info, std::ostream &out )
   for( size_t i = 0; i < ndet; ++i )
     out << (i ? ", " : "") << info.detector_names()[i];
   out << "\n\tWith total live time " << info.gamma_live_time() << ", real time "
-      << info.gamma_real_time() << ", and " << info.neutron_counts_sum()
+      << info.gamma_real_time() << ", and "
+      << (info.contained_neutron() ? std::to_string(info.neutron_counts_sum()) : string("N/A"))
       << " neutrons\n";
   
   if( info.manufacturer().size() )

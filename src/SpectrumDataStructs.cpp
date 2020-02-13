@@ -70,9 +70,9 @@ using namespace std;
 
 using UtilityFunctions::trim;
 using UtilityFunctions::split;
-using UtilityFunctions::iequals;
-using UtilityFunctions::to_lower;
-using UtilityFunctions::to_upper;
+using UtilityFunctions::iequals_ascii;
+using UtilityFunctions::to_lower_ascii;
+using UtilityFunctions::to_upper_ascii;
 using UtilityFunctions::contains;
 using UtilityFunctions::icontains;
 using UtilityFunctions::starts_with;
@@ -445,7 +445,7 @@ namespace
       return -1;
     }
     
-    to_lower( name );
+    to_lower_ascii( name );
     
     const char col_char = ((name.size()==3) ? name[1] : 'a');
     const char panel_char = name[0];
@@ -650,7 +650,7 @@ namespace
     if( detector_attrib )
     {
       string name = xml_value_str(detector_attrib);
-      to_lower( name );
+      to_lower_ascii( name );
       
       if( contains(name, "neutron") )
         is_nuetron = true;
@@ -839,7 +839,7 @@ namespace
     
     string units = xml_value_str( unit_attrib );
     trim( units );
-    to_lower( units );
+    to_lower_ascii( units );
     if( units == "mph" )
       return 0.44704f * speed;
     if( units == "m/s" )
@@ -1377,7 +1377,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
 
 int sample_num_from_remark( std::string remark )
 {
-  UtilityFunctions::to_lower(remark);
+  UtilityFunctions::to_lower_ascii(remark);
   size_t pos = remark.find( "survey" );
 
   if( pos == string::npos )
@@ -1411,7 +1411,7 @@ int sample_num_from_remark( std::string remark )
 //  Returns 0 upon failure.
 float speed_from_remark( std::string remark )
 {
-  to_lower( remark );
+  to_lower_ascii( remark );
   size_t pos = remark.find( "speed" );
 
   if( pos == string::npos )
@@ -1469,7 +1469,7 @@ std::string detector_name_from_remark( const std::string &remark )
     string remarkcopy = remark;
     
     string remarkcopylowercase = remarkcopy;
-    UtilityFunctions::to_lower( remarkcopylowercase );
+    UtilityFunctions::to_lower_ascii( remarkcopylowercase );
     
     size_t pos = remarkcopylowercase.find( "det" );
     if( pos != string::npos )
@@ -1479,7 +1479,7 @@ std::string detector_name_from_remark( const std::string &remark )
       if( pos != string::npos )
       {
         string det_identifier = remarkcopy.substr(0,pos);
-        UtilityFunctions::to_lower( det_identifier );
+        UtilityFunctions::to_lower_ascii( det_identifier );
         UtilityFunctions::trim( det_identifier ); //I dont htink this is necassarry
         if( det_identifier=="det" || det_identifier=="detector"
            || (UtilityFunctions::levenshtein_distance(det_identifier,"detector") < 3) ) //Allow two typos of "detector"; arbitrary
@@ -1608,11 +1608,11 @@ bool likely_not_spec_file( const std::string &fullpath )
   const size_t num_bad_exts = sizeof(bad_exts) / sizeof(bad_exts[0]);
   
   for( size_t i = 0; i < num_bad_exts; ++i )
-    if( UtilityFunctions::iequals(extension, bad_exts[i]) )
+    if( UtilityFunctions::iequals_ascii(extension, bad_exts[i]) )
       return true;
     
-  if( //(filename.find("_AA_")!=std::string::npos && UtilityFunctions::iequals(extension, ".n42") )
-     //|| (filename.find("_AN_")!=std::string::npos && UtilityFunctions::iequals(extension, ".n42") )
+  if( //(filename.find("_AA_")!=std::string::npos && UtilityFunctions::iequals_ascii(extension, ".n42") )
+     //|| (filename.find("_AN_")!=std::string::npos && UtilityFunctions::iequals_ascii(extension, ".n42") )
      filename.find("Neutron.n42") != std::string::npos
      || filename.find(".xml.XML") != std::string::npos
      || filename.find("results.xml") != std::string::npos
@@ -5488,7 +5488,7 @@ bool MeasurementInfo::load_file( const std::string &filename,
         const size_t period_pos = orig_file_ending.find_last_of( '.' );
         if( period_pos != string::npos )
           orig_file_ending = orig_file_ending.substr( period_pos+1 );
-        to_lower( orig_file_ending );
+        to_lower_ascii( orig_file_ending );
 
         if( orig_file_ending=="pcf")
         {
@@ -6722,25 +6722,25 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
           {
             string neutnamelowercase = neutname;
             UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "Gamma");
-            if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+            if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
             {
               distances[detnameindex] = 0;
             }else
             {
               neutnamelowercase = neutname;
               UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "");
-              if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+              if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
                 distances[detnameindex] = 0;
             }
           }else if( UtilityFunctions::iends_with( neutname, "Ntr") )
           {
             string neutnamelowercase = neutname.substr( 0, neutname.size() - 3 );
-            if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+            if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
               distances[detnameindex] = 0;
           }else if( UtilityFunctions::iends_with( neutname, "N") )
           {
             string neutnamelowercase = neutname.substr( 0, neutname.size() - 1 );
-            if( UtilityFunctions::iequals( neutnamelowercase, gammaname ) )
+            if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
               distances[detnameindex] = 0;
           }
         }//if( distances[i] > 3 )
@@ -8041,7 +8041,7 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
       if( UtilityFunctions::istarts_with(remark, prefix) )
       {
         output << pad_iaea_prefix(label) << remark.substr( prefix.size() ) << "\r\n";
-        printedFWHMCCoeff |= UtilityFunctions::iequals(label,"FWHMCCoeff");
+        printedFWHMCCoeff |= UtilityFunctions::iequals_ascii(label,"FWHMCCoeff");
         used = true;
         break;
       }
@@ -9439,7 +9439,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
             //  lowercase; I didnt test yet for longitude/latitude, or nuclide
             //  IDs, so I dont want to convert to lower case for those yet.
             string datastr( data.begin(), data.end() );
-            UtilityFunctions::to_lower( datastr );
+            UtilityFunctions::to_lower_ascii( datastr );
             
             term = "total neutron counts = ";
             string::const_iterator positer, enditer;
@@ -11071,7 +11071,7 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
       
       trim( fields[0] );
       string lowered = fields[0];  //We will make searches case independent
-      UtilityFunctions::to_lower( lowered ); //We are relying on to_lower() not adding/removing bytes from string, which it doesnt since it is dumb (e.g., ASCII).
+      UtilityFunctions::to_lower_ascii( lowered ); //We are relying on to_lower_ascii() not adding/removing bytes from string, which it doesnt since it is dumb (e.g., ASCII).
       
       size_t gamma_pos = lowered.find( "gamma detector:" );
       if( gamma_pos == string::npos )
@@ -12091,7 +12091,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             {
               //Note!: this next line alters gamdetname, so this should be the last test!
               UtilityFunctions::ireplace_all(gamdetname, "Gamma", "Neutron" );
-              gamma_matches_neutron = UtilityFunctions::iequals(gamdetname, neut->detector_name_);
+              gamma_matches_neutron = UtilityFunctions::iequals_ascii(gamdetname, neut->detector_name_);
             }
             
             if( !gamma_matches_neutron )
@@ -12174,7 +12174,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               {
                 string gamdetname = spec->detector_name_;
                 UtilityFunctions::ireplace_all(gamdetname, "Gamma", "Neutron" );
-                gamma_matches_neutron = UtilityFunctions::iequals(gamdetname, gross->detector_name_);
+                gamma_matches_neutron = UtilityFunctions::iequals_ascii(gamdetname, gross->detector_name_);
                 
                 //TODO: should probably get rid of "Gamma" in the detector name
                 //  now that we have combined them but I havent evaluated the
@@ -12652,9 +12652,9 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
   
   
   //Lets try to figure out if we can fill out detector_type_
-  if( iequals( manufacturer_,"ORTEC" ) )
+  if( iequals_ascii( manufacturer_,"ORTEC" ) )
   {
-    if( iequals(instrument_model_,"OSASP") )
+    if( iequals_ascii(instrument_model_,"OSASP") )
       detector_type_ = kDetectiveEx200Detector;
     else if( icontains(instrument_model_,"100") )
       detector_type_ = kDetectiveEx100Detector;
@@ -12666,8 +12666,8 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
       detector_type_ = kMicroDetectiveDetector;
     else if( icontains(instrument_model_,"Detective") )
       detector_type_ = kDetectiveDetector;
-  }else if( iequals(instrument_type_,"PVT Portal")
-           && iequals(manufacturer_,"SAIC") )
+  }else if( iequals_ascii(instrument_type_,"PVT Portal")
+           && iequals_ascii(manufacturer_,"SAIC") )
   {
     detector_type_ = kSAIC8Detector;
   }else if( icontains(instrument_model_,"identiFINDER")
@@ -12975,17 +12975,17 @@ const std::string &convert_n42_instrument_type_from_2006_to_2012( const std::str
   static const string SurveyMeter = "Backpack or Personal Radiation Scanner";
   static const string Spectrometer = "Spectroscopic Personal Radiation Detector";
   
-  if( iequals(classcode, "PortalMonitor") || iequals(classcode, "PVT Portal") )
+  if( iequals_ascii(classcode, "PortalMonitor") || iequals_ascii(classcode, "PVT Portal") )
     return PortalMonitor;
-  else if( iequals(classcode, "SpecPortal") )
+  else if( iequals_ascii(classcode, "SpecPortal") )
     return SpecPortal;
-  else if( iequals(classcode, "RadionuclideIdentifier") )
+  else if( iequals_ascii(classcode, "RadionuclideIdentifier") )
     return RadionuclideIdentifier;
-  else if( iequals(classcode, "PersonalRadiationDetector") )
+  else if( iequals_ascii(classcode, "PersonalRadiationDetector") )
     return PersonalRadiationDetector;
-  else if( iequals(classcode, "SurveyMeter") )
+  else if( iequals_ascii(classcode, "SurveyMeter") )
     return SurveyMeter;
-  else if( iequals(classcode, "Spectrometer") )
+  else if( iequals_ascii(classcode, "Spectrometer") )
     return Spectrometer;
   
   return classcode;
@@ -13549,7 +13549,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     xml_node<char> *version_node = version_node = doc->allocate_node( node_element, "RadInstrumentVersion" );
     RadInstrumentInformation->append_node( version_node );
     
-    if( UtilityFunctions::iequals( name, "Software" ) )
+    if( UtilityFunctions::iequals_ascii( name, "Software" ) )
       val = doc->allocate_string( ("Original " +  name).c_str() );
     else
       val = doc->allocate_string( name.c_str(), name.size()+1 );
@@ -14546,7 +14546,7 @@ void MeasurementInfo::set_2012_N42_instrument_info( const rapidxml::xml_node<cha
   const rapidxml::xml_node<char> *class_code_node = info_node->first_node( "RadInstrumentClassCode", 22 );
   instrument_type_ = xml_value_str( class_code_node );
   
-  if( UtilityFunctions::iequals( instrument_type_, "Other" ) )
+  if( UtilityFunctions::iequals_ascii( instrument_type_, "Other" ) )
     instrument_type_ = "";
   
   for( const rapidxml::xml_node<char> *version_node = XML_FIRST_NODE(info_node, "RadInstrumentVersion");
@@ -15152,7 +15152,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       
       //For the sake of file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42
       if( meas->source_type_ == Measurement::UnknownSourceType
-         && UtilityFunctions::iequals(meas->detector_name_, "intrinsicActivity")  )
+         && UtilityFunctions::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
         meas->source_type_ = Measurement::IntrinsicActivity;
       
       meas->occupied_ = occupied;
@@ -15339,7 +15339,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       
       if( has_min_max_total_neutron )
       {
-        if( !UtilityFunctions::iequals(det_info_ref, "totalNeutrons") )
+        if( !UtilityFunctions::iequals_ascii(det_info_ref, "totalNeutrons") )
           continue;
       }
       
@@ -16044,15 +16044,15 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
             {
               MeasurementShrdPtr &m = meass[i];
               
-              if( UtilityFunctions::iequals(m->detector_name_, "gamma" ) )
+              if( UtilityFunctions::iequals_ascii(m->detector_name_, "gamma" ) )
               {
                 ++ngamma;
                 gamma_meas = m;
-              }else if( UtilityFunctions::iequals(m->detector_name_, "neutron" ) )
+              }else if( UtilityFunctions::iequals_ascii(m->detector_name_, "neutron" ) )
               {
                 ++nneut;
                 neut_meas = m;
-              }else if( UtilityFunctions::iequals(m->detector_name_, "GMTube" ) )
+              }else if( UtilityFunctions::iequals_ascii(m->detector_name_, "GMTube" ) )
               {
                 ++ngm;
                 gm_meas = m;
@@ -17250,6 +17250,16 @@ size_t MeasurementInfo::keep_n_bin_spectra_only( size_t nbin )
 
   return nremoved;
 }//size_t keep_n_bin_spectra_only( size_t nbin )
+
+
+bool MeasurementInfo::contained_neutron() const
+{
+  for( const auto &m : measurements_ )
+    if( m && m->contained_neutron() )
+      return true;
+  
+  return false;
+}//
 
 
 size_t MeasurementInfo::remove_neutron_measurments()
@@ -19295,7 +19305,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
 
       //cout << "For record " << record_number << ", num_channel=" << num_channel << " with bytes_per_record=" << bytes_per_record << endl;
       
-      if( (record_number == 1) && UtilityFunctions::iequals(spectrum_title,"Energy") )
+      if( (record_number == 1) && UtilityFunctions::iequals_ascii(spectrum_title,"Energy") )
       {
         bool increasing = true;
         for( int32_t channel = 1; increasing && (channel < num_channel); ++channel )
@@ -19576,11 +19586,11 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
         {
           m->deviation_pairs_ = dev_pos->second;
           
-          stringstream msg;
-          msg << "Assigning Det=" << m->detector_name_ << " deviation pairs: ";
-          for( auto p : m->deviation_pairs_ )
-            msg << "{" << p.first << "," << p.second << "}, ";
-          cout << msg.str() << endl;
+          //stringstream msg;
+          //msg << "Assigning Det=" << m->detector_name_ << " deviation pairs: ";
+          //for( auto p : m->deviation_pairs_ )
+          //  msg << "{" << p.first << "," << p.second << "}, ";
+          //cout << msg.str() << endl;
         }
       }//for( auto &m : measurements_ )
     }//if( have_deviation_pairs )
@@ -19733,7 +19743,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
     
 #if(PERFORM_DEVELOPER_CHECKS)
       //Files such as ref985OS89O82 can have value chntype=-1
-      if( chntype != -102 && chntype != -101 )
+      if( chntype != -102 && chntype != -101 && chntype != 1 )
       {
         stringstream msg;
         msg << "Found a chntype with unexpected value: " << chntype;
@@ -20211,7 +20221,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       throw runtime_error( "Found to long of line" );
     
     trim( line );
-    to_lower( line );
+    to_lower_ascii( line );
     
     if( line.empty() )
       continue;
@@ -20760,7 +20770,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
     do
     {
       trim(line);
-      to_upper(line);
+      to_upper_ascii(line);
       skip_getline = false;
 
       if( starts_with(line,"$DATA:") )
@@ -22473,13 +22483,14 @@ namespace SpectroscopicDailyFile
       }//if( spacepos != string::npos )
     }//for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
 
-    if( info.calibcoefs.empty() )
-    {
-      cerr << "parse_s1_info(): warning, couldnt find calibration coeffecicents"
-           << endl;
-      info.calibcoefs.push_back( 0.0f );
-      info.calibcoefs.push_back( 3000.0f / std::max(info.nchannels-1, 1) );
-    }//if( info.calibcoefs.empty() )
+    //TODO 20200212: it isnt clear how or if energy calibration is set; should investigate.
+    //if( info.calibcoefs.empty() )
+    //{
+    //  cerr << "parse_s1_info(): warning, couldnt find calibration coeffecicents"
+    //       << endl;
+    //  info.calibcoefs.push_back( 0.0f );
+    //  info.calibcoefs.push_back( 3000.0f / std::max(info.nchannels-1, 1) );
+    //}//if( info.calibcoefs.empty() )
 
     info.success = true;
   }//bool parse_s1_info( const std::string &s1str, DailyFileS1Info &info )
@@ -22559,9 +22570,9 @@ namespace SpectroscopicDailyFile
     }
     
     string type = line.substr( pos1+1, pos2-pos1-1 );
-    if( UtilityFunctions::iequals( type, "Gamma" ) )
+    if( UtilityFunctions::iequals_ascii( type, "Gamma" ) )
       info.type = DailyFileAnalyzedBackground::Gamma;
-    else if( UtilityFunctions::iequals( type, "Neutron" ) )
+    else if( UtilityFunctions::iequals_ascii( type, "Neutron" ) )
       info.type = DailyFileAnalyzedBackground::Neutrons;
     else
     {
@@ -23426,8 +23437,12 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->sample_number_      = 1000*endrecord.occupancyNumber;
       meas->source_type_        = Measurement::Background;
       meas->occupied_           = Measurement::NotOccupied;
-      meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-      meas->calibration_coeffs_ = sinfo.calibcoefs;
+      if( !sinfo.calibcoefs.empty() )
+      {
+        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
+        meas->calibration_coeffs_ = sinfo.calibcoefs;
+      }
+      
       meas->remarks_.push_back( "Analyzed Background (sum over all detectors" );
       meas->real_time_ = meas->live_time_ = 0.1f*detNameToNum.size()*gammaback->realTime;
       
@@ -23527,8 +23542,11 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->sample_number_      = 1000*endrecord.occupancyNumber + gamma.timeChunkNumber;
       meas->source_type_        = Measurement::Foreground;
       meas->occupied_           = Measurement::Occupied;
-      meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-      meas->calibration_coeffs_ = sinfo.calibcoefs;
+      if( !sinfo.calibcoefs.empty() )
+      {
+        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
+        meas->calibration_coeffs_ = sinfo.calibcoefs;
+      }
       meas->speed_              = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
       meas->start_time_         = endrecord.lastStartTime;
       meas->remarks_.push_back( "ICD1 Filename: " + endrecord.icd1FileName );
@@ -23656,8 +23674,11 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->detector_number_    = detNameToNum[back.detectorName];
       meas->gamma_counts_       = back.spectrum;
       meas->start_time_         = timestamp;
-      meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-      meas->calibration_coeffs_ = sinfo.calibcoefs;
+      if( !sinfo.calibcoefs.empty() )
+      {
+        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
+        meas->calibration_coeffs_ = sinfo.calibcoefs;
+      }
       meas->occupied_           = Measurement::NotOccupied;
       
       meas->sample_number_ = 1000*(max_occupancie_num+1) + backnum;
@@ -23755,23 +23776,20 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
   cleanup_after_load();
 #endif
   
-  if( properties_flags_ & kNotSampleDetectorTimeSorted )
-    cerr << "load_from_spectroscopic_daily_file: kNotSampleDetectorTimeSorted is set" << endl;
-  
-  if( properties_flags_ & kNotTimeSortedOrder )
-    cerr << "load_from_spectroscopic_daily_file: kNotTimeSortedOrder is set" << endl;
-
-  
-  if( properties_flags_ & kNotUniqueSampleDetectorNumbers )
-    cerr << "load_from_spectroscopic_daily_file: kNotUniqueSampleDetectorNumbers is set" << endl;
-
-  
-  if( properties_flags_ & kAllSpectraSameNumberChannels )
-    cerr << "load_from_spectroscopic_daily_file: kAllSpectraSameNumberChannels is set" << endl;
-
-  
-  if( properties_flags_ & kHasCommonBinning )
-    cerr << "load_from_spectroscopic_daily_file: kHasCommonBinning is set" << endl;
+  //if( properties_flags_ & kNotSampleDetectorTimeSorted )
+  //  cerr << "load_from_spectroscopic_daily_file: kNotSampleDetectorTimeSorted is set" << endl;
+  //
+  //if( properties_flags_ & kNotTimeSortedOrder )
+  //  cerr << "load_from_spectroscopic_daily_file: kNotTimeSortedOrder is set" << endl;
+  //
+  //if( properties_flags_ & kNotUniqueSampleDetectorNumbers )
+  //  cerr << "load_from_spectroscopic_daily_file: kNotUniqueSampleDetectorNumbers is set" << endl;
+  //
+  //if( properties_flags_ & kAllSpectraSameNumberChannels )
+  //  cerr << "load_from_spectroscopic_daily_file: kAllSpectraSameNumberChannels is set" << endl;
+  //
+  //if( properties_flags_ & kHasCommonBinning )
+  //  cerr << "load_from_spectroscopic_daily_file: kHasCommonBinning is set" << endl;
 
 
   return true;
@@ -25854,12 +25872,16 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
 //        m->detector_type_ = "";
         m->quality_status_ = (status==0 ? Measurement::Good : Measurement::Suspect);
         m->source_type_  = Measurement::UnknownSourceType;
-        m->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+        
+        if( calPeakFound != 0 )
+        {
+          m->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
 //        m->start_time_ = ;
-        m->calibration_coeffs_.push_back( 0.0f );
+          m->calibration_coeffs_.push_back( 0.0f );
 //        m->calibration_coeffs_.push_back( 3.0 );
-        m->calibration_coeffs_.push_back( 1460.0f / calPeakFound );
+          m->calibration_coeffs_.push_back( 1460.0f / calPeakFound );
 //        m->channel_energies_  //dont need to fill out here
+        }//if( calPeakFound != 0 ) / else
       
         vector<float> *gammacounts = new vector<float>( 1024 );
         m->gamma_counts_.reset( gammacounts );

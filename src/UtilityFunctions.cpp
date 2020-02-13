@@ -397,7 +397,7 @@ bool contains( const std::string &line, const char *label )
   return answer;
 }//contains(...)
   
-bool iequals( const char *str, const char *test )
+bool iequals_ascii( const char *str, const char *test )
 {
   const bool answer = ::rapidxml::internal::compare( str, strlen(str), test, strlen(test), false );
     
@@ -415,9 +415,9 @@ bool iequals( const char *str, const char *test )
 #endif
     
   return answer;
-}//bool iequals
+}//bool iequals_ascii
   
-bool iequals( const std::string &str, const char *test )
+bool iequals_ascii( const std::string &str, const char *test )
 {
   const bool answer = ::rapidxml::internal::compare( str.c_str(), str.length(), test, strlen(test), false );
   
@@ -437,7 +437,7 @@ bool iequals( const std::string &str, const char *test )
   return answer;
 }
   
-bool iequals( const std::string &str, const std::string &test )
+bool iequals_ascii( const std::string &str, const std::string &test )
 {
   const bool answer = ::rapidxml::internal::compare( str.c_str(), str.size(), test.c_str(), test.size(), false );
   
@@ -513,20 +513,23 @@ void trim( std::string &s )
 {
 #if(PERFORM_DEVELOPER_CHECKS)
   string copystr = s;
-  boost::algorithm::trim( copystr );
 #endif
   
   ltrim( rtrim(s) );
   
 #if(PERFORM_DEVELOPER_CHECKS)
+  //boost::algorithm::trim doesnt remove trailing null characters.
+  
   size_t pos = copystr.find_first_not_of( '\0' );
   if( pos != 0 && pos != string::npos )
     copystr.erase( copystr.begin(), copystr.begin() + pos );
   else if( pos == string::npos )
     copystr.clear();
   pos = copystr.find_last_not_of( '\0' );
-  if( pos != string::npos && (pos+1) < s.size() )
+  if( pos != string::npos && (pos+1) < copystr.size() )
     copystr.erase( copystr.begin() + pos + 1, copystr.end() );
+  
+  boost::algorithm::trim( copystr );
   
   if( copystr != s )
   {
@@ -698,12 +701,17 @@ std::string trim_copy( std::string str )
   }//void split_no_delim_compress(...)
   
   
-  void to_lower( string &input )
+  void to_lower_ascii( string &input )
   {
 #if(PERFORM_DEVELOPER_CHECKS)
     string strcopy = input;
     boost::algorithm::to_lower( strcopy );
 #endif
+    
+    //For non-ASCII we need to convert to wide string, select a locale, and then call locale templated version of tolower (I guess)
+    //std::locale loc("en_US.UTF-8");
+    //for( size_t i = 0; i < input.size(); ++i )
+    //  input[i] = std::tolower( input[i], loc );
     
     for( size_t i = 0; i < input.size(); ++i )
       input[i] = static_cast<char>( tolower(input[i]) );
@@ -718,15 +726,15 @@ std::string trim_copy( std::string str )
       log_developer_error( __func__, errormsg );
     }
 #endif
-  }//to_lower(...)
+  }//to_lower_ascii(...)
   
-  std::string to_lower_copy( std::string input )
+  std::string to_lower_ascii_copy( std::string input )
   {
-    to_lower( input );
+    to_lower_ascii( input );
     return input;
   }
   
-  void to_upper( string &input )
+  void to_upper_ascii( string &input )
   {
 #if(PERFORM_DEVELOPER_CHECKS)
     string strcopy = input;
@@ -746,7 +754,7 @@ std::string trim_copy( std::string str )
       log_developer_error( __func__, errormsg );
     }
 #endif
-  }//void to_upper( string &input )
+  }//void to_upper_ascii( string &input )
   
   void ireplace_all( std::string &input, const char *pattern, const char *replacement )
   {
@@ -987,31 +995,40 @@ std::string trim_copy( std::string str )
   
   void utf8_limit_str_size( std::string &str, const size_t max_bytes )
   {
-    const size_t pos = utf8_str_size_limit( str.c_str(), str.size(), max_bytes );
-    str = str.substr( 0, pos );
+    const size_t index = utf8_str_size_limit( str.c_str(), str.size() + 1, max_bytes + 1 );
+    str = str.substr( 0, index );
   }
   
   
-  size_t utf8_str_size_limit( const char *str,
-                              size_t len, const size_t max_bytes )
+  size_t utf8_str_size_limit( const char * const str,
+                              size_t num_in_bytes, const size_t max_bytes )
   {
-    if( !len )
-      len = strlen( str );
+    if( !str )
+      return 0;
     
-    if( !len || !max_bytes )
+    if( !num_in_bytes )
+      num_in_bytes = strlen(str) + 1;
+    
+    if( num_in_bytes<=1 || max_bytes<=1 )
       return 0;
   
-    if( len < max_bytes )
-      return len;
+    if( num_in_bytes <= max_bytes )
+      return num_in_bytes - 1;
     
-    const char *iter = str + max_bytes - 1;
-    for( ; iter != str; --iter )
+    
+    for( size_t index = max_bytes - 1; index != 0; --index )
     {
-      if( ((*iter) & 0xC0) == 0xC0 )
-        break;
+      if( (str[index-1] & 0x80) == 0x00 ) //character before index is ascii character
+        return index;
+      
+      if( (str[index] & 0xC0) == 0xC0 )  //character at index is first byte of a UTF-8 character
+        return index;
+      
+      if( (str[index] & 0x80) == 0x00 )  //character at index index is ascii character, so we can replace it will null byte
+        return index;
     }
     
-    return iter - str;
+    return 0;
   }
   
   std::string convert_from_utf16_to_utf8(const std::wstring &winput)
@@ -1349,7 +1366,7 @@ bool strptime_wrapper( const char *s, const char *f, struct tm *t )
 #if(PERFORM_DEVELOPER_CHECKS)
 	  const string develop_orig_str = time_string;
 #endif
-    UtilityFunctions::to_upper( time_string );  //make sure strings like "2009-11-10t14:47:12" will work (some file parsers convert to lower case)
+    UtilityFunctions::to_upper_ascii( time_string );  //make sure strings like "2009-11-10t14:47:12" will work (some file parsers convert to lower case)
     UtilityFunctions::ireplace_all( time_string, "  ", " " );
     UtilityFunctions::ireplace_all( time_string, "_T", "T" );  //Smiths NaI HPRDS: 2009-11-10_T14:47:12Z
     UtilityFunctions::trim( time_string );
@@ -2840,16 +2857,45 @@ std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxl
     {
       case '\r':
         c = sb->sgetc();  //does not advance pointer to current location
-        if(c == '\n')
+        if( c == '\n' )
           sb->sbumpc();   //advances pointer to one current location by one
-         return is;
+        return is;
+        
       case '\n':
         return is;
+        
       case EOF:
         is.setstate( ios::eofbit );
         return is;
+        
       default:
         t += (char)c;
+        
+        if( maxlength && (t.length() == maxlength) )
+        {
+          c = sb->sgetc();    //does not advance pointers current location
+          
+          if( c == EOF )
+          {
+            sb->sbumpc();
+            is.setstate( ios::eofbit );
+          }else
+          {
+            if( c == '\r' )
+            {
+              sb->sbumpc();     //advances pointers current location by one
+              c = sb->sgetc();  //does not advance pointer to current location
+            }
+            
+            if( c == '\n')
+            {
+              sb->sbumpc();     //advances pointer to one current location by one
+              c = sb->sgetc();  //does not advance pointer to current location
+            }
+          }
+          
+          return is;
+        }
     }//switch( c )
   }//for(;;)
 

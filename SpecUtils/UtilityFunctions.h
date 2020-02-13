@@ -79,22 +79,22 @@ namespace UtilityFunctions
   std::string trim_copy( std::string str );
   
   /** \brief Converts each ascii letter to lower case, not UTF8 safe/aware. */
-  void to_lower( std::string &input );
+  void to_lower_ascii( std::string &input );
   
   /** \brief Converts each ascii letter to lower case, not UTF8 safe/aware. */
-  std::string to_lower_copy( std::string input );
+  std::string to_lower_ascii_copy( std::string input );
   
   /** \brief Converts each ascii letter to upper case, not UTF8 safe/aware. */
-  void to_upper( std::string &input );
+  void to_upper_ascii( std::string &input );
   
   /** \brief Case independant string comparison. Not UTF8 or locale aware. */
-  bool iequals( const char *str, const char *test );
+  bool iequals_ascii( const char *str, const char *test );
   
   /** \brief Case independant string comparison. Not UTF8 or locale aware. */
-  bool iequals( const std::string &str, const char *test );
+  bool iequals_ascii( const std::string &str, const char *test );
   
   /** \brief Case independant string comparison. Not UTF8 or locale aware. */
-  bool iequals( const std::string &str, const std::string &test );
+  bool iequals_ascii( const std::string &str, const std::string &test );
   
   /** \brief Returns if the substring is contained within the input string. */
   bool contains( const std::string &input, const char *substr );
@@ -205,22 +205,26 @@ namespace UtilityFunctions
   
   /** \brief Reduces string size to the specified number of bytes, or the
     nearest valid smaller size, where the last character is a valid UTF8 
-    character.
+    character.  Does not include the null terminating byte (e.g., will take
+    max_bytes+1 bytes to represent in a c-string).
    */
   void utf8_limit_str_size( std::string &str, const size_t max_bytes );
   
-  /** Gives the location to place a null terminating character that is less
+  /** Gives the index to place a null terminating character that is less
     than or equal to the specified lenght, while making sure the last byte is a
     valid UTF8 character.
    
    \param str The UTF8 encoded input string.
-   \param strlen The actual length of the input string, in bytes.  If zero
-     <em>str</em> must be null terminated.
-   \param max_bytes The maximum desired length, in bytes, of the string.
-   \returns The location, in bytes, to place the new terminating '\0' character.
+   \param num_in_bytes The actual length of the input string, in bytes,
+     including the null-terminating byte.  If zero <em>str</em> must be null
+     terminated.
+   \param max_bytes The maximum desired length, in bytes, of the string,
+     including the null terminating byte.  If zero or one, will return zero.
+   \returns The location (index), in bytes, to place the new terminating '\0'
+     character.
    */
-  size_t utf8_str_size_limit( const char *str,
-                              size_t strlen, const size_t max_bytes );
+  size_t utf8_str_size_limit( const char * const str,
+                              size_t num_in_bytes, const size_t max_bytes );
   
   /* Convert between UTF-16 and UTF-8 strings.  This is used on Windows as
      all the file path functions encode everything as UTF-8, however on Windows

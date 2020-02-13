@@ -12,7 +12,8 @@ option( SpecUtils_NO_BOOST_LIB "Feature under development to avoid having to lin
 option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (only for use within InterSpec)" OFF )
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING "Rebins all spectra in spectrum file to the same energy calibration" OFF )
-option( SpecUtils_BUILD_TEST "Creates executuable to perform interactive regression test" OFF )
+option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
+option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
@@ -40,9 +41,14 @@ endif( TRY_TO_STATIC_LINK )
 
 list( APPEND boost_libs_required date_time system filesystem )
 
-if( SpecUtils_BUILD_TEST )
+if( SpecUtils_BUILD_REGRESSION_TEST )
   list( APPEND boost_libs_required program_options )
-endif( SpecUtils_BUILD_TEST )
+endif( SpecUtils_BUILD_REGRESSION_TEST )
+
+if( SpecUtils_BUILD_UNIT_TESTS )
+  list( APPEND boost_libs_required unit_test_framework )
+endif( SpecUtils_BUILD_UNIT_TESTS )
+
 
 if( SpecUtils_PYTHON_BINDINGS )
   list( APPEND boost_libs_required python )
@@ -218,20 +224,29 @@ if( SpecUtils_JAVA_SWIG )
 endif( SpecUtils_JAVA_SWIG )
 
 
+if( SpecUtils_BUILD_UNIT_TESTS )
+  target_link_libraries( SpecUtils PUBLIC ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} )
+endif( SpecUtils_BUILD_UNIT_TESTS )
+
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
                             PRIVATE ${RAPID_XML_DIR} ${PYTHON_INCLUDE_DIRS} )
 
-if( SpecUtils_BUILD_TEST )
+if( SpecUtils_BUILD_REGRESSION_TEST )
   if( NOT PERFORM_DEVELOPER_CHECKS )
     message( FATAL_ERROR "PERFORM_DEVELOPER_CHECKS must be enabled when building testing executable" )
   endif( NOT PERFORM_DEVELOPER_CHECKS )
 
-  add_executable( regression_test testing/regression_test.cpp )
+  add_executable( regression_test regression_test/regression_test.cpp )
   #target_link_libraries( regression_test PRIVATE SpecUtils Boost::program_options )
   target_link_libraries( regression_test PRIVATE SpecUtils ${Boost_PROGRAM_OPTIONS_LIBRARY} )
   set_target_properties( regression_test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
 )
-endif( SpecUtils_BUILD_TEST )
+endif( SpecUtils_BUILD_REGRESSION_TEST )
+
+
+IF( SpecUtils_BUILD_UNIT_TESTS )
+  add_subdirectory( unit_tests )
+ENDIF( SpecUtils_BUILD_UNIT_TESTS )
 
 
 configure_file(

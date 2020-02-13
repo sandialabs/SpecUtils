@@ -343,7 +343,7 @@ namespace SerialToDetectorModel
     //The case independance does not appear to be necassarry, but JIC
     // if( UtilityFunctions::icontains( instrument_id, "EX100" ) || UtilityFunctions::icontains( instrument_id, "EX 100" ) )
     if( UtilityFunctions::icontains( instrument_id, "Detective X" )
-       || UtilityFunctions::iequals( instrument_id, "DetectiveX" ))
+       || UtilityFunctions::iequals_ascii( instrument_id, "DetectiveX" ))
       return DetectorModel::DetectiveX;
     
     if( UtilityFunctions::icontains( instrument_id, "100" ) )
