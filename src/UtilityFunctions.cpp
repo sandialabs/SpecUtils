@@ -36,6 +36,7 @@
 #include <string>
 #include <vector>
 #include <locale>
+#include <random>
 #include <limits>
 #include <time.h>
 //GCC 4.8 doesnt have codecvt, so we'll use boost for utf8<-->utf16
@@ -78,7 +79,6 @@
 
 #include <boost/version.hpp>
 
-#if( SpecUtils_NO_BOOST_LIB )
 #ifndef _WIN32
 #include <libgen.h>
 #else
@@ -86,11 +86,8 @@
 //We will need to link to Shlawapi.lib, which I think uncommenting the next line would do... untested
 //#pragma comment(lib, "Shlwapi.lib")
 #endif
-#endif
 
-//#if( SpecUtils_NO_BOOST_LIB )
 #include <sys/stat.h>
-//#endif
 
 #if( !SpecUtils_NO_BOOST_LIB )
 #include <boost/filesystem.hpp>
@@ -131,11 +128,6 @@
 #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #endif
-
-
-//#ifdef _WIN32
-//static_assert( defined(UNICODE) || defined(_UNICODE), "UNICODE must be defined to compile on windows" );
-//#endif
 
 
 using namespace std;
@@ -457,7 +449,7 @@ bool iequals_ascii( const std::string &str, const std::string &test )
   return answer;
 }
   
-#if( defined(WIN32) && _DEBUG )
+#if( defined(_WIN32) && _DEBUG )
 //I get the MSVC debug runtime asserts on for character values less than -1, which since chars are signed by default
 //  happens on unicode characters.  So I'll make a crappy workaround
 //  https://social.msdn.microsoft.com/Forums/vstudio/en-US/d57d4078-1fab-44e3-b821-40763b119be0/assertion-in-isctypec?forum=vcgeneral
@@ -471,7 +463,7 @@ bool not_whitespace( char c )
   // trim from start
 static inline std::string &ltrim(std::string &s)
 {
-#if( defined(WIN32) && _DEBUG )
+#if( defined(_WIN32) && _DEBUG )
   s.erase( s.begin(), std::find_if( s.begin(), s.end(), &not_whitespace ) );
 #else
   s.erase( s.begin(), std::find_if( s.begin(), s.end(), std::not1( std::ptr_fun<int, int>( std::isspace ) ) ) );
@@ -492,7 +484,7 @@ static inline std::string &ltrim(std::string &s)
 // trim from end
 static inline std::string &rtrim(std::string &s)
 {
-#if( defined(WIN32) && _DEBUG )
+#if( defined(_WIN32) && _DEBUG )
   s.erase( std::find_if( s.rbegin(), s.rend(), &not_whitespace ).base(), s.end() );
 #else
   s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
@@ -1143,7 +1135,6 @@ std::string trim_copy( std::string str )
   std::string print_to_iso_str( const boost::posix_time::ptime &t,
                                const bool extended )
   {
-    //#if( SpecUtils_NO_BOOST_LIB )
     if( t.is_special() )
       return "not-a-date-time";
     //should try +-inf as well
@@ -1654,25 +1645,11 @@ std::string temp_dir()
   }
 #endif
   
-#if( !SpecUtils_NO_BOOST_LIB && BOOST_VERSION >= 104700)
-  try
-  {
-#ifdef _WIN32
-    return convert_from_utf16_to_utf8( boost::filesystem::temp_directory_path().string<std::wstring>() );
-#else
-    return boost::filesystem::temp_directory_path().string<std::string>();
-#endif
-  }catch( std::exception &e )
-  {
-    cerr << "Warning, unable to get a temporary directory...: " << e.what()
-         << "\nReturning '/tmp'" << endl;
-  }//try/catch
-#endif
 
-#if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#if( defined(_WIN32) )
   //Completely un-tested
   const DWORD len = GetTempPathW( 0, NULL );
-  vector<wchar_t> buf( len );
+  vector<wchar_t> buf( len + 1 );
   
   if( !len )
   {
@@ -1689,9 +1666,8 @@ std::string temp_dir()
     return "C:\\Temp";
   }
   
+  GetTempPathW( len + 1, &(buf[0]) );
   return convert_from_utf16_to_utf8( std::wstring( buf.begin(), buf.end() ) );
-  
-  
 #else
   
   const char *val = NULL;
@@ -1713,14 +1689,23 @@ bool remove_file( const std::string &name )
 #ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
   return (0 == _wunlink( wname.c_str()) );
-#elif( SpecUtils_NO_BOOST_LIB )
-  return (0 == unlink( name.c_str()) );
 #else
-  try{ boost::filesystem::remove( name ); } catch(...){ return false; }
-  return true;
+  return (0 == unlink( name.c_str()) );
 #endif
 }//bool remove_file( const std::string &name )
 
+
+//bool remove_directory( const std::string &name )
+//{
+//#ifdef _WIN32
+//  const std::wstring wname = convert_from_utf8_to_utf16( name );
+//  return RemoveDirectory( wname.c_str() );
+//#else
+//  return (0 == rmdir( name.c_str()) );
+//#endif
+//}
+  
+  
 bool rename_file( const std::string &source, const std::string &destination )
 {
   if( !is_file(source) || is_file(destination) || is_directory(destination) )
@@ -1730,26 +1715,23 @@ bool rename_file( const std::string &source, const std::string &destination )
   const std::wstring wsource = convert_from_utf8_to_utf16( source );
   const std::wstring wdestination = convert_from_utf8_to_utf16( destination );
   return MoveFileW( wsource.c_str(), wdestination.c_str() );
-#elif( SpecUtils_NO_BOOST_LIB )
-  
+#else
   const int result = rename( source.c_str(), destination.c_str() );
   return (result==0);
-#else
-  boost::system::error_code ec;
-  boost::filesystem::rename( source, destination, ec );
-  return !ec;
 #endif
 }//bool rename_file( const std::string &from, const std::string &destination )
   
   
 bool is_file( const std::string &name )
 {
+  return (access(name.c_str(), F_OK) == 0);
+  
+  /*
 #ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
   ifstream file( wname.c_str() );
   return file.good();
-#endif
-#if( SpecUtils_NO_BOOST_LIB )
+#else
 //  struct stat fileInfo;
 //  const int status = stat( name.c_str(), &fileInfo );
 //  if( status != 0 )
@@ -1757,16 +1739,8 @@ bool is_file( const std::string &name )
 //  return S_ISREG(fileinfo.st_mode);
   ifstream file( name.c_str() );
   return file.good();
-#else
-  bool isfile = false;
-  try
-  {
-    isfile = (boost::filesystem::exists( name )
-              && !boost::filesystem::is_directory( name ));
-  }catch(...){}
-  
-  return isfile;
 #endif
+   */
 }//bool is_file( const std::string &name )
   
 
@@ -1777,13 +1751,10 @@ bool is_directory( const std::string &name )
   struct _stat statbuf;
   _wstat( wname.c_str(), &statbuf);
   return S_ISDIR(statbuf.st_mode);
-#elif( SpecUtils_NO_BOOST_LIB )
+#else
   struct stat statbuf;
   stat( name.c_str(), &statbuf);
   return S_ISDIR(statbuf.st_mode);
-#else
-  try{ return boost::filesystem::is_directory( name ); }catch(...){}
-  return false;
 #endif
 }//bool is_directory( const std::string &name )
 
@@ -1867,9 +1838,7 @@ std::string append_path( const std::string &base, const std::string &name )
 
 std::string filename( const std::string &path_and_name )
 {
-#if( SpecUtils_NO_BOOST_LIB )
 #ifdef _WIN32
-
   /*
    errno_t _wsplitpath_s(
    const wchar_t * path,
@@ -1884,7 +1853,6 @@ std::string filename( const std::string &path_and_name )
    );
    */
   
-
 #error "UtilityFunctions::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once - and need to switch to doing wide"
   char path_buffer[_MAX_PATH];
   char drive[_MAX_DRIVE];
@@ -1905,7 +1873,6 @@ std::string filename( const std::string &path_and_name )
   // "/"        -> "/"
   // "."        -> "."
   // ".."       -> ".."
-  #error "UtilityFunctions::filename not tested for SpecUtils_NO_BOOST_LIB *NIX - not even one time"
   vector<char> pathvec( path_and_name.size() + 1 );
   memcpy( &(pathvec[0]), path_and_name.c_str(), path_and_name.size() + 1 );
   
@@ -1917,15 +1884,11 @@ std::string filename( const std::string &path_and_name )
   
   return bname;
 #endif
-#else
-  return boost::filesystem::path(path_and_name).filename().string<string>();
-#endif
 }//std::string filename( const std::string &path_and_name )
   
   
 std::string parent_path( const std::string &path )
 {
-#if( SpecUtils_NO_BOOST_LIB )
 #ifdef _WIN32
   #error "UtilityFunctions::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once"
   std::wstring wpath = convert_from_utf8_to_utf16( path );
@@ -1955,17 +1918,34 @@ std::string parent_path( const std::string &path )
   vector<char> pathvec( path.size() + 1 );
   memcpy( &(pathvec[0]), path.c_str(), path.size() + 1 );
   
+  char *bname = basename( &(pathvec[0]) );
+  
+  int nparent = 0;
+  while( strcmp(bname,"..") == 0 )
+  {
+    char *parname = dirname( &(pathvec[0]) );
+    size_t newlen = strlen(parname);
+    pathvec.resize( newlen + 1 );
+    pathvec[newlen] = '\0';
+    
+    ++nparent;
+    bname = basename( &(pathvec[0]) );
+  }
+  
+  for( int i = 0; i < nparent; ++i )
+  {
+    char *parname = dirname( &(pathvec[0]) );
+    size_t newlen = strlen(parname);
+    pathvec.resize( newlen + 1 );
+    pathvec[newlen] = '\0';
+  }
+  
   //dirname is supposedly thread safe, and also you arent supposed to free what
   //  it returns
   char *parname = dirname( &(pathvec[0]) );
-  if( !parname )  //shouldnt ever happen!
-    throw runtime_error( "Error with dirname in parent_path()" );
   
-  #error "UtilityFunctions::parent_path not not tested for SpecUtils_NO_BOOST_LIB"
+  
   return parname;
-#endif
-#else
-  return boost::filesystem::path(path).parent_path().string<string>();
 #endif
 }//std::string parent_path( const std::string &path )
 
@@ -2006,17 +1986,11 @@ size_t file_size( const std::string &path )
   
 bool is_absolute_path( const std::string &path )
 {
-  cerr << "Warning, is_absolute_path() untested" << endl;
-    
-#if( SpecUtils_NO_BOOST_LIB )
 #ifdef WIN32
   std::wstring wpath = convert_from_utf8_to_utf16( path );
   return !PathIsRelativeW( wpath.c_str() );
 #else
   return (path.size() && (path[0]=='/'));
-#endif
-#else //SpecUtils_NO_BOOST_LIB
-  return boost::filesystem::path(path).is_absolute();
 #endif
 }
   
@@ -2038,18 +2012,14 @@ std::string get_working_path()
 #endif
 }//std::string get_working_path();
   
-#if( SpecUtils_NO_BOOST_LIB )
+
 std::string temp_file_name( std::string base, std::string directory )
 {
-#error "temp_file_name for SpecUtils_NO_BOOST_LIB=1 not tested (but is in principle reasonably solid)"
-  
   //For alternative implementations (this one is probably by no means
   //trustworthy) see http://msdn.microsoft.com/en-us/library/aa363875%28VS.85%29.aspx
   // for windows
   // Or just grab from unique_path.cpp in boost.
-  
-  if( directory.empty() || !is_directory(directory) )
-    directory = UtilityFunctions::temp_dir();
+
  
   size_t numplaceholders = 0;
   for( const char c : base )
@@ -2066,7 +2036,7 @@ std::string temp_file_name( std::string base, std::string directory )
   std::uniform_int_distribution<int> distribution(0,15);
   
   const char hex[] = "0123456789abcdef";
-  static_assert( sizeof(hex) == 16, "" );
+  static_assert( sizeof(hex) == 17, "" );
   
   for( size_t i = 0; i < base.size(); ++i )
   {
@@ -2082,49 +2052,11 @@ std::string temp_file_name( std::string base, std::string directory )
   //  says it doesnt, so we'll live large and skip the check.
   
   return append_path( directory, base );
-}
-#else
-std::string temp_file_name( std::string bases, std::string temppaths )
-{
-  using boost::filesystem::path;
-  using boost::filesystem::unique_path;
-
-  boost::filesystem::path temppath = temppaths;
-  if( temppath.empty() || !boost::filesystem::is_directory(temppath) )
-    temppath = UtilityFunctions::temp_dir();
-  
-  size_t numplaceholders = 0;
-  for( const char c : bases )
-    numplaceholders += (c=='%');
-  
-  if( numplaceholders < 8 )
-  {
-    if( !bases.empty() )
-      bases += "_";
-    bases += "%%%%-%%%%-%%%%-%%%%";
-  }
-  
-  temppath /= bases;
-#ifdef _WIN32
-  return convert_from_utf16_to_utf8( unique_path(temppath).string<std::wstring>() );
-#else
-  return unique_path( temppath ).string<std::string>();
-#endif
-}//path temp_file_name( path base )
-
-
+}//temp_file_name
 
   
-
-  
-#if( SpecUtils_NO_BOOST_LIB || BOOST_VERSION >= 104500 )
 bool make_canonical_path( std::string &path, const std::string &cwd )
-{  
-  //filesystem::canonical was added some time after boost 1.44, so if we want canonicla
-  //(BOOST_VERSION < 104500)
-  
-#if( SpecUtils_NO_BOOST_LIB ) //I dont know when filesystem::canonical was added
-  cerr << "Warning, make_canonical_path() untested" << endl;
+{
   if( !is_absolute_path(path) )
   {
     if( cwd.empty() )
@@ -2139,24 +2071,26 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
     }
   }//if( !is_absolute_path(path) )
   
-#ifdef WIN32
+#if( defined(_WIN32) )
   //wchar_t full[_MAX_PATH];
   //if( _wfullpath( full, partialPath, _MAX_PATH ) != NULL )
   //{
   //}
   wchar_t buffer[MAX_PATH];
   const std::wstring wpath = convert_from_utf8_to_utf16( path );
+#error "Fix up make_canonical_path for windows"
+  
   
   /*
    ToDo: Switch to using the bellow implementation to handle longer filepaths.
-         Bellow is untested.
+   Bellow is untested.
    const ULONG flags = PATHCCH_ALLOW_LONG_PATHS;
    const size_t pathlen = std::max( std::max( MAX_PATH, 2048 ), 2*wpath )
    wchar_t *buffer = (wchar_t *)malloc( pathlen*sizeof(wchar_t) );
    if( !buffer )
-     return false;
+   return false;
    
-  if( PathCchCanonicalizeEx( buffer, pathlen, wpath.c_str(), flags ) == S_OK )
+   if( PathCchCanonicalizeEx( buffer, pathlen, wpath.c_str(), flags ) == S_OK )
    {
    path = convert_from_utf16_to_utf8( buffer );
    free( buffer );
@@ -2165,7 +2099,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
    {
    path.reset();
    }
-  */
+   */
   
   if( PathCanonicalizeW( buffer, wpath.c_str() ) )
   {
@@ -2181,32 +2115,11 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   path = linkpath;
   return true;
 #endif
-#else //SpecUtils_NO_BOOST_LIB
-  boost::system::error_code ec;
-
-#ifdef WIN32
-  const std::wstring wpath = convert_from_utf8_to_utf16( path );
-  const std::wstring wcwd = convert_from_utf8_to_utf16( cwd );
-
-  const auto result = boost::filesystem::canonical(wpath, wcwd, ec);
-
-  //cout << "make_canonical_path: '" << path << "'  --> '";
-  if( !ec )
-    path = convert_from_utf16_to_utf8( result.string<wstring>() );
-  cout << path << "'" << endl;
-#else
-  const auto result = boost::filesystem::canonical( path, cwd, ec );
-
-  if( !ec )
-    path = result.string<string>();
-#endif //#ifdef WIN32
-
-  return !ec;
-#endif
 }//bool make_canonical_path( std::string &path )
-#endif //#if( SpecUtils_NO_BOOST_LIB || BOOST_VERSION >= 104500 )
+
   
-  
+#if( !SpecUtils_NO_BOOST_LIB )
+
   /*
    Could replace recursive_ls_internal() with the following to help get rid of linking to boost
 #ifdef _WIN32
@@ -2673,7 +2586,7 @@ vector<string> ls_directories_in_directory( const std::string &src )
     }//if( a symbolic link that doesnt resolve to a file )
     
     if( is_dir )
-      answer.push_back( dent->d_name );
+      answer.push_back( append_path(src,dent->d_name) );
   }//while( dent )
   
   closedir( dir ); //Should we bother checking/handling errors
@@ -2698,7 +2611,7 @@ vector<string> ls_directories_in_directory( const std::string &src )
     const bool isdir = UtilityFunctions::is_directory( pstr );
     
     if( isdir )
-      answer.push_back( p.filename().string<string>() );
+      answer.push_back( append_path(src, p.filename().string<string>()) );
   }//for( loop over
   
 #endif  //ifndef windows / else
@@ -2707,7 +2620,6 @@ vector<string> ls_directories_in_directory( const std::string &src )
 }//std::vector<std::string> ls_directories_in_directory( const std::string &src )
   
   
-#if( BOOST_VERSION < 106501 )
 namespace
 {
   namespace fs = boost::filesystem;
@@ -2750,22 +2662,14 @@ namespace
     return answer;
   }
 }//namespace
-#endif
+  
   
 std::string fs_relative( const std::string &from_path, const std::string &to_path )
 {
 #ifdef _WIN32
-#if( BOOST_VERSION < 106501 )
   return convert_from_utf16_to_utf8( make_relative( from_path, to_path ).string<std::wstring>() );
 #else
-  return convert_from_utf16_to_utf8( boost::filesystem::relative(to_path,from_path).string<std::wstring>() );
-#endif
-#else
-#if( BOOST_VERSION < 106501 )
   return make_relative( from_path, to_path ).string<std::string>();
-#else
-  return boost::filesystem::relative( to_path, from_path ).string<std::string>();
-#endif
 #endif
 }//std::string fs_relative( const std::string &target, const std::string &base )
   

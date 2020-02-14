@@ -86,3 +86,9 @@ target_link_libraries( test_filesystem_functions.exe PRIVATE SpecUtils )
 set_target_properties( test_filesystem_functions.exe PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( testUtilityFilesystemFunctions ${EXECUTABLE_OUTPUT_PATH}/test_filesystem_functions.exe  --log_level=test_suite --catch_system_error=yes )
 
+add_executable( test_rebin_by_lower_energy.exe test_rebin_by_lower_energy.cpp )
+target_link_libraries( test_rebin_by_lower_energy.exe PRIVATE SpecUtils )
+set_target_properties( test_rebin_by_lower_energy.exe PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test( TestRebinByLowerEnergy ${EXECUTABLE_OUTPUT_PATH}/test_rebin_by_lower_energy.exe  --log_level=test_suite --catch_system_error=yes )
+
+

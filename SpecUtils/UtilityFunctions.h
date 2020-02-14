@@ -314,11 +314,10 @@ namespace UtilityFunctions
                                                      const DateParseEndianType endian );
   
   
-  //The below uses home-spun methods when SpecUtils_NO_BOOST_LIB is
-  //  true (not well tested as of 20140404, may have issues with symbolic links),
-  //  and calls the equivalent boost funcitons otherwise.
+  //The below uses home-spun methods, and hasnt been tested with symbolic links.
   /** \brief Removes file from the filesystem, returning true if succesful. */
   bool remove_file( const std::string &name );
+  
   
   /** \brief Returns if the specified name cooresponds to a file that can be 
     read. */
@@ -369,20 +368,39 @@ namespace UtilityFunctions
   /** \brief Returns just the filename of a path passed in
 
    ex. "/path/to/some/file.txt" --> "file.txt"
-       "/path/to/some"          --> "some" );
-       "/path/to/some/"         --> "." );
+       "/path/to/some"          --> "some"
+       "/path/to/some/"         --> "some"
+       "/path/to/some/.."       --> ".."
+       "usr"                    --> "usr"
+       "/"                      --> "/"
+       "."                      --> "."
+       ".."                     --> ".."
    */
   std::string filename( const std::string &path_and_name );
   
   /** \brief Returns the parent path of the passed in path
    
-   ex. "/path/to/some/file.txt" --> "/path/to/some"
-       "/path/to/some/path"     --> "/path/to/some"
-       "/path/to/some/path/"    -->  "/path/to/some" );
+   ex. "/path/to/some/file.txt"     --> "/path/to/some"
+       "/path/to/some/path"         --> "/path/to/some"
+       "/path/to/some/path/"        --> "/path/to/some";
+       "/path/to/some/.."           --> "/path/to"
+       "/path/to/some/../.."        --> "/path"
+       "/path/to/some/../path"      --> "/path/to/some/.."
+       "/"                          --> "/"
+       "."                          --> "."
+       ".."                         --> "."
+       "somefile"                   --> "."
+       "/somefile"                  --> "/"
+       "/path/to/some/../../../"    --> "/"
+       "/path/to/some/../../../../" --> "/"
    
-       Note that currently:
-         "/path/to/some/path/.."  will return  "/path/to/some/path"
-       (but may change in the future)
+   
+   Note that paths like "/path/to/some/path/.." are treated differently than
+   POSIX dirname(), since the ".." are resolved before getting the parent,
+   rather than it just being a simple string operation.
+   
+   Note: does not resolve symbolic links or anything; strickly string
+   operations.
    
    This function operated in the passed in path string, not the absolute
    path on the filesystem.
@@ -404,11 +422,14 @@ namespace UtilityFunctions
   size_t file_size( const std::string &path );
   
   /** \brief Returns temporary directory as designated by the operating system
-   (or /tmp on unix if not specified).
+   (or /tmp or C:\Temp on unix and windows respectively, if not specified).
    
    Note that if you are deployed in as a FCGI app, the system environment
    wont specify the temporary directory, in that case you should consult the
    CGI values (this function will just return /tmp in that case).
+   
+   Does not check that the returned path is a directory, or that you have read
+   and/or write permissions on it.
    */
   std::string temp_dir();
   
@@ -431,22 +452,20 @@ namespace UtilityFunctions
     have '_%%%%-%%%%-%%%%-%%%%' appended to it (unless the string already
     contains at least 8 '%' characters), where the % characters will be randomly
     generated.
-    
    
     \param directory Specifies the location where the temporary file should be
-     located; if blank, or not a valid directory, the directory
-     returned by #UtilityFunctions::temp_dir will be used.
-*/
-#if( SpecUtils_NO_BOOST_LIB )
-  //temp_file_name: not implemetned well for SpecUtils_NO_BOOST_LIB==1
-  std::string temp_file_name( std::string filebasename, std::string directory );
-#else
+     located; if blank, only the filename will be returned.  Not checked to see
+     if it is a valid directory either.
+   
+   A common use pattern is:
+   \code{.cpp}
+   ofstream tmp( temp_file_name( "mybase", temp_dir() ).c_str() );
+   \endcode
+   
+   Note: this function is home-spun, so dont rely on it being the best.
+  */
   std::string temp_file_name( std::string filebasename, std::string directory );
   
-  //Boost 1.44 doesnt support boost::filesystem::canonical, so we'll leave this
-  //  function out because nothing I compile with the ancient Boosts use it; see
-  //  source code for workaround if need-be
-#if( SpecUtils_NO_BOOST_LIB || BOOST_VERSION >= 104500 )
   /** Converts path to a canonical absolute path (no dot, dot-dot or symbolic
       links). If the path is not an absolute path, it is first made absolute.
    
@@ -458,7 +477,6 @@ namespace UtilityFunctions
       Returns true if sucessful, and false if it fails for any reason.
    */
   bool make_canonical_path( std::string &path, const std::string &cwd = "" );
-#endif
   
   /** Limit of how far down any of the recursive 'ls' functions can recurse down.
       I.e., how many directories deep can you go.
@@ -549,11 +567,10 @@ namespace UtilityFunctions
    
        \returns directories in src directory.  the "." and ".." directories are
                 not included in results.  If src is not a directory, an empty
-                answer is returned.  Returned answers do not include 'src' in
+                answer is returned.  Returned answers do include 'src' in
                 them (i.e. if src contains directors "a", "b", "c", you will
-                get back {"a", "b", "c"}.
+                get back {"src/path/a", "src/path/b", "src/path/c"}.
    
-      As of 20190625 only briefly checked that this function sorta-kinda seemed okay.
    */
   std::vector<std::string> ls_directories_in_directory( const std::string &src );
   
@@ -578,8 +595,7 @@ namespace UtilityFunctions
   //assert( fs_lexically_relative("a/b/c/x/y","a/b/c") == "../..");
   //assert( fs_lexically_relative("a/b/c","a/b/c") == ".");
   //assert( fs_lexically_relative("c/d","a/b") == "../../a/b");
-  
-#endif //#if( !SpecUtils_NO_BOOST_LIB )
+
 
   /** Loads data from specified file on filesystem into the `data` vector and
       terminate with a null character.

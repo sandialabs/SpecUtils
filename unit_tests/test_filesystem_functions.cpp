@@ -34,6 +34,7 @@
 //#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE testUtilityFilesystemFunctions
 #include <boost/test/unit_test.hpp>
+#include <boost/filesystem.hpp>
 //#include <boost/test/included/unit_test.hpp>
 #include "SpecUtils/UtilityFunctions.h"
 
@@ -43,30 +44,322 @@ using namespace boost::unit_test;
 
 BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
 //A few easy filesystem functions; assumes UNIX
-
+  const string hexs = "0123456789abcdef";
+  
+#ifdef _WIN32
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "\\a\\b\\c\\d", "\\a\\b\\foo\\bar"), "..\\..\\foo\\bar" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "a", "a\\b\\c"), "b\\c" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "a\\b\\c\\x\\y", "a/b/c"), "../.." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan\\File1.txt" );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "path\\to\\some\\file.txt"), "file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "C:\\\\path\\to\\some"), "some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "C:\\\\path\\to\\some\\"), "." );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "C:\\\\path\\to\\some\\file.txt"), "C:\\\\path\\to\\some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "C:\\\\path\\to\\some\\path"), "C:\\\\path\\to\\some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "C:\\\\path\\to\\some\\path\\"), "C:\\\\path\\to\\some\\path" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "C:\\\\path\\to\\some\\path\\.."), "C:\\\\path\\to" ); //
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "C:\\\\" ), "C:\\\\" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "." ), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( ".." ), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "somefile" ), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "C:\\\\somefile" ), "C:\\\\" );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( "C:\\\\path\\to\\some\\file.txt"), ".txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( "C:\\\\path\\to\\filename"), "" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( ".profile"), ".profile" );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path", "file.txt"), "path/file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path/", "file.txt"), "path\\file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path\\", "/file.txt"), "path\\file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "/path", "file.txt"), "\\path\\file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path", "file" ), "path/file" );
+#endif //#ifdef _WIN32
+  
 //BOOST_CHECK(results.size() == 1);
-BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "/a/b/c/d", "/a/b/foo/bar"), "../../foo/bar" );
-BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "a", "a/b/c"), "b/c" );
-BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "a/b/c/x/y", "a/b/c"), "../.." );
-BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan/File1.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "/a/b/c/d", "/a/b/foo/bar"), "../../foo/bar" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "a", "a/b/c"), "b/c" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "a/b/c/x/y", "a/b/c"), "../.." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan/File1.txt" );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some/file.txt"), "file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some"), "some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some/"), "some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some/.."), ".." );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "usr"), "usr" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/"), "/" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( "."), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::filename( ".."), ".." );
+  
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/file.txt"), "/path/to/some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path"), "/path/to/some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path/"), "/path/to/some" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path/.."), "/path/to" ); //
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path/../../"), "/path" ); //
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/../path" ), "/path/to/some/.." ); //
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/../../../" ), "/" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/../../../../" ), "/" );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/" ), "/" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "." ), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( ".." ), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "somefile" ), "." );
+  BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/somefile" ), "/" );
+  
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( "/path/to/some/file.txt"), ".txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( "/path/to/filename"), "" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( ".profile"), ".profile" );
+  
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path", "file.txt"), "path/file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path/", "file.txt"), "path/file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path/", "/file.txt"), "path/file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "/path", "file.txt"), "/path/file.txt" );
+  BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path", "file" ), "path/file" );
 
-BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some/file.txt"), "file.txt" );
-BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some"), "some" );
-BOOST_CHECK_EQUAL( UtilityFunctions::filename( "/path/to/some/"), "." );
+  
+  BOOST_CHECK( !UtilityFunctions::is_absolute_path( "." ) );
+  BOOST_CHECK( !UtilityFunctions::is_absolute_path( "./someFile" ) );
+  BOOST_CHECK( UtilityFunctions::is_absolute_path( "/" ) );
+  BOOST_CHECK( UtilityFunctions::is_absolute_path( UtilityFunctions::temp_dir() ) );
+  BOOST_CHECK( UtilityFunctions::is_absolute_path( UtilityFunctions::get_working_path() ) );
+  
+  
+  
+  
+  const string tmpdir = UtilityFunctions::temp_dir();
+  BOOST_REQUIRE( !tmpdir.empty() );
+  BOOST_REQUIRE( UtilityFunctions::is_directory(tmpdir) );
+  
+  const string testname1 = UtilityFunctions::temp_file_name( "myuniquename", UtilityFunctions::temp_dir() );
+  BOOST_CHECK( UtilityFunctions::contains( testname1, "myuniquename") );
+  BOOST_CHECK( testname1.size() > (tmpdir.size() + 12 + 8) );
+  BOOST_CHECK( !UtilityFunctions::is_directory(testname1) );
+  BOOST_CHECK( !UtilityFunctions::is_file(testname1) );
+  
+  const string testname2 = UtilityFunctions::temp_file_name( "myuniquename-%%%%%%%%%%", UtilityFunctions::temp_dir() );
+  BOOST_CHECK( UtilityFunctions::contains( testname2, "myuniquename") );;
+  BOOST_CHECK( !UtilityFunctions::is_directory(testname2) );
+  BOOST_CHECK( !UtilityFunctions::is_file(testname2) );
+  const string testname2_ending = testname2.substr( testname2.length() - 11, 11 );
+  BOOST_CHECK( testname2_ending[0] == '-' );
+  
+  
+  for( size_t i = 1; i < testname2_ending.size(); ++i )
+  {
+    BOOST_CHECK( hexs.find(testname2_ending[i]) != string::npos );
+  }
+  
+  BOOST_REQUIRE( UtilityFunctions::create_directory(testname2) == 1 );
+  BOOST_CHECK( UtilityFunctions::is_directory(testname2) );
+  
+  //cout << "Created directory '" << testname2 << "'" << endl;
+  
+  BOOST_CHECK( UtilityFunctions::can_rw_in_directory(testname2) );
+  
+#ifdef _WIN32
+  const auto wtestname2 = UtilityFunctions::convert_from_utf8_to_utf16(testname2);
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
+  BOOST_CHECK( !UtilityFunctions::can_rw_in_directory(testname2) );
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
+  BOOST_CHECK( UtilityFunctions::can_rw_in_directory(testname2) );
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
+  BOOST_CHECK( !UtilityFunctions::can_rw_in_directory(testname2) );
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read );
+#else
+  boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
+  boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
+  boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
+  BOOST_CHECK( !UtilityFunctions::can_rw_in_directory(testname2) );
+  boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
+  BOOST_CHECK( UtilityFunctions::can_rw_in_directory(testname2) );
+  boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
+  BOOST_CHECK( !UtilityFunctions::can_rw_in_directory(testname2) );
+  boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read );
+#endif
 
-BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/file.txt"), "/path/to/some" );
-BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path"), "/path/to/some" );
-BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path/"), "/path/to/some/path" );
-BOOST_CHECK_EQUAL( UtilityFunctions::parent_path( "/path/to/some/path/.."), "/path/to" ); //
+  
+  vector<string> added_dirs, added_files, toplevel_dirs;
+  for( size_t subdirnum = 0; subdirnum < 25; ++subdirnum )
+  {
+    int depth = 0;
+    string currentdir = testname2;
+    
+    while( (rand() % 2) == 1 )
+    {
+      ++depth;
+      currentdir = UtilityFunctions::temp_file_name( "subdir-" + std::to_string(depth) + "-%%%%%%%%%%", currentdir );
+      BOOST_CHECK( !UtilityFunctions::is_directory(currentdir) );
+      BOOST_REQUIRE( UtilityFunctions::create_directory(currentdir) == 1 );
+      BOOST_CHECK( UtilityFunctions::is_directory(currentdir) );
+      added_dirs.push_back( currentdir );
+      if( depth == 1 )
+        toplevel_dirs.push_back( currentdir );
+      
+      const int nfilescreate = (rand() % 100);
+      vector<string> filesinthisdir;
+      for( int filenum = 0; filenum < nfilescreate; ++filenum )
+      {
+        string fname = UtilityFunctions::append_path( currentdir, "file_" + std::to_string(filenum) + ".txt" );
+        BOOST_CHECK( !UtilityFunctions::is_file(fname) );
+        const int nbytes = (rand() % (1024*512));
+        vector<char> writtenbytes;
+        
+        {//Begin writing to file
+          ofstream outputfile( fname.c_str() );
+          BOOST_REQUIRE( outputfile.is_open() );
+          for( int i = 0 ; i < nbytes; ++i )
+          {
+            const char byte = rand();
+            outputfile.put( byte );
+            writtenbytes.push_back( byte );
+          }
+        }//End writing to file
+        
+        
+        //BOOST_CHECK( UtilityFunctions::make_canonical_path( f ) );
+        string forigname = UtilityFunctions::filename(fname);
+        string fparent = UtilityFunctions::parent_path(fname);
+        string fparentname = UtilityFunctions::filename(fparent);
+        
+        string fgparent = UtilityFunctions::parent_path(fparent);
+        string fgparentname = UtilityFunctions::filename(fgparent);
+        
+        string fggparent = UtilityFunctions::parent_path(fgparent);
+        string fggparentname = UtilityFunctions::filename(fggparent);
+        
+        string onedown = UtilityFunctions::append_path( fparent, ".." );
+        string twodown = UtilityFunctions::append_path( onedown, ".." );
+        string threedown = UtilityFunctions::append_path( twodown, ".." );
+        
+        string onedotequiv = UtilityFunctions::append_path( UtilityFunctions::append_path(onedown, fparentname ), forigname );
+        
+        string twodotequiv = UtilityFunctions::append_path(
+                               UtilityFunctions::append_path(
+                                 UtilityFunctions::append_path(twodown, fgparentname),
+                               fparentname),
+                             forigname );
+        
+        string threedotequiv = UtilityFunctions::append_path(
+                                 UtilityFunctions::append_path(
+                                   UtilityFunctions::append_path(
+                                     UtilityFunctions::append_path(threedown, fggparentname),
+                                   fgparentname),
+                                 fparentname ),
+                               forigname );
+        
+        string fname_canonical = fname;
+        BOOST_CHECK( UtilityFunctions::make_canonical_path(fname_canonical) );
+        string fname_canonical_check = fname_canonical;
+        BOOST_CHECK( UtilityFunctions::make_canonical_path(fname_canonical_check) );
+        BOOST_CHECK_EQUAL( fname_canonical_check, fname_canonical );
+        
+        BOOST_CHECK_MESSAGE( UtilityFunctions::make_canonical_path(onedotequiv), "Failed to canoniclize " << onedotequiv );
+        BOOST_CHECK_MESSAGE( UtilityFunctions::make_canonical_path(twodotequiv), "Failed to canoniclize " << twodotequiv );
+        BOOST_CHECK_MESSAGE( UtilityFunctions::make_canonical_path(threedotequiv), "Failed to canoniclize " << threedotequiv );
+        
+        BOOST_CHECK_MESSAGE( threedotequiv.find("..") == string::npos, "threedotequiv='" << threedotequiv << "'" );
+        
+        std::vector<char> read_bytes;
+        UtilityFunctions::load_file_data( fname.c_str(), read_bytes );
+        if( !read_bytes.empty() )
+          read_bytes.resize(read_bytes.size()-1);  //Get rid of '\0' that was inserted
+        
+        BOOST_CHECK( writtenbytes == read_bytes );
+        
+        BOOST_CHECK( UtilityFunctions::is_file(fname) );
+        //BOOST_CHECK_EQUAL( UtilityFunctions::file_size(fname), nbytes );
+        
+#ifdef _WIN32
+        BOOST_CHECK_EQUAL( UtilityFunctions::file_size(fname),
+                           boost::filesystem::file_size(UtilityFunctions::convert_from_utf8_to_utf16(fname) ) );
+#else
+        BOOST_CHECK_EQUAL( UtilityFunctions::file_size(fname), boost::filesystem::file_size(fname) );
+#endif
 
-BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( "/path/to/some/file.txt"), ".txt" );
-BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( "/path/to/filename"), "" );
-BOOST_CHECK_EQUAL( UtilityFunctions::file_extension( ".profile"), ".profile" );
+  
+        filesinthisdir.push_back( fname );
+        added_files.push_back( fname );
+      }//for( int filenum = 0; filenum < nfilescreate; ++filenum )
+      
+      const vector<string> lsfiles = UtilityFunctions::ls_files_in_directory( currentdir, "" );
+      BOOST_CHECK_EQUAL( lsfiles.size(), filesinthisdir.size() );
+      for( string createdfile : filesinthisdir )
+      {
+        bool found_file = false;
+        BOOST_CHECK( UtilityFunctions::make_canonical_path( createdfile ) );
+                    
+        for( string f : lsfiles )
+        {
+          BOOST_CHECK( UtilityFunctions::make_canonical_path( f ) );
+          found_file = (f == createdfile);
+          if( found_file )
+            break;
+        }
+        
+        BOOST_CHECK_MESSAGE( found_file, "Failed on " << createdfile );
+      }//for( string createdfile : filesinthisdir )
+    }//while( (rand() % 2) == 1 )
+  }//for( size_t subdirnum = 0; subdirnum < 100; ++subdirnum )
+  
+  vector<string> toplevel_ls_dirs = UtilityFunctions::ls_directories_in_directory( testname2 );
+  for( string &s : toplevel_dirs )
+    UtilityFunctions::make_canonical_path(s);
+  for( string &s : toplevel_ls_dirs )
+    UtilityFunctions::make_canonical_path(s);
+  
+  std::sort( begin(toplevel_dirs), end(toplevel_dirs) );
+  std::sort( begin(toplevel_ls_dirs), end(toplevel_ls_dirs) );
+  
+  
+  BOOST_CHECK_MESSAGE( toplevel_dirs == toplevel_ls_dirs, "Expected " << toplevel_dirs.size() << " dirs, and got " << toplevel_ls_dirs.size() );
+  
+  
+  vector<string> rls = UtilityFunctions::recursive_ls(testname2);
+  vector<string> rlstxt = UtilityFunctions::recursive_ls(testname2,".txt");
+  vector<string> rlsnone = UtilityFunctions::recursive_ls(testname2,".a");
+  
+  std::sort( begin(added_files), end(added_files) );
+  std::sort( begin(rls), end(rls) );
+  std::sort( begin(rlstxt), end(rlstxt) );
+  std::sort( begin(rlsnone), end(rlsnone) );
+  
+  BOOST_CHECK_EQUAL(rls.size(), added_files.size());
+  BOOST_CHECK( rls == rlstxt );
+  BOOST_CHECK( added_files == rls );
+  BOOST_CHECK( rlsnone.empty() );
+  
+  for( const string f : added_files )
+  {
+    BOOST_CHECK( UtilityFunctions::is_file(f) );
+    BOOST_CHECK( !UtilityFunctions::is_directory(f) );
+    
+    vector<char> old_file_data, new_file_data;
+    UtilityFunctions::load_file_data( f.c_str(), old_file_data );
+    
+    const string newname = f + "renamed.t";
+    BOOST_CHECK( UtilityFunctions::rename_file( f, newname ) );
+    BOOST_CHECK( !UtilityFunctions::is_file(f) );
+    BOOST_CHECK( UtilityFunctions::is_file(newname) );
+    
+    UtilityFunctions::load_file_data( newname.c_str(), new_file_data );
+    BOOST_CHECK( old_file_data == new_file_data );
+    
+    BOOST_CHECK( UtilityFunctions::remove_file(newname) );
+    BOOST_CHECK( !UtilityFunctions::is_file(newname) );
+  }//
+  
 
-BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path", "file.txt"), "path/file.txt" );
-BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path/", "file.txt"), "path/file.txt" );
-BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path/", "/file.txt"), "path/file.txt" );
-BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "/path", "file.txt"), "/path/file.txt" );
-BOOST_CHECK_EQUAL( UtilityFunctions::append_path( "path", "file" ), "path/file" );
-
+  
+#ifdef _WIN32
+  boost::filesystem::remove_all(wtestname2);
+#else
+  boost::filesystem::remove_all(testname2);
+#endif
 }
