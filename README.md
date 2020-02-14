@@ -20,7 +20,7 @@ A minimal program to print out the channel counts of a spectrum file, and then s
 ```c++
 #include  <stdlib.h>
 #include  <iostream>
-#include  "SpecUtils/SpectrumDataStructs.h"
+#include  "SpecUtils/SpecFile.h"
 
 int main() {
   MeasurementInfo specfile;

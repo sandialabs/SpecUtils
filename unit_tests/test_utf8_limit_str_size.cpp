@@ -34,7 +34,8 @@
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
 
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/StringAlgo.h"
+
 
 using namespace std;
 using namespace boost::unit_test;
@@ -43,146 +44,146 @@ using namespace boost::unit_test;
 BOOST_AUTO_TEST_CASE( test_utf8_limit_str_size )
 {
   string teststr = "";
-  UtilityFunctions::utf8_limit_str_size( teststr, 0 );
+  SpecUtils::utf8_limit_str_size( teststr, 0 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = "";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = "";
-  UtilityFunctions::utf8_limit_str_size( teststr, 5 );
+  SpecUtils::utf8_limit_str_size( teststr, 5 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = "AAAA";
-  UtilityFunctions::utf8_limit_str_size( teststr, 0 );
+  SpecUtils::utf8_limit_str_size( teststr, 0 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = "AAAA";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, "A" );
   
   teststr = "AAAA";
-  UtilityFunctions::utf8_limit_str_size( teststr, 4 );
+  SpecUtils::utf8_limit_str_size( teststr, 4 );
   BOOST_CHECK_EQUAL( teststr, "AAAA" );
   
   teststr = "AAA";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, "AAA" );
   
   teststr = "AAA";
-  UtilityFunctions::utf8_limit_str_size( teststr, 4 );
+  SpecUtils::utf8_limit_str_size( teststr, 4 );
   BOOST_CHECK_EQUAL( teststr, "AAA" );
   
   teststr = u8"ⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 0 );
+  SpecUtils::utf8_limit_str_size( teststr, 0 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = u8"ⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = u8"ⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 2 );
+  SpecUtils::utf8_limit_str_size( teststr, 2 );
   BOOST_CHECK_EQUAL( teststr, "" );
   
   teststr = u8"ⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"ⓧ" );
   
   teststr = u8"aⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, "a" );
   
   teststr = u8"ⓧⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"ⓧ" );
   
   teststr = u8"ⓧⓧ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 6 );
+  SpecUtils::utf8_limit_str_size( teststr, 6 );
   BOOST_CHECK_EQUAL( teststr, u8"ⓧⓧ" );
   
   teststr = u8"ⓧⓧaaa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 6 );
+  SpecUtils::utf8_limit_str_size( teststr, 6 );
   BOOST_CHECK_EQUAL( teststr, u8"ⓧⓧ" );
   
   teststr = u8"ⓧⓧaaa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 7 );
+  SpecUtils::utf8_limit_str_size( teststr, 7 );
   BOOST_CHECK_EQUAL( teststr, u8"ⓧⓧa" );
   
   
   teststr = u8"aaⓧⓧaaa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 5 );
+  SpecUtils::utf8_limit_str_size( teststr, 5 );
   BOOST_CHECK_EQUAL( teststr, u8"aaⓧ" );
   
   teststr = u8"aaⓧⓧaaa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 6 );
+  SpecUtils::utf8_limit_str_size( teststr, 6 );
   BOOST_CHECK_EQUAL( teststr, u8"aaⓧ" );
   
   teststr = u8"aaⓧⓧaaa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 7 );
+  SpecUtils::utf8_limit_str_size( teststr, 7 );
   BOOST_CHECK_EQUAL( teststr, u8"aaⓧ" );
   
   
   teststr = u8"aõ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"aõ" );
   
   teststr = u8"õa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"õa" );
   
   teststr = u8"õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"õ" );
   
   teststr = u8"õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 2 );
+  SpecUtils::utf8_limit_str_size( teststr, 2 );
   BOOST_CHECK_EQUAL( teststr, u8"õ" );
   
   teststr = u8"õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, u8"" );
   
   teststr = u8"÷õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 2 );
+  SpecUtils::utf8_limit_str_size( teststr, 2 );
   BOOST_CHECK_EQUAL( teststr, u8"÷" );
   
   teststr = u8"÷õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"÷" );
   
   teststr = u8"÷õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 4 );
+  SpecUtils::utf8_limit_str_size( teststr, 4 );
   BOOST_CHECK_EQUAL( teststr, u8"÷õ" );
   
   teststr = u8"÷õ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 5 );
+  SpecUtils::utf8_limit_str_size( teststr, 5 );
   BOOST_CHECK_EQUAL( teststr, u8"÷õ" );
   
   teststr = u8"÷aõ";
-  UtilityFunctions::utf8_limit_str_size( teststr, 5 );
+  SpecUtils::utf8_limit_str_size( teststr, 5 );
   BOOST_CHECK_EQUAL( teststr, u8"÷aõ" );
   
   teststr = u8"÷aõa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 5 );
+  SpecUtils::utf8_limit_str_size( teststr, 5 );
   BOOST_CHECK_EQUAL( teststr, u8"÷aõ" );
   
   teststr = u8"÷aõa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 3 );
+  SpecUtils::utf8_limit_str_size( teststr, 3 );
   BOOST_CHECK_EQUAL( teststr, u8"÷a" );
   
   teststr = u8"÷aõa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 2 );
+  SpecUtils::utf8_limit_str_size( teststr, 2 );
   BOOST_CHECK_EQUAL( teststr, u8"÷" );
   
   
   teststr = u8"÷aõa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, u8"" );
   
   teststr = u8"a÷aõa";
-  UtilityFunctions::utf8_limit_str_size( teststr, 1 );
+  SpecUtils::utf8_limit_str_size( teststr, 1 );
   BOOST_CHECK_EQUAL( teststr, u8"a" );
   
   
@@ -201,11 +202,11 @@ BOOST_AUTO_TEST_CASE( test_utf8_limit_str_size )
   const string potential_input_paths[] = { ".", indir, "../../testing/", "../../../testing/" };
   for( const string dir : potential_input_paths )
   {
-    const string potential = UtilityFunctions::append_path( dir, "test_data/txt/utf8_limit_str_size_INPUT.txt" );
-    if( UtilityFunctions::is_file(potential) )
+    const string potential = SpecUtils::append_path( dir, "test_data/txt/utf8_limit_str_size_INPUT.txt" );
+    if( SpecUtils::is_file(potential) )
     {
       test_in_file = potential;
-      test_out_file = UtilityFunctions::append_path( dir, "test_data/txt/utf8_limit_str_size_OUTPUT.txt" );
+      test_out_file = SpecUtils::append_path( dir, "test_data/txt/utf8_limit_str_size_OUTPUT.txt" );
     }
   }
   
@@ -225,13 +226,13 @@ BOOST_AUTO_TEST_CASE( test_utf8_limit_str_size )
     throw runtime_error( "Failed to open output file " + test_out_file );
   
   string line;
-  while( UtilityFunctions::safe_get_line(input_check, line) )
+  while( SpecUtils::safe_get_line(input_check, line) )
   {
-    UtilityFunctions::utf8_limit_str_size( line , 45 );
+    SpecUtils::utf8_limit_str_size( line , 45 );
     input_vector.push_back( line );
   }
   
-  while( UtilityFunctions::safe_get_line(output_check, line) )
+  while( SpecUtils::safe_get_line(output_check, line) )
     output_vector.push_back( line );
   
   BOOST_REQUIRE_EQUAL( input_vector.size(), output_vector.size() );

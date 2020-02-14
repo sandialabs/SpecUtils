@@ -30,8 +30,9 @@
 #include <utility>
 #include <ostream>
 
-#include "SpectrumDataStructs.h"
 #include "SpecUtils_config.h"
+#include "SpecUtils/SpecFile.h"
+
 
 class Measurement;
 class MeasurementInfo;

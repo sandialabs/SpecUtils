@@ -1,5 +1,5 @@
-#ifndef SpectrumDataStructs_h
-#define SpectrumDataStructs_h
+#ifndef SpecUtils_SpecFile_h
+#define SpecUtils_SpecFile_h
 /* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
  
  Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC
@@ -2912,4 +2912,4 @@ float Measurement::gamma_energy_max() const
   return 2.0f*(*channel_energies_)[nbin-1] - (*channel_energies_)[nbin-2];
 }
 
-#endif
+#endif  //SpecUtils_SpecFile_h

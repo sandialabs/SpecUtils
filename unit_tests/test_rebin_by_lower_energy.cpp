@@ -25,9 +25,8 @@
 #include <vector>
 #include <iostream>
 
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
-#include "SpecUtils/SpectrumDataStructs.h"
-
 
 
 void test_rebin_case( const std::vector<float> &original_energies,

@@ -26,17 +26,23 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/date_time/date.hpp>
-#include <boost/date_time/gregorian/gregorian.hpp>
 
+
+#include <boost/date_time/date.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
 
 //#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE testTimeFromString
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
-#include "SpecUtils/UtilityFunctions.h"
+
+
+#include "SpecUtils/DateTime.h"
+#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/Filesystem.h"
 
 
 using namespace std;
@@ -61,8 +67,8 @@ BOOST_AUTO_TEST_CASE(timeFromString)
   const string potential_input_paths[] = { ".", indir, "../../testing/", "../../../testing/", "" };
   for( const string dir : potential_input_paths )
   {
-    const string potential = UtilityFunctions::append_path( dir, "datetimes.txt" );
-    if( UtilityFunctions::is_file(potential) )
+    const string potential = SpecUtils::append_path( dir, "datetimes.txt" );
+    if( SpecUtils::is_file(potential) )
       input_filename = potential;
   }
   
@@ -74,13 +80,13 @@ BOOST_AUTO_TEST_CASE(timeFromString)
   BOOST_REQUIRE_MESSAGE( file.is_open(), "Failed to open input text test file '" <<  input_filename << "'" );
 
   string line;
-  while( UtilityFunctions::safe_get_line(file, line) ) 
+  while( SpecUtils::safe_get_line(file, line) ) 
   {
     if( line.empty() || line[0]=='#' ) 
       continue;
       
     std::vector<std::string> fields;
-    UtilityFunctions::split( fields, line, "," );
+    SpecUtils::split( fields, line, "," );
 
     if( fields.size() != 2 )
     {
@@ -102,11 +108,11 @@ BOOST_AUTO_TEST_CASE(timeFromString)
   {
     const string orig_fmt_str = original_string[i];
     const string iso_frmt_str = iso_string[i];
-    const ptime orig_fmt_answ = UtilityFunctions::time_from_string( orig_fmt_str.c_str() );
-    const ptime iso_fmt_answ = UtilityFunctions::time_from_string( iso_frmt_str.c_str() );
+    const ptime orig_fmt_answ = SpecUtils::time_from_string( orig_fmt_str.c_str() );
+    const ptime iso_fmt_answ = SpecUtils::time_from_string( iso_frmt_str.c_str() );
         
-    const string orig_fmt_answ_str = UtilityFunctions::to_common_string(orig_fmt_answ,true);
-    const string iso_fmt_answ_str = UtilityFunctions::to_common_string(iso_fmt_answ,true);
+    const string orig_fmt_answ_str = SpecUtils::to_common_string(orig_fmt_answ,true);
+    const string iso_fmt_answ_str = SpecUtils::to_common_string(iso_fmt_answ,true);
     //bool pass = "not-a-date-time"==s;
       
 

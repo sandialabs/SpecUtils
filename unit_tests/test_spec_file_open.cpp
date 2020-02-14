@@ -31,8 +31,9 @@
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
 
-#include "SpecUtils/UtilityFunctions.h"
-#include "SpecUtils/SpectrumDataStructs.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/Filesystem.h"
 
 using namespace std;
 using namespace boost::unit_test;
@@ -52,7 +53,7 @@ BOOST_AUTO_TEST_CASE( testFileOpen )
       indir = arg.substr( 8 );
   }//for( int arg = 1; arg < argc; ++ arg )
   
-  UtilityFunctions::ireplace_all( indir, "%20", " " );
+  SpecUtils::ireplace_all( indir, "%20", " " );
   
   while( indir.size() && indir[0]=='"' )
     indir = indir.substr( 1 );
@@ -61,9 +62,9 @@ BOOST_AUTO_TEST_CASE( testFileOpen )
   
   
   BOOST_CHECK_MESSAGE( !indir.empty(), "No Input directory specified" << indir );
-  BOOST_CHECK_MESSAGE( UtilityFunctions::is_directory(indir), "Input is not a valid directory: " << indir );
+  BOOST_CHECK_MESSAGE( SpecUtils::is_directory(indir), "Input is not a valid directory: " << indir );
   
-  vector<std::string> files = UtilityFunctions::recursive_ls( indir );
+  vector<std::string> files = SpecUtils::recursive_ls( indir );
   
   BOOST_TEST_MESSAGE( "Input Directory:" << indir );
   

@@ -34,9 +34,8 @@
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
 
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
-#include "SpecUtils/SpectrumDataStructs.h"
 
 using namespace std;
 using namespace boost::unit_test;

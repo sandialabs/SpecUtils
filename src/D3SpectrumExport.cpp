@@ -30,11 +30,13 @@
 #include "rapidxml/rapidxml_print.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
 
-#include "SpecUtils/D3SpectrumExport.h"
-#include "SpecUtils/UtilityFunctions.h"
-#include "SpecUtils/EnergyCalibration.h"
-#include "SpecUtils/SpectrumDataStructs.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/DateTime.h"
+#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/Filesystem.h"
 #include "D3SpectrumExportResources.h"
+#include "SpecUtils/D3SpectrumExport.h"
+#include "SpecUtils/EnergyCalibration.h"
 
 
 using namespace std;
@@ -60,7 +62,7 @@ namespace
   string file_to_string( const std::string &filename )
   {
 #ifdef _WIN32
-    const std::wstring wfilename = UtilityFunctions::convert_from_utf8_to_utf16(filename);
+    const std::wstring wfilename = SpecUtils::convert_from_utf8_to_utf16(filename);
     std::ifstream t( wfilename.c_str() );
 #else
     std::ifstream t( filename.c_str() );
@@ -334,7 +336,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
 #else
     //could also:
     //ostr << "include(\"" << D3_MIN_JS_FILENAME << "\");" << endline;
-    using UtilityFunctions::append_path;
+    using SpecUtils::append_path;
     const std::string basdir = D3_SCRIPT_RUNTIME_DIR;
     
     ostr << "<script>" << file_to_string( append_path(basdir, D3_MIN_JS_FILENAME) ) << "</script>" << endline;
@@ -376,7 +378,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     ostr << endline << "var data_" << div_name << " = {" << endline;
     
-    ostr << "\"updateTime\": \"" << UtilityFunctions::to_iso_string(boost::posix_time::second_clock::local_time()) << "\"," << endline;
+    ostr << "\"updateTime\": \"" << SpecUtils::to_iso_string(boost::posix_time::second_clock::local_time()) << "\"," << endline;
     
     ostr << "\"spectra\": [" << endline;
     

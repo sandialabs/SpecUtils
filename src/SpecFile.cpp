@@ -56,31 +56,52 @@
 #include "rapidxml/rapidxml_print.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
 
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/DateTime.h"
+#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/Filesystem.h"
 #include "SpecUtils/EnergyCalibration.h"
-#include "SpecUtils/SpectrumDataStructs.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
 #if( SpecUtils_ENABLE_D3_CHART )
 #include "SpecUtils/D3SpectrumExport.h"
 #endif
 
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+#if( defined(_MSC_VER) && _MSC_VER <= 1700 )
+#define SRC_LOCATION (std::string("File " TOSTRING(__FILE__) ": Function '") \
+        +  std::string(__FUNCTION__) \
+        + std::string( "': Line " TOSTRING(__LINE__)))
+#else
+#define SRC_LOCATION (std::string("File " TOSTRING(__FILE__) ": Function '") \
+        + std::string(__func__) \
+        + std::string( "': Line " TOSTRING(__LINE__)))
+#endif
+
+#if( defined(WIN32) )
+#undef min
+#undef max
+#endif 
+
 using namespace std;
 
 
-using UtilityFunctions::trim;
-using UtilityFunctions::split;
-using UtilityFunctions::iequals_ascii;
-using UtilityFunctions::to_lower_ascii;
-using UtilityFunctions::to_upper_ascii;
-using UtilityFunctions::contains;
-using UtilityFunctions::icontains;
-using UtilityFunctions::starts_with;
-using UtilityFunctions::istarts_with;
-using UtilityFunctions::ireplace_all;
-using UtilityFunctions::convert_from_utf8_to_utf16;
+using SpecUtils::trim;
+using SpecUtils::split;
+using SpecUtils::iequals_ascii;
+using SpecUtils::to_lower_ascii;
+using SpecUtils::to_upper_ascii;
+using SpecUtils::contains;
+using SpecUtils::icontains;
+using SpecUtils::starts_with;
+using SpecUtils::istarts_with;
+using SpecUtils::ireplace_all;
+using SpecUtils::convert_from_utf8_to_utf16;
 
-using UtilityFunctions::time_from_string;
+using SpecUtils::time_from_string;
 
 //For references in comments similar to 'refDXMA3HSRA6', see
 //  documentation/comment_refernce_to_ouo_source.txt for source file information
@@ -127,7 +148,7 @@ namespace
   
   bool toFloat( const std::string &str, float &f )
   {
-    //ToDO: should probably use UtilityFunctions::parse_float(...) for consistency/speed
+    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
     const int nconvert = sscanf( str.c_str(), "%f", &f );
     return (nconvert == 1);
   }
@@ -395,7 +416,7 @@ namespace
   {
     const size_t start_len = strlen(start);
     for( size_t i = 0; i < remarks.size(); ++i )
-      if( UtilityFunctions::istarts_with(remarks[i], start) )
+      if( SpecUtils::istarts_with(remarks[i], start) )
       {
         string val = remarks[i].substr( start_len );
         const size_t pos = val.find_first_not_of( " :\t\n\r=");
@@ -420,7 +441,7 @@ namespace
     const size_t zeropos = field.find_first_of( '\0' );
     if( zeropos != string::npos )
       field = field.substr(0,zeropos);
-    UtilityFunctions::trim( field );
+    SpecUtils::trim( field );
     
     return field;
   };//parse_pcf_field
@@ -604,14 +625,14 @@ namespace
     val = 0.0f;
     if( !node )
       return false;
-    return UtilityFunctions::parse_float( node->value(), node->value_size(), val );
+    return SpecUtils::parse_float( node->value(), node->value_size(), val );
   }
   
   std::string get_n42_xmlns( const rapidxml::xml_node<char> *node )
   {
     const string node_name = xml_name_str(node);
     const size_t colon_pos = node_name.find(':');
-    if( colon_pos != string::npos && UtilityFunctions::icontains(node_name, "n42") )
+    if( colon_pos != string::npos && SpecUtils::icontains(node_name, "n42") )
       return node_name.substr( 0, colon_pos + 1 );
     return "";
   }//std::string get_n42_xmlns( const rapidxml::xml_node<char> *node )
@@ -688,7 +709,7 @@ namespace
         }
         
         if( matches_convention )
-          matches_convention = !UtilityFunctions::icontains( name, "Unknown" );
+          matches_convention = !SpecUtils::icontains( name, "Unknown" );
         
         if( matches_convention )
         {
@@ -817,7 +838,7 @@ namespace
       throw std::runtime_error( "speed_from_node(...): NULL <Speed> node" );
     
     float speed = 0.0f;
-    if( !UtilityFunctions::parse_float( speed_node->value(), speed_node->value_size(), speed ) )
+    if( !SpecUtils::parse_float( speed_node->value(), speed_node->value_size(), speed ) )
     {
       stringstream msg;
       msg << SRC_LOCATION << "\n\tUnable to convert '" << xml_value_str(speed_node)
@@ -925,7 +946,7 @@ void log_developer_error( const char *location, const char *error )
   boost::posix_time::ptime time = boost::posix_time::second_clock::local_time();
   
   const string timestr = boost::posix_time::to_iso_extended_string( time );
-//  const string timestr = UtilityFunctions::to_iso_string( time );
+//  const string timestr = SpecUtils::to_iso_string( time );
   
   s_dev_error_log << timestr << ": " << location << endl << error << "\n\n" << endl;
   cerr << timestr << ": " << location << endl << error << "\n\n" << endl;
@@ -1377,7 +1398,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
 
 int sample_num_from_remark( std::string remark )
 {
-  UtilityFunctions::to_lower_ascii(remark);
+  SpecUtils::to_lower_ascii(remark);
   size_t pos = remark.find( "survey" );
 
   if( pos == string::npos )
@@ -1463,13 +1484,13 @@ float speed_from_remark( std::string remark )
 std::string detector_name_from_remark( const std::string &remark )
 {
   //Check for the Gadras convention similar to "Det=Aa1"
-  if( UtilityFunctions::icontains(remark, "det") )
+  if( SpecUtils::icontains(remark, "det") )
   {
     //Could use a regex here... maybe someday I'll upgrade
     string remarkcopy = remark;
     
     string remarkcopylowercase = remarkcopy;
-    UtilityFunctions::to_lower_ascii( remarkcopylowercase );
+    SpecUtils::to_lower_ascii( remarkcopylowercase );
     
     size_t pos = remarkcopylowercase.find( "det" );
     if( pos != string::npos )
@@ -1479,10 +1500,10 @@ std::string detector_name_from_remark( const std::string &remark )
       if( pos != string::npos )
       {
         string det_identifier = remarkcopy.substr(0,pos);
-        UtilityFunctions::to_lower_ascii( det_identifier );
-        UtilityFunctions::trim( det_identifier ); //I dont htink this is necassarry
+        SpecUtils::to_lower_ascii( det_identifier );
+        SpecUtils::trim( det_identifier ); //I dont htink this is necassarry
         if( det_identifier=="det" || det_identifier=="detector"
-           || (UtilityFunctions::levenshtein_distance(det_identifier,"detector") < 3) ) //Allow two typos of "detector"; arbitrary
+           || (SpecUtils::levenshtein_distance(det_identifier,"detector") < 3) ) //Allow two typos of "detector"; arbitrary
         {
           remarkcopy = remarkcopy.substr(pos);  //get rid of the "det="
           while( remarkcopy.length() && (remarkcopy[0]==' ' || remarkcopy[0]=='=') )
@@ -1493,7 +1514,7 @@ std::string detector_name_from_remark( const std::string &remark )
       }
     }
     
-  }//if( UtilityFunctions::icontains(remark, "det") )
+  }//if( SpecUtils::icontains(remark, "det") )
   
   
   vector<string> split_contents;
@@ -1590,9 +1611,9 @@ float dose_units_usvPerH( const char *str, const size_t str_length )
 
 bool likely_not_spec_file( const std::string &fullpath )
 {
-  const std::string extension = UtilityFunctions::file_extension( fullpath );
-  const std::string filename = UtilityFunctions::filename( fullpath );
-  const std::string dir = UtilityFunctions::parent_path( fullpath );
+  const std::string extension = SpecUtils::file_extension( fullpath );
+  const std::string filename = SpecUtils::filename( fullpath );
+  const std::string dir = SpecUtils::parent_path( fullpath );
   
   const char * const bad_exts[] = { ".jpg", ".jpeg", ".zip", ".docx", ".png",
       ".pdf", ".html", ".xtk3d", ".xtk", ".doc", /*".txt",*/ ".An1", ".rpt",
@@ -1608,21 +1629,21 @@ bool likely_not_spec_file( const std::string &fullpath )
   const size_t num_bad_exts = sizeof(bad_exts) / sizeof(bad_exts[0]);
   
   for( size_t i = 0; i < num_bad_exts; ++i )
-    if( UtilityFunctions::iequals_ascii(extension, bad_exts[i]) )
+    if( SpecUtils::iequals_ascii(extension, bad_exts[i]) )
       return true;
     
-  if( //(filename.find("_AA_")!=std::string::npos && UtilityFunctions::iequals_ascii(extension, ".n42") )
-     //|| (filename.find("_AN_")!=std::string::npos && UtilityFunctions::iequals_ascii(extension, ".n42") )
+  if( //(filename.find("_AA_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
+     //|| (filename.find("_AN_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
      filename.find("Neutron.n42") != std::string::npos
      || filename.find(".xml.XML") != std::string::npos
      || filename.find("results.xml") != std::string::npos
      || filename.find("Rebin.dat") != std::string::npos
      || filename.find("Detector.dat") != std::string::npos
-     || UtilityFunctions::iends_with( fullpath, ".html")
+     || SpecUtils::iends_with( fullpath, ".html")
      || filename.empty()
      || filename[0] == '.'
      || extension.empty()
-     || UtilityFunctions::file_size(fullpath) < 100
+     || SpecUtils::file_size(fullpath) < 100
      )
     return true;
   
@@ -1651,7 +1672,7 @@ bool is_candidate_n42_file( const char * data )
   
   for( const char *substr : magic_strs )
   {
-    if( UtilityFunctions::icontains( filebegining, substr ) )
+    if( SpecUtils::icontains( filebegining, substr ) )
       return true;
   }
   
@@ -1747,7 +1768,7 @@ bool is_candidate_n42_file( const char * const data, const char * const data_end
   
   for( const char *substr : magic_strs )
   {
-    if( UtilityFunctions::icontains( filebegining, substr ) )
+    if( SpecUtils::icontains( filebegining, substr ) )
       return true;
   }
   
@@ -1794,7 +1815,7 @@ void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
       remark_node = XML_NEXT_TWIN(remark_node) )
   {
     string remark = xml_value_str( remark_node );
-    UtilityFunctions::trim(remark);
+    SpecUtils::trim(remark);
     if(!remark.empty())
       analysis.remarks_.push_back( remark );
   }
@@ -2736,7 +2757,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
       if( remark.empty() )
         continue;
     
-      if( UtilityFunctions::istarts_with( remark, "Title:") )
+      if( SpecUtils::istarts_with( remark, "Title:") )
       {
         remark = remark.substr(6);
         trim( remark );
@@ -2758,7 +2779,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
         
       //marking it intrinsic activity will happen further down from the 'ID'
       //  attribute, so we wont wast cpu time here checking the remark for itww
-//      if( UtilityFunctions::icontains( remark, "intrinsic activity") )
+//      if( SpecUtils::icontains( remark, "intrinsic activity") )
 //        source_type_ = Measurement::IntrinsicActivity;
       }
 
@@ -2904,8 +2925,8 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
   const bool compressed_zeros = icontains(compress_type, "CountedZeroe");
   
   //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
-  UtilityFunctions::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
-//  UtilityFunctions::split_to_floats( channel_data_node->value(), channel_data_node->value_size(), *contents );
+  SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
+//  SpecUtils::split_to_floats( channel_data_node->value(), channel_data_node->value_size(), *contents );
 
   if( compressed_zeros )
     expand_counted_zeros( *contents, *contents );
@@ -2962,7 +2983,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
       vector<int> sizes;
       const char *str = specsize->value();
       const size_t strsize = specsize->value_size();
-      if( UtilityFunctions::split_to_ints( str, strsize, sizes )
+      if( SpecUtils::split_to_ints( str, strsize, sizes )
          && sizes.size() == 1 )
       {
         const size_t origlen = gamma_counts_->size();
@@ -2983,7 +3004,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
           log_developer_error( __func__, buffer );
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
         }
-      }//if( UtilityFunctions::split_to_ints( str, strsize, sizes ) )
+      }//if( SpecUtils::split_to_ints( str, strsize, sizes ) )
     }//if( specsize_node && specsize_node->value_size() )
     
     
@@ -4030,7 +4051,7 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
       if( coeff_node->value_size() )
       {
         coeffs.clear();
-        UtilityFunctions::split_to_floats( coeff_node->value(),
+        SpecUtils::split_to_floats( coeff_node->value(),
                                          coeff_node->value_size(), coeffs );
       }else
       {
@@ -4039,7 +4060,7 @@ void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *cali
         if( subeqn && subeqn->value_size() )
         {
           coeffs.clear();
-          UtilityFunctions::split_to_floats( subeqn->value(),
+          SpecUtils::split_to_floats( subeqn->value(),
                                              subeqn->value_size(), coeffs );
         }
       }//if( coeff_node->value_size() ) / else
@@ -4234,8 +4255,8 @@ void DetectorAnalysisResult::equalEnough( const DetectorAnalysisResult &lhs,
                          + rhs.detector_ + "')" );
   //if( lhs.start_time_ != rhs.start_time_ )
   //  throw runtime_error( "DetectorAnalysisResult start time for LHS ("
-  //                      + UtilityFunctions::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
-  //                    + UtilityFunctions::to_iso_string(rhs.start_time_) + ")" );
+  //                      + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
+  //                    + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   
   char buffer[1024];
   if( fabs(lhs.activity_ - rhs.activity_) > (0.0001*std::max(fabs(lhs.activity_),fabs(rhs.activity_))) )
@@ -4606,8 +4627,8 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
 		tdiff = -tdiff;
 	if( tdiff >  boost::posix_time::seconds(1) )
       throw runtime_error( "Start time for LHS ("
-                        + UtilityFunctions::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
-                        + UtilityFunctions::to_iso_string(rhs.start_time_) + ")" );
+                        + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
+                        + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   }
 
   if( lhs.energy_calibration_model_ == rhs.energy_calibration_model_ )
@@ -4798,8 +4819,8 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
 
   if( lhs.position_time_ != rhs.position_time_ )
     throw runtime_error( "Position time for LHS ("
-                        + UtilityFunctions::to_iso_string(lhs.position_time_) + ") doesnt match RHS ("
-                        + UtilityFunctions::to_iso_string(rhs.position_time_) + ")" );
+                        + SpecUtils::to_iso_string(lhs.position_time_) + ") doesnt match RHS ("
+                        + SpecUtils::to_iso_string(rhs.position_time_) + ")" );
 
   if( lhs.title_ != rhs.title_ )
     throw runtime_error( "Title for LHS ('" + lhs.title_
@@ -5156,8 +5177,8 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   {
     string lhsremark = nlhsremarkss[i];
     string rhsremark = nrhsremarkss[i];
-    UtilityFunctions::trim( lhsremark );
-    UtilityFunctions::trim( rhsremark );
+    SpecUtils::trim( lhsremark );
+    SpecUtils::trim( rhsremark );
     
     if( lhsremark != rhsremark )
     {
@@ -5175,7 +5196,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   {
     const string &n = lhs.component_versions_[i].first;
     if( n != "InterSpec" && n!= "InterSpecN42Serialization" && n != "Software"
-        && !UtilityFunctions::istarts_with(n, "Original Software") )
+        && !SpecUtils::istarts_with(n, "Original Software") )
       lhscompvsn.push_back( lhs.component_versions_[i] );
   }
   
@@ -5183,7 +5204,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   {
     const string &n = rhs.component_versions_[i].first;
     if( n != "InterSpec" && n!= "InterSpecN42Serialization" && n != "Software"
-        && !UtilityFunctions::istarts_with(n, "Original Software") )
+        && !SpecUtils::istarts_with(n, "Original Software") )
       rhscompvsn.push_back( rhs.component_versions_[i] );
   }
   
@@ -5209,10 +5230,10 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     pair<string,string> lhsp = lhscompvsn[i];
     pair<string,string> rhsp = rhscompvsn[i];
     
-    UtilityFunctions::trim( lhsp.first );
-    UtilityFunctions::trim( lhsp.second );
-    UtilityFunctions::trim( rhsp.first );
-    UtilityFunctions::trim( rhsp.second );
+    SpecUtils::trim( lhsp.first );
+    SpecUtils::trim( lhsp.second );
+    SpecUtils::trim( rhsp.first );
+    SpecUtils::trim( rhsp.second );
     
     if( lhsp.first != rhsp.first )
     {
@@ -6715,32 +6736,32 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
       for( size_t detnameindex = 0; detnameindex < tested_gamma_to_actual.size(); ++detnameindex )
       {
         const string &gammaname = tested_gamma_to_actual[detnameindex].first;
-        distances[detnameindex] = UtilityFunctions::levenshtein_distance( neutname, gammaname );
+        distances[detnameindex] = SpecUtils::levenshtein_distance( neutname, gammaname );
         if( distances[detnameindex] > 3 )
         {
-          if( UtilityFunctions::icontains( neutname, "Neutron") )
+          if( SpecUtils::icontains( neutname, "Neutron") )
           {
             string neutnamelowercase = neutname;
-            UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "Gamma");
-            if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
+            SpecUtils::ireplace_all(neutnamelowercase, "Neutron", "Gamma");
+            if( SpecUtils::iequals_ascii( neutnamelowercase, gammaname ) )
             {
               distances[detnameindex] = 0;
             }else
             {
               neutnamelowercase = neutname;
-              UtilityFunctions::ireplace_all(neutnamelowercase, "Neutron", "");
-              if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
+              SpecUtils::ireplace_all(neutnamelowercase, "Neutron", "");
+              if( SpecUtils::iequals_ascii( neutnamelowercase, gammaname ) )
                 distances[detnameindex] = 0;
             }
-          }else if( UtilityFunctions::iends_with( neutname, "Ntr") )
+          }else if( SpecUtils::iends_with( neutname, "Ntr") )
           {
             string neutnamelowercase = neutname.substr( 0, neutname.size() - 3 );
-            if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
+            if( SpecUtils::iequals_ascii( neutnamelowercase, gammaname ) )
               distances[detnameindex] = 0;
-          }else if( UtilityFunctions::iends_with( neutname, "N") )
+          }else if( SpecUtils::iends_with( neutname, "N") )
           {
             string neutnamelowercase = neutname.substr( 0, neutname.size() - 1 );
-            if( UtilityFunctions::iequals_ascii( neutnamelowercase, gammaname ) )
+            if( SpecUtils::iequals_ascii( neutnamelowercase, gammaname ) )
               distances[detnameindex] = 0;
           }
         }//if( distances[i] > 3 )
@@ -6894,7 +6915,7 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
           stringstream errmsg;
           errmsg << "Found a nuetron detector Measurement (DetName='" << meas->detector_name_
                  << "', SampleNumber=" << meas->sample_number_
-                 << ", StartTime=" << UtilityFunctions::to_iso_string(meas->start_time_)
+                 << ", StartTime=" << SpecUtils::to_iso_string(meas->start_time_)
                  << ") I couldnt find a gamma w/ DetName='"
                  << gamma_name << "' and SampleNumber=" << meas->sample_number_ << ".";
           log_developer_error( __func__, errmsg.str().c_str() );
@@ -7036,8 +7057,8 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
 
 void MeasurementInfo::set_detector_type_from_other_info()
 {
-  using UtilityFunctions::contains;
-  using UtilityFunctions::icontains;
+  using SpecUtils::contains;
+  using SpecUtils::icontains;
   
   
   if( detector_type_ != kUnknownDetector )
@@ -7112,16 +7133,16 @@ void MeasurementInfo::set_detector_type_from_other_info()
   if( (icontains(model,"Rad") && icontains(model,"Eagle"))
       || istarts_with(model, "RE-") || istarts_with(model, "RE ") )
   {
-    if( UtilityFunctions::icontains(model,"3SG") ) //RADEAGLE NaI(Tl) 3x1, GM Handheld RIID
+    if( SpecUtils::icontains(model,"3SG") ) //RADEAGLE NaI(Tl) 3x1, GM Handheld RIID
     {
       detector_type_ = kOrtecRadEagleNai;
-    }else if( UtilityFunctions::icontains(model,"2CG") ) //RADEAGLE CeBr3 2x1, GM Handheld RIID.
+    }else if( SpecUtils::icontains(model,"2CG") ) //RADEAGLE CeBr3 2x1, GM Handheld RIID.
     {
       detector_type_ = kOrtecRadEagleCeBr2Inch;
-    }else if( UtilityFunctions::icontains(model,"3CG") ) //RADEAGLE CeBr3 3x0.8, GM Handheld RIID
+    }else if( SpecUtils::icontains(model,"3CG") ) //RADEAGLE CeBr3 3x0.8, GM Handheld RIID
     {
       detector_type_ = kOrtecRadEagleCeBr3Inch;
-    }else if( UtilityFunctions::icontains(model,"2LG") ) //RADEAGLE LaBr3(Ce) 2x1, GM Handheld RIID
+    }else if( SpecUtils::icontains(model,"2LG") ) //RADEAGLE LaBr3(Ce) 2x1, GM Handheld RIID
     {
       detector_type_ = kOrtecRadEagleLaBr;
     }else
@@ -7297,9 +7318,9 @@ std::string MeasurementInfo::generate_psuedo_uuid() const
   
   if(!measurements_.empty() && measurements_[0]
       && !measurements_[0]->start_time().is_special() )
-    uuid = UtilityFunctions::to_iso_string( measurements_[0]->start_time() );
+    uuid = SpecUtils::to_iso_string( measurements_[0]->start_time() );
   else
-    uuid = UtilityFunctions::to_iso_string( time_from_string( "1982-07-28 23:59:59" ) );
+    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59" ) );
   
   //uuid something like: "20020131T100001,123456789"
   if( uuid.size() >= 15 )
@@ -7475,7 +7496,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
 //    getline( input, line, '\r' );
     
     const size_t max_len = 1024*1024;  //allows a line length of 64k fields, each of 16 characters, which his more than any spectrum file should get
-    UtilityFunctions::safe_get_line( input, line, max_len );
+    SpecUtils::safe_get_line( input, line, max_len );
     
     if( line.size() >= (max_len-1) )
       throw runtime_error( "Line greater than 1MB" );
@@ -7546,13 +7567,13 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
     {//SpectrumName        : ident903558-21_2012-07-26_07-10-55-003.spc
       if( info_pos != string::npos )
       {
-        if( UtilityFunctions::icontains( line.substr(info_pos), "ident") )
+        if( SpecUtils::icontains( line.substr(info_pos), "ident") )
         {
           detector_type_ = kIdentiFinderNGDetector;
                            //TODO: kIdentiFinderLaBr3Detector
           manufacturer_ = "FLIR";
           instrument_model_ = "identiFINDER";
-        }else if( UtilityFunctions::icontains(line, "Raider") )
+        }else if( SpecUtils::icontains(line, "Raider") )
         {
           detector_type_ = kMicroRaiderDetector;
           instrument_model_ = "MicroRaider";
@@ -7685,33 +7706,33 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
         {
           result.id_confidence_ = info.substr(0,delim);
           info = info.substr(delim);
-          UtilityFunctions::trim( info );
+          SpecUtils::trim( info );
           delim = info.find_first_of( " ." );
           
           string nuctype = info.substr( 0, delim );
           
-          if( UtilityFunctions::istarts_with(nuctype, "Ann")
-             || UtilityFunctions::istarts_with(nuctype, "Nuc")
-             || UtilityFunctions::istarts_with(nuctype, "NORM")
-             || UtilityFunctions::istarts_with(nuctype, "Ind")
-             || UtilityFunctions::istarts_with(nuctype, "Cal")
-             || UtilityFunctions::istarts_with(nuctype, "x")
-             || UtilityFunctions::istarts_with(nuctype, "med")
-             || UtilityFunctions::istarts_with(nuctype, "cos")
-             || UtilityFunctions::istarts_with(nuctype, "bac")
-             || UtilityFunctions::istarts_with(nuctype, "TENORM")
-             || UtilityFunctions::istarts_with(nuctype, "bre")
+          if( SpecUtils::istarts_with(nuctype, "Ann")
+             || SpecUtils::istarts_with(nuctype, "Nuc")
+             || SpecUtils::istarts_with(nuctype, "NORM")
+             || SpecUtils::istarts_with(nuctype, "Ind")
+             || SpecUtils::istarts_with(nuctype, "Cal")
+             || SpecUtils::istarts_with(nuctype, "x")
+             || SpecUtils::istarts_with(nuctype, "med")
+             || SpecUtils::istarts_with(nuctype, "cos")
+             || SpecUtils::istarts_with(nuctype, "bac")
+             || SpecUtils::istarts_with(nuctype, "TENORM")
+             || SpecUtils::istarts_with(nuctype, "bre")
              //any others? this list so far was just winged
              )
           {
             result.nuclide_type_ = nuctype;
             result.nuclide_ = info.substr( delim );
-            UtilityFunctions::trim( result.nuclide_ );
+            SpecUtils::trim( result.nuclide_ );
             
             if(!result.nuclide_.empty() && result.nuclide_[0]=='.' )
             {
               result.nuclide_ = result.nuclide_.substr(1);
-              UtilityFunctions::trim( result.nuclide_ );
+              SpecUtils::trim( result.nuclide_ );
               result.nuclide_type_ += ".";
             }
             
@@ -7761,7 +7782,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
       measurment_operator_ = line.substr(info_pos);
     }else if( istarts_with( line, "GPSValid" ) )
     {
-      if( UtilityFunctions::icontains(line, "no") )
+      if( SpecUtils::icontains(line, "no") )
       {
         meas->latitude_ = -999.9;
         meas->longitude_= -999.9;
@@ -7805,9 +7826,9 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
       string strengthline, classline, confidenceline;
       try
       {
-        UtilityFunctions::safe_get_line( input, strengthline, max_len );
-        UtilityFunctions::safe_get_line( input, classline, max_len );
-        UtilityFunctions::safe_get_line( input, confidenceline, max_len );
+        SpecUtils::safe_get_line( input, strengthline, max_len );
+        SpecUtils::safe_get_line( input, classline, max_len );
+        SpecUtils::safe_get_line( input, confidenceline, max_len );
         
         
         const size_t strength_colonpos = strengthline.find(':');
@@ -7819,9 +7840,9 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
         const size_t conf_colonpos = confidenceline.find(':');
         const size_t conf_info_pos = confidenceline.find_first_not_of(": ", conf_colonpos);
         
-        if( !UtilityFunctions::istarts_with( strengthline, "Strength" )
-            || !UtilityFunctions::istarts_with( classline, "Class" )
-            || !UtilityFunctions::istarts_with( confidenceline, "Confidence" )
+        if( !SpecUtils::istarts_with( strengthline, "Strength" )
+            || !SpecUtils::istarts_with( classline, "Class" )
+            || !SpecUtils::istarts_with( confidenceline, "Confidence" )
             || class_info_pos == string::npos
             || strength_info_pos == string::npos
             || conf_info_pos == string::npos )
@@ -7855,7 +7876,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
       auto channel_data = std::make_shared< std::vector<float> >();
       
       input.seekg( sol_pos, ios::beg );
-      while( UtilityFunctions::safe_get_line( input, line ) )
+      while( SpecUtils::safe_get_line( input, line ) )
       {
         trim(line);
         
@@ -7876,7 +7897,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
                 input.seekg( pos, ios::beg );
                 break;
               }
-            }while( UtilityFunctions::safe_get_line( input, line ) );
+            }while( SpecUtils::safe_get_line( input, line ) );
           }//if( not at the end of the file )
           
           break;
@@ -7886,9 +7907,9 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
           break;
         
         vector<float> linefloats;
-        UtilityFunctions::split_to_floats( line.c_str(), line.length(), linefloats );
+        SpecUtils::split_to_floats( line.c_str(), line.length(), linefloats );
         channel_data->insert( channel_data->end(), linefloats.begin(), linefloats.end() );
-      }//while( UtilityFunctions::safe_get_line( input, line ) )
+      }//while( SpecUtils::safe_get_line( input, line ) )
       
       if( size_t(Length) != channel_data->size() )
       {
@@ -7919,7 +7940,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
             throw runtime_error( "Unknown tag and non-ascii character in first non-empty line" );
       }
       
-      if( UtilityFunctions::istarts_with(line, "TSA,") )
+      if( SpecUtils::istarts_with(line, "TSA,") )
         throw runtime_error( "This is probably a TSA file, not a Ascii Spc" );
       
       ++nnotrecognized;
@@ -8038,10 +8059,10 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
     for( const char * const label : ns_iaea_comment_labels )
     {
       const string prefix = label + string(" : ");
-      if( UtilityFunctions::istarts_with(remark, prefix) )
+      if( SpecUtils::istarts_with(remark, prefix) )
       {
         output << pad_iaea_prefix(label) << remark.substr( prefix.size() ) << "\r\n";
-        printedFWHMCCoeff |= UtilityFunctions::iequals_ascii(label,"FWHMCCoeff");
+        printedFWHMCCoeff |= SpecUtils::iequals_ascii(label,"FWHMCCoeff");
         used = true;
         break;
       }
@@ -8178,7 +8199,7 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
       {
         const string postfix = string("") + char('0' + i);
         output << pad_iaea_prefix( "Nuclide" + postfix ) << res.nuclide_ << "\r\n";
-        if( UtilityFunctions::istarts_with(res.remark_, "Strength ") )
+        if( SpecUtils::istarts_with(res.remark_, "Strength ") )
           output << pad_iaea_prefix( "Strength" + postfix ) << res.nuclide_ << "\r\n";
         else
           output << pad_iaea_prefix( "Strength" + postfix ) << "\r\n";
@@ -8574,7 +8595,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   string sampledescrip = summed->title_;
   for( const string &s : remarks_ )
   {
-    if( UtilityFunctions::starts_with(s, "Sample Description: ") )
+    if( SpecUtils::starts_with(s, "Sample Description: ") )
       sampledescrip = " " + s.substr( 20 );
   }
 
@@ -9306,7 +9327,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
         try
         {
           meas_time = time_from_string( datedata );
-          //cout << "meas_time=" << UtilityFunctions::to_iso_string( meas_time ) << endl;
+          //cout << "meas_time=" << SpecUtils::to_iso_string( meas_time ) << endl;
         }catch(...)
         {
           cerr << "MeasurementInfo::loadBinarySpcFile(...): invalid date string: "
@@ -9439,7 +9460,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
             //  lowercase; I didnt test yet for longitude/latitude, or nuclide
             //  IDs, so I dont want to convert to lower case for those yet.
             string datastr( data.begin(), data.end() );
-            UtilityFunctions::to_lower_ascii( datastr );
+            SpecUtils::to_lower_ascii( datastr );
             
             term = "total neutron counts = ";
             string::const_iterator positer, enditer;
@@ -10518,7 +10539,7 @@ bool MeasurementInfo::write_binary_exploranium_gr135v2( std::ostream &output ) c
       memcpy( buffer + 0, "ZZZZ", 4 );
       memcpy( buffer + 4, "1350", 4 );
       
-      const bool is_czt = UtilityFunctions::icontains(meas.detector_name_, "CZT");
+      const bool is_czt = SpecUtils::icontains(meas.detector_name_, "CZT");
       buffer[8] = (is_czt ? 'C' : 'A');
       
     
@@ -10676,9 +10697,9 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
     char buffer[256];
     
     string title = summed->title();
-    UtilityFunctions::ireplace_all( title, "\r\n", " " );
-    UtilityFunctions::ireplace_all( title, "\r", " " );
-    UtilityFunctions::ireplace_all( title, "\n", " " );
+    SpecUtils::ireplace_all( title, "\r\n", " " );
+    SpecUtils::ireplace_all( title, "\r", " " );
+    SpecUtils::ireplace_all( title, "\n", " " );
     
     if( title.size() )
       output << "$SPEC_ID:\r\n" << title << "\r\n";
@@ -10692,9 +10713,9 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
       
       for( string remark : remarks )
       {
-        UtilityFunctions::ireplace_all( remark, "\r\n", " " );
-        UtilityFunctions::ireplace_all( remark, "\r", " " );
-        UtilityFunctions::ireplace_all( remark, "\n", " " );
+        SpecUtils::ireplace_all( remark, "\r\n", " " );
+        SpecUtils::ireplace_all( remark, "\r", " " );
+        SpecUtils::ireplace_all( remark, "\n", " " );
         if( remark.size() )
           output << remark << "\r\n";
       }
@@ -10880,7 +10901,7 @@ struct SpectrumNodeDecodeWorker
             if( /*!realtime ||*/ !starttime )
               continue;
             
-            const boost::posix_time::ptime startptime = UtilityFunctions::time_from_string( xml_value_str(starttime).c_str() );
+            const boost::posix_time::ptime startptime = SpecUtils::time_from_string( xml_value_str(starttime).c_str() );
             if( startptime.is_special() )
               continue;
             
@@ -10918,12 +10939,12 @@ struct SpectrumNodeDecodeWorker
     {
       m_meas->reset();
       m_meas->title_ = SpectrumNodeDecodeWorker_failed_decode_title;
-      if( !UtilityFunctions::icontains( e.what(), "didnt find <ChannelData>" ) )
+      if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
       {
         char buffer[256];
         snprintf( buffer, sizeof(buffer), "Caught: %s", e.what() );
         log_developer_error( __func__, buffer );
-      }//if( !UtilityFunctions::icontains( e.what(), "didnt find <ChannelData>" ) )
+      }//if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
     }//try / catch
 #else
     catch( std::exception & )
@@ -11013,7 +11034,7 @@ void MeasurementInfo::set_n42_2006_deviation_pair_info( const rapidxml::xml_node
       if( dev_node->value_size() )
       {
         vector<float> devpair;
-        const bool success = UtilityFunctions::split_to_floats( dev_node->value(), dev_node->value_size(), devpair );
+        const bool success = SpecUtils::split_to_floats( dev_node->value(), dev_node->value_size(), devpair );
         
         if( success && devpair.size()>=2 )
           deviatnpairs.push_back( pair<float,float>(devpair[0],devpair[1]) );
@@ -11060,7 +11081,7 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
   {
     const string val = xml_value_str( probe_node );
     vector<string> fields;
-    UtilityFunctions::split( fields, val, "," );
+    SpecUtils::split( fields, val, "," );
     
     if( fields.size() == 1 )
     {
@@ -11071,7 +11092,7 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
       
       trim( fields[0] );
       string lowered = fields[0];  //We will make searches case independent
-      UtilityFunctions::to_lower_ascii( lowered ); //We are relying on to_lower_ascii() not adding/removing bytes from string, which it doesnt since it is dumb (e.g., ASCII).
+      SpecUtils::to_lower_ascii( lowered ); //We are relying on to_lower_ascii() not adding/removing bytes from string, which it doesnt since it is dumb (e.g., ASCII).
       
       size_t gamma_pos = lowered.find( "gamma detector:" );
       if( gamma_pos == string::npos )
@@ -11096,7 +11117,7 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
         size_t len = string::npos;
         if( (i+1) < posvec.size() )
           len = posvec[i+1] - posvec[i];
-        remarks_.push_back( UtilityFunctions::trim_copy( fields[0].substr( posvec[i], len ) ) );
+        remarks_.push_back( SpecUtils::trim_copy( fields[0].substr( posvec[i], len ) ) );
       }
       
       if( posvec.empty() )
@@ -11110,9 +11131,9 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
       for( string &field : fields )
       {
         trim( field );
-        if( UtilityFunctions::istarts_with( field, "Serial") )
+        if( SpecUtils::istarts_with( field, "Serial") )
           instrument_id_ += ", Probe " + field;
-        else if( UtilityFunctions::istarts_with( field, "Type") )
+        else if( SpecUtils::istarts_with( field, "Type") )
           instrument_model_ += "," + field.substr(4);
       }//for( string &field : fields )
     }
@@ -11153,11 +11174,11 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
       hassub = true;
       //A rough, and easily breakable hack for:
       //"Hardware: 4C	Firmware: 5.00.54	Operating System: 1.2.040	Application: 2.37"
-      UtilityFunctions::split( fields, value, "\t");
+      SpecUtils::split( fields, value, "\t");
       for( size_t i = 0; hassub && i < fields.size(); ++i )
       {
         vector<string> subfields;
-        UtilityFunctions::split( subfields, fields[i], ":");
+        SpecUtils::split( subfields, fields[i], ":");
         if( subfields.size() == 2 )
           subcomponents.push_back( make_pair(subfields[0], subfields[1]) );
         else
@@ -11167,7 +11188,7 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
     
     if( !hassub )
     {
-      UtilityFunctions::split( fields, value, " \t:");
+      SpecUtils::split( fields, value, " \t:");
     
       if( fields.size() )
       {
@@ -11180,9 +11201,9 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
           {
             string &name = fields[i];
             string &value = fields[i+1];
-            UtilityFunctions::trim(name);
-            UtilityFunctions::trim(value);
-            UtilityFunctions::ireplace_all( name, ":", "" );
+            SpecUtils::trim(name);
+            SpecUtils::trim(value);
+            SpecUtils::ireplace_all( name, ":", "" );
             component_versions_.push_back( make_pair(name,value) );
           }
         }
@@ -11219,8 +11240,8 @@ void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xm
             //remarks_.push_back( val );
             
             string val = xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
-            UtilityFunctions::trim( val );
-            UtilityFunctions::ireplace_all( val, "  ", " " );
+            SpecUtils::trim( val );
+            SpecUtils::ireplace_all( val, "  ", " " );
             if( instrument_model_.size() )
               val = " " + val;
             instrument_model_ += val;
@@ -11274,7 +11295,7 @@ void Measurement::set_n42_2006_count_dose_data_info( const rapidxml::xml_node<ch
         units_attrib = 0;
       
       if( units_attrib && units_attrib->value_size()
-         && !UtilityFunctions::icontains( xml_value_str(units_attrib), "CPS") )
+         && !SpecUtils::icontains( xml_value_str(units_attrib), "CPS") )
         throw runtime_error( "Neutron count rate not in CPS" );
       
       float countrate;
@@ -11432,7 +11453,7 @@ void Measurement::set_n42_2006_gross_count_node_info( const rapidxml::xml_node<c
 
   if( node )
   {
-    if( UtilityFunctions::split_to_floats( node->value(), node->value_size(), m->neutron_counts_ ) )
+    if( SpecUtils::split_to_floats( node->value(), node->value_size(), m->neutron_counts_ ) )
       m->neutron_counts_sum_ = std::accumulate( m->neutron_counts_.begin(), m->neutron_counts_.end(), 0.0f, std::plus<float>() );
     else
       m->neutron_counts_sum_ = 0.0;
@@ -11668,7 +11689,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     {
       //Some files use the "n42ns" namespace, IDK
       const string name = xml_name_str(attrib);
-      if( UtilityFunctions::starts_with(name, "xmlns:" ) && UtilityFunctions::icontains(name, "n42") )
+      if( SpecUtils::starts_with(name, "xmlns:" ) && SpecUtils::icontains(name, "n42") )
         xmlns = name.substr(6) + ":";
     }//for( check for xmlns:n42ns="..."
   }//if( doc_node_name has a namespace in it ) / else
@@ -11875,7 +11896,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
       if( uuid_attrib && uuid_attrib->value_size() )
       {
         string thisuuid = xml_value_str( uuid_attrib );
-        UtilityFunctions::trim( thisuuid );
+        SpecUtils::trim( thisuuid );
         
         if( uuid_.empty() )
           uuid_ = thisuuid;
@@ -12086,12 +12107,12 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               gamma_matches_neutron = ((gamdetname+"N") == neut->detector_name_);
             
             //Some detectors will have names like "ChannelAGamma", "ChannelANeutron", "ChannelBGamma", "ChannelBNeutron", etc
-            if( !gamma_matches_neutron && UtilityFunctions::icontains(gamdetname, "Gamma")
-                && UtilityFunctions::icontains(neut->detector_name_, "Neutron") )
+            if( !gamma_matches_neutron && SpecUtils::icontains(gamdetname, "Gamma")
+                && SpecUtils::icontains(neut->detector_name_, "Neutron") )
             {
               //Note!: this next line alters gamdetname, so this should be the last test!
-              UtilityFunctions::ireplace_all(gamdetname, "Gamma", "Neutron" );
-              gamma_matches_neutron = UtilityFunctions::iequals_ascii(gamdetname, neut->detector_name_);
+              SpecUtils::ireplace_all(gamdetname, "Gamma", "Neutron" );
+              gamma_matches_neutron = SpecUtils::iequals_ascii(gamdetname, neut->detector_name_);
             }
             
             if( !gamma_matches_neutron )
@@ -12169,18 +12190,18 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
                 gamma_matches_neutron = ((spec->detector_name_+"N") == gross->detector_name_);
               
               //Some detectors will have names like "ChannelAGamma", "ChannelANeutron", "ChannelBGamma", "ChannelBNeutron", etc
-              if( !gamma_matches_neutron && UtilityFunctions::icontains(spec->detector_name_, "Gamma")
-                 && UtilityFunctions::icontains(gross->detector_name_, "Neutron") )
+              if( !gamma_matches_neutron && SpecUtils::icontains(spec->detector_name_, "Gamma")
+                 && SpecUtils::icontains(gross->detector_name_, "Neutron") )
               {
                 string gamdetname = spec->detector_name_;
-                UtilityFunctions::ireplace_all(gamdetname, "Gamma", "Neutron" );
-                gamma_matches_neutron = UtilityFunctions::iequals_ascii(gamdetname, gross->detector_name_);
+                SpecUtils::ireplace_all(gamdetname, "Gamma", "Neutron" );
+                gamma_matches_neutron = SpecUtils::iequals_ascii(gamdetname, gross->detector_name_);
                 
                 //TODO: should probably get rid of "Gamma" in the detector name
                 //  now that we have combined them but I havent evaluated the
                 //  effect of this yet...
                 //if( gamma_matches_neutron )
-                //  UtilityFunctions::ireplace_all( spec->detector_name_, "Gamma" );
+                //  SpecUtils::ireplace_all( spec->detector_name_, "Gamma" );
               }
               
               if( !gamma_matches_neutron )
@@ -12251,7 +12272,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             newmeas->gamma_count_sum_ += a;
           
           vector<float> coeffs;
-          if( UtilityFunctions::split_to_floats( second_coefs->value(),
+          if( SpecUtils::split_to_floats( second_coefs->value(),
                                                 second_coefs->value_size(), coeffs )
              && coeffs != meas->calibration_coeffs_ )
           {
@@ -12389,7 +12410,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               continue;
             
             string name = xml_name_str(spectrum_nodes[i]);
-            if( UtilityFunctions::icontains(name, "BackgroundSpectrum" ) )
+            if( SpecUtils::icontains(name, "BackgroundSpectrum" ) )
             {
               meas->title_ += " " + string("Background");
              
@@ -12407,12 +12428,12 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
                 meas->calibration_coeffs_ = measurements_this_node[i+1]->calibration_coeffs_;
                 meas->deviation_pairs_ = measurements_this_node[i+1]->deviation_pairs_;
               }
-            }//if( UtilityFunctions::icontains(name, "BackgroundSpectrum" ) )
+            }//if( SpecUtils::icontains(name, "BackgroundSpectrum" ) )
               
             const rapidxml::xml_attribute<char> *nuclides_att = XML_FIRST_ATTRIB( spectrum_nodes[i], "dndoarns:NuclidesIdentified" );
             const string nucstr = xml_value_str( nuclides_att );  //ex "Th-232-001 Ra-226-002"
             //vector<string> nuclides;
-            //UtilityFunctions::split( nuclides, nucstr, " \t\n," );
+            //SpecUtils::split( nuclides, nucstr, " \t\n," );
             if( nucstr.size() )
               meas->title_ +=  " Nuclides Reported: " + nucstr + ".";
               
@@ -12433,10 +12454,10 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               if( subset && subset->value_size() )
               {
                 vector<int> samples;
-                if( UtilityFunctions::split_to_ints( subset->value(), subset->value_size(), samples ) )
+                if( SpecUtils::split_to_ints( subset->value(), subset->value_size(), samples ) )
                 {
                   const set<int> samplesset( samples.begin(), samples.end() );
-                  const string sequence = UtilityFunctions::sequencesToBriefString( samplesset );
+                  const string sequence = SpecUtils::sequencesToBriefString( samplesset );
                   if( sequence.size() )
                     det_to_sequence[detname] = sequence;
                 }else
@@ -12469,7 +12490,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             if( detectors.size() )
               meas->title_ += " Detectors: " + detectors + ". ";
               
-            UtilityFunctions::trim( meas->title_ );
+            SpecUtils::trim( meas->title_ );
               
             measurements_.push_back( meas );
             added_measurements.push_back( meas );
@@ -13156,7 +13177,7 @@ void add_analysis_results_to_2012_N42(
       xml_node<char> *AnalysisStartDateTime = (xml_node<char> *)0;
       if( !AnalysisStartDateTime && !result.start_time_.is_special() )
       {
-        const string timestr = UtilityFunctions::to_iso_string( result.start_time_ );
+        const string timestr = SpecUtils::to_iso_string( result.start_time_ );
         val = doc->allocate_string( timestr.c_str(), timestr.size()+1 );
         AnalysisStartDateTime = doc->allocate_node( node_element, "StartTime", val );
         AnalysisResults->append_node( AnalysisStartDateTime );
@@ -13259,7 +13280,7 @@ void add_analysis_results_to_2012_N42(
 /*
       if( !AnalysisStartDateTime && !result.start_time_.is_special() )
       {
-        const string timestr = UtilityFunctions::to_iso_string( result.start_time_ );
+        const string timestr = SpecUtils::to_iso_string( result.start_time_ );
         val = doc->allocate_string( timestr.c_str(), timestr.size()+1 );
         AnalysisStartDateTime = doc->allocate_node( node_element, "StartTime", val );
         AnalysisResults->append_node( AnalysisStartDateTime );
@@ -13401,7 +13422,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
   
   {
     const boost::posix_time::ptime t = boost::posix_time::second_clock::universal_time();
-    const string datetime = UtilityFunctions::to_extended_iso_string(t) + "Z";
+    const string datetime = SpecUtils::to_extended_iso_string(t) + "Z";
     val = doc->allocate_string( datetime.c_str(), datetime.size()+1 );
     attr = doc->allocate_attribute( "n42DocDateTime", val );
     RadInstrumentData->append_attribute( attr );
@@ -13416,12 +13437,12 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
   for( size_t i = 0; i < remarks_.size(); ++i )
   {
     if( remarks_[i].empty()
-        || UtilityFunctions::starts_with(remarks_[i], "InstrumentVersion:")
-        || UtilityFunctions::starts_with(remarks_[i], "Instrument ")
+        || SpecUtils::starts_with(remarks_[i], "InstrumentVersion:")
+        || SpecUtils::starts_with(remarks_[i], "Instrument ")
        )
       continue;
     
-    if( UtilityFunctions::starts_with(remarks_[i], "N42 file created by: " ) )
+    if( SpecUtils::starts_with(remarks_[i], "N42 file created by: " ) )
     {
       original_creator = remarks_[i].substr(21);
       continue;
@@ -13443,8 +13464,8 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
       RadInstrumentData->append_node( RadInstrumentDataCreatorName );
     }else
     {
-      UtilityFunctions::ireplace_all( original_creator, "InterSpec", "" );
-      UtilityFunctions::ireplace_all( original_creator, "  ", "" );
+      SpecUtils::ireplace_all( original_creator, "InterSpec", "" );
+      SpecUtils::ireplace_all( original_creator, "  ", "" );
       original_creator = "InterSpec. Original file by " + original_creator;
       
       val = doc->allocate_string( original_creator.c_str() );
@@ -13541,7 +13562,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     const string &name = component_versions_[i].first;
     const string &version = component_versions_[i].second;
     
-    if( UtilityFunctions::icontains( name, "Software") && version == "Unknown" )
+    if( SpecUtils::icontains( name, "Software") && version == "Unknown" )
       continue;
   
     std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -13549,7 +13570,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     xml_node<char> *version_node = version_node = doc->allocate_node( node_element, "RadInstrumentVersion" );
     RadInstrumentInformation->append_node( version_node );
     
-    if( UtilityFunctions::iequals_ascii( name, "Software" ) )
+    if( SpecUtils::iequals_ascii( name, "Software" ) )
       val = doc->allocate_string( ("Original " +  name).c_str() );
     else
       val = doc->allocate_string( name.c_str(), name.size()+1 );
@@ -13998,7 +14019,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
         snprintf( latitude, sizeof(latitude), "%.12f", measurments[i]->latitude_ );
         snprintf( longitude, sizeof(longitude), "%.12f", measurments[i]->longitude_ );
         if( !measurments[i]->position_time_.is_special() )
-          positiontime = UtilityFunctions::to_extended_iso_string(measurments[i]->position_time_) + "Z";
+          positiontime = SpecUtils::to_extended_iso_string(measurments[i]->position_time_) + "Z";
       }//if( !has_gps )
         
       if( measurments[i]->source_type_ != Measurement::UnknownSourceType )
@@ -14011,7 +14032,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
     snprintf( realtime, sizeof(realtime), "PT%fS", realtime_used );
     snprintf( speedstr, sizeof(speedstr), "%.8f", speed );
   
-    const string startstr = UtilityFunctions::to_extended_iso_string(starttime) + "Z";
+    const string startstr = SpecUtils::to_extended_iso_string(starttime) + "Z";
     
     const char *classcode = (const char *)0;
     const char *occupied = (const char *)0;
@@ -14063,7 +14084,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
       snprintf( livetime, sizeof(livetime), "PT%fS", m->live_time_ );
       snprintf( calibstr, sizeof(calibstr), "EnergyCal%i", static_cast<int>(calibid) );
 
-      if( UtilityFunctions::icontains(radMeasID, "Det") )
+      if( SpecUtils::icontains(radMeasID, "Det") )
       {
         //This is case where all measurements of a sample number did not have a similar
         //  start time or background/foreground status so each sample/detector
@@ -14506,8 +14527,8 @@ void MeasurementInfo::set_2012_N42_instrument_info( const rapidxml::xml_node<cha
     if( inspection_.find("Location ") != string::npos )
       inspection_ = inspection_.substr(0,inspection_.find("Location "));
     
-    UtilityFunctions::trim( inspection_ );
-    UtilityFunctions::trim( measurement_location_name_ );
+    SpecUtils::trim( inspection_ );
+    SpecUtils::trim( measurement_location_name_ );
     
     if( lanepos==string::npos && (locationpos==string::npos && val.size()<8) )
       remarks_.push_back( string("Instrument Description: ") + xml_value_str( desc_node ) );
@@ -14546,7 +14567,7 @@ void MeasurementInfo::set_2012_N42_instrument_info( const rapidxml::xml_node<cha
   const rapidxml::xml_node<char> *class_code_node = info_node->first_node( "RadInstrumentClassCode", 22 );
   instrument_type_ = xml_value_str( class_code_node );
   
-  if( UtilityFunctions::iequals_ascii( instrument_type_, "Other" ) )
+  if( SpecUtils::iequals_ascii( instrument_type_, "Other" ) )
     instrument_type_ = "";
   
   for( const rapidxml::xml_node<char> *version_node = XML_FIRST_NODE(info_node, "RadInstrumentVersion");
@@ -14680,7 +14701,7 @@ void get_2012_N42_energy_calibrations( map<string,MeasurementCalibInfo> &calibra
                             const rapidxml::xml_node<char> *data_node,
                             vector<string> &remarks )
 {
-  using UtilityFunctions::split_to_floats;
+  using SpecUtils::split_to_floats;
   
   
   for( const rapidxml::xml_node<char> *cal_node = XML_FIRST_NODE(data_node, "EnergyCalibration");
@@ -14825,7 +14846,7 @@ void MeasurementInfo::decode_2012_N42_detector_state_and_quality( MeasurementShr
       else if( XML_VALUE_ICOMPARE( fault, "Warning" ) )
         meas->quality_status_ = Measurement::Suspect;
     }else if( !detector_state_node->first_node() ||
-              (remark && UtilityFunctions::starts_with( xml_value_str(remark), "InterSpec could not")) )
+              (remark && SpecUtils::starts_with( xml_value_str(remark), "InterSpec could not")) )
     {
       meas->quality_status_ = Measurement::Missing; //InterSpec Specific
     }
@@ -14877,7 +14898,7 @@ void MeasurementInfo::decode_2012_N42_detector_state_and_quality( MeasurementShr
 //      static std::mutex sm;
 //      {
 //        std::lock_guard<std::mutex> lock(sm);
-//        cerr << "time=" << time << ", timestr=" << timestr << ", meas->position_time_=" << UtilityFunctions::to_iso_string(meas->position_time_) << endl;
+//        cerr << "time=" << time << ", timestr=" << timestr << ", meas->position_time_=" << SpecUtils::to_iso_string(meas->position_time_) << endl;
 //      }
     }//if( GeographicPoint )
   }//if( RadInstrumentState )
@@ -14925,9 +14946,9 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     const string meas_id_att_str = xml_value_str( meas_att );
     if( meas_id_att_str.size() )
     {
-      if( UtilityFunctions::icontains(meas_id_att_str,"background")
-          && !UtilityFunctions::icontains(meas_id_att_str,"Survey")
-          && !UtilityFunctions::icontains(meas_id_att_str,"Sample") )
+      if( SpecUtils::icontains(meas_id_att_str,"background")
+          && !SpecUtils::icontains(meas_id_att_str,"Survey")
+          && !SpecUtils::icontains(meas_id_att_str,"Sample") )
       {
         sample_num_from_meas_node = 0;
       }else if( sscanf( meas_id_att_str.c_str(), "Sample%i", &(sample_num_from_meas_node)) == 1 )
@@ -14945,7 +14966,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         remark_node;
         remark_node = XML_NEXT_TWIN(remark_node) )
     {
-      string remark = UtilityFunctions::trim_copy( xml_value_str(remark_node) );
+      string remark = SpecUtils::trim_copy( xml_value_str(remark_node) );
       if( remark.size() )
         remarks.push_back( remark );
     }//for( loop over remarks _
@@ -14977,7 +14998,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       //  that was little endian (ex "15-05-2017T18:51:50"), but by default
       //  #time_from_string tries middle-endian first.
       start_time = time_from_string( xml_value_str(time_node).c_str() );
-      //start_time = UtilityFunctions::time_from_string_strptime( xml_value_str(time_node).c_str(), UtilityFunctions::LittleEndianFirst );
+      //start_time = SpecUtils::time_from_string_strptime( xml_value_str(time_node).c_str(), SpecUtils::LittleEndianFirst );
     }
   
     rapidxml::xml_node<char> *real_time_node = meas_node->first_node( "RealTimeDuration", 16 );
@@ -15072,20 +15093,20 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         if( remark.empty() )
           continue;
           
-        if( UtilityFunctions::istarts_with( remark, "RealTime:") )
+        if( SpecUtils::istarts_with( remark, "RealTime:") )
         {
           //Starting with MeasurementInfo_2012N42_VERSION==3, a slightly more
           //  accurate RealTime may be recorded in the remark if necassary...
           //  see notes in create_2012_N42_xml() and add_spectra_to_measurment_node_in_2012_N42_xml()
           //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
-          remark = UtilityFunctions::trim_copy( remark.substr(9) );
+          remark = SpecUtils::trim_copy( remark.substr(9) );
           meas->real_time_ = time_duration_in_seconds( remark );
           
           use_remark_real_time = (meas->real_time_ > 0.0);
-        }else if( UtilityFunctions::istarts_with( remark, "Title:") )
+        }else if( SpecUtils::istarts_with( remark, "Title:") )
         {
           //Starting with MeasurementInfo_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
-          remark = UtilityFunctions::trim_copy( remark.substr(6) );
+          remark = SpecUtils::trim_copy( remark.substr(6) );
           meas->title_ += remark;
         }else if( remark.size() )
         {
@@ -15099,7 +15120,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       const string samp_det_str = xml_value_str( spectrum_node );
       if( samp_det_str.size() )
       {
-        if( UtilityFunctions::istarts_with(samp_det_str, "background") )
+        if( SpecUtils::istarts_with(samp_det_str, "background") )
         { 
           meas->sample_number_ = 0;
         }else if( sscanf( samp_det_str.c_str(), "Sample%i", &(meas->sample_number_)) == 1 )
@@ -15152,7 +15173,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       
       //For the sake of file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42
       if( meas->source_type_ == Measurement::UnknownSourceType
-         && UtilityFunctions::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
+         && SpecUtils::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
         meas->source_type_ = Measurement::IntrinsicActivity;
       
       meas->occupied_ = occupied;
@@ -15166,7 +15187,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       {
         const char *char_data = channel_data_node->value();
         const size_t char_data_len = channel_data_node->value_size();
-        UtilityFunctions::split_to_floats( char_data, char_data_len, *gamma_counts );
+        SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts );
       
         rapidxml::xml_attribute<char> *comp_att = channel_data_node->first_attribute( "compressionCode", 15 );
         if( icontains( xml_value_str(comp_att), "CountedZeroes") )  //( comp_att && XML_VALUE_ICOMPARE(comp_att, "CountedZeroes") )
@@ -15339,7 +15360,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       
       if( has_min_max_total_neutron )
       {
-        if( !UtilityFunctions::iequals_ascii(det_info_ref, "totalNeutrons") )
+        if( !SpecUtils::iequals_ascii(det_info_ref, "totalNeutrons") )
           continue;
       }
       
@@ -15388,7 +15409,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       const string sample_det_att = xml_value_str( gross_counts_node );
       if( sample_det_att.size() )
       {
-        if( UtilityFunctions::istarts_with(sample_det_att, "background") )
+        if( SpecUtils::istarts_with(sample_det_att, "background") )
         {
           meas->sample_number_ = 0;
         }else if( sscanf( sample_det_att.c_str(), "Sample%i", &(meas->sample_number_) ) == 1 )
@@ -15423,18 +15444,18 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
            remark_node;
            remark_node = XML_NEXT_TWIN(remark_node) )
       {
-        string remark = UtilityFunctions::trim_copy( xml_value_str(remark_node) );
+        string remark = SpecUtils::trim_copy( xml_value_str(remark_node) );
         
-        if( UtilityFunctions::istarts_with( remark, "RealTime:") )
+        if( SpecUtils::istarts_with( remark, "RealTime:") )
         {
           //See notes in equivalent portion of code for the <Spectrum> tag
-          remark = UtilityFunctions::trim_copy( remark.substr(9) );
+          remark = SpecUtils::trim_copy( remark.substr(9) );
           meas->real_time_ = time_duration_in_seconds( remark );
           use_remark_real_time = (meas->real_time_ > 0.0f);
-        }else if( UtilityFunctions::istarts_with( remark, "Title:") )
+        }else if( SpecUtils::istarts_with( remark, "Title:") )
         {
           //See notes in equivalent portion of code for the <Spectrum> tag
-          meas->title_ += UtilityFunctions::trim_copy( remark.substr(6) );
+          meas->title_ += SpecUtils::trim_copy( remark.substr(6) );
         }else if( !remark.empty() )
         {
           meas->remarks_.push_back( remark );
@@ -15472,7 +15493,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         continue;
       }
     
-      UtilityFunctions::split_to_floats( count_data_node->value(),
+      SpecUtils::split_to_floats( count_data_node->value(),
                                          count_data_node->value_size(),
                                          meas->neutron_counts_ );
       for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
@@ -15522,7 +15543,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
             continue;
           
           if( (gdetname == ndetname)
-              || (istarts_with(ndetname, gdetname) && UtilityFunctions::icontains(ndetname, "neut")) )
+              || (istarts_with(ndetname, gdetname) && SpecUtils::icontains(ndetname, "neut")) )
           {
             gamma_and_neut_pairs.push_back( make_pair(spectrum_meas[i], neutron_meas[j]) );
             spectrum_meas[i].reset();
@@ -15636,7 +15657,7 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
     
     //A certain HPGe detector always writes the same UUID, making it not unique...
     //  See ref3J9DRAPSZ1
-    if( UtilityFunctions::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" ) )
+    if( SpecUtils::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" ) )
       uuid_ = "";
   }
   //In the next call, the location in memory pointed to by 'data_node' may be
@@ -15747,7 +15768,7 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
       //See refDUEL9G1II9, but basically if a detectors name ends with "Ntr",
       //  force it to be a neutron detector (to make up for manufacturers error)
       if( (type == GammaDetection)
-          && UtilityFunctions::iends_with(name, "Ntr") )
+          && SpecUtils::iends_with(name, "Ntr") )
       {
         type = NeutronDetection;
       }
@@ -15759,9 +15780,9 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
       if( type == OtherDetection )
       {
         const string idval = xml_value_str(id_att);
-        if( UtilityFunctions::icontains(idval, "gamma") )
+        if( SpecUtils::icontains(idval, "gamma") )
           type = GammaDetection;
-        else if( UtilityFunctions::icontains(idval, "neutron") )
+        else if( SpecUtils::icontains(idval, "neutron") )
           type = NeutronDetection;
       }//if( type == OtherDetection )
     }//if( category_node && category_node->value_size() )
@@ -15769,8 +15790,8 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
     string descrip; // = xml_value_str( kind_node );
     
     descrip = xml_value_str( descrip_node );
-    UtilityFunctions::ireplace_all( descrip, ", Gamma and Neutron", "" );
-    UtilityFunctions::ireplace_all( descrip, "Gamma and Neutron", "" );
+    SpecUtils::ireplace_all( descrip, ", Gamma and Neutron", "" );
+    SpecUtils::ireplace_all( descrip, "Gamma and Neutron", "" );
   
     if( length_node && length_node->value_size() )
     {
@@ -15932,7 +15953,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
     bool hprds = false;
     const rapidxml::xml_node<char> *dataformat = document_node->first_node( "ThisDataFormat", 14 );
     if( dataformat && dataformat->value_size() )
-      hprds = UtilityFunctions::icontains( xml_value_str(dataformat), "HPRDS" );
+      hprds = SpecUtils::icontains( xml_value_str(dataformat), "HPRDS" );
     
     if( hprds )
     {
@@ -15960,9 +15981,9 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
         for( int i = 0; i < 2; ++i )
         {
           const string &dettype = measurements_[i]->detector_description_;
-          if( UtilityFunctions::icontains( dettype, "Gamma" ) )
+          if( SpecUtils::icontains( dettype, "Gamma" ) )
             gamma = measurements_[i];
-          else if( UtilityFunctions::icontains( dettype, "Neutron" ) )
+          else if( SpecUtils::icontains( dettype, "Neutron" ) )
             neutron = measurements_[i];
         }//for( int i = 0; i < 2; ++i )
         
@@ -15993,7 +16014,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
           if( m->source_type() == Measurement::Background )
             keep = true;
           for( const std::string &c : m->remarks_ )
-            keep |= UtilityFunctions::icontains( c, "count" );
+            keep |= SpecUtils::icontains( c, "count" );
           if( keep )
           {
             keepersamples.insert( m->sample_number_ );
@@ -16007,7 +16028,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
           remarks_to_keep.reserve( remarks_.size() );
           for( const string &remark : remarks_ )
           {
-            if( !UtilityFunctions::icontains(remark, "DNDORadiationMeasurement") )
+            if( !SpecUtils::icontains(remark, "DNDORadiationMeasurement") )
               remarks_to_keep.push_back( remark );
           }
           remarks_.swap( remarks_to_keep );
@@ -16044,15 +16065,15 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
             {
               MeasurementShrdPtr &m = meass[i];
               
-              if( UtilityFunctions::iequals_ascii(m->detector_name_, "gamma" ) )
+              if( SpecUtils::iequals_ascii(m->detector_name_, "gamma" ) )
               {
                 ++ngamma;
                 gamma_meas = m;
-              }else if( UtilityFunctions::iequals_ascii(m->detector_name_, "neutron" ) )
+              }else if( SpecUtils::iequals_ascii(m->detector_name_, "neutron" ) )
               {
                 ++nneut;
                 neut_meas = m;
-              }else if( UtilityFunctions::iequals_ascii(m->detector_name_, "GMTube" ) )
+              }else if( SpecUtils::iequals_ascii(m->detector_name_, "GMTube" ) )
               {
                 ++ngm;
                 gm_meas = m;
@@ -16177,7 +16198,7 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
                                          = std::make_shared<vector<float> >();
     
     const bool validchannel
-               = UtilityFunctions::split_to_floats( Spectrum->value(),
+               = SpecUtils::split_to_floats( Spectrum->value(),
                                       Spectrum->value_size(), *channel_counts );
     if( !validchannel || channel_counts->empty() )
       throw runtime_error( "Couldnt parse channel counts" );
@@ -16204,7 +16225,7 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
     
     //Unecasary allocation to get time.
     const string start_time = xml_value_str(StartTime);
-    meas->start_time_ = UtilityFunctions::time_from_string( start_time.c_str() );
+    meas->start_time_ = SpecUtils::time_from_string( start_time.c_str() );
 
     if( GPS && GPS->value_size() )
     {
@@ -16372,7 +16393,7 @@ bool MeasurementInfo::load_N42_file( const std::string &filename )
   try
   {
     std::vector<char> data;
-    UtilityFunctions::load_file_data( filename.c_str(), data );
+    SpecUtils::load_file_data( filename.c_str(), data );
     
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
     const bool loaded = MeasurementInfo::load_N42_from_data( &data.front(), (&data.front())+data.size() );
@@ -17481,7 +17502,7 @@ void MeasurementInfo::write_to_file( const std::string name,
                    const std::set<int> det_nums,
                    const SaveSpectrumAsType format ) const
 {
-  if( UtilityFunctions::is_file(name) || UtilityFunctions::is_directory(name) )
+  if( SpecUtils::is_file(name) || SpecUtils::is_directory(name) )
     throw runtime_error( "File (" + name + ") already exists, not overwriting" );
   
 #ifdef _WIN32
@@ -17834,7 +17855,7 @@ size_t MeasurementInfo::write_lower_channel_energies_to_pcf( std::ostream &ostr,
   {
     if( !m->start_time().is_special() )
     {
-      datestr = UtilityFunctions::to_common_string( m->start_time(), true );
+      datestr = SpecUtils::to_common_string( m->start_time(), true );
       break;
     }
   }
@@ -18142,12 +18163,12 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
     for( size_t i = 0; i < remarks_.size(); ++i )
     {
       string val = remarks_[i];
-      UtilityFunctions::trim( val );
+      SpecUtils::trim( val );
       if( val.empty()
-         || UtilityFunctions::istarts_with(val, "ItemDescription")
-         || UtilityFunctions::istarts_with(val, "CargoType")
-         || UtilityFunctions::istarts_with(val, "ItemToDetectorDistance")
-         || UtilityFunctions::istarts_with(val, "OccupancyNumber") )
+         || SpecUtils::istarts_with(val, "ItemDescription")
+         || SpecUtils::istarts_with(val, "CargoType")
+         || SpecUtils::istarts_with(val, "ItemToDetectorDistance")
+         || SpecUtils::istarts_with(val, "OccupancyNumber") )
         continue;
       fileid += (i ? "\r\n" : "") + val;
     }
@@ -18277,8 +18298,8 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       
       if( passthrough()
          && (meas->sample_number_ >= 0)
-         && !UtilityFunctions::icontains( meas->title_, "sample" )
-         && !UtilityFunctions::icontains( meas->title_, "survey" ) )
+         && !SpecUtils::icontains( meas->title_, "sample" )
+         && !SpecUtils::icontains( meas->title_, "survey" ) )
       {
         if( meas->source_type() == Measurement::Background )
           snprintf( buffer, sizeof(buffer), " Background" );
@@ -18293,16 +18314,16 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       {
         //See refP0Z5UKVMME for why remove DetectorInfo
         string detname = meas->detector_name_;
-        if( UtilityFunctions::istarts_with( detname, "DetectorInfo" ) )
+        if( SpecUtils::istarts_with( detname, "DetectorInfo" ) )
           detname = detname.substr(12);
           
         spectrum_title += (spectrum_title.empty() ? "Det=" : ": Det=") + detname;
       }
       
       if( !passthrough()
-         && !UtilityFunctions::icontains( meas->title_, "Background" )
-         && !UtilityFunctions::icontains( meas->title_, "Calibration" )
-         && !UtilityFunctions::icontains( meas->title_, "Foreground" ) )
+         && !SpecUtils::icontains( meas->title_, "Background" )
+         && !SpecUtils::icontains( meas->title_, "Calibration" )
+         && !SpecUtils::icontains( meas->title_, "Foreground" ) )
       {
         if( meas->source_type_ == Measurement::Background )
           spectrum_title += " Background";
@@ -18313,7 +18334,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }//if( not already labeled foreground or background )
       
       if( meas->speed_ > 0.0
-         && !UtilityFunctions::icontains( meas->title_, "speed" ) )
+         && !SpecUtils::icontains( meas->title_, "speed" ) )
       {
         snprintf( buffer, sizeof(buffer), " Speed %f m/s", meas->speed_ );
         spectrum_title += buffer;
@@ -18330,25 +18351,25 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       //string old_title = meas->title_;
       //const char * const check_paterns[] = { "background", "foreground" };
       //for( const char *p : check_paterns )
-      //  if( UtilityFunctions::icontains(old_title, p) && UtilityFunctions::icontains(spectrum_title, p) )
-      //    UtilityFunctions::ireplace_all(old_title, p, "" );
+      //  if( SpecUtils::icontains(old_title, p) && SpecUtils::icontains(spectrum_title, p) )
+      //    SpecUtils::ireplace_all(old_title, p, "" );
       //spectrum_title += " " + old_title;
       
       trim( spectrum_title );
-      UtilityFunctions::ireplace_all( spectrum_title, "  ", " " );
+      SpecUtils::ireplace_all( spectrum_title, "  ", " " );
       
       string source_list, spectrum_desc;
       for( const string &remark : meas->remarks() )
       {
-        if( UtilityFunctions::istarts_with(remark, "Description:") )
+        if( SpecUtils::istarts_with(remark, "Description:") )
           spectrum_desc = remark.substr(12);
-        else if( UtilityFunctions::istarts_with(remark, "Source:") )
+        else if( SpecUtils::istarts_with(remark, "Source:") )
           source_list = remark.substr(7);
       }//for( const string &remark : meas->remarks() )
       
-      UtilityFunctions::trim( spectrum_title );
-      UtilityFunctions::trim( spectrum_desc );
-      UtilityFunctions::trim( source_list );
+      SpecUtils::trim( spectrum_title );
+      SpecUtils::trim( spectrum_desc );
+      SpecUtils::trim( source_list );
       
       //Maximum length for title, description, or source list is 128 characters
       if( spectrum_title.size() > 128 )
@@ -18383,7 +18404,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }//if( we can used fixed title/desc/source placement ) else ( use truncation )
       
       if( !meas->start_time_.is_special() )
-        collection_time = UtilityFunctions::to_vax_string( meas->start_time() );
+        collection_time = SpecUtils::to_vax_string( meas->start_time() );
       else
         collection_time = "                       "; //"01-Jan-1900 00:00:00.00";  //23 characters
       
@@ -18553,7 +18574,7 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
     if( position_time_.is_special() )
       ostr << ">";
     else
-      ostr << " Time=\"" << UtilityFunctions::to_extended_iso_string(position_time_) << "Z\">";
+      ostr << " Time=\"" << SpecUtils::to_extended_iso_string(position_time_) << "Z\">";
     
     ostr << latitude_ << " " << longitude_ << "</Coordinates>" << endline;
     ostr << "      </MeasurementLocation>" << endline;
@@ -18658,7 +18679,7 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
   /*
   if( !start_time_.is_special() )
     ostr << "      <StartTime>"
-         << UtilityFunctions::to_extended_iso_string(start_time_)
+         << SpecUtils::to_extended_iso_string(start_time_)
          << "Z</StartTime>" << endline;
 //    ostr << "      <StartTime>" << start_time_ << "</StartTime>" << endline;
   */
@@ -18878,7 +18899,7 @@ bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
     
     ostr << "  <DetectorData>" << endline;
     if( !starttime.is_special() )
-      ostr << "    <StartTime>" << UtilityFunctions::to_extended_iso_string(starttime) << "Z</StartTime>" << endline;
+      ostr << "    <StartTime>" << SpecUtils::to_extended_iso_string(starttime) << "Z</StartTime>" << endline;
     if( rtime > 0.0f )
      ostr << "    <SampleRealTime>PT" << rtime << "S</SampleRealTime>" << endline;
     if( occstatus != Measurement::UnknownOccupancyStatus )
@@ -19112,7 +19133,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       measurement_location_name_ = parse_pcf_field(fileid,204,16);
       const string meas_coords = parse_pcf_field(fileid,220,16);
       vector<string> meas_coords_components;
-      UtilityFunctions::split(meas_coords_components, meas_coords, " ,\t\r\n");
+      SpecUtils::split(meas_coords_components, meas_coords, " ,\t\r\n");
       if( meas_coords_components.size() > 2 )
       {
         //Totally untested as of 20170811 - beacuase I have never seen a PCF file with coordinates...
@@ -19305,7 +19326,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
 
       //cout << "For record " << record_number << ", num_channel=" << num_channel << " with bytes_per_record=" << bytes_per_record << endl;
       
-      if( (record_number == 1) && UtilityFunctions::iequals_ascii(spectrum_title,"Energy") )
+      if( (record_number == 1) && SpecUtils::iequals_ascii(spectrum_title,"Energy") )
       {
         bool increasing = true;
         for( int32_t channel = 1; increasing && (channel < num_channel); ++channel )
@@ -19350,9 +19371,9 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       meas->start_time_ = time_from_string( collection_time.c_str() );
       
        //XXX test for Background below not tested
-      if( UtilityFunctions::icontains( spectrum_title, "Background" ) )
+      if( SpecUtils::icontains( spectrum_title, "Background" ) )
         meas->source_type_ = Measurement::Background;
-      else if( UtilityFunctions::icontains( spectrum_title, "Calib" ) )
+      else if( SpecUtils::icontains( spectrum_title, "Calib" ) )
         meas->source_type_ = Measurement::Calibration;
       else //if( spectrum_title.find("Foreground") != string::npos )
         meas->source_type_ = Measurement::Foreground;
@@ -19835,7 +19856,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
                            + " " + hourstr + ":" + minutestr + ":" + secondstr;
 
     meas->start_time_ = time_from_string( datestr.c_str() );
-	//cerr << "DateStr=" << datestr << " --> " << UtilityFunctions::to_iso_string(meas->start_time_) << endl;
+	//cerr << "DateStr=" << datestr << " --> " << SpecUtils::to_iso_string(meas->start_time_) << endl;
     if( title.size() )
       meas->title_ = title;
 
@@ -20029,7 +20050,7 @@ bool MeasurementInfo::write_integer_chn( ostream &ostr, set<int> sample_nums,
   string detdesc = summed->title_;
   for( const string &remark : remarks_ )
   {
-    if( UtilityFunctions::starts_with( remark, "Detector Description: " ) )
+    if( SpecUtils::starts_with( remark, "Detector Description: " ) )
       detdesc = " " + remark.substr( 22 );
   }
   
@@ -20067,15 +20088,15 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
 {
   //There is a variant of refQQZGMTCC93, RSL mobile system ref8T2SZ11TQE
   
-  using UtilityFunctions::safe_get_line;
-  using UtilityFunctions::split_to_floats;
+  using SpecUtils::safe_get_line;
+  using SpecUtils::split_to_floats;
   
   const istream::pos_type orig_pos = istr.tellg();
   
   try
   {
     string line;
-    if( !UtilityFunctions::safe_get_line(istr, line) )
+    if( !SpecUtils::safe_get_line(istr, line) )
       throw runtime_error(""); //"Failed getting first line"
   
     if( line.size() < 8 || line.size() > 100 )
@@ -20088,7 +20109,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
       throw runtime_error( "" ); //"Invalid character in first 8 characters"
     
     vector<string> flinefields;
-    UtilityFunctions::split( flinefields, line, " ,\t");
+    SpecUtils::split( flinefields, line, " ,\t");
     if( flinefields.size() != 4 )
       throw runtime_error( "" ); //"First line not real time then calibration coefs"
     
@@ -20117,7 +20138,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     if( fline.size() >= 127 )
     {
       //Second line is CSV of channel counts
-      if( UtilityFunctions::safe_get_line(istr, line) && line.size() )
+      if( SpecUtils::safe_get_line(istr, line) && line.size() )
         throw runtime_error(""); //"Only expected two lines"
       
       counts->swap( fline );
@@ -20136,7 +20157,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
 
       channelnum = channelnum - 1.0f;
       istr.seekg( orig_pos, ios::beg );
-      UtilityFunctions::safe_get_line( istr, line );
+      SpecUtils::safe_get_line( istr, line );
     
       while( safe_get_line( istr, line ) )
       {
@@ -20152,7 +20173,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
         
         channelnum = fline[0];
         counts->push_back( fline[1] );
-      }//while( UtilityFunctions::safe_get_line( istr, line ) )
+      }//while( SpecUtils::safe_get_line( istr, line ) )
     }//if( fline.size() >= 127 )
     
     const size_t nchannel = counts->size();
@@ -20215,7 +20236,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
   size_t nlines_used = 0, nlines_total = 0;
   
   const size_t maxlen = 1024*1024; //should be long enough for even the largest spectra
-  while( UtilityFunctions::safe_get_line(istr, line, maxlen) )
+  while( SpecUtils::safe_get_line(istr, line, maxlen) )
   {
     if( line.size() > (maxlen-5) )
       throw runtime_error( "Found to long of line" );
@@ -20231,7 +20252,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     vector<string> split_fields, fields;
     const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");  //Dont allow a space delimiter until we have the columns mapped out to avoid things like "Energy (keV)" counting as two columns
     
-    UtilityFunctions::split( split_fields, line, delim );
+    SpecUtils::split( split_fields, line, delim );
 
     fields.reserve( split_fields.size() );
     for( string s : split_fields )
@@ -20273,7 +20294,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       if( fields.size() == 4 )
       {
         vector<float> cals;
-        if( UtilityFunctions::split_to_floats( line.c_str(), line.size(), cals ) )
+        if( SpecUtils::split_to_floats( line.c_str(), line.size(), cals ) )
         {
           //refY2EF53S0BD
           vector<float> eqn;
@@ -20289,7 +20310,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
             const istream::pos_type current_pos = istr.tellg();
             
             string channeldata;
-            if( UtilityFunctions::safe_get_line(istr, channeldata, maxlen) )
+            if( SpecUtils::safe_get_line(istr, channeldata, maxlen) )
             {
               ++nlines_total;
               const istream::pos_type post_pos = istr.tellg();
@@ -20300,7 +20321,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                 istr.setstate( ios::eofbit );
               
               std::shared_ptr<vector<float> > channels( new vector<float>() );
-              if( UtilityFunctions::split_to_floats( channeldata.c_str(), channeldata.size(), *channels ) )
+              if( SpecUtils::split_to_floats( channeldata.c_str(), channeldata.size(), *channels ) )
               {
                 if( post_pos == eof_pos )
                 {
@@ -20325,7 +20346,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                   channels->clear();
                   
                   string str;
-                  while( UtilityFunctions::safe_get_line(istr, str, maxlen) )
+                  while( SpecUtils::safe_get_line(istr, str, maxlen) )
                   {
                     ++nlines_total;
                     trim(str);
@@ -20333,7 +20354,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                       continue;
                     
                     vector<float> vals;
-                    if( !UtilityFunctions::split_to_floats( str.c_str(), str.size(), vals ) )
+                    if( !SpecUtils::split_to_floats( str.c_str(), str.size(), vals ) )
                     {
                       channels.reset();
                       break;
@@ -20455,7 +20476,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         counts->push_back( count );
         channels->push_back( channel );
         position = istr.tellg();
-      }while( UtilityFunctions::safe_get_line( istr, line, maxlen ) );
+      }while( SpecUtils::safe_get_line( istr, line, maxlen ) );
 
       if( counts->empty() )
         throw runtime_error( "Didnt find and channel counts" );
@@ -20506,7 +20527,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                 || starts_with( fields[i], "en" ) )
         {
           column_map[i] = kEnergy;
-          if( UtilityFunctions::contains( fields[i], "mev" ) )
+          if( SpecUtils::contains( fields[i], "mev" ) )
             energy_units = 1000.0f;
         }else if( starts_with( fields[i], "counts" )
                   || starts_with( fields[i], "data" )
@@ -20745,12 +20766,12 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
   try
   {
     string line;
-    while( UtilityFunctions::safe_get_line( istr, line ) )
+    while( SpecUtils::safe_get_line( istr, line ) )
     {
       trim(line);
       if( !line.empty() )
         break;
-    }//while( UtilityFunctions::safe_get_line( istr, line ) )
+    }//while( SpecUtils::safe_get_line( istr, line ) )
 
     
     //If someone opened the file up in a Windows text editor, the file may have
@@ -20777,7 +20798,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       {
         //RadEagle files contains a seemingly duplicate section of DATA: $TRANSFORMED_DATA:
         
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error( "Error reading DATA section of IAEA file" );
 
         trim(line);
@@ -20808,7 +20829,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
 
         //XXX - for some reason I think this next test condition is a little
         //      fragile...
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -20818,7 +20839,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
 
           vector<float> linevalues;
-          const bool ok = UtilityFunctions::split_to_floats( line.c_str(), line.size(), linevalues );
+          const bool ok = SpecUtils::split_to_floats( line.c_str(), line.size(), linevalues );
         
           if( !ok )
           {
@@ -20843,7 +20864,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         meas->gamma_count_sum_ = sum;
       }else if( starts_with(line,"$MEAS_TIM:") )
       {
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error( "Error reading MEAS_TIM section of IAEA file" );
         vector<string> fields;
         split( fields, line, " \t," );
@@ -20859,7 +20880,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         }//if( firstlineparts.size() == 2 )
       }else if( starts_with(line,"$DATE_MEA:") )
       {
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error( "Error reading MEAS_TIM section of IAEA file" );
 
         trim(line);
@@ -20878,7 +20899,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$SPEC_ID:") )
       {
         string remark;
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -20895,9 +20916,9 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             //Is a ORTEC RADEAGLE
             //See http://www.ortec-online.com/-/media/ametekortec/brochures/radeagle.pdf to decode model number/options
             //Example "RE 3SG-H-GPS"
-            //const bool has_gps = UtilityFunctions::icontains(line,"-GPS");
-            //const bool has_neutron = UtilityFunctions::icontains(line,"-H");
-            const bool has_underwater = UtilityFunctions::icontains(line,"SGA");
+            //const bool has_gps = SpecUtils::icontains(line,"-GPS");
+            //const bool has_neutron = SpecUtils::icontains(line,"-H");
+            const bool has_underwater = SpecUtils::icontains(line,"SGA");
             if( has_underwater )
               remarks_.push_back( "Detector has under water option" );
             
@@ -20945,7 +20966,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           {
             remark += (!remark.empty() ? " " : "") + line;
           }
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
 
         remarks_.push_back( remark );
       }else if( starts_with(line,"$ENER_FIT:")
@@ -20953,14 +20974,14 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       {
         if( !starts_with(line,"$GAIN_OFFSET_XIA:") || meas->calibration_coeffs_.empty() )
         {
-          if( !UtilityFunctions::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line ) )
             throw runtime_error( "Error reading ENER_FIT section of IAEA file" );
 
           trim(line);
           meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
 
           vector<float> coefs;
-          if( UtilityFunctions::split_to_floats( line.c_str(), line.size(), coefs ) )
+          if( SpecUtils::split_to_floats( line.c_str(), line.size(), coefs ) )
           {
             bool allZeros = true;
             for( const float c : coefs )
@@ -20971,7 +20992,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }
         }else
         {
-          UtilityFunctions::safe_get_line( istr, line );
+          SpecUtils::safe_get_line( istr, line );
           if( starts_with(line,"$") )
           {
             skip_getline = true;
@@ -20982,7 +21003,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       {
         try
         {
-          if( !UtilityFunctions::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line ) )
             throw runtime_error("Error reading MCA_CAL section of IAEA file");
           trim(line);
           
@@ -20991,7 +21012,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           if( line.empty() || npar < 1 )
             throw runtime_error("Invalid number of parameters");
           
-          if( !UtilityFunctions::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line ) )
             throw runtime_error("Error reading MCA_CAL section of IAEA file");
           trim(line);
           meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
@@ -21001,13 +21022,13 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           {
             //Often times the line will end with "keV".  Lets get rid of that to
             //  not trip up developers checks
-            if( UtilityFunctions::iends_with(line, "kev") )
+            if( SpecUtils::iends_with(line, "kev") )
             {
               line = line.substr(0,line.size()-3);
-              UtilityFunctions::trim( line );
+              SpecUtils::trim( line );
             }
             
-            const bool success = UtilityFunctions::split_to_floats(
+            const bool success = SpecUtils::split_to_floats(
                                              line.c_str(), line.size(), coefs );
 
             if( !success )
@@ -21049,7 +21070,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         }
       }else if( starts_with(line,"$GPS:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21078,14 +21099,14 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               meas->speed_ = 0.0;
           }else if( !line.empty() )
             remarks_.push_back( line ); //also can be Alt=, Dir=, Valid=
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$GPS_COORDINATES:") )
       {
-        if( UtilityFunctions::safe_get_line( istr, line ) )
+        if( SpecUtils::safe_get_line( istr, line ) )
           remarks_.push_back( "GPS Coordinates: " + line );
       }else if( starts_with(line,"$NEUTRONS:") )
       { //ex "0.000000  (total)"
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error("Error reading NEUTRONS section of IAEA file");
         trim( line );
         float val;
@@ -21099,13 +21120,13 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                        "MeasurementInfo::load_from_iaea()", 1 );
       }else if( starts_with(line,"$NEUTRONS_LIVETIME:") )
       { //ex "267706.437500  (sec)"
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error("Error reading NEUTRONS_LIVETIME section of IAEA file");
         trim( line );
         meas->remarks_.push_back( "Neutron Live Time: " + line );
       }else if( starts_with(line,"$NEUTRON_CPS:") )
       { //found in RadEagle SPE files
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error("Error reading NEUTRON_CPS section of IAEA file");
         trim( line );
         float val;
@@ -21120,7 +21141,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                       "MeasurementInfo::load_from_iaea()", 1 );
       }else if( starts_with(line,"$SPEC_REM:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21130,10 +21151,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           if( !line.empty() )
             meas->remarks_.push_back( line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$ROI:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21143,10 +21164,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
 //          if( !line.empty() )
 //            meas->remarks_.push_back( line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$ROI_INFO:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21157,7 +21178,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           if( !line.empty() )
           {
             vector<float> parts;
-            UtilityFunctions::split_to_floats( line.c_str(), line.size(), parts );
+            SpecUtils::split_to_floats( line.c_str(), line.size(), parts );
             if( parts.size() > 7 )
             {
               const int roinum     = static_cast<int>( parts[0] );
@@ -21181,14 +21202,14 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               meas->remarks_.push_back( buffer );
             }//if( parts.size() > 7 )
           }
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$ENER_DATA:") || starts_with(line,"$MCA_CAL_DATA:") )
       {
-        if( UtilityFunctions::safe_get_line( istr, line ) )
+        if( SpecUtils::safe_get_line( istr, line ) )
         {
           const size_t num = static_cast<size_t>( atol( line.c_str() ) );
           vector<pair<int,float> > bintoenergy;
-          while( UtilityFunctions::safe_get_line( istr, line ) )
+          while( SpecUtils::safe_get_line( istr, line ) )
           {
             trim(line);
             if( starts_with(line,"$") )
@@ -21200,11 +21221,11 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             if( !line.empty() )
             {
               vector<float> parts;
-              UtilityFunctions::split_to_floats( line.c_str(), line.size(), parts );
+              SpecUtils::split_to_floats( line.c_str(), line.size(), parts );
               if( parts.size() == 2 )
                 bintoenergy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
             }
-          }//while( UtilityFunctions::safe_get_line( istr, line ) )
+          }//while( SpecUtils::safe_get_line( istr, line ) )
           
           if( num && bintoenergy.size()==num )
           {
@@ -21219,7 +21240,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$SHAPE_CAL:") )
       {
         //I think this is FWHM calibration parameters - skipping this for now
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21227,17 +21248,17 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
 
 /*
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error("Error reading SHAPE_CA section of IAEA file");
         trim(line);
         unsigned int npar;
         if( !(stringstream(line) >> npar ) )
           throw runtime_error( "Invalid number of parameter: " + line );
 
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error("Error reading SHAPE_CA section of IAEA file");
         trim(line);
 
@@ -21265,7 +21286,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         //XXX - it would be nice to keep the peak lables, or at least search for
         //      these peaks and assign the isotopes..., but for now we'll ignore
         //      them :(
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21273,10 +21294,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$CAMBIO:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21284,10 +21305,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$APPLICATION_ID:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21299,10 +21320,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           //line something like "identiFINDER 2 NG, Application: 2.37, Operating System: 1.2.040"
           if( line.size() )
             remarks_.push_back( line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$DEVICE_ID:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21311,34 +21332,34 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             break;
           }//if( we have overrun the data section )
           
-          if( UtilityFunctions::icontains( line, "identiFINDER 2 LG" ) )
+          if( SpecUtils::icontains( line, "identiFINDER 2 LG" ) )
           {
             detector_type_ = kIdentiFinderLaBr3Detector;
             instrument_model_ = line;
             manufacturer_ = "FLIR";
             
-            if( UtilityFunctions::icontains( line, "LGH" ) )
+            if( SpecUtils::icontains( line, "LGH" ) )
               meas->contained_neutron_ = true;
-          }else if( UtilityFunctions::icontains( line, "identiFINDER 2 NG") ) //"nanoRaider ZH"
+          }else if( SpecUtils::icontains( line, "identiFINDER 2 NG") ) //"nanoRaider ZH"
           {
             detector_type_ = kIdentiFinderNGDetector;
             instrument_model_ = line;
             manufacturer_ = "FLIR";
             
-            if( UtilityFunctions::icontains( line, "NGH" ) )
+            if( SpecUtils::icontains( line, "NGH" ) )
               meas->contained_neutron_ = true;
-          }else if( UtilityFunctions::istarts_with( line, "SN#") )
+          }else if( SpecUtils::istarts_with( line, "SN#") )
           {
             line = line.substr(3);
-            UtilityFunctions::trim( line );
+            SpecUtils::trim( line );
             if( line.size() )
               instrument_id_ = line;
           }else
             remarks_.push_back( line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_DATASET_NUMBER:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21350,10 +21371,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           //line something like "identiFINDER 2 NG, Application: 2.37, Operating System: 1.2.040"
           if( line.size() )
             remarks_.push_back( "FLIR DATSET NUMBER: " + line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_GAMMA_DETECTOR_INFORMATION:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21364,12 +21385,12 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "GAMMA DETECTOR INFORMATION: " + line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_NEUTRON_DETECTOR_INFORMATION:") )
       {
         meas->contained_neutron_ = true;
         
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21380,10 +21401,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "NEUTRON DETECTOR INFORMATION: " + line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_SPECTRUM_TYPE:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21392,14 +21413,14 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             break;
           }//if( we have overrun the data section )
           
-          if( UtilityFunctions::icontains( line, "IntrinsicActivity" ) )
+          if( SpecUtils::icontains( line, "IntrinsicActivity" ) )
             meas->source_type_ = Measurement::IntrinsicActivity;
-          else if( UtilityFunctions::icontains( line, "Measurement" ) )
+          else if( SpecUtils::icontains( line, "Measurement" ) )
             meas->source_type_ = Measurement::Foreground;
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_REACHBACK:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21410,12 +21431,12 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "Reachback url: " + line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_DOSE_RATE_SWMM:") )
       {
         //I dont understand the structure of this... so just putting in remarks.
         string remark;
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21426,14 +21447,14 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remark += (remark.size()?", ":"") + line;
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
         
         if( remark.size() )
           remarks_.push_back( "Dose information: " + remark );
       }else if( starts_with(line,"$FLIR_ANALYSIS_RESULTS:") )
       {
         vector<string> analines;
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21443,7 +21464,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           if( !line.empty() )
             analines.push_back( line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
         
         if( analines.empty() )
           continue;
@@ -21476,7 +21497,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         }//for( int ananum = 0; ananum < numresults; ++ananum )
       }else if( starts_with(line,"$DOSE_RATE:") )
       {  //Dose rate in uSv.  Seen in RadEagle
-        if( !UtilityFunctions::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line ) )
           throw runtime_error( "Error reading DOSE_RATE section of IAEA file" );
         
         trim(line);
@@ -21495,7 +21516,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$RADIONUCLIDES:") )
       { //Have only seen one file with this , and it only had a single nuclide
         //Cs137*[9.58755]
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21523,10 +21544,10 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               anaresult = std::make_shared<DetectorAnalysis>();
             anaresult->results_.push_back( result );
           }//if( nuc_end != string::npos )
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$SPEC_INTEGRAL:") )
       {
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21537,12 +21558,12 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "SPEC_INTEGRAL: " + line );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$IDENTIFY_PARAMETER:") )
       {
         vector<float> calibcoefs;
         vector< pair<float,float> > fwhms;
-        while( !skip_getline && UtilityFunctions::safe_get_line( istr, line ) )
+        while( !skip_getline && SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21551,12 +21572,12 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             break;
           }//if( we have overrun the data section )
           
-          const bool slope = UtilityFunctions::icontains( line, "Energieeichung_Steigung");
-          const bool offset = UtilityFunctions::icontains( line, "Energieeichung_Offset");
-          const bool quad = UtilityFunctions::icontains( line, "Energieeichung_Quadrat");
+          const bool slope = SpecUtils::icontains( line, "Energieeichung_Steigung");
+          const bool offset = SpecUtils::icontains( line, "Energieeichung_Offset");
+          const bool quad = SpecUtils::icontains( line, "Energieeichung_Quadrat");
           if( slope || offset || quad )
           {
-            if( UtilityFunctions::safe_get_line( istr, line ) )
+            if( SpecUtils::safe_get_line( istr, line ) )
             {
               trim(line);
               if( starts_with(line,"$") )
@@ -21584,8 +21605,8 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                 if( !toFloat( line, calibcoefs[2] ) )
                   throw runtime_error( "Couldnt convert to cal quad to flt: " + line );
               }
-            }//if( UtilityFunctions::safe_get_line( istr, line ) )
-          }//if( UtilityFunctions::icontains( line, "Energieeichung_Steigung") )
+            }//if( SpecUtils::safe_get_line( istr, line ) )
+          }//if( SpecUtils::icontains( line, "Energieeichung_Steigung") )
           
 /*
             FWHM_FWHM1:
@@ -21599,7 +21620,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             Detektortyp:
             2
  */
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
         
         if( calibcoefs.size() && !meas->calibration_coeffs_.size() )
         {
@@ -21608,7 +21629,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         }
       }else if( starts_with(line,"$NON_LINEAR_DEVIATIONS:") )
       {
-        UtilityFunctions::safe_get_line( istr, line );
+        SpecUtils::safe_get_line( istr, line );
         trim(line);
         
         const size_t npairs = static_cast<size_t>( atoi(line.c_str()) );
@@ -21618,7 +21639,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         
         DeviationPairVec pairs;
         
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21635,7 +21656,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }//if( !(stringstream(line) >> energy >> deviation ) )
 
           pairs.push_back( pair<float,float>(energy,deviation) );
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
         
         if( pairs.size() == npairs )
         {
@@ -21656,7 +21677,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                || starts_with(line,"$DT:") )
       {
         //Burn off things we dont care about
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21675,7 +21696,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               )
       {
         //Burn off things we dont care about
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21686,7 +21707,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( line == "Live Time" )
           {
-            if( UtilityFunctions::safe_get_line( istr, line ) )
+            if( SpecUtils::safe_get_line( istr, line ) )
             {
               if( starts_with(line,"$") )
               {
@@ -21694,17 +21715,17 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                 break;
               }//if( we have overrun the data section )
               remarks_.push_back( "A preset live time of " + line + " was used" );
-            }//if( UtilityFunctions::safe_get_line( istr, line ) )
+            }//if( SpecUtils::safe_get_line( istr, line ) )
           }//if( line == "Live Time" )
 //          if( line.size() )
 //            cout << "Got Something" << endl;
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_NEUTRON_SWMM:")
                || starts_with(line,"$TRANSFORMED_DATA:") )
       {
         //we'll just burn through this section of the file since wcjohns doesnt
         //  understand the purpose or structure of these sections
-        while( UtilityFunctions::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -21712,7 +21733,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( UtilityFunctions::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( !line.empty() && line != "END" )
       {
         cerr << "Unrecognized line '" << line << "'" << endl;
@@ -21780,7 +21801,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
       $WINSPEC_AUTOMATION:
       $WINSPEC_INFO:
       */
-    }while( skip_getline || UtilityFunctions::safe_get_line( istr, line) );
+    }while( skip_getline || SpecUtils::safe_get_line( istr, line) );
     //  while( getline( istr, line ) )
 
     if( neutrons_were_cps )
@@ -21829,7 +21850,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
   try
   {
     string line;
-    if( !UtilityFunctions::safe_get_line( input, line ) )
+    if( !SpecUtils::safe_get_line( input, line ) )
       return false;
   
     vector<string> headers;
@@ -21942,12 +21963,12 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
     
     std::vector<float> counts;
     
-    while( UtilityFunctions::safe_get_line( input, line ) )
+    while( SpecUtils::safe_get_line( input, line ) )
     {
       if( line.empty() )
         continue;
       
-      UtilityFunctions::split_to_floats( line.c_str(), line.size(), counts );
+      SpecUtils::split_to_floats( line.c_str(), line.size(), counts );
       if( counts.size() != measurments.size() )
         throw runtime_error( "Unexpected number of channel counts" );
     
@@ -21956,7 +21977,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
         gammacounts.at(i)->push_back( counts[i] );
         measurments[i]->gamma_count_sum_ += counts[i];
       }
-    }//while( UtilityFunctions::safe_get_line( input, line ) )
+    }//while( SpecUtils::safe_get_line( input, line ) )
     
     const uint32_t len = static_cast<uint32_t>( gammacounts[0]->size() );
     const bool isPowerOfTwo = ((len != 0) && !(len & (len - 1)));
@@ -21999,7 +22020,7 @@ bool MeasurementInfo::load_from_txt_or_csv( std::istream &istr )
   const char *not_allowed_txt[] = { "<?xml", "<Event", "<N42InstrumentData" };
   for( const char *txt : not_allowed_txt )
   {
-    if( UtilityFunctions::icontains(firstdata, txt) )
+    if( SpecUtils::icontains(firstdata, txt) )
       return false;
   }
   
@@ -22070,15 +22091,15 @@ bool MeasurementInfo::load_spectroscopic_daily_file( const std::string &filename
   
   string bufferstr = buffer;
   const bool isSDF = ((bufferstr.size() > 3 && bufferstr[2]==',')
-                      && ( UtilityFunctions::starts_with( bufferstr, "GB" )
-                          || UtilityFunctions::starts_with( bufferstr, "NB" )
-                          || UtilityFunctions::starts_with( bufferstr, "S1" )
-                          || UtilityFunctions::starts_with( bufferstr, "S2" )
-                          || UtilityFunctions::starts_with( bufferstr, "GS" )
-                          || UtilityFunctions::starts_with( bufferstr, "GS" )
-                          || UtilityFunctions::starts_with( bufferstr, "NS" )
-                          || UtilityFunctions::starts_with( bufferstr, "ID" )
-                          || UtilityFunctions::starts_with( bufferstr, "AB" )));
+                      && ( SpecUtils::starts_with( bufferstr, "GB" )
+                          || SpecUtils::starts_with( bufferstr, "NB" )
+                          || SpecUtils::starts_with( bufferstr, "S1" )
+                          || SpecUtils::starts_with( bufferstr, "S2" )
+                          || SpecUtils::starts_with( bufferstr, "GS" )
+                          || SpecUtils::starts_with( bufferstr, "GS" )
+                          || SpecUtils::starts_with( bufferstr, "NS" )
+                          || SpecUtils::starts_with( bufferstr, "ID" )
+                          || SpecUtils::starts_with( bufferstr, "AB" )));
   if( !isSDF )
     return false;
   
@@ -22098,7 +22119,7 @@ bool MeasurementInfo::load_spectroscopic_daily_file( const std::string &filename
   //        -MRDIS2 for the Mobile Radiation Detection and Identification System in secondary
   //        ex. refG8JBF6M229
   vector<string> fields;
-  UtilityFunctions::split( fields, filename, "_" );
+  SpecUtils::split( fields, filename, "_" );
   if( fields.size() > 3 )
   {
     if( fields[3] == "SPM-T" )
@@ -22298,7 +22319,7 @@ bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
     
     //Check to see if this is a GR135 text file
     string firstline;
-    UtilityFunctions::safe_get_line( *input, firstline );
+    SpecUtils::safe_get_line( *input, firstline );
     
     bool success = false;
     
@@ -22312,15 +22333,15 @@ bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
     }
     
     const bool isSDF = ((!success && firstline.size() > 3 && firstline[2]==',')
-                         && ( UtilityFunctions::starts_with( firstline, "GB" )
-                         || UtilityFunctions::starts_with( firstline, "NB" )
-                         || UtilityFunctions::starts_with( firstline, "S1" )
-                         || UtilityFunctions::starts_with( firstline, "S2" )
-                         || UtilityFunctions::starts_with( firstline, "GS" )
-                         || UtilityFunctions::starts_with( firstline, "GS" )
-                         || UtilityFunctions::starts_with( firstline, "NS" )
-                         || UtilityFunctions::starts_with( firstline, "ID" )
-                         || UtilityFunctions::starts_with( firstline, "AB" )));
+                         && ( SpecUtils::starts_with( firstline, "GB" )
+                         || SpecUtils::starts_with( firstline, "NB" )
+                         || SpecUtils::starts_with( firstline, "S1" )
+                         || SpecUtils::starts_with( firstline, "S2" )
+                         || SpecUtils::starts_with( firstline, "GS" )
+                         || SpecUtils::starts_with( firstline, "GS" )
+                         || SpecUtils::starts_with( firstline, "NS" )
+                         || SpecUtils::starts_with( firstline, "ID" )
+                         || SpecUtils::starts_with( firstline, "AB" )));
     if( isSDF )
     {
       input->close();
@@ -22444,7 +22465,7 @@ namespace SpectroscopicDailyFile
     info.calibcoefs.clear();
     
     vector<string> s1fields;
-    UtilityFunctions::split( s1fields, s1str, "," );
+    SpecUtils::split( s1fields, s1str, "," );
     if( s1fields.size() < 5 )
     {
       cerr << "parse_s1_info(): Invalid S1 line" << endl;
@@ -22502,7 +22523,7 @@ namespace SpectroscopicDailyFile
     answer.clear();
   
     vector<string> s2fields;
-    UtilityFunctions::split( s2fields, s2str, "," );
+    SpecUtils::split( s2fields, s2str, "," );
     string detname;
     for( size_t i = 1; i < (s2fields.size()-1); )
     {
@@ -22535,7 +22556,7 @@ namespace SpectroscopicDailyFile
     const std::string str( data, datalen );
     
     vector<string> fields;
-    UtilityFunctions::split( fields, str, "," );
+    SpecUtils::split( fields, str, "," );
     
     if( fields.size() < 5 )
     {
@@ -22570,9 +22591,9 @@ namespace SpectroscopicDailyFile
     }
     
     string type = line.substr( pos1+1, pos2-pos1-1 );
-    if( UtilityFunctions::iequals_ascii( type, "Gamma" ) )
+    if( SpecUtils::iequals_ascii( type, "Gamma" ) )
       info.type = DailyFileAnalyzedBackground::Gamma;
-    else if( UtilityFunctions::iequals_ascii( type, "Neutron" ) )
+    else if( SpecUtils::iequals_ascii( type, "Neutron" ) )
       info.type = DailyFileAnalyzedBackground::Neutrons;
     else
     {
@@ -22603,7 +22624,7 @@ namespace SpectroscopicDailyFile
       const char *start = line.c_str() + pos1 + 1;
       const size_t len = line.size() - pos1 - 2;
       const bool success
-              = UtilityFunctions::split_to_floats( start, len, *info.spectrum );
+              = SpecUtils::split_to_floats( start, len, *info.spectrum );
       
       if( !success )
       {
@@ -22631,7 +22652,7 @@ namespace SpectroscopicDailyFile
     const size_t len = line.size() - pos - 1;
     
     vector<float> vals;
-    const bool success = UtilityFunctions::split_to_floats( start, len, vals );
+    const bool success = SpecUtils::split_to_floats( start, len, vals );
     if( !success || vals.size() < 2 )
     {
       cerr << "parse_neutron_signal: did not decode spectrum" << endl;
@@ -22680,7 +22701,7 @@ namespace SpectroscopicDailyFile
     vector<float> vals;
     const char *start = line.c_str() + pos2 + 1;
     const size_t len = line.size() - pos2 - 1;
-    const bool success = UtilityFunctions::split_to_floats( start, len, *info.spectrum );
+    const bool success = SpecUtils::split_to_floats( start, len, *info.spectrum );
     if( !success || info.spectrum->size() < 2 )
     {
       cerr << "parse_gamma_signal: did not decode spectrum" << endl;
@@ -22716,7 +22737,7 @@ namespace SpectroscopicDailyFile
     
     const char *start = line.c_str() + pos2 + 1;
     const size_t len = line.size() - pos2 - 1;
-    const bool success = UtilityFunctions::split_to_floats( start, len, *info.spectrum );
+    const bool success = SpecUtils::split_to_floats( start, len, *info.spectrum );
     if( !success || info.spectrum->size() < 2 )
     {
       cerr << "parse_gamma_background: did not decode spectrum" << endl;
@@ -22753,7 +22774,7 @@ namespace SpectroscopicDailyFile
     
     
     //Files like fail: ref1E5GQ2SW76
-    const bool success = UtilityFunctions::split_to_floats( start, len, info.counts );
+    const bool success = SpecUtils::split_to_floats( start, len, info.counts );
     if( !success || info.counts.size() < 2 )
     {
       cerr << "parse_neutron_background: did not decode counts" << endl;
@@ -22857,7 +22878,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
   //  with no other line types.  so here we will test for this.
   {//begin test for wierd format
     string line;
-    if( !UtilityFunctions::safe_get_line( input, line, 2048 ) )
+    if( !SpecUtils::safe_get_line( input, line, 2048 ) )
       return false;
     int ndash = 0;
     auto pos = line.find_last_of( ',' );
@@ -22905,7 +22926,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
 #if( DO_SDF_MULTITHREAD )
   while( pos < filelength )
 #else
-  while( UtilityFunctions::safe_get_line( input, line ) )
+  while( SpecUtils::safe_get_line( input, line ) )
 #endif
   {
     
@@ -23286,7 +23307,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
     }else
     {
       string line(linestart, linelen);
-      UtilityFunctions::trim( line );
+      SpecUtils::trim( line );
       
       if( !line.empty() )
       {
@@ -23303,7 +23324,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
              << linetype << endl;
       }//if( !line.empty() )
     }//if / else (determine what this line means)
-  }//while( UtilityFunctions::safe_get_line( input, line ) )
+  }//while( SpecUtils::safe_get_line( input, line ) )
   
 #if( DO_SDF_MULTITHREAD )
   pool.join();
@@ -23802,14 +23823,14 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
   try
   {
     string line;
-    if( !UtilityFunctions::safe_get_line(input, line) )
+    if( !SpecUtils::safe_get_line(input, line) )
       return false;
     
     if( line.find("Fields, RSP 1, RSP 2") == string::npos )
       return false;
     
     vector<string> header;
-    UtilityFunctions::split( header, line, "," );
+    SpecUtils::split( header, line, "," );
     if( header.size() < 3 )
       return false; //we know this cant happen, but whatever
     header.erase( begin(header) );  //get rid of "Fields"
@@ -23819,7 +23840,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
 #endif
     for( auto &field : header )
     {
-      UtilityFunctions::trim( field );
+      SpecUtils::trim( field );
       if( field.size() < 2 )
       {
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -23847,9 +23868,9 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
     vector<float> real_times, live_times;
     vector<vector<float>> gamma_counts, neutron_counts;
     
-    while( UtilityFunctions::safe_get_line(input, line) )
+    while( SpecUtils::safe_get_line(input, line) )
     {
-      UtilityFunctions::trim( line );
+      SpecUtils::trim( line );
       if( line.empty() )
         continue;
       
@@ -23875,7 +23896,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
         continue;
       
       vector<float> line_data;
-      if( !UtilityFunctions::split_to_floats(line, line_data) )
+      if( !SpecUtils::split_to_floats(line, line_data) )
       {
 #if(PERFORM_DEVELOPER_CHECKS)
         log_developer_error( __func__, ("Failed in parsing line of SRPM file: '" + line + "'").c_str() );
@@ -23892,23 +23913,23 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       }else if( key == "ACC_TIME_LIVE_us" )
       {
         live_times.swap( line_data );
-      }else if( UtilityFunctions::istarts_with( key, "Spectrum_") )
+      }else if( SpecUtils::istarts_with( key, "Spectrum_") )
       {
         if( gamma_counts.size() < line_data.size() )
           gamma_counts.resize( line_data.size() );
         for( size_t i = 0; i < line_data.size(); ++i )
           gamma_counts[i].push_back(line_data[i]);
-      }else if( UtilityFunctions::istarts_with( key, "Ntr_") )
+      }else if( SpecUtils::istarts_with( key, "Ntr_") )
       {
-        if( UtilityFunctions::icontains(key, "Total") )
+        if( SpecUtils::icontains(key, "Total") )
         {
           if( neutron_counts.size() < line_data.size() )
             neutron_counts.resize( line_data.size() );
           for( size_t i = 0; i < line_data.size(); ++i )
             neutron_counts[i].push_back(line_data[i]);
-        }else if( UtilityFunctions::icontains(key, "Low")
-                 || UtilityFunctions::icontains(key, "High")
-                 || UtilityFunctions::icontains(key, "_Neutron") )
+        }else if( SpecUtils::icontains(key, "Low")
+                 || SpecUtils::icontains(key, "High")
+                 || SpecUtils::icontains(key, "_Neutron") )
         {
           //Meh, ignore this I guess
         }else
@@ -23923,7 +23944,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
         log_developer_error( __func__, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
 #endif
       }//if( key is specific value ) / else
-    }//while( UtilityFunctions::safe_get_line(input, line) )
+    }//while( SpecUtils::safe_get_line(input, line) )
     
     if( gamma_counts.empty() )
       return false;
@@ -24118,7 +24139,7 @@ bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
     std::shared_ptr<vector<float> > counts( new vector<float>() );
     meas->gamma_counts_ = counts;
     
-    const bool success = UtilityFunctions::split_to_floats(
+    const bool success = SpecUtils::split_to_floats(
                                filedata.c_str() + datastart, datalen, *counts );
     if( !success )
       throw runtime_error( "Couldnt parse channel data" );
@@ -24136,7 +24157,7 @@ bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
       {
         vector<string> lines;
         const string data = filedata.substr( dp5start, dp5end - dp5start );
-        UtilityFunctions::split( lines, data, "\r\n" );
+        SpecUtils::split( lines, data, "\r\n" );
         for( size_t i = 1; i < lines.size(); ++i )
           meas->remarks_.push_back( lines[i] );
       }//if( dp5end != string::npos )
@@ -24152,13 +24173,13 @@ bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
       {
         vector<string> lines;
         const string data = filedata.substr( dppstart, dppend - dppstart );
-        UtilityFunctions::split( lines, data, "\r\n" );
+        SpecUtils::split( lines, data, "\r\n" );
         for( size_t i = 1; i < lines.size(); ++i )
         {
-          if( UtilityFunctions::starts_with( lines[i], "Serial Number: " )
+          if( SpecUtils::starts_with( lines[i], "Serial Number: " )
               && instrument_id_.size() < 3 )
             instrument_id_ = lines[i].substr( 15 );
-          else if( UtilityFunctions::starts_with( lines[i], "Device Type: " ) )
+          else if( SpecUtils::starts_with( lines[i], "Device Type: " ) )
             instrument_model_ = lines[i].substr( 13 );
           else
             remarks_.push_back( lines[i] );
@@ -24638,7 +24659,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
         return "";
       
       const string value = data.substr( pos+tag.size(), endline - value_start );
-      return UtilityFunctions::trim_copy( value );
+      return SpecUtils::trim_copy( value );
     };//getval
     
     auto meas = make_shared<Measurement>();
@@ -24650,7 +24671,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
       startdate += getval( "TIME=" );
     }
     
-    meas->start_time_ = UtilityFunctions::time_from_string( startdate.c_str() );
+    meas->start_time_ = SpecUtils::time_from_string( startdate.c_str() );
     
     if( !toFloat( getval("TLIVE="), meas->live_time_ ) )
       meas->live_time_ = 0.0f;
@@ -24661,7 +24682,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
     instrument_id_ = getval( "DETECTOR=" );
     
     const string energy = getval( "ENERGY=" );
-    if( UtilityFunctions::split_to_floats( energy, meas->calibration_coeffs_ ) )
+    if( SpecUtils::split_to_floats( energy, meas->calibration_coeffs_ ) )
       meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     
     const string comment = getval( "COMMENT=" );
@@ -24741,13 +24762,13 @@ bool MeasurementInfo::load_from_tka( std::istream &input )
     auto get_next_number = [&input]( float &val ) -> int {
       const size_t max_len = 128;
       string line;
-      if( !UtilityFunctions::safe_get_line( input, line, max_len ) )
+      if( !SpecUtils::safe_get_line( input, line, max_len ) )
         return -1;
       
       if( line.length() > 32 )
         throw runtime_error( "Invalid line length" );
       
-      UtilityFunctions::trim(line);
+      SpecUtils::trim(line);
       if( line.empty() )
         return 0;
       
@@ -24840,7 +24861,7 @@ bool MeasurementInfo::load_from_multiact( std::istream &input )
     if( !input.read(&start[0], 8) )
       throw runtime_error( "Failed to read header" );
     
-    if( !UtilityFunctions::istarts_with( start, "MultiAct") )
+    if( !SpecUtils::istarts_with( start, "MultiAct") )
       throw runtime_error( "File must start with word 'MultiAct'" );
     
     double countssum = 0.0;
@@ -24930,7 +24951,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
     while( input.good() )
     {
       const size_t max_len = 1024*1024;  //all the files I've seen have been less than like 80 characters
-      UtilityFunctions::safe_get_line( input, line, max_len );
+      SpecUtils::safe_get_line( input, line, max_len );
       ++linenum;
       
       if( line.size() >= (max_len-1) )
@@ -24948,48 +24969,48 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
       {
         //First line for all files I've seen is "BEGIN IMS2.0"
         tested_first_line = true;
-        if( !UtilityFunctions::istarts_with( line, "BEGIN" ) )
+        if( !SpecUtils::istarts_with( line, "BEGIN" ) )
           throw runtime_error( "First line of PHD file must start with 'BEGIN'" );
         
         continue;
       }//if( !tested_first_line )
       
-      if( UtilityFunctions::istarts_with( line, "#Collection") )
+      if( SpecUtils::istarts_with( line, "#Collection") )
       {
-        UtilityFunctions::safe_get_line( input, line, max_len );
+        SpecUtils::safe_get_line( input, line, max_len );
         ++linenum;
         //line is somethign like "2012/10/11 09:34:51.7 2011/10/13 09:32:43.6 14377.2   "
         continue;
-      }//if( UtilityFunctions::istarts_with( line, "#Collection") )
+      }//if( SpecUtils::istarts_with( line, "#Collection") )
       
       
-      if( UtilityFunctions::istarts_with( line, "#Acquisition") )
+      if( SpecUtils::istarts_with( line, "#Acquisition") )
       {
-        UtilityFunctions::safe_get_line( input, line, max_len );
+        SpecUtils::safe_get_line( input, line, max_len );
         ++linenum;
         trim( line );
         //line is somethign like "2012/09/15 09:52:14.0 3605.0        3600.0"
         vector<string> fields;
-        UtilityFunctions::split( fields, line, " \t");
+        SpecUtils::split( fields, line, " \t");
         if( fields.size() < 4 )
           continue;
         
         //We wont worry about conversion error for now
         stringstream(fields[2]) >> meas->real_time_;
         stringstream(fields[3]) >> meas->live_time_;
-        meas->start_time_ = UtilityFunctions::time_from_string( (fields[0] + " " + fields[1]).c_str() );
+        meas->start_time_ = SpecUtils::time_from_string( (fields[0] + " " + fields[1]).c_str() );
         continue;
-      }//if( UtilityFunctions::istarts_with( line, "#Acquisition") )
+      }//if( SpecUtils::istarts_with( line, "#Acquisition") )
       
       
-      if( UtilityFunctions::istarts_with( line, "#g_Spectrum") )
+      if( SpecUtils::istarts_with( line, "#g_Spectrum") )
       {
-        UtilityFunctions::safe_get_line( input, line, max_len );
+        SpecUtils::safe_get_line( input, line, max_len );
         ++linenum;
         trim( line );
         //line is something like "8192  2720.5"
         vector<float> fields;
-        UtilityFunctions::split_to_floats( line, fields );
+        SpecUtils::split_to_floats( line, fields );
         
         if( fields.empty() || fields[0]<32 || fields[0]>65536 || floorf(fields[0])!=fields[0] )
           throw runtime_error( "Line after #g_Spectrum not as expected" );
@@ -25000,16 +25021,16 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
         
         double channelsum = 0.0;
         size_t last_channel = 0;
-        while( UtilityFunctions::safe_get_line(input, line, max_len) )
+        while( SpecUtils::safe_get_line(input, line, max_len) )
         {
-          UtilityFunctions::trim( line );
+          SpecUtils::trim( line );
           if( line.empty() )
             continue;
           
           if( line[0] == '#')
             break;
           
-          UtilityFunctions::split_to_floats( line, fields );
+          SpecUtils::split_to_floats( line, fields );
           if( fields.empty() ) //allow blank lines
             continue;
           
@@ -25042,14 +25063,14 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
           meas->calibration_coeffs_.push_back( upper_energy );
           meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
         }
-      }//if( UtilityFunctions::istarts_with( line, "#g_Spectrum") )
+      }//if( SpecUtils::istarts_with( line, "#g_Spectrum") )
       
-      if( UtilityFunctions::istarts_with( line, "#Calibration") )
+      if( SpecUtils::istarts_with( line, "#Calibration") )
       {
         //Following line gives datetime of calibration
       }//if( "#Calibration" )
       
-      if( UtilityFunctions::istarts_with( line, "#g_Energy") )
+      if( SpecUtils::istarts_with( line, "#g_Energy") )
       {
         //Following lines look like:
         //59.540           176.1400         0.02968
@@ -25060,7 +25081,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
         //1836.060         5448.4400        0.02968
       }//if( "#g_Energy" )
       
-      if( UtilityFunctions::istarts_with( line, "#g_Resolution") )
+      if( SpecUtils::istarts_with( line, "#g_Resolution") )
       {
         //Following lines look like:
         //59.540           0.9400           0.00705
@@ -25071,7 +25092,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
         //1836.060         2.3100           0.00393
       }//if( "#g_Resolution" )
       
-      if( UtilityFunctions::istarts_with( line, "#g_Efficiency") )
+      if( SpecUtils::istarts_with( line, "#g_Efficiency") )
       {
         //Following lines look like:
         //59.540           0.031033         0.0002359
@@ -25192,7 +25213,7 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     
     auto spec = std::make_shared<vector<float>>();
     const string spec_data_str = xml_value_str(spec_data_node);
-    UtilityFunctions::split_to_floats( spec_data_str.c_str(), *spec, " \t\n\r", false );
+    SpecUtils::split_to_floats( spec_data_str.c_str(), *spec, " \t\n\r", false );
     
     if( spec->empty() )
       throw runtime_error( "Failed to parse spectrum to floats" );
@@ -25206,11 +25227,11 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     
     const rapidxml::xml_node<char> *real_time_node = xml_first_node(time_node,"real");
     if( real_time_node )
-      UtilityFunctions::parse_float(real_time_node->value(), real_time_node->value_size(), meas->real_time_ );
+      SpecUtils::parse_float(real_time_node->value(), real_time_node->value_size(), meas->real_time_ );
     
     const rapidxml::xml_node<char> *live_time_node = xml_first_node(time_node,"live");
     if( live_time_node )
-      UtilityFunctions::parse_float(live_time_node->value(), live_time_node->value_size(), meas->live_time_ );
+      SpecUtils::parse_float(live_time_node->value(), live_time_node->value_size(), meas->live_time_ );
     
     //const rapidxml::xml_node<char> *dead_time_node = xml_first_node(time_node,"dead");
     
@@ -25218,9 +25239,9 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     if( date_node )
     {
       string datestr = xml_value_str(date_node);
-      UtilityFunctions::ireplace_all(datestr, "@", " ");
-      UtilityFunctions::ireplace_all(datestr, "  ", " ");
-      meas->start_time_ = UtilityFunctions::time_from_string_strptime( datestr, UtilityFunctions::DateParseEndianType::LittleEndianFirst );
+      SpecUtils::ireplace_all(datestr, "@", " ");
+      SpecUtils::ireplace_all(datestr, "  ", " ");
+      meas->start_time_ = SpecUtils::time_from_string_strptime( datestr, SpecUtils::DateParseEndianType::LittleEndianFirst );
     }
     
     const rapidxml::xml_node<char> *calibration_node = XML_FIRST_NODE(nano_mca_node,"calibration");
@@ -25233,10 +25254,10 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
     if( channelA_node && energyA_node && channelB_node && energyB_node )
     {
       float channelA, energyA, channelB, energyB;
-      if( UtilityFunctions::parse_float(channelA_node->value(), channelA_node->value_size(), channelA )
-          && UtilityFunctions::parse_float(energyA_node->value(), energyA_node->value_size(), energyA )
-          && UtilityFunctions::parse_float(channelB_node->value(), channelB_node->value_size(), channelB )
-          && UtilityFunctions::parse_float(energyB_node->value(), energyB_node->value_size(), energyB ) )
+      if( SpecUtils::parse_float(channelA_node->value(), channelA_node->value_size(), channelA )
+          && SpecUtils::parse_float(energyA_node->value(), energyA_node->value_size(), energyA )
+          && SpecUtils::parse_float(channelB_node->value(), channelB_node->value_size(), channelB )
+          && SpecUtils::parse_float(energyB_node->value(), energyB_node->value_size(), energyB ) )
       {
         const float gain = (energyB - energyA) / (channelB - channelA);
         const float offset = energyA - channelA*gain;
@@ -25283,14 +25304,14 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
       //nanoMCA with Ortec HPGE-TRP, Model GEM-10195-PLUS, SN 24-P-12RA, 3000V-PLUS
       //I'm not sure how reliable it is to assume comma-seperated
       vector<string> fields;
-      UtilityFunctions::split(fields, value, ",");
+      SpecUtils::split(fields, value, ",");
       for( auto field : fields )
       {
-        UtilityFunctions::trim(field);
-        if( UtilityFunctions::istarts_with(field, "SN") )
-          instrument_id_ = UtilityFunctions::trim_copy(field.substr(2));
-        else if( UtilityFunctions::istarts_with(field, "model") )
-          instrument_model_ = UtilityFunctions::trim_copy(field.substr(5));
+        SpecUtils::trim(field);
+        if( SpecUtils::istarts_with(field, "SN") )
+          instrument_id_ = SpecUtils::trim_copy(field.substr(2));
+        else if( SpecUtils::istarts_with(field, "model") )
+          instrument_model_ = SpecUtils::trim_copy(field.substr(5));
       }//for( auto field : fields )
     }//if( tag_node )
     
@@ -25927,7 +25948,7 @@ bool MeasurementInfo::load_aram_file( const std::string &filename )
   reset();
   
   //Only seend pretty small ones, therefor limit to 25 MB, JIC
-  if( UtilityFunctions::file_size(filename) > 25*1024*1024 )
+  if( SpecUtils::file_size(filename) > 25*1024*1024 )
     return false;
   
 #ifdef _WIN32
@@ -26016,10 +26037,10 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
       throw runtime_error( "No sample channels node" );
     
     const std::string start_iso_str = xml_value_str( XML_FIRST_ATTRIB(event_node,"start_iso8601") );
-    const auto start_time = UtilityFunctions::time_from_string( start_iso_str.c_str() );
+    const auto start_time = SpecUtils::time_from_string( start_iso_str.c_str() );
     
     //const std::string end_iso_str = xml_value_str( XML_FIRST_ATTRIB(event_node,"end_iso8601") );
-    //const auto end_time = UtilityFunctions::time_from_string( end_iso_str.c_str() );
+    //const auto end_time = SpecUtils::time_from_string( end_iso_str.c_str() );
     
     //Other attributes we could put into the comments or somethign
     //XML_FIRST_ATTRIB(event_node,"monitor_type") //"ARAM"
@@ -26033,7 +26054,7 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
     fore_meas = make_shared<Measurement>();
     auto fore_channels = std::make_shared<vector<float>>();
     fore_channels->reserve( 1024 );
-    UtilityFunctions::split_to_floats( channels_node->value(), channels_node->value_size(), *fore_channels );
+    SpecUtils::split_to_floats( channels_node->value(), channels_node->value_size(), *fore_channels );
     if( fore_channels->size() < 64 ) //64 is arbitrary
       throw runtime_error( "Not enough channels" );
     
@@ -26072,7 +26093,7 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
     {
       back_meas = make_shared<Measurement>();
       auto back_channels = std::make_shared<vector<float>>();
-      UtilityFunctions::split_to_floats( channels_node->value(), channels_node->value_size(), *back_channels );
+      SpecUtils::split_to_floats( channels_node->value(), channels_node->value_size(), *back_channels );
       if( back_channels->size() >= 64 ) //64 is arbitrary
       {
         xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "realtime"), real_time );
@@ -26108,7 +26129,7 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
     {
       vector<float> coefs;
       const size_t coef_strlen = coef_end - coef_start - 14;
-      UtilityFunctions::split_to_floats( &filedata[coef_start+14], coef_strlen, coefs );
+      SpecUtils::split_to_floats( &filedata[coef_start+14], coef_strlen, coefs );
       
       if( coefs.size() > 1 && coefs.size() < 10 )
       {
@@ -26124,15 +26145,15 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
     
     vector<string> begin_remarks;
     const string begindata( &(filedata[0]), &(filedata[event_tag_pos]) );
-    UtilityFunctions::split(begin_remarks, begindata, "\r\n");
+    SpecUtils::split(begin_remarks, begindata, "\r\n");
     string lat_str, lon_str;
     for( const auto &remark : begin_remarks )
     {
-      if( UtilityFunctions::istarts_with(remark, "Site Name:") )
-        measurement_location_name_ = UtilityFunctions::trim_copy( remark.substr(10) );
-      else if( UtilityFunctions::istarts_with(remark, "Site Longitude:") )
+      if( SpecUtils::istarts_with(remark, "Site Name:") )
+        measurement_location_name_ = SpecUtils::trim_copy( remark.substr(10) );
+      else if( SpecUtils::istarts_with(remark, "Site Longitude:") )
         lon_str = remark.substr( 15 ); //ex. "39deg 18min 15.2sec N"
-      else if( UtilityFunctions::istarts_with(remark, "Site Latitude:") )
+      else if( SpecUtils::istarts_with(remark, "Site Latitude:") )
         lat_str = remark.substr( 14 ); //ex. "124deg 13min 51.8sec W"
       else
         remarks_.push_back( remark );
@@ -26226,7 +26247,7 @@ bool Measurement::write_txt( std::ostream& ostr ) const
     ostr << "Longitude: " << longitude_ << endline;
     if( !position_time_.is_special() )
       ostr << "Position Time: "
-      << UtilityFunctions::to_iso_string(position_time_) << endline;
+      << SpecUtils::to_iso_string(position_time_) << endline;
   }
   
   ostr << "EquationType ";

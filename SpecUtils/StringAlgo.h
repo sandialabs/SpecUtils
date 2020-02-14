@@ -1,0 +1,324 @@
+#ifndef SpecUtils_StringAlgo_h
+#define SpecUtils_StringAlgo_h
+/* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
+ 
+ Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC
+ (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
+ Government retains certain rights in this software.
+ For questions contact William Johnson via email at wcjohns@sandia.gov, or
+ alternative emails of interspec@sandia.gov.
+ 
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ 
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ 
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+#include "SpecUtils_config.h"
+
+#include <set>
+#include <string>
+#include <vector>
+
+
+
+/** String-based functions used while parsing, creating, or dealing with
+ spectrum files.
+ 
+ Contains not just functions for altering or manipulating strings, but functions
+ to split, combine, parse float/int/etc from string, CSV, dealing with UTF-8,
+ etc.
+ */
+namespace  SpecUtils
+{
+  /** \brief Removes leading and trailing whitespaces (" \f\n\r\t\v"). */
+  void trim( std::string &str );
+  
+  /** \brief Removes leading and trailing whitespaces (" \f\n\r\t\v"). */
+  std::string trim_copy( std::string str );
+  
+  /** \brief Converts each ascii letter to lower case, not UTF8 safe/aware. */
+  void to_lower_ascii( std::string &input );
+  
+  /** \brief Converts each ascii letter to lower case, not UTF8 safe/aware. */
+  std::string to_lower_ascii_copy( std::string input );
+  
+  /** \brief Converts each ascii letter to upper case, not UTF8 safe/aware. */
+  void to_upper_ascii( std::string &input );
+  
+  /** \brief Case independant string comparison. Not UTF8 or locale aware. */
+  bool iequals_ascii( const char *str, const char *test );
+  
+  /** \brief Case independant string comparison. Not UTF8 or locale aware. */
+  bool iequals_ascii( const std::string &str, const char *test );
+  
+  /** \brief Case independant string comparison. Not UTF8 or locale aware. */
+  bool iequals_ascii( const std::string &str, const std::string &test );
+  
+  /** \brief Returns if the substring is contained within the input string. */
+  bool contains( const std::string &input, const char *substr );
+  
+  /** \brief Returns if the substring is contained within the input string,
+   independant of case; not UTF8 or locale aware.
+   */
+  bool icontains( const std::string &input, const char *substr );
+  
+  /** \brief Returns if the substring is contained within the input string,
+   independant of case; not UTF8 or locale aware.
+   */
+  bool icontains( const std::string &input, const std::string &substr );
+  
+  /** \brief Returns if the substring is contained within the input string,
+   independant of case; not UTF8 or locale aware.
+   */
+  bool icontains( const char *input, const size_t input_len,
+                 const char *substr, const size_t substr_len );
+  
+  /** \brief Returns if the input starts with the specified substr. */
+  bool starts_with( const std::string &input, const char *substr );
+  
+  /** \brief Returns if the input starts with the specified substr, case
+   independant; is not UTF8 or locale aware.
+   */
+  bool istarts_with( const std::string &line, const char *label );
+  
+  /** \brief Returns if the input starts with the specified substr, case
+   independant; is not UTF8 or locale aware.
+   */
+  bool istarts_with( const std::string &line, const std::string &label );
+  
+  /** \brief Returns if the input ends with the specified substr, case
+   independant; is not UTF8 or locale aware.
+   */
+  bool iends_with( const std::string &line, const std::string &label );
+  
+  /** \brief Removes any character in chars_to_remove from line; is not UTF8 or
+   locale aware.
+   */
+  void erase_any_character( std::string &line, const char *chars_to_remove );
+  
+  /** \brief Splits an input string according to specified delimiters.
+   
+   Leading and trailing delimiters are ignored, and mutliple delimiters in a
+   row are treated as eqivalent to a single delimiter.
+   Note that this function is not equivalent to boost::split.
+   
+   \param results Where results of splitting are placed.  Will be cleared of
+   any previous contents first.
+   \param input input string to split.
+   \param delims Null terminated list of delimiters to split at; note that the
+   input string will be split when ever any of the characters are
+   encountered. '\0' cannot be specified as a delimiter. An empty string
+   will return 0 results if #input is empty, and one result otherwise.
+   */
+  void split( std::vector<std::string> &results,
+             const std::string &input, const char *delims );
+  
+  /** \brief Splits an input string according to specified delimiters.
+   
+   Similar to #split, but each delimiters ends the field, even if the field is
+   empty (i.e., no delimiter compression)
+   
+   \param results Where results of splitting are placed.  Will be cleared of
+   any previous contents first.
+   \param input input string to split.
+   \param delims Null terminated list of delimiters to split at; note that the
+   input string will be split when ever any of the characters are
+   encountered. '\0' cannot be specified as a delimiter, and an empty string
+   will return 0 results if input is empty, and one result otherwise.
+   */
+  void split_no_delim_compress( std::vector<std::string> &results,
+                               const std::string &input, const char *delims );
+  
+  /** \brief Replaces all (case insensitive) instances of <i>pattern</i> with
+   <i>replacement</i> in <i>input</i>.  Not UTF8 or locale aware.
+   */
+  void ireplace_all( std::string &input,
+                    const char *pattern, const char *replacement );
+  
+  /** \brief  Replaces all (case insensitive) instances of <i>pattern</i> with
+   <i>replacement</i> in <i>input</i>, returning a copy.  Much more efficient
+   for longer strings and/or many matches.
+   Not UTF8 or locale aware.
+   Not well tested - so commented out.
+   */
+  //  std::string ireplace_all_copy( const std::string &input,
+  //                  const char *pattern, const char *replacement );
+  
+  //XXX The following UTF8 functions have not been tested at all
+  //
+  // TODO: consider using code at http://bjoern.hoehrmann.de/utf-8/decoder/dfa/
+  //       be the UTF-8 "workhorse"
+  //
+  /** \brief Counts the number of UTF8 encoded characters of the string,
+   not the number of bytes the string length is.
+   
+   \param str input UTF8 encoded string.
+   \param str_size_bytes Specifies how many bytes the string is
+   (ex: str+str_size_bytes will typically point to a '\0' character, but
+   doesnt have to).  If <em>str_size_bytes</em> is 0, then
+   'str' must must be null-terminated, and length will be determined from
+   that.
+   */
+  size_t utf8_str_len( const char * const str, size_t str_size_bytes );
+  
+  /** \brief Reduces string size to the specified number of bytes, or the
+   nearest valid smaller size, where the last character is a valid UTF8
+   character.  Does not include the null terminating byte (e.g., will take
+   max_bytes+1 bytes to represent in a c-string).
+   */
+  void utf8_limit_str_size( std::string &str, const size_t max_bytes );
+  
+  /** Gives the index to place a null terminating character that is less
+   than or equal to the specified lenght, while making sure the last byte is a
+   valid UTF8 character.
+   
+   \param str The UTF8 encoded input string.
+   \param num_in_bytes The actual length of the input string, in bytes,
+   including the null-terminating byte.  If zero <em>str</em> must be null
+   terminated.
+   \param max_bytes The maximum desired length, in bytes, of the string,
+   including the null terminating byte.  If zero or one, will return zero.
+   \returns The location (index), in bytes, to place the new terminating '\0'
+   character.
+   */
+  size_t utf8_str_size_limit( const char * const str,
+                             size_t num_in_bytes, const size_t max_bytes );
+  
+  
+  
+  
+  /** \brief parses a string of ascii characters to their floating point value.
+   
+   The ascii float may have preceding whitespaces, and any text afterwards;
+   both of which are ignored.
+   
+   \param input Pointer to start of ascii string.  May be null only if length
+   is zero.
+   \param length Number of bytes long the string to be parsed is.  A length
+   of zero will always result in failed parsing.
+   \param result The result of parsing.  If parsing failed, will be 0.0f.
+   \returns True if was able to parse a number, false otherwise.
+   */
+  bool parse_float( const char *input, const size_t length, float &result );
+  
+  
+  /** \brief Parses a string of ascii floats seperated by user specified
+   delimters into a std::vector<float>.
+   
+   If there is more than one delimiter between floats,
+   the extra delimiters are ignored (e.g. same result as if only a single
+   delimiter).
+   
+   \param input Null terminated input text string.
+   \param contents Where the resulting floats are placed
+   \param delims The possible delimiters that can seperate floats, specified as
+   a null terminated c-string.  Note that any one character in this string
+   acts as a delimieter. The delimters specified should not be '\0', numbers,
+   '+', '-', '.', 'e', or 'E'.
+   \param cambio_zero_compress_fix In Cambio N42 files zeros written like "0"
+   indicates zeroes compression, a zero written like "0.000", "-0.0", etc are
+   all a single bin with content zero - so for this case, if you specify
+   cambio_zero_compress_fix this function substitures a really small number
+   (FLT_MIN) in place of zero so zero-decompression wont decompress that
+   channel.
+   \returns True if all characters in the string were either delimiters or were
+   interpreted as part of a float, and the entire string was consumed (eg
+   there were no extra non-delimeter characters hanging on the end of the
+   string).  A false return value indicates parsing failed one of these
+   conditions.
+   
+   \code{.cpp}
+   std::vector<float> contents;
+   if( split_to_floats( "7.990,3,5 7 8", contents, ", ", false ) )
+   cout << "Succesed in parsing" <<endl;
+   assert( contents.size() == 5 );
+   assert( contents[0] == 7.99f );
+   assert( contents[4] == 8.0f );
+   \endcode
+   */
+  bool split_to_floats( const char *input,
+                       std::vector<float> &contents,
+                       const char * const delims, // = " ,\r\n\t",
+                       const bool cambio_zero_compress_fix );
+  
+  
+  /** \brief Parses a string of ascii floats seperated by a fixed set of
+   delimters into a std::vector<float>.
+   
+   This implementation is approximately 20% faster than
+   the other variant of this function, and does not require a null terminated
+   input string, but the delimiters used are fixed, and this version does not
+   consider the cambio zero compress issue.
+   
+   \param input Input ascii string of floats seperated by spaces, tabs, returns,
+   newlines or commas.  Does not have to be a null terminated string.
+   \param length Length of input string to be parsed.
+   \returns True of the entire specified length of the input could be
+   interpreted as delimeter seperated floats.
+   
+   Note: the leading numbers before the decimal point must have a value less
+   than 4294967296 (2^32) or else parsing will fail; values larger than this
+   will still parse fine as long as they are written in engineering notation,
+   such as 5.0E9.  The other implementation of this function is not effected
+   by this potential issue (not this has not been seen to happen on channel
+   counts of gamma data by wcjohns).
+   */
+  bool split_to_floats( const char *input, const size_t length,
+                       std::vector<float> &results );
+  
+  /* \brief A convienience function. */
+  bool split_to_floats( const std::string &input, std::vector<float> &results );
+  
+  
+  /** \brief Parses a string of ascii integers into a std::vector<int>.
+   
+   The ascii ints must be seperated by spaces, tabs, returns, newlines or
+   commas, and multiple delimiters in a row are treated as a single deliter.
+   \param input Input text (does not have to be null terminated).
+   \param length The lenght (number of bytes) of the input text to be parsed.
+   \param results Where the results are placed.
+   \returns True if input text only contained delimiters and numbers that could
+   be interpreted as ints, and the entire string was consumed during parsing
+   (no trailing text besides delimiters).
+   */
+  bool split_to_ints( const char *input, const size_t length,
+                     std::vector<int> &results );
+  
+  /** Same as split_to_ints, but for long longs.
+   */
+  bool split_to_long_longs( const char *input, const size_t length,
+                           std::vector<long long> &results );
+  
+  
+  /** \brief Turns a set of numbers with possible many sub-sequences with values
+   that are adjacent into a convient human-readable string.
+   
+   For sequences such as {0,1,2,3,4,5,10,99,100,101,102,200}, will return a
+   human readable string similar to "1-5,10,99-102,200"
+   */
+  std::string sequencesToBriefString( const std::set<int> &sequence );
+  
+  //see CompactFileManager::handleUserChangeSampleNum(...) for code that
+  //  goes from a sequence string to a set of numbers... Not implemented here
+  //  so we dont have to link to regex lib..
+  
+  
+  /** \brief Gives the case-insensitive distance between two strings.
+   */
+  unsigned int levenshtein_distance( const std::string &source,
+                                    const std::string &target );
+  
+}//namespace SpecUtils
+
+#endif //SpecUtils_StringAlgo_h
+

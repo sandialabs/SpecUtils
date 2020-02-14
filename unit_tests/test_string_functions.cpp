@@ -37,7 +37,9 @@
 #define BOOST_TEST_MODULE testUtilityStringFunctions
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
-#include "SpecUtils/UtilityFunctions.h"
+
+#include "SpecUtils/Filesystem.h"
+#include "SpecUtils/StringAlgo.h"
 
 using namespace std;
 using namespace boost::unit_test;
@@ -57,11 +59,11 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   const string potential_input_paths[] = { ".", indir, "../../testing/", "../../../testing/" };
   for( const string dir : potential_input_paths )
   {
-    const string potential = UtilityFunctions::append_path( dir, "test_data/txt/test_string_functions_input.txt" );
-    if( UtilityFunctions::is_file(potential) )
+    const string potential = SpecUtils::append_path( dir, "test_data/txt/test_string_functions_input.txt" );
+    if( SpecUtils::is_file(potential) )
     {
       test_in_file = potential;
-      test_out_file = UtilityFunctions::append_path( dir, "test_data/txt/test_string_functions_output.txt" );
+      test_out_file = SpecUtils::append_path( dir, "test_data/txt/test_string_functions_output.txt" );
     }
   }
   
@@ -77,7 +79,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
   string line;
   vector<string> tests, correctOutput;
-  while( UtilityFunctions::safe_get_line(utf8_input, line)  )
+  while( SpecUtils::safe_get_line(utf8_input, line)  )
     tests.emplace_back( std::move(line) );
   
 
@@ -87,7 +89,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   if( !utf8_input.is_open() )
     throw std::runtime_error( "Can not open file " + test_out_file );
   
-  while( UtilityFunctions::safe_get_line(utf8_output, line)  )
+  while( SpecUtils::safe_get_line(utf8_output, line)  )
     correctOutput.emplace_back( std::move(line) );
   
   BOOST_REQUIRE_GT( tests.size(), 0 );
@@ -109,23 +111,23 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "1" );
     
     string test = tests[index1].substr(2);
-    UtilityFunctions::trim(test);
+    SpecUtils::trim(test);
     BOOST_CHECK_EQUAL(test, correctOutput[index2].substr(2));
     index1++; index2++;
   }while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0, 1) == "1" );
   
   // test empty string
   string s = "";
-  UtilityFunctions::trim(s);
+  SpecUtils::trim(s);
   BOOST_CHECK_EQUAL(s, "");
   
   // test string with only whitespace
   s = "   ";
-  UtilityFunctions::trim(s);
+  SpecUtils::trim(s);
   BOOST_CHECK_EQUAL(s, "");
 
 
-  // tests for UtilityFunctions::to_lower(string &input) - 2 in text files
+  // tests for SpecUtils::to_lower(string &input) - 2 in text files
   do
   {
     BOOST_REQUIRE_LT( index1, tests.size() );
@@ -136,9 +138,9 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     string test = tests[index1].substr(2);
     
     //Currently there are non-ascii strings in the test data - skip them for now
-    if( UtilityFunctions::utf8_str_len(test.c_str(),test.size()) == test.size() )
+    if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
-      UtilityFunctions::to_lower_ascii(test);
+      SpecUtils::to_lower_ascii(test);
       BOOST_CHECK_EQUAL(test, correctOutput[index2].substr(2));
     }
     
@@ -148,10 +150,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
   // ASCII tests
   s = "     ";
-  UtilityFunctions::to_lower_ascii(s);
+  SpecUtils::to_lower_ascii(s);
   BOOST_CHECK_EQUAL(s, "     ");
   s = "";
-  UtilityFunctions::to_lower_ascii(s);
+  SpecUtils::to_lower_ascii(s);
   BOOST_CHECK_EQUAL(s, "");
   
   // tests for all printable ASCII characters
@@ -168,24 +170,24 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
       correctAllASCII += (char)i;
   }
   
-  UtilityFunctions::to_lower_ascii(allASCII);
+  SpecUtils::to_lower_ascii(allASCII);
   BOOST_CHECK_EQUAL(allASCII, correctAllASCII);
   
   // tests for ASCII escape characters
   s = '\t';
   string correctS;
   correctS = '\t';
-  UtilityFunctions::to_lower_ascii(s);
+  SpecUtils::to_lower_ascii(s);
   BOOST_CHECK_EQUAL(s, correctS);
   
   s = '\n';
   correctS = '\n';
-  UtilityFunctions::to_lower_ascii(s);
+  SpecUtils::to_lower_ascii(s);
   BOOST_CHECK_EQUAL(s, correctS);
   
   s = '\r';
   correctS = '\r';
-  UtilityFunctions::to_lower_ascii(s);
+  SpecUtils::to_lower_ascii(s);
   BOOST_CHECK_EQUAL(s, correctS);
   
   // test of ASCII string of random lenth and random characters
@@ -208,11 +210,11 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
       correct_random_ASCII += (char)(random);
   }
   
-  UtilityFunctions::to_lower_ascii(random_ASCII);
+  SpecUtils::to_lower_ascii(random_ASCII);
   BOOST_CHECK_EQUAL(random_ASCII, correct_random_ASCII);
   
   
-  // test for UtilityFunctions::to_upper_ascii(string &input)
+  // test for SpecUtils::to_upper_ascii(string &input)
   // 3 in text files
   // string &input is found in testUtilityStringFunctions.txt
   // expected output is found in testUtilityStringFunctionsOutput.txt
@@ -226,9 +228,9 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     string test = tests[index1].substr(2);
     
     //Currently there are non-ascii strings in the test data - skip them for now
-    if( UtilityFunctions::utf8_str_len(test.c_str(),test.size()) == test.size() )
+    if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
-      UtilityFunctions::to_upper_ascii(test);
+      SpecUtils::to_upper_ascii(test);
       BOOST_CHECK_EQUAL(test, correctOutput[index2].substr(2));
     }
     
@@ -237,11 +239,11 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
   
   s = "     ";
-  UtilityFunctions::to_upper_ascii(s);
+  SpecUtils::to_upper_ascii(s);
   BOOST_CHECK_EQUAL(s, "     ");
   
   s= "";
-  UtilityFunctions::to_upper_ascii(s);
+  SpecUtils::to_upper_ascii(s);
   BOOST_CHECK_EQUAL(s, "");
   
   // test of all printable ASCII characters
@@ -257,23 +259,23 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     else
       correctAllASCII += (char)i;
   }
-  UtilityFunctions::to_upper_ascii(allASCII);
+  SpecUtils::to_upper_ascii(allASCII);
   BOOST_CHECK_EQUAL(allASCII, correctAllASCII);
   
   // tests for ASCII escape characters
   s = '\t';
   correctS = '\t';
-  UtilityFunctions::to_upper_ascii(s);
+  SpecUtils::to_upper_ascii(s);
   BOOST_CHECK_EQUAL(s, correctS);
   
   s = '\n';
   correctS = '\n';
-  UtilityFunctions::to_upper_ascii(s);
+  SpecUtils::to_upper_ascii(s);
   BOOST_CHECK_EQUAL(s, correctS);
   
   s = '\r';
   correctS = '\r';
-  UtilityFunctions::to_upper_ascii(s);
+  SpecUtils::to_upper_ascii(s);
   BOOST_CHECK_EQUAL(s, correctS);
   
   // test for ASCII string of random length with random characters
@@ -292,10 +294,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     else
       correct_random_ASCII += (char)(random);
   }//
-  UtilityFunctions::to_upper_ascii(random_ASCII);
+  SpecUtils::to_upper_ascii(random_ASCII);
   BOOST_CHECK_EQUAL(random_ASCII, correct_random_ASCII);
   
-  // tests for UtilityFunctions::iequals_ascii(const char *str, const char *test)
+  // tests for SpecUtils::iequals_ascii(const char *str, const char *test)
   // 4 in text file
   // each *str is tested with two *test with the first expected to pass and second to fail
   do
@@ -308,18 +310,18 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     string message;
     string test = tests[index1].substr(2);
     
-    if( UtilityFunctions::utf8_str_len(test.c_str(),test.size()) == test.size() )
+    if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
       message = test + "  " + correctOutput[index2].substr(2);
-      BOOST_CHECK_MESSAGE(UtilityFunctions::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
+      BOOST_CHECK_MESSAGE(SpecUtils::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
     }
     
     index2++;
     
-    if( UtilityFunctions::utf8_str_len(test.c_str(),test.size()) == test.size() )
+    if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
       message = test + "  " + correctOutput[index2].substr(2);
-      BOOST_CHECK_MESSAGE(!UtilityFunctions::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
+      BOOST_CHECK_MESSAGE(!SpecUtils::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
     }
     
     index1++;
@@ -328,9 +330,9 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
   s = "    ";
   string q;
-  BOOST_CHECK( !UtilityFunctions::iequals_ascii(s.c_str(), q.c_str()) );
+  BOOST_CHECK( !SpecUtils::iequals_ascii(s.c_str(), q.c_str()) );
   
-  // tests for UtilityFunctions::contains(const string &line, const char *label)
+  // tests for SpecUtils::contains(const string &line, const char *label)
   // 5 in text file
   // each &line is tested with two *label with the first expected to pass and second to fail
   do
@@ -342,18 +344,18 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     
     string test = tests[index1].substr(2);
     string message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(UtilityFunctions::contains(test, correctOutput[index2].substr(2).c_str()), message);
+    BOOST_CHECK_MESSAGE(SpecUtils::contains(test, correctOutput[index2].substr(2).c_str()), message);
     index2++;
     message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(!UtilityFunctions::contains(test, correctOutput[index2].substr(2).c_str()), message);
+    BOOST_CHECK_MESSAGE(!SpecUtils::contains(test, correctOutput[index2].substr(2).c_str()), message);
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "5" );
   
   const char *e = "";
-  BOOST_CHECK( UtilityFunctions::contains(q, e) );
+  BOOST_CHECK( SpecUtils::contains(q, e) );
 
 
-  // tests for UtilityFunctions::icontains(string &line, const char *label)
+  // tests for SpecUtils::icontains(string &line, const char *label)
   // 6 in text file
   // each &line is tested with two *label with the first expected to pass and second to fail
   do
@@ -365,15 +367,15 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     
     string test = tests[index1].substr(2);
     string message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(UtilityFunctions::icontains(test, correctOutput[index2].substr(2).c_str()), message);
+    BOOST_CHECK_MESSAGE(SpecUtils::icontains(test, correctOutput[index2].substr(2).c_str()), message);
     index2++;
     message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(!UtilityFunctions::icontains(test, correctOutput[index2].substr(2).c_str()), message);
+    BOOST_CHECK_MESSAGE(!SpecUtils::icontains(test, correctOutput[index2].substr(2).c_str()), message);
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "6");
   
 
-  // tests for UtilityFunctions::starts_with(string &line, const char* label)
+  // tests for SpecUtils::starts_with(string &line, const char* label)
   // 7 in text file
   // each &line is test with two *label with the first expected to pass and second to fail
   do
@@ -385,15 +387,15 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     
     string test = tests[index1].substr(2);
     string message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(UtilityFunctions::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
+    BOOST_CHECK_MESSAGE(SpecUtils::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
     index2++;
     message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(!UtilityFunctions::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
+    BOOST_CHECK_MESSAGE(!SpecUtils::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
     index1++; index2++;
   }while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "7");
 
 
-  // tests for UtilityFunctions::split(vector<string> &resutls, string &input, const char *delims)
+  // tests for SpecUtils::split(vector<string> &resutls, string &input, const char *delims)
   // 8 in text file
   do
   {
@@ -408,7 +410,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     index1++;
     
     vector<string> results;
-    UtilityFunctions::split(results, input, delims.c_str());
+    SpecUtils::split(results, input, delims.c_str());
     int expected_length = atoi(correctOutput[index2].substr(2).c_str());
     int length = (int)(results.size());
     BOOST_CHECK_EQUAL(expected_length, length);
@@ -425,23 +427,23 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   string originalInput = input;
   const char* delims = "";
   vector<string> results;
-  UtilityFunctions::split(results, input, delims);
+  SpecUtils::split(results, input, delims);
   BOOST_CHECK(results.size() == 1);
   BOOST_CHECK_EQUAL(results[0], input);
 
   
   input = "hello how are you doing 543 342 ";
-  UtilityFunctions::split_no_delim_compress( results, input, "" );
+  SpecUtils::split_no_delim_compress( results, input, "" );
   BOOST_CHECK(results.size() == 1);
   BOOST_CHECK_EQUAL(results[0], input);
 
   input = "hello how are you doing 543 342 ";
-  UtilityFunctions::split_no_delim_compress( results, input, "," );
+  SpecUtils::split_no_delim_compress( results, input, "," );
   BOOST_CHECK(results.size() == 1);
   BOOST_CHECK_EQUAL(results[0], input);
 
   input = ",,,hello how are you doing 543 342 ,,";
-  UtilityFunctions::split_no_delim_compress( results, input, "," );
+  SpecUtils::split_no_delim_compress( results, input, "," );
   BOOST_CHECK(results.size() == 6);
   BOOST_CHECK(results[0].empty());
   BOOST_CHECK(results[1].empty());
@@ -452,7 +454,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
 
 
   input = ",A, AAA";
-  UtilityFunctions::split_no_delim_compress( results, input, ", " );
+  SpecUtils::split_no_delim_compress( results, input, ", " );
   BOOST_CHECK(results.size() == 4);
   BOOST_CHECK(results[0].empty());
   BOOST_CHECK_EQUAL(results[1], "A");
@@ -460,13 +462,13 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   BOOST_CHECK_EQUAL(results[3], "AAA");
 
   input = ",A, AAA ";
-  UtilityFunctions::split_no_delim_compress( results, input, ", " );
+  SpecUtils::split_no_delim_compress( results, input, ", " );
   BOOST_CHECK( results.size() == 5 );
   BOOST_CHECK_EQUAL( results[3], "AAA" );
   BOOST_CHECK( results[4].empty() );
     
 
-  // tests for UtilityFunctions::ireplace_all(string &input, const char *pattern, const char *replacement)
+  // tests for SpecUtils::ireplace_all(string &input, const char *pattern, const char *replacement)
   // 9 in text file
   do
   {
@@ -481,7 +483,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     index1++;
     string replacement = tests[index1].substr(2);
     index1++;
-    UtilityFunctions::ireplace_all(input, pattern.c_str(), replacement.c_str());
+    SpecUtils::ireplace_all(input, pattern.c_str(), replacement.c_str());
     BOOST_CHECK_EQUAL(input, correctOutput[index2].substr(2));
     index2++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "9" );

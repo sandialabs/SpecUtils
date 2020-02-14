@@ -38,7 +38,7 @@
 #define BOOST_TEST_MODULE testIsoTimeString
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/DateTime.h"
 
 
 using namespace std;
@@ -100,8 +100,8 @@ BOOST_AUTO_TEST_CASE( isoString )
         ptime pt = times[i];
         string str1 = to_iso_extended_string(pt);
         string str2 = to_iso_string(pt);
-        string s1 = UtilityFunctions::to_extended_iso_string(pt);
-        string s2 = UtilityFunctions::to_iso_string(pt);
+        string s1 = SpecUtils::to_extended_iso_string(pt);
+        string s2 = SpecUtils::to_iso_string(pt);
         for (int i = s1.length(); i < 26; i++) {
             s1 += "0";
         }
@@ -125,33 +125,33 @@ BOOST_AUTO_TEST_CASE( isoString )
     ptime d5(min_date_time);
     ptime d6(date(2015,Jul,1));
 
-    bool passneg1 = to_iso_extended_string(d1)==UtilityFunctions::to_extended_iso_string(d1);
-    bool passneg2 = to_iso_string(d1)==UtilityFunctions::to_iso_string(d1);
+    bool passneg1 = to_iso_extended_string(d1)==SpecUtils::to_extended_iso_string(d1);
+    bool passneg2 = to_iso_string(d1)==SpecUtils::to_iso_string(d1);
     BOOST_CHECK(!passneg1);
     BOOST_CHECK(!passneg2);
 
-    bool passpos1 = to_iso_extended_string(d2)==UtilityFunctions::to_extended_iso_string(d2);
-    bool passpos2 = to_iso_string(d2)==UtilityFunctions::to_iso_string(d2);
+    bool passpos1 = to_iso_extended_string(d2)==SpecUtils::to_extended_iso_string(d2);
+    bool passpos2 = to_iso_string(d2)==SpecUtils::to_iso_string(d2);
     BOOST_CHECK(!passpos1);
     BOOST_CHECK(!passpos2);
 
-    bool not1 = to_iso_extended_string(d3)==UtilityFunctions::to_extended_iso_string(d3);
-    bool not2 = to_iso_string(d3)==UtilityFunctions::to_iso_string(d3);
+    bool not1 = to_iso_extended_string(d3)==SpecUtils::to_extended_iso_string(d3);
+    bool not2 = to_iso_string(d3)==SpecUtils::to_iso_string(d3);
     BOOST_CHECK(not1);
     BOOST_CHECK(not2);
 
-    bool max1 = to_iso_extended_string(d4)==UtilityFunctions::to_extended_iso_string(d4);
-    bool max2 = to_iso_string(d4)==UtilityFunctions::to_iso_string(d4);
+    bool max1 = to_iso_extended_string(d4)==SpecUtils::to_extended_iso_string(d4);
+    bool max2 = to_iso_string(d4)==SpecUtils::to_iso_string(d4);
     BOOST_CHECK(max1);
     BOOST_CHECK(max2);
 
-    bool min1 = to_iso_extended_string(d5)==UtilityFunctions::to_extended_iso_string(d5);
-    bool min2 = to_iso_string(d5)==UtilityFunctions::to_iso_string(d5);
+    bool min1 = to_iso_extended_string(d5)==SpecUtils::to_extended_iso_string(d5);
+    bool min2 = to_iso_string(d5)==SpecUtils::to_iso_string(d5);
     BOOST_CHECK(min1);
     BOOST_CHECK(min2);
 
-    bool mid1 = to_iso_extended_string(d6)==UtilityFunctions::to_extended_iso_string(d6);
-    bool mid2 = to_iso_string(d6)==UtilityFunctions::to_iso_string(d6);
+    bool mid1 = to_iso_extended_string(d6)==SpecUtils::to_extended_iso_string(d6);
+    bool mid2 = to_iso_string(d6)==SpecUtils::to_iso_string(d6);
     BOOST_CHECK(mid1);
     BOOST_CHECK(mid2);
 }

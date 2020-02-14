@@ -32,7 +32,8 @@
 #include <algorithm>
 #include <functional>
 
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/Filesystem.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
 using namespace std;
@@ -107,7 +108,7 @@ namespace SerialToDetectorModel
       return nullptr;
     
 #ifdef _WIN32
-    const std::wstring wfilename = UtilityFunctions::convert_from_utf8_to_utf16(filename);
+    const std::wstring wfilename = SpecUtils::convert_from_utf8_to_utf16(filename);
     ifstream input( filename.c_str() );
 #else
     ifstream input( filename.c_str() );
@@ -121,7 +122,7 @@ namespace SerialToDetectorModel
     
     string line;
     int line_num = 0;
-    while( UtilityFunctions::safe_get_line(input, line, 8192) )
+    while( SpecUtils::safe_get_line(input, line, 8192) )
     {
       if( line.size() > 8190 )
       {
@@ -131,12 +132,12 @@ namespace SerialToDetectorModel
       
       ++line_num;
       
-      UtilityFunctions::trim( line );
+      SpecUtils::trim( line );
       if( line.empty() || line[0]=='#' )
         continue;
       
       vector<string> fields;
-      UtilityFunctions::split_no_delim_compress( fields, line, "," );
+      SpecUtils::split_no_delim_compress( fields, line, "," );
       
       //Allow the file to be comma or tab delimited, but if an individual field
       //  contains a comma or tab, then the field must be quoted by a double
@@ -156,8 +157,8 @@ namespace SerialToDetectorModel
       if( fields.size() < 2 )
         continue;
       
-      UtilityFunctions::trim( fields[0] );
-      UtilityFunctions::trim( fields[1] );
+      SpecUtils::trim( fields[0] );
+      SpecUtils::trim( fields[1] );
       
       if( newdata->empty() && fields[0]=="SerialToDetectorModelVersion" )
       {
@@ -222,7 +223,7 @@ namespace SerialToDetectorModel
         info.file_locations = fields[3];
 #endif
       newdata->push_back( info );
-    }//while( UtilityFunctions::safe_get_line(input, line) )
+    }//while( SpecUtils::safe_get_line(input, line) )
     
     if( newdata->size() < 2 )  //2 is arbitrary, kindaof
       return nullptr;
@@ -328,28 +329,28 @@ namespace SerialToDetectorModel
   
   DetectorModel guess_detective_model_from_serial( const std::string &instrument_id )
   {
-    if( UtilityFunctions::icontains( instrument_id, "Micro" )
-       || UtilityFunctions::icontains( instrument_id, "uDet" )
-       || UtilityFunctions::icontains( instrument_id, "HX" )
-       || UtilityFunctions::icontains( instrument_id, "uDX")
-       || UtilityFunctions::icontains( instrument_id, "\xCE\xBC" )  //Equiv to u8"μ", mu="0xCE0x9C", "&#x39C;", "U+039C", micro="0xC20xB5", "&#xB5;"
-       || UtilityFunctions::icontains( instrument_id, "\xCE\x9C")  //lower-caser mu
-       || UtilityFunctions::icontains( instrument_id, "\xc2\xb5") ) //micro (apparently a distint code-point)
+    if( SpecUtils::icontains( instrument_id, "Micro" )
+       || SpecUtils::icontains( instrument_id, "uDet" )
+       || SpecUtils::icontains( instrument_id, "HX" )
+       || SpecUtils::icontains( instrument_id, "uDX")
+       || SpecUtils::icontains( instrument_id, "\xCE\xBC" )  //Equiv to u8"μ", mu="0xCE0x9C", "&#x39C;", "U+039C", micro="0xC20xB5", "&#xB5;"
+       || SpecUtils::icontains( instrument_id, "\xCE\x9C")  //lower-caser mu
+       || SpecUtils::icontains( instrument_id, "\xc2\xb5") ) //micro (apparently a distint code-point)
     {
       return DetectorModel::MicroDetective;
     }
     
     
     //The case independance does not appear to be necassarry, but JIC
-    // if( UtilityFunctions::icontains( instrument_id, "EX100" ) || UtilityFunctions::icontains( instrument_id, "EX 100" ) )
-    if( UtilityFunctions::icontains( instrument_id, "Detective X" )
-       || UtilityFunctions::iequals_ascii( instrument_id, "DetectiveX" ))
+    // if( SpecUtils::icontains( instrument_id, "EX100" ) || SpecUtils::icontains( instrument_id, "EX 100" ) )
+    if( SpecUtils::icontains( instrument_id, "Detective X" )
+       || SpecUtils::iequals_ascii( instrument_id, "DetectiveX" ))
       return DetectorModel::DetectiveX;
     
-    if( UtilityFunctions::icontains( instrument_id, "100" ) )
+    if( SpecUtils::icontains( instrument_id, "100" ) )
       return DetectorModel::DetectiveEx100;
     
-    if( UtilityFunctions::icontains( instrument_id, "200" ) )
+    if( SpecUtils::icontains( instrument_id, "200" ) )
       return DetectorModel::Detective200;
     
     const auto serials = candidate_serial_nums_from_str( instrument_id );

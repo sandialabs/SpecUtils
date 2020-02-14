@@ -38,7 +38,8 @@
 #define BOOST_TEST_MODULE testsafeGetLine
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
-#include "SpecUtils/UtilityFunctions.h"
+
+#include "SpecUtils/Filesystem.h"
 
 
 using namespace std;
@@ -49,7 +50,7 @@ void test_num_lines( const char *str, const size_t num_expected_lines )
   
   size_t num_read_lines = 0;
   string line;
-  while( UtilityFunctions::safe_get_line(strm, line) )
+  while( SpecUtils::safe_get_line(strm, line) )
     ++num_read_lines;
   
   BOOST_CHECK_MESSAGE( num_read_lines==num_expected_lines, "Failed on \n'" + string(str) + "'\n Got "
@@ -109,7 +110,7 @@ void test_num_lines_len_limit( const char *str, const size_t strsizelimit, const
   size_t num_read_lines = 0;
   string line;
   vector<string> lines;
-  while( UtilityFunctions::safe_get_line(strm, line, strsizelimit) )
+  while( SpecUtils::safe_get_line(strm, line, strsizelimit) )
   {
     lines.push_back( line );
     ++num_read_lines;

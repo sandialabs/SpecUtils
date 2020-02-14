@@ -34,14 +34,14 @@
 //#include <boost/test/unit_test.hpp>
 #include <boost/test/included/unit_test.hpp>
 
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/StringAlgo.h"
 
 using namespace std;
 using namespace boost::unit_test;
 
 void check_str( const std::string str, const size_t ncharacters )
 {
-  const size_t ncounted = UtilityFunctions::utf8_str_len( str.c_str(), str.size() );
+  const size_t ncounted = SpecUtils::utf8_str_len( str.c_str(), str.size() );
   BOOST_CHECK_MESSAGE( ncharacters == ncounted, "Failed on string '" << str << "' with getting " << ncounted << " but expected " << ncharacters );
 }
 

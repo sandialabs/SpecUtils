@@ -92,23 +92,27 @@ if( SpecUtils_PYTHON_BINDINGS )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 set( sources
-     src/SpectrumDataStructs.cpp
-     src/UtilityFunctions.cpp
+     src/SpecFile.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp
      src/CubicSpline.cpp
+     src/StringAlgo.cpp
+     src/Filesystem.cpp
+     src/DateTime.cpp
      README.md
 )
 
 set( headers
-     SpecUtils/SpectrumDataStructs.h
-     SpecUtils/UtilityFunctions.h
+     SpecUtils/SpecFile.h
      SpecUtils/SpecUtilsAsync.h
      SpecUtils/SpecUtils_config.h.in
      SpecUtils/SerialToDetectorModel.h
      SpecUtils/EnergyCalibration.h
      SpecUtils/CubicSpline.h
+     SpecUtils/StringAlgo.h
+     SpecUtils/Filesystem.h
+     SpecUtils/DateTime.h
 )
 
 if( SpecUtils_ENABLE_D3_CHART )

@@ -100,7 +100,7 @@ namespace SerialToDetectorModel
   
   /** An enum to list the detector models supported by the utilities in this
       namespace.  Not using #DetectorType to avoid pulling in dependancy on
-      SpectrumDataStructs.h, and to disambiguate the functionality of this
+      SpecFile.h, and to disambiguate the functionality of this
       utility.
    */
   enum class DetectorModel : uint32_t

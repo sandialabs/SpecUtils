@@ -33,8 +33,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
-#include "SpecUtils/UtilityFunctions.h"
-#include "SpecUtils/SpectrumDataStructs.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/DateTime.h"
+#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/Filesystem.h"
 
 #if( !PERFORM_DEVELOPER_CHECKS )
 #error PERFORM_DEVELOPER_CHECKS must be enabled to compile regression_test
@@ -189,7 +191,7 @@ int main( int argc, char **argv )
   }
 
   
-  if( !UtilityFunctions::is_directory( test_base_directory ) )
+  if( !SpecUtils::is_directory( test_base_directory ) )
   {
     cerr << "Base directory '" << test_base_directory << "' is not a valid "
          << "directory\n";
@@ -206,8 +208,8 @@ int main( int argc, char **argv )
   if( !g_sub_test_dir.empty() )
   {
     test_base_directory
-       = UtilityFunctions::append_path( test_base_directory, g_sub_test_dir );
-    if( !UtilityFunctions::is_directory(test_base_directory) )
+       = SpecUtils::append_path( test_base_directory, g_sub_test_dir );
+    if( !SpecUtils::is_directory(test_base_directory) )
     {
       cerr << "Test sub directory '" << g_sub_test_dir << "' is not a valid"
            << " directory\n";
@@ -315,13 +317,13 @@ void check_parse_time( const string basedir )
     {
       MeasurementInfo info;
       
-      const double orig_wall_time = UtilityFunctions::get_wall_time();
-      const double orig_cpu_time = UtilityFunctions::get_cpu_time();
+      const double orig_wall_time = SpecUtils::get_wall_time();
+      const double orig_cpu_time = SpecUtils::get_cpu_time();
     
       const bool parsed = info.load_file( filename, kAutoParser, extention );
     
-      const double final_cpu_time = UtilityFunctions::get_cpu_time();
-      const double final_wall_time = UtilityFunctions::get_wall_time();
+      const double final_cpu_time = SpecUtils::get_cpu_time();
+      const double final_wall_time = SpecUtils::get_wall_time();
     
       if( parsed && orig_cpu_time > 0.0 && final_cpu_time > 0.0 )
       {
@@ -344,22 +346,22 @@ void check_parse_time( const string basedir )
   map<path,double> previous_cpu_parse_times, previous_wall_parse_times;
   
   const string timingname
-              = UtilityFunctions::append_path( basedir, g_parse_time_filename );
+              = SpecUtils::append_path( basedir, g_parse_time_filename );
   
   {//begin read parsetimes
     ifstream parsetimes( timingname.c_str(), ios::in | ios::binary );
     if( parsetimes.is_open() && parsetimes.good() )
     {
       string filename;
-      UtilityFunctions::safe_get_line( parsetimes, prevtimestr );
+      SpecUtils::safe_get_line( parsetimes, prevtimestr );
       
-      while( UtilityFunctions::safe_get_line( parsetimes, filename ) )
+      while( SpecUtils::safe_get_line( parsetimes, filename ) )
       {
         if( filename.size() == 0 )
           continue;
         
         string times;
-        UtilityFunctions::safe_get_line( parsetimes, times );
+        SpecUtils::safe_get_line( parsetimes, times );
         
         double cputime, walltime;
         
@@ -373,7 +375,7 @@ void check_parse_time( const string basedir )
         
         previous_cpu_parse_times[filename] = cputime;
         previous_wall_parse_times[filename] = walltime;
-      }//while( UtilityFunctions::safeGetline( parsetimes, line ) )
+      }//while( SpecUtils::safeGetline( parsetimes, line ) )
     }//if( parsetimes.is_open() && parsetimes.good() )
   }//end read parsetimes
   
@@ -439,7 +441,7 @@ void check_parse_time( const string basedir )
     ofstream file( timingname.c_str(), ios::out | ios::binary );
     if( file.is_open() )
     {
-      file << UtilityFunctions::to_extended_iso_string( start_time ) << endl;
+      file << SpecUtils::to_extended_iso_string( start_time ) << endl;
       for( map<path,double>::iterator i = cpu_parse_times.begin();
            i != cpu_parse_times.end(); ++i )
       {
@@ -460,7 +462,7 @@ void check_parse_time( const string basedir )
 
 FixableErrors get_compare_error_type( const string &msg )
 {
-  if( UtilityFunctions::icontains( msg, "UUID of LHS" ) )
+  if( SpecUtils::icontains( msg, "UUID of LHS" ) )
     return UuidError;
   
   return NumFixableErrors;
@@ -654,7 +656,7 @@ void check_serialization_to_n42( const string basedir )
          nFailToSerialize = 0, nSerializedFileFailParse = 0,
          npassed = 0, nfailed = 0;
   vector<path> failedcompare;
-  const path tempdir = UtilityFunctions::temp_dir();
+  const path tempdir = SpecUtils::temp_dir();
   const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
   for( const path &fpath : with_truth )
   {
@@ -677,7 +679,7 @@ void check_serialization_to_n42( const string basedir )
     }//if( !status )
     
     
-    const string tempname = UtilityFunctions::temp_file_name( filename, tempdir.string<string>().c_str() );
+    const string tempname = SpecUtils::temp_file_name( filename, tempdir.string<string>().c_str() );
     
     {//Begin codeblock to serialize to temporary file
       ofstream output( tempname.c_str() );
@@ -686,7 +688,7 @@ void check_serialization_to_n42( const string basedir )
         ++nFailToSerialize;
         cerr << "N42 Serialization Test: Couldnt open temporary file "
              << tempname << "\n\n";
-        UtilityFunctions::remove_file( tempname.c_str() );
+        SpecUtils::remove_file( tempname.c_str() );
         continue;
       }
     
@@ -697,7 +699,7 @@ void check_serialization_to_n42( const string basedir )
         ++nFailToSerialize;
         cerr << "N42 Serialization Test: Couldnt serialize " << fpath
              << " to temp file " << tempname << "\n\n";
-        UtilityFunctions::remove_file( tempname.c_str() );
+        SpecUtils::remove_file( tempname.c_str() );
         continue;
       }//if( !status )
     }//End codeblock to serialize to temporary file
@@ -710,7 +712,7 @@ void check_serialization_to_n42( const string basedir )
       ++nSerializedFileFailParse;
       cerr << "N42 Serialization Test: Couldnt parse serialized N42 file for "
            << fpath << "\n\n";
-      UtilityFunctions::remove_file( tempname.c_str() );
+      SpecUtils::remove_file( tempname.c_str() );
       continue;
     }//if( !status )
     
@@ -729,7 +731,7 @@ void check_serialization_to_n42( const string basedir )
            << " failed with error:\n\t" << error_msg << "\n"
            << "\t(LHS is original parse, RHS is re-ad back in)\n\n";
       
-      if( UtilityFunctions::contains(error_msg, "MeasurementInfo: Number of remarks in LHS") )
+      if( SpecUtils::contains(error_msg, "MeasurementInfo: Number of remarks in LHS") )
       {
         for( const string r : info.remarks() )
           cout << "\t\tLHS remark: '"  << r << "'" << endl;
@@ -739,7 +741,7 @@ void check_serialization_to_n42( const string basedir )
       
     }//try / catch
     
-    UtilityFunctions::remove_file( tempname.c_str() );
+    SpecUtils::remove_file( tempname.c_str() );
   }//for( const path &fpath : with_truth )
   
   
@@ -1066,11 +1068,11 @@ vector<path> candidate_test_files( const string basedir )
 {
   vector<path> filenames;
   
-  const vector<string> allfiles = UtilityFunctions::recursive_ls( basedir );
+  const vector<string> allfiles = SpecUtils::recursive_ls( basedir );
   
   for( const string &filepath : allfiles )
   {
-    const string filename = UtilityFunctions::filename(filepath);
+    const string filename = SpecUtils::filename(filepath);
     const string parentdir = path(filepath).parent_path().filename().string<string>();
     
     if( filename != "source.txt"
@@ -1110,7 +1112,7 @@ vector<path> truth_n42_files( const string basedir )
 {
   vector<path> filenames;
   
-  const vector<string> allfiles = UtilityFunctions::recursive_ls( basedir );
+  const vector<string> allfiles = SpecUtils::recursive_ls( basedir );
   
   for( const string &filestr : allfiles )
   {
