@@ -288,13 +288,6 @@ typedef std::map<std::string,std::pair<DetectionType,std::string> > IdToDetector
 typedef std::map<std::string,MeasurementCalibInfo>                  DetectorToCalibInfo;
 
 
-typedef std::vector< std::pair<float,float> > DeviationPairVec;
-typedef std::shared_ptr< std::vector<float> > ShrdFVecPtr;
-typedef std::shared_ptr< const std::vector<float> > ShrdConstFVecPtr;
-
-typedef std::shared_ptr<Measurement> MeasurementShrdPtr;
-typedef std::shared_ptr<const Measurement> MeasurementConstShrdPtr;
-
 //gamma_integral(): get the integral of gamma counts between lowenergy and
 //  upperunergy; linear approximation is used for fractions of channels.
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
@@ -321,13 +314,6 @@ float speed_from_remark( std::string remark );
 std::string detector_name_from_remark( const std::string &remark );
 
 
-//time_duration_in_seconds(...): Reads times in formats similar to "PT16M44S"
-//  or "13H82M49.33S".  Returns partial answer upon failure (and thus 0.0 on
-//  complete failure), that is "PT16M44AS" would return 16 minutes, 0 seconds.
-//  Shouldnt ever throw.
-float time_duration_in_seconds( const std::string &duration );
-float time_duration_in_seconds( const char *duration_str, const size_t length );
-
 //dose_units_usvPerH(...): returns the dose units indicated by the string, in
 //  units such that ia micro-sievert per hour is equal to 1.0.
 //Currently only handles the label "uSv" and "uRem/h", e.g. fnctn not really
@@ -336,13 +322,6 @@ float time_duration_in_seconds( const char *duration_str, const size_t length );
 float dose_units_usvPerH( const char *str, const size_t str_length );
 
 //int detector_num_from_name( std::string name );
-
-//Returns true if the file is likely a spectrum file, based off of file
-//  extenstion, file size, etc..  By no means definitive, but useful when
-//  looping through a large amount of files in order to filter out files likely
-//  to not be spectrum files (but will also filter out a small amount of actual
-//  spectrum files in practice).
-bool likely_not_spec_file( const std::string &file );
 
 //Checks the first 512 bytes of data for a few magic strings that *should* be
 //  in N42 files; if it contains any of them, it returns true
@@ -555,7 +534,7 @@ public:
   //deviation_pairs(): returns the energy deviation pairs.  Sometimes also
   // refered to as nonlinear deviation pairs.
   //  TODO: insert description of how to actually use these.
-  inline const DeviationPairVec &deviation_pairs() const;
+  inline const std::vector<std::pair<float,float>> &deviation_pairs() const;
   
   //channel_energies(): returns a vector containing the starting (lower) energy
   //  of the gamma channels, calculated using the energy calibration
@@ -587,15 +566,15 @@ public:
 
   //compare_by_sample_det_time: compares by sample_number_, and then
   //  detector_number_, then by start_time_, then source_type_
-  static bool compare_by_sample_det_time( const MeasurementConstShrdPtr &lhs,
-                                          const MeasurementConstShrdPtr &rhs );
+  static bool compare_by_sample_det_time( const std::shared_ptr<const Measurement> &lhs,
+                                          const std::shared_ptr<const Measurement> &rhs );
   
   //set_title(): sets the title property.
   inline void set_title( const std::string &title );
   
   //set_gamma_counts(...): XXX - should deprecate!
   //  reset real and live times, updates total gamma counts
-  inline void set_gamma_counts( ShrdConstFVecPtr counts,
+  inline void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                 const float livetime, const float realtime );
   
   //set_neutron_counts(): XXX - should deprecate!
@@ -606,7 +585,7 @@ public:
   //set_channel_energies(...): XXX - should deprecate!
   //  if channel_energies_ or gamma_counts_ must be same number channels as
   //  before
-  inline void set_channel_energies( ShrdConstFVecPtr counts );
+  inline void set_channel_energies( std::shared_ptr<const std::vector<float>> counts );
 
   //popuplate_channel_energies_from_coeffs(): uses calibration_coeffs_ and 
   //  deviation_pairs_ to populate channel_energies_.
@@ -809,7 +788,7 @@ protected:
   //set_n42_2006_detector_data_node_info(): silently returns if information isnt found
   static void set_n42_2006_detector_data_node_info(
                           const rapidxml::xml_node<char> *det_data_node,
-                          std::vector<MeasurementShrdPtr> &measurs_to_update );
+                          std::vector<std::shared_ptr<Measurement>> &measurs_to_update );
 
   
   //set_info_from_txt_or_csv(...): throws upon failure
@@ -830,7 +809,7 @@ protected:
   //  bins)
   //Throws exception if (old or new) binning or channel energies arent defined
   //  or have less than 4 or so bins.
-  void rebin_by_lower_edge( ShrdConstFVecPtr new_binning );
+  void rebin_by_lower_edge( std::shared_ptr<const std::vector<float>> new_binning );
   
   //rebin_by_eqn(...) should probably just be renamed rebin(....)
   
@@ -843,7 +822,7 @@ protected:
   //  or not defined, or potentialy (but not necassirly) if input equation is
   //  ill-specified.
   void rebin_by_eqn( const std::vector<float> &eqn,
-                    const DeviationPairVec &dev_pairs,
+                    const std::vector<std::pair<float,float>> &dev_pairs,
                     SpecUtils::EnergyCalType type );
   
   //If the new binning has already been calculated when rebinning by polynomial
@@ -855,13 +834,13 @@ protected:
   //  or not defined, or potentialy (but not necassirly) if input equation is
   //  ill-specified.
   void rebin_by_eqn( const std::vector<float> &eqn,
-                    const DeviationPairVec &dev_pairs,
-                    ShrdConstFVecPtr new_binning,
+                    const std::vector<std::pair<float,float>> &dev_pairs,
+                    std::shared_ptr<const std::vector<float>> new_binning,
                     SpecUtils::EnergyCalType type );
   
   
   //recalibrate_by_eqn(...) passing in a valid binning
-  //  ShrdConstFVecPtr object will save recomputing this quantity, however no
+  //  std::shared_ptr<const std::vector<float>> object will save recomputing this quantity, however no
   //  checks are performed to make sure 'eqn' actually cooresponds to 'binning'
   //  For type==LowerChannelEdge, eqn should coorespond to the energies of the
   //  lower edges of the bin.
@@ -869,11 +848,11 @@ protected:
   //  necassirily) if input is ill-specified, or if the passed in binning doesnt
   //  have the proper number of channels.
   void recalibrate_by_eqn( const std::vector<float> &eqn,
-                          const DeviationPairVec &dev_pairs,
+                          const std::vector<std::pair<float,float>> &dev_pairs,
                           SpecUtils::EnergyCalType type,
-                          ShrdConstFVecPtr binning
+                          std::shared_ptr<const std::vector<float>> binning
 #if( !SpecUtils_JAVA_SWIG )
-                          = ShrdConstFVecPtr()  //todo: fix this more better
+                          = std::shared_ptr<const std::vector<float>>()  //todo: fix this more better
 #endif
                           );
   
@@ -931,7 +910,7 @@ protected:
   //std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::milliseconds> start_timepoint_;
 
   std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
-  DeviationPairVec          deviation_pairs_;     //<energy,offset>
+  std::vector<std::pair<float,float>>          deviation_pairs_;     //<energy,offset>
 
   std::shared_ptr< const std::vector<float> >   channel_energies_;    //gamma channel_energies_[energy_channel]
   std::shared_ptr< const std::vector<float> >   gamma_counts_;        //gamma_counts_[energy_channel]
@@ -1005,7 +984,7 @@ public:
   //operator=(...) copies all the 'rhs' information and creates a new set of
   //  Measurment objects so that if you apply changes to *this, it will not
   //  effect the lhs; this is however fairly effieient as the Measurment
-  //  objects copy shallow copy of all ShrdConstFVecPtr instances.
+  //  objects copy shallow copy of all std::shared_ptr<const std::vector<float>> instances.
   //  Since it is assumed the 'rhs' is in good shape, recalc_total_counts() and
   //  cleanup_after_load() are NOT called.
   const MeasurementInfo &operator=( const MeasurementInfo &rhs );
@@ -1094,8 +1073,8 @@ public:
   //set_live_time(...) and set_real_time(...) update both the measurment
   //  you pass in, as well as *this.  If measurment is invalid, or not in
   //  measurments_, than an exception is thrown.
-  void set_live_time( const float lt, MeasurementConstShrdPtr measurment );
-  void set_real_time( const float rt, MeasurementConstShrdPtr measurment );
+  void set_live_time( const float lt, std::shared_ptr<const Measurement> measurment );
+  void set_real_time( const float rt, std::shared_ptr<const Measurement> measurment );
 
   //set_start_time(...), set_remarks(...), set_spectra_type(...) allow
   //  setting the relevant variables of the 'measurment' passed in.  The reason
@@ -1104,23 +1083,23 @@ public:
   //  with const pointers to these object for both the sake of the modified_
   //  flag, but also to ensure some amount of thread safety.
   void set_start_time( const boost::posix_time::ptime &timestamp,
-                       const MeasurementConstShrdPtr measurment  );
+                       const std::shared_ptr<const Measurement> measurment  );
   void set_remarks( const std::vector<std::string> &remarks,
-                    const MeasurementConstShrdPtr measurment  );
+                    const std::shared_ptr<const Measurement> measurment  );
   void set_source_type( const Measurement::SourceType type,
-                         const MeasurementConstShrdPtr measurment );
+                         const std::shared_ptr<const Measurement> measurment );
   void set_position( double longitude, double latitude,
                      boost::posix_time::ptime position_time,
-                     const MeasurementConstShrdPtr measurment );
+                     const std::shared_ptr<const Measurement> measurment );
   void set_title( const std::string &title,
-                  const MeasurementConstShrdPtr measurment );
+                  const std::shared_ptr<const Measurement> measurment );
   
   //set_contained_neutrons(...): sets the specified measurment as either having
   //  contained neutron counts, or not.  If specified to be false, then counts
   //  is ignored.  If true, then the neutron sum counts is set to be as
   //  specified.
   void set_contained_neutrons( const bool contained, const float counts,
-                               const MeasurementConstShrdPtr measurment );
+                               const std::shared_ptr<const Measurement> measurment );
 
   /** Sets the detectors analysis.
    
@@ -1154,7 +1133,7 @@ public:
   //  number available if that detector does not already have that one or else
   //  its assigned to be one larger sample number - this by no means captures
   //  all use cases, but good enough for now.
-  void add_measurment( MeasurementShrdPtr meas, const bool doCleanup );
+  void add_measurment( std::shared_ptr<Measurement> meas, const bool doCleanup );
   
   //remove_measurment(...): removes the measurment from this MeasurmentInfo
   //  object and if 'doCleanup' is specified, then all sums will be
@@ -1162,13 +1141,13 @@ public:
   //  cleanup_after_load() once you are done adding/removing Measurments if a
   //  rough fix up isnt good enough.
   //Will throw if 'meas' isnt currently in this MeasurementInfo.
-  void remove_measurment( MeasurementConstShrdPtr meas, const bool doCleanup );
+  void remove_measurment( std::shared_ptr<const Measurement> meas, const bool doCleanup );
   
   //remove_measurments(): similar to remove_measurment(...), but more efficient
   //  for removing large numbers of measurments.  This function assumes
   //  the internal state of this MeasurmentInfo object is consistent
   //  (e.g. no measurments have been added or removed without 'cleaningup').
-  void remove_measurments( const std::vector<MeasurementConstShrdPtr> &meas );
+  void remove_measurments( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
   //combine_gamma_channels(): combines 'ncombine' gamma channels for every
   //  Measurement that has exactly nchannels.  Returns number of Measurments
@@ -1245,7 +1224,7 @@ public:
   //  or else an exception may be thrown.
   //Requires the selected samples and detectors to have at least one spectrum
   //  that can serve as gamma binning, or else nullptr will be returned.
-  MeasurementShrdPtr sum_measurements( const std::set<int> &sample_numbers,
+  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
                                     const std::vector<bool> &det_to_use ) const;
   
   //sum_measurements(...): a convienience function for calling the the other
@@ -1254,7 +1233,7 @@ public:
   //  numbers are included, an exception will be thrown.
   //Requires the selected samples and detectors to have at least one spectrum
   //  that can serve as gamma binning, or else nullptr will be returned.
-  MeasurementShrdPtr sum_measurements( const std::set<int> &sample_numbers,
+  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
                                     const std::vector<int> &det_numbers ) const;
   
   /** A convienience function for calling the the other form of this function.
@@ -1273,13 +1252,13 @@ public:
   //  or else an exception may be thrown.
   //Requires the selected samples and detectors to have at least one spectrum
   //  that can serve as gamma binning, or else nullptr will be returned.
-  MeasurementShrdPtr sum_measurements( const std::set<int> &sample_numbers,
+  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
                                        const std::vector<bool> &det_to_use,
-                                       const MeasurementConstShrdPtr binTo ) const;
+                                       const std::shared_ptr<const Measurement> binTo ) const;
   
-  MeasurementShrdPtr sum_measurements( const std::set<int> &sample_numbers,
+  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
                                       const std::vector<int> &det_numbers,
-                                      const MeasurementConstShrdPtr binTo ) const;
+                                      const std::shared_ptr<const Measurement> binTo ) const;
   
   
   
@@ -1514,16 +1493,16 @@ public:
   //  be the lower edges of bins, in keV - note: alters individual bin contents.
   //  Necassarily information losing, so use sparingly and dont compound calls.
   void rebin_by_eqn( const std::vector<float> &eqn,
-                     const DeviationPairVec &dev_pairs,
+                     const std::vector<std::pair<float,float>> &dev_pairs,
                      SpecUtils::EnergyCalType type );
 
   
   //Recalibrate the spectrum so the existing channel counts coorespond
   //  to the energies of the new binning - note: does not alter bin contents.
   //  Also not that the recalibration is applied to all gamma detectors
-  void recalibrate_by_lower_edge( ShrdConstFVecPtr binning );
+  void recalibrate_by_lower_edge( std::shared_ptr<const std::vector<float>> binning );
   void recalibrate_by_eqn( const std::vector<float> &eqn,
-                           const DeviationPairVec &dev_pairs,
+                           const std::vector<std::pair<float,float>> &dev_pairs,
                            SpecUtils::EnergyCalType type );
   
   //If only certain detectors are specified, then those detectors will be
@@ -1535,7 +1514,7 @@ public:
   //  of the passed in names match any of the available names, since these are
   //  both likely a mistakes
   void recalibrate_by_eqn( const std::vector<float> &eqn,
-                           const DeviationPairVec &dev_pairs,
+                           const std::vector<std::pair<float,float>> &dev_pairs,
                            SpecUtils::EnergyCalType type,
                            const std::vector<std::string> &detectors,
                            const bool rebin_other_detectors );
@@ -1810,7 +1789,7 @@ protected:
   //set_n42_2006_deviation_pair_info(...): called from load_2006_N42_from_doc(...)
   //  Does not obtain a thread lock.
   void set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
-                            std::vector<MeasurementShrdPtr> &measurs_to_update );
+                            std::vector<std::shared_ptr<Measurement>> &measurs_to_update );
   
   /** Ensures unique detector-name sample-number combos.
    
@@ -1883,7 +1862,7 @@ protected:
   //  I would preffer you didnt awknowledge the existence of this function.
   //  id_to_dettypeany_ptr and calibrations_ptr must be valid.
   static void decode_2012_N42_rad_measurment_node(
-                                std::vector< MeasurementShrdPtr > &measurments,
+                                std::vector< std::shared_ptr<Measurement> > &measurments,
                                 const rapidxml::xml_node<char> *meas_node,
                                 const IdToDetectorType *id_to_dettypeany_ptr,
                                 DetectorToCalibInfo *calibrations_ptr,
@@ -1892,7 +1871,7 @@ protected:
 
   //decode_2012_N42_detector_state_and_quality: gets GPS and detector quality
   //  status as well as InterSpec specific RadMeasurementExtension infor (title)
-  static void decode_2012_N42_detector_state_and_quality( MeasurementShrdPtr meas,
+  static void decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
                                    const rapidxml::xml_node<char> *meas_node );
   
   //Gets N42 2012 <RadDetectorKindCode> element value
@@ -1906,7 +1885,7 @@ protected:
   //  multiple spectrums per measurment).
   void set_n42_2006_measurment_location_information(
                     const rapidxml::xml_node<char> *measured_item_info_node,
-                    std::vector<MeasurementShrdPtr> measurements_applicable );
+                    std::vector<std::shared_ptr<Measurement>> measurements_applicable );
 
   /** If this MeasurementInfo is calibrated by lower channel energy, then this
    function will write a record (and it should be the first record) to the
@@ -2331,7 +2310,7 @@ const std::set<int> &MeasurementInfo::sample_numbers() const
 {
 //  std::unique_lock<std::recursive_mutex> lock( mutex_ );
 //  set<int> answer;
-//  fore( const MeasurementShrdPtr &meas : measurements_ )
+//  fore( const std::shared_ptr<Measurement> &meas : measurements_ )
 //    answer.insert( meas->sample_number_ );
 //  return answer;
   return sample_numbers_;
@@ -2584,7 +2563,7 @@ const std::vector<float> &Measurement::calibration_coeffs() const
   return calibration_coeffs_;
 }
 
-const DeviationPairVec &Measurement::deviation_pairs() const
+const std::vector<std::pair<float,float>> &Measurement::deviation_pairs() const
 {
   return deviation_pairs_;
 }
@@ -2615,7 +2594,7 @@ void Measurement::set_source_type( const SourceType type )
 }
 
 
-void Measurement::set_gamma_counts( ShrdConstFVecPtr counts,
+void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                     const float livetime, const float realtime )
 {
   if( !counts )
@@ -2648,7 +2627,7 @@ void Measurement::set_neutron_counts( const std::vector<float> &counts )
     neutron_counts_sum_ += counts[i];
 }
 
-void Measurement::set_channel_energies( ShrdConstFVecPtr counts )  //if channel_energies_ or gamma_counts_ must be same number channels as before
+void Measurement::set_channel_energies( std::shared_ptr<const std::vector<float>> counts )  //if channel_energies_ or gamma_counts_ must be same number channels as before
 {
   if( !counts )
     return;

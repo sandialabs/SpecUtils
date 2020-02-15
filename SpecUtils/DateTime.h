@@ -115,6 +115,25 @@ namespace  SpecUtils
   
   
   
+  /** Reads times like ISO 8601 period formats similar to "PT16M44S" or
+   "13H82M49.33S" and returns their duration in seconds.  Returns partial answer
+    upon failure (and thus 0.0 on complete failure), that is "PT16M44AS" would
+    return 16 minutes, 0 seconds.
+   
+   Note implementation is anything but complete - only implements what is
+   commonly seen for real/live times in spectrum files. Instead of handling
+   "PnYnMnDTnHnMnS" formats, this function only does something like "PTnHnMnS".
+   
+   Note: InterSpec/PhysicalUnits.h/.cpp::stringToTimeDuration(...) is a much
+   more complete implementation, but hasnt been tested against parsing spectrum
+   files.
+   */
+  float time_duration_string_to_seconds( const char *duration_str, const size_t length );
+
+  /** Convenience function for getting time duration from a ISO 8601 like
+   std::string.
+   */
+  float time_duration_string_to_seconds( const std::string &duration );
   
   
   /** \brief Gives the CPU time in seconds.

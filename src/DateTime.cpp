@@ -35,6 +35,13 @@ using namespace std;
 
 namespace
 {
+  bool toFloat( const std::string &str, float &f )
+  {
+    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
+    const int nconvert = sscanf( str.c_str(), "%f", &f );
+    return (nconvert == 1);
+  }
+  
   const char *month_number_to_Str( const int month )
   {
     switch( month )
@@ -619,7 +626,60 @@ namespace SpecUtils
   }//boost::posix_time::ptime time_from_string_strptime( std::string time_string )
   //#endif  //#ifndef _WIN32
   
+  float time_duration_string_to_seconds( const std::string &duration )
+  {
+    return time_duration_string_to_seconds( duration.c_str(), duration.size() );
+  }
   
+  
+  float time_duration_string_to_seconds( const char *duration_str, const size_t len )
+  {
+    float durration = 0.0f;
+    
+    if( !duration_str || !len )
+      return durration;
+    
+    const char *orig = duration_str;
+    const char *end = duration_str + len;
+    
+    while( duration_str < end )
+    {
+      while( (duration_str < end) && !isdigit(*duration_str) )
+        ++duration_str;
+      
+      if( duration_str >= end )
+        break;
+      
+      const char *num_start = duration_str;
+      while( (duration_str < end) && (isdigit(*duration_str) || duration_str[0]=='.') )
+        ++duration_str;
+      const char *num_end = duration_str;
+      
+      float unit = 1.0;
+      char unitchar = (num_end<end) ? (*num_end) : 's';
+      
+      if( unitchar=='s' || unitchar=='S' )
+        unit = 1.0;
+      else if( unitchar=='m' || unitchar=='M' )
+        unit = 60.0;
+      else if( unitchar=='h' || unitchar=='H' )
+        unit = 3600.0;
+      
+      float num_val = 0.0;
+      const string numberstr( num_start, num_end );
+      if( toFloat( numberstr, num_val ) )
+      {
+        durration += num_val * unit;
+      }else
+      {
+        cerr << "Error parsing time from '" << string(orig,orig+len) << "'" << endl;
+        return durration;
+      }
+    }//while( *duration_str )
+    
+    return durration;
+  }//float time_duration_string_to_seconds( const char *duration_str )
+
   
   //  Windows
 #ifdef _WIN32

@@ -385,6 +385,14 @@ namespace  SpecUtils
    */
   std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxlength );
   
+  
+  /** Returns true if the file is likely a spectrum file, based off of file
+    extenstion, file size, etc..  By no means definitive, but useful when
+   looping through a large amount of files in order to filter out files likely
+    to not be spectrum files (but may also filter out a small amount of actual
+    spectrum files in practice).
+   */
+  bool likely_not_spec_file( const std::string &file );
 }//namespace  SpecUtils
 
 #endif //SpecUtils_Filesystem_h

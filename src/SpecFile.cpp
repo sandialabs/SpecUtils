@@ -100,6 +100,7 @@ using SpecUtils::starts_with;
 using SpecUtils::istarts_with;
 using SpecUtils::ireplace_all;
 using SpecUtils::convert_from_utf8_to_utf16;
+using SpecUtils::time_duration_string_to_seconds;
 
 using SpecUtils::time_from_string;
 
@@ -201,7 +202,7 @@ namespace
   {
     assert( !!binning );
     
-    const ShrdConstFVecPtr &wantedenergies = binning->channel_energies();
+    const std::shared_ptr<const std::vector<float>> &wantedenergies = binning->channel_energies();
     
     const size_t nbin = wantedenergies->size();
     if( results.size() < nbin )
@@ -212,8 +213,8 @@ namespace
     for( size_t i = 0; i < datas.size(); ++i )
     {
       const std::shared_ptr<const Measurement> &d = datas[i];
-      const ShrdConstFVecPtr &dataenergies = d->channel_energies();
-      const ShrdConstFVecPtr &channel_counts = d->gamma_counts();
+      const std::shared_ptr<const std::vector<float>> &dataenergies = d->channel_energies();
+      const std::shared_ptr<const std::vector<float>> &channel_counts = d->gamma_counts();
       
       if( !dataenergies || !channel_counts )
       {
@@ -962,7 +963,7 @@ struct MeasurementInfoLessThan
   
   MeasurementInfoLessThan( int sample_num, int det_num )
   : sample_number( sample_num ), detector_number( det_num ) {}
-  bool operator()( const MeasurementShrdPtr& lhs, const MeasurementShrdPtr &dummy )
+  bool operator()( const std::shared_ptr<Measurement>& lhs, const std::shared_ptr<Measurement> &dummy )
   {
     assert( !dummy );
     if( !lhs )
@@ -983,12 +984,12 @@ struct MeasurementCalibInfo
   size_t nbin;
   vector<float> coefficients;
   vector< pair<float,float> > deviation_pairs_;
-  ShrdConstFVecPtr original_binning;
-  mutable ShrdConstFVecPtr binning;
+  std::shared_ptr<const std::vector<float>> original_binning;
+  mutable std::shared_ptr<const std::vector<float>> binning;
 
   string calib_id; //optional
   
-  MeasurementCalibInfo( MeasurementShrdPtr meas )
+  MeasurementCalibInfo( std::shared_ptr<Measurement> meas )
   {
     equation_type = meas->energy_calibration_model();
     nbin = meas->gamma_counts()->size();
@@ -1537,61 +1538,6 @@ std::string detector_name_from_remark( const std::string &remark )
 
 
 
-float time_duration_in_seconds( const std::string &duration )
-{
-  return time_duration_in_seconds( duration.c_str(), duration.size() );
-}
-
-
-float time_duration_in_seconds( const char *duration_str, const size_t len )
-{
-  float durration = 0.0f;
-
-  if( !duration_str || !len )
-    return durration;
-
-  const char *orig = duration_str;
-  const char *end = duration_str + len;
-  
-  while( duration_str < end )
-  {
-    while( (duration_str < end) && !isdigit(*duration_str) )
-      ++duration_str;
-
-    if( duration_str >= end )
-      break;
-
-    const char *num_start = duration_str;
-    while( (duration_str < end) && (isdigit(*duration_str) || duration_str[0]=='.') )
-      ++duration_str;
-    const char *num_end = duration_str;
-
-    float unit = 1.0;
-    char unitchar = (num_end<end) ? (*num_end) : 's';
-
-    if( unitchar=='s' || unitchar=='S' )
-      unit = 1.0;
-    else if( unitchar=='m' || unitchar=='M' )
-      unit = 60.0;
-    else if( unitchar=='h' || unitchar=='H' )
-      unit = 3600.0;
-
-    float num_val = 0.0;
-    const string numberstr( num_start, num_end );
-    if( toFloat( numberstr, num_val ) )
-    {
-      durration += num_val * unit;
-    }else
-    {
-      cerr << "Error parsing live time from '" << string(orig,orig+len) << "'" << endl;
-      return durration;
-    }
-  }//while( *duration_str )
-
-  return durration;
-}//float time_duration_in_seconds( const char *duration_str )
-
-
 float dose_units_usvPerH( const char *str, const size_t str_length )
 {
   if( !str )
@@ -1609,46 +1555,6 @@ float dose_units_usvPerH( const char *str, const size_t str_length )
 }//float dose_units_usvPerH( const char *str )
 
 
-bool likely_not_spec_file( const std::string &fullpath )
-{
-  const std::string extension = SpecUtils::file_extension( fullpath );
-  const std::string filename = SpecUtils::filename( fullpath );
-  const std::string dir = SpecUtils::parent_path( fullpath );
-  
-  const char * const bad_exts[] = { ".jpg", ".jpeg", ".zip", ".docx", ".png",
-      ".pdf", ".html", ".xtk3d", ".xtk", ".doc", /*".txt",*/ ".An1", ".rpt",
-      ".ufo", ".bmp", ".IIF", ".xls", ".xlsx", ".ds_store", ".kmz", ".msg",
-      ".exe", ".jp2", ".wmv", /*".gam",*/ ".pptx", ".htm", ".ppt", ".mht",
-      ".ldb", ".lis", ".zep", ".ana", ".eft", ".clb", ".lib", ".wav", ".gif",
-      ".wmf", /*".phd",*/ ".log", ".vi", ".incident", ".tiff", ".cab", ".ANS",
-      ".menc", ".tif", ".psd", ".mdb", ".drill", ".lnk", ".mov", ".rtf", ".shx",
-      ".dbf", ".prj", ".sbn", ".shb", ".inp1", ".bat", ".xps", ".svy", ".ini",
-      ".2", ".mp4", ".sql", ".gz", ".url", ".zipx", ".001", ".002", ".003",
-      ".html", ".sqlite3"
-  };
-  const size_t num_bad_exts = sizeof(bad_exts) / sizeof(bad_exts[0]);
-  
-  for( size_t i = 0; i < num_bad_exts; ++i )
-    if( SpecUtils::iequals_ascii(extension, bad_exts[i]) )
-      return true;
-    
-  if( //(filename.find("_AA_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
-     //|| (filename.find("_AN_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
-     filename.find("Neutron.n42") != std::string::npos
-     || filename.find(".xml.XML") != std::string::npos
-     || filename.find("results.xml") != std::string::npos
-     || filename.find("Rebin.dat") != std::string::npos
-     || filename.find("Detector.dat") != std::string::npos
-     || SpecUtils::iends_with( fullpath, ".html")
-     || filename.empty()
-     || filename[0] == '.'
-     || extension.empty()
-     || SpecUtils::file_size(fullpath) < 100
-     )
-    return true;
-  
-  return false;
-}//bool likely_not_spec_file( const boost::filesystem::path &file )
 
 
 bool is_candidate_n42_file( const char * data )
@@ -2022,7 +1928,7 @@ void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
         const rapidxml::xml_node<char> *Detector = extention_node->first_node( "Detector", 8 );
       
         if( SampleRealTime && SampleRealTime->value_size() )
-          result.real_time_ = time_duration_in_seconds( SampleRealTime->value(), SampleRealTime->value_size() );
+          result.real_time_ = time_duration_string_to_seconds( SampleRealTime->value(), SampleRealTime->value_size() );
 
         result.detector_ = xml_value_str(Detector);
       }//if( extention_node )
@@ -2243,8 +2149,8 @@ size_t Measurement::memmorysize() const
 }//size_t Measurement::memmorysize() const
 
 
-bool Measurement::compare_by_sample_det_time( const MeasurementConstShrdPtr &lhs,
-                           const MeasurementConstShrdPtr &rhs )
+bool Measurement::compare_by_sample_det_time( const std::shared_ptr<const Measurement> &lhs,
+                           const std::shared_ptr<const Measurement> &rhs )
 {
   if( !lhs || !rhs )
     return false;
@@ -2511,7 +2417,7 @@ void MeasurementInfo::combine_gamma_channels( const size_t ncombine,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  MeasurementShrdPtr m = measurment( meas );
+  std::shared_ptr<Measurement> m = measurment( meas );
   if( !m )
     throw runtime_error( "MeasurementInfo::combine_gamma_channels(): measurment"
                          " passed in is not owned by this MeasurementInfo." );
@@ -2598,7 +2504,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
 
   
 #if( PERFORM_DEVELOPER_CHECKS )
-  ShrdConstFVecPtr old_binning = channel_energies_;
+  std::shared_ptr<const std::vector<float>> old_binning = channel_energies_;
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
   
   const int n = static_cast<int>( keep_first_channel );
@@ -2714,7 +2620,7 @@ void MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   
-  MeasurementShrdPtr m = measurment( meas );
+  std::shared_ptr<Measurement> m = measurment( meas );
   if( !m )
     throw runtime_error( "MeasurementInfo::truncate_gamma_channels(): measurment"
                         " passed in is not owned by this MeasurementInfo." );
@@ -2887,9 +2793,9 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
   const rapidxml::xml_node<char> *start_time_node = xml_first_node_nso( spectrum, "StartTime", xmlns );
 
   if( live_time_node )
-    live_time_ = time_duration_in_seconds( live_time_node->value(), live_time_node->value_size() );
+    live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
   if( real_time_node )
-    real_time_ = time_duration_in_seconds( real_time_node->value(), real_time_node->value_size() );
+    real_time_ = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
   
   if( !start_time_node && spectrum->parent() )
     start_time_node = xml_first_node_nso( spectrum->parent(), "StartTime", xmlns );
@@ -2914,7 +2820,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
   const rapidxml::xml_attribute<char> *compress_attrib = channel_data_node->first_attribute(
                                                           "Compression", 11 );
   const string compress_type = xml_value_str( compress_attrib );
-  ShrdFVecPtr contents = std::make_shared< vector<float> >();
+  std::shared_ptr<std::vector<float>> contents = std::make_shared< vector<float> >();
   
   //Some variants have a <Data> tag under the <ChannelData> node.
   const rapidxml::xml_node<char> *datanode = xml_first_node_nso( channel_data_node, "Data", xmlns );
@@ -3241,7 +3147,7 @@ void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml
 }//set_n42_2006_spectrum_calibration_from_id
 
 
-MeasurementShrdPtr MeasurementInfo::measurment( MeasurementConstShrdPtr meas )
+std::shared_ptr<Measurement> MeasurementInfo::measurment( std::shared_ptr<const Measurement> meas )
 {
   for( const auto &m : measurements_ )
   {
@@ -3249,18 +3155,18 @@ MeasurementShrdPtr MeasurementInfo::measurment( MeasurementConstShrdPtr meas )
       return m;
   }//for( const auto &m : measurements_ )
   
-  return MeasurementShrdPtr();
+  return std::shared_ptr<Measurement>();
 }//measurment(...)
 
 //set_live_time(...) and set_real_time(...) update both the measurment
 //  you pass in, as well as *this.  If measurment is invalid, or not in
 //  measurments_, than an exception is thrown.
 void MeasurementInfo::set_live_time( const float lt,
-                                     MeasurementConstShrdPtr meas )
+                                     std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_live_time(...): measurment"
                          " passed in didnt belong to this MeasurementInfo" );
@@ -3271,11 +3177,11 @@ void MeasurementInfo::set_live_time( const float lt,
   modified_ = modifiedSinceDecode_ = true;
 }//set_live_time(...)
 
-void MeasurementInfo::set_real_time( const float rt, MeasurementConstShrdPtr meas )
+void MeasurementInfo::set_real_time( const float rt, std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_real_time(...): measurment"
                          " passed in didnt belong to this MeasurementInfo" );
@@ -3287,13 +3193,13 @@ void MeasurementInfo::set_real_time( const float rt, MeasurementConstShrdPtr mea
 }//set_real_time(...)
 
 
-void MeasurementInfo::add_measurment( MeasurementShrdPtr meas,
+void MeasurementInfo::add_measurment( std::shared_ptr<Measurement> meas,
                                       const bool doCleanup )
 {
   if( !meas )
     return;
   
-  vector< MeasurementShrdPtr >::iterator meas_pos;
+  vector< std::shared_ptr<Measurement> >::iterator meas_pos;
   
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -3331,7 +3237,7 @@ void MeasurementInfo::add_measurment( MeasurementShrdPtr meas,
   int samplenum = meas->sample_number();
   
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                         MeasurementShrdPtr(),
+                         std::shared_ptr<Measurement>(),
                          MeasurementInfoLessThan(samplenum, detnum) );
   
   if( meas_pos != measurements_.end()
@@ -3340,7 +3246,7 @@ void MeasurementInfo::add_measurment( MeasurementShrdPtr meas,
   {
     const int last_sample = (*sample_numbers_.rbegin());
     meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                            MeasurementShrdPtr(),
+                            std::shared_ptr<Measurement>(),
                             MeasurementInfoLessThan(last_sample, detnum) );
     if( meas_pos == measurements_.end()
        || (*meas_pos)->sample_number()!=last_sample
@@ -3375,17 +3281,17 @@ void MeasurementInfo::add_measurment( MeasurementShrdPtr meas,
     sample_to_measurments_.clear();
     for( size_t measn = 0; measn < measurements_.size(); ++measn )
     {
-      MeasurementShrdPtr &meas = measurements_[measn];
+      std::shared_ptr<Measurement> &meas = measurements_[measn];
       sample_to_measurments_[meas->sample_number_].push_back( measn );
     }
   }//if( doCleanup ) / else
   
   modified_ = modifiedSinceDecode_ = true;
-}//void add_measurment( MeasurementShrdPtr meas, bool doCleanup )
+}//void add_measurment( std::shared_ptr<Measurement> meas, bool doCleanup )
 
 
 void MeasurementInfo::remove_measurments(
-                                         const vector<MeasurementConstShrdPtr> &meas )
+                                         const vector<std::shared_ptr<const Measurement>> &meas )
 {
   if( meas.empty() )
     return;
@@ -3404,7 +3310,7 @@ void MeasurementInfo::remove_measurments(
   
   for( size_t i = 0; i < meas.size(); ++i )
   {
-    const MeasurementConstShrdPtr &m = meas[i];
+    const std::shared_ptr<const Measurement> &m = meas[i];
     
     map<int, std::vector<size_t> >::const_iterator iter
     = sample_to_measurments_.find( m->sample_number_ );
@@ -3427,7 +3333,7 @@ void MeasurementInfo::remove_measurments(
     }//if( iter != sample_to_measurments_.end() )
   }//for( size_t i = 0; i < meas.size(); ++i )
   
-  vector< MeasurementShrdPtr > surviving;
+  vector< std::shared_ptr<Measurement> > surviving;
   surviving.reserve( norigmeas - meas.size() );
   for( size_t i = 0; i < norigmeas; ++i )
   {
@@ -3440,8 +3346,8 @@ void MeasurementInfo::remove_measurments(
   /*
    for( size_t i = 0; i < meas.size(); ++i )
    {
-   const MeasurementConstShrdPtr &m = meas[i];
-   vector< MeasurementShrdPtr >::iterator pos;
+   const std::shared_ptr<const Measurement> &m = meas[i];
+   vector< std::shared_ptr<Measurement> >::iterator pos;
    if( measurements_.size() > 100 )
    {
    pos = std::lower_bound( measurements_.begin(), measurements_.end(),
@@ -3460,10 +3366,10 @@ void MeasurementInfo::remove_measurments(
   
   cleanup_after_load();
   modified_ = modifiedSinceDecode_ = true;
-}//void remove_measurments( const vector<MeasurementConstShrdPtr> meas )
+}//void remove_measurments( const vector<std::shared_ptr<const Measurement>> meas )
 
 
-void MeasurementInfo::remove_measurment( MeasurementConstShrdPtr meas,
+void MeasurementInfo::remove_measurment( std::shared_ptr<const Measurement> meas,
                                          const bool doCleanup )
 {
   if( !meas )
@@ -3471,7 +3377,7 @@ void MeasurementInfo::remove_measurment( MeasurementConstShrdPtr meas,
   
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
-  vector< MeasurementShrdPtr >::iterator pos
+  vector< std::shared_ptr<Measurement> >::iterator pos
                 = std::find( measurements_.begin(), measurements_.end(), meas );
   
   if( pos == measurements_.end() )
@@ -3522,14 +3428,14 @@ void MeasurementInfo::remove_measurment( MeasurementConstShrdPtr meas,
   }//if( doCleanup ) / else
   
   modified_ = modifiedSinceDecode_ = true;
-}//void remove_measurment( MeasurementShrdPtr meas, bool doCleanup );
+}//void remove_measurment( std::shared_ptr<Measurement> meas, bool doCleanup );
 
 
 void MeasurementInfo::set_start_time( const boost::posix_time::ptime &timestamp,
-                    const MeasurementConstShrdPtr meas  )
+                    const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_start_time(...): measurment"
                         " passed in didnt belong to this MeasurementInfo" );
@@ -3539,10 +3445,10 @@ void MeasurementInfo::set_start_time( const boost::posix_time::ptime &timestamp,
 }//set_start_time(...)
 
 void MeasurementInfo::set_remarks( const std::vector<std::string> &remarks,
-                 const MeasurementConstShrdPtr meas  )
+                 const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_remarks(...): measurment"
                         " passed in didnt belong to this MeasurementInfo" );
@@ -3552,10 +3458,10 @@ void MeasurementInfo::set_remarks( const std::vector<std::string> &remarks,
 }//set_remarks(...)
 
 void MeasurementInfo::set_source_type( const Measurement::SourceType type,
-                                    const MeasurementConstShrdPtr meas )
+                                    const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_source_type(...): measurment"
                         " passed in didnt belong to this MeasurementInfo" );
@@ -3567,10 +3473,10 @@ void MeasurementInfo::set_source_type( const Measurement::SourceType type,
 
 void MeasurementInfo::set_position( double longitude, double latitude,
                                     boost::posix_time::ptime position_time,
-                                    const MeasurementConstShrdPtr meas )
+                                    const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_position(...): measurment"
                         " passed in didnt belong to this MeasurementInfo" );
@@ -3607,10 +3513,10 @@ void MeasurementInfo::set_position( double longitude, double latitude,
 
 
 void MeasurementInfo::set_title( const std::string &title,
-                                 const MeasurementConstShrdPtr meas )
+                                 const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_title(...): measurment"
                         " passed in didnt belong to this MeasurementInfo" );
@@ -3623,10 +3529,10 @@ void MeasurementInfo::set_title( const std::string &title,
 
 void MeasurementInfo::set_contained_neutrons( const bool contained,
                                              const float counts,
-                                             const MeasurementConstShrdPtr meas )
+                                             const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  MeasurementShrdPtr ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
     throw runtime_error( "MeasurementInfo::set_containtained_neutrons(...): "
                         "measurment passed in didnt belong to this "
@@ -3733,7 +3639,7 @@ int MeasurementInfo::occupancy_number_from_remarks() const
 }//int occupancy_number_from_remarks() const
 
 
-MeasurementConstShrdPtr MeasurementInfo::measurement( const int sample_number,
+std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sample_number,
                                              const std::string &det_name ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -3745,18 +3651,18 @@ MeasurementConstShrdPtr MeasurementInfo::measurement( const int sample_number,
   {
     cerr << "Didnt find detector named '" << det_name
          << "' in detector_names_" << endl;
-    return MeasurementConstShrdPtr();
+    return std::shared_ptr<const Measurement>();
   }//if( det_name_iter == detector_names_.end() )
 
   const size_t det_index = det_name_iter - detector_names_.begin();
   const int detector_number = detector_numbers_[det_index];
 
   return measurement( sample_number, detector_number );
-}//MeasurementConstShrdPtr measurement( const int, const string & )
+}//std::shared_ptr<const Measurement> measurement( const int, const string & )
 
 
 
-MeasurementConstShrdPtr MeasurementInfo::measurement( const int sample_number,
+std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sample_number,
                                                const int detector_number ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -3774,19 +3680,19 @@ MeasurementConstShrdPtr MeasurementInfo::measurement( const int sample_number,
           return measurements_[ind];
     }//if( pos != sample_to_measurments_.end() )
     
-    return MeasurementConstShrdPtr();
+    return std::shared_ptr<const Measurement>();
   }//if( properties_flags_ & kNotSampleDetectorTimeSorted )
   
   
-  std::vector< MeasurementShrdPtr >::const_iterator meas_pos;
+  std::vector< std::shared_ptr<Measurement> >::const_iterator meas_pos;
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                          MeasurementShrdPtr(),
+                          std::shared_ptr<Measurement>(),
                           MeasurementInfoLessThan(sample_number, detector_number) );
   if( meas_pos == measurements_.end()
      || (*meas_pos)->sample_number()!=sample_number
      || (*meas_pos)->detector_number()!=detector_number )
   {
-    return MeasurementConstShrdPtr();
+    return std::shared_ptr<const Measurement>();
   }//if( meas_pos == measurements_.end() )
 
   return *meas_pos;
@@ -3798,7 +3704,7 @@ MeasurementConstShrdPtr MeasurementInfo::measurement( const int sample_number,
 //    if( meas->sample_number_==sample_number && meas->detector_number==detector_number )
 //    {
 //      assert( meas_pos != measurements_.end() );
-//      MeasurementShrdPtr lb = *meas_pos;
+//      std::shared_ptr<Measurement> lb = *meas_pos;
 //      if( lb.get() != meas.get() )
 //      {
 //        for( const auto &meas : measurements_ )
@@ -3809,16 +3715,16 @@ MeasurementConstShrdPtr MeasurementInfo::measurement( const int sample_number,
 //    }
 //  cerr << "Didnt find detector " << detector_number << " for sample number "
 //       << sample_number_ << endl;
-//  return MeasurementConstShrdPtr();
-}//MeasurementConstShrdPtr measurement( const int , onst int )
+//  return std::shared_ptr<const Measurement>();
+}//std::shared_ptr<const Measurement> measurement( const int , onst int )
 
 
 
-vector<MeasurementConstShrdPtr> MeasurementInfo::sample_measurements( const int sample ) const
+vector<std::shared_ptr<const Measurement>> MeasurementInfo::sample_measurements( const int sample ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
-  vector< MeasurementConstShrdPtr > answer;
+  vector< std::shared_ptr<const Measurement> > answer;
 
   std::map<int, std::vector<size_t> >::const_iterator pos;
   pos = sample_to_measurments_.find( sample );
@@ -3835,7 +3741,7 @@ vector<MeasurementConstShrdPtr> MeasurementInfo::sample_measurements( const int 
   /*
   //get all measurements_ cooresponding to 'sample_number', where
   //  sample_number may not be a zero based index (eg may start at one)
-  vector< MeasurementConstShrdPtr > answer;
+  vector< std::shared_ptr<const Measurement> > answer;
 
   if( measurements_.empty() )
     return answer;
@@ -3847,7 +3753,7 @@ vector<MeasurementConstShrdPtr> MeasurementInfo::sample_measurements( const int 
 
   return answer;
   */
-}//vector<const MeasurementConstShrdPtr> measurements( const int sample ) const
+}//vector<const std::shared_ptr<const Measurement>> measurements( const int sample ) const
 
 
 
@@ -3856,9 +3762,9 @@ vector<MeasurementConstShrdPtr> MeasurementInfo::sample_measurements( const int 
 
 
 void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
-                                      const DeviationPairVec &dev_pairs,
+                                      const std::vector<std::pair<float,float>> &dev_pairs,
                                       SpecUtils::EnergyCalType type,
-                                      ShrdConstFVecPtr binning )
+                                      std::shared_ptr<const std::vector<float>> binning )
 {
   // Note: this will run multiple times per calibration
 
@@ -3917,14 +3823,14 @@ void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
 
 
 void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
-                                const DeviationPairVec &dev_pairs,
+                                const std::vector<std::pair<float,float>> &dev_pairs,
                                 SpecUtils::EnergyCalType type )
 {
   if( !gamma_counts_ || gamma_counts_->empty() )
     throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
                               "gamma_counts_ must be defined");
 
-  ShrdConstFVecPtr binning;
+  std::shared_ptr<const std::vector<float>> binning;
   const size_t nbin = gamma_counts_->size(); //channel_energies_->size();
 
   switch( type )
@@ -3953,8 +3859,8 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
 
 
 void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
-                                const DeviationPairVec &dev_pairs,
-                                ShrdConstFVecPtr binning,
+                                const std::vector<std::pair<float,float>> &dev_pairs,
+                                std::shared_ptr<const std::vector<float>> binning,
                                 SpecUtils::EnergyCalType type )
 {
   rebin_by_lower_edge( binning );
@@ -3976,7 +3882,7 @@ void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
 
 
 
-void Measurement::rebin_by_lower_edge( ShrdConstFVecPtr new_binning_shrd )
+void Measurement::rebin_by_lower_edge( std::shared_ptr<const std::vector<float>> new_binning_shrd )
 {
   if( new_binning_shrd.get() == channel_energies_.get() )
     return;
@@ -3992,7 +3898,7 @@ void Measurement::rebin_by_lower_edge( ShrdConstFVecPtr new_binning_shrd )
       throw runtime_error( "rebin_by_lower_edge: no initial binning" );
     
     const size_t new_nbin = new_binning_shrd->size();
-    ShrdFVecPtr rebinned_gamma_counts( new vector<float>(new_nbin) );
+    std::shared_ptr<std::vector<float>> rebinned_gamma_counts( new vector<float>(new_nbin) );
     
     SpecUtils::rebin_by_lower_edge( *channel_energies_, *gamma_counts_,
                             *new_binning_shrd, *rebinned_gamma_counts );
@@ -5100,8 +5006,8 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   {
     for( const string detname : lhs.detector_names_ )
     {
-      MeasurementConstShrdPtr lhsptr = lhs.measurement( sample, detname );
-      MeasurementConstShrdPtr rhsptr = rhs.measurement( sample, detname );
+      std::shared_ptr<const Measurement> lhsptr = lhs.measurement( sample, detname );
+      std::shared_ptr<const Measurement> rhsptr = rhs.measurement( sample, detname );
       
       if( (!lhsptr) != (!rhsptr) )
       {
@@ -5339,7 +5245,7 @@ const MeasurementInfo &MeasurementInfo::operator=( const MeasurementInfo &rhs )
   measurements_.clear();
   for( size_t i = 0; i < rhs.measurements_.size(); ++i )
   {
-    MeasurementShrdPtr ptr( new Measurement( *rhs.measurements_[i] ) );
+    std::shared_ptr<Measurement> ptr( new Measurement( *rhs.measurements_[i] ) );
     measurements_.push_back( ptr );
   }
 
@@ -5715,8 +5621,8 @@ bool MeasurementInfo::load_file( const std::string &filename,
 
 
 
-bool comp_by_start_time_source( const MeasurementShrdPtr &lhs,
-                           const MeasurementShrdPtr &rhs )
+bool comp_by_start_time_source( const std::shared_ptr<Measurement> &lhs,
+                           const std::shared_ptr<Measurement> &rhs )
 {
   if( !lhs || !rhs)
     return (!rhs) < (!lhs);
@@ -5751,7 +5657,7 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
 
   if( measurements_.size() > 500 )
   {
-    vector<MeasurementShrdPtr> sorted_meas, sorted_foreground, sorted_calibration, sorted_background;
+    vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background;
 
     sorted_meas.reserve( measurements_.size() );
 
@@ -5788,7 +5694,7 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
   
     
     int sample_num = 1;
-    vector<MeasurementShrdPtr>::iterator start, end, iter;
+    vector<std::shared_ptr<Measurement>>::iterator start, end, iter;
     for( start=end=sorted_meas.begin(); start != sorted_meas.end(); start=end )
     {
       //Incremement sample numbers for each new start time.
@@ -5805,7 +5711,7 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
 
       for( iter = start; iter != end; ++iter )
       {
-        MeasurementShrdPtr &meas = *iter;
+        std::shared_ptr<Measurement> &meas = *iter;
 
         if( detectors.count(meas->detector_name_) == 0 )
           detectors[meas->detector_name_] = 0;
@@ -5824,7 +5730,7 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
 
   }else
   {
-    typedef std::map<int, vector<MeasurementShrdPtr > > SampleToMeasMap;
+    typedef std::map<int, vector<std::shared_ptr<Measurement> > > SampleToMeasMap;
     typedef map<boost::posix_time::ptime, SampleToMeasMap > TimeToSamplesMeasMap;
     
     TimeToSamplesMeasMap time_meas_map;
@@ -5897,7 +5803,7 @@ bool MeasurementInfo::has_unique_sample_and_detector_numbers() const
   const size_t nmeas = measurements_.size();
   for( size_t i = 0; i < nmeas; ++i )
   {
-    const MeasurementShrdPtr &m = measurements_[i];
+    const std::shared_ptr<Measurement> &m = measurements_[i];
     vector<int> &meass = sampleNumsToSamples[m->sample_number_];
     
     if( std::find(meass.begin(),meass.end(),m->detector_number_) != meass.end() )
@@ -5910,7 +5816,7 @@ bool MeasurementInfo::has_unique_sample_and_detector_numbers() const
       timesSet.insert( m->start_time_ );
     if( timesSet.size() > 1 )
       return false;
-  }//for( MeasurementShrdPtr &m : measurements_ )
+  }//for( std::shared_ptr<Measurement> &m : measurements_ )
   
   return true;
 }//bool has_unique_sample_and_detector_numbers() const
@@ -6029,7 +5935,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     
     for( size_t meas_index = 0; meas_index < measurements_.size(); ++meas_index )
     {
-      MeasurementShrdPtr &meas = measurements_[meas_index];
+      std::shared_ptr<Measurement> &meas = measurements_[meas_index];
       
       namepos = find( names.begin(), names.end(), meas->detector_name_ );
       if( namepos != names.end() )
@@ -6129,7 +6035,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       if( allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
       {
         //TODO: look to see if we can grab a calibration for this same detector from another sample.
-        //MeasurementShrdPtr &meas = measurements_[meas_index];
+        //std::shared_ptr<Measurement> &meas = measurements_[meas_index];
         //invalid_calib
       }//if( allZeros )
       
@@ -6300,7 +6206,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     
     for( size_t measn = 0; measn < nmeas; ++measn )
     {
-      MeasurementShrdPtr &meas = measurements_[measn];
+      std::shared_ptr<Measurement> &meas = measurements_[measn];
       sample_numbers_.insert( meas->sample_number_ );
       sample_to_measurments_[meas->sample_number_].push_back( measn );
       
@@ -6459,7 +6365,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     if( is_passthrough )
     {
       const int first_sample_number = *sample_numbers_.begin();
-      map<string,MeasurementShrdPtr> det_meas_map;
+      map<string,std::shared_ptr<Measurement>> det_meas_map;
       
       for( const auto &meas : measurements_ )
       {
@@ -6493,7 +6399,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
           meas->energy_calibration_model_  = det_meas_map[name]->energy_calibration_model_;
           meas->calibration_coeffs_ = det_meas_map[name]->calibration_coeffs_;
         }
-      }//for( const MeasurementShrdPtr &meas : measurements_ )
+      }//for( const std::shared_ptr<Measurement> &meas : measurements_ )
     }//if( is_passthrough )
     
     
@@ -6531,7 +6437,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
         {
           if( meas->gamma_counts_->size() > 16 )//dont rebin SAIC or LUDLUMS
           {
-            rebin_by_eqn( poly_eqn, DeviationPairVec(), SpecUtils::EnergyCalType::Polynomial );
+            rebin_by_eqn( poly_eqn, std::vector<std::pair<float,float>>(), SpecUtils::EnergyCalType::Polynomial );
             break;
           }//if( meas->gamma_counts_->size() > 16 )
         }//for( const auto &meas : measurements_ )
@@ -7463,7 +7369,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
 
   std::shared_ptr<DetectorAnalysis> analysis;
   
-  MeasurementShrdPtr meas = std::make_shared<Measurement>();
+  std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
 
   if( !input.good() )
     return false;
@@ -8034,7 +7940,7 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
   }//if( det_nums.empty() )
   
   
-  MeasurementShrdPtr summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
   
   if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
     return false;
@@ -8311,7 +8217,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   
   //const size_t initialpos = output.tellp();
   
-  MeasurementShrdPtr summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
   
   if( !summed || !summed->gamma_counts() )
     return false;
@@ -9841,7 +9747,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
     detectors_analysis_ = analysis;
     instrument_id_      = instrument_id;
       
-    MeasurementShrdPtr meas = std::make_shared<Measurement>();
+    std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
     
     if( sLVTMDT < 0.0 || sRLTMDT < 0.0 )
       throw runtime_error( "Invalid real or live time" );
@@ -10398,10 +10304,10 @@ bool MeasurementInfo::write_binary_exploranium_gr130v0( std::ostream &output ) c
         coeffs.push_back( delta_e / noutchannel );
         
         std::shared_ptr<const vector<float> > new_binning =
-        SpecUtils::polynomial_binning( coeffs, noutchannel, DeviationPairVec() );
+        SpecUtils::polynomial_binning( coeffs, noutchannel, std::vector<std::pair<float,float>>() );
         
         meas.rebin_by_lower_edge( new_binning );
-        meas.recalibrate_by_eqn( coeffs, DeviationPairVec(),
+        meas.recalibrate_by_eqn( coeffs, std::vector<std::pair<float,float>>(),
                                 SpecUtils::EnergyCalType::Polynomial, new_binning );
       }//
       
@@ -10523,10 +10429,10 @@ bool MeasurementInfo::write_binary_exploranium_gr135v2( std::ostream &output ) c
         coeffs.push_back( delta_e / noutchannel );
         
         std::shared_ptr<const vector<float> > new_binning =
-             SpecUtils::polynomial_binning( coeffs, noutchannel, DeviationPairVec() );
+             SpecUtils::polynomial_binning( coeffs, noutchannel, std::vector<std::pair<float,float>>() );
         
         meas.rebin_by_lower_edge( new_binning );
-        meas.recalibrate_by_eqn( coeffs, DeviationPairVec(),
+        meas.recalibrate_by_eqn( coeffs, std::vector<std::pair<float,float>>(),
                                 SpecUtils::EnergyCalType::Polynomial, new_binning );
       }//
       
@@ -10647,7 +10553,7 @@ bool MeasurementInfo::write_d3_html( ostream &ostr,
     }//if( det_nums.empty() )
   
   
-    MeasurementShrdPtr summed = sum_measurements( sample_nums, detectors );
+    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
   
     if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
       return false;
@@ -10689,7 +10595,7 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
     }//if( det_nums.empty() )
     
     
-    MeasurementShrdPtr summed = sum_measurements( sample_nums, detectors );
+    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
     
     if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
       return false;
@@ -10842,9 +10748,9 @@ struct SpectrumNodeDecodeWorker
       m_doc( doc_node )
   {}
   
-  static void filter_valid_measurments( vector< MeasurementShrdPtr > &meass )
+  static void filter_valid_measurments( vector< std::shared_ptr<Measurement> > &meass )
   {
-    vector< MeasurementShrdPtr > valid_meass;
+    vector< std::shared_ptr<Measurement> > valid_meass;
     valid_meass.reserve( meass.size() );
     
     for( auto &meas : meass )
@@ -10855,7 +10761,7 @@ struct SpectrumNodeDecodeWorker
 
       if( meas->title_ != SpectrumNodeDecodeWorker_failed_decode_title )
         valid_meass.push_back( meas );
-    }//for( MeasurementShrdPtr &meas : meass )
+    }//for( std::shared_ptr<Measurement> &meas : meass )
     
     meass.swap( valid_meass );
   }
@@ -10908,7 +10814,7 @@ struct SpectrumNodeDecodeWorker
             boost::posix_time::time_duration thisdelta = startptime - m_meas->start_time_;
             if( thisdelta < boost::posix_time::time_duration(0,0,0) )
               thisdelta = -thisdelta;
-            //const float realtime = time_duration_in_seconds(realtime->value(), realtime->value_size());
+            //const float realtime = time_duration_string_to_seconds(realtime->value(), realtime->value_size());
             
             if( thisdelta < boost::posix_time::time_duration(0,0,10) )
               m_meas->set_n42_2006_count_dose_data_info( dose_data, m_analysis_info, m_mutex );
@@ -10985,7 +10891,7 @@ struct GrossCountNodeDecodeWorker
 
 
 void MeasurementInfo::set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
-                                            std::vector<MeasurementShrdPtr> &measurs_to_update )
+                                            std::vector<std::shared_ptr<Measurement>> &measurs_to_update )
 {
   if( !info_node )
     return;
@@ -11285,7 +11191,7 @@ void Measurement::set_n42_2006_count_dose_data_info( const rapidxml::xml_node<ch
       if( !realtime_node || !realtime_node->value_size() )
         throw runtime_error( "Couldnt find realtime for neutron count rate" );
       
-      const float realtime = time_duration_in_seconds( realtime_node->value(),
+      const float realtime = time_duration_string_to_seconds( realtime_node->value(),
                                                   realtime_node->value_size() );
       if( realtime <= 0.0f )
         throw runtime_error( "Couldnt read realtime" );
@@ -11376,7 +11282,7 @@ void Measurement::set_n42_2006_count_dose_data_info( const rapidxml::xml_node<ch
     thisana.remark_ = xml_value_str( remark_node );
     //thisana.start_time_ = time_from_string( xml_value_str(start_time_node).c_str() );
     if( real_time_node && real_time_node->value_size() )
-      thisana.real_time_ = time_duration_in_seconds( real_time_node->value(),
+      thisana.real_time_ = time_duration_string_to_seconds( real_time_node->value(),
                                                 real_time_node->value_size() );
     if( dose_node && dose_node->value_size() )
     {
@@ -11401,7 +11307,7 @@ void Measurement::set_n42_2006_count_dose_data_info( const rapidxml::xml_node<ch
   }//if( neutron detector ) / else( gamma detector )
 
 
-}//void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data, MeasurementShrdPtr m )
+}//void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data, std::shared_ptr<Measurement> m )
 
 
 
@@ -11474,7 +11380,7 @@ void Measurement::set_n42_2006_gross_count_node_info( const rapidxml::xml_node<c
 
 
 void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node<char> *det_data_node,
-                              std::vector<MeasurementShrdPtr> &measurs_to_update )
+                              std::vector<std::shared_ptr<Measurement>> &measurs_to_update )
 {
   string xmlns = get_n42_xmlns(det_data_node);
   if( xmlns.empty() && det_data_node && det_data_node->parent() )
@@ -11490,7 +11396,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
   Measurement::OccupancyStatus occupied = Measurement::UnknownOccupancyStatus;
 
   if( sample_real_time_node && sample_real_time_node->value_size() )
-    real_time = time_duration_in_seconds( sample_real_time_node->value(), sample_real_time_node->value_size() );
+    real_time = time_duration_string_to_seconds( sample_real_time_node->value(), sample_real_time_node->value_size() );
 
   if( start_time_node )
      start_time = time_from_string( xml_value_str(start_time_node).c_str() );
@@ -11533,13 +11439,13 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
     if( meas->contained_neutron_ && meas->live_time_ < 0.000001f
        && (!meas->gamma_counts_ || meas->gamma_counts_->empty()) )
       meas->live_time_ = meas->real_time_;
-  }//foeach( MeasurementShrdPtr &meas, measurements_this_node )
+  }//foeach( std::shared_ptr<Measurement> &meas, measurements_this_node )
 }//void set_n42_2006_detector_data_node_info(  )
 
 
 void MeasurementInfo::set_n42_2006_measurment_location_information(
                           const rapidxml::xml_node<char> *measured_item_info_node,
-                          std::vector<MeasurementShrdPtr> added_measurements )
+                          std::vector<std::shared_ptr<Measurement>> added_measurements )
 {
   if( !measured_item_info_node )
     return;
@@ -11639,7 +11545,7 @@ void MeasurementInfo::set_n42_2006_measurment_location_information(
       meas->latitude_      = latitude;
       meas->longitude_     = longitude;
       meas->position_time_ = position_time;
-    }//for( MeasurementShrdPtr &meas : measurements_this_node )
+    }//for( std::shared_ptr<Measurement> &meas : measurements_this_node )
   }//if( !valid(latitude) &&  !valid(longitude) )
     
   if( !meas_loc_name )
@@ -11822,12 +11728,12 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
                 //For nucsafe g4 predator
                 const rapidxml::xml_attribute<char> *det_attrib = XML_FIRST_ATTRIB(dose, "DetectorType");
                 const rapidxml::xml_node<char> *backrate_node = xml_first_node_nso(dose, "BackgroundRate", "Nucsafe:");
-                MeasurementShrdPtr back = measurements_[nearestindex?0:1];
+                std::shared_ptr<Measurement> back = measurements_[nearestindex?0:1];
                 
                 if( !back->contained_neutron_
                    && det_attrib && backrate_node && XML_VALUE_ICOMPARE(det_attrib, "Neutron") )
                 {
-                  MeasurementShrdPtr back = measurements_[nearestindex?0:1];
+                  std::shared_ptr<Measurement> back = measurements_[nearestindex?0:1];
                   float rate;
                   if( xml_value_to_flt( backrate_node, rate) )
                   {
@@ -11861,7 +11767,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     {
       if( locationNodes[i] && (i<measurements_.size()) && measurements_[i] )
       {
-        vector<MeasurementShrdPtr> addedmeas( 1, measurements_[i] );
+        vector<std::shared_ptr<Measurement>> addedmeas( 1, measurements_[i] );
         set_n42_2006_measurment_location_information( locationNodes[i], addedmeas );
       }//if( locationNodes[i] && measurements_[i] )
     }//for( size_t i = 0; i < locationNodes.size(); ++i )
@@ -11876,7 +11782,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     {
       if( instInfoNodes[i] && (i<measurements_.size()) && measurements_[i] )
       {
-        vector<MeasurementShrdPtr> addedmeas( 1, measurements_[i] );
+        vector<std::shared_ptr<Measurement>> addedmeas( 1, measurements_[i] );
         set_n42_2006_deviation_pair_info( instInfoNodes[i], addedmeas );
       }//if( instInfoNodes[i] && measurements_[i] )
     }//for( size_t i = 0; i < locationNodes.size(); ++i )
@@ -11918,14 +11824,14 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
       rapidxml::xml_attribute<char> *inspection_attrib = XML_FIRST_ATTRIB( measurement, "dndons:Inspection" );
       inspection_ = xml_value_str( inspection_attrib );
       
-      vector<MeasurementShrdPtr> added_measurements;
+      vector<std::shared_ptr<Measurement>> added_measurements;
       
       //<SpectrumMeasurement> nodes should be under <DetectorMeasurement> nodes,
       //  however "Avid Annotated Spectrum" files (see ref40568MWYJS)
       //  dont obey this.  I didnt test this addition very well.
       if( measurement->first_node( "SpectrumMeasurement", 19 ) )
       {
-        vector< MeasurementShrdPtr > measurements_this_node;
+        vector< std::shared_ptr<Measurement> > measurements_this_node;
         
         
         for( const rapidxml::xml_node<char> *spec_meas_node = xml_first_node_nso( measurement, "SpectrumMeasurement", xmlns );
@@ -11964,7 +11870,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
            det_data_node;
            det_data_node = XML_NEXT_TWIN(det_data_node) )
       {
-        vector< MeasurementShrdPtr > measurements_this_node, gross_counts_this_node;
+        vector< std::shared_ptr<Measurement> > measurements_this_node, gross_counts_this_node;
         
         //For files that give multiple spectra, but with different energy
         //  calibration, for the same data, lets keep track of the <Spectrum>
@@ -12158,10 +12064,10 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
         
         if( combined_gam_neut_spec )
         {
-          vector< MeasurementShrdPtr >::iterator begin, end, newend;
+          vector< std::shared_ptr<Measurement> >::iterator begin, end, newend;
           begin = measurements_this_node.begin();
           end = measurements_this_node.end();
-          newend = std::remove( begin, end, MeasurementShrdPtr() );
+          newend = std::remove( begin, end, std::shared_ptr<Measurement>() );
           measurements_this_node.resize( newend - begin );
         }//if( combined_gam_neut_spec )
       
@@ -12240,7 +12146,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
         
         for( size_t multical_index = 0; multical_index < multiple_cals.size(); ++multical_index )
         {
-          MeasurementShrdPtr &meas = multiple_cals[multical_index].first;
+          std::shared_ptr<Measurement> &meas = multiple_cals[multical_index].first;
           const rapidxml::xml_node<char> *second_coefs = multiple_cals[multical_index].second;
           
           if( find( measurements_this_node.begin(), measurements_this_node.end(), meas ) == measurements_this_node.end() )
@@ -12259,7 +12165,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
           auto lowerbins = std::make_shared<vector<float> >( oldcounts->begin(), oldcounts->begin()+1024 );
           auto upperbins = std::make_shared<vector<float> >( oldcounts->begin()+1024, oldcounts->end() );
           
-          MeasurementShrdPtr newmeas = std::make_shared<Measurement>(*meas);
+          std::shared_ptr<Measurement> newmeas = std::make_shared<Measurement>(*meas);
           
           meas->gamma_counts_ = lowerbins;
           meas->gamma_count_sum_ = 0.0;
@@ -12314,8 +12220,8 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
         //Look for multiple spectra representing the same data, but that actually
         // have different calibrations.
         // See comments for #energy_cal_variants and #keep_energy_cal_variant.
-        const vector< MeasurementShrdPtr >::const_iterator datastart = measurements_this_node.begin();
-        const vector< MeasurementShrdPtr >::const_iterator dataend = measurements_this_node.end();
+        const vector< std::shared_ptr<Measurement> >::const_iterator datastart = measurements_this_node.begin();
+        const vector< std::shared_ptr<Measurement> >::const_iterator dataend = measurements_this_node.end();
         
         for( size_t i = 1; i < meas_to_spec_node.size(); ++i )
         {
@@ -12376,7 +12282,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             gamma_data;
             gamma_data = XML_NEXT_TWIN(gamma_data) )
         {
-          vector< MeasurementShrdPtr > measurements_this_node;
+          vector< std::shared_ptr<Measurement> > measurements_this_node;
           vector<const rapidxml::xml_node<char> *> spectrum_nodes;
           
           const rapidxml::xml_node<char> *node = xml_first_node_nso( gamma_data, "BackgroundSpectrum", "dndoarns:" );
@@ -12610,7 +12516,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
             continue;
         }
         
-        const float realtimesec = time_duration_in_seconds( realtime_node->value(), realtime_node->value_size() );
+        const float realtimesec = time_duration_string_to_seconds( realtime_node->value(), realtime_node->value_size() );
         
         if( !has_counts_node && realtimesec > 0.0 )
           counts *= realtimesec;
@@ -12924,7 +12830,7 @@ void Measurement::add_calibration_to_2012_N42_xml(
     EnergyCalibration->append_node( node );
   }//if( coefname )
   
-  const DeviationPairVec &devpairs = deviation_pairs();
+  const std::vector<std::pair<float,float>> &devpairs = deviation_pairs();
   if( devpairs.size() )
   {
     stringstream EnergyValuesStrm, EnergyDeviationValuesStrm;
@@ -12955,12 +12861,12 @@ void Measurement::add_calibration_to_2012_N42_xml(
 
 
 //getCalibrationToSpectrumMap(...): builds map from the binning shared vector to
-//  the the index of a MeasurementShrdPtr that has that binning
+//  the the index of a std::shared_ptr<Measurement> that has that binning
 namespace
 {
 typedef std::map< std::shared_ptr< const std::vector<float> >, size_t > BinningToIndexMap;
 
-void insert_N42_calibration_nodes( const std::vector< MeasurementShrdPtr > &measurements,
+void insert_N42_calibration_nodes( const std::vector< std::shared_ptr<Measurement> > &measurements,
                                 ::rapidxml::xml_node<char> *RadInstrumentData,
                                 std::mutex &xmldocmutex,
                                 BinningToIndexMap &calToSpecMap )
@@ -12970,7 +12876,7 @@ void insert_N42_calibration_nodes( const std::vector< MeasurementShrdPtr > &meas
   
   for( size_t i = 0; i < measurements.size(); ++i )
   {
-    const MeasurementShrdPtr &meas = measurements[i];
+    const std::shared_ptr<Measurement> &meas = measurements[i];
     
     if( !meas || !meas->gamma_counts() || meas->gamma_counts()->empty() )
       continue;
@@ -13701,7 +13607,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
       
       for( int sample : sample_numbers_ )
       {
-        MeasurementConstShrdPtr m = measurement( sample, detector_numbers_[i] );
+        std::shared_ptr<const Measurement> m = measurement( sample, detector_numbers_[i] );
         if( m && m->gamma_counts_ && !m->gamma_counts_->empty())
         {
           hasgamma = true;
@@ -13780,7 +13686,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     vector<size_t> calid;
     for( size_t i = 0; i < smeas.size(); ++i )
     {
-      const ShrdConstFVecPtr &binning = smeas[i]->channel_energies();
+      const std::shared_ptr<const std::vector<float>> &binning = smeas[i]->channel_energies();
       calid.push_back( calToSpecMap[binning] );
     }
     
@@ -13912,7 +13818,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
 /*
   for( size_t i = 0; i < measurements_.size(); ++i )
   {
-    const ShrdConstFVecPtr &binning = measurements_[i]->channel_energies();
+    const std::shared_ptr<const std::vector<float>> &binning = measurements_[i]->channel_energies();
 
     workerpool.post( std::bind( &Measurement::add_to_2012_N42_xml, measurements_[i],
                                   RadInstrumentData,
@@ -14822,7 +14728,7 @@ void get_2012_N42_energy_calibrations( map<string,MeasurementCalibInfo> &calibra
 
 
 
-void MeasurementInfo::decode_2012_N42_detector_state_and_quality( MeasurementShrdPtr meas,
+void MeasurementInfo::decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
                                                            const rapidxml::xml_node<char> *meas_node )
 {
   using rapidxml::internal::compare;
@@ -14919,7 +14825,7 @@ void MeasurementInfo::decode_2012_N42_detector_state_and_quality( MeasurementShr
 
 
 void MeasurementInfo::decode_2012_N42_rad_measurment_node(
-                                     vector< MeasurementShrdPtr > &measurments,
+                                     vector< std::shared_ptr<Measurement> > &measurments,
                                      const rapidxml::xml_node<char> *meas_node,
                                      const IdToDetectorType *id_to_dettype_ptr,
                                      DetectorToCalibInfo *calibrations_ptr,
@@ -15005,7 +14911,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     if( !real_time_node )
       real_time_node = meas_node->first_node( "RealTime", 8 );
     if( real_time_node && real_time_node->value_size() )
-      real_time = time_duration_in_seconds( real_time_node->value(), real_time_node->value_size() );
+      real_time = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
   
     rapidxml::xml_node<char> *occupancy_node = meas_node->first_node( "OccupancyIndicator", 18 );
     if( occupancy_node && occupancy_node->value_size() )
@@ -15016,7 +14922,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         occupied = Measurement::NotOccupied;
     }//if( occupancy_node && occupancy_node->value_size() )
 
-    vector< MeasurementShrdPtr > spectrum_meas, neutron_meas;
+    vector< std::shared_ptr<Measurement> > spectrum_meas, neutron_meas;
     
     //Lets track the Measurement to calibration id value incase multiple spectra
     //  are given for the same detector and <RadMeasurement>, but with different
@@ -15100,7 +15006,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           //  see notes in create_2012_N42_xml() and add_spectra_to_measurment_node_in_2012_N42_xml()
           //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
           remark = SpecUtils::trim_copy( remark.substr(9) );
-          meas->real_time_ = time_duration_in_seconds( remark );
+          meas->real_time_ = time_duration_string_to_seconds( remark );
           
           use_remark_real_time = (meas->real_time_ > 0.0);
         }else if( SpecUtils::istarts_with( remark, "Title:") )
@@ -15164,7 +15070,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         if( !real_time_node )
           real_time_node = XML_FIRST_NODE(spectrum_node, "RealTime");
         if( real_time_node )
-           meas->real_time_ = time_duration_in_seconds( real_time_node->value(), real_time_node->value_size() );
+           meas->real_time_ = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
       }
       
       
@@ -15179,7 +15085,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       meas->occupied_ = occupied;
     
       if( live_time_node && live_time_node->value_size() )
-        meas->live_time_ = time_duration_in_seconds( live_time_node->value(), live_time_node->value_size() );
+        meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
       
       auto gamma_counts = std::make_shared<vector<float>>();
     
@@ -15450,7 +15356,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
         {
           //See notes in equivalent portion of code for the <Spectrum> tag
           remark = SpecUtils::trim_copy( remark.substr(9) );
-          meas->real_time_ = time_duration_in_seconds( remark );
+          meas->real_time_ = time_duration_string_to_seconds( remark );
           use_remark_real_time = (meas->real_time_ > 0.0f);
         }else if( SpecUtils::istarts_with( remark, "Title:") )
         {
@@ -15469,7 +15375,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       meas->occupied_ = occupied;
     
       if( live_time_node && live_time_node->value_size() )
-        meas->live_time_ = time_duration_in_seconds( live_time_node->value(), live_time_node->value_size() );
+        meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
       
       const rapidxml::xml_node<char> *RadItemState = XML_FIRST_NODE(meas_node, "RadItemState");
       const rapidxml::xml_node<char> *StateVector  = xml_first_node( RadItemState, "StateVector" );
@@ -15504,13 +15410,13 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       neutron_meas.push_back( meas );
     }//for( loop over GrossCounts Node )
   
-    vector<MeasurementShrdPtr> meas_to_add;
+    vector<std::shared_ptr<Measurement>> meas_to_add;
     if( spectrum_meas.size() == neutron_meas.size() )
     {
       for( size_t i = 0; i < spectrum_meas.size(); ++i )
       {
-        MeasurementShrdPtr &gamma = spectrum_meas[i];
-        MeasurementShrdPtr &neutron = neutron_meas[i];
+        std::shared_ptr<Measurement> &gamma = spectrum_meas[i];
+        std::shared_ptr<Measurement> &neutron = neutron_meas[i];
       
         gamma->neutron_counts_ = neutron->neutron_counts_;
         gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
@@ -15526,7 +15432,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       }//for( size_t i = 0; i < spectrum_meas.size(); ++i )
     }else
     {
-      vector< pair<MeasurementShrdPtr,MeasurementShrdPtr> > gamma_and_neut_pairs;
+      vector< pair<std::shared_ptr<Measurement>,std::shared_ptr<Measurement>> > gamma_and_neut_pairs;
       for( size_t i = 0; i < spectrum_meas.size(); ++i )
       {
         if( !spectrum_meas[i] )
@@ -15555,8 +15461,8 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       
       for( size_t i = 0; i < gamma_and_neut_pairs.size(); ++i )
       {
-        MeasurementShrdPtr &gamma = gamma_and_neut_pairs[i].first;
-        MeasurementShrdPtr &neutron = gamma_and_neut_pairs[i].second;
+        std::shared_ptr<Measurement> &gamma = gamma_and_neut_pairs[i].first;
+        std::shared_ptr<Measurement> &neutron = gamma_and_neut_pairs[i].second;
         
         gamma->neutron_counts_ = neutron->neutron_counts_;
         gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
@@ -15593,11 +15499,11 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     //  with different calibrations.
     //  See comments for #energy_cal_variants and #keep_energy_cal_variant.
     //Note: as of 20160531, this duplicate spectrum stuff is untested.
-    const vector<MeasurementShrdPtr>::const_iterator beginmeas = meas_to_add.begin();
-    const vector<MeasurementShrdPtr>::const_iterator endmeas = meas_to_add.end();
+    const vector<std::shared_ptr<Measurement>>::const_iterator beginmeas = meas_to_add.begin();
+    const vector<std::shared_ptr<Measurement>>::const_iterator endmeas = meas_to_add.end();
     for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
     {
-      MeasurementShrdPtr &meas = meas_to_cal_id[i].first;
+      std::shared_ptr<Measurement> &meas = meas_to_cal_id[i].first;
       if( std::find(beginmeas,endmeas,meas) == endmeas )
         continue;
       
@@ -16045,7 +15951,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
           
           for( size_t i = 0; i < keepers.size(); ++i )
           {
-            MeasurementShrdPtr &m = keepers[i];
+            std::shared_ptr<Measurement> &m = keepers[i];
             const int oldsn = m->sample_number_;
             const vector<int>::const_iterator pos = std::find(sbegin, send, oldsn);
             m->sample_number_ = 1 + static_cast<int>(pos - sbegin);
@@ -16063,7 +15969,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
             std::shared_ptr<Measurement> gm_meas, gamma_meas, neut_meas;
             for( size_t i = 0; i < meass.size(); ++i )
             {
-              MeasurementShrdPtr &m = meass[i];
+              std::shared_ptr<Measurement> &m = meass[i];
               
               if( SpecUtils::iequals_ascii(m->detector_name_, "gamma" ) )
               {
@@ -16203,7 +16109,7 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
     if( !validchannel || channel_counts->empty() )
       throw runtime_error( "Couldnt parse channel counts" );
     
-    MeasurementShrdPtr meas = std::make_shared<Measurement>();
+    std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
     
     meas->gamma_counts_ = channel_counts;
     
@@ -16237,9 +16143,9 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
     }//if( GPS )
     
     if( RealTime && RealTime->value_size() )
-      meas->real_time_ = time_duration_in_seconds( RealTime->value(), RealTime->value_size() );
+      meas->real_time_ = time_duration_string_to_seconds( RealTime->value(), RealTime->value_size() );
     if( LiveTime && LiveTime->value_size() )
-      meas->live_time_ = time_duration_in_seconds( LiveTime->value(), LiveTime->value_size() );
+      meas->live_time_ = time_duration_string_to_seconds( LiveTime->value(), LiveTime->value_size() );
     
     
     std::shared_ptr<DetectorAnalysis> detana;
@@ -16480,12 +16386,12 @@ bool MeasurementInfo::load_N42_from_data( char *data, char *data_end )
 
 
 void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
-                                    const DeviationPairVec &dev_pairs,
+                                    const std::vector<std::pair<float,float>> &dev_pairs,
                                     SpecUtils::EnergyCalType type )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
-  ShrdConstFVecPtr new_binning; //to save memory we will only create one binning object
+  std::shared_ptr<const std::vector<float>> new_binning; //to save memory we will only create one binning object
 
   SpecUtilsAsync::ThreadPool threadpool;
 
@@ -16526,13 +16432,13 @@ void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
 }//void rebin_by_eqn( const std::vector<float> &eqn )
 
 
-void MeasurementInfo::recalibrate_by_lower_edge( ShrdConstFVecPtr binning )
+void MeasurementInfo::recalibrate_by_lower_edge( std::shared_ptr<const std::vector<float>> binning )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
   for( auto &m : measurements_ )
     if( m->gamma_counts_ && !m->gamma_counts_->empty() )
-      m->recalibrate_by_eqn( vector<float>(), DeviationPairVec(), SpecUtils::EnergyCalType::LowerChannelEdge, binning );
+      m->recalibrate_by_eqn( vector<float>(), std::vector<std::pair<float,float>>(), SpecUtils::EnergyCalType::LowerChannelEdge, binning );
   
   modified_ = modifiedSinceDecode_ = true;
 }//void recalibrate_by_lower_edge( const std::vector<float> &binning )
@@ -16540,13 +16446,13 @@ void MeasurementInfo::recalibrate_by_lower_edge( ShrdConstFVecPtr binning )
 
 
 void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
-                                          const DeviationPairVec &dev_pairs,
+                                          const std::vector<std::pair<float,float>> &dev_pairs,
                                           SpecUtils::EnergyCalType type )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
 
-  ShrdConstFVecPtr new_binning; //to save memory we will only create one binning object
+  std::shared_ptr<const std::vector<float>> new_binning; //to save memory we will only create one binning object
 
   for( auto &m : measurements_ )
   {
@@ -16555,7 +16461,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
 
     if( !new_binning )
     {
-      m->recalibrate_by_eqn( eqn, dev_pairs, type, ShrdConstFVecPtr() );
+      m->recalibrate_by_eqn( eqn, dev_pairs, type, std::shared_ptr<const std::vector<float>>() );
       new_binning = m->channel_energies_;
     }else
     {
@@ -16572,7 +16478,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
 //If only certain detectors are specified, then those detectors will be
 //  recalibrated, and the other detectors will be rebinned.
 void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
-                                          const DeviationPairVec &dev_pairs,
+                                          const std::vector<std::pair<float,float>> &dev_pairs,
                                           SpecUtils::EnergyCalType type,
                                           const vector<string> &detectors,
                                           const bool rebin_other_detectors )
@@ -16592,8 +16498,8 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
   }//if( detectors == detector_names_ )
   
   
-  ShrdConstFVecPtr new_binning; //to save memory we will only create one binning object
-  vector<MeasurementShrdPtr> rebinned;
+  std::shared_ptr<const std::vector<float>> new_binning; //to save memory we will only create one binning object
+  vector<std::shared_ptr<Measurement>> rebinned;
   
   for( auto &m : measurements_ )
   {
@@ -16607,7 +16513,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
       rebinned.push_back( m );
     }else if( !new_binning )
     {
-      m->recalibrate_by_eqn( eqn, dev_pairs, type, ShrdConstFVecPtr() );
+      m->recalibrate_by_eqn( eqn, dev_pairs, type, std::shared_ptr<const std::vector<float>>() );
       new_binning = m->channel_energies_;
     }else
     {
@@ -16692,7 +16598,7 @@ size_t MeasurementInfo::memmorysize() const
   size += instrument_model_.capacity()*sizeof(string::value_type);
   size += instrument_id_.capacity()*sizeof(string::value_type);
 
-  size += measurements_.capacity() * sizeof( MeasurementShrdPtr );
+  size += measurements_.capacity() * sizeof( std::shared_ptr<Measurement> );
 
   map< const vector<float> *, int> binnings;
   for( const auto &m : measurements_ )
@@ -16727,7 +16633,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
 {
   //XXX - this function is a quickly implemented (temporary?) hack
   size_t index;
-  ShrdConstFVecPtr binning_ptr;
+  std::shared_ptr<const std::vector<float>> binning_ptr;
     
   if( detector_numbers_.size() != det_to_use.size() )
     throw runtime_error( "MeasurementInfo::suggested_gamma_binning_index():"
@@ -16737,7 +16643,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
   
   for( size_t i = 0; i < measurements_.size(); ++i )
   {
-    const MeasurementShrdPtr &meas = measurements_[i];
+    const std::shared_ptr<Measurement> &meas = measurements_[i];
     
     if( !sample_numbers.empty() && !sample_numbers.count(meas->sample_number_) )
       continue;
@@ -16747,7 +16653,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
                                         meas->detector_number_ )
                               - detector_numbers_.begin();
     
-    const ShrdConstFVecPtr &thisbinning = meas->channel_energies();
+    const std::shared_ptr<const std::vector<float>> &thisbinning = meas->channel_energies();
     
     if( det_to_use.at(det_index) && !!thisbinning && !thisbinning->empty() )
     {
@@ -16813,11 +16719,11 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<i
   }//for( const int num : det_nums )
   
   return sum_measurements( sample_numbers, det_to_use );
-}//MeasurementShrdPtr sum_measurements(...)
+}//std::shared_ptr<Measurement> sum_measurements(...)
 
 
 
-MeasurementShrdPtr MeasurementInfo::sum_measurements( const set<int> &sample_num,
+std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &sample_num,
                                             const vector<int> &det_nums ) const
 {
   vector<bool> det_to_use( detector_numbers_.size(), false );
@@ -16838,9 +16744,9 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const set<int> &sample_num
 }//sum_measurements(...)
 
 
-MeasurementShrdPtr MeasurementInfo::sum_measurements( const set<int> &sample_num,
+std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &sample_num,
                                                      const vector<int> &det_nums,
-                                                     const MeasurementConstShrdPtr binTo ) const
+                                                     const std::shared_ptr<const Measurement> binTo ) const
 {
   vector<bool> det_to_use( detector_numbers_.size(), false );
   
@@ -16861,7 +16767,7 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const set<int> &sample_num
 
 
 
-MeasurementShrdPtr MeasurementInfo::sum_measurements(
+std::shared_ptr<Measurement> MeasurementInfo::sum_measurements(
                                          const std::set<int> &sample_numbers,
                                          const vector<bool> &det_to_use ) const
 {
@@ -16878,21 +16784,21 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements(
     calIndex = suggested_gamma_binning_index( sample_numbers, det_to_use );
   }catch(...)
   {
-    return MeasurementShrdPtr();
+    return std::shared_ptr<Measurement>();
   }
   
   return sum_measurements( sample_numbers, det_to_use, measurements_[calIndex] );
 }//sum_measurements(...)
 
 
-MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sample_numbers,
+std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<int> &sample_numbers,
                                       const vector<bool> &det_to_use,
-                                      const MeasurementConstShrdPtr binto ) const
+                                      const std::shared_ptr<const Measurement> binto ) const
 {
   if( !binto || measurements_.empty() )
-    return MeasurementShrdPtr();
+    return std::shared_ptr<Measurement>();
   
-  MeasurementShrdPtr dataH = std::make_shared<Measurement>();
+  std::shared_ptr<Measurement> dataH = std::make_shared<Measurement>();
   
   dataH->energy_calibration_model_  = binto->energy_calibration_model_;
   dataH->calibration_coeffs_ = binto->calibration_coeffs_;
@@ -16958,7 +16864,7 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sampl
     for( size_t index = 0; index < detector_names_.size(); ++index )
     {
       const std::string &det = detector_names_[index];
-      MeasurementConstShrdPtr meas = measurement( sample_number, det );
+      std::shared_ptr<const Measurement> meas = measurement( sample_number, det );
       
       if( !meas )
         continue;
@@ -17023,7 +16929,7 @@ MeasurementShrdPtr MeasurementInfo::sum_measurements( const std::set<int> &sampl
   }//for( const int sample_number : sample_numbers )
   
   if( !current_total_sample_num )
-    return dataH->contained_neutron_ ? dataH : MeasurementShrdPtr();
+    return dataH->contained_neutron_ ? dataH : std::shared_ptr<Measurement>();
   
   //If we are only summing one sample, we can preserve some additional
   //  information
@@ -17172,15 +17078,15 @@ size_t MeasurementInfo::num_gamma_channels() const
 
 struct KeepNBinSpectraStruct
 {
-  typedef std::vector< MeasurementShrdPtr >::const_iterator MeasVecIter;
+  typedef std::vector< std::shared_ptr<Measurement> >::const_iterator MeasVecIter;
 
   size_t m_nbin;
   MeasVecIter m_start, m_end;
-  std::vector< MeasurementShrdPtr > *m_keepers;
+  std::vector< std::shared_ptr<Measurement> > *m_keepers;
 
   KeepNBinSpectraStruct( size_t nbin,
                          MeasVecIter start, MeasVecIter end,
-                         std::vector< MeasurementShrdPtr > *keepers )
+                         std::vector< std::shared_ptr<Measurement> > *keepers )
     : m_nbin( nbin ), m_start( start ), m_end( end ), m_keepers( keepers )
   {
   }
@@ -17190,9 +17096,9 @@ struct KeepNBinSpectraStruct
     m_keepers->reserve( m_end - m_start );
     for( MeasVecIter iter = m_start; iter != m_end; ++iter )
     {
-      const MeasurementShrdPtr &m = *iter;
-      const ShrdConstFVecPtr channel_energies = (m ? m->channel_energies()
-                                                   : ShrdConstFVecPtr());
+      const std::shared_ptr<Measurement> &m = *iter;
+      const std::shared_ptr<const std::vector<float>> channel_energies = (m ? m->channel_energies()
+                                                   : std::shared_ptr<const std::vector<float>>());
 
       if( !( ( !channel_energies || channel_energies->size()!=m_nbin )
           && (channel_energies || !channel_energies->empty()) ) )
@@ -17212,7 +17118,7 @@ size_t MeasurementInfo::keep_n_bin_spectra_only( size_t nbin )
   size_t nremoved = 0;
   const size_t nstart = measurements_.size();
 
-  std::vector< MeasurementShrdPtr > newmeass;
+  std::vector< std::shared_ptr<Measurement> > newmeass;
   newmeass.reserve( nstart );
 
   if( nstart < 100 )
@@ -17234,7 +17140,7 @@ size_t MeasurementInfo::keep_n_bin_spectra_only( size_t nbin )
     if( (nstart % meas_per_thread) != 0 )
       nsections += 1;
 
-    vector< vector< MeasurementShrdPtr > > answers( nsections );
+    vector< vector< std::shared_ptr<Measurement> > > answers( nsections );
 
     size_t sec_num = 0;
     for( size_t pos = 0; pos < nstart; pos += meas_per_thread )
@@ -17257,7 +17163,7 @@ size_t MeasurementInfo::keep_n_bin_spectra_only( size_t nbin )
 
     for( size_t i = 0; i < nsections; ++i )
     {
-      const vector< MeasurementShrdPtr > &thismeas = answers[i];
+      const vector< std::shared_ptr<Measurement> > &thismeas = answers[i];
       newmeass.insert( newmeass.end(), thismeas.begin(), thismeas.end() );
     }//for( size_t i = 0; i < nsections; ++i )
     nremoved = nstart - newmeass.size();
@@ -17291,7 +17197,7 @@ size_t MeasurementInfo::remove_neutron_measurments()
 
   for( size_t i = 0; i < measurements_.size();  )
   {
-    MeasurementShrdPtr &m = measurements_[i];
+    std::shared_ptr<Measurement> &m = measurements_[i];
     if( m->contained_neutron_
         && (!m->channel_energies_ || m->channel_energies_->empty()) )
     {
@@ -17332,7 +17238,7 @@ set<string> MeasurementInfo::energy_cal_variants() const
 size_t MeasurementInfo::keep_energy_cal_variant( const std::string variant )
 {
   const string ending = "_intercal_" + variant;
-  std::vector< MeasurementShrdPtr > keepers;
+  std::vector< std::shared_ptr<Measurement> > keepers;
   
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -18262,7 +18168,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       }
 #endif
       
-      MeasurementConstShrdPtr meas = measurements_[i];
+      std::shared_ptr<const Measurement> meas = measurements_[i];
       
       if( !meas || ((!meas->gamma_counts_ || meas->gamma_counts_->empty()) && !meas->contained_neutron() ) )
       {
@@ -18825,7 +18731,7 @@ bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
   
   for( size_t i = 0; !unwrittendets.empty() && i < measurements_.size(); ++i )
   {
-    const MeasurementShrdPtr &meas = measurements_[i];
+    const std::shared_ptr<Measurement> &meas = measurements_[i];
     if( !meas )
       continue;
     
@@ -18874,7 +18780,7 @@ bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
   
   for( const int samplenum : sample_numbers_ )
   {
-    vector<MeasurementConstShrdPtr> meass = sample_measurements( samplenum );
+    vector<std::shared_ptr<const Measurement>> meass = sample_measurements( samplenum );
     if( meass.empty() )
       continue;
     
@@ -19524,7 +19430,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       sample_numbers_from_title[meas] = titlesamplenum;
     
     
-    map<MeasurementShrdPtr,int> sample_numbers_from_title;
+    map<std::shared_ptr<Measurement>,int> sample_numbers_from_title;
     
     sample_numbers[meas->detector_name_] = std::max( meas->sample_number_,
                                                     sample_numbers[meas->detector_name_] );
@@ -19811,7 +19717,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
       }//if( title_index < bytes_left )
     }//if( bytes_left >= 322 )
     
-    MeasurementShrdPtr meas = std::make_shared<Measurement>();
+    std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
     meas->live_time_ = liveTime;
     meas->real_time_ = realTime;
     meas->gamma_count_sum_ = gamma_sum;
@@ -19896,12 +19802,12 @@ bool MeasurementInfo::write_integer_chn( ostream &ostr, set<int> sample_nums,
       detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
   }//if( det_nums.empty() )
   
-  MeasurementShrdPtr summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
   
   if( !summed || !summed->gamma_counts() )
     return false;
   
-  const ShrdConstFVecPtr &fgammacounts = summed->gamma_counts();
+  const std::shared_ptr<const std::vector<float>> &fgammacounts = summed->gamma_counts();
   
   int16_t val16 = -1;
   ostr.write( (const char *)&val16, sizeof(int16_t) );
@@ -20388,7 +20294,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                         calibration_coeffs_[i] = cals[1+i];
                       channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_,
                                                              channels->size(),
-                                                             DeviationPairVec() );
+                                                             std::vector<std::pair<float,float>>() );
                       
                       break;
                     }//if( some reasonalbe number of channels )
@@ -20405,7 +20311,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }//if( the line was made of 4 numbers )
       }//if( fields.size() == 4 )
       
-      ShrdFVecPtr energies( new vector<float>() ), counts( new vector<float>());
+      std::shared_ptr<std::vector<float>> energies( new vector<float>() ), counts( new vector<float>());
       std::shared_ptr<vector<int> > channels( new vector<int>() );
 
       //After we hit a line that no longer starts with numbers, we actually want
@@ -20501,7 +20407,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           calibration_coeffs_[0] = 0.0f;
           calibration_coeffs_[1] = 3000.0f / std::max( counts->size()-1, size_t(1) );
 //        channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, counts->size(),
-//                                                           DeviationPairVec() );
+//                                                           std::vector<std::pair<float,float>>() );
         }
       }//if( energies ) / else channels
 
@@ -20563,13 +20469,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       if( (pos != fields.end()) && ((pos+1) != fields.end()) )
       {
         used = true;
-        live_time_ = time_duration_in_seconds( *(pos+1) );
+        live_time_ = time_duration_string_to_seconds( *(pos+1) );
       }
       pos = std::find( fields.begin(), fields.end(), "realtime" );
       if( (pos != fields.end()) && ((pos+1) != fields.end()) )
       {
         used = true;
-        real_time_ = time_duration_in_seconds( *(pos+1) );
+        real_time_ = time_duration_string_to_seconds( *(pos+1) );
       }
 
       try
@@ -20625,14 +20531,14 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       ++nlines_used;
       
       if( nfields > 1 )
-        live_time_ = time_duration_in_seconds( fields[1] );
+        live_time_ = time_duration_string_to_seconds( fields[1] );
     }else if( istarts_with( fields[0], "realtime" )
              || istarts_with( fields[0], "Real time" ) )
     {
       ++nlines_used;
       
       if( nfields > 1 )
-        real_time_ = time_duration_in_seconds( fields[1] );
+        real_time_ = time_duration_string_to_seconds( fields[1] );
     }else if( starts_with( fields[0], "neutroncount" ) )
     {
       ++nlines_used;
@@ -21637,7 +21543,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         if( line.empty() || npairs < 1 )
           continue;
         
-        DeviationPairVec pairs;
+        std::vector<std::pair<float,float>> pairs;
         
         while( SpecUtils::safe_get_line( istr, line ) )
         {
@@ -21861,8 +21767,8 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
   
     //each header will look like:
     // "1899715091 Oct. 09 2013  12:29:38 T counts Live time (s) 279.4 neutron 1 gieger 194"
-    std::vector< MeasurementShrdPtr > measurments;
-    std::vector< ShrdFVecPtr > gammacounts;
+    std::vector< std::shared_ptr<Measurement> > measurments;
+    std::vector< std::shared_ptr<std::vector<float>> > gammacounts;
     
     for( size_t i = 0; i < headers.size(); ++i )
     {
@@ -21870,7 +21776,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
       if( header.empty() )
         continue;
 
-      MeasurementShrdPtr meas( new Measurement() );
+      std::shared_ptr<Measurement> meas( new Measurement() );
       
       string::size_type pos = header.find( ' ' );
       if( pos == string::npos )
@@ -21940,7 +21846,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
         meas->remarks_.push_back( remark );
       }
       
-      ShrdFVecPtr channelcounts( new vector<float>() );
+      std::shared_ptr<std::vector<float>> channelcounts( new vector<float>() );
       channelcounts->reserve( 1024 );
       meas->gamma_counts_ = channelcounts;
       meas->gamma_count_sum_ = 0.0;
@@ -24000,7 +23906,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       std::vector<std::string>  remarks_;
       boost::posix_time::ptime  start_time_;
       std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
-      DeviationPairVec          deviation_pairs_;     //<energy,offset>
+      std::vector<std::pair<float,float>>          deviation_pairs_;     //<energy,offset>
        std::vector<float>        neutron_counts_;
       double latitude_;  //set to -999.9 if not specified
       double longitude_; //set to -999.9 if not specified
@@ -24079,7 +23985,7 @@ bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
   
   try
   {
-    MeasurementShrdPtr meas( new Measurement() );
+    std::shared_ptr<Measurement> meas( new Measurement() );
   
     string filedata;
     filedata.resize( filesize );
@@ -24554,7 +24460,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
     energycoef.push_back( gain );
     if( quadratic != 0.0 )
       energycoef.push_back( quadratic );
-    const DeviationPairVec devpairs;
+    const std::vector<std::pair<float,float>> devpairs;
     
     
     //Should check energyunits=="keV"
@@ -24939,7 +24845,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
   
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  MeasurementShrdPtr meas = std::make_shared<Measurement>();
+  std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
   
   const istream::pos_type orig_pos = input.tellg();
   

@@ -1331,4 +1331,46 @@ std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxl
   return is;
 }//safe_get_line(...)
   
+  
+bool likely_not_spec_file( const std::string &fullpath )
+{
+  const std::string extension = SpecUtils::file_extension( fullpath );
+  const std::string filename = SpecUtils::filename( fullpath );
+  const std::string dir = SpecUtils::parent_path( fullpath );
+  
+  const char * const bad_exts[] = { ".jpg", ".jpeg", ".zip", ".docx", ".png",
+    ".pdf", ".html", ".xtk3d", ".xtk", ".doc", /*".txt",*/ ".An1", ".rpt",
+    ".ufo", ".bmp", ".IIF", ".xls", ".xlsx", ".ds_store", ".kmz", ".msg",
+    ".exe", ".jp2", ".wmv", /*".gam",*/ ".pptx", ".htm", ".ppt", ".mht",
+    ".ldb", ".lis", ".zep", ".ana", ".eft", ".clb", ".lib", ".wav", ".gif",
+    ".wmf", /*".phd",*/ ".log", ".vi", ".incident", ".tiff", ".cab", ".ANS",
+    ".menc", ".tif", ".psd", ".mdb", ".drill", ".lnk", ".mov", ".rtf", ".shx",
+    ".dbf", ".prj", ".sbn", ".shb", ".inp1", ".bat", ".xps", ".svy", ".ini",
+    ".2", ".mp4", ".sql", ".gz", ".url", ".zipx", ".001", ".002", ".003",
+    ".html", ".sqlite3"
+  };
+  const size_t num_bad_exts = sizeof(bad_exts) / sizeof(bad_exts[0]);
+  
+  for( size_t i = 0; i < num_bad_exts; ++i )
+    if( SpecUtils::iequals_ascii(extension, bad_exts[i]) )
+      return true;
+  
+  if( //(filename.find("_AA_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
+     //|| (filename.find("_AN_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
+     filename.find("Neutron.n42") != std::string::npos
+     || filename.find(".xml.XML") != std::string::npos
+     || filename.find("results.xml") != std::string::npos
+     || filename.find("Rebin.dat") != std::string::npos
+     || filename.find("Detector.dat") != std::string::npos
+     || SpecUtils::iends_with( fullpath, ".html")
+     || filename.empty()
+     || filename[0] == '.'
+     || extension.empty()
+     || SpecUtils::file_size(fullpath) < 100
+     )
+    return true;
+  
+  return false;
+}//bool likely_not_spec_file( const boost::filesystem::path &file )
+
 }//namespace  SpecUtils
