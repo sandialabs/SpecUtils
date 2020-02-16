@@ -20,8 +20,8 @@
 
 #include "SpecUtils_config.h"
 
-#include "SpecUtils/UtilityFunctions.h"
-#include "SpecUtils/SpectrumDataStructs.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/EnergyCalibration.h"
 
 
 #include <set>
@@ -261,39 +261,39 @@ namespace
   
   
   //Begin wrapper functions
-  void loadFile( MeasurementInfo *info,
+  void loadFile( SpecUtils::SpecFile *info,
                  const std::string &filename,
-                 ParserType parser_type,
+                 SpecUtils::ParserType parser_type,
                  std::string file_ending_hint = "" )
   {
     const bool success = info->load_file( filename, parser_type, file_ending_hint );
     if( !success )
     {
-      if( parser_type == kAutoParser )
+      if( parser_type == SpecUtils::ParserType::kAutoParser )
         throw std::runtime_error( "Couldnt parse file " + filename );
       
       string type;
       switch( parser_type )
       {
-        case k2006Icd1Parser: type = "N42-2006"; break;
-        case K2012ICD1Parser: type = "N42-2012"; break;
-        case kSpcParser: type = "SPC"; break;
-        case kGR135Parser: type = "GR135"; break;
-        case kPcfParser: type = "PCF"; break;
-        case kChnParser: type = "CHN"; break;
-        case kIaeaParser: type = "IAEA"; break;
-        case kTxtOrCsvParser: type = "TXT or CSV"; break;
-        case kCnfParser: type = "CNF"; break;
-        case kTracsMpsParser: type = "MPS"; break;
-        case kSPMDailyFile: type = "SpectroscopicPortalMonitor"; break;
-        case kAmptekMca: type = "Amptek MCA"; break;
-        case kMicroRaider: type = "Micro Raider"; break;
-        case kAramParser: type = "Aram"; break;
-        case kOrtecListMode: type = "Ortec Listmode"; break;
-        case kLsrmSpe: type = "LSRM"; break;
-        case kTka: type = "TKA"; break;
-        case kMultiAct: type = "MultiAct"; break;
-        case kAutoParser: type = ""; break;
+        case SpecUtils::ParserType::k2006Icd1Parser: type = "N42-2006"; break;
+        case SpecUtils::ParserType::K2012ICD1Parser: type = "N42-2012"; break;
+        case SpecUtils::ParserType::kSpcParser: type = "SPC"; break;
+        case SpecUtils::ParserType::kGR135Parser: type = "GR135"; break;
+        case SpecUtils::ParserType::kPcfParser: type = "PCF"; break;
+        case SpecUtils::ParserType::kChnParser: type = "CHN"; break;
+        case SpecUtils::ParserType::kIaeaParser: type = "IAEA"; break;
+        case SpecUtils::ParserType::kTxtOrCsvParser: type = "TXT or CSV"; break;
+        case SpecUtils::ParserType::kCnfParser: type = "CNF"; break;
+        case SpecUtils::ParserType::kTracsMpsParser: type = "MPS"; break;
+        case SpecUtils::ParserType::kSPMDailyFile: type = "SpectroscopicPortalMonitor"; break;
+        case SpecUtils::ParserType::kAmptekMca: type = "Amptek MCA"; break;
+        case SpecUtils::ParserType::kMicroRaider: type = "Micro Raider"; break;
+        case SpecUtils::ParserType::kAramParser: type = "Aram"; break;
+        case SpecUtils::ParserType::kOrtecListMode: type = "Ortec Listmode"; break;
+        case SpecUtils::ParserType::kLsrmSpe: type = "LSRM"; break;
+        case SpecUtils::ParserType::kTka: type = "TKA"; break;
+        case SpecUtils::ParserType::kMultiAct: type = "MultiAct"; break;
+        case SpecUtils::ParserType::kAutoParser: type = ""; break;
       }//switch( parser_type )
       
       throw std::runtime_error( filename + " couldnt be parsed as a " + type + " file." );
@@ -304,22 +304,22 @@ namespace
   //I couldnt quite figure out how to get Python to play nicely with const
   //  references to smart pointers, so instead am using some thin wrapper
   //  functions to return a smart pointer by value.
-  std::shared_ptr< const std::vector<float> > channel_energies_wrapper( Measurement *meas )
+  std::shared_ptr< const std::vector<float> > channel_energies_wrapper( SpecUtils::Measurement *meas )
   {
     return meas->channel_energies();
   }
   
-  std::shared_ptr< const std::vector<float> > gamma_counts_wrapper( Measurement *meas )
+  std::shared_ptr< const std::vector<float> > gamma_counts_wrapper( SpecUtils::Measurement *meas )
   {
     return meas->gamma_counts();
   }
   
-  boost::posix_time::ptime start_time_wrapper( Measurement *meas )
+  boost::posix_time::ptime start_time_wrapper( SpecUtils::Measurement *meas )
   {
     return meas->start_time();
   }
   
-  boost::python::list get_measurments_wrapper( MeasurementInfo *info )
+  boost::python::list get_measurments_wrapper( SpecUtils::SpecFile *info )
   {
     //This function overcomes an issue where returning a vector of
     //  std::shared_ptr<const Measurment> objects to python, and then in python
@@ -331,7 +331,7 @@ namespace
     return l;
   }
   
-  boost::python::list Measurment_remarks_wrapper( Measurement *info )
+  boost::python::list Measurment_remarks_wrapper( SpecUtils::Measurement *info )
   {
     boost::python::list l;
     for( const string &p : info->remarks() )
@@ -340,7 +340,7 @@ namespace
   }
   
   
-  boost::python::list MeasurmentInfo_remarks_wrapper( MeasurementInfo *info )
+  boost::python::list MeasurmentInfo_remarks_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->remarks() )
@@ -348,7 +348,7 @@ namespace
     return l;
   }
   
-  boost::python::list gamma_channel_counts_wrapper( MeasurementInfo *info )
+  boost::python::list gamma_channel_counts_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( size_t p : info->gamma_channel_counts() )
@@ -356,7 +356,7 @@ namespace
     return l;
   }
   
-  boost::python::list sample_numbers_wrapper( MeasurementInfo *info )
+  boost::python::list sample_numbers_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( size_t p : info->sample_numbers() )
@@ -364,7 +364,7 @@ namespace
     return l;
   }
   
-  boost::python::list detector_numbers_wrapper( MeasurementInfo *info )
+  boost::python::list detector_numbers_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( size_t p : info->detector_numbers() )
@@ -372,7 +372,7 @@ namespace
     return l;
   }
   
-  boost::python::list neutron_detector_names_wrapper( MeasurementInfo *info )
+  boost::python::list neutron_detector_names_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->neutron_detector_names() )
@@ -381,7 +381,7 @@ namespace
   }
   
   
-  boost::python::list detector_names_wrapper( MeasurementInfo *info )
+  boost::python::list detector_names_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->detector_names() )
@@ -390,7 +390,7 @@ namespace
   }
   
   
-  std::shared_ptr<Measurement> sum_measurements_wrapper( MeasurementInfo *info,
+  std::shared_ptr<SpecUtils::Measurement> sum_measurements_wrapper( SpecUtils::SpecFile *info,
                                                           boost::python::list py_samplenums,
                                                           boost::python::list py_detnums )
   {
@@ -410,42 +410,42 @@ namespace
   
   
   
-  void writePcf_wrapper( MeasurementInfo *info, boost::python::object pystream )
+  void writePcf_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_pcf( output ) )
       throw std::runtime_error( "Failed to write PCF file." );
   }
   
-  void write2006N42_wrapper( MeasurementInfo *info, boost::python::object pystream )
+  void write2006N42_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_2006_N42( output ) )
       throw std::runtime_error( "Failed to write 2006 N42 file." );
   }
   
-  void write2012N42Xml_wrapper( MeasurementInfo *info, boost::python::object pystream )
+  void write2012N42Xml_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_2012_N42( output ) )
       throw std::runtime_error( "Failed to write 2012 N42 file." );
   }
   
-  void writeCsv_wrapper( MeasurementInfo *info, boost::python::object pystream )
+  void writeCsv_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_csv( output ) )
       throw std::runtime_error( "Failed to write CSV file." );
   }
   
-  void writeTxt_wrapper( MeasurementInfo *info, boost::python::object pystream )
+  void writeTxt_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_txt( output ) )
       throw std::runtime_error( "Failed to TXT file." );
   }
   
-  void writeIntegerChn_wrapper( MeasurementInfo *info,
+  void writeIntegerChn_wrapper( SpecUtils::SpecFile *info,
                                boost::python::object pystream,
                                boost::python::object py_sample_nums,
                                boost::python::object py_det_nums )
@@ -469,7 +469,7 @@ namespace
   }
   
   
-  void setInfoFromN42File_wrapper( MeasurementInfo *info,
+  void setInfoFromN42File_wrapper( SpecUtils::SpecFile *info,
                                   boost::python::object pystream )
   {
     boost::iostreams::stream<PythonInputDevice> input( pystream );
@@ -478,7 +478,7 @@ namespace
   }//setInfoFromN42File_wrapper(...)
   
   
-  void setInfoFromPcfFile_wrapper( MeasurementInfo *info,
+  void setInfoFromPcfFile_wrapper( SpecUtils::SpecFile *info,
                                   boost::python::object pystream )
   {
     boost::iostreams::stream<PythonInputDevice> input( pystream );
@@ -505,140 +505,145 @@ BOOST_PYTHON_MODULE(SpecUtils)
   docstring_options local_docstring_options( true, true, false );
   
   //Register our enums
-  enum_<ParserType>( "ParserType" )
-  .value( "k2006Icd1Parser", k2006Icd1Parser )
-  .value( "K2012ICD1Parser", K2012ICD1Parser )
-  .value( "kSpcParser", kSpcParser )
-  .value( "kGR135Parser", kGR135Parser )
-  .value( "kPcfParser", kPcfParser )
-  .value( "kChnParser", kChnParser )
-  .value( "kIaeaParser", kIaeaParser )
-  .value( "kTxtOrCsvParser", kTxtOrCsvParser )
-  .value( "kCnfParser", kCnfParser )
-  .value( "kTracsMpsParser", kTracsMpsParser )
-  .value( "kSPMDailyFile", kSPMDailyFile )
-  .value( "kAmptekMca", kAmptekMca )
-  .value( "kMicroRaider", kMicroRaider )
-  .value( "kOrtecListMode", kOrtecListMode )
-  .value( "kLsrmSpe", kLsrmSpe )
-  .value( "kTka", kTka )
-  .value( "kMultiAct", kMultiAct )
-  .value( "kAutoParser", kAutoParser );
+  enum_<SpecUtils::ParserType>( "ParserType" )
+  .value( "k2006Icd1Parser", SpecUtils::ParserType::k2006Icd1Parser )
+  .value( "K2012ICD1Parser", SpecUtils::ParserType::K2012ICD1Parser )
+  .value( "kSpcParser", SpecUtils::ParserType::kSpcParser )
+  .value( "kGR135Parser", SpecUtils::ParserType::kGR135Parser )
+  .value( "kPcfParser", SpecUtils::ParserType::kPcfParser )
+  .value( "kChnParser", SpecUtils::ParserType::kChnParser )
+  .value( "kIaeaParser", SpecUtils::ParserType::kIaeaParser )
+  .value( "kTxtOrCsvParser", SpecUtils::ParserType::kTxtOrCsvParser )
+  .value( "kCnfParser", SpecUtils::ParserType::kCnfParser )
+  .value( "kTracsMpsParser", SpecUtils::ParserType::kTracsMpsParser )
+  .value( "kSPMDailyFile", SpecUtils::ParserType::kSPMDailyFile )
+  .value( "kAmptekMca", SpecUtils::ParserType::kAmptekMca )
+  .value( "kMicroRaider", SpecUtils::ParserType::kMicroRaider )
+  .value( "kOrtecListMode", SpecUtils::ParserType::kOrtecListMode )
+  .value( "kLsrmSpe", SpecUtils::ParserType::kLsrmSpe )
+  .value( "kTka", SpecUtils::ParserType::kTka )
+  .value( "kMultiAct", SpecUtils::ParserType::kMultiAct )
+  .value( "kPhd", SpecUtils::ParserType::kPhd )
+  .value( "kLzs", SpecUtils::ParserType::kLzs )
+  .value( "kAutoParser", SpecUtils::ParserType::kAutoParser );
   
 
-enum_<DetectorType>( "DetectorType" )
-  .value( "kGR135Detector", kGR135Detector )
-  .value( "kIdentiFinderDetector", kIdentiFinderDetector )
-  .value( "kIdentiFinderNGDetector", kIdentiFinderNGDetector )
-  .value( "kIdentiFinderLaBr3Detector", kIdentiFinderLaBr3Detector )
-  .value( "kDetectiveDetector", kDetectiveDetector )
-  .value( "kDetectiveExDetector", kDetectiveExDetector )
-  .value( "kDetectiveEx100Detector", kDetectiveEx100Detector )
-  .value( "kDetectiveEx200Detector", kDetectiveEx200Detector )
-  .value( "kSAIC8Detector", kSAIC8Detector )
-  .value( "kFalcon5000", kFalcon5000 )
-  .value( "kUnknownDetector", kUnknownDetector )
-  .value( "kMicroDetectiveDetector", kMicroDetectiveDetector )
-  .value( "kMicroRaiderDetector", kMicroRaiderDetector )
-  .value( "kRadHunterNaI", kRadHunterNaI )
-  .value( "kRadHunterLaBr3", kRadHunterLaBr3 )
-  .value( "kRsi701", kRsi701 )
-  .value( "kRsi705", kRsi705 )
-  .value( "kAvidRsi", kAvidRsi )
-  .value( "kOrtecRadEagleNai", kOrtecRadEagleNai )
-  .value( "kOrtecRadEagleCeBr2Inch", kOrtecRadEagleCeBr2Inch )
-  .value( "kOrtecRadEagleCeBr3Inch", kOrtecRadEagleCeBr3Inch )
-  .value( "kOrtecRadEagleLaBr", kOrtecRadEagleLaBr )
-  .value( "kSam940LaBr3", kSam940LaBr3 )
-  .value( "kSam940", kSam940 )
-  .value( "kSam945", kSam945 );
+enum_<SpecUtils::DetectorType>( "DetectorType" )
+  .value( "kGR135Detector", SpecUtils::DetectorType::kGR135Detector )
+  .value( "kIdentiFinderDetector", SpecUtils::DetectorType::kIdentiFinderDetector )
+  .value( "kIdentiFinderNGDetector", SpecUtils::DetectorType::kIdentiFinderNGDetector )
+  .value( "kIdentiFinderLaBr3Detector", SpecUtils::DetectorType::kIdentiFinderLaBr3Detector )
+  .value( "kDetectiveDetector", SpecUtils::DetectorType::kDetectiveDetector )
+  .value( "kDetectiveExDetector", SpecUtils::DetectorType::kDetectiveExDetector )
+  .value( "kDetectiveEx100Detector", SpecUtils::DetectorType::kDetectiveEx100Detector )
+  .value( "kDetectiveEx200Detector", SpecUtils::DetectorType::kDetectiveEx200Detector )
+  .value( "kDetectiveX", SpecUtils::DetectorType::kDetectiveX )
+  .value( "kSAIC8Detector", SpecUtils::DetectorType::kSAIC8Detector )
+  .value( "kFalcon5000", SpecUtils::DetectorType::kFalcon5000 )
+  .value( "kMicroDetectiveDetector", SpecUtils::DetectorType::kMicroDetectiveDetector )
+  .value( "kMicroRaiderDetector", SpecUtils::DetectorType::kMicroRaiderDetector )
+  .value( "kRadHunterNaI", SpecUtils::DetectorType::kRadHunterNaI )
+  .value( "kRadHunterLaBr3", SpecUtils::DetectorType::kRadHunterLaBr3 )
+  .value( "kRsi701", SpecUtils::DetectorType::kRsi701 )
+  .value( "kRsi705", SpecUtils::DetectorType::kRsi705 )
+  .value( "kAvidRsi", SpecUtils::DetectorType::kAvidRsi )
+  .value( "kOrtecRadEagleNai", SpecUtils::DetectorType::kOrtecRadEagleNai )
+  .value( "kOrtecRadEagleCeBr2Inch", SpecUtils::DetectorType::kOrtecRadEagleCeBr2Inch )
+  .value( "kOrtecRadEagleCeBr3Inch", SpecUtils::DetectorType::kOrtecRadEagleCeBr3Inch )
+  .value( "kOrtecRadEagleLaBr", SpecUtils::DetectorType::kOrtecRadEagleLaBr )
+  .value( "kSam940LaBr3", SpecUtils::DetectorType::kSam940LaBr3 )
+  .value( "kSam940", SpecUtils::DetectorType::kSam940 )
+  .value( "kSam945", SpecUtils::DetectorType::kSam945 )
+  .value( "kSrpm210", SpecUtils::DetectorType::kSrpm210 )
+  .value( "kUnknownDetector", SpecUtils::DetectorType::kUnknownDetector );
+
 
 
   
   {//begin Measurement class scope
-    boost::python::scope Measurement_scope = class_<Measurement, boost::noncopyable>( "Measurement" )
-    .def( "liveTime", &Measurement::live_time, "The live time help" )
-    .def( "realTime", &Measurement::real_time )
-    .def( "containedNeutron", &Measurement::contained_neutron )
-    .def( "sampleNumber", &Measurement::sample_number )
-    .def( "title", &Measurement::title, return_value_policy<copy_const_reference>() )
-    .def( "occupied", &Measurement::occupied )
-    .def( "gammaCountSum", &Measurement::gamma_count_sum )
-    .def( "neutronCountsSum", &Measurement::neutron_counts_sum )
-    .def( "speed", &Measurement::speed )
-    .def( "latitude", &Measurement::latitude )
-    .def( "longitude", &Measurement::longitude )
-    .def( "hasGpsInfo", &Measurement::has_gps_info )
-    //      .def( "positionTime", &Measurement::position_time, return_internal_reference<>() )
-    .def( "detectorName", &Measurement::detector_name, return_value_policy<copy_const_reference>() )
-    .def( "detectorNumber", &Measurement::detector_number )
-    .def( "detectorType", &Measurement::detector_type, return_value_policy<copy_const_reference>() )
-    .def( "qualityStatus", &Measurement::quality_status )
-    .def( "sourceType", &Measurement::source_type )
-    .def( "energyCalibrationModel", &Measurement::energy_calibration_model )
-    //      .def( "remarks", &Measurement::remarks, return_internal_reference<>() )
+    boost::python::scope Measurement_scope = class_<SpecUtils::Measurement, boost::noncopyable>( "Measurement" )
+    .def( "liveTime", &SpecUtils::Measurement::live_time, "The live time help" )
+    .def( "realTime", &SpecUtils::Measurement::real_time )
+    .def( "containedNeutron", &SpecUtils::Measurement::contained_neutron )
+    .def( "sampleNumber", &SpecUtils::Measurement::sample_number )
+    .def( "title", &SpecUtils::Measurement::title, return_value_policy<copy_const_reference>() )
+    .def( "occupied", &SpecUtils::Measurement::occupied )
+    .def( "gammaCountSum", &SpecUtils::Measurement::gamma_count_sum )
+    .def( "neutronCountsSum", &SpecUtils::Measurement::neutron_counts_sum )
+    .def( "speed", &SpecUtils::Measurement::speed )
+    .def( "latitude", &SpecUtils::Measurement::latitude )
+    .def( "longitude", &SpecUtils::Measurement::longitude )
+    .def( "hasGpsInfo", &SpecUtils::Measurement::has_gps_info )
+    //      .def( "positionTime", &SpecUtils::Measurement::position_time, return_internal_reference<>() )
+    .def( "detectorName", &SpecUtils::Measurement::detector_name, return_value_policy<copy_const_reference>() )
+    .def( "detectorNumber", &SpecUtils::Measurement::detector_number )
+    .def( "detectorType", &SpecUtils::Measurement::detector_type, return_value_policy<copy_const_reference>() )
+    .def( "qualityStatus", &SpecUtils::Measurement::quality_status )
+    .def( "sourceType", &SpecUtils::Measurement::source_type )
+    .def( "energyCalibrationModel", &SpecUtils::Measurement::energy_calibration_model )
+    //      .def( "remarks", &SpecUtils::Measurement::remarks, return_internal_reference<>() )
     .def( "remarks", &Measurment_remarks_wrapper )
-    //    .def( "startTime", &Measurement::start_time, return_internal_reference<>() )
+    //    .def( "startTime", &SpecUtils::Measurement::start_time, return_internal_reference<>() )
     .def( "startTime", &start_time_wrapper )
-    .def( "calibrationCoeffs", &Measurement::calibration_coeffs, return_internal_reference<>() )
-    .def( "deviationPairs", &Measurement::deviation_pairs, return_internal_reference<>() )
+    .def( "calibrationCoeffs", &SpecUtils::Measurement::calibration_coeffs, return_internal_reference<>() )
+    .def( "deviationPairs", &SpecUtils::Measurement::deviation_pairs, return_internal_reference<>() )
     .def( "channelEnergies", &channel_energies_wrapper )
     .def( "gammaCounts", &gamma_counts_wrapper )
-    .def( "neutronCounts", &Measurement::neutron_counts, return_internal_reference<>() )
-    .def( "numGammaChannels", &Measurement::num_gamma_channels )
-    .def( "findGammaChannel", &Measurement::find_gamma_channel )
-    .def( "gammaChannelContent", &Measurement::gamma_channel_content )
-    .def( "gammaChannelLower", &Measurement::gamma_channel_lower )
-    .def( "gammaChannelCenter", &Measurement::gamma_channel_center )
-    .def( "gammaChannelUpper", &Measurement::gamma_channel_upper )
-    .def( "gammaChannelWidth", &Measurement::gamma_channel_width )
-    .def( "gammaIntegral", &Measurement::gamma_integral )
-    .def( "gammaChannelsSum", &Measurement::gamma_channels_sum )
+    .def( "neutronCounts", &SpecUtils::Measurement::neutron_counts, return_internal_reference<>() )
+    .def( "numGammaChannels", &SpecUtils::Measurement::num_gamma_channels )
+    .def( "findGammaChannel", &SpecUtils::Measurement::find_gamma_channel )
+    .def( "gammaChannelContent", &SpecUtils::Measurement::gamma_channel_content )
+    .def( "gammaChannelLower", &SpecUtils::Measurement::gamma_channel_lower )
+    .def( "gammaChannelCenter", &SpecUtils::Measurement::gamma_channel_center )
+    .def( "gammaChannelUpper", &SpecUtils::Measurement::gamma_channel_upper )
+    .def( "gammaChannelWidth", &SpecUtils::Measurement::gamma_channel_width )
+    .def( "gammaIntegral", &SpecUtils::Measurement::gamma_integral )
+    .def( "gammaChannelsSum", &SpecUtils::Measurement::gamma_channels_sum )
     .def( "channelChannelEnergies", &channel_energies_wrapper )
     .def( "gammaChannelCounts", &gamma_counts_wrapper )
-    .def( "gammaEnergyMin", &Measurement::gamma_energy_min )
-    .def( "gammaEnergyMax", &Measurement::gamma_energy_max )
+    .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
+    .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
     //... setter functions here
     ;
     
     
-    enum_<Measurement::SourceType>( "SourceType" )
-    .value( "Background", Measurement::Background )
-    .value( "Calibration", Measurement::Calibration )
-    .value( "Foreground", Measurement::Foreground )
-    .value( "IntrinsicActivity", Measurement::IntrinsicActivity )
-    .value( "UnknownSourceType", Measurement::UnknownSourceType )
+    enum_<SpecUtils::SourceType>( "SourceType" )
+    .value( "Background", SpecUtils::SourceType::Background )
+    .value( "Calibration", SpecUtils::SourceType::Calibration )
+    .value( "Foreground", SpecUtils::SourceType::Foreground )
+    .value( "IntrinsicActivity", SpecUtils::SourceType::IntrinsicActivity )
+    .value( "UnknownSourceType", SpecUtils::SourceType::UnknownSourceType )
     .export_values();
     
-    enum_<Measurement::EquationType>( "EquationType" )
-    .value( "Polynomial", Measurement::Polynomial )
-    .value( "FullRangeFraction", Measurement::FullRangeFraction )
-    .value( "LowerChannelEdge", Measurement::LowerChannelEdge )
-    .value( "InvalidEquationType", Measurement::InvalidEquationType )
-    .value( "UnspecifiedUsingDefaultPolynomial", Measurement::UnspecifiedUsingDefaultPolynomial )
+    enum_<SpecUtils::EnergyCalType>( "EnergyCalType" )
+    .value( "Polynomial", SpecUtils::EnergyCalType::Polynomial )
+    .value( "FullRangeFraction", SpecUtils::EnergyCalType::FullRangeFraction )
+    .value( "LowerChannelEdge", SpecUtils::EnergyCalType::LowerChannelEdge )
+    .value( "InvalidEquationType", SpecUtils::EnergyCalType::InvalidEquationType )
+    .value( "UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
     .export_values();
     
-    enum_<Measurement::QualityStatus>( "QualityStatus" )
-    .value( "Good", Measurement::Good )
-    .value( "Suspect", Measurement::Suspect )
-    .value( "Bad", Measurement::Bad )
-    .value( "Missing", Measurement::Missing )
+    enum_<SpecUtils::Measurement::QualityStatus>( "QualityStatus" )
+    .value( "Good", SpecUtils::Measurement::Good )
+    .value( "Suspect", SpecUtils::Measurement::Suspect )
+    .value( "Bad", SpecUtils::Measurement::Bad )
+    .value( "Missing", SpecUtils::Measurement::Missing )
     .export_values();
     
-    enum_<Measurement::OccupancyStatus>( "OccupancyStatus" )
-    .value( "NotOccupied", Measurement::NotOccupied )
-    .value( "Occupied", Measurement::Occupied )
-    .value( "UnknownOccupancyStatus", Measurement::UnknownOccupancyStatus )
+    enum_<SpecUtils::OccupancyStatus>( "OccupancyStatus" )
+    .value( "NotOccupied", SpecUtils::OccupancyStatus::NotOccupied )
+    .value( "Occupied", SpecUtils::OccupancyStatus::Occupied )
+    .value( "UnknownOccupancyStatus", SpecUtils::OccupancyStatus::UnknownOccupancyStatus )
     .export_values();
   }//end Measurement class scope
   
   
   //Register smart pointers we will use with python.
-  register_ptr_to_python< std::shared_ptr<Measurement> >();
-  register_ptr_to_python< std::shared_ptr<const Measurement> >();
+  register_ptr_to_python< std::shared_ptr<SpecUtils::Measurement> >();
+  register_ptr_to_python< std::shared_ptr<const SpecUtils::Measurement> >();
   register_ptr_to_python< std::shared_ptr< const std::vector<float> > >();
   
-  implicitly_convertible< std::shared_ptr<Measurement>, std::shared_ptr<const Measurement> >();
+  implicitly_convertible< std::shared_ptr<SpecUtils::Measurement>, std::shared_ptr<const SpecUtils::Measurement> >();
   
   
   //Register vectors of C++ types we use to python
@@ -648,8 +653,8 @@ enum_<DetectorType>( "DetectorType" )
   class_< std::vector<std::string> >("StringVec")
   .def( vector_indexing_suite<std::vector<std::string> >() );
   
-  class_< std::vector<std::shared_ptr<const Measurement> > >("MeasurmentVec")
-  .def( vector_indexing_suite<std::vector<std::shared_ptr<const Measurement> > >() );
+  class_< std::vector<std::shared_ptr<const SpecUtils::Measurement> > >("MeasurmentVec")
+  .def( vector_indexing_suite<std::vector<std::shared_ptr<const SpecUtils::Measurement> > >() );
   
   
   PyDateTime_IMPORT;
@@ -657,9 +662,9 @@ enum_<DetectorType>( "DetectorType" )
   boost::python::to_python_converter<const boost::posix_time::ptime, ptime_to_python_datetime>();
   
   //disambiguate a few functions that have overloads
-  std::shared_ptr<const Measurement> (MeasurementInfo::*meas_fcn_ptr)(size_t) const = &MeasurementInfo::measurement;
+  std::shared_ptr<const SpecUtils::Measurement> (SpecUtils::SpecFile::*meas_fcn_ptr)(size_t) const = &SpecUtils::SpecFile::measurement;
   
-  class_<MeasurementInfo>("MeasurementInfo")
+  class_<SpecUtils::SpecFile>("SpecFile")
   .def( "loadFile", &loadFile, loadFile_overloads(
         args( "file_name", "parser_type", "file_ending_hint" ),
         "Callling this function with parser_type==SpecUtils.ParserType.kAutoParser\n"
@@ -669,40 +674,40 @@ enum_<DetectorType>( "DetectorType" )
         "values for this might be: \"n24\", \"pcf\", \"chn\", etc. The entire filename\n"
         "can be passed in since only the letters after the last period are used.\n"
         "Throws RuntimeError if the file can not be opened or parsed." ) )
-  .def( "modified", &MeasurementInfo::modified,
+  .def( "modified", &SpecUtils::SpecFile::modified,
         "Indicates if object has been modified since last save." )
-  .def( "numMeasurements", &MeasurementInfo::num_measurements,
+  .def( "numMeasurements", &SpecUtils::SpecFile::num_measurements,
         "Returns the number of measurments (sometimes called records) parsed." )
   .def( "measurement", meas_fcn_ptr, args("i"),
         "Returns the i'th measurment, where valid values are between 0 and\n"
-        "MeasurementInfo.numMeasurements()-1.\n"
+        "SpecFile.numMeasurements()-1.\n"
         "Throws RuntimeError if i is out of range." )
   .def( "measurements", &get_measurments_wrapper,
         "Returns a list of all Measurment's that were parsed." )
-  .def( "gammaLiveTime", &MeasurementInfo::gamma_live_time,
+  .def( "gammaLiveTime", &SpecUtils::SpecFile::gamma_live_time,
         "Returns the sum of detector live times of the all the parsed Measurments." )
-  .def( "gammaRealTime", &MeasurementInfo::gamma_real_time,
+  .def( "gammaRealTime", &SpecUtils::SpecFile::gamma_real_time,
         "Returns the sum of detector real times (wall/clock time) of the all the\n"
         "parsed Measurments." )
-  .def( "gammaCountSum", &MeasurementInfo::gamma_count_sum,
+  .def( "gammaCountSum", &SpecUtils::SpecFile::gamma_count_sum,
         "Returns the summed number of gamma counts from all parsed Measurments." )
-  .def( "neutronCountsSum", &MeasurementInfo::neutron_counts_sum,
+  .def( "neutronCountsSum", &SpecUtils::SpecFile::neutron_counts_sum,
         "Returns the summed number of neutron counts from all parsed Measurments." )
-  .def( "filename", &MeasurementInfo::filename, return_value_policy<copy_const_reference>(),
+  .def( "filename", &SpecUtils::SpecFile::filename, return_value_policy<copy_const_reference>(),
         "Returns the filename of parsed file; if the \"file\" was parsed from a\n"
         "stream, then may be empty unless user specifically set it using \n"
         "setFilename (not currently implemented for python)." )
   .def( "detectorNames", &detector_names_wrapper,
         "Returns a list of names for all detectors found within the parsed file.\n"
         "The list will be in the same order as (and correspond one-to-one with)\n"
-        "the list MeasurementInfo.detectorNumbers() returns." )
+        "the list SpecFile.detectorNumbers() returns." )
   .def( "detectorNumbers", &detector_numbers_wrapper,
         "Returns a list of assigned detector numbers for all detectors found within\n"
         "the parsed file.  The list will be in the same order as (and correspond\n"
-        "one-to-one with) the list MeasurementInfo.detectorNames() returns." )
+        "one-to-one with) the list SpecFile.detectorNames() returns." )
   .def( "neutronDetectorNames", &neutron_detector_names_wrapper,
         "Returns list of names of detectors that contained neutron information." )
-  .def( "uuid", &MeasurementInfo::uuid, return_value_policy<copy_const_reference>(),
+  .def( "uuid", &SpecUtils::SpecFile::uuid, return_value_policy<copy_const_reference>(),
         "Returns the unique ID string for this parsed spectrum file.  The UUID\n"
         "may have been specified in the input file itself, or if not, it is\n"
         "generated using the file contents.  This value will always be the same\n"
@@ -710,16 +715,16 @@ enum_<DetectorType>( "DetectorType" )
   .def( "remarks", &MeasurmentInfo_remarks_wrapper,
         "Returns a list of remarks or comments found while parsing the spectrum file.\n"
         "May include parser generated warnings or notes." )
-  .def( "laneNumber", &MeasurementInfo::lane_number,
+  .def( "laneNumber", &SpecUtils::SpecFile::lane_number,
         "Returns the lane number of the RPM if specified in the spectrum file, otherwise\n"
         "will have a value of -1." )
-  .def( "measurementLocationName", &MeasurementInfo::measurement_location_name, return_value_policy<copy_const_reference>(),
+  .def( "measurementLocationName", &SpecUtils::SpecFile::measurement_location_name, return_value_policy<copy_const_reference>(),
         "Returns the location name specified in the spectrum file; will be an\n"
         "empty string if not specified." )
-  .def( "inspection", &MeasurementInfo::inspection, return_value_policy<copy_const_reference>(),
+  .def( "inspection", &SpecUtils::SpecFile::inspection, return_value_policy<copy_const_reference>(),
         "Returns the inspection type (e.g. primary, secondary, etc.) specified\n"
         "in the spectrum file. If not specified an empty string will be returned." )
-  .def( "measurmentOperator", &MeasurementInfo::measurment_operator, return_value_policy<copy_const_reference>(),
+  .def( "measurmentOperator", &SpecUtils::SpecFile::measurment_operator, return_value_policy<copy_const_reference>(),
         "Returns the detector operators name if specified in the spectrum file.\n"
         "If not specified an empty string will be returned." )
   .def( "sampleNumbers", &sample_numbers_wrapper,
@@ -728,35 +733,35 @@ enum_<DetectorType>( "DetectorType" )
         "into unique groupings of sample and detectors, with the sample number\n"
         "generally increasing for measurments taken later in time.\n"
         "This function returns a list of all sample numbers in the parsed file." )
-  .def( "numMeasurements", &MeasurementInfo::num_measurements,
+  .def( "numMeasurements", &SpecUtils::SpecFile::num_measurements,
         "Returns the number of measurments (records) parsed from the spectrum file." )
-  .def( "detectorType", &MeasurementInfo::detector_type,
+  .def( "detectorType", &SpecUtils::SpecFile::detector_type,
         "Returns the detector type specified in the spectrum file, or an empty string\n"
         "if none was specified.  Example values could include: 'HPGe 50%' or 'NaI'.")
-  .def( "instrumentType", &MeasurementInfo::instrument_type, return_value_policy<copy_const_reference>(),
+  .def( "instrumentType", &SpecUtils::SpecFile::instrument_type, return_value_policy<copy_const_reference>(),
         "Returns the instrument type if specified in (or infered from) the spectrum\n"
         "file, or an empty string otherwise. Example values could include: PortalMonitor,\n"
         "SpecPortal, RadionuclideIdentifier, etc." )
-  .def( "manufacturer", &MeasurementInfo::manufacturer, return_value_policy<copy_const_reference>(),
+  .def( "manufacturer", &SpecUtils::SpecFile::manufacturer, return_value_policy<copy_const_reference>(),
         "Returns the detector manufacturer if specified (or infered), or an empty\n"
         "string otherwise." )
-  .def( "instrumentModel", &MeasurementInfo::instrument_model, return_value_policy<copy_const_reference>(),
+  .def( "instrumentModel", &SpecUtils::SpecFile::instrument_model, return_value_policy<copy_const_reference>(),
         "Returns the instrument model if specified, or infered from, the spectrum file.\n"
         "Returns empty string otherwise.  Examples include: 'Falcon 5000', 'ASP', \n"
         "'identiFINDER', etc." )
-  .def( "instrumentId", &MeasurementInfo::instrument_id, return_value_policy<copy_const_reference>(),
+  .def( "instrumentId", &SpecUtils::SpecFile::instrument_id, return_value_policy<copy_const_reference>(),
         "Returns the instrument ID (typically the serial number) specified in the\n"
         "file, or an empty string otherwise." )
   //     inline std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
-  .def( "hasGpsInfo", &MeasurementInfo::has_gps_info,
+  .def( "hasGpsInfo", &SpecUtils::SpecFile::has_gps_info,
         "Returns True if any of the measurments contained valid GPS data." )
-  .def( "meanLatitude", &MeasurementInfo::mean_latitude,
+  .def( "meanLatitude", &SpecUtils::SpecFile::mean_latitude,
         "Returns the mean latitidue of all measurments with valid GPS data.  If no\n"
         "GPS data was availble, will return something close to -999.9." )
-  .def( "meanLongitude", &MeasurementInfo::mean_longitude,
+  .def( "meanLongitude", &SpecUtils::SpecFile::mean_longitude,
         "Returns the mean longitude of all measurments with valid GPS data.  If no\n"
         "GPS data was availble, will return something close to -999.9." )
-  .def( "memmorysize", &MeasurementInfo::memmorysize,
+  .def( "memmorysize", &SpecUtils::SpecFile::memmorysize,
         "Returns the approximate (lower bound) of bytes this object takes up in memory." )
   .def( "gammaChannelCounts", &gamma_channel_counts_wrapper,
         "Returns the set of number of channels the gamma data has. If all measurments\n"
@@ -764,14 +769,14 @@ enum_<DetectorType>( "DetectorType" )
         "will have one entry with the number of channels (so typically 1024 for Nai,\n"
         "16384 for HPGe, etc.).  If there are detectors with different numbers of bins,\n"
         "then the result returned will have multiple entries.")
-  .def( "numGammaChannels", &MeasurementInfo::num_gamma_channels,
+  .def( "numGammaChannels", &SpecUtils::SpecFile::num_gamma_channels,
         "Returns the number of gamma channels of the first (gamma) detector found\n"
         " or 0 if there is no gamma data.")
-  .def( "backgroundSampleNumber", &MeasurementInfo::background_sample_number,
+  .def( "backgroundSampleNumber", &SpecUtils::SpecFile::background_sample_number,
         "Returns the first background sample number in the spectrum file, even if\n"
         "there is more than one background sample number." )
-  .def( "reset", &MeasurementInfo::reset,
-        "Resets the MeasurementInfo object to its initial (empty) state." )
+  .def( "reset", &SpecUtils::SpecFile::reset,
+        "Resets the SpecUtils::SpecFile object to its initial (empty) state." )
   .def( "sumMeasurements", &sum_measurements_wrapper,
         args("SampleNumbers", "DetectorNumbers"),
         "Sums the measurments of the specified sample and detector numbers.\n"

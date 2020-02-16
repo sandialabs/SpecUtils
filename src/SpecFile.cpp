@@ -197,8 +197,8 @@ namespace
   
   
   void sum_with_rebin( vector<float> &results,
-                      const std::shared_ptr<const Measurement> &binning,
-                      const vector<std::shared_ptr<const Measurement> > &datas )
+                      const std::shared_ptr<const SpecUtils::Measurement> &binning,
+                      const vector<std::shared_ptr<const SpecUtils::Measurement> > &datas )
   {
     assert( !!binning );
     
@@ -212,7 +212,7 @@ namespace
     
     for( size_t i = 0; i < datas.size(); ++i )
     {
-      const std::shared_ptr<const Measurement> &d = datas[i];
+      const std::shared_ptr<const SpecUtils::Measurement> &d = datas[i];
       const std::shared_ptr<const std::vector<float>> &dataenergies = d->channel_energies();
       const std::shared_ptr<const std::vector<float>> &channel_counts = d->gamma_counts();
       
@@ -319,8 +319,8 @@ namespace
       //cerr << "latstr='" << latstr << "'-->" << lat << endl;
       //cerr << "lonstr='" << lonstr << "'-->" << lon << endl;
       
-      return (Measurement::valid_longitude(lon)
-              && Measurement::valid_latitude(lat));
+      return (SpecUtils::Measurement::valid_longitude(lon)
+              && SpecUtils::Measurement::valid_latitude(lat));
     }//if( pos != end )
     
     return false;
@@ -359,7 +359,7 @@ namespace
   
   
   /* IAEA block labels that represent items to put into the remarks_ variable of
-     MeasurementInfo.
+     SpecFile.
    */
   const char * const ns_iaea_comment_labels[] =
   {
@@ -379,7 +379,7 @@ namespace
   
   
   /* IAEA block labels that represent information to be put into
-     component_versions_ member variable of MeasurementInfo.
+     component_versions_ member variable of SpecFile.
    */
   const char * const ns_iaea_version_labels[] =
   {
@@ -954,14 +954,16 @@ void log_developer_error( const char *location, const char *error )
 }//void log_developer_error( const char *location, const char *error )
 #endif //#if(PERFORM_DEVELOPER_CHECKS)
 
-
+namespace SpecUtils
+{
+  
 //Analogous to Measurement::compare_by_sample_det_time; compares by
 // sample_number, and then detector_number_, but NOT by start_time_
-struct MeasurementInfoLessThan
+struct SpecFileLessThan
 {
   const int sample_number, detector_number;
   
-  MeasurementInfoLessThan( int sample_num, int det_num )
+  SpecFileLessThan( int sample_num, int det_num )
   : sample_number( sample_num ), detector_number( det_num ) {}
   bool operator()( const std::shared_ptr<Measurement>& lhs, const std::shared_ptr<Measurement> &dummy )
   {
@@ -973,7 +975,7 @@ struct MeasurementInfoLessThan
       return (lhs->detector_number() < detector_number);
     return (lhs->sample_number() < sample_number);
   }//operator()
-};//struct MeasurementInfoLessThan
+};//struct SpecFileLessThan
 
 
 
@@ -1163,7 +1165,6 @@ struct MeasurementCalibInfo
 
 
 
-
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {
@@ -1317,39 +1318,39 @@ double Measurement::gamma_channels_sum( size_t startbin, size_t endbin ) const
 
 
 
-const char *descriptionText( const SpectrumType type )
+const char *descriptionText( const SpecUtils::SpectrumType type )
 {
   switch( type )
   {
-    case kForeground:       return "Foreground";
-    case kSecondForeground: return "Secondary";
-    case kBackground:       return "Background";
+    case SpecUtils::SpectrumType::Foreground:       return "Foreground";
+    case SpecUtils::SpectrumType::SecondForeground: return "Secondary";
+    case SpecUtils::SpectrumType::Background:       return "Background";
   }//switch( type )
   
   return "";
-}//const char *descriptionText( const SpectrumType type )
+}//const char *descriptionText( const SpecUtils::SpectrumType type )
 
 
 const char *suggestedNameEnding( const SaveSpectrumAsType type )
 {
   switch( type )
   {
-    case kTxtSpectrumFile:                return "txt";
-    case kCsvSpectrumFile:                return "csv";
-    case kPcfSpectrumFile:                return "pcf";
-    case kXmlSpectrumFile:                return "n42";
-    case k2012N42SpectrumFile:            return "n42";
-    case kChnSpectrumFile:                return "chn";
-    case kBinaryIntSpcSpectrumFile:       return "spc";
-    case kBinaryFloatSpcSpectrumFile:     return "spc";
-    case kAsciiSpcSpectrumFile:           return "spc";
-    case kExploraniumGr130v0SpectrumFile: return "dat";
-    case kExploraniumGr135v2SpectrumFile: return "dat";
-    case kIaeaSpeSpectrumFile:            return "spe";
+    case SaveSpectrumAsType::kTxtSpectrumFile:                return "txt";
+    case SaveSpectrumAsType::kCsvSpectrumFile:                return "csv";
+    case SaveSpectrumAsType::kPcfSpectrumFile:                return "pcf";
+    case SaveSpectrumAsType::kXmlSpectrumFile:                return "n42";
+    case SaveSpectrumAsType::k2012N42SpectrumFile:            return "n42";
+    case SaveSpectrumAsType::kChnSpectrumFile:                return "chn";
+    case SaveSpectrumAsType::kBinaryIntSpcSpectrumFile:       return "spc";
+    case SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile:     return "spc";
+    case SaveSpectrumAsType::kAsciiSpcSpectrumFile:           return "spc";
+    case SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile: return "dat";
+    case SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile: return "dat";
+    case SaveSpectrumAsType::kIaeaSpeSpectrumFile:            return "spe";
 #if( SpecUtils_ENABLE_D3_CHART )
-    case kD3HtmlSpectrumFile:             return "html";
+    case SaveSpectrumAsType::kD3HtmlSpectrumFile:             return "html";
 #endif
-    case kNumSaveSpectrumAsType:          break;
+    case SaveSpectrumAsType::kNumSaveSpectrumAsType:          break;
   }//switch( m_format )
   
   return "";
@@ -1358,17 +1359,17 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 
 SpectrumType spectrumTypeFromDescription( const char *descrip )
 {
-  if( strcmp(descrip,descriptionText(kForeground)) == 0 )
-    return kForeground;
-  if( strcmp(descrip,descriptionText(kSecondForeground)) == 0 )
-    return kSecondForeground;
-  if( strcmp(descrip,descriptionText(kBackground)) == 0 )
-    return kBackground;
+  if( strcmp(descrip,descriptionText(SpecUtils::SpectrumType::Foreground)) == 0 )
+    return SpecUtils::SpectrumType::Foreground;
+  if( strcmp(descrip,descriptionText(SpecUtils::SpectrumType::SecondForeground)) == 0 )
+    return SpecUtils::SpectrumType::SecondForeground;
+  if( strcmp(descrip,descriptionText(SpecUtils::SpectrumType::Background)) == 0 )
+    return SpecUtils::SpectrumType::Background;
 
   throw runtime_error( "spectrumTypeFromDescription(...): invalid descrip: "
                         + string(descrip) );
   
-  return kForeground;
+  return SpecUtils::SpectrumType::Foreground;
 }//SpectrumType spectrumTypeFromDescription( const char *descrip )
 
 
@@ -1376,22 +1377,22 @@ const char *descriptionText( const SaveSpectrumAsType type )
 {
   switch( type )
   {
-    case kTxtSpectrumFile:                return "TXT";
-    case kCsvSpectrumFile:                return "CSV";
-    case kPcfSpectrumFile:                return "PCF";
-    case kXmlSpectrumFile:                return "2006 N42";
-    case k2012N42SpectrumFile:            return "2012 N42";
-    case kChnSpectrumFile:                return "CHN";
-    case kBinaryIntSpcSpectrumFile:       return "Integer SPC";
-    case kBinaryFloatSpcSpectrumFile:     return "Float SPC";
-    case kAsciiSpcSpectrumFile:           return "ASCII SPC";
-    case kExploraniumGr130v0SpectrumFile: return "GR130 DAT";
-    case kExploraniumGr135v2SpectrumFile: return "GR135v2 DAT";
-    case kIaeaSpeSpectrumFile:            return "IAEA SPE";
+    case SaveSpectrumAsType::kTxtSpectrumFile:                return "TXT";
+    case SaveSpectrumAsType::kCsvSpectrumFile:                return "CSV";
+    case SaveSpectrumAsType::kPcfSpectrumFile:                return "PCF";
+    case SaveSpectrumAsType::kXmlSpectrumFile:                return "2006 N42";
+    case SaveSpectrumAsType::k2012N42SpectrumFile:            return "2012 N42";
+    case SaveSpectrumAsType::kChnSpectrumFile:                return "CHN";
+    case SaveSpectrumAsType::kBinaryIntSpcSpectrumFile:       return "Integer SPC";
+    case SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile:     return "Float SPC";
+    case SaveSpectrumAsType::kAsciiSpcSpectrumFile:           return "ASCII SPC";
+    case SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile: return "GR130 DAT";
+    case SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile: return "GR135v2 DAT";
+    case SaveSpectrumAsType::kIaeaSpeSpectrumFile:            return "IAEA SPE";
 #if( SpecUtils_ENABLE_D3_CHART )
-    case kD3HtmlSpectrumFile:             return "HTML";
+    case SaveSpectrumAsType::kD3HtmlSpectrumFile:             return "HTML";
 #endif
-    case kNumSaveSpectrumAsType:          return "";
+    case SaveSpectrumAsType::kNumSaveSpectrumAsType:          return "";
   }
   return "";
 }//const char *descriptionText( const SaveSpectrumAsType type )
@@ -2044,60 +2045,60 @@ const std::string &detectorTypeToString( const DetectorType type )
 
   switch( type )
   {
-    case kGR135Detector:
+    case DetectorType::kGR135Detector:
       return sm_GR135DetectorStr;
-    case kIdentiFinderNGDetector:
+    case DetectorType::kIdentiFinderNGDetector:
       return sm_IdentiFinderNGDetectorStr;
 //  kIdentiFinderNGDetector,   //I dont have any examples of this
-    case kIdentiFinderDetector:
+    case DetectorType::kIdentiFinderDetector:
       return sm_IdentiFinderDetectorStr;
-    case kIdentiFinderLaBr3Detector:
+    case DetectorType::kIdentiFinderLaBr3Detector:
       return sm_IdentiFinderLaBr3DetectorStr;
-    case kDetectiveDetector:
+    case DetectorType::kDetectiveDetector:
       return sm_DetectiveDetectorStr;
-    case kDetectiveExDetector:
+    case DetectorType::kDetectiveExDetector:
       return sm_DetectiveExDetectorStr;
-    case kDetectiveEx100Detector:
+    case DetectorType::kDetectiveEx100Detector:
       return sm_DetectiveEx100DetectorStr;
-    case kDetectiveEx200Detector:
+    case DetectorType::kDetectiveEx200Detector:
       return sm_OrtecIDMPortalDetectorStr;
-    case kDetectiveX:
+    case DetectorType::kDetectiveX:
       return sm_OrtecDetectiveXStr;
-    case kSAIC8Detector:
+    case DetectorType::kSAIC8Detector:
       return sm_SAIC8DetectorStr;
-    case kFalcon5000:
+    case DetectorType::kFalcon5000:
       return sm_Falcon5kDetectorStr;
-    case kUnknownDetector:
+    case DetectorType::kUnknownDetector:
       return sm_UnknownDetectorStr;
-    case kMicroDetectiveDetector:
+    case DetectorType::kMicroDetectiveDetector:
       return sm_MicroDetectiveDetectorStr;
-    case kMicroRaiderDetector:
+    case DetectorType::kMicroRaiderDetector:
       return sm_MicroRaiderDetectorStr;
-    case kSam940:
+    case DetectorType::kSam940:
       return sm_Sam940DetectorStr;
-    case kSam945:
+    case DetectorType::kSam945:
       return sm_Sam945DetectorStr;
-    case kSrpm210:
+    case DetectorType::kSrpm210:
       return sm_Srpm210DetectorStr;
-    case kSam940LaBr3:
+    case DetectorType::kSam940LaBr3:
       return sm_Sam940Labr3DetectorStr;
-    case kRsi701:
+    case DetectorType::kRsi701:
       return sm_Rsi701DetectorStr;
-    case kRadHunterNaI:
+    case DetectorType::kRadHunterNaI:
       return sm_RadHunterNaIDetectorStr;
-    case kRadHunterLaBr3:
+    case DetectorType::kRadHunterLaBr3:
       return sm_RadHunterLaBr3DetectorStr;
-    case kRsi705:
+    case DetectorType::kRsi705:
       return sm_Rsi705DetectorStr;
-    case kAvidRsi:
+    case DetectorType::kAvidRsi:
       return sm_AvidRsiDetectorStr;
-    case kOrtecRadEagleNai:
+    case DetectorType::kOrtecRadEagleNai:
       return sm_RadEagleNaiDetectorStr;
-    case kOrtecRadEagleCeBr2Inch:
+    case DetectorType::kOrtecRadEagleCeBr2Inch:
       return sm_RadEagleCeBr2InDetectorStr;
-    case kOrtecRadEagleCeBr3Inch:
+    case DetectorType::kOrtecRadEagleCeBr3Inch:
       return sm_RadEagleCeBr3InDetectorStr;
-    case kOrtecRadEagleLaBr:
+    case DetectorType::kOrtecRadEagleLaBr:
       return sm_RadEagleLaBrDetectorStr;
   }//switch( type )
 
@@ -2174,7 +2175,7 @@ void Measurement::reset()
   real_time_ = 0.0f;
 
   sample_number_ = 1;
-  occupied_ = UnknownOccupancyStatus;
+  occupied_ = OccupancyStatus::UnknownOccupancyStatus;
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
   speed_ = 0.0;
@@ -2183,7 +2184,7 @@ void Measurement::reset()
   detector_description_ = "";
   quality_status_ = Missing;
 
-  source_type_       = UnknownSourceType;
+  source_type_       = SourceType::UnknownSourceType;
   energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
 
   contained_neutron_ = false;
@@ -2304,7 +2305,7 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
 }//void combine_gamma_channels( const size_t nchann )
 
 
-size_t MeasurementInfo::do_channel_data_xform( const size_t nchannels,
+size_t SpecFile::do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -2392,11 +2393,11 @@ size_t MeasurementInfo::do_channel_data_xform( const size_t nchannels,
 }//size_t do_channel_data_xform( const size_t nchannels, const std::function<std::shared_ptr<Measurement> > &xform )
 
 
-size_t MeasurementInfo::combine_gamma_channels( const size_t ncombine,
+size_t SpecFile::combine_gamma_channels( const size_t ncombine,
                                                 const size_t nchannels )
 {
   if( ((nchannels % ncombine) != 0) || !nchannels || !ncombine )
-    throw runtime_error( "MeasurementInfo::combine_gamma_channels(): invalid input" );
+    throw runtime_error( "SpecFile::combine_gamma_channels(): invalid input" );
   
   try
   {
@@ -2404,7 +2405,7 @@ size_t MeasurementInfo::combine_gamma_channels( const size_t ncombine,
     return do_channel_data_xform( nchannels, xform );
   }catch( std::exception &e )
   {
-    throw runtime_error( "MeasurementInfo::combine_gamma_channels():" + string(e.what()) );
+    throw runtime_error( "SpecFile::combine_gamma_channels():" + string(e.what()) );
   }
   
   return 0;
@@ -2412,15 +2413,15 @@ size_t MeasurementInfo::combine_gamma_channels( const size_t ncombine,
 
 
 
-void MeasurementInfo::combine_gamma_channels( const size_t ncombine,
+void SpecFile::combine_gamma_channels( const size_t ncombine,
                              const std::shared_ptr<const Measurement> &meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   std::shared_ptr<Measurement> m = measurment( meas );
   if( !m )
-    throw runtime_error( "MeasurementInfo::combine_gamma_channels(): measurment"
-                         " passed in is not owned by this MeasurementInfo." );
+    throw runtime_error( "SpecFile::combine_gamma_channels(): measurment"
+                         " passed in is not owned by this SpecFile." );
   
   m->combine_gamma_channels( ncombine );
   
@@ -2590,7 +2591,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
 }//size_t Measurement::truncate_gamma_channels(...)
 
 
-size_t MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel,
+size_t SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
                                const size_t keep_last_channel,
                                const size_t nchannels,
                                const bool keep_under_over_flow )
@@ -2604,7 +2605,7 @@ size_t MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel
     return do_channel_data_xform( nchannels, xform );
   }catch( std::exception &e )
   {
-    throw runtime_error( "MeasurementInfo::truncate_gamma_channels():"
+    throw runtime_error( "SpecFile::truncate_gamma_channels():"
                           + string(e.what()) );
   }
   
@@ -2612,7 +2613,7 @@ size_t MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel
 }//size_t truncate_gamma_channels(...)
 
 
-void MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel,
+void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
                              const size_t keep_last_channel,
                              const bool keep_under_over_flow,
                              const std::shared_ptr<const Measurement> &meas )
@@ -2622,8 +2623,8 @@ void MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel,
   
   std::shared_ptr<Measurement> m = measurment( meas );
   if( !m )
-    throw runtime_error( "MeasurementInfo::truncate_gamma_channels(): measurment"
-                        " passed in is not owned by this MeasurementInfo." );
+    throw runtime_error( "SpecFile::truncate_gamma_channels(): measurment"
+                        " passed in is not owned by this SpecFile." );
   
   m->truncate_gamma_channels( keep_first_channel, keep_last_channel,
                               keep_under_over_flow );
@@ -2637,7 +2638,7 @@ void MeasurementInfo::truncate_gamma_channels( const size_t keep_first_channel,
   }//if( measurements_.size() > 1 )
   
   modifiedSinceDecode_ = modified_ = true;
-}//void MeasurementInfo::truncate_gamma_channels(...)
+}//void SpecFile::truncate_gamma_channels(...)
 
 
 void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char> *spectrum )
@@ -2686,7 +2687,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
       //marking it intrinsic activity will happen further down from the 'ID'
       //  attribute, so we wont wast cpu time here checking the remark for itww
 //      if( SpecUtils::icontains( remark, "intrinsic activity") )
-//        source_type_ = Measurement::IntrinsicActivity;
+//        source_type_ = SourceType::IntrinsicActivity;
       }
 
       const float thisspeed = speed_from_remark( remark );
@@ -2724,34 +2725,34 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
   if( src_type_node )
   {
     if( XML_VALUE_ICOMPARE(src_type_node, "Item") )
-      source_type_ = Foreground;
+      source_type_ = SourceType::Foreground;
     else if( XML_VALUE_ICOMPARE(src_type_node, "Background") )
-      source_type_ = Background;
+      source_type_ = SourceType::Background;
     else if( XML_VALUE_ICOMPARE(src_type_node, "Calibration") )
-      source_type_ = Calibration;
+      source_type_ = SourceType::Calibration;
     else if( XML_VALUE_ICOMPARE(src_type_node, "Stabilization") ) //RadSeeker HPRDS files have the "Stabilization" source type, which looks like an intrinsic source
-      source_type_ = IntrinsicActivity;
+      source_type_ = SourceType::IntrinsicActivity;
     else if( XML_VALUE_ICOMPARE(src_type_node, "IntrinsicActivity") )
-      source_type_ = IntrinsicActivity;
+      source_type_ = SourceType::IntrinsicActivity;
     else
-      source_type_ = UnknownSourceType;
+      source_type_ = SourceType::UnknownSourceType;
   }//if( src_type_node )
   
   const rapidxml::xml_attribute<char> *id_att = spectrum->first_attribute( "ID", 2, false );
   if( id_att )
   {
     if( XML_VALUE_ICOMPARE( id_att, "intrinsicActivity" ) )
-      source_type_ = IntrinsicActivity;
+      source_type_ = SourceType::IntrinsicActivity;
   }// if( id_att )
 
   const rapidxml::xml_node<char> *uccupied_node = xml_first_node_nso( spectrum, "Occupied", xmlns );
 
   try
   {
-    if( !uccupied_node )                  occupied_ = UnknownOccupancyStatus;
-    else if( is_occupied(uccupied_node) ) occupied_ = Occupied;
-    else                                  occupied_ = NotOccupied;
-  }catch(...){                            occupied_ = UnknownOccupancyStatus; }
+    if( !uccupied_node )                  occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+    else if( is_occupied(uccupied_node) ) occupied_ = OccupancyStatus::Occupied;
+    else                                  occupied_ = OccupancyStatus::NotOccupied;
+  }catch(...){                            occupied_ = OccupancyStatus::UnknownOccupancyStatus; }
 
   const rapidxml::xml_node<char> *det_type_node = xml_first_node_nso( spectrum, "DetectorType", xmlns );
   if( det_type_node && det_type_node->value_size() )
@@ -3147,7 +3148,7 @@ void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml
 }//set_n42_2006_spectrum_calibration_from_id
 
 
-std::shared_ptr<Measurement> MeasurementInfo::measurment( std::shared_ptr<const Measurement> meas )
+std::shared_ptr<Measurement> SpecFile::measurment( std::shared_ptr<const Measurement> meas )
 {
   for( const auto &m : measurements_ )
   {
@@ -3161,15 +3162,15 @@ std::shared_ptr<Measurement> MeasurementInfo::measurment( std::shared_ptr<const 
 //set_live_time(...) and set_real_time(...) update both the measurment
 //  you pass in, as well as *this.  If measurment is invalid, or not in
 //  measurments_, than an exception is thrown.
-void MeasurementInfo::set_live_time( const float lt,
+void SpecFile::set_live_time( const float lt,
                                      std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_live_time(...): measurment"
-                         " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_live_time(...): measurment"
+                         " passed in didnt belong to this SpecFile" );
 
   const float oldLifeTime = meas->live_time();
   ptr->live_time_ = lt;
@@ -3177,14 +3178,14 @@ void MeasurementInfo::set_live_time( const float lt,
   modified_ = modifiedSinceDecode_ = true;
 }//set_live_time(...)
 
-void MeasurementInfo::set_real_time( const float rt, std::shared_ptr<const Measurement> meas )
+void SpecFile::set_real_time( const float rt, std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_real_time(...): measurment"
-                         " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_real_time(...): measurment"
+                         " passed in didnt belong to this SpecFile" );
 
   const float oldRealTime = ptr->live_time();
   ptr->real_time_ = rt;
@@ -3193,7 +3194,7 @@ void MeasurementInfo::set_real_time( const float rt, std::shared_ptr<const Measu
 }//set_real_time(...)
 
 
-void MeasurementInfo::add_measurment( std::shared_ptr<Measurement> meas,
+void SpecFile::add_measurment( std::shared_ptr<Measurement> meas,
                                       const bool doCleanup )
 {
   if( !meas )
@@ -3207,11 +3208,11 @@ void MeasurementInfo::add_measurment( std::shared_ptr<Measurement> meas,
                           meas, &Measurement::compare_by_sample_det_time );
  
   if( (meas_pos!=measurements_.end()) && ((*meas_pos)==meas) )
-    throw runtime_error( "MeasurementInfo::add_measurment: duplicate meas" );
+    throw runtime_error( "SpecFile::add_measurment: duplicate meas" );
   
   //Making sure detector names/numbers are kept track of here instead of in
   //  cleanup_after_load() makes sure to preserve sample and detector numbers
-  //  of the Measurments already in this MeasurementInfo object
+  //  of the Measurments already in this SpecFile object
   const string &detname = meas->detector_name_;
   vector<std::string>::const_iterator namepos
          = std::find( detector_names_.begin(), detector_names_.end(), detname );
@@ -3238,7 +3239,7 @@ void MeasurementInfo::add_measurment( std::shared_ptr<Measurement> meas,
   
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
                          std::shared_ptr<Measurement>(),
-                         MeasurementInfoLessThan(samplenum, detnum) );
+                         SpecFileLessThan(samplenum, detnum) );
   
   if( meas_pos != measurements_.end()
      && (*meas_pos)->sample_number()==samplenum
@@ -3247,7 +3248,7 @@ void MeasurementInfo::add_measurment( std::shared_ptr<Measurement> meas,
     const int last_sample = (*sample_numbers_.rbegin());
     meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
                             std::shared_ptr<Measurement>(),
-                            MeasurementInfoLessThan(last_sample, detnum) );
+                            SpecFileLessThan(last_sample, detnum) );
     if( meas_pos == measurements_.end()
        || (*meas_pos)->sample_number()!=last_sample
        || (*meas_pos)->detector_number()!=detnum  )
@@ -3290,7 +3291,7 @@ void MeasurementInfo::add_measurment( std::shared_ptr<Measurement> meas,
 }//void add_measurment( std::shared_ptr<Measurement> meas, bool doCleanup )
 
 
-void MeasurementInfo::remove_measurments(
+void SpecFile::remove_measurments(
                                          const vector<std::shared_ptr<const Measurement>> &meas )
 {
   if( meas.empty() )
@@ -3300,10 +3301,10 @@ void MeasurementInfo::remove_measurments(
   
   const size_t norigmeas = measurements_.size();
   if( meas.size() > norigmeas )
-    throw runtime_error( "MeasurementInfo::remove_measurments:"
+    throw runtime_error( "SpecFile::remove_measurments:"
                         " to many input measurments to remove" );
   
-  //This below implementation is targeted for MeasurementInfo's with lots of
+  //This below implementation is targeted for SpecFile's with lots of
   //  measurements_, and empiracally is much faster than commented out
   //  implementation below (which is left in because its a bit 'cleaner')
   vector<bool> keep( norigmeas, true );
@@ -3329,7 +3330,7 @@ void MeasurementInfo::remove_measurments(
       }//for( size_t i = 0; i < indexs.size(); ++i )
       
       if( i == indexs.size() )
-        throw runtime_error( "MeasurementInfo::remove_measurments: invalid meas" );
+        throw runtime_error( "SpecFile::remove_measurments: invalid meas" );
     }//if( iter != sample_to_measurments_.end() )
   }//for( size_t i = 0; i < meas.size(); ++i )
   
@@ -3358,7 +3359,7 @@ void MeasurementInfo::remove_measurments(
    }
    
    if( pos == measurements_.end() || ((*pos)!=m) )
-   throw runtime_error( "MeasurementInfo::remove_measurments: invalid meas" );
+   throw runtime_error( "SpecFile::remove_measurments: invalid meas" );
    
    measurements_.erase( pos );
    }
@@ -3369,7 +3370,7 @@ void MeasurementInfo::remove_measurments(
 }//void remove_measurments( const vector<std::shared_ptr<const Measurement>> meas )
 
 
-void MeasurementInfo::remove_measurment( std::shared_ptr<const Measurement> meas,
+void SpecFile::remove_measurment( std::shared_ptr<const Measurement> meas,
                                          const bool doCleanup )
 {
   if( !meas )
@@ -3381,7 +3382,7 @@ void MeasurementInfo::remove_measurment( std::shared_ptr<const Measurement> meas
                 = std::find( measurements_.begin(), measurements_.end(), meas );
   
   if( pos == measurements_.end() )
-    throw runtime_error( "MeasurementInfo::remove_measurment: invalid meas" );
+    throw runtime_error( "SpecFile::remove_measurment: invalid meas" );
   
   measurements_.erase( pos );
   
@@ -3431,55 +3432,55 @@ void MeasurementInfo::remove_measurment( std::shared_ptr<const Measurement> meas
 }//void remove_measurment( std::shared_ptr<Measurement> meas, bool doCleanup );
 
 
-void MeasurementInfo::set_start_time( const boost::posix_time::ptime &timestamp,
+void SpecFile::set_start_time( const boost::posix_time::ptime &timestamp,
                     const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_start_time(...): measurment"
-                        " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_start_time(...): measurment"
+                        " passed in didnt belong to this SpecFile" );
   
   ptr->set_start_time( timestamp );
   modified_ = modifiedSinceDecode_ = true;
 }//set_start_time(...)
 
-void MeasurementInfo::set_remarks( const std::vector<std::string> &remarks,
+void SpecFile::set_remarks( const std::vector<std::string> &remarks,
                  const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_remarks(...): measurment"
-                        " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_remarks(...): measurment"
+                        " passed in didnt belong to this SpecFile" );
   
   ptr->set_remarks( remarks );
   modified_ = modifiedSinceDecode_ = true;
 }//set_remarks(...)
 
-void MeasurementInfo::set_source_type( const Measurement::SourceType type,
+void SpecFile::set_source_type( const SourceType type,
                                     const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_source_type(...): measurment"
-                        " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_source_type(...): measurment"
+                        " passed in didnt belong to this SpecFile" );
   
   ptr->set_source_type( type );
   modified_ = modifiedSinceDecode_ = true;
 }//set_source_type(...)
 
 
-void MeasurementInfo::set_position( double longitude, double latitude,
+void SpecFile::set_position( double longitude, double latitude,
                                     boost::posix_time::ptime position_time,
                                     const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_position(...): measurment"
-                        " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_position(...): measurment"
+                        " passed in didnt belong to this SpecFile" );
   
   ptr->longitude_ = longitude;
   ptr->latitude_ = latitude;
@@ -3512,31 +3513,31 @@ void MeasurementInfo::set_position( double longitude, double latitude,
 }//set_position(...)_
 
 
-void MeasurementInfo::set_title( const std::string &title,
+void SpecFile::set_title( const std::string &title,
                                  const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_title(...): measurment"
-                        " passed in didnt belong to this MeasurementInfo" );
+    throw runtime_error( "SpecFile::set_title(...): measurment"
+                        " passed in didnt belong to this SpecFile" );
   
   ptr->set_title( title );
   
   modified_ = modifiedSinceDecode_ = true;
-}//void MeasurementInfo::set_title(...)
+}//void SpecFile::set_title(...)
 
 
-void MeasurementInfo::set_contained_neutrons( const bool contained,
+void SpecFile::set_contained_neutrons( const bool contained,
                                              const float counts,
                                              const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurment( meas );
   if( !ptr )
-    throw runtime_error( "MeasurementInfo::set_containtained_neutrons(...): "
+    throw runtime_error( "SpecFile::set_containtained_neutrons(...): "
                         "measurment passed in didnt belong to this "
-                        "MeasurementInfo" );
+                        "SpecFile" );
   
   ptr->contained_neutron_ = contained;
   if( contained )
@@ -3554,7 +3555,7 @@ void MeasurementInfo::set_contained_neutrons( const bool contained,
 }//void set_containtained_neutrons(...)
 
 
-void MeasurementInfo::set_detectors_analysis( const DetectorAnalysis &ana )
+void SpecFile::set_detectors_analysis( const DetectorAnalysis &ana )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -3571,7 +3572,7 @@ void MeasurementInfo::set_detectors_analysis( const DetectorAnalysis &ana )
   modified_ = modifiedSinceDecode_ = true;
 }//void set_detectors_analysis( const DetectorAnalysis &ana )
 
-void MeasurementInfo::change_detector_name( const string &origname,
+void SpecFile::change_detector_name( const string &origname,
                                             const string &newname )
 {
   if( origname == newname )
@@ -3606,7 +3607,7 @@ void MeasurementInfo::change_detector_name( const string &origname,
 }//change_detector_name(...)
 
 
-int MeasurementInfo::occupancy_number_from_remarks() const
+int SpecFile::occupancy_number_from_remarks() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -3639,7 +3640,7 @@ int MeasurementInfo::occupancy_number_from_remarks() const
 }//int occupancy_number_from_remarks() const
 
 
-std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sample_number,
+std::shared_ptr<const Measurement> SpecFile::measurement( const int sample_number,
                                              const std::string &det_name ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -3662,7 +3663,7 @@ std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sampl
 
 
 
-std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sample_number,
+std::shared_ptr<const Measurement> SpecFile::measurement( const int sample_number,
                                                const int detector_number ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -3687,7 +3688,7 @@ std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sampl
   std::vector< std::shared_ptr<Measurement> >::const_iterator meas_pos;
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
                           std::shared_ptr<Measurement>(),
-                          MeasurementInfoLessThan(sample_number, detector_number) );
+                          SpecFileLessThan(sample_number, detector_number) );
   if( meas_pos == measurements_.end()
      || (*meas_pos)->sample_number()!=sample_number
      || (*meas_pos)->detector_number()!=detector_number )
@@ -3720,7 +3721,7 @@ std::shared_ptr<const Measurement> MeasurementInfo::measurement( const int sampl
 
 
 
-vector<std::shared_ptr<const Measurement>> MeasurementInfo::sample_measurements( const int sample ) const
+vector<std::shared_ptr<const Measurement>> SpecFile::sample_measurements( const int sample ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -4734,8 +4735,8 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
 }//void equalEnough( const Measurement &lhs, const Measurement &rhs )
 
 
-void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
-                                   const MeasurementInfo &rhs )
+void SpecFile::equalEnough( const SpecFile &lhs,
+                                   const SpecFile &rhs )
 {
   std::lock( lhs.mutex_, rhs.mutex_ );
   std::unique_lock<std::recursive_mutex> lhs_lock( lhs.mutex_, std::adopt_lock_t() );
@@ -4747,7 +4748,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( (live_time_diff > (std::max(lhs.gamma_live_time_,rhs.gamma_live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-              "MeasurementInfo: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
+              "SpecFile: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_live_time_, rhs.gamma_live_time_ );
     throw runtime_error( buffer );
   }
@@ -4757,7 +4758,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( (real_time_diff > (std::max(lhs.gamma_real_time_,rhs.gamma_real_time_)*1.0E-5)) && (real_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Real time of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "SpecFile: Real time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_real_time_, rhs.gamma_real_time_ );
     throw runtime_error( buffer );
   }
@@ -4767,7 +4768,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( gamma_sum_diff > 0.1 || gamma_sum_diff > 1.0E-6*max_gamma_sum )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Gamma sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "SpecFile: Gamma sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_count_sum_, rhs.gamma_count_sum_ );
     throw runtime_error( buffer );
   }
@@ -4775,19 +4776,19 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > 0.01 )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Neutron sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "SpecFile: Neutron sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.neutron_counts_sum_, rhs.neutron_counts_sum_ );
     throw runtime_error( buffer );
   }
   
   if( lhs.filename_ != rhs.filename_ )
-    throw runtime_error( "MeasurementInfo: Filename of LHS (" + lhs.filename_
+    throw runtime_error( "SpecFile: Filename of LHS (" + lhs.filename_
                          + ") doenst match RHS (" + rhs.filename_ + ")" );
   
   if( lhs.detector_names_.size() != rhs.detector_names_.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Number of detector names of LHS (%i) doesnt match RHS (%i)",
+             "SpecFile: Number of detector names of LHS (%i) doesnt match RHS (%i)",
              int(lhs.detector_names_.size()), int(rhs.detector_names_.size()) );
     throw runtime_error( buffer );
   }
@@ -4798,11 +4799,11 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
                               rhs.detector_names_.end() );
   
   if( lhsnames != rhsnames )
-    throw runtime_error( "MeasurementInfo: Detector names do not match for LHS and RHS" );
+    throw runtime_error( "SpecFile: Detector names do not match for LHS and RHS" );
  
   if( lhs.detector_numbers_.size() != rhs.detector_numbers_.size()
       || lhs.detector_numbers_.size() != lhs.detector_names_.size() )
-    throw runtime_error( "MeasurementInfo: Inproper number of detector numbers - wtf" );
+    throw runtime_error( "SpecFile: Inproper number of detector numbers - wtf" );
   
   //Ehh, I guess since detector numbers are an internal only thing (and we
   //  should get rid of them anyway), lets not test this anymore.
@@ -4816,7 +4817,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     if( lhs.detector_numbers_[i] != rhs.detector_numbers_[pos] )
     {
       stringstream msg;
-      msg << "MeasurementInfo: Detector number for detector '" << lhs.detector_names_[i] << " dont match.\n\tLHS->[";
+      msg << "SpecFile: Detector number for detector '" << lhs.detector_names_[i] << " dont match.\n\tLHS->[";
       for( size_t i = 0; i < lhs.detector_names_.size() && i < lhs.detector_numbers_.size(); ++i )
         msg << "{" << lhs.detector_names_[i] << "=" << lhs.detector_numbers_[i] << "}, ";
       msg << "]\n\tRHS->[";
@@ -4833,7 +4834,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Number of neutron detector names of LHS (%i) doesnt match RHS (%i)",
+             "SpecFile: Number of neutron detector names of LHS (%i) doesnt match RHS (%i)",
              int(lhs.neutron_detector_names_.size()),
              int(rhs.neutron_detector_names_.size()) );
     throw runtime_error( buffer );
@@ -4845,25 +4846,25 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
                                rhs.neutron_detector_names_.end() );
   
   if( nlhsnames != nrhsnames )
-    throw runtime_error( "MeasurementInfo: Neutron detector names dont match for LHS and RHS" );
+    throw runtime_error( "SpecFile: Neutron detector names dont match for LHS and RHS" );
 
   
   if( lhs.lane_number_ != rhs.lane_number_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Lane number of LHS (%i) doesnt match RHS (%i)",
+             "SpecFile: Lane number of LHS (%i) doesnt match RHS (%i)",
              lhs.lane_number_, rhs.lane_number_ );
     throw runtime_error( buffer );
   }
   
   if( lhs.measurement_location_name_ != rhs.measurement_location_name_ )
-    throw runtime_error( "MeasurementInfo: Measurment location name of LHS ('"
+    throw runtime_error( "SpecFile: Measurment location name of LHS ('"
                          + lhs.measurement_location_name_
                          + "') doesnt match RHS ('"
                          + rhs.measurement_location_name_ + "')" );
   
   if( lhs.inspection_ != rhs.inspection_ )
-    throw runtime_error( "MeasurementInfo: Inspection of LHS ('" + lhs.inspection_
+    throw runtime_error( "SpecFile: Inspection of LHS ('" + lhs.inspection_
                         + "') doesnt match RHS ('" + rhs.inspection_ + "')" );
 
   string leftoperator = lhs.measurment_operator_;
@@ -4876,7 +4877,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   trim( rightoperator );
   
   if( leftoperator != rightoperator )
-    throw runtime_error( "MeasurementInfo: Measurment operator of LHS ('"
+    throw runtime_error( "SpecFile: Measurment operator of LHS ('"
                          + lhs.measurment_operator_ + "') doesnt match RHS ('"
                          + rhs.measurment_operator_ + ")" );
 
@@ -4914,7 +4915,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
      */
     
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Number of sample numbers in LHS (%i) doesnt match RHS (%i)",
+             "SpecFile: Number of sample numbers in LHS (%i) doesnt match RHS (%i)",
              int(lhs.sample_numbers_.size()), int(rhs.sample_numbers_.size()) );
     throw runtime_error( buffer );
   }
@@ -4926,14 +4927,14 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
       lhssamples << (sample==(*lhs.sample_numbers_.begin()) ? "":",") << sample;
     for( auto sample : rhs.sample_numbers_ )
       rhssamples << (sample== (*rhs.sample_numbers_.begin()) ? "":",") << sample;
-    throw runtime_error( "MeasurementInfo: Sample numbers of RHS (" + rhssamples.str()
+    throw runtime_error( "SpecFile: Sample numbers of RHS (" + rhssamples.str()
                          + ") and LHS (" + lhssamples.str() + ") doent match" );
   }
   
   if( lhs.detector_type_ != rhs.detector_type_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: LHS detector type (%i) doesnt match RHS (%i)",
+             "SpecFile: LHS detector type (%i) doesnt match RHS (%i)",
              int(lhs.detector_type_), int(rhs.detector_type_) );
     throw runtime_error( buffer );
   }
@@ -4942,27 +4943,27 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   string rhsinst = convert_n42_instrument_type_from_2006_to_2012( rhs.instrument_type_ );
   if( lhsinst != rhsinst )
   {
-    throw runtime_error( "MeasurementInfo: Instrument type of LHS ('" + lhs.instrument_type_
+    throw runtime_error( "SpecFile: Instrument type of LHS ('" + lhs.instrument_type_
                     + "') doesnt match RHS ('" + rhs.instrument_type_ + "')" );
   }
   
   if( lhs.manufacturer_ != rhs.manufacturer_ )
-    throw runtime_error( "MeasurementInfo: Manufacturer of LHS ('" + lhs.manufacturer_
+    throw runtime_error( "SpecFile: Manufacturer of LHS ('" + lhs.manufacturer_
                         + "') doesnt match RHS ('" + rhs.manufacturer_ + "')" );
   
   if( lhs.instrument_model_ != rhs.instrument_model_ )
-    throw runtime_error( "MeasurementInfo: Instrument model of LHS ('" + lhs.instrument_model_
+    throw runtime_error( "SpecFile: Instrument model of LHS ('" + lhs.instrument_model_
                     + "') doesnt match RHS ('" + rhs.instrument_model_ + "')" );
   
   if( lhs.instrument_id_ != rhs.instrument_id_ )
-    throw runtime_error( "MeasurementInfo: Instrument ID model of LHS ('" + lhs.instrument_id_
+    throw runtime_error( "SpecFile: Instrument ID model of LHS ('" + lhs.instrument_id_
                        + "') doesnt match RHS ('" + rhs.instrument_id_ + "')" );
   
   
   if( fabs(lhs.mean_latitude_ - rhs.mean_latitude_) > 0.000001 )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Mean latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "SpecFile: Mean latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.mean_latitude_, rhs.mean_latitude_ );
     throw runtime_error( buffer );
   }
@@ -4970,7 +4971,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( fabs(lhs.mean_longitude_ - rhs.mean_longitude_) > 0.000001 )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Mean longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "SpecFile: Mean longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.mean_longitude_, rhs.mean_longitude_ );
     throw runtime_error( buffer );
   }
@@ -4995,7 +4996,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     testBitEqual( kNotUniqueSampleDetectorNumbers, "kNotUniqueSampleDetectorNumbers" );
     
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Properties flags of LHS (%x) doesnt match RHS (%x) (Failing bits: %s)",
+             "SpecFile: Properties flags of LHS (%x) doesnt match RHS (%x) (Failing bits: %s)",
              static_cast<unsigned int>(lhs.properties_flags_),
              static_cast<unsigned int>(rhs.properties_flags_),
              failingBits.c_str() );
@@ -5011,7 +5012,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
       
       if( (!lhsptr) != (!rhsptr) )
       {
-        snprintf( buffer, sizeof(buffer), "MeasurementInfo: Measurment avaialblity for LHS (%s)"
+        snprintf( buffer, sizeof(buffer), "SpecFile: Measurment avaialblity for LHS (%s)"
                  " doesnt match RHS (%s) for sample %i and detector name %s",
               (!lhsptr?"missing":"available"), (!rhsptr?"missing":"available"),
               sample, detname.c_str() );
@@ -5026,7 +5027,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
         Measurement::equalEnough( *lhsptr, *rhsptr );
       }catch( std::exception &e )
       {
-        snprintf( buffer, sizeof(buffer), "MeasurementInfo: Sample %i, Detector name %s: %s",
+        snprintf( buffer, sizeof(buffer), "SpecFile: Sample %i, Detector name %s: %s",
                   sample, detname.c_str(), e.what() );
         throw runtime_error( buffer );
       }
@@ -5035,7 +5036,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   
   if( (!lhs.detectors_analysis_) != (!rhs.detectors_analysis_) )
   {
-    snprintf( buffer, sizeof(buffer), "MeasurementInfo: Detector analysis avaialblity for LHS (%s)"
+    snprintf( buffer, sizeof(buffer), "SpecFile: Detector analysis avaialblity for LHS (%s)"
              " doesnt match RHS (%s)",
              (!lhs.detectors_analysis_?"missing":"available"),
              (!rhs.detectors_analysis_?"missing":"available") );
@@ -5068,7 +5069,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( nlhsremarkss.size() != nrhsremarkss.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Number of remarks in LHS (%i) doesnt match RHS (%i)",
+             "SpecFile: Number of remarks in LHS (%i) doesnt match RHS (%i)",
              int(nlhsremarkss.size()), int(nrhsremarkss.size()) );
     
     for( string a : nlhsremarkss )
@@ -5089,7 +5090,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     if( lhsremark != rhsremark )
     {
       snprintf( buffer, sizeof(buffer),
-               "MeasurementInfo: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
+               "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
                int(i), nlhsremarkss[i].c_str(), nrhsremarkss[i].c_str() );
       throw runtime_error( buffer );
     }
@@ -5118,7 +5119,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   if( lhscompvsn.size() != rhscompvsn.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "MeasurementInfo: Number of component versions in LHS (%i) doesnt match RHS (%i)",
+             "SpecFile: Number of component versions in LHS (%i) doesnt match RHS (%i)",
              int(lhscompvsn.size()), int(rhscompvsn.size()) );
     
     for( size_t i = 0; i < lhscompvsn.size(); ++i )
@@ -5144,7 +5145,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     if( lhsp.first != rhsp.first )
     {
       snprintf( buffer, sizeof(buffer),
-               "MeasurementInfo: Component Version %i name in LHS ('%s') doesnt match RHS ('%s')",
+               "SpecFile: Component Version %i name in LHS ('%s') doesnt match RHS ('%s')",
                int(i), lhsp.first.c_str(), rhsp.first.c_str() );
       throw runtime_error( buffer );
     }
@@ -5152,7 +5153,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
     if( lhsp.second != rhsp.second )
     {
       snprintf( buffer, sizeof(buffer),
-               "MeasurementInfo: Component Version %i valiue in LHS ('%s') doesnt match RHS ('%s')",
+               "SpecFile: Component Version %i valiue in LHS ('%s') doesnt match RHS ('%s')",
                int(i), lhsp.second.c_str(), rhsp.second.c_str() );
       throw runtime_error( buffer );
     }
@@ -5168,7 +5169,7 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
   /*
 #if( !defined(WIN32) )
   if( lhs.uuid_ != rhs.uuid_ )
-    throw runtime_error( "MeasurementInfo: UUID of LHS (" + lhs.uuid_
+    throw runtime_error( "SpecFile: UUID of LHS (" + lhs.uuid_
                         + ") doesnt match RHS (" + rhs.uuid_ + ")" );
 #endif
   */
@@ -5179,24 +5180,24 @@ void MeasurementInfo::equalEnough( const MeasurementInfo &lhs,
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
 
 
-MeasurementInfo::MeasurementInfo()
+SpecFile::SpecFile()
 {
   reset();
 }
 
 
-MeasurementInfo::~MeasurementInfo()
+SpecFile::~SpecFile()
 {
 }
 
 
-MeasurementInfo::MeasurementInfo( const MeasurementInfo &rhs )
+SpecFile::SpecFile( const SpecFile &rhs )
 {
   *this = rhs;
 }
 
 
-const MeasurementInfo &MeasurementInfo::operator=( const MeasurementInfo &rhs )
+const SpecFile &SpecFile::operator=( const SpecFile &rhs )
 {
   if( this == &rhs )
     return *this;
@@ -5314,7 +5315,7 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
 
 
 
-bool MeasurementInfo::load_file( const std::string &filename,
+bool SpecFile::load_file( const std::string &filename,
                ParserType parser_type,
                std::string orig_file_ending )
 {
@@ -5323,84 +5324,84 @@ bool MeasurementInfo::load_file( const std::string &filename,
   bool success = false;
   switch( parser_type )
   {
-    case k2006Icd1Parser:
-    case K2012ICD1Parser:
+    case ParserType::k2006Icd1Parser:
+    case ParserType::K2012ICD1Parser:
       success = load_N42_file( filename );
     break;
 
-    case kSpcParser:
+    case ParserType::kSpcParser:
       success = load_spc_file( filename );
     break;
 
-    case kGR135Parser:
+    case ParserType::kGR135Parser:
       success = load_binary_exploranium_file( filename );
     break;
 
-    case kPcfParser:
+    case ParserType::kPcfParser:
       success = load_pcf_file( filename );
     break;
 
-    case kChnParser:
+    case ParserType::kChnParser:
       success = load_chn_file( filename );
     break;
 
-    case kIaeaParser:
+    case ParserType::kIaeaParser:
       success = load_iaea_file( filename );
     break;
 
-    case kTxtOrCsvParser:
+    case ParserType::kTxtOrCsvParser:
       success = load_txt_or_csv_file( filename );
     break;
 
-    case kCnfParser:
+    case ParserType::kCnfParser:
       success = load_cnf_file( filename );
     break;
       
-    case kTracsMpsParser:
+    case ParserType::kTracsMpsParser:
       success = load_tracs_mps_file( filename );
     break;
       
-    case kAramParser:
+    case ParserType::kAramParser:
       success = load_aram_file( filename );
     break;
       
-    case kSPMDailyFile:
+    case ParserType::kSPMDailyFile:
       success = load_spectroscopic_daily_file( filename );
     break;
       
-    case kAmptekMca:
+    case ParserType::kAmptekMca:
       success = load_amptek_file( filename );
     break;
       
-    case kOrtecListMode:
+    case ParserType::kOrtecListMode:
       success = load_ortec_listmode_file( filename );
     break;
       
-    case kLsrmSpe:
+    case ParserType::kLsrmSpe:
       success = load_lsrm_spe_file( filename );
       break;
       
-    case kTka:
+    case ParserType::kTka:
       success = load_tka_file( filename );
       break;
       
-    case kMultiAct:
+    case ParserType::kMultiAct:
       success = load_multiact_file( filename );
       break;
       
-    case kPhd:
+    case ParserType::kPhd:
       success = load_phd_file( filename );
       break;
       
-    case kLzs:
+    case ParserType::kLzs:
       success = load_lzs_file( filename );
       break;
       
-    case kMicroRaider:
+    case ParserType::kMicroRaider:
       success = load_micro_raider_file( filename );
     break;
       
-    case kAutoParser:
+    case ParserType::kAutoParser:
     {
       bool triedPcf = false, triedSpc = false,
           triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
@@ -5639,7 +5640,7 @@ bool comp_by_start_time_source( const std::shared_ptr<Measurement> &lhs,
   return (left < right);
 }
 
-void  MeasurementInfo::set_sample_numbers_by_time_stamp()
+void  SpecFile::set_sample_numbers_by_time_stamp()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -5668,17 +5669,17 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
       
       switch( m->source_type_ )
       {
-        case Measurement::SourceType::IntrinsicActivity:
-        case Measurement::SourceType::Calibration:
+        case SourceType::IntrinsicActivity:
+        case SourceType::Calibration:
           sorted_calibration.push_back( m );
           break;
             
-        case Measurement::SourceType::Background:
+        case SourceType::Background:
           sorted_background.push_back( m );
           break;
             
-        case Measurement::SourceType::Foreground:
-        case Measurement::SourceType::UnknownSourceType:
+        case SourceType::Foreground:
+        case SourceType::UnknownSourceType:
         default:
           sorted_foreground.push_back( m );
       }//switch( m->source_type_ )
@@ -5744,7 +5745,7 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
       
       //If the time is invalid, we'll put this measurment after all the others.
       //If its an IntrinsicActivity, we'll put it before any of the others.
-      if( m->source_type() == Measurement::IntrinsicActivity )
+      if( m->source_type() == SourceType::IntrinsicActivity )
         time_meas_map[boost::posix_time::neg_infin][detnum].push_back( m );
       else if( m->start_time_.is_special() )
         time_meas_map[boost::posix_time::pos_infin][detnum].push_back( m );
@@ -5790,7 +5791,7 @@ void  MeasurementInfo::set_sample_numbers_by_time_stamp()
 }//void  set_sample_numbers_by_time_stamp()
 
 
-bool MeasurementInfo::has_unique_sample_and_detector_numbers() const
+bool SpecFile::has_unique_sample_and_detector_numbers() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -5822,7 +5823,7 @@ bool MeasurementInfo::has_unique_sample_and_detector_numbers() const
 }//bool has_unique_sample_and_detector_numbers() const
 
 
-void MeasurementInfo::ensure_unique_sample_numbers()
+void SpecFile::ensure_unique_sample_numbers()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -5895,7 +5896,7 @@ void MeasurementInfo::ensure_unique_sample_numbers()
 }//void ensure_unique_sample_numbers()
 
 
-std::set<std::string> MeasurementInfo::find_detector_names() const
+std::set<std::string> SpecFile::find_detector_names() const
 {
 //  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   set<string> det_names;
@@ -5907,7 +5908,7 @@ std::set<std::string> MeasurementInfo::find_detector_names() const
 }//set<string> find_detector_names() const
 
 
-void MeasurementInfo::cleanup_after_load( const unsigned int flags )
+void SpecFile::cleanup_after_load( const unsigned int flags )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -5916,7 +5917,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
   
   //When loading the example passthrough N42 file, this function
   //  take about 60% of the parse time - due almost entirely to
-  //  MeasurementInfo::rebin_by_polunomial_eqn
+  //  SpecFile::rebin_by_polunomial_eqn
   try
   {
     set<string> gamma_detector_names; //can be gamma+nutron
@@ -6221,9 +6222,9 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
       
       //20180221: Removed check on measurement type because some ROSA portal
       //  occupancies have less than 4 non-background samples.
-      if( //meas->source_type_ != Measurement::Background
-         //&& meas->source_type_ != Measurement::Calibration &&
-        meas->source_type_ != Measurement::IntrinsicActivity
+      if( //meas->source_type_ != SourceType::Background
+         //&& meas->source_type_ != SourceType::Calibration &&
+        meas->source_type_ != SourceType::IntrinsicActivity
          && meas->sample_number() >= 0
          && meas->live_time() > 0.00000001
          && meas->real_time() > 0.00000001
@@ -6528,7 +6529,7 @@ void MeasurementInfo::cleanup_after_load( const unsigned int flags )
     
     
     
-void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
+void SpecFile::merge_neutron_meas_into_gamma_meas()
 {
   //Check to make sure sample numbers arent whack (they havent been finally
   //  assigned yet) before doing the correction - all the files I've seen
@@ -6961,13 +6962,13 @@ void MeasurementInfo::merge_neutron_meas_into_gamma_meas()
 
 
 
-void MeasurementInfo::set_detector_type_from_other_info()
+void SpecFile::set_detector_type_from_other_info()
 {
   using SpecUtils::contains;
   using SpecUtils::icontains;
   
   
-  if( detector_type_ != kUnknownDetector )
+  if( detector_type_ != DetectorType::kUnknownDetector )
     return;
   
   const string &model = instrument_model_;
@@ -6977,9 +6978,9 @@ void MeasurementInfo::set_detector_type_from_other_info()
       && (contains(model,"940") || icontains(model,"Eagle+")) )
   {
     if( icontains(model,"LaBr") )
-      detector_type_ = kSam940LaBr3;
+      detector_type_ = DetectorType::kSam940LaBr3;
     else
-      detector_type_ = kSam940;
+      detector_type_ = DetectorType::kSam940;
     
     cerr << "ASAm940 model=" << model << endl;
     
@@ -6991,47 +6992,47 @@ void MeasurementInfo::set_detector_type_from_other_info()
     //if( icontains(model,"LaBr") )
       //detector_type_ = kSam945LaBr3;
     //else
-    detector_type_ = kSam945;
+    detector_type_ = DetectorType::kSam945;
     return;
   }
   
   //Dont know what the 'ULCS' that some models have in their name is
   if( icontains(model,"identiFINDER") && icontains(model,"NG") )
   {
-    detector_type_ = kIdentiFinderNGDetector;
+    detector_type_ = DetectorType::kIdentiFinderNGDetector;
     return;
   }
   
   if( icontains(model,"identiFINDER") && icontains(model,"LG") )
   {
-    detector_type_ = kIdentiFinderLaBr3Detector;
+    detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
     return;
   }
   
   if( icontains(model,"RS-701") )
   {
-    detector_type_ = kRsi701;
+    detector_type_ = DetectorType::kRsi701;
     return;
   }
   
   if( icontains(model,"RS-705") )
   {
-    detector_type_ = kRsi705;
+    detector_type_ = DetectorType::kRsi705;
     return;
   }
   
   if( icontains(model,"RS???") /*&& icontains(id,"Avid")*/ )
   {
-    detector_type_ = kAvidRsi;
+    detector_type_ = DetectorType::kAvidRsi;
     return;
   }
   
   if( icontains(model,"radHUNTER") )
   {
     if( icontains(model,"UL-LGH") )
-      detector_type_ = kRadHunterLaBr3;
+      detector_type_ = DetectorType::kRadHunterLaBr3;
     else
-      detector_type_ = kRadHunterNaI;
+      detector_type_ = DetectorType::kRadHunterNaI;
     return;
   }
   
@@ -7041,16 +7042,16 @@ void MeasurementInfo::set_detector_type_from_other_info()
   {
     if( SpecUtils::icontains(model,"3SG") ) //RADEAGLE NaI(Tl) 3x1, GM Handheld RIID
     {
-      detector_type_ = kOrtecRadEagleNai;
+      detector_type_ = DetectorType::kOrtecRadEagleNai;
     }else if( SpecUtils::icontains(model,"2CG") ) //RADEAGLE CeBr3 2x1, GM Handheld RIID.
     {
-      detector_type_ = kOrtecRadEagleCeBr2Inch;
+      detector_type_ = DetectorType::kOrtecRadEagleCeBr2Inch;
     }else if( SpecUtils::icontains(model,"3CG") ) //RADEAGLE CeBr3 3x0.8, GM Handheld RIID
     {
-      detector_type_ = kOrtecRadEagleCeBr3Inch;
+      detector_type_ = DetectorType::kOrtecRadEagleCeBr3Inch;
     }else if( SpecUtils::icontains(model,"2LG") ) //RADEAGLE LaBr3(Ce) 2x1, GM Handheld RIID
     {
-      detector_type_ = kOrtecRadEagleLaBr;
+      detector_type_ = DetectorType::kOrtecRadEagleLaBr;
     }else
     {
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -7068,7 +7069,7 @@ void MeasurementInfo::set_detector_type_from_other_info()
 
 
 #if( PERFORM_DEVELOPER_CHECKS )
-double MeasurementInfo::deep_gamma_count_sum() const
+double SpecFile::deep_gamma_count_sum() const
 {
   double deep_gamma_sum = 0.0;
   for( const auto &meas : measurements_ )
@@ -7085,7 +7086,7 @@ double MeasurementInfo::deep_gamma_count_sum() const
   return deep_gamma_sum;
 }//double deep_gamma_count_sum() const
 
-double MeasurementInfo::deep_neutron_count_sum() const
+double SpecFile::deep_neutron_count_sum() const
 {
   double deep_sum = 0.0;
   for( const auto &meas : measurements_ )
@@ -7102,7 +7103,7 @@ double MeasurementInfo::deep_neutron_count_sum() const
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
 
 
-void MeasurementInfo::recalc_total_counts()
+void SpecFile::recalc_total_counts()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -7161,7 +7162,7 @@ void MeasurementInfo::recalc_total_counts()
 
 
 
-std::string MeasurementInfo::generate_psuedo_uuid() const
+std::string SpecFile::generate_psuedo_uuid() const
 {
   std::size_t seed = 0;
   
@@ -7252,7 +7253,7 @@ std::string MeasurementInfo::generate_psuedo_uuid() const
 }//std::string generate_psuedo_uuid() const
 
 
-bool MeasurementInfo::load_spc_file( const std::string &filename )
+bool SpecFile::load_spc_file( const std::string &filename )
 {
   reset();
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -7292,7 +7293,7 @@ bool MeasurementInfo::load_spc_file( const std::string &filename )
 
 
 
-bool MeasurementInfo::load_chn_file( const std::string &filename )
+bool SpecFile::load_chn_file( const std::string &filename )
 {
   reset();
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -7325,7 +7326,7 @@ bool MeasurementInfo::load_chn_file( const std::string &filename )
 }//bool load_chn_file( const std::string &filename )
 
 
-bool MeasurementInfo::load_iaea_file( const std::string &filename )
+bool SpecFile::load_iaea_file( const std::string &filename )
 {
   reset();
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -7359,7 +7360,7 @@ bool MeasurementInfo::load_iaea_file( const std::string &filename )
 }//bool load_iaea_file(...)
 
 
-bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
+bool SpecFile::load_from_iaea_spc( std::istream &input )
 {
   //Function is currently not very robust to line ending changes, or unexpected
   //  whitespaces.  Aslo parsing of channel counts coult be sped up probably.
@@ -7475,13 +7476,13 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
       {
         if( SpecUtils::icontains( line.substr(info_pos), "ident") )
         {
-          detector_type_ = kIdentiFinderNGDetector;
+          detector_type_ = DetectorType::kIdentiFinderNGDetector;
                            //TODO: kIdentiFinderLaBr3Detector
           manufacturer_ = "FLIR";
           instrument_model_ = "identiFINDER";
         }else if( SpecUtils::icontains(line, "Raider") )
         {
-          detector_type_ = kMicroRaiderDetector;
+          detector_type_ = DetectorType::kMicroRaiderDetector;
           instrument_model_ = "MicroRaider";
           manufacturer_ = "FLIR";
         }
@@ -7854,7 +7855,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
         throw runtime_error( "To many unregognized begining lines" );
      
 #if(PERFORM_DEVELOPER_CHECKS)
-      cerr << "Warning: MeasurementInfo::load_from_iaea_spc(...):  I didnt recognize line: '"
+      cerr << "Warning: SpecFile::load_from_iaea_spc(...):  I didnt recognize line: '"
            << line << "'" << endl;
 #endif
     }//if / else to figure out what this line cooresponds to
@@ -7881,7 +7882,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
   if( !meas->gamma_counts_ || meas->gamma_counts_->size() < 9 )
   {
     reset();
-//    cerr << "MeasurementInfo::load_from_iaea_spc(...): did not read any spectrum info"
+//    cerr << "SpecFile::load_from_iaea_spc(...): did not read any spectrum info"
 //         << endl;
     return false;
   }//if( meas->gamma_counts_->empty() )
@@ -7893,19 +7894,19 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
   //A temporary message untile I debug detector_type_ a little more
   if( icontains(instrument_model_,"identiFINDER")
       && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-     detector_type_ = kIdentiFinderNGDetector;
+     detector_type_ = DetectorType::kIdentiFinderNGDetector;
   else if( icontains(detector_type,"La") && !detector_type.empty())
   {
     cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
     //XXX - this doesnt actually catch all LaBr3 detectors
-    detector_type_ = kIdentiFinderLaBr3Detector;
+    detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
   }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
   {
     cout << "Untested kIdentiFinderLaBr3Detector association!" << endl;
-    detector_type_ = kIdentiFinderLaBr3Detector;
+    detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
   }else if( icontains(instrument_model_,"identiFINDER") )
   {
-    detector_type_ = kIdentiFinderDetector;
+    detector_type_ = DetectorType::kIdentiFinderDetector;
   }
 
 //  if( detector_type_ == kUnknownDetector )
@@ -7920,7 +7921,7 @@ bool MeasurementInfo::load_from_iaea_spc( std::istream &input )
 
 
 
-bool MeasurementInfo::write_ascii_spc( std::ostream &output,
+bool SpecFile::write_ascii_spc( std::ostream &output,
                                      std::set<int> sample_nums,
                                      const std::set<int> &det_nums ) const
 {
@@ -8173,7 +8174,7 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
   //A temporary message untile I debug detector_type_ a little more
   if( icontains(instrument_model_,"identiFINDER")
      && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-    detector_type_ = kIdentiFinderNGDetector;
+    detector_type_ = DetectorType::kIdentiFinderNGDetector;
   else if( icontains(detector_type,"La") && detector_type.size() )
   {
     cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
@@ -8197,8 +8198,8 @@ bool MeasurementInfo::write_ascii_spc( std::ostream &output,
 }//bool write_ascii_spc(...)
 
 
-bool MeasurementInfo::write_binary_spc( std::ostream &output,
-                                    const MeasurementInfo::SpcBinaryType type,
+bool SpecFile::write_binary_spc( std::ostream &output,
+                                    const SpecFile::SpcBinaryType type,
                                     std::set<int> sample_nums,
                                     const std::set<int> &det_nums ) const
 {
@@ -8383,21 +8384,29 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
   const char *defaultname = 0;
   switch( detector_type_ )
   {
-    case kGR135Detector:          case kIdentiFinderDetector:
-    case kIdentiFinderNGDetector: case kIdentiFinderLaBr3Detector:
-    case kSAIC8Detector:          case kFalcon5000:
-    case kUnknownDetector:        case kMicroRaiderDetector:
-    case kRsi701: case kRsi705: case kAvidRsi: case kSam940LaBr3: case kSam940:
-    case kOrtecRadEagleNai: case kOrtecRadEagleCeBr2Inch:
-    case kOrtecRadEagleCeBr3Inch: case kOrtecRadEagleLaBr:
-    case kSam945: case kSrpm210:
-    case kRadHunterNaI: case kRadHunterLaBr3:
+    case DetectorType::kGR135Detector:          case DetectorType::kIdentiFinderDetector:
+    case DetectorType::kIdentiFinderNGDetector: case DetectorType::kIdentiFinderLaBr3Detector:
+    case DetectorType::kSAIC8Detector:          case DetectorType::kFalcon5000:
+    case DetectorType::kUnknownDetector:        case DetectorType::kMicroRaiderDetector:
+    case DetectorType::kRsi701: case DetectorType::kRsi705:
+    case DetectorType::kAvidRsi: case DetectorType::kSam940LaBr3:
+    case DetectorType::kSam940: case DetectorType::kOrtecRadEagleNai:
+    case DetectorType::kOrtecRadEagleCeBr2Inch:
+    case DetectorType::kOrtecRadEagleCeBr3Inch:
+    case DetectorType::kOrtecRadEagleLaBr:
+    case DetectorType::kSam945:
+    case DetectorType::kSrpm210:
+    case DetectorType::kRadHunterNaI:
+    case DetectorType::kRadHunterLaBr3:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
       
-    case kDetectiveDetector:      case kDetectiveExDetector:
-    case kDetectiveEx100Detector: case kDetectiveEx200Detector:
-    case kMicroDetectiveDetector: case kDetectiveX:
+    case DetectorType::kDetectiveDetector:
+    case DetectorType::kDetectiveExDetector:
+    case DetectorType::kDetectiveEx100Detector:
+    case DetectorType::kDetectiveEx200Detector:
+    case DetectorType::kMicroDetectiveDetector:
+    case DetectorType::kDetectiveX:
       defaultname = "DetectiveEX.SPC";
       break;
   }//switch( detector_type_ )
@@ -8792,7 +8801,7 @@ bool MeasurementInfo::write_binary_spc( std::ostream &output,
 
 
 
-bool MeasurementInfo::load_from_binary_spc( std::istream &input )
+bool SpecFile::load_from_binary_spc( std::istream &input )
 {
 /*
  This function was implemented by hand-decoding binary SPC files by wcjohns.
@@ -9197,7 +9206,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
     string manufacturer = "Ortec";
     string inst_model = "Detective";
     string type_instrument = "RadionuclideIdentifier";
-    DetectorType type_detector = kUnknownDetector;
+    DetectorType type_detector = DetectorType::kUnknownDetector;
       
     
     {//begin codeblock to get acquisition information
@@ -9227,7 +9236,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
         {
           type_instrument = "Radionuclide Identifier";
           manufacturer = "Ortec";
-          type_detector = kDetectiveDetector;
+          type_detector = DetectorType::kDetectiveDetector;
         }//if( istarts_with( name, "DetectiveEX" ) )
       
         try
@@ -9236,7 +9245,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
           //cout << "meas_time=" << SpecUtils::to_iso_string( meas_time ) << endl;
         }catch(...)
         {
-          cerr << "MeasurementInfo::loadBinarySpcFile(...): invalid date string: "
+          cerr << "SpecFile::loadBinarySpcFile(...): invalid date string: "
                << datedata << endl;
         }
       
@@ -9666,32 +9675,32 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
         case SerialToDetectorModel::DetectorModel::Unknown:
         case SerialToDetectorModel::DetectorModel::NotInitialized:
         case SerialToDetectorModel::DetectorModel::UnknownSerialNumber:
-          type_detector = kDetectiveDetector;
+          type_detector = DetectorType::kDetectiveDetector;
           inst_model = "Detective";
           break;
           
         case SerialToDetectorModel::DetectorModel::MicroDetective:
-          type_detector = kMicroDetectiveDetector;
+          type_detector = DetectorType::kMicroDetectiveDetector;
           inst_model = "MicroDetective";
           break;
           
         case SerialToDetectorModel::DetectorModel::DetectiveEx:
-          type_detector = kDetectiveExDetector;
+          type_detector = DetectorType::kDetectiveExDetector;
           inst_model = foundNeutronDet ? "DetectiveEX" : "DetectiveDX";
           break;
           
         case SerialToDetectorModel::DetectorModel::DetectiveEx100:
-          type_detector = kDetectiveEx100Detector;
+          type_detector = DetectorType::kDetectiveEx100Detector;
           inst_model = foundNeutronDet ? "DetectiveEX100" : "DetectiveDX100";
           break;
           
         case SerialToDetectorModel::DetectorModel::Detective200:
-          type_detector = kDetectiveEx200Detector;
+          type_detector = DetectorType::kDetectiveEx200Detector;
           inst_model = "Detective200";
           break;
           
         case SerialToDetectorModel::DetectorModel::DetectiveX:
-          type_detector = kDetectiveX;
+          type_detector = DetectorType::kDetectiveX;
           inst_model = "Detective X";
           break;
       }//switch( model )
@@ -9805,7 +9814,7 @@ bool MeasurementInfo::load_from_binary_spc( std::istream &input )
 
 
 
-bool MeasurementInfo::load_binary_exploranium_file( const std::string &filename )
+bool SpecFile::load_binary_exploranium_file( const std::string &filename )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -9830,7 +9839,7 @@ bool MeasurementInfo::load_binary_exploranium_file( const std::string &filename 
 
 
 
-bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
+bool SpecFile::load_from_binary_exploranium( std::istream &input )
 {
   //Currently doesnt:
   //  -CHSUM	Checksum not checked
@@ -10237,7 +10246,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
         instrument_model_ = is130v0 ? "GR130" : "GR135";
         instrument_type_ = "Radionuclide Identifier";
         if( !is130v0 )
-          detector_type_ = kGR135Detector;
+          detector_type_ = DetectorType::kGR135Detector;
       }//if( j == 0 )
       
       measurements_.push_back( meas );
@@ -10270,7 +10279,7 @@ bool MeasurementInfo::load_from_binary_exploranium( std::istream &input )
 }//void load_from_binary_exploranium()
 
 
-bool MeasurementInfo::write_binary_exploranium_gr130v0( std::ostream &output ) const
+bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -10395,7 +10404,7 @@ bool MeasurementInfo::write_binary_exploranium_gr130v0( std::ostream &output ) c
 
 
 
-bool MeasurementInfo::write_binary_exploranium_gr135v2( std::ostream &output ) const
+bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -10532,10 +10541,10 @@ bool MeasurementInfo::write_binary_exploranium_gr135v2( std::ostream &output ) c
 
 
 #if( SpecUtils_ENABLE_D3_CHART )
-bool MeasurementInfo::write_d3_html( ostream &ostr,
-                                     const D3SpectrumExport::D3SpectrumChartOptions &options,
-                                     std::set<int> sample_nums,
-                                     const std::set<int> &det_nums ) const
+bool SpecFile::write_d3_html( ostream &ostr,
+                              const D3SpectrumExport::D3SpectrumChartOptions &options,
+                              std::set<int> sample_nums,
+                              const std::set<int> &det_nums ) const
 {
   try
   {
@@ -10561,7 +10570,7 @@ bool MeasurementInfo::write_d3_html( ostream &ostr,
     
     vector< pair<const Measurement *,D3SpectrumExport::D3SpectrumOptions> > measurements;
     D3SpectrumExport::D3SpectrumOptions spec_options;
-    measurements.push_back( pair<const Measurement *,D3SpectrumExport::D3SpectrumOptions>(summed.get(),spec_options) );
+    measurements.push_back( pair<const Measurement *,::D3SpectrumExport::D3SpectrumOptions>(summed.get(),spec_options) );
     
     return D3SpectrumExport::write_d3_html( ostr, measurements, options );
   }catch( std::exception & )
@@ -10573,7 +10582,7 @@ bool MeasurementInfo::write_d3_html( ostream &ostr,
 }
 #endif
 
-bool MeasurementInfo::write_iaea_spe( ostream &output,
+bool SpecFile::write_iaea_spe( ostream &output,
                                       set<int> sample_nums,
                                       const set<int> &det_nums ) const
 {
@@ -10690,7 +10699,7 @@ bool MeasurementInfo::write_iaea_spe( ostream &output,
   return true;
 }//write_iaea_spe(...)
 
-bool MeasurementInfo::load_pcf_file( const std::string &filename )
+bool SpecFile::load_pcf_file( const std::string &filename )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
@@ -10836,7 +10845,7 @@ struct SpectrumNodeDecodeWorker
         
         const rapidxml::xml_node<char> *start_time = xml_first_node_nso( parent, "StartTime", xmlns );
         if( start_time && start_time->value_size() && m_meas->start_time_.is_special()
-            && m_meas->source_type_ != Measurement::IntrinsicActivity )
+            && m_meas->source_type_ != SourceType::IntrinsicActivity )
           m_meas->start_time_ = time_from_string( xml_value_str(start_time).c_str() );
       }//if( parent )
     }
@@ -10890,7 +10899,7 @@ struct GrossCountNodeDecodeWorker
 };//struct GrossCountNodeDecodeWorker
 
 
-void MeasurementInfo::set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
+void SpecFile::set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
                                             std::vector<std::shared_ptr<Measurement>> &measurs_to_update )
 {
   if( !info_node )
@@ -10957,7 +10966,7 @@ void MeasurementInfo::set_n42_2006_deviation_pair_info( const rapidxml::xml_node
 }//void set_n42_2006_deviation_pair_info(...)
 
 
-void MeasurementInfo::set_n42_2006_instrument_info_node_info( const rapidxml::xml_node<char> *info_node )
+void SpecFile::set_n42_2006_instrument_info_node_info( const rapidxml::xml_node<char> *info_node )
 {
   if( !info_node )
     return;
@@ -11393,7 +11402,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
 
   float real_time = 0.0, speed = 0.0;
   boost::posix_time::ptime start_time;
-  Measurement::OccupancyStatus occupied = Measurement::UnknownOccupancyStatus;
+  OccupancyStatus occupied = OccupancyStatus::UnknownOccupancyStatus;
 
   if( sample_real_time_node && sample_real_time_node->value_size() )
     real_time = time_duration_string_to_seconds( sample_real_time_node->value(), sample_real_time_node->value_size() );
@@ -11407,17 +11416,17 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
 
   try{
     if( !occupancy_node )
-      occupied = Measurement::UnknownOccupancyStatus;
+      occupied = OccupancyStatus::UnknownOccupancyStatus;
     else if( is_occupied( occupancy_node ) )
-      occupied = Measurement::Occupied;
+      occupied = OccupancyStatus::Occupied;
     else
-      occupied = Measurement::NotOccupied;
+      occupied = OccupancyStatus::NotOccupied;
   }catch(...){}
 
 
   for( auto &meas : measurs_to_update )
   {
-    if( meas->occupied_ == Measurement::UnknownOccupancyStatus )
+    if( meas->occupied_ == OccupancyStatus::UnknownOccupancyStatus )
       meas->occupied_ = occupied;
 
     if( meas->speed_ < 0.00000001f )
@@ -11428,7 +11437,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
     //  <DetectorData> (of which, this time disagrees with the actual spectrum
     //  StartTime, so I dont know what to do about this anyway)
     if( meas->start_time_.is_special()
-        && (meas->source_type_ != Measurement::IntrinsicActivity) )
+        && (meas->source_type_ != SourceType::IntrinsicActivity) )
       meas->start_time_ = start_time;
 
     if( meas->real_time_ < 0.000001f )
@@ -11443,7 +11452,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
 }//void set_n42_2006_detector_data_node_info(  )
 
 
-void MeasurementInfo::set_n42_2006_measurment_location_information(
+void SpecFile::set_n42_2006_measurment_location_information(
                           const rapidxml::xml_node<char> *measured_item_info_node,
                           std::vector<std::shared_ptr<Measurement>> added_measurements )
 {
@@ -11558,7 +11567,7 @@ void MeasurementInfo::set_n42_2006_measurment_location_information(
 
 
 
-void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_node )
+void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_node )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -11722,8 +11731,8 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
               }
               
               if( measurements_.size() == 2
-                 && measurements_[nearestindex]->source_type() == Measurement::Foreground
-                 && measurements_[nearestindex?0:1]->source_type() == Measurement::Background )
+                 && measurements_[nearestindex]->source_type() == SourceType::Foreground
+                 && measurements_[nearestindex?0:1]->source_type() == SourceType::Background )
               {
                 //For nucsafe g4 predator
                 const rapidxml::xml_attribute<char> *det_attrib = XML_FIRST_ATTRIB(dose, "DetectorType");
@@ -11959,7 +11968,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
           rapidxml::xml_attribute<char> *detector_attrib = det_meas_node->first_attribute( "Detector", 8 );
           if( detector_attrib && XML_VALUE_ICOMPARE(detector_attrib, "ORTEC Portal") )
           {
-            detector_type_ = kDetectiveEx200Detector;
+            detector_type_ = DetectorType::kDetectiveEx200Detector;
           }
         }//for( loop over <DetectorMeasurement> nodes under current <DetectorData> )
         
@@ -12201,19 +12210,19 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
         //Make sure if any of the spectrum had the <SourceType> tag, but some
         //  others didnt, we propogate this info to them.  This notably effects
         //  rad assist detectors
-        Measurement::SourceType sourcetype = Measurement::UnknownSourceType;
+        SourceType sourcetype = SourceType::UnknownSourceType;
         for( auto &m : measurements_this_node )
         {
           if( !m ) continue;
-          if( sourcetype == Measurement::UnknownSourceType )
+          if( sourcetype == SourceType::UnknownSourceType )
             sourcetype = m->source_type_;
-          else if( m->source_type_ != Measurement::UnknownSourceType )
+          else if( m->source_type_ != SourceType::UnknownSourceType )
             sourcetype = max( sourcetype, m->source_type_ );
         }//for( auto &m : measurements_this_node )
         
         for( auto &m : measurements_this_node )
         {
-          if( m && (m->source_type_ == Measurement::UnknownSourceType) )
+          if( m && (m->source_type_ == SourceType::UnknownSourceType) )
             m->source_type_ = sourcetype;
         }//for( auto &m : measurements_this_node )
         
@@ -12511,7 +12520,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
           //  we'll do it - I really dont like the brittlness of all of this!
           size_t nspectra = 0;
           for( const auto &meas : added_measurements )
-            nspectra += (meas && (meas->source_type_ != Measurement::IntrinsicActivity) && meas->start_time_.is_special() );
+            nspectra += (meas && (meas->source_type_ != SourceType::IntrinsicActivity) && meas->start_time_.is_special() );
           if( nspectra != 1 )
             continue;
         }
@@ -12551,7 +12560,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     if( info_node )
     {
       if( instrument_type_.size() )
-        cerr << "MeasurementInfo::load_2006_N42_from_doc(): may be overwriting InstrumentInformation already gathered from a specific spectrum" << endl;
+        cerr << "SpecFile::load_2006_N42_from_doc(): may be overwriting InstrumentInformation already gathered from a specific spectrum" << endl;
       set_n42_2006_instrument_info_node_info( info_node );
     }
   }
@@ -12582,21 +12591,21 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
   if( iequals_ascii( manufacturer_,"ORTEC" ) )
   {
     if( iequals_ascii(instrument_model_,"OSASP") )
-      detector_type_ = kDetectiveEx200Detector;
+      detector_type_ = DetectorType::kDetectiveEx200Detector;
     else if( icontains(instrument_model_,"100") )
-      detector_type_ = kDetectiveEx100Detector;
+      detector_type_ = DetectorType::kDetectiveEx100Detector;
     else if( icontains(instrument_model_,"Detective-EX") )
-      detector_type_ = kDetectiveExDetector;
+      detector_type_ = DetectorType::kDetectiveExDetector;
     else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
-      detector_type_ = kDetectiveEx100Detector;
+      detector_type_ = DetectorType::kDetectiveEx100Detector;
     else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
-      detector_type_ = kMicroDetectiveDetector;
+      detector_type_ = DetectorType::kMicroDetectiveDetector;
     else if( icontains(instrument_model_,"Detective") )
-      detector_type_ = kDetectiveDetector;
+      detector_type_ = DetectorType::kDetectiveDetector;
   }else if( iequals_ascii(instrument_type_,"PVT Portal")
            && iequals_ascii(manufacturer_,"SAIC") )
   {
-    detector_type_ = kSAIC8Detector;
+    detector_type_ = DetectorType::kSAIC8Detector;
   }else if( icontains(instrument_model_,"identiFINDER")
            //&& icontains(manufacturer_,"FLIR")
            )
@@ -12606,18 +12615,18 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     //      <InstrumentVersion>Hardware: 4C	Firmware: 5.00.54	Operating System: 1.2.040	Application: 2.37</InstrumentVersion>
     
     if( icontains(instrument_model_,"LG") )
-      detector_type_ = kIdentiFinderLaBr3Detector;
+      detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
     else
-      detector_type_ = kIdentiFinderNGDetector;
+      detector_type_ = DetectorType::kIdentiFinderNGDetector;
   }else if( icontains(manufacturer_,"FLIR") || icontains(instrument_model_,"Interceptor") )
   {
     
   }else if( icontains(instrument_model_,"SAM940") || icontains(instrument_model_,"SAM 940") || icontains(instrument_model_,"SAM Eagle") )
   {
     if( icontains(instrument_model_,"LaBr") )
-      detector_type_ = kSam940LaBr3;
+      detector_type_ = DetectorType::kSam940LaBr3;
     else
-      detector_type_ = kSam940;
+      detector_type_ = DetectorType::kSam940;
   }else if( istarts_with(instrument_model_,"RE ") || icontains(instrument_model_,"RadEagle") || icontains(instrument_model_,"Rad Eagle" ) )
   {
     if( !manufacturer_.empty() && !icontains(manufacturer_, "ortec") )
@@ -12627,11 +12636,11 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
     //set_detector_type_from_other_info() will set detector_type_ ...
   }else if( icontains(instrument_model_,"SAM") && icontains(instrument_model_,"945") )
   {
-    detector_type_ = kSam945;
+    detector_type_ = DetectorType::kSam945;
   }else if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
             && icontains(instrument_model_,"Raider") )
   {
-    detector_type_ = kMicroRaiderDetector;
+    detector_type_ = DetectorType::kMicroRaiderDetector;
   }else if( icontains(manufacturer_,"Canberra Industries, Inc.") )
   {
     //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
@@ -12675,7 +12684,7 @@ void MeasurementInfo::load_2006_N42_from_doc( const rapidxml::xml_node<char> *do
   {
     if( manufacturer_.size() < 2 )
       manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
-    detector_type_ = kSrpm210;
+    detector_type_ = DetectorType::kSrpm210;
   }else if( (icontains(instrument_type_,"innoRIID") || icontains(instrument_type_,"ortec"))
            && istarts_with(instrument_model_, "RE ") )
   {
@@ -13241,44 +13250,56 @@ void add_analysis_results_to_2012_N42(
 }//void add_analysis_results_to_2012_N42(...)
 
 
-std::string MeasurementInfo::determine_rad_detector_kind_code() const
+std::string SpecFile::determine_rad_detector_kind_code() const
 {
   string det_kind = "Other";
   switch( detector_type_ )
   {
-    case kDetectiveDetector: case kDetectiveExDetector:
-    case kDetectiveEx100Detector: case kDetectiveEx200Detector:
-    case kFalcon5000: case kMicroDetectiveDetector: case kDetectiveX:
+    case DetectorType::kDetectiveDetector:
+    case DetectorType::kDetectiveExDetector:
+    case DetectorType::kDetectiveEx100Detector:
+    case DetectorType::kDetectiveEx200Detector:
+    case DetectorType::kFalcon5000:
+    case DetectorType::kMicroDetectiveDetector:
+    case DetectorType::kDetectiveX:
       det_kind = "HPGe";
       break;
       
-    case kGR135Detector: case kIdentiFinderDetector:
-    case kIdentiFinderNGDetector: case kRadHunterNaI:
-    case kRsi701: case kRsi705: case kAvidRsi: case kOrtecRadEagleNai:
-    case kSam940: case kSam945:
+    case DetectorType::kGR135Detector:
+    case DetectorType::kIdentiFinderDetector:
+    case DetectorType::kIdentiFinderNGDetector:
+    case DetectorType::kRadHunterNaI:
+    case DetectorType::kRsi701:
+    case DetectorType::kRsi705:
+    case DetectorType::kAvidRsi:
+    case DetectorType::kOrtecRadEagleNai:
+    case DetectorType::kSam940:
+    case DetectorType::kSam945:
       det_kind = "NaI";
       break;
       
-    case kIdentiFinderLaBr3Detector: case kRadHunterLaBr3: case kSam940LaBr3:
-    case kOrtecRadEagleLaBr:
+    case DetectorType::kIdentiFinderLaBr3Detector:
+    case DetectorType::kRadHunterLaBr3:
+    case DetectorType::kSam940LaBr3:
+    case DetectorType::kOrtecRadEagleLaBr:
       det_kind = "LaBr3";
       break;
       
-    case kOrtecRadEagleCeBr2Inch:
-    case kOrtecRadEagleCeBr3Inch:
+    case DetectorType::kOrtecRadEagleCeBr2Inch:
+    case DetectorType::kOrtecRadEagleCeBr3Inch:
       det_kind = "CeBr3";
       break;
       
-    case kSAIC8Detector:
-    case kSrpm210:
+    case DetectorType::kSAIC8Detector:
+    case DetectorType::kSrpm210:
       det_kind = "PVT";
       break;
       
-    case kMicroRaiderDetector:
+    case DetectorType::kMicroRaiderDetector:
       det_kind = "CZT";
       break;
       
-    case kUnknownDetector:
+    case DetectorType::kUnknownDetector:
       if( num_gamma_channels() > 4100 )
         det_kind = "HPGe";
       else if( manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
@@ -13294,7 +13315,7 @@ std::string MeasurementInfo::determine_rad_detector_kind_code() const
 }//determine_rad_detector_kind_code()
 
 
-std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N42_xml() const
+std::shared_ptr< ::rapidxml::xml_document<char> > SpecFile::create_2012_N42_xml() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -13515,7 +13536,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
     //Could add InterSpec_VERSION
     
     char buff[8];
-    snprintf( buff, sizeof(buff), "%d", MeasurementInfo_2012N42_VERSION );
+    snprintf( buff, sizeof(buff), "%d", SpecFile_2012N42_VERSION );
     
     instvrsn = doc->allocate_node( node_element, "RadInstrumentVersion" );
     RadInstrumentInformation->append_node( instvrsn );
@@ -13558,7 +13579,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
   }//if( measurment_operator_.size() )
   
   
-  if( detector_type_ != kUnknownDetector )
+  if( detector_type_ != DetectorType::kUnknownDetector )
   {
     std::lock_guard<std::mutex> lock( xmldocmutex );
     if( !RadInstrumentInformationExtension )
@@ -13724,7 +13745,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
       //  this sample.  This is to accomidate some portals whos RSPs may
       //  accumulate backgrounds a little weird, but none-the-less should all be
       //  considered teh same sample.
-      if( m->source_type() != Measurement::SourceType::Background
+      if( m->source_type() != SourceType::Background
          || (sample_num != (*sample_numbers_.begin())) )
       {
         if( starttime != m->start_time() )
@@ -13754,7 +13775,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
         //  the first sample is a long background.  Apparently GADRAS relies
         //  on the "id" attribute of RadMeasurement for this...
         if( (sample_num == (*sample_numbers_.begin()))
-            && (smeas[0]->source_type() == Measurement::SourceType::Background)
+            && (smeas[0]->source_type() == SourceType::Background)
             && smeas[0]->live_time() > 10.0 )
         {
           first_sample_was_back = true;
@@ -13838,7 +13859,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > MeasurementInfo::create_2012_N
 }//rapidxml::xml_node<char> *create_2012_N42_xml() const
 
 
-void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
+void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
                                    ::rapidxml::xml_node<char> *RadMeasurement,
                                    const std::vector< std::shared_ptr<const Measurement> > measurments,
                                    const std::vector<size_t> calibids,
@@ -13896,8 +13917,8 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
     float speed = measurments[0]->speed_;
     boost::posix_time::ptime starttime = measurments[0]->start_time();
     
-    Measurement::OccupancyStatus occupancy = measurments[0]->occupied_;
-    Measurement::SourceType source_type = measurments[0]->source_type();
+    OccupancyStatus occupancy = measurments[0]->occupied_;
+    SourceType source_type = measurments[0]->source_type();
     
     bool has_gps = false;
     string positiontime;
@@ -13912,11 +13933,11 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
       
       speed = max( measurments[i]->speed_, speed );
         
-      if( measurments[i]->occupied_ == Measurement::Occupied )
+      if( measurments[i]->occupied_ == OccupancyStatus::Occupied )
         occupancy = measurments[i]->occupied_;
-      else if( occupancy == Measurement::UnknownOccupancyStatus )
+      else if( occupancy == OccupancyStatus::UnknownOccupancyStatus )
         occupancy = measurments[i]->occupied_;
-      else if( measurments[i]->occupied_ == Measurement::NotOccupied && occupancy == Measurement::UnknownOccupancyStatus )
+      else if( measurments[i]->occupied_ ==  OccupancyStatus::NotOccupied && occupancy == OccupancyStatus::UnknownOccupancyStatus )
         occupancy = measurments[i]->occupied_;
         
       if( !has_gps && measurments[i]->has_gps_info() )
@@ -13928,7 +13949,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
           positiontime = SpecUtils::to_extended_iso_string(measurments[i]->position_time_) + "Z";
       }//if( !has_gps )
         
-      if( measurments[i]->source_type_ != Measurement::UnknownSourceType )
+      if( measurments[i]->source_type_ != SourceType::UnknownSourceType )
         source_type = std::max( measurments[i]->source_type_, source_type );
     }//for( size_t i = 1; i < measurments.size(); ++i )
   
@@ -13944,18 +13965,18 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
     const char *occupied = (const char *)0;
     switch( source_type )
     {
-      case Measurement::Background:         classcode = "Background";        break;
-      case Measurement::Calibration:        classcode = "Calibration";       break;
-      case Measurement::Foreground:         classcode = "Foreground";        break;
-      case Measurement::IntrinsicActivity:  classcode = "IntrinsicActivity"; break;
-      case Measurement::UnknownSourceType:  classcode = "NotSpecified";      break;
+      case SourceType::Background:         classcode = "Background";        break;
+      case SourceType::Calibration:        classcode = "Calibration";       break;
+      case SourceType::Foreground:         classcode = "Foreground";        break;
+      case SourceType::IntrinsicActivity:  classcode = "IntrinsicActivity"; break;
+      case SourceType::UnknownSourceType:  classcode = "NotSpecified";      break;
     }//switch( source_type_ )
     
     switch( occupancy )
     {
-      case Measurement::NotOccupied: occupied = "false"; break;
-      case Measurement::Occupied:    occupied = "true";  break;
-      case Measurement::UnknownOccupancyStatus:          break;
+      case OccupancyStatus::NotOccupied: occupied = "false"; break;
+      case OccupancyStatus::Occupied:    occupied = "true";  break;
+      case OccupancyStatus::UnknownOccupancyStatus:          break;
     }//switch( occupied_ )
     
     {
@@ -14311,7 +14332,7 @@ void MeasurementInfo::add_spectra_to_measurment_node_in_2012_N42_xml(
 
 
 
-bool MeasurementInfo::write_2012_N42( std::ostream& ostr ) const
+bool SpecFile::write_2012_N42( std::ostream& ostr ) const
 {
   std::shared_ptr< rapidxml::xml_document<char> > doc = create_2012_N42_xml();
   
@@ -14325,7 +14346,7 @@ bool MeasurementInfo::write_2012_N42( std::ostream& ostr ) const
 }//bool write_2012_N42( std::ostream& ostr ) const
 
 
-std::string MeasurementInfo::concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node )
+std::string SpecFile::concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node )
 {
   //      const rapidxml::xml_attribute<char> *char_id = char_node->first_attribute( "id", 2 );
   const rapidxml::xml_attribute<char> *date = char_node->first_attribute( "valueDateTime", 13 );
@@ -14373,7 +14394,7 @@ std::string MeasurementInfo::concat_2012_N42_characteristic_node( const rapidxml
 }//std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *node )
 
 
-void MeasurementInfo::set_2012_N42_instrument_info( const rapidxml::xml_node<char> *info_node )
+void SpecFile::set_2012_N42_instrument_info( const rapidxml::xml_node<char> *info_node )
 {
   if( !info_node )
     return;
@@ -14444,7 +14465,7 @@ void MeasurementInfo::set_2012_N42_instrument_info( const rapidxml::xml_node<cha
   const rapidxml::xml_node<char> *infoextension_node = info_node->first_node( "RadInstrumentInformationExtension", 33 );
 //  const rapidxml::xml_node<char> *operator_node = infoextension_node ? infoextension_node->first_node("InterSpec:MeasurmentOperator",18) : (const rapidxml::xml_node<char> *)0;
   
-  //<InterSpec:Inspection> node is vestigual as of 20160607, and only kept in to read older files (with MeasurementInfo_2012N42_VERSION==1), of which, there are probably not many, if any around
+  //<InterSpec:Inspection> node is vestigual as of 20160607, and only kept in to read older files (with SpecFile_2012N42_VERSION==1), of which, there are probably not many, if any around
   const rapidxml::xml_node<char> *inspection_node = infoextension_node ? infoextension_node->first_node("InterSpec:Inspection",20) : (const rapidxml::xml_node<char> *)0;
   
   const rapidxml::xml_node<char> *detector_type_node = infoextension_node ? infoextension_node->first_node("InterSpec:DetectorType",22) : (const rapidxml::xml_node<char> *)0;
@@ -14459,7 +14480,9 @@ void MeasurementInfo::set_2012_N42_instrument_info( const rapidxml::xml_node<cha
   if( detector_type_node )
   {
     const string type = xml_value_str( detector_type_node );
-    for( DetectorType i = DetectorType(0); i <= kSrpm210; i = DetectorType(i+1) )
+    for( DetectorType i = DetectorType(0);
+         i < DetectorType::kUnknownDetector;
+         i = DetectorType(static_cast<int>(i)+1) )
     {
       if( type == detectorTypeToString(i) )
       {
@@ -14728,7 +14751,7 @@ void get_2012_N42_energy_calibrations( map<string,MeasurementCalibInfo> &calibra
 
 
 
-void MeasurementInfo::decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
+void SpecFile::decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
                                                            const rapidxml::xml_node<char> *meas_node )
 {
   using rapidxml::internal::compare;
@@ -14813,18 +14836,18 @@ void MeasurementInfo::decode_2012_N42_detector_state_and_quality( std::shared_pt
   
   if( extension_node )
   {
-    //This is vestigial for MeasurementInfo_2012N42_VERSION==2
+    //This is vestigial for SpecFile_2012N42_VERSION==2
     rapidxml::xml_node<char> *title_node = extension_node->first_node( "InterSpec:Title", 15 );
     meas->title_ = xml_value_str( title_node );
     
-    //This is vestigial for MeasurementInfo_2012N42_VERSION==1
+    //This is vestigial for SpecFile_2012N42_VERSION==1
     rapidxml::xml_node<char> *type_node = extension_node->first_node( "InterSpec:DetectorType", 22 );
     meas->detector_description_ = xml_value_str( type_node );
   }//if( detector_type_.size() || title_.size() )
 }//void decode_2012_N42_detector_state_and_quality(...)
 
 
-void MeasurementInfo::decode_2012_N42_rad_measurment_node(
+void SpecFile::decode_2012_N42_rad_measurment_node(
                                      vector< std::shared_ptr<Measurement> > &measurments,
                                      const rapidxml::xml_node<char> *meas_node,
                                      const IdToDetectorType *id_to_dettype_ptr,
@@ -14840,8 +14863,8 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     vector<string> remarks;
     float real_time = 0.0;
     boost::posix_time::ptime start_time;
-    Measurement::SourceType spectra_type = Measurement::UnknownSourceType;
-    Measurement::OccupancyStatus occupied = Measurement::UnknownOccupancyStatus;
+    SourceType spectra_type = SourceType::UnknownSourceType;
+    OccupancyStatus occupied = OccupancyStatus::UnknownOccupancyStatus;
     
     rapidxml::xml_attribute<char> *meas_att = meas_node->first_attribute( "id", 2, false );
 //    rapidxml::xml_attribute<char> *info_att = meas_node->first_attribute( "radItemInformationReferences", 28 );
@@ -14881,21 +14904,21 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     if( class_code_node && class_code_node->value_size() )
     {
       if( XML_VALUE_ICOMPARE(class_code_node, "Foreground") )
-        spectra_type = Measurement::Foreground;
+        spectra_type = SourceType::Foreground;
       else if( XML_VALUE_ICOMPARE(class_code_node, "Background") )
-        spectra_type = Measurement::Background;
+        spectra_type = SourceType::Background;
       else if( XML_VALUE_ICOMPARE(class_code_node, "Calibration") )
-        spectra_type = Measurement::Calibration;
+        spectra_type = SourceType::Calibration;
       else if( XML_VALUE_ICOMPARE(class_code_node, "IntrinsicActivity") )
-        spectra_type = Measurement::IntrinsicActivity;
+        spectra_type = SourceType::IntrinsicActivity;
       else if( XML_VALUE_ICOMPARE(class_code_node, "NotSpecified") )
-        spectra_type = Measurement::UnknownSourceType;
+        spectra_type = SourceType::UnknownSourceType;
     }//if( class_code_node && class_code_node->value_size() )
 
     //Special check for RadSeeker.
-    if( spectra_type == Measurement::UnknownSourceType
+    if( spectra_type == SourceType::UnknownSourceType
         && meas_att && XML_VALUE_ICOMPARE(meas_att, "Stabilization") )
-      spectra_type = Measurement::IntrinsicActivity;
+      spectra_type = SourceType::IntrinsicActivity;
     
     rapidxml::xml_node<char> *time_node = meas_node->first_node( "StartDateTime", 13 );
     if( time_node && time_node->value_size() )
@@ -14917,9 +14940,9 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
     if( occupancy_node && occupancy_node->value_size() )
     {
       if( XML_VALUE_ICOMPARE(occupancy_node, "true") || XML_VALUE_ICOMPARE(occupancy_node, "1") )
-        occupied = Measurement::Occupied;
+        occupied = OccupancyStatus::Occupied;
       else if( XML_VALUE_ICOMPARE(occupancy_node, "false") || XML_VALUE_ICOMPARE(occupancy_node, "0") )
-        occupied = Measurement::NotOccupied;
+        occupied =  OccupancyStatus::NotOccupied;
     }//if( occupancy_node && occupancy_node->value_size() )
 
     vector< std::shared_ptr<Measurement> > spectrum_meas, neutron_meas;
@@ -15001,7 +15024,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           
         if( SpecUtils::istarts_with( remark, "RealTime:") )
         {
-          //Starting with MeasurementInfo_2012N42_VERSION==3, a slightly more
+          //Starting with SpecFile_2012N42_VERSION==3, a slightly more
           //  accurate RealTime may be recorded in the remark if necassary...
           //  see notes in create_2012_N42_xml() and add_spectra_to_measurment_node_in_2012_N42_xml()
           //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
@@ -15011,7 +15034,7 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
           use_remark_real_time = (meas->real_time_ > 0.0);
         }else if( SpecUtils::istarts_with( remark, "Title:") )
         {
-          //Starting with MeasurementInfo_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
+          //Starting with SpecFile_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
           remark = SpecUtils::trim_copy( remark.substr(6) );
           meas->title_ += remark;
         }else if( remark.size() )
@@ -15078,9 +15101,9 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
       meas->source_type_ = spectra_type;
       
       //For the sake of file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42
-      if( meas->source_type_ == Measurement::UnknownSourceType
+      if( meas->source_type_ == SourceType::UnknownSourceType
          && SpecUtils::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
-        meas->source_type_ = Measurement::IntrinsicActivity;
+        meas->source_type_ = SourceType::IntrinsicActivity;
       
       meas->occupied_ = occupied;
     
@@ -15539,13 +15562,13 @@ void MeasurementInfo::decode_2012_N42_rad_measurment_node(
   }catch( std::exception &e )
   {
     std::lock_guard<std::mutex> lock( meas_mutex );
-    cerr << "Error decoding MeasurementInfo::decode2012N42SpectrumNode(...): "
+    cerr << "Error decoding SpecFile::decode2012N42SpectrumNode(...): "
          << e.what() << endl;
   }//try / catch
 }//void decode_2012_N42_rad_measurment_node( const rapidxml::xml_node<char> *spectrum )
 
 
-void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *data_node )
+void SpecFile::load_2012_N42_from_doc( const rapidxml::xml_node<char> *data_node )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -15737,7 +15760,7 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
     for( auto character = XML_FIRST_NODE_CHECKED(characteristics_node, "Characteristic");
          character; character = XML_NEXT_TWIN(character) )
     {
-      const string charac_str = MeasurementInfo::concat_2012_N42_characteristic_node(character);
+      const string charac_str = SpecFile::concat_2012_N42_characteristic_node(character);
       if( charac_str.size() )
         descrip += string(descrip.size() ? ", " : "") + "{" + charac_str + "}";
     }//loop over characteristics
@@ -15835,7 +15858,7 @@ void MeasurementInfo::load_2012_N42_from_doc( const rapidxml::xml_node<char> *da
 }//bool load_2012_N42_from_doc( rapidxml::xml_node<char> *document_node )
 
 
-bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *document_node )
+bool SpecFile::load_from_N42_document( const rapidxml::xml_node<char> *document_node )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -15917,7 +15940,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
         for( const auto &m : measurements_ )
         {
           bool keep = false;
-          if( m->source_type() == Measurement::Background )
+          if( m->source_type() == SourceType::Background )
             keep = true;
           for( const std::string &c : m->remarks_ )
             keep |= SpecUtils::icontains( c, "count" );
@@ -16028,7 +16051,7 @@ bool MeasurementInfo::load_from_N42_document( const rapidxml::xml_node<char> *do
 }//bool load_from_N42_document( rapidxml::xml_node<char> *document_node )
 
 
-bool MeasurementInfo::load_micro_raider_file( const std::string &filename )
+bool SpecFile::load_micro_raider_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -16059,7 +16082,7 @@ bool MeasurementInfo::load_micro_raider_file( const std::string &filename )
 }//bool load_micro_raider_file(...)
 
 
-bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
+bool SpecFile::load_from_micro_raider_from_data( const char *data )
 {
   try
   {
@@ -16243,7 +16266,7 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
     manufacturer_ = "ICx Radiation";
     instrument_model_ = "Raider";
     instrument_type_ = "Radionuclide Identifier";  //or PersonalRadiationDetector
-    detector_type_ = kMicroRaiderDetector;
+    detector_type_ = DetectorType::kMicroRaiderDetector;
     
     measurements_.push_back( meas );
     
@@ -16262,7 +16285,7 @@ bool MeasurementInfo::load_from_micro_raider_from_data( const char *data )
 }//bool load_from_micro_raider_from_data( const char *data )
 
 
-bool MeasurementInfo::load_from_N42( std::istream &input )
+bool SpecFile::load_from_N42( std::istream &input )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -16275,10 +16298,10 @@ bool MeasurementInfo::load_from_N42( std::istream &input )
   {
     rapidxml::file<char> input_file( input );
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
-    return MeasurementInfo::load_N42_from_data( input_file.data(), input_file.data()+input_file.size() );
+    return SpecFile::load_N42_from_data( input_file.data(), input_file.data()+input_file.size() );
 #else
     input_file.check_for_premature_nulls( 2048, ' ' );
-    return MeasurementInfo::load_N42_from_data( input_file.data() );
+    return SpecFile::load_N42_from_data( input_file.data() );
 #endif
   }catch( std::exception & )
   {
@@ -16292,7 +16315,7 @@ bool MeasurementInfo::load_from_N42( std::istream &input )
 }//bool load_from_N42( char *data )
 
 
-bool MeasurementInfo::load_N42_file( const std::string &filename )
+bool SpecFile::load_N42_file( const std::string &filename )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -16302,10 +16325,10 @@ bool MeasurementInfo::load_N42_file( const std::string &filename )
     SpecUtils::load_file_data( filename.c_str(), data );
     
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
-    const bool loaded = MeasurementInfo::load_N42_from_data( &data.front(), (&data.front())+data.size() );
+    const bool loaded = SpecFile::load_N42_from_data( &data.front(), (&data.front())+data.size() );
 #else
     input_file.check_for_premature_nulls( 2048, ' ' );
-    const bool loaded = MeasurementInfo::load_N42_from_data( &data.front() );
+    const bool loaded = SpecFile::load_N42_from_data( &data.front() );
 #endif
     
     if( !loaded )
@@ -16322,7 +16345,7 @@ bool MeasurementInfo::load_N42_file( const std::string &filename )
 }//bool load_N42_file( const std::string &filename );
 
 
-bool MeasurementInfo::load_N42_from_data( char *data )
+bool SpecFile::load_N42_from_data( char *data )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -16352,7 +16375,7 @@ bool MeasurementInfo::load_N42_from_data( char *data )
 
 
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
-bool MeasurementInfo::load_N42_from_data( char *data, char *data_end )
+bool SpecFile::load_N42_from_data( char *data, char *data_end )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -16385,7 +16408,7 @@ bool MeasurementInfo::load_N42_from_data( char *data, char *data_end )
 
 
 
-void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
+void SpecFile::rebin_by_eqn( const std::vector<float> &eqn,
                                     const std::vector<std::pair<float,float>> &dev_pairs,
                                     SpecUtils::EnergyCalType type )
 {
@@ -16432,7 +16455,7 @@ void MeasurementInfo::rebin_by_eqn( const std::vector<float> &eqn,
 }//void rebin_by_eqn( const std::vector<float> &eqn )
 
 
-void MeasurementInfo::recalibrate_by_lower_edge( std::shared_ptr<const std::vector<float>> binning )
+void SpecFile::recalibrate_by_lower_edge( std::shared_ptr<const std::vector<float>> binning )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -16445,7 +16468,7 @@ void MeasurementInfo::recalibrate_by_lower_edge( std::shared_ptr<const std::vect
 
 
 
-void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
+void SpecFile::recalibrate_by_eqn( const std::vector<float> &eqn,
                                           const std::vector<std::pair<float,float>> &dev_pairs,
                                           SpecUtils::EnergyCalType type )
 {
@@ -16477,7 +16500,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
 
 //If only certain detectors are specified, then those detectors will be
 //  recalibrated, and the other detectors will be rebinned.
-void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
+void SpecFile::recalibrate_by_eqn( const std::vector<float> &eqn,
                                           const std::vector<std::pair<float,float>> &dev_pairs,
                                           SpecUtils::EnergyCalType type,
                                           const vector<string> &detectors,
@@ -16568,7 +16591,7 @@ void MeasurementInfo::recalibrate_by_eqn( const std::vector<float> &eqn,
 
 
 
-size_t MeasurementInfo::memmorysize() const
+size_t SpecFile::memmorysize() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -16620,14 +16643,14 @@ size_t MeasurementInfo::memmorysize() const
 }//size_t memmorysize() const
 
 
-bool MeasurementInfo::passthrough() const
+bool SpecFile::passthrough() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   return (properties_flags_ & kPassthroughOrSearchMode);
 }//bool passthrough() const
 
 
-size_t MeasurementInfo::suggested_gamma_binning_index(
+size_t SpecFile::suggested_gamma_binning_index(
                                             const std::set<int> &sample_numbers,
                                             const vector<bool> &det_to_use ) const
 {
@@ -16636,7 +16659,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
   std::shared_ptr<const std::vector<float>> binning_ptr;
     
   if( detector_numbers_.size() != det_to_use.size() )
-    throw runtime_error( "MeasurementInfo::suggested_gamma_binning_index():"
+    throw runtime_error( "SpecFile::suggested_gamma_binning_index():"
                          " invalid det_to_use" );
   
   const bool same_nchannel = ((properties_flags_ & kAllSpectraSameNumberChannels) != 0);
@@ -16693,7 +16716,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
   }//for( size_t i = 0; i < measurements_.size(); ++i )
   
   if( !binning_ptr )
-    throw runtime_error( "MeasurementInfo::suggested_gamma_binning_index():"
+    throw runtime_error( "SpecFile::suggested_gamma_binning_index():"
                          " no valid measurments." );
   
   return index;
@@ -16701,7 +16724,7 @@ size_t MeasurementInfo::suggested_gamma_binning_index(
 
 
 
-std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<int> &sample_numbers,
+std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sample_numbers,
                                      const std::vector<std::string> &det_names ) const
 {
   vector<bool> det_to_use( detector_numbers_.size(), false );
@@ -16712,7 +16735,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<i
                                                 end(detector_names_),
                                                 name );
     if( pos == end(detector_names_) )
-      throw runtime_error( "MeasurementInfo::sum_measurements(): invalid detector name in the input" );
+      throw runtime_error( "SpecFile::sum_measurements(): invalid detector name in the input" );
     
     const size_t index = pos - detector_names_.begin();
     det_to_use[index] = true;
@@ -16723,7 +16746,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<i
 
 
 
-std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &sample_num,
+std::shared_ptr<Measurement> SpecFile::sum_measurements( const set<int> &sample_num,
                                             const vector<int> &det_nums ) const
 {
   vector<bool> det_to_use( detector_numbers_.size(), false );
@@ -16734,7 +16757,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &
                                                  detector_numbers_.end(),
                                                  num );
     if( pos == detector_numbers_.end() )
-      throw runtime_error( "MeasurementInfo::sum_measurements(): invalid detector number in the input" );
+      throw runtime_error( "SpecFile::sum_measurements(): invalid detector number in the input" );
     
     const size_t index = pos - detector_numbers_.begin();
     det_to_use[index] = true;
@@ -16744,7 +16767,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &
 }//sum_measurements(...)
 
 
-std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &sample_num,
+std::shared_ptr<Measurement> SpecFile::sum_measurements( const set<int> &sample_num,
                                                      const vector<int> &det_nums,
                                                      const std::shared_ptr<const Measurement> binTo ) const
 {
@@ -16756,7 +16779,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &
                                                 detector_numbers_.end(),
                                                 num );
     if( pos == detector_numbers_.end() )
-      throw runtime_error( "MeasurementInfo::sum_measurements(): invalid detector number in the input" );
+      throw runtime_error( "SpecFile::sum_measurements(): invalid detector number in the input" );
     
     const size_t index = pos - detector_numbers_.begin();
     det_to_use[index] = true;
@@ -16767,7 +16790,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const set<int> &
 
 
 
-std::shared_ptr<Measurement> MeasurementInfo::sum_measurements(
+std::shared_ptr<Measurement> SpecFile::sum_measurements(
                                          const std::set<int> &sample_numbers,
                                          const vector<bool> &det_to_use ) const
 {
@@ -16791,7 +16814,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements(
 }//sum_measurements(...)
 
 
-std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<int> &sample_numbers,
+std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sample_numbers,
                                       const vector<bool> &det_to_use,
                                       const std::shared_ptr<const Measurement> binto ) const
 {
@@ -16811,7 +16834,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<i
     dataH->set_title( filename_ );
   
   if( detector_names_.size() != det_to_use.size() )
-    throw runtime_error( "MeasurementInfo::sum_measurements(...): "
+    throw runtime_error( "SpecFile::sum_measurements(...): "
                         "det_to_use.size() != sample_measurements.size()" );
   
   dataH->contained_neutron_ = false;
@@ -17046,7 +17069,7 @@ std::shared_ptr<Measurement> MeasurementInfo::sum_measurements( const std::set<i
 
 
 
-set<size_t> MeasurementInfo::gamma_channel_counts() const
+set<size_t> SpecFile::gamma_channel_counts() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17060,7 +17083,7 @@ set<size_t> MeasurementInfo::gamma_channel_counts() const
 }//std::set<size_t> gamma_channel_counts() const
 
 
-size_t MeasurementInfo::num_gamma_channels() const
+size_t SpecFile::num_gamma_channels() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17073,7 +17096,7 @@ size_t MeasurementInfo::num_gamma_channels() const
   //  return std::min( meas->channel_energies_->size(), meas->gamma_counts_->size() );
 
   return 0;
-}//size_t MeasurementInfo::num_gamma_channels() const
+}//size_t SpecFile::num_gamma_channels() const
 
 
 struct KeepNBinSpectraStruct
@@ -17111,7 +17134,7 @@ struct KeepNBinSpectraStruct
 
 
 //return number of removed spectra
-size_t MeasurementInfo::keep_n_bin_spectra_only( size_t nbin )
+size_t SpecFile::keep_n_bin_spectra_only( size_t nbin )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17179,7 +17202,7 @@ size_t MeasurementInfo::keep_n_bin_spectra_only( size_t nbin )
 }//size_t keep_n_bin_spectra_only( size_t nbin )
 
 
-bool MeasurementInfo::contained_neutron() const
+bool SpecFile::contained_neutron() const
 {
   for( const auto &m : measurements_ )
     if( m && m->contained_neutron() )
@@ -17189,7 +17212,7 @@ bool MeasurementInfo::contained_neutron() const
 }//
 
 
-size_t MeasurementInfo::remove_neutron_measurments()
+size_t SpecFile::remove_neutron_measurments()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17218,7 +17241,7 @@ size_t MeasurementInfo::remove_neutron_measurments()
 }//size_t remove_neutron_measurments();
 
 
-set<string> MeasurementInfo::energy_cal_variants() const
+set<string> SpecFile::energy_cal_variants() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -17235,7 +17258,7 @@ set<string> MeasurementInfo::energy_cal_variants() const
 }//set<string> energy_cal_variants() const
 
 
-size_t MeasurementInfo::keep_energy_cal_variant( const std::string variant )
+size_t SpecFile::keep_energy_cal_variant( const std::string variant )
 {
   const string ending = "_intercal_" + variant;
   std::vector< std::shared_ptr<Measurement> > keepers;
@@ -17245,7 +17268,7 @@ size_t MeasurementInfo::keep_energy_cal_variant( const std::string variant )
   const set<string> origvaraints = energy_cal_variants();
   
   if( !origvaraints.count(variant) )
-    throw runtime_error( "MeasurementInfo::keep_energy_cal_variant():"
+    throw runtime_error( "SpecFile::keep_energy_cal_variant():"
                          " measurment did not contain an energy variant named '"
                          + variant + "'" );
   
@@ -17281,21 +17304,21 @@ size_t MeasurementInfo::keep_energy_cal_variant( const std::string variant )
 
 
 
-int MeasurementInfo::background_sample_number() const
+int SpecFile::background_sample_number() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
   //XXX - maybe could be sped up by using sample_numbers()
   //      and/or sample_measurements(..)
   for( const auto &meas : measurements_ )
-    if( meas->source_type_ == Measurement::Background )
+    if( meas->source_type_ == SourceType::Background )
       return meas->sample_number_;
 
   return numeric_limits<int>::min();
 }//int background_sample_number() const
 
 
-void MeasurementInfo::reset()
+void SpecFile::reset()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -17316,7 +17339,7 @@ void MeasurementInfo::reset()
   measurment_operator_.clear();
   sample_numbers_.clear();
   sample_to_measurments_.clear();
-  detector_type_ = kUnknownDetector;
+  detector_type_ = DetectorType::kUnknownDetector;
   instrument_type_.clear();
   manufacturer_.clear();
   instrument_model_.clear();
@@ -17326,7 +17349,7 @@ void MeasurementInfo::reset()
   modified_ = modifiedSinceDecode_ = false;
   component_versions_.clear();
   detectors_analysis_.reset();
-}//void MeasurementInfo::reset()
+}//void SpecFile::reset()
 
   
 DetectorAnalysisResult::DetectorAnalysisResult()
@@ -17387,7 +17410,7 @@ bool DetectorAnalysis::is_empty() const
 }
 
 
-void MeasurementInfo::write_to_file( const std::string filename,
+void SpecFile::write_to_file( const std::string filename,
                                      const SaveSpectrumAsType format ) const
 {
   set<int> samples, detectors;
@@ -17403,7 +17426,7 @@ void MeasurementInfo::write_to_file( const std::string filename,
 
 
 
-void MeasurementInfo::write_to_file( const std::string name,
+void SpecFile::write_to_file( const std::string name,
                    const std::set<int> sample_nums,
                    const std::set<int> det_nums,
                    const SaveSpectrumAsType format ) const
@@ -17424,7 +17447,7 @@ void MeasurementInfo::write_to_file( const std::string name,
 }//void write_to_file(...)
 
 
-void MeasurementInfo::write_to_file( const std::string name,
+void SpecFile::write_to_file( const std::string name,
                    const std::vector<int> sample_nums_vector,
                    const std::vector<int> det_nums_vector,
                    const SaveSpectrumAsType format ) const
@@ -17439,7 +17462,7 @@ void MeasurementInfo::write_to_file( const std::string name,
 }//write_to_file(...)
 
 
-void MeasurementInfo::write_to_file( const std::string &filename,
+void SpecFile::write_to_file( const std::string &filename,
                    const std::set<int> &sample_nums,
                    const std::vector<std::string> &det_names,
                    const SaveSpectrumAsType format ) const
@@ -17455,7 +17478,7 @@ void MeasurementInfo::write_to_file( const std::string &filename,
                                                          end(detector_names_),
                                                          name );
       if( pos == end(detector_names_) )
-        throw runtime_error( "MeasurementInfo::write_to_file(): invalid detector name in the input" );
+        throw runtime_error( "SpecFile::write_to_file(): invalid detector name in the input" );
     
       const size_t index = pos - detector_names_.begin();
       det_nums_set.insert( detector_numbers_[index] );
@@ -17466,7 +17489,7 @@ void MeasurementInfo::write_to_file( const std::string &filename,
 }//void write_to_file(...)
 
 
-void MeasurementInfo::write( std::ostream &strm,
+void SpecFile::write( std::ostream &strm,
            std::set<int> sample_nums,
            const std::set<int> det_nums,
            const SaveSpectrumAsType format ) const
@@ -17495,7 +17518,7 @@ void MeasurementInfo::write( std::ostream &strm,
       throw runtime_error( "Specified invalid detector number to write out" );
   }
   
-  MeasurementInfo info = *this;
+  SpecFile info = *this;
   
   if( (sample_nums != sample_numbers_)
       || (det_nums.size() != detector_numbers_.size()) )
@@ -17522,56 +17545,56 @@ void MeasurementInfo::write( std::ostream &strm,
   bool success = false;
   switch( format )
   {
-    case kTxtSpectrumFile:
+    case SaveSpectrumAsType::kTxtSpectrumFile:
       success = info.write_txt( strm );
       break;
       
-    case kCsvSpectrumFile:
+    case SaveSpectrumAsType::kCsvSpectrumFile:
       success = info.write_csv( strm );
       break;
       
-    case kPcfSpectrumFile:
+    case SaveSpectrumAsType::kPcfSpectrumFile:
       success = info.write_pcf( strm );
       break;
       
-    case kXmlSpectrumFile:
+    case SaveSpectrumAsType::kXmlSpectrumFile:
       success = info.write_2006_N42( strm );
       break;
       
-    case k2012N42SpectrumFile:
+    case SaveSpectrumAsType::k2012N42SpectrumFile:
       success = info.write_2012_N42( strm );
       break;
       
-    case kChnSpectrumFile:
+    case SaveSpectrumAsType::kChnSpectrumFile:
       success = info.write_integer_chn( strm, samples, detectors );
       break;
       
-    case kBinaryIntSpcSpectrumFile:
+    case SaveSpectrumAsType::kBinaryIntSpcSpectrumFile:
       success = info.write_binary_spc( strm, IntegerSpcType, samples, detectors );
       break;
       
-    case kBinaryFloatSpcSpectrumFile:
+    case SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile:
       success = info.write_binary_spc( strm, FloatSpcType, samples, detectors );
       break;
       
-    case kAsciiSpcSpectrumFile:
+    case SaveSpectrumAsType::kAsciiSpcSpectrumFile:
       success = info.write_ascii_spc( strm, samples, detectors );
       break;
       
-    case kExploraniumGr130v0SpectrumFile:
+    case SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile:
       success = info.write_binary_exploranium_gr130v0( strm );
       break;
             
-    case kExploraniumGr135v2SpectrumFile:
+    case SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile:
       success = info.write_binary_exploranium_gr135v2( strm );
       break;
       
-    case kIaeaSpeSpectrumFile:
+    case SaveSpectrumAsType::kIaeaSpeSpectrumFile:
       success = info.write_iaea_spe( strm, samples, detectors );
       break;
 
 #if( SpecUtils_ENABLE_D3_CHART )
-    case kD3HtmlSpectrumFile:
+    case SaveSpectrumAsType::kD3HtmlSpectrumFile:
     {
       D3SpectrumExport::D3SpectrumChartOptions options;
       success = info.write_d3_html( strm, options, samples, detectors );
@@ -17579,7 +17602,7 @@ void MeasurementInfo::write( std::ostream &strm,
     }
 #endif
       
-    case kNumSaveSpectrumAsType:
+    case SaveSpectrumAsType::kNumSaveSpectrumAsType:
       throw runtime_error( "Invalid output format specified" );
       break;
   }//switch( format )
@@ -17590,7 +17613,7 @@ void MeasurementInfo::write( std::ostream &strm,
 }//write_to_file(...)
 
 
-void MeasurementInfo::pcf_file_channel_info( size_t &nchannel,
+void SpecFile::pcf_file_channel_info( size_t &nchannel,
                                              std::shared_ptr<const std::vector<float>> &lower_channel_energies ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -17682,7 +17705,7 @@ void MeasurementInfo::pcf_file_channel_info( size_t &nchannel,
 }//size_t pcf_file_channel_info(...) const;
 
 /*
-std::shared_ptr<const std::vector<float>> MeasurementInfo::lower_channel_energies_for_pcf() const
+std::shared_ptr<const std::vector<float>> SpecFile::lower_channel_energies_for_pcf() const
 {
   shared_ptr<const vector<float>> lower_channel_energies;
   for( const auto &meas : measurements_ )
@@ -17739,7 +17762,7 @@ std::shared_ptr<const std::vector<float>> MeasurementInfo::lower_channel_energie
 }//std::shared_ptr<const std::vector<float>> lower_channel_energies_for_pcf() const;
 */
 
-size_t MeasurementInfo::write_lower_channel_energies_to_pcf( std::ostream &ostr,
+size_t SpecFile::write_lower_channel_energies_to_pcf( std::ostream &ostr,
                std::shared_ptr<const std::vector<float>> lower_channel_energies,
                const size_t nchannel_file ) const
 {
@@ -17819,7 +17842,7 @@ size_t MeasurementInfo::write_lower_channel_energies_to_pcf( std::ostream &ostr,
 }//size_t write_lower_channel_energies_to_pcf()
 
 
-void MeasurementInfo::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
+void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
 {
   //Find the deviation pairs to use in this file, for each detector.  PCF
   //  format assumes each detector only has one set of deviation pairs in the
@@ -17996,7 +18019,7 @@ void MeasurementInfo::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
       //  couldnt find a spot, but at this point, oh well.
 #if(PERFORM_DEVELOPER_CHECKS)
       if( !found_spot )
-        log_developer_error( __func__, ("MeasurementInfo::write_deviation_pairs_to_pcf: "
+        log_developer_error( __func__, ("SpecFile::write_deviation_pairs_to_pcf: "
                     "Couldnt find spot to write deviation pairs for detector " + name + "!!!").c_str() );
 #endif
     }//for( const auto &name : detectors_not_written )
@@ -18010,7 +18033,7 @@ void MeasurementInfo::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
 
 
 
-bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
+bool SpecFile::write_pcf( std::ostream &outputstrm ) const
 {
 #if(PERFORM_DEVELOPER_CHECKS)
   //The input stream may not support tellp(), so for testing to make sure we
@@ -18191,7 +18214,7 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       char buffer[128];
       
       int sample_num = meas->sample_number_;
-      if( passthrough() && (meas->source_type() != Measurement::Background && (meas->source_type() != Measurement::Calibration)) )
+      if( passthrough() && (meas->source_type() != SourceType::Background && (meas->source_type() != SourceType::Calibration)) )
       {
         auto pos = std::lower_bound( begin(passthrough_samples), end(passthrough_samples), meas->sample_number_ );
         sample_num = static_cast<int>(pos - passthrough_samples.begin()) + 1;
@@ -18207,9 +18230,9 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
          && !SpecUtils::icontains( meas->title_, "sample" )
          && !SpecUtils::icontains( meas->title_, "survey" ) )
       {
-        if( meas->source_type() == Measurement::Background )
+        if( meas->source_type() == SourceType::Background )
           snprintf( buffer, sizeof(buffer), " Background" );
-        else if( meas->source_type() == Measurement::Calibration )
+        else if( meas->source_type() == SourceType::Calibration )
           snprintf( buffer, sizeof(buffer), " Calibration" );
         else
           snprintf( buffer, sizeof(buffer), " Survey %i", sample_num );
@@ -18231,9 +18254,9 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
          && !SpecUtils::icontains( meas->title_, "Calibration" )
          && !SpecUtils::icontains( meas->title_, "Foreground" ) )
       {
-        if( meas->source_type_ == Measurement::Background )
+        if( meas->source_type_ == SourceType::Background )
           spectrum_title += " Background";
-        else if( meas->source_type_ == Measurement::Calibration )
+        else if( meas->source_type_ == SourceType::Calibration )
           spectrum_title += " Calibration";
         else
           spectrum_title += " Foreground";
@@ -18327,10 +18350,10 @@ bool MeasurementInfo::write_pcf( std::ostream &outputstrm ) const
       
       if( passthrough() )
       {
-        if( (meas->occupied() == Measurement::NotOccupied)
-            && (meas->source_type() != Measurement::Background) )
+        if( (meas->occupied() ==  OccupancyStatus::NotOccupied)
+            && (meas->source_type() != SourceType::Background) )
           character_tag = '-';
-        else if( meas->occupied() == Measurement::Occupied )
+        else if( meas->occupied() == OccupancyStatus::Occupied )
           character_tag = ' ';
         //else if this is background and we know what isotope we are calibrating
         //  from, then could put 'K' or 'T'
@@ -18471,7 +18494,7 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
     ostr << "    <MeasuredItemInformation>" << endline
          << "      <MeasurementLocation>" << endline;
 
-//The MeasurementInfo class contains the member variable
+//The SpecFile class contains the member variable
 //      measurement_location_name_, so we cant write the following
 //  if( measurement_location_name_.size() )
 //    ostr << "        <MeasurementLocationName>" << measurement_location_name_
@@ -18595,11 +18618,11 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
   
   switch( source_type_ )
   {
-    case IntrinsicActivity: ostr << "      <SourceType>Other</SourceType>" << endline; break; break;
-    case Calibration:       ostr << "      <SourceType>Calibration</SourceType>" << endline; break;
-    case Background:        ostr << "      <SourceType>Background</SourceType>" << endline; break;
-    case Foreground:        ostr << "      <SourceType>Item</SourceType>" << endline; break;
-    case UnknownSourceType: break;
+    case SourceType::IntrinsicActivity: ostr << "      <SourceType>Other</SourceType>" << endline; break; break;
+    case SourceType::Calibration:       ostr << "      <SourceType>Calibration</SourceType>" << endline; break;
+    case SourceType::Background:        ostr << "      <SourceType>Background</SourceType>" << endline; break;
+    case SourceType::Foreground:        ostr << "      <SourceType>Item</SourceType>" << endline; break;
+    case SourceType::UnknownSourceType: break;
   }//switch( source_type_ )
   
   if(!detector_description_.empty())
@@ -18667,7 +18690,7 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
 }//bool write_2006_N42_xml( std::ostream& ostr ) const
 
 
-bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
+bool SpecFile::write_2006_N42( std::ostream& ostr ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -18788,7 +18811,7 @@ bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
     boost::posix_time::ptime starttime = meass[0]->start_time();
     float rtime = meass[0]->real_time_;
     float speed = meass[0]->speed_;
-    Measurement::OccupancyStatus occstatus = meass[0]->occupied_;
+    OccupancyStatus occstatus = meass[0]->occupied_;
     
     for( size_t i = 1; i < meass.size(); ++i )
     {
@@ -18796,9 +18819,9 @@ bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
       starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
       rtime = max( rtime, meass[i]->real_time_ );
       speed = max( speed, meass[i]->speed_ );
-      if( occstatus == Measurement::UnknownOccupancyStatus )
+      if( occstatus == OccupancyStatus::UnknownOccupancyStatus )
         occstatus = meass[i]->occupied_;
-      else if( meass[i]->occupied_ != Measurement::UnknownOccupancyStatus )
+      else if( meass[i]->occupied_ != OccupancyStatus::UnknownOccupancyStatus )
         occstatus = max( occstatus, meass[i]->occupied_ );
     }
     
@@ -18808,8 +18831,8 @@ bool MeasurementInfo::write_2006_N42( std::ostream& ostr ) const
       ostr << "    <StartTime>" << SpecUtils::to_extended_iso_string(starttime) << "Z</StartTime>" << endline;
     if( rtime > 0.0f )
      ostr << "    <SampleRealTime>PT" << rtime << "S</SampleRealTime>" << endline;
-    if( occstatus != Measurement::UnknownOccupancyStatus )
-      ostr << "    <Occupied>" << (occstatus==Measurement::NotOccupied ? "0" : "1") << "</Occupied>" << endline;
+    if( occstatus != OccupancyStatus::UnknownOccupancyStatus )
+      ostr << "    <Occupied>" << (occstatus== OccupancyStatus::NotOccupied ? "0" : "1") << "</Occupied>" << endline;
     if( speed > 0.0f )
       ostr << "    <Speed Units=\"m/s\">" << speed << "</Speed>" << endline;
 
@@ -18858,7 +18881,7 @@ bool Measurement::write_csv( std::ostream& ostr ) const
 }//bool Measurement::write_csv( std::ostream& ostr ) const
 
 
-bool MeasurementInfo::write_csv( std::ostream& ostr ) const
+bool SpecFile::write_csv( std::ostream& ostr ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -18869,7 +18892,7 @@ bool MeasurementInfo::write_csv( std::ostream& ostr ) const
 }//bool write_csv( std::ostream& ostr ) const
 
 
-bool MeasurementInfo::load_from_pcf( std::istream &input )
+bool SpecFile::load_from_pcf( std::istream &input )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -19278,12 +19301,12 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       
        //XXX test for Background below not tested
       if( SpecUtils::icontains( spectrum_title, "Background" ) )
-        meas->source_type_ = Measurement::Background;
+        meas->source_type_ = SourceType::Background;
       else if( SpecUtils::icontains( spectrum_title, "Calib" ) )
-        meas->source_type_ = Measurement::Calibration;
+        meas->source_type_ = SourceType::Calibration;
       else //if( spectrum_title.find("Foreground") != string::npos )
-        meas->source_type_ = Measurement::Foreground;
-       //else meas->source_type_ = Measurement::UnknownSourceType
+        meas->source_type_ = SourceType::Foreground;
+       //else meas->source_type_ = SourceType::UnknownSourceType
 
       meas->title_ = spectrum_title;
 
@@ -19295,19 +19318,19 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
       
       if( character_tag == '-' )
       {
-        meas->occupied_ = Measurement::NotOccupied;
+        meas->occupied_ =  OccupancyStatus::NotOccupied;
       }else if( character_tag == ' ' )
       {
         //If the data isnt portal data, then will change to UnknownOccupancyStatus
-        meas->occupied_ = Measurement::Occupied;
+        meas->occupied_ = OccupancyStatus::Occupied;
         
         //Background spectra should not have the tag character be a dash, as the
         //  tag chacter could indicate calibration isotope.
-        if( meas->source_type_ == Measurement::Background )
-          meas->occupied_ = Measurement::NotOccupied;
+        if( meas->source_type_ == SourceType::Background )
+          meas->occupied_ =  OccupancyStatus::NotOccupied;
       }else
       {
-        meas->occupied_ = Measurement::UnknownOccupancyStatus;
+        meas->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
       }
       
       while( energy_cal_terms.size() && (energy_cal_terms.back()==0.0f) )
@@ -19533,7 +19556,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
     if( !passthrough() )
     {
       for( auto &m : measurements_ )
-        m->occupied_ = Measurement::UnknownOccupancyStatus;
+        m->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
     }//if( !passthrough() )
   }catch( std::exception & )
   {
@@ -19551,7 +19574,7 @@ bool MeasurementInfo::load_from_pcf( std::istream &input )
 
 
 
-bool MeasurementInfo::load_from_chn( std::istream &input )
+bool SpecFile::load_from_chn( std::istream &input )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -19786,7 +19809,7 @@ bool MeasurementInfo::load_from_chn( std::istream &input )
 }//bool load_from_chn( std::istream &input )
 
 
-bool MeasurementInfo::write_integer_chn( ostream &ostr, set<int> sample_nums,
+bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
                                          const set<int> &det_nums ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -20648,7 +20671,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
 }//void set_info_from_txt_or_csv( std::istream& istr )
 
 
-bool MeasurementInfo::load_from_iaea( std::istream& istr )
+bool SpecFile::load_from_iaea( std::istream& istr )
 {
   //channel data in $DATA:
   //live time, real time in $MEAS_TIM:
@@ -20725,7 +20748,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         {
           passMessage( "Error reading DATA section of IAEA file, "
                        "unexpected number of fields in first line.",
-                       "MeasurementInfo::load_from_iaea()", 1 );
+                       "SpecFile::load_from_iaea()", 1 );
         }//if( firstlineparts.size() == 2 )
 
         double sum = 0.0;
@@ -20782,7 +20805,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         {
           passMessage( "Error reading MEAS_TIM section of IAEA file, "
                        "unexpected number of fields.",
-                       "MeasurementInfo::load_from_iaea()", 1 );
+                       "SpecFile::load_from_iaea()", 1 );
         }//if( firstlineparts.size() == 2 )
       }else if( starts_with(line,"$DATE_MEA:") )
       {
@@ -20800,7 +20823,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
         {
           passMessage( "Unable to convert date/time '" + line +
                        "' to a valid posix time",
-                       "MeasurementInfo::load_from_iaea()", 1 );
+                       "SpecFile::load_from_iaea()", 1 );
         }
       }else if( starts_with(line,"$SPEC_ID:") )
       {
@@ -20962,7 +20985,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
                 msg << "Unexpected number of calibration parameters in "
                        "IAEA file, expected " << npar << " found "
                     << coefs.size();
-                passMessage( msg.str(), "MeasurementInfo::load_from_iaea()", 1 );
+                passMessage( msg.str(), "SpecFile::load_from_iaea()", 1 );
 //              throw runtime_error( "Unexpected number of energy calibration parameters" );
               }
             }
@@ -21023,7 +21046,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           meas->contained_neutron_ = true;
         }else
           passMessage( "Error parsing neutron counts from line: " + line,
-                       "MeasurementInfo::load_from_iaea()", 1 );
+                       "SpecFile::load_from_iaea()", 1 );
       }else if( starts_with(line,"$NEUTRONS_LIVETIME:") )
       { //ex "267706.437500  (sec)"
         if( !SpecUtils::safe_get_line( istr, line ) )
@@ -21044,7 +21067,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           meas->contained_neutron_ = true;
         }else
           passMessage( "Error parsing neutron cps from line: " + line,
-                      "MeasurementInfo::load_from_iaea()", 1 );
+                      "SpecFile::load_from_iaea()", 1 );
       }else if( starts_with(line,"$SPEC_REM:") )
       {
         while( SpecUtils::safe_get_line( istr, line ) )
@@ -21240,7 +21263,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           
           if( SpecUtils::icontains( line, "identiFINDER 2 LG" ) )
           {
-            detector_type_ = kIdentiFinderLaBr3Detector;
+            detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
             instrument_model_ = line;
             manufacturer_ = "FLIR";
             
@@ -21248,7 +21271,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
               meas->contained_neutron_ = true;
           }else if( SpecUtils::icontains( line, "identiFINDER 2 NG") ) //"nanoRaider ZH"
           {
-            detector_type_ = kIdentiFinderNGDetector;
+            detector_type_ = DetectorType::kIdentiFinderNGDetector;
             instrument_model_ = line;
             manufacturer_ = "FLIR";
             
@@ -21320,9 +21343,9 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           
           if( SpecUtils::icontains( line, "IntrinsicActivity" ) )
-            meas->source_type_ = Measurement::IntrinsicActivity;
+            meas->source_type_ = SourceType::IntrinsicActivity;
           else if( SpecUtils::icontains( line, "Measurement" ) )
-            meas->source_type_ = Measurement::Foreground;
+            meas->source_type_ = SourceType::Foreground;
         }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( starts_with(line,"$FLIR_REACHBACK:") )
       {
@@ -21573,7 +21596,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
           snprintf( buffer, sizeof(buffer),
                     "Error parsing deviation pairs, expected %i, read in %i; "
                     "not using", int(npairs), int(pairs.size()) );
-          passMessage( buffer, "MeasurementInfo::load_from_iaea()", 1 );
+          passMessage( buffer, "SpecFile::load_from_iaea()", 1 );
         }//if( pairs.size() == npairs )
       }else if( starts_with(line,"$ENDRECORD:") )
       {
@@ -21743,7 +21766,7 @@ bool MeasurementInfo::load_from_iaea( std::istream& istr )
 }//bool load_from_iaea( std::istream& ostr )
 
 
-bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
+bool SpecFile::load_from_Gr135_txt( std::istream &input )
 {
   //See data file for refIED7MP8PYR for an example file
   reset();
@@ -21907,7 +21930,7 @@ bool MeasurementInfo::load_from_Gr135_txt( std::istream &input )
 }//bool load_from_Gr135_txt( std::istream &istr )
 
 
-bool MeasurementInfo::load_from_txt_or_csv( std::istream &istr )
+bool SpecFile::load_from_txt_or_csv( std::istream &istr )
 {
   reset();
 
@@ -21980,7 +22003,7 @@ bool MeasurementInfo::load_from_txt_or_csv( std::istream &istr )
 }//bool load_from_txt_or_csv( std::ostream& ostr )
 
 
-bool MeasurementInfo::load_spectroscopic_daily_file( const std::string &filename )
+bool SpecFile::load_spectroscopic_daily_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22055,7 +22078,7 @@ bool MeasurementInfo::load_spectroscopic_daily_file( const std::string &filename
 }//bool load_spectroscopic_daily_file( const std::string &filename )
 
 
-bool MeasurementInfo::load_amptek_file( const std::string &filename )
+bool SpecFile::load_amptek_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22075,7 +22098,7 @@ bool MeasurementInfo::load_amptek_file( const std::string &filename )
 }//bool load_amptek_file( const std::string &filename )
 
 
-bool MeasurementInfo::load_ortec_listmode_file( const std::string &filename )
+bool SpecFile::load_ortec_listmode_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22095,7 +22118,7 @@ bool MeasurementInfo::load_ortec_listmode_file( const std::string &filename )
 }
 
 
-bool MeasurementInfo::load_lsrm_spe_file( const std::string &filename )
+bool SpecFile::load_lsrm_spe_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22115,7 +22138,7 @@ bool MeasurementInfo::load_lsrm_spe_file( const std::string &filename )
 }//bool load_lsrm_spe_file( const std::string &filename );
 
 
-bool MeasurementInfo::load_tka_file( const std::string &filename )
+bool SpecFile::load_tka_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22135,7 +22158,7 @@ bool MeasurementInfo::load_tka_file( const std::string &filename )
 }//bool load_tka_file( const std::string &filename )
 
 
-bool MeasurementInfo::load_multiact_file( const std::string &filename )
+bool SpecFile::load_multiact_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22155,7 +22178,7 @@ bool MeasurementInfo::load_multiact_file( const std::string &filename )
 }//bool load_multiact_file( const std::string &filename );
 
 
-bool MeasurementInfo::load_phd_file( const std::string &filename )
+bool SpecFile::load_phd_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22175,7 +22198,7 @@ bool MeasurementInfo::load_phd_file( const std::string &filename )
 }//bool load_phd_file( const std::string &filename );
 
 
-bool MeasurementInfo::load_lzs_file( const std::string &filename )
+bool SpecFile::load_lzs_file( const std::string &filename )
 {
 #ifdef _WIN32
   ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
@@ -22196,7 +22219,7 @@ bool MeasurementInfo::load_lzs_file( const std::string &filename )
 
 
 
-bool MeasurementInfo::load_txt_or_csv_file( const std::string &filename )
+bool SpecFile::load_txt_or_csv_file( const std::string &filename )
 {
   try
   {
@@ -22695,7 +22718,7 @@ namespace SpectroscopicDailyFile
 }//namespace SpectroscopicDailyFile
 
 
-bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
+bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 {
 /* The daily file is a comma separated value file, with a carriage return and
    line feed denoting the end of each line.  The file is saved as a text (.txt) 
@@ -23362,8 +23385,8 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->detector_name_      = "sum";
       meas->gamma_counts_       = gammaback->spectrum;
       meas->sample_number_      = 1000*endrecord.occupancyNumber;
-      meas->source_type_        = Measurement::Background;
-      meas->occupied_           = Measurement::NotOccupied;
+      meas->source_type_        = SourceType::Background;
+      meas->occupied_           = OccupancyStatus::NotOccupied;
       if( !sinfo.calibcoefs.empty() )
       {
         meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
@@ -23467,8 +23490,8 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       meas->detector_name_      = gamma.detectorName;
       meas->gamma_counts_       = gamma.spectrum;
       meas->sample_number_      = 1000*endrecord.occupancyNumber + gamma.timeChunkNumber;
-      meas->source_type_        = Measurement::Foreground;
-      meas->occupied_           = Measurement::Occupied;
+      meas->source_type_        = SourceType::Foreground;
+      meas->occupied_           = OccupancyStatus::Occupied;
       if( !sinfo.calibcoefs.empty() )
       {
         meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
@@ -23596,7 +23619,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
       
       std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
       
-      meas->source_type_        = Measurement::Background;
+      meas->source_type_        = SourceType::Background;
       meas->detector_name_      = back.detectorName;
       meas->detector_number_    = detNameToNum[back.detectorName];
       meas->gamma_counts_       = back.spectrum;
@@ -23606,7 +23629,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
         meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
         meas->calibration_coeffs_ = sinfo.calibcoefs;
       }
-      meas->occupied_           = Measurement::NotOccupied;
+      meas->occupied_           =  OccupancyStatus::NotOccupied;
       
       meas->sample_number_ = 1000*(max_occupancie_num+1) + backnum;
       
@@ -23724,7 +23747,7 @@ bool MeasurementInfo::load_from_spectroscopic_daily_file( std::istream &input )
 
 
 
-bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
+bool SpecFile::load_from_srpm210_csv( std::istream &input )
 {
   try
   {
@@ -23917,7 +23940,7 @@ bool MeasurementInfo::load_from_srpm210_csv( std::istream &input )
       
     }//for( size_t i = 0; i < gamma_counts.size(); ++i )
     
-    detector_type_ = kSrpm210;  //This is deduced from the file
+    detector_type_ = DetectorType::kSrpm210;  //This is deduced from the file
     instrument_type_ = "Spectroscopic Portal Monitor";
     manufacturer_ = "Leidos";
     instrument_model_ = "SRPM-210";
@@ -23957,7 +23980,7 @@ namespace
 
 
 
-bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
+bool SpecFile::load_from_amptek_mca( std::istream &input )
 {
   if( !input.good() )
     return false;
@@ -24106,11 +24129,11 @@ bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
   }
   
   return false;
-}//bool MeasurementInfo::load_from_amptek_mca( std::istream &input )
+}//bool SpecFile::load_from_amptek_mca( std::istream &input )
 
 
 
-bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
+bool SpecFile::load_from_ortec_listmode( std::istream &input )
 {
   if( !input.good() )
     return false;
@@ -24439,7 +24462,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
     meas->real_time_ = realtime;
     meas->contained_neutron_ = false;
     meas->sample_number_ = 1;
-    meas->occupied_ = Measurement::UnknownOccupancyStatus;
+    meas->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
     meas->gamma_count_sum_ = gammasum;
     meas->neutron_counts_sum_ = 0.0;
     meas->speed_ = 0.0;  //in m/s
@@ -24447,7 +24470,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
     meas->detector_number_ = 0;
     meas->detector_description_ = meas->detector_name_ + " ListMode data";
     meas->quality_status_ = Measurement::Missing;
-    meas->source_type_ = Measurement::UnknownSourceType;
+    meas->source_type_ = SourceType::UnknownSourceType;
     meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     
     //std::vector<std::string>  remarks_;
@@ -24518,7 +24541,7 @@ bool MeasurementInfo::load_from_ortec_listmode( std::istream &input )
 }//bool load_from_ortec_listmode( std::istream &input )
 
 
-bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
+bool SpecFile::load_from_lsrm_spe( std::istream &input )
 {
   if( !input.good() )
     return false;
@@ -24637,7 +24660,7 @@ bool MeasurementInfo::load_from_lsrm_spe( std::istream &input )
 }//bool load_from_lsrm_spe( std::istream &input );
 
 
-bool MeasurementInfo::load_from_tka( std::istream &input )
+bool SpecFile::load_from_tka( std::istream &input )
 {
 /*
  Simple file with one number on each line with format:
@@ -24743,7 +24766,7 @@ bool MeasurementInfo::load_from_tka( std::istream &input )
 }//bool load_from_tka( std::istream &input );
 
 
-bool MeasurementInfo::load_from_multiact( std::istream &input )
+bool SpecFile::load_from_multiact( std::istream &input )
 {
   if( !input.good() )
     return false;
@@ -24832,7 +24855,7 @@ bool MeasurementInfo::load_from_multiact( std::istream &input )
 }//bool load_from_tka( std::istream &input );
 
 
-bool MeasurementInfo::load_from_phd( std::istream &input )
+bool SpecFile::load_from_phd( std::istream &input )
 {
   //Note: this function implemented off using only a couple files from a single
   //      source to determine file format; there is likely some assumptions that
@@ -25030,7 +25053,7 @@ bool MeasurementInfo::load_from_phd( std::istream &input )
 }//bool load_from_phd( std::istream &input );
 
 
-bool MeasurementInfo::load_from_lzs( std::istream &input )
+bool SpecFile::load_from_lzs( std::istream &input )
 {
   //Note: this function implemented off using a few files to determine
   //      file format; there is likely some assumptions that could be loosened
@@ -25238,7 +25261,7 @@ bool MeasurementInfo::load_from_lzs( std::istream &input )
 }//bool load_from_phd( std::istream &input );
 
 
-bool MeasurementInfo::load_cnf_file( const std::string &filename )
+bool SpecFile::load_cnf_file( const std::string &filename )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
@@ -25258,7 +25281,7 @@ bool MeasurementInfo::load_cnf_file( const std::string &filename )
 }//bool load_cnf_file( const std::string &filename );
 
 
-bool MeasurementInfo::load_from_cnf( std::istream &input )
+bool SpecFile::load_from_cnf( std::istream &input )
 {
   //Function to find a specific block (e.g., 512kb) of information in a CNF file.
   auto findCnfBlock = []( const uint8_t B, const size_t SBeg, size_t &pos,
@@ -25460,7 +25483,7 @@ bool MeasurementInfo::load_from_cnf( std::istream &input )
       //This assumption is based on inspecting files from a only two
       //  Falcon 5000 detectors
       //  (also instrument_name=="Instrument Name")
-      detector_type_ = kFalcon5000;
+      detector_type_ = DetectorType::kFalcon5000;
       instrument_type_ = "Spectrometer";
       manufacturer_ = "Canberra";
       instrument_model_ = "Falcon 5000";
@@ -25533,7 +25556,7 @@ bool MeasurementInfo::load_from_cnf( std::istream &input )
 }//bool load_from_cnf( std::istream &input )
 
 
-bool MeasurementInfo::load_tracs_mps_file( const std::string &filename )
+bool SpecFile::load_tracs_mps_file( const std::string &filename )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
@@ -25553,7 +25576,7 @@ bool MeasurementInfo::load_tracs_mps_file( const std::string &filename )
 }//bool load_tracs_mps_file( const std::string &filename )
 
 
-bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
+bool SpecFile::load_from_tracs_mps( std::istream &input )
 {
 /*
  Cabin Data
@@ -25790,7 +25813,7 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
         m->real_time_ = realtime / 6250.0f;
         m->contained_neutron_ = (((i%2)!=1) || neutroncount);
         m->sample_number_ = static_cast<int>( sample + 1 );
-        m->occupied_ = Measurement::UnknownOccupancyStatus;
+        m->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
         m->gamma_count_sum_ = 0.0;
         m->neutron_counts_sum_ = neutroncount;
 //        m->speed_ = ;
@@ -25798,7 +25821,7 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
         m->detector_number_ = static_cast<int>( i );
 //        m->detector_type_ = "";
         m->quality_status_ = (status==0 ? Measurement::Good : Measurement::Suspect);
-        m->source_type_  = Measurement::UnknownSourceType;
+        m->source_type_  = SourceType::UnknownSourceType;
         
         if( calPeakFound != 0 )
         {
@@ -25848,7 +25871,7 @@ bool MeasurementInfo::load_from_tracs_mps( std::istream &input )
 }//bool load_from_tracs_mps( std::istream &input )
 
 
-bool MeasurementInfo::load_aram_file( const std::string &filename )
+bool SpecFile::load_aram_file( const std::string &filename )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
@@ -25872,7 +25895,7 @@ bool MeasurementInfo::load_aram_file( const std::string &filename )
 }//bool load_aram_file( const std::string &filename )
 
 
-bool MeasurementInfo::load_from_aram( std::istream &input )
+bool SpecFile::load_from_aram( std::istream &input )
 {
   //This is a wierd TXT and XML format hybrid, so we have to seprate out the
   //  XML from non-XML portions and parse them seperately.
@@ -25968,8 +25991,8 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
     xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "realtime"), real_time );
     xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "livetime"), live_time );
     fore_meas->set_gamma_counts( fore_channels, live_time/1000.0f, real_time/1000.0f );
-    fore_meas->source_type_ = Measurement::SourceType::Foreground;
-    fore_meas->occupied_ = Measurement::OccupancyStatus::Occupied;
+    fore_meas->source_type_ = SourceType::Foreground;
+    fore_meas->occupied_ = OccupancyStatus::Occupied;
     if( !start_time.is_special() )
       fore_meas->set_start_time( start_time );
     
@@ -26006,8 +26029,8 @@ bool MeasurementInfo::load_from_aram( std::istream &input )
         xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "livetime"), live_time );
         back_meas->set_gamma_counts( back_channels, live_time/1000.0f, real_time/1000.0f );
         back_meas->set_title( "Background" );
-        back_meas->source_type_ = Measurement::SourceType::Background;
-        back_meas->occupied_ = Measurement::OccupancyStatus::NotOccupied;
+        back_meas->source_type_ = SourceType::Background;
+        back_meas->occupied_ = OccupancyStatus::NotOccupied;
         if( !start_time.is_special() )
           back_meas->set_start_time( start_time );
         measurements_.push_back( back_meas );
@@ -26211,7 +26234,7 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   return !ostr.bad();
 }//bool write_txt( std::ostream& ostr ) const
 
-bool MeasurementInfo::write_txt( std::ostream& ostr ) const
+bool SpecFile::write_txt( std::ostream& ostr ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -26233,5 +26256,5 @@ bool MeasurementInfo::write_txt( std::ostream& ostr ) const
   return !ostr.bad();
 }//bool write_txt( std::ostream& ostr ) const
 
-
+}//namespace SpecUtils
 

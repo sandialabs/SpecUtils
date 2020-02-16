@@ -90,8 +90,8 @@ BOOST_AUTO_TEST_CASE( testCalibration )
                        "Full Width Fraction coefficnets didnt make round trip: " \
                        << print_vec(frf_coefs) << "--->" << print_vec(new_frf_coefs) );
 
-  DeviationPairVec dev_pairs;
-  ShrdConstFVecPtr frf_binning = fullrangefraction_binning( frf_coefs, nbin, dev_pairs );
+  vector<pair<float,float>> dev_pairs;
+  auto frf_binning = fullrangefraction_binning( frf_coefs, nbin, dev_pairs );
   
   BOOST_REQUIRE_MESSAGE( !!frf_binning, \
                          "Failed to make Full Width Fraction Binning for " \
@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE( testCalibration )
   }
   
   
-  ShrdConstFVecPtr poly_binning = polynomial_binning( poly_coefs, nbin, dev_pairs );
+  auto poly_binning = polynomial_binning( poly_coefs, nbin, dev_pairs );
   BOOST_REQUIRE_MESSAGE( !!poly_binning, \
                         "Failed to make Polynomial Binning for " \
                         << print_vec(poly_coefs) );
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE( testCalibration )
   }
   //Need to do a lot more tests here...
 
-//  Need to test MeasurementInfo::calibrationIsValid(...)
+//  Need to test SpecFile::calibrationIsValid(...)
   
 //  BOOST_TEST_MESSAGE( "Input Directory:" << indir );
 //  BOOST_CHECK( false );
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE( testFindEnergy )
   fwf_coefs.push_back( 3020.178f );
   fwf_coefs.push_back( -8.720629f );
   
-  DeviationPairVec dev_pairs;
+  vector<pair<float,float>> dev_pairs;
   const float accuracy = 0.001f;
   
   float binnum;

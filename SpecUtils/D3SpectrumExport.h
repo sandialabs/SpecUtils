@@ -31,11 +31,13 @@
 #include <ostream>
 
 #include "SpecUtils_config.h"
-#include "SpecUtils/SpecFile.h"
 
 
-class Measurement;
-class MeasurementInfo;
+namespace SpecUtils
+{
+  class Measurement;
+  enum class SpectrumType : int;
+}
 
 /* 20170701: compiling with SpecUtils_ENABLE_D3_CHART and SpecUtils_D3_SUPPORT_FILE_STATIC
   on adds about 0.7Mb to the library size (of which almost all of it is SpecUtils_D3_SUPPORT_FILE_STATIC).
@@ -49,11 +51,14 @@ namespace D3SpectrumExport
   // An anotatated example of what would be written is:
   // { "title": "Line Title", "peaks":"[...]", "liveTime": 300, "realTime": 320, "neutrons": 0,
   //   "lineColor": "black", "x": [0, 2.93, 5.86, ..., 3000], "y": [0,1,10,...0], "yScaleFactor": 1.0 }
-  bool write_spectrum_data_js( std::ostream &ostr, const Measurement &meas, const D3SpectrumOptions &options, const size_t specID, const int backgroundID );
+  bool write_spectrum_data_js( std::ostream &ostr,
+                               const SpecUtils::Measurement &meas,
+                               const D3SpectrumOptions &options,
+                               const size_t specID, const int backgroundID );
   
   //Legacy function for the moment... makes an entire HTML page for the provided Measurement
   bool write_d3_html( std::ostream &ostr,
-                      const std::vector< std::pair<const Measurement *,D3SpectrumOptions> > &measurements,
+                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
                       const D3SpectrumChartOptions &options );
   
   /** Writes the HTML page header (</head> is the last thing written), including
@@ -77,7 +82,7 @@ namespace D3SpectrumExport
       Does not create <script></script> tags
    */
   bool write_and_set_data_for_chart( std::ostream &ostr, const std::string &div_name,
-                             const std::vector< std::pair<const Measurement *,D3SpectrumOptions> > &measurements );
+                             const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements );
   
   /** Sets the selected options to the chart dispayed in the div with id 
       specified by div_name.
@@ -115,7 +120,7 @@ namespace D3SpectrumExport
     std::string line_color;  //standard css names, "steelblue", "black", etc
     std::string peak_color;
     double display_scale_factor;  //
-    SpectrumType spectrum_type;  // spectrum type
+    SpecUtils::SpectrumType spectrum_type;  // spectrum type
   };//struct D3SpectrumOptions
   
   

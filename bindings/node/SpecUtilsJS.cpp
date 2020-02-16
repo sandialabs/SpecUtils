@@ -6,14 +6,15 @@
 #include <napi-inl.h>
 
 #include "SpecUtilsJS.h"
-#include "SpecUtils/UtilityFunctions.h"
-#include "SpecUtils/SpectrumDataStructs.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/Filesystem.h"
+#include "SpecUtils/EnergyCalibration.h"
 
 
 namespace
 {
   
-  const std::string &to_str( const Measurement::SourceType t )
+  const std::string &to_str( const SpecUtils::SourceType t )
   {
     static const std::string back = "Background";
     static const std::string cal = "Calibration";
@@ -23,17 +24,17 @@ namespace
     
     switch( t )
     {
-      case Measurement::Background:        return back;
-      case Measurement::Calibration:       return cal;
-      case Measurement::Foreground:        return fore;
-      case Measurement::IntrinsicActivity: return intrins;
-      case Measurement::UnknownSourceType: return unknown;
+      case SpecUtils::SourceType::Background:        return back;
+      case SpecUtils::SourceType::Calibration:       return cal;
+      case SpecUtils::SourceType::Foreground:        return fore;
+      case SpecUtils::SourceType::IntrinsicActivity: return intrins;
+      case SpecUtils::SourceType::UnknownSourceType: return unknown;
     }//switch( m_meas->source_type() )
     assert(0);
     return unknown;
-  }//to_str( const Measurement::SourceType t )
+  }//to_str( const SpecUtils::SourceType::SourceType t )
   
-  const std::string &to_str( const Measurement::OccupancyStatus t )
+  const std::string &to_str( const SpecUtils::OccupancyStatus t )
   {
     static const std::string notocc = "NotOccupied";
     static const std::string occ = "Occupied";
@@ -41,15 +42,15 @@ namespace
     
     switch( t )
     {
-      case Measurement::NotOccupied: return notocc;
-      case Measurement::Occupied: return occ;
-      case Measurement::UnknownOccupancyStatus: return unknownocc;
+      case SpecUtils::OccupancyStatus::NotOccupied: return notocc;
+      case SpecUtils::OccupancyStatus::Occupied: return occ;
+      case SpecUtils::OccupancyStatus::UnknownOccupancyStatus: return unknownocc;
     }//switch( m_meas->source_type() )
     assert(0);
     return unknownocc;
-  }//to_str( const Measurement::SourceType t )
+  }//to_str( const SpecUtils::OccupancyStatus::SourceType t )
   
-  const std::string &to_str( const Measurement::EquationType t )
+  const std::string &to_str( const SpecUtils::EnergyCalType t )
   {
     static const std::string polynomial = "Polynomial";
     static const std::string fullRangeFraction = "FullRangeFraction";
@@ -59,15 +60,15 @@ namespace
     
     switch( t )
     {
-      case Measurement::Polynomial: return polynomial;
-      case Measurement::FullRangeFraction: return fullRangeFraction;
-      case Measurement::LowerChannelEdge: return lowerChannelEdge;
-      case Measurement::UnspecifiedUsingDefaultPolynomial: return unspecifiedUsingDefaultPolynomial;
-      case Measurement::InvalidEquationType: return invalidEquationType;
+      case SpecUtils::EnergyCalType::Polynomial: return polynomial;
+      case SpecUtils::EnergyCalType::FullRangeFraction: return fullRangeFraction;
+      case SpecUtils::EnergyCalType::LowerChannelEdge: return lowerChannelEdge;
+      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial: return unspecifiedUsingDefaultPolynomial;
+      case SpecUtils::EnergyCalType::InvalidEquationType: return invalidEquationType;
     }//switch( m_meas->source_type() )
     assert(0);
     return invalidEquationType;
-  }//to_str( const Measurement::SourceType t )
+  }//to_str( const SpecUtils::EnergyCalType t )
   
   
 }//namespace
@@ -96,11 +97,11 @@ public:
   static void Init(Napi::Env &env, Napi::Object &exports)
   {
     exports.Set("SourceType", DefineClass(env, "SourceType", {
-      StaticValue(to_str(Measurement::Background).c_str(), Napi::String::New(env, to_str(Measurement::Background))),
-      StaticValue(to_str(Measurement::Calibration).c_str(), Napi::String::New(env, to_str(Measurement::Calibration))),
-      StaticValue(to_str(Measurement::Foreground).c_str(), Napi::String::New(env, to_str(Measurement::Foreground))),
-      StaticValue(to_str(Measurement::IntrinsicActivity).c_str(), Napi::String::New(env, to_str(Measurement::IntrinsicActivity))),
-      StaticValue(to_str(Measurement::UnknownSourceType).c_str(), Napi::String::New(env, to_str(Measurement::UnknownSourceType)))
+      StaticValue(to_str(SpecUtils::SourceType::Background).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::Background))),
+      StaticValue(to_str(SpecUtils::SourceType::Calibration).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::Calibration))),
+      StaticValue(to_str(SpecUtils::SourceType::Foreground).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::Foreground))),
+      StaticValue(to_str(SpecUtils::SourceType::IntrinsicActivity).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::IntrinsicActivity))),
+      StaticValue(to_str(SpecUtils::SourceType::UnknownSourceType).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::UnknownSourceType)))
     } ) );
   }
   
@@ -121,9 +122,9 @@ public:
   static void Init(Napi::Env &env, Napi::Object &exports)
   {
     exports.Set("OccupancyStatus", DefineClass(env, "OccupancyStatus", {
-      StaticValue(to_str(Measurement::NotOccupied).c_str(), Napi::String::New(env, to_str(Measurement::NotOccupied))),
-      StaticValue(to_str(Measurement::Occupied).c_str(), Napi::String::New(env, to_str(Measurement::Occupied))),
-      StaticValue(to_str(Measurement::UnknownOccupancyStatus).c_str(), Napi::String::New(env, to_str(Measurement::UnknownOccupancyStatus))),
+      StaticValue(to_str(SpecUtils::OccupancyStatus::NotOccupied).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::NotOccupied))),
+      StaticValue(to_str(SpecUtils::OccupancyStatus::Occupied).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::Occupied))),
+      StaticValue(to_str(SpecUtils::OccupancyStatus::UnknownOccupancyStatus).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::UnknownOccupancyStatus))),
     } ) );
   }
   
@@ -144,11 +145,11 @@ public:
   static void Init(Napi::Env &env, Napi::Object &exports)
   {
     exports.Set("EquationType", DefineClass(env, "EquationType", {
-      StaticValue(to_str(Measurement::Polynomial).c_str(), Napi::String::New(env, to_str(Measurement::Polynomial))),
-      StaticValue(to_str(Measurement::FullRangeFraction).c_str(), Napi::String::New(env, to_str(Measurement::FullRangeFraction))),
-      StaticValue(to_str(Measurement::LowerChannelEdge).c_str(), Napi::String::New(env, to_str(Measurement::LowerChannelEdge))),
-      StaticValue(to_str(Measurement::UnspecifiedUsingDefaultPolynomial).c_str(), Napi::String::New(env, to_str(Measurement::UnspecifiedUsingDefaultPolynomial))),
-      StaticValue(to_str(Measurement::InvalidEquationType).c_str(), Napi::String::New(env, to_str(Measurement::InvalidEquationType)))
+      StaticValue(to_str(SpecUtils::EnergyCalType::Polynomial).c_str(), Napi::String::New(env, to_str(SpecUtils::EnergyCalType::Polynomial))),
+      StaticValue(to_str(SpecUtils::EnergyCalType::FullRangeFraction).c_str(), Napi::String::New(env, to_str(SpecUtils::EnergyCalType::FullRangeFraction))),
+      StaticValue(to_str(SpecUtils::EnergyCalType::LowerChannelEdge).c_str(), Napi::String::New(env, to_str(SpecUtils::EnergyCalType::LowerChannelEdge))),
+      StaticValue(to_str(SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial).c_str(), Napi::String::New(env, to_str(SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial))),
+      StaticValue(to_str(SpecUtils::EnergyCalType::InvalidEquationType).c_str(), Napi::String::New(env, to_str(SpecUtils::EnergyCalType::InvalidEquationType)))
     } ) );
   }
   
@@ -170,7 +171,9 @@ public:
   {
     std::vector<PropertyDescriptor> properties;
     
-    for( DetectorType type = DetectorType(0); type <= kUnknownDetector; type = DetectorType(type+1) )
+    for( SpecUtils::DetectorType type = SpecUtils::DetectorType(0); 
+         type <= SpecUtils::DetectorType::kUnknownDetector; 
+         type = SpecUtils::DetectorType(static_cast<int>(type)+1) )
     {
       const std::string &name = detectorTypeToString(type);
       properties.push_back( StaticValue( name.c_str(), Napi::String::New(env,name) )  );
@@ -556,9 +559,9 @@ Napi::Value SpecRecord::occupied(const Napi::CallbackInfo& info)
   
   switch( m_meas->occupied() )
   {
-    case Measurement::Occupied:                val = "Occupied"; break;
-    case Measurement::NotOccupied:             val = "NotOccupied"; break;
-    case Measurement::UnknownOccupancyStatus:  val = "UnknownOccupancyStatus"; break;
+    case SpecUtils::OccupancyStatus::Occupied:                val = "Occupied"; break;
+    case SpecUtils::OccupancyStatus::NotOccupied:             val = "NotOccupied"; break;
+    case SpecUtils::OccupancyStatus::UnknownOccupancyStatus:  val = "UnknownOccupancyStatus"; break;
   }//switch( m_meas->occupied() )
   
   assert( val );
@@ -787,8 +790,8 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
   
   const std::string path = info[0].ToString().Utf8Value();
   
-  auto ptr = std::make_shared<MeasurementInfo>();
-  const bool loaded = ptr->load_file( path, ParserType::kAutoParser );
+  auto ptr = std::make_shared<SpecUtils::SpecFile>();
+  const bool loaded = ptr->load_file( path, SpecUtils::ParserType::kAutoParser );
   if( !loaded ){
     Napi::TypeError::New(env, "Could not decode as a spectrum file.").ThrowAsJavaScriptException();
   }
@@ -958,7 +961,7 @@ Napi::Value SpecFile::sample_numbers(const Napi::CallbackInfo& info)
   std::set<int> samplenums;
   const std::set<std::string> sourcetypes = to_valid_source_types( info[0], info.Env() );
   
-  std::vector< std::shared_ptr<const Measurement> > meass = m_spec->measurements();
+  std::vector< std::shared_ptr<const SpecUtils::Measurement> > meass = m_spec->measurements();
   for( const auto &m : meass )
   {
     if( m && !samplenums.count(m->sample_number()) && sourcetypes.count(to_str(m->source_type())) )
@@ -1076,28 +1079,28 @@ std::set<int> SpecFile::to_valid_sample_numbers( Napi::Value value, const Napi::
 std::set<std::string> SpecFile::to_valid_source_types( Napi::Value value, const Napi::Env &env )
 {
   auto check_source_type = [&]( const std::string &n ){
-    if( n == to_str(Measurement::Background)
-       || n == to_str(Measurement::Calibration)
-       || n == to_str(Measurement::Foreground)
-       || n == to_str(Measurement::IntrinsicActivity)
-       || n == to_str(Measurement::UnknownSourceType) )
+    if( n == to_str(SpecUtils::SourceType::Background)
+       || n == to_str(SpecUtils::SourceType::Calibration)
+       || n == to_str(SpecUtils::SourceType::Foreground)
+       || n == to_str(SpecUtils::SourceType::IntrinsicActivity)
+       || n == to_str(SpecUtils::SourceType::UnknownSourceType) )
       return;
     
     Napi::Error::New(env, "Source type '" + n + "' is not a valid; must be one of ['"
-                     + std::string(to_str(Measurement::Background))
-                     + "', '" + std::string(to_str(Measurement::Calibration))
-                     + "', '" + std::string(to_str(Measurement::Foreground))
-                     + "', '" + std::string(to_str(Measurement::IntrinsicActivity))
-                     + "', '" + std::string(to_str(Measurement::UnknownSourceType))
+                     + std::string(to_str(SpecUtils::SourceType::Background))
+                     + "', '" + std::string(to_str(SpecUtils::SourceType::Calibration))
+                     + "', '" + std::string(to_str(SpecUtils::SourceType::Foreground))
+                     + "', '" + std::string(to_str(SpecUtils::SourceType::IntrinsicActivity))
+                     + "', '" + std::string(to_str(SpecUtils::SourceType::UnknownSourceType))
                      + "']"
                      ).ThrowAsJavaScriptException();
   };//check_source_type lambda
   
   if( value.IsNull() || value.IsUndefined() )
   {
-    return std::set<std::string>{ to_str(Measurement::Background),
-      to_str(Measurement::Calibration), to_str(Measurement::Foreground),
-      to_str(Measurement::IntrinsicActivity), to_str(Measurement::UnknownSourceType)
+    return std::set<std::string>{ to_str(SpecUtils::SourceType::Background),
+      to_str(SpecUtils::SourceType::Calibration), to_str(SpecUtils::SourceType::Foreground),
+      to_str(SpecUtils::SourceType::IntrinsicActivity), to_str(SpecUtils::SourceType::UnknownSourceType)
     };
   }//if( value.IsNull() )
   
@@ -1149,7 +1152,7 @@ Napi::Value SpecFile::measurements(const Napi::CallbackInfo& info)
   
   auto arr = Napi::Array::New( info.Env() );
   
-  std::vector< std::shared_ptr<const Measurement> > meass = m_spec->measurements();
+  std::vector< std::shared_ptr<const SpecUtils::Measurement> > meass = m_spec->measurements();
   
   uint32_t index = 0;
   for( size_t i = 0; i < meass.size(); ++i )
@@ -1157,7 +1160,7 @@ Napi::Value SpecFile::measurements(const Napi::CallbackInfo& info)
     if( !meass[i] )  //shouldnt ever happen, but jic
       continue;
     
-    const Measurement &m = *meass[i];
+    const SpecUtils::Measurement &m = *meass[i];
     
     if( !samplenums.count(m.sample_number()) )
       continue;
@@ -1211,7 +1214,7 @@ Napi::Value SpecFile::sum_measurements(const Napi::CallbackInfo& info)
   
   const std::vector<std::string> detectornames( std::begin(detnames), std::end(detnames) );
   
-  std::shared_ptr<Measurement> meas;
+  std::shared_ptr<SpecUtils::Measurement> meas;
   try
   {
     meas = m_spec->sum_measurements( samplenums, detectornames );
@@ -1260,7 +1263,7 @@ Napi::Value SpecFile::mean_longitude(const Napi::CallbackInfo& info)
 
 Napi::Value SpecFile::riid_analysis(const Napi::CallbackInfo& info)
 {
-  const std::shared_ptr<const DetectorAnalysis> ana = m_spec->detectors_analysis();
+  const std::shared_ptr<const SpecUtils::DetectorAnalysis> ana = m_spec->detectors_analysis();
   if( !ana )
     return Napi::Value();
   
@@ -1292,34 +1295,34 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
   const bool force = length>=6 ? false : info[5].ToBoolean().Value();
   
   
-  SaveSpectrumAsType type = kNumSaveSpectrumAsType;
+  SpecUtils::SaveSpectrumAsType type = SpecUtils::SaveSpectrumAsType::kNumSaveSpectrumAsType;
   if( format == "TXT" )
-    type = SaveSpectrumAsType::kTxtSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kTxtSpectrumFile;
   else if( format == "CSV" )
-    type = SaveSpectrumAsType::kCsvSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kCsvSpectrumFile;
   else if( format == "PCF" )
-    type = SaveSpectrumAsType::kPcfSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kPcfSpectrumFile;
   else if( format == "N42-2006" )
-    type = SaveSpectrumAsType::kXmlSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kXmlSpectrumFile;
   else if( format == "N42-2012" )
-    type = SaveSpectrumAsType::k2012N42SpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::k2012N42SpectrumFile;
   else if( format == "CHN" )
-    type = SaveSpectrumAsType::kChnSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kChnSpectrumFile;
   else if( format == "SPC-int" )
-    type = SaveSpectrumAsType::kBinaryIntSpcSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kBinaryIntSpcSpectrumFile;
   else if( format == "SPC" || format == "SPC-float" )
-    type = SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile;
   else if( format == "SPC-ascii" )
-    type = SaveSpectrumAsType::kAsciiSpcSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kAsciiSpcSpectrumFile;
   else if( format == "GR130v0" )
-    type = SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile;
   else if( format == "GR135v2" )
-    type = SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile;
   else if( format == "SPE" || format == "IAEA" )
-    type = SaveSpectrumAsType::kIaeaSpeSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kIaeaSpeSpectrumFile;
 #if( SpecUtils_ENABLE_D3_CHART )
   else if( format == "HTML" )
-    type = SaveSpectrumAsType::kD3HtmlSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::kD3HtmlSpectrumFile;
 #endif
   else {
     Napi::Error::New(info.Env(), "Invalid file-type specification").ThrowAsJavaScriptException();
@@ -1328,8 +1331,8 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
   
   assert( type != kNumSaveSpectrumAsType );
   
-  if( force && UtilityFunctions::is_file(path) )
-    UtilityFunctions::remove_file(path);
+  if( force && SpecUtils::is_file(path) )
+    SpecUtils::remove_file(path);
   
   try
   {

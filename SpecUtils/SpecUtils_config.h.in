@@ -39,13 +39,6 @@
 
 #define BOOST_DATE_TIME_NO_LIB
 
-namespace boost
-{
-  template<class type> class shared_ptr;
-}//namespace boost
-
-class Measurement;
-
 #if( defined(_WIN32) && defined(_MSC_VER) )
 #include <stdio.h>
 #include <stdlib.h>

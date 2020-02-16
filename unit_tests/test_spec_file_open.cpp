@@ -74,8 +74,8 @@ BOOST_AUTO_TEST_CASE( testFileOpen )
     
     BOOST_TEST_MESSAGE( "Testing file: '" << file << "'" );
     
-    MeasurementInfo meas;
-    const bool loaded = meas.load_file( file, kAutoParser, file );
+    SpecUtils::SpecFile meas;
+    const bool loaded = meas.load_file( file, SpecUtils::ParserType::kAutoParser, file );
     BOOST_CHECK_MESSAGE( loaded, "Failed to load " << file );
     
     if( loaded )

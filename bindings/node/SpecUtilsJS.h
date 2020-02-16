@@ -7,10 +7,13 @@
 
 // Forward declarations
 class SpecFile;
-class Measurement;
-class RiidAnalysis;
-class MeasurementInfo;
-class DetectorAnalysis;
+namespace SpecUtils
+{
+  class SpecFile;
+  class Measurement;
+  class RiidAnalysis;
+  class DetectorAnalysis;
+}
 
 /**
  Current known shortcommings:
@@ -89,7 +92,7 @@ public:
   
 protected:
   size_t m_index;
-  std::shared_ptr<const DetectorAnalysis> m_ana;
+  std::shared_ptr<const SpecUtils::DetectorAnalysis> m_ana;
   
   friend class RiidAnalysis;
 };//struct RiidAnaResult
@@ -153,7 +156,7 @@ public:
 
   
 protected:
-  std::shared_ptr<const DetectorAnalysis> m_ana;
+  std::shared_ptr<const SpecUtils::DetectorAnalysis> m_ana;
   
   
   friend class SpecFile;
@@ -164,7 +167,7 @@ protected:
 
 
 
-/** SpecFile cooresponds to the C++ Measurement class, which holds the
+/** SpecFile cooresponds to the C++ SpecUtils::Measurement class, which holds the
  information of a gamma spectrum from a single detection element.  If there is
  a neutron detector associated with the gamma detector, its counts are also
  in this class.
@@ -271,13 +274,13 @@ public:
   
   
 protected:
-  std::shared_ptr<const Measurement> m_meas;
+  std::shared_ptr<const SpecUtils::Measurement> m_meas;
   
   friend class SpecFile;
 };//class SpecRecord
 
 
-/** SpecFile cooresponds to the C++ MeasurementInfo class, which basically
+/** SpecFile cooresponds to the C++ SpecUtils::SpecFile class, which basically
  represents a spectrum file.
  */
 class SpecFile : public Napi::ObjectWrap<SpecFile>
@@ -376,7 +379,7 @@ class SpecFile : public Napi::ObjectWrap<SpecFile>
   std::set<std::string> to_valid_source_types( Napi::Value value, const Napi::Env &env );
   
   
-  std::shared_ptr<const MeasurementInfo> m_spec;
+  std::shared_ptr<const SpecUtils::SpecFile> m_spec;
 };//class SpecFile
 
 

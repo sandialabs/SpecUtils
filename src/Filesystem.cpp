@@ -24,6 +24,9 @@
 #include <random>
 #include <fstream>
 
+#if( ANDROID )
+#include <android/log.h>
+#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
@@ -187,8 +190,9 @@ std::string temp_dir()
     const char *val = std::getenv("TMPDIR");
     if( !val )
     {
-      cerr << "Warning, unable to get \"TMPDIR\" environment variable;"
-      << "returning: \"/data/local/tmp/\"" << endl;
+      __android_log_write( ANDROID_LOG_ERROR, "temp_dir",
+                          "Warning, unable to get \"TMPDIR\" environment variable; returning: \"/data/local/tmp/\"" );
+      
       return "/data/local/tmp/";
     }
     
@@ -1202,6 +1206,19 @@ std::string fs_relative( std::string from_path, std::string to_path )
   std::vector<std::string> from_components, to_components;
   SpecUtils::split( from_components, from_path, delim );
   SpecUtils::split( to_components, to_path, delim );
+  
+  
+#if( defined(_WIN32) )
+  //For windows check if on network drive, and if so append to zeroth element
+  //  ... however, I 'm not sure relative paths work across drives on windows...
+  //TODO: Check if relative paths work across drives, and how that should be handled..
+  if( from_path.size() > 1 && !from_components.empty() && from_path[0]=='\\' && from_path[1]=='\\' )
+    from_components[0] = "\\\\" + from_components[0];
+  
+  if( to_path.size() > 1 && !to_components.empty() && to_path[0]=='\\' && to_path[1]=='\\' )
+    to_path[0] = "\\\\" + to_path[0];
+#endif
+  
   
   size_t from_index = 0, to_index = 0;
   

@@ -372,7 +372,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
   
   
   bool write_and_set_data_for_chart( std::ostream &ostr, const std::string &div_name,
-                            const std::vector< std::pair<const Measurement *,D3SpectrumOptions> > &measurements )
+                            const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements )
   {
     const char *endline = "\r\n";
     
@@ -394,7 +394,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     {
       if( !measurements[id].first )
         continue;
-      if (measurements[id].second.spectrum_type == kBackground) {
+      if (measurements[id].second.spectrum_type == SpecUtils::SpectrumType::Background) {
         while (!foregroundIDs.empty()) {
           size_t foregroundID = foregroundIDs.top();
           backgroundIDs[foregroundID] = id;
@@ -403,7 +403,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       } else {
         backgroundIDs[id] = -1; // Set to -1, meaning no background spectrum assigned
         foregroundIDs.push(id);
-      } //if (measurements[id].second.spectrum_type == kBackground)
+      } //if (measurements[id].second.spectrum_type == SpecUtils::SpectrumType::Background)
     }//for( size_t i = 0; i < measurements.size(); ++i )
     
     for( size_t i = 0; i < measurements.size(); ++i )
@@ -589,7 +589,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
   }//write_html_display_options_for_chart
   
   bool write_d3_html( std::ostream &ostr,
-                      const std::vector< std::pair<const Measurement *,D3SpectrumOptions> > &measurements,
+                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
                       const D3SpectrumChartOptions &options )
   {
     const char *endline = "\r\n";
@@ -630,7 +630,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     return !ostr.bad();
   }
 
-  bool write_spectrum_data_js( std::ostream &ostr, const Measurement &meas, const D3SpectrumOptions &options, const size_t specID, const int backgroundID )
+  bool write_spectrum_data_js( std::ostream &ostr, const SpecUtils::Measurement &meas, const D3SpectrumOptions &options, const size_t specID, const int backgroundID )
   {
     const char *q = "\"";  // for creating valid json format
     
@@ -649,9 +649,9 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     // foreground spectrum type
     ostr << "\n\t\t\t" << q << "type" << q << ":";
     switch (options.spectrum_type) {
-      case kForeground: ostr << q << "FOREGROUND" << q; break;
-      case kBackground: ostr << q << "BACKGROUND" << q; break;
-      case kSecondForeground: ostr << q << "SECONDARY" << q; break;
+      case SpecUtils::SpectrumType::Foreground: ostr << q << "FOREGROUND" << q; break;
+      case SpecUtils::SpectrumType::Background: ostr << q << "BACKGROUND" << q; break;
+      case SpecUtils::SpectrumType::SecondForeground: ostr << q << "SECONDARY" << q; break;
       default: ostr << "null"; break;
     }
     ostr << ",";

@@ -23,7 +23,7 @@ A minimal program to print out the channel counts of a spectrum file, and then s
 #include  "SpecUtils/SpecFile.h"
 
 int main() {
-  MeasurementInfo specfile;
+  SpecUtils::SpecFile specfile;
   if( !specfile.load_file("input.n42", kAutoParser) )
     return EXIT_FAILURE;
     

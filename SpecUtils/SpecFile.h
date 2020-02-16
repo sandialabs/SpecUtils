@@ -71,7 +71,7 @@ Shortcommings that wcjohns should be addressed
  -Should implement tracking N42 MeasurementGroupReferences to link Analysis
   with appropriate spectra, and InterSpec can use to link to peaks and such.
  -Should add in InstrumentToItemDistance and InstrumentToItemBearing to
- -There is a degeneracy in MeasurementInfo between: detector_type_,
+ -There is a degeneracy in SpecFile between: detector_type_,
   instrument_type_, manufacturer_, and instrument_model_ - so this should 
   be sorted out.
  -Should link derived spectra to analysis results (when applicable), and
@@ -96,14 +96,27 @@ Shortcommings that wcjohns should be addressed
  -Should add in "Characteristics" a few places (for detectors, system,
 */
 
-//A forward declaration
+//Forward declarations not within SpecUtils namespace
+namespace rapidxml
+{
+  template<class Ch> class xml_node;
+  template<class Ch> class xml_document;
+  template<class Ch> class xml_attribute;
+}//namespace rapidxml
+
+class SpecMeas;
+
+#if( SpecUtils_ENABLE_D3_CHART )
+namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
+#endif
+
+
+
 namespace SpecUtils
 {
-  enum class EnergyCalType : int;
-}
-
-
-enum ParserType
+  
+  //ToDo: now that this is an enum class, cleanup the names
+enum class ParserType : int
 {
   k2006Icd1Parser,
   K2012ICD1Parser,
@@ -129,54 +142,54 @@ enum ParserType
 };//enum ParserType
 
 
-enum SpectrumType
+enum class SpectrumType : int
 {
-  kForeground,
-  kSecondForeground,
-  kBackground
-};//enum SpectrumType
+  Foreground,
+  SecondForeground,
+  Background
+};//enum SpecUtils::SpectrumType
 
 
-enum SaveSpectrumAsType
+enum class SaveSpectrumAsType : int
 {
-  /** See #MeasurementInfo::write_txt for details. */
+  /** See #SpecFile::write_txt for details. */
   kTxtSpectrumFile,
   
-  /** See #MeasurementInfo::write_csv for details. */
+  /** See #SpecFile::write_csv for details. */
   kCsvSpectrumFile,
   
-  /** See #MeasurementInfo::write_pcf for details. */
+  /** See #SpecFile::write_pcf for details. */
   kPcfSpectrumFile,
   
-  /** See #MeasurementInfo::write_2006_N42_xml for details. */
+  /** See #SpecFile::write_2006_N42_xml for details. */
   kXmlSpectrumFile,
   
-  /** See #MeasurementInfo::write_2012_N42 for details. */
+  /** See #SpecFile::write_2012_N42 for details. */
   k2012N42SpectrumFile,
   
-  /** See #MeasurementInfo::write_integer_chn for details. */
+  /** See #SpecFile::write_integer_chn for details. */
   kChnSpectrumFile,
   
-  /** See #MeasurementInfo::write_binary_spc for details. */
+  /** See #SpecFile::write_binary_spc for details. */
   kBinaryIntSpcSpectrumFile,
   
-  /** See #MeasurementInfo::write_binary_spc for details. */
+  /** See #SpecFile::write_binary_spc for details. */
   kBinaryFloatSpcSpectrumFile,
   
-  /** See #MeasurementInfo::write_ascii_spc for details. */
+  /** See #SpecFile::write_ascii_spc for details. */
   kAsciiSpcSpectrumFile,
   
-  /** See #MeasurementInfo::write_binary_exploranium_gr130v0 for details. */
+  /** See #SpecFile::write_binary_exploranium_gr130v0 for details. */
   kExploraniumGr130v0SpectrumFile,
   
-  /** See #MeasurementInfo::write_binary_exploranium_gr135v2 for details. */
+  /** See #SpecFile::write_binary_exploranium_gr135v2 for details. */
   kExploraniumGr135v2SpectrumFile,
   
-  /** See #MeasurementInfo::write_iaea_spe for details. */
+  /** See #SpecFile::write_iaea_spe for details. */
   kIaeaSpeSpectrumFile,
 
 #if( SpecUtils_ENABLE_D3_CHART )
-  /** See #MeasurementInfo::write_d3_html for details. */
+  /** See #SpecFile::write_d3_html for details. */
   kD3HtmlSpectrumFile,
 #endif
   
@@ -184,7 +197,7 @@ enum SaveSpectrumAsType
 };//enum SaveSpectrumAsType
 
 
-const char *descriptionText( const SpectrumType type );
+const char *descriptionText( const SpecUtils::SpectrumType type );
 
 //suggestedNameEnding(): returns suggested lowercase file name ending for type
 //  passed in.  Does not contain the leading '.' for extentions
@@ -202,10 +215,12 @@ const char *descriptionText( const SaveSpectrumAsType type );
 //  spectra in a spectrum file.  It typically refers to a whole system which
 //  may be comprised of multpile subdetectors, like for portals, or gamma
 //  detectors with neutron detectors as well.
-//Currently only opening files in MeasurementInfo that are specialezed (spc,
+//Currently only opening files in SpecFile that are specialezed (spc,
 //  dat, etc) support filling out detector_type_, and even then I've been a
 //  bit lazy and not added all systems, just the most common ones I work with.
-enum DetectorType
+//
+//ToDo: now that this is an enum class should cleanup all the names
+enum class DetectorType : int
 {
   kGR135Detector,
   /** First gen identiFINDER with smaller crystal than NGs; note sometimes
@@ -254,33 +269,42 @@ enum DetectorType
   kSam945,
   kSrpm210,
   //RadSeekerLaBr1.5x1.5
-  //RadSeekerNaI2x2 (although should check for this, see MeasurementInfo::set_n42_2006_instrument_info_node_info
+  //RadSeekerNaI2x2 (although should check for this, see SpecFile::set_n42_2006_instrument_info_node_info
   
   kUnknownDetector
 };//enum DetectorType
 
 
-
-//A Forward declaration
-namespace rapidxml
+enum class OccupancyStatus : int
 {
-  template<class Ch> class xml_node;
-  template<class Ch> class xml_document;
-  template<class Ch> class xml_attribute;
-}//namespace rapidxml
+  //Reported occupancy status; not be applicable to all systems/formats, in
+  //  which case is marked to UnknownOccupancyStatus.
+  //
+  //ToDo: now that this is an enum class should cleanup UnknownOccupancyStatus
+  NotOccupied, Occupied, UnknownOccupancyStatus
+};
+  
+  
+  
+enum class SourceType : int
+{
+  //Reported source type for a record; marked as UnknownSourceType unless
+  //  file format explicitly specifies, or can reasonably be infered.
+  //
+  //ToDo: now that this is an enum class should cleanup UnknownSourceType
+  IntrinsicActivity, Calibration, Background, Foreground, UnknownSourceType
+};
 
-class InterSpec;
-class SpecMeas;
+//Forward declarations within SpecUtils
+enum class EnergyCalType : int;
+  
+class SpecFile;
 class Measurement;
-class MeasurementInfo;
+
 class DetectorAnalysis;
 struct MeasurementCalibInfo; //defined in SpectrumDataStructs.cpp (used for parsing N42 2006/2012 files and rebinning)
 struct SpectrumNodeDecodeWorker;
 struct GrossCountNodeDecodeWorker;
-#if( SpecUtils_ENABLE_D3_CHART )
-namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
-#endif
-
 
 //Some typedefs and enums used for decode_2012_N42_rad_measurment_node(...)
 enum DetectionType{ GammaDetection, NeutronDetection, GammaAndNeutronDetection, OtherDetection };
@@ -377,7 +401,9 @@ struct EnergyCalibration
   std::shared_ptr< const std::vector<float> > binning_;
 };//struct EnergyCalibration
 */
-
+  
+  
+  
 class Measurement
 {
 public:
@@ -388,22 +414,6 @@ public:
     //  in which case should be marked as Missing, although some formats
     //  (notable N42 and MPS) default to Good.
     Good, Suspect, Bad, Missing
-  };
-
-  enum OccupancyStatus
-  {
-    //Reported occupancy status; not be applicable to all systems/formats, in
-    //  which case is marked to UnknownOccupancyStatus.
-    NotOccupied, Occupied, UnknownOccupancyStatus
-  };
-
-  
-  
-  enum SourceType
-  {
-    //Reported source type for a record; marked as UnknownSourceType unless
-    //  file format explicitly specifies, or can reasonably be infered.
-    IntrinsicActivity, Calibration, Background, Foreground, UnknownSourceType
   };
   
 
@@ -435,7 +445,7 @@ public:
   
   //sample_number(): the sample number assigned to this Measurment.  If the
   //  'DontChangeOrReorderSamples' flag wasnt passed to the
-  //  MeasurementInfo::cleanup_after_load() function, then this value may be
+  //  SpecFile::cleanup_after_load() function, then this value may be
   //  assigned during file parsing.
   inline int sample_number() const;
   
@@ -590,7 +600,7 @@ public:
   //popuplate_channel_energies_from_coeffs(): uses calibration_coeffs_ and 
   //  deviation_pairs_ to populate channel_energies_.
   //This function should not be used when this Measurment is part of a
-  //  MeasurementInfo object (since this could waste memorry), but is intentded 
+  //  SpecFile object (since this could waste memorry), but is intentded
   //  for the case when this Measurment is saved all by itself to XML by 
   //  write_2006_N42_xml() and then restored using
   //  set_2006_N42_spectrum_node_info().
@@ -599,7 +609,7 @@ public:
   //channel_energies_ is garunteed to be valid after calling this function.
   void popuplate_channel_energies_from_coeffs();
 
-  //To set real and live times, see MeasurementInfo::set_live_time(...)
+  //To set real and live times, see SpecFile::set_live_time(...)
   
   //Functions that mimmic ROOTs TH1 class
   //  XXX - note that I should _really_ convert these functions to be same
@@ -928,8 +938,8 @@ protected:
   
   std::string title_;  //Actually used for a number of file formats
 
-  friend class SpecMeas;
-  friend class MeasurementInfo;
+  friend class ::SpecMeas;
+  friend class SpecFile;
   friend struct SpectrumNodeDecodeWorker;
   friend struct GrossCountNodeDecodeWorker;
 };//class Measurement
@@ -955,8 +965,8 @@ public:
 };//class CountDose
 */
 
-//Should MeasurementInfo be renamed to something better?
-class MeasurementInfo
+//Should SpecFile be renamed to something better?
+class SpecFile
 {
 public:
   //ToDo:
@@ -977,9 +987,9 @@ public:
   //  -The ASP 16k channels, 133 samples, 8 detectors takes up 66 MB memmorry
 
 public:
-  MeasurementInfo();
-  MeasurementInfo( const MeasurementInfo &rhs );  //calls operator=
-  virtual ~MeasurementInfo();
+  SpecFile();
+  SpecFile( const SpecFile &rhs );  //calls operator=
+  virtual ~SpecFile();
  
   //operator=(...) copies all the 'rhs' information and creates a new set of
   //  Measurment objects so that if you apply changes to *this, it will not
@@ -987,7 +997,7 @@ public:
   //  objects copy shallow copy of all std::shared_ptr<const std::vector<float>> instances.
   //  Since it is assumed the 'rhs' is in good shape, recalc_total_counts() and
   //  cleanup_after_load() are NOT called.
-  const MeasurementInfo &operator=( const MeasurementInfo &rhs );
+  const SpecFile &operator=( const SpecFile &rhs );
 
   //load_file(...): returns true when file is successfully loaded, false
   //  otherwise. Callling this function with parser_type==kAutoParser is
@@ -1086,7 +1096,7 @@ public:
                        const std::shared_ptr<const Measurement> measurment  );
   void set_remarks( const std::vector<std::string> &remarks,
                     const std::shared_ptr<const Measurement> measurment  );
-  void set_source_type( const Measurement::SourceType type,
+  void set_source_type( const SourceType type,
                          const std::shared_ptr<const Measurement> measurment );
   void set_position( double longitude, double latitude,
                      boost::posix_time::ptime position_time,
@@ -1126,7 +1136,7 @@ public:
   //  binnings made consistent.  If you do not specify 'doCleanup' then
   //  things will be roughly updated, but the more thorough cleanup_after_load()
   //  is not called.
-  //Will throw if 'meas' is already in this MeasurementInfo object, otherwise
+  //Will throw if 'meas' is already in this SpecFile object, otherwise
   //  will ensure it has a unique sample number/ detector number combination
   //  (which means 'meas' may be modified).  Note that if a sample number
   //  needs to be assigned, it is chosen to be the very last available sample
@@ -1140,7 +1150,7 @@ public:
   //  recalculated.  If you do not specify 'doCleanup' then make sure to call
   //  cleanup_after_load() once you are done adding/removing Measurments if a
   //  rough fix up isnt good enough.
-  //Will throw if 'meas' isnt currently in this MeasurementInfo.
+  //Will throw if 'meas' isnt currently in this SpecFile.
   void remove_measurment( std::shared_ptr<const Measurement> meas, const bool doCleanup );
   
   //remove_measurments(): similar to remove_measurment(...), but more efficient
@@ -1730,7 +1740,7 @@ public:
   //             ids similar to "Survey 1", "Survey 2", etc.  The id attrib
   //             of <spectrum> tags also start with these same strings.
   //             (Hack to be compatible with GADRAS)
-  #define MeasurementInfo_2012N42_VERSION 4
+  #define SpecFile_2012N42_VERSION 4
   
   //The goal of create_2012_N42_xml(...) is that when read back into
   //  load_2012_N42_from_doc(...), the results should be identical (i.e. can
@@ -1744,11 +1754,11 @@ public:
 
 
 #if( PERFORM_DEVELOPER_CHECKS )
-  //equalEnough(...): tests whether the passed in MeasurementInfo objects are
+  //equalEnough(...): tests whether the passed in SpecFile objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
   //Throws an std::exception with a brief explanaition when an issue is found.
-  static void equalEnough( const MeasurementInfo &lhs, const MeasurementInfo &rhs );
+  static void equalEnough( const SpecFile &lhs, const SpecFile &rhs );
   
   double deep_gamma_count_sum() const;
   double deep_neutron_count_sum() const;
@@ -1758,7 +1768,7 @@ protected:
   
   //measurment(...): converts a const Measurement ptr to a non-const Measurement
   // ptr, as well as checking that the Measurement actually belong to this
-  //  MeasurementInfo object. Returns empty pointer on error.
+  //  SpecFile object. Returns empty pointer on error.
   //  Does not obtain a thread lock.
   std::shared_ptr<Measurement> measurment( std::shared_ptr<const Measurement> meas );
   
@@ -1887,7 +1897,7 @@ protected:
                     const rapidxml::xml_node<char> *measured_item_info_node,
                     std::vector<std::shared_ptr<Measurement>> measurements_applicable );
 
-  /** If this MeasurementInfo is calibrated by lower channel energy, then this
+  /** If this SpecFile is calibrated by lower channel energy, then this
    function will write a record (and it should be the first record) to the
    output with title "Energy" and channel counts equal to the energies of the
    channels.  Does not write the record if not SpecUtils::EnergyCalType::LowerChannelEdge
@@ -2058,7 +2068,7 @@ protected:
   
   //modified_: intended to be used to determine if changes have been
   //  made to oject since the last time the spectrum was saved to disk.
-  //  Set to true by (hopefully) all MeasurementInfo functions which are
+  //  Set to true by (hopefully) all SpecFile functions which are
   //  modifying, except cleanup_after_load() and reset() which sets it to false.
   //  Is _not_ set to false by any of the "saving" functions, this is your
   //  responsibility.
@@ -2066,7 +2076,7 @@ protected:
   
   //modifiedSinceDecode_: indicates if file has been modified at all since
   // cleanup_after_load() was called.  Set to true by (hopefully) all
-  //  MeasurementInfo functions which are modifying, except cleanup_after_load()
+  //  SpecFile functions which are modifying, except cleanup_after_load()
   //  and reset() which sets it to false.
   bool modifiedSinceDecode_;
  
@@ -2074,7 +2084,7 @@ protected:
   mutable std::recursive_mutex mutex_;
 public:
   std::recursive_mutex &mutex() const { return mutex_; };
-};//class MeasurementInfo
+};//class SpecFile
 
 
 //DetectorAnalysisResult and DetectorAnalysis are a first hack at recording
@@ -2136,7 +2146,7 @@ class DetectorAnalysis
 {
 public:
   //Need to make an association of this with the sample/detector number, and
-  //  allow MeasurementInfo to have multiple of these...
+  //  allow SpecFile to have multiple of these...
 
   /** Remarks included with the AnalysisResults */
   std::vector<std::string> remarks_;
@@ -2194,89 +2204,89 @@ public:
 
 
 //implementation of inlined functions
-bool MeasurementInfo::modified() const
+bool SpecFile::modified() const
 {
   return modified_;
 }
 
-void MeasurementInfo::reset_modified()
+void SpecFile::reset_modified()
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
   modified_ = false;
 }
 
-void MeasurementInfo::reset_modified_since_decode()
+void SpecFile::reset_modified_since_decode()
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
   modifiedSinceDecode_ = false;
 }
 
-bool MeasurementInfo::modified_since_decode() const
+bool SpecFile::modified_since_decode() const
 {
   return modifiedSinceDecode_;
 }
 
-float MeasurementInfo::gamma_live_time() const
+float SpecFile::gamma_live_time() const
 {
   return gamma_live_time_;
 }
 
-float MeasurementInfo::gamma_real_time() const
+float SpecFile::gamma_real_time() const
 {
   return gamma_real_time_;
 }
 
-double MeasurementInfo::gamma_count_sum() const
+double SpecFile::gamma_count_sum() const
 {
   return gamma_count_sum_;
 }
 
-double MeasurementInfo::neutron_counts_sum() const
+double SpecFile::neutron_counts_sum() const
 {
   return neutron_counts_sum_;
 }
 
-const std::string &MeasurementInfo::filename() const
+const std::string &SpecFile::filename() const
 {
   return filename_;
 }
 
-const std::vector<std::string> &MeasurementInfo::detector_names() const
+const std::vector<std::string> &SpecFile::detector_names() const
 {
   return detector_names_;
 }
 
-const std::vector<int> &MeasurementInfo::detector_numbers() const
+const std::vector<int> &SpecFile::detector_numbers() const
 {
   return detector_numbers_;
 }
 
-const std::vector<std::string> &MeasurementInfo::neutron_detector_names() const
+const std::vector<std::string> &SpecFile::neutron_detector_names() const
 {
   return neutron_detector_names_;
 }
 
-const std::string &MeasurementInfo::uuid() const
+const std::string &SpecFile::uuid() const
 {
   return uuid_;
 }
 
-const std::vector<std::string> &MeasurementInfo::remarks() const
+const std::vector<std::string> &SpecFile::remarks() const
 {
   return remarks_;
 }
 
-int MeasurementInfo::lane_number() const
+int SpecFile::lane_number() const
 {
   return lane_number_;
 }
 
-const std::string &MeasurementInfo::measurement_location_name() const
+const std::string &SpecFile::measurement_location_name() const
 {
   return measurement_location_name_;
 }
 
-const std::string &MeasurementInfo::inspection() const
+const std::string &SpecFile::inspection() const
 {
   return inspection_;
 }
@@ -2301,12 +2311,12 @@ const boost::posix_time::ptime &Measurement::position_time() const
   return position_time_;
 }
 
-const std::string &MeasurementInfo::measurment_operator() const
+const std::string &SpecFile::measurment_operator() const
 {
   return measurment_operator_;
 }
 
-const std::set<int> &MeasurementInfo::sample_numbers() const
+const std::set<int> &SpecFile::sample_numbers() const
 {
 //  std::unique_lock<std::recursive_mutex> lock( mutex_ );
 //  set<int> answer;
@@ -2317,7 +2327,7 @@ const std::set<int> &MeasurementInfo::sample_numbers() const
 }//set<int> sample_numbers() const
 
 
-size_t MeasurementInfo::num_measurements() const
+size_t SpecFile::num_measurements() const
 {
   size_t n;
 
@@ -2330,45 +2340,45 @@ size_t MeasurementInfo::num_measurements() const
 }//size_t num_measurements() const
 
 
-std::shared_ptr<const Measurement> MeasurementInfo::measurement(
+std::shared_ptr<const Measurement> SpecFile::measurement(
                                                              size_t num ) const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
   const size_t n = measurements_.size();
  
   if( num >= n )
-    throw std::runtime_error( "MeasurementInfo::measurement(size_t): invalid index" );
+    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index" );
   
   return measurements_[num];
 }
 
 
-DetectorType MeasurementInfo::detector_type() const
+DetectorType SpecFile::detector_type() const
 {
   return detector_type_;
 }
 
-const std::string &MeasurementInfo::instrument_type() const
+const std::string &SpecFile::instrument_type() const
 {
   return instrument_type_;
 }
 
-const std::string &MeasurementInfo::manufacturer() const
+const std::string &SpecFile::manufacturer() const
 {
   return manufacturer_;
 }
 
-const std::string &MeasurementInfo::instrument_model() const
+const std::string &SpecFile::instrument_model() const
 {
   return instrument_model_;
 }
 
-const std::string &MeasurementInfo::instrument_id() const
+const std::string &SpecFile::instrument_id() const
 {
   return instrument_id_;
 }
 
-std::vector< std::shared_ptr<const Measurement> > MeasurementInfo::measurements() const
+std::vector< std::shared_ptr<const Measurement> > SpecFile::measurements() const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
   
@@ -2379,88 +2389,88 @@ std::vector< std::shared_ptr<const Measurement> > MeasurementInfo::measurements(
 }//std::vector< std::shared_ptr<const Measurement> > measurements() const
 
 
-std::shared_ptr<const DetectorAnalysis> MeasurementInfo::detectors_analysis() const
+std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
 {
   return detectors_analysis_;
 }
 
-bool MeasurementInfo::has_gps_info() const
+bool SpecFile::has_gps_info() const
 {
   return (Measurement::valid_longitude(mean_longitude_)
            && Measurement::valid_latitude(mean_latitude_));
 }
 
-double MeasurementInfo::mean_latitude() const
+double SpecFile::mean_latitude() const
 {
   return mean_latitude_;
 }
 
-double MeasurementInfo::mean_longitude() const
+double SpecFile::mean_longitude() const
 {
   return mean_longitude_;
 }
 
-void MeasurementInfo::set_filename( const std::string &n )
+void SpecFile::set_filename( const std::string &n )
 {
   filename_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_remarks( const std::vector<std::string> &n )
+void SpecFile::set_remarks( const std::vector<std::string> &n )
 {
   remarks_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_uuid( const std::string &n )
+void SpecFile::set_uuid( const std::string &n )
 {
   uuid_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_lane_number( const int num )
+void SpecFile::set_lane_number( const int num )
 {
   lane_number_ = num;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_measurement_location_name( const std::string &n )
+void SpecFile::set_measurement_location_name( const std::string &n )
 {
   measurement_location_name_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_inspection( const std::string &n )
+void SpecFile::set_inspection( const std::string &n )
 {
   inspection_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_instrument_type( const std::string &n )
+void SpecFile::set_instrument_type( const std::string &n )
 {
   instrument_type_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_detector_type( const DetectorType type )
+void SpecFile::set_detector_type( const DetectorType type )
 {
   detector_type_ = type;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_manufacturer( const std::string &n )
+void SpecFile::set_manufacturer( const std::string &n )
 {
   manufacturer_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_instrument_model( const std::string &n )
+void SpecFile::set_instrument_model( const std::string &n )
 {
   instrument_model_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
-void MeasurementInfo::set_instrument_id( const std::string &n )
+void SpecFile::set_instrument_id( const std::string &n )
 {
   instrument_id_ = n;
   modified_ = modifiedSinceDecode_ = true;
@@ -2490,7 +2500,7 @@ int Measurement::sample_number() const
   return sample_number_;
 }
 
-Measurement::OccupancyStatus Measurement::occupied() const
+OccupancyStatus Measurement::occupied() const
 {
   return occupied_;
 }
@@ -2530,7 +2540,7 @@ Measurement::QualityStatus Measurement::quality_status() const
   return quality_status_;
 }
 
-Measurement::SourceType Measurement::source_type() const
+SourceType Measurement::source_type() const
 {
   return source_type_;
 }
@@ -2891,4 +2901,5 @@ float Measurement::gamma_energy_max() const
   return 2.0f*(*channel_energies_)[nbin-1] - (*channel_energies_)[nbin-2];
 }
 
+}//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h

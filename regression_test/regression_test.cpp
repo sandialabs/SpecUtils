@@ -103,13 +103,13 @@ void check_files_with_truth_n42( const string basedir );
 //  N42, and then read back in and ensured its equalEnough() to the original.
 void check_serialization_to_n42( const string basedir );
 
-//add_truth_n42(): adds a truth n42 file for the MeasurementInfo and path
+//add_truth_n42(): adds a truth n42 file for the  SpecUtils::SpecFile and path
 //  passed in.  Will fail if a truth n42 file already exists, unless force is
 //  specified to be true.  Checks the created n42 file to be sure it can be read
 //  back in and pass the 'equalEnough(...)' test, otherwise wont add truth n42
 //  file.  Will add resulting added file (and possibly directory) to GIT.
 //  Returns true if the truth N42 file was created.
-bool add_truth_n42( const MeasurementInfo &m, const path &p, const bool force );
+bool add_truth_n42( const  SpecUtils::SpecFile &m, const path &p, const bool force );
 
 //check_parse_time(): compares the parse times of files with truth n42 files
 //  against previous parse times.  Parses the file 10 times and takes the
@@ -120,10 +120,10 @@ void check_parse_time( const string basedir );
 string url_encode( const string &value );
 
 //print_summary(): prints a reasonably brief summary to the provided stream.
-void print_summary( const MeasurementInfo &info, std::ostream &out );
+void print_summary( const  SpecUtils::SpecFile &info, std::ostream &out );
 
 //print_one_line_summary(): prints a single line summary to the provided stream.
-void print_one_line_summary( const Measurement &info, std::ostream &out );
+void print_one_line_summary( const SpecUtils::Measurement &info, std::ostream &out );
 
 //candidate_test_files(): return all candidate files, regardless if they have a
 //  matching truth_n42.
@@ -315,12 +315,12 @@ void check_parse_time( const string basedir )
     
     for( int i = 0; i < ntimes_parse; ++i )
     {
-      MeasurementInfo info;
+       SpecUtils::SpecFile info;
       
       const double orig_wall_time = SpecUtils::get_wall_time();
       const double orig_cpu_time = SpecUtils::get_cpu_time();
     
-      const bool parsed = info.load_file( filename, kAutoParser, extention );
+      const bool parsed = info.load_file( filename, SpecUtils::ParserType::kAutoParser, extention );
     
       const double final_cpu_time = SpecUtils::get_cpu_time();
       const double final_wall_time = SpecUtils::get_wall_time();
@@ -488,10 +488,10 @@ void check_files_with_truth_n42( const string basedir )
     const string originalpath = fpath.string<string>();
     const string originalext = fpath.extension().string<string>();
     
-    MeasurementInfo original;
+     SpecUtils::SpecFile original;
     
     const bool originalstatus
-                = original.load_file( originalpath, kAutoParser, originalext );
+                = original.load_file( originalpath, SpecUtils::ParserType::kAutoParser, originalext );
     
     if( !originalstatus )
     {
@@ -517,8 +517,8 @@ void check_files_with_truth_n42( const string basedir )
       exit( EXIT_FAILURE );
     }
     
-    MeasurementInfo truth;
-    const bool truthstat = truth.load_file( tpath.string<string>().c_str(), K2012ICD1Parser, "" );
+     SpecUtils::SpecFile truth;
+    const bool truthstat = truth.load_file( tpath.string<string>().c_str(), SpecUtils::ParserType::K2012ICD1Parser, "" );
     
     if( !truthstat )
     {
@@ -533,7 +533,7 @@ void check_files_with_truth_n42( const string basedir )
     
     try
     {
-      MeasurementInfo::equalEnough( original, truth );
+       SpecUtils::SpecFile::equalEnough( original, truth );
       ++passed_tests;
     }catch( std::exception &e )
     {
@@ -601,7 +601,7 @@ void check_files_with_truth_n42( const string basedir )
                   break;
               }//switch( errortype )
               
-              MeasurementInfo::equalEnough( original, truth );
+               SpecUtils::SpecFile::equalEnough( original, truth );
               
               cout << "\nFixing the issue allowed the comparison test to pass."
                    << "\nWould you like to update the truth level information?"
@@ -666,9 +666,9 @@ void check_serialization_to_n42( const string basedir )
     const string originalpath = fpath.string<string>();
     const string originalext = fpath.extension().string<string>();
     
-    MeasurementInfo info;
+     SpecUtils::SpecFile info;
     
-    bool status = info.load_file( originalpath, kAutoParser, originalext );
+    bool status = info.load_file( originalpath, SpecUtils::ParserType::kAutoParser, originalext );
 
     if( !status )
     {
@@ -704,8 +704,8 @@ void check_serialization_to_n42( const string basedir )
       }//if( !status )
     }//End codeblock to serialize to temporary file
     
-    MeasurementInfo reread;
-    status = reread.load_file( tempname.c_str(), K2012ICD1Parser, "" );
+     SpecUtils::SpecFile reread;
+    status = reread.load_file( tempname.c_str(), SpecUtils::ParserType::K2012ICD1Parser, "" );
     
     if( !status )
     {
@@ -720,7 +720,7 @@ void check_serialization_to_n42( const string basedir )
     
     try
     {
-      MeasurementInfo::equalEnough( info, reread );
+       SpecUtils::SpecFile::equalEnough( info, reread );
       ++npassed;
     }catch( std::exception &e )
     {
@@ -731,7 +731,7 @@ void check_serialization_to_n42( const string basedir )
            << " failed with error:\n\t" << error_msg << "\n"
            << "\t(LHS is original parse, RHS is re-ad back in)\n\n";
       
-      if( SpecUtils::contains(error_msg, "MeasurementInfo: Number of remarks in LHS") )
+      if( SpecUtils::contains(error_msg, " SpecUtils::SpecFile: Number of remarks in LHS") )
       {
         for( const string r : info.remarks() )
           cout << "\t\tLHS remark: '"  << r << "'" << endl;
@@ -782,7 +782,7 @@ void check_serialization_to_n42( const string basedir )
 
 
 
-bool add_truth_n42( const MeasurementInfo &info, const path &p,
+bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
                     const bool force )
 {
   const path parentdir = p.parent_path();
@@ -833,9 +833,9 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
     }//end write files
   
     
-    MeasurementInfo reloadedinfo;
+     SpecUtils::SpecFile reloadedinfo;
     const bool reloadstatus
-                 = reloadedinfo.load_file( truth_n42.string<string>().c_str(), K2012ICD1Parser, "" );
+          = reloadedinfo.load_file( truth_n42.string<string>().c_str(), SpecUtils::ParserType::K2012ICD1Parser, "" );
     if( !reloadstatus )
       throw runtime_error( "Failed to read in written n42 file" );
   
@@ -843,7 +843,7 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
     
     try
     {
-      MeasurementInfo::equalEnough( info, reloadedinfo );
+       SpecUtils::SpecFile::equalEnough( info, reloadedinfo );
     }catch( std::exception &e )
     {
       char option = '\0';
@@ -859,8 +859,8 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
       }//while( option != 'n' && option != 'y' )
       
       if( option == 'n' )
-        throw runtime_error( "Failed to make the MeasurementInfo--->N42"
-                             "--->MeasurementInfo round trip" );
+        throw runtime_error( "Failed to make the  SpecUtils::SpecFile--->N42"
+                             "---> SpecUtils::SpecFile round trip" );
     }//try / catch for equalEnoughs
     
     if( !old_n42.empty() )
@@ -888,7 +888,7 @@ bool add_truth_n42( const MeasurementInfo &info, const path &p,
   }//try / catch
   
   return true;
-}//void add_truth_n42( MeasurementInfo &info, path &p )
+}//void add_truth_n42(  SpecUtils::SpecFile &info, path &p )
 
 
 
@@ -904,8 +904,8 @@ void handle_no_truth_files( const string basedir )
     const string filenamestr = path.string<string>();
     const string extention = path.extension().string<string>();
     
-    MeasurementInfo info;
-    const bool status = info.load_file( filenamestr, kAutoParser, extention );
+     SpecUtils::SpecFile info;
+    const bool status = info.load_file( filenamestr, SpecUtils::ParserType::kAutoParser, extention );
     
     if( !status )
     {
@@ -967,7 +967,7 @@ void handle_no_truth_files( const string basedir )
 
 
 
-void print_one_line_summary( const Measurement &meas, std::ostream &out )
+void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &out )
 {
   out << "Sample " << meas.sample_number() << " detector '"
       << meas.detector_name() << "', LT=" << meas.live_time()
@@ -979,11 +979,11 @@ void print_one_line_summary( const Measurement &meas, std::ostream &out )
   
   switch( meas.source_type() )
   {
-    case Measurement::Background:        out << ", Background";        break;
-    case Measurement::Calibration:       out << ", Calibration";       break;
-    case Measurement::Foreground:        out << ", Foreground";        break;
-    case Measurement::IntrinsicActivity: out << ", IntrinsicActivity"; break;
-    case Measurement::UnknownSourceType: out << ", UnknownSourceType"; break;
+    case SpecUtils::SourceType::Background:        out << ", Background";        break;
+    case SpecUtils::SourceType::Calibration:       out << ", Calibration";       break;
+    case SpecUtils::SourceType::Foreground:        out << ", Foreground";        break;
+    case SpecUtils::SourceType::IntrinsicActivity: out << ", IntrinsicActivity"; break;
+    case SpecUtils::SourceType::UnknownSourceType: out << ", UnknownSourceType"; break;
   }//switch( meas.source_type() )
   
   out << ", " << meas.start_time();
@@ -991,13 +991,13 @@ void print_one_line_summary( const Measurement &meas, std::ostream &out )
   if( meas.has_gps_info() )
     out << ", GPS(" << meas.latitude() << "," << meas.longitude() << "," << meas.position_time() << ")";
   
-}//void print_one_line_summary( const Measurement &info, std::ostream &out )
+}//void print_one_line_summary( const SpecUtils::Measurement &info, std::ostream &out )
 
 
 
-void print_summary( const MeasurementInfo &info, std::ostream &out )
+void print_summary( const  SpecUtils::SpecFile &info, std::ostream &out )
 {
-  vector< std::shared_ptr<const Measurement> > meass = info.measurements();
+  vector< std::shared_ptr<const SpecUtils::Measurement> > meass = info.measurements();
 
   const size_t ndet = info.detector_names().size();
   
@@ -1025,7 +1025,7 @@ void print_summary( const MeasurementInfo &info, std::ostream &out )
       << "passthrough/searchmode data.\n";
   
   //print out analysis info
-  std::shared_ptr<const DetectorAnalysis> ana = info.detectors_analysis();
+  std::shared_ptr<const SpecUtils::DetectorAnalysis> ana = info.detectors_analysis();
   if( !ana )
     out << "\tDoes not contain analysis results\n";
   else
@@ -1040,7 +1040,7 @@ void print_summary( const MeasurementInfo &info, std::ostream &out )
   }//for( size_t i = 0; i < meass.size(); ++i )
   
   out << "\n";
-}//void print_summary( const MeasurementInfo &info, std::ostream out );
+}//void print_summary( const  SpecUtils::SpecFile &info, std::ostream out );
 
 
 

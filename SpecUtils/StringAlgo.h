@@ -119,6 +119,10 @@ namespace  SpecUtils
    input string will be split when ever any of the characters are
    encountered. '\0' cannot be specified as a delimiter. An empty string
    will return 0 results if #input is empty, and one result otherwise.
+   
+   Example results:
+     {",,,hello how are,,", ", "}  -> {"hello", "how", "are"}
+     {",,,hello how are,,", ","}  ->  {"hello how are"}
    */
   void split( std::vector<std::string> &results,
              const std::string &input, const char *delims );

@@ -431,6 +431,35 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   BOOST_CHECK(results.size() == 1);
   BOOST_CHECK_EQUAL(results[0], input);
 
+  SpecUtils::split( results, ",,,hello how are,,", ", " );
+  BOOST_CHECK_EQUAL(results.size(), 3);
+  BOOST_CHECK_EQUAL(results[0], "hello");
+  BOOST_CHECK_EQUAL(results[1], "how");
+  BOOST_CHECK_EQUAL(results[2], "are");
+  
+  SpecUtils::split( results, ",,,hello how are,,", "," );
+  BOOST_CHECK_EQUAL(results.size(), 1);
+  BOOST_CHECK_EQUAL(results[0], "hello how are");
+  
+  SpecUtils::split( results, ",hello,,  how     are  ", ", " );
+  BOOST_CHECK_EQUAL(results.size(), 3);
+  BOOST_CHECK_EQUAL(results[0], "hello");
+  BOOST_CHECK_EQUAL(results[1], "how");
+  BOOST_CHECK_EQUAL(results[2], "are");
+  
+  SpecUtils::split( results, ", hello,,  how     are  ", " ;" );
+  BOOST_CHECK_EQUAL(results.size(), 4);
+  BOOST_CHECK_EQUAL(results[0], ",");
+  BOOST_CHECK_EQUAL(results[1], "hello,,");
+  BOOST_CHECK_EQUAL(results[2], "how");
+  BOOST_CHECK_EQUAL(results[3], "are");
+  
+  
+  SpecUtils::split( results, "hello, how, are,", "," );
+  BOOST_CHECK_EQUAL(results.size(), 3);
+  BOOST_CHECK_EQUAL(results[0], "hello");
+  BOOST_CHECK_EQUAL(results[0], " how");
+  BOOST_CHECK_EQUAL(results[0], " are");
   
   input = "hello how are you doing 543 342 ";
   SpecUtils::split_no_delim_compress( results, input, "" );
