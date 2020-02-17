@@ -28,7 +28,7 @@ namespace
       case SpecUtils::SourceType::Calibration:       return cal;
       case SpecUtils::SourceType::Foreground:        return fore;
       case SpecUtils::SourceType::IntrinsicActivity: return intrins;
-      case SpecUtils::SourceType::UnknownSourceType: return unknown;
+      case SpecUtils::SourceType::Unknown:           return unknown;
     }//switch( m_meas->source_type() )
     assert(0);
     return unknown;
@@ -44,7 +44,7 @@ namespace
     {
       case SpecUtils::OccupancyStatus::NotOccupied: return notocc;
       case SpecUtils::OccupancyStatus::Occupied: return occ;
-      case SpecUtils::OccupancyStatus::UnknownOccupancyStatus: return unknownocc;
+      case SpecUtils::OccupancyStatus::Unknown: return unknownocc;
     }//switch( m_meas->source_type() )
     assert(0);
     return unknownocc;
@@ -101,7 +101,7 @@ public:
       StaticValue(to_str(SpecUtils::SourceType::Calibration).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::Calibration))),
       StaticValue(to_str(SpecUtils::SourceType::Foreground).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::Foreground))),
       StaticValue(to_str(SpecUtils::SourceType::IntrinsicActivity).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::IntrinsicActivity))),
-      StaticValue(to_str(SpecUtils::SourceType::UnknownSourceType).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::UnknownSourceType)))
+      StaticValue(to_str(SpecUtils::SourceType::Unknown).c_str(), Napi::String::New(env, to_str(SpecUtils::SourceType::Unknown)))
     } ) );
   }
   
@@ -124,7 +124,7 @@ public:
     exports.Set("OccupancyStatus", DefineClass(env, "OccupancyStatus", {
       StaticValue(to_str(SpecUtils::OccupancyStatus::NotOccupied).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::NotOccupied))),
       StaticValue(to_str(SpecUtils::OccupancyStatus::Occupied).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::Occupied))),
-      StaticValue(to_str(SpecUtils::OccupancyStatus::UnknownOccupancyStatus).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::UnknownOccupancyStatus))),
+      StaticValue(to_str(SpecUtils::OccupancyStatus::Unknown).c_str(), Napi::String::New(env, to_str(SpecUtils::OccupancyStatus::Unknown))),
     } ) );
   }
   
@@ -172,7 +172,7 @@ public:
     std::vector<PropertyDescriptor> properties;
     
     for( SpecUtils::DetectorType type = SpecUtils::DetectorType(0); 
-         type <= SpecUtils::DetectorType::kUnknownDetector; 
+         type <= SpecUtils::DetectorType::Unknown; 
          type = SpecUtils::DetectorType(static_cast<int>(type)+1) )
     {
       const std::string &name = detectorTypeToString(type);
@@ -559,9 +559,9 @@ Napi::Value SpecRecord::occupied(const Napi::CallbackInfo& info)
   
   switch( m_meas->occupied() )
   {
-    case SpecUtils::OccupancyStatus::Occupied:                val = "Occupied"; break;
-    case SpecUtils::OccupancyStatus::NotOccupied:             val = "NotOccupied"; break;
-    case SpecUtils::OccupancyStatus::UnknownOccupancyStatus:  val = "UnknownOccupancyStatus"; break;
+    case SpecUtils::OccupancyStatus::Occupied:    val = "Occupied"; break;
+    case SpecUtils::OccupancyStatus::NotOccupied: val = "NotOccupied"; break;
+    case SpecUtils::OccupancyStatus::Unknown:     val = "UnknownOccupancyStatus"; break;
   }//switch( m_meas->occupied() )
   
   assert( val );
@@ -791,7 +791,7 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
   const std::string path = info[0].ToString().Utf8Value();
   
   auto ptr = std::make_shared<SpecUtils::SpecFile>();
-  const bool loaded = ptr->load_file( path, SpecUtils::ParserType::kAutoParser );
+  const bool loaded = ptr->load_file( path, SpecUtils::ParserType::Auto );
   if( !loaded ){
     Napi::TypeError::New(env, "Could not decode as a spectrum file.").ThrowAsJavaScriptException();
   }
@@ -1083,7 +1083,7 @@ std::set<std::string> SpecFile::to_valid_source_types( Napi::Value value, const 
        || n == to_str(SpecUtils::SourceType::Calibration)
        || n == to_str(SpecUtils::SourceType::Foreground)
        || n == to_str(SpecUtils::SourceType::IntrinsicActivity)
-       || n == to_str(SpecUtils::SourceType::UnknownSourceType) )
+       || n == to_str(SpecUtils::SourceType::Unknown) )
       return;
     
     Napi::Error::New(env, "Source type '" + n + "' is not a valid; must be one of ['"
@@ -1091,7 +1091,7 @@ std::set<std::string> SpecFile::to_valid_source_types( Napi::Value value, const 
                      + "', '" + std::string(to_str(SpecUtils::SourceType::Calibration))
                      + "', '" + std::string(to_str(SpecUtils::SourceType::Foreground))
                      + "', '" + std::string(to_str(SpecUtils::SourceType::IntrinsicActivity))
-                     + "', '" + std::string(to_str(SpecUtils::SourceType::UnknownSourceType))
+                     + "', '" + std::string(to_str(SpecUtils::SourceType::Unknown))
                      + "']"
                      ).ThrowAsJavaScriptException();
   };//check_source_type lambda
@@ -1100,7 +1100,7 @@ std::set<std::string> SpecFile::to_valid_source_types( Napi::Value value, const 
   {
     return std::set<std::string>{ to_str(SpecUtils::SourceType::Background),
       to_str(SpecUtils::SourceType::Calibration), to_str(SpecUtils::SourceType::Foreground),
-      to_str(SpecUtils::SourceType::IntrinsicActivity), to_str(SpecUtils::SourceType::UnknownSourceType)
+      to_str(SpecUtils::SourceType::IntrinsicActivity), to_str(SpecUtils::SourceType::Unknown)
     };
   }//if( value.IsNull() )
   
@@ -1295,34 +1295,34 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
   const bool force = length>=6 ? false : info[5].ToBoolean().Value();
   
   
-  SpecUtils::SaveSpectrumAsType type = SpecUtils::SaveSpectrumAsType::kNumSaveSpectrumAsType;
+  SpecUtils::SaveSpectrumAsType type = SpecUtils::SaveSpectrumAsType::NumSaveSpectrumAsType;
   if( format == "TXT" )
-    type = SpecUtils::SaveSpectrumAsType::kTxtSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::Txt;
   else if( format == "CSV" )
-    type = SpecUtils::SaveSpectrumAsType::kCsvSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::Csv;
   else if( format == "PCF" )
-    type = SpecUtils::SaveSpectrumAsType::kPcfSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::Pcf;
   else if( format == "N42-2006" )
-    type = SpecUtils::SaveSpectrumAsType::kXmlSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::N42_2006;
   else if( format == "N42-2012" )
-    type = SpecUtils::SaveSpectrumAsType::k2012N42SpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::N42_2012;
   else if( format == "CHN" )
-    type = SpecUtils::SaveSpectrumAsType::kChnSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::Chn;
   else if( format == "SPC-int" )
-    type = SpecUtils::SaveSpectrumAsType::kBinaryIntSpcSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::SpcBinaryInt;
   else if( format == "SPC" || format == "SPC-float" )
-    type = SpecUtils::SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::SpcBinaryFloat;
   else if( format == "SPC-ascii" )
-    type = SpecUtils::SaveSpectrumAsType::kAsciiSpcSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::SpcAscii;
   else if( format == "GR130v0" )
-    type = SpecUtils::SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::ExploraniumGr130v0;
   else if( format == "GR135v2" )
-    type = SpecUtils::SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::ExploraniumGr135v2;
   else if( format == "SPE" || format == "IAEA" )
-    type = SpecUtils::SaveSpectrumAsType::kIaeaSpeSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::SpeIaea;
 #if( SpecUtils_ENABLE_D3_CHART )
   else if( format == "HTML" )
-    type = SpecUtils::SaveSpectrumAsType::kD3HtmlSpectrumFile;
+    type = SpecUtils::SaveSpectrumAsType::HtmlD3;
 #endif
   else {
     Napi::Error::New(info.Env(), "Invalid file-type specification").ThrowAsJavaScriptException();
