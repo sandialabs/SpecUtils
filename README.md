@@ -24,12 +24,12 @@ A minimal program to print out the channel counts of a spectrum file, and then s
 
 int main() {
   SpecUtils::SpecFile specfile;
-  if( !specfile.load_file("input.n42", kAutoParser) )
+  if( !specfile.load_file("input.n42", SpecUtils::ParserType::Auto) )
     return EXIT_FAILURE;
     
-  for( auto sample : specfile.sample_numbers() ) {
-    for( auto detector : specfile.detector_names() ) {
-      std::shared_ptr<const  Measurement> meas = specfile.measurement( sample, detector );
+  for( int sample : specfile.sample_numbers() ) {
+    for( std::string detector : specfile.detector_names() ) {
+      std::shared_ptr<const SpecUtils::Measurement> meas = specfile.measurement( sample, detector );
       std::cout << "Sample " << sample << " detector " << detector
                 << " has live time " << meas->live_time() << "s and real time "
                 << meas->real_time() << "s with counts: ";
@@ -39,7 +39,7 @@ int main() {
     }
   }
   
-  specfile.write_to_file( "outout,csv", kCsvSpectrumFile );
+  specfile.write_to_file( "outout,csv", SpecUtils::SaveSpectrumAsType::Csv );
   return EXIT_SUCCESS;
 }
 ``` 

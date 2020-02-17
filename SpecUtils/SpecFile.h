@@ -118,27 +118,27 @@ namespace SpecUtils
   //ToDo: now that this is an enum class, cleanup the names
 enum class ParserType : int
 {
-  k2006Icd1Parser,
-  K2012ICD1Parser,
-  kSpcParser,  //ascii or binary
-  kGR135Parser,
-  kPcfParser,
-  kChnParser,
-  kIaeaParser,
-  kTxtOrCsvParser,
-  kCnfParser,
-  kTracsMpsParser,
-  kAramParser,
-  kSPMDailyFile, //SpectroscopicPortalMonitor
-  kAmptekMca,
-  kMicroRaider,
-  kOrtecListMode,
-  kLsrmSpe,
-  kTka,
-  kMultiAct, //only partially supported
-  kPhd,
-  kLzs,
-  kAutoParser
+  N42_2006,
+  N42_2012,
+  Spc,  //ascii or binary
+  GR135,
+  Pcf,
+  Chn,
+  SpeIaea,
+  TxtOrCsv,
+  Cnf,
+  TracsMps,
+  Aram,
+  SPMDailyFile,
+  AmptekMca,
+  MicroRaider,
+  OrtecListMode,
+  LsrmSpe,
+  Tka,
+  MultiAct, //only partially supported
+  Phd,
+  Lzs,
+  Auto
 };//enum ParserType
 
 
@@ -153,47 +153,47 @@ enum class SpectrumType : int
 enum class SaveSpectrumAsType : int
 {
   /** See #SpecFile::write_txt for details. */
-  kTxtSpectrumFile,
+  Txt,
   
   /** See #SpecFile::write_csv for details. */
-  kCsvSpectrumFile,
+  Csv,
   
   /** See #SpecFile::write_pcf for details. */
-  kPcfSpectrumFile,
+  Pcf,
   
   /** See #SpecFile::write_2006_N42_xml for details. */
-  kXmlSpectrumFile,
+  N42_2006,
   
   /** See #SpecFile::write_2012_N42 for details. */
-  k2012N42SpectrumFile,
+  N42_2012,
   
   /** See #SpecFile::write_integer_chn for details. */
-  kChnSpectrumFile,
+  Chn,
   
   /** See #SpecFile::write_binary_spc for details. */
-  kBinaryIntSpcSpectrumFile,
+  SpcBinaryInt,
   
   /** See #SpecFile::write_binary_spc for details. */
-  kBinaryFloatSpcSpectrumFile,
+  SpcBinaryFloat,
   
   /** See #SpecFile::write_ascii_spc for details. */
-  kAsciiSpcSpectrumFile,
+  SpcAscii,
   
   /** See #SpecFile::write_binary_exploranium_gr130v0 for details. */
-  kExploraniumGr130v0SpectrumFile,
+  ExploraniumGr130v0,
   
   /** See #SpecFile::write_binary_exploranium_gr135v2 for details. */
-  kExploraniumGr135v2SpectrumFile,
+  ExploraniumGr135v2,
   
   /** See #SpecFile::write_iaea_spe for details. */
-  kIaeaSpeSpectrumFile,
+  SpeIaea,
 
 #if( SpecUtils_ENABLE_D3_CHART )
   /** See #SpecFile::write_d3_html for details. */
-  kD3HtmlSpectrumFile,
+  HtmlD3,
 #endif
   
-  kNumSaveSpectrumAsType
+  NumSaveSpectrumAsType
 };//enum SaveSpectrumAsType
 
 
@@ -222,79 +222,89 @@ const char *descriptionText( const SaveSpectrumAsType type );
 //ToDo: now that this is an enum class should cleanup all the names
 enum class DetectorType : int
 {
-  kGR135Detector,
+  GR135,
   /** First gen identiFINDER with smaller crystal than NGs; note sometimes
       called identiFINDER-N.
    */
-  kIdentiFinderDetector,
+  IdentiFinder,
   
   /** Used for both the NG and NGH since same crystal size (NGH has neutron
       tube)
   */
-  kIdentiFinderNGDetector,
+  IdentiFinderNG,
   
-  kIdentiFinderLaBr3Detector,
+  IdentiFinderLaBr3,
   
-  /** The kDetectiveDetector is a default for when the type of detective cant be
+  /** The DetectiveUnknown is a default for when the type of detective cant be
       determined, not an actual detector type.  This enum doesnt consider the
       difference between the EX and DX series; the DX are same gamma crystal,
       but do not have a neutron detector.
    */
-  kDetectiveDetector,          
-  kDetectiveExDetector,
-  kDetectiveEx100Detector,
+  DetectiveUnknown,
+  DetectiveEx,
+  DetectiveEx100,
   /** There are a number of variants, a self contained model, a portal, etc */
-  kDetectiveEx200Detector,
-  kDetectiveX,
+  DetectiveEx200,
+  DetectiveX,
   /** only identified from N42 files */
-  kSAIC8Detector,
-  kFalcon5000,
-  kMicroDetectiveDetector,
-  kMicroRaiderDetector,
-  kRadHunterNaI,
-  kRadHunterLaBr3,
-  kRsi701,
-  kRsi705,
+  SAIC8,
+  Falcon5000,
+  MicroDetective,
+  MicroRaider,
+  RadHunterNaI,
+  RadHunterLaBr3,
+  Rsi701,
+  Rsi705,
   /** Unspecified RSI/Avid system, usually model is stated as RS??? */
-  kAvidRsi,
-  kOrtecRadEagleNai,
-  kOrtecRadEagleCeBr2Inch,
-  kOrtecRadEagleCeBr3Inch,
-  kOrtecRadEagleLaBr,
+  AvidRsi,
+  OrtecRadEagleNai,
+  OrtecRadEagleCeBr2Inch,
+  OrtecRadEagleCeBr3Inch,
+  OrtecRadEagleLaBr,
   /** The LaBr3 may not always be detector, and then it will be assigned
       kSame940
    */
-  kSam940LaBr3,
-  kSam940,
+  Sam940LaBr3,
+  Sam940,
   kSam945,
-  kSrpm210,
+  Srpm210,
   //RadSeekerLaBr1.5x1.5
   //RadSeekerNaI2x2 (although should check for this, see SpecFile::set_n42_2006_instrument_info_node_info
   
-  kUnknownDetector
+  Unknown
 };//enum DetectorType
 
 
 enum class OccupancyStatus : int
 {
   //Reported occupancy status; not be applicable to all systems/formats, in
-  //  which case is marked to UnknownOccupancyStatus.
+  //  which case is marked to Unknown.
   //
-  //ToDo: now that this is an enum class should cleanup UnknownOccupancyStatus
-  NotOccupied, Occupied, UnknownOccupancyStatus
+  //ToDo: now that this is an enum class should cleanup Unknown
+  NotOccupied, Occupied, Unknown
 };
   
   
   
+/**
+ */
 enum class SourceType : int
 {
-  //Reported source type for a record; marked as UnknownSourceType unless
+  //Reported source type for a record; marked as Unknown unless
   //  file format explicitly specifies, or can reasonably be infered.
-  //
-  //ToDo: now that this is an enum class should cleanup UnknownSourceType
-  IntrinsicActivity, Calibration, Background, Foreground, UnknownSourceType
+  IntrinsicActivity, Calibration, Background, Foreground, Unknown
 };
 
+  
+enum class QualityStatus : int
+{
+  //The detector status reported in the file; not applicable to all formats,
+  //  in which case should be marked as Missing, although some formats
+  //  (notable N42 and MPS) default to Good.
+  Good, Suspect, Bad, Missing
+};
+  
+  
 //Forward declarations within SpecUtils
 enum class EnergyCalType : int;
   
@@ -407,16 +417,6 @@ struct EnergyCalibration
 class Measurement
 {
 public:
-
-  enum QualityStatus
-  {
-    //The detector status reported in the file; not applicable to all formats,
-    //  in which case should be marked as Missing, although some formats
-    //  (notable N42 and MPS) default to Good.
-    Good, Suspect, Bad, Missing
-  };
-  
-
   Measurement();
   
   //operator=: operates as expected for most member variables.  Smart pointer
@@ -454,7 +454,7 @@ public:
   inline const std::string &title() const;
   
   //occupied(): returns the occupancy status.  Detectors which do not contain
-  //  this capability will return 'UnknownOccupancyStatus'
+  //  this capability will return 'Unknown'
   inline OccupancyStatus occupied() const;
   
   //gamma_count_sum(): returns the sum of channel data counts for gamma data.
@@ -509,7 +509,7 @@ public:
   //source_type():  Returns the source type if known.  For some formats (notably
   //  PCF snd spectroscopic daily files), anything not background will be marked
   //  as foreground (this behaviour may be cahnged in the future).  For other
-  //  formats if not known, 'UnknownSourceType' is returned.
+  //  formats if not known, 'Unknown' is returned.
   inline SourceType source_type() const;
   
   //energy_calibration_model(): returns calibration model used for energy
@@ -893,7 +893,7 @@ protected:
   int sample_number_;
   
   //occupied_: for portal data indicates if vehicle in RPM.  If non-portal data
-  //  then will probably usually be OccupancyStatus::UnknownOccupancyStatus.
+  //  then will probably usually be OccupancyStatus::Unknown.
   OccupancyStatus occupied_;
   
   double gamma_count_sum_;
@@ -1000,9 +1000,9 @@ public:
   const SpecFile &operator=( const SpecFile &rhs );
 
   //load_file(...): returns true when file is successfully loaded, false
-  //  otherwise. Callling this function with parser_type==kAutoParser is
+  //  otherwise. Callling this function with parser_type==Auto is
   //  the easiest way to load a spectrum file when you dont know the type of
-  //  file.  The file_ending_hint is only used in the case of kAutoParser
+  //  file.  The file_ending_hint is only used in the case of Auto
   //  and uses the file ending to effect the order of parsers tried, example
   //  values for this mught be: "n24", "pcf", "chn", etc. The entire filename
   //  can be passed in since only the letters after the last period are used
@@ -2535,7 +2535,7 @@ const std::string &Measurement::detector_type() const
   return detector_description_;
 }
 
-Measurement::QualityStatus Measurement::quality_status() const
+SpecUtils::QualityStatus Measurement::quality_status() const
 {
   return quality_status_;
 }

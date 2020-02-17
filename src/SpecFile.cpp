@@ -1335,22 +1335,22 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 {
   switch( type )
   {
-    case SaveSpectrumAsType::kTxtSpectrumFile:                return "txt";
-    case SaveSpectrumAsType::kCsvSpectrumFile:                return "csv";
-    case SaveSpectrumAsType::kPcfSpectrumFile:                return "pcf";
-    case SaveSpectrumAsType::kXmlSpectrumFile:                return "n42";
-    case SaveSpectrumAsType::k2012N42SpectrumFile:            return "n42";
-    case SaveSpectrumAsType::kChnSpectrumFile:                return "chn";
-    case SaveSpectrumAsType::kBinaryIntSpcSpectrumFile:       return "spc";
-    case SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile:     return "spc";
-    case SaveSpectrumAsType::kAsciiSpcSpectrumFile:           return "spc";
-    case SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile: return "dat";
-    case SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile: return "dat";
-    case SaveSpectrumAsType::kIaeaSpeSpectrumFile:            return "spe";
+    case SaveSpectrumAsType::Txt:                return "txt";
+    case SaveSpectrumAsType::Csv:                return "csv";
+    case SaveSpectrumAsType::Pcf:                return "pcf";
+    case SaveSpectrumAsType::N42_2006:                return "n42";
+    case SaveSpectrumAsType::N42_2012:            return "n42";
+    case SaveSpectrumAsType::Chn:                return "chn";
+    case SaveSpectrumAsType::SpcBinaryInt:       return "spc";
+    case SaveSpectrumAsType::SpcBinaryFloat:     return "spc";
+    case SaveSpectrumAsType::SpcAscii:           return "spc";
+    case SaveSpectrumAsType::ExploraniumGr130v0: return "dat";
+    case SaveSpectrumAsType::ExploraniumGr135v2: return "dat";
+    case SaveSpectrumAsType::SpeIaea:            return "spe";
 #if( SpecUtils_ENABLE_D3_CHART )
-    case SaveSpectrumAsType::kD3HtmlSpectrumFile:             return "html";
+    case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
-    case SaveSpectrumAsType::kNumSaveSpectrumAsType:          break;
+    case SaveSpectrumAsType::NumSaveSpectrumAsType:          break;
   }//switch( m_format )
   
   return "";
@@ -1377,22 +1377,22 @@ const char *descriptionText( const SaveSpectrumAsType type )
 {
   switch( type )
   {
-    case SaveSpectrumAsType::kTxtSpectrumFile:                return "TXT";
-    case SaveSpectrumAsType::kCsvSpectrumFile:                return "CSV";
-    case SaveSpectrumAsType::kPcfSpectrumFile:                return "PCF";
-    case SaveSpectrumAsType::kXmlSpectrumFile:                return "2006 N42";
-    case SaveSpectrumAsType::k2012N42SpectrumFile:            return "2012 N42";
-    case SaveSpectrumAsType::kChnSpectrumFile:                return "CHN";
-    case SaveSpectrumAsType::kBinaryIntSpcSpectrumFile:       return "Integer SPC";
-    case SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile:     return "Float SPC";
-    case SaveSpectrumAsType::kAsciiSpcSpectrumFile:           return "ASCII SPC";
-    case SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile: return "GR130 DAT";
-    case SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile: return "GR135v2 DAT";
-    case SaveSpectrumAsType::kIaeaSpeSpectrumFile:            return "IAEA SPE";
+    case SaveSpectrumAsType::Txt:                return "TXT";
+    case SaveSpectrumAsType::Csv:                return "CSV";
+    case SaveSpectrumAsType::Pcf:                return "PCF";
+    case SaveSpectrumAsType::N42_2006:                return "2006 N42";
+    case SaveSpectrumAsType::N42_2012:            return "2012 N42";
+    case SaveSpectrumAsType::Chn:                return "CHN";
+    case SaveSpectrumAsType::SpcBinaryInt:       return "Integer SPC";
+    case SaveSpectrumAsType::SpcBinaryFloat:     return "Float SPC";
+    case SaveSpectrumAsType::SpcAscii:           return "ASCII SPC";
+    case SaveSpectrumAsType::ExploraniumGr130v0: return "GR130 DAT";
+    case SaveSpectrumAsType::ExploraniumGr135v2: return "GR135v2 DAT";
+    case SaveSpectrumAsType::SpeIaea:            return "IAEA SPE";
 #if( SpecUtils_ENABLE_D3_CHART )
-    case SaveSpectrumAsType::kD3HtmlSpectrumFile:             return "HTML";
+    case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif
-    case SaveSpectrumAsType::kNumSaveSpectrumAsType:          return "";
+    case SaveSpectrumAsType::NumSaveSpectrumAsType:          return "";
   }
   return "";
 }//const char *descriptionText( const SaveSpectrumAsType type )
@@ -2045,60 +2045,60 @@ const std::string &detectorTypeToString( const DetectorType type )
 
   switch( type )
   {
-    case DetectorType::kGR135Detector:
+    case DetectorType::GR135:
       return sm_GR135DetectorStr;
-    case DetectorType::kIdentiFinderNGDetector:
+    case DetectorType::IdentiFinderNG:
       return sm_IdentiFinderNGDetectorStr;
-//  kIdentiFinderNGDetector,   //I dont have any examples of this
-    case DetectorType::kIdentiFinderDetector:
+//  IdentiFinderNG,   //I dont have any examples of this
+    case DetectorType::IdentiFinder:
       return sm_IdentiFinderDetectorStr;
-    case DetectorType::kIdentiFinderLaBr3Detector:
+    case DetectorType::IdentiFinderLaBr3:
       return sm_IdentiFinderLaBr3DetectorStr;
-    case DetectorType::kDetectiveDetector:
+    case DetectorType::DetectiveUnknown:
       return sm_DetectiveDetectorStr;
-    case DetectorType::kDetectiveExDetector:
+    case DetectorType::DetectiveEx:
       return sm_DetectiveExDetectorStr;
-    case DetectorType::kDetectiveEx100Detector:
+    case DetectorType::DetectiveEx100:
       return sm_DetectiveEx100DetectorStr;
-    case DetectorType::kDetectiveEx200Detector:
+    case DetectorType::DetectiveEx200:
       return sm_OrtecIDMPortalDetectorStr;
-    case DetectorType::kDetectiveX:
+    case DetectorType::DetectiveX:
       return sm_OrtecDetectiveXStr;
-    case DetectorType::kSAIC8Detector:
+    case DetectorType::SAIC8:
       return sm_SAIC8DetectorStr;
-    case DetectorType::kFalcon5000:
+    case DetectorType::Falcon5000:
       return sm_Falcon5kDetectorStr;
-    case DetectorType::kUnknownDetector:
+    case DetectorType::Unknown:
       return sm_UnknownDetectorStr;
-    case DetectorType::kMicroDetectiveDetector:
+    case DetectorType::MicroDetective:
       return sm_MicroDetectiveDetectorStr;
-    case DetectorType::kMicroRaiderDetector:
+    case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
-    case DetectorType::kSam940:
+    case DetectorType::Sam940:
       return sm_Sam940DetectorStr;
     case DetectorType::kSam945:
       return sm_Sam945DetectorStr;
-    case DetectorType::kSrpm210:
+    case DetectorType::Srpm210:
       return sm_Srpm210DetectorStr;
-    case DetectorType::kSam940LaBr3:
+    case DetectorType::Sam940LaBr3:
       return sm_Sam940Labr3DetectorStr;
-    case DetectorType::kRsi701:
+    case DetectorType::Rsi701:
       return sm_Rsi701DetectorStr;
-    case DetectorType::kRadHunterNaI:
+    case DetectorType::RadHunterNaI:
       return sm_RadHunterNaIDetectorStr;
-    case DetectorType::kRadHunterLaBr3:
+    case DetectorType::RadHunterLaBr3:
       return sm_RadHunterLaBr3DetectorStr;
-    case DetectorType::kRsi705:
+    case DetectorType::Rsi705:
       return sm_Rsi705DetectorStr;
-    case DetectorType::kAvidRsi:
+    case DetectorType::AvidRsi:
       return sm_AvidRsiDetectorStr;
-    case DetectorType::kOrtecRadEagleNai:
+    case DetectorType::OrtecRadEagleNai:
       return sm_RadEagleNaiDetectorStr;
-    case DetectorType::kOrtecRadEagleCeBr2Inch:
+    case DetectorType::OrtecRadEagleCeBr2Inch:
       return sm_RadEagleCeBr2InDetectorStr;
-    case DetectorType::kOrtecRadEagleCeBr3Inch:
+    case DetectorType::OrtecRadEagleCeBr3Inch:
       return sm_RadEagleCeBr3InDetectorStr;
-    case DetectorType::kOrtecRadEagleLaBr:
+    case DetectorType::OrtecRadEagleLaBr:
       return sm_RadEagleLaBrDetectorStr;
   }//switch( type )
 
@@ -2175,16 +2175,16 @@ void Measurement::reset()
   real_time_ = 0.0f;
 
   sample_number_ = 1;
-  occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+  occupied_ = OccupancyStatus::Unknown;
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
   speed_ = 0.0;
   detector_name_ = "";
   detector_number_ = -1;
   detector_description_ = "";
-  quality_status_ = Missing;
+  quality_status_ = QualityStatus::Missing;
 
-  source_type_       = SourceType::UnknownSourceType;
+  source_type_       = SourceType::Unknown;
   energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
 
   contained_neutron_ = false;
@@ -2735,7 +2735,7 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
     else if( XML_VALUE_ICOMPARE(src_type_node, "IntrinsicActivity") )
       source_type_ = SourceType::IntrinsicActivity;
     else
-      source_type_ = SourceType::UnknownSourceType;
+      source_type_ = SourceType::Unknown;
   }//if( src_type_node )
   
   const rapidxml::xml_attribute<char> *id_att = spectrum->first_attribute( "ID", 2, false );
@@ -2749,10 +2749,10 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
 
   try
   {
-    if( !uccupied_node )                  occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+    if( !uccupied_node )                  occupied_ = OccupancyStatus::Unknown;
     else if( is_occupied(uccupied_node) ) occupied_ = OccupancyStatus::Occupied;
     else                                  occupied_ = OccupancyStatus::NotOccupied;
-  }catch(...){                            occupied_ = OccupancyStatus::UnknownOccupancyStatus; }
+  }catch(...){                            occupied_ = OccupancyStatus::Unknown; }
 
   const rapidxml::xml_node<char> *det_type_node = xml_first_node_nso( spectrum, "DetectorType", xmlns );
   if( det_type_node && det_type_node->value_size() )
@@ -2762,19 +2762,19 @@ void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char
   if( quality_attrib && quality_attrib->value_size() )
   {
     if( XML_VALUE_ICOMPARE( quality_attrib, "Good" ) )
-      quality_status_ = Good;
+      quality_status_ = QualityStatus::Good;
     else if( XML_VALUE_ICOMPARE( quality_attrib, "Suspect" ) )
-      quality_status_ = Suspect;
+      quality_status_ = QualityStatus::Suspect;
     else if( XML_VALUE_ICOMPARE( quality_attrib, "Bad" ) )
-      quality_status_ = Bad;
+      quality_status_ = QualityStatus::Bad;
     else if( XML_VALUE_ICOMPARE( quality_attrib, "Missing" )
              || XML_VALUE_ICOMPARE( quality_attrib, "Unknown" ) )
-      quality_status_ = Missing;
+      quality_status_ = QualityStatus::Missing;
     else
     {
       cerr << SRC_LOCATION << "\n\tWarning: unknow quality status: '"
            << quality_attrib->value() << "' setting to Missing." << endl;
-      quality_status_ = Missing;
+      quality_status_ = QualityStatus::Missing;
     }//if(0.../else/...
   }//if( quality_attrib is valid )
 
@@ -5324,84 +5324,84 @@ bool SpecFile::load_file( const std::string &filename,
   bool success = false;
   switch( parser_type )
   {
-    case ParserType::k2006Icd1Parser:
-    case ParserType::K2012ICD1Parser:
+    case ParserType::N42_2006:
+    case ParserType::N42_2012:
       success = load_N42_file( filename );
     break;
 
-    case ParserType::kSpcParser:
+    case ParserType::Spc:
       success = load_spc_file( filename );
     break;
 
-    case ParserType::kGR135Parser:
+    case ParserType::GR135:
       success = load_binary_exploranium_file( filename );
     break;
 
-    case ParserType::kPcfParser:
+    case ParserType::Pcf:
       success = load_pcf_file( filename );
     break;
 
-    case ParserType::kChnParser:
+    case ParserType::Chn:
       success = load_chn_file( filename );
     break;
 
-    case ParserType::kIaeaParser:
+    case ParserType::SpeIaea:
       success = load_iaea_file( filename );
     break;
 
-    case ParserType::kTxtOrCsvParser:
+    case ParserType::TxtOrCsv:
       success = load_txt_or_csv_file( filename );
     break;
 
-    case ParserType::kCnfParser:
+    case ParserType::Cnf:
       success = load_cnf_file( filename );
     break;
       
-    case ParserType::kTracsMpsParser:
+    case ParserType::TracsMps:
       success = load_tracs_mps_file( filename );
     break;
       
-    case ParserType::kAramParser:
+    case ParserType::Aram:
       success = load_aram_file( filename );
     break;
       
-    case ParserType::kSPMDailyFile:
+    case ParserType::SPMDailyFile:
       success = load_spectroscopic_daily_file( filename );
     break;
       
-    case ParserType::kAmptekMca:
+    case ParserType::AmptekMca:
       success = load_amptek_file( filename );
     break;
       
-    case ParserType::kOrtecListMode:
+    case ParserType::OrtecListMode:
       success = load_ortec_listmode_file( filename );
     break;
       
-    case ParserType::kLsrmSpe:
+    case ParserType::LsrmSpe:
       success = load_lsrm_spe_file( filename );
       break;
       
-    case ParserType::kTka:
+    case ParserType::Tka:
       success = load_tka_file( filename );
       break;
       
-    case ParserType::kMultiAct:
+    case ParserType::MultiAct:
       success = load_multiact_file( filename );
       break;
       
-    case ParserType::kPhd:
+    case ParserType::Phd:
       success = load_phd_file( filename );
       break;
       
-    case ParserType::kLzs:
+    case ParserType::Lzs:
       success = load_lzs_file( filename );
       break;
       
-    case ParserType::kMicroRaider:
+    case ParserType::MicroRaider:
       success = load_micro_raider_file( filename );
     break;
       
-    case ParserType::kAutoParser:
+    case ParserType::Auto:
     {
       bool triedPcf = false, triedSpc = false,
           triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
@@ -5609,7 +5609,7 @@ bool SpecFile::load_file( const std::string &filename,
         success = load_ortec_listmode_file( filename );
       
        break;
-    }//case kAutoParser
+    }//case Auto
   };//switch( parser_type )
 
   set_filename( filename );
@@ -5679,7 +5679,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
           break;
             
         case SourceType::Foreground:
-        case SourceType::UnknownSourceType:
+        case SourceType::Unknown:
         default:
           sorted_foreground.push_back( m );
       }//switch( m->source_type_ )
@@ -6968,7 +6968,7 @@ void SpecFile::set_detector_type_from_other_info()
   using SpecUtils::icontains;
   
   
-  if( detector_type_ != DetectorType::kUnknownDetector )
+  if( detector_type_ != DetectorType::Unknown )
     return;
   
   const string &model = instrument_model_;
@@ -6978,9 +6978,9 @@ void SpecFile::set_detector_type_from_other_info()
       && (contains(model,"940") || icontains(model,"Eagle+")) )
   {
     if( icontains(model,"LaBr") )
-      detector_type_ = DetectorType::kSam940LaBr3;
+      detector_type_ = DetectorType::Sam940LaBr3;
     else
-      detector_type_ = DetectorType::kSam940;
+      detector_type_ = DetectorType::Sam940;
     
     cerr << "ASAm940 model=" << model << endl;
     
@@ -6999,40 +6999,40 @@ void SpecFile::set_detector_type_from_other_info()
   //Dont know what the 'ULCS' that some models have in their name is
   if( icontains(model,"identiFINDER") && icontains(model,"NG") )
   {
-    detector_type_ = DetectorType::kIdentiFinderNGDetector;
+    detector_type_ = DetectorType::IdentiFinderNG;
     return;
   }
   
   if( icontains(model,"identiFINDER") && icontains(model,"LG") )
   {
-    detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
+    detector_type_ = DetectorType::IdentiFinderLaBr3;
     return;
   }
   
   if( icontains(model,"RS-701") )
   {
-    detector_type_ = DetectorType::kRsi701;
+    detector_type_ = DetectorType::Rsi701;
     return;
   }
   
   if( icontains(model,"RS-705") )
   {
-    detector_type_ = DetectorType::kRsi705;
+    detector_type_ = DetectorType::Rsi705;
     return;
   }
   
   if( icontains(model,"RS???") /*&& icontains(id,"Avid")*/ )
   {
-    detector_type_ = DetectorType::kAvidRsi;
+    detector_type_ = DetectorType::AvidRsi;
     return;
   }
   
   if( icontains(model,"radHUNTER") )
   {
     if( icontains(model,"UL-LGH") )
-      detector_type_ = DetectorType::kRadHunterLaBr3;
+      detector_type_ = DetectorType::RadHunterLaBr3;
     else
-      detector_type_ = DetectorType::kRadHunterNaI;
+      detector_type_ = DetectorType::RadHunterNaI;
     return;
   }
   
@@ -7042,16 +7042,16 @@ void SpecFile::set_detector_type_from_other_info()
   {
     if( SpecUtils::icontains(model,"3SG") ) //RADEAGLE NaI(Tl) 3x1, GM Handheld RIID
     {
-      detector_type_ = DetectorType::kOrtecRadEagleNai;
+      detector_type_ = DetectorType::OrtecRadEagleNai;
     }else if( SpecUtils::icontains(model,"2CG") ) //RADEAGLE CeBr3 2x1, GM Handheld RIID.
     {
-      detector_type_ = DetectorType::kOrtecRadEagleCeBr2Inch;
+      detector_type_ = DetectorType::OrtecRadEagleCeBr2Inch;
     }else if( SpecUtils::icontains(model,"3CG") ) //RADEAGLE CeBr3 3x0.8, GM Handheld RIID
     {
-      detector_type_ = DetectorType::kOrtecRadEagleCeBr3Inch;
+      detector_type_ = DetectorType::OrtecRadEagleCeBr3Inch;
     }else if( SpecUtils::icontains(model,"2LG") ) //RADEAGLE LaBr3(Ce) 2x1, GM Handheld RIID
     {
-      detector_type_ = DetectorType::kOrtecRadEagleLaBr;
+      detector_type_ = DetectorType::OrtecRadEagleLaBr;
     }else
     {
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -7476,13 +7476,13 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       {
         if( SpecUtils::icontains( line.substr(info_pos), "ident") )
         {
-          detector_type_ = DetectorType::kIdentiFinderNGDetector;
-                           //TODO: kIdentiFinderLaBr3Detector
+          detector_type_ = DetectorType::IdentiFinderNG;
+                           //TODO: IdentiFinderLaBr3
           manufacturer_ = "FLIR";
           instrument_model_ = "identiFINDER";
         }else if( SpecUtils::icontains(line, "Raider") )
         {
-          detector_type_ = DetectorType::kMicroRaiderDetector;
+          detector_type_ = DetectorType::MicroRaider;
           instrument_model_ = "MicroRaider";
           manufacturer_ = "FLIR";
         }
@@ -7894,22 +7894,22 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
   //A temporary message untile I debug detector_type_ a little more
   if( icontains(instrument_model_,"identiFINDER")
       && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-     detector_type_ = DetectorType::kIdentiFinderNGDetector;
+     detector_type_ = DetectorType::IdentiFinderNG;
   else if( icontains(detector_type,"La") && !detector_type.empty())
   {
     cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
     //XXX - this doesnt actually catch all LaBr3 detectors
-    detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
+    detector_type_ = DetectorType::IdentiFinderLaBr3;
   }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
   {
-    cout << "Untested kIdentiFinderLaBr3Detector association!" << endl;
-    detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
+    cout << "Untested IdentiFinderLaBr3 association!" << endl;
+    detector_type_ = DetectorType::IdentiFinderLaBr3;
   }else if( icontains(instrument_model_,"identiFINDER") )
   {
-    detector_type_ = DetectorType::kIdentiFinderDetector;
+    detector_type_ = DetectorType::IdentiFinder;
   }
 
-//  if( detector_type_ == kUnknownDetector )
+//  if( detector_type_ == Unknown )
 //  {
 //    cerr << "I couldnt find detector type for ASCII SPC file" << endl;
 //  }
@@ -8174,16 +8174,16 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
   //A temporary message untile I debug detector_type_ a little more
   if( icontains(instrument_model_,"identiFINDER")
      && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-    detector_type_ = DetectorType::kIdentiFinderNGDetector;
+    detector_type_ = DetectorType::IdentiFinderNG;
   else if( icontains(detector_type,"La") && detector_type.size() )
   {
     cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
     //XXX - this doesnt actually catch all LaBr3 detectors
-    detector_type_ = kIdentiFinderLaBr3Detector;
+    detector_type_ = IdentiFinderLaBr3;
   }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
   {
-    cout << "Untested kIdentiFinderLaBr3Detector association!" << endl;
-    detector_type_ = kIdentiFinderLaBr3Detector;
+    cout << "Untested IdentiFinderLaBr3 association!" << endl;
+    detector_type_ = IdentiFinderLaBr3;
   }else if( icontains(instrument_model_,"identiFINDER") )
   {
     detector_type_ = kIdentiFinderDetector;
@@ -8384,29 +8384,29 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   const char *defaultname = 0;
   switch( detector_type_ )
   {
-    case DetectorType::kGR135Detector:          case DetectorType::kIdentiFinderDetector:
-    case DetectorType::kIdentiFinderNGDetector: case DetectorType::kIdentiFinderLaBr3Detector:
-    case DetectorType::kSAIC8Detector:          case DetectorType::kFalcon5000:
-    case DetectorType::kUnknownDetector:        case DetectorType::kMicroRaiderDetector:
-    case DetectorType::kRsi701: case DetectorType::kRsi705:
-    case DetectorType::kAvidRsi: case DetectorType::kSam940LaBr3:
-    case DetectorType::kSam940: case DetectorType::kOrtecRadEagleNai:
-    case DetectorType::kOrtecRadEagleCeBr2Inch:
-    case DetectorType::kOrtecRadEagleCeBr3Inch:
-    case DetectorType::kOrtecRadEagleLaBr:
+    case DetectorType::GR135:          case DetectorType::IdentiFinder:
+    case DetectorType::IdentiFinderNG: case DetectorType::IdentiFinderLaBr3:
+    case DetectorType::SAIC8:          case DetectorType::Falcon5000:
+    case DetectorType::Unknown:        case DetectorType::MicroRaider:
+    case DetectorType::Rsi701: case DetectorType::Rsi705:
+    case DetectorType::AvidRsi: case DetectorType::Sam940LaBr3:
+    case DetectorType::Sam940: case DetectorType::OrtecRadEagleNai:
+    case DetectorType::OrtecRadEagleCeBr2Inch:
+    case DetectorType::OrtecRadEagleCeBr3Inch:
+    case DetectorType::OrtecRadEagleLaBr:
     case DetectorType::kSam945:
-    case DetectorType::kSrpm210:
-    case DetectorType::kRadHunterNaI:
-    case DetectorType::kRadHunterLaBr3:
+    case DetectorType::Srpm210:
+    case DetectorType::RadHunterNaI:
+    case DetectorType::RadHunterLaBr3:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
       
-    case DetectorType::kDetectiveDetector:
-    case DetectorType::kDetectiveExDetector:
-    case DetectorType::kDetectiveEx100Detector:
-    case DetectorType::kDetectiveEx200Detector:
-    case DetectorType::kMicroDetectiveDetector:
-    case DetectorType::kDetectiveX:
+    case DetectorType::DetectiveUnknown:
+    case DetectorType::DetectiveEx:
+    case DetectorType::DetectiveEx100:
+    case DetectorType::DetectiveEx200:
+    case DetectorType::MicroDetective:
+    case DetectorType::DetectiveX:
       defaultname = "DetectiveEX.SPC";
       break;
   }//switch( detector_type_ )
@@ -9206,7 +9206,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     string manufacturer = "Ortec";
     string inst_model = "Detective";
     string type_instrument = "RadionuclideIdentifier";
-    DetectorType type_detector = DetectorType::kUnknownDetector;
+    DetectorType type_detector = DetectorType::Unknown;
       
     
     {//begin codeblock to get acquisition information
@@ -9236,7 +9236,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         {
           type_instrument = "Radionuclide Identifier";
           manufacturer = "Ortec";
-          type_detector = DetectorType::kDetectiveDetector;
+          type_detector = DetectorType::DetectiveUnknown;
         }//if( istarts_with( name, "DetectiveEX" ) )
       
         try
@@ -9675,32 +9675,32 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         case SerialToDetectorModel::DetectorModel::Unknown:
         case SerialToDetectorModel::DetectorModel::NotInitialized:
         case SerialToDetectorModel::DetectorModel::UnknownSerialNumber:
-          type_detector = DetectorType::kDetectiveDetector;
+          type_detector = DetectorType::DetectiveUnknown;
           inst_model = "Detective";
           break;
           
         case SerialToDetectorModel::DetectorModel::MicroDetective:
-          type_detector = DetectorType::kMicroDetectiveDetector;
+          type_detector = DetectorType::MicroDetective;
           inst_model = "MicroDetective";
           break;
           
         case SerialToDetectorModel::DetectorModel::DetectiveEx:
-          type_detector = DetectorType::kDetectiveExDetector;
+          type_detector = DetectorType::DetectiveEx;
           inst_model = foundNeutronDet ? "DetectiveEX" : "DetectiveDX";
           break;
           
         case SerialToDetectorModel::DetectorModel::DetectiveEx100:
-          type_detector = DetectorType::kDetectiveEx100Detector;
+          type_detector = DetectorType::DetectiveEx100;
           inst_model = foundNeutronDet ? "DetectiveEX100" : "DetectiveDX100";
           break;
           
         case SerialToDetectorModel::DetectorModel::Detective200:
-          type_detector = DetectorType::kDetectiveEx200Detector;
+          type_detector = DetectorType::DetectiveEx200;
           inst_model = "Detective200";
           break;
           
         case SerialToDetectorModel::DetectorModel::DetectiveX:
-          type_detector = DetectorType::kDetectiveX;
+          type_detector = DetectorType::DetectiveX;
           inst_model = "Detective X";
           break;
       }//switch( model )
@@ -10246,7 +10246,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         instrument_model_ = is130v0 ? "GR130" : "GR135";
         instrument_type_ = "Radionuclide Identifier";
         if( !is130v0 )
-          detector_type_ = DetectorType::kGR135Detector;
+          detector_type_ = DetectorType::GR135;
       }//if( j == 0 )
       
       measurements_.push_back( meas );
@@ -11402,7 +11402,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
 
   float real_time = 0.0, speed = 0.0;
   boost::posix_time::ptime start_time;
-  OccupancyStatus occupied = OccupancyStatus::UnknownOccupancyStatus;
+  OccupancyStatus occupied = OccupancyStatus::Unknown;
 
   if( sample_real_time_node && sample_real_time_node->value_size() )
     real_time = time_duration_string_to_seconds( sample_real_time_node->value(), sample_real_time_node->value_size() );
@@ -11416,7 +11416,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
 
   try{
     if( !occupancy_node )
-      occupied = OccupancyStatus::UnknownOccupancyStatus;
+      occupied = OccupancyStatus::Unknown;
     else if( is_occupied( occupancy_node ) )
       occupied = OccupancyStatus::Occupied;
     else
@@ -11426,7 +11426,7 @@ void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node
 
   for( auto &meas : measurs_to_update )
   {
-    if( meas->occupied_ == OccupancyStatus::UnknownOccupancyStatus )
+    if( meas->occupied_ == OccupancyStatus::Unknown )
       meas->occupied_ = occupied;
 
     if( meas->speed_ < 0.00000001f )
@@ -11968,7 +11968,7 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
           rapidxml::xml_attribute<char> *detector_attrib = det_meas_node->first_attribute( "Detector", 8 );
           if( detector_attrib && XML_VALUE_ICOMPARE(detector_attrib, "ORTEC Portal") )
           {
-            detector_type_ = DetectorType::kDetectiveEx200Detector;
+            detector_type_ = DetectorType::DetectiveEx200;
           }
         }//for( loop over <DetectorMeasurement> nodes under current <DetectorData> )
         
@@ -12210,19 +12210,19 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
         //Make sure if any of the spectrum had the <SourceType> tag, but some
         //  others didnt, we propogate this info to them.  This notably effects
         //  rad assist detectors
-        SourceType sourcetype = SourceType::UnknownSourceType;
+        SourceType sourcetype = SourceType::Unknown;
         for( auto &m : measurements_this_node )
         {
           if( !m ) continue;
-          if( sourcetype == SourceType::UnknownSourceType )
+          if( sourcetype == SourceType::Unknown )
             sourcetype = m->source_type_;
-          else if( m->source_type_ != SourceType::UnknownSourceType )
+          else if( m->source_type_ != SourceType::Unknown )
             sourcetype = max( sourcetype, m->source_type_ );
         }//for( auto &m : measurements_this_node )
         
         for( auto &m : measurements_this_node )
         {
-          if( m && (m->source_type_ == SourceType::UnknownSourceType) )
+          if( m && (m->source_type_ == SourceType::Unknown) )
             m->source_type_ = sourcetype;
         }//for( auto &m : measurements_this_node )
         
@@ -12591,21 +12591,21 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
   if( iequals_ascii( manufacturer_,"ORTEC" ) )
   {
     if( iequals_ascii(instrument_model_,"OSASP") )
-      detector_type_ = DetectorType::kDetectiveEx200Detector;
+      detector_type_ = DetectorType::DetectiveEx200;
     else if( icontains(instrument_model_,"100") )
-      detector_type_ = DetectorType::kDetectiveEx100Detector;
+      detector_type_ = DetectorType::DetectiveEx100;
     else if( icontains(instrument_model_,"Detective-EX") )
-      detector_type_ = DetectorType::kDetectiveExDetector;
+      detector_type_ = DetectorType::DetectiveEx;
     else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
-      detector_type_ = DetectorType::kDetectiveEx100Detector;
+      detector_type_ = DetectorType::DetectiveEx100;
     else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
-      detector_type_ = DetectorType::kMicroDetectiveDetector;
+      detector_type_ = DetectorType::MicroDetective;
     else if( icontains(instrument_model_,"Detective") )
-      detector_type_ = DetectorType::kDetectiveDetector;
+      detector_type_ = DetectorType::DetectiveUnknown;
   }else if( iequals_ascii(instrument_type_,"PVT Portal")
            && iequals_ascii(manufacturer_,"SAIC") )
   {
-    detector_type_ = DetectorType::kSAIC8Detector;
+    detector_type_ = DetectorType::SAIC8;
   }else if( icontains(instrument_model_,"identiFINDER")
            //&& icontains(manufacturer_,"FLIR")
            )
@@ -12615,18 +12615,18 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
     //      <InstrumentVersion>Hardware: 4C	Firmware: 5.00.54	Operating System: 1.2.040	Application: 2.37</InstrumentVersion>
     
     if( icontains(instrument_model_,"LG") )
-      detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
+      detector_type_ = DetectorType::IdentiFinderLaBr3;
     else
-      detector_type_ = DetectorType::kIdentiFinderNGDetector;
+      detector_type_ = DetectorType::IdentiFinderNG;
   }else if( icontains(manufacturer_,"FLIR") || icontains(instrument_model_,"Interceptor") )
   {
     
   }else if( icontains(instrument_model_,"SAM940") || icontains(instrument_model_,"SAM 940") || icontains(instrument_model_,"SAM Eagle") )
   {
     if( icontains(instrument_model_,"LaBr") )
-      detector_type_ = DetectorType::kSam940LaBr3;
+      detector_type_ = DetectorType::Sam940LaBr3;
     else
-      detector_type_ = DetectorType::kSam940;
+      detector_type_ = DetectorType::Sam940;
   }else if( istarts_with(instrument_model_,"RE ") || icontains(instrument_model_,"RadEagle") || icontains(instrument_model_,"Rad Eagle" ) )
   {
     if( !manufacturer_.empty() && !icontains(manufacturer_, "ortec") )
@@ -12640,7 +12640,7 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
   }else if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
             && icontains(instrument_model_,"Raider") )
   {
-    detector_type_ = DetectorType::kMicroRaiderDetector;
+    detector_type_ = DetectorType::MicroRaider;
   }else if( icontains(manufacturer_,"Canberra Industries, Inc.") )
   {
     //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
@@ -12684,7 +12684,7 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
   {
     if( manufacturer_.size() < 2 )
       manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
-    detector_type_ = DetectorType::kSrpm210;
+    detector_type_ = DetectorType::Srpm210;
   }else if( (icontains(instrument_type_,"innoRIID") || icontains(instrument_type_,"ortec"))
            && istarts_with(instrument_model_, "RE ") )
   {
@@ -13255,51 +13255,51 @@ std::string SpecFile::determine_rad_detector_kind_code() const
   string det_kind = "Other";
   switch( detector_type_ )
   {
-    case DetectorType::kDetectiveDetector:
-    case DetectorType::kDetectiveExDetector:
-    case DetectorType::kDetectiveEx100Detector:
-    case DetectorType::kDetectiveEx200Detector:
-    case DetectorType::kFalcon5000:
-    case DetectorType::kMicroDetectiveDetector:
-    case DetectorType::kDetectiveX:
+    case DetectorType::DetectiveUnknown:
+    case DetectorType::DetectiveEx:
+    case DetectorType::DetectiveEx100:
+    case DetectorType::DetectiveEx200:
+    case DetectorType::Falcon5000:
+    case DetectorType::MicroDetective:
+    case DetectorType::DetectiveX:
       det_kind = "HPGe";
       break;
       
-    case DetectorType::kGR135Detector:
-    case DetectorType::kIdentiFinderDetector:
-    case DetectorType::kIdentiFinderNGDetector:
-    case DetectorType::kRadHunterNaI:
-    case DetectorType::kRsi701:
-    case DetectorType::kRsi705:
-    case DetectorType::kAvidRsi:
-    case DetectorType::kOrtecRadEagleNai:
-    case DetectorType::kSam940:
+    case DetectorType::GR135:
+    case DetectorType::IdentiFinder:
+    case DetectorType::IdentiFinderNG:
+    case DetectorType::RadHunterNaI:
+    case DetectorType::Rsi701:
+    case DetectorType::Rsi705:
+    case DetectorType::AvidRsi:
+    case DetectorType::OrtecRadEagleNai:
+    case DetectorType::Sam940:
     case DetectorType::kSam945:
       det_kind = "NaI";
       break;
       
-    case DetectorType::kIdentiFinderLaBr3Detector:
-    case DetectorType::kRadHunterLaBr3:
-    case DetectorType::kSam940LaBr3:
-    case DetectorType::kOrtecRadEagleLaBr:
+    case DetectorType::IdentiFinderLaBr3:
+    case DetectorType::RadHunterLaBr3:
+    case DetectorType::Sam940LaBr3:
+    case DetectorType::OrtecRadEagleLaBr:
       det_kind = "LaBr3";
       break;
       
-    case DetectorType::kOrtecRadEagleCeBr2Inch:
-    case DetectorType::kOrtecRadEagleCeBr3Inch:
+    case DetectorType::OrtecRadEagleCeBr2Inch:
+    case DetectorType::OrtecRadEagleCeBr3Inch:
       det_kind = "CeBr3";
       break;
       
-    case DetectorType::kSAIC8Detector:
-    case DetectorType::kSrpm210:
+    case DetectorType::SAIC8:
+    case DetectorType::Srpm210:
       det_kind = "PVT";
       break;
       
-    case DetectorType::kMicroRaiderDetector:
+    case DetectorType::MicroRaider:
       det_kind = "CZT";
       break;
       
-    case DetectorType::kUnknownDetector:
+    case DetectorType::Unknown:
       if( num_gamma_channels() > 4100 )
         det_kind = "HPGe";
       else if( manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
@@ -13579,7 +13579,7 @@ std::shared_ptr< ::rapidxml::xml_document<char> > SpecFile::create_2012_N42_xml(
   }//if( measurment_operator_.size() )
   
   
-  if( detector_type_ != DetectorType::kUnknownDetector )
+  if( detector_type_ != DetectorType::Unknown )
   {
     std::lock_guard<std::mutex> lock( xmldocmutex );
     if( !RadInstrumentInformationExtension )
@@ -13935,9 +13935,9 @@ void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
         
       if( measurments[i]->occupied_ == OccupancyStatus::Occupied )
         occupancy = measurments[i]->occupied_;
-      else if( occupancy == OccupancyStatus::UnknownOccupancyStatus )
+      else if( occupancy == OccupancyStatus::Unknown )
         occupancy = measurments[i]->occupied_;
-      else if( measurments[i]->occupied_ ==  OccupancyStatus::NotOccupied && occupancy == OccupancyStatus::UnknownOccupancyStatus )
+      else if( measurments[i]->occupied_ ==  OccupancyStatus::NotOccupied && occupancy == OccupancyStatus::Unknown )
         occupancy = measurments[i]->occupied_;
         
       if( !has_gps && measurments[i]->has_gps_info() )
@@ -13949,7 +13949,7 @@ void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
           positiontime = SpecUtils::to_extended_iso_string(measurments[i]->position_time_) + "Z";
       }//if( !has_gps )
         
-      if( measurments[i]->source_type_ != SourceType::UnknownSourceType )
+      if( measurments[i]->source_type_ != SourceType::Unknown )
         source_type = std::max( measurments[i]->source_type_, source_type );
     }//for( size_t i = 1; i < measurments.size(); ++i )
   
@@ -13969,14 +13969,14 @@ void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
       case SourceType::Calibration:        classcode = "Calibration";       break;
       case SourceType::Foreground:         classcode = "Foreground";        break;
       case SourceType::IntrinsicActivity:  classcode = "IntrinsicActivity"; break;
-      case SourceType::UnknownSourceType:  classcode = "NotSpecified";      break;
+      case SourceType::Unknown:  classcode = "NotSpecified";      break;
     }//switch( source_type_ )
     
     switch( occupancy )
     {
       case OccupancyStatus::NotOccupied: occupied = "false"; break;
       case OccupancyStatus::Occupied:    occupied = "true";  break;
-      case OccupancyStatus::UnknownOccupancyStatus:          break;
+      case OccupancyStatus::Unknown:          break;
     }//switch( occupied_ )
     
     {
@@ -14219,11 +14219,11 @@ void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
       
       switch( measurments[i]->quality_status_ )
       {
-        case Measurement::Good:
+        case SpecUtils::QualityStatus::Good:
           //When reading in the 2012 N42, we will assume good unless indicated otherwise
         break;
             
-        case Measurement::Suspect: case Measurement::Bad:
+        case SpecUtils::QualityStatus::Suspect: case SpecUtils::QualityStatus::Bad:
         {
           xml_node<char> *RadDetectorState = doc->allocate_node( node_element, "RadDetectorState" );
           det_states.push_back( RadDetectorState );
@@ -14232,12 +14232,12 @@ void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
           xml_attribute<char> *att = doc->allocate_attribute( "radDetectorInformationReference", val );
           RadDetectorState->append_attribute( att );
           
-          val = ((measurments[i]->quality_status_==Measurement::Suspect) ? "Warning" : "Fatal" ); //"Error" is also an option
+          val = ((measurments[i]->quality_status_==SpecUtils::QualityStatus::Suspect) ? "Warning" : "Fatal" ); //"Error" is also an option
           RadDetectorState->append_node( doc->allocate_node( node_element, "Fault", val ) );
           break;
         }//case Suspect: case Bad:
             
-        case Measurement::Missing:
+        case SpecUtils::QualityStatus::Missing:
         {
           //This next line is InterSpec specific for round-tripping files
           xml_node<char> *RadDetectorState = doc->allocate_node( node_element, "RadDetectorState" );
@@ -14481,7 +14481,7 @@ void SpecFile::set_2012_N42_instrument_info( const rapidxml::xml_node<char> *inf
   {
     const string type = xml_value_str( detector_type_node );
     for( DetectorType i = DetectorType(0);
-         i < DetectorType::kUnknownDetector;
+         i < DetectorType::Unknown;
          i = DetectorType(static_cast<int>(i)+1) )
     {
       if( type == detectorTypeToString(i) )
@@ -14759,7 +14759,7 @@ void SpecFile::decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measu
   if( !meas_node || !meas )
     return;
   
-  meas->quality_status_ = Measurement::Good;  //2012 N42 defaults to good
+  meas->quality_status_ = SpecUtils::QualityStatus::Good;  //2012 N42 defaults to good
   const rapidxml::xml_node<char> *detector_state_node = meas_node->first_node( "RadDetectorState", 16 );
   
   if( detector_state_node )
@@ -14771,13 +14771,13 @@ void SpecFile::decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measu
     {
       if( XML_VALUE_ICOMPARE( fault, "Fatal" )
           || XML_VALUE_ICOMPARE( fault, "Error" ) )
-        meas->quality_status_ = Measurement::Bad;
+        meas->quality_status_ = SpecUtils::QualityStatus::Bad;
       else if( XML_VALUE_ICOMPARE( fault, "Warning" ) )
-        meas->quality_status_ = Measurement::Suspect;
+        meas->quality_status_ = SpecUtils::QualityStatus::Suspect;
     }else if( !detector_state_node->first_node() ||
               (remark && SpecUtils::starts_with( xml_value_str(remark), "InterSpec could not")) )
     {
-      meas->quality_status_ = Measurement::Missing; //InterSpec Specific
+      meas->quality_status_ = SpecUtils::QualityStatus::Missing; //InterSpec Specific
     }
   }//if( detector_state_node )
 
@@ -14863,8 +14863,8 @@ void SpecFile::decode_2012_N42_rad_measurment_node(
     vector<string> remarks;
     float real_time = 0.0;
     boost::posix_time::ptime start_time;
-    SourceType spectra_type = SourceType::UnknownSourceType;
-    OccupancyStatus occupied = OccupancyStatus::UnknownOccupancyStatus;
+    SourceType spectra_type = SourceType::Unknown;
+    OccupancyStatus occupied = OccupancyStatus::Unknown;
     
     rapidxml::xml_attribute<char> *meas_att = meas_node->first_attribute( "id", 2, false );
 //    rapidxml::xml_attribute<char> *info_att = meas_node->first_attribute( "radItemInformationReferences", 28 );
@@ -14912,11 +14912,11 @@ void SpecFile::decode_2012_N42_rad_measurment_node(
       else if( XML_VALUE_ICOMPARE(class_code_node, "IntrinsicActivity") )
         spectra_type = SourceType::IntrinsicActivity;
       else if( XML_VALUE_ICOMPARE(class_code_node, "NotSpecified") )
-        spectra_type = SourceType::UnknownSourceType;
+        spectra_type = SourceType::Unknown;
     }//if( class_code_node && class_code_node->value_size() )
 
     //Special check for RadSeeker.
-    if( spectra_type == SourceType::UnknownSourceType
+    if( spectra_type == SourceType::Unknown
         && meas_att && XML_VALUE_ICOMPARE(meas_att, "Stabilization") )
       spectra_type = SourceType::IntrinsicActivity;
     
@@ -15101,7 +15101,7 @@ void SpecFile::decode_2012_N42_rad_measurment_node(
       meas->source_type_ = spectra_type;
       
       //For the sake of file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42
-      if( meas->source_type_ == SourceType::UnknownSourceType
+      if( meas->source_type_ == SourceType::Unknown
          && SpecUtils::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
         meas->source_type_ = SourceType::IntrinsicActivity;
       
@@ -16266,7 +16266,7 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
     manufacturer_ = "ICx Radiation";
     instrument_model_ = "Raider";
     instrument_type_ = "Radionuclide Identifier";  //or PersonalRadiationDetector
-    detector_type_ = DetectorType::kMicroRaiderDetector;
+    detector_type_ = DetectorType::MicroRaider;
     
     measurements_.push_back( meas );
     
@@ -17339,7 +17339,7 @@ void SpecFile::reset()
   measurment_operator_.clear();
   sample_numbers_.clear();
   sample_to_measurments_.clear();
-  detector_type_ = DetectorType::kUnknownDetector;
+  detector_type_ = DetectorType::Unknown;
   instrument_type_.clear();
   manufacturer_.clear();
   instrument_model_.clear();
@@ -17545,56 +17545,56 @@ void SpecFile::write( std::ostream &strm,
   bool success = false;
   switch( format )
   {
-    case SaveSpectrumAsType::kTxtSpectrumFile:
+    case SaveSpectrumAsType::Txt:
       success = info.write_txt( strm );
       break;
       
-    case SaveSpectrumAsType::kCsvSpectrumFile:
+    case SaveSpectrumAsType::Csv:
       success = info.write_csv( strm );
       break;
       
-    case SaveSpectrumAsType::kPcfSpectrumFile:
+    case SaveSpectrumAsType::Pcf:
       success = info.write_pcf( strm );
       break;
       
-    case SaveSpectrumAsType::kXmlSpectrumFile:
+    case SaveSpectrumAsType::N42_2006:
       success = info.write_2006_N42( strm );
       break;
       
-    case SaveSpectrumAsType::k2012N42SpectrumFile:
+    case SaveSpectrumAsType::N42_2012:
       success = info.write_2012_N42( strm );
       break;
       
-    case SaveSpectrumAsType::kChnSpectrumFile:
+    case SaveSpectrumAsType::Chn:
       success = info.write_integer_chn( strm, samples, detectors );
       break;
       
-    case SaveSpectrumAsType::kBinaryIntSpcSpectrumFile:
+    case SaveSpectrumAsType::SpcBinaryInt:
       success = info.write_binary_spc( strm, IntegerSpcType, samples, detectors );
       break;
       
-    case SaveSpectrumAsType::kBinaryFloatSpcSpectrumFile:
+    case SaveSpectrumAsType::SpcBinaryFloat:
       success = info.write_binary_spc( strm, FloatSpcType, samples, detectors );
       break;
       
-    case SaveSpectrumAsType::kAsciiSpcSpectrumFile:
+    case SaveSpectrumAsType::SpcAscii:
       success = info.write_ascii_spc( strm, samples, detectors );
       break;
       
-    case SaveSpectrumAsType::kExploraniumGr130v0SpectrumFile:
+    case SaveSpectrumAsType::ExploraniumGr130v0:
       success = info.write_binary_exploranium_gr130v0( strm );
       break;
             
-    case SaveSpectrumAsType::kExploraniumGr135v2SpectrumFile:
+    case SaveSpectrumAsType::ExploraniumGr135v2:
       success = info.write_binary_exploranium_gr135v2( strm );
       break;
       
-    case SaveSpectrumAsType::kIaeaSpeSpectrumFile:
+    case SaveSpectrumAsType::SpeIaea:
       success = info.write_iaea_spe( strm, samples, detectors );
       break;
 
 #if( SpecUtils_ENABLE_D3_CHART )
-    case SaveSpectrumAsType::kD3HtmlSpectrumFile:
+    case SaveSpectrumAsType::HtmlD3:
     {
       D3SpectrumExport::D3SpectrumChartOptions options;
       success = info.write_d3_html( strm, options, samples, detectors );
@@ -17602,7 +17602,7 @@ void SpecFile::write( std::ostream &strm,
     }
 #endif
       
-    case SaveSpectrumAsType::kNumSaveSpectrumAsType:
+    case SaveSpectrumAsType::NumSaveSpectrumAsType:
       throw runtime_error( "Invalid output format specified" );
       break;
   }//switch( format )
@@ -18520,10 +18520,10 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
   
   switch( quality_status_ )
   {
-    case Good:    ostr << " Quality=\"Good\""; break;
-    case Suspect: ostr << " Quality=\"Suspect\""; break;
-    case Bad:     ostr << " Quality=\"Bad\""; break;
-    case Missing:
+    case QualityStatus::Good:    ostr << " Quality=\"Good\""; break;
+    case QualityStatus::Suspect: ostr << " Quality=\"Suspect\""; break;
+    case QualityStatus::Bad:     ostr << " Quality=\"Bad\""; break;
+    case QualityStatus::Missing:
 //      ostr << " Quality=\"Missing\"";
     break;
   }//switch( quality_status_ )
@@ -18595,7 +18595,7 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
   /*
   switch( occupied_ )
   {
-    case UnknownOccupancyStatus:
+    case Unknown:
     break;
     case Occupied:
     case NotOccupied:
@@ -18622,7 +18622,7 @@ bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
     case SourceType::Calibration:       ostr << "      <SourceType>Calibration</SourceType>" << endline; break;
     case SourceType::Background:        ostr << "      <SourceType>Background</SourceType>" << endline; break;
     case SourceType::Foreground:        ostr << "      <SourceType>Item</SourceType>" << endline; break;
-    case SourceType::UnknownSourceType: break;
+    case SourceType::Unknown: break;
   }//switch( source_type_ )
   
   if(!detector_description_.empty())
@@ -18819,9 +18819,9 @@ bool SpecFile::write_2006_N42( std::ostream& ostr ) const
       starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
       rtime = max( rtime, meass[i]->real_time_ );
       speed = max( speed, meass[i]->speed_ );
-      if( occstatus == OccupancyStatus::UnknownOccupancyStatus )
+      if( occstatus == OccupancyStatus::Unknown )
         occstatus = meass[i]->occupied_;
-      else if( meass[i]->occupied_ != OccupancyStatus::UnknownOccupancyStatus )
+      else if( meass[i]->occupied_ != OccupancyStatus::Unknown )
         occstatus = max( occstatus, meass[i]->occupied_ );
     }
     
@@ -18831,7 +18831,7 @@ bool SpecFile::write_2006_N42( std::ostream& ostr ) const
       ostr << "    <StartTime>" << SpecUtils::to_extended_iso_string(starttime) << "Z</StartTime>" << endline;
     if( rtime > 0.0f )
      ostr << "    <SampleRealTime>PT" << rtime << "S</SampleRealTime>" << endline;
-    if( occstatus != OccupancyStatus::UnknownOccupancyStatus )
+    if( occstatus != OccupancyStatus::Unknown )
       ostr << "    <Occupied>" << (occstatus== OccupancyStatus::NotOccupied ? "0" : "1") << "</Occupied>" << endline;
     if( speed > 0.0f )
       ostr << "    <Speed Units=\"m/s\">" << speed << "</Speed>" << endline;
@@ -19306,7 +19306,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         meas->source_type_ = SourceType::Calibration;
       else //if( spectrum_title.find("Foreground") != string::npos )
         meas->source_type_ = SourceType::Foreground;
-       //else meas->source_type_ = SourceType::UnknownSourceType
+       //else meas->source_type_ = SourceType::Unknown
 
       meas->title_ = spectrum_title;
 
@@ -19321,7 +19321,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         meas->occupied_ =  OccupancyStatus::NotOccupied;
       }else if( character_tag == ' ' )
       {
-        //If the data isnt portal data, then will change to UnknownOccupancyStatus
+        //If the data isnt portal data, then will change to Unknown
         meas->occupied_ = OccupancyStatus::Occupied;
         
         //Background spectra should not have the tag character be a dash, as the
@@ -19330,7 +19330,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
           meas->occupied_ =  OccupancyStatus::NotOccupied;
       }else
       {
-        meas->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+        meas->occupied_ = OccupancyStatus::Unknown;
       }
       
       while( energy_cal_terms.size() && (energy_cal_terms.back()==0.0f) )
@@ -19556,7 +19556,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
     if( !passthrough() )
     {
       for( auto &m : measurements_ )
-        m->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+        m->occupied_ = OccupancyStatus::Unknown;
     }//if( !passthrough() )
   }catch( std::exception & )
   {
@@ -21263,7 +21263,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( SpecUtils::icontains( line, "identiFINDER 2 LG" ) )
           {
-            detector_type_ = DetectorType::kIdentiFinderLaBr3Detector;
+            detector_type_ = DetectorType::IdentiFinderLaBr3;
             instrument_model_ = line;
             manufacturer_ = "FLIR";
             
@@ -21271,7 +21271,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               meas->contained_neutron_ = true;
           }else if( SpecUtils::icontains( line, "identiFINDER 2 NG") ) //"nanoRaider ZH"
           {
-            detector_type_ = DetectorType::kIdentiFinderNGDetector;
+            detector_type_ = DetectorType::IdentiFinderNG;
             instrument_model_ = line;
             manufacturer_ = "FLIR";
             
@@ -23940,7 +23940,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
       
     }//for( size_t i = 0; i < gamma_counts.size(); ++i )
     
-    detector_type_ = DetectorType::kSrpm210;  //This is deduced from the file
+    detector_type_ = DetectorType::Srpm210;  //This is deduced from the file
     instrument_type_ = "Spectroscopic Portal Monitor";
     manufacturer_ = "Leidos";
     instrument_model_ = "SRPM-210";
@@ -24462,15 +24462,15 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     meas->real_time_ = realtime;
     meas->contained_neutron_ = false;
     meas->sample_number_ = 1;
-    meas->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+    meas->occupied_ = OccupancyStatus::Unknown;
     meas->gamma_count_sum_ = gammasum;
     meas->neutron_counts_sum_ = 0.0;
     meas->speed_ = 0.0;  //in m/s
     meas->detector_name_ = ((lmstyle==1) ? "digiBASE" : "digiBASE-E");
     meas->detector_number_ = 0;
     meas->detector_description_ = meas->detector_name_ + " ListMode data";
-    meas->quality_status_ = Measurement::Missing;
-    meas->source_type_ = SourceType::UnknownSourceType;
+    meas->quality_status_ = SpecUtils::QualityStatus::Missing;
+    meas->source_type_ = SourceType::Unknown;
     meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     
     //std::vector<std::string>  remarks_;
@@ -25483,7 +25483,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
       //This assumption is based on inspecting files from a only two
       //  Falcon 5000 detectors
       //  (also instrument_name=="Instrument Name")
-      detector_type_ = DetectorType::kFalcon5000;
+      detector_type_ = DetectorType::Falcon5000;
       instrument_type_ = "Spectrometer";
       manufacturer_ = "Canberra";
       instrument_model_ = "Falcon 5000";
@@ -25813,15 +25813,15 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
         m->real_time_ = realtime / 6250.0f;
         m->contained_neutron_ = (((i%2)!=1) || neutroncount);
         m->sample_number_ = static_cast<int>( sample + 1 );
-        m->occupied_ = OccupancyStatus::UnknownOccupancyStatus;
+        m->occupied_ = OccupancyStatus::Unknown;
         m->gamma_count_sum_ = 0.0;
         m->neutron_counts_sum_ = neutroncount;
 //        m->speed_ = ;
         m->detector_name_ = title;
         m->detector_number_ = static_cast<int>( i );
 //        m->detector_type_ = "";
-        m->quality_status_ = (status==0 ? Measurement::Good : Measurement::Suspect);
-        m->source_type_  = SourceType::UnknownSourceType;
+        m->quality_status_ = (status==0 ? SpecUtils::QualityStatus::Good : SpecUtils::QualityStatus::Suspect);
+        m->source_type_  = SourceType::Unknown;
         
         if( calPeakFound != 0 )
         {
