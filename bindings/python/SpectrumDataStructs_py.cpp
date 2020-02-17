@@ -269,31 +269,33 @@ namespace
     const bool success = info->load_file( filename, parser_type, file_ending_hint );
     if( !success )
     {
-      if( parser_type == SpecUtils::ParserType::kAutoParser )
+      if( parser_type == SpecUtils::ParserType::Auto )
         throw std::runtime_error( "Couldnt parse file " + filename );
       
       string type;
       switch( parser_type )
       {
-        case SpecUtils::ParserType::k2006Icd1Parser: type = "N42-2006"; break;
-        case SpecUtils::ParserType::K2012ICD1Parser: type = "N42-2012"; break;
-        case SpecUtils::ParserType::kSpcParser: type = "SPC"; break;
-        case SpecUtils::ParserType::kGR135Parser: type = "GR135"; break;
-        case SpecUtils::ParserType::kPcfParser: type = "PCF"; break;
-        case SpecUtils::ParserType::kChnParser: type = "CHN"; break;
-        case SpecUtils::ParserType::kIaeaParser: type = "IAEA"; break;
-        case SpecUtils::ParserType::kTxtOrCsvParser: type = "TXT or CSV"; break;
-        case SpecUtils::ParserType::kCnfParser: type = "CNF"; break;
-        case SpecUtils::ParserType::kTracsMpsParser: type = "MPS"; break;
-        case SpecUtils::ParserType::kSPMDailyFile: type = "SpectroscopicPortalMonitor"; break;
-        case SpecUtils::ParserType::kAmptekMca: type = "Amptek MCA"; break;
-        case SpecUtils::ParserType::kMicroRaider: type = "Micro Raider"; break;
-        case SpecUtils::ParserType::kAramParser: type = "Aram"; break;
-        case SpecUtils::ParserType::kOrtecListMode: type = "Ortec Listmode"; break;
-        case SpecUtils::ParserType::kLsrmSpe: type = "LSRM"; break;
-        case SpecUtils::ParserType::kTka: type = "TKA"; break;
-        case SpecUtils::ParserType::kMultiAct: type = "MultiAct"; break;
-        case SpecUtils::ParserType::kAutoParser: type = ""; break;
+        case SpecUtils::ParserType::N42_2006: type = "N42-2006"; break;
+        case SpecUtils::ParserType::N42_2012: type = "N42-2012"; break;
+        case SpecUtils::ParserType::Spc: type = "SPC"; break;
+        case SpecUtils::ParserType::Exploranium: type = "Exploranium"; break;
+        case SpecUtils::ParserType::Pcf: type = "PCF"; break;
+        case SpecUtils::ParserType::Chn: type = "CHN"; break;
+        case SpecUtils::ParserType::SpeIaea: type = "IAEA"; break;
+        case SpecUtils::ParserType::TxtOrCsv: type = "TXT or CSV"; break;
+        case SpecUtils::ParserType::Cnf: type = "CNF"; break;
+        case SpecUtils::ParserType::TracsMps: type = "MPS"; break;
+        case SpecUtils::ParserType::SPMDailyFile: type = "SpectroscopicPortalMonitor"; break;
+        case SpecUtils::ParserType::AmptekMca: type = "Amptek MCA"; break;
+        case SpecUtils::ParserType::MicroRaider: type = "Micro Raider"; break;
+        case SpecUtils::ParserType::Aram: type = "Aram"; break;
+        case SpecUtils::ParserType::OrtecListMode: type = "Ortec Listmode"; break;
+        case SpecUtils::ParserType::LsrmSpe: type = "LSRM"; break;
+        case SpecUtils::ParserType::Tka: type = "TKA"; break;
+        case SpecUtils::ParserType::MultiAct: type = "MultiAct"; break;
+        case SpecUtils::ParserType::Lzs: type = "LZS"; break;
+        case SpecUtils::ParserType::Phd: type = "PHD"; break;
+        case SpecUtils::ParserType::Auto: type = ""; break;
       }//switch( parser_type )
       
       throw std::runtime_error( filename + " couldnt be parsed as a " + type + " file." );
@@ -506,56 +508,56 @@ BOOST_PYTHON_MODULE(SpecUtils)
   
   //Register our enums
   enum_<SpecUtils::ParserType>( "ParserType" )
-  .value( "k2006Icd1Parser", SpecUtils::ParserType::k2006Icd1Parser )
-  .value( "K2012ICD1Parser", SpecUtils::ParserType::K2012ICD1Parser )
-  .value( "kSpcParser", SpecUtils::ParserType::kSpcParser )
-  .value( "kGR135Parser", SpecUtils::ParserType::kGR135Parser )
-  .value( "kPcfParser", SpecUtils::ParserType::kPcfParser )
-  .value( "kChnParser", SpecUtils::ParserType::kChnParser )
-  .value( "kIaeaParser", SpecUtils::ParserType::kIaeaParser )
-  .value( "kTxtOrCsvParser", SpecUtils::ParserType::kTxtOrCsvParser )
-  .value( "kCnfParser", SpecUtils::ParserType::kCnfParser )
-  .value( "kTracsMpsParser", SpecUtils::ParserType::kTracsMpsParser )
-  .value( "kSPMDailyFile", SpecUtils::ParserType::kSPMDailyFile )
-  .value( "kAmptekMca", SpecUtils::ParserType::kAmptekMca )
-  .value( "kMicroRaider", SpecUtils::ParserType::kMicroRaider )
-  .value( "kOrtecListMode", SpecUtils::ParserType::kOrtecListMode )
-  .value( "kLsrmSpe", SpecUtils::ParserType::kLsrmSpe )
-  .value( "kTka", SpecUtils::ParserType::kTka )
-  .value( "kMultiAct", SpecUtils::ParserType::kMultiAct )
-  .value( "kPhd", SpecUtils::ParserType::kPhd )
-  .value( "kLzs", SpecUtils::ParserType::kLzs )
-  .value( "kAutoParser", SpecUtils::ParserType::kAutoParser );
+  .value( "N42_2006", SpecUtils::ParserType::N42_2006 )
+  .value( "N42_2012", SpecUtils::ParserType::N42_2012 )
+  .value( "Spc", SpecUtils::ParserType::Spc )
+  .value( "Exploranium", SpecUtils::ParserType::Exploranium )
+  .value( "Pcf", SpecUtils::ParserType::Pcf )
+  .value( "Chn", SpecUtils::ParserType::Chn )
+  .value( "SpeIaea", SpecUtils::ParserType::SpeIaea )
+  .value( "TxtOrCsv", SpecUtils::ParserType::TxtOrCsv )
+  .value( "Cnf", SpecUtils::ParserType::Cnf )
+  .value( "TracsMps", SpecUtils::ParserType::TracsMps )
+  .value( "SPMDailyFile", SpecUtils::ParserType::SPMDailyFile )
+  .value( "AmptekMca", SpecUtils::ParserType::AmptekMca )
+  .value( "MicroRaider", SpecUtils::ParserType::MicroRaider )
+  .value( "OrtecListMode", SpecUtils::ParserType::OrtecListMode )
+  .value( "LsrmSpe", SpecUtils::ParserType::LsrmSpe )
+  .value( "Tka", SpecUtils::ParserType::Tka )
+  .value( "MultiAct", SpecUtils::ParserType::MultiAct )
+  .value( "Phd", SpecUtils::ParserType::Phd )
+  .value( "Lzs", SpecUtils::ParserType::Lzs )
+  .value( "Auto", SpecUtils::ParserType::Auto );
   
 
 enum_<SpecUtils::DetectorType>( "DetectorType" )
-  .value( "kGR135Detector", SpecUtils::DetectorType::kGR135Detector )
-  .value( "kIdentiFinderDetector", SpecUtils::DetectorType::kIdentiFinderDetector )
-  .value( "kIdentiFinderNGDetector", SpecUtils::DetectorType::kIdentiFinderNGDetector )
-  .value( "kIdentiFinderLaBr3Detector", SpecUtils::DetectorType::kIdentiFinderLaBr3Detector )
-  .value( "kDetectiveDetector", SpecUtils::DetectorType::kDetectiveDetector )
-  .value( "kDetectiveExDetector", SpecUtils::DetectorType::kDetectiveExDetector )
-  .value( "kDetectiveEx100Detector", SpecUtils::DetectorType::kDetectiveEx100Detector )
-  .value( "kDetectiveEx200Detector", SpecUtils::DetectorType::kDetectiveEx200Detector )
-  .value( "kDetectiveX", SpecUtils::DetectorType::kDetectiveX )
-  .value( "kSAIC8Detector", SpecUtils::DetectorType::kSAIC8Detector )
-  .value( "kFalcon5000", SpecUtils::DetectorType::kFalcon5000 )
-  .value( "kMicroDetectiveDetector", SpecUtils::DetectorType::kMicroDetectiveDetector )
-  .value( "kMicroRaiderDetector", SpecUtils::DetectorType::kMicroRaiderDetector )
-  .value( "kRadHunterNaI", SpecUtils::DetectorType::kRadHunterNaI )
-  .value( "kRadHunterLaBr3", SpecUtils::DetectorType::kRadHunterLaBr3 )
-  .value( "kRsi701", SpecUtils::DetectorType::kRsi701 )
-  .value( "kRsi705", SpecUtils::DetectorType::kRsi705 )
-  .value( "kAvidRsi", SpecUtils::DetectorType::kAvidRsi )
-  .value( "kOrtecRadEagleNai", SpecUtils::DetectorType::kOrtecRadEagleNai )
-  .value( "kOrtecRadEagleCeBr2Inch", SpecUtils::DetectorType::kOrtecRadEagleCeBr2Inch )
-  .value( "kOrtecRadEagleCeBr3Inch", SpecUtils::DetectorType::kOrtecRadEagleCeBr3Inch )
-  .value( "kOrtecRadEagleLaBr", SpecUtils::DetectorType::kOrtecRadEagleLaBr )
-  .value( "kSam940LaBr3", SpecUtils::DetectorType::kSam940LaBr3 )
-  .value( "kSam940", SpecUtils::DetectorType::kSam940 )
-  .value( "kSam945", SpecUtils::DetectorType::kSam945 )
-  .value( "kSrpm210", SpecUtils::DetectorType::kSrpm210 )
-  .value( "kUnknownDetector", SpecUtils::DetectorType::kUnknownDetector );
+  .value( "Exploranium", SpecUtils::DetectorType::Exploranium )
+  .value( "IdentiFinder", SpecUtils::DetectorType::IdentiFinder )
+  .value( "IdentiFinderNG", SpecUtils::DetectorType::IdentiFinderNG )
+  .value( "IdentiFinderLaBr3", SpecUtils::DetectorType::IdentiFinderLaBr3 )
+  .value( "DetectiveUnknown", SpecUtils::DetectorType::DetectiveUnknown )
+  .value( "DetectiveEx", SpecUtils::DetectorType::DetectiveEx )
+  .value( "DetectiveEx100", SpecUtils::DetectorType::DetectiveEx100 )
+  .value( "DetectiveEx200", SpecUtils::DetectorType::DetectiveEx200 )
+  .value( "DetectiveX", SpecUtils::DetectorType::DetectiveX )
+  .value( "SAIC8", SpecUtils::DetectorType::SAIC8 )
+  .value( "Falcon5000", SpecUtils::DetectorType::Falcon5000 )
+  .value( "MicroDetective", SpecUtils::DetectorType::MicroDetective )
+  .value( "MicroRaider", SpecUtils::DetectorType::MicroRaider )
+  .value( "RadHunterNaI", SpecUtils::DetectorType::RadHunterNaI )
+  .value( "RadHunterLaBr3", SpecUtils::DetectorType::RadHunterLaBr3 )
+  .value( "Rsi701", SpecUtils::DetectorType::Rsi701 )
+  .value( "Rsi705", SpecUtils::DetectorType::Rsi705 )
+  .value( "AvidRsi", SpecUtils::DetectorType::AvidRsi )
+  .value( "OrtecRadEagleNai", SpecUtils::DetectorType::OrtecRadEagleNai )
+  .value( "OrtecRadEagleCeBr2Inch", SpecUtils::DetectorType::OrtecRadEagleCeBr2Inch )
+  .value( "OrtecRadEagleCeBr3Inch", SpecUtils::DetectorType::OrtecRadEagleCeBr3Inch )
+  .value( "OrtecRadEagleLaBr", SpecUtils::DetectorType::OrtecRadEagleLaBr )
+  .value( "Sam940LaBr3", SpecUtils::DetectorType::Sam940LaBr3 )
+  .value( "Sam940", SpecUtils::DetectorType::Sam940 )
+  .value( "Sam945", SpecUtils::DetectorType::Sam945 )
+  .value( "Srpm210", SpecUtils::DetectorType::Srpm210 )
+  .value( "Unknown", SpecUtils::DetectorType::Unknown );
 
 
 
@@ -612,7 +614,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
     .value( "Calibration", SpecUtils::SourceType::Calibration )
     .value( "Foreground", SpecUtils::SourceType::Foreground )
     .value( "IntrinsicActivity", SpecUtils::SourceType::IntrinsicActivity )
-    .value( "UnknownSourceType", SpecUtils::SourceType::UnknownSourceType )
+    .value( "UnknownSourceType", SpecUtils::SourceType::Unknown )
     .export_values();
     
     enum_<SpecUtils::EnergyCalType>( "EnergyCalType" )
@@ -623,17 +625,17 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
     .value( "UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
     .export_values();
     
-    enum_<SpecUtils::Measurement::QualityStatus>( "QualityStatus" )
-    .value( "Good", SpecUtils::Measurement::Good )
-    .value( "Suspect", SpecUtils::Measurement::Suspect )
-    .value( "Bad", SpecUtils::Measurement::Bad )
-    .value( "Missing", SpecUtils::Measurement::Missing )
+    enum_<SpecUtils::QualityStatus>( "QualityStatus" )
+    .value( "Good", SpecUtils::QualityStatus::Good )
+    .value( "Suspect", SpecUtils::QualityStatus::Suspect )
+    .value( "Bad", SpecUtils::QualityStatus::Bad )
+    .value( "Missing", SpecUtils::QualityStatus::Missing )
     .export_values();
     
     enum_<SpecUtils::OccupancyStatus>( "OccupancyStatus" )
     .value( "NotOccupied", SpecUtils::OccupancyStatus::NotOccupied )
     .value( "Occupied", SpecUtils::OccupancyStatus::Occupied )
-    .value( "UnknownOccupancyStatus", SpecUtils::OccupancyStatus::UnknownOccupancyStatus )
+    .value( "UnknownOccupancyStatus", SpecUtils::OccupancyStatus::Unknown )
     .export_values();
   }//end Measurement class scope
   

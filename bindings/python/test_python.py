@@ -26,10 +26,10 @@
 import SpecUtils
 
 filename = "Cal.pcf"
-info = SpecUtils.MeasurementInfo()
+info = SpecUtils.SpecFile()
 
 try:
-    info.loadFile( filename, SpecUtils.ParserType.kAutoParser )
+    info.loadFile( filename, SpecUtils.ParserType.Auto )
 except RuntimeError as e:
     print "Failed to decode file: {0}".format( e )
     exit( 1 )
@@ -131,7 +131,7 @@ print "Wrote", savetoname
 
 #still having trouble reading from python source when seeking is done by the reader
 f = open( "Cal_pyconverted.pcf", 'r' );
-rereadinfo = SpecUtils.MeasurementInfo()
+rereadinfo = SpecUtils.SpecFile()
 try:
     rereadinfo.setInfoFromPcfFile( f );
 except RuntimeError as e:

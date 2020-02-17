@@ -115,13 +115,21 @@ namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 namespace SpecUtils
 {
   
-  //ToDo: now that this is an enum class, cleanup the names
+
+/** Enum used to specify which spectrum parsing function to call when opening a
+ spectrum file.
+ 
+ Users of this library should nearly always use #SpecUtils::ParserType::Auto
+ and only use another value if efficiency is a concern, or the format is really
+ known or needs to be forced to correctly open (in which case please report as a
+ bug).
+ */
 enum class ParserType : int
 {
-  N42_2006,
+  N42_2006, //ICD1 or supported ICD2 variants
   N42_2012,
-  Spc,  //ascii or binary
-  GR135,
+  Spc,      //ascii or binary
+  Exploranium,    //GR130, GR135 v1 or v2
   Pcf,
   Chn,
   SpeIaea,
@@ -197,32 +205,23 @@ enum class SaveSpectrumAsType : int
 };//enum SaveSpectrumAsType
 
 
-const char *descriptionText( const SpecUtils::SpectrumType type );
 
-//suggestedNameEnding(): returns suggested lowercase file name ending for type
-//  passed in.  Does not contain the leading '.' for extentions
-const char *suggestedNameEnding( const SaveSpectrumAsType type );
-
-
-//spectrumTypeFromDescription(..): the inverse of descriptionText(SpectrumType)
-//  throw runtiem_exception if doesnt match
-SpectrumType spectrumTypeFromDescription( const char *descrip );
-
-const char *descriptionText( const SaveSpectrumAsType type );
-
-
-//DetectorType is intended to identify the detector system used to aquire the
-//  spectra in a spectrum file.  It typically refers to a whole system which
-//  may be comprised of multpile subdetectors, like for portals, or gamma
-//  detectors with neutron detectors as well.
-//Currently only opening files in SpecFile that are specialezed (spc,
-//  dat, etc) support filling out detector_type_, and even then I've been a
-//  bit lazy and not added all systems, just the most common ones I work with.
-//
-//ToDo: now that this is an enum class should cleanup all the names
+/** Enum to indentify the detection system used to create data in a spectrum
+ file.
+ 
+ May be infered from spectrum file format or from comments or information within
+ the spectrum file.
+ 
+ It is currently known to not be comprehensive (e.g., some models not include in
+ this list, or some models not identified from all possible formats of spectrum
+ files the detection system can produce, or some models lumped together) for all
+ spectrum files known to be openable by this library.
+*/
 enum class DetectorType : int
 {
-  GR135,
+  /** GR130 or GR135 v1 or v2 systems. */
+  Exploranium,
+  
   /** First gen identiFINDER with smaller crystal than NGs; note sometimes
       called identiFINDER-N.
    */
@@ -236,16 +235,23 @@ enum class DetectorType : int
   IdentiFinderLaBr3,
   
   /** The DetectiveUnknown is a default for when the type of detective cant be
-      determined, not an actual detector type.  This enum doesnt consider the
-      difference between the EX and DX series; the DX are same gamma crystal,
-      but do not have a neutron detector.
+      determined, not an actual detector type.
    */
   DetectiveUnknown,
+  
+  /** Doesnt consider the difference between the EX and DX series; the DX are
+   same gamma crystal, but do not have a neutron detector.  Same thing for
+   100/200 series enums.
+   */
   DetectiveEx,
+  
   DetectiveEx100,
+  
   /** There are a number of variants, a self contained model, a portal, etc */
   DetectiveEx200,
+  
   DetectiveX,
+  
   /** only identified from N42 files */
   SAIC8,
   Falcon5000,
@@ -266,7 +272,7 @@ enum class DetectorType : int
    */
   Sam940LaBr3,
   Sam940,
-  kSam945,
+  Sam945,
   Srpm210,
   //RadSeekerLaBr1.5x1.5
   //RadSeekerNaI2x2 (although should check for this, see SpecFile::set_n42_2006_instrument_info_node_info
@@ -304,6 +310,21 @@ enum class QualityStatus : int
   Good, Suspect, Bad, Missing
 };
   
+
+  
+const char *descriptionText( const SpecUtils::SpectrumType type );
+  
+//suggestedNameEnding(): returns suggested lowercase file name ending for type
+//  passed in.  Does not contain the leading '.' for extentions
+const char *suggestedNameEnding( const SaveSpectrumAsType type );
+  
+  
+//spectrumTypeFromDescription(..): the inverse of descriptionText(SpectrumType)
+//  throw runtiem_exception if doesnt match
+SpectrumType spectrumTypeFromDescription( const char *descrip );
+  
+const char *descriptionText( const SaveSpectrumAsType type );
+
   
 //Forward declarations within SpecUtils
 enum class EnergyCalType : int;

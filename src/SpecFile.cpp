@@ -2045,7 +2045,7 @@ const std::string &detectorTypeToString( const DetectorType type )
 
   switch( type )
   {
-    case DetectorType::GR135:
+    case DetectorType::Exploranium:
       return sm_GR135DetectorStr;
     case DetectorType::IdentiFinderNG:
       return sm_IdentiFinderNGDetectorStr;
@@ -2076,7 +2076,7 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_MicroRaiderDetectorStr;
     case DetectorType::Sam940:
       return sm_Sam940DetectorStr;
-    case DetectorType::kSam945:
+    case DetectorType::Sam945:
       return sm_Sam945DetectorStr;
     case DetectorType::Srpm210:
       return sm_Srpm210DetectorStr;
@@ -5333,7 +5333,7 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_spc_file( filename );
     break;
 
-    case ParserType::GR135:
+    case ParserType::Exploranium:
       success = load_binary_exploranium_file( filename );
     break;
 
@@ -6990,9 +6990,9 @@ void SpecFile::set_detector_type_from_other_info()
   if( icontains(model,"SAM") && contains(model,"945") )
   {
     //if( icontains(model,"LaBr") )
-      //detector_type_ = kSam945LaBr3;
+      //detector_type_ = Sam945LaBr3;
     //else
-    detector_type_ = DetectorType::kSam945;
+    detector_type_ = DetectorType::Sam945;
     return;
   }
   
@@ -8384,7 +8384,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   const char *defaultname = 0;
   switch( detector_type_ )
   {
-    case DetectorType::GR135:          case DetectorType::IdentiFinder:
+    case DetectorType::Exploranium:    case DetectorType::IdentiFinder:
     case DetectorType::IdentiFinderNG: case DetectorType::IdentiFinderLaBr3:
     case DetectorType::SAIC8:          case DetectorType::Falcon5000:
     case DetectorType::Unknown:        case DetectorType::MicroRaider:
@@ -8394,7 +8394,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::OrtecRadEagleCeBr2Inch:
     case DetectorType::OrtecRadEagleCeBr3Inch:
     case DetectorType::OrtecRadEagleLaBr:
-    case DetectorType::kSam945:
+    case DetectorType::Sam945:
     case DetectorType::Srpm210:
     case DetectorType::RadHunterNaI:
     case DetectorType::RadHunterLaBr3:
@@ -10246,7 +10246,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         instrument_model_ = is130v0 ? "GR130" : "GR135";
         instrument_type_ = "Radionuclide Identifier";
         if( !is130v0 )
-          detector_type_ = DetectorType::GR135;
+          detector_type_ = SpecUtils::DetectorType::Exploranium;
       }//if( j == 0 )
       
       measurements_.push_back( meas );
@@ -12636,7 +12636,7 @@ void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_
     //set_detector_type_from_other_info() will set detector_type_ ...
   }else if( icontains(instrument_model_,"SAM") && icontains(instrument_model_,"945") )
   {
-    detector_type_ = DetectorType::kSam945;
+    detector_type_ = DetectorType::Sam945;
   }else if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
             && icontains(instrument_model_,"Raider") )
   {
@@ -13265,7 +13265,7 @@ std::string SpecFile::determine_rad_detector_kind_code() const
       det_kind = "HPGe";
       break;
       
-    case DetectorType::GR135:
+    case DetectorType::Exploranium:
     case DetectorType::IdentiFinder:
     case DetectorType::IdentiFinderNG:
     case DetectorType::RadHunterNaI:
@@ -13274,7 +13274,7 @@ std::string SpecFile::determine_rad_detector_kind_code() const
     case DetectorType::AvidRsi:
     case DetectorType::OrtecRadEagleNai:
     case DetectorType::Sam940:
-    case DetectorType::kSam945:
+    case DetectorType::Sam945:
       det_kind = "NaI";
       break;
       
