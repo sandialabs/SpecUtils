@@ -1295,7 +1295,7 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
   const bool force = length>=6 ? false : info[5].ToBoolean().Value();
   
   
-  SpecUtils::SaveSpectrumAsType type = SpecUtils::SaveSpectrumAsType::NumSaveSpectrumAsType;
+  SpecUtils::SaveSpectrumAsType type = SpecUtils::SaveSpectrumAsType::NumTypes;
   if( format == "TXT" )
     type = SpecUtils::SaveSpectrumAsType::Txt;
   else if( format == "CSV" )
@@ -1329,7 +1329,7 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
     return Napi::Value();
   }
   
-  assert( type != kNumSaveSpectrumAsType );
+  assert( type != SpecUtils::SaveSpectrumAsType::NumTypes );
   
   if( force && SpecUtils::is_file(path) )
     SpecUtils::remove_file(path);

@@ -201,7 +201,7 @@ enum class SaveSpectrumAsType : int
   HtmlD3,
 #endif
   
-  NumSaveSpectrumAsType
+  NumTypes
 };//enum SaveSpectrumAsType
 
 

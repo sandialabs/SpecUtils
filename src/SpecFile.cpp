@@ -1350,7 +1350,7 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
-    case SaveSpectrumAsType::NumSaveSpectrumAsType:          break;
+    case SaveSpectrumAsType::NumTypes:          break;
   }//switch( m_format )
   
   return "";
@@ -1392,7 +1392,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif
-    case SaveSpectrumAsType::NumSaveSpectrumAsType:          return "";
+    case SaveSpectrumAsType::NumTypes:          return "";
   }
   return "";
 }//const char *descriptionText( const SaveSpectrumAsType type )
@@ -17602,7 +17602,7 @@ void SpecFile::write( std::ostream &strm,
     }
 #endif
       
-    case SaveSpectrumAsType::NumSaveSpectrumAsType:
+    case SaveSpectrumAsType::NumTypes:
       throw runtime_error( "Invalid output format specified" );
       break;
   }//switch( format )
