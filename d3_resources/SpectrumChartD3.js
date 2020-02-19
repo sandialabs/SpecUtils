@@ -345,10 +345,17 @@ SpectrumChartD3 = function(elem, options) {
     .on("click.zoom", null)
     .on("dblclick.zoom", null);
 
+  /// @TODO triggering the cancel events on document.body and window is probably a bit agressive; could probably do this for just this.vis + on leave events
   d3.select(document.body)
+    .on("mouseup", self.handleCancelAllMouseEvents() )
+  d3.select(window)
     .on("mouseup", self.handleCancelAllMouseEvents())
-  d3.select(window).on("mouseup", self.handleCancelAllMouseEvents())
-    .on("mousemove", function() { if (self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown || self.currentlyAdjustingSpectrumScale) { d3.event.preventDefault(); d3.event.stopPropagation(); }});;
+    .on("mousemove", function() {
+        if( d3.event && (self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown || self.currentlyAdjustingSpectrumScale) ) {
+          d3.event.preventDefault();
+          d3.event.stopPropagation();
+        }
+      });
 
 
 
@@ -3741,10 +3748,7 @@ SpectrumChartD3.prototype.addMouseInfoBox = function(){
 SpectrumChartD3.prototype.updateMouseCoordText = function() {
   var self = this;
 
-  /*without d3.event */
-  if( !d3.event )
-    return;
-  if ( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+  if ( !d3.event || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
     return;
 
   var p = d3.mouse(self.vis[0][0]);
