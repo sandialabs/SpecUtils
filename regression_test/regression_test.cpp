@@ -228,15 +228,15 @@ int main( int argc, char **argv )
   if( actions.empty() )
   {
     if( g_automated_mode )
-	{
+    {
       actions.push_back( "test" );
-	}else
-	{
-	  actions.push_back( "addfiles" );
-	  actions.push_back( "test" );
-	  actions.push_back( "timing" );
-	  actions.push_back( "n42test" );
-	}
+    }else
+    {
+      actions.push_back( "addfiles" );
+      actions.push_back( "test" );
+      actions.push_back( "timing" );
+      actions.push_back( "n42test" );
+    }
   }//if( vm.count("action") ) / else
   
   for( string action : actions )
@@ -320,7 +320,7 @@ void check_parse_time( const string basedir )
       const double orig_wall_time = SpecUtils::get_wall_time();
       const double orig_cpu_time = SpecUtils::get_cpu_time();
     
-      const bool parsed = info.load_file( filename, SpecUtils::ParserType::kAutoParser, extention );
+      const bool parsed = info.load_file( filename, SpecUtils::ParserType::Auto, extention );
     
       const double final_cpu_time = SpecUtils::get_cpu_time();
       const double final_wall_time = SpecUtils::get_wall_time();
@@ -491,7 +491,7 @@ void check_files_with_truth_n42( const string basedir )
      SpecUtils::SpecFile original;
     
     const bool originalstatus
-                = original.load_file( originalpath, SpecUtils::ParserType::kAutoParser, originalext );
+                = original.load_file( originalpath, SpecUtils::ParserType::Auto, originalext );
     
     if( !originalstatus )
     {
@@ -517,8 +517,8 @@ void check_files_with_truth_n42( const string basedir )
       exit( EXIT_FAILURE );
     }
     
-     SpecUtils::SpecFile truth;
-    const bool truthstat = truth.load_file( tpath.string<string>().c_str(), SpecUtils::ParserType::K2012ICD1Parser, "" );
+    SpecUtils::SpecFile truth;
+    const bool truthstat = truth.load_file( tpath.string<string>().c_str(), SpecUtils::ParserType::N42_2012, "" );
     
     if( !truthstat )
     {
@@ -668,7 +668,7 @@ void check_serialization_to_n42( const string basedir )
     
      SpecUtils::SpecFile info;
     
-    bool status = info.load_file( originalpath, SpecUtils::ParserType::kAutoParser, originalext );
+    bool status = info.load_file( originalpath, SpecUtils::ParserType::Auto, originalext );
 
     if( !status )
     {
@@ -704,8 +704,8 @@ void check_serialization_to_n42( const string basedir )
       }//if( !status )
     }//End codeblock to serialize to temporary file
     
-     SpecUtils::SpecFile reread;
-    status = reread.load_file( tempname.c_str(), SpecUtils::ParserType::K2012ICD1Parser, "" );
+    SpecUtils::SpecFile reread;
+    status = reread.load_file( tempname.c_str(), SpecUtils::ParserType::N42_2012, "" );
     
     if( !status )
     {
@@ -835,7 +835,7 @@ bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
     
      SpecUtils::SpecFile reloadedinfo;
     const bool reloadstatus
-          = reloadedinfo.load_file( truth_n42.string<string>().c_str(), SpecUtils::ParserType::K2012ICD1Parser, "" );
+          = reloadedinfo.load_file( truth_n42.string<string>().c_str(), SpecUtils::ParserType::N42_2012, "" );
     if( !reloadstatus )
       throw runtime_error( "Failed to read in written n42 file" );
   
@@ -905,7 +905,7 @@ void handle_no_truth_files( const string basedir )
     const string extention = path.extension().string<string>();
     
      SpecUtils::SpecFile info;
-    const bool status = info.load_file( filenamestr, SpecUtils::ParserType::kAutoParser, extention );
+    const bool status = info.load_file( filenamestr, SpecUtils::ParserType::Auto, extention );
     
     if( !status )
     {
@@ -983,7 +983,7 @@ void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &o
     case SpecUtils::SourceType::Calibration:       out << ", Calibration";       break;
     case SpecUtils::SourceType::Foreground:        out << ", Foreground";        break;
     case SpecUtils::SourceType::IntrinsicActivity: out << ", IntrinsicActivity"; break;
-    case SpecUtils::SourceType::UnknownSourceType: out << ", UnknownSourceType"; break;
+    case SpecUtils::SourceType::Unknown:           out << ", UnknownSourceType"; break;
   }//switch( meas.source_type() )
   
   out << ", " << meas.start_time();

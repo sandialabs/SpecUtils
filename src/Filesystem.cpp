@@ -313,6 +313,7 @@ bool is_directory( const std::string &name )
 {
 #ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
+  //could also use PathIsDirectoryW
   struct _stat statbuf;
   _wstat( wname.c_str(), &statbuf);
   return S_ISDIR(statbuf.st_mode);
@@ -640,6 +641,24 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   }//if( !is_absolute_path(path) )
   
 #if( defined(_WIN32) )
+  
+  SpecUtils::ireplace_all( path, "\\", "/");
+  
+  /*
+   - path empty, return.
+   - Replace each slash character in the root-name with a preferred-separator.
+   - Replace each directory-separator with a preferred-separator.
+   - Remove each dot filename and any immediately following directory-separator.
+   - As long as any appear, remove a non-dot-dot filename immediately followed
+   by a directory-separator and a dot-dot filename, along with any immediately
+   following directory-separator.
+   - If there is a root-directory, remove all dot-dot filenames and any
+   directory-separators immediately following them.
+   - If the last filename is dot-dot, remove any trailing directory-separator.
+   - If the path is empty, add a dot.
+   */
+  
+  
   //wchar_t full[_MAX_PATH];
   //if( _wfullpath( full, partialPath, _MAX_PATH ) != NULL )
   //{
@@ -1188,16 +1207,93 @@ vector<string> ls_directories_in_directory( const std::string &src )
   return answer;
 }//std::vector<std::string> ls_directories_in_directory( const std::string &src )
   
-
+  
+std::string lexically_normalize_path( const std::string &input )
+{
+  const bool isabs = is_absolute_path(input);
+  
+  std::vector<std::string> components;
+  
+#if( defined(_WIN32) )
+  const char * const delim = "\\";
+  SpecUtils::split( components, input, "/\\" );
+  
+  if( isabs && input.size() > 1 && !components.empty() && input[0]=='\\' && input[1]=='\\' )
+    components[0] = "\\\\" + components[0];
+#else
+  const char * const delim = "/";
+  SpecUtils::split( components, input, "/" );
+#endif
+  
+  //Remove all "." elements
+  bool found = true;
+  while( found )
+  {
+    auto pos = std::find( begin(components), end(components), "." );
+    found = (pos != end(components));
+    if( found )
+      components.erase(pos);
+  }//while( found )
+  
+  size_t nlead_dotdot = 0;
+  
+  //Remove all ".." elements, and the path component proceeding them.
+  found = true;
+  while( found && !components.empty() )
+  {
+    auto pos = std::find( begin(components), end(components), ".." );
+    found = (pos != end(components));
+    if( pos == begin(components) )
+    {
+      if( !isabs )
+        ++nlead_dotdot;
+      components.erase(pos);
+    }else if( pos != end(components) )
+    {
+      components.erase(pos-1,pos+1);
+    }
+  }//while( found )
+  
+  //now combine together, and make sure to get trailing slash right.
+  string answer;
+  
+  for( size_t i = 0; i < nlead_dotdot; ++i )
+    answer += (i ? delim : "") + string("..");
+  
+  for( size_t i = 0; i < components.size(); ++i )
+    answer += (answer.empty() ? "" : delim) + components[i];
+  
+  const char first = (!input.empty() ? input[0] : ' ');
+  const char last = (input.size() > 1) ? input[input.size()-1] : ' ';
+  
+  if( (first==delim[0] || first=='/') && (answer.empty() || answer[0]!=delim[0])  )
+    answer = delim + answer;
+  
+  if( (last==delim[0] || last=='/') && (answer.empty() || answer[answer.size()-1]!=delim[0]) )
+    answer += delim;
+  
+  return answer;
+}//std::string lexically_normalize_path( std::string &input )
+  
+  
 std::string fs_relative( std::string from_path, std::string to_path )
 {
   string answer;
   
-  SpecUtils::make_canonical_path(from_path);
-  SpecUtils::make_canonical_path(to_path);
+  const bool from_is_abs = SpecUtils::is_absolute_path(from_path);
+  const bool to_is_abs = SpecUtils::is_absolute_path(to_path);
+  
+  const string cwd = (!from_is_abs || !to_is_abs) ? SpecUtils::get_working_path() : std::string();
+  
+  if( !from_is_abs )
+    from_path = SpecUtils::append_path( cwd, from_path );
+  if( !to_is_abs )
+    to_path = SpecUtils::append_path( cwd, to_path );
+  
+  from_path = SpecUtils::lexically_normalize_path(from_path);
+  to_path = SpecUtils::lexically_normalize_path(to_path);
   
 #if( defined(_WIN32) )
-  SpecUtils::ireplace_all( answer, "/", "\\" );
   const char * const delim = "\\";
 #else
   const char * const delim = "/";
@@ -1209,7 +1305,8 @@ std::string fs_relative( std::string from_path, std::string to_path )
   
   
 #if( defined(_WIN32) )
-  //For windows check if on network drive, and if so append to zeroth element
+  //For windows check if on network drive or extended (ex. R"(\\?\C:\mypath)" ),
+  // and if so append to zeroth element
   //  ... however, I 'm not sure relative paths work across drives on windows...
   //TODO: Check if relative paths work across drives, and how that should be handled..
   if( from_path.size() > 1 && !from_components.empty() && from_path[0]=='\\' && from_path[1]=='\\' )
@@ -1240,7 +1337,6 @@ std::string fs_relative( std::string from_path, std::string to_path )
   
   
   return answer;
-  
 //#ifdef _WIN32
 //  return convert_from_utf16_to_utf8( make_relative( from_path, to_path ).string<std::wstring>() );
 //#else

@@ -79,6 +79,53 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file" ), "path/file" );
 #endif //#ifdef _WIN32
   
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/./bar/.."), "foo" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/.///bar/../"), "foo/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/bar/../../../dude"), "../dude" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("../"), "../" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(".."), ".." );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/bar/.."), "foo" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/bar/../"), "foo/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/bar/"), "/foo/bar/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/bar"), "/foo/bar" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo///bar"), "/foo/bar" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/"), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("//"), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/.."), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/../.."), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/../../.."), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(""), "" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("."), "" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/."), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/../."), "/" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo"), "foo" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("./foo/bar"), "foo/bar" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("./foo/bar/.."), "foo" );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("./foo/bar/."), "foo/bar" );
+#ifdef _WIN32
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(\\foo)str"), R"str(\\foo)str") );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(\\foo/bar)str"), R"str(\\foo\bar)str") );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(\\foo/bar/)str"), R"str(\\foo\bar\)str") );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(C:\foo\bar)str"), R"str(C:\foo\bar)str") );
+  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(C:\foo\bar\..)str"), R"str(C:\foo)str") );
+  
+  // @TODO Read the following to actually understand Windows paths
+  //       https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
+  
+  //UNC
+  // R"str(\\host-name\share-name\file_path)str"
+  // R"str(C:\Windows)str"
+  //Extended
+  // R"str(\\?\C:\Path\path\file.log)str"
+  // R"str(\\?\C:\)str"
+  // R"str(\\.\C:\)str"
+  // R"str(\\?\)str"
+  // R"str(\\?\UNC\server\share)str"
+  
+  
+  
+#endif //_WIN32
+  
 //BOOST_CHECK(results.size() == 1);
   BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/a/b/c/d", "/a/b/foo/bar"), "../../foo/bar" );
   BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a", "a/b//c"), "b/c" );
@@ -86,6 +133,9 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a/b/c/x/y", "a/b/c"), "../.." );
   BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a/b/c//x/y", "a//b/c"), "../.." );
   BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan/File1.txt" );
+  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/foo/bar/../daz", "/foo/daz"), "" );
+  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/foo/bar/../daz", "/foo/daz/hello.txt"), "hello.txt" );
+  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/foo/bar/.///../daz/../daz/dude", "/foo/daz/hello.txt"), "../hello.txt" );
   
   BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some/file.txt"), "file.txt" );
   BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some"), "some" );

@@ -340,25 +340,62 @@ namespace  SpecUtils
   
   
   /** Get a relative path from 'from_path' to 'to_path'
-   Note: resolves files, so may throw exception
    
-   assert( make_relative( "/a/b/c/d", "/a/b/foo/bar" ) == "../../foo/bar" );
-   assert( make_relative( "a", "a/b/c") == "b/c");
-   assert( make_relative( "a/b/c/x/y", "a/b/c") == "../..");
+   @param from_path The starting path.  If not absolute, will be prepended by
+          the current working path.
+   @param to_path The destination filesystem location.  If not absolute, will be
+          prepended by the current working path.
+   @returns The path necassary to get from 'from_path' to 'to_path'
+   
+   Note: files are not resolved, so they do not need to exist.  File links are
+   not accounted for.  When passing in non-absolute paths, be careful that
+   the paths do not have so many ".." elements such that they would go up above
+   the root path from the current working durectory, in which case, the extra
+   ".." elements are discarded, and not accounted for.
+   
+   assert( fs_relative( "/a/b/c/d", "/a/b/foo/bar" ) == "../../foo/bar" );
+   assert( fs_relative( "a", "a/b/c") == "b/c");
+   assert( fs_relative( "a/b/c/x/y", "a/b/c") == "../..");
    */
   std::string fs_relative( std::string from_path, std::string to_path );
+  
+  /** Removes all "." elements; for absolute paths will resolve/remove all ".."
+   elements, and for relative paths will resolve/remove all ".." elements that
+   wont cause a loss of path information. Preserves trailing slash
+   Similar to #SpecUtils::make_canonical_path, but this function is strickly
+   string based, so passed in file does not need to exist.
+   
+   Examples:
+   "foo/./bar/.."           --> "foo"
+   "foo/bar/.."             --> "foo"
+   "foo/bar/../"            --> "foo/"
+   "/foo/bar"               --> "/foo/bar"
+   "/foo/bar/"              --> "/foo/bar/"
+   "foo/.///bar/../"        --> "foo/"
+   "foo/bar/../../../dude"  --> "../dude"
+   ".."                     --> ".."
+   "/../..")                --> "/"
+   "/foo/../../.."          --> "/"
+   ""                       --> ""
+   "."                      --> ""
+   "/foo/bar"               --> "/foo/bar"
+   "/foo///bar"             --> "/foo/bar"
+   "/"                      --> "/"
+   "/.."                    --> "/"
+   "./foo/bar/."            --> "foo/bar"
+   */
+  std::string lexically_normalize_path( const std::string &input );
   
   //ToDo: add in path comparisons (which dont resolve files, just use strings)
   //std::string lexically_normalize_path( std::string &input );
   //std::string fs_lexically_relative( const std::string &source, const std::string &target );
-  //assert( fs_lexically_normal("foo/./bar/..") == "foo/");
-  //assert( fs_lexically_normal("foo/.///bar/../") == "foo/");
-  //assert( fs_lexically_relative("/a/b/c","/a/d") == "../../d");
-  //assert( fs_lexically_relative("/a/d","/a/b/c") == "../b/c");
-  //assert( fs_lexically_relative("a","a/b/c") == "b/c");
-  //assert( fs_lexically_relative("a/b/c/x/y","a/b/c") == "../..");
-  //assert( fs_lexically_relative("a/b/c","a/b/c") == ".");
-  //assert( fs_lexically_relative("c/d","a/b") == "../../a/b");
+  
+  //assert( fs_relative("/a/b/c","/a/d") == "../../d");
+  //assert( fs_relative("/a/d","/a/b/c") == "../b/c");
+  //assert( fs_relative("a","a/b/c") == "b/c");
+  //assert( fs_relative("a/b/c/x/y","a/b/c") == "../..");
+  //assert( fs_relative("a/b/c","a/b/c") == ".");
+  //assert( fs_relative("c/d","a/b") == "../../a/b");
   
   
   /** Loads data from specified file on filesystem into the `data` vector and

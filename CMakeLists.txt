@@ -18,8 +18,6 @@ option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 
-#This is a temporary (20170629) hack to deal with error messages... should be handled a lot better...
-option( SpecUtils_EXTERNALLY_DEFINED_LOG_MESSAGE "If true, you must have a externally defined log_error_message(string,string,int) function defined when linking" OFF )
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
@@ -93,6 +91,14 @@ endif( SpecUtils_PYTHON_BINDINGS )
 
 set( sources
      src/SpecFile.cpp
+     src/SpecFile_pcf.cpp
+     src/SpecFile_cnf.cpp
+     src/SpecFile_n42.cpp
+     src/SpecFile_spc.cpp
+     src/SpecFile_chn.cpp
+     src/SpecFile_spe.cpp
+     src/SpecFile_csv.cpp
+     src/SpecFile_gr135.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp
@@ -100,6 +106,7 @@ set( sources
      src/StringAlgo.cpp
      src/Filesystem.cpp
      src/DateTime.cpp
+     src/ParseUtils.cpp
      README.md
 )
 
@@ -113,6 +120,8 @@ set( headers
      SpecUtils/StringAlgo.h
      SpecUtils/Filesystem.h
      SpecUtils/DateTime.h
+     SpecUtils/ParseUtils.h
+     SpecUtils/RapidXmlUtils.hpp
 )
 
 if( SpecUtils_ENABLE_D3_CHART )

@@ -39,11 +39,6 @@
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
-#include "SpecUtils/SpecUtilsAsync.h"
-
-//Temporary include to pull in RAPIDXML_USE_SIZED_INPUT_WCJOHNS
-//#include "rapidxml/rapidxml.hpp"
-#define RAPIDXML_USE_SIZED_INPUT_WCJOHNS 1
 
 /*
 Shortcommings that wcjohns should be addressed
@@ -126,26 +121,53 @@ namespace SpecUtils
  */
 enum class ParserType : int
 {
-  N42_2006, //ICD1 or supported ICD2 variants
+  /** All N42-2006 like variants (aka ICD1), as well as some ICD2 variants. */
+  N42_2006,
+  /** All N42-2012 like variants. */
   N42_2012,
-  Spc,      //ascii or binary
-  Exploranium,    //GR130, GR135 v1 or v2
+  /** ASCII or binary (both integer based and float based) SPC formats. */
+  Spc,
+  /** Exploranium GR-130, GR-135 v1 or v2 binary formats. */
+  Exploranium,
+  /** GADRAS PCF binary format. */
   Pcf,
+  /** ORTEC binary CHN file. */
   Chn,
+  /** The IAEA SPE ascii format; includes a number of vendor extensions */
   SpeIaea,
+  /** Catch all for CSV, TSV, TXT and similar variants (ex TXT GR-135, SRPM210,
+   Spectroscopic Daily Files, ...)
+   */
   TxtOrCsv,
+  /** Canberra binary CNF format. */
   Cnf,
+  /** Tracs MPS binary format. */
   TracsMps,
+  /** Aram TXT and XML hybrid format. */
   Aram,
+  /** Spectroscopic Portal Monitor Daily File. */
   SPMDailyFile,
+  /** Amptek MCA text-ish based format. */
   AmptekMca,
+  /** Microraider XML based format. */
   MicroRaider,
+  /** ORTEC list mode (.lis) from at least digiBASE(-E) detectors. */
   OrtecListMode,
+  /** LSRM text based format. */
   LsrmSpe,
+  /** TKA text based format. */
   Tka,
-  MultiAct, //only partially supported
+  /** MultiAct binary format - only partially supported. */
+  MultiAct,
+  /** PHD text based format. */
   Phd,
+  /** LabZY XML based files. */
   Lzs,
+  /** Automatically determine format - should be safe to be used with any format
+   that can be parsed.  Will first guess format based on file extension, then
+   on initial file contents, and if still not succesfully identified, will try
+   every parsing function.
+   */
   Auto
 };//enum ParserType
 
@@ -432,6 +454,32 @@ struct EnergyCalibration
   std::shared_ptr< const std::vector<float> > binning_;
 };//struct EnergyCalibration
 */
+ 
+  
+/** A struct used internally while parsing files to
+ @TODO Move this into something like the #EnergyCalibration commented above
+       and use the same struct in parsing and for representing data to users of
+       library.
+ */
+struct MeasurementCalibInfo
+{
+  SpecUtils::EnergyCalType equation_type;
+  
+  size_t nbin;
+  std::vector<float> coefficients;
+  std::vector< std::pair<float,float> > deviation_pairs_;
+  std::shared_ptr<const std::vector<float>> original_binning;
+  mutable std::shared_ptr<const std::vector<float>> binning;
+  
+  std::string calib_id; //optional
+  
+  MeasurementCalibInfo( std::shared_ptr<Measurement> meas );
+  MeasurementCalibInfo();
+  void strip_end_zero_coeff();
+  void fill_binning();
+  bool operator<( const MeasurementCalibInfo &rhs ) const;
+  bool operator==( const MeasurementCalibInfo &rhs ) const;
+};//struct MeasurementCalibInfo
   
   
   
@@ -497,13 +545,8 @@ public:
   inline double longitude() const;
   
   //has_gps_info(): returns true only if both latitude and longitude are valid.
-  inline bool has_gps_info() const;
+  bool has_gps_info() const;
   
-  //valid_longitude(): checks if abs(longitude) is less than or equal to 180.
-  static bool valid_longitude( const double longitude );
-  
-  //valid_latitude(): checks if abs(latitude) is less or equal to 90.
-  static bool valid_latitude( const double latitude );
   
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns boost::posix_time::not_a_date_time otherwise.
@@ -544,6 +587,10 @@ public:
   //  that pertain to this record specifically.  See also
   //  MeasurmentInformation::remarks().
   inline const std::vector<std::string> &remarks() const;
+  
+  /** Warnings from parsing that apply to this measurement.
+   */
+  inline const std::vector<std::string> &parse_warnings() const;
   
   //start_time(): start time of the measurement.  Returns
   //  boost::posix_time::not_a_date_time if could not be determined.
@@ -935,6 +982,7 @@ protected:
   SpecUtils::EnergyCalType   energy_calibration_model_;
 
   std::vector<std::string>  remarks_;
+  std::vector<std::string>  parse_warnings_;
   boost::posix_time::ptime  start_time_;
   
   //ToDo: switch from ptime, to std::chrono::time_point
@@ -1037,6 +1085,16 @@ public:
 #endif
                  );
 
+  /** Returns the warnings or issues encountered during file parsing,
+   appropriate for displaying to the user, as applicable to the entire file.
+   For each Measurement in the file, you should also consult
+   #Measurement::parse_warnings.
+   
+   An example condition when a message might be made is if it is know the
+   neutron real time can sometimes not coorespond to the gamma real time.
+   */
+  inline const std::vector<std::string> &parse_warnings() const;
+  
   //modified(): intended to indicate if object has been modified since last save
   inline bool modified() const;
   
@@ -1078,7 +1136,7 @@ public:
   inline std::vector< std::shared_ptr<const Measurement> > measurements() const;
   inline std::shared_ptr<const Measurement> measurement( size_t num ) const;
   inline std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
-  inline bool has_gps_info() const; //mean longitude/latitude are valid gps coords
+  bool has_gps_info() const; //mean longitude/latitude are valid gps coords
   inline double mean_latitude() const;
   inline double mean_longitude() const;
 
@@ -1374,12 +1432,10 @@ public:
   //load_N42_from_data(...): raw xml file data - must be 0 terminated
   virtual bool load_N42_from_data( char *data );
   
-#if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
   /** Load data from raw xml file data specified by data begin and end - does
       not need to be null terminated.
    */
   virtual bool load_N42_from_data( char *data, char *data_end );
-#endif
   
   //load_from_iaea_spc(...) and load_from_binary_spc(...) reset the
   //  input stream to original position and sets *this to reset state upon
@@ -1982,6 +2038,8 @@ protected:
   std::string uuid_;
   std::vector<std::string> remarks_;
 
+  std::vector<std::string> parse_warnings_;
+  
   //These go under the <MeasuredItemInformation> node in N42 file
   //  There are more fields were not currently checking for (also remarks under
   //  this node are just put into remarks_), and not necassarily set for other
@@ -2297,6 +2355,11 @@ const std::vector<std::string> &SpecFile::remarks() const
   return remarks_;
 }
 
+const std::vector<std::string> &SpecFile::parse_warnings() const
+{
+  return parse_warnings_;
+}
+  
 int SpecFile::lane_number() const
 {
   return lane_number_;
@@ -2322,10 +2385,6 @@ double Measurement::longitude() const
   return longitude_;
 }
 
-bool Measurement::has_gps_info() const
-{
-  return (valid_longitude(longitude_) && valid_latitude(latitude_));
-}
 
 const boost::posix_time::ptime &Measurement::position_time() const
 {
@@ -2415,11 +2474,6 @@ std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
   return detectors_analysis_;
 }
 
-bool SpecFile::has_gps_info() const
-{
-  return (Measurement::valid_longitude(mean_longitude_)
-           && Measurement::valid_latitude(mean_latitude_));
-}
 
 double SpecFile::mean_latitude() const
 {
@@ -2578,6 +2632,11 @@ const std::vector<std::string> &Measurement::remarks() const
   return remarks_;
 }
 
+const std::vector<std::string> &Measurement::parse_warnings() const
+{
+  return parse_warnings_;
+}
+  
 const boost::posix_time::ptime &Measurement::start_time() const
 {
   return start_time_;
