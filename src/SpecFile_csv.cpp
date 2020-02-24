@@ -41,6 +41,7 @@
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
+#include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
 
 using namespace std;
@@ -590,7 +591,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       {
         if( sample_number_ < 0 )
         {
-          sample_number_ = sample_num_from_remark( line );
+          sample_number_ = SpecUtils::sample_num_from_remark( line );
           used |= (sample_number_ > -1);
         }
       }catch(...){}
@@ -599,7 +600,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       {
         if( speed_ == 0.0 )
         {
-          speed_ = speed_from_remark( line );
+          speed_ = SpecUtils::speed_from_remark( line );
           used |= (speed_ != 0.0);
         }
       }catch(...){}
@@ -756,6 +757,346 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
 }//void set_info_from_txt_or_csv( std::istream& istr )
 
   
+  
+void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
+{
+  //There is a variant of refQQZGMTCC93, RSL mobile system ref8T2SZ11TQE
+  
+  using SpecUtils::safe_get_line;
+  using SpecUtils::split_to_floats;
+  
+  const istream::pos_type orig_pos = istr.tellg();
+  
+  try
+  {
+    string line;
+    if( !SpecUtils::safe_get_line(istr, line) )
+      throw runtime_error(""); //"Failed getting first line"
+    
+    if( line.size() < 8 || line.size() > 100 )
+      throw runtime_error(""); //"First line not reasonable length"
+    
+    //const size_t first_invalid_char = line.substr(0,8).find_first_not_of( "0123456789 ,\r\n\t+-e." );
+    const size_t first_invalid_char = line.find_first_not_of( "0123456789 ,\r\n\t+-e." );
+    
+    if( first_invalid_char != string::npos )
+      throw runtime_error( "" ); //"Invalid character in first 8 characters"
+    
+    vector<string> flinefields;
+    SpecUtils::split( flinefields, line, " ,\t");
+    if( flinefields.size() != 4 )
+      throw runtime_error( "" ); //"First line not real time then calibration coefs"
+    
+    vector<float> fline;
+    if( !split_to_floats(line, fline) || fline.size()!=4 )
+      throw runtime_error( "" ); //We expect the first line to be all numbers
+    
+    const vector<float> eqn( fline.begin() + 1, fline.end() );
+    const float realtime = fline[0];
+    
+    if( realtime < -FLT_EPSILON )
+      throw runtime_error( "" ); //"First coefficient not real time"
+    
+    if( !safe_get_line(istr, line) )
+      throw runtime_error(""); //"Failed getting second line"
+    
+    if( !split_to_floats(line, fline) )
+      throw runtime_error( "" ); //"Second line not floats"
+    
+    if( fline.size() < 127 && fline.size() != 2 )
+      throw runtime_error( "" ); //"Invalid second line"
+    
+    //If we got here, this is probably a valid file
+    auto counts = std::make_shared< vector<float> >();
+    
+    if( fline.size() >= 127 )
+    {
+      //Second line is CSV of channel counts
+      if( SpecUtils::safe_get_line(istr, line) && line.size() )
+        throw runtime_error(""); //"Only expected two lines"
+      
+      counts->swap( fline );
+    }else
+    {
+      //Rest of file is \t seperated column with two columns per line
+      //  "channel\tcounts"
+      float channelnum = fline[0];
+      const float counts0 = fline[1];
+      
+      if( fabs(channelnum) > FLT_EPSILON && fabs(channelnum - 1.0) > FLT_EPSILON )
+        throw runtime_error( "" ); //"First column doesnt refer to channel number"
+      
+      if( counts0 < -FLT_EPSILON )
+        throw runtime_error( "" ); //"Second column doesnt refer to channel counts"
+      
+      channelnum = channelnum - 1.0f;
+      istr.seekg( orig_pos, ios::beg );
+      SpecUtils::safe_get_line( istr, line );
+      
+      while( safe_get_line( istr, line ) )
+      {
+        trim( line );
+        if( line.empty() ) //Sometimes file will have a newline at the end of the file
+          continue;
+        
+        if( !split_to_floats(line, fline) || fline.size() != 2 )
+          throw runtime_error( "" ); //"Unexpected number of fields on a line"
+        
+        if( fabs(channelnum + 1.0f - fline[0]) > 0.9f /*FLT_EPSILON*/ )
+          throw runtime_error( "" ); //"First column is not channel number"
+        
+        channelnum = fline[0];
+        counts->push_back( fline[1] );
+      }//while( SpecUtils::safe_get_line( istr, line ) )
+    }//if( fline.size() >= 127 )
+    
+    const size_t nchannel = counts->size();
+    if( nchannel < 127 )
+      throw runtime_error(""); //"Not enought channels"
+    
+    const vector< pair<float,float> > devpairs;
+    const bool validcalib
+    = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn, devpairs,
+                                      nchannel );
+    if( !validcalib )
+      throw runtime_error( "" ); //"Invalid calibration"
+    
+    //    real_time_ = realtime;
+    live_time_ = realtime;
+    contained_neutron_ = false;
+    deviation_pairs_.clear();
+    calibration_coeffs_ = eqn;
+    energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+    neutron_counts_.clear();
+    gamma_counts_ = counts;
+    neutron_counts_sum_ = gamma_count_sum_ = 0.0;
+    for( const float f : *counts )
+      gamma_count_sum_ += f;
+  }catch( std::exception &e )
+  {
+    istr.seekg( orig_pos, ios::beg );
+    throw;
+  }
+}//void set_info_from_avid_mobile_txt( std::istream& istr )
+
+  
+bool SpecFile::load_from_srpm210_csv( std::istream &input )
+{
+  try
+  {
+    string line;
+    if( !SpecUtils::safe_get_line(input, line) )
+      return false;
+    
+    if( line.find("Fields, RSP 1, RSP 2") == string::npos )
+      return false;
+    
+    vector<string> header;
+    SpecUtils::split( header, line, "," );
+    if( header.size() < 3 )
+      return false; //we know this cant happen, but whatever
+    header.erase( begin(header) );  //get rid of "Fields"
+    
+#if(PERFORM_DEVELOPER_CHECKS)
+    set<string> header_names_check;
+#endif
+    for( auto &field : header )
+    {
+      SpecUtils::trim( field );
+      if( field.size() < 2 )
+      {
+#if(PERFORM_DEVELOPER_CHECKS)
+        header_names_check.insert( field );
+#endif
+        continue; //JIC, shouldnt ever hit though
+      }
+      
+      //Transform "RSP 1" to "RSP 01", so this way when names get sorted
+      //  "RSP 11" wont come before "RSP 2"
+      if( isdigit( field[field.size()-1] ) && !isdigit( field[field.size()-2] ) )
+        field = field.substr(0,field.size()-1) + '0' + field.substr(field.size()-1);
+      
+#if(PERFORM_DEVELOPER_CHECKS)
+      header_names_check.insert( field );
+#endif
+    }//for( auto &field : header )
+    
+#if(PERFORM_DEVELOPER_CHECKS)
+    if( header_names_check.size() != header_names_check.size() )
+      log_developer_error( __func__, ("There was a duplicate detector name in SRPM CSV file: '" + line + "' - who knows what will happen").c_str() );
+#endif
+    
+    
+    vector<float> real_times, live_times;
+    vector<vector<float>> gamma_counts, neutron_counts;
+    
+    while( SpecUtils::safe_get_line(input, line) )
+    {
+      SpecUtils::trim( line );
+      if( line.empty() )
+        continue;
+      
+      auto commapos = line.find(',');
+      if( commapos == string::npos )
+        continue;  //shouldnt happen
+      
+      const string key = line.substr( 0, commapos );
+      line = line.substr(commapos+1);
+      
+      //All columns, other than the first are integral, however for conveince
+      //  we will just read them into floats.  The time (in microseconds) would
+      //  maybe be the only thing that would lose info, but it will be way to
+      //  minor to worry about.
+      
+      //Meh, I dont think we care about any of the following lines
+      const string lines_to_skip[] = { "PLS_CNTR", "GOOD_CNTR", "PU_CNTR",
+        "COSM_CNTR", "PMT_COUNTS_1", "PMT_COUNTS_2", "PMT_COUNTS_3",
+        "PMT_COUNTS_4", "XRAY_CNTR"
+      };
+      
+      if( std::find(begin(lines_to_skip), end(lines_to_skip), key) != end(lines_to_skip) )
+        continue;
+      
+      vector<float> line_data;
+      if( !SpecUtils::split_to_floats(line, line_data) )
+      {
+#if(PERFORM_DEVELOPER_CHECKS)
+        log_developer_error( __func__, ("Failed in parsing line of SRPM file: '" + line + "'").c_str() );
+#endif
+        continue;
+      }
+      
+      if( line_data.empty() )
+        continue;
+      
+      if( key == "ACC_TIME_us" )
+      {
+        real_times.swap( line_data );
+      }else if( key == "ACC_TIME_LIVE_us" )
+      {
+        live_times.swap( line_data );
+      }else if( SpecUtils::istarts_with( key, "Spectrum_") )
+      {
+        if( gamma_counts.size() < line_data.size() )
+          gamma_counts.resize( line_data.size() );
+        for( size_t i = 0; i < line_data.size(); ++i )
+          gamma_counts[i].push_back(line_data[i]);
+      }else if( SpecUtils::istarts_with( key, "Ntr_") )
+      {
+        if( SpecUtils::icontains(key, "Total") )
+        {
+          if( neutron_counts.size() < line_data.size() )
+            neutron_counts.resize( line_data.size() );
+          for( size_t i = 0; i < line_data.size(); ++i )
+            neutron_counts[i].push_back(line_data[i]);
+        }else if( SpecUtils::icontains(key, "Low")
+                 || SpecUtils::icontains(key, "High")
+                 || SpecUtils::icontains(key, "_Neutron") )
+        {
+          //Meh, ignore this I guess
+        }else
+        {
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( __func__, ("Unrecognized neutron type in SRPM file: '" + key + "'").c_str() );
+#endif
+        }
+      }else
+      {
+#if(PERFORM_DEVELOPER_CHECKS)
+        log_developer_error( __func__, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
+#endif
+      }//if( key is specific value ) / else
+    }//while( SpecUtils::safe_get_line(input, line) )
+    
+    if( gamma_counts.empty() )
+      return false;
+    
+    reset();
+    
+    
+    for( size_t i = 0; i < gamma_counts.size(); ++i )
+    {
+      vector<float> &gammacount = gamma_counts[i];
+      if( gammacount.size() < 7 ) //7 is arbitrary
+        continue;
+      
+      float livetime = 0.0f, realtime = 0.0f;
+      if( i < live_times.size() )
+        livetime = 1.0E-6f * live_times[i];
+      if( i < real_times.size() )
+        realtime = 1.0E-6f * real_times[i];
+      
+      //JIC something is whack getting time, hack it! (shouldnt happen that I'm aware of)
+      if( livetime==0.0f && realtime!=0.0f )
+        realtime = livetime;
+      if( realtime==0.0f && livetime!=0.0f )
+        livetime = realtime;
+      
+      auto m = std::make_shared<Measurement>();
+      
+      if( i < header.size() )
+        m->detector_name_ = header[i];
+      else
+        m->detector_name_ = "Det" + to_string(i);
+      m->detector_number_ = static_cast<int>( i );
+      m->real_time_ = realtime;
+      m->live_time_ = livetime;
+      m->detector_description_ = "PVT";
+      m->gamma_counts_ = std::make_shared<vector<float>>( gammacount );
+      if( i < neutron_counts.size() )
+        m->neutron_counts_ = neutron_counts[i];
+      for( const float counts : *m->gamma_counts_ )
+        m->gamma_count_sum_ += counts;
+      for( const float counts : m->neutron_counts_ )
+        m->neutron_counts_sum_ += counts;
+      m->contained_neutron_ = !m->neutron_counts_.empty();
+      m->sample_number_ = 1;
+      
+      //Further quantities it would be nice to fill out:
+      /*
+       OccupancyStatus  occupied_;
+       float speed_;  //in m/s
+       QualityStatus quality_status_;
+       SourceType     source_type_;
+       SpecUtils::EnergyCalType   energy_calibration_model_;
+       std::vector<std::string>  remarks_;
+       boost::posix_time::ptime  start_time_;
+       std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
+       std::vector<std::pair<float,float>>          deviation_pairs_;     //<energy,offset>
+       std::vector<float>        neutron_counts_;
+       double latitude_;  //set to -999.9 if not specified
+       double longitude_; //set to -999.9 if not specified
+       boost::posix_time::ptime position_time_;
+       std::string title_;  //Actually used for a number of file formats
+       */
+      measurements_.push_back( m );
+      
+    }//for( size_t i = 0; i < gamma_counts.size(); ++i )
+    
+    detector_type_ = DetectorType::Srpm210;  //This is deduced from the file
+    instrument_type_ = "Spectroscopic Portal Monitor";
+    manufacturer_ = "Leidos";
+    instrument_model_ = "SRPM-210";
+    
+    //Further information it would be nice to fill out:
+    //instrument_id_ = "";
+    //remarks_.push_back( "..." );
+    //lane_number_ = ;
+    //measurement_location_name_ = "";
+    //inspection_ = "";
+    //measurment_operator_ = "";
+    
+    cleanup_after_load();
+  }catch( std::exception & )
+  {
+    reset();
+    return false;
+  }
+  
+  return true;
+}//bool load_from_srpm210_csv( std::istream &input );
+  
+  
 bool Measurement::write_txt( std::ostream& ostr ) const
 {
   const char *endline = "\r\n";
@@ -882,6 +1223,32 @@ bool SpecFile::write_txt( std::ostream& ostr ) const
   
   return !ostr.bad();
 }//bool write_txt( std::ostream& ostr ) const
+
+  
+bool Measurement::write_csv( std::ostream& ostr ) const
+{
+  const char *endline = "\r\n";
+  
+  ostr << "Energy, Data" << endline;
+  
+  for( size_t i = 0; i < gamma_counts_->size(); ++i )
+    ostr << channel_energies_->at(i) << "," << gamma_counts_->operator[](i) << endline;
+  
+  ostr << endline;
+  
+  return !ostr.bad();
+}//bool Measurement::write_csv( std::ostream& ostr ) const
+  
+  
+bool SpecFile::write_csv( std::ostream& ostr ) const
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+    
+  for( const std::shared_ptr<const Measurement> meas : measurements_ )
+    meas->write_csv( ostr );
+    
+  return !ostr.bad();
+}//bool write_csv( std::ostream& ostr ) const
 
 }//namespace SpecUtils
 

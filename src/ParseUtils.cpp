@@ -21,6 +21,8 @@
 
 #include <cmath>
 #include <string>
+#include <limits>
+#include <sstream>
 
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
@@ -29,8 +31,84 @@
 using namespace std;
 
 
+namespace
+{
+  bool toFloat( const std::string &str, float &f )
+  {
+    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
+    const int nconvert = sscanf( str.c_str(), "%f", &f );
+    return (nconvert == 1);
+  }
+  
+}//namespace
+
 namespace SpecUtils
 {
+void expand_counted_zeros( const vector<float> &data, vector<float> &return_answer )
+{
+  vector<float> answer;
+  answer.reserve( 1024 );
+  vector<float>::const_iterator iter;
+  for( iter = data.begin(); iter != data.end(); iter++)
+  {
+    if( (*iter != 0.0f) || (iter+1==data.end()) || (*(iter+1)==0.0f) )
+      answer.push_back(*iter);
+    else
+    {
+      iter++;
+      const size_t nZeroes = ((iter==data.end()) ? 0u : static_cast<size_t>(floor(*iter + 0.5f)) );
+      
+      if( ((*iter) <= 0.5f) || ((answer.size() + nZeroes) > 131072) )
+        throw runtime_error( "Invalid counted zeros: too many total elements, or negative number of zeros" );
+      
+      for( size_t k = 0; k < nZeroes; ++k )
+        answer.push_back( 0.0f );
+    }//if( at a non-zero value, the last value, or the next value is zero) / else
+  }//for( iterate over data, iter )
+  
+  answer.swap( return_answer );
+}//vector<float> expand_counted_zeros( const vector<float> &data )
+  
+  
+void compress_to_counted_zeros( const std::vector<float> &input, std::vector<float> &results )
+{
+  results.clear();
+  
+  //Previous to 20181120 1E-8 was used, but this caused problems with PCF files
+  //  from GADRAS that were not Poisson varied.  FLT_EPSILON is usually 1.19e-7f
+  //  which is still to big!  So chose 10*FLT_MIN (FLT_MIN is something 1E-37)
+  //  which worked with a GADRAS Db.pcf I checked.
+  const float epsilon = 10.0f * std::numeric_limits<float>::min();
+  
+  
+  const size_t nBin = input.size();
+  
+  for( size_t bin = 0; bin < nBin; ++bin )
+  {
+    const bool isZero = (fabs(input[bin]) < epsilon);
+    
+    if( !isZero ) results.push_back( input[bin] );
+    else          results.push_back( 0.0f );
+    
+    if( isZero )
+    {
+      size_t nBinZeroes = 0;
+      while( ( bin < nBin ) && ( fabs( input[bin] ) < epsilon) )
+      {
+        ++nBinZeroes;
+        ++bin;
+      }//while more zero bins
+      
+      results.push_back( static_cast<float>(nBinZeroes) );
+      
+      if( bin != nBin )
+        --bin;
+    }//if( input[bin] == 0.0 )
+  }//for( size_t bin = 0; bin < input.size(); ++bin )
+}//void compress_to_counted_zeros(...)
+
+  
+  
 double conventional_lat_or_long_str_to_flt( std::string input )
 {
   input.erase( std::remove_if(input.begin(), input.end(), [](char c) -> bool {
@@ -115,4 +193,198 @@ bool parse_deg_min_sec_lat_lon( const char *str, const size_t len,
   
   return false;
 }//bool parse_deg_min_sec_lat_lon(
+  
+  
+int sample_num_from_remark( std::string remark )
+{
+    SpecUtils::to_lower_ascii(remark);
+    size_t pos = remark.find( "survey" );
+    
+    if( pos == string::npos )
+      pos = remark.find( "sample" );
+    
+    if( pos == string::npos )
+    {
+      //    cerr << "Remark '" << remark << "'' didnt contain a sample num" << endl;
+      return -1;
+    }
+    
+    pos = remark.find_first_not_of( " \t=", pos+6 );
+    if( pos == string::npos )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+      string msg = "Remark '" + remark + "'' didnt have a integer sample num";
+      log_developer_error( __func__, msg.c_str() );
+#endif
+      return -1;
+    }
+    
+    int num = -1;
+    if( !(stringstream(remark.c_str()+pos) >> num) )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+      string msg = "ample_num_from_remark(...): Error converting '" + string(remark.c_str()+pos) + "' to int";
+      log_developer_error( __func__, msg.c_str() );
+#endif
+      return -1;
+    }//if( cant convert result to int )
+    
+    return num;
+}//int sample_num_from_remark( const std::string &remark )
+  
+
+  
+float speed_from_remark( std::string remark )
+{
+  to_lower_ascii( remark );
+  size_t pos = remark.find( "speed" );
+  
+  if( pos == string::npos )
+    return 0.0;
+  
+  pos = remark.find_first_not_of( "= \t", pos+5 );
+  if( pos == string::npos )
+    return 0.0;
+  
+  const string speedstr = remark.substr( pos );
+  
+  float speed = 0.0;
+  if( !toFloat( speedstr, speed) )
+  {
+#if( PERFORM_DEVELOPER_CHECKS )
+    string msg = "speed_from_remark(...): couldn conver to number: '" + speedstr + "' to float";
+    log_developer_error( __func__, msg.c_str() );
+#endif
+    return 0.0;
+  }//if( !(stringstream(speedstr) >> speed) )
+  
+  
+  for( size_t i = 0; i < speedstr.size(); ++i )
+  {
+    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') )
+    {
+      float convertion = 0.0f;
+      
+      const string unitstr = speedstr.substr( i );
+      const size_t unitstrlen = unitstr.size();
+      
+      if( unitstrlen>=3 && unitstr.substr(0,3) == "m/s" )
+        convertion = 1.0f;
+      else if( unitstrlen>=3 && unitstr.substr(0,3) == "mph" )
+        convertion = 0.44704f;
+      else
+      {
+#if( PERFORM_DEVELOPER_CHECKS )
+        string msg = "speed_from_remark(...): Unknown speed unit: '" + unitstr + "'";
+        log_developer_error( __func__, msg.c_str() );
+#endif
+      }
+      
+      return convertion*speed;
+    }//if( we found the start of the units )
+  }//for( size_t i = 0; i < speedstr.size(); ++i )
+  
+  return 0.0;
+}//float speed_from_remark( const std::string &remark )
+  
+  
+  
+std::string detector_name_from_remark( const std::string &remark )
+{
+  //Check for the Gadras convention similar to "Det=Aa1"
+  if( SpecUtils::icontains(remark, "det") )
+  {
+    //Could use a regex here... maybe someday I'll upgrade
+    string remarkcopy = remark;
+    
+    string remarkcopylowercase = remarkcopy;
+    SpecUtils::to_lower_ascii( remarkcopylowercase );
+    
+    size_t pos = remarkcopylowercase.find( "det" );
+    if( pos != string::npos )
+    {
+      remarkcopy = remarkcopy.substr(pos);
+      pos = remarkcopy.find_first_of( "= " );
+      if( pos != string::npos )
+      {
+        string det_identifier = remarkcopy.substr(0,pos);
+        SpecUtils::to_lower_ascii( det_identifier );
+        SpecUtils::trim( det_identifier ); //I dont htink this is necassarry
+        if( det_identifier=="det" || det_identifier=="detector"
+           || (SpecUtils::levenshtein_distance(det_identifier,"detector") < 3) ) //Allow two typos of "detector"; arbitrary
+        {
+          remarkcopy = remarkcopy.substr(pos);  //get rid of the "det="
+          while( remarkcopy.length() && (remarkcopy[0]==' ' || remarkcopy[0]=='=') )
+            remarkcopy = remarkcopy.substr(1);
+          pos = remarkcopy.find_first_of( ' ' );
+          return remarkcopy.substr(0,pos);
+        }
+      }
+    }
+    
+  }//if( SpecUtils::icontains(remark, "det") )
+  
+  
+  vector<string> split_contents;
+  split( split_contents, remark, ", \t\r\n" );
+  
+  for( const string &field : split_contents )
+  {
+    if( (field.length() < 3) ||  !isdigit(field[field.size()-1])
+       || (field.length() > 4) ||  (field[1] != 'a') )
+      continue;
+    
+    if( field[0]!='A' && field[0]!='B' && field[0]!='C' && field[0]!='D' )
+      continue;
+    
+    return field;
+  }//for( size_t i = 0; i < split_contents.size(); ++i )
+  
+  return "";
+}//std::string detector_name_from_remark( const std::string &remark )
+  
+  
+  
+float dose_units_usvPerH( const char *str, const size_t str_length )
+{
+  if( !str )
+    return 0.0f;
+  
+  if( icontains( str, str_length, "uSv", 3 )
+     || icontains( str, str_length, "\xc2\xb5Sv", 4) )
+    return 1.0f;
+  
+  //One sievert equals 100 rem.
+  if( icontains( str, str_length, "&#xB5;Rem/h", 11 ) ) //micro
+    return 0.01f;
+  
+  return 0.0f;
+}//float dose_units_usvPerH( const char *str )
+
+  
+const std::string &convert_n42_instrument_type_from_2006_to_2012( const std::string &classcode )
+{
+  static const string PortalMonitor = "Portal Monitor";
+  static const string SpecPortal = "Spectroscopic Portal Monitor";
+  static const string RadionuclideIdentifier = "Radionuclide Identifier";
+  static const string PersonalRadiationDetector = "Spectroscopic Personal Radiation Detector"; //hmm, prob not best
+  static const string SurveyMeter = "Backpack or Personal Radiation Scanner";
+  static const string Spectrometer = "Spectroscopic Personal Radiation Detector";
+  
+  if( iequals_ascii(classcode, "PortalMonitor") || iequals_ascii(classcode, "PVT Portal") )
+    return PortalMonitor;
+  else if( iequals_ascii(classcode, "SpecPortal") )
+    return SpecPortal;
+  else if( iequals_ascii(classcode, "RadionuclideIdentifier") )
+    return RadionuclideIdentifier;
+  else if( iequals_ascii(classcode, "PersonalRadiationDetector") )
+    return PersonalRadiationDetector;
+  else if( iequals_ascii(classcode, "SurveyMeter") )
+    return SurveyMeter;
+  else if( iequals_ascii(classcode, "Spectrometer") )
+    return Spectrometer;
+  
+  return classcode;
+}//const std::string &convert_n42_instrument_type_2006_to_2012( const std::string &input )
+  
 }//namespace SpecUtils

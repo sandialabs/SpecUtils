@@ -671,6 +671,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
 #endif
           if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )
             parse_warnings_.emplace_back( std::move(msg) );
+
         }
         
         meas->calibration_coeffs_.push_back( EgyCal[0] );

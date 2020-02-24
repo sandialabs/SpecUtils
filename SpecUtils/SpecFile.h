@@ -371,66 +371,11 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                        const float lowenergy, const float upperunergy );
 
 
-// XXX - all these functions should be placed in a namespace, and
-//      possible in a seperate source/header file
- 
-//expand_counted_zeros(...): requires zeros to be identically 0.0f, in order
-//  be expanded by the next value.  The value following a zero is rounded to
-//  nearest integer (no integer check is performed).
-void expand_counted_zeros( const std::vector<float> &data,
-                           std::vector<float> &results );
-
-//compress_to_counted_zeros(...): contents less than 1E-8 are assumed to be
-//  zeros
-void compress_to_counted_zeros( const std::vector<float> &data,
-                                std::vector<float> &results );
-
-
-int sample_num_from_remark( std::string remark ); //returns -1 on error
-float speed_from_remark( std::string remark );
-std::string detector_name_from_remark( const std::string &remark );
-
-
-//dose_units_usvPerH(...): returns the dose units indicated by the string, in
-//  units such that ia micro-sievert per hour is equal to 1.0.
-//Currently only handles the label "uSv" and "uRem/h", e.g. fnctn not really
-//  impleneted.
-//Returns 0.0 on error.
-float dose_units_usvPerH( const char *str, const size_t str_length );
-
-//int detector_num_from_name( std::string name );
-
-//Checks the first 512 bytes of data for a few magic strings that *should* be
-//  in N42 files; if it contains any of them, it returns true
-bool is_candidate_n42_file( const char *data );
-
-//Same as other version of this function, but input does not need to be null
-//  terminated.
-bool is_candidate_n42_file( const char * const data, const char * const data_end );
-
-//Checks if the input data might be a N42 file, and if it might be UTF16 instead
-//  of UTF8, and if so, uses a very niave/horrible approach of just eliminating
-//  '\0' bytes from the input data.  Returns new data_end (or if no changes, the
-//  one passed in)
-char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end );
-
-//setAnalysisInformation(...): adds to analysis the information
-//  in AnalysisResults node.  Currently only adds the NuclideAnalysis to
-//  for a select few number of detectors.
-void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
-                             DetectorAnalysis &analysis );
-
-void add_analysis_results_to_2012_N42( const DetectorAnalysis &ana,
-                                      ::rapidxml::xml_node<char> *RadInstrumentData,
-                                      std::mutex &xmldocmutex );
-
 //detectorTypeToString(): returns string which cooresponds to the convention
 //  InterSpec is using to represent detector response functions on disk.
 const std::string &detectorTypeToString( const DetectorType type );
 
-//We have to convert from 2006 N42 to 2012 instrument typs
-const std::string &convert_n42_instrument_type_from_2006_to_2012(
-                                                    const std::string &input );
+
 
 
 /*
@@ -500,49 +445,49 @@ public:
   //Simple accessor functions (cheap to call):
   
   //live_time(): returned in units of seconds.  Will be 0 if not known.
-  inline float live_time() const;
+  float live_time() const;
   
   //real_time(): returned in units of seconds.  Will be 0 if not known.
-  inline float real_time() const;
+  float real_time() const;
   
   //contained_neutron(): returns whether or not the measurment is thought to
   //  contain the possibility to detect neutrons (e.g. if a neutron detector was
   //  also present).  This may be true even if zero neutrons were detected.  For
   //  some detector types this value is infered through previous hardware
   //  knowledge.
-  inline bool contained_neutron() const;
+  bool contained_neutron() const;
   
   //sample_number(): the sample number assigned to this Measurment.  If the
   //  'DontChangeOrReorderSamples' flag wasnt passed to the
   //  SpecFile::cleanup_after_load() function, then this value may be
   //  assigned during file parsing.
-  inline int sample_number() const;
+  int sample_number() const;
   
   //title(): some formats such as .PCF or .DAT files will contain a title for
   //  the spectrum, or this may be set through set_title(...).
-  inline const std::string &title() const;
+  const std::string &title() const;
   
   //occupied(): returns the occupancy status.  Detectors which do not contain
   //  this capability will return 'Unknown'
-  inline OccupancyStatus occupied() const;
+  OccupancyStatus occupied() const;
   
   //gamma_count_sum(): returns the sum of channel data counts for gamma data.
-  inline double gamma_count_sum() const;
+  double gamma_count_sum() const;
   
   //neutron_counts_sum(): returns the sum of neutron counts.
-  inline double neutron_counts_sum() const;
+  double neutron_counts_sum() const;
   
   //speed(): returns the speed of the vehicle, object or detector, in m/s if
   //  known.  Otherwise return 0.0.
-  inline float speed() const;
+  float speed() const;
   
   //latitude(): returns the latitude of the measurment, in degrees, if known.
   //  Returns -999.9 otherwise.
-  inline double latitude() const;
+  double latitude() const;
   
   //longitude(): returns the longitude, in degrees, of the measurment if known.
   //  Returns -999.9 otherwise.
-  inline double longitude() const;
+  double longitude() const;
   
   //has_gps_info(): returns true only if both latitude and longitude are valid.
   bool has_gps_info() const;
@@ -550,55 +495,55 @@ public:
   
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns boost::posix_time::not_a_date_time otherwise.
-  inline const boost::posix_time::ptime &position_time() const;
+  const boost::posix_time::ptime &position_time() const;
   
   //detector_name(): returns the name of the detector within the device.
   //  May be empty string for single detector systems, or otherwise.
   //  ex: Aa1, Ba1, etc.
-  inline const std::string &detector_name() const;
+  const std::string &detector_name() const;
   
   //detector_number(): returns the detector number of the detector within the
   //  detection system.  Will have a 1 to 1 coorespondence with detector_name().
-  inline int detector_number() const;
+  int detector_number() const;
   
   //detector_type():  If the file specifies the detector type string, it _may_
   //  be retrieved here.  Note there is not much consistency between file
   //  formats in what you should expect to get from this function.
   //  e.x. "HPGe 50%", "NaI"
-  inline const std::string &detector_type() const;
+  const std::string &detector_type() const;
   
   //quality_status():  If not specified in file, will have value of 'Missing'.
-  inline QualityStatus quality_status() const;
+  QualityStatus quality_status() const;
   
   //source_type():  Returns the source type if known.  For some formats (notably
   //  PCF snd spectroscopic daily files), anything not background will be marked
   //  as foreground (this behaviour may be cahnged in the future).  For other
   //  formats if not known, 'Unknown' is returned.
-  inline SourceType source_type() const;
+  SourceType source_type() const;
   
   //energy_calibration_model(): returns calibration model used for energy
   //  binning.  If a value of 'InvalidEquationType' is returned, then
   //  channel_energies() may or may not return a valid pointer; otherwise, if
   //  this Measurment is part of a MeasurmentInfo object constructed by parsing
   //  a file, then channel_energies() pointer _should_ be valid.
-  inline SpecUtils::EnergyCalType energy_calibration_model() const;
+  SpecUtils::EnergyCalType energy_calibration_model() const;
   
   //remarks(): the list of remarks found while parsing this record from the file
   //  that pertain to this record specifically.  See also
   //  MeasurmentInformation::remarks().
-  inline const std::vector<std::string> &remarks() const;
+  const std::vector<std::string> &remarks() const;
   
   /** Warnings from parsing that apply to this measurement.
    */
-  inline const std::vector<std::string> &parse_warnings() const;
+  const std::vector<std::string> &parse_warnings() const;
   
   //start_time(): start time of the measurement.  Returns
   //  boost::posix_time::not_a_date_time if could not be determined.
-  inline const boost::posix_time::ptime &start_time() const;
+  const boost::posix_time::ptime &start_time() const;
 
   //start_time_copy(): start time of the measurement.  Returns
   //  boost::posix_time::not_a_date_time if could not be determined.
-  inline const boost::posix_time::ptime start_time_copy() const;
+  const boost::posix_time::ptime start_time_copy() const;
   
   //calibration_coeffs(): returns the energy calibration coeificients.
   //  Returned vector should have at least two elements for Polynomial and
@@ -607,12 +552,12 @@ public:
   //  five.  For LowerChannelEdge calibration model the returned vector will
   //  most likely be empty (a memory optimization, may be changed in the future)
   //  so you should instead call channel_energies().
-  inline const std::vector<float> &calibration_coeffs() const;
+  const std::vector<float> &calibration_coeffs() const;
   
   //deviation_pairs(): returns the energy deviation pairs.  Sometimes also
   // refered to as nonlinear deviation pairs.
   //  TODO: insert description of how to actually use these.
-  inline const std::vector<std::pair<float,float>> &deviation_pairs() const;
+  const std::vector<std::pair<float,float>> &deviation_pairs() const;
   
   //channel_energies(): returns a vector containing the starting (lower) energy
   //  of the gamma channels, calculated using the energy calibration
@@ -627,20 +572,20 @@ public:
   //  calibration model files, channel_energies() may have 1 more channels (to
   //  indicate end of last channel energy).
   //  Returned pointer may be null if energy calibration is unknown/unspecified.
-  inline const std::shared_ptr< const std::vector<float> > &
+  const std::shared_ptr< const std::vector<float> > &
                                                        channel_energies() const;
   
   //gamma_counts(): the channel counts of the gamma data.
   //  Returned pointer may be null if no gamma data present, or not thie
   //  Measurment is not properly initialized.
-  inline const std::shared_ptr< const std::vector<float> > &
+  const std::shared_ptr< const std::vector<float> > &
                                                            gamma_counts() const;
   
   //neutron_counts(): the channel counts of neutron data.  Currently none of
   //  the file formats give channelized neutron data, so this function may
   //  be removed in the future; use neutron_counts_sum() instead.  Currently
   //  returned vector will have a size 1 if the file contained neutron counts.
-  inline const std::vector<float> &neutron_counts() const;
+  const std::vector<float> &neutron_counts() const;
 
   //compare_by_sample_det_time: compares by sample_number_, and then
   //  detector_number_, then by start_time_, then source_type_
@@ -648,22 +593,22 @@ public:
                                           const std::shared_ptr<const Measurement> &rhs );
   
   //set_title(): sets the title property.
-  inline void set_title( const std::string &title );
+  void set_title( const std::string &title );
   
   //set_gamma_counts(...): XXX - should deprecate!
   //  reset real and live times, updates total gamma counts
-  inline void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
+  void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                 const float livetime, const float realtime );
   
   //set_neutron_counts(): XXX - should deprecate!
   //   updates total nuetron counts.  Marks containing neutrons based on
   //   if input has any entries or not.
-  inline void set_neutron_counts( const std::vector<float> &counts );
+  void set_neutron_counts( const std::vector<float> &counts );
   
   //set_channel_energies(...): XXX - should deprecate!
   //  if channel_energies_ or gamma_counts_ must be same number channels as
   //  before
-  inline void set_channel_energies( std::shared_ptr<const std::vector<float>> counts );
+  void set_channel_energies( std::shared_ptr<const std::vector<float>> counts );
 
   //popuplate_channel_energies_from_coeffs(): uses calibration_coeffs_ and 
   //  deviation_pairs_ to populate channel_energies_.
@@ -688,14 +633,14 @@ public:
   //  e.g. the first binn is bin 1, NOT bin 0
   //
   //All of these functions are depreciated!  (dont use them anywhere new)
-  inline float GetBinCenter( int bin ) const;  //depreciated
-  inline float GetBinContent( int bin ) const; //depreciated
-  inline float GetBinLowEdge( int bin ) const; //depreciated
-  inline float GetBinWidth( int bin ) const;   //depreciated
-  inline int GetNbinsX() const;                //depreciated
-  inline float Integral( int binx1=0, int binx2 = -1 ) const; //depreciated
-  inline int FindFixBin( float x ) const;      //depreciated
-  inline bool CheckBinRange( int bin ) const;  //depreciated
+  float GetBinCenter( int bin ) const;  //depreciated
+  float GetBinContent( int bin ) const; //depreciated
+  float GetBinLowEdge( int bin ) const; //depreciated
+  float GetBinWidth( int bin ) const;   //depreciated
+  int GetNbinsX() const;                //depreciated
+  float Integral( int binx1=0, int binx2 = -1 ) const; //depreciated
+  int FindFixBin( float x ) const;      //depreciated
+  bool CheckBinRange( int bin ) const;  //depreciated
 
   //I want to get rid of all the CERN ROOT inspired functions (who uses 1 based
   //  indexing?), so I am slowly re-writing them in a (more) sane manner below.
@@ -703,41 +648,41 @@ public:
   //num_gamma_channels(): returns the minimum number of channels of either
   //  this->channel_energies_ or this->gamma_counts_; if either is not defined
   //  0 is returned.
-  inline size_t num_gamma_channels() const;
+  size_t num_gamma_channels() const;
   
   //find_gamma_channel(): returns gamma channel containing 'energy'.  If
   //  'energy' is below the zeroth channel energy, 0 is returned; if 'energy'
   //  is above last channels energy, the index for the last channel is returned.
   //  If this->channel_energies_ is not defined, an exception is thrown.
-  inline size_t find_gamma_channel( const float energy ) const;
+  size_t find_gamma_channel( const float energy ) const;
   
   //gamma_channel_content(): returns the gamma channel contents for the
   //  specified channel.  Returns 0 if this->gamma_counts_ is not defined, or
   //  if specified channel is invalid (to large).
-  inline float gamma_channel_content( const size_t channel ) const;
+  float gamma_channel_content( const size_t channel ) const;
   
   //gamma_channel_lower(): returns the lower energy of the specified gamma
   //  channel.
   //Throws exception if invalid channel number, or  !this->channel_energies_.
-  inline float gamma_channel_lower( const size_t channel ) const;
+  float gamma_channel_lower( const size_t channel ) const;
   
   //gamma_channel_center(): returns the central energy of the specified
   //  channel.  For the last channel, it is assumed its width is the same as
   //  the second to last channel.
   //Throws exception if invalid channel number, or  !this->channel_energies_.
-  inline float gamma_channel_center( const size_t channel ) const;
+  float gamma_channel_center( const size_t channel ) const;
 
   //gamma_channel_upper(): returns the energy just past the energy range the
   //  specified channel contains (e.g. the lower edge of the next bin).  For the
   //  last bin, the bin width is assumed to be the same as the previous bin.
   //Throws exception if invalid channel number, or  !this->channel_energies_.
-  inline float gamma_channel_upper( const size_t channel ) const;
+  float gamma_channel_upper( const size_t channel ) const;
 
   //gamma_channel_width(): returns the energy width of the specified channel.
   //  For the last channel, it is assumed its width is the same as the second
   //  to last channel.
   //Throws exception if invalid channel number, or  !this->channel_energies_.
-  inline float gamma_channel_width( const size_t channel ) const;
+  float gamma_channel_width( const size_t channel ) const;
   
   //gamma_integral(): get the integral of gamma counts between lower_energy and
   //  upper_energy; linear approximation is used for fractions of channels.
@@ -759,7 +704,7 @@ public:
   //  The returned shared pointer may be null.
   //  The exact same as channel_energies(), just renamed to be consistent with
   //  above accessors.
-  inline const std::shared_ptr< const std::vector<float> > &
+  const std::shared_ptr< const std::vector<float> > &
                                                  gamma_channel_energies() const;
   
   //gamma_channel_contents(): returns gamma_counts_, the gamma channel data
@@ -767,11 +712,11 @@ public:
   //  The returned shared pointer may be null.
   //  The exact same as gamma_counts(), just renamed to be consistent with
   //  above accessors.
-  inline const std::shared_ptr< const std::vector<float> > &
+  const std::shared_ptr< const std::vector<float> > &
                                                  gamma_channel_contents() const;
   
-  inline float gamma_energy_min() const;
-  inline float gamma_energy_max() const;
+  float gamma_energy_min() const;
+  float gamma_energy_max() const;
   
   
   //Functions to write this Measurement object out to external formats
@@ -794,9 +739,9 @@ public:
 
 protected:
   
-  inline void set_start_time( const boost::posix_time::ptime &timestamp );
-  inline void set_remarks( const std::vector<std::string> &remar );
-  inline void set_source_type( const SourceType type );
+  void set_start_time( const boost::posix_time::ptime &timestamp );
+  void set_remarks( const std::vector<std::string> &remar );
+  void set_source_type( const SourceType type );
 
   
   //Functions to set the information in this Measurement object from external
@@ -1093,69 +1038,69 @@ public:
    An example condition when a message might be made is if it is know the
    neutron real time can sometimes not coorespond to the gamma real time.
    */
-  inline const std::vector<std::string> &parse_warnings() const;
+  const std::vector<std::string> &parse_warnings() const;
   
   //modified(): intended to indicate if object has been modified since last save
-  inline bool modified() const;
+  bool modified() const;
   
   //reset_modified(): intended to be called after saving object
-  inline void reset_modified();
+  void reset_modified();
   
   //modified_since_decode(): returns if object has been modified since decoding
-  inline bool modified_since_decode() const;
+  bool modified_since_decode() const;
 
   //reset_modified_since_decode(): intended to be called right after any initial
   //  adjustments following openeing of an object
-  inline void reset_modified_since_decode();
+  void reset_modified_since_decode();
 
   //simple accessors (no thread locks are aquired)
-  inline float gamma_live_time() const;
-  inline float gamma_real_time() const;
-  inline double gamma_count_sum() const;
-  inline double neutron_counts_sum() const;
-  inline const std::string &filename() const;
-  inline const std::vector<std::string> &detector_names() const;
-  inline const std::vector<int> &detector_numbers() const;
-  inline const std::vector<std::string> &neutron_detector_names() const;
-  inline const std::string &uuid() const;
-  inline const std::vector<std::string> &remarks() const;
-  inline int lane_number() const;
-  inline const std::string &measurement_location_name() const;
-  inline const std::string &inspection() const;
-  inline const std::string &measurment_operator() const;
-  inline const std::set<int> &sample_numbers() const;
-  inline size_t num_measurements() const;
-  inline DetectorType detector_type() const;
+  float gamma_live_time() const;
+  float gamma_real_time() const;
+  double gamma_count_sum() const;
+  double neutron_counts_sum() const;
+  const std::string &filename() const;
+  const std::vector<std::string> &detector_names() const;
+  const std::vector<int> &detector_numbers() const;
+  const std::vector<std::string> &neutron_detector_names() const;
+  const std::string &uuid() const;
+  const std::vector<std::string> &remarks() const;
+  int lane_number() const;
+  const std::string &measurement_location_name() const;
+  const std::string &inspection() const;
+  const std::string &measurment_operator() const;
+  const std::set<int> &sample_numbers() const;
+  size_t num_measurements() const;
+  DetectorType detector_type() const;
   //instrument_type(): From ICD1 Specs InstrumentType can be:
   //   PortalMonitor, SpecPortal, RadionuclideIdentifier,
   //   PersonalRadiationDetector, SurveyMeter, Spectrometer, Other
-  inline const std::string &instrument_type() const;
-  inline const std::string &manufacturer() const;
-  inline const std::string &instrument_model() const;
-  inline const std::string &instrument_id() const;
-  inline std::vector< std::shared_ptr<const Measurement> > measurements() const;
-  inline std::shared_ptr<const Measurement> measurement( size_t num ) const;
-  inline std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
+  const std::string &instrument_type() const;
+  const std::string &manufacturer() const;
+  const std::string &instrument_model() const;
+  const std::string &instrument_id() const;
+  std::vector< std::shared_ptr<const Measurement> > measurements() const;
+  std::shared_ptr<const Measurement> measurement( size_t num ) const;
+  std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   bool has_gps_info() const; //mean longitude/latitude are valid gps coords
-  inline double mean_latitude() const;
-  inline double mean_longitude() const;
+  double mean_latitude() const;
+  double mean_longitude() const;
 
   //passthrough(): returns true if it looked like this data was from a portal
   //  or search mode data.  Not 100% right always, but pretty close.
   bool passthrough() const;
   
   //simple setters (no thread locks are aquired)
-  inline void set_filename( const std::string &n );
-  inline void set_remarks( const std::vector<std::string> &n );
-  inline void set_uuid( const std::string &n );
-  inline void set_lane_number( const int num );
-  inline void set_measurement_location_name( const std::string &n );
-  inline void set_inspection( const std::string &n );
-  inline void set_instrument_type( const std::string &n );
-  inline void set_detector_type( const DetectorType type );
-  inline void set_manufacturer( const std::string &n );
-  inline void set_instrument_model( const std::string &n );
-  inline void set_instrument_id( const std::string &n );
+  void set_filename( const std::string &n );
+  void set_remarks( const std::vector<std::string> &n );
+  void set_uuid( const std::string &n );
+  void set_lane_number( const int num );
+  void set_measurement_location_name( const std::string &n );
+  void set_inspection( const std::string &n );
+  void set_instrument_type( const std::string &n );
+  void set_detector_type( const DetectorType type );
+  void set_manufacturer( const std::string &n );
+  void set_instrument_model( const std::string &n );
+  void set_instrument_id( const std::string &n );
 
 
   //A little more complex setters:
@@ -2279,707 +2224,6 @@ public:
                            const DetectorAnalysis &rhs );
 #endif
 };//struct DetectorAnalysisResults
-
-
-
-//implementation of inlined functions
-bool SpecFile::modified() const
-{
-  return modified_;
-}
-
-void SpecFile::reset_modified()
-{
-  std::unique_lock<std::recursive_mutex> lock( mutex_ );
-  modified_ = false;
-}
-
-void SpecFile::reset_modified_since_decode()
-{
-  std::unique_lock<std::recursive_mutex> lock( mutex_ );
-  modifiedSinceDecode_ = false;
-}
-
-bool SpecFile::modified_since_decode() const
-{
-  return modifiedSinceDecode_;
-}
-
-float SpecFile::gamma_live_time() const
-{
-  return gamma_live_time_;
-}
-
-float SpecFile::gamma_real_time() const
-{
-  return gamma_real_time_;
-}
-
-double SpecFile::gamma_count_sum() const
-{
-  return gamma_count_sum_;
-}
-
-double SpecFile::neutron_counts_sum() const
-{
-  return neutron_counts_sum_;
-}
-
-const std::string &SpecFile::filename() const
-{
-  return filename_;
-}
-
-const std::vector<std::string> &SpecFile::detector_names() const
-{
-  return detector_names_;
-}
-
-const std::vector<int> &SpecFile::detector_numbers() const
-{
-  return detector_numbers_;
-}
-
-const std::vector<std::string> &SpecFile::neutron_detector_names() const
-{
-  return neutron_detector_names_;
-}
-
-const std::string &SpecFile::uuid() const
-{
-  return uuid_;
-}
-
-const std::vector<std::string> &SpecFile::remarks() const
-{
-  return remarks_;
-}
-
-const std::vector<std::string> &SpecFile::parse_warnings() const
-{
-  return parse_warnings_;
-}
-  
-int SpecFile::lane_number() const
-{
-  return lane_number_;
-}
-
-const std::string &SpecFile::measurement_location_name() const
-{
-  return measurement_location_name_;
-}
-
-const std::string &SpecFile::inspection() const
-{
-  return inspection_;
-}
-
-double Measurement::latitude() const
-{
-  return latitude_;
-}
-
-double Measurement::longitude() const
-{
-  return longitude_;
-}
-
-
-const boost::posix_time::ptime &Measurement::position_time() const
-{
-  return position_time_;
-}
-
-const std::string &SpecFile::measurment_operator() const
-{
-  return measurment_operator_;
-}
-
-const std::set<int> &SpecFile::sample_numbers() const
-{
-//  std::unique_lock<std::recursive_mutex> lock( mutex_ );
-//  set<int> answer;
-//  fore( const std::shared_ptr<Measurement> &meas : measurements_ )
-//    answer.insert( meas->sample_number_ );
-//  return answer;
-  return sample_numbers_;
-}//set<int> sample_numbers() const
-
-
-size_t SpecFile::num_measurements() const
-{
-  size_t n;
-
-  {
-    std::unique_lock<std::recursive_mutex> lock( mutex_ );
-    n = measurements_.size();
-  }
-
-  return n;
-}//size_t num_measurements() const
-
-
-std::shared_ptr<const Measurement> SpecFile::measurement(
-                                                             size_t num ) const
-{
-  std::unique_lock<std::recursive_mutex> lock( mutex_ );
-  const size_t n = measurements_.size();
- 
-  if( num >= n )
-    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index" );
-  
-  return measurements_[num];
-}
-
-
-DetectorType SpecFile::detector_type() const
-{
-  return detector_type_;
-}
-
-const std::string &SpecFile::instrument_type() const
-{
-  return instrument_type_;
-}
-
-const std::string &SpecFile::manufacturer() const
-{
-  return manufacturer_;
-}
-
-const std::string &SpecFile::instrument_model() const
-{
-  return instrument_model_;
-}
-
-const std::string &SpecFile::instrument_id() const
-{
-  return instrument_id_;
-}
-
-std::vector< std::shared_ptr<const Measurement> > SpecFile::measurements() const
-{
-  std::unique_lock<std::recursive_mutex> lock( mutex_ );
-  
-  std::vector< std::shared_ptr<const Measurement> > answer;
-  for( size_t i = 0; i < measurements_.size(); ++i )
-    answer.push_back( measurements_[i] );
-  return answer;
-}//std::vector< std::shared_ptr<const Measurement> > measurements() const
-
-
-std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
-{
-  return detectors_analysis_;
-}
-
-
-double SpecFile::mean_latitude() const
-{
-  return mean_latitude_;
-}
-
-double SpecFile::mean_longitude() const
-{
-  return mean_longitude_;
-}
-
-void SpecFile::set_filename( const std::string &n )
-{
-  filename_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_remarks( const std::vector<std::string> &n )
-{
-  remarks_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_uuid( const std::string &n )
-{
-  uuid_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_lane_number( const int num )
-{
-  lane_number_ = num;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_measurement_location_name( const std::string &n )
-{
-  measurement_location_name_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_inspection( const std::string &n )
-{
-  inspection_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_instrument_type( const std::string &n )
-{
-  instrument_type_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_detector_type( const DetectorType type )
-{
-  detector_type_ = type;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_manufacturer( const std::string &n )
-{
-  manufacturer_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_instrument_model( const std::string &n )
-{
-  instrument_model_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-void SpecFile::set_instrument_id( const std::string &n )
-{
-  instrument_id_ = n;
-  modified_ = modifiedSinceDecode_ = true;
-}
-
-
-
-
-//implementation of inline Measurment functions
-float Measurement::live_time() const
-{
-  return live_time_;
-}
-
-float Measurement::real_time() const
-{
-  return real_time_;
-}
-
-bool Measurement::contained_neutron() const
-{
-  return contained_neutron_;
-}
-
-int Measurement::sample_number() const
-{
-  return sample_number_;
-}
-
-OccupancyStatus Measurement::occupied() const
-{
-  return occupied_;
-}
-
-double Measurement::gamma_count_sum() const
-{
-  return gamma_count_sum_;
-}
-
-double Measurement::neutron_counts_sum() const
-{
-  return neutron_counts_sum_;
-}
-
-float Measurement::speed() const
-{
-  return speed_;
-}
-
-const std::string &Measurement::detector_name() const
-{
-  return detector_name_;
-}
-
-int Measurement::detector_number() const
-{
-  return detector_number_;
-}
-
-const std::string &Measurement::detector_type() const
-{
-  return detector_description_;
-}
-
-SpecUtils::QualityStatus Measurement::quality_status() const
-{
-  return quality_status_;
-}
-
-SourceType Measurement::source_type() const
-{
-  return source_type_;
-}
-
-
-SpecUtils::EnergyCalType Measurement::energy_calibration_model() const
-{
-  return energy_calibration_model_;
-}
-
-
-const std::vector<std::string> &Measurement::remarks() const
-{
-  return remarks_;
-}
-
-const std::vector<std::string> &Measurement::parse_warnings() const
-{
-  return parse_warnings_;
-}
-  
-const boost::posix_time::ptime &Measurement::start_time() const
-{
-  return start_time_;
-}
-
-const boost::posix_time::ptime Measurement::start_time_copy() const
-{
-  return start_time_;
-}
-
-
-const std::vector<float> &Measurement::calibration_coeffs() const
-{
-  return calibration_coeffs_;
-}
-
-const std::vector<std::pair<float,float>> &Measurement::deviation_pairs() const
-{
-  return deviation_pairs_;
-}
-
-const std::shared_ptr< const std::vector<float> > &Measurement::channel_energies() const
-{
-  return channel_energies_;
-}
-
-const std::shared_ptr< const std::vector<float> > &Measurement::gamma_counts() const
-{
-  return gamma_counts_;
-}
-
-void Measurement::set_start_time( const boost::posix_time::ptime &time )
-{
-  start_time_ = time;
-}
-
-void Measurement::set_remarks( const std::vector<std::string> &remar )
-{
-  remarks_ = remar;
-}
-
-void Measurement::set_source_type( const SourceType type )
-{
-  source_type_ = type;
-}
-
-
-void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
-                                    const float livetime, const float realtime )
-{
-  if( !counts )
-  {
-    if( !gamma_counts_ )
-      return;
-    gamma_counts_.reset( new std::vector<float>( gamma_counts_->size(), 0.0f ) );
-    return;
-  }//if( !counts )
-
-  const size_t size = counts->size();
-  gamma_counts_ = counts;
-  live_time_ = livetime;
-  real_time_ = realtime;
-  gamma_count_sum_ = 0.0;
-
-  const std::vector<float> &rhs = *counts;
-  for( size_t i = 0; i < size; ++i )
-    gamma_count_sum_ += rhs[i];
-}
-
-
-void Measurement::set_neutron_counts( const std::vector<float> &counts )
-{
-  neutron_counts_ = counts;
-  neutron_counts_sum_ = 0.0;
-  contained_neutron_ = !counts.empty();
-  const size_t size = counts.size();
-  for( size_t i = 0; i < size; ++i )
-    neutron_counts_sum_ += counts[i];
-}
-
-void Measurement::set_channel_energies( std::shared_ptr<const std::vector<float>> counts )  //if channel_energies_ or gamma_counts_ must be same number channels as before
-{
-  if( !counts )
-    return;
-
-  if( (channel_energies_ && !channel_energies_->empty() && channel_energies_->size() != counts->size())
-      || ( gamma_counts_ && !gamma_counts_->empty() && gamma_counts_->size() != counts->size() ) )
-  {
-    throw std::runtime_error( "Measurement::set_channel_energies(...): number of bin mismatch" );
-  }//if( nbins mismatch )
-
-  channel_energies_ = counts;
-}
-
-const std::vector<float> &Measurement::neutron_counts() const
-{
-  return neutron_counts_;
-}
-
-
-float Measurement::GetBinCenter( int bin ) const
-{
-  return (float)( GetBinLowEdge(bin) + 0.5*GetBinWidth(bin) );
-}
-
-float Measurement::GetBinContent( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return 0.0;
-  return (*gamma_counts_)[bin-1];
-}
-
-float Measurement::GetBinLowEdge( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return (float)-999.9;
-  return  (*channel_energies_)[bin-1];
-}
-
-float Measurement::GetBinWidth( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return 0.0;
-  if( channel_energies_->size()==1 )
-    return 0.0;
-  if( bin == static_cast<int>(channel_energies_->size()) )
-    --bin;
-  return ((*channel_energies_)[bin]) - ((*channel_energies_)[bin-1]);
-}
-
-int Measurement::GetNbinsX() const
-{
-  if( !channel_energies_ )
-  {
-    if( gamma_counts_ )
-      return static_cast<int>( gamma_counts_->size() );
-    return 0;
-  }//
-
-  return static_cast<int>( channel_energies_->size() );
-}
-
-
-float Measurement::Integral( int binx1, int binx2 ) const
-{
-  float answer = 0.0;
-  if( !gamma_counts_ )
-    return answer;
-
-  --binx1;
-  --binx2;
-
-  const int nbinsx = static_cast<int>( gamma_counts_->size() );
-  
-  if( binx1 < 0 )
-    binx1 = 0;
-  if( binx2 < 0 || binx2 < binx1 || binx2 >= nbinsx )
-    binx2 = nbinsx - 1;
-
-  for( int i = binx1; i <= binx2; ++i )
-    answer += gamma_counts_->operator[](i);
-  return answer;
-}
-
-
-
-size_t Measurement::num_gamma_channels() const
-{
-  if( !gamma_counts_ || !channel_energies_ )
-    return 0;
-  
-  if( channel_energies_->empty() )  //JIC we dont have an energy calibration
-    return gamma_counts_->size();
-  
-  return std::min( gamma_counts_->size(), channel_energies_->size() );
-}
-
-
-size_t Measurement::find_gamma_channel( const float x ) const
-{
-  if( !channel_energies_ || channel_energies_->empty() )
-  {
-    throw std::runtime_error( "Measurement::find_gamma_channel(): "
-                              "channel_energies_ not defined" );
-  }
-  //Using upper_bound instead of lower_bound to properly handle the case
-  //  where x == bin lower energy.
-  const std::vector<float>::const_iterator pos_iter
-                              = std::upper_bound( channel_energies_->begin(),
-                                                  channel_energies_->end(), x );
-  
-  if( pos_iter == channel_energies_->begin() )
-    return 0;
-  
-  if( pos_iter == channel_energies_->end() )
-    return channel_energies_->size() - 1;
-  
-  return (pos_iter - channel_energies_->begin()) - 1;
-}//size_t find_gamma_channel( const float energy ) const
-
-
-float Measurement::gamma_channel_content( const size_t channel ) const
-{
-  if( !gamma_counts_ || channel >= gamma_counts_->size() )
-    return 0.0f;
-  
-  return gamma_counts_->operator[]( channel );
-}//float gamma_channel_content( const size_t channel ) const
-
-
-float Measurement::gamma_channel_lower( const size_t channel ) const
-{
-  if( !channel_energies_ || channel >= channel_energies_->size() )
-    throw std::runtime_error( "Measurement::gamma_channel_lower(): "
-                              "channel_energies_ not defined" );
-  
-  return channel_energies_->operator[]( channel );
-}//float gamma_channel_lower( const size_t channel ) const
-
-
-float Measurement::gamma_channel_center( const size_t channel ) const
-{
-  return gamma_channel_lower( channel ) + 0.5f*gamma_channel_width( channel );
-}//float gamma_channel_center( const size_t channel ) const
-
-
-float Measurement::gamma_channel_upper( const size_t channel ) const
-{
-  if( !channel_energies_ || channel >= channel_energies_->size()
-     || channel_energies_->size() < 2 )
-    throw std::runtime_error( "Measurement::gamma_channel_upper(): "
-                             "channel_energies_ not defined" );
-  
-  if( channel < (channel_energies_->size()-1) )
-    return (*channel_energies_)[channel+1];
-  
-  return gamma_channel_lower(channel) + gamma_channel_width(channel);
-}//float gamma_channel_upper( const size_t channel ) const
-
-
-inline const std::shared_ptr< const std::vector<float> > &
-                                     Measurement::gamma_channel_energies() const
-{
-  return channel_energies_;
-}
-
-
-const std::shared_ptr< const std::vector<float> > &
-                                    Measurement::gamma_channel_contents() const
-{
-  return gamma_counts_;
-}
-
-
-float Measurement::gamma_channel_width( const size_t channel ) const
-{
-  if( !channel_energies_ || channel >= channel_energies_->size()
-      || channel_energies_->size() < 2 )
-    throw std::runtime_error( "Measurement::gamma_channel_width(): "
-                              "channel_energies_ not defined" );
-  
-  if( channel == (channel_energies_->size()-1) )
-    return (*channel_energies_)[channel] - (*channel_energies_)[channel-1];
-  
-  return (*channel_energies_)[channel+1] - (*channel_energies_)[channel];
-}//float gamma_channel_width( const size_t channel ) const
-
-
-
-int Measurement::FindFixBin( float x ) const
-{
-  //Note, this function returns an index one-above what you would use to access
-  //  the channel_energies_ or gamma_counts_ arrays.  This is to be compatible
-  //  with CERNs ROOT package functions.
-  if( !channel_energies_ )
-    return -1;
-  
-  //Using upper_bound instead of lower_bound to properly handle the case
-  //  where x == bin lower energy.
-  const std::vector<float>::const_iterator pos_iter
-                             = std::upper_bound( channel_energies_->begin(),
-                                                 channel_energies_->end(), x );
-
-  if( pos_iter == channel_energies_->end() )
-  {
-    float width = GetBinWidth( static_cast<int>(channel_energies_->size() ) );
-    if( x < (channel_energies_->back()+width) )
-      return static_cast<int>( channel_energies_->size() );
-    else return static_cast<int>( channel_energies_->size() + 1 );
-  }//if( pos_iter ==  channel_energies_->end() )
-
-  if( pos_iter == channel_energies_->begin() )
-  {
-    if( x < channel_energies_->front() )
-      return 0;
-    return 1;
-  }//if( pos_iter ==  channel_energies_->begin() )
-  
-  return static_cast<int>( pos_iter - channel_energies_->begin() );
-}//int FindFixBin( float x ) const
-
-
-bool Measurement::CheckBinRange( int bin ) const
-{
-  if( !channel_energies_
-      || bin < 1 || bin > static_cast<int>(channel_energies_->size()) )
-    return false;
-  return true;
-}
-
-
-const std::string &Measurement::title() const
-{
-  return title_;
-}
-
-
-void Measurement::set_title( const std::string &title )
-{
-  title_ = title;
-}
-
-
-
-
-float Measurement::gamma_energy_min() const
-{
-  if( !channel_energies_ || channel_energies_->empty() )
-    return 0.0f;
-  return (*channel_energies_)[0];
-}
-
-float Measurement::gamma_energy_max() const
-{
-  if( !channel_energies_ || channel_energies_->empty() )
-    return 0.0f;
-  
-  const size_t nbin = channel_energies_->size();
-  if( nbin < 2 )
-    return (*channel_energies_)[0];
-  
-  return 2.0f*(*channel_energies_)[nbin-1] - (*channel_energies_)[nbin-2];
-}
 
 }//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h

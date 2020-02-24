@@ -69,6 +69,22 @@ static_assert( RAPIDXML_USE_SIZED_INPUT_WCJOHNS == 1,
 #endif
 
 
+/** Some forward declarations of functions private to this file, but in the
+ SpecUtils namespace.
+ */
+namespace SpecUtils
+{
+  void add_analysis_results_to_2012_N42( const DetectorAnalysis &ana,
+                                        ::rapidxml::xml_node<char> *RadInstrumentData,
+                                        std::mutex &xmldocmutex );
+  
+  /** adds to analysis the information in AnalysisResults node.  Currently only
+   adds the NuclideAnalysis to for a select few number of detectors.
+   */
+  void setAnalysisInformation( const rapidxml::xml_node<char> *analysis_node,
+                              DetectorAnalysis &analysis );
+
+}//namespace SpecUtils
 
 namespace
 {
@@ -116,6 +132,143 @@ namespace
       return node_name.substr( 0, colon_pos + 1 );
     return "";
   }//std::string get_n42_xmlns( const rapidxml::xml_node<char> *node )
+  
+  /** Checks if the input data might be a N42 file, and if it might be UTF16
+   instead of UTF8, and if so, uses a very niave/horrible approach of just
+   eliminating '\0' bytes from the input data.  Returns new data_end (or if no
+   changes, the one passed in)
+   */
+  char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end )
+  {
+    if( !data || data_end <= data )
+      return data_end;
+    
+    const size_t datalen = data_end - data;
+    if( datalen < 512 )
+      return data_end;
+    
+    //Look to see how often we alternate between a zero-byte, and non-zero byte
+    size_t num_zero_alternations = 0;
+    
+    //First do a quick check of just the first 64 bytes, being a little loose.
+    // (note, we could increment i by two each time, but I was too lazy to test
+    //  for now)
+    for( size_t i = 1; i < 64; ++i )
+      num_zero_alternations += (((!data[i-1]) == (!data[i])) ? 0 : 1);
+    
+    //For nearly all N42 files num_zero_alternations will still be zero, so we
+    //  can return here
+    if( num_zero_alternations < 32 )
+      return data_end;
+    
+    //This might be UTF16, lets continue looking at the first 512 bytes.
+    for( size_t i = 64; i < 512; ++i )
+      num_zero_alternations += (((!data[i-1]) == (!data[i])) ? 0 : 1);
+    
+    //Arbitrarily allow 16 non-ascii characters in the first 256 characters
+    if( num_zero_alternations < 480 )
+      return data_end;
+    
+    //Check that the '<' symbol is in the first ~128 bytes, and skip to it.
+    //  The one file I've seen that was UTF16 (but claimed to be UTF8) had the
+    //  '<' character at byte three
+    char *new_data_start = data;
+    while( ((*new_data_start) != '<') && (new_data_start != (data+128)) )
+      ++new_data_start;
+    
+    if( (*new_data_start) != '<' )
+      return data_end;
+    
+    //This is horrible and totally incorrect, but seems to work well enough for
+    //  the files I've seen this in... sorry you have to see this, but since
+    //  N42 is probably all ASCII, just remove all the zero bytes
+    char *new_data_end = data;
+    for( char *iter = new_data_start; iter != data_end; ++iter )
+    {
+      if( *iter )
+      {
+        *new_data_end = *iter;
+        ++new_data_end;
+      }
+    }
+    memset(new_data_end, 0, (data_end - new_data_end) );
+    
+    return new_data_end;
+  }//convert_n42_utf16_xml_to_utf8
+
+  
+  /** Checks the first 512 bytes of data for a few magic strings that *should* be
+  in N42 files; if it contains any of them, it returns true
+   */
+  bool is_candidate_n42_file( const char * data )
+  {
+    if( !data )
+      return false;
+    
+    //If smaller than 512 bytes, or doesnt contain a magic_strs string, bail
+    const char *magic_strs[] = { "N42", "RadInstrumentData", "Measurement",
+      "N42InstrumentData", "ICD1", "HPRDS",
+    };
+    
+    size_t nlength = 0;
+    while( nlength < 512 && data[nlength] )
+      ++nlength;
+    
+    if( nlength < 512 )
+      return false;
+    
+    const string filebegining( data, data+nlength );
+    
+    for( const char *substr : magic_strs )
+    {
+      if( SpecUtils::icontains( filebegining, substr ) )
+        return true;
+    }
+    
+    return false;
+  }//bool is_candidate_n42_file( const char * data )
+  
+  
+  
+  /** Same as other version of this function, but input does not need to be null
+  terminated.
+   */
+  bool is_candidate_n42_file( const char * const data, const char * const data_end )
+  {
+    if( !data || data_end <= data )
+      return false;
+    
+    const size_t datalen = data_end - data;
+    
+    if( datalen < 512 )
+      return false;
+    
+    //If smaller than 512 bytes, or doesnt contain a magic_strs string, bail
+    const char *magic_strs[] = { "N42", "RadInstrumentData", "Measurement",
+      "N42InstrumentData", "ICD1", "HPRDS",
+    };
+    
+    //Check how many non-null bytes there are
+    size_t nlength = 0;
+    for( size_t i = 0; i < 512; ++i )
+      nlength += (data[i] ? 1 : 0);
+    
+    //Allow for max of 8 zero bytes...
+    
+    if( nlength+8 < 512 )
+      return false;
+    
+    const string filebegining( data, data+512 );
+    
+    for( const char *substr : magic_strs )
+    {
+      if( SpecUtils::icontains( filebegining, substr ) )
+        return true;
+    }
+    
+    return false;
+  }//bool is_candidate_n42_file( const char * data, const char * const data_end )
+
 }//anonomous namespace for XML utilities
 
 
@@ -2668,30 +2821,6 @@ namespace SpecUtils
 
   
   
-  const std::string &convert_n42_instrument_type_from_2006_to_2012( const std::string &classcode )
-  {
-    static const string PortalMonitor = "Portal Monitor";
-    static const string SpecPortal = "Spectroscopic Portal Monitor";
-    static const string RadionuclideIdentifier = "Radionuclide Identifier";
-    static const string PersonalRadiationDetector = "Spectroscopic Personal Radiation Detector"; //hmm, prob not best
-    static const string SurveyMeter = "Backpack or Personal Radiation Scanner";
-    static const string Spectrometer = "Spectroscopic Personal Radiation Detector";
-    
-    if( iequals_ascii(classcode, "PortalMonitor") || iequals_ascii(classcode, "PVT Portal") )
-      return PortalMonitor;
-    else if( iequals_ascii(classcode, "SpecPortal") )
-      return SpecPortal;
-    else if( iequals_ascii(classcode, "RadionuclideIdentifier") )
-      return RadionuclideIdentifier;
-    else if( iequals_ascii(classcode, "PersonalRadiationDetector") )
-      return PersonalRadiationDetector;
-    else if( iequals_ascii(classcode, "SurveyMeter") )
-      return SurveyMeter;
-    else if( iequals_ascii(classcode, "Spectrometer") )
-      return Spectrometer;
-    
-    return classcode;
-  }//const std::string &convert_n42_instrument_type_2006_to_2012( const std::string &input )
   
   
   void add_analysis_results_to_2012_N42(

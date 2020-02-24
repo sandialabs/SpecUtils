@@ -34,6 +34,23 @@
  */
 namespace  SpecUtils
 {
+  /** Expands the N42 counted zeros scheme, i.e., if an entry is zero, then the
+   entry after that says how many zeroes that elememnt should be expanded to.
+   
+   Requires zeros to be identically 0.0f, in order be expanded by the next
+   value.  The value following a zero is rounded to nearest integer (no integer
+   check is performed).
+   */
+  void expand_counted_zeros( const std::vector<float> &data,
+                            std::vector<float> &results );
+  
+  /** Performs the counted zero compression.
+   Note that contents less than 10.0f*FLT_MIN are assumed to be zeros.
+   */
+  void compress_to_counted_zeros( const std::vector<float> &data,
+                                 std::vector<float> &results );
+
+  
   /** Parses strings similar to "25°47\"17.820' N / 80°19\"25.500' W" into
    latitude and longitude.
    
@@ -60,6 +77,45 @@ namespace  SpecUtils
   
   /** Checks if abs(longitude) is less than or equal to 180. */
   bool valid_longitude( const double longitude );
+  
+  /** Tries to extract sample number from remark in file - mostly from N42-2006
+   files.
+   */
+  int sample_num_from_remark( std::string remark ); //returns -1 on error
+  
+  /** Tries to extract speed from a remark string - mostly from N42-2006, and
+   returns it in m/s.
+   
+   Ex., takes a line like "Speed = 5 mph" and returns the speed in m/s.
+   Returns 0.0 on failure.
+   
+   Note: not very generically implemented, just covers cases that have been ran
+   into.
+   */
+  float speed_from_remark( std::string remark );
+  
+  /** Looks for GADRAS style detector names in remarks, or something from the
+      N42 conventions of 'Aa1', 'Aa2', etc.  Returns empty string on failure.
+   */
+  std::string detector_name_from_remark( const std::string &remark );
+  
+  
+  /** Returns the dose units indicated by the string, in units such that ia
+   micro-sievert per hour is equal to 1.0.
+    Currently only handles the label "uSv" and "uRem/h", e.g. fnctn not really
+    impleneted.
+    Returns 0.0 on error.
+   */
+  float dose_units_usvPerH( const char *str, const size_t str_length );
+
+  
+  /** Convert from 2006 N42 to 2012 instrument types
+   E.x., "PortalMonitor" -> "Portal Monitor", or
+  "SpecPortal" -> "Spectroscopic Portal Monitor"
+   */
+  
+  const std::string &convert_n42_instrument_type_from_2006_to_2012(
+                                                    const std::string &input );
   
   
   /** Reads a POD from an istream.  Currently no endianess transform is done. */

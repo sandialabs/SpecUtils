@@ -223,49 +223,6 @@ namespace
       
     }//for( size_t i = 0; i < datas.size(); ++i )
   }//void sum_with_rebin(...)
-
-  
-  
-  
-  
-
-  
-  
-  
-  boost::posix_time::ptime datetime_ole_to_posix(double ole_dt)
-  {
-    static const boost::gregorian::date ole_zero(1899,12,30);
-    
-    boost::gregorian::days d( static_cast<long>(ole_dt) );
-    boost::posix_time::ptime pt(ole_zero + d);
-    
-    ole_dt -= d.days();
-    ole_dt *= 24 * 60 * 60 * 1000;
-    
-    return pt + boost::posix_time::milliseconds( std::abs( static_cast<int64_t>(ole_dt) ) );
-    
-    /*
-     typedef typename time_type::date_type date_type;
-     typedef typename time_type::date_duration_type date_duration_type;
-     typedef typename time_type::time_duration_type time_duration_type;
-     using boost::math::modf;
-     static const date_type base_date(1899, Dec, 30);
-     static const time_type base_time(base_date, time_duration_type(0,0,0));
-     int dayOffset, hourOffset, minuteOffset, secondOffset;
-     double fraction = fabs(modf(oa_date, &dayOffset)) * 24; // fraction = hours
-     fraction = modf(fraction, &hourOffset) * 60; // fraction = minutes
-     fraction = modf(fraction, &minuteOffset) * 60; // fraction = seconds
-     modf(fraction, &secondOffset);
-     time_type t(base_time);
-     t += time_duration_type(hourOffset, minuteOffset, secondOffset);
-     t += date_duration_type(dayOffset);
-     return t;
-     */
-  }
-  
-  
- 
-  
   
 }//anaomous namespace
 
@@ -294,6 +251,720 @@ void log_developer_error( const char *location, const char *error )
 
 namespace SpecUtils
 {
+    
+  //implementation of inlined functions
+bool SpecFile::modified() const
+{
+  return modified_;
+}
+  
+  
+void SpecFile::reset_modified()
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  modified_ = false;
+}
+
+void SpecFile::reset_modified_since_decode()
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  modifiedSinceDecode_ = false;
+}
+
+bool SpecFile::modified_since_decode() const
+{
+  return modifiedSinceDecode_;
+}
+
+float SpecFile::gamma_live_time() const
+{
+  return gamma_live_time_;
+}
+
+float SpecFile::gamma_real_time() const
+{
+  return gamma_real_time_;
+}
+
+double SpecFile::gamma_count_sum() const
+{
+  return gamma_count_sum_;
+}
+
+double SpecFile::neutron_counts_sum() const
+{
+  return neutron_counts_sum_;
+}
+
+const std::string &SpecFile::filename() const
+{
+  return filename_;
+}
+
+const std::vector<std::string> &SpecFile::detector_names() const
+{
+  return detector_names_;
+}
+
+const std::vector<int> &SpecFile::detector_numbers() const
+{
+  return detector_numbers_;
+}
+
+const std::vector<std::string> &SpecFile::neutron_detector_names() const
+{
+  return neutron_detector_names_;
+}
+
+const std::string &SpecFile::uuid() const
+{
+  return uuid_;
+}
+
+const std::vector<std::string> &SpecFile::remarks() const
+{
+  return remarks_;
+}
+
+const std::vector<std::string> &SpecFile::parse_warnings() const
+{
+  return parse_warnings_;
+}
+
+int SpecFile::lane_number() const
+{
+  return lane_number_;
+}
+
+const std::string &SpecFile::measurement_location_name() const
+{
+  return measurement_location_name_;
+}
+
+const std::string &SpecFile::inspection() const
+{
+  return inspection_;
+}
+
+double Measurement::latitude() const
+{
+  return latitude_;
+}
+
+double Measurement::longitude() const
+{
+  return longitude_;
+}
+
+
+const boost::posix_time::ptime &Measurement::position_time() const
+{
+  return position_time_;
+}
+
+const std::string &SpecFile::measurment_operator() const
+{
+  return measurment_operator_;
+}
+
+const std::set<int> &SpecFile::sample_numbers() const
+{
+  //  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  //  set<int> answer;
+  //  fore( const std::shared_ptr<Measurement> &meas : measurements_ )
+  //    answer.insert( meas->sample_number_ );
+  //  return answer;
+  return sample_numbers_;
+}//set<int> sample_numbers() const
+
+
+size_t SpecFile::num_measurements() const
+{
+  size_t n;
+  
+  {
+    std::unique_lock<std::recursive_mutex> lock( mutex_ );
+    n = measurements_.size();
+  }
+  
+  return n;
+}//size_t num_measurements() const
+
+
+std::shared_ptr<const Measurement> SpecFile::measurement(
+                                                         size_t num ) const
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  const size_t n = measurements_.size();
+  
+  if( num >= n )
+    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index" );
+  
+  return measurements_[num];
+}
+
+
+DetectorType SpecFile::detector_type() const
+{
+  return detector_type_;
+}
+
+const std::string &SpecFile::instrument_type() const
+{
+  return instrument_type_;
+}
+
+const std::string &SpecFile::manufacturer() const
+{
+  return manufacturer_;
+}
+
+const std::string &SpecFile::instrument_model() const
+{
+  return instrument_model_;
+}
+
+const std::string &SpecFile::instrument_id() const
+{
+  return instrument_id_;
+}
+
+std::vector< std::shared_ptr<const Measurement> > SpecFile::measurements() const
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  
+  std::vector< std::shared_ptr<const Measurement> > answer;
+  for( size_t i = 0; i < measurements_.size(); ++i )
+    answer.push_back( measurements_[i] );
+  return answer;
+}//std::vector< std::shared_ptr<const Measurement> > measurements() const
+
+
+std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
+{
+  return detectors_analysis_;
+}
+
+
+double SpecFile::mean_latitude() const
+{
+  return mean_latitude_;
+}
+
+double SpecFile::mean_longitude() const
+{
+  return mean_longitude_;
+}
+
+void SpecFile::set_filename( const std::string &n )
+{
+  filename_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_remarks( const std::vector<std::string> &n )
+{
+  remarks_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_uuid( const std::string &n )
+{
+  uuid_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_lane_number( const int num )
+{
+  lane_number_ = num;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_measurement_location_name( const std::string &n )
+{
+  measurement_location_name_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_inspection( const std::string &n )
+{
+  inspection_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_instrument_type( const std::string &n )
+{
+  instrument_type_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_detector_type( const DetectorType type )
+{
+  detector_type_ = type;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_manufacturer( const std::string &n )
+{
+  manufacturer_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_instrument_model( const std::string &n )
+{
+  instrument_model_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+void SpecFile::set_instrument_id( const std::string &n )
+{
+  instrument_id_ = n;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+
+
+
+//implementation of inline Measurment functions
+float Measurement::live_time() const
+{
+  return live_time_;
+}
+
+float Measurement::real_time() const
+{
+  return real_time_;
+}
+
+bool Measurement::contained_neutron() const
+{
+  return contained_neutron_;
+}
+
+int Measurement::sample_number() const
+{
+  return sample_number_;
+}
+
+OccupancyStatus Measurement::occupied() const
+{
+  return occupied_;
+}
+
+double Measurement::gamma_count_sum() const
+{
+  return gamma_count_sum_;
+}
+
+double Measurement::neutron_counts_sum() const
+{
+  return neutron_counts_sum_;
+}
+
+float Measurement::speed() const
+{
+  return speed_;
+}
+
+const std::string &Measurement::detector_name() const
+{
+  return detector_name_;
+}
+
+int Measurement::detector_number() const
+{
+  return detector_number_;
+}
+
+const std::string &Measurement::detector_type() const
+{
+  return detector_description_;
+}
+
+SpecUtils::QualityStatus Measurement::quality_status() const
+{
+  return quality_status_;
+}
+
+SourceType Measurement::source_type() const
+{
+  return source_type_;
+}
+
+
+SpecUtils::EnergyCalType Measurement::energy_calibration_model() const
+{
+  return energy_calibration_model_;
+}
+
+
+const std::vector<std::string> &Measurement::remarks() const
+{
+  return remarks_;
+}
+
+const std::vector<std::string> &Measurement::parse_warnings() const
+{
+  return parse_warnings_;
+}
+
+const boost::posix_time::ptime &Measurement::start_time() const
+{
+  return start_time_;
+}
+
+const boost::posix_time::ptime Measurement::start_time_copy() const
+{
+  return start_time_;
+}
+
+  
+const std::vector<float> &Measurement::calibration_coeffs() const
+{
+  return calibration_coeffs_;
+}
+
+  
+const std::vector<std::pair<float,float>> &Measurement::deviation_pairs() const
+{
+  return deviation_pairs_;
+}
+ 
+  
+const std::shared_ptr< const std::vector<float> > &Measurement::channel_energies() const
+{
+  return channel_energies_;
+}
+
+  
+const std::shared_ptr< const std::vector<float> > &Measurement::gamma_counts() const
+{
+  return gamma_counts_;
+}
+  
+  
+void Measurement::set_start_time( const boost::posix_time::ptime &time )
+{
+  start_time_ = time;
+}
+
+  
+void Measurement::set_remarks( const std::vector<std::string> &remar )
+{
+  remarks_ = remar;
+}
+  
+  
+void Measurement::set_source_type( const SourceType type )
+{
+  source_type_ = type;
+}
+  
+  
+void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
+                                     const float livetime, const float realtime )
+{
+  if( !counts )
+  {
+    if( !gamma_counts_ )
+      return;
+    gamma_counts_.reset( new std::vector<float>( gamma_counts_->size(), 0.0f ) );
+    return;
+  }//if( !counts )
+  
+  const size_t size = counts->size();
+  gamma_counts_ = counts;
+  live_time_ = livetime;
+  real_time_ = realtime;
+  gamma_count_sum_ = 0.0;
+  
+  const std::vector<float> &rhs = *counts;
+  for( size_t i = 0; i < size; ++i )
+    gamma_count_sum_ += rhs[i];
+}
+  
+  
+void Measurement::set_neutron_counts( const std::vector<float> &counts )
+{
+  neutron_counts_ = counts;
+  neutron_counts_sum_ = 0.0;
+  contained_neutron_ = !counts.empty();
+  const size_t size = counts.size();
+  for( size_t i = 0; i < size; ++i )
+    neutron_counts_sum_ += counts[i];
+}
+  
+  
+void Measurement::set_channel_energies( std::shared_ptr<const std::vector<float>> counts )  //if channel_energies_ or gamma_counts_ must be same number channels as before
+{
+  if( !counts )
+    return;
+  
+  if( (channel_energies_ && !channel_energies_->empty() && channel_energies_->size() != counts->size())
+     || ( gamma_counts_ && !gamma_counts_->empty() && gamma_counts_->size() != counts->size() ) )
+  {
+    throw std::runtime_error( "Measurement::set_channel_energies(...): number of bin mismatch" );
+  }//if( nbins mismatch )
+  
+  channel_energies_ = counts;
+}
+
+  
+const std::vector<float> &Measurement::neutron_counts() const
+{
+  return neutron_counts_;
+}
+  
+  
+float Measurement::GetBinCenter( int bin ) const
+{
+  return (float)( GetBinLowEdge(bin) + 0.5*GetBinWidth(bin) );
+}
+  
+
+float Measurement::GetBinContent( int bin ) const
+{
+  if( !CheckBinRange(bin) )
+    return 0.0;
+  return (*gamma_counts_)[bin-1];
+}
+
+  
+float Measurement::GetBinLowEdge( int bin ) const
+{
+  if( !CheckBinRange(bin) )
+    return (float)-999.9;
+  return  (*channel_energies_)[bin-1];
+}
+  
+  
+float Measurement::GetBinWidth( int bin ) const
+{
+  if( !CheckBinRange(bin) )
+    return 0.0;
+  if( channel_energies_->size()==1 )
+    return 0.0;
+  if( bin == static_cast<int>(channel_energies_->size()) )
+    --bin;
+  return ((*channel_energies_)[bin]) - ((*channel_energies_)[bin-1]);
+}
+  
+  
+int Measurement::GetNbinsX() const
+{
+  if( !channel_energies_ )
+  {
+    if( gamma_counts_ )
+      return static_cast<int>( gamma_counts_->size() );
+    return 0;
+  }//
+    
+  return static_cast<int>( channel_energies_->size() );
+}
+  
+  
+float Measurement::Integral( int binx1, int binx2 ) const
+{
+  float answer = 0.0;
+  if( !gamma_counts_ )
+    return answer;
+  
+  --binx1;
+  --binx2;
+  
+  const int nbinsx = static_cast<int>( gamma_counts_->size() );
+  
+  if( binx1 < 0 )
+    binx1 = 0;
+  if( binx2 < 0 || binx2 < binx1 || binx2 >= nbinsx )
+    binx2 = nbinsx - 1;
+  
+  for( int i = binx1; i <= binx2; ++i )
+    answer += gamma_counts_->operator[](i);
+  return answer;
+}
+  
+  
+  
+size_t Measurement::num_gamma_channels() const
+{
+  if( !gamma_counts_ || !channel_energies_ )
+    return 0;
+  
+  if( channel_energies_->empty() )  //JIC we dont have an energy calibration
+    return gamma_counts_->size();
+  
+  return std::min( gamma_counts_->size(), channel_energies_->size() );
+}
+  
+  
+size_t Measurement::find_gamma_channel( const float x ) const
+{
+  if( !channel_energies_ || channel_energies_->empty() )
+  {
+    throw std::runtime_error( "Measurement::find_gamma_channel(): "
+                             "channel_energies_ not defined" );
+  }
+  //Using upper_bound instead of lower_bound to properly handle the case
+  //  where x == bin lower energy.
+  const std::vector<float>::const_iterator pos_iter
+  = std::upper_bound( channel_energies_->begin(),
+                     channel_energies_->end(), x );
+  
+  if( pos_iter == channel_energies_->begin() )
+    return 0;
+  
+  if( pos_iter == channel_energies_->end() )
+    return channel_energies_->size() - 1;
+  
+  return (pos_iter - channel_energies_->begin()) - 1;
+}//size_t find_gamma_channel( const float energy ) const
+  
+  
+float Measurement::gamma_channel_content( const size_t channel ) const
+{
+  if( !gamma_counts_ || channel >= gamma_counts_->size() )
+    return 0.0f;
+    
+  return gamma_counts_->operator[]( channel );
+}//float gamma_channel_content( const size_t channel ) const
+  
+  
+float Measurement::gamma_channel_lower( const size_t channel ) const
+{
+  if( !channel_energies_ || channel >= channel_energies_->size() )
+    throw std::runtime_error( "Measurement::gamma_channel_lower(): "
+                               "channel_energies_ not defined" );
+    
+  return channel_energies_->operator[]( channel );
+}//float gamma_channel_lower( const size_t channel ) const
+  
+  
+float Measurement::gamma_channel_center( const size_t channel ) const
+{
+  return gamma_channel_lower( channel ) + 0.5f*gamma_channel_width( channel );
+}//float gamma_channel_center( const size_t channel ) const
+  
+  
+float Measurement::gamma_channel_upper( const size_t channel ) const
+{
+  if( !channel_energies_ || channel >= channel_energies_->size()
+     || channel_energies_->size() < 2 )
+    throw std::runtime_error( "Measurement::gamma_channel_upper(): "
+                             "channel_energies_ not defined" );
+  
+  if( channel < (channel_energies_->size()-1) )
+    return (*channel_energies_)[channel+1];
+  
+  return gamma_channel_lower(channel) + gamma_channel_width(channel);
+}//float gamma_channel_upper( const size_t channel ) const
+  
+  
+const std::shared_ptr< const std::vector<float> > &
+  Measurement::gamma_channel_energies() const
+{
+  return channel_energies_;
+}
+  
+  
+const std::shared_ptr< const std::vector<float> > &
+  Measurement::gamma_channel_contents() const
+{
+  return gamma_counts_;
+}
+  
+  
+float Measurement::gamma_channel_width( const size_t channel ) const
+{
+  if( !channel_energies_ || channel >= channel_energies_->size()
+     || channel_energies_->size() < 2 )
+    throw std::runtime_error( "Measurement::gamma_channel_width(): "
+                             "channel_energies_ not defined" );
+  
+  if( channel == (channel_energies_->size()-1) )
+    return (*channel_energies_)[channel] - (*channel_energies_)[channel-1];
+  
+  return (*channel_energies_)[channel+1] - (*channel_energies_)[channel];
+}//float gamma_channel_width( const size_t channel ) const
+  
+  
+  
+int Measurement::FindFixBin( float x ) const
+{
+  //Note, this function returns an index one-above what you would use to access
+  //  the channel_energies_ or gamma_counts_ arrays.  This is to be compatible
+  //  with CERNs ROOT package functions.
+  if( !channel_energies_ )
+    return -1;
+  
+  //Using upper_bound instead of lower_bound to properly handle the case
+  //  where x == bin lower energy.
+  const std::vector<float>::const_iterator pos_iter
+  = std::upper_bound( channel_energies_->begin(),
+                     channel_energies_->end(), x );
+  
+  if( pos_iter == channel_energies_->end() )
+  {
+    float width = GetBinWidth( static_cast<int>(channel_energies_->size() ) );
+    if( x < (channel_energies_->back()+width) )
+      return static_cast<int>( channel_energies_->size() );
+    else return static_cast<int>( channel_energies_->size() + 1 );
+  }//if( pos_iter ==  channel_energies_->end() )
+  
+  if( pos_iter == channel_energies_->begin() )
+  {
+    if( x < channel_energies_->front() )
+      return 0;
+    return 1;
+  }//if( pos_iter ==  channel_energies_->begin() )
+  
+  return static_cast<int>( pos_iter - channel_energies_->begin() );
+}//int FindFixBin( float x ) const
+  
+  
+bool Measurement::CheckBinRange( int bin ) const
+{
+  if( !channel_energies_
+      || bin < 1 || bin > static_cast<int>(channel_energies_->size()) )
+    return false;
+  return true;
+}
+  
+  
+const std::string &Measurement::title() const
+{
+  return title_;
+}
+  
+  
+void Measurement::set_title( const std::string &title )
+{
+  title_ = title;
+}
+  
+  
+float Measurement::gamma_energy_min() const
+{
+  if( !channel_energies_ || channel_energies_->empty() )
+    return 0.0f;
+  return (*channel_energies_)[0];
+}
+
+  
+float Measurement::gamma_energy_max() const
+{
+  if( !channel_energies_ || channel_energies_->empty() )
+    return 0.0f;
+  
+  const size_t nbin = channel_energies_->size();
+  if( nbin < 2 )
+    return (*channel_energies_)[0];
+  
+  return 2.0f*(*channel_energies_)[nbin-1] - (*channel_energies_)[nbin-2];
+}
+
+  
+  
   
 //Analogous to Measurement::compare_by_sample_det_time; compares by
 // sample_number, and then detector_number_, but NOT by start_time_
@@ -667,8 +1338,8 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::Txt:                return "txt";
     case SaveSpectrumAsType::Csv:                return "csv";
     case SaveSpectrumAsType::Pcf:                return "pcf";
-    case SaveSpectrumAsType::N42_2006:                return "n42";
-    case SaveSpectrumAsType::N42_2012:            return "n42";
+    case SaveSpectrumAsType::N42_2006:           return "n42";
+    case SaveSpectrumAsType::N42_2012:           return "n42";
     case SaveSpectrumAsType::Chn:                return "chn";
     case SaveSpectrumAsType::SpcBinaryInt:       return "spc";
     case SaveSpectrumAsType::SpcBinaryFloat:     return "spc";
@@ -725,292 +1396,6 @@ const char *descriptionText( const SaveSpectrumAsType type )
   }
   return "";
 }//const char *descriptionText( const SaveSpectrumAsType type )
-
-
-int sample_num_from_remark( std::string remark )
-{
-  SpecUtils::to_lower_ascii(remark);
-  size_t pos = remark.find( "survey" );
-
-  if( pos == string::npos )
-    pos = remark.find( "sample" );
-  
-  if( pos == string::npos )
-  {
-//    cerr << "Remark '" << remark << "'' didnt contain a sample num" << endl;
-    return -1;
-  }
-
-  pos = remark.find_first_not_of( " \t=", pos+6 );
-  if( pos == string::npos )
-  {
-    cerr << "Remark '" << remark << "'' didnt have a integer sample num" << endl;
-    return -1;
-  }
-
-  int num = -1;
-  if( !(stringstream(remark.c_str()+pos) >> num) )
-  {
-     cerr << "sample_num_from_remark(...): Error converting '"
-          << remark.c_str()+pos << "' to int" << endl;
-    return -1;
-  }//if( cant convert result to int )
-
-  return num;
-}//int sample_num_from_remark( const std::string &remark )
-
-//Takes a line like "Speed = 5 mph" and returns the speed in m/s.
-//  Returns 0 upon failure.
-float speed_from_remark( std::string remark )
-{
-  to_lower_ascii( remark );
-  size_t pos = remark.find( "speed" );
-
-  if( pos == string::npos )
-    return 0.0;
-
-  pos = remark.find_first_not_of( "= \t", pos+5 );
-  if( pos == string::npos )
-    return 0.0;
-
-  const string speedstr = remark.substr( pos );
-
-  float speed = 0.0;
-  if( !toFloat( speedstr, speed) )
-  {
-    cerr << "speed_from_remark(...): couldn conver to number: '"
-         << speedstr << "'" << endl;
-    return 0.0;
-  }//if( !(stringstream(speedstr) >> speed) )
-
-
-  for( size_t i = 0; i < speedstr.size(); ++i )
-  {
-    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') )
-    {
-      float convertion = 0.0f;
-
-      const string unitstr = speedstr.substr( i );
-      const size_t unitstrlen = unitstr.size();
-
-      if( unitstrlen>=3 && unitstr.substr(0,3) == "m/s" )
-        convertion = 1.0f;
-      else if( unitstrlen>=3 && unitstr.substr(0,3) == "mph" )
-        convertion = 0.44704f;
-      else
-        cerr << "speed_from_remark(...): Unknown speed unit: '"
-             << unitstrlen << "'" << endl;
-
-      return convertion*speed;
-    }//if( we found the start of the units )
-  }//for( size_t i = 0; i < speedstr.size(); ++i )
-
-  return 0.0;
-}//float speed_from_remark( const std::string &remark )
-
-
-//Looks for GADRAS style detector names in remarks, or something from the N42
-//  conventions of 'Aa1', 'Aa2', etc.
-//  Returns empty string on failure.
-std::string detector_name_from_remark( const std::string &remark )
-{
-  //Check for the Gadras convention similar to "Det=Aa1"
-  if( SpecUtils::icontains(remark, "det") )
-  {
-    //Could use a regex here... maybe someday I'll upgrade
-    string remarkcopy = remark;
-    
-    string remarkcopylowercase = remarkcopy;
-    SpecUtils::to_lower_ascii( remarkcopylowercase );
-    
-    size_t pos = remarkcopylowercase.find( "det" );
-    if( pos != string::npos )
-    {
-      remarkcopy = remarkcopy.substr(pos);
-      pos = remarkcopy.find_first_of( "= " );
-      if( pos != string::npos )
-      {
-        string det_identifier = remarkcopy.substr(0,pos);
-        SpecUtils::to_lower_ascii( det_identifier );
-        SpecUtils::trim( det_identifier ); //I dont htink this is necassarry
-        if( det_identifier=="det" || det_identifier=="detector"
-           || (SpecUtils::levenshtein_distance(det_identifier,"detector") < 3) ) //Allow two typos of "detector"; arbitrary
-        {
-          remarkcopy = remarkcopy.substr(pos);  //get rid of the "det="
-          while( remarkcopy.length() && (remarkcopy[0]==' ' || remarkcopy[0]=='=') )
-            remarkcopy = remarkcopy.substr(1);
-          pos = remarkcopy.find_first_of( ' ' );
-          return remarkcopy.substr(0,pos);
-        }
-      }
-    }
-    
-  }//if( SpecUtils::icontains(remark, "det") )
-  
-  
-  vector<string> split_contents;
-  split( split_contents, remark, ", \t\r\n" );
-
-  for( const string &field : split_contents )
-  {
-    if( (field.length() < 3) ||  !isdigit(field[field.size()-1])
-        || (field.length() > 4) ||  (field[1] != 'a') )
-      continue;
-
-    if( field[0]!='A' && field[0]!='B' && field[0]!='C' && field[0]!='D' )
-      continue;
-
-    return field;
-  }//for( size_t i = 0; i < split_contents.size(); ++i )
-
-  return "";
-}//std::string detector_name_from_remark( const std::string &remark )
-
-
-
-float dose_units_usvPerH( const char *str, const size_t str_length )
-{
-  if( !str )
-    return 0.0f;
-  
-  if( icontains( str, str_length, "uSv", 3 )
-     || icontains( str, str_length, "\xc2\xb5Sv", 4) )
-    return 1.0f;
-  
-  //One sievert equals 100 rem.
-  if( icontains( str, str_length, "&#xB5;Rem/h", 11 ) ) //micro
-    return 0.01f;
-
-  return 0.0f;
-}//float dose_units_usvPerH( const char *str )
-
-
-
-
-bool is_candidate_n42_file( const char * data )
-{
-  if( !data )
-    return false;
-  
-  //If smaller than 512 bytes, or doesnt contain a magic_strs string, bail
-  const char *magic_strs[] = { "N42", "RadInstrumentData", "Measurement",
-    "N42InstrumentData", "ICD1", "HPRDS",
-  };
-  
-  size_t nlength = 0;
-  while( nlength < 512 && data[nlength] )
-    ++nlength;
-
-  if( nlength < 512 )
-    return false;
-  
-  const string filebegining( data, data+nlength );
-  
-  for( const char *substr : magic_strs )
-  {
-    if( SpecUtils::icontains( filebegining, substr ) )
-      return true;
-  }
-  
-  return false;
-}//bool is_candidate_n42_file( const char * data )
-
-
-char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end )
-{
-  if( !data || data_end <= data )
-    return data_end;
-  
-  const size_t datalen = data_end - data;
-  if( datalen < 512 )
-    return data_end;
-  
-  //Look to see how often we alternate between a zero-byte, and non-zero byte
-  size_t num_zero_alternations = 0;
-  
-  //First do a quick check of just the first 64 bytes, being a little loose.
-  // (note, we could increment i by two each time, but I was too lazy to test
-  //  for now)
-  for( size_t i = 1; i < 64; ++i )
-    num_zero_alternations += (((!data[i-1]) == (!data[i])) ? 0 : 1);
-  
-  //For nearly all N42 files num_zero_alternations will still be zero, so we
-  //  can return here
-  if( num_zero_alternations < 32 )
-    return data_end;
-  
-  //This might be UTF16, lets continue looking at the first 512 bytes.
-  for( size_t i = 64; i < 512; ++i )
-    num_zero_alternations += (((!data[i-1]) == (!data[i])) ? 0 : 1);
-  
-  //Arbitrarily allow 16 non-ascii characters in the first 256 characters
-  if( num_zero_alternations < 480 )
-    return data_end;
-  
-  //Check that the '<' symbol is in the first ~128 bytes, and skip to it.
-  //  The one file I've seen that was UTF16 (but claimed to be UTF8) had the
-  //  '<' character at byte three
-  char *new_data_start = data;
-  while( ((*new_data_start) != '<') && (new_data_start != (data+128)) )
-    ++new_data_start;
-  
-  if( (*new_data_start) != '<' )
-    return data_end;
-  
-  //This is horrible and totally incorrect, but seems to work well enough for
-  //  the files I've seen this in... sorry you have to see this, but since
-  //  N42 is probably all ASCII, just remove all the zero bytes
-  char *new_data_end = data;
-  for( char *iter = new_data_start; iter != data_end; ++iter )
-  {
-    if( *iter )
-    {
-      *new_data_end = *iter;
-      ++new_data_end;
-    }
-  }
-  memset(new_data_end, 0, (data_end - new_data_end) );
-  
-  return new_data_end;
-}//convert_n42_utf16_xml_to_utf8
-
-
-bool is_candidate_n42_file( const char * const data, const char * const data_end )
-{
-  if( !data || data_end <= data )
-    return false;
- 
-  const size_t datalen = data_end - data;
-  
-  if( datalen < 512 )
-    return false;
-  
-  //If smaller than 512 bytes, or doesnt contain a magic_strs string, bail
-  const char *magic_strs[] = { "N42", "RadInstrumentData", "Measurement",
-    "N42InstrumentData", "ICD1", "HPRDS",
-  };
-  
-  //Check how many non-null bytes there are
-  size_t nlength = 0;
-  for( size_t i = 0; i < 512; ++i )
-    nlength += (data[i] ? 1 : 0);
-  
-  //Allow for max of 8 zero bytes...
-  
-  if( nlength+8 < 512 )
-    return false;
-  
-  const string filebegining( data, data+512 );
-  
-  for( const char *substr : magic_strs )
-  {
-    if( SpecUtils::icontains( filebegining, substr ) )
-      return true;
-  }
-  
-  return false;
-}//bool is_candidate_n42_file( const char * data, const char * const data_end )
-
 
 
 
@@ -2423,69 +2808,6 @@ void Measurement::rebin_by_lower_edge( std::shared_ptr<const std::vector<float>>
 
 
 
-void expand_counted_zeros( const vector<float> &data, vector<float> &return_answer )
-{
-  vector<float> answer;
-  answer.reserve( 1024 );
-  vector<float>::const_iterator iter;
-  for( iter = data.begin(); iter != data.end(); iter++)
-  {
-    if( (*iter != 0.0f) || (iter+1==data.end()) || (*(iter+1)==0.0f) )
-      answer.push_back(*iter);
-    else
-    {
-      iter++;
-      const size_t nZeroes = ((iter==data.end()) ? 0u : static_cast<size_t>(floor(*iter + 0.5f)) );
-
-      if( ((*iter) <= 0.5f) || ((answer.size() + nZeroes) > 131072) )
-        throw runtime_error( "Invalid counted zeros: too many total elements, or negative number of zeros" );
-      
-      for( size_t k = 0; k < nZeroes; ++k )
-        answer.push_back( 0.0f );
-    }//if( at a non-zero value, the last value, or the next value is zero) / else
-  }//for( iterate over data, iter )
-
-  answer.swap( return_answer );
-}//vector<float> expand_counted_zeros( const vector<float> &data )
-
-
-void compress_to_counted_zeros( const std::vector<float> &input, std::vector<float> &results )
-{
-  results.clear();
-
-  //Previous to 20181120 1E-8 was used, but this caused problems with PCF files
-  //  from GADRAS that were not Poisson varied.  FLT_EPSILON is usually 1.19e-7f
-  //  which is still to big!  So chose 10*FLT_MIN (FLT_MIN is something 1E-37)
-  //  which worked with a GADRAS Db.pcf I checked.
-  const float epsilon = 10.0f*FLT_MIN;
-  
-  
-  
-  const size_t nBin = input.size();
-
-  for( size_t bin = 0; bin < nBin; ++bin )
-  {
-      const bool isZero = (fabs(input[bin]) < epsilon);
-
-      if( !isZero ) results.push_back( input[bin] );
-      else          results.push_back( 0.0f );
-
-      if( isZero )
-      {
-          size_t nBinZeroes = 0;
-          while( ( bin < nBin ) && ( fabs( input[bin] ) < epsilon) )
-          {
-            ++nBinZeroes;
-            ++bin;
-          }//while more zero bins
-
-          results.push_back( static_cast<float>(nBinZeroes) );
-
-          if( bin != nBin )
-            --bin;
-      }//if( input[bin] == 0.0 )
-  }//for( size_t bin = 0; bin < input.size(); ++bin )
-}//void compress_to_counted_zeros(...)
 
 #if( PERFORM_DEVELOPER_CHECKS )
 
@@ -5907,239 +6229,6 @@ std::string SpecFile::determine_rad_detector_kind_code() const
 
 
 
-bool SpecFile::load_micro_raider_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  try
-  {
-    reset();
-    rapidxml::file<char> input_file( input );
-    const bool success = load_from_micro_raider_from_data( input_file.data() );
-    
-    if( success )
-      filename_ = filename;
-    
-    return success;
-  }catch( std::exception & )
-  {
-    reset();
-    return false;
-  }//try/catch
-  
-  return false;
-}//bool load_micro_raider_file(...)
-
-
-bool SpecFile::load_from_micro_raider_from_data( const char *data )
-{
-  try
-  {
-    typedef char XmlChar;
-    rapidxml::xml_document<XmlChar> doc;
-    
-    //Casting 'data' to non-const, BUT rapidxml::parse_non_destructive
-    //  _should_ garuntee the source is no altered.  It's a little bit shaky
-    //  but it allows us to potentially use mmap
-    doc.parse<rapidxml::parse_non_destructive |rapidxml::allow_sloppy_parse>( (XmlChar *)data );
-    const rapidxml::xml_node<XmlChar> *IdResult = XML_FIRST_NODE((&doc),"IdResult");
-    
-    if( !IdResult )
-      throw runtime_error( "Invalid Micro Raider XML document" );
-    
-    const rapidxml::xml_node<XmlChar> *DeviceId = XML_FIRST_NODE(IdResult,"DeviceId");
-    const rapidxml::xml_node<XmlChar> *SurveyId = XML_FIRST_NODE(IdResult,"SurveyId");
-    const rapidxml::xml_node<XmlChar> *UUID = XML_FIRST_NODE(IdResult,"UUID");
-    const rapidxml::xml_node<XmlChar> *EventNumber = XML_FIRST_NODE(IdResult,"EventNumber");
-    const rapidxml::xml_node<XmlChar> *CrystalType = XML_FIRST_NODE(IdResult,"CrystalType");
-    const rapidxml::xml_node<XmlChar> *UserMode = XML_FIRST_NODE(IdResult,"UserMode");
-    const rapidxml::xml_node<XmlChar> *StartTime = XML_FIRST_NODE(IdResult,"StartTime");
-//    const rapidxml::xml_node<XmlChar> *StopTime = XML_FIRST_NODE(IdResult,"StopTime");
-    const rapidxml::xml_node<XmlChar> *GPS = XML_FIRST_NODE(IdResult,"GPS");
-    const rapidxml::xml_node<XmlChar> *RealTime = XML_FIRST_NODE(IdResult,"RealTime");
-    const rapidxml::xml_node<XmlChar> *LiveTime = XML_FIRST_NODE(IdResult,"LiveTime");
-//    const rapidxml::xml_node<XmlChar> *DeadTime = XML_FIRST_NODE(IdResult,"DeadTime");
-    const rapidxml::xml_node<XmlChar> *DoseRate = XML_FIRST_NODE(IdResult,"DoseRate");
-//    const rapidxml::xml_node<XmlChar> *CountRate = XML_FIRST_NODE(IdResult,"CountRate");
-    const rapidxml::xml_node<XmlChar> *NeutronCountRate = XML_FIRST_NODE(IdResult,"NeutronCountRate");
-    
-    
-    const rapidxml::xml_node<XmlChar> *Nuclide = XML_FIRST_NODE(IdResult,"Nuclide");
-    const rapidxml::xml_node<XmlChar> *Image = XML_FIRST_NODE(IdResult,"Image");
-    const rapidxml::xml_node<XmlChar> *VoiceRecording = XML_FIRST_NODE(IdResult,"VoiceRecording");
-    const rapidxml::xml_node<XmlChar> *Spectrum = XML_FIRST_NODE(IdResult,"Spectrum");
-    
-    if( !Spectrum || !Spectrum->value_size() )
-      throw runtime_error( "No Spectrum Node" );
-    
-    std::shared_ptr< vector<float> > channel_counts
-                                         = std::make_shared<vector<float> >();
-    
-    const bool validchannel
-               = SpecUtils::split_to_floats( Spectrum->value(),
-                                      Spectrum->value_size(), *channel_counts );
-    if( !validchannel || channel_counts->empty() )
-      throw runtime_error( "Couldnt parse channel counts" );
-    
-    std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-    
-    meas->gamma_counts_ = channel_counts;
-    
-    meas->gamma_count_sum_ = 0.0;
-    const size_t nchannel = meas->gamma_counts_->size();
-    for( size_t i = 0; i < nchannel; ++i )
-      meas->gamma_count_sum_ += (*channel_counts)[i];
-    
-    instrument_id_ = xml_value_str( DeviceId );
-    if( SurveyId )
-      remarks_.push_back( "Survey ID: " + xml_value_str( SurveyId ) );
-    uuid_ = xml_value_str( UUID );
-    if( EventNumber )
-      remarks_.push_back( "EventNumber: " + xml_value_str( EventNumber ) );
-    if( CrystalType )
-      remarks_.push_back( "CrystalType: " + xml_value_str( CrystalType ) );
-    if( UserMode )
-      remarks_.push_back( "CrystalType: " + xml_value_str( UserMode ) );
-    
-    //Unecasary allocation to get time.
-    const string start_time = xml_value_str(StartTime);
-    meas->start_time_ = SpecUtils::time_from_string( start_time.c_str() );
-
-    if( GPS && GPS->value_size() )
-    {
-      rapidxml::xml_attribute<XmlChar> *att = GPS->first_attribute("Valid",5);
-      
-      if( !att || XML_VALUE_ICOMPARE(att,"True") )
-        parse_deg_min_sec_lat_lon(GPS->value(), GPS->value_size(),
-                                  meas->latitude_, meas->longitude_ );
-    }//if( GPS )
-    
-    if( RealTime && RealTime->value_size() )
-      meas->real_time_ = time_duration_string_to_seconds( RealTime->value(), RealTime->value_size() );
-    if( LiveTime && LiveTime->value_size() )
-      meas->live_time_ = time_duration_string_to_seconds( LiveTime->value(), LiveTime->value_size() );
-    
-    
-    std::shared_ptr<DetectorAnalysis> detana;
-    
-    if( DoseRate && DoseRate->value_size() )
-    {
-      DetectorAnalysisResult detanares;
-      const float doseunit = dose_units_usvPerH( DoseRate->value(),
-                                                 DoseRate->value_size() );
-      
-      //Avoidable allocation here below
-      float dose;
-      if( (stringstream(xml_value_str(DoseRate)) >> dose) )
-        detanares.dose_rate_ = dose * doseunit;
-      else
-        cerr << "Failed to turn '" << xml_value_str(DoseRate) << "' into a dose" << endl;
-      
-      //detanares.start_time_ = meas->start_time_;
-      detanares.real_time_ = meas->real_time_;
-      
-      if( !detana )
-        detana = std::make_shared<DetectorAnalysis>();
-      detana->results_.push_back( detanares );
-    }//if( DoseRate && DoseRate->value_size() )
-    
-    if( NeutronCountRate && NeutronCountRate->value_size() )
-    {
-      const string neutroncountstr = xml_value_str(NeutronCountRate);
-      meas->neutron_counts_.resize( 1, 0.0f );
-      
-      float neutrons = 0.0f;
-      if( toFloat(neutroncountstr,neutrons) )
-      {
-        if( meas->real_time_ > 0.0f )
-          neutrons *= meas->real_time_;
-        else if( meas->live_time_ > 0.0f )
-          neutrons *= meas->live_time_;
-        else
-          meas->remarks_.push_back( "NeutronCountRate: " + neutroncountstr + " (error computing gross count)" ); //meh, should be fine...
-        
-        meas->neutron_counts_sum_ = neutrons;
-        meas->neutron_counts_[0] = neutrons;
-        meas->contained_neutron_ = true;
-      }else
-      {
-        meas->remarks_.push_back( "NeutronCountRate: " + neutroncountstr );
-        cerr << "Failed to read '" << neutroncountstr << "' as neutroncountstr"
-             << endl;
-      }
-    }//if( NeutronCountRate && NeutronCountRate->value_size() )
-    
-    while( Nuclide )
-    {
-      DetectorAnalysisResult res;
-      
-      const rapidxml::xml_node<XmlChar> *NuclideName = XML_FIRST_NODE(Nuclide,"NuclideName");
-      const rapidxml::xml_node<XmlChar> *NuclideType = XML_FIRST_NODE(Nuclide,"NuclideType");
-      const rapidxml::xml_node<XmlChar> *NuclideIDConfidenceIndication = XML_FIRST_NODE(Nuclide,"NuclideIDConfidenceIndication");
-      const rapidxml::xml_node<XmlChar> *NuclideIDStrengthIndication = XML_FIRST_NODE(Nuclide,"NuclideIDStrengthIndication");
-      const rapidxml::xml_node<XmlChar> *NuclideDescription = XML_FIRST_NODE(Nuclide,"NuclideDescription");
-//      const rapidxml::xml_node<XmlChar> *NuclideInstruction = XML_FIRST_NODE(Nuclide,"NuclideInstruction");
-      const rapidxml::xml_node<XmlChar> *NuclideHPRDSType = XML_FIRST_NODE(Nuclide,"NuclideHPRDSType");
-    
-      res.nuclide_ = xml_value_str(NuclideName);
-      res.nuclide_type_ = xml_value_str(NuclideType);
-      res.id_confidence_ = xml_value_str(NuclideIDConfidenceIndication);
-      
-      const string strength = xml_value_str(NuclideIDStrengthIndication);
-      if( strength.size() )
-        res.remark_ += "strength: " + strength;
-      if( NuclideHPRDSType && NuclideHPRDSType->value_size() )
-        res.remark_ += (res.remark_.size() ? ". " : "") + xml_value_str(NuclideHPRDSType);
-      if( NuclideDescription && NuclideDescription->value_size() )
-        res.remark_ += (res.remark_.size() ? ". " : "") + xml_value_str(NuclideDescription);
-      
-      Nuclide = XML_NEXT_TWIN(Nuclide);
-      
-      if( !detana )
-        detana = std::make_shared<DetectorAnalysis>();
-      detana->results_.push_back( res );
-    }//while( Nuclide )
-    
-    while( Image && Image->value_size() )
-    {
-      remarks_.push_back( "Image: " + xml_value_str(Image) );
-      Image = XML_NEXT_TWIN(Image);
-    }
-    
-    if( VoiceRecording && VoiceRecording->value_size() )
-      remarks_.push_back( "VoiceRecording: " + xml_value_str(VoiceRecording) );
-    
-    detectors_analysis_ = detana;
-    
-    //Following values taken from a Micro Raider ICD1 N42 2006 file
-    manufacturer_ = "ICx Radiation";
-    instrument_model_ = "Raider";
-    instrument_type_ = "Radionuclide Identifier";  //or PersonalRadiationDetector
-    detector_type_ = DetectorType::MicroRaider;
-    
-    measurements_.push_back( meas );
-    
-    cleanup_after_load();
-    
-    return true;
-  }catch( std::exception & )
-  {
-    return false;
-  }
-  
-  
-//  "<IdResult"
-  
-  return false;
-}//bool load_from_micro_raider_from_data( const char *data )
-
 
 
 
@@ -7352,3902 +7441,6 @@ void SpecFile::write( std::ostream &strm,
     throw runtime_error( "Failed to write to output" );
   
 }//write_to_file(...)
-
-
-
-
-bool Measurement::write_csv( std::ostream& ostr ) const
-{
-  const char *endline = "\r\n";
-
-  ostr << "Energy, Data" << endline;
-
-  for( size_t i = 0; i < gamma_counts_->size(); ++i )
-    ostr << channel_energies_->at(i) << "," << gamma_counts_->operator[](i) << endline;
-
-  ostr << endline;
-
-  return !ostr.bad();
-}//bool Measurement::write_csv( std::ostream& ostr ) const
-
-
-bool SpecFile::write_csv( std::ostream& ostr ) const
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-
-  for( const std::shared_ptr<const Measurement> meas : measurements_ )
-    meas->write_csv( ostr );
-
-  return !ostr.bad();
-}//bool write_csv( std::ostream& ostr ) const
-
-
-
-
-void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
-{
-  //There is a variant of refQQZGMTCC93, RSL mobile system ref8T2SZ11TQE
-  
-  using SpecUtils::safe_get_line;
-  using SpecUtils::split_to_floats;
-  
-  const istream::pos_type orig_pos = istr.tellg();
-  
-  try
-  {
-    string line;
-    if( !SpecUtils::safe_get_line(istr, line) )
-      throw runtime_error(""); //"Failed getting first line"
-  
-    if( line.size() < 8 || line.size() > 100 )
-      throw runtime_error(""); //"First line not reasonable length"
-    
-    //const size_t first_invalid_char = line.substr(0,8).find_first_not_of( "0123456789 ,\r\n\t+-e." );
-    const size_t first_invalid_char = line.find_first_not_of( "0123456789 ,\r\n\t+-e." );
-    
-    if( first_invalid_char != string::npos )
-      throw runtime_error( "" ); //"Invalid character in first 8 characters"
-    
-    vector<string> flinefields;
-    SpecUtils::split( flinefields, line, " ,\t");
-    if( flinefields.size() != 4 )
-      throw runtime_error( "" ); //"First line not real time then calibration coefs"
-    
-    vector<float> fline;
-    if( !split_to_floats(line, fline) || fline.size()!=4 )
-      throw runtime_error( "" ); //We expect the first line to be all numbers
-    
-    const vector<float> eqn( fline.begin() + 1, fline.end() );
-    const float realtime = fline[0];
-    
-    if( realtime < -FLT_EPSILON )
-      throw runtime_error( "" ); //"First coefficient not real time"
-    
-    if( !safe_get_line(istr, line) )
-      throw runtime_error(""); //"Failed getting second line"
-    
-    if( !split_to_floats(line, fline) )
-      throw runtime_error( "" ); //"Second line not floats"
-    
-    if( fline.size() < 127 && fline.size() != 2 )
-      throw runtime_error( "" ); //"Invalid second line"
-    
-    //If we got here, this is probably a valid file
-    auto counts = std::make_shared< vector<float> >();
-    
-    if( fline.size() >= 127 )
-    {
-      //Second line is CSV of channel counts
-      if( SpecUtils::safe_get_line(istr, line) && line.size() )
-        throw runtime_error(""); //"Only expected two lines"
-      
-      counts->swap( fline );
-    }else
-    {
-      //Rest of file is \t seperated column with two columns per line
-      //  "channel\tcounts"
-      float channelnum = fline[0];
-      const float counts0 = fline[1];
-    
-      if( fabs(channelnum) > FLT_EPSILON && fabs(channelnum - 1.0) > FLT_EPSILON )
-        throw runtime_error( "" ); //"First column doesnt refer to channel number"
-    
-      if( counts0 < -FLT_EPSILON )
-        throw runtime_error( "" ); //"Second column doesnt refer to channel counts"
-
-      channelnum = channelnum - 1.0f;
-      istr.seekg( orig_pos, ios::beg );
-      SpecUtils::safe_get_line( istr, line );
-    
-      while( safe_get_line( istr, line ) )
-      {
-        trim( line );
-        if( line.empty() ) //Sometimes file will have a newline at the end of the file
-          continue;
-        
-        if( !split_to_floats(line, fline) || fline.size() != 2 )
-          throw runtime_error( "" ); //"Unexpected number of fields on a line"
-        
-        if( fabs(channelnum + 1.0f - fline[0]) > 0.9f /*FLT_EPSILON*/ )
-          throw runtime_error( "" ); //"First column is not channel number"
-        
-        channelnum = fline[0];
-        counts->push_back( fline[1] );
-      }//while( SpecUtils::safe_get_line( istr, line ) )
-    }//if( fline.size() >= 127 )
-    
-    const size_t nchannel = counts->size();
-    if( nchannel < 127 )
-      throw runtime_error(""); //"Not enought channels"
-    
-    const vector< pair<float,float> > devpairs;
-    const bool validcalib
-           = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn, devpairs,
-                                                    nchannel );
-    if( !validcalib )
-      throw runtime_error( "" ); //"Invalid calibration"
-    
-//    real_time_ = realtime;
-    live_time_ = realtime;
-    contained_neutron_ = false;
-    deviation_pairs_.clear();
-    calibration_coeffs_ = eqn;
-    energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-    neutron_counts_.clear();
-    gamma_counts_ = counts;
-    neutron_counts_sum_ = gamma_count_sum_ = 0.0;
-    for( const float f : *counts )
-      gamma_count_sum_ += f;
-  }catch( std::exception &e )
-  {
-    istr.seekg( orig_pos, ios::beg );
-    throw;
-  }
-}//void set_info_from_avid_mobile_txt( std::istream& istr )
-
-
-
-
-
-
-
-
-bool SpecFile::load_spectroscopic_daily_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  char buffer[8];
-  input.get( buffer, sizeof(buffer)-1 );
-  buffer[sizeof(buffer)-1] = '\0'; //JIC
-  
-  string bufferstr = buffer;
-  const bool isSDF = ((bufferstr.size() > 3 && bufferstr[2]==',')
-                      && ( SpecUtils::starts_with( bufferstr, "GB" )
-                          || SpecUtils::starts_with( bufferstr, "NB" )
-                          || SpecUtils::starts_with( bufferstr, "S1" )
-                          || SpecUtils::starts_with( bufferstr, "S2" )
-                          || SpecUtils::starts_with( bufferstr, "GS" )
-                          || SpecUtils::starts_with( bufferstr, "GS" )
-                          || SpecUtils::starts_with( bufferstr, "NS" )
-                          || SpecUtils::starts_with( bufferstr, "ID" )
-                          || SpecUtils::starts_with( bufferstr, "AB" )));
-  if( !isSDF )
-    return false;
-  
-  input.seekg( 0, ios_base::beg );
-  
-  const bool success = load_from_spectroscopic_daily_file( input );
-  
-  if( !success )
-    return false;
-  
-  filename_ = filename;
-  //      Field 4, the equipment specifier, is as follows:
-  //        -SPM-T for a Thermo ASP-C
-  //        -SPM-C for a Canberra ASP-C
-  //        -RDSC1 for the Radiation Detector Straddle Carrier in primary
-  //        -RDSC2 for the Radiation Detector Straddle Carrier in secondary
-  //        -MRDIS2 for the Mobile Radiation Detection and Identification System in secondary
-  //        ex. refG8JBF6M229
-  vector<string> fields;
-  SpecUtils::split( fields, filename, "_" );
-  if( fields.size() > 3 )
-  {
-    if( fields[3] == "SPM-T" )
-    {
-      manufacturer_ = "Thermo";
-      instrument_model_ = "ASP";
-    }else if( fields[3] == "SPM-C" )
-    {
-      manufacturer_ = "Canberra";
-      instrument_model_ = "ASP";
-    }else if( fields[3] == "RDSC1" )
-    {
-      inspection_ = "Primary";
-      instrument_model_ = "Radiation Detector Straddle Carrier";
-    }else if( fields[3] == "RDSC2" )
-    {
-      inspection_ = "Secondary";
-      instrument_model_ = "Radiation Detector Straddle Carrier";
-    }else if( fields[3] == "MRDIS2" )
-    {
-      inspection_ = "Secondary";
-      instrument_model_ = "Mobile Radiation Detection and Identification System";
-    }
-  }//if( fields.size() > 3 )
-      
-  return true;
-}//bool load_spectroscopic_daily_file( const std::string &filename )
-
-
-bool SpecFile::load_amptek_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_amptek_mca( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_amptek_file( const std::string &filename )
-
-
-bool SpecFile::load_ortec_listmode_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_ortec_listmode( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}
-
-
-bool SpecFile::load_lsrm_spe_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_lsrm_spe( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_lsrm_spe_file( const std::string &filename );
-
-
-bool SpecFile::load_tka_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_tka( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_tka_file( const std::string &filename )
-
-
-bool SpecFile::load_multiact_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_multiact( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_multiact_file( const std::string &filename );
-
-
-bool SpecFile::load_phd_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_phd( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_phd_file( const std::string &filename );
-
-
-bool SpecFile::load_lzs_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_lzs( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_phd_file( const std::string &filename );
-
-
-
-
-
-namespace SpectroscopicDailyFile
-{
-  struct DailyFileS1Info
-  {
-    bool success;
-    std::string detTypeStr;
-    std::string appTypeStr;
-    int nchannels;
-    std::vector<float> calibcoefs;
-    std::string algorithmVersion;
-    //caputures max 1 attribute...
-    struct params{ std::string name, value, attname, attval; };
-    vector<DailyFileS1Info::params> parameters;
-  };//struct DailyFileS1Info
-  
-  
-  struct DailyFileEndRecord
-  {
-    bool success;
-    std::string alarmColor; //Red, Yellow, Gree
-    int occupancyNumber;
-    boost::posix_time::ptime lastStartTime;
-    std::string icd1FileName;
-    float entrySpeed, exitSpeed;
-  };//struct DailyFileEndRecord
-
-  
-  struct DailyFileAnalyzedBackground
-  {
-    enum BackgroundType{ Gamma, Neutrons };
-    
-    bool success;
-    BackgroundType type;
-    float realTime;
-    std::shared_ptr< std::vector<float> > spectrum;
-  };//struct DailyFileAnalyzedBackground
-  
-  struct DailyFileNeutronSignal
-  {
-    bool success;
-    int numTimeSlicesAgregated;
-    int timeChunkNumber;  //identical to one used for gamma
-    vector<float> counts;  //Aa1, Aa2, Aa3, Aa4, Ba1, Ba2, Ba3, Ba4, Ca1, Ca2, Ca3, Ca4, Da1, Da2, Da3, Da4
-  };//enum DailyFileNeutronSignal
-  
-  struct DailyFileGammaSignal
-  {
-    bool success;
-    std::string detectorName;
-    int timeChunkNumber;
-    std::shared_ptr< std::vector<float> > spectrum;
-  };//struct DailyFileGammaSignal
-  
-  
-  struct DailyFileGammaBackground
-  {
-    bool success;
-    std::string detectorName;
-    std::shared_ptr< std::vector<float> > spectrum;
-  };//struct DailyFileGammaBackground
-  
-  struct DailyFileNeutronBackground
-  {
-    bool success;
-    float realTime;
-    vector<float> counts;
-  };//struct DailyFileNeutronBackground
-  
-  
-  void parse_s1_info( const char * const data, const size_t datalen, DailyFileS1Info &info )
-  {
-    const string s1str( data, datalen );
-    
-    info.calibcoefs.clear();
-    
-    vector<string> s1fields;
-    SpecUtils::split( s1fields, s1str, "," );
-    if( s1fields.size() < 5 )
-    {
-      cerr << "parse_s1_info(): Invalid S1 line" << endl;
-      info.success = false;
-      return;
-    }
-    
-    info.detTypeStr = s1fields[1];  //NaI or HPGe
-    info.appTypeStr = s1fields[2];  //SPM, RDSC, MRDIS
-    info.nchannels = atoi( s1fields[3].c_str() );  //typically 512 or 4096
-    info.algorithmVersion = s1fields[4];
-    
-    if( info.nchannels <= 0 )
-    {
-      cerr << "parse_s1_info(): Invalid claimed number of channels" << endl;
-      info.nchannels = 512;
-    }
-    
-    for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
-    {
-      DailyFileS1Info::params p;
-      
-      p.name = s1fields[i];
-      p.value = s1fields[i+1];
-      
-      const string::size_type spacepos = p.name.find(' ');
-      if( spacepos != string::npos )
-      {
-        const string::size_type equalpos = p.name.find('=',spacepos);
-        if( equalpos != string::npos )
-        {
-          p.attval = p.name.substr( equalpos+1 );
-          p.attname = p.name.substr( spacepos + 1, equalpos - spacepos - 1 );
-          p.name = p.name.substr( 0, spacepos );
-        }//if( equalpos != string::npos )
-      }//if( spacepos != string::npos )
-    }//for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
-
-    //TODO 20200212: it isnt clear how or if energy calibration is set; should investigate.
-    //if( info.calibcoefs.empty() )
-    //{
-    //  cerr << "parse_s1_info(): warning, couldnt find calibration coeffecicents"
-    //       << endl;
-    //  info.calibcoefs.push_back( 0.0f );
-    //  info.calibcoefs.push_back( 3000.0f / std::max(info.nchannels-1, 1) );
-    //}//if( info.calibcoefs.empty() )
-
-    info.success = true;
-  }//bool parse_s1_info( const std::string &s1str, DailyFileS1Info &info )
-  
-  void parse_s2_info( const char * const data, const size_t datalen,
-                      map<string,vector< pair<float,float> > > &answer )
-  {
-    const std::string s2str( data, datalen );
-    answer.clear();
-  
-    vector<string> s2fields;
-    SpecUtils::split( s2fields, s2str, "," );
-    string detname;
-    for( size_t i = 1; i < (s2fields.size()-1); )
-    {
-      const string &field = s2fields[i];
-      const string &nextfield = s2fields[i+1];
-      
-      if( field.empty() || nextfield.empty() )
-      {
-        i += 2;
-        continue;
-      }
-      
-      if( isdigit(field[0]) )
-      {
-        const float energy = static_cast<float>( atof( field.c_str() ) );
-        const float offset = static_cast<float>( atof( nextfield.c_str() ) );
-        answer[detname].push_back( pair<float,float>(energy,offset) );
-        i += 2;
-      }else
-      {
-        detname = s2fields[i];
-        ++i;
-      }
-    }//for( size_t i = 1; i < (s2fields.size()-1); )
-  }//void parse_s2_info(...)
-  
-
-  void parse_end_record( const char * const data, const size_t datalen, DailyFileEndRecord &info )
-  {
-    const std::string str( data, datalen );
-    
-    vector<string> fields;
-    SpecUtils::split( fields, str, "," );
-    
-    if( fields.size() < 5 )
-    {
-      info.success = false;
-      return;
-    }
-    
-    info.alarmColor = fields[1];
-    info.occupancyNumber = atoi( fields[2].c_str() );
-    info.lastStartTime = time_from_string( fields[3].c_str() );
-    
-//    cout << "'" << fields[3] << "'--->" << info.lastStartTime << endl;
-    info.icd1FileName = fields[4];
-    info.entrySpeed = (fields.size()>5) ? static_cast<float>(atof(fields[5].c_str())) : 0.0f;
-    info.exitSpeed = (fields.size()>6) ? static_cast<float>(atof(fields[6].c_str())) : info.entrySpeed;
-    
-    info.success = true;
-  }//bool parse_end_record(...)
-  
-  void parse_analyzed_background( const char * const data, const size_t datalen,
-                                 DailyFileAnalyzedBackground &info )
-  {
-    const string line( data, datalen );
-    std::string::size_type pos1 = line.find( ',' );
-    assert( line.substr(0,pos1) == "AB" );
-    std::string::size_type pos2 = line.find( ',', pos1+1 );
-    if( pos2 == string::npos )
-    {
-      cerr << "parse_analyzed_background: unexpected EOL 1" << endl;
-      info.success = false;
-      return;
-    }
-    
-    string type = line.substr( pos1+1, pos2-pos1-1 );
-    if( SpecUtils::iequals_ascii( type, "Gamma" ) )
-      info.type = DailyFileAnalyzedBackground::Gamma;
-    else if( SpecUtils::iequals_ascii( type, "Neutron" ) )
-      info.type = DailyFileAnalyzedBackground::Neutrons;
-    else
-    {
-      cerr << "parse_analyzed_background: invalid type '" << type << "'" << endl;
-      info.success = false;
-      return;
-    }
-    
-    pos1 = pos2;
-    info.realTime = static_cast<float>( atof( line.c_str() + pos1 + 1 ) );
-    pos1 = line.find( ',', pos1+1 );
-    
-    if( pos1 == string::npos )
-    {
-      cerr << "parse_analyzed_background: unexpected EOL 2" << endl;
-      info.success = false;
-      return;
-    }
-    
-    info.spectrum.reset( new vector<float>() );
-    
-    if( info.type == DailyFileAnalyzedBackground::Neutrons )
-    {
-      const float nneut = static_cast<float>( atof( line.c_str() + pos1 + 1 ) );
-      info.spectrum->resize( 1, nneut );
-    }else
-    {
-      const char *start = line.c_str() + pos1 + 1;
-      const size_t len = line.size() - pos1 - 2;
-      const bool success
-              = SpecUtils::split_to_floats( start, len, *info.spectrum );
-      
-      if( !success )
-      {
-        cerr << "parse_analyzed_background: did not decode spectrum" << endl;
-        info.success = false;
-        return;
-      }
-    }//if( neutron ) / ( gamma )
-    
-    info.success = true;
-  }//void parse_analyzed_background(...)
-  
-  void parse_neutron_signal( const char * const data, const size_t datalen,
-                                 DailyFileNeutronSignal &info )
-  {
-    const string line( data, datalen );
-    std::string::size_type pos = line.find( ',' );
-    if( pos == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    const char *start = line.c_str() + pos + 1;
-    const size_t len = line.size() - pos - 1;
-    
-    vector<float> vals;
-    const bool success = SpecUtils::split_to_floats( start, len, vals );
-    if( !success || vals.size() < 2 )
-    {
-      cerr << "parse_neutron_signal: did not decode spectrum" << endl;
-      info.success = false;
-      return;
-    }
-    
-    info.numTimeSlicesAgregated = static_cast<int>( vals[0] );
-    info.timeChunkNumber = static_cast<int>( vals[1] );
-    info.counts.clear();
-    info.counts.insert( info.counts.end(), vals.begin()+2, vals.end() );
-    
-    info.success = true;
-  }//bool parse_analyzed_background
-  
-  void parse_gamma_signal( const char * const data, const size_t datalen,
-                           DailyFileGammaSignal &info )
-  {
-    const string line( data, datalen );
-    std::string::size_type pos1 = line.find( ',' );
-    if( pos1 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    std::string::size_type pos2 = line.find( ',', pos1+1 );
-    if( pos2 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    info.detectorName = line.substr( pos1+1, pos2-pos1-1 );
-    pos1 = pos2;
-    pos2 = line.find( ',', pos1+1 );
-    if( pos2 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    info.timeChunkNumber = static_cast<int>( atoi( line.c_str() + pos1 + 1 ) );
-    info.spectrum.reset( new vector<float>() );
-    
-    vector<float> vals;
-    const char *start = line.c_str() + pos2 + 1;
-    const size_t len = line.size() - pos2 - 1;
-    const bool success = SpecUtils::split_to_floats( start, len, *info.spectrum );
-    if( !success || info.spectrum->size() < 2 )
-    {
-      cerr << "parse_gamma_signal: did not decode spectrum" << endl;
-      info.success = false;
-      return;
-    }
-    
-    info.success = true;
-    return;
-  }//void parse_gamma_signal()
-
-  
-  void parse_gamma_background( const char * const data, const size_t datalen,
-                               DailyFileGammaBackground &info )
-  {
-    const string line( data, datalen );
-    std::string::size_type pos1 = line.find( ',' );
-    if( pos1 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    std::string::size_type pos2 = line.find( ',', pos1+1 );
-    if( pos2 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    info.detectorName = line.substr( pos1+1, pos2-pos1-1 );
-    info.spectrum.reset( new vector<float>() );
-    
-    const char *start = line.c_str() + pos2 + 1;
-    const size_t len = line.size() - pos2 - 1;
-    const bool success = SpecUtils::split_to_floats( start, len, *info.spectrum );
-    if( !success || info.spectrum->size() < 2 )
-    {
-      cerr << "parse_gamma_background: did not decode spectrum" << endl;
-      info.success = false;
-      return;
-    }
-    
-    info.success = true;
-  }//bool parse_gamma_background(...)
-    
-  
-  void parse_neutron_background( const char * const data, const size_t datalen,
-                                 DailyFileNeutronBackground &info )
-  {
-    const string line( data, datalen );
-    std::string::size_type pos1 = line.find( ',' );
-    if( pos1 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    std::string::size_type pos2 = line.find( ',', pos1+1 );
-    if( pos2 == string::npos )
-    {
-      info.success = false;
-      return;
-    }
-    
-    info.realTime = static_cast<float>( atof( line.c_str() + pos1 + 1 ) );
-    
-    const char *start = line.c_str() + pos2 + 1;
-    const size_t len = line.size() - pos2 - 1;
-    
-    
-    //Files like fail: ref1E5GQ2SW76
-    const bool success = SpecUtils::split_to_floats( start, len, info.counts );
-    if( !success || info.counts.size() < 2 )
-    {
-      cerr << "parse_neutron_background: did not decode counts" << endl;
-      info.success = false;
-      return;
-    }
-
-    info.success = true;
-    return;
-  }//bool parse_neutron_background(...)
-  
-}//namespace SpectroscopicDailyFile
-
-
-bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
-{
-/* The daily file is a comma separated value file, with a carriage return and
-   line feed denoting the end of each line.  The file is saved as a text (.txt) 
-   file.  Spaces are not necessary after each comma, in an effort to minimize 
-   the overall size of the file.
-   In the future, all data provided in the Daily File will be energy calibrated, 
-   according to the calibration parameters provided in the S1 and/or S2 lines.
-   This is to ensure that calibration is being done correctly and consistently 
-   between various institutions, laboratories, and individuals.  The calibration 
-   parameters will be provided in case an individual wants to “unwrap” the data 
-   back to the source information provided in the ICD-1 file.  This is not done 
-   for GS line data as of Revision 3 of this data.
-*/
-  
-  //This is a rough hack in; it would be nice to mmap things and read in that
-  //  way, as well as handle potential errors better
-  
-#define DO_SDF_MULTITHREAD 0
-  //Intitial GetLineSafe() for "dailyFile6.txt"
-  //  To parse SDF took:  1.027030s wall, 1.000000s user + 0.020000s system = 1.020000s CPU (99.3%)
-  //  Total File openeing time was:  1.164266s wall, 1.300000s user + 0.110000s system = 1.410000s CPU (121.1%)
-  //
-  //Adding an extra indirection of creating a copy of a string
-  //  To parse SDF took:  1.162067s wall, 1.120000s user + 0.030000s system = 1.150000s CPU (99.0%)
-  //  Total File openeing time was:  1.313293s wall, 1.420000s user + 0.130000s system = 1.550000s CPU (118.0%)
-  //
-  //Reading the file all at once
-  //  To parse SDF took:  1.023828s wall, 0.980000s user + 0.030000s system = 1.010000s CPU (98.6%)
-  //  Total File openeing time was:  1.191765s wall, 1.330000s user + 0.160000s system = 1.490000s CPU (125.0%)
-  //
-  //Making things niavly multithreaded
-  //  To parse SDF took:  0.864120s wall, 1.140000s user + 0.110000s system = 1.250000s CPU (144.7%)
-  //  Total File openeing time was:  0.995905s wall, 1.410000s user + 0.190000s system = 1.600000s CPU (160.7%)
-  //
-  //With error checking
-  //  To parse SDF took:  0.855769s wall, 1.140000s user + 0.110000s system = 1.250000s CPU (146.1%)
-  //
-  //With current multithreaded implementation:
-  //  To parse SDF took:  0.971223s wall, 0.950000s user + 0.020000s system = 0.970000s CPU (99.9%)
-  //  Total File openeing time was:  1.102778s wall, 1.230000s user + 0.110000s system = 1.340000s CPU (121.5%)
-  //
-  //So I think I'll just stick to single threaded parsing for now since it only
-  //  increases speed by ~15% to do mutliithreaded, at the cost of memory.
-  //
-  //TODO: Check whether creating the Measurment objects in a multithreaded
-  //      fashion significantly helps things.
-  //      Make it so the worker functions in the SpectroscopicDailyFile
-  //      namespace dont re-copy all the strings passed in.
-  
-  
-  using namespace SpectroscopicDailyFile;
-  
-  int occupancy_num = 0, background_num = 0, s1_num = 0, s2_num = 0;
-  vector<DailyFileS1Info> s1infos;
-  vector< map<string,vector< pair<float,float> > > > detname_to_devpairs;
-  
-  map<int,int> background_to_s1_num, background_to_s2_num;
-  map<int,int> occupancy_num_to_s1_num, occupancy_num_to_s2_num;
-  map<int,vector<std::shared_ptr<DailyFileGammaBackground> > > gamma_backgrounds;
-  map<int,std::shared_ptr<DailyFileNeutronBackground> > neutron_backgrounds;  //*should* only have one per background number
-  map<int, boost::posix_time::ptime > end_background;
-  
-  map<int,vector<std::shared_ptr<DailyFileGammaSignal> > > gamma_signal;
-  map<int,vector<std::shared_ptr<DailyFileNeutronSignal> > > neutron_signal;
-  
-  map<int,DailyFileEndRecord> end_occupancy;
-  
-  //We *should* only have one analyzed background per occupancy, so we'll go
-  //  with this assumption
-  map<int,DailyFileAnalyzedBackground> analyzed_gamma_backgrounds;
-  map<int,DailyFileAnalyzedBackground> analyzed_neutron_backgrounds;
-  
-  
-  set<string> detectorNames;
-
-  reset();
-  const istream::pos_type orig_pos = input.tellg();
-  
-  
-  
-  //TODO 20180817 - only niavely addressed below:
-  //Files like refRA2PVFVA5I look a lot like these types of files because they
-  //  are text and start with GB or NB, but instead have formats of
-  //NB,000002,000002,000002,000002,00-00-04.841
-  //GB,000822,000750,000770,000757,00-00-04.919
-  //  with no other line types.  so here we will test for this.
-  {//begin test for wierd format
-    string line;
-    if( !SpecUtils::safe_get_line( input, line, 2048 ) )
-      return false;
-    int ndash = 0;
-    auto pos = line.find_last_of( ',' );
-    for( ; pos < line.size(); ++pos )
-      ndash += (line[pos] == '-');
-    
-    if( ndash > 1 || pos == string::npos )
-      return false;
-    input.seekg( orig_pos, ios::beg );
-  }//end test for wierd format
-    
-  
-  
-#if( DO_SDF_MULTITHREAD )
-  if( !input.good() )
-    return false;
-  
-  vector<char> filedata;
-  input.seekg( 0, ios::end );
-  const istream::pos_type eof_pos = input.tellg();
-  input.seekg( orig_pos, ios::beg );
-  
-  const size_t filelength = 0 + eof_pos - orig_pos;
-  filedata.resize( filelength + 1 );
-  input.read( &filedata[0], filelength );
-  if( !input.good() )
-  {
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-    return false;
-  }
-  
-  filedata[filelength] = '\0';
-  
-  size_t pos = 0;
-  const char * const data = &filedata[0];
-  
-  SpecUtilsAsync::ThreadPool pool;
-#else
-  string line;
-#endif
-  
-  int nUnrecognizedLines = 0, nLines = 0, nGammaLines = 0;
-  
-#if( DO_SDF_MULTITHREAD )
-  while( pos < filelength )
-#else
-  while( SpecUtils::safe_get_line( input, line ) )
-#endif
-  {
-    
-#if( DO_SDF_MULTITHREAD )
-    const char * const linestart = data + pos;
-    while( pos < filelength && data[pos] != '\r' && data[pos] != '\n' )
-      ++pos;
-    
-    const char * const lineend = data + pos;
-    const size_t linelen = lineend - linestart;
-    
-    ++pos;
-    if( pos < filelength && data[pos]=='\n' )
-      ++pos;
-#else
-    const size_t linelen = line.length();
-    const char * const linestart = line.c_str();
-#endif
-    
-    ++nLines;
-    if( linelen < 3 )
-      continue;
-    
-    const string linetype(linestart,2);
-    
-    //dates are writtn as yyyy-mm-ddThh:mm:ss.000Z-hh:mm
-    
-    if( linetype == "S1" )
-    {
-/*     First line of setup parameters
-       “S1” is the first line of Setup Parameters.
-       The second element on the S1 line is the type of detector, either “NaI” 
-       or “HPGe”.
-       The third element on the S1 line is the application, either “SPM”, “RDSC”
-       , or “MRDIS”.
-       The fourth element on the S1 line is the number of channels used per 
-       detector.  This is typically 512 for NaI systems or 4096 for HPGe 
-       systems.
-       The fifth element on the S1 line is the algorithm version number.  This 
-       is taken from the <AlgorithmVersion> tag in the ICD-2 file.
-       The next series of elements are variable, and are additional setup 
-       parameters taken from the ICD-2 file.  They are the children of the
-       <AlgorithmParameter> tag in the ICD-2 file, and alternate <ParameterName>
-       , <ParameterValue>.
-       For example, if a ParameterName was “NSigma” and the ParameterValue was 
-       “8”, and the next ParameterName was “Width” and the ParameterValue was 
-       “14”, the S1 line would include the text:
-       NSigma, 8, Width, 14
-       This process continues through all <ParameterName> and <ParameterValue> 
-       elements in the ICD-2 file.
-*/
-      DailyFileS1Info info;
-      parse_s1_info( linestart, linelen, info );
-      if( !info.success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): S1 line invalid" << endl;
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        return false;
-      }
-      
-      s1infos.push_back( info );
-      
-      s1_num = static_cast<int>( s1infos.size() - 1 );
-    }else if( linetype == "S2" )
-    {
-/*     “S2” is the second line of Setup Parameters.  
-       This line provides any detector-specific calibration information that is 
-       included in the ICD-1 file as a <NonlinearityCorrection> tag.
-       The <NonlinearityCorrection> tags are listed in detector order.  So the 
-       S2 line should read:
-           S2, Aa1, 81, -5, 122, -6, …, Aa2, 81, -4, 122, -6, …, Aa3, 81, -5, …
-       These elements are important for properly calibrating the detectors when 
-       plotting spectra.
-*/
-      map<string,vector< pair<float,float> > > devpairs;
-      parse_s2_info( linestart, linelen, devpairs );
-      detname_to_devpairs.push_back( devpairs );
-      
-      s2_num = static_cast<int>( detname_to_devpairs.size() - 1 );
-    }else if( linetype == "GB" )
-    {
-/*
-      The monitors will produce a background on a regular, periodic interval.  
-      The period is currently every 30 minutes; however, it is conceivable that 
-      this could change in the future.  These periodic backgrounds are crucial 
-      to evaluating the long-term health of the system as well for detecting and 
-      troubleshooting intermittent failures.
-*/
-/*
-      Each gamma detector has its own GB line.
-      The specific gamma detector is denoted in the second element of the GB 
-      line (e.g., Aa1, Ca3).
-      The remaining elements are the channel counts in each channel, in order.  
-      These are taken from the <ChannelData> child of the same 
-      <BackgroundSpectrum> that the timestamp was derived from.  If 
-      “zeros compression” is used, the data must be expanded such that each line 
-      has 512 (or 4096) channels of data.  The data must also be energy calibrated.
-*/
-      if( nGammaLines == 0 )
-      {
-        //See "TODO 20180817" above
-        if( (line.size()<50) && (line.find("00-00-")!=string::npos) )
-        {
-          cerr << "load_from_spectroscopic_daily_file(): "
-          "Not a daily file we can decode (probably - giving up)" << endl;
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
-        }
-      }//if( nGammaLines == 0 )
-      
-      auto info = make_shared<DailyFileGammaBackground>();
-      
-#if( DO_SDF_MULTITHREAD )
-      pool.post( std::bind( &parse_gamma_background, linestart, linelen, std::ref(*info) ) );
-#else
-      parse_gamma_background( linestart, linelen, *info );
-      
-      if( !info->success )  //See "TODO 20180817" above
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing gamma background" << endl;
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }//if( !info->success )
-      
-      detectorNames.insert( info->detectorName );
-#endif
-      ++nGammaLines;
-      gamma_backgrounds[background_num].push_back( info );
-    }else if( linetype == "NB" )
-    {
-/*    All neutron detectors are combined on a single NB line.
-      The second element of the NB line is the duration of the background, in 
-      seconds.  To help align columns, the duration in seconds should always be 
-      a three-digit number (e.g., 030 for a 30-second background).  The daily 
-      file assumes that the duration of the neutron background is identical to 
-      the duration of the gamma background, which is supported by operational 
-      observations.
-      The remaining elements of the NB line are the counts for each neutron 
-      detector recorded over the background period.  The detectors are listed in 
-      order – Aa1N, then Aa2N, then Ba1N, etc.
-*/
-      auto info = make_shared<DailyFileNeutronBackground>();
-      
-#if( DO_SDF_MULTITHREAD )
-      pool.post( std::bind(&parse_neutron_background, linestart, linelen, std::ref(*info) ) );
-#else
-      parse_neutron_background( linestart, linelen, *info );
-      
-      if( !info->success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing neutron background" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }
-#endif
-      
-      neutron_backgrounds[background_num] = info;
-    }else if( linetype == "BX" )
-    {
-/*    Then end of the background is denoted by a BX line.
-      The second element of the BX line is the timestamp of the background.  The 
-      timestamp is the <StartTime> child to the <BackgroundSpectrum> tag in the 
-      periodic background files.
-*/
-      if( linelen < 4 )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): invalid BX line lenght"
-             << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }
-      
-      const string line( linestart, linelen );
-      end_background[background_num] = time_from_string( line.c_str() + 3 );
-      background_to_s1_num[background_num] = s1_num;
-      background_to_s2_num[background_num] = s2_num;
-      
-      ++background_num;
-    }else if( linetype == "GS" )
-    {
-/*    Signals – GS and NS
-      ICD-1 file contains large amounts of pre- and post-occupancy data, all 
-      recorded in 0.1 second intervals.  These high-frequency, long-duration 
-      measurements significantly increase the size of the ICD-1 file.  This 
-      level of data fidelity is useful for detailed analysis; however, the cost 
-      would be too great to use these as daily files, and is not warranted for 
-      daily file analysis.  The signal lines in the daily file make two 
-      important concessions to reduce overall file size:
-        -The only data included in the daily file is occupied data.  Pre- and 
-         post-occupancy data are discarded.
-        -The data is only recorded in 1 second intervals, not 0.1 second 
-         intervals.
-      Future versions of this document may relax some of these concessions to 
-      include data other than occupied, or at a higher frequency.
-*/
-/*    The second element of the GS line is the gamma detector name, for example 
-      Aa1 or Da3.
-      The third element of the GS line is the time chunk number, starting from 
-      001.  In this version of the specification, the first ten time slices will 
-      be aggregated into the first time chunk (001); the next ten time slices 
-      will be aggregated into the second time chunk (002); and so on, resulting 
-      in 1 second time chunks.  In the future, it is conceivable that a 
-      different time chunk size (0.5 second, 0.2 second, or 2 seconds) may be 
-      utilized.  The time chunk number serves as a timestamp within the occupancy.
-      The remaining elements of the GS line are the counts in each channel for 
-      that detector, aggregated over one second and energy calibrated per the 
-      parameters provided in the S1 and S2 lines (and any other source as 
-      necessary).  These are taken directly from the <ChannelData> elements.  
-      Unfortunately, since these are taken directly from the ICD-1 file, GS line 
-      data is not energy calibrated as of this version.
-*/
-      std::shared_ptr<DailyFileGammaSignal> info( new DailyFileGammaSignal );
-      
-#if( DO_SDF_MULTITHREAD )
-      pool.post( std::bind(&parse_gamma_signal, linestart, linelen, std::ref(*info) ) );
-#else
-      parse_gamma_signal( linestart, linelen, *info );
-      
-      if( !info->success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing gamma signal" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }//if( !info->success )
-      
-      detectorNames.insert( info->detectorName );
-#endif
-      ++nGammaLines;
-      gamma_signal[occupancy_num].push_back( info );
-    }else if( linetype == "NS" )
-    {
-/*    Neutron Signal
-      The second element of the NS line is the number of time slices used to
-      form one time chunk, represented as a 3 digit number to help align 
-      columns.  In this case, since ten time slices contribute to each chunk, 
-      the second element of the NS line should read, “010”.  (Again, future 
-      versions could change this to 005 or 002 or 020.)
-      The third element of the NS line is the time chunk number.  This should be 
-      identical to the time chunk number used in the gamma signal.
-      The remaining elements of the NS line are the counts from each detector 
-      for the one second interval.  These are taken directly from the 
-      <ChannelData> elements.  The signals are listed in order of the detectors: 
-      Aa1N, Aa2N, Ba1N, and so forth.
-*/
-      std::shared_ptr<DailyFileNeutronSignal> info( new DailyFileNeutronSignal() );
-      
-#if( DO_SDF_MULTITHREAD )
-      pool.post( std::bind(&parse_neutron_signal,linestart, linelen, std::ref(*info) ) );
-#else
-      parse_neutron_signal( linestart, linelen, *info );
-      
-      if( !info->success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing neutron signal" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }//if( !info->success )
-#endif
-      
-      neutron_signal[occupancy_num].push_back( info );
-    }else if( linetype == "ID" )
-    {
-/*    One line is provided for each radionuclide identification.  Even if 
-      multiple identifications are made within the same detector subset and time 
-      slices, a new line should be provided for each radionuclide identified.  
-      If a radionuclide is identified multiple times within the same occupancy 
-      (based on different time slices or different detector subsets), a separate
-      line should be provided for each ID.
-      The second element of the ID line is the radionuclide identified.  The 
-      nuclide ID comes from the <NuclideName> tag in the ICD-2 file.
-      The next elements of the ID line are the detectors that were used to make
-      the identification.  These stem from the <SubsetSampleList> element in the 
-      ICD-2 file.
-      The next elements of the ID line are the time slices that were used in 
-      making the identification.  These are taken directly from the 
-      <SubsetSampleList> tag name in the ICD-2 file.
-      The ID field will state “NONE” if no radionuclide was identified.  This is 
-      made clear if the <AlarmDescription> tag reads “No Alarm”.
-*/
-      //ToDo, implement this
-    }else if( linetype == "AB" )
-    {
-/*    When evaluating an alarm, the background used by the algorithm is 
-      extremely important to capture.  This is provided in the ICD-2 file as a
-      common background aggregated over all gamma detectors, over a long period 
-      of time – typically 300 seconds.
-*/
-/*    The second element of the AB line is “Neutron” for the neutron background.
-      The third element of the AB line is the duration of the background, in 
-      seconds.  This is taken from the <RealTime> child of the
-      <BackgroundSpectrum> element in the ICD-2 file, the same as the gamma 
-      background.
-      The fourth element of the AB line is the <BackgroundCounts> child of the 
-      <GrossCountSummed> element.  This is the sum of the counts from all 
-      neutron detectors over the background period.
-*/
-      DailyFileAnalyzedBackground info;
-      parse_analyzed_background( linestart, linelen, info );
-      
-      if( !info.success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing analyzed background" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }
-      
-      if( info.type == DailyFileAnalyzedBackground::Gamma )
-        analyzed_gamma_backgrounds[occupancy_num] = info;
-      else
-        analyzed_neutron_backgrounds[occupancy_num] = info;
-    }else if( linetype == "GX" )
-    {
-/*    The end of the occupancy is denoted by a GX line.
-      The second element on the GX line is the alarm light color, either Red, 
-      Yellow, or Green, taken from the <AlarmLightColor> tag in the ICD-2 file.  
-      This is useful for categorizing alarms in follow-up analysis.
-      The third element on the GX line is the occupancy number, taken from the 
-      <occupancyNumber> tag in the ICD-2 file.
-      The fourth element on the GX line is the timestamp, taken from the last 
-      time stamp in the ICD-1 file.  This is the <StartTime> child of the last 
-      <DetectorData> element in the file.  This methodology should also work for 
-      the RDSC, which does not record pre- and post-occupancy data.
-      The fifth element of the GX line is the filename of the ICD-1 file that 
-      provided data for this occupancy.  This information may be useful in case 
-      the actual ICD-1 file is needed for additional analysis.
-      The sixth element on the GX line is the entry speed, taken from the 
-      <vehicleEntrySpeed> tag in the ICD-2 file.
-      The seventh element on the GX line is the exit speed, taken from the 
-      <vehicleExitSpeed> tag in the ICD-2 file.  This sixth element (exit speed) 
-      may or may not exist, if the monitor records it.
-*/
-      
-      DailyFileEndRecord info;
-      parse_end_record( linestart, linelen, info );
-      
-      if( !info.success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing end of record line" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }
-      
-      end_occupancy[occupancy_num] = info;
-      
-      occupancy_num_to_s1_num[occupancy_num] = s1_num;
-      occupancy_num_to_s2_num[occupancy_num] = s2_num;
-      
-      ++occupancy_num;
-    }else
-    {
-      string line(linestart, linelen);
-      SpecUtils::trim( line );
-      
-      if( !line.empty() )
-      {
-        ++nUnrecognizedLines;
-        const double fracBad = double(nUnrecognizedLines) / nLines;
-        if( (nUnrecognizedLines > 10) && (fracBad > 0.1) )
-        {
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          return false;
-        }
-      
-        cerr << "load_from_spectroscopic_daily_file, unrecognized line begining: "
-             << linetype << endl;
-      }//if( !line.empty() )
-    }//if / else (determine what this line means)
-  }//while( SpecUtils::safe_get_line( input, line ) )
-  
-#if( DO_SDF_MULTITHREAD )
-  pool.join();
-#endif
-  
-  //Probably not necassary, but JIC
-  background_to_s1_num[background_num] = s1_num;
-  background_to_s2_num[background_num] = s2_num;
-  occupancy_num_to_s1_num[occupancy_num] = s1_num;
-  occupancy_num_to_s2_num[occupancy_num] = s2_num;
-  
-  //TODO: convert so that we are sure we are using the correct setup, incase
-  //      there are multiple setup lines
-  //Probably just create a struct to hold the information, and parse all the
-  //      setups.
-
-  
-  //Heres what we have to work with:
-  if( s1infos.empty() )
-  {
-    cerr << "load_from_spectroscopic_daily_file(): Either S1 line missing"
-         << endl;
-    
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-    
-    return false;
-  }//
-  
-
-#if( DO_SDF_MULTITHREAD )
-  //The below two loops are probably quite wasteful, and not necassary
-  for( map<int,vector<std::shared_ptr<DailyFileGammaBackground> > >::const_iterator i = gamma_backgrounds.begin();
-      i != gamma_backgrounds.end(); ++i )
-  {
-    for( size_t j = 0; j < i->second.size(); ++j )
-      detectorNames.insert( i->second[j]->detectorName );
-  }
-
-  for( map<int,vector<std::shared_ptr<DailyFileGammaSignal> > >::const_iterator i = gamma_signal.begin();
-      i != gamma_signal.end(); ++i )
-  {
-    for( size_t j = 0; j < i->second.size(); ++j )
-      detectorNames.insert( i->second[j]->detectorName );
-  }
-#endif  //#if( DO_SDF_MULTITHREAD )
-  
-  
-  map<string,int> detNameToNum;
-  int detnum = 0;
-  for( const string &name : detectorNames )
-    detNameToNum[name] = detnum++;
-
-  vector< std::shared_ptr<Measurement> > backgroundMeasurments, signalMeasurments;
-  
-  int max_occupancie_num = 0;
-  
-  for( int occnum = 0; occnum < occupancy_num; ++occnum )
-  {
-    const map<int,int>::const_iterator s1pos = occupancy_num_to_s1_num.find(occnum);
-    const map<int,int>::const_iterator s2pos = occupancy_num_to_s2_num.find(occnum);
-    
-    if( s1pos == occupancy_num_to_s1_num.end() || s1pos->second >= int(s1infos.size()) )
-    {
-      cerr << "Serious programing logic error in "
-      "load_from_spectroscopic_daily_file(): 0" << endl;
-      
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
-    }
-    
-    const DailyFileS1Info &sinfo = s1infos[s1pos->second];
-    const map<string,vector< pair<float,float> > > *devpairs = 0;
-    if( s2pos != occupancy_num_to_s2_num.end() && s2pos->second<int(detname_to_devpairs.size()))
-      devpairs = &(detname_to_devpairs[s2pos->second]);
-
-    const map<int,vector<std::shared_ptr<DailyFileGammaSignal> > >::const_iterator gammaiter
-                                                  = gamma_signal.find( occnum );
-    if( gammaiter == gamma_signal.end() )
-    {
-      cerr << "Serious programing logic error in "
-      "load_from_spectroscopic_daily_file(): 0.1" << endl;
-      
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
-    }//if( gammaiter == gamma_signal.end() )
-    
-    const map<int,vector<std::shared_ptr<DailyFileNeutronSignal> > >::const_iterator neutiter
-                                                = neutron_signal.find( occnum );
-    
-    const map<int,DailyFileEndRecord>::const_iterator endrecorditer
-                                                 = end_occupancy.find( occnum );
-    if( endrecorditer == end_occupancy.end() )
-    {
-      cerr << "Serious programing logic error in "
-      "load_from_spectroscopic_daily_file(): 0.2" << endl;
-      
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
-    }//if( endrecorditer == end_occupancy.end() )
-    
-    const DailyFileEndRecord &endrecord = endrecorditer->second;
-    const vector<std::shared_ptr<DailyFileGammaSignal> > &gammas = gammaiter->second;
-    const vector<std::shared_ptr<DailyFileNeutronSignal> > *nutsignal = 0;
-    if( neutiter != neutron_signal.end() )
-      nutsignal = &neutiter->second;
-    
-    const DailyFileAnalyzedBackground *gammaback = 0, *neutback = 0;
-    map<int,DailyFileAnalyzedBackground>::const_iterator backiter;
-    backiter = analyzed_gamma_backgrounds.find( occnum );
-    if( backiter != analyzed_gamma_backgrounds.end() )
-      gammaback = &backiter->second;
-    backiter = analyzed_neutron_backgrounds.find( occnum );
-    if( backiter != analyzed_neutron_backgrounds.end() )
-      neutback = &backiter->second;
-    
-    //Place the analyzed background into signalMeasurments
-    if( gammaback )
-    {
-      std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-      
-      meas->detector_number_    = static_cast<int>( detNameToNum.size() );
-      meas->detector_name_      = "sum";
-      meas->gamma_counts_       = gammaback->spectrum;
-      meas->sample_number_      = 1000*endrecord.occupancyNumber;
-      meas->source_type_        = SourceType::Background;
-      meas->occupied_           = OccupancyStatus::NotOccupied;
-      if( !sinfo.calibcoefs.empty() )
-      {
-        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_ = sinfo.calibcoefs;
-      }
-      
-      meas->remarks_.push_back( "Analyzed Background (sum over all detectors" );
-      meas->real_time_ = meas->live_time_ = 0.1f*detNameToNum.size()*gammaback->realTime;
-      
-/*
-      meas->start_time_         = endrecord.lastStartTime;
-      if( gammas.size() )
-      {
-        //This is a bit of a hack; I want the analyzed backgrounds to appear
-        //  just before the analyzed spectra, so to keep this being the case
-        //  we have to falsify the time a bit, because the measurments will get
-        //  sorted later on according to start time
-        const int totalChunks = gammas[gammas.size()-1].timeChunkNumber;
-        
-        const DailyFileNeutronSignal *neut = 0;
-        if( nutsignal && nutsignal->size() )
-          neut = &(*nutsignal)[0];
-        
-        const float realTime = neut ? 0.1f*neut->numTimeSlicesAgregated : 1.0f;
-        const float timecor = realTime * (totalChunks - 0.5);
-        const boost::posix_time::seconds wholesec( static_cast<int>(floor(timecor)) );
-        const boost::posix_time::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
-        meas->start_time_ -= wholesec;
-        meas->start_time_ -= fracsec;
-        
-        cout << "Background meas->sample_number_=" << meas->sample_number_ << " has time " << meas->start_time_ << endl;
-      }//if( gammas.size() )
-*/
-      
-      if( neutback && !neutback->spectrum )
-      {
-        meas->neutron_counts_ = *neutback->spectrum;
-        meas->neutron_counts_sum_ = 0.0;
-        for( const float f : meas->neutron_counts_ )
-          meas->neutron_counts_sum_ += f;
-        meas->contained_neutron_ = true;
-      }//if( neutback )
-      
-      meas->gamma_count_sum_ = 0.0;
-      if( !!meas->gamma_counts_ )
-      {
-        for( const float f : *meas->gamma_counts_ )
-          meas->gamma_count_sum_ += f;
-      }//if( !!meas->gamma_counts_ )
-      
-      signalMeasurments.push_back( meas );
-//      backgroundMeasurments.push_back( meas );
-    }//if( gammaback )
-    
-    for( size_t i = 0; i < gammas.size(); ++i )
-    {
-      const DailyFileNeutronSignal *neut = 0;
-      const DailyFileGammaSignal &gamma = *gammas[i];
-      
-#if( DO_SDF_MULTITHREAD )
-      if( !gamma.success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing gamma signal" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }//if( !gamma.success )
-#endif
-      
-      if( nutsignal )
-      {
-        for( size_t j = 0; j < nutsignal->size(); ++j )
-        {
-          if( (*nutsignal)[j]->timeChunkNumber == gamma.timeChunkNumber )
-          {
-            neut = ((*nutsignal)[j]).get();
-            break;
-          }
-        }//for( size_t j = 0; j < nutsignal->size(); ++j )
-      }//if( nutsignal )
-      
-#if( DO_SDF_MULTITHREAD )
-      if( neut && !neut->success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing neutron signal" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }//if( neut && !neut->success )
-#endif
-      
-      std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-      
-      meas->detector_number_    = detNameToNum[gamma.detectorName];
-      meas->detector_name_      = gamma.detectorName;
-      meas->gamma_counts_       = gamma.spectrum;
-      meas->sample_number_      = 1000*endrecord.occupancyNumber + gamma.timeChunkNumber;
-      meas->source_type_        = SourceType::Foreground;
-      meas->occupied_           = OccupancyStatus::Occupied;
-      if( !sinfo.calibcoefs.empty() )
-      {
-        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_ = sinfo.calibcoefs;
-      }
-      meas->speed_              = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
-      meas->start_time_         = endrecord.lastStartTime;
-      meas->remarks_.push_back( "ICD1 Filename: " + endrecord.icd1FileName );
-      meas->remarks_.push_back( "Alarm Color: " + endrecord.alarmColor );
-      meas->remarks_.push_back( "Occupancy Number: " + std::to_string(endrecord.occupancyNumber) );
-      
-      max_occupancie_num = std::max( endrecord.occupancyNumber, max_occupancie_num );
-      
-      meas->gamma_count_sum_ = 0.0;
-      if( !!meas->gamma_counts_ )
-      {
-        for( const float f : *meas->gamma_counts_ )
-          meas->gamma_count_sum_ += f;
-      }
-      
-      meas->contained_neutron_ = false;
-      meas->live_time_ = meas->real_time_ = 1.0f;
-      if( neut )
-      {
-        meas->live_time_ = meas->real_time_ = 0.1f*neut->numTimeSlicesAgregated;
-        
-        if( meas->detector_number_ < static_cast<int>(neut->counts.size()) )
-        {
-          meas->neutron_counts_sum_ = neut->counts[meas->detector_number_];
-          meas->neutron_counts_.resize( 1 );
-          meas->neutron_counts_[0] = static_cast<float>( meas->neutron_counts_sum_ );
-          meas->contained_neutron_ = true;
-        }else
-        {
-          meas->neutron_counts_sum_ = 0.0;
-        }
-      }//if( neut )
-      
-      const int totalChunks = gammas[gammas.size()-1]->timeChunkNumber;
-      const float dtMeasStart = meas->real_time_ * (totalChunks - 1);
-      const float timecor = dtMeasStart * float(totalChunks-gamma.timeChunkNumber)/float(totalChunks);
-      const boost::posix_time::seconds wholesec( static_cast<int>(floor(timecor)) );
-      const boost::posix_time::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
-      meas->start_time_ -= wholesec;
-      meas->start_time_ -= fracsec;
-      
-      signalMeasurments.push_back( meas );
-    }//for( size_t i = 0; i < gammas.size(); ++i )
-  }//for( int occnum = 0; occnum < occupancy_num; ++occnum )
-
-  
-  
-  for( int backnum = 0; backnum < background_num; ++backnum )
-  {
-    const map<int,int>::const_iterator s1pos = background_to_s1_num.find(backnum);
-    const map<int,int>::const_iterator s2pos = background_to_s2_num.find(backnum);
-  
-    if( s1pos == background_to_s1_num.end() || s1pos->second >= int(s1infos.size()) )
-    {
-      cerr << "Serious programing logic error in "
-              "load_from_spectroscopic_daily_file(): 1" << endl;
-      
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
-    }
-    
-    const DailyFileS1Info &sinfo = s1infos[s1pos->second];
-    const map<string,vector< pair<float,float> > > *devpairs = 0;
-	const int ndets = static_cast<int>( detname_to_devpairs.size() );
-    if( s2pos != background_to_s2_num.end() && s2pos->second < ndets )
-      devpairs = &(detname_to_devpairs[s2pos->second]);
-
-    const map<int,vector<std::shared_ptr<DailyFileGammaBackground> > >::const_iterator gammaback
-                                             = gamma_backgrounds.find(backnum);
-    
-    const map<int,std::shared_ptr<DailyFileNeutronBackground> >::const_iterator neutback
-                                           = neutron_backgrounds.find(backnum);
-    
-    const map<int, boost::posix_time::ptime >::const_iterator backtimestamp
-                                                = end_background.find(backnum);
-    
-    if( gammaback == gamma_backgrounds.end() )
-    {
-      cerr << "Serious programing logic error in "
-              "load_from_spectroscopic_daily_file(): 1.1" << endl;
-      
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
-    }
-    
-    if( backtimestamp == end_background.end() )
-    {
-      cerr << "Serious programing logic error in "
-              "load_from_spectroscopic_daily_file(): 1.2" << endl;
-      
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
-    }
-    
-    const vector<std::shared_ptr<DailyFileGammaBackground> > &backgrounds = gammaback->second;
-    const boost::posix_time::ptime &timestamp = backtimestamp->second;
-    
-    for( size_t i = 0; i < backgrounds.size(); ++i )
-    {
-      const DailyFileGammaBackground &back = *backgrounds[i];
-      
-#if( DO_SDF_MULTITHREAD )
-      if( !back.success )
-      {
-        cerr << "load_from_spectroscopic_daily_file(): "
-                "Error Parsing gamma background" << endl;
-        
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
-        
-        return false;
-      }//if( !back.success )
-#endif
-      
-      std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-      
-      meas->source_type_        = SourceType::Background;
-      meas->detector_name_      = back.detectorName;
-      meas->detector_number_    = detNameToNum[back.detectorName];
-      meas->gamma_counts_       = back.spectrum;
-      meas->start_time_         = timestamp;
-      if( !sinfo.calibcoefs.empty() )
-      {
-        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_ = sinfo.calibcoefs;
-      }
-      meas->occupied_           =  OccupancyStatus::NotOccupied;
-      
-      meas->sample_number_ = 1000*(max_occupancie_num+1) + backnum;
-      
-      if( !meas->gamma_counts_ )
-        cerr << "Warning, invalid gamma counts" << endl;
-      else if( static_cast<int>(meas->gamma_counts_->size()) != sinfo.nchannels )
-        cerr << "WArning, mismatch in spectrum size, got "
-             << meas->gamma_counts_->size() << " expected " << sinfo.nchannels
-             << endl;
-      
-      if( devpairs )
-      {
-        map<string,vector< pair<float,float> > >::const_iterator pos
-                                      = devpairs->find( meas->detector_name_ );
-        meas->deviation_pairs_ = pos->second;
-      }//if( devpairs )
-      
-      meas->gamma_count_sum_ = 0.0;
-      if( !!meas->gamma_counts_ )
-      {
-        for( const float f : *meas->gamma_counts_ )
-          meas->gamma_count_sum_ += f;
-      }//if( !!meas->gamma_counts_ )
-      
-      meas->contained_neutron_ = false;
-      if( neutback != neutron_backgrounds.end() )
-      {
-        const DailyFileNeutronBackground &neutbackground = *neutback->second;
-        
-#if( DO_SDF_MULTITHREAD )
-        if( !neutbackground.success )
-        {
-          cerr << "load_from_spectroscopic_daily_file(): "
-                  "Error Parsing neutron background" << endl;
-          
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
-        }
-#endif
-        
-        meas->live_time_ = meas->real_time_ = neutbackground.realTime;
-        const int nneutdet = static_cast<int>( neutbackground.counts.size() );
-        if( meas->detector_number_ < nneutdet )
-        {
-          const float counts = neutbackground.counts[meas->detector_number_];
-          meas->neutron_counts_.resize( 1 );
-          meas->neutron_counts_[0] = counts;
-          meas->neutron_counts_sum_ = counts;
-          meas->contained_neutron_ = true;
-        }//if( meas->detector_number_ < neutbackground.counts.size() )
-      }//if( neutback != neutron_backgrounds.end() )
-      
-      backgroundMeasurments.push_back( meas );
-    }//for( size_t i = 0; i < backgrounds.size(); ++i )
-  }//for( int backnum = 0; backnum < background_num; ++backnum )
-  
-  
-  for( std::shared_ptr<Measurement> &m : signalMeasurments )
-    measurements_.push_back( m );
-  
-  for( std::shared_ptr<Measurement> &m : backgroundMeasurments )
-    measurements_.push_back( m );
-
-  
-  for( size_t i = 0; i < s1infos.size(); ++i )
-  {
-    const DailyFileS1Info &sinfo = s1infos[i];
-    remarks_.push_back( "Algorithm Version: " + sinfo.algorithmVersion );
-    remarks_.push_back( "Portal Type: " + sinfo.appTypeStr );  //SPM, RDSC, MRDIS
-    instrument_type_ = sinfo.detTypeStr;
-    
-    if( sinfo.appTypeStr == "SPM" )
-      instrument_model_ = "ASP";
-    else if( sinfo.appTypeStr == "RDSC" )
-      instrument_model_ = "Radiation Detector Straddle Carrier";
-    else if( sinfo.appTypeStr == "MRDIS" )
-      instrument_model_ = "Mobile Radiation Detection and Identification System";
-
-    for( const DailyFileS1Info::params &p : sinfo.parameters )
-    {
-      string remark = p.name + " = " + p.value;
-      if( p.attname.size() && p.attval.size() )
-        remark += ", " + p.attname + " = " +p.attval;
-      remarks_.push_back( remark );
-    }//for( const DailyFileS1Info::params &p : sinfo.parameters )
-  }//for( size_t i = 0; i < s1infos.size(); ++i )
-  
-  
-#if( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING )
-  cleanup_after_load( StandardCleanup | DontChangeOrReorderSamples );
-#else
-  cleanup_after_load();
-#endif
-  
-  //if( properties_flags_ & kNotSampleDetectorTimeSorted )
-  //  cerr << "load_from_spectroscopic_daily_file: kNotSampleDetectorTimeSorted is set" << endl;
-  //
-  //if( properties_flags_ & kNotTimeSortedOrder )
-  //  cerr << "load_from_spectroscopic_daily_file: kNotTimeSortedOrder is set" << endl;
-  //
-  //if( properties_flags_ & kNotUniqueSampleDetectorNumbers )
-  //  cerr << "load_from_spectroscopic_daily_file: kNotUniqueSampleDetectorNumbers is set" << endl;
-  //
-  //if( properties_flags_ & kAllSpectraSameNumberChannels )
-  //  cerr << "load_from_spectroscopic_daily_file: kAllSpectraSameNumberChannels is set" << endl;
-  //
-  //if( properties_flags_ & kHasCommonBinning )
-  //  cerr << "load_from_spectroscopic_daily_file: kHasCommonBinning is set" << endl;
-
-
-  return true;
-}//bool load_from_spectroscopic_daily_file( std::istream &input )
-
-
-
-bool SpecFile::load_from_srpm210_csv( std::istream &input )
-{
-  try
-  {
-    string line;
-    if( !SpecUtils::safe_get_line(input, line) )
-      return false;
-    
-    if( line.find("Fields, RSP 1, RSP 2") == string::npos )
-      return false;
-    
-    vector<string> header;
-    SpecUtils::split( header, line, "," );
-    if( header.size() < 3 )
-      return false; //we know this cant happen, but whatever
-    header.erase( begin(header) );  //get rid of "Fields"
-    
-#if(PERFORM_DEVELOPER_CHECKS)
-    set<string> header_names_check;
-#endif
-    for( auto &field : header )
-    {
-      SpecUtils::trim( field );
-      if( field.size() < 2 )
-      {
-#if(PERFORM_DEVELOPER_CHECKS)
-        header_names_check.insert( field );
-#endif
-        continue; //JIC, shouldnt ever hit though
-      }
-      
-      //Transform "RSP 1" to "RSP 01", so this way when names get sorted
-      //  "RSP 11" wont come before "RSP 2"
-      if( isdigit( field[field.size()-1] ) && !isdigit( field[field.size()-2] ) )
-        field = field.substr(0,field.size()-1) + '0' + field.substr(field.size()-1);
-      
-#if(PERFORM_DEVELOPER_CHECKS)
-      header_names_check.insert( field );
-#endif
-    }//for( auto &field : header )
-    
-#if(PERFORM_DEVELOPER_CHECKS)
-    if( header_names_check.size() != header_names_check.size() )
-      log_developer_error( __func__, ("There was a duplicate detector name in SRPM CSV file: '" + line + "' - who knows what will happen").c_str() );
-#endif
-    
-    
-    vector<float> real_times, live_times;
-    vector<vector<float>> gamma_counts, neutron_counts;
-    
-    while( SpecUtils::safe_get_line(input, line) )
-    {
-      SpecUtils::trim( line );
-      if( line.empty() )
-        continue;
-      
-      auto commapos = line.find(',');
-      if( commapos == string::npos )
-        continue;  //shouldnt happen
-      
-      const string key = line.substr( 0, commapos );
-      line = line.substr(commapos+1);
-      
-      //All columns, other than the first are integral, however for conveince
-      //  we will just read them into floats.  The time (in microseconds) would
-      //  maybe be the only thing that would lose info, but it will be way to
-      //  minor to worry about.
-      
-      //Meh, I dont think we care about any of the following lines
-      const string lines_to_skip[] = { "PLS_CNTR", "GOOD_CNTR", "PU_CNTR",
-        "COSM_CNTR", "PMT_COUNTS_1", "PMT_COUNTS_2", "PMT_COUNTS_3",
-        "PMT_COUNTS_4", "XRAY_CNTR"
-      };
-      
-      if( std::find(begin(lines_to_skip), end(lines_to_skip), key) != end(lines_to_skip) )
-        continue;
-      
-      vector<float> line_data;
-      if( !SpecUtils::split_to_floats(line, line_data) )
-      {
-#if(PERFORM_DEVELOPER_CHECKS)
-        log_developer_error( __func__, ("Failed in parsing line of SRPM file: '" + line + "'").c_str() );
-#endif
-        continue;
-      }
-      
-      if( line_data.empty() )
-        continue;
-      
-      if( key == "ACC_TIME_us" )
-      {
-        real_times.swap( line_data );
-      }else if( key == "ACC_TIME_LIVE_us" )
-      {
-        live_times.swap( line_data );
-      }else if( SpecUtils::istarts_with( key, "Spectrum_") )
-      {
-        if( gamma_counts.size() < line_data.size() )
-          gamma_counts.resize( line_data.size() );
-        for( size_t i = 0; i < line_data.size(); ++i )
-          gamma_counts[i].push_back(line_data[i]);
-      }else if( SpecUtils::istarts_with( key, "Ntr_") )
-      {
-        if( SpecUtils::icontains(key, "Total") )
-        {
-          if( neutron_counts.size() < line_data.size() )
-            neutron_counts.resize( line_data.size() );
-          for( size_t i = 0; i < line_data.size(); ++i )
-            neutron_counts[i].push_back(line_data[i]);
-        }else if( SpecUtils::icontains(key, "Low")
-                 || SpecUtils::icontains(key, "High")
-                 || SpecUtils::icontains(key, "_Neutron") )
-        {
-          //Meh, ignore this I guess
-        }else
-        {
-#if(PERFORM_DEVELOPER_CHECKS)
-          log_developer_error( __func__, ("Unrecognized neutron type in SRPM file: '" + key + "'").c_str() );
-#endif
-        }
-      }else
-      {
-#if(PERFORM_DEVELOPER_CHECKS)
-        log_developer_error( __func__, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
-#endif
-      }//if( key is specific value ) / else
-    }//while( SpecUtils::safe_get_line(input, line) )
-    
-    if( gamma_counts.empty() )
-      return false;
-    
-    reset();
-    
-    
-    for( size_t i = 0; i < gamma_counts.size(); ++i )
-    {
-      vector<float> &gammacount = gamma_counts[i];
-      if( gammacount.size() < 7 ) //7 is arbitrary
-        continue;
-      
-      float livetime = 0.0f, realtime = 0.0f;
-      if( i < live_times.size() )
-        livetime = 1.0E-6f * live_times[i];
-      if( i < real_times.size() )
-        realtime = 1.0E-6f * real_times[i];
-      
-      //JIC something is whack getting time, hack it! (shouldnt happen that I'm aware of)
-      if( livetime==0.0f && realtime!=0.0f )
-        realtime = livetime;
-      if( realtime==0.0f && livetime!=0.0f )
-        livetime = realtime;
-    
-      auto m = std::make_shared<Measurement>();
-      
-      if( i < header.size() )
-        m->detector_name_ = header[i];
-      else
-        m->detector_name_ = "Det" + to_string(i);
-      m->detector_number_ = static_cast<int>( i );
-      m->real_time_ = realtime;
-      m->live_time_ = livetime;
-      m->detector_description_ = "PVT";
-      m->gamma_counts_ = std::make_shared<vector<float>>( gammacount );
-      if( i < neutron_counts.size() )
-        m->neutron_counts_ = neutron_counts[i];
-      for( const float counts : *m->gamma_counts_ )
-        m->gamma_count_sum_ += counts;
-      for( const float counts : m->neutron_counts_ )
-        m->neutron_counts_sum_ += counts;
-      m->contained_neutron_ = !m->neutron_counts_.empty();
-      m->sample_number_ = 1;
-      
-      //Further quantities it would be nice to fill out:
-      /*
-      OccupancyStatus  occupied_;
-      float speed_;  //in m/s
-      QualityStatus quality_status_;
-      SourceType     source_type_;
-      SpecUtils::EnergyCalType   energy_calibration_model_;
-      std::vector<std::string>  remarks_;
-      boost::posix_time::ptime  start_time_;
-      std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
-      std::vector<std::pair<float,float>>          deviation_pairs_;     //<energy,offset>
-       std::vector<float>        neutron_counts_;
-      double latitude_;  //set to -999.9 if not specified
-      double longitude_; //set to -999.9 if not specified
-      boost::posix_time::ptime position_time_;
-      std::string title_;  //Actually used for a number of file formats
-      */
-      measurements_.push_back( m );
-      
-    }//for( size_t i = 0; i < gamma_counts.size(); ++i )
-    
-    detector_type_ = DetectorType::Srpm210;  //This is deduced from the file
-    instrument_type_ = "Spectroscopic Portal Monitor";
-    manufacturer_ = "Leidos";
-    instrument_model_ = "SRPM-210";
-    
-    //Further information it would be nice to fill out:
-    //instrument_id_ = "";
-    //remarks_.push_back( "..." );
-    //lane_number_ = ;
-    //measurement_location_name_ = "";
-    //inspection_ = "";
-    //measurment_operator_ = "";
-    
-    cleanup_after_load();
-  }catch( std::exception & )
-  {
-    reset();
-    return false;
-  }
-  
-  return true;
-}//bool load_from_srpm210_csv( std::istream &input );
-
-
-namespace
-{
-  string getAmptekMcaLineInfo( const string &data, const string &heading )
-  {
-    const size_t pos = data.find( heading );
-    if( pos == string::npos )
-      return "";
-    const size_t end = data.find_first_of( "\r\n", pos );
-    if( end == string::npos )
-      return "";
-    return data.substr( pos + heading.size(), end - pos - heading.size() );
-  }
-}//anonomous namespace
-
-
-
-bool SpecFile::load_from_amptek_mca( std::istream &input )
-{
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  char firstline[18];
-  input.read( firstline, 17 );
-  firstline[17] = '\0';
-  
-  if( strcmp(firstline, "<<PMCA SPECTRUM>>") != 0 )
-    return false;
-  
-  input.seekg( 0, ios::end );
-  const istream::pos_type eof_pos = input.tellg();
-  input.seekg( orig_pos, ios::beg );
-  
-  const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-  
-  
-  //Assume maximum file size of 2.5 MB - this is _way_ more than expected for
-  //  even a 16k channel spectrum
-  if( filesize > 2.5*1024*1024 )
-    return false;
-  
-  try
-  {
-    std::shared_ptr<Measurement> meas( new Measurement() );
-  
-    string filedata;
-    filedata.resize( filesize );
-    input.read( &filedata[0], filesize );
-  
-    string lineinfo = getAmptekMcaLineInfo( filedata, "TAG - " );
-    if( !lineinfo.empty() )
-      remarks_.push_back( "Tag: " + lineinfo );
-  
-    lineinfo = getAmptekMcaLineInfo( filedata, "DESCRIPTION - " );
-    if( !lineinfo.empty() )
-      remarks_.push_back( "Description: " + lineinfo );
-  
-    lineinfo = getAmptekMcaLineInfo( filedata, "GAIN - " );
-    if( !lineinfo.empty() )
-    {
-      float gain;
-      if( toFloat(lineinfo,gain) )
-      {
-        meas->calibration_coeffs_.push_back( 0.0f );
-        meas->calibration_coeffs_.push_back( gain );
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-      }
-    }//if( !lineinfo.empty() )
-  
-  
-    lineinfo = getAmptekMcaLineInfo( filedata, "LIVE_TIME - " );
-    if( !lineinfo.empty() )
-      meas->live_time_ = static_cast<float>( atof( lineinfo.c_str() ) );
-  
-    lineinfo = getAmptekMcaLineInfo( filedata, "REAL_TIME - " );
-    if( !lineinfo.empty() )
-      meas->real_time_ = static_cast<float>( atof( lineinfo.c_str() ) );
-  
-    lineinfo = getAmptekMcaLineInfo( filedata, "START_TIME - " );
-    if( !lineinfo.empty() )
-      meas->start_time_ = time_from_string( lineinfo.c_str() );
-  
-    lineinfo = getAmptekMcaLineInfo( filedata, "SERIAL_NUMBER - " );
-    if( !lineinfo.empty() )
-      instrument_id_ = lineinfo;
-  
-    size_t datastart = filedata.find( "<<DATA>>" );
-    if( datastart == string::npos )
-      throw runtime_error( "File doesnt contain <<DATA>> section" );
-  
-    datastart += 8;
-    while( datastart < filedata.size() && !isdigit(filedata[datastart]) )
-      ++datastart;
-    
-    const size_t dataend = filedata.find( "<<END>>", datastart );
-    if( dataend == string::npos )
-      throw runtime_error( "File doesnt contain <<END>> for data section" );
-  
-    const size_t datalen = dataend - datastart - 1;
-    
-    std::shared_ptr<vector<float> > counts( new vector<float>() );
-    meas->gamma_counts_ = counts;
-    
-    const bool success = SpecUtils::split_to_floats(
-                               filedata.c_str() + datastart, datalen, *counts );
-    if( !success )
-      throw runtime_error( "Couldnt parse channel data" );
-    
-    meas->gamma_count_sum_ = 0.0;
-    for( const float f : *counts )
-      meas->gamma_count_sum_ += f;
-    
-    const size_t dp5start = filedata.find( "<<DP5 CONFIGURATION>>" );
-    if( dp5start != string::npos )
-    {
-      const size_t dp5end = filedata.find( "<<DP5 CONFIGURATION END>>", dp5start );
-      
-      if( dp5end != string::npos )
-      {
-        vector<string> lines;
-        const string data = filedata.substr( dp5start, dp5end - dp5start );
-        SpecUtils::split( lines, data, "\r\n" );
-        for( size_t i = 1; i < lines.size(); ++i )
-          meas->remarks_.push_back( lines[i] );
-      }//if( dp5end != string::npos )
-    }//if( dp5start == string::npos )
-    
-    
-    const size_t dppstart = filedata.find( "<<DPP STATUS>>" );
-    if( dppstart != string::npos )
-    {
-      const size_t dppend = filedata.find( "<<DPP STATUS END>>", dppstart );
-      
-      if( dppend != string::npos )
-      {
-        vector<string> lines;
-        const string data = filedata.substr( dppstart, dppend - dppstart );
-        SpecUtils::split( lines, data, "\r\n" );
-        for( size_t i = 1; i < lines.size(); ++i )
-        {
-          if( SpecUtils::starts_with( lines[i], "Serial Number: " )
-              && instrument_id_.size() < 3 )
-            instrument_id_ = lines[i].substr( 15 );
-          else if( SpecUtils::starts_with( lines[i], "Device Type: " ) )
-            instrument_model_ = lines[i].substr( 13 );
-          else
-            remarks_.push_back( lines[i] );
-        }
-      }//if( dppend != string::npos )
-    }//if( dp5start == string::npos )
-  
-    
-    measurements_.push_back( meas );
-   
-    cleanup_after_load();
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-  }
-  
-  return false;
-}//bool SpecFile::load_from_amptek_mca( std::istream &input )
-
-
-
-bool SpecFile::load_from_ortec_listmode( std::istream &input )
-{
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  try
-  {
-    //http://www.ortec-online.com/download/List-Mode-File-Formats.pdf
-    
-    //For reference:
-    //  2^21 = 2097152  (e.g. event us clock overflows every 2.097 seconds)
-    //  2^31 = 2147483648
-    //  2^32 = 4294967296
-    //  2147.483647s = 35.79m (e.g. 31 bit clock us overflows every ~36 minutes)
-    //  2^30 = 1073741824
-    //  1073741.824 = 298 hours (e.g. digiBASE-E ms overflows every ~12 days, can ignore)
-    const streampos orig_pos = input.tellg();
-    
-    double olestartdate;
-    uint8_t energy_cal_valid, shape_cal_valid;
-    float realtime, livetime;
-    float offset, gain, quadratic;
-    float shapeoffset, shapegain, shapequad;
-    int32_t magicnum, lmstyle, conversiongain, detectoridint;
-    char devaddress[81] = {'\0'}, mcb_type[10] = {'\0'}, energyunits[5] = {'\0'};
-    char serialnumstr[17] = {'\0'}, txtdcreption[81] = {'\0'}, dummy[9];
-    
-    
-    if( !input.read( (char *)&magicnum, 4) )
-      throw runtime_error( "" );  //Failed to read from input stream
-    
-    if( magicnum != -13 )
-      throw runtime_error( "Incorrect leading 4 bytes for .LIS file" );
-    
-    if( !input.read( (char *)&lmstyle, 4) )
-      throw runtime_error( "" );  //Failed to read from input stream
-    
-    if( lmstyle != 1 && lmstyle != 2 && lmstyle != 4 )
-      throw runtime_error( "Unrecognized listmode format" );
-    
-    if( lmstyle != 1 && lmstyle != 4 )
-      throw runtime_error( "Listmode data not in digiBASE/digiBASE-E format (PRO List not supported yet)" );
-    
-    if( !input.read( (char *)&olestartdate, 8) )
-      throw runtime_error( "" );
-    
-    if( !input.read( devaddress, 80) || !input.read( mcb_type, 9)
-       || !input.read( serialnumstr, 16) || !input.read( txtdcreption, 80) )
-      throw runtime_error( "" );
-    
-    if( !input.read( (char *)&energy_cal_valid, 1 ) || !input.read(energyunits,4)
-       || !input.read( (char *)&offset, 4 ) || !input.read( (char *)&gain, 4 )
-       || !input.read( (char *)&quadratic, 4 ) )
-      throw runtime_error( "" );  //Failed reading energy calibration
-    
-    if( !input.read( (char *)&shape_cal_valid, 1 )
-       || !input.read( (char *)&shapeoffset, 4 )
-       || !input.read( (char *)&shapegain, 4 )
-       || !input.read( (char *)&shapequad, 4 ) )
-      throw runtime_error( "" ); //Failed reading shape calibration coefficents
-    
-    if( !input.read( (char *)&conversiongain, 4) )
-      throw runtime_error( "" );
-    
-    if( !input.read( (char *)&detectoridint, 4) )
-      throw runtime_error( "" );
-    
-    if( !input.read( (char *)&realtime, 4) || !input.read( (char *)&livetime, 4) )
-      throw runtime_error( "" );
-    
-    if( !input.read(dummy, 9) )
-      throw runtime_error( "" );
-    
-    assert( input.tellg() == (orig_pos + streampos(256)) );
-  
-    size_t ninitialbin = 1024;
-    switch( lmstyle )
-    {
-      case 1: ninitialbin = 1024; break;
-      case 2: ninitialbin = 1024; break;  //16k?
-      case 4: ninitialbin = 2048; break;
-    }
-    
-    std::shared_ptr< vector<float> > histogram = std::make_shared< vector<float> >( ninitialbin, 0.0f );
-    
-    uint32_t event;
-    
-    if( lmstyle == 1 )
-    {
-      //We need to track overflows in the 31bit microsecond counter, so we will
-      //  check if the current 31bit timestamp is less than the previous, and if
-      //  so know a overflow occured, and add 2^31 to timeepoch.
-      uint32_t previous_time = 0;
-      
-      //Incase real time isnt excplicitly given in the header we will grab the
-      //  first and last events timetampts
-      uint64_t firsttimestamp = 0, lasttimestamp = 0;
-      
-      //To track measurments longer than 35.79 minutes we need to keep track of
-      //  more than a 31 bit clock.
-      uint64_t timeepoch = 0;
-      
-      //Bits 20 through 31 of the timestamp (e.g. the part not given with actual
-      //  hits)
-      uint32_t time_msb = 0;
-      
-      //It appears that events with a zero value of the 21 bit timestamp will be
-      //  transmitted before the 31 bit clock update (it will be the next 32bit
-      //  event), so we have to add 2^21 to these zero clock value hits - however
-      //  since these events are rare to investigate, I'm adding in an additional
-      //  check to make sure that the 31 bit clock wasnt just sent, since I cant be
-      //  sure the ordering is always consistent.
-      bool prev_was_timestamp = false;
-      
-      //First, look for timestamp.  If first two timestamps most significant bits
-      //  (20 though 31) are different, then the data is starting with the time_msb
-      //  first given in file.  If first two timestamps are the same, then begging
-      //  timestamp is this value minus 2^21.
-      uint32_t firsttimestamps[2] = { 0 };
-      for( int i = 0; i < 2 && input.read((char *)&event, 4); )
-      {
-        if( event > 0x7fffffff )
-          firsttimestamps[i++] = (event & 0x7fe00000);
-      }
-    
-      if( firsttimestamps[0] && firsttimestamps[0] == firsttimestamps[1] )
-        time_msb = firsttimestamps[0] - 2097152;
-      else
-        time_msb = firsttimestamps[0];
-      
-      input.seekg( orig_pos + streampos(256) );
-      
-      
-      for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
-      {
-        if( event <= 0x7fffffff )
-        {
-          //Bits   Description
-          //31     0 for event
-          //30-21  Amplitude of pulse (10 bits)
-          //20-0   Time in microseconds that the event occured (21 bits)
-            
-          //10-bit ADC value
-          uint32_t amplitude = (uint32_t) ((event & 0x7fe00000) >> 21);
-            
-          //21-bit timestamp
-          uint32_t time_lsb = (event & 0x001fffff);
-          //Correct for time_lsb with value zero
-          time_lsb = ((time_lsb || prev_was_timestamp) ? time_lsb : 2097152);
-          const uint64_t timestamp = timeepoch + time_msb + time_lsb;
-          
-          if( amplitude > 16384 )
-            throw runtime_error( "To high of a channel number" );
-            
-          amplitude = (amplitude > 0 ? amplitude-1 : amplitude);
-          
-          if( amplitude >= histogram->size() )
-          {
-            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude)/log(2)) );
-            const size_t next_power_of_two = static_cast<size_t>( std::pow( 2u, powexp ) );
-            histogram->resize( next_power_of_two, 0.0f );
-          }
-            
-          ++((*histogram)[amplitude]);
-            
-          firsttimestamp = (firsttimestamp ? firsttimestamp : timestamp);
-          lasttimestamp = timestamp;
-            
-          prev_was_timestamp = false;
-        }else
-        {
-          //	The	number	rolls	over	to	0	every 2.097152 seconds. In	order	to	track
-          //  the rollovers, a “time only” event is sent from the digiBASE to the
-          //  computer every 1.048576 seconds.
-            
-          //Bits   Description
-          //31     1 for time
-          //30-0   Current time in microseconds
-          const uint32_t this_time = (uint32_t) (event & 0x7fffffff);
-          
-          if( this_time < previous_time )
-            timeepoch += 2147483648u;
-          previous_time = this_time;
-          time_msb = (this_time & 0xffe00000);
-          prev_was_timestamp = true;
-        }//if( a hit ) / else( a timestamp )
-      }//for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
-      
-      
-      if( realtime == 0.0f )
-        realtime = 1.0E-6f*(lasttimestamp - firsttimestamp);
-      if( livetime == 0.0f )
-        livetime = 1.0E-6f*(lasttimestamp - firsttimestamp);
-    }else if( lmstyle == 4 )
-    {
-      uint32_t firstlivetimes[2] = { 0 }, firstrealtimes[2] = { 0 };
-      
-      for( int i = 0, j = 0, k = 0; (i < 2 || j < 2) && input.read((char *)&event, 4); ++k)
-      {
-        const bool msb = (event & 0x80000000);
-        const bool ssb = (event & 0x40000000);
-        
-        if( msb && ssb )
-        {
-          //ADC Word
-        }else if( msb )
-        {
-          //RT Word, 30-bit Real Time counter in 10 mS Ticks
-          firstrealtimes[i++] = (event & 0x3FFFFFFF);
-        }else if( ssb )
-        {
-          //LT Word, 30 Bit Live Time counter in 10 mS Ticks
-          firstlivetimes[j++] = (event & 0x3FFFFFFF);
-        }else
-        {
-          //Ext Sync, 13-bit Real Time counter in 10 mS Ticks, 17-bit time pre-scale in 80 nS ticks
-        }
-      }
-      
-      uint64_t firsttimestamp = 0, lasttimestamp = 0;
-      uint64_t realtime_ns = 10*1000000 * uint64_t(firstrealtimes[0]);
-      uint64_t livetime_ns = 10*1000000 * uint64_t(firstlivetimes[0]);
-      
-      //if( firsttimestamps[0] && firsttimestamps[0] == firsttimestamps[1] )
-        //time_msb = firsttimestamps[0] - 2097152;
-      //else
-        //time_msb = firsttimestamps[0];
-      
-      
-      input.seekg( orig_pos + streampos(256) );
-      for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
-      {
-        //Untested!
-        if( (event & 0xC0000000) == 0xC0000000 )
-        {
-          //From DIGIBASE-E-MNL.pdf:
-          //  Data[31:30] = 3
-          //  Data[29] = Memory Routing bit
-          //  Data[28:17] = Conversion Data[11:0]
-          //  Data[16:0] = RealTime PreScale [17:1]
-          
-          //ADC Word: 17-bit time pre-scale in 80 nS Ticks, 13-bit ADC channel number
-          //          const uint32_t adc_value = (event & 0x1FFF);
-          const uint32_t ticks = (event & 0x0001FFFF);
-          const uint64_t timestamp_ns = realtime_ns + 80*ticks;
-          
-          firsttimestamp = (!firsttimestamp ? timestamp_ns : firsttimestamp);
-          lasttimestamp = timestamp_ns;
-          
-          
-          //Have 2048 channels
-          uint32_t amplitude = (uint32_t(event & 0x0FFE0000) >> 17);
-          
-          if( amplitude > 16384 )
-            throw runtime_error( "To high of a channel number" );
-          
-          if( amplitude >= histogram->size() )
-          {
-            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude)/log(2.0)) );
-            const size_t next_power_of_two = static_cast<size_t>( std::pow( 2u, powexp ) );
-            histogram->resize( next_power_of_two, 0.0f );
-          }
-          
-          ++((*histogram)[amplitude]);
-        }else if( (event & 0x80000000) == 0x80000000 )
-        {
-          //RT Word: 30-bit Real Time counter in 10 mS Ticks
-          realtime_ns = 10*1000000*uint64_t(event & 0x3FFFFFFF);
-        }else if( (event & 0x40000000) == 0x40000000 )
-        {
-          //LT Word: 30 Bit Live Time counter in 10 mS Ticks
-          livetime_ns = 10*1000000*uint64_t(event & 0x3FFFFFFF);
-        }else if( ((event ^ 0xC0000000) >> 30) == 0x00000003 )
-        {
-          /*
-           //Ext Sync: 13-bit Real Time counter in 10 mS Ticks; 17-bit time pre-scale in 80 nS ticks
-           //The Ext Sync words contain the value of the external input pulse counters.
-           // The external pulse counters count the positive pulses at the external
-           // input of the spectrometer. The sync time is calculated by adding the
-           //  real time counter to the time pre-scale value.
-           const uint32_t tenms_ticks = (uint32_t(event & 0x3FFE0000) >> 17);
-           const uint32_t ns_ticks = (event & 0x1FFFF);
-           
-           
-           from: https://oaktrust.library.tamu.edu/bitstream/handle/1969.1/ETD-TAMU-2012-08-11450/CraneWowUserManual.pdf?sequence=3&isAllowed=y
-           Care must be taken as the real time
-           portion of the stamp, found at bits 12-0, will reset every 80 stamps. This means that the sync time
-           stamps roll over every 8 seconds. Note that the time stamp is in units of 100ms, such that a reading of
-           “10” would equal one second. The remaining bits are a prescale in the units of 80ns that can be used to
-           pinpoint the sync pulse in relation to the digiBASE-Es own clock. See the Sync Gating section of
-           Explanations of Terms for more details.
-           */
-        }
-      }//for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
-      
-      //realtime=33.02, from hits->32.62
-      //livetime=33.02, from hits->32.2
-      //cout << "realtime=" << realtime << ", from hits->" << (1.0E-9*(lasttimestamp - firsttimestamp)) << endl;
-      //cout << "livetime=" << realtime << ", from hits->" << (1.0E-9*(livetime_ns - (10*1000000 * uint64_t(firstlivetimes[0])))) << endl;
-      
-      if( realtime == 0.0f ) //not exact, but close enough
-        realtime = 1.0E-9f*(lasttimestamp - firsttimestamp);
-      
-      if( livetime == 0.0 ) //get us within ~20ms live time calc, close enough!
-        livetime = 1.0E-9f*(livetime_ns - (10*1000000 * uint64_t(firstlivetimes[0])));
-    }else if( lmstyle == 2 )
-    {
-      assert( 0 );
-      //This one is pretty complicated, so I would definetly need some example
-      //  data to test against.
-    }else
-    {
-      assert( 0 );
-    }//if( lmstyle == 1 ) / else
-    
-    
-    
-    const double gammasum = std::accumulate( histogram->begin(), histogram->end(), 0.0, std::plus<double>() );
-    if( gammasum < 1.0 && realtime == 0.0f )
-      throw runtime_error( "" ); //"Empty listmode file"
-    
-    std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-    
-    meas->live_time_ = livetime;
-    meas->real_time_ = realtime;
-    meas->contained_neutron_ = false;
-    meas->sample_number_ = 1;
-    meas->occupied_ = OccupancyStatus::Unknown;
-    meas->gamma_count_sum_ = gammasum;
-    meas->neutron_counts_sum_ = 0.0;
-    meas->speed_ = 0.0;  //in m/s
-    meas->detector_name_ = ((lmstyle==1) ? "digiBASE" : "digiBASE-E");
-    meas->detector_number_ = 0;
-    meas->detector_description_ = meas->detector_name_ + " ListMode data";
-    meas->quality_status_ = SpecUtils::QualityStatus::Missing;
-    meas->source_type_ = SourceType::Unknown;
-    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-    
-    //std::vector<std::string>  remarks_;
-    
-    if( olestartdate > 0 )
-      meas->start_time_ = datetime_ole_to_posix( olestartdate );
-    
-    vector<float> energycoef;
-    energycoef.push_back( offset );
-    energycoef.push_back( gain );
-    if( quadratic != 0.0 )
-      energycoef.push_back( quadratic );
-    const std::vector<std::pair<float,float>> devpairs;
-    
-    
-    //Should check energyunits=="keV"
-    if( energy_cal_valid && (gain != 0 || quadratic != 0)
-       && calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, energycoef, devpairs, histogram->size() ) )
-    {
-      meas->calibration_coeffs_ = energycoef;
-    }
-    
-    meas->deviation_pairs_ = devpairs;
-    //meas->channel_energies_ = ...;
-    meas->gamma_counts_ = histogram;
-    //meas->neutron_counts_ = ...;
-    //meas->latitude_;  //set to -999.9 if not specified
-    //meas->longitude_; //set to -999.9 if not specified
-    //meas->position_time_;
-    
-
-    meas->title_ = txtdcreption;
-    
-    instrument_type_ = "Spectroscopic Personal Radiation Detector";
-    manufacturer_ = "ORTEC";
-    instrument_model_ = ((lmstyle==1) ? "digiBASE" : "digiBASE-E");
-    instrument_id_ = serialnumstr;
-    if( instrument_id_.empty() && detectoridint )
-    {
-      char buffer[32];
-      snprintf( buffer, sizeof(buffer), "%i", int(detectoridint) );
-      instrument_id_ = buffer;
-    }
-
-    if( strlen(txtdcreption) )
-      remarks_.push_back( "Description: " + string(txtdcreption) );
-    if( strlen(devaddress) )
-      remarks_.push_back( "Device Address: " + string(devaddress) );
-    if( strlen(mcb_type) )
-      remarks_.push_back( "MCB Type: " + string(mcb_type) );
-    
-    measurements_.push_back( meas );
-
-    cleanup_after_load();
-    
-    if( measurements_.empty() )
-      throw std::runtime_error( "no measurments" );
-    
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-  }
-  
-  return false;
-}//bool load_from_ortec_listmode( std::istream &input )
-
-
-bool SpecFile::load_from_lsrm_spe( std::istream &input )
-{
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  try
-  {
-    input.seekg( 0, ios::end );
-    const istream::pos_type eof_pos = input.tellg();
-    input.seekg( orig_pos, ios::beg );
-    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    if( filesize > 512*1024 )
-      throw runtime_error( "File to large to be LSRM SPE" );
-    
-    const size_t initial_read = std::min( filesize, size_t(2048) );
-    string data( initial_read, '\0' );
-    input.read( &(data[0]), initial_read );
-    
-    const size_t spec_tag_pos = data.find("SPECTR=");
-    if( spec_tag_pos == string::npos )
-      throw runtime_error( "Couldnt find SPECTR" );
-  
-    const size_t spec_start_pos = spec_tag_pos + 7;
-    const size_t nchannel = (filesize - spec_start_pos) / 4;
-    if( nchannel < 128 )
-      throw runtime_error( "Not enough channels" );
-    
-    if( nchannel > 68000 )
-      throw runtime_error( "To many channels" );
-    
-    //We could have the next test, but lets be loose right now.
-    //if( ((filesize - spec_start_pos) % 4) != 0 )
-    //  throw runtime_error( "Spec size not multiple of 4" );
-    
-    auto getval = [&data]( const string &tag ) -> string {
-      const size_t pos = data.find( tag );
-      if( pos == string::npos )
-        return "";
-      
-      const size_t value_start = pos + tag.size();
-      const size_t endline = data.find_first_of( "\r\n", value_start );
-      if( endline == string::npos )
-        return "";
-      
-      const string value = data.substr( pos+tag.size(), endline - value_start );
-      return SpecUtils::trim_copy( value );
-    };//getval
-    
-    auto meas = make_shared<Measurement>();
-    
-    string startdate = getval( "MEASBEGIN=" );
-    if( startdate.empty() )
-    {
-      startdate = getval( "DATE=" );
-      startdate += getval( "TIME=" );
-    }
-    
-    meas->start_time_ = SpecUtils::time_from_string( startdate.c_str() );
-    
-    if( !toFloat( getval("TLIVE="), meas->live_time_ ) )
-      meas->live_time_ = 0.0f;
-    
-    if( !toFloat( getval("TREAL="), meas->real_time_ ) )
-      meas->live_time_ = 0.0f;
-    
-    instrument_id_ = getval( "DETECTOR=" );
-    
-    const string energy = getval( "ENERGY=" );
-    if( SpecUtils::split_to_floats( energy, meas->calibration_coeffs_ ) )
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-    
-    const string comment = getval( "COMMENT=" );
-    if( !comment.empty() )
-      remarks_.push_back( comment );
-    
-    const string fwhm = getval( "FWHM=" );
-    if( !fwhm.empty() )
-      remarks_.push_back( "FWHM=" + fwhm );
-    
-    //Other things we could look for:
-    //"SHIFR=", "NOMER=", "CONFIGNAME=", "PREPBEGIN=", "PREPEND=", "OPERATOR=",
-    //"GEOMETRY=", "SETTYPE=", "CONTTYPE=", "MATERIAL=", "DISTANCE=", "VOLUME="
-    
-    if( initial_read < filesize )
-    {
-      data.resize( filesize, '\0' );
-      input.read( &(data[initial_read]), filesize-initial_read );
-    }
-    
-    vector<int32_t> spectrumint( nchannel, 0 );
-    memcpy( &(spectrumint[0]), &(data[spec_start_pos]), 4*nchannel );
-    
-    meas->gamma_count_sum_ = 0.0f;
-    auto channel_counts = make_shared<vector<float>>(nchannel);
-    for( size_t i = 0; i < nchannel; ++i )
-    {
-      (*channel_counts)[i] = static_cast<float>( spectrumint[i] );
-      meas->gamma_count_sum_ += spectrumint[i];
-    }
-    meas->gamma_counts_ = channel_counts;
-    
-    measurements_.push_back( meas );
-    
-    cleanup_after_load();
-    
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-  }//try / catch to parse
-  
-  return false;
-}//bool load_from_lsrm_spe( std::istream &input );
-
-
-bool SpecFile::load_from_tka( std::istream &input )
-{
-/*
- Simple file with one number on each line with format:
-   Live time
-   Real time
-   counts first channel
-   .
-   .
-   .
-   counts last channel
- */
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  try
-  {
-    input.seekg( 0, ios::end );
-    const istream::pos_type eof_pos = input.tellg();
-    input.seekg( orig_pos, ios::beg );
-    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    if( filesize > 512*1024 )
-      throw runtime_error( "File to large to be TKA" );
-    
-    //ToDo: check UTF16 ByteOrderMarker [0xFF,0xFE] as first two bytes.
-    
-    auto get_next_number = [&input]( float &val ) -> int {
-      const size_t max_len = 128;
-      string line;
-      if( !SpecUtils::safe_get_line( input, line, max_len ) )
-        return -1;
-      
-      if( line.length() > 32 )
-        throw runtime_error( "Invalid line length" );
-      
-      SpecUtils::trim(line);
-      if( line.empty() )
-        return 0;
-      
-      if( line.find_first_not_of("+-.0123456789") != string::npos )
-        throw runtime_error( "Invalid char" );
-      
-      if( !(stringstream(line) >> val) )
-        throw runtime_error( "Failed to convert '" + line + "' into number" );
-      
-      return 1;
-    };//get_next_number lambda
-    
-    int rval;
-    float realtime, livetime, dummy;
-    
-    while( (rval = get_next_number(livetime)) != 1 )
-    {
-      if( rval <= -1 )
-        throw runtime_error( "unexpected end of file" );
-    }
-    
-    while( (rval = get_next_number(realtime)) != 1 )
-    {
-      if( rval <= -1 )
-        throw runtime_error( "unexpected end of file" );
-    }
-    
-    if( livetime > (realtime+FLT_EPSILON) || livetime<0.0f || realtime<0.0f || livetime>2592000.0f || realtime>2592000.0f )
-      throw runtime_error( "Livetime or realtime invalid" );
-    
-    double countssum = 0.0;
-    auto channel_counts = make_shared<vector<float>>();
-    while( (rval = get_next_number(dummy)) >= 0 )
-    {
-      if( rval == 1 )
-      {
-        countssum += dummy;
-        channel_counts->push_back( dummy );
-      }
-    }
-    
-    if( channel_counts->size() < 16 )
-      throw runtime_error( "Not enough counts" );
-    
-    auto meas = make_shared<Measurement>();
-    
-    meas->real_time_ = realtime;
-    meas->live_time_ = livetime;
-    meas->gamma_count_sum_ = countssum;
-    meas->gamma_counts_ = channel_counts;
-    
-    measurements_.push_back( meas );
-    
-    cleanup_after_load();
-    
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-  }//try / catch
-  
-  
-  return false;
-}//bool load_from_tka( std::istream &input );
-
-
-bool SpecFile::load_from_multiact( std::istream &input )
-{
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  try
-  {
-    input.seekg( 0, ios::end );
-    const istream::pos_type eof_pos = input.tellg();
-    input.seekg( orig_pos, ios::beg );
-    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    if( filesize > 512*1024 )  //The files I've seen are a few kilobytes
-      throw runtime_error( "File to large to be MultiAct" );
-    
-    if( filesize < (128 + 24 + 48) )
-      throw runtime_error( "File to small to be MultiAct" );
-    
-    string start = "                ";
-    
-    if( !input.read(&start[0], 8) )
-      throw runtime_error( "Failed to read header" );
-    
-    if( !SpecUtils::istarts_with( start, "MultiAct") )
-      throw runtime_error( "File must start with word 'MultiAct'" );
-    
-    double countssum = 0.0;
-    auto channel_counts = make_shared<vector<float>>();
-    
-    vector<char> data;
-    data.resize( filesize - 8, '\0' );
-    input.read(&data.front(), static_cast<streamsize>(filesize-8) );
-    
-    //103: potentially channel counts (int of some sort)
-    //107: real time in seconds (int of some sort)
-    //111: real time in seconds (int of some sort)
-    //115: live time in seconds (int of some sort)
-    
-    uint32_t numchannels, realtime, livetime;
-    memcpy( &numchannels, (&(data[103])), 4 );
-    memcpy( &realtime, (&(data[107])), 4 );
-    memcpy( &livetime, (&(data[115])), 4 );
-  
-    if( realtime < livetime || livetime > 3600*24*5 )
-    {
-#if(PERFORM_DEVELOPER_CHECKS)
-      log_developer_error( __func__, ("Got real time (" + std::to_string(realtime)
-                                                    + ") less than (" + std::to_string(livetime) + ") livetime").c_str() );
-#endif
-      throw runtime_error( "Invalid live/real time values" );
-    }
-    
-    for( size_t i = 128; i < (data.size()-21); i += 3 )
-    {
-      //ToDo: make sure channel counts are reasonable...
-      uint32_t threebyte = 0;
-      memcpy( &threebyte, (&(data[i])), 3 );
-      channel_counts->push_back( static_cast<float>(threebyte) );
-      countssum += threebyte;
-    }
-    
-    if( channel_counts->size() < 16 )
-      throw runtime_error( "Not enough channels" );
-    
-    auto meas = make_shared<Measurement>();
-    
-    meas->real_time_ = static_cast<float>( realtime );
-    meas->live_time_ = static_cast<float>( livetime );
-    meas->gamma_count_sum_ = countssum;
-    meas->gamma_counts_ = channel_counts;
-    
-    measurements_.push_back( meas );
-    
-    cleanup_after_load();
-    
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-  }//try / catch
-  
-  
-  return false;
-}//bool load_from_tka( std::istream &input );
-
-
-bool SpecFile::load_from_phd( std::istream &input )
-{
-  //Note: this function implemented off using only a couple files from a single
-  //      source to determine file format; there is likely some assumptions that
-  //      could be loosened or tightened up.
-  
-  reset();
-  
-  if( !input.good() )
-    return false;
-  
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
-  std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  try
-  {
-    string line;
-    size_t linenum = 0;  //for debug purposes only
-    bool tested_first_line = false;
-    while( input.good() )
-    {
-      const size_t max_len = 1024*1024;  //all the files I've seen have been less than like 80 characters
-      SpecUtils::safe_get_line( input, line, max_len );
-      ++linenum;
-      
-      if( line.size() >= (max_len-1) )
-        throw runtime_error( "Line greater than 1MB" );
-      
-      if( linenum > 32*1024 )  //2048 would probably be plenty
-        throw runtime_error( "Too many lines for PHD format" );
-      
-      trim( line );
-      
-      if( line.empty() )
-        continue;
-      
-      if( !tested_first_line )
-      {
-        //First line for all files I've seen is "BEGIN IMS2.0"
-        tested_first_line = true;
-        if( !SpecUtils::istarts_with( line, "BEGIN" ) )
-          throw runtime_error( "First line of PHD file must start with 'BEGIN'" );
-        
-        continue;
-      }//if( !tested_first_line )
-      
-      if( SpecUtils::istarts_with( line, "#Collection") )
-      {
-        SpecUtils::safe_get_line( input, line, max_len );
-        ++linenum;
-        //line is somethign like "2012/10/11 09:34:51.7 2011/10/13 09:32:43.6 14377.2   "
-        continue;
-      }//if( SpecUtils::istarts_with( line, "#Collection") )
-      
-      
-      if( SpecUtils::istarts_with( line, "#Acquisition") )
-      {
-        SpecUtils::safe_get_line( input, line, max_len );
-        ++linenum;
-        trim( line );
-        //line is somethign like "2012/09/15 09:52:14.0 3605.0        3600.0"
-        vector<string> fields;
-        SpecUtils::split( fields, line, " \t");
-        if( fields.size() < 4 )
-          continue;
-        
-        //We wont worry about conversion error for now
-        stringstream(fields[2]) >> meas->real_time_;
-        stringstream(fields[3]) >> meas->live_time_;
-        meas->start_time_ = SpecUtils::time_from_string( (fields[0] + " " + fields[1]).c_str() );
-        continue;
-      }//if( SpecUtils::istarts_with( line, "#Acquisition") )
-      
-      
-      if( SpecUtils::istarts_with( line, "#g_Spectrum") )
-      {
-        SpecUtils::safe_get_line( input, line, max_len );
-        ++linenum;
-        trim( line );
-        //line is something like "8192  2720.5"
-        vector<float> fields;
-        SpecUtils::split_to_floats( line, fields );
-        
-        if( fields.empty() || fields[0]<32 || fields[0]>65536 || floorf(fields[0])!=fields[0] )
-          throw runtime_error( "Line after #g_Spectrum not as expected" );
-        
-        const float upper_energy = (fields.size()>1 && fields[1]>500.0f && fields[1]<13000.0f) ? fields[1] : 0.0f;
-        const size_t nchannel = static_cast<size_t>( fields[0] );
-        auto counts = std::make_shared< vector<float> >(nchannel,0.0f);
-        
-        double channelsum = 0.0;
-        size_t last_channel = 0;
-        while( SpecUtils::safe_get_line(input, line, max_len) )
-        {
-          SpecUtils::trim( line );
-          if( line.empty() )
-            continue;
-          
-          if( line[0] == '#')
-            break;
-          
-          SpecUtils::split_to_floats( line, fields );
-          if( fields.empty() ) //allow blank lines
-            continue;
-          
-          if( fields.size() == 1 )  //you need at least two rows for phd format
-            throw runtime_error( "Unexpected spectrum data line-size" );
-          
-          if( (floorf(fields[0]) != fields[0]) || (fields[0] < 0.0f) )
-            throw runtime_error( "First col of spectrum data must be positive integer" );
-          
-          const size_t start_channel = static_cast<size_t>( fields[0] );
-          
-          if( (start_channel <= last_channel) || (start_channel > nchannel) )
-            throw runtime_error( "Channels not ordered as expected" );
-          
-          for( size_t i = 1; (i < fields.size()) && (start_channel+i-2)<nchannel; ++i )
-          {
-            channelsum += fields[i];
-            (*counts)[start_channel + i - 2] = fields[i];
-          }
-        }//while( spectrum data )
-        
-        meas->gamma_counts_ = counts;
-        meas->gamma_count_sum_ = channelsum;
-        
-        if( upper_energy > 0.0f )
-        {
-          //There is maybe better energy calibration in the file, but since I
-          //  so rarely see this file format, I'm not bothering with parsing it.
-          meas->calibration_coeffs_.push_back( 0.0f );
-          meas->calibration_coeffs_.push_back( upper_energy );
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
-        }
-      }//if( SpecUtils::istarts_with( line, "#g_Spectrum") )
-      
-      if( SpecUtils::istarts_with( line, "#Calibration") )
-      {
-        //Following line gives datetime of calibration
-      }//if( "#Calibration" )
-      
-      if( SpecUtils::istarts_with( line, "#g_Energy") )
-      {
-        //Following lines look like:
-        //59.540           176.1400         0.02968
-        //88.040           260.7800         0.00000
-        //122.060          361.7500         0.00000
-        //165.860          491.7100         0.02968
-        //...
-        //1836.060         5448.4400        0.02968
-      }//if( "#g_Energy" )
-      
-      if( SpecUtils::istarts_with( line, "#g_Resolution") )
-      {
-        //Following lines look like:
-        //59.540           0.9400           0.00705
-        //88.040           0.9700           0.00669
-        //122.060          1.0100           0.00151
-        //165.860          1.0600           0.00594
-        //...
-        //1836.060         2.3100           0.00393
-      }//if( "#g_Resolution" )
-      
-      if( SpecUtils::istarts_with( line, "#g_Efficiency") )
-      {
-        //Following lines look like:
-        //59.540           0.031033         0.0002359
-        //88.040           0.083044         0.0023501
-        //122.060          0.107080         0.0044224
-        //165.860          0.103710         0.0026757
-        //...
-        //1836.060         0.020817         0.0012261
-      }//if( "#g_Efficiency" )
-    }//while( input.good() )
-    
-    if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
-      throw runtime_error( "Didnt find gamma spectrum" );
-  
-    measurements_.push_back( meas );
-  }catch( std::exception & )
-  {
-    //cerr  << SRC_LOCATION << "caught: " << e.what() << endl;
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-    return false;
-  }
-  
-  
-  cleanup_after_load();
-  
-  return true;
-}//bool load_from_phd( std::istream &input );
-
-
-bool SpecFile::load_from_lzs( std::istream &input )
-{
-  //Note: this function implemented off using a few files to determine
-  //      file format; there is likely some assumptions that could be loosened
-  //      or tightened up, or additional information to add.
-  
-  reset();
-  
-  if( !input.good() )
-    return false;
-  
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
-  const istream::pos_type start_pos = input.tellg();
-  input.unsetf(ios::skipws);
-  
-  // Determine stream size
-  input.seekg( 0, ios::end );
-  const size_t file_size = static_cast<size_t>( input.tellg() - start_pos );
-  input.seekg( start_pos );
-  
-  //I've only seen pretty small lzs files (40k), so assume if over 1MB, not a lzs
-  if( file_size < 512 || file_size > 1*1024*1024 )
-    return false;
-  
-  string filedata;
-  filedata.resize(file_size + 1);
-  
-  input.read(&(filedata[0]), static_cast<streamsize>(file_size));
-  filedata[file_size] = 0; //jic.
-  
-  //Look to find "<nanoMCA" and "spectrum" in the first kb
-  const auto nano_mca_pos = filedata.find( "spectrum" );
-  if( nano_mca_pos == string::npos || nano_mca_pos > 2048 )
-    return false;
-  
-  const auto spectrum_pos = filedata.find( "data" );
-  if( spectrum_pos == string::npos || spectrum_pos > 2048 )
-    return false;
-  
-  try
-  {
-    rapidxml::xml_document<char> doc;
-    doc.parse<rapidxml::parse_non_destructive|rapidxml::allow_sloppy_parse>( &(filedata[0]) );
-    
-    //<nanoMCA>  //But some files dont have this tag, but start with <spectrum>
-    //  <serialnumber>28001</serialnumber>
-    //  <spectrum>
-    //    <tag>nanoMCA with Ortec HPGE-TRP, Model GEM-10195-PLUS, SN 24-P-12RA, 3000V-PLUS</tag>
-    //    <hardsize>16384</hardsize>
-    //    <softsize>16384</hardsize>
-    //    <data>...this is spectrum...</data>
-    //  </spectrum>
-    //  <time>
-    //    <real>  613.232</real>
-    //    <live>  601.0000</live>
-    //    <dead>    4.1769</dead>
-    //    <date>11/06/2019  20:19:15</date>
-    //  </time>
-    //  <registers><size>128</size><data>...not syre what this is...</data></registers>
-    //  <calibration>
-    //    <enabled>YES</enabled>
-    //    <units>2</units>
-    //    <channelA>    0.0000</channelA>
-    //    <energyA>    0.0000</energyA>
-    //    <channelB>10436.2100</channelB>
-    //    <energyB> 1332.0000</energyB>
-    //  </calibration>
-    //  <volatile>
-    //    <firmware>30.20</firmware>
-    //    <intemp>44</intemp>
-    //    <slowadvc> 0.82</slowadc>
-    //  </volatile>
-    //</nanoMCA>
-    
-    const rapidxml::xml_node<char> *nano_mca_node = XML_FIRST_NODE((&doc),"nanoMCA");
-    if( !nano_mca_node )  //Account for files that start with <spectrum> tag instead of nesting it under <nanoMCA>
-      nano_mca_node = &doc;
-
-    const rapidxml::xml_node<char> *spectrum_node = XML_FIRST_NODE(nano_mca_node,"spectrum");
-    if( !spectrum_node )
-      throw runtime_error( "Failed to get spectrum node" );
-    
-    const rapidxml::xml_node<char> *spec_data_node = XML_FIRST_NODE(spectrum_node,"data");
-    if( !spec_data_node )
-      throw runtime_error( "Failed to get spectrum/data node" );
-    
-    auto spec = std::make_shared<vector<float>>();
-    const string spec_data_str = xml_value_str(spec_data_node);
-    SpecUtils::split_to_floats( spec_data_str.c_str(), *spec, " \t\n\r", false );
-    
-    if( spec->empty() )
-      throw runtime_error( "Failed to parse spectrum to floats" );
-    
-    auto meas = std::make_shared<Measurement>();
-    meas->contained_neutron_ = false;
-    meas->gamma_counts_ = spec;
-    meas->gamma_count_sum_ = std::accumulate(begin(*spec), end(*spec), 0.0 );
-    
-    const rapidxml::xml_node<char> *time_node = xml_first_node(nano_mca_node,"time");
-    
-    const rapidxml::xml_node<char> *real_time_node = xml_first_node(time_node,"real");
-    if( real_time_node )
-      SpecUtils::parse_float(real_time_node->value(), real_time_node->value_size(), meas->real_time_ );
-    
-    const rapidxml::xml_node<char> *live_time_node = xml_first_node(time_node,"live");
-    if( live_time_node )
-      SpecUtils::parse_float(live_time_node->value(), live_time_node->value_size(), meas->live_time_ );
-    
-    //const rapidxml::xml_node<char> *dead_time_node = xml_first_node(time_node,"dead");
-    
-    const rapidxml::xml_node<char> *date_node = xml_first_node(time_node,"date");
-    if( date_node )
-    {
-      string datestr = xml_value_str(date_node);
-      SpecUtils::ireplace_all(datestr, "@", " ");
-      SpecUtils::ireplace_all(datestr, "  ", " ");
-      meas->start_time_ = SpecUtils::time_from_string_strptime( datestr, SpecUtils::DateParseEndianType::LittleEndianFirst );
-    }
-    
-    const rapidxml::xml_node<char> *calibration_node = XML_FIRST_NODE(nano_mca_node,"calibration");
-    //const rapidxml::xml_node<char> *enabled_node = xml_first_node(calibration_node, "enabled");
-    //const rapidxml::xml_node<char> *units_node = xml_first_node(calibration_node, "units");
-    const rapidxml::xml_node<char> *channelA_node = xml_first_node(calibration_node, "channelA");
-    const rapidxml::xml_node<char> *energyA_node = xml_first_node(calibration_node, "energyA");
-    const rapidxml::xml_node<char> *channelB_node = xml_first_node(calibration_node, "channelB");
-    const rapidxml::xml_node<char> *energyB_node = xml_first_node(calibration_node, "energyB");
-    if( channelA_node && energyA_node && channelB_node && energyB_node )
-    {
-      float channelA, energyA, channelB, energyB;
-      if( SpecUtils::parse_float(channelA_node->value(), channelA_node->value_size(), channelA )
-          && SpecUtils::parse_float(energyA_node->value(), energyA_node->value_size(), energyA )
-          && SpecUtils::parse_float(channelB_node->value(), channelB_node->value_size(), channelB )
-          && SpecUtils::parse_float(energyB_node->value(), energyB_node->value_size(), energyB ) )
-      {
-        const float gain = (energyB - energyA) / (channelB - channelA);
-        const float offset = energyA - channelA*gain;
-        if( !IsNan(gain) && !IsInf(gain) && !IsNan(offset) && !IsInf(offset)
-           && gain > 0.0f && fabs(offset) < 350.0f )
-        {
-          meas->calibration_coeffs_.clear();
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          meas->calibration_coeffs_.push_back( offset );
-          meas->calibration_coeffs_.push_back( gain );
-        }
-      }//if( parsed all float values okay )
-    }//if( got at least calibration points )
-    
-    const rapidxml::xml_node<char> *volatile_node = XML_FIRST_NODE(nano_mca_node,"volatile");
-    
-    const rapidxml::xml_node<char> *firmware_node = xml_first_node(volatile_node,"firmware");
-    if( firmware_node )
-      component_versions_.push_back( pair<string,string>("firmware",xml_value_str(firmware_node)) );
-    
-    const rapidxml::xml_node<char> *intemp_node = xml_first_node(volatile_node,"intemp");
-    if( intemp_node && intemp_node->value_size() )
-      meas->remarks_.push_back( "Internal Temperature: " + xml_value_str(intemp_node) );
-    const rapidxml::xml_node<char> *adctemp_node = xml_first_node(volatile_node,"adctemp");
-    if( adctemp_node && adctemp_node->value_size() )
-      meas->remarks_.push_back( "ADC Temperature: " + xml_value_str(adctemp_node) );
-    
-    //const rapidxml::xml_node<char> *slowadvc_node = xml_first_node(volatile_node,"slowadvc");
-    
-    const rapidxml::xml_node<char> *serialnum_node = XML_FIRST_NODE(nano_mca_node,"serialnumber");
-    if( serialnum_node && serialnum_node->value_size() )
-      instrument_id_ = xml_value_str(serialnum_node);
-    
-    const rapidxml::xml_node<char> *tag_node = XML_FIRST_NODE(spectrum_node,"tag");
-    if( !tag_node )
-      tag_node = XML_FIRST_NODE(nano_mca_node,"tag");
-    
-    if( tag_node && tag_node->value_size() )
-    {
-      const string value = xml_value_str(tag_node);
-      
-      remarks_.push_back( value );
-      
-      //nanoMCA with Ortec HPGE-TRP, Model GEM-10195-PLUS, SN 24-P-12RA, 3000V-PLUS
-      //I'm not sure how reliable it is to assume comma-seperated
-      vector<string> fields;
-      SpecUtils::split(fields, value, ",");
-      for( auto field : fields )
-      {
-        SpecUtils::trim(field);
-        if( SpecUtils::istarts_with(field, "SN") )
-          instrument_id_ = SpecUtils::trim_copy(field.substr(2));
-        else if( SpecUtils::istarts_with(field, "model") )
-          instrument_model_ = SpecUtils::trim_copy(field.substr(5));
-      }//for( auto field : fields )
-    }//if( tag_node )
-    
-    manufacturer_ = "labZY";
-    
-    measurements_.push_back( meas );
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( start_pos, ios::beg );
-    return false;
-  }//try / catch
-  
-  cleanup_after_load();
-  
-  return true;
-}//bool load_from_phd( std::istream &input );
-
-
-
-
-bool SpecFile::load_tracs_mps_file( const std::string &filename )
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  reset();
-  
-#ifdef _WIN32
-  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  if( !file.is_open() )
-    return false;
-  const bool loaded = load_from_tracs_mps( file );
-  if( loaded )
-    filename_ = filename;
-  
-  return loaded;
-}//bool load_tracs_mps_file( const std::string &filename )
-
-
-bool SpecFile::load_from_tracs_mps( std::istream &input )
-{
-/*
- Cabin Data
- Byte offset	Size	Description
- 0	8	Memory address
- 8	4	Memory address
- 12	4	Connect Status
- 16	4	Event
- 20	4	Neutron AlarmLevel
- 24	4	Gamma Alarm Level
- 28	4	Ratio Alarm Level
- 32	8	Latitude
- 40	8	Longitude
- 48	4	GPS Time of Day
- 52	4	#1 pod status
- 56	4	#2 pod status
- 60	4	#1 det status
- 64	4	#2 det status
- 68	4	#3 det status
- 72	4	#4 det status
- 76	4	Index Number
- 80	4	Neutron GC
- 84	4	Gamma GC
- 88	2048	Sum Spectra
- 2136	4	Pod1 Index Number
- 2140	4	Pod1 deltaTau
- 
- 2144	4	Pod1 Det1 Neutron GC
- 2148	4	Pod1 Det2 Neutron GC
- 
- 2152	4	Pod1 Det1 Gamma GC
- 2156	4	Pod1 Det2 Gamma GC
- 2160	4	Pod1 Det1 DAC
- 2164	4	Pod1 Det2 DAC
- 2168	4	Pod1 Det1 calibration Peak
- 2172	4	Pod1 Det2 calibration Peak
- 2176	4	Pod1 Det1 calibration peak found
- 2180	4	Pod1 Det2 calibration peak found
- 
- 2184	2048	Pod1 Det1 spectra
- 4232	2	Pod1 Det1 clock time
- 4234	2	Pod1 Det1 dead time
- 4236	2	Pod1 Det1 live time
- 
- 4238	2048	Pod1 Det2 spectra
- 6286	2	Pod1 Det2 clock time
- 6288	2	Pod1 Det2 dead time
- 6290	2	Pod1 Det2 live time
- 
- 6292	4	Pod2 Index Number
- 6296	4	Pod2 deltaTau
- 
- 6300	4	Pod2 Det1 Neutron GC
- 6304	4	Pod2 Det2 Neutron GC
- 
- 6308	4	Pod2 Det1 Gamma GC
- 6312	4	Pod2 Det2 Gamma GC
- 6316	4	Pod2 Det1 DAC
- 6320	4	Pod2 Det2 DAC
- 6324	4	Pod2 Det1 calibration Peak
- 6328	4	Pod2 Det2 calibration Peak
- 6332	4	Pod2 Det1 calibration peak found
- 6336	4	Pod2 Det2 calibration peak found
- 
- 6340	2048	Pod2 Det1 spectra
- 8388	2	Pod2 Det1 clock time
- 8390	2	Pod2 Det1 dead time
- 8392	2	Pod2 Det1 live time
- 
- 8394	2048	Pod2 Det2 spectra
- 10442	2	Pod2 Det2 clock time
- 10444	2	Pod2 Det2 dead time
- 10446	2	Pod2 Det2 live time
- 
- 10448	4	Radar Altimeter
- 10452	128	GPS String
- 10580	8	GPS Source
- 10588	6	GPS Age
- 10594	3	GPS Num SV
- 10597
-*/
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  reset();
-  
-  const size_t samplesize = 10597;
-  
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  input.seekg( 0, ios::end );
-  const istream::pos_type eof_pos = input.tellg();
-  input.seekg( orig_pos, ios::beg );
-
-  const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-  const size_t numsamples = filesize / samplesize;
-  const size_t leftoverbytes = (filesize % samplesize);
-  
-  if( leftoverbytes )
-    return false;
-  
-  try
-  {
-    for( size_t sample = 0; sample < numsamples; ++sample )
-    {
-      double lat, lon;
-      const size_t startpos = sample * samplesize;
-      uint32_t gpsTOD, indexNum, overallGammaGC, overallNeutronGC, radarAltimiter;
-    
-      if( !input.seekg(startpos+32, ios::beg) )
-        throw runtime_error( "Failed seek 1" );
-      if( !input.read( (char *)&lat, sizeof(lat) ) )
-        throw runtime_error( "Failed read 2" );
-      if( !input.read( (char *)&lon, sizeof(lon) ) )
-        throw runtime_error( "Failed read 3" );
-      if( !input.read( (char *)&gpsTOD, sizeof(gpsTOD) ) )
-        throw runtime_error( "Failed read 4" );
-      if( !input.seekg(startpos+76, ios::beg) )
-        throw runtime_error( "Failed read 5" );
-      if( !input.read( (char *)&indexNum, sizeof(indexNum) ) )
-        throw runtime_error( "Failed read 6" );
-      if( !input.read( (char *)&overallNeutronGC, sizeof(overallNeutronGC) ) )
-        throw runtime_error( "Failed read 7" );
-      if( !input.read( (char *)&overallGammaGC, sizeof(overallGammaGC) ) )
-        throw runtime_error( "Failed read 8" );
-  
-      char gpsstr[129];
-      gpsstr[128] = '\0';
-      if( !input.seekg(startpos+10448, ios::beg) )
-        throw runtime_error( "Failed seek 9" );
-      if( !input.read( (char *)&radarAltimiter, sizeof(radarAltimiter) ) )
-        throw runtime_error( "Failed read 10" );
-      if( !input.read( gpsstr, 128 ) )
-        throw runtime_error( "Failed read 11" );
-      
-      for( size_t i = 0; i < 4; ++i )
-      {
-        const char *title;
-        size_t datastart, neutrongc, gammagc, detstatus;
-     
-        switch( i )
-        {
-          case 0:
-            detstatus = 60;
-            datastart = 2184;
-            gammagc   = 2152;
-            neutrongc = 2144;
-            title = "Pod 1, Det 1";
-          break;
-        
-          case 1:
-            detstatus = 64;
-            datastart = 4238;
-            gammagc   = 2156;
-            neutrongc = 2148;
-            title = "Pod 1, Det 2";
-          break;
-    
-          case 2:
-            detstatus = 68;
-            datastart = 6340;
-            gammagc   = 6308;
-            neutrongc = 6300;
-            title = "Pod 2, Det 1";
-          break;
-        
-          case 3:
-            detstatus = 72;
-            datastart = 8394;
-            gammagc   = 6312;
-            neutrongc = 6304;
-            title = "Pod 2, Det 2";
-          break;
-        }//switch( i )
-    
-        uint32_t neutroncount;
-        uint16_t channeldata[1024];
-        uint16_t realtime, livetime, deadtime;
-        uint32_t gammaGC, detDAC, calPeak, calPeakFound, status, dummy;
-      
-        if( !input.seekg(startpos+detstatus, ios::beg) )
-          throw runtime_error( "Failed seek 12" );
-        if( !input.read( (char *)&status, sizeof(status) ) )
-          throw runtime_error( "Failed read 13" );
-      
-        if( !input.seekg(startpos+gammagc, ios::beg) )
-          throw runtime_error( "Failed seek 14" );
-    
-        if( !input.read( (char *)&gammaGC, sizeof(gammaGC) ) )
-          throw runtime_error( "Failed read 15" );
-        if( !input.read( (char *)&dummy, sizeof(dummy) ) )
-          throw runtime_error( "Failed read 16" );
-        
-        if( !input.read( (char *)&detDAC, sizeof(detDAC) ) )
-          throw runtime_error( "Failed read 17" );
-        if( !input.read( (char *)&dummy, sizeof(dummy) ) )
-          throw runtime_error( "Failed read 18" );
-      
-        if( !input.read( (char *)&calPeak, sizeof(calPeak) ) )
-          throw runtime_error( "Failed read 19" );
-        if( !input.read( (char *)&dummy, sizeof(dummy) ) )
-          throw runtime_error( "Failed read 20" );
-      
-        if( !input.read( (char *)&calPeakFound, sizeof(calPeakFound) ) )
-          throw runtime_error( "Failed read 21" );
-        if( !input.read( (char *)&dummy, sizeof(dummy) ) )
-          throw runtime_error( "Failed read 22" );
-      
-        if( !input.seekg(startpos+datastart, ios::beg) )
-          throw runtime_error( "Failed seek 23" );
-      
-        if( !input.read( (char *)channeldata, sizeof(channeldata) ) )
-          throw runtime_error( "Failed read 24" );
-    
-        if( !input.read( (char *)&realtime, sizeof(realtime) ) )
-          throw runtime_error( "Failed read 25" );
-    
-      //if realtime == 6250, then its about 1 second... - I have no idea what these units means (25000/4?)
-      
-        if( !input.read( (char *)&deadtime, sizeof(deadtime) ) )
-          throw runtime_error( "Failed read 26" );
-    
-        if( !input.read( (char *)&livetime, sizeof(livetime) ) )
-          throw runtime_error( "Failed read 27" );
-    
-        if( !input.seekg(startpos+neutrongc, ios::beg) )
-          throw runtime_error( "Failed seek 28" );
-    
-        if( !input.read( (char *)&neutroncount, sizeof(neutroncount) ) )
-          throw runtime_error( "Failed read 29" );
-      
-        auto m = std::make_shared<Measurement>();
-        m->live_time_ = livetime / 6250.0f;
-        m->real_time_ = realtime / 6250.0f;
-        m->contained_neutron_ = (((i%2)!=1) || neutroncount);
-        m->sample_number_ = static_cast<int>( sample + 1 );
-        m->occupied_ = OccupancyStatus::Unknown;
-        m->gamma_count_sum_ = 0.0;
-        m->neutron_counts_sum_ = neutroncount;
-//        m->speed_ = ;
-        m->detector_name_ = title;
-        m->detector_number_ = static_cast<int>( i );
-//        m->detector_type_ = "";
-        m->quality_status_ = (status==0 ? SpecUtils::QualityStatus::Good : SpecUtils::QualityStatus::Suspect);
-        m->source_type_  = SourceType::Unknown;
-        
-        if( calPeakFound != 0 )
-        {
-          m->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-//        m->start_time_ = ;
-          m->calibration_coeffs_.push_back( 0.0f );
-//        m->calibration_coeffs_.push_back( 3.0 );
-          m->calibration_coeffs_.push_back( 1460.0f / calPeakFound );
-//        m->channel_energies_  //dont need to fill out here
-        }//if( calPeakFound != 0 ) / else
-      
-        vector<float> *gammacounts = new vector<float>( 1024 );
-        m->gamma_counts_.reset( gammacounts );
-        for( size_t i = 0; i < 1024; ++i )
-        {
-          const float val = static_cast<float>( channeldata[i] );
-          m->gamma_count_sum_ += val;
-          (*gammacounts)[i] = val;
-        }
-      
-        if( m->contained_neutron_ )
-          m->neutron_counts_.resize( 1, static_cast<float>(neutroncount) );
-
-        m->latitude_ = lat;
-        m->longitude_ = lon;
-//        m->position_time_ = ;//
-        m->title_ = title;
-      
-        measurements_.push_back( m );
-      }//for( size_t i = 0; i < 4; ++i )
-    }//for( size_t sample = 0; sample < numsamples; ++sample )
-    
-    cleanup_after_load();
-    
-    if( measurements_.empty() )
-      throw std::runtime_error( "no measurments" );
-  }catch( std::exception & )
-  {
-    //cerr << SRC_LOCATION << "\n\tCaught: " << e.what() << endl;
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-    reset();
-    return false;
-  }//try / catch
-  
-  return true;
-}//bool load_from_tracs_mps( std::istream &input )
-
-
-bool SpecFile::load_aram_file( const std::string &filename )
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  reset();
-  
-  //Only seend pretty small ones, therefor limit to 25 MB, JIC
-  if( SpecUtils::file_size(filename) > 25*1024*1024 )
-    return false;
-  
-#ifdef _WIN32
-  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  if( !file.is_open() )
-    return false;
-  const bool loaded = load_from_aram( file );
-  if( loaded )
-    filename_ = filename;
-  
-  return loaded;
-}//bool load_aram_file( const std::string &filename )
-
-
-bool SpecFile::load_from_aram( std::istream &input )
-{
-  //This is a wierd TXT and XML format hybrid, so we have to seprate out the
-  //  XML from non-XML portions and parse them seperately.
-  
-  if( !input )
-    return false;
-  
-  const istream::iostate origexceptions = input.exceptions();
-  input.exceptions( istream::goodbit );  //make so stream never throws
-  const istream::pos_type start_pos = input.tellg();
-  input.unsetf(ios::skipws);
-  
-  // Determine stream size
-  input.seekg( 0, ios::end );
-  const size_t file_size = static_cast<size_t>( input.tellg() - start_pos );
-  input.seekg( start_pos );
-  
-  //I've only seen pretty small ARAM files, so assume if over 25MB, not a ARAM
-  if( file_size > 25*1024*1024 )
-    return false;
-  
-  string filedata;
-  filedata.resize(file_size + 1);
-  
-  input.read(&(filedata[0]), static_cast<streamsize>(file_size));
-  filedata[file_size] = 0; //jic.
-
-  //Look to find "<event" and "ARAM" in the first kb
-  const auto event_tag_pos = filedata.find( "<event" );
-  if( event_tag_pos == string::npos || event_tag_pos > 2048 )
-    return false;
-  
-  const auto aram_pos = filedata.find( "ARAM" );
-  if( aram_pos == string::npos || aram_pos > 2048 )
-    return false;
-  
-  auto event_tag_clos_pos = filedata.find( "</event", event_tag_pos + 5 );
-  if( event_tag_clos_pos == string::npos )
-    return false;
-  
-  //It looks like there can be multiple <event> tags in the file, but in the
-  //  file I have with a second <event> tag, it is empty, so wont worry about now
-  
-  try
-  {
-    rapidxml::xml_document<char> doc;
-    const char orig_close_char = filedata[event_tag_clos_pos];
-    filedata[event_tag_clos_pos] = '\0';
-    doc.parse<rapidxml::parse_non_destructive|rapidxml::allow_sloppy_parse>( &(filedata[event_tag_pos]) );
-    
-    const rapidxml::xml_node<char> *event_node = XML_FIRST_NODE((&doc),"event");
-    if( !event_node )
-      throw runtime_error( "Failed to get event node, even though it really should be there" );
-    
-    const rapidxml::xml_node<char> *detectors_node = XML_FIRST_NODE(event_node,"detectors");
-    if( !detectors_node )
-      throw runtime_error( "No detectors node" );
-    
-    const rapidxml::xml_node<char> *gamma_node = XML_FIRST_NODE(detectors_node,"gamma");
-    if( !gamma_node )
-      throw runtime_error( "No detectors node" );
-    
-    const rapidxml::xml_node<char> *sample_node = XML_FIRST_NODE(gamma_node,"sample");
-    if( !sample_node )
-      throw runtime_error( "No sample node" );
-    const rapidxml::xml_node<char> *channels_node = XML_FIRST_NODE(sample_node,"channels");
-    if( !channels_node || !channels_node->value_size() )
-      throw runtime_error( "No sample channels node" );
-    
-    const std::string start_iso_str = xml_value_str( XML_FIRST_ATTRIB(event_node,"start_iso8601") );
-    const auto start_time = SpecUtils::time_from_string( start_iso_str.c_str() );
-    
-    //const std::string end_iso_str = xml_value_str( XML_FIRST_ATTRIB(event_node,"end_iso8601") );
-    //const auto end_time = SpecUtils::time_from_string( end_iso_str.c_str() );
-    
-    //Other attributes we could put into the comments or somethign
-    //XML_FIRST_ATTRIB(event_node,"monitor_type") //"ARAM"
-    //XML_FIRST_ATTRIB(event_node,"version")
-    //XML_FIRST_ATTRIB(event_node,"start_timestamp") //"1464191873756"
-    //XML_FIRST_ATTRIB(event_node,"monitor_name")  //"IST"
-    //XML_FIRST_ATTRIB(event_node,"event_id") //"1464191866846"
-    
-    
-    std::shared_ptr<Measurement> fore_meas, back_meas;
-    fore_meas = make_shared<Measurement>();
-    auto fore_channels = std::make_shared<vector<float>>();
-    fore_channels->reserve( 1024 );
-    SpecUtils::split_to_floats( channels_node->value(), channels_node->value_size(), *fore_channels );
-    if( fore_channels->size() < 64 ) //64 is arbitrary
-      throw runtime_error( "Not enough channels" );
-    
-    float live_time = 0.0f, real_time = 0.0f;
-    xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "realtime"), real_time );
-    xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "livetime"), live_time );
-    fore_meas->set_gamma_counts( fore_channels, live_time/1000.0f, real_time/1000.0f );
-    fore_meas->source_type_ = SourceType::Foreground;
-    fore_meas->occupied_ = OccupancyStatus::Occupied;
-    if( !start_time.is_special() )
-      fore_meas->set_start_time( start_time );
-    
-    //See if neutrons are around
-    const rapidxml::xml_node<char> *neutron_node = XML_FIRST_NODE(detectors_node,"neutron");
-    const rapidxml::xml_node<char> *neutron_sample = xml_first_node_nso(neutron_node, "sample", "");
-    const rapidxml::xml_node<char> *neutron_counts = xml_first_node_nso(neutron_sample, "counts", "");
-    if( neutron_counts )
-    {
-      float total_neutrons = 0.0;
-      if( xml_value_to_flt( XML_FIRST_ATTRIB(neutron_counts, "total"), total_neutrons) )
-      {
-        fore_meas->neutron_counts_.push_back( total_neutrons );
-        fore_meas->neutron_counts_sum_ = total_neutrons;
-        fore_meas->contained_neutron_ = true;
-     
-        if( xml_value_to_flt( XML_FIRST_ATTRIB(neutron_counts, "realtime"), real_time ) )
-          fore_meas->remarks_.push_back( "Neutron real time: " + std::to_string(real_time/1000.0) + "s" );
-        if( xml_value_to_flt( XML_FIRST_ATTRIB(neutron_counts, "livetime"), live_time ) )
-          fore_meas->remarks_.push_back( "Neutron live time: " + std::to_string(live_time/1000.0) + "s" );
-      }
-    }//if( neutron_counts )
-    
-    const rapidxml::xml_node<char> *background_node = XML_FIRST_NODE(gamma_node,"background");
-    channels_node = xml_first_node_nso( background_node, "channels", "" );
-    if( channels_node && channels_node->value_size() )
-    {
-      back_meas = make_shared<Measurement>();
-      auto back_channels = std::make_shared<vector<float>>();
-      SpecUtils::split_to_floats( channels_node->value(), channels_node->value_size(), *back_channels );
-      if( back_channels->size() >= 64 ) //64 is arbitrary
-      {
-        xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "realtime"), real_time );
-        xml_value_to_flt( XML_FIRST_ATTRIB(channels_node, "livetime"), live_time );
-        back_meas->set_gamma_counts( back_channels, live_time/1000.0f, real_time/1000.0f );
-        back_meas->set_title( "Background" );
-        back_meas->source_type_ = SourceType::Background;
-        back_meas->occupied_ = OccupancyStatus::NotOccupied;
-        if( !start_time.is_special() )
-          back_meas->set_start_time( start_time );
-        measurements_.push_back( back_meas );
-      }
-    }//if( background data )
-    
-    measurements_.push_back( fore_meas );
-    
-    //ToDO:
-    //This file contains a time history of the gross count data (but only a single summed spectrum)
-    const rapidxml::xml_node<char> *gamma_counts_node = XML_FIRST_NODE(gamma_node,"counts");
-    if( gamma_counts_node )
-      remarks_.push_back( "The ARAM file format has a time history in it that is not decoded" );
-    
-    filedata[event_tag_clos_pos] = orig_close_char;
-    
-    //Try and get energy calibration.
-    size_t calib_pos = string::npos, coef_start = string::npos, coef_end = string::npos;
-    calib_pos = filedata.rfind("<Calibration");
-    if( calib_pos != string::npos )
-      coef_start = filedata.find( "<Coefficients>", calib_pos );
-    if( coef_start != string::npos )
-      coef_end = filedata.find( "</Coefficients>", coef_start );
-    if( coef_end != string::npos && ((coef_start+14) < coef_end) )
-    {
-      vector<float> coefs;
-      const size_t coef_strlen = coef_end - coef_start - 14;
-      SpecUtils::split_to_floats( &filedata[coef_start+14], coef_strlen, coefs );
-      
-      if( coefs.size() > 1 && coefs.size() < 10 )
-      {
-        fore_meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-        fore_meas->calibration_coeffs_ = coefs;
-        if( back_meas )
-        {
-          back_meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          back_meas->calibration_coeffs_ = coefs;
-        }
-      }
-    }//if( we found the coefficients )
-    
-    vector<string> begin_remarks;
-    const string begindata( &(filedata[0]), &(filedata[event_tag_pos]) );
-    SpecUtils::split(begin_remarks, begindata, "\r\n");
-    string lat_str, lon_str;
-    for( const auto &remark : begin_remarks )
-    {
-      if( SpecUtils::istarts_with(remark, "Site Name:") )
-        measurement_location_name_ = SpecUtils::trim_copy( remark.substr(10) );
-      else if( SpecUtils::istarts_with(remark, "Site Longitude:") )
-        lon_str = remark.substr( 15 ); //ex. "39deg 18min 15.2sec N"
-      else if( SpecUtils::istarts_with(remark, "Site Latitude:") )
-        lat_str = remark.substr( 14 ); //ex. "124deg 13min 51.8sec W"
-      else
-        remarks_.push_back( remark );
-    }//for( const auto &remark : begin_remarks )
-    
-    if( lon_str.size() && lat_str.size() )
-    {
-      double lat, lon;
-      const string coord = lon_str + " / " + lat_str;
-      if( parse_deg_min_sec_lat_lon( coord.c_str(), coord.size(), lat, lon ) )
-      {
-        fore_meas->longitude_ = lon;
-        fore_meas->latitude_ = lat;
-        if( back_meas )
-        {
-          back_meas->longitude_ = lon;
-          back_meas->latitude_ = lat;
-        }
-      }//if( can parse string )
-    }//if( lat / lon str )
-    
-    //manufacturer_;
-    instrument_model_ = "ARAM";
-
-    //There is a <trigger...> node under <event> that describes why the event
-    //  alarmed, should read that into comments or analysis results, or something
-    
-    parse_warnings_.emplace_back( "The ARAM file format has a time history in it that is not decoded" );
-    
-    cleanup_after_load();
-    
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.seekg( start_pos );
-    input.clear();
-  }//try / catch
-  
-  input.exceptions( origexceptions );
-  
-  
-  return false;
-}//bool load_from_aram( std::istream &input )
-
-
 
 }//namespace SpecUtils
 
