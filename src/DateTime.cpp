@@ -564,6 +564,7 @@ namespace SpecUtils
       "%Y%m%d%n%H%M%S",  //20100115T232115
       (middle ? "%m/%d/%Y%n%I:%M %p" : "%d/%m/%Y%n%I:%M %p"), //11/18/2018 10:04 AM
       (only ? "" : (middle ? "%d/%m/%Y%n%I:%M %p" : "%m/%d/%Y%n%I:%M %p")),
+      "%Y/%m/%d%n%H:%M:%S", //"2020/02/12 14:57:39"
       "%Y-%m-%d%n%H-%M-%S", //2018-10-09T19-34-31_27 (not sure what the "_27" exactly means)
       "%d-%b-%Y",           //"00-Jan-2000 "
       "%Y/%m/%d", //"2010/01/18"
@@ -594,7 +595,6 @@ namespace SpecUtils
 #else
       if( formats[i][0] && strptime_wrapper( timestr, formats[i], &t ) )
       {
-        
         //cout << "Format='" << formats[i] << "' worked to give: "
         //  << print_to_iso_str( boost::posix_time::from_time_t(timegm( &t )) + fraction + boost::gregorian::years( add100Years ? 100 : 0 ), false )
         //  << " time_t=" << timegm(&t)

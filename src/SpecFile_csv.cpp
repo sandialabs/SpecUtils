@@ -180,6 +180,9 @@ bool SpecFile::load_from_txt_or_csv( std::istream &istr )
       auto m = std::make_shared<Measurement>();
       m->set_info_from_txt_or_csv( istr );
       
+      if( m->num_gamma_channels() < 7 && !m->contained_neutron() )
+        break;
+      
       measurements_.push_back( m );
     }catch( exception & )
     {
@@ -544,6 +547,23 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           column_map[i] = kEnergy;
           if( SpecUtils::contains( fields[i], "mev" ) )
             energy_units = 1000.0f;
+          
+          const auto kevpos = fields[i].find( "(kev)" );
+          if( kevpos != string::npos && ((fields[i].size() - kevpos) > 3) )
+          {
+            //Theramino produces a header like "Energy(KeV)    Counts    "
+            //  but the rest of the lines are CSV
+            //  Hopefully accounting for this doesnt erroneoulsy affect other formats
+            string restofline = fields[i].substr(kevpos+5);
+            SpecUtils::trim(restofline);
+            if( SpecUtils::istarts_with(restofline, "count")
+               || SpecUtils::istarts_with(restofline, "data")
+               || SpecUtils::istarts_with(restofline, "signal") )
+            {
+              column_map[i+1] = kCounts;
+            }
+          }//if( text after "(kev)" )
+          
         }else if( starts_with( fields[i], "counts" )
                  || starts_with( fields[i], "data" )
                  || starts_with( fields[i], "selection" )
@@ -625,7 +645,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }
       }
     }else if( istarts_with( fields[0], "starttime" )
-             || istarts_with( fields[0], "Measurement start" ) )
+             || istarts_with( fields[0], "Measurement start" )
+             || istarts_with( fields[0], "Started at" ) )
     {
       ++nlines_used;
       
@@ -634,6 +655,18 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         timestr = fields[1];
       if( nfields > 2 )
         timestr += (" " + fields[2]);
+      
+      if( timestr.size() < 2 )
+      {
+        //Theramino has lines like: "Started at: 2020/02/12 14:57:39"
+        const auto semicolonpos = fields[0].find(":");
+        if( semicolonpos != string::npos && (fields[0].size()-semicolonpos) > 2 )
+        {
+          timestr = fields[0].substr(semicolonpos+1);
+          SpecUtils::trim(timestr);
+        }
+      }//if( timestr.empty() )
+      
       start_time_ = time_from_string( timestr.c_str() );
     }else if( starts_with( fields[0], "livetime" ) )
     {
@@ -642,12 +675,24 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       if( nfields > 1 )
         live_time_ = time_duration_string_to_seconds( fields[1] );
     }else if( istarts_with( fields[0], "realtime" )
-             || istarts_with( fields[0], "Real time" ) )
+             || istarts_with( fields[0], "Real time" )
+             || istarts_with( fields[0], "Total time") )
     {
       ++nlines_used;
       
       if( nfields > 1 )
+      {
         real_time_ = time_duration_string_to_seconds( fields[1] );
+      }else
+      {
+        const auto semipos = fields[0].find(":");
+        if( semipos != string::npos && (semipos+2) < fields[0].size() )
+        {
+          string restofline = fields[0].substr( semipos+1 );
+          SpecUtils::trim(restofline);
+          real_time_ = time_duration_string_to_seconds( restofline );
+        }
+      }
     }else if( starts_with( fields[0], "neutroncount" ) )
     {
       ++nlines_used;
@@ -748,12 +793,24 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
   for( const float f : *gamma_counts_ )
     gamma_count_sum_ += f;
   
-  //Some CSV files only contain live or real time, so I guess we could just set
-  //  them both equal in this case, but we'll skip this for now.
-  //if( real_time_ > FLT_EPSILON && fabs(live_time_) < FLT_EPSILON )
-  //  live_time_ = real_time_;
-  //else if( live_time_ > FLT_EPSILON && fabs(real_time_) < FLT_EPSILON )
-  //  real_time_ = live_time_;
+  if( (gamma_count_sum_ < FLT_EPSILON) && !contained_neutron() )
+  {
+    reset();
+    istr.seekg( orig_pos, ios::beg );
+    istr.clear( ios::failbit );
+    throw runtime_error( "Measurement::set_info_from_txt_or_csv(...)\n\tFailed to find gamma or neutron counts" );
+  }
+  
+  //Some CSV files only contain live or real time, so just set them equal
+  if( real_time_ > FLT_EPSILON && fabs(live_time_) < FLT_EPSILON )
+  {
+    live_time_ = real_time_;
+    parse_warnings_.emplace_back( "Measurement did not contain Live Time, so setting this to Real Time" );
+  }else if( live_time_ > FLT_EPSILON && fabs(real_time_) < FLT_EPSILON )
+  {
+    real_time_ = live_time_;
+    parse_warnings_.emplace_back( "Measurement did not contain Real Time, so setting this to Live Time" );
+  }
 }//void set_info_from_txt_or_csv( std::istream& istr )
 
   
