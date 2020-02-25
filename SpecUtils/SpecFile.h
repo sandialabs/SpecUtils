@@ -364,6 +364,46 @@ enum DetectionType{ GammaDetection, NeutronDetection, GammaAndNeutronDetection, 
 typedef std::map<std::string,std::pair<DetectionType,std::string> > IdToDetectorType;
 typedef std::map<std::string,MeasurementCalibInfo>                  DetectorToCalibInfo;
 
+  
+/** Checks the first 512 bytes of data for a few magic strings that *should* be
+   in N42 files; if it contains any of them, it returns true
+ 
+ @TODO move this function, and similar ones to a N42 utils header/source
+*/
+bool is_candidate_n42_file( const char * data );
+  
+/** Same as other version of this function, but input does not need to be null
+   terminated.
+
+  @TODO move this function, and similar ones to a N42 utils header/source
+*/
+bool is_candidate_n42_file( const char * const data, const char * const data_end );
+  
+/** Checks if the input data might be a N42 file, and if it might be UTF16
+   instead of UTF8, and if so, uses a very niave/horrible approach of just
+   eliminating '\0' bytes from the input data.  Returns new data_end (or if no
+   changes, the one passed in)
+ 
+ @TODO move this function, and similar ones to a N42 utils header/source
+ */
+char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end );
+  
+  
+/** @TODO move this function, and similar ones to a N42 utils header/source
+ 
+ */
+void add_analysis_results_to_2012_N42( const DetectorAnalysis &ana,
+                                        ::rapidxml::xml_node<char> *RadInstrumentData,
+                                        std::mutex &xmldocmutex );
+  
+/** adds to analysis the information in AnalysisResults node.  Currently only
+   adds the NuclideAnalysis to for a select few number of detectors.
+ 
+  @TODO move this function, and similar ones to a N42 utils header/source
+*/
+void set_analysis_info_from_n42( const rapidxml::xml_node<char> *analysis_node,
+                              DetectorAnalysis &analysis );
+
 
 //gamma_integral(): get the integral of gamma counts between lowenergy and
 //  upperunergy; linear approximation is used for fractions of channels.
@@ -578,8 +618,7 @@ public:
   //gamma_counts(): the channel counts of the gamma data.
   //  Returned pointer may be null if no gamma data present, or not thie
   //  Measurment is not properly initialized.
-  const std::shared_ptr< const std::vector<float> > &
-                                                           gamma_counts() const;
+  const std::shared_ptr< const std::vector<float> > &gamma_counts() const;
   
   //neutron_counts(): the channel counts of neutron data.  Currently none of
   //  the file formats give channelized neutron data, so this function may
@@ -633,7 +672,6 @@ public:
   //  e.g. the first binn is bin 1, NOT bin 0
   //
   //All of these functions are depreciated!  (dont use them anywhere new)
-  float GetBinCenter( int bin ) const;  //depreciated
   float GetBinContent( int bin ) const; //depreciated
   float GetBinLowEdge( int bin ) const; //depreciated
   float GetBinWidth( int bin ) const;   //depreciated

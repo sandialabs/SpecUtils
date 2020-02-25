@@ -715,12 +715,6 @@ const std::vector<float> &Measurement::neutron_counts() const
   return neutron_counts_;
 }
   
-  
-float Measurement::GetBinCenter( int bin ) const
-{
-  return (float)( GetBinLowEdge(bin) + 0.5*GetBinWidth(bin) );
-}
-  
 
 float Measurement::GetBinContent( int bin ) const
 {
