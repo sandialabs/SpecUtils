@@ -2900,6 +2900,22 @@ namespace SpecUtils
       AnalysisResults->append_node( desc );
     }
     
+    if( !ana.analysis_start_time_.is_special() )
+    {
+      std::lock_guard<std::mutex> lock( xmldocmutex );
+      const string dt = SpecUtils::to_extended_iso_string(ana.analysis_start_time_) + "Z";
+      val = doc->allocate_string( dt.c_str(), dt.size()+1 );
+      xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisStartDateTime", val );
+      AnalysisResults->append_node( desc );
+    }
+    
+    if( ana.analysis_computation_duration_ > FLT_EPSILON )
+    {
+      snprintf( buffer, sizeof(buffer), "PT%fS", ana.analysis_computation_duration_ );
+      val = doc->allocate_string( buffer );
+      xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisComputationDuration", val );
+      AnalysisResults->append_node( desc );
+    }
     
     for( const auto &component : ana.algorithm_component_versions_ )
     {
@@ -2954,17 +2970,6 @@ namespace SpecUtils
           result_node = doc->allocate_node( node_element, "NuclideAnalysisResults" );
           AnalysisResults->append_node( result_node );
         }
-        
-        /*
-         xml_node<char> *AnalysisStartDateTime = (xml_node<char> *)0;
-         if( !AnalysisStartDateTime && !result.start_time_.is_special() )
-         {
-         const string timestr = SpecUtils::to_iso_string( result.start_time_ );
-         val = doc->allocate_string( timestr.c_str(), timestr.size()+1 );
-         AnalysisStartDateTime = doc->allocate_node( node_element, "StartTime", val );
-         AnalysisResults->append_node( AnalysisStartDateTime );
-         }
-         */
         
         xml_node<char> *nuclide_node = doc->allocate_node( node_element, "Nuclide" );
         result_node->append_node( nuclide_node );
@@ -3058,16 +3063,6 @@ namespace SpecUtils
           xml_node<char> *Remark = doc->allocate_node( node_element, "Remark", val );
           DoseAnalysisResults->append_node( Remark );
         }
-        
-        /*
-         if( !AnalysisStartDateTime && !result.start_time_.is_special() )
-         {
-         const string timestr = SpecUtils::to_iso_string( result.start_time_ );
-         val = doc->allocate_string( timestr.c_str(), timestr.size()+1 );
-         AnalysisStartDateTime = doc->allocate_node( node_element, "StartTime", val );
-         AnalysisResults->append_node( AnalysisStartDateTime );
-         }
-         */
         
         snprintf( buffer, sizeof(buffer), "%1.8E", result.dose_rate_ );
         val = doc->allocate_string( buffer );
@@ -5949,11 +5944,6 @@ namespace SpecUtils
     if( !analysis_node )
       return;
     
-    //  boost::posix_time::ptime ana_start_time;
-    //  const rapidxml::xml_node<char> *AnalysisStartDateTime = XML_FIRST_NODE( analysis_node, "AnalysisStartDateTime" );
-    //  if( AnalysisStartDateTime )
-    //    ana_start_time = time_from_string( xml_value_str(AnalysisStartDateTime).c_str() );
-    
     const rapidxml::xml_node<char> *nuc_ana_node = XML_FIRST_NODE( analysis_node, "NuclideAnalysis" );
     if( !nuc_ana_node )
       nuc_ana_node = XML_FIRST_NODE(analysis_node, "NuclideAnalysisResults");
@@ -6077,6 +6067,13 @@ namespace SpecUtils
       analysis.algorithm_description_.swap( desc );
     }//if( analysis.algorithm_description_.empty() && algo_info_node )
     
+    const rapidxml::xml_node<char> *AnalysisStartDateTime = XML_FIRST_NODE( analysis_node, "AnalysisStartDateTime" );
+    if( AnalysisStartDateTime )
+      analysis.analysis_start_time_ = time_from_string( xml_value_str(AnalysisStartDateTime).c_str() );
+    
+    const rapidxml::xml_node<char> *anadur = XML_FIRST_NODE( analysis_node, "AnalysisComputationDuration" );
+    if( anadur )
+      analysis.analysis_computation_duration_ = SpecUtils::time_duration_string_to_seconds( anadur->value(), anadur->value_size() );
     
     const rapidxml::xml_node<char> *result_desc_node = XML_FIRST_NODE( analysis_node, "AnalysisResultDescription" );
     if( !result_desc_node )

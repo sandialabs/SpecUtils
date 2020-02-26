@@ -2975,6 +2975,21 @@ void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
                         + lhs.algorithm_description_ + "') doesnt match RHS ('"
                         + rhs.algorithm_description_ + "')" );
 
+  if( lhs.analysis_start_time_ != rhs.analysis_start_time_ )
+    throw runtime_error( "Analysis start time for LHS ('"
+                      + SpecUtils::to_iso_string(lhs.analysis_start_time_)
+                      + "') doesnt match RHS ('"
+                      + SpecUtils::to_iso_string(rhs.analysis_start_time_)
+                      + "')" );
+  
+  
+  if( fabs(lhs.analysis_computation_duration_ - rhs.analysis_computation_duration_) > FLT_EPSILON )
+    throw runtime_error( "Analysis duration time for LHS ('"
+      + std::to_string(lhs.analysis_computation_duration_)
+      + "') doesnt match RHS ('"
+      + std::to_string(rhs.analysis_computation_duration_)
+      + "')" );
+  
   if( lhs.algorithm_result_description_ != rhs.algorithm_result_description_ )
     throw runtime_error( "Analysis algorithm result description for LHS ('"
                         + lhs.algorithm_result_description_ + "') doesnt match RHS ('"
@@ -7216,6 +7231,8 @@ void DetectorAnalysis::reset()
   algorithm_component_versions_.clear();
   algorithm_creator_.clear();
   algorithm_description_.clear();
+  analysis_start_time_ = boost::posix_time::ptime();
+  analysis_computation_duration_ = 0.0f;
   algorithm_result_description_.clear();
   
   results_.clear();
@@ -7229,6 +7246,8 @@ bool DetectorAnalysis::is_empty() const
    && algorithm_component_versions_.empty()
    && algorithm_creator_.empty()
    && algorithm_description_.empty()
+   //&& analysis_start_time_.is_special()
+   //&& analysis_computation_duration_ < FLT_EPSILON
    && algorithm_result_description_.empty()
    && results_.empty());
 }

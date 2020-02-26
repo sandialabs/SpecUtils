@@ -2229,6 +2229,14 @@ public:
   /** Free-form text describing the analysis algorithm. */
   std::string algorithm_description_;
   
+  /** Time at which the analysis was started, if available; */
+  boost::posix_time::ptime analysis_start_time_;
+  
+  /** The number of seconds taken to perform the analysis; will be 0.0f if not
+   specified.
+   */
+  float analysis_computation_duration_;
+  
   /** Free-form text describing the overall conclusion of the analysis regarding 
       the source of concern.  Equivalent to <AnalysisResultDescription> or 
       <ThreatDescription> tag of N42 2012 or 2006 respectively
