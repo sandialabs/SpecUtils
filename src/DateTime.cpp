@@ -29,6 +29,25 @@
 
 #if( USE_HH_DATE_LIB )
 #include "3rdparty/date_2cb4c34/include/date/date.h"
+#else
+
+//#if( defined(_MSC_VER) && _MSC_VER < 1800 )
+//#if( defined(_MSC_VER) )  //Doesnt look like MSVS 2017 has strptime.
+#if( defined(_WIN32) )
+#define HAS_NATIVE_STRPTIME 0
+#else
+#define HAS_NATIVE_STRPTIME 1
+#endif
+
+#if( HAS_NATIVE_STRPTIME )
+#include <time.h>
+#endif
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN 1
+#include <windows.h>
+#endif
+
 #endif
 
 using namespace std;
@@ -290,7 +309,7 @@ namespace SpecUtils
   
 #else //USE_HH_DATE_LIB
   
-#if( defined(WIN32) )
+#if( defined(_WIN32) )
 #define timegm _mkgmtime
 #endif
   
@@ -299,13 +318,6 @@ namespace SpecUtils
     //For the testTimeFromString unit test on my mac, the native take strptime
     //  takes 302188us to run, vs the c++11 version taking 4113835us.
     //  ~10 times slower, so preffer native strptime where available.
-    //#if( defined(_MSC_VER) && _MSC_VER < 1800 )
-    //#if( defined(_MSC_VER) )  //Doesnt look like MSVS 2017 has strptime.
-#if( defined(WIN32) )
-#define HAS_NATIVE_STRPTIME 0
-#else
-#define HAS_NATIVE_STRPTIME 1
-#endif
     
 #if( HAS_NATIVE_STRPTIME )
     return (strptime(s,f,t) != nullptr);
@@ -314,7 +326,7 @@ namespace SpecUtils
     //memset( t, 0, sizeof(*t) );  //Without this some tm fields dont make sense for some formats...
     
     
-#if(defined(WIN32))
+#if(defined(_WIN32))
     //see https://developercommunity.visualstudio.com/content/problem/18311/stdget-time-asserts-with-istreambuf-iterator-is-no.html
     //if( strlen( f ) < strlen( s ) )
     //  return false;

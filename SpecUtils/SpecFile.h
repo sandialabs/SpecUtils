@@ -30,11 +30,10 @@
 #endif
 
 #include <set>
+#include <mutex>
 #include <string>
 #include <vector>
-#include <memory>
 #include <algorithm>
-#include <stdexcept>
 #include <functional>
 
 #include <boost/date_time/posix_time/posix_time.hpp>

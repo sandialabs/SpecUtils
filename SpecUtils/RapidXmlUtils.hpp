@@ -25,7 +25,7 @@
 
 #include "SpecUtils_config.h"
 
-#include "rapidxml/rapidxml.hpp"
+#include "3rdparty/rapidxml/rapidxml.hpp"
 
 namespace SpecUtils
 {

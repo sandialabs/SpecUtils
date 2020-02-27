@@ -43,6 +43,29 @@
 
 #include "SpecUtils/StringAlgo.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN 1
+//Pull in WideCharToMultiByte(...), etc from WIndows
+#include <windows.h>
+#endif
+
+//#include <boost/config.hpp>
+//BOOST_NO_CXX11_HDR_CODECVT
+#ifndef _WIN32
+#if( defined(__clang__) || !defined(__GNUC__) || __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 8) )
+#define HAS_STD_CODECVT 1
+#else
+#define HAS_STD_CODECVT 0
+#endif
+
+//GCC 4.8 doesnt have codecvt, so we'll use boost for utf8<-->utf16
+#if( HAS_STD_CODECVT )
+#include <codecvt>
+#else
+#include <boost/locale/encoding_utf.hpp>
+#endif
+#endif //#ifndef _WIN32
+
 
 using namespace std;
 
@@ -1297,11 +1320,11 @@ namespace SpecUtils
     char *pos_ptr = NULL;
     
     // Branches for Windows; strtok_r is on POSIX systems. strtok_s is the Windows equivalent.
-#if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#ifdef _WIN32
     char *value_str = strtok_s( input, delims, &pos_ptr );
 #else
     char *value_str = strtok_r( input, delims, &pos_ptr );
-#endif // #if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#endif
     
     while( value_str != NULL )
     {
@@ -1359,11 +1382,11 @@ namespace SpecUtils
       contents.push_back( value );
       
       // Branches for Windows; strtok_r is on POSIX systems. strtok_s is the Windows equivalent.
-#if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#ifdef _WIN32
       value_str = strtok_s( NULL, delims, &pos_ptr );
 #else
       value_str = strtok_r( NULL, delims, &pos_ptr );
-#endif // #if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+#endif
     }//while( pch != NULL )
     
 #else
@@ -1373,6 +1396,53 @@ namespace SpecUtils
     return true;
   }//vector<float> split_to_floats( ... )
   
+
+std::string convert_from_utf16_to_utf8(const std::wstring &winput)
+{
+#ifdef _WIN32
+  std::string answer;
+  int requiredSize = WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, 0, 0, 0, 0);
+  if(requiredSize > 0)
+  {
+    std::vector<char> buffer(requiredSize);
+    WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, &buffer[0], requiredSize, 0, 0);
+    answer.assign(buffer.begin(), buffer.end() - 1);
+  }
+  return answer;
+#else
+#if( HAS_STD_CODECVT )
+  return std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes( winput );
+#else
+  return boost::locale::conv::utf_to_utf<char>(winput.c_str(), winput.c_str() + winput.size());
+#endif
+#endif
+}//std::string convert_from_utf16_to_utf8(const std::wstring &winput)
+  
+  
+std::wstring convert_from_utf8_to_utf16( const std::string &input )
+{
+//#if( defined(_WIN32) && defined(_MSC_VER) )
+#ifdef _WIN32
+  std::wstring answer;
+  int requiredSize = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, 0, 0);
+  if(requiredSize > 0)
+  {
+    std::vector<wchar_t> buffer(requiredSize);
+    MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, &buffer[0], requiredSize);
+    answer.assign(buffer.begin(), buffer.end() - 1);
+  }
+  
+  return answer;
+#else
+#if( HAS_STD_CODECVT )
+  return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(input);
+#else
+  return boost::locale::conv::utf_to_utf<wchar_t>(input.c_str(), input.c_str() + input.size());
+#endif
+#endif
+}//std::wstring convert_from_utf8_to_utf16( const std::string &str );
+  
+
   std::string sequencesToBriefString( const std::set<int> &sample_numbers )
   {
     stringstream editVal;

@@ -304,6 +304,23 @@ namespace  SpecUtils
                            std::vector<long long> &results );
   
   
+  /** Convert between UTF-16 and UTF-8 strings.  This is used on Windows as
+    all the file path functions encode everything as UTF-8, however on Windows
+    you must call the "wide" version of functions related to file paths to work
+    correctly (the narrow versions use the current code range, not UTF-8).
+    */
+   std::string convert_from_utf16_to_utf8( const std::wstring &wstr );
+ 
+  /** Converts from UTF-8 to UTF-16 strings; primarily useful on Windows.
+  
+  All filesystem functions in this library take in, and give out UTF-8 paths,
+  so if you want to open a file path given by one of the functions in this
+  library on Windows, you should first convert it to UTF-16 before calling into
+  the C or C++ standard library functions, or Windows provided functions.
+  */
+  std::wstring convert_from_utf8_to_utf16( const std::string &str );
+ 
+
   /** \brief Turns a set of numbers with possible many sub-sequences with values
    that are adjacent into a convient human-readable string.
    

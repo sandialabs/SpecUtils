@@ -26,6 +26,7 @@
 #include "SpecUtils_config.h"
 
 #include <string>
+#include <vector>
 #include <istream>
 #include <ostream>
 

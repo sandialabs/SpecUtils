@@ -252,6 +252,10 @@ if( SpecUtils_BUILD_UNIT_TESTS )
   target_link_libraries( SpecUtils PUBLIC ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} )
 endif( SpecUtils_BUILD_UNIT_TESTS )
 
+if( MINGW )
+  target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a )
+endif( MINGW )
+
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
                             PRIVATE ${RAPID_XML_DIR} ${PYTHON_INCLUDE_DIRS} )
 

@@ -23,6 +23,7 @@
 #include <string>
 #include <limits>
 #include <sstream>
+#include <algorithm>
 
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"

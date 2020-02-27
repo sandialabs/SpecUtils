@@ -19,10 +19,14 @@
 
 #include "SpecUtils_config.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 #include <random>
 #include <fstream>
+#include <algorithm>
+
+#include <iostream> //temporatry for debug
 
 #if( ANDROID )
 #include <android/log.h>
@@ -31,6 +35,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
+#include <pathcch.h>
 #include <Lmcons.h>
 #include <direct.h>
 #include <io.h>
@@ -61,22 +66,6 @@
 #include <boost/filesystem.hpp>
 #endif
 
-//#include <boost/config.hpp>
-//BOOST_NO_CXX11_HDR_CODECVT
-#ifndef _WIN32
-#if( defined(__clang__) || !defined(__GNUC__) || __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 8) )
-#define HAS_STD_CODECVT 1
-#else
-#define HAS_STD_CODECVT 0
-#endif
-
-//GCC 4.8 doesnt have codecvt, so we'll use boost for utf8<-->utf16
-#if( HAS_STD_CODECVT )
-#include <codecvt>
-#else
-#include <boost/locale/encoding_utf.hpp>
-#endif
-#endif //#ifndef _WIN32
 
 #ifdef _WIN32
 // Copied from linux libc sys/stat.h:
@@ -137,52 +126,6 @@ namespace
 
 namespace SpecUtils
 {
-std::string convert_from_utf16_to_utf8(const std::wstring &winput)
-{
-#ifdef _WIN32
-  std::string answer;
-  int requiredSize = WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, 0, 0, 0, 0);
-  if(requiredSize > 0)
-  {
-    std::vector<char> buffer(requiredSize);
-    WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, &buffer[0], requiredSize, 0, 0);
-    answer.assign(buffer.begin(), buffer.end() - 1);
-  }
-  return answer;
-#else
-#if( HAS_STD_CODECVT )
-  return std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes( winput );
-#else
-  return boost::locale::conv::utf_to_utf<char>(winput.c_str(), winput.c_str() + winput.size());
-#endif
-#endif
-}//std::string convert_from_utf16_to_utf8(const std::wstring &winput)
-  
-  
-std::wstring convert_from_utf8_to_utf16( const std::string &input )
-{
-#if( defined(_WIN32) && defined(_MSC_VER) )
-  std::wstring answer;
-  int requiredSize = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, 0, 0);
-  if(requiredSize > 0)
-  {
-    std::vector<wchar_t> buffer(requiredSize);
-    MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, &buffer[0], requiredSize);
-    answer.assign(buffer.begin(), buffer.end() - 1);
-  }
-  
-  return answer;
-#else
-#if( HAS_STD_CODECVT )
-  return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(input);
-#else
-  return boost::locale::conv::utf_to_utf<wchar_t>(input.c_str(), input.c_str() + input.size());
-#endif
-#endif
-}//std::wstring convert_from_utf8_to_utf16( const std::string &str );
-  
-
-  
 std::string temp_dir()
 {
 #if( ANDROID )
@@ -280,7 +223,7 @@ bool rename_file( const std::string &source, const std::string &destination )
 bool is_file( const std::string &name )
 {
 #ifdef _WIN32
-  //const std::wstring wname = convert_from_utf8_to_utf16( name );
+  const std::wstring wname = convert_from_utf8_to_utf16( name );
   //ifstream file( wname.c_str() );
   //return file.good();
   
@@ -289,7 +232,10 @@ bool is_file( const std::string &name )
   return S_ISREG(statbuf.st_mode) && ((statbuf.st_mode & _S_IREAD) == _S_IREAD);
   //return (_waccess(wname.c_str(), 0x04) == 0) && !S_ISDIR(statbuf.st_mode);  //0x04 checks for read
 #else
-  return (access(name.c_str(), F_OK) == 0);
+  struct stat statbuf;
+  stat( name.c_str(), &statbuf);
+  // @TODO Make sure the ISREG and ISLNK is what we want, and also make sure Windows uses a consistent definition of what a file is...
+  return (S_ISREG(statbuf.st_mode) || S_ISLNK(statbuf.st_mode)) && (access(name.c_str(), F_OK) == 0);
 #endif
   /*
    #ifdef _WIN32
@@ -406,33 +352,24 @@ std::string append_path( const std::string &base, const std::string &name )
 std::string filename( const std::string &path_and_name )
 {
 #ifdef _WIN32
-  /*
-   errno_t _wsplitpath_s(
-   const wchar_t * path,
-   wchar_t * drive,
-   size_t driveNumberOfElements,
-   wchar_t *dir,
-   size_t dirNumberOfElements,
-   wchar_t * fname,
-   size_t nameNumberOfElements,
-   wchar_t * ext,
-   size_t extNumberOfElements
-   );
-   */
+  const wstring wpath = convert_from_utf8_to_utf16(path_and_name);
   
-#error "SpecUtils::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once - and need to switch to doing wide"
-  char path_buffer[_MAX_PATH];
-  char drive[_MAX_DRIVE];
-  char dir[_MAX_DIR];
-  char fname[_MAX_FNAME];
-  char ext[_MAX_EXT];
+  wchar_t drive[_MAX_DRIVE+1];
+  const size_t maxdirlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_DIR));
+  const size_t maxfilenamelen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_FNAME));
+  std::unique_ptr<wchar_t []> dir( new wchar_t [maxdirlen+1] );
+  std::unique_ptr<wchar_t []> fname( new wchar_t [maxfilenamelen+1] );
+  wchar_t ext[_MAX_EXT+1];
   
-  errno_t err = _splitpath_s( path.c_str(), drive, dir, fname,  ext );
-  
+  errno_t err = _wsplitpath_s( wpath.c_str(), drive, _MAX_DRIVE,
+                               dir.get(), maxdirlen,
+                               fname.get(), maxfilenamelen,
+                               ext, _MAX_EXT );
+
   if( err != 0 )
     throw runtime_error( "Failed to _splitpath_s in filename()" );
   
-  return string(fname) + ext;
+  return convert_from_utf16_to_utf8( wstring(fname.get()) + ext );
 #else  // _WIN32
   // "/usr/lib" -> "lib"
   // "/usr/"    -> "usr"
@@ -457,25 +394,32 @@ std::string filename( const std::string &path_and_name )
 std::string parent_path( const std::string &path )
 {
 #ifdef _WIN32
-#error "SpecUtils::parent_path not not tested for SpecUtils_NO_BOOST_LIB on Win32!  Like not even tested once"
   std::wstring wpath = convert_from_utf8_to_utf16( path );
-  wchar_t path_buffer[_MAX_PATH];
-  wchar_t drive[_MAX_DRIVE];
-  wchar_t dir[_MAX_DIR];
-  wchar_t fname[_MAX_FNAME];
-  wchar_t ext[_MAX_EXT];
   
-  errno_t err = _wsplitpath_s( wpath.c_str(), drive, dir, fname, ext );
+  wchar_t drive[_MAX_DRIVE+1];
+  const size_t maxdirlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_DIR)) + 1;
+  const size_t maxfilenamelen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_FNAME)) + 1;
+  std::unique_ptr<wchar_t []> dir( new wchar_t [maxdirlen+1] );
+  std::unique_ptr<wchar_t []> fname( new wchar_t [maxfilenamelen+1] );
+  wchar_t ext[_MAX_EXT+1];
+  
+  errno_t err = _wsplitpath_s( wpath.c_str(), drive, _MAX_DRIVE,
+                               dir.get(), maxdirlen,
+                               fname.get(), maxfilenamelen,
+                               ext, _MAX_EXT );
   
   if( err != 0 )
     throw runtime_error( "Failed to get parent-path" );
   
-  err = _makepath_s( path_buffer, _MAX_PATH, drive, dir, nullptr, nullptr );
+  const size_t maxpathlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_PATH));
+  std::unique_ptr<wchar_t []> path_buffer( new wchar_t [maxpathlen+1] );
+  
+  err = _wmakepath_s( path_buffer.get(), maxpathlen, drive, dir.get(), nullptr, nullptr );
   
   if( err != 0 )
     throw runtime_error( "Failed to makepathin parent_path" );
   
-  return convert_from_utf16_to_utf8( path_buffer );
+  return convert_from_utf16_to_utf8( path_buffer.get() );
 #else
   //dirname from libgen.h
   //"/usr/lib" -> "/usr"
@@ -642,7 +586,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   
 #if( defined(_WIN32) )
   
-  SpecUtils::ireplace_all( path, "\\", "/");
+  //SpecUtils::ireplace_all( path, "/", "\\");
   
   /*
    - path empty, return.
@@ -663,36 +607,35 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   //if( _wfullpath( full, partialPath, _MAX_PATH ) != NULL )
   //{
   //}
-  wchar_t buffer[MAX_PATH];
   const std::wstring wpath = convert_from_utf8_to_utf16( path );
-#error "Fix up make_canonical_path for windows"
   
   
-  /*
-   ToDo: Switch to using the bellow implementation to handle longer filepaths.
-   Bellow is untested.
-   const ULONG flags = PATHCCH_ALLOW_LONG_PATHS;
-   const size_t pathlen = std::max( std::max( MAX_PATH, 2048 ), 2*wpath )
-   wchar_t *buffer = (wchar_t *)malloc( pathlen*sizeof(wchar_t) );
-   if( !buffer )
-   return false;
-   
-   if( PathCchCanonicalizeEx( buffer, pathlen, wpath.c_str(), flags ) == S_OK )
-   {
-   path = convert_from_utf16_to_utf8( buffer );
-   free( buffer );
-   return true;
-   }else
-   {
-   path.reset();
-   }
-   */
+  //MinGW has trouble linking since its libraries dont have PathCchCanonicalizeEx(...) it doesnt look like
+#if( defined(_MSC_VER) )
+  const ULONG flags = PATHCCH_ALLOW_LONG_PATHS;
+  const size_t pathlen = std::max( std::max( static_cast<size_t>(_MAX_PATH), static_cast<size_t>(2048) ), 2*wpath.size() );
+  std::unique_ptr<wchar_t []> buffer( new wchar_t [pathlen+1] );
+  if( !buffer )
+    return false;
   
+  if( PathCchCanonicalizeEx( buffer.get(), pathlen, wpath.c_str(), flags ) == S_OK )
+  {
+    path = convert_from_utf16_to_utf8( buffer.get() );
+    return true;
+  }else
+  {
+    path.clear();
+  }
+#else
+  wchar_t buffer[_MAX_PATH];
   if( PathCanonicalizeW( buffer, wpath.c_str() ) )
   {
     path = convert_from_utf16_to_utf8( buffer );
     return true;
   }
+  path.clear();
+#endif
+  
   return false;
 #else //WIN32
   vector<char> resolved_name(PATH_MAX + 1, '\0');
@@ -705,59 +648,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
 }//bool make_canonical_path( std::string &path )
   
   
-  /*
-   Could replace recursive_ls_internal() with the following to help get rid of linking to boost
-   #ifdef _WIN32
-   //https://stackoverflow.com/questions/2314542/listing-directory-contents-using-c-and-windows
-   
-   bool ListDirectoryContents(const char *sDir)
-   {
-   WIN32_FIND_DATA fdFile;
-   HANDLE hFind = NULL;
-   
-   char sPath[2048];
-   
-   //Specify a file mask. *.* = We want everything!
-   sprintf(sPath, "%s\\*.*", sDir);
-   
-   if((hFind = FindFirstFile(sPath, &fdFile)) == INVALID_HANDLE_VALUE)
-   {
-   printf("Path not found: [%s]\n", sDir);
-   return false;
-   }
-   
-   do
-   {
-   //Find first file will always return "."
-   //    and ".." as the first two directories.
-   if(strcmp(fdFile.cFileName, ".") != 0
-   && strcmp(fdFile.cFileName, "..") != 0)
-   {
-   //Build up our file path using the passed in
-   //  [sDir] and the file/foldername we just found:
-   sprintf(sPath, "%s\\%s", sDir, fdFile.cFileName);
-   
-   //Is the entity a File or Folder?
-   if(fdFile.dwFileAttributes &FILE_ATTRIBUTE_DIRECTORY)
-   {
-   printf("Directory: %s\n", sPath);
-   ListDirectoryContents(sPath); //Recursion, I love it!
-   }
-   else{
-   printf("File: %s\n", sPath);
-   }
-   }
-   }
-   while(FindNextFile(hFind, &fdFile)); //Find the next file.
-   
-   FindClose(hFind); //Always, Always, clean things up!
-   
-   return true;
-   }
-   #else
-   //see recursive_ls_internal_unix(...)
-   #endif
-   */
+  
   
   
   
@@ -769,6 +660,79 @@ bool filter_ending( const std::string &path, void *user_match_data )
 
   
 #if( defined(_WIN32) || PERFORM_DEVELOPER_CHECKS )
+//Could replace recursive_ls_internal() with the following to help get rid of linking to boost
+//https://stackoverflow.com/questions/2314542/listing-directory-contents-using-c-and-windows
+
+
+vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
+         file_match_function_t match_fcn,
+         void *user_match_data,
+         const size_t depth,
+         const size_t numfiles )
+{
+  vector<std::string> files;
+  
+  if( depth >= sm_recursive_ls_max_depth )
+    return files;
+  
+  WIN32_FIND_DATAW fdFile;
+  HANDLE hFind = NULL;
+  
+  const wstring wpath = convert_from_utf8_to_utf16(sourcedir);
+  
+  //Specify a file mask. *.* = We want everything!
+  std::wcout << L"recursive_ls_internal_windows(\"" << wpath << L"\")" << std::endl;
+  
+  //FindFirstFileExW
+  if((hFind = FindFirstFileW(wpath.c_str(), &fdFile)) == INVALID_HANDLE_VALUE)
+  {
+    std::wcout << L"recursive_ls_internal_windows(\"" << wpath << L"\"): Path not found." << std::endl;
+    return files;
+  }
+  
+  do
+  {
+    if( (files.size()+numfiles) >= sm_ls_max_results )
+      break;
+      
+    //Find first file will always return "."
+    //    and ".." as the first two directories.
+    if( (fdFile.cFileName == wstring(L".")) || (fdFile.cFileName == wstring(L"..")) )
+      continue;
+    
+    
+    //Build up our file path using the passed in
+    //  [sDir] and the file/foldername we just found:
+    wstring newpath = wpath + ((wpath.size() && wpath[wpath.size()-1] != L'\\') ? L"\\" : L"") + fdFile.cFileName;
+    //sprintf(sPath, "%s\\%s", sDir, fdFile.cFileName);
+    
+    //Is the entity a File or Folder?
+    if( fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+      std::wcout << L"recursive_ls_internal_windows(...) Directory: '" << newpath << L"'" << std::endl;
+      string newdirname = SpecUtils::convert_from_utf16_to_utf8(newpath);
+      
+      const auto r = recursive_ls_internal_windows( newdirname,
+                                   match_fcn, user_match_data, depth+1, files.size() + numfiles );
+      
+      files.insert( files.end(), r.begin(), r.end() );
+    }else
+    {
+      std::wcout << L"recursive_ls_internal_windows(...) File: '" << newpath << L"'" << std::endl;
+      string newfilename = SpecUtils::convert_from_utf16_to_utf8(newpath);
+      if( !match_fcn || match_fcn(newfilename,user_match_data) )
+        files.push_back( newfilename );
+    }
+  }while( FindNextFileW( hFind, &fdFile) ); //Find the next file.
+  
+  FindClose(hFind);
+  
+  return files;
+}
+#endif
+
+ 
+#if( PERFORM_DEVELOPER_CHECKS )
 vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
                                                   file_match_function_t match_fcn,
                                                   void *user_match_data,
@@ -779,21 +743,17 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   
   vector<string> files;
   
-  /*
    //A shorter untested implementation, that might be better.
-   for( recursive_directory_iterator iter(sourcedir), end; iter != end; ++iter )
-   {
-   const std::string name = iter->path().filename().string();
-   const bool isdir = SpecUtils::is_directory( name );
-   
-   if( !isdir && (!match_fcn || match_fcn(name,user_match_data)) )
-   files.push_back( name );
-   
-   if( files.size() >= sm_ls_max_results )
-   break;
-   }
-   return files;
-   */
+   //for( recursive_directory_iterator iter(sourcedir), end; iter != end; ++iter )
+   //{
+   //const std::string name = iter->path().filename().string();
+   //const bool isdir = SpecUtils::is_directory( name );
+   //if( !isdir && (!match_fcn || match_fcn(name,user_match_data)) )
+   //  files.push_back( name );
+   //if( files.size() >= sm_ls_max_results )
+   //  break;
+   //}
+   //return files;
   
   
   if( depth >= sm_recursive_ls_max_depth )
@@ -864,7 +824,8 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   
   return files;
 }//recursive_ls(...)
-#endif //#if( defined(_WIN32) || PERFORM_DEVELOPER_CHECKS )
+#endif //PERFORM_DEVELOPER_CHECKS
+
   
   
 #ifndef _WIN32
@@ -995,7 +956,7 @@ vector<std::string> recursive_ls_internal_unix( const std::string &sourcedir,
       //Note that we are leaving the directory open here - there is a limit on
       //  the number of directories we can have open (like a couple hundred)
       //  (we could refactor things to avoid this, but whatever for now)
-      const vector<string> r = recursive_ls_internal_unix( filename, match_fcn, user_match_data, depth + 1, files.size() );
+      const vector<string> r = recursive_ls_internal_unix( filename, match_fcn, user_match_data, depth + 1, files.size() + numfiles );
       files.insert( files.end(), r.begin(), r.end() );
     }else if( is_file )
     {
@@ -1011,7 +972,7 @@ vector<std::string> recursive_ls_internal_unix( const std::string &sourcedir,
   
   
 #if(PERFORM_DEVELOPER_CHECKS)
-  auto from_boost = recursive_ls_internal_boost( sourcedir, match_fcn, user_match_data, depth, numfiles );
+  auto from_boost = recursive_ls_internal_boost( sourcedir, match_fcn, user_match_data, depth, files.size() + numfiles );
   if( from_boost != files )  //It looks like things are always oredered the same
   {
     auto from_native = files;
@@ -1060,8 +1021,8 @@ vector<std::string> recursive_ls( const std::string &sourcedir,
 {
 #ifdef _WIN32
   if( ending.empty() )
-    return recursive_ls_internal_boost( sourcedir, (file_match_function_t)0, 0, 0, 0 );
-  return recursive_ls_internal_boost( sourcedir, &filter_ending, (void *)&ending, 0, 0 );
+    return recursive_ls_internal_windows( sourcedir, (file_match_function_t)0, 0, 0, 0 );
+  return recursive_ls_internal_windows( sourcedir, &filter_ending, (void *)&ending, 0, 0 );
 #else
   if( ending.empty() )
     return recursive_ls_internal_unix( sourcedir, (file_match_function_t)0, 0, 0, 0 );
@@ -1075,7 +1036,7 @@ std::vector<std::string> recursive_ls( const std::string &sourcedir,
                                         void *match_data )
 {
 #ifdef _WIN32
-  return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
+  return recursive_ls_internal_windows( sourcedir, match_fcn, match_data, 0, 0 );
 #else
   return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
   //return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
@@ -1098,6 +1059,8 @@ std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
 #ifndef _WIN32
   return recursive_ls_internal_unix( sourcedir, match_fcn, user_data, sm_recursive_ls_max_depth-1, 0 );
 #else
+  return recursive_ls_internal_windows( sourcedir, match_fcn, user_data, sm_recursive_ls_max_depth-1, 0 );
+/*
   using namespace boost::filesystem;
   
   vector<string> files;
@@ -1128,6 +1091,7 @@ std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
   }//for( loop over
   
   return files;
+*/
 #endif
 }//ls_files_in_directory(...)
   
@@ -1179,6 +1143,42 @@ vector<string> ls_directories_in_directory( const std::string &src )
   
   closedir( dir ); //Should we bother checking/handling errors
 #else
+  
+  WIN32_FIND_DATAW fdFile;
+  HANDLE hFind = NULL;
+  
+  const wstring wpath = convert_from_utf8_to_utf16(src);
+  
+  //Specify a file mask. *.* = We want everything!
+  std::wcout << L"ls_directories_in_directory(\"" << wpath << L"\")" << std::endl;
+  
+  //FindFirstFileExW
+  if((hFind = FindFirstFileW(wpath.c_str(), &fdFile)) == INVALID_HANDLE_VALUE)
+  {
+    std::wcout << L"ls_directories_in_directory(\"" << wpath << L"\"): Path not found." << std::endl;
+    return answer;
+  }
+  
+  do
+  {
+    if( (fdFile.cFileName == wstring(L".")) || (fdFile.cFileName == wstring(L"..")) )
+      continue;
+    
+    wstring newpath = wpath + ((wpath.size() && wpath[wpath.size()-1] != L'\\') ? L"\\" : L"") + fdFile.cFileName;
+    
+    //Is the entity a File or Folder?
+    if( fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+      std::wcout << L"ls_directories_in_directory(...) Directory: '" << newpath << L"'" << std::endl;
+      string newdirname = SpecUtils::convert_from_utf16_to_utf8(newpath);
+      answer.push_back( newdirname );
+    }
+  }while( FindNextFileW( hFind, &fdFile) ); //Find the next file.
+  
+  FindClose(hFind);
+  
+  
+  /*
   using namespace boost::filesystem;
   directory_iterator end_itr; // default construction yields past-the-end
   
@@ -1201,7 +1201,7 @@ vector<string> ls_directories_in_directory( const std::string &src )
     if( isdir )
       answer.push_back( append_path(src, p.filename().string<string>()) );
   }//for( loop over
-  
+  */
 #endif  //ifndef windows / else
   
   return answer;
@@ -1212,7 +1212,7 @@ std::string lexically_normalize_path( const std::string &input )
 {
   const bool isabs = is_absolute_path(input);
   
-  std::vector<std::string> components;
+  vector<string> components;
   
 #if( defined(_WIN32) )
   const char * const delim = "\\";
@@ -1229,7 +1229,7 @@ std::string lexically_normalize_path( const std::string &input )
   bool found = true;
   while( found )
   {
-    auto pos = std::find( begin(components), end(components), "." );
+    auto pos = std::find( begin(components), end(components), string(".") );
     found = (pos != end(components));
     if( found )
       components.erase(pos);
@@ -1241,7 +1241,7 @@ std::string lexically_normalize_path( const std::string &input )
   found = true;
   while( found && !components.empty() )
   {
-    auto pos = std::find( begin(components), end(components), ".." );
+    auto pos = std::find( begin(components), end(components), string("..") );
     found = (pos != end(components));
     if( pos == begin(components) )
     {
@@ -1313,7 +1313,7 @@ std::string fs_relative( std::string from_path, std::string to_path )
     from_components[0] = "\\\\" + from_components[0];
   
   if( to_path.size() > 1 && !to_components.empty() && to_path[0]=='\\' && to_path[1]=='\\' )
-    to_path[0] = "\\\\" + to_path[0];
+    to_components[0] = "\\\\" + to_path[0];
 #endif
   
   
