@@ -253,7 +253,7 @@ if( SpecUtils_BUILD_UNIT_TESTS )
 endif( SpecUtils_BUILD_UNIT_TESTS )
 
 if( MINGW )
-  target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a )
+  target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a )
 endif( MINGW )
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}

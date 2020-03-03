@@ -2864,9 +2864,9 @@ namespace SpecUtils
       RadInstrumentData->append_node( AnalysisResults );
     }
     
-    for( size_t i = 0; i < ana.remarks_.size(); ++i )
+  
+    for( const string &remark : ana.remarks_ )
     {
-      const string &remark = ana.remarks_[i];
       if( remark.size() )
       {
         std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -2874,6 +2874,25 @@ namespace SpecUtils
         xml_node<char> *remark = doc->allocate_node( node_element, "Remark", val );
         AnalysisResults->append_node( remark );
       }
+    }//for( loop over remarks )
+    
+    
+    if( !ana.analysis_start_time_.is_special() )
+    {
+      std::lock_guard<std::mutex> lock( xmldocmutex );
+      const string dt = SpecUtils::to_extended_iso_string(ana.analysis_start_time_) + "Z";
+      val = doc->allocate_string( dt.c_str(), dt.size()+1 );
+      xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisStartDateTime", val );
+      AnalysisResults->append_node( desc );
+    }
+    
+    if( ana.analysis_computation_duration_ > FLT_EPSILON )
+    {
+      std::lock_guard<std::mutex> lock( xmldocmutex );
+      snprintf( buffer, sizeof(buffer), "PT%fS", ana.analysis_computation_duration_ );
+      val = doc->allocate_string( buffer );
+      xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisComputationDuration", val );
+      AnalysisResults->append_node( desc );
     }
     
     if( ana.algorithm_name_.size() )
@@ -2899,24 +2918,7 @@ namespace SpecUtils
       xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisAlgorithmDescription", val );
       AnalysisResults->append_node( desc );
     }
-    
-    if( !ana.analysis_start_time_.is_special() )
-    {
-      std::lock_guard<std::mutex> lock( xmldocmutex );
-      const string dt = SpecUtils::to_extended_iso_string(ana.analysis_start_time_) + "Z";
-      val = doc->allocate_string( dt.c_str(), dt.size()+1 );
-      xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisStartDateTime", val );
-      AnalysisResults->append_node( desc );
-    }
-    
-    if( ana.analysis_computation_duration_ > FLT_EPSILON )
-    {
-      snprintf( buffer, sizeof(buffer), "PT%fS", ana.analysis_computation_duration_ );
-      val = doc->allocate_string( buffer );
-      xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisComputationDuration", val );
-      AnalysisResults->append_node( desc );
-    }
-    
+        
     for( const auto &component : ana.algorithm_component_versions_ )
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -2956,7 +2958,6 @@ namespace SpecUtils
     //<ExposureAnalysisResults>
     //<Fault>
     
-    
     xml_node<char> *result_node = 0;
     
     for( const DetectorAnalysisResult &result : ana.results_ )
@@ -2974,16 +2975,34 @@ namespace SpecUtils
         xml_node<char> *nuclide_node = doc->allocate_node( node_element, "Nuclide" );
         result_node->append_node( nuclide_node );
         
-        val = doc->allocate_string( result.nuclide_.c_str(), result.nuclide_.size()+1 );
-        xml_node<char> *NuclideName = doc->allocate_node( node_element, "NuclideName", val );
-        nuclide_node->append_node( NuclideName );
-        
         if( result.remark_.size() )
         {
           val = doc->allocate_string( result.remark_.c_str(), result.remark_.size()+1 );
           xml_node<char> *Remark = doc->allocate_node( node_element, "Remark", val );
           nuclide_node->append_node( Remark );
         }
+        
+          //<xsd:element ref="n42:NuclideIdentifiedIndicator" minOccurs="1" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideName" minOccurs="1" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideActivityValue" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideActivityUncertaintyValue" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideMinimumDetectableActivityValue" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideIdentificationConfidence" minOccurs="1" maxOccurs="3"/>
+          //<xsd:element ref="n42:NuclideCategoryDescription" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideSourceGeometryCode" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:SourcePosition" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideShieldingAtomicNumber" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideShieldingArealDensityValue" minOccurs="0" maxOccurs="1"/>
+          //<xsd:element ref="n42:NuclideExtension" minOccurs="0" maxOccurs="1"/>
+        
+        xml_node<char> *NuclideIdentifiedIndicator = doc->allocate_node( node_element, "NuclideIdentifiedIndicator", "true" );
+        nuclide_node->append_node( NuclideIdentifiedIndicator );
+        
+        
+        val = doc->allocate_string( result.nuclide_.c_str(), result.nuclide_.size()+1 );
+        xml_node<char> *NuclideName = doc->allocate_node( node_element, "NuclideName", val );
+        nuclide_node->append_node( NuclideName );
+        
         
         if( result.activity_ > 0.0f )
         {
@@ -2995,18 +3014,20 @@ namespace SpecUtils
           nuclide_node->append_node( NuclideActivityValue );
         }
         
+        if( result.id_confidence_.size() )
+        {
+          //If result.id_confidence_ represents a number between 0 and 100, then
+          //  should use "NuclideIDConfidenceValue" instead of "NuclideIDConfidenceDescription"
+          val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
+          xml_node<char> *NuclideIDConfidenceDescription = doc->allocate_node( node_element, "NuclideIDConfidenceDescription", val );
+          nuclide_node->append_node( NuclideIDConfidenceDescription );
+        }
+        
         if( result.nuclide_type_.size() )
         {
           val = doc->allocate_string( result.nuclide_type_.c_str(), result.nuclide_type_.size()+1 );
-          xml_node<char> *NuclideType = doc->allocate_node( node_element, "NuclideType", val );
+          xml_node<char> *NuclideType = doc->allocate_node( node_element, "NuclideCategoryDescription", val );
           nuclide_node->append_node( NuclideType );
-        }
-        
-        if( result.id_confidence_.size() )
-        {
-          val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
-          xml_node<char> *NuclideIDConfidenceDescription = doc->allocate_node( node_element, "NuclideIDConfidenceIndication", val ); //NuclideIDConfidenceDescription
-          nuclide_node->append_node( NuclideIDConfidenceDescription );
         }
         
         xml_node<char> *NuclideExtension = 0;
@@ -3121,7 +3142,6 @@ namespace SpecUtils
     
     std::mutex xmldocmutex;
     BinningToIndexMap calToSpecMap;
-    SpecUtilsAsync::ThreadPool workerpool;
     
     std::shared_ptr<xml_document<char> > doc = std::make_shared<xml_document<char> >();
     
@@ -3142,7 +3162,7 @@ namespace SpecUtils
     attr = doc->allocate_attribute( "n42DocUUID", val );
     RadInstrumentData->append_attribute( attr );
     
-    attr = doc->allocate_attribute( "xmlns", "http://physics.nist.gov/N42/2012/N42" );
+    attr = doc->allocate_attribute( "xmlns", "http://physics.nist.gov/N42/2011/N42" );
     RadInstrumentData->append_attribute( attr );
     
     {
@@ -3153,10 +3173,6 @@ namespace SpecUtils
       RadInstrumentData->append_attribute( attr );
     }
     
-    
-    workerpool.post( [this,RadInstrumentData,&xmldocmutex,&calToSpecMap](){
-      insert_N42_calibration_nodes( measurements_ , RadInstrumentData, xmldocmutex, calToSpecMap );
-    });
     
     string original_creator;
     for( size_t i = 0; i < remarks_.size(); ++i )
@@ -3198,7 +3214,7 @@ namespace SpecUtils
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
       
-      if( original_creator.empty() )
+      if( original_creator.empty() || original_creator=="InterSpec")
       {
         xml_node<char> *RadInstrumentDataCreatorName = doc->allocate_node( node_element, "RadInstrumentDataCreatorName", "InterSpec" );
         RadInstrumentData->append_node( RadInstrumentDataCreatorName );
@@ -3468,21 +3484,17 @@ namespace SpecUtils
         RadDetectorInformation->append_node( RadDetectorCategoryCode );
       }
       
+      const string det_kind = determine_rad_detector_kind_code();
+      val = doc->allocate_string( det_kind.c_str() );
+      xml_node<char> *RadDetectorKindCode = doc->allocate_node( node_element, "RadDetectorKindCode", val );
+      RadDetectorInformation->append_node( RadDetectorKindCode );
+      
       if(!rad_det_desc.empty())
       {
         val = doc->allocate_string( rad_det_desc.c_str(), rad_det_desc.size()+1 );
         xml_node<char> *RadDetectorDescription = doc->allocate_node( node_element, "RadDetectorDescription", val );
         RadDetectorInformation->append_node( RadDetectorDescription );
       }
-      
-      //"RadDetectorDescription"
-      
-      
-      
-      const string det_kind = determine_rad_detector_kind_code();
-      val = doc->allocate_string( det_kind.c_str() );
-      xml_node<char> *RadDetectorKindCode = doc->allocate_node( node_element, "RadDetectorKindCode", val );
-      RadDetectorInformation->append_node( RadDetectorKindCode );
       
       //    if( det_kind == "Other" )
       //    {
@@ -3500,6 +3512,13 @@ namespace SpecUtils
       //    xml_node<char> *DetectorNumber = doc->allocate_node( node_element, "InterSpec:DetectorNumber", val );
       //    RadDetectorInformationExtension->append_node( DetectorNumber );
     }//for( size_t i = 0; i < ndetectors; ++i )
+    
+    
+    SpecUtilsAsync::ThreadPool workerpool;
+    
+    workerpool.post( [this,RadInstrumentData,&xmldocmutex,&calToSpecMap](){
+      insert_N42_calibration_nodes( measurements_ , RadInstrumentData, xmldocmutex, calToSpecMap );
+    });
     
     workerpool.join();  //ensures all calibrations have been written to the DOM and can be referenced using calToSpecMap
     
@@ -6091,7 +6110,9 @@ namespace SpecUtils
         const rapidxml::xml_node<char> *remark_node = nuclide_node->first_node( "Remark", 6 );
         const rapidxml::xml_node<char> *nuclide_name_node = nuclide_node->first_node( "NuclideName", 11 );
         const rapidxml::xml_node<char> *nuclide_type_node = nuclide_node->first_node( "NuclideType", 11 );
-        const rapidxml::xml_node<char> *confidence_node = nuclide_node->first_node( "NuclideIDConfidenceIndication", 29 );
+        const rapidxml::xml_node<char> *confidence_node = nuclide_node->first_node( "NuclideIDConfidenceIndication", 29 );  //N42-2006?
+        if( !confidence_node )
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIdentificationConfidence");  //N42-2012
         if( !confidence_node )
           confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidence");  //RadSeeker
         const rapidxml::xml_node<char> *id_desc_node = nuclide_node->first_node( "NuclideIDConfidenceDescription", 30 );

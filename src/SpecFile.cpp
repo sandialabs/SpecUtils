@@ -133,21 +133,6 @@ namespace
     return (nconvert == 1);
   }
   
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
-  
-  bool xml_value_to_flt( const rapidxml::xml_base<char> *node, float &val )
-  {
-    val = 0.0f;
-    if( !node )
-      return false;
-    return SpecUtils::parse_float( node->value(), node->value_size(), val );
-  }
-
   
   /** Adds the vector of 'input' float vectors, to results.
       The result will be resized to larges input float vector size.
@@ -5989,6 +5974,8 @@ void SpecFile::recalc_total_counts()
 
 std::string SpecFile::generate_psuedo_uuid() const
 {
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
   std::size_t seed = 0;
   
   

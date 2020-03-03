@@ -376,7 +376,7 @@ namespace SpecUtils
 #if( defined(_WIN32) && _DEBUG )
     s.erase( s.begin(), std::find_if( s.begin(), s.end(), &not_whitespace ) );
 #else
-    s.erase( s.begin(), std::find_if( s.begin(), s.end(), std::not1( std::ptr_fun<int, int>( std::isspace ) ) ) );
+    s.erase( s.begin(), std::find_if( s.begin(), s.end(), [](int val)->bool { return !std::isspace(val); } ) );
 #endif
     
     if( s.size() )
@@ -397,7 +397,7 @@ namespace SpecUtils
 #if( defined(_WIN32) && _DEBUG )
     s.erase( std::find_if( s.rbegin(), s.rend(), &not_whitespace ).base(), s.end() );
 #else
-    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int val)->bool { return !std::isspace(val); } ).base(), s.end());
 #endif
     //remove null terminating characters.  Boost doesnt do this, but is
     //  necassary when reading fixed width binary data.

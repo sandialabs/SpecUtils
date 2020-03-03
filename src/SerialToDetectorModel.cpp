@@ -33,7 +33,7 @@
 #include <functional>
 
 #include "SpecUtils/StringAlgo.h"
-#include "SpecUtils/Filesystem.h"
+#include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
 using namespace std;

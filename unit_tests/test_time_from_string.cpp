@@ -43,6 +43,7 @@
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
+#include "SpecUtils/ParseUtils.h"
 
 
 using namespace std;
@@ -53,8 +54,73 @@ using namespace boost::gregorian;
 
 //time_from_string_strptime (doesn't work on Windows)
 //time_from_string_boost ?
+
+
+void compare_from_str( const string test, const string truth )
+{
+  const ptime testptime = SpecUtils::time_from_string( test.c_str() );
+  const ptime truthptime = SpecUtils::time_from_string( truth.c_str() );
+      
+  const string test_fmt_str = SpecUtils::to_common_string(testptime,true);
+  const string truth_fmt_str = SpecUtils::to_common_string(truthptime,true);
+  
+  BOOST_REQUIRE_MESSAGE( !truthptime.is_special(), "Truth datetime ('" << truth << "') is invalid" );
+  
+  BOOST_CHECK_MESSAGE( test_fmt_str==truth_fmt_str,
+                       "Date formatted '" << test << "' gave datetime '" << test_fmt_str
+                      << "' while we expected '" << truth_fmt_str << "' from ('" << truth << "')" );
+}//void compare_from_str( const string test, const string truth )
+
+
+void minimalTestFormats()
+{
+  // datetimes.txt contains an extensive collection of formats and variants, but
+  //  since it isnt ditributed in the repo, here is a minimal collection of formats
+  
+  compare_from_str( "15-MAY-14 08:30:44 PM",  "20140515T203044" );
+  compare_from_str( "2010-01-15T23:21:15Z",   "20100115T232115" );
+  compare_from_str( "2010-01-15 23:21:15",    "20100115T232115" );
+  compare_from_str( "1-Oct-2004 12:34:42 AM", "20041001T003442" );
+  compare_from_str( "1/18/2008 2:54:44 PM",   "20080118T145444" );
+  compare_from_str( "08/05/2014 14:51:09",    "20140805T145109" );
+  compare_from_str( "14-10-2014 16:15:52",    "20141014T161552" );
+  compare_from_str( "14 10 2014 16:15:52",    "20141014T161552" );
+  compare_from_str( "16-MAR-06 13:31:02",     "20060316T133102" );
+  compare_from_str( "12-SEP-12 11:23:30",     "20120912T112330" );
+  compare_from_str( "31-Aug-2005 12:38:04",   "20050831T123804" );
+  compare_from_str( "9-Sep-2014T20:29:21 Z",  "20140909T202921" );
+  compare_from_str( "10-21-2015 17:20:04",    "20151021T172004" );
+  compare_from_str( "21-10-2015 17:20:04",    "20151021T172004" );
+  compare_from_str( "26.05.2010 02:53:49",    "20100526T025349" );
+  compare_from_str( "04.05.2010 02:53:49",    "20100504T025349" );
+  compare_from_str( "May. 21 2013  07:06:42", "20130521T070642" );
+  compare_from_str( "28.02.13 13:42:47",      "20130228T134247" );
+  compare_from_str( "3.14.06 10:19:36",       "20060314T101936" );
+  compare_from_str( "28.02.13 13:42:47",      "20130228T134247" );
+  compare_from_str( "3.14.2006 10:19:36",     "20060314T101936" );
+  compare_from_str( "28.02.2013 13:42:47",    "20130228T134247" );
+  compare_from_str( "2012.07.28 16:48:02",    "20120728T164802" );
+  compare_from_str( "01.Nov.2010 21:43:35",   "20101101T214335" );
+  compare_from_str( "20100115 23:21:15",      "20100115T232115" );
+  compare_from_str( "2017-Jul-07 09:16:37",   "20170707T091637" );
+  compare_from_str( "20100115T232115",        "20100115T232115" );
+  compare_from_str( "11/18/2018 10:04 AM",    "20181118T100400" );
+  compare_from_str( "11/18/2018 10:04 PM",    "20181118T220400" );
+  compare_from_str( "11/18/2018 22:04",       "20181118T220400" );
+  compare_from_str( "2020/02/12 14:57:39",    "20200212T145739" );
+  compare_from_str( "2018-10-09T19-34-31_27", "20181009T193431" );//not sure what the "_27" exactly means)
+  compare_from_str( "00-Jan-2000",            "20000100T000000" );
+  compare_from_str( "2010/01/18",             "20100118T000000" );
+  compare_from_str( "2010-01-18",             "20100118T000000" );
+
+}//void minimalTestFormats()
+
+
 BOOST_AUTO_TEST_CASE(timeFromString) 
 {
+  minimalTestFormats();
+  return;
+  
   string indir, input_filename = "";
 
   const int argc = framework::master_test_suite().argc;

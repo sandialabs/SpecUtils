@@ -1382,6 +1382,26 @@ public:
   // background is found; behavior undefined for more than one background sample
   int background_sample_number() const;
   
+  /** Uses things like gamma and neutron sums, real/live times, number of
+   samples, and calibration to generate a pseudo-UUID unique to the measurement
+   represented by this data.
+   
+   Its possible that the same measurement read in by two different formats may
+   produce the same UUID (ex. a SPE format and SPC format), but if _all_ the
+   fields contained and read from each format are not the same, then different
+   values will be produced.
+   
+   Results kinda conform to the expected UUID v4 format (a random
+   UUID) of YYMMDDHH-MMSS-4FFx-axxx-xxxxxxxxxxxx, where {Y,M,D,H,M,S,F}
+   relate to the time of first measurement, and the x's are based off of
+   hashing the various properties of the spectrum.
+   
+   Note: this is called from cleanup_after_load() if a UUID doesnt already exist
+   in order to generate one.
+  */
+  std::string generate_psuedo_uuid() const;
+  
+  
   //reset(): resets all variables to same state as just after construction
   void reset();
 
@@ -1830,16 +1850,6 @@ protected:
   //  SpecFile object. Returns empty pointer on error.
   //  Does not obtain a thread lock.
   std::shared_ptr<Measurement> measurment( std::shared_ptr<const Measurement> meas );
-  
-  //generate_psuedo_uuid(): uses things like gamma and nuetrons sums, times,
-  //  number of samples, and calibration to generate a psuedo-UUID.
-  //  Is called from cleanup_after_load() if a UUID doesnt already exist.
-  //  Results kinda conform to the expected UUID v4 format (a random
-  //  UUID) of YYMMDDHH-MMSS-4FFx-axxx-xxxxxxxxxxxx, where {Y,M,D,H,M,S,F}
-  //  relate to the time of first measurment, and the x's are based off of
-  //  hashing the various properties of the spectrum.
-  //  Does not obtain a thread lock.
-  std::string generate_psuedo_uuid() const;
   
   //find_detector_names(): looks through measurements_ to find all detector
   //  names.

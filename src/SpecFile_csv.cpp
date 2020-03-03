@@ -40,7 +40,6 @@
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
-#include "SpecUtils/Filesystem.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
 

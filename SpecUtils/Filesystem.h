@@ -114,32 +114,41 @@ namespace  SpecUtils
   
   /** \brief Returns just the filename of a path passed in
    
-   ex. "/path/to/some/file.txt" --> "file.txt"
+   ex:
+   "/path/to/some/file.txt" --> "file.txt"
    "/path/to/some"          --> "some"
-   "/path/to/some/"         --> "some"
-   "/path/to/some/.."       --> ".."
+   "/path/to/some/"         --> ""
+   "/path/to/some/.."       --> ""
    "usr"                    --> "usr"
-   "/"                      --> "/"
-   "."                      --> "."
-   ".."                     --> ".."
+   "/"                      --> ""
+   "."                      --> ""
+   ".."                     --> ""
    */
   std::string filename( const std::string &path_and_name );
   
   /** \brief Returns the parent path of the passed in path
    
-   ex. "/path/to/some/file.txt"     --> "/path/to/some"
+   Unix examples:
+   "/path/to/some/file.txt"     --> "/path/to/some"
    "/path/to/some/path"         --> "/path/to/some"
    "/path/to/some/path/"        --> "/path/to/some";
    "/path/to/some/.."           --> "/path/to"
    "/path/to/some/../.."        --> "/path"
    "/path/to/some/../path"      --> "/path/to/some/.."
-   "/"                          --> "/"
-   "."                          --> "."
-   ".."                         --> "."
-   "somefile"                   --> "."
+   "/"                          --> ""
+   "/usr"                       --> "/"
+   "."                          --> ""
+   ".."                         --> ""
+   "somefile"                   --> ""
    "/somefile"                  --> "/"
+   "./somefile"                 --> "."
    "/path/to/some/../../../"    --> "/"
    "/path/to/some/../../../../" --> "/"
+   
+   Windows Examples:
+   "C:" -> ""
+   "C:\\" -> "C:"
+   "C:\\somefile" -> "C:\"
    
    
    Note that paths like "/path/to/some/path/.." are treated differently than
@@ -390,20 +399,6 @@ namespace  SpecUtils
    Throws exception on failure.
    */
   void load_file_data( const char * const filename, std::vector<char> &data );
-  
-  
-  /** \brief Gets a line from the input stream that may be terminated with
-   either UNIX or Windows EOL characters.
-   
-   See code for code source.
-   Note that this function is probably very slow, and could be upgraded.
-   */
-  std::istream &safe_get_line( std::istream &is, std::string &t );
-  
-  /** Same as other variant of #safe_get_line, except allows specifying the
-   maximum number of bytes to read; specifying zero means no limit.
-   */
-  std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxlength );
   
   
   /** Returns true if the file is likely a spectrum file, based off of file

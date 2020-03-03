@@ -40,6 +40,7 @@
 
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/ParseUtils.h"
 
 using namespace std;
 using namespace boost::unit_test;
@@ -56,7 +57,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   }
   
   string test_in_file, test_out_file;
-  const string potential_input_paths[] = { ".", indir, "../../testing/", "../../../testing/" };
+  const string potential_input_paths[] = { ".", indir, "../testing/", "../../testing/", "../../../testing/" };
   for( const string dir : potential_input_paths )
   {
     const string potential = SpecUtils::append_path( dir, "test_data/txt/test_string_functions_input.txt" );
@@ -458,8 +459,8 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   SpecUtils::split( results, "hello, how, are,", "," );
   BOOST_CHECK_EQUAL(results.size(), 3);
   BOOST_CHECK_EQUAL(results[0], "hello");
-  BOOST_CHECK_EQUAL(results[0], " how");
-  BOOST_CHECK_EQUAL(results[0], " are");
+  BOOST_CHECK_EQUAL(results[1], " how");
+  BOOST_CHECK_EQUAL(results[2], " are");
   
   input = "hello how are you doing 543 342 ";
   SpecUtils::split_no_delim_compress( results, input, "" );
