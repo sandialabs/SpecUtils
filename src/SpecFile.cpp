@@ -645,27 +645,51 @@ void Measurement::set_source_type( const SourceType type )
   source_type_ = type;
 }
   
+void Measurement::set_sample_number( const int samplenum )
+{
+  sample_number_ = samplenum;
+}
+  
+
+void Measurement::set_occupancy_status( const OccupancyStatus status )
+{
+  occupied_ = status;
+}
+
+
+void Measurement::set_detector_name( const std::string &name )
+{
+  detector_name_ = name;
+}
+
+
+void Measurement::set_detector_number( const int detnum )
+{
+  detector_number_ = detnum;
+}
+
   
 void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                      const float livetime, const float realtime )
 {
-  if( !counts )
-  {
-    if( !gamma_counts_ )
-      return;
-    gamma_counts_.reset( new std::vector<float>( gamma_counts_->size(), 0.0f ) );
-    return;
-  }//if( !counts )
-  
-  const size_t size = counts->size();
-  gamma_counts_ = counts;
   live_time_ = livetime;
   real_time_ = realtime;
   gamma_count_sum_ = 0.0;
   
-  const std::vector<float> &rhs = *counts;
-  for( size_t i = 0; i < size; ++i )
-    gamma_count_sum_ += rhs[i];
+  if( !counts )
+  {
+    /// @TODO: Why is the behavior when a nullptr is passed in not consistent? Should fix once its determined why this was done.
+    
+    if( !gamma_counts_ )
+      return;
+    gamma_counts_ = std::make_shared<std::vector<float>>( gamma_counts_->size(), 0.0f );
+    return;
+  }//if( !counts )
+  
+  gamma_counts_ = counts;
+  
+  for( const float val : *counts )
+    gamma_count_sum_ += val;
 }
   
   

@@ -630,17 +630,82 @@ public:
   static bool compare_by_sample_det_time( const std::shared_ptr<const Measurement> &lhs,
                                           const std::shared_ptr<const Measurement> &rhs );
   
-  //set_title(): sets the title property.
+  /** Sets the title property.
+   
+   Some file formats like PCF, CNF, and CHN support something like a title, but
+   not all formats do.
+   If written to an N42-2012 file the title will be written as a remark,
+   prepended with the text "Title: " (this is looked for when reading N42-2012
+   files in).
+   */
   void set_title( const std::string &title );
   
-  //set_gamma_counts(...): XXX - should deprecate!
-  //  reset real and live times, updates total gamma counts
+  /** Set start time of this measurement. */
+  void set_start_time( const boost::posix_time::ptime &timestamp );
+  
+  /** Set the remarks of this measurement; any previous remarks are removed. */
+  void set_remarks( const std::vector<std::string> &remar );
+  
+  /** Set the source type of this measurement; default is #SourceType::Unknown.
+   */
+  void set_source_type( const SourceType type );
+
+  /** Set the sample number of this measurement; default is 1. */
+  void set_sample_number( const int samplenum );
+  
+  /** Set the occupancy status for this measurement; default is
+   #OccupancyStatus::Unknown
+   */
+  void set_occupancy_status( const OccupancyStatus status );
+  
+  /** Set the detector name for this measurement; default is an empty string.
+   
+   Note: you may also wish to set detector number.
+   */
+  void set_detector_name( const std::string &name );
+  
+  /**  Set the detector number of this Measurement.
+   
+   Note: detector number is used by the SpecFile class in some places, but since
+   it is essentially duplicate information to the detector name, it may be
+   removed at some point in the future, so please use detector name instead.
+   
+   @deprecated
+   */
+  void set_detector_number( const int detnum );
+  
+  
+  /** Set real and live times, as well as gamma counts.
+   
+   Updates gamma counts sum as well.
+   
+   @param counts The gamma channel counts to use; a copy is not made, but the
+          actual vector pointed to is used - so you should be-careful about
+          modifying it as then the sum gamma counts will be out of date.
+          Currently if nullptr, and #gamma_counts_ is not a nullptr, then
+          #gamma_counts_ will be set to a new vector of the previous size, but
+          with all 0.0f entries (this behavior will be changed in the future).
+   @param livetime The live time (i.e., real time minus dead time), in seconds,
+          corresponding to the channel counts.
+   @param realtime The real time (i.e., as measured on a clock), in seconds,
+          corresponding to the channel counts.
+   */
   void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                 const float livetime, const float realtime );
   
-  //set_neutron_counts(): XXX - should deprecate!
-  //   updates total nuetron counts.  Marks containing neutrons based on
-  //   if input has any entries or not.
+  /** Sets the neutron counts, and also updates
+   #Measurement::neutron_counts_sum_ and #Measurement::contained_neutron_ .
+   
+   If this vector of counts passed in is empty, will mark
+   #Measurement::contained_neutron_ as false, or else this variable will be
+   marked true, even of all entries in 'counts' are zero.
+   
+   Each element in the vector corresponds to a different detection element.  So
+   commonly if multiple He3 tubes are read out separately but paired with one
+   gamma detector, the passed in vector will have one element for each of the
+   He3 tubes.  Most handheld detection systems have a single neutron detector
+   that is read out, so the passed in counts would have a size of one.
+   */
   void set_neutron_counts( const std::vector<float> &counts );
   
   //set_channel_energies(...): XXX - should deprecate!
@@ -775,11 +840,6 @@ public:
   void reset();
 
 protected:
-  
-  void set_start_time( const boost::posix_time::ptime &timestamp );
-  void set_remarks( const std::vector<std::string> &remar );
-  void set_source_type( const SourceType type );
-
   
   //Functions to set the information in this Measurement object from external
   //  sources
