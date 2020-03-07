@@ -297,11 +297,17 @@ bool can_rw_in_directory( const std::string &name )
 {
   if( !is_directory(name) )
     return false;
-  
+
 #ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
-  const int can_access = _waccess( wname.c_str(), 0x06 );
-  return (can_access == 0);
+  
+  DWORD attributes = GetFileAttributesW( wname.c_str() );
+  return ( (attributes != 0xFFFFFFFF)
+           && (attributes & FILE_ATTRIBUTE_DIRECTORY)
+           && !(attributes & FILE_ATTRIBUTE_READONLY) );
+
+  //const int can_access = _waccess( wname.c_str(), 0x06 );
+  //return (can_access == 0);
 #else
   const int can_access = access( name.c_str(), R_OK | W_OK | X_OK );
   return (can_access == 0);

@@ -93,8 +93,10 @@ namespace  SpecUtils
   
   /** Checks that path passed in is a directory, and the current process can
    list directory contents, as well as change them.
-   On Unix cooresponds to +rwx (note, while on Windows it checks you
-   can access the directory and read/write it).
+   On Unix corresponds to +rwx.
+   On Windows it checks you can access the directory and write it (i.e., if you
+   remove the read permission, but still have write, this function will return
+   true).
    */
   bool can_rw_in_directory( const std::string &name );
   

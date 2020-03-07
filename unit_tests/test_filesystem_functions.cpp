@@ -322,6 +322,7 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
     BOOST_CHECK( hexs.find(testname2_ending[i]) != string::npos );
   }
   
+  BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
   BOOST_REQUIRE( SpecUtils::create_directory(testname2) == 1 );
   BOOST_CHECK( SpecUtils::is_directory(testname2) );
   
@@ -330,6 +331,7 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   BOOST_CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
   
+  //boost::filesystem::status(wtestname2).
   
 #ifdef _WIN32
   const auto wtestname2 = SpecUtils::convert_from_utf8_to_utf16(testname2);
@@ -339,9 +341,12 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
   boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
   BOOST_CHECK( SpecUtils::can_rw_in_directory(testname2) );
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
-  BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read );
+  
+  //On windows
+  //boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
+  //BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+  
+  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read | boost::filesystem::perms::owner_write );
 #else
   boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
   boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
@@ -398,6 +403,8 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
           }
         }//End writing to file
         
+        
+        BOOST_CHECK( !SpecUtils::can_rw_in_directory(fname) );
         
         //BOOST_CHECK( SpecUtils::make_canonical_path( f ) );
         string forigname = SpecUtils::filename(fname);
