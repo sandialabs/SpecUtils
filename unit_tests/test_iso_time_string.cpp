@@ -27,10 +27,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
-#include <fstream>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/date_time/date.hpp>
 #include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <boost/algorithm/string.hpp>
 
@@ -46,112 +45,139 @@ using namespace boost::unit_test;
 using namespace boost::posix_time;
 using namespace boost::gregorian;
 
+boost::posix_time::ptime random_ptime()
+{
+  const auto mon = boost::date_time::months_of_year( (rand()%12) + 1 );
+  
+  const int yr = 1401 + (rand()%700);
+  int day;
+  
+  switch( mon )
+  {
+    case boost::date_time::Feb:
+      day = 1 + (rand() % 28);
+      break;
+      
+    case boost::date_time::Sep:
+    case boost::date_time::Apr:
+    case boost::date_time::Jun:
+    case boost::date_time::Nov:
+      day = 1 + (rand() % 30);
+      break;
+    
+    case boost::date_time::Aug:
+    case boost::date_time::Dec:
+    case boost::date_time::Jan:
+    case boost::date_time::Jul:
+    case boost::date_time::Mar:
+    case boost::date_time::May:
+    case boost::date_time::Oct:
+      day = rand()%31+1;
+      break;
+      
+    case boost::date_time::NotAMonth:
+    case boost::date_time::NumMonths:
+    default:
+      assert(0);
+  }//switch( mon )
+  
+  
+  const boost::gregorian::date d(yr, mon, day);
 
-//see http://www.alittlemadness.com/2009/03/31/c-unit-testing-with-boosttest/
+  const int hr = rand() % 24;
+  const int min = rand() % 60;
+  const int sec = rand() % 60;
+  const int frac = rand() % 1000000;
+  boost::posix_time::time_duration td( hr, min, sec, frac);
 
-//to_extended_iso_string
-//to_iso_string
+  return boost::posix_time::ptime(d, td);
+}//random_ptime()
+
+
+
 BOOST_AUTO_TEST_CASE( isoString )
-{	
-    vector<ptime> times;
-    vector<greg_month> months;
-    months.push_back(Jan);
-    months.push_back(Feb);
-    months.push_back(Mar);
-    months.push_back(Apr);
-    months.push_back(May);
-    months.push_back(Jun);
-    months.push_back(Jul);
-    months.push_back(Aug);
-    months.push_back(Sep);
-    months.push_back(Oct);
-    months.push_back(Nov);
-    months.push_back(Dec);
+{
+  srand( time(NULL) );
+  
+  //compare to original to_iso_extended_string and to_iso_string function
+  //which gives the same thing except with trailing 0's
+  for( size_t i = 0; i < 1000; ++i )
+  {
+    const boost::posix_time::ptime pt = random_ptime();
+    
+    const string boost_extended_str = boost::posix_time::to_iso_extended_string(pt);
+    const string boost_iso_str = boost::posix_time::to_iso_string(pt);
+    string our_extended_str = SpecUtils::to_extended_iso_string(pt);
+    string our_iso_str = SpecUtils::to_iso_string(pt);
 
-    srand(time(NULL));
-
-    //generate random ptime objects from year 1400-2100
-    for (int i = 0; i < 100; i++) {
-        greg_month mon = months[rand()%12+1];
-        int yr = rand()%700+1401;
-        int day;
-        if (mon == Feb) {
-            day = rand()%28+1;
-        } else if (mon == Sep || mon == Apr || mon == Jun || mon == Nov) {
-            day = rand()%30+1;
-        } else {
-            day = rand()%31+1;
-        }
-        date d(yr, mon, day);
-
-        int hr = rand()%24;
-        int min = rand()%60;
-        int sec = rand()%60;
-        int frac = rand()%1000000;
-        time_duration td(hr, min, sec, frac);
-
-        ptime t(d, td);
-        times.push_back(t);
-    }
-
-    //compare to original to_iso_extended_string and to_iso_string function
-    //which gives the same thing except with trailing 0's
-    for (int i = 0; i < times.size(); i++) {
-        ptime pt = times[i];
-        string str1 = to_iso_extended_string(pt);
-        string str2 = to_iso_string(pt);
-        string s1 = SpecUtils::to_extended_iso_string(pt);
-        string s2 = SpecUtils::to_iso_string(pt);
-        for (int i = s1.length(); i < 26; i++) {
-            s1 += "0";
-        }
-        for (int i = s2.length(); i < 22; i++) {
-            s2 += "0";
-        }
-        ptime check = from_iso_string(s2);
-        bool pass1 = pt==check;
-        bool pass2 = s1==str1;
-        bool pass3 = s2==str2;
-        BOOST_CHECK_MESSAGE(pass1, "failed: "+s2);
-        BOOST_CHECK_MESSAGE(pass2, "failed: "+s1);
-        BOOST_CHECK_MESSAGE(pass3, "failed: "+s2);
-    }
+    if( our_extended_str.length() < 26 )
+      our_extended_str.resize( 26, '0' );
+        
+    if( our_iso_str.length() < 22 )
+      our_iso_str.resize( 22, '0' );
+        
+    const boost::posix_time::ptime check = boost::posix_time::from_iso_string( our_iso_str );
+    BOOST_CHECK_MESSAGE( pt == check,
+                         "failed to read ISO time back in using boost::from_iso_string( '"
+                         + our_iso_str + "' ).");
+    BOOST_CHECK_MESSAGE( our_extended_str == boost_extended_str,
+                         "SpecUtils::to_extended_iso_string produced '"
+                         + our_extended_str
+                         + "' while boost::to_iso_extended_string produced '"
+                         + boost_extended_str + "'." );
+    BOOST_CHECK_MESSAGE( our_iso_str == boost_iso_str,
+                         "SpecUtils::to_iso_string produced '"
+                         + our_iso_str + "' while boost::to_iso_string produced '"
+                         + boost_iso_str + "'" );
+      
+  
+    const boost::posix_time::ptime parse_check_iso = SpecUtils::time_from_string( boost_iso_str.c_str() );
+    BOOST_CHECK_MESSAGE( parse_check_iso == pt,
+                         "Failed to read time from ISO string ('" + boost_iso_str
+                         + "'), parsed " + SpecUtils::to_iso_string(parse_check_iso) );
+    
+    const boost::posix_time::ptime parse_check_ext = SpecUtils::time_from_string( boost_extended_str.c_str() );
+    
+    BOOST_CHECK_MESSAGE( parse_check_ext == pt,
+                         "Failed to read time from EXTENDED string ('" + boost_iso_str
+                         + "'), parsed " + SpecUtils::to_iso_string(parse_check_ext) );
+  }//for( size_t i = 0; i < 1000; ++i )
     
     //check special time values
-    ptime d1(neg_infin);
-    ptime d2(pos_infin);
-    ptime d3(not_a_date_time);
-    ptime d4(max_date_time);
-    ptime d5(min_date_time);
-    ptime d6(date(2015,Jul,1));
+  boost::posix_time::ptime d1(neg_infin);
+  boost::posix_time::ptime d2(pos_infin);
+  boost::posix_time::ptime d3(not_a_date_time);
+  boost::posix_time::ptime d4(max_date_time);
+  boost::posix_time::ptime d5(min_date_time);
+  boost::posix_time::ptime d6(date(2015,Jul,1));
 
-    bool passneg1 = to_iso_extended_string(d1)==SpecUtils::to_extended_iso_string(d1);
-    bool passneg2 = to_iso_string(d1)==SpecUtils::to_iso_string(d1);
-    BOOST_CHECK(!passneg1);
-    BOOST_CHECK(!passneg2);
+  bool passneg1 = to_iso_extended_string(d1)==SpecUtils::to_extended_iso_string(d1);
+  bool passneg2 = to_iso_string(d1)==SpecUtils::to_iso_string(d1);
+  BOOST_CHECK(!passneg1);
+  BOOST_CHECK(!passneg2);
 
-    bool passpos1 = to_iso_extended_string(d2)==SpecUtils::to_extended_iso_string(d2);
-    bool passpos2 = to_iso_string(d2)==SpecUtils::to_iso_string(d2);
-    BOOST_CHECK(!passpos1);
-    BOOST_CHECK(!passpos2);
-
-    bool not1 = to_iso_extended_string(d3)==SpecUtils::to_extended_iso_string(d3);
-    bool not2 = to_iso_string(d3)==SpecUtils::to_iso_string(d3);
-    BOOST_CHECK(not1);
-    BOOST_CHECK(not2);
-
-    bool max1 = to_iso_extended_string(d4)==SpecUtils::to_extended_iso_string(d4);
-    bool max2 = to_iso_string(d4)==SpecUtils::to_iso_string(d4);
-    BOOST_CHECK(max1);
-    BOOST_CHECK(max2);
-
-    bool min1 = to_iso_extended_string(d5)==SpecUtils::to_extended_iso_string(d5);
-    bool min2 = to_iso_string(d5)==SpecUtils::to_iso_string(d5);
-    BOOST_CHECK(min1);
-    BOOST_CHECK(min2);
-
-    bool mid1 = to_iso_extended_string(d6)==SpecUtils::to_extended_iso_string(d6);
-    bool mid2 = to_iso_string(d6)==SpecUtils::to_iso_string(d6);
-    BOOST_CHECK(mid1);
-    BOOST_CHECK(mid2);
+  bool passpos1 = to_iso_extended_string(d2)==SpecUtils::to_extended_iso_string(d2);
+  bool passpos2 = to_iso_string(d2)==SpecUtils::to_iso_string(d2);
+  BOOST_CHECK(!passpos1);
+  BOOST_CHECK(!passpos2);
+  
+  bool not1 = to_iso_extended_string(d3)==SpecUtils::to_extended_iso_string(d3);
+  bool not2 = to_iso_string(d3)==SpecUtils::to_iso_string(d3);
+  BOOST_CHECK(not1);
+  BOOST_CHECK(not2);
+  
+  bool max1 = to_iso_extended_string(d4)==SpecUtils::to_extended_iso_string(d4);
+  bool max2 = to_iso_string(d4)==SpecUtils::to_iso_string(d4);
+  BOOST_CHECK(max1);
+  BOOST_CHECK(max2);
+  
+  bool min1 = to_iso_extended_string(d5)==SpecUtils::to_extended_iso_string(d5);
+  bool min2 = to_iso_string(d5)==SpecUtils::to_iso_string(d5);
+  BOOST_CHECK(min1);
+  BOOST_CHECK(min2);
+  
+  bool mid1 = to_iso_extended_string(d6)==SpecUtils::to_extended_iso_string(d6);
+  bool mid2 = to_iso_string(d6)==SpecUtils::to_iso_string(d6);
+  BOOST_CHECK(mid1);
+  BOOST_CHECK(mid2);
 }
