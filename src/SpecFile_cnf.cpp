@@ -352,6 +352,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
   
   try
   {
+    //First, lets take care of some boilerplate code.
     std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
     
     if( sample_nums.empty() )
@@ -370,6 +371,11 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     
     if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
       return false;
+    
+    //At this point we have the one spectrum (called summed) that we will write
+    //  to the CNF file.  If the input file only had a single spectrum, this is
+    //  now held in 'summed', otherwise the specified samples and detectors have
+    //  all been summed together/
     
     //Gamma information
     const float real_time = summed->real_time();
