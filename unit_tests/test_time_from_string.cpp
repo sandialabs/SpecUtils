@@ -76,7 +76,12 @@ void minimalTestFormats()
 {
   // datetimes.txt contains an extensive collection of formats and variants, but
   //  since it isnt distributed in the repo, here is a minimal collection of formats
-  compare_from_str( "15-MAY-14 08:30:44 PM",  "20140515T203044" );
+  //compare_from_str( "15-May-14 08:30:44 pm",  "20140515T203044" );
+  //compare_from_str( "15-May-14 08:30:44 Pm",  "20140515T203044" );
+  //cerr << "Only ran a couple tests for MinGW" << endl;
+  //return;
+  
+  compare_from_str( "15-May-14 08:30:44 PM",  "20140515T203044" );
   compare_from_str( "2010-01-15T23:21:15Z",   "20100115T232115" );
   compare_from_str( "2010-01-15 23:21:15",    "20100115T232115" );
   compare_from_str( "1-Oct-2004 12:34:42 AM", "20041001T003442" );
@@ -304,6 +309,31 @@ void minimalTestFormats()
   //1999-03-22 5:06
   //1999-3-22 5:06
   //
+  //http://www.partow.net/programming/datetime/index.html
+  //20060314 13:27:54
+  //2006/03/14 13:27:54
+  //14/03/2006 13:27:54
+  //2006-03-14 13:27:54.123  //YYYY-MM-DD HH:MM:SS.mss
+  //14-03-2006 13:27:54.123  //DD-MM-YYYY HH:MM:SS.mss
+  //2006-03-14 13:27:54
+  //14-03-2006 13:27:54
+  //2006-03-14T13:27:54
+  //2006-03-14T13:27:54.123
+  //20060314T13:27:54
+  //20060314T13:27:54.123
+  //14-03-2006T13:27:54.123
+  //14-03-2006T13:27:54
+  //20060314T1327
+  //20060314T132754
+  //20060314T132754123
+  //2006-03-04T13:27:54+03:45
+  //2006-03-04T13:27:54-01:28
+  //2006-03-04T13:27+03:45
+  //2006-03-04T13:27-01:28
+  //04/Mar/2006:13:27:54 -0537
+  //17/Sep/2006:18:12:45 +1142
+  //Sat, 04 Mar 2006 13:27:54 GMT
+  //Sat, 04 Mar 2006 13:27:54 -0234
 
 }//void minimalTestFormats()
 

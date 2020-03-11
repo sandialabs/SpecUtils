@@ -63,7 +63,6 @@
 
 #if(PERFORM_DEVELOPER_CHECKS)
 #include <iostream>
-#include <boost/filesystem.hpp>
 #endif
 
 
@@ -73,6 +72,13 @@
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #endif
 
+//Currently CMakeLists.txt isnt setup to link against boost, so we'll rely on
+//  the unit-test to make sure the recursive_ls functions are okay
+#define CHECK_RECURSIVE_LS_AGAINST_BOOST 0
+
+#if( CHECK_RECURSIVE_LS_AGAINST_BOOST )
+#include <boost/filesystem.hpp>
+#endif
 
 using namespace std;
 
@@ -828,7 +834,7 @@ vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
 #endif  //#ifdef _WIN32
 
  
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && CHECK_RECURSIVE_LS_AGAINST_BOOST )
 vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
                                                   file_match_function_t match_fcn,
                                                   void *user_match_data,
@@ -920,7 +926,7 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   
   return files;
 }//recursive_ls(...)
-#endif //PERFORM_DEVELOPER_CHECKS
+#endif //PERFORM_DEVELOPER_CHECKS && CHECK_RECURSIVE_LS_AGAINST_BOOST
 
   
   
@@ -1067,7 +1073,7 @@ vector<std::string> recursive_ls_internal_unix( const std::string &sourcedir,
   closedir( dir ); //Should we bother checking/handling errors
   
   
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && CHECK_RECURSIVE_LS_AGAINST_BOOST )
   auto from_boost = recursive_ls_internal_boost( sourcedir, match_fcn, user_match_data, depth, files.size() + numfiles );
   if( from_boost != files )  //It looks like things are always oredered the same
   {
@@ -1135,7 +1141,6 @@ std::vector<std::string> recursive_ls( const std::string &sourcedir,
   return recursive_ls_internal_windows( sourcedir, match_fcn, match_data, 0, 0 );
 #else
   return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
-  //return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
 #endif
 }//recursive_ls
   
@@ -1508,6 +1513,6 @@ bool likely_not_spec_file( const std::string &fullpath )
     return true;
   
   return false;
-}//bool likely_not_spec_file( const boost::filesystem::path &file )
+}//bool likely_not_spec_file( const std::string &file )
 
 }//namespace  SpecUtils

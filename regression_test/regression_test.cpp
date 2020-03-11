@@ -143,7 +143,7 @@ vector<path> candidates_without_truth_n42_files( const string basedir );
 
 int main( int argc, char **argv )
 {
-  //TODO: add test theat ensures serializing to N42 and back again pass
+  //TODO: add test that ensures serializing to N42 and back again pass
   //      equalEnough(...) test.
   
   //test_base_directory: the directory where the test file structure is based.

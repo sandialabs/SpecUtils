@@ -20,6 +20,7 @@
 #include "SpecUtils_config.h"
 
 #include <string>
+#include <cctype>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
@@ -43,12 +44,17 @@
 #include <time.h>
 #endif
 
+#endif
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
 #endif
 
-#endif
+/** Checking ISO time string against boost requires linking to boost, so for now
+ we'll just rely on the unit-tests to make sure we're getting things okay.
+*/
+#define CHECK_TIME_STR_AGAINST_BOOST 0
 
 using namespace std;
 
@@ -198,7 +204,7 @@ namespace SpecUtils
     if( result_len > 1 && buffer[result_len]==point )
       buffer[result_len--] = '\0';
     
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && CHECK_TIME_STR_AGAINST_BOOST )
     string correctAnswer = extended
     ? boost::posix_time::to_iso_extended_string( t )
     : boost::posix_time::to_iso_string( t );
@@ -347,6 +353,14 @@ namespace SpecUtils
     SpecUtils::ireplace_all( time_string, "_T", "T" );  //Smiths NaI HPRDS: 2009-11-10_T14:47:12Z
     SpecUtils::trim( time_string );
     
+#ifdef _WIN32
+    // On MinGW
+    //  - it seems we need "Apr" and not "APR".
+    //  - AM/PM doesnt seem to work
+    //  - lots of other errors
+#endif
+    
+    
     //Replace 'T' with a space to almost cut the number of formats to try in
     //  half.  We could probably do a straight replacement of 'T', but we'll be
     //  conservative and make it have a number on both sides of it (e.g.,
@@ -451,7 +465,7 @@ namespace SpecUtils
       if( period > (fraccolon+1)
           && aftertime
           && period != string::npos && period > 0 && (period+1) < time_string.size()
-          && isnumber(time_string[period-1]) && isnumber(time_string[period+1]) )
+          && isdigit(time_string[period-1]) && isdigit(time_string[period+1]) )
       {
         const size_t last = time_string.find_first_not_of( "0123456789", period+1 );
         string fracstr = ((last!=string::npos)
@@ -533,20 +547,14 @@ namespace SpecUtils
     const bool middle = (endian == MiddleEndianFirst);
     const bool only = (endian == MiddleEndianOnly || endian == LittleEndianOnly);
     
-    
-    //  Should go through list of formats listed in http://www.partow.net/programming/datetime/index.html
-    //  and make sure they all parse.
     const char * const formats[] =
     {
-      "%Y-%m-%d%n%H:%M:%SZ", //2010-01-15T23:21:15Z  //I think this is the most common format in N42-2012 files, so try it first.
-      
       "%Y-%m-%d%n%I:%M:%S%n%p", //2010-01-15 06:21:15 PM
-      
+      "%Y-%m-%d%n%H:%M:%SZ", //2010-01-15T23:21:15Z  //I think this is the most common format in N42-2012 files, so try it first.
       "%Y-%m-%d%n%H:%M:%S", //2010-01-15 23:21:15    //  Sometimes the N42 files dont have the Z though, or have some offset (we'll ignore)
-      
       "%Y%m%d%n%H%M%S",  //20100115T232115           //ISO format
-      "%d-%b-%y%n%r", //'15-MAY-14 08:30:44 PM'  (disambiguous: May 15 2014)
       "%d-%b-%Y%n%r",       //1-Oct-2004 12:34:42 AM  //"%r" ~ "%I:%M:%S %p"
+      "%d-%b-%y%n%r", //'15-MAY-14 08:30:44 PM'  (disambiguous: May 15 2014)
       "%Y%m%d%n%H:%M:%S",  //20100115T23:21:15
       (middle ? "%m/%d/%Y%n%I:%M%n%p" : "%d/%m/%Y%n%I:%M%n%p"), //1/18/2008 2:54 PM
       (only ? "" : (middle ? "%d/%m/%Y%n%I:%M%n%p" : "%m/%d/%Y%n%I:%M%n%p")),

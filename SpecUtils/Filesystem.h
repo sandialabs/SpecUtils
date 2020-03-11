@@ -100,12 +100,7 @@ namespace  SpecUtils
    */
   bool can_rw_in_directory( const std::string &name );
   
-  //Need file_extension(), current_path(), is_regular_file(),
-  //  boost::filesystem::absolute, boost::filesystem::equivalent,
-  //  boost::filesystem::path::make_preferred()
-  //in order to ditch boost::filesystem throughout InterSpec
-  
-  /** \brief Concatinates parts of a filesystem name according to the operating
+  /** \brief Concatenates parts of a filesystem name according to the operating
    system.
    
    ex. append_path("path/to","file.txt") return "path/to/file.txt" on UNIX

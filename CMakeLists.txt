@@ -8,7 +8,6 @@ project( SpecUtils )
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
-option( SpecUtils_NO_BOOST_LIB "Feature under development to avoid having to link to boost (however, boost headers still necassary)." OFF )
 option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (only for use within InterSpec)" OFF )
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING "Rebins all spectra in spectrum file to the same energy calibration" OFF )
@@ -37,11 +36,6 @@ else( TRY_TO_STATIC_LINK )
   set( CMAKE_FIND_LIBRARY_SUFFIXES .so .dylib ${CMAKE_FIND_LIBRARY_SUFFIXES} )
 endif( TRY_TO_STATIC_LINK )
 
-list( APPEND boost_libs_required date_time system filesystem )
-
-if( SpecUtils_BUILD_REGRESSION_TEST )
-  list( APPEND boost_libs_required program_options )
-endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 if( SpecUtils_BUILD_UNIT_TESTS )
   list( APPEND boost_libs_required unit_test_framework )
@@ -215,10 +209,8 @@ if( SpecUtils_JAVA_SWIG )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
-
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
-target_compile_options( SpecUtils PRIVATE -DBOOST_FILESYSTEM_VERSION=3 )
 
 set_target_properties( SpecUtils PROPERTIES
   CXX_STANDARD 11
@@ -226,10 +218,6 @@ set_target_properties( SpecUtils PROPERTIES
   CXX_EXTENSIONS NO
 )
 
-#Android Studio has an old version of cmake... gotta accomidate, see
-# https://cliutils.gitlab.io/modern-cmake/chapters/packages/Boost.html for an alternative
-#target_link_libraries( SpecUtils PUBLIC Boost::date_time Boost::system Boost::filesystem )
-target_link_libraries( SpecUtils PUBLIC ${Boost_LIBRARIES} ${Boost_DATE_TIME_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} )
 
 if( SpecUtils_USE_WT_THREADPOOL )
   include( ${CMAKE_SOURCE_DIR}/cmake/FindWt.cmake)
@@ -248,10 +236,6 @@ if( SpecUtils_JAVA_SWIG )
 endif( SpecUtils_JAVA_SWIG )
 
 
-if( SpecUtils_BUILD_UNIT_TESTS )
-  target_link_libraries( SpecUtils PUBLIC ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} )
-endif( SpecUtils_BUILD_UNIT_TESTS )
-
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a )
 endif( MINGW )
@@ -260,15 +244,7 @@ target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
                             PRIVATE ${RAPID_XML_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
-  if( NOT PERFORM_DEVELOPER_CHECKS )
-    message( FATAL_ERROR "PERFORM_DEVELOPER_CHECKS must be enabled when building testing executable" )
-  endif( NOT PERFORM_DEVELOPER_CHECKS )
-
-  add_executable( regression_test regression_test/regression_test.cpp )
-  #target_link_libraries( regression_test PRIVATE SpecUtils Boost::program_options )
-  target_link_libraries( regression_test PRIVATE SpecUtils ${Boost_PROGRAM_OPTIONS_LIBRARY} )
-  set_target_properties( regression_test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
-)
+  add_subdirectory( regression_test )
 endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 

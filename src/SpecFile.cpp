@@ -226,7 +226,7 @@ void log_developer_error( const char *location, const char *error )
   
   boost::posix_time::ptime time = boost::posix_time::second_clock::local_time();
   
-  const string timestr = boost::posix_time::to_iso_extended_string( time );
+  const string timestr = SpecUtils::to_iso_string(time);
 //  const string timestr = SpecUtils::to_iso_string( time );
   
   s_dev_error_log << timestr << ": " << location << endl << error << "\n\n" << endl;

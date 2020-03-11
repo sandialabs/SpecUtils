@@ -25,10 +25,6 @@
 
 #include "SpecUtils_config.h"
 
-#if( SpecUtils_NO_BOOST_LIB )
-#define BOOST_DATE_TIME_NO_LIB
-#endif
-
 #include <set>
 #include <mutex>
 #include <string>
@@ -36,6 +32,7 @@
 #include <algorithm>
 #include <functional>
 
+#define BOOST_DATE_TIME_NO_LIB
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 
@@ -164,7 +161,7 @@ enum class ParserType : int
   Lzs,
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
-   on initial file contents, and if still not succesfully identified, will try
+   on initial file contents, and if still not successfully identified, will try
    every parsing function.
    */
   Auto
