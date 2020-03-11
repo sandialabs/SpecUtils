@@ -278,9 +278,8 @@ vector<float> polynomial_coef_to_fullrangefraction( const vector<float> &coeffs,
 }//vector<float> polynomial_coeef_to_fullrangefraction( const vector<float> &coeffs )
 
   
-std::vector<float> fullrangefraction_coef_to_polynomial(
-                                                          const std::vector<float> &coeffs,
-                                                          const size_t nbinint )
+std::vector<float> fullrangefraction_coef_to_polynomial( const std::vector<float> &coeffs,
+                                                         const size_t nbinint )
 {
   if( !nbinint || coeffs.empty() )
     return std::vector<float>();
