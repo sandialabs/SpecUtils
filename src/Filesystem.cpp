@@ -34,7 +34,9 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
+#define NOMINMAX
 #include <windows.h>
+#undef NOMINMAX
 #include <pathcch.h>
 #include <Lmcons.h>
 #include <direct.h>
@@ -52,9 +54,10 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <libgen.h>
+#include <unistd.h>
 #endif
 
-#include <unistd.h>
+
 #include <sys/stat.h>
 
 #include "SpecUtils/StringAlgo.h"

@@ -48,7 +48,9 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
+#define NOMINMAX
 #include <windows.h>
+#undef NOMINMAX
 #endif
 
 /** Checking ISO time string against boost requires linking to boost, so for now

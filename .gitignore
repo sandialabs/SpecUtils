@@ -17,3 +17,10 @@ README.txt
 *.tgz
 *.bz2
 *.log
+*.json
+CMakeLists.txt.user
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+.vs/
+out/

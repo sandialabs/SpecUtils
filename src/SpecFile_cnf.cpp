@@ -47,6 +47,102 @@ using namespace std;
 
 namespace
 {
+	//Convert data to CAM data formats
+	template <class T>
+	//IEEE-754 variables to CAM float (PDP-11)
+	static char* convert_to_CAM_float(const T &input) 
+	{
+		//pdp-11 is a wordswaped float/4
+		float temp_f = static_cast<float>(input) * 4;
+		char* temp = reinterpret_cast<char*>(&temp_f);
+		const size_t word_size = sizeof(temp) / 2;
+		//create a containter
+		char output[sizeof(temp)];
+		//perform a word swap
+		for (size_t i = 0; i < word_size; i++)
+		{
+			output[i] = temp[i + word_size];
+			output[i + word_size] = temp[i];
+		}
+		delete[] temp;
+		return output;
+	}
+	template <class T>
+	//IEEE variables to CAM double (PDP-11)
+	static char* convert_to_CAM_double(const T &input) 
+	{
+		//pdp-11 is a word swaped Double/4
+		double temp_d = static_cast<double>(input) * 4;
+		char* temp = reinterpret_cast<char*>(&temp_f);
+		const size_t word_size = sizeof(temp) / 4;
+		//create a containter
+		char output[sizeof(temp)];
+		//perform a word swap
+		for (size_t i = 0; i < word_size; i++)
+		{
+			output[i] = temp[i + word_size];					//IEEE second is PDP-11 first
+			output[i + word_size] = temp[i];					//IEEE first is PDP-11 second
+			output[i + 2 * word_size] = temp[i + 3 * word_size];//IEEE forth is PDP-11 third
+			output[i + 3 * word_size] = temp[i + 2 * word_size];//IEEE third is PDP-11 fouth
+		}
+		delete[] temp;
+		return output;
+	}
+
+	//boost ptime to CAM DateTime
+	static char* convert_to_CAM_DateTime(const boost::posix_time::ptime &date_time) 
+	{
+		//error checking
+		if (date_time.is_not_a_date_time)
+			throw std::range_error("The input date time is not a valid date time");
+
+		//get the total seconds between the input time and the epoch
+		boost::posix_time::ptime epoch(boost::gregorian::date(1970, 1, 1));
+		boost::posix_time::time_duration::sec_type sec_from_epoch = (date_time - epoch).total_seconds();
+		
+		//covert to modified julian in usec
+		uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
+		return reinterpret_cast<char*>(&j_sec);
+	}
+
+	//float sec to CAM duration
+	static char* convert_to_CAM_duration(const float& duration) 
+	{
+		//duration in usec is larger than a int64: covert to years
+		if (duration * 10000000 > INT64_MAX)
+		{
+			char c_duration[8] = {0};
+			//duration in years is larger than an int32, divide by a million years
+			if (duration / 31557600 > INT32_MAX) 
+			{
+				int32_t y_duration = static_cast<int32_t>(duration) / 1E6;
+				char* temp_dur = reinterpret_cast<char*>(&y_duration);
+				memcpy(c_duration, temp_dur, sizeof(temp_dur));
+				//set the flags
+				c_duration[7] = 0x80;
+				c_duration[4] = 0x01;
+			}
+			//duration can be represented in years
+			else 
+			{
+				int32_t y_duration = static_cast<int32_t>(duration);
+				char *temp_dur = reinterpret_cast<char*>(&y_duration);
+				memcpy(c_duration, temp_dur, sizeof(temp_dur));
+				//set the flag
+				c_duration[7] = 0x80;
+			}
+			return c_duration;
+		}
+		//duration is able to be represented in usec
+		else
+		{
+			//cam time span is in usec and a negatve int64
+			int64_t t_duration = -1 * static_cast<int64_t>(duration) * 10000000L;
+			return reinterpret_cast<char*>(&t_duration);
+		}
+	}
+
+
 }//namespace
 
 
@@ -423,7 +519,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     {
       //The start time may not be valid (e.g., if input file didnt have times),
       // but if we're here we time is valid.
-      const std::time_t seconds_since_unix_epoch = boost::posix_time::to_time_t(start_time);
+      //const std::time_t seconds_since_unix_epoch = boost::posix_time::to_time_t(start_time);
       
       //Get the fractional seconds; will be be in range [0,1.0)
       const double fractional_seconds = start_time.time_of_day().fractional_seconds()
@@ -432,6 +528,9 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
       //...
     }//if( we have start time )
     
+	//SpecUtils::write_binary_data(output, (char)0x1); 
+
+
     //Check if we have RIID analysis results we could write to the output file.
     if( detectors_analysis_ && !detectors_analysis_->is_empty() )
     {
