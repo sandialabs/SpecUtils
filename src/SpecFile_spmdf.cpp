@@ -585,7 +585,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   //So I think I'll just stick to single threaded parsing for now since it only
   //  increases speed by ~15% to do mutliithreaded, at the cost of memory.
   //
-  //TODO: Check whether creating the Measurment objects in a multithreaded
+  //TODO: Check whether creating the Measurement objects in a multithreaded
   //      fashion significantly helps things.
   //      Make it so the worker functions in the SpectroscopicDailyFile
   //      namespace dont re-copy all the strings passed in.
@@ -1134,7 +1134,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   for( const string &name : detectorNames )
     detNameToNum[name] = detnum++;
   
-  vector< std::shared_ptr<Measurement> > backgroundMeasurments, signalMeasurments;
+  vector< std::shared_ptr<Measurement> > backgroundMeasurements, signalMeasurements;
   
   int max_occupancie_num = 0;
   
@@ -1203,7 +1203,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     if( backiter != analyzed_neutron_backgrounds.end() )
       neutback = &backiter->second;
     
-    //Place the analyzed background into signalMeasurments
+    //Place the analyzed background into signalMeasurements
     if( gammaback )
     {
       std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
@@ -1229,7 +1229,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
        {
        //This is a bit of a hack; I want the analyzed backgrounds to appear
        //  just before the analyzed spectra, so to keep this being the case
-       //  we have to falsify the time a bit, because the measurments will get
+       //  we have to falsify the time a bit, because the measurements will get
        //  sorted later on according to start time
        const int totalChunks = gammas[gammas.size()-1].timeChunkNumber;
        
@@ -1264,8 +1264,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           meas->gamma_count_sum_ += f;
       }//if( !!meas->gamma_counts_ )
       
-      signalMeasurments.push_back( meas );
-      //      backgroundMeasurments.push_back( meas );
+      signalMeasurements.push_back( meas );
+      //      backgroundMeasurements.push_back( meas );
     }//if( gammaback )
     
     for( size_t i = 0; i < gammas.size(); ++i )
@@ -1365,7 +1365,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       meas->start_time_ -= wholesec;
       meas->start_time_ -= fracsec;
       
-      signalMeasurments.push_back( meas );
+      signalMeasurements.push_back( meas );
     }//for( size_t i = 0; i < gammas.size(); ++i )
   }//for( int occnum = 0; occnum < occupancy_num; ++occnum )
   
@@ -1520,15 +1520,15 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         }//if( meas->detector_number_ < neutbackground.counts.size() )
       }//if( neutback != neutron_backgrounds.end() )
       
-      backgroundMeasurments.push_back( meas );
+      backgroundMeasurements.push_back( meas );
     }//for( size_t i = 0; i < backgrounds.size(); ++i )
   }//for( int backnum = 0; backnum < background_num; ++backnum )
   
   
-  for( std::shared_ptr<Measurement> &m : signalMeasurments )
+  for( std::shared_ptr<Measurement> &m : signalMeasurements )
     measurements_.push_back( m );
   
-  for( std::shared_ptr<Measurement> &m : backgroundMeasurments )
+  for( std::shared_ptr<Measurement> &m : backgroundMeasurements )
     measurements_.push_back( m );
   
   

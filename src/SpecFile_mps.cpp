@@ -340,7 +340,7 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
     cleanup_after_load();
     
     if( measurements_.empty() )
-      throw std::runtime_error( "no measurments" );
+      throw std::runtime_error( "no measurements" );
   }catch( std::exception & )
   {
     //cerr << SRC_LOCATION << "\n\tCaught: " << e.what() << endl;

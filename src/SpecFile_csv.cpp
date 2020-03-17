@@ -1140,7 +1140,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
     //lane_number_ = ;
     //measurement_location_name_ = "";
     //inspection_ = "";
-    //measurment_operator_ = "";
+    //measurement_operator_ = "";
     
     cleanup_after_load();
   }catch( std::exception & )

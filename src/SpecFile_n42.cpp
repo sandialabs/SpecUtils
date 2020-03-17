@@ -475,7 +475,7 @@ namespace SpecUtils
     m_doc( doc_node )
     {}
     
-    static void filter_valid_measurments( vector< std::shared_ptr<SpecUtils::Measurement> > &meass )
+    static void filter_valid_measurements( vector< std::shared_ptr<SpecUtils::Measurement> > &meass )
     {
       vector< std::shared_ptr<SpecUtils::Measurement> > valid_meass;
       valid_meass.reserve( meass.size() );
@@ -1401,7 +1401,7 @@ namespace SpecUtils
   }//void set_n42_2006_detector_data_node_info(  )
   
   
-  void SpecFile::set_n42_2006_measurment_location_information(
+  void SpecFile::set_n42_2006_measurement_location_information(
                                                               const rapidxml::xml_node<char> *measured_item_info_node,
                                                               std::vector<std::shared_ptr<Measurement>> added_measurements )
   {
@@ -1446,7 +1446,7 @@ namespace SpecUtils
       const rapidxml::xml_node<char> *coord_node = xml_first_node_nso( meas_loc, "Coordinates", xmlns );
       
       //We should actually loop over Coordinate nodes here and average values
-      //  that occur while the measurment is being taken...
+      //  that occur while the measurement is being taken...
       if( coord_node && coord_node->value() )
       {
         if( (stringstream(xml_value_str(coord_node)) >> latitude >> longitude) )
@@ -1511,8 +1511,8 @@ namespace SpecUtils
     measurement_location_name_ = xml_value_str( meas_loc_name );
     
     const rapidxml::xml_node<char> *operator_node = xml_first_node_nso( measured_item_info_node, "MeasurementOperator", xmlns );
-    measurment_operator_ = xml_value_str( operator_node );
-  }//void set_n42_2006_measurment_location_information()
+    measurement_operator_ = xml_value_str( operator_node );
+  }//void set_n42_2006_measurement_location_information()
   
   
   
@@ -1588,7 +1588,7 @@ namespace SpecUtils
             dose = XML_NEXT_TWIN(dose) )
         {
           countdoseNodes.push_back( dose );
-          //We dont want to set file level information from this <Measurment> node
+          //We dont want to set file level information from this <Measurement> node
           //  so we will continue;
           //continue;
         }//if( spectrum ) / else ( dose )
@@ -1621,7 +1621,7 @@ namespace SpecUtils
       
       workerpool.join();
       
-      SpectrumNodeDecodeWorker::filter_valid_measurments( measurements_ );
+      SpectrumNodeDecodeWorker::filter_valid_measurements( measurements_ );
       
       //This loop may be taken care of by SpectrumNodeDecodeWorker anyway
       for( size_t i = 0; i < countdoseNodes.size(); ++i )
@@ -1641,7 +1641,7 @@ namespace SpecUtils
         //find the nearest measurements and set intfo from it
         if( measurements_.size() == 1 )
         {
-          //If only one measurment, set the data no matter whate
+          //If only one measurement, set the data no matter whate
           measurements_[0]->set_n42_2006_count_dose_data_info( dose, analysis_info, &queue_mutex );
           //addedCountDose = true;
         }else if( measurements_.size() )
@@ -1702,11 +1702,11 @@ namespace SpecUtils
                       back->neutron_counts_sum_ = rate;
                     }
                   }//( if( the foregorund neutron info als ocontains background neutron rate )
-                }//if( there is a foreground and background spectrum for this measurment, and we're assigning the neutron info to foreground )
-              }//if( found an appropriate measurment to put this neutron info in )
+                }//if( there is a foreground and background spectrum for this measurement, and we're assigning the neutron info to foreground )
+              }//if( found an appropriate measurement to put this neutron info in )
             }//if( !starttime.is_special() )
           }//if( starttime_node && starttime_node->value_size() )
-        }//if( we only have one other measurment ) / else, find nearest one
+        }//if( we only have one other measurement ) / else, find nearest one
         
         //#if(PERFORM_DEVELOPER_CHECKS)
         //      if( !addedCountDose )
@@ -1726,7 +1726,7 @@ namespace SpecUtils
         if( locationNodes[i] && (i<measurements_.size()) && measurements_[i] )
         {
           vector<std::shared_ptr<Measurement>> addedmeas( 1, measurements_[i] );
-          set_n42_2006_measurment_location_information( locationNodes[i], addedmeas );
+          set_n42_2006_measurement_location_information( locationNodes[i], addedmeas );
         }//if( locationNodes[i] && measurements_[i] )
       }//for( size_t i = 0; i < locationNodes.size(); ++i )
       
@@ -1819,7 +1819,7 @@ namespace SpecUtils
           workerpool.join();
           
           
-          SpectrumNodeDecodeWorker::filter_valid_measurments( measurements_this_node );
+          SpectrumNodeDecodeWorker::filter_valid_measurements( measurements_this_node );
           
           for( auto &meas : measurements_this_node )
           {
@@ -1873,7 +1873,7 @@ namespace SpecUtils
               det_meas_node;
               det_meas_node = XML_NEXT_TWIN(det_meas_node) )
           {
-            //Look for <SpectrumMeasurement> measurments
+            //Look for <SpectrumMeasurement> measurements
             for( const rapidxml::xml_node<char> *spec_meas_node = xml_first_node_nso( det_meas_node, "SpectrumMeasurement", xmlns );
                 spec_meas_node;
                 spec_meas_node = XML_NEXT_TWIN(spec_meas_node) )
@@ -1909,7 +1909,7 @@ namespace SpecUtils
             }//for( const rapidxml::xml_node<char> *spec_meas_node ... )
             
             
-            //now look for <GrossCountMeasurement> measurments
+            //now look for <GrossCountMeasurement> measurements
             for( const rapidxml::xml_node<char> *gross_count_meas = xml_first_node_nso( det_meas_node, "GrossCountMeasurement", xmlns );
                 gross_count_meas;
                 (gross_count_meas = XML_NEXT_TWIN(gross_count_meas)))
@@ -1931,7 +1931,7 @@ namespace SpecUtils
           workerpool.join();
           
           //Avid system in ref67CSUPJ531 has one Gamma, and one Nuetron
-          //  DetectorMeasurment node for each <DetectorData> node, where the
+          //  DetectorMeasurement node for each <DetectorData> node, where the
           //  neutron detector isnt explicitly named, but it should clearly go
           //  with the gamma detector
           if( measurements_this_node.size() == gross_counts_this_node.size() )
@@ -1952,10 +1952,10 @@ namespace SpecUtils
           }//if( measurements_this_node.size() == gross_counts_this_node.size() )
           
           
-          SpectrumNodeDecodeWorker::filter_valid_measurments( measurements_this_node );
+          SpectrumNodeDecodeWorker::filter_valid_measurements( measurements_this_node );
           
           
-          //Now go through and look for Measurments with neutron data, but no
+          //Now go through and look for Measurements with neutron data, but no
           //  gamma data, and see if can combine with onces that have gamma data...
           bool combined_gam_neut_spec = false;
           for( auto &neut : measurements_this_node )
@@ -2039,9 +2039,9 @@ namespace SpecUtils
           
           if( gross_counts_this_node.size() )
           {
-            //The Measurments in gross_counts might be just neutrons from
+            //The Measurements in gross_counts might be just neutrons from
             //  detectors with the same name as a gamma detector, if
-            //  so we need to combine measurments so ensure_unique_sample_numbers()
+            //  so we need to combine measurements so ensure_unique_sample_numbers()
             //  wont go wonky
             std::lock_guard<std::mutex> lock( queue_mutex );
             
@@ -2097,7 +2097,7 @@ namespace SpecUtils
               }//for( auto &spectru : measurements_this_node )
               
               if( gross_used )
-                gross.reset();  //we dont want this measurment anymore
+                gross.reset();  //we dont want this measurement anymore
             }//for( auto &gross : gross_count_meas )
             
             for( const auto &gross : gross_counts_this_node )
@@ -2275,7 +2275,7 @@ namespace SpecUtils
               //<dndoarns:SpectrumSummed dndoarns:DetectorSubset="Partial" dndoarns:NuclidesIdentified="Th-232-001 Ra-226-002">
               std::shared_ptr<Measurement> meas = measurements_this_node[i];
               vector<std::shared_ptr<Measurement> > measv( 1, meas );
-              SpectrumNodeDecodeWorker::filter_valid_measurments( measv );
+              SpectrumNodeDecodeWorker::filter_valid_measurements( measv );
               
               if( measv.empty() )
                 continue;
@@ -2382,7 +2382,7 @@ namespace SpecUtils
         if( !item_info_node ) //HPRDS
           item_info_node = xml_first_node_nso( measurement, "InstrumentLocation", xmlns );
         
-        set_n42_2006_measurment_location_information( item_info_node, added_measurements );
+        set_n42_2006_measurement_location_information( item_info_node, added_measurements );
         set_n42_2006_deviation_pair_info( info_node, added_measurements );
         
         const rapidxml::xml_node<char> *analysis_node = xml_first_node_nso( measurement, "AnalysisResults", xmlns );
@@ -2545,7 +2545,7 @@ namespace SpecUtils
     if( measurements_.empty() )
     {
       stringstream msg;
-      msg << SRC_LOCATION << "\n\rNo Measurments found inside ICD1/XML file";
+      msg << SRC_LOCATION << "\n\rNo Measurements found inside ICD1/XML file";
       throw runtime_error( msg.str() );
     }//if( measurements_.empty() )
     
@@ -3383,7 +3383,7 @@ namespace SpecUtils
     xml_node<char> *RadInstrumentCharacteristics = 0;
     xml_node<char> *RadInstrumentInformationExtension = 0;
     
-    if(!measurment_operator_.empty())
+    if(!measurement_operator_.empty())
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
       RadInstrumentCharacteristics = doc->allocate_node( node_element, "RadInstrumentCharacteristics" );
@@ -3398,14 +3398,14 @@ namespace SpecUtils
       xml_node<char> *CharacteristicName = doc->allocate_node( node_element, "CharacteristicName", "Operator Name" );
       Characteristic->append_node( CharacteristicName );
       
-      string operatorname = measurment_operator_;
+      string operatorname = measurement_operator_;
       //    ireplace_all( operatorname, "\t", "&#009;" );//replace tab characters with tab character code
       //    ireplace_all( operatorname, "&", "&#38;" );
       
       val = doc->allocate_string( operatorname.c_str(), operatorname.size()+1 );
       xml_node<char> *CharacteristicValue = doc->allocate_node( node_element, "CharacteristicValue", val );
       Characteristic->append_node( CharacteristicValue );
-    }//if( measurment_operator_.size() )
+    }//if( measurement_operator_.size() )
     
     
     if( detector_type_ != DetectorType::Unknown )
@@ -3573,7 +3573,7 @@ namespace SpecUtils
         std::shared_ptr<const Measurement> m = smeas[i];
         
         //Allow the first record in the file, if it is a background, to not need
-        //  to have the same start time or real time as the other measurments in
+        //  to have the same start time or real time as the other measurements in
         //  this sample.  This is to accomidate some portals whos RSPs may
         //  accumulate backgrounds a little weird, but none-the-less should all be
         //  considered teh same sample.
@@ -3591,7 +3591,7 @@ namespace SpecUtils
         }//if( not background or not first sample )
         
         allsame = allsame && (smeas[i]->source_type() == smeas[0]->source_type());
-      }//for( check if all measurments can go under a single <RadMeasurement> tag )
+      }//for( check if all measurements can go under a single <RadMeasurement> tag )
       
       
       //allsame = false;
@@ -3639,7 +3639,7 @@ namespace SpecUtils
         }
         
         workerpool.post( [&xmldocmutex,RadMeasurement,smeas,calid](){
-          add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
+          add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
         } );
       }else //if( allsame )
       {
@@ -3663,7 +3663,7 @@ namespace SpecUtils
           }
           
           workerpool.post( [RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
-            add_spectra_to_measurment_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex ); } );
+            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex ); } );
         }//for( loop over measuremtns for this sample number )
       }//if( allsame ) / else
     }//for( )
@@ -3691,9 +3691,9 @@ namespace SpecUtils
   }//rapidxml::xml_node<char> *create_2012_N42_xml() const
   
   
-  void SpecFile::add_spectra_to_measurment_node_in_2012_N42_xml(
+  void SpecFile::add_spectra_to_measurement_node_in_2012_N42_xml(
                                                                 ::rapidxml::xml_node<char> *RadMeasurement,
-                                                                const std::vector< std::shared_ptr<const Measurement> > measurments,
+                                                                const std::vector< std::shared_ptr<const Measurement> > measurements,
                                                                 const std::vector<size_t> calibids,
                                                                 std::mutex &xmldocmutex )
   {
@@ -3704,10 +3704,10 @@ namespace SpecUtils
       //Some checks that should never actualy trigger
       if( !RadMeasurement )
         throw runtime_error( "null RadMeasurement" );
-      if( measurments.empty() )
+      if( measurements.empty() )
         throw runtime_error( "with empty input" );
-      if( measurments.size() != calibids.size() )
-        throw runtime_error( "measurments.size != calibids.size" );
+      if( measurements.size() != calibids.size() )
+        throw runtime_error( "measurements.size != calibids.size" );
       
       string radMeasID;
       xml_document<char> *doc = 0;
@@ -3746,44 +3746,44 @@ namespace SpecUtils
       // originally being modeled after N42 2012.  In principle, this loop
       // shouldnt have an effect in the vast majority (maybe all I know of) of
       // situations, but jic
-      float speed = measurments[0]->speed_;
-      boost::posix_time::ptime starttime = measurments[0]->start_time();
+      float speed = measurements[0]->speed_;
+      boost::posix_time::ptime starttime = measurements[0]->start_time();
       
-      OccupancyStatus occupancy = measurments[0]->occupied_;
-      SourceType source_type = measurments[0]->source_type();
+      OccupancyStatus occupancy = measurements[0]->occupied_;
+      SourceType source_type = measurements[0]->source_type();
       
       bool has_gps = false;
       string positiontime;
       char latitude[16], longitude[16];
-      float realtime_used = measurments[0]->real_time_;
+      float realtime_used = measurements[0]->real_time_;
       
-      for( size_t i = 0; i < measurments.size(); ++i )
+      for( size_t i = 0; i < measurements.size(); ++i )
       {
-        realtime_used = max( measurments[i]->real_time_, realtime_used );
-        const boost::posix_time::ptime tst = measurments[i]->start_time();
+        realtime_used = max( measurements[i]->real_time_, realtime_used );
+        const boost::posix_time::ptime tst = measurements[i]->start_time();
         starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
         
-        speed = max( measurments[i]->speed_, speed );
+        speed = max( measurements[i]->speed_, speed );
         
-        if( measurments[i]->occupied_ == OccupancyStatus::Occupied )
-          occupancy = measurments[i]->occupied_;
+        if( measurements[i]->occupied_ == OccupancyStatus::Occupied )
+          occupancy = measurements[i]->occupied_;
         else if( occupancy == OccupancyStatus::Unknown )
-          occupancy = measurments[i]->occupied_;
-        else if( measurments[i]->occupied_ ==  OccupancyStatus::NotOccupied && occupancy == OccupancyStatus::Unknown )
-          occupancy = measurments[i]->occupied_;
+          occupancy = measurements[i]->occupied_;
+        else if( measurements[i]->occupied_ ==  OccupancyStatus::NotOccupied && occupancy == OccupancyStatus::Unknown )
+          occupancy = measurements[i]->occupied_;
         
-        if( !has_gps && measurments[i]->has_gps_info() )
+        if( !has_gps && measurements[i]->has_gps_info() )
         {
           has_gps = true;
-          snprintf( latitude, sizeof(latitude), "%.12f", measurments[i]->latitude_ );
-          snprintf( longitude, sizeof(longitude), "%.12f", measurments[i]->longitude_ );
-          if( !measurments[i]->position_time_.is_special() )
-            positiontime = SpecUtils::to_extended_iso_string(measurments[i]->position_time_) + "Z";
+          snprintf( latitude, sizeof(latitude), "%.12f", measurements[i]->latitude_ );
+          snprintf( longitude, sizeof(longitude), "%.12f", measurements[i]->longitude_ );
+          if( !measurements[i]->position_time_.is_special() )
+            positiontime = SpecUtils::to_extended_iso_string(measurements[i]->position_time_) + "Z";
         }//if( !has_gps )
         
-        if( measurments[i]->source_type_ != SourceType::Unknown )
-          source_type = std::max( measurments[i]->source_type_, source_type );
-      }//for( size_t i = 1; i < measurments.size(); ++i )
+        if( measurements[i]->source_type_ != SourceType::Unknown )
+          source_type = std::max( measurements[i]->source_type_, source_type );
+      }//for( size_t i = 1; i < measurements.size(); ++i )
       
       
       char realtime[32], speedstr[32];
@@ -3816,13 +3816,13 @@ namespace SpecUtils
         val = doc->allocate_string( classcode );
         RadMeasurement->append_node( doc->allocate_node( node_element, "MeasurementClassCode", val ) );
         
-        if( !measurments[0]->start_time_.is_special() )
+        if( !measurements[0]->start_time_.is_special() )
         {
           val = doc->allocate_string( startstr.c_str(), startstr.size()+1 );
           RadMeasurement->append_node( doc->allocate_node( node_element, "StartDateTime", val, 13, startstr.size() ) );
         }
         
-        if( measurments[0]->real_time_ > 0.0f )
+        if( measurements[0]->real_time_ > 0.0f )
         {
           val = doc->allocate_string( realtime );
           RadMeasurement->append_node( doc->allocate_node( node_element, "RealTimeDuration", val ) );
@@ -3832,10 +3832,10 @@ namespace SpecUtils
       //Since gross count nodes have to come after
       vector< xml_node<char> *> spectrum_nodes, gross_count_nodes, det_states;
       
-      for( size_t i = 0; i < measurments.size(); ++i )
+      for( size_t i = 0; i < measurements.size(); ++i )
       {
         const size_t calibid = calibids[i];
-        const std::shared_ptr<const Measurement> m = measurments[i];
+        const std::shared_ptr<const Measurement> m = measurements[i];
         
         char livetime[32], calibstr[16], spec_idstr[48];
         
@@ -4067,7 +4067,7 @@ namespace SpecUtils
         }//if( contained_neutron_ )
         
         
-        switch( measurments[i]->quality_status_ )
+        switch( measurements[i]->quality_status_ )
         {
           case SpecUtils::QualityStatus::Good:
             //When reading in the 2012 N42, we will assume good unless indicated otherwise
@@ -4082,7 +4082,7 @@ namespace SpecUtils
             xml_attribute<char> *att = doc->allocate_attribute( "radDetectorInformationReference", val );
             RadDetectorState->append_attribute( att );
             
-            val = ((measurments[i]->quality_status_==SpecUtils::QualityStatus::Suspect) ? "Warning" : "Fatal" ); //"Error" is also an option
+            val = ((measurements[i]->quality_status_==SpecUtils::QualityStatus::Suspect) ? "Warning" : "Fatal" ); //"Error" is also an option
             RadDetectorState->append_node( doc->allocate_node( node_element, "Fault", val ) );
             break;
           }//case Suspect: case Bad:
@@ -4102,7 +4102,7 @@ namespace SpecUtils
             break;
           }
         }//switch( quality_status_ )
-      }//for( loop over input measurments )
+      }//for( loop over input measurements )
       
       
       {//start put <Spectrum> and <GrossCount> nodes into tree
@@ -4176,7 +4176,7 @@ namespace SpecUtils
       
     }catch( std::exception &e )
     {
-      cerr << "Measurement::add_spectra_to_measurment_node_in_2012_N42_xml(...): something horrible happened!: " << e.what() << endl;
+      cerr << "Measurement::add_spectra_to_measurement_node_in_2012_N42_xml(...): something horrible happened!: " << e.what() << endl;
     }//try catch
   }//void Measurement::add_to_2012_N42_xml(...)
   
@@ -4313,7 +4313,7 @@ namespace SpecUtils
     
     
     const rapidxml::xml_node<char> *infoextension_node = info_node->first_node( "RadInstrumentInformationExtension", 33 );
-    //  const rapidxml::xml_node<char> *operator_node = infoextension_node ? infoextension_node->first_node("InterSpec:MeasurmentOperator",18) : (const rapidxml::xml_node<char> *)0;
+    //  const rapidxml::xml_node<char> *operator_node = infoextension_node ? infoextension_node->first_node("InterSpec:MeasurementOperator",18) : (const rapidxml::xml_node<char> *)0;
     
     //<InterSpec:Inspection> node is vestigual as of 20160607, and only kept in to read older files (with SpecFile_2012N42_VERSION==1), of which, there are probably not many, if any around
     const rapidxml::xml_node<char> *inspection_node = infoextension_node ? infoextension_node->first_node("InterSpec:Inspection",20) : (const rapidxml::xml_node<char> *)0;
@@ -4323,7 +4323,7 @@ namespace SpecUtils
     //
     
     //  if( operator_node )
-    //    measurment_operator_ = xml_value_str( operator_node );
+    //    measurement_operator_ = xml_value_str( operator_node );
     if( inspection_node )
       inspection_ = xml_value_str( inspection_node );
     
@@ -4457,7 +4457,7 @@ namespace SpecUtils
           if( name_node && XML_VALUE_ICOMPARE(name_node, "Operator Name") )
           {
             const rapidxml::xml_node<char> *value_node = char_node->first_node( "CharacteristicValue", 19 );
-            measurment_operator_ = xml_value_str(value_node);
+            measurement_operator_ = xml_value_str(value_node);
           }else
           {
             const string comment = concat_2012_N42_characteristic_node( char_node );
@@ -4698,8 +4698,8 @@ namespace SpecUtils
   }//void decode_2012_N42_detector_state_and_quality(...)
   
   
-  void SpecFile::decode_2012_N42_rad_measurment_node(
-                                                     vector< std::shared_ptr<Measurement> > &measurments,
+  void SpecFile::decode_2012_N42_rad_measurement_node(
+                                                     vector< std::shared_ptr<Measurement> > &measurements,
                                                      const rapidxml::xml_node<char> *meas_node,
                                                      const IdToDetectorType *id_to_dettype_ptr,
                                                      DetectorToCalibInfo *calibrations_ptr,
@@ -4893,7 +4893,7 @@ namespace SpecUtils
           {
             //Starting with SpecFile_2012N42_VERSION==3, a slightly more
             //  accurate RealTime may be recorded in the remark if necassary...
-            //  see notes in create_2012_N42_xml() and add_spectra_to_measurment_node_in_2012_N42_xml()
+            //  see notes in create_2012_N42_xml() and add_spectra_to_measurement_node_in_2012_N42_xml()
             //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
             remark = SpecUtils::trim_copy( remark.substr(9) );
             meas->real_time_ = time_duration_string_to_seconds( remark );
@@ -5424,7 +5424,7 @@ namespace SpecUtils
       
       {
         std::lock_guard<std::mutex> lock( meas_mutex );
-        measurments.insert( measurments.end(), meas_to_add.begin(), meas_to_add.end() );
+        measurements.insert( measurements.end(), meas_to_add.begin(), meas_to_add.end() );
       }
     }catch( std::exception &e )
     {
@@ -5432,7 +5432,7 @@ namespace SpecUtils
       cerr << "Error decoding SpecFile::decode2012N42SpectrumNode(...): "
       << e.what() << endl;
     }//try / catch
-  }//void decode_2012_N42_rad_measurment_node( const rapidxml::xml_node<char> *spectrum )
+  }//void decode_2012_N42_rad_measurement_node( const rapidxml::xml_node<char> *spectrum )
   
   
   void SpecFile::load_2012_N42_from_doc( const rapidxml::xml_node<char> *data_node )
@@ -5521,7 +5521,7 @@ namespace SpecUtils
       rapidxml::xml_node<char> *category_node = XML_FIRST_NODE( info_node, "RadDetectorCategoryCode" );
       
       //<RadDetectorKindCode> returns "NaI", "HPGe", "PVT", "He3", etc (see determine_rad_detector_kind_code())
-      //  and should be utilized at some point.  But would require adding a field to MeasurmentInfo
+      //  and should be utilized at some point.  But would require adding a field to MeasurementInfo
       //  I think to kind of do it properly.
       
       //rapidxml::xml_node<char> *kind_node     = info_node->first_node( "RadDetectorKindCode" );
@@ -5681,7 +5681,7 @@ namespace SpecUtils
       measurements_each_meas.push_back( these_meas );
       
       workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-        decode_2012_N42_rad_measurment_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+        decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
       } );
     }//for( loop over "RadMeasurement" nodes )
     
@@ -5727,7 +5727,7 @@ namespace SpecUtils
      */
     
     if( measurements_.empty() )
-      throw runtime_error( "No valid measurments in 2012 N42 file." );
+      throw runtime_error( "No valid measurements in 2012 N42 file." );
     
     cleanup_after_load();
   }//bool load_2012_N42_from_doc( rapidxml::xml_node<char> *document_node )
@@ -5902,7 +5902,7 @@ namespace SpecUtils
                   //We could add a comment here about the GMTube counts...
                   keepers.erase( find( keepers.begin(), keepers.end(), gm_meas ) );
                 }
-              }//if( we have one neutron and one gamma measurment with same start time )
+              }//if( we have one neutron and one gamma measurement with same start time )
             }//for( time_to_meas_t::value_type &vt : time_to_meas )
             
             
@@ -7280,14 +7280,14 @@ namespace SpecUtils
     
     
     
-    if( measurement_location_name_.size() || measurment_operator_.size() )
+    if( measurement_location_name_.size() || measurement_operator_.size() )
     {
       ostr << "    <MeasuredItemInformation>" << endline;
       if( measurement_location_name_.size() )
         ostr << "      <MeasurementLocationName>" << measurement_location_name_ << "</MeasurementLocationName>" << endline;
       //<Coordinates>40.12 10.67</Coordinates>
-      if( measurment_operator_.size() )
-        ostr << "      <MeasurementOperator>" << measurment_operator_ << "</MeasurementOperator>" << endline;
+      if( measurement_operator_.size() )
+        ostr << "      <MeasurementOperator>" << measurement_operator_ << "</MeasurementOperator>" << endline;
       ostr << "    </MeasuredItemInformation>" << endline;
     }
     

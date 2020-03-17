@@ -77,7 +77,7 @@ namespace D3SpectrumExport
                            const std::string &x_axis_title,
                            const std::string &y_axis_title );
   
-  /** Creates a var data_`div_name` that represents the measurments and options
+  /** Creates a var data_`div_name` that represents the measurements and options
       passed into this function, and calls setData on spec_chart_`div_name`.
       Does not create <script></script> tags
    */

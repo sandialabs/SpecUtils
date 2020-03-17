@@ -82,7 +82,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
     
     //each header will look like:
     // "1899715091 Oct. 09 2013  12:29:38 T counts Live time (s) 279.4 neutron 1 gieger 194"
-    std::vector< std::shared_ptr<Measurement> > measurments;
+    std::vector< std::shared_ptr<Measurement> > measurements;
     std::vector< std::shared_ptr<std::vector<float>> > gammacounts;
     
     for( size_t i = 0; i < headers.size(); ++i )
@@ -95,7 +95,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       
       string::size_type pos = header.find( ' ' );
       if( pos == string::npos )
-        throw runtime_error( "Invalid GR135 measurment header" );
+        throw runtime_error( "Invalid GR135 measurement header" );
       
       const string measIDStr = header.substr( 0, pos );
       string timestampStr = header.substr( pos+1 );
@@ -114,7 +114,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       meas->start_time_ = time_from_string( timestampStr.c_str() );
 #if(PERFORM_DEVELOPER_CHECKS)
       if( meas->start_time_.is_special() )
-        log_developer_error( __func__, ("Failed to extract measurment start time from: '" + header  + "' timestampStr='" + timestampStr + "'").c_str() );
+        log_developer_error( __func__, ("Failed to extract measurement start time from: '" + header  + "' timestampStr='" + timestampStr + "'").c_str() );
 #endif
       
       pos = header.find( "Live time (s)" );
@@ -174,7 +174,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       meas->calibration_coeffs_.push_back( 0 );
       meas->calibration_coeffs_.push_back( 3.0 );
       
-      measurments.push_back( meas );
+      measurements.push_back( meas );
       gammacounts.push_back( channelcounts );
       measurements_.push_back( meas );
     }//for( size_t i = 0; i < headers.size(); ++i )
@@ -190,13 +190,13 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
         continue;
       
       SpecUtils::split_to_floats( line.c_str(), line.size(), counts );
-      if( counts.size() != measurments.size() )
+      if( counts.size() != measurements.size() )
         throw runtime_error( "Unexpected number of channel counts" );
       
       for( size_t i = 0; i < counts.size(); ++i )
       {
         gammacounts.at(i)->push_back( counts[i] );
-        measurments[i]->gamma_count_sum_ += counts[i];
+        measurements[i]->gamma_count_sum_ += counts[i];
       }
     }//while( SpecUtils::safe_get_line( input, line ) )
     

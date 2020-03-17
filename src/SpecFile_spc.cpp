@@ -202,7 +202,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
   
   const istream::pos_type orig_pos = input.tellg();
   
-  //There are quite a number of fileds that Measurment or MeasurmentInfo class
+  //There are quite a number of fields that Measurement or SpecFile class
   //  does not yet implement, so for now we will just put them into the remarks
   
   string detector_type = "";
@@ -517,7 +517,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           instrument_model_ = line.substr(info_pos);
       }else if( istarts_with( line, "OperatorInformation" ) )
       {
-        measurment_operator_ = line.substr(info_pos);
+        measurement_operator_ = line.substr(info_pos);
       }else if( istarts_with( line, "GPSValid" ) )
       {
         if( SpecUtils::icontains(line, "no") )
@@ -911,8 +911,8 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     if(!instrument_model_.empty())
       output << pad_iaea_prefix( "ModelNumber" ) << instrument_model_ << "\r\n";
     
-    if(!measurment_operator_.empty())
-      output << pad_iaea_prefix( "OperatorInformation" ) << measurment_operator_ << "\r\n";
+    if(!measurement_operator_.empty())
+      output << pad_iaea_prefix( "OperatorInformation" ) << measurement_operator_ << "\r\n";
     
     if( summed->has_gps_info() )
     {

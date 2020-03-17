@@ -69,7 +69,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
 {
   //channel data in $DATA:
   //live time, real time in $MEAS_TIM:
-  //measurment datetime in $DATE_MEA:
+  //measurement datetime in $DATE_MEA:
   //Description in $SPEC_ID
   //Ploynomial calibration coefficients in $ENER_FIT: as well as $MCA_CAL:
   

@@ -192,7 +192,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
       //  first and last events timetampts
       uint64_t firsttimestamp = 0, lasttimestamp = 0;
       
-      //To track measurments longer than 35.79 minutes we need to keep track of
+      //To track measurements longer than 35.79 minutes we need to keep track of
       //  more than a 31 bit clock.
       uint64_t timeepoch = 0;
       
@@ -486,7 +486,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     cleanup_after_load();
     
     if( measurements_.empty() )
-      throw std::runtime_error( "no measurments" );
+      throw std::runtime_error( "no measurements" );
     
     return true;
   }catch( std::exception & )

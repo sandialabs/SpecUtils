@@ -41,7 +41,7 @@ Shortcommings that wcjohns should be addressed
   -Many of the ICD1 fields possible are not checked for
     -comments for multiple different tags, ...
  -Energy calibration should be made its own object and shared between 
-  Measurments.
+  Measurements.
  -Neutron meausruemtns should have their own live and real time
  -Neutron counts are typically merged into a gamma detectors Measurement if a
   reasonable pairing can be made. When and if this is done needs to be clearly
@@ -57,7 +57,7 @@ Shortcommings that wcjohns should be addressed
  -Should consider adding explicit dead_time field 
  -Should add elevation and uncertainties to GPS coordinates
  -Should add detector and item orientation/positions
- -Should consider removing measurment_operator and inspection and make location 
+ -Should consider removing measurement_operator and inspection and make location 
   part of detector location object
  -Should implement tracking N42 MeasurementGroupReferences to link Analysis
   with appropriate spectra, and InterSpec can use to link to peaks and such.
@@ -355,7 +355,7 @@ struct MeasurementCalibInfo; //defined in SpectrumDataStructs.cpp (used for pars
 struct SpectrumNodeDecodeWorker;
 struct GrossCountNodeDecodeWorker;
 
-//Some typedefs and enums used for decode_2012_N42_rad_measurment_node(...)
+//Some typedefs and enums used for decode_2012_N42_rad_measurement_node(...)
 enum DetectionType{ GammaDetection, NeutronDetection, GammaAndNeutronDetection, OtherDetection };
 typedef std::map<std::string,std::pair<DetectionType,std::string> > IdToDetectorType;
 typedef std::map<std::string,MeasurementCalibInfo>                  DetectorToCalibInfo;
@@ -473,7 +473,7 @@ public:
   //  to const objects (channel data and channel energies) are shallow copied.
   const Measurement &operator=( const Measurement &rhs );
   
-  //memmorysize(): calculates the approximate amount of memorry this Measurment
+  //memmorysize(): calculates the approximate amount of memorry this Measurement
   //  is taking up in memmory, including all of the objects which it owns (like
   //  pointers to float arrays and stuff).
   size_t memmorysize() const;
@@ -486,14 +486,14 @@ public:
   //real_time(): returned in units of seconds.  Will be 0 if not known.
   float real_time() const;
   
-  //contained_neutron(): returns whether or not the measurment is thought to
+  //contained_neutron(): returns whether or not the measurement is thought to
   //  contain the possibility to detect neutrons (e.g. if a neutron detector was
   //  also present).  This may be true even if zero neutrons were detected.  For
   //  some detector types this value is infered through previous hardware
   //  knowledge.
   bool contained_neutron() const;
   
-  //sample_number(): the sample number assigned to this Measurment.  If the
+  //sample_number(): the sample number assigned to this Measurement.  If the
   //  'DontChangeOrReorderSamples' flag wasnt passed to the
   //  SpecFile::cleanup_after_load() function, then this value may be
   //  assigned during file parsing.
@@ -517,11 +517,11 @@ public:
   //  known.  Otherwise return 0.0.
   float speed() const;
   
-  //latitude(): returns the latitude of the measurment, in degrees, if known.
+  //latitude(): returns the latitude of the measurement, in degrees, if known.
   //  Returns -999.9 otherwise.
   double latitude() const;
   
-  //longitude(): returns the longitude, in degrees, of the measurment if known.
+  //longitude(): returns the longitude, in degrees, of the measurement if known.
   //  Returns -999.9 otherwise.
   double longitude() const;
   
@@ -560,13 +560,13 @@ public:
   //energy_calibration_model(): returns calibration model used for energy
   //  binning.  If a value of 'InvalidEquationType' is returned, then
   //  channel_energies() may or may not return a valid pointer; otherwise, if
-  //  this Measurment is part of a MeasurmentInfo object constructed by parsing
+  //  this Measurement is part of a MeasurementInfo object constructed by parsing
   //  a file, then channel_energies() pointer _should_ be valid.
   SpecUtils::EnergyCalType energy_calibration_model() const;
   
   //remarks(): the list of remarks found while parsing this record from the file
   //  that pertain to this record specifically.  See also
-  //  MeasurmentInformation::remarks().
+  //  MeasurementInformation::remarks().
   const std::vector<std::string> &remarks() const;
   
   /** Warnings from parsing that apply to this measurement.
@@ -599,8 +599,8 @@ public:
   //  of the gamma channels, calculated using the energy calibration
   //  coefficients as well as the deviation pairs.  These channel energies are
   //  calculated during file parsing, or any subsequent re-calibrations;  the
-  //  owining MeasurmentInfo object will make an attempt so that multiple
-  //  Measurments that it owns, that have the same calibration, will also return
+  //  owining MeasurementInfo object will make an attempt so that multiple
+  //  Measurements that it owns, that have the same calibration, will also return
   //  pointers from channel_energies() that point to the same spot in memory
   //  (this is primarily a memory usage optimization).
   //  Typically the vector returned by channel_energies() will have the same
@@ -613,7 +613,7 @@ public:
   
   //gamma_counts(): the channel counts of the gamma data.
   //  Returned pointer may be null if no gamma data present, or not thie
-  //  Measurment is not properly initialized.
+  //  Measurement is not properly initialized.
   const std::shared_ptr< const std::vector<float> > &gamma_counts() const;
   
   //neutron_counts(): the channel counts of neutron data.  Currently none of
@@ -712,9 +712,9 @@ public:
 
   //popuplate_channel_energies_from_coeffs(): uses calibration_coeffs_ and 
   //  deviation_pairs_ to populate channel_energies_.
-  //This function should not be used when this Measurment is part of a
+  //This function should not be used when this Measurement is part of a
   //  SpecFile object (since this could waste memorry), but is intentded
-  //  for the case when this Measurment is saved all by itself to XML by 
+  //  for the case when this Measurement is saved all by itself to XML by 
   //  write_2006_N42_xml() and then restored using
   //  set_2006_N42_spectrum_node_info().
   //Throws if gamma_counts_ or calibration_coeffs_ is empty, or if 
@@ -1080,7 +1080,7 @@ public:
   //ToDo:
   //  -wcjohns needs to document how these classes are structured, now that
   //   there development has stabilized
-  //     e.g. note things like how all Measurments in measurements_
+  //     e.g. note things like how all Measurements in measurements_
   //          may or may not have the same binning, or channel_energies()
   //          may return a null pointer, or passthrough vehicles are
   //          rebinned to a consistent FullWidthFraction binning
@@ -1100,8 +1100,8 @@ public:
   virtual ~SpecFile();
  
   //operator=(...) copies all the 'rhs' information and creates a new set of
-  //  Measurment objects so that if you apply changes to *this, it will not
-  //  effect the lhs; this is however fairly effieient as the Measurment
+  //  Measurement objects so that if you apply changes to *this, it will not
+  //  effect the lhs; this is however fairly effieient as the Measurement
   //  objects copy shallow copy of all std::shared_ptr<const std::vector<float>> instances.
   //  Since it is assumed the 'rhs' is in good shape, recalc_total_counts() and
   //  cleanup_after_load() are NOT called.
@@ -1161,7 +1161,7 @@ public:
   int lane_number() const;
   const std::string &measurement_location_name() const;
   const std::string &inspection() const;
-  const std::string &measurment_operator() const;
+  const std::string &measurement_operator() const;
   const std::set<int> &sample_numbers() const;
   size_t num_measurements() const;
   DetectorType detector_type() const;
@@ -1198,36 +1198,36 @@ public:
 
 
   //A little more complex setters:
-  //set_live_time(...) and set_real_time(...) update both the measurment
-  //  you pass in, as well as *this.  If measurment is invalid, or not in
-  //  measurments_, than an exception is thrown.
-  void set_live_time( const float lt, std::shared_ptr<const Measurement> measurment );
-  void set_real_time( const float rt, std::shared_ptr<const Measurement> measurment );
+  //set_live_time(...) and set_real_time(...) update both the measurement
+  //  you pass in, as well as *this.  If measurement is invalid, or not in
+  //  measurements_, than an exception is thrown.
+  void set_live_time( const float lt, std::shared_ptr<const Measurement> measurement );
+  void set_real_time( const float rt, std::shared_ptr<const Measurement> measurement );
 
   //set_start_time(...), set_remarks(...), set_spectra_type(...) allow
-  //  setting the relevant variables of the 'measurment' passed in.  The reason
-  //  you have to set these variables from MeasurmentInfo class, instead of
+  //  setting the relevant variables of the 'measurement' passed in.  The reason
+  //  you have to set these variables from MeasurementInfo class, instead of
   //  directly from the Measurement class is because you should only be dealing
   //  with const pointers to these object for both the sake of the modified_
   //  flag, but also to ensure some amount of thread safety.
   void set_start_time( const boost::posix_time::ptime &timestamp,
-                       const std::shared_ptr<const Measurement> measurment  );
+                       const std::shared_ptr<const Measurement> measurement  );
   void set_remarks( const std::vector<std::string> &remarks,
-                    const std::shared_ptr<const Measurement> measurment  );
+                    const std::shared_ptr<const Measurement> measurement  );
   void set_source_type( const SourceType type,
-                         const std::shared_ptr<const Measurement> measurment );
+                         const std::shared_ptr<const Measurement> measurement );
   void set_position( double longitude, double latitude,
                      boost::posix_time::ptime position_time,
-                     const std::shared_ptr<const Measurement> measurment );
+                     const std::shared_ptr<const Measurement> measurement );
   void set_title( const std::string &title,
-                  const std::shared_ptr<const Measurement> measurment );
+                  const std::shared_ptr<const Measurement> measurement );
   
-  //set_contained_neutrons(...): sets the specified measurment as either having
+  //set_contained_neutrons(...): sets the specified measurement as either having
   //  contained neutron counts, or not.  If specified to be false, then counts
   //  is ignored.  If true, then the neutron sum counts is set to be as
   //  specified.
   void set_contained_neutrons( const bool contained, const float counts,
-                               const std::shared_ptr<const Measurement> measurment );
+                               const std::shared_ptr<const Measurement> measurement );
 
   /** Sets the detectors analysis.
    
@@ -1249,7 +1249,7 @@ public:
   void change_detector_name( const std::string &original_name,
                              const std::string &new_name );
   
-  //add_measurment(...): adds the measurment to this MeasurmentInfo object and
+  //add_measurement(...): adds the measurement to this MeasurementInfo object and
   //  if 'doCleanup' is specified, then all sums will be recalculated, and
   //  binnings made consistent.  If you do not specify 'doCleanup' then
   //  things will be roughly updated, but the more thorough cleanup_after_load()
@@ -1261,24 +1261,24 @@ public:
   //  number available if that detector does not already have that one or else
   //  its assigned to be one larger sample number - this by no means captures
   //  all use cases, but good enough for now.
-  void add_measurment( std::shared_ptr<Measurement> meas, const bool doCleanup );
+  void add_measurement( std::shared_ptr<Measurement> meas, const bool doCleanup );
   
-  //remove_measurment(...): removes the measurment from this MeasurmentInfo
+  //remove_measurement(...): removes the measurement from this MeasurementInfo
   //  object and if 'doCleanup' is specified, then all sums will be
   //  recalculated.  If you do not specify 'doCleanup' then make sure to call
-  //  cleanup_after_load() once you are done adding/removing Measurments if a
+  //  cleanup_after_load() once you are done adding/removing Measurements if a
   //  rough fix up isnt good enough.
   //Will throw if 'meas' isnt currently in this SpecFile.
-  void remove_measurment( std::shared_ptr<const Measurement> meas, const bool doCleanup );
+  void remove_measurement( std::shared_ptr<const Measurement> meas, const bool doCleanup );
   
-  //remove_measurments(): similar to remove_measurment(...), but more efficient
-  //  for removing large numbers of measurments.  This function assumes
-  //  the internal state of this MeasurmentInfo object is consistent
-  //  (e.g. no measurments have been added or removed without 'cleaningup').
-  void remove_measurments( const std::vector<std::shared_ptr<const Measurement>> &meas );
+  //remove_measurements(): similar to remove_measurement(...), but more efficient
+  //  for removing large numbers of measurements.  This function assumes
+  //  the internal state of this MeasurementInfo object is consistent
+  //  (e.g. no measurements have been added or removed without 'cleaningup').
+  void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
   //combine_gamma_channels(): combines 'ncombine' gamma channels for every
-  //  Measurement that has exactly nchannels.  Returns number of Measurments
+  //  Measurement that has exactly nchannels.  Returns number of Measurements
   //  modified.
   //  Throws exception if( (nchannels % ncombine) != 0 )
   size_t combine_gamma_channels( const size_t ncombine, const size_t nchannels );
@@ -1290,10 +1290,10 @@ public:
                                const std::shared_ptr<const Measurement> &m );
   
   //truncate_gamma_channels(): removes all channels below 'keep_first_channel'
-  //  and above 'keep_last_channel', for every measurment that has 'nchannels'.
+  //  and above 'keep_last_channel', for every measurement that has 'nchannels'.
   //  If keep_under_over_flow is true, then removed channel counts will be added
   //  to the first/last channel of the remaing data.
-  //  Returns number of modified Measurments.
+  //  Returns number of modified Measurements.
   //Throws exception if keep_last_channel>=nchannels, or if
   //  keep_first_channel>=keep_last_channel.
   size_t truncate_gamma_channels( const size_t keep_first_channel,
@@ -1302,7 +1302,7 @@ public:
                                   const bool keep_under_over_flow );
   
   //truncate_gamma_channels(): removes all channels below 'keep_first_channel'
-  //  and above 'keep_last_channel', for specified measurment.
+  //  and above 'keep_last_channel', for specified measurement.
   //  If keep_under_over_flow is true, then removed channel counts will be added
   //  to the first/last channel of the remaing data.
   //Throws exception if invalid Measurement, or if
@@ -1335,13 +1335,13 @@ public:
   std::shared_ptr<const Measurement> measurement( const int sample_number,
                                            const int detector_number ) const;
 
-  //suggested_gamma_binning_index(...): returns the index of measurments_ to use
+  //suggested_gamma_binning_index(...): returns the index of measurements_ to use
   //  as the binning, when you are summing over the specified sample numbers and
   //  detectors.
-  //  This function chooses the Measurment with the largest number of gamma
+  //  This function chooses the Measurement with the largest number of gamma
   //  channels, if the Measurements have varying number of gamma channels.
   //'det_to_use' must be same size as, and coorespond 1:1 with detector_numbers_
-  //Throws exception if 'det_to_use' is wrong size, no measurments available, or
+  //Throws exception if 'det_to_use' is wrong size, no measurements available, or
   //  other errors.
   size_t suggested_gamma_binning_index( const std::set<int> &sample_numbers,
                                     const std::vector<bool> &det_to_use ) const;
@@ -1373,8 +1373,8 @@ public:
   std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
                                       const std::vector<std::string> &det_names ) const;
   
-  //sum_measurements(...): sums measurments similar to the other variants by
-  //  the same name, but uses the 'binTo' Measurment passed in as the bassis
+  //sum_measurements(...): sums measurements similar to the other variants by
+  //  the same name, but uses the 'binTo' Measurement passed in as the bassis
   //  for the energy calibration binning.
   //'det_to_use' must be same size as, and coorespond 1:1 with detector_numbers_
   //  or else an exception may be thrown.
@@ -1392,15 +1392,15 @@ public:
   
   //memmorysize(): should be reasonbly accurate, but could definetly be off by a
   //  little bit.  Tries to take into account the shared float vectors may be
-  //  shared between Measurment objects.
+  //  shared between Measurement objects.
   size_t memmorysize() const; //in bytes
 
-  //gamma_channel_counts(): loops over the Measurments and returns a set<size_t>
+  //gamma_channel_counts(): loops over the Measurements and returns a set<size_t>
   //  containing all the channel_energies_->size() results
   std::set<size_t> gamma_channel_counts() const;
 
-  //num_gamma_channels(): loops over the Measurments, and returns the size of
-  //  the first Measurment that reports non-zero channels.
+  //num_gamma_channels(): loops over the Measurements, and returns the size of
+  //  the first Measurement that reports non-zero channels.
   size_t num_gamma_channels() const;
 
   //keep_n_bin_spectra_only(..): return number of removed spectra
@@ -1424,16 +1424,16 @@ public:
   
   //keep_energy_cal_variant(): When #energy_cal_variants() returns multiple
   //  variants, you can use this function to remove all energy calibration
-  //  variants, besides the one you specify, from the measurment.  If a spectrum
+  //  variants, besides the one you specify, from the measurement.  If a spectrum
   //  is not part of a variant, it is kept.
   //Returns return number of removed spectra.
   //Throws exception if you pass in an invalid variant.
   size_t keep_energy_cal_variant( const std::string variant );
   
   
-  //rremove_neutron_measurments() only removes neutron measurments that do not
+  //rremove_neutron_measurements() only removes neutron measurements that do not
   //  have a gamma binning defined
-  size_t remove_neutron_measurments();
+  size_t remove_neutron_measurements();
 
   //background_sample_number() returns numeric_limits<int>::min() if no
   // background is found; behavior undefined for more than one background sample
@@ -1760,7 +1760,7 @@ public:
    level remarks will be written on seperate labeled lines.
    Then after two blank lines each spectrum in the current file
    will be written, seperated by two blank lines.
-   Each spectrum will contain all remarks, measurment start time
+   Each spectrum will contain all remarks, measurement start time
    (if valid), live and real times, sample number, detector name,
    detector type, GPS coordinates/time (if valid), serial number
    (if present), energy
@@ -1786,7 +1786,7 @@ public:
   //  stream.  If sample_nums and/or det_nums is empty, then all sample and/or
   //  detector numbers are assumed to be wanted.  Values in det_nums coorespond
   //  to values in detector_numbers_.
-  // This format preserves the gamma spectrum, measurment start time, spectrum
+  // This format preserves the gamma spectrum, measurement start time, spectrum
   //  title (up to 63 characters)," detector description, and energy
   //  calibration.
   //  Energy deviation pairs and neutron counts, as well as any other meta
@@ -1804,7 +1804,7 @@ public:
    If sample_nums and/or det_nums is empty, then all sample and/or detector
    numbers are assumed to be wanted.
    This format preserves the gamma spectrum, neutron counts, gps info, 
-   measurment start time, detector serial number, and energy calibration (if 
+   measurement start time, detector serial number, and energy calibration (if 
    polynomnial or FWHM).
    Energy deviation pairs, analysis results, and other meta information will be
    lost.
@@ -1820,7 +1820,7 @@ public:
       If sample_nums and/or det_nums is empty, then all sample and/or detector
       numbers are assumed to be wanted.
       This format preserves the gamma spectrum, neutron counts, gps info,
-      measurment start time, detector serial number, and energy calibration (if
+      measurement start time, detector serial number, and energy calibration (if
       polynomnial or FWHM).
       Energy deviation pairs, some analysis analysis results, and possibly some, 
       but not all, meta information will be lost.
@@ -1902,11 +1902,11 @@ public:
   
 protected:
   
-  //measurment(...): converts a const Measurement ptr to a non-const Measurement
+  //measurement(...): converts a const Measurement ptr to a non-const Measurement
   // ptr, as well as checking that the Measurement actually belong to this
   //  SpecFile object. Returns empty pointer on error.
   //  Does not obtain a thread lock.
-  std::shared_ptr<Measurement> measurment( std::shared_ptr<const Measurement> meas );
+  std::shared_ptr<Measurement> measurement( std::shared_ptr<const Measurement> meas );
   
   //find_detector_names(): looks through measurements_ to find all detector
   //  names.
@@ -1939,8 +1939,8 @@ protected:
    
     Currently assumed to only be called from #cleanup_after_load.
    
-    TODO: function should be parralized for measurments with many samples
-        - currently measurments with large numbers of measurments (>500)
+    TODO: function should be parralized for measurements with many samples
+        - currently measurements with large numbers of measurements (>500)
           dont ensure dense sample numbers as a computational workaround.
         - Function probably also use other work as well
    */
@@ -1972,18 +1972,18 @@ protected:
   void load_2012_N42_from_doc( const rapidxml::xml_node<char> *document_node );
 
   
-  //add_spectra_to_measurment_node_in_2012_N42_xml(...): Adds the given
-  //  spectra to the specified RadMeasurementNode.  All measurments should
+  //add_spectra_to_measurement_node_in_2012_N42_xml(...): Adds the given
+  //  spectra to the specified RadMeasurementNode.  All measurements should
   //  have the sample sample number, and the entries in calibid should
-  //  coorespond one to one to the entries in measurments.
+  //  coorespond one to one to the entries in measurements.
   //  If something drastically goes wrong, and an exception is thrown somewhere
   //  this function will not throw, it will print an error to stderror and not
   //  insert itself into the DOM; this is so this function is safe to call in
   //  its own thread with no error handling.  I expect this to never happen, so
   //  I'm not bothing with any better error handling.
-  static void add_spectra_to_measurment_node_in_2012_N42_xml(
+  static void add_spectra_to_measurement_node_in_2012_N42_xml(
           ::rapidxml::xml_node<char> *RadMeasurementNode,
-          const std::vector< std::shared_ptr<const Measurement> > measurments,
+          const std::vector< std::shared_ptr<const Measurement> > measurements,
           const std::vector<size_t> calibids,
           std::mutex &xmldocmutex );
   
@@ -1992,13 +1992,13 @@ protected:
   void set_2012_N42_instrument_info( const rapidxml::xml_node<char> *inst_info_node );
   static std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node );
   
-  //decode_2012_N42_rad_measurment_node: a function to help decode 2012 N42
-  //  RadMeasurment nodes in a mutlithreaded fashion. This helper function
+  //decode_2012_N42_rad_measurement_node: a function to help decode 2012 N42
+  //  RadMeasurement nodes in a mutlithreaded fashion. This helper function
   //  has to be a member function in order to access the member variables.
   //  I would preffer you didnt awknowledge the existence of this function.
   //  id_to_dettypeany_ptr and calibrations_ptr must be valid.
-  static void decode_2012_N42_rad_measurment_node(
-                                std::vector< std::shared_ptr<Measurement> > &measurments,
+  static void decode_2012_N42_rad_measurement_node(
+                                std::vector< std::shared_ptr<Measurement> > &measurements,
                                 const rapidxml::xml_node<char> *meas_node,
                                 const IdToDetectorType *id_to_dettypeany_ptr,
                                 DetectorToCalibInfo *calibrations_ptr,
@@ -2013,13 +2013,13 @@ protected:
   //Gets N42 2012 <RadDetectorKindCode> element value
   std::string determine_rad_detector_kind_code() const;
   
-  //setMeasurmentLocationInformation(...):  sets the measurment information
+  //setMeasurementLocationInformation(...):  sets the measurement information
   //  for a particular <Measurement> section of N42 data.  The parced data
-  //  sets both MeasurmentInfo member variables, as well as member variables
+  //  sets both MeasurementInfo member variables, as well as member variables
   //  (particularly gps) of the Measurnment's passed in (that should belong to
   //  the same <Measurement> section of the N42 file, since there may be
-  //  multiple spectrums per measurment).
-  void set_n42_2006_measurment_location_information(
+  //  multiple spectrums per measurement).
+  void set_n42_2006_measurement_location_information(
                     const rapidxml::xml_node<char> *measured_item_info_node,
                     std::vector<std::shared_ptr<Measurement>> measurements_applicable );
 
@@ -2067,18 +2067,18 @@ protected:
   
   //do_channel_data_xform(): utility function called by
   //  truncate_gamma_channels() and combine_gamma_channels().  For each
-  //  Measurment with 'nchannels', xform is called for it.  Returns
-  //  number of modified Measurments.  Will appropriately modify the
+  //  Measurement with 'nchannels', xform is called for it.  Returns
+  //  number of modified Measurements.  Will appropriately modify the
   //  kHasCommonBinning and kAllSpectraSameNumberChannels bits of
   //  properties_flags_, as well as set modified_ and modifiedSinceDecode_.
   size_t do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform );
   
   //Data members
-  float gamma_live_time_;      //sum over all measurments
-  float gamma_real_time_;      //sum over all measurments
-  double gamma_count_sum_;      //sum over all measurments
-  double neutron_counts_sum_;   //sum over all measurments
+  float gamma_live_time_;      //sum over all measurements
+  float gamma_real_time_;      //sum over all measurements
+  double gamma_count_sum_;      //sum over all measurements
+  double neutron_counts_sum_;   //sum over all measurements
   std::string                 filename_;
   std::vector<std::string>    detector_names_;          //Names may have "_intercal_..." appended to them to account for multiple binnings of the same data.
   std::vector<int>            detector_numbers_;        //in same order as detector_names_
@@ -2097,19 +2097,19 @@ protected:
   //  of the files what gets put here.
   //In the future all this info should be placed in a shared_ptr, and only
   //  pouplated if it actually exists in the file
-  //  Should also consider moving to the Measurment class
+  //  Should also consider moving to the Measurement class
   int lane_number_;
   std::string measurement_location_name_;
   std::string inspection_;
-  std::string measurment_operator_;
+  std::string measurement_operator_;
 
 
   //Start dealing with sample numbers
   std::set<int> sample_numbers_;
 
-  // map from sample_number to a vector with indices of measurments_ of all
+  // map from sample_number to a vector with indices of measurements_ of all
   //  Measurement with that sample_number
-  std::map<int, std::vector<size_t> > sample_to_measurments_;
+  std::map<int, std::vector<size_t> > sample_to_measurements_;
 
 
   DetectorType detector_type_;  //This is deduced from the file
@@ -2152,15 +2152,15 @@ protected:
 
   
   //properties_flags_: intenteded to indicate boolean things about the
-  //  measurment style, origin, properties, or other values.
+  //  measurement style, origin, properties, or other values.
   //  These flags are calculated and set in the cleanup_after_load() function.
   //  This value is also not included in the computation of the hash of this
   //  object in generate_psuedo_uuid().
-  enum MeasurmentPorperties
+  enum MeasurementPorperties
   {
     //kPassthroughOrSearchMode: gretaer than 5 samples, with average real time
     //  less than 2.5 seconds.  May be improved in the future to ensure
-    //  measurments are sequential.
+    //  measurements are sequential.
     kPassthroughOrSearchMode = (1 << 0),
     
     //kHasCommonBinning: ensures that all spectrums in measurements_ share the
@@ -2185,12 +2185,12 @@ protected:
     kNotSampleDetectorTimeSorted = (1 << 5),
     
     //kNotUniqueSampleDetectorNumbers: marked when the the combination of
-    //  sample and detector numbers does not uniquly identify a Measurment.
+    //  sample and detector numbers does not uniquly identify a Measurement.
     //  May be marked when cleanup_after_load() is called with the
-    //  DontChangeOrReorderSamples flag.  If not set, then each measurment for
+    //  DontChangeOrReorderSamples flag.  If not set, then each measurement for
     //  a sample number has a the same start time.
     kNotUniqueSampleDetectorNumbers = (1 << 6)
-  };//enum MeasurmentPorperties
+  };//enum MeasurementPorperties
   
   uint32_t properties_flags_;
   
