@@ -35,6 +35,21 @@
  */
 namespace  SpecUtils
 {
+  /** \brief Gets a line from the input stream that may be terminated with
+   either UNIX or Windows EOL characters.
+ 
+   See code for code source.
+   Note that this function is probably very slow, and could be upgraded.
+  */
+  std::istream &safe_get_line( std::istream &is, std::string &t );
+
+
+  /** Same as other variant of #safe_get_line, except allows specifying the
+   maximum number of bytes to read; specifying zero means no limit.
+   */
+  std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxlength );
+
+
   /** Expands the N42 counted zeros scheme, i.e., if an entry is zero, then the
    entry after that says how many zeroes that elememnt should be expanded to.
    
@@ -45,6 +60,7 @@ namespace  SpecUtils
   void expand_counted_zeros( const std::vector<float> &data,
                             std::vector<float> &results );
   
+
   /** Performs the counted zero compression.
    Note that contents less than 10.0f*FLT_MIN are assumed to be zeros.
    */
@@ -79,6 +95,7 @@ namespace  SpecUtils
   /** Checks if abs(longitude) is less than or equal to 180. */
   bool valid_longitude( const double longitude );
   
+
   /** Tries to extract sample number from remark in file - mostly from N42-2006
    files.
    */
@@ -95,6 +112,7 @@ namespace  SpecUtils
    */
   float speed_from_remark( std::string remark );
   
+
   /** Looks for GADRAS style detector names in remarks, or something from the
       N42 conventions of 'Aa1', 'Aa2', etc.  Returns empty string on failure.
    */
@@ -114,7 +132,6 @@ namespace  SpecUtils
    E.x., "PortalMonitor" -> "Portal Monitor", or
   "SpecPortal" -> "Spectroscopic Portal Monitor"
    */
-  
   const std::string &convert_n42_instrument_type_from_2006_to_2012(
                                                     const std::string &input );
   

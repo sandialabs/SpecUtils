@@ -25,8 +25,8 @@
 #include <stdlib.h>
 #include <iostream>
 
-#include "SpecUtils/SpectrumDataStructs.h"
-#include "SpecUtils/UtilityFunctions.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/Filesystem.h"
 
 using namespace std;
 
@@ -42,8 +42,8 @@ int main( int argc, char **argv )
     return EXIT_FAILURE;
   }
 
-  MeasurementInfo specfile;
-  if( !specfile.load_file( argv[1], kAutoParser ) )
+  SpecUtils::SpecFile specfile;
+  if( !specfile.load_file( argv[1], SpecUtils::ParserType::Auto ) )
   {
     cerr << "Sorry, could not parse '" << argv[1] << "' as a spectrum file." << endl;
     return EXIT_FAILURE;
@@ -58,14 +58,14 @@ int main( int argc, char **argv )
        << specfile.gamma_real_time() << " seconds, with live time "
        << specfile.gamma_live_time() << " seconds." << endl;
   
-  vector<shared_ptr<const Measurement>> records = specfile.measurements();
+  vector<shared_ptr<const SpecUtils::Measurement>> records = specfile.measurements();
   if( !records.empty() )
   {
     cout << "The first record has " << records[0]->num_gamma_channels() << " gamma channels." << endl;
   }
 
   //Save the output file.
-  if( UtilityFunctions::is_file(argv[2]) )
+  if( SpecUtils::is_file(argv[2]) )
   {
     cerr << "Output file '" << argv[2] << "' already exists - not overwriting!" << endl;
     return EXIT_FAILURE;
@@ -84,7 +84,7 @@ int main( int argc, char **argv )
     //We will write all time samples and detectors to output file.
     //  For more control see overloads of MeasurementInfo::write_to_file
     //  and MeasurementInfo::write
-    specfile.write_to_file( argv[2], k2012N42SpectrumFile );
+    specfile.write_to_file( argv[2], SpecUtils::SaveSpectrumAsType::N42_2012 );
   }catch( std::exception &e )
   {
     cerr << "Failed to write '" << argv[2] << "', error: " << e.what() << endl;

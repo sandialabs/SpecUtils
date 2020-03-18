@@ -63,7 +63,6 @@
 
 #if(PERFORM_DEVELOPER_CHECKS)
 #include <iostream>
-#include <boost/filesystem.hpp>
 #endif
 
 
@@ -73,6 +72,13 @@
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #endif
 
+//Currently CMakeLists.txt isnt setup to link against boost, so we'll rely on
+//  the unit-test to make sure the recursive_ls functions are okay
+#define CHECK_RECURSIVE_LS_AGAINST_BOOST 0
+
+#if( CHECK_RECURSIVE_LS_AGAINST_BOOST )
+#include <boost/filesystem.hpp>
+#endif
 
 using namespace std;
 
@@ -297,15 +303,21 @@ bool can_rw_in_directory( const std::string &name )
 {
   if( !is_directory(name) )
     return false;
-  
-#if ( defined(WIN32) || defined(UNDER_CE) || defined(_WIN32) || defined(WIN64) )
+
+#ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
-  const int can_access = _waccess( wname.c_str(), 06 );
+  
+  DWORD attributes = GetFileAttributesW( wname.c_str() );
+  return ( (attributes != 0xFFFFFFFF)
+           && (attributes & FILE_ATTRIBUTE_DIRECTORY)
+           && !(attributes & FILE_ATTRIBUTE_READONLY) );
+
+  //const int can_access = _waccess( wname.c_str(), 0x06 );
+  //return (can_access == 0);
 #else
   const int can_access = access( name.c_str(), R_OK | W_OK | X_OK );
-#endif
-  
   return (can_access == 0);
+#endif
 }//bool can_rw_in_directory( const std::string &name )
   
   
@@ -352,8 +364,15 @@ std::string append_path( const std::string &base, const std::string &name )
 std::string filename( const std::string &path_and_name )
 {
 #ifdef _WIN32
-  const wstring wpath = convert_from_utf8_to_utf16(path_and_name);
+  //const wstring wpath = convert_from_utf8_to_utf16(path_and_name);
   
+  //this function species filename("/path/to/some/")=="some", but the MS function
+  //  will give a empty filename (very reasonably!), so lets fix that.
+  string p = path_and_name;
+  while( !p.empty() && (p.back()=='/' || p.back()=='\\') )
+    p = p.substr(0,p.size()-1);
+  const wstring wpath = convert_from_utf8_to_utf16(p);
+
   wchar_t drive[_MAX_DRIVE+1];
   const size_t maxdirlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_DIR));
   const size_t maxfilenamelen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_FNAME));
@@ -372,11 +391,17 @@ std::string filename( const std::string &path_and_name )
   return convert_from_utf16_to_utf8( wstring(fname.get()) + ext );
 #else  // _WIN32
   // "/usr/lib" -> "lib"
-  // "/usr/"    -> "usr"
+  // "/usr/"    -> ""
   // "usr"      -> "usr"
-  // "/"        -> "/"
-  // "."        -> "."
-  // ".."       -> ".."
+  // "/"        -> ""
+  // "."        -> ""
+  // ".."       -> ""
+  if( path_and_name.empty() )
+    return path_and_name;
+  
+  if( path_and_name.back() == '/' )
+    return "";
+  
   vector<char> pathvec( path_and_name.size() + 1 );
   memcpy( &(pathvec[0]), path_and_name.c_str(), path_and_name.size() + 1 );
   
@@ -386,16 +411,50 @@ std::string filename( const std::string &path_and_name )
   if( !bname ) //shouldnt ever happen!
     throw runtime_error( "Error with basename in filename()" );
   
-  return bname;
+  string answer = bname;
+  if( answer == ".." || answer == "." )
+    return "";
+  
+  return answer;
 #endif
 }//std::string filename( const std::string &path_and_name )
   
   
 std::string parent_path( const std::string &path )
 {
-#ifdef _WIN32
-  std::wstring wpath = convert_from_utf8_to_utf16( path );
   
+#ifdef _WIN32  
+  string p = path;
+  int numdotdot = 0;
+  while( p.size() > 3 )
+  {
+    const size_t len = p.length();
+    if( p.back() == '/' || p.back() == '\\' )
+    {
+      p = p.substr(0,len-1);
+      continue;
+    }
+    
+    if( (p[len-3]=='/' || p[len-3]=='\\') && p[len-2]=='.' && p[len-1]=='.' )
+    {
+      ++numdotdot;
+      p = p.substr(0,len-3);
+      continue;
+    }
+    
+    if( numdotdot > 0 )
+    {
+      p = p.substr(0, p.find_last_of( "/\\" ) );
+      --numdotdot;
+      continue;
+    }
+    
+    break;
+  }//while( normalized.size() > 3 )
+  
+  
+  std::wstring wpath = convert_from_utf8_to_utf16( p );
+
   wchar_t drive[_MAX_DRIVE+1];
   const size_t maxdirlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_DIR)) + 1;
   const size_t maxfilenamelen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_FNAME)) + 1;
@@ -411,21 +470,50 @@ std::string parent_path( const std::string &path )
   if( err != 0 )
     throw runtime_error( "Failed to get parent-path" );
   
+  //wcout << L"0) '" << wpath << L"' -> drive='" << drive << L"', dir='" << dir.get()
+  //      << L"', fname='" << fname.get() << L"', ext='" << ext << L"'" << endl;
+  
+  //"C:"  -> ""
+  if( wcslen(dir.get())==0 && wcslen(fname.get())==0 && wcslen(ext)==0 )
+    return "";
+  
+  //Remove trailing '\' from Dir
+  //  "C:\\"  -> "C:"
+  //  ".\\somefile" -> "." (but right now  dir='.\\')
+  //  "\\\\" -> "" (but right now dir='\\\\')
+  size_t dirlen = wcslen(dir.get());
+  while( dirlen && ((dir[dirlen-1] == L'\\') || (dir[dirlen-1] == L'/')) )
+    dir[--dirlen] = L'\0';
+  
+  //wcout << L"1) '" << wpath << L"' -> drive='" << drive << L"', dir='" << dir.get()
+  //      << L"', fname='" << fname.get() << L"', ext='" << ext << L"'" << endl;
+  
+  
   const size_t maxpathlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_PATH));
   std::unique_ptr<wchar_t []> path_buffer( new wchar_t [maxpathlen+1] );
   
   err = _wmakepath_s( path_buffer.get(), maxpathlen, drive, dir.get(), nullptr, nullptr );
   
   if( err != 0 )
-    throw runtime_error( "Failed to makepathin parent_path" );
+    throw runtime_error( "Failed to make pathin parent_path" );
   
-  return convert_from_utf16_to_utf8( path_buffer.get() );
+  string answer = convert_from_utf16_to_utf8( path_buffer.get() );
+  
+  if( answer.size() && dirlen && (answer.back()=='\\' || answer.back()=='/') && dir[dirlen-1]!=L'/' && dir[dirlen-1]!=L'\\' )
+    answer.resize( answer.size() - 1 );
+  
+  // We need to remove the trailing '\' character.
+  /// @TODO is the below always valid
+  if( answer.size()>3 && answer[answer.size()-1] == '\\' )
+    answer = answer.substr(0,answer.size()-1);
+  
+  return answer;
 #else
   //dirname from libgen.h
   //"/usr/lib" -> "/usr"
   //"/usr/" -> "/"
-  //"usr" -> "."
-  //"." -> "."
+  //"usr" -> ""
+  //"." -> ""
   vector<char> pathvec( path.size() + 1 );
   memcpy( &(pathvec[0]), path.c_str(), path.size() + 1 );
   
@@ -455,8 +543,19 @@ std::string parent_path( const std::string &path )
   //  it returns
   char *parname = dirname( &(pathvec[0]) );
   
+  string answer = parname;
   
-  return parname;
+  if( answer == path )
+    answer.clear();
+  
+  if( answer=="." && !path.empty() && path[0]!='.' )
+    answer.clear();
+  
+  if( answer=="." && path.size()>1 && path[0]=='.' && path[1]=='.' )
+    answer.clear();
+  
+  
+  return answer;
 #endif
 }//std::string parent_path( const std::string &path )
   
@@ -659,7 +758,7 @@ bool filter_ending( const std::string &path, void *user_match_data )
 }
 
   
-#if( defined(_WIN32) || PERFORM_DEVELOPER_CHECKS )
+#ifdef _WIN32
 //Could replace recursive_ls_internal() with the following to help get rid of linking to boost
 //https://stackoverflow.com/questions/2314542/listing-directory-contents-using-c-and-windows
 
@@ -678,15 +777,17 @@ vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
   WIN32_FIND_DATAW fdFile;
   HANDLE hFind = NULL;
   
-  const wstring wpath = convert_from_utf8_to_utf16(sourcedir);
+  wstring wpath = convert_from_utf8_to_utf16(sourcedir);
+  if( wpath.size() && wpath.back()!=L'/' && wpath.back()!=L'\\' )
+    wpath += L"\\";
   
-  //Specify a file mask. *.* = We want everything!
-  std::wcout << L"recursive_ls_internal_windows(\"" << wpath << L"\")" << std::endl;
+  //std::wcout << L"recursive_ls_internal_windows(\"" << wpath << L"\")" << std::endl;
   
   //FindFirstFileExW
-  if((hFind = FindFirstFileW(wpath.c_str(), &fdFile)) == INVALID_HANDLE_VALUE)
+  //Specify a file mask. *.* = We want everything!
+  if((hFind = FindFirstFileW( (wpath + L"*").c_str(), &fdFile)) == INVALID_HANDLE_VALUE)
   {
-    std::wcout << L"recursive_ls_internal_windows(\"" << wpath << L"\"): Path not found." << std::endl;
+    //std::wcout << L"recursive_ls_internal_windows(\"" << wpath << L"\"): Path not found." << std::endl;
     return files;
   }
   
@@ -700,16 +801,17 @@ vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
     if( (fdFile.cFileName == wstring(L".")) || (fdFile.cFileName == wstring(L"..")) )
       continue;
     
+    //std::wcout << L"On filename: '" << fdFile.cFileName << L"'" << std::endl;
     
     //Build up our file path using the passed in
     //  [sDir] and the file/foldername we just found:
-    wstring newpath = wpath + ((wpath.size() && wpath[wpath.size()-1] != L'\\') ? L"\\" : L"") + fdFile.cFileName;
+    wstring newpath = wpath + ((wpath.size() && wpath.back() != L'\\') ? L"\\" : L"") + fdFile.cFileName;
     //sprintf(sPath, "%s\\%s", sDir, fdFile.cFileName);
     
     //Is the entity a File or Folder?
     if( fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-      std::wcout << L"recursive_ls_internal_windows(...) Directory: '" << newpath << L"'" << std::endl;
+      //std::wcout << L"recursive_ls_internal_windows(...) Directory: '" << newpath << L"'" << std::endl;
       string newdirname = SpecUtils::convert_from_utf16_to_utf8(newpath);
       
       const auto r = recursive_ls_internal_windows( newdirname,
@@ -718,7 +820,7 @@ vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
       files.insert( files.end(), r.begin(), r.end() );
     }else
     {
-      std::wcout << L"recursive_ls_internal_windows(...) File: '" << newpath << L"'" << std::endl;
+      //std::wcout << L"recursive_ls_internal_windows(...) File: '" << newpath << L"'" << std::endl;
       string newfilename = SpecUtils::convert_from_utf16_to_utf8(newpath);
       if( !match_fcn || match_fcn(newfilename,user_match_data) )
         files.push_back( newfilename );
@@ -729,10 +831,10 @@ vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
   
   return files;
 }
-#endif
+#endif  //#ifdef _WIN32
 
  
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && CHECK_RECURSIVE_LS_AGAINST_BOOST )
 vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
                                                   file_match_function_t match_fcn,
                                                   void *user_match_data,
@@ -824,7 +926,7 @@ vector<std::string> recursive_ls_internal_boost( const std::string &sourcedir,
   
   return files;
 }//recursive_ls(...)
-#endif //PERFORM_DEVELOPER_CHECKS
+#endif //PERFORM_DEVELOPER_CHECKS && CHECK_RECURSIVE_LS_AGAINST_BOOST
 
   
   
@@ -971,7 +1073,7 @@ vector<std::string> recursive_ls_internal_unix( const std::string &sourcedir,
   closedir( dir ); //Should we bother checking/handling errors
   
   
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && CHECK_RECURSIVE_LS_AGAINST_BOOST )
   auto from_boost = recursive_ls_internal_boost( sourcedir, match_fcn, user_match_data, depth, files.size() + numfiles );
   if( from_boost != files )  //It looks like things are always oredered the same
   {
@@ -1039,7 +1141,6 @@ std::vector<std::string> recursive_ls( const std::string &sourcedir,
   return recursive_ls_internal_windows( sourcedir, match_fcn, match_data, 0, 0 );
 #else
   return recursive_ls_internal_unix( sourcedir, match_fcn, match_data, 0, 0 );
-  //return recursive_ls_internal_boost( sourcedir, match_fcn, match_data, 0, 0 );
 #endif
 }//recursive_ls
   
@@ -1147,15 +1248,18 @@ vector<string> ls_directories_in_directory( const std::string &src )
   WIN32_FIND_DATAW fdFile;
   HANDLE hFind = NULL;
   
-  const wstring wpath = convert_from_utf8_to_utf16(src);
+  wstring wpath = convert_from_utf8_to_utf16(src);
+  if( wpath.size() && wpath.back()!=L'/' && wpath.back()!=L'\\' )
+    wpath += L"\\";
   
   //Specify a file mask. *.* = We want everything!
-  std::wcout << L"ls_directories_in_directory(\"" << wpath << L"\")" << std::endl;
+  //std::wcout << L"ls_directories_in_directory(\"" << wpath << L"\")" << std::endl;
+  
   
   //FindFirstFileExW
-  if((hFind = FindFirstFileW(wpath.c_str(), &fdFile)) == INVALID_HANDLE_VALUE)
+  if((hFind = FindFirstFileW((wpath + L"*").c_str(), &fdFile)) == INVALID_HANDLE_VALUE)
   {
-    std::wcout << L"ls_directories_in_directory(\"" << wpath << L"\"): Path not found." << std::endl;
+    //std::wcout << L"ls_directories_in_directory(\"" << wpath << L"\"): Path not found." << std::endl;
     return answer;
   }
   
@@ -1169,7 +1273,7 @@ vector<string> ls_directories_in_directory( const std::string &src )
     //Is the entity a File or Folder?
     if( fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
-      std::wcout << L"ls_directories_in_directory(...) Directory: '" << newpath << L"'" << std::endl;
+      //std::wcout << L"ls_directories_in_directory(...) Directory: '" << newpath << L"'" << std::endl;
       string newdirname = SpecUtils::convert_from_utf16_to_utf8(newpath);
       answer.push_back( newdirname );
     }
@@ -1313,7 +1417,7 @@ std::string fs_relative( std::string from_path, std::string to_path )
     from_components[0] = "\\\\" + from_components[0];
   
   if( to_path.size() > 1 && !to_components.empty() && to_path[0]=='\\' && to_path[1]=='\\' )
-    to_components[0] = "\\\\" + to_path[0];
+    to_components[0] = "\\\\" + to_components[0];
 #endif
   
   
@@ -1337,11 +1441,6 @@ std::string fs_relative( std::string from_path, std::string to_path )
   
   
   return answer;
-//#ifdef _WIN32
-//  return convert_from_utf16_to_utf8( make_relative( from_path, to_path ).string<std::wstring>() );
-//#else
-//  return make_relative( from_path, to_path ).string<std::string>();
-//#endif
 }//std::string fs_relative( const std::string &target, const std::string &base )
   
   
@@ -1372,77 +1471,7 @@ void load_file_data( const char * const filename, std::vector<char> &data )
 }//void load_file_data( const std::string &filename, std::vector<char> &data )
   
   
-std::istream& safe_get_line(std::istream& is, std::string& t)
-{
-  return safe_get_line( is, t, 0 );
-}
-  
-  
-std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxlength )
-{
-  //from  http://stackoverflow.com/questions/6089231/getting-std-ifstream-to-handle-lf-cr-and-crlf
-  //  adapted by wcjohns
-  t.clear();
-  
-  // The characters in the stream are read one-by-one using a std::streambuf.
-  // That is faster than reading them one-by-one using the std::istream.
-  // Code that uses streambuf this way must be guarded by a sentry object.
-  // The sentry object performs various tasks,
-  // such as thread synchronization and updating the stream state.
-  std::istream::sentry se( is, true );
-  std::streambuf *sb = is.rdbuf();
-  
-  for( ; !maxlength || (t.length() < maxlength); )
-  {
-    int c = sb->sbumpc(); //advances pointer to current location by one
-    switch( c )
-    {
-      case '\r':
-        c = sb->sgetc();  //does not advance pointer to current location
-        if( c == '\n' )
-          sb->sbumpc();   //advances pointer to one current location by one
-        return is;
-        
-      case '\n':
-        return is;
-        
-      case EOF:
-        is.setstate( ios::eofbit );
-        return is;
-        
-      default:
-        t += (char)c;
-        
-        if( maxlength && (t.length() == maxlength) )
-        {
-          c = sb->sgetc();    //does not advance pointers current location
-          
-          if( c == EOF )
-          {
-            sb->sbumpc();
-            is.setstate( ios::eofbit );
-          }else
-          {
-            if( c == '\r' )
-            {
-              sb->sbumpc();     //advances pointers current location by one
-              c = sb->sgetc();  //does not advance pointer to current location
-            }
-            
-            if( c == '\n')
-            {
-              sb->sbumpc();     //advances pointer to one current location by one
-              c = sb->sgetc();  //does not advance pointer to current location
-            }
-          }
-          
-          return is;
-        }
-    }//switch( c )
-  }//for(;;)
-  
-  return is;
-}//safe_get_line(...)
+
   
   
 bool likely_not_spec_file( const std::string &fullpath )
@@ -1484,6 +1513,6 @@ bool likely_not_spec_file( const std::string &fullpath )
     return true;
   
   return false;
-}//bool likely_not_spec_file( const boost::filesystem::path &file )
+}//bool likely_not_spec_file( const std::string &file )
 
 }//namespace  SpecUtils

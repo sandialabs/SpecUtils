@@ -133,21 +133,6 @@ namespace
     return (nconvert == 1);
   }
   
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
-  
-  bool xml_value_to_flt( const rapidxml::xml_base<char> *node, float &val )
-  {
-    val = 0.0f;
-    if( !node )
-      return false;
-    return SpecUtils::parse_float( node->value(), node->value_size(), val );
-  }
-
   
   /** Adds the vector of 'input' float vectors, to results.
       The result will be resized to larges input float vector size.
@@ -241,7 +226,7 @@ void log_developer_error( const char *location, const char *error )
   
   boost::posix_time::ptime time = boost::posix_time::second_clock::local_time();
   
-  const string timestr = boost::posix_time::to_iso_extended_string( time );
+  const string timestr = SpecUtils::to_iso_string(time);
 //  const string timestr = SpecUtils::to_iso_string( time );
   
   s_dev_error_log << timestr << ": " << location << endl << error << "\n\n" << endl;
@@ -362,9 +347,9 @@ const boost::posix_time::ptime &Measurement::position_time() const
   return position_time_;
 }
 
-const std::string &SpecFile::measurment_operator() const
+const std::string &SpecFile::measurement_operator() const
 {
-  return measurment_operator_;
+  return measurement_operator_;
 }
 
 const std::set<int> &SpecFile::sample_numbers() const
@@ -525,7 +510,7 @@ void SpecFile::set_instrument_id( const std::string &n )
 
 
 
-//implementation of inline Measurment functions
+//implementation of inline Measurement functions
 float Measurement::live_time() const
 {
   return live_time_;
@@ -660,27 +645,51 @@ void Measurement::set_source_type( const SourceType type )
   source_type_ = type;
 }
   
+void Measurement::set_sample_number( const int samplenum )
+{
+  sample_number_ = samplenum;
+}
+  
+
+void Measurement::set_occupancy_status( const OccupancyStatus status )
+{
+  occupied_ = status;
+}
+
+
+void Measurement::set_detector_name( const std::string &name )
+{
+  detector_name_ = name;
+}
+
+
+void Measurement::set_detector_number( const int detnum )
+{
+  detector_number_ = detnum;
+}
+
   
 void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                      const float livetime, const float realtime )
 {
-  if( !counts )
-  {
-    if( !gamma_counts_ )
-      return;
-    gamma_counts_.reset( new std::vector<float>( gamma_counts_->size(), 0.0f ) );
-    return;
-  }//if( !counts )
-  
-  const size_t size = counts->size();
-  gamma_counts_ = counts;
   live_time_ = livetime;
   real_time_ = realtime;
   gamma_count_sum_ = 0.0;
   
-  const std::vector<float> &rhs = *counts;
-  for( size_t i = 0; i < size; ++i )
-    gamma_count_sum_ += rhs[i];
+  if( !counts )
+  {
+    /// @TODO: Why is the behavior when a nullptr is passed in not consistent? Should fix once its determined why this was done.
+    
+    if( !gamma_counts_ )
+      return;
+    gamma_counts_ = std::make_shared<std::vector<float>>( gamma_counts_->size(), 0.0f );
+    return;
+  }//if( !counts )
+  
+  gamma_counts_ = counts;
+  
+  for( const float val : *counts )
+    gamma_count_sum_ += val;
 }
   
   
@@ -1725,7 +1734,7 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
       }
       
       continue;
-    }//if( not a gamma measurment )
+    }//if( not a gamma measurement )
     
     xform( m );
     
@@ -1735,7 +1744,7 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
     
     if(!calibs[info].empty())
     {
-      cerr << "Making it so measurment shared channel_energies_ with " << calibs[info][0].get() << endl;
+      cerr << "Making it so measurement shared channel_energies_ with " << calibs[info][0].get() << endl;
       m->channel_energies_ = calibs[info][0]->channel_energies_;
     }
     
@@ -1808,9 +1817,9 @@ void SpecFile::combine_gamma_channels( const size_t ncombine,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> m = measurment( meas );
+  std::shared_ptr<Measurement> m = measurement( meas );
   if( !m )
-    throw runtime_error( "SpecFile::combine_gamma_channels(): measurment"
+    throw runtime_error( "SpecFile::combine_gamma_channels(): measurement"
                          " passed in is not owned by this SpecFile." );
   
   m->combine_gamma_channels( ncombine );
@@ -2011,9 +2020,9 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   
-  std::shared_ptr<Measurement> m = measurment( meas );
+  std::shared_ptr<Measurement> m = measurement( meas );
   if( !m )
-    throw runtime_error( "SpecFile::truncate_gamma_channels(): measurment"
+    throw runtime_error( "SpecFile::truncate_gamma_channels(): measurement"
                         " passed in is not owned by this SpecFile." );
   
   m->truncate_gamma_channels( keep_first_channel, keep_last_channel,
@@ -2032,7 +2041,7 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
 
 
 
-std::shared_ptr<Measurement> SpecFile::measurment( std::shared_ptr<const Measurement> meas )
+std::shared_ptr<Measurement> SpecFile::measurement( std::shared_ptr<const Measurement> meas )
 {
   for( const auto &m : measurements_ )
   {
@@ -2041,19 +2050,19 @@ std::shared_ptr<Measurement> SpecFile::measurment( std::shared_ptr<const Measure
   }//for( const auto &m : measurements_ )
   
   return std::shared_ptr<Measurement>();
-}//measurment(...)
+}//measurement(...)
 
-//set_live_time(...) and set_real_time(...) update both the measurment
-//  you pass in, as well as *this.  If measurment is invalid, or not in
-//  measurments_, than an exception is thrown.
+//set_live_time(...) and set_real_time(...) update both the measurement
+//  you pass in, as well as *this.  If measurement is invalid, or not in
+//  measurements_, than an exception is thrown.
 void SpecFile::set_live_time( const float lt,
                                      std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_live_time(...): measurment"
+    throw runtime_error( "SpecFile::set_live_time(...): measurement"
                          " passed in didnt belong to this SpecFile" );
 
   const float oldLifeTime = meas->live_time();
@@ -2066,9 +2075,9 @@ void SpecFile::set_real_time( const float rt, std::shared_ptr<const Measurement>
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_real_time(...): measurment"
+    throw runtime_error( "SpecFile::set_real_time(...): measurement"
                          " passed in didnt belong to this SpecFile" );
 
   const float oldRealTime = ptr->live_time();
@@ -2078,7 +2087,7 @@ void SpecFile::set_real_time( const float rt, std::shared_ptr<const Measurement>
 }//set_real_time(...)
 
 
-void SpecFile::add_measurment( std::shared_ptr<Measurement> meas,
+void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
                                       const bool doCleanup )
 {
   if( !meas )
@@ -2092,11 +2101,11 @@ void SpecFile::add_measurment( std::shared_ptr<Measurement> meas,
                           meas, &Measurement::compare_by_sample_det_time );
  
   if( (meas_pos!=measurements_.end()) && ((*meas_pos)==meas) )
-    throw runtime_error( "SpecFile::add_measurment: duplicate meas" );
+    throw runtime_error( "SpecFile::add_measurement: duplicate meas" );
   
   //Making sure detector names/numbers are kept track of here instead of in
   //  cleanup_after_load() makes sure to preserve sample and detector numbers
-  //  of the Measurments already in this SpecFile object
+  //  of the Measurements already in this SpecFile object
   const string &detname = meas->detector_name_;
   vector<std::string>::const_iterator namepos
          = std::find( detector_names_.begin(), detector_names_.end(), detname );
@@ -2163,19 +2172,19 @@ void SpecFile::add_measurment( std::shared_ptr<Measurement> meas,
     gamma_live_time_    += meas->live_time_;
     gamma_real_time_    += meas->real_time_;
     
-    sample_to_measurments_.clear();
+    sample_to_measurements_.clear();
     for( size_t measn = 0; measn < measurements_.size(); ++measn )
     {
       std::shared_ptr<Measurement> &meas = measurements_[measn];
-      sample_to_measurments_[meas->sample_number_].push_back( measn );
+      sample_to_measurements_[meas->sample_number_].push_back( measn );
     }
   }//if( doCleanup ) / else
   
   modified_ = modifiedSinceDecode_ = true;
-}//void add_measurment( std::shared_ptr<Measurement> meas, bool doCleanup )
+}//void add_measurement( std::shared_ptr<Measurement> meas, bool doCleanup )
 
 
-void SpecFile::remove_measurments(
+void SpecFile::remove_measurements(
                                          const vector<std::shared_ptr<const Measurement>> &meas )
 {
   if( meas.empty() )
@@ -2185,8 +2194,8 @@ void SpecFile::remove_measurments(
   
   const size_t norigmeas = measurements_.size();
   if( meas.size() > norigmeas )
-    throw runtime_error( "SpecFile::remove_measurments:"
-                        " to many input measurments to remove" );
+    throw runtime_error( "SpecFile::remove_measurements:"
+                        " to many input measurements to remove" );
   
   //This below implementation is targeted for SpecFile's with lots of
   //  measurements_, and empiracally is much faster than commented out
@@ -2198,9 +2207,9 @@ void SpecFile::remove_measurments(
     const std::shared_ptr<const Measurement> &m = meas[i];
     
     map<int, std::vector<size_t> >::const_iterator iter
-    = sample_to_measurments_.find( m->sample_number_ );
+    = sample_to_measurements_.find( m->sample_number_ );
     
-    if( iter != sample_to_measurments_.end() )
+    if( iter != sample_to_measurements_.end() )
     {
       const vector<size_t> &indexs = iter->second;
       size_t i;
@@ -2214,8 +2223,8 @@ void SpecFile::remove_measurments(
       }//for( size_t i = 0; i < indexs.size(); ++i )
       
       if( i == indexs.size() )
-        throw runtime_error( "SpecFile::remove_measurments: invalid meas" );
-    }//if( iter != sample_to_measurments_.end() )
+        throw runtime_error( "SpecFile::remove_measurements: invalid meas" );
+    }//if( iter != sample_to_measurements_.end() )
   }//for( size_t i = 0; i < meas.size(); ++i )
   
   vector< std::shared_ptr<Measurement> > surviving;
@@ -2243,7 +2252,7 @@ void SpecFile::remove_measurments(
    }
    
    if( pos == measurements_.end() || ((*pos)!=m) )
-   throw runtime_error( "SpecFile::remove_measurments: invalid meas" );
+   throw runtime_error( "SpecFile::remove_measurements: invalid meas" );
    
    measurements_.erase( pos );
    }
@@ -2251,10 +2260,10 @@ void SpecFile::remove_measurments(
   
   cleanup_after_load();
   modified_ = modifiedSinceDecode_ = true;
-}//void remove_measurments( const vector<std::shared_ptr<const Measurement>> meas )
+}//void remove_measurements( const vector<std::shared_ptr<const Measurement>> meas )
 
 
-void SpecFile::remove_measurment( std::shared_ptr<const Measurement> meas,
+void SpecFile::remove_measurement( std::shared_ptr<const Measurement> meas,
                                          const bool doCleanup )
 {
   if( !meas )
@@ -2266,7 +2275,7 @@ void SpecFile::remove_measurment( std::shared_ptr<const Measurement> meas,
                 = std::find( measurements_.begin(), measurements_.end(), meas );
   
   if( pos == measurements_.end() )
-    throw runtime_error( "SpecFile::remove_measurment: invalid meas" );
+    throw runtime_error( "SpecFile::remove_measurement: invalid meas" );
   
   measurements_.erase( pos );
   
@@ -2284,7 +2293,7 @@ void SpecFile::remove_measurment( std::shared_ptr<const Measurement> meas,
     gamma_real_time_    -= meas->real_time_;
     
     sample_numbers_.clear();
-    sample_to_measurments_.clear();
+    sample_to_measurements_.clear();
     
     //should update detector names and numbers too
     set<string> detectornames;
@@ -2294,7 +2303,7 @@ void SpecFile::remove_measurment( std::shared_ptr<const Measurement> meas,
     {
       const int samplenum = measurements_[measn]->sample_number_;
       sample_numbers_.insert( samplenum );
-      sample_to_measurments_[samplenum].push_back( measn );
+      sample_to_measurements_[samplenum].push_back( measn );
       detectornames.insert( measurements_[measn]->detector_name_ );
     }
     
@@ -2313,16 +2322,16 @@ void SpecFile::remove_measurment( std::shared_ptr<const Measurement> meas,
   }//if( doCleanup ) / else
   
   modified_ = modifiedSinceDecode_ = true;
-}//void remove_measurment( std::shared_ptr<Measurement> meas, bool doCleanup );
+}//void remove_measurement( std::shared_ptr<Measurement> meas, bool doCleanup );
 
 
 void SpecFile::set_start_time( const boost::posix_time::ptime &timestamp,
                     const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_start_time(...): measurment"
+    throw runtime_error( "SpecFile::set_start_time(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
   ptr->set_start_time( timestamp );
@@ -2333,9 +2342,9 @@ void SpecFile::set_remarks( const std::vector<std::string> &remarks,
                  const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_remarks(...): measurment"
+    throw runtime_error( "SpecFile::set_remarks(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
   ptr->set_remarks( remarks );
@@ -2346,9 +2355,9 @@ void SpecFile::set_source_type( const SourceType type,
                                     const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_source_type(...): measurment"
+    throw runtime_error( "SpecFile::set_source_type(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
   ptr->set_source_type( type );
@@ -2361,9 +2370,9 @@ void SpecFile::set_position( double longitude, double latitude,
                                     const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_position(...): measurment"
+    throw runtime_error( "SpecFile::set_position(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
   ptr->longitude_ = longitude;
@@ -2401,9 +2410,9 @@ void SpecFile::set_title( const std::string &title,
                                  const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
-    throw runtime_error( "SpecFile::set_title(...): measurment"
+    throw runtime_error( "SpecFile::set_title(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
   ptr->set_title( title );
@@ -2417,10 +2426,10 @@ void SpecFile::set_contained_neutrons( const bool contained,
                                              const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurment( meas );
+  std::shared_ptr<Measurement> ptr = measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_containtained_neutrons(...): "
-                        "measurment passed in didnt belong to this "
+                        "measurement passed in didnt belong to this "
                         "SpecFile" );
   
   ptr->contained_neutron_ = contained;
@@ -2555,15 +2564,15 @@ std::shared_ptr<const Measurement> SpecFile::measurement( const int sample_numbe
   if( properties_flags_ & kNotSampleDetectorTimeSorted )
   {
     std::map<int, std::vector<size_t> >::const_iterator pos;
-    pos = sample_to_measurments_.find( sample_number );
+    pos = sample_to_measurements_.find( sample_number );
     
-    if( pos != sample_to_measurments_.end() )
+    if( pos != sample_to_measurements_.end() )
     {
       const vector<size_t> &indices = pos->second;
       for( const size_t ind : indices )
         if( measurements_[ind]->detector_number_ == detector_number )
           return measurements_[ind];
-    }//if( pos != sample_to_measurments_.end() )
+    }//if( pos != sample_to_measurements_.end() )
     
     return std::shared_ptr<const Measurement>();
   }//if( properties_flags_ & kNotSampleDetectorTimeSorted )
@@ -2612,14 +2621,14 @@ vector<std::shared_ptr<const Measurement>> SpecFile::sample_measurements( const 
   vector< std::shared_ptr<const Measurement> > answer;
 
   std::map<int, std::vector<size_t> >::const_iterator pos;
-  pos = sample_to_measurments_.find( sample );
+  pos = sample_to_measurements_.find( sample );
 
-  if( pos != sample_to_measurments_.end() )
+  if( pos != sample_to_measurements_.end() )
   {
     const vector<size_t> &indices = pos->second;
     for( const size_t ind : indices )
       answer.push_back( measurements_.at(ind) );
-  }//if( pos != sample_to_measurments_.end() )
+  }//if( pos != sample_to_measurements_.end() )
 
   return answer;
 
@@ -3622,7 +3631,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   }
   
   if( lhs.measurement_location_name_ != rhs.measurement_location_name_ )
-    throw runtime_error( "SpecFile: Measurment location name of LHS ('"
+    throw runtime_error( "SpecFile: Measurement location name of LHS ('"
                          + lhs.measurement_location_name_
                          + "') doesnt match RHS ('"
                          + rhs.measurement_location_name_ + "')" );
@@ -3631,8 +3640,8 @@ void SpecFile::equalEnough( const SpecFile &lhs,
     throw runtime_error( "SpecFile: Inspection of LHS ('" + lhs.inspection_
                         + "') doesnt match RHS ('" + rhs.inspection_ + "')" );
 
-  string leftoperator = lhs.measurment_operator_;
-  string rightoperator = rhs.measurment_operator_;
+  string leftoperator = lhs.measurement_operator_;
+  string rightoperator = rhs.measurement_operator_;
   ireplace_all( leftoperator, "\t", " " );
   ireplace_all( leftoperator, "  ", " " );
   trim( leftoperator );
@@ -3641,9 +3650,9 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   trim( rightoperator );
   
   if( leftoperator != rightoperator )
-    throw runtime_error( "SpecFile: Measurment operator of LHS ('"
-                         + lhs.measurment_operator_ + "') doesnt match RHS ('"
-                         + rhs.measurment_operator_ + ")" );
+    throw runtime_error( "SpecFile: Measurement operator of LHS ('"
+                         + lhs.measurement_operator_ + "') doesnt match RHS ('"
+                         + rhs.measurement_operator_ + ")" );
 
   if( lhs.sample_numbers_.size() != rhs.sample_numbers_.size() )
   {
@@ -3743,7 +3752,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   if( lhs.properties_flags_ != rhs.properties_flags_ )
   {
     string failingBits;
-    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurmentPorperties p, const string label ) {
+    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurementPorperties p, const string label ) {
       if( (lhs.properties_flags_ & p) != (rhs.properties_flags_ & p) ) {
         failingBits += failingBits.empty() ? "": ", ";
         failingBits += (lhs.properties_flags_ & p) ? "LHS" : "RHS";
@@ -3776,7 +3785,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
       
       if( (!lhsptr) != (!rhsptr) )
       {
-        snprintf( buffer, sizeof(buffer), "SpecFile: Measurment avaialblity for LHS (%s)"
+        snprintf( buffer, sizeof(buffer), "SpecFile: Measurement avaialblity for LHS (%s)"
                  " doesnt match RHS (%s) for sample %i and detector name %s",
               (!lhsptr?"missing":"available"), (!rhsptr?"missing":"available"),
               sample, detname.c_str() );
@@ -4052,9 +4061,9 @@ const SpecFile &SpecFile::operator=( const SpecFile &rhs )
   lane_number_             = rhs.lane_number_;
   measurement_location_name_ = rhs.measurement_location_name_;
   inspection_             = rhs.inspection_;
-  measurment_operator_    = rhs.measurment_operator_;
+  measurement_operator_    = rhs.measurement_operator_;
   sample_numbers_         = rhs.sample_numbers_;
-  sample_to_measurments_  = rhs.sample_to_measurments_;
+  sample_to_measurements_  = rhs.sample_to_measurements_;
   detector_type_          = rhs.detector_type_;
   instrument_type_        = rhs.instrument_type_;
   manufacturer_           = rhs.manufacturer_;
@@ -4478,7 +4487,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
   //  For a certain large file in debug mode, took from 9.058687s to 0.232338s
   //  (in release mode this was from 1.808691s to 0.053467s)
   //  Right now this faster method is only enabled for really large files with
-  //  more than 500 measurments - this is because the faster method does not
+  //  more than 500 measurements - this is because the faster method does not
   //  preserve existing sample numbers
 
   if( measurements_.size() > 500 )
@@ -4568,7 +4577,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
       
       const int detnum = m->detector_number_;
       
-      //If the time is invalid, we'll put this measurment after all the others.
+      //If the time is invalid, we'll put this measurement after all the others.
       //If its an IntrinsicActivity, we'll put it before any of the others.
       if( m->source_type() == SourceType::IntrinsicActivity )
         time_meas_map[boost::posix_time::neg_infin][detnum].push_back( m );
@@ -4584,14 +4593,14 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       SampleToMeasMap &measmap = t.second;
       
-      //Make an attempt to sort the measurments in a reproducable, unique way
-      //  because measurments wont be in the same order due to the decoding
+      //Make an attempt to sort the measurements in a reproducable, unique way
+      //  because measurements wont be in the same order due to the decoding
       //  being multithreaded for some of the parsers.
 //20150609: I think the multithreaded parsing has been fixed to yeild a
 //  deterministic ordering always.  This only really matters for spectra where
 //  the same start time is given for all records, or no start time at all is
 //  given.  I think in these cases we want to assume the order that the
-//  measurments were taken is the same as the order in the file.
+//  measurements were taken is the same as the order in the file.
 
       
       size_t nsamples = 0;
@@ -4621,7 +4630,7 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   //First we will check that the comnination of sample numbers and detector
-  //  numbers is unique, and also that all measurments with the same sample
+  //  numbers is unique, and also that all measurements with the same sample
   //  number have the same time stamp.  If we pass both of thers conditions,
   //  then we'll return since there is no need re-assign sample numbers.
   std::map<int, vector<int> > sampleNumsToSamples;
@@ -5014,14 +5023,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     bool all_same_num_bins = true;
     
     
-    //In order to figure out if a measurment is passthrough, we'll use these
+    //In order to figure out if a measurement is passthrough, we'll use these
     //  two variables.
     int pt_num_items = 0;
     float pt_averageRealTime = 0;
     
     //ensure_unique_sample_numbers(); has already been called a
     sample_numbers_.clear();
-    sample_to_measurments_.clear();
+    sample_to_measurements_.clear();
     
     typedef std::pair<boost::posix_time::ptime,float> StartAndRealTime;
     typedef map<int, StartAndRealTime > SampleToTimeInfoMap;
@@ -5034,7 +5043,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     {
       std::shared_ptr<Measurement> &meas = measurements_[measn];
       sample_numbers_.insert( meas->sample_number_ );
-      sample_to_measurments_[meas->sample_number_].push_back( measn );
+      sample_to_measurements_[meas->sample_number_].push_back( measn );
       
       if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
         continue;
@@ -5146,7 +5155,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     is_passthrough = is_passthrough && ( (pt_num_items>5) && pt_num_items > static_cast<size_t>(0.75*ngamma_meas) );
     //is_passthrough = true;
     
-    //Go through and verify the measurments are mostly sequential (one
+    //Go through and verify the measurements are mostly sequential (one
     //  measurement right after the next), for at least the occupied/item/unknown
     //  portions of the file.  The background portion, as well as the transition
     //  between background/foreground/etc is a little harder to deal with since
@@ -5989,6 +5998,8 @@ void SpecFile::recalc_total_counts()
 
 std::string SpecFile::generate_psuedo_uuid() const
 {
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
   std::size_t seed = 0;
   
   
@@ -6027,7 +6038,7 @@ std::string SpecFile::generate_psuedo_uuid() const
   boost::hash_combine( seed, measurements_.size() );
 //  boost::hash_combine( seed, detectors_analysis_ );
   boost::hash_combine( seed, int(detector_type_) );
-  boost::hash_combine( seed, measurment_operator_ );
+  boost::hash_combine( seed, measurement_operator_ );
   
   for( const std::shared_ptr<const Measurement> meas : measurements_ )
   {
@@ -6410,7 +6421,7 @@ void SpecFile::recalibrate_by_eqn( const std::vector<float> &eqn,
     properties_flags_ |= kHasCommonBinning;
   }else
   {
-    //check to see if the binning of all the measurments_ happens to be same
+    //check to see if the binning of all the measurements_ happens to be same
     bool allsame = true;
     for( size_t i = 0; allsame && i < rebinned.size(); ++i )
       allsame = ((rebinned[i]->energy_calibration_model_ == type)
@@ -6449,9 +6460,9 @@ size_t SpecFile::memmorysize() const
   size += inspection_.capacity()*sizeof(string::value_type);
   size += sample_numbers_.size()*sizeof(int);
 
-  size += sample_to_measurments_.size() * sizeof(vector<size_t>);
+  size += sample_to_measurements_.size() * sizeof(vector<size_t>);
   typedef std::map<int, std::vector<size_t> > InIndVecMap;
-  for( const InIndVecMap::value_type &t : sample_to_measurments_ )
+  for( const InIndVecMap::value_type &t : sample_to_measurements_ )
     size += t.second.capacity() * sizeof(size_t);
 
   size += instrument_type_.capacity()*sizeof(string::value_type);
@@ -6537,8 +6548,8 @@ size_t SpecFile::suggested_gamma_binning_index(
           char buffer[512];
           snprintf( buffer, sizeof(buffer),
                     "Found instance of differening number of gamma channels,"
-                    " when I shouldnt have; measurment %i had %i channels,"
-                    " while measurment %i had %i channels.",
+                    " when I shouldnt have; measurement %i had %i channels,"
+                    " while measurement %i had %i channels.",
                    static_cast<int>(index),
                    static_cast<int>(binning_ptr->size()),
                    static_cast<int>(i),
@@ -6555,7 +6566,7 @@ size_t SpecFile::suggested_gamma_binning_index(
   
   if( !binning_ptr )
     throw runtime_error( "SpecFile::suggested_gamma_binning_index():"
-                         " no valid measurments." );
+                         " no valid measurements." );
   
   return index;
 }//suggested_gamma_binning_index(...)
@@ -7050,7 +7061,7 @@ bool SpecFile::contained_neutron() const
 }//
 
 
-size_t SpecFile::remove_neutron_measurments()
+size_t SpecFile::remove_neutron_measurements()
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -7076,7 +7087,7 @@ size_t SpecFile::remove_neutron_measurments()
     modified_ = modifiedSinceDecode_ = true;
   
   return nremoved;
-}//size_t remove_neutron_measurments();
+}//size_t remove_neutron_measurements();
 
 
 set<string> SpecFile::energy_cal_variants() const
@@ -7107,7 +7118,7 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   
   if( !origvaraints.count(variant) )
     throw runtime_error( "SpecFile::keep_energy_cal_variant():"
-                         " measurment did not contain an energy variant named '"
+                         " measurement did not contain an energy variant named '"
                          + variant + "'" );
   
   if( origvaraints.size() == 1 )
@@ -7175,9 +7186,9 @@ void SpecFile::reset()
   lane_number_ = -1;
   measurement_location_name_.clear();
   inspection_.clear();
-  measurment_operator_.clear();
+  measurement_operator_.clear();
   sample_numbers_.clear();
-  sample_to_measurments_.clear();
+  sample_to_measurements_.clear();
   detector_type_ = DetectorType::Unknown;
   instrument_type_.clear();
   manufacturer_.clear();
@@ -7376,8 +7387,8 @@ void SpecFile::write( std::ostream &strm,
       }
     }//for( oldm : info.measurements() )
     
-    info.remove_measurments( toremove );
-  }//if( we dont want all the measurments )
+    info.remove_measurements( toremove );
+  }//if( we dont want all the measurements )
   
   if( info.measurements_.empty() )
     throw runtime_error( "No Measurements to write out" );

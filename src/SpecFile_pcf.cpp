@@ -585,7 +585,7 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
 #endif
     
     if( !nchannel_file )
-      throw runtime_error( "No measurments to write to PCF." );
+      throw runtime_error( "No measurements to write to PCF." );
     
     //We want to put the detector name in the "Title" of the PCF, but only if
     //  there is more than one detector.
@@ -1465,7 +1465,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
     
     
     if( measurements_.empty() )
-      throw runtime_error( "Didnt read in any Measurments" );
+      throw runtime_error( "Didnt read in any Measurements" );
     
     
     if( !allSamplesHaveNumbers )

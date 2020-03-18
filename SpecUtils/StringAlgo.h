@@ -256,19 +256,19 @@ namespace  SpecUtils
                        const bool cambio_zero_compress_fix );
   
   
-  /** \brief Parses a string of ascii floats seperated by a fixed set of
-   delimters into a std::vector<float>.
+  /** \brief Parses a string of ascii floats separated by a fixed set of
+   delimiters into a std::vector<float>.
    
    This implementation is approximately 20% faster than
    the other variant of this function, and does not require a null terminated
    input string, but the delimiters used are fixed, and this version does not
    consider the cambio zero compress issue.
    
-   \param input Input ascii string of floats seperated by spaces, tabs, returns,
+   \param input Input ascii string of floats separated by spaces, tabs, returns,
    newlines or commas.  Does not have to be a null terminated string.
    \param length Length of input string to be parsed.
    \returns True of the entire specified length of the input could be
-   interpreted as delimeter seperated floats.
+   interpreted as delimiter separated floats.
    
    Note: the leading numbers before the decimal point must have a value less
    than 4294967296 (2^32) or else parsing will fail; values larger than this
@@ -276,6 +276,10 @@ namespace  SpecUtils
    such as 5.0E9.  The other implementation of this function is not effected
    by this potential issue (not this has not been seen to happen on channel
    counts of gamma data by wcjohns).
+   
+   \TODO: Investigate performance of using:
+     - https://github.com/lemire/fast_double_parser
+     - https://github.com/abseil/abseil-cpp/blob/master/absl/strings/charconv.h
    */
   bool split_to_floats( const char *input, const size_t length,
                        std::vector<float> &results );

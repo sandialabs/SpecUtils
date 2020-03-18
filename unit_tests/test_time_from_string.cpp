@@ -43,6 +43,7 @@
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
+#include "SpecUtils/ParseUtils.h"
 
 
 using namespace std;
@@ -53,8 +54,295 @@ using namespace boost::gregorian;
 
 //time_from_string_strptime (doesn't work on Windows)
 //time_from_string_boost ?
+
+
+void compare_from_str( const string test, const string truth )
+{
+  const ptime testptime = SpecUtils::time_from_string( test.c_str() );
+  const ptime truthptime = SpecUtils::time_from_string( truth.c_str() );
+      
+  const string test_fmt_str = SpecUtils::to_common_string(testptime,true);
+  const string truth_fmt_str = SpecUtils::to_common_string(truthptime,true);
+  
+  BOOST_REQUIRE_MESSAGE( !truthptime.is_special(), "Truth datetime ('" << truth << "') is invalid" );
+  
+  BOOST_CHECK_MESSAGE( test_fmt_str==truth_fmt_str,
+                       "Date formatted '" << test << "' gave datetime '" << test_fmt_str
+                      << "' while we expected '" << truth_fmt_str << "' from ('" << truth << "')" );
+}//void compare_from_str( const string test, const string truth )
+
+
+void minimalTestFormats()
+{
+  // datetimes.txt contains an extensive collection of formats and variants, but
+  //  since it isnt distributed in the repo, here is a minimal collection of formats
+  //compare_from_str( "15-May-14 08:30:44 pm",  "20140515T203044" );
+  //compare_from_str( "15-May-14 08:30:44 Pm",  "20140515T203044" );
+  //cerr << "Only ran a couple tests for MinGW" << endl;
+  //return;
+  
+  compare_from_str( "15-May-14 08:30:44 PM",  "20140515T203044" );
+  compare_from_str( "2010-01-15T23:21:15Z",   "20100115T232115" );
+  compare_from_str( "2010-01-15 23:21:15",    "20100115T232115" );
+  compare_from_str( "1-Oct-2004 12:34:42 AM", "20041001T003442" );
+  compare_from_str( "1/18/2008 2:54:44 PM",   "20080118T145444" );
+  compare_from_str( "08/05/2014 14:51:09",    "20140805T145109" );
+  compare_from_str( "14-10-2014 16:15:52",    "20141014T161552" );
+  compare_from_str( "14 10 2014 16:15:52",    "20141014T161552" );
+  compare_from_str( "16-MAR-06 13:31:02",     "20060316T133102" );
+  compare_from_str( "12-SEP-12 11:23:30",     "20120912T112330" );
+  compare_from_str( "31-Aug-2005 12:38:04",   "20050831T123804" );
+  compare_from_str( "9-Sep-2014T20:29:21 Z",  "20140909T202921" );
+  compare_from_str( "10-21-2015 17:20:04",    "20151021T172004" );
+  compare_from_str( "21-10-2015 17:20:04",    "20151021T172004" );
+  compare_from_str( "26.05.2010 02:53:49",    "20100526T025349" );
+  compare_from_str( "04.05.2010 02:53:49",    "20100504T025349" );
+  compare_from_str( "May. 21 2013  07:06:42", "20130521T070642" );
+  compare_from_str( "28.02.13 13:42:47",      "20130228T134247" );
+  compare_from_str( "28.02.2013 13:42:47",    "20130228T134247" );
+  compare_from_str( "3.14.06 10:19:36",       "20060314T101936" );
+  compare_from_str( "28.02.13 13:42:47",      "20130228T134247" );
+  compare_from_str( "3.14.2006 10:19:36",     "20060314T101936" );
+  compare_from_str( "28.02.2013 13:42:47",    "20130228T134247" );
+  compare_from_str( "2012.07.28 16:48:02",    "20120728T164802" );
+  compare_from_str( "01.Nov.2010 21:43:35",   "20101101T214335" );
+  compare_from_str( "20100115 23:21:15",      "20100115T232115" );
+  compare_from_str( "2017-Jul-07 09:16:37",   "20170707T091637" );
+  compare_from_str( "20100115T232115",        "20100115T232115" );
+  compare_from_str( "11/18/2018 10:04 AM",    "20181118T100400" );
+  compare_from_str( "11/18/2018 10:04 PM",    "20181118T220400" );
+  compare_from_str( "11/18/2018 22:04",       "20181118T220400" );
+  compare_from_str( "2020/02/12 14:57:39",    "20200212T145739" );
+  compare_from_str( "2018-10-09T19-34-31_27", "20181009T193431" );//not sure what the "_27" exactly means)
+  compare_from_str( "31-Aug-2005 6:38:04 PM", "20050831T183804" );
+  compare_from_str( "31 Aug 2005 6:38:04 pm", "20050831T183804" );
+  compare_from_str( "31-Aug-2005 6:38:04 AM", "20050831T063804" );
+  compare_from_str( "31 Aug 2005 6:38:04 AM", "20050831T063804" );
+  compare_from_str( "01-Jan-2000",            "20000101T000000" );
+  compare_from_str( "2010/01/18",             "20100118T000000" );
+  compare_from_str( "2010-01-18",             "20100118T000000" );
+  compare_from_str( "2015-05-16T05:50:06.7199222-04:00", "20150516T055006.7199222" );
+  //"Fri, 16 May 2015 05:50:06 GMT"
+  compare_from_str( "1997-07-16T19:20:30+01:00", "19970716T192030" );
+  compare_from_str( "2070-07-16T19:20:30+01:00", "20700716T192030" );
+  //Some examples from https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings
+  compare_from_str( "6/15/2009 1:45 PM",  "20090615T134500" );
+  compare_from_str( "15/06/2009 13:45",  "20090615T134500" );
+  compare_from_str( "2009/6/15 13:45",  "20090615T134500" );
+  //compare_from_str( "Monday, June 15, 2009 1:45:30 PM",  "2009-06-15T13:45:30" )
+  //compare_from_str( "Monday, June 15, 2009 1:45 PM",  "2009-06-15T13:45:30" )
+  //compare_from_str( "Monday, June 15, 2009",  "2009-06-15T13:45:30" )
+  compare_from_str( "6/15/2009",  "20090615T000000" );
+  compare_from_str( "15/06/2009",  "20090615T000000" );
+  compare_from_str( "2009/06/15",  "20090615T000000" );
+  compare_from_str( "2009-06-15T13:45:30.0000000-07:00",  "20090615T134530" );
+  compare_from_str( "2009-06-15T13:45:30.123-07:00",  "20090615T134530.123" );
+  compare_from_str( "2009-06-15T13:45:30.0000000Z",  "20090615T134530" );
+  compare_from_str( "2009-06-15T13:45:30.0000000",  "20090615T134530" );
+  //2009-06-15T13:45:30-07:00 --> 2009-06-15T13:45:30.0000000-07:00",  "2009-06-15T13:45:30" )
+  //2009-06-15T13:45:30 -> Mon, 15 Jun 2009 20:45:30 GMT",  "2009-06-15T13:45:30" )  //RFC1123
+  compare_from_str( "2009-06-15T13:45:30",  "20090615T134530" );  //Sortable date/time pattern.
+  compare_from_str( "2009-06-15T13:45:30",  "20090615T134530" );
+  compare_from_str( "06/10/11 15:24:16 +00:00",  "20110610T15:24:16" );
+  compare_from_str( "6/15/09 13:12:30", "20090615T131230" );
+  compare_from_str( "6/15/09 13:12", "20090615T131200" );
+  compare_from_str( "6/15/09 11:12:30 PM", "20090615T231230" );
+  //Following formats from https://help.talend.com/reader/3zI67zZ9kaoTVCjNoXuEyw/YHc8JcQYJ7mWCehcQRTEIw
+  //ISO 8601 patterns
+  compare_from_str( "1999-03-22T05:06:07.000", "19990322T050607" );
+  //1999-03-22 AD
+  compare_from_str( "1999-03-22+01:00", "19990322T000000" );
+  compare_from_str( "19990322", "19990322T000000" );
+  compare_from_str( "1999-03-22T05:06:07.000", "19990322T050607" );
+  compare_from_str( "1999-03-22T05:06:07.000", "19990322T050607" );
+  compare_from_str( "1999-03-22T05:06:07", "19990322T050607" );
+  compare_from_str( "1999-03-22T05:06:07.000Z", "19990322T050607" );
+  compare_from_str( "1999-03-22T05:06:07.000+01:00", "19990322T050607" );
+  compare_from_str( "1999-03-22T05:06:07+01:00", "19990322T050607" );
+  //"1999-081+01:00
+  compare_from_str( "1999-03-22T05:06:07.000+01:00", "19990322T050607" );
+  compare_from_str( "1999-03-22T05:06:07+01:00", "19990322T050607" );
+  //Locale en_CA: English, Canada
+  compare_from_str( "22/03/99 5:06 AM", "19990322T050600" );
+  compare_from_str( "22/03/99 5:06 PM", "19990322T170600" );
+  //Monday, March 22, 1999 5:06:07 o'clock AM CET
+  compare_from_str( "22-Mar-1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "22-Mar-1999 5:06:07 PM", "19990322T170607" );
+  //Locale en_GB: English, United Kingdom
+  //Monday, 22 March 1999
+  compare_from_str( "22 March 1999 05:06:07 CET", "19990322T050607" );
+  //Monday, 22 March 1999 05:06:07 o'clock CET
+  compare_from_str( "22-Mar-1999 05:06:07", "19990322T050607" );
+  compare_from_str( "22-Mar-99 05.06.07.000000888 AM", "19990322T050607.000000888" );
+  compare_from_str( "22-Mar-99 05.06.07.000000888 PM", "19990322T170607.000000888" );
+  //Locale en_US : English, United States
+  compare_from_str( "March 22, 1999", "19990322T000000" );
+  //Monday, March 22, 1999
+  compare_from_str( "1999/3/22", "19990322T000000" );
+  compare_from_str( "3/22/1999", "19990322T000000" );
+  compare_from_str( "03/22/1999", "19990322T000000" );
+  //22/3/1999
+  //1999-03-22+01:00
+  compare_from_str( "22/03/1999", "19990322T000000" );
+  compare_from_str( "03-22-99 5:06 AM", "19990322T050600" );
+  compare_from_str( "03-22-99 5:06 PM", "19990322T170600" );
+  compare_from_str( "03/22/99 5:06 AM", "19990322T050600" );
+  compare_from_str( "03/22/99 5:06 PM", "19990322T170600" );
+  compare_from_str( "3/22/99 5:06 AM", "19990322T050600" );
+  compare_from_str( "3/22/99 5:06 PM", "19990322T170600" );
+  compare_from_str( "3-22-99 5:06 AM", "19990322T050600" );
+  compare_from_str( "3-22-99 5:06 PM", "19990322T170600" );
+  compare_from_str( "Mar 22, 1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "Mar 22, 1999 5:06:07 PM", "19990322T170607" );
+  //Monday, March 22, 1999 5:06:07 AM CET
+  //Mon Mar 22 05:06:07 CET 1999
+  compare_from_str( "22 Mar 1999 05:06:07 +0100", "19990322T050607" );
+  compare_from_str( "03-22-1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "03-22-1999 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "3-22-1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "3-22-1999 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "1999-03-22 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "1999-03-22 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "1999-3-22 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "1999-3-22 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "1999-03-22 05:06:07.0", "19990322T050607" );
+  compare_from_str( "22/03/1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "22/03/1999 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "22/3/1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "22/3/1999 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "03/22/1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "03/22/1999 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "3/22/1999 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "3/22/1999 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "03/22/99 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "03/22/99 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "03/22/99 5:06:07", "19990322T050607" );
+  compare_from_str( "3/22/99 5:06:07", "19990322T050607" );
+  compare_from_str( "22/03/1999 5:06 AM", "19990322T050600" );
+  compare_from_str( "22/03/1999 5:06 PM", "19990322T170600" );
+  compare_from_str( "22/3/1999 5:06 AM", "19990322T050600" );
+  compare_from_str( "22/3/1999 5:06 PM", "19990322T170600" );
+  compare_from_str( "03/22/1999 5:06 AM", "19990322T050600" );
+  compare_from_str( "03/22/1999 5:06 PM", "19990322T170600" );
+  compare_from_str( "3/22/1999 5:06 AM", "19990322T050600" );
+  compare_from_str( "3/22/1999 5:06 PM", "19990322T170600" );
+  
+  compare_from_str( "03-22-99 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "03-22-99 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "3-22-99 5:06:07 AM", "19990322T050607" );
+  compare_from_str( "3-22-99 5:06:07 PM", "19990322T170607" );
+  compare_from_str( "03-22-1999 5:06 AM", "19990322T050600" );
+  compare_from_str( "03-22-1999 5:06 PM", "19990322T170600" );
+  compare_from_str( "3-22-1999 5:06 AM", "19990322T050600" );
+  compare_from_str( "3-22-1999 5:06 PM", "19990322T170600" );
+  compare_from_str( "1999-03-22 5:06 AM", "19990322T050600" );
+  compare_from_str( "1999-03-22 5:06 PM", "19990322T170600" );
+  compare_from_str( "1999-3-22 5:06 AM", "19990322T050600" );
+  compare_from_str( "1999-3-22 5:06 PM", "19990322T170600" );
+  compare_from_str( "Mar.22.1999", "19990322T000000" );
+  compare_from_str( "22/Mar/1999 5:06:07 +0100", "19990322T050607" );
+  compare_from_str( "22/Mar/99 5:06 AM", "19990322T050600" );
+  compare_from_str( "22/Mar/99 5:06 PM", "19990322T170600" );
+  //Locale es: Spanish
+  compare_from_str( "22.3.99 5:06", "19990322T050600" );
+  compare_from_str( "22/03/99 5:06", "19990322T050600" );
+  compare_from_str( "22/03/99", "19990322T000000" );
+  compare_from_str( "22.03.1999 5:06:07", "19990322T050607" );
+  compare_from_str( "22.03.99 5:06", "19990322T050600" );
+  //Locale fr_FR: French, France
+  //22/03/99
+  //22 mars 1999
+  compare_from_str( "22/03/99 05:06", "19990322T050600" );
+  compare_from_str( "03/22/99 05:06", "19990322T050600" );
+  compare_from_str( "3/22/99 05:06", "19990322T050600" );
+  compare_from_str( "03-22-99 05:06", "19990322T050600" );
+  compare_from_str( "3-22-99 05:06", "19990322T050600" );
+  compare_from_str( "03-22-1999 05:06:07", "19990322T050607" );
+  compare_from_str( "3-22-1999 05:06:07", "19990322T050607" );
+  compare_from_str( "1999-3-22 05:06:07", "19990322T050607" );
+  compare_from_str( "22/03/1999 05:06:07", "19990322T050607" );
+  compare_from_str( "22/3/1999 05:06:07", "19990322T050607" );
+  compare_from_str( "03/22/1999 05:06:07", "19990322T050607" );
+  compare_from_str( "3/22/1999 05:06:07", "19990322T050607" );
+  compare_from_str( "22/03/99 05:06:07", "19990322T050607" );
+  compare_from_str( "03/22/99 05:06:07", "19990322T050607" );
+  compare_from_str( "3/22/99 05:06:07", "19990322T050607" );
+  compare_from_str( "22/03/1999 05:06", "19990322T050600" );
+  compare_from_str( "22/3/1999 05:06", "19990322T050600" );
+  compare_from_str( "03/22/1999 05:06", "19990322T050600" );
+  compare_from_str( "3/22/1999 05:06", "19990322T050600" );
+  compare_from_str( "03-22-99 05:06:07", "19990322T050607" );
+  compare_from_str( "3-22-99 05:06:07", "19990322T050607" );
+  compare_from_str( "03-22-1999 05:06", "19990322T050600" );
+  compare_from_str( "3-22-1999 05:06", "19990322T050600" );
+  compare_from_str( "1999-3-22 05:06", "19990322T050600" );
+  //Locale it_IT: Italian, Italy
+  compare_from_str( "22-mar-1999", "19990322T000000" );
+  compare_from_str( "22/03/99 5.06", "19990322T050600" );
+  compare_from_str( "99-03-22 05:06", "19990322T050600" );
+  compare_from_str( "22-mar-1999 5.06.07", "19990322T050607" );
+  //Locale iw: Hebrew
+  //05:06 22/03/99
+  //05:06:07 22/03/1999
+  //Locale ja_JP: Japanese, Japan
+  //99/03/22
+  //1999/03/22
+  //99/03/22 5:06
+  //03/22/99 5:06
+  //3/22/99 5:06
+  //03-22-99 5:06
+  //3-22-99 5:06 AM
+  //03-22-1999 5:06:07
+  //3-22-1999 5:06:07
+  //1999-03-22 5:06:07
+  //99/03/22 5:06:07
+  //3/22/99 5:06:07 AM
+  //1999/03/22 5:06
+  //22/03/1999 5:06
+  //22/3/1999 5:06
+  //03/22/1999 5:06
+  //3/22/1999 5:06
+  //03-22-99 5:06:07
+  //3-22-99 5:06:07
+  //03-22-1999 5:06
+  //3-22-1999 5:06
+  //1999-03-22 5:06
+  //1999-3-22 5:06
+  //
+  //http://www.partow.net/programming/datetime/index.html
+  //20060314 13:27:54
+  //2006/03/14 13:27:54
+  //14/03/2006 13:27:54
+  //2006-03-14 13:27:54.123  //YYYY-MM-DD HH:MM:SS.mss
+  //14-03-2006 13:27:54.123  //DD-MM-YYYY HH:MM:SS.mss
+  //2006-03-14 13:27:54
+  //14-03-2006 13:27:54
+  //2006-03-14T13:27:54
+  //2006-03-14T13:27:54.123
+  //20060314T13:27:54
+  //20060314T13:27:54.123
+  //14-03-2006T13:27:54.123
+  //14-03-2006T13:27:54
+  //20060314T1327
+  //20060314T132754
+  //20060314T132754123
+  //2006-03-04T13:27:54+03:45
+  //2006-03-04T13:27:54-01:28
+  //2006-03-04T13:27+03:45
+  //2006-03-04T13:27-01:28
+  //04/Mar/2006:13:27:54 -0537
+  //17/Sep/2006:18:12:45 +1142
+  //Sat, 04 Mar 2006 13:27:54 GMT
+  //Sat, 04 Mar 2006 13:27:54 -0234
+
+}//void minimalTestFormats()
+
+
 BOOST_AUTO_TEST_CASE(timeFromString) 
 {
+  minimalTestFormats();
+  return;
+  
   string indir, input_filename = "";
 
   const int argc = framework::master_test_suite().argc;

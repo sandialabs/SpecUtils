@@ -45,6 +45,78 @@ namespace
 
 namespace SpecUtils
 {
+std::istream& safe_get_line(std::istream& is, std::string& t)
+{
+  return safe_get_line( is, t, 0 );
+}
+  
+  
+std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxlength )
+{
+  //from  http://stackoverflow.com/questions/6089231/getting-std-ifstream-to-handle-lf-cr-and-crlf
+  //  adapted by wcjohns
+  t.clear();
+  
+  // The characters in the stream are read one-by-one using a std::streambuf.
+  // That is faster than reading them one-by-one using the std::istream.
+  // Code that uses streambuf this way must be guarded by a sentry object.
+  // The sentry object performs various tasks,
+  // such as thread synchronization and updating the stream state.
+  std::istream::sentry se( is, true );
+  std::streambuf *sb = is.rdbuf();
+  
+  for( ; !maxlength || (t.length() < maxlength); )
+  {
+    int c = sb->sbumpc(); //advances pointer to current location by one
+    switch( c )
+    {
+      case '\r':
+        c = sb->sgetc();  //does not advance pointer to current location
+        if( c == '\n' )
+          sb->sbumpc();   //advances pointer to one current location by one
+        return is;
+        
+      case '\n':
+        return is;
+        
+      case EOF:
+        is.setstate( ios::eofbit );
+        return is;
+        
+      default:
+        t += (char)c;
+        
+        if( maxlength && (t.length() == maxlength) )
+        {
+          c = sb->sgetc();    //does not advance pointers current location
+          
+          if( c == EOF )
+          {
+            sb->sbumpc();
+            is.setstate( ios::eofbit );
+          }else
+          {
+            if( c == '\r' )
+            {
+              sb->sbumpc();     //advances pointers current location by one
+              c = sb->sgetc();  //does not advance pointer to current location
+            }
+            
+            if( c == '\n')
+            {
+              sb->sbumpc();     //advances pointer to one current location by one
+              c = sb->sgetc();  //does not advance pointer to current location
+            }
+          }
+          
+          return is;
+        }
+    }//switch( c )
+  }//for(;;)
+  
+  return is;
+}//safe_get_line(...)
+
 void expand_counted_zeros( const vector<float> &data, vector<float> &return_answer )
 {
   vector<float> answer;
