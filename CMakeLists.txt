@@ -201,7 +201,7 @@ set( SpecUtils_LIB_TYPE STATIC )
 
 if( SpecUtils_PYTHON_BINDINGS )
   set( SpecUtils_LIB_TYPE SHARED )
-  list( APPEND sources bindings/python/SpectrumDataStructs_py.cpp )
+  list( APPEND sources bindings/python/SpecFile_py.cpp )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_JAVA_SWIG )
@@ -211,6 +211,10 @@ endif( SpecUtils_JAVA_SWIG )
 
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
+
+#For CMake 3.8+, could specify C++11 using the following so it will be propagated to down-line targets...
+#target_compile_features(SpecUtils PUBLIC cxx_std_11)
+#set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
 set_target_properties( SpecUtils PROPERTIES
   CXX_STANDARD 11
