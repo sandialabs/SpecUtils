@@ -187,6 +187,8 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   const string tmpdir = SpecUtils::temp_dir();
   BOOST_REQUIRE( !tmpdir.empty() );
   BOOST_REQUIRE( SpecUtils::is_directory(tmpdir) );
+  BOOST_CHECK( !SpecUtils::is_file(tmpdir) );
+  
   
   const string testname1 = SpecUtils::temp_file_name( "myuniquename", SpecUtils::temp_dir() );
   BOOST_CHECK( SpecUtils::contains( testname1, "myuniquename") );
@@ -209,6 +211,7 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   
   BOOST_REQUIRE( SpecUtils::create_directory(testname2) == 1 );
   BOOST_CHECK( SpecUtils::is_directory(testname2) );
+  BOOST_CHECK( !SpecUtils::is_file(testname2) );
   
   //cout << "Created directory '" << testname2 << "'" << endl;
   
