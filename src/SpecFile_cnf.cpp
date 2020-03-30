@@ -50,7 +50,7 @@ namespace
 
     typedef  char byte;
 
-    enum cam_type //name and size of bytes
+    enum class cam_type //name and size of bytes
     {
   
         cam_float,     //any float
@@ -64,32 +64,31 @@ namespace
         cam_string,
     };
 
-	//Convert data to CAM data formats
-	template <class T>
-	//IEEE-754 variables to CAM float (PDP-11)
-	static void convert_to_CAM_float(const T &input, byte output[4])
-	{
-		//pdp-11 is a wordswaped float/4
-		float temp_f = static_cast<float>(input) * 4;
-		char* temp = reinterpret_cast<char*>(&temp_f);
-		const size_t word_size = sizeof(temp) / 2;
-		//create a containter
-		char output[sizeof(temp)];
-		//perform a word swap
-		for (size_t i = 0; i < word_size; i++)
-		{
-			output[i] = temp[i + word_size];
-			output[i + word_size] = temp[i];
-		}
-	}
-	template <class T>
-	//IEEE variables to CAM double (PDP-11)
+    //Convert data to CAM data formats
+    template <class T>
+    //IEEE-754 variables to CAM float (PDP-11)
+    static void convert_to_CAM_float(const T &input, byte output[4])
+    {
+        //pdp-11 is a wordswaped float/4
+        float temp_f = static_cast<float>(input) * 4;
+        char* temp = reinterpret_cast<char*>(&temp_f);
+        const size_t word_size = 2;
+
+        //perform a word swap
+        for (size_t i = 0; i < word_size; i++)
+        {
+            output[i] = temp[i + word_size];
+            output[i + word_size] = temp[i];
+        }
+    }
+    template <class T>
+    //IEEE variables to CAM double (PDP-11)
     static void convert_to_CAM_double(const T &input, byte output[8])
     {
         //pdp-11 is a word swaped Double/4
         double temp_d = static_cast<double>(input) * 4;
         byte* temp = reinterpret_cast<byte*>(&temp_d);
-        const size_t word_size = sizeof(temp) / 4;
+        const size_t word_size = 2;
 
         //perform a word swap
         for (size_t i = 0; i < word_size; i++)
@@ -101,111 +100,140 @@ namespace
         }
     }
 
-	//boost ptime to CAM DateTime
-	static void convert_to_CAM_datetime(const boost::posix_time::ptime &date_time, byte output[8])
-	{
-		//error checking
-		if (date_time.is_not_a_date_time)
-			throw std::range_error("The input date time is not a valid date time");
+    //boost ptime to CAM DateTime
+    static void convert_to_CAM_datetime(const boost::posix_time::ptime &date_time, byte output[8])
+    {
+        //error checking
+        if (date_time.is_not_a_date_time())
+            throw std::range_error("The input date time is not a valid date time");
 
-		//get the total seconds between the input time and the epoch
-		boost::posix_time::ptime epoch(boost::gregorian::date(1970, 1, 1));
-		boost::posix_time::time_duration::sec_type sec_from_epoch = (date_time - epoch).total_seconds();
-		
-		//covert to modified julian in usec
-		uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
-		output =  reinterpret_cast<byte*>(&j_sec);
-	}
+        //get the total seconds between the input time and the epoch
+        boost::posix_time::ptime epoch(boost::gregorian::date(1970, 1, 1));
+        boost::posix_time::time_duration::sec_type sec_from_epoch = (date_time - epoch).total_seconds();
+        
+        //covert to modified julian in usec
+        uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
+        output =  reinterpret_cast<byte*>(&j_sec);
+    }
 
-	//float sec to CAM duration
-	static void convert_to_CAM_duration(const float &duration, byte output[8])
-	{
-		//duration in usec is larger than a int64: covert to years
-		if (duration * 10000000 > INT64_MAX)
-		{
+    //float sec to CAM duration
+    static void convert_to_CAM_duration(const float &duration, byte output[8])
+    {
+        //duration in usec is larger than a int64: covert to years
+        if (duration * 10000000 > INT64_MAX)
+        {
 
-			//duration in years is larger than an int32, divide by a million years
-			if (duration / 31557600 > INT32_MAX) 
-			{
-				int32_t y_duration = static_cast<int32_t>(duration) / 1E6;
+            //duration in years is larger than an int32, divide by a million years
+            if (duration / 31557600 > INT32_MAX) 
+            {
+                int32_t y_duration = static_cast<int32_t>(duration) / 1E6;
                 byte* temp_dur = reinterpret_cast<byte*>(&y_duration);
-				memcpy(output, temp_dur, sizeof(temp_dur)/8);
-				//set the flags
+                memcpy(output, temp_dur, 2);
+                //set the flags
                 output[7] = 0x80;
                 output[4] = 0x01;
-			}
-			//duration can be represented in years
-			else 
-			{
-				int32_t y_duration = static_cast<int32_t>(duration);
+            }
+            //duration can be represented in years
+            else 
+            {
+                int32_t y_duration = static_cast<int32_t>(duration);
                 byte* temp_dur = reinterpret_cast<byte*>(&y_duration);
-				memcpy(output, temp_dur, sizeof(temp_dur)/8);
-				//set the flag
+                memcpy(output, temp_dur, 2);
+                //set the flag
                 output[7] = 0x80;
-			}
-		}
-		//duration is able to be represented in usec
-		else
-		{
-			//cam time span is in usec and a negatve int64
-			int64_t t_duration = -1 * static_cast<int64_t>(duration) * 10000000L;
-			output =  reinterpret_cast<byte*>(&t_duration);
-		}
-	}
-    //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    template <class T>
-    void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type &type)
-    {
-        switch (type)
-        {
-        case cam_float:
-            byte temp[4];
-            convert_to_CAM_float(input, temp);
-            std::copy(temp, temp + 4, destination.begin() + location);
-            break;
-        case cam_double:
-            byte temp[8];
-            convert_to_CAM_double(input, temp);
-            std::copy(temp, temp + 8, destination.begin() + location);
-            break;
-        case cam_duration:
-            byte temp[4];
-            convert_to_CAM_duration(input, temp);
-            std::copy(temp, temp + 4, destination.begin() + location);
-            break;
-        case cam_datetime:
-            byte temp[8];
-            convert_to_CAM_datetime(input, temp);
-            std::copy(temp, temp + 8, destination.begin() + location);
-            break;
-            break;
-        case cam_quadword:
-            int64_t t_longword = static_cast<int64_t>(input);
-            byte* temp = reinterpret_cast<byte*>(t_longword);
-            std::copy(temp, temp + 8, destination.begin() + location);
-            break;
-        case cam_longword:
-            int t_longword = static_cast<int>(input);
-            byte* temp = reinterpret_cast<byte*>(t_longword);
-            std::copy(temp, temp + 4, destination.begin() + location);
-            break;
-        case cam_word:
-            int16_t t_word = static_cast<int16_t>(input);
-            byte* temp = reinterpret_cast<byte*>(t_word);
-            std::copy(temp, temp + 2, destination.begin() + location);
-            break;
-        case cam_byte:
-            char t_byte = static_cast<char>(input);
-            byte* temp = reinterpret_cast<byte*>(t_byte);
-            std::copy(temp, temp + 2, destination.begin() + location);
-        case cam_string:
-            size_t length = input.length();
-            byte* temp = reinterpret_cast<byte*>(input);
-            std::copy(temp, temp + length, destination.begin() + location);
-            break;
-        default:
-            break;
+            }
         }
+        //duration is able to be represented in usec
+        else
+        {
+            //cam time span is in usec and a negatve int64
+            int64_t t_duration = -1 * static_cast<int64_t>(duration) * 10000000L;
+            output =  reinterpret_cast<byte*>(&t_duration);
+        }
+    }
+    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+    template<typename T, typename = std::enable_if<std::is_arithmetic<T>::value, T>::type>
+    void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type& type) 
+    {
+        switch (type) {
+        case cam_type::cam_float:
+        {
+            byte f_temp[4];
+            convert_to_CAM_float(input, f_temp);
+            std::copy(f_temp, f_temp + 4, destination.begin() + location);
+        }
+        break;
+        case cam_type::cam_double:
+        {
+            byte d_temp[8];
+            convert_to_CAM_double(input, d_temp);
+            std::copy(d_temp, d_temp + 8, destination.begin() + location);
+        }
+        break;
+        case cam_type::cam_duration:
+        {
+            byte dur_temp[4];
+            convert_to_CAM_duration(input, dur_temp);
+            std::copy(dur_temp, dur_temp + 4, destination.begin() + location);
+        }
+        break;
+        case cam_type::cam_quadword:
+        {
+            int64_t t_quadword = static_cast<int64_t>(input);
+            byte* q_temp = reinterpret_cast<byte*>(t_quadword);
+            std::copy(q_temp, q_temp + 8, destination.begin() + location);
+        }
+        break;
+        case cam_type::cam_longword:
+        {
+            int t_longword = static_cast<int>(input);
+            byte* l_temp = reinterpret_cast<byte*>(t_longword);
+            std::copy(l_temp, l_temp + 4, destination.begin() + location);
+        }
+        break;
+        case cam_type::cam_word:
+        {
+            int16_t t_word = static_cast<int16_t>(input);
+            byte* w_temp = reinterpret_cast<byte*>(t_word);
+            std::copy(w_temp, w_temp + 2, destination.begin() + location);
+        }
+        break;
+        case cam_type::cam_byte:
+        {
+            char t_byte = static_cast<char>(input);
+            byte* b_temp = reinterpret_cast<byte*>(t_byte);
+            std::copy(b_temp, b_temp + 2, destination.begin() + location);
+        }
+        default:
+            string message = "error - Invalid converstion from: ";
+            message.append(typeid(T).name());
+            message.append(" to athermetic type");
+
+            throw std::invalid_argument(message);
+            break;
+        }//end switch
+    }
+    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+    void enter_CAM_value(const boost::posix_time::ptime& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
+    {
+        if (type != cam_type::cam_datetime)
+        {
+            throw std::invalid_argument("error - Invalid converstion from: boost::posix_time::ptime");
+        }
+
+        byte dt_temp[8];
+         convert_to_CAM_datetime(input, dt_temp);
+         std::copy(dt_temp, dt_temp + 8, destination.begin() + location);
+    }
+    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+    void enter_CAM_value(const string& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
+    {
+        if (type != cam_type::cam_string)
+        {
+            throw std::invalid_argument("error - Invalid converstion from: char*[]");
+        }
+
+        std::copy(input.begin(), input.end(), destination.begin() + location);
     }
 
 }//namespace
@@ -609,11 +637,11 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //  ex., output.write( (const char *)my_data, 10 );
 
         //create a containter for the file header
-        const uint16_t file_header_length = 0x800;
-        const uint16_t sec_header_length = 0x30;
+        const size_t file_header_length = 0x800;
+        const size_t sec_header_length = 0x30;
 
         //create the aquisition parameters (acqp) header
-        uint16_t acqp_header[] = { 0x0500, 0x0A00, 0x0000, 0x0000, sec_header_length, //has common data, size of block, size of header
+        size_t acqp_header[] = { 0x0500, 0x0A00, 0x0000, 0x0000, sec_header_length, //has common data, size of block, size of header
                                    0x0800, 0x0000,                                    //block locaton is acually a int32 but break it up for this
                                    0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
                                    0x0000, 0x0001, 0x051C, 0x03D8, 0x02F7,            //number of records, size of record block, address of records in block, address of common tabular
@@ -621,14 +649,14 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         acqp_header[21] = acqp_header[4] + acqp_header[14] + acqp_header[15];
 
         //create the sample header (SAMP)
-        uint16_t samp_header[] = { 0x0100, 0x0C00, 0x0000, 0x0000, sec_header_length, //has common data, size of header
+        size_t samp_header[] = { 0x0100, 0x0C00, 0x0000, 0x0000, sec_header_length, //has common data, size of header
                                    0x1200, 0x0000,                                    //block locaton is acually a int32 but break it up for this
                                    0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
                                    0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,            //size of data item, address of the common tabular
                                    0x0000, 0x1FFF, 0x0000, 0x0000, 0x0C00 };          //address of entires in block
 
         //create the spectrum header (DATA)
-        uint16_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x0000, sec_header_length, //has common data, size of header
+        size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x0000, sec_header_length, //has common data, size of header
                                    0x1E00, 0x0000,                                    //block locaton is acually a int32 but break it up for this
                                    0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
                                    0x0000, 0x0000, 0x0004, 0x0000, 0x0000,            //size of data item
@@ -646,88 +674,90 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
 
 
         //enter the file header
-        enter_CAM_value(0x400, cnf_file, 0x0, cam_word);
-        enter_CAM_value(0x400, cnf_file, 0x4, cam_byte);
-        enter_CAM_value(file_header_length, cnf_file, 0x6, cam_word);
-        enter_CAM_value(file_length, cnf_file, 0x6, cam_longword);
-        enter_CAM_value(sec_header_length, cnf_file, 0x10, cam_word);
+        enter_CAM_value(0x400, cnf_file, 0x0, cam_type::cam_word);
+        enter_CAM_value(0x400, cnf_file, 0x4, cam_type::cam_byte);
+        enter_CAM_value(file_header_length, cnf_file, 0x6, cam_type::cam_word);
+        enter_CAM_value(file_length, cnf_file, 0x6, cam_type::cam_longword);
+        enter_CAM_value(sec_header_length, cnf_file, 0x10, cam_type::cam_word);
 
         //enter the acqp header
-        uint16_t acqp_loc = acqp_header[5];
-        enter_CAM_value(0x12000, cnf_file, 0x70, cam_longword);       //block identifier
-        enter_CAM_value(0x12000, cnf_file, acqp_loc, cam_longword);   //block identifier in block
+        size_t acqp_loc = acqp_header[5];
+        enter_CAM_value(0x12000, cnf_file, 0x70, cam_type::cam_longword);       //block identifier
+        enter_CAM_value(0x12000, cnf_file, acqp_loc, cam_type::cam_longword);   //block identifier in block
         //put in array of data
         for (size_t i = 0; i < 22; i++)
         {
-            uint16_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(acqp_header[i], cnf_file, 0x70 + pos, cam_word);
-            enter_CAM_value(acqp_header[i], cnf_file, acqp_loc + pos, cam_word);
+            size_t pos = 0x4 + i * 0x2;
+            enter_CAM_value(acqp_header[i], cnf_file, 0x70 + pos, cam_type::cam_word);
+            enter_CAM_value(acqp_header[i], cnf_file, acqp_loc + pos, cam_type::cam_word);
         }
         acqp_loc += 0x30;
 
         //enter the aqcp data
-        enter_CAM_value("PHA ", cnf_file, acqp_loc + 0x80, cam_string);
-        enter_CAM_value(0x04, cnf_file, acqp_loc + 0x88, cam_word);         //BITES
-        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x8D, cam_word);         //ROWS
-        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x91, cam_word);         //GROUPS
-        enter_CAM_value(0x4, cnf_file, acqp_loc + 0x55, cam_word);          //BACKGNDCHNS
-        enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_longword);//Channels
+        enter_CAM_value("PHA ", cnf_file, acqp_loc + 0x80, cam_type::cam_string);
+        enter_CAM_value(0x04, cnf_file, acqp_loc + 0x88, cam_type::cam_word);         //BITES
+        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x8D, cam_type::cam_word);         //ROWS
+        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x91, cam_type::cam_word);         //GROUPS
+        enter_CAM_value(0x4, cnf_file, acqp_loc + 0x55, cam_type::cam_word);          //BACKGNDCHNS
+        enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_type::cam_longword);//Channels
         
         string title = summed->title(); //CTITLE
-        if (!title.empty()) {
-            enter_CAM_value(title.erase(title.begin() + 0x20, title.end()), cnf_file, acqp_loc + 0x89, cam_string);
+        if (!title.empty()) 
+        {
+            std::string expectsString(title.begin(), title.begin() + 0x20);
+            enter_CAM_value(expectsString, cnf_file, acqp_loc + 0x89);
         }
         
  //TODO: implement converted shape calibration information into CNF files 
         //shape calibration, just use the defualt values for NaI detectors if the type cotains any NaI, if not use Ge defaults
         const string& detector_type = summed->detector_type();
-        enter_CAM_value("SQRT", cnf_file, acqp_loc + 0x464, cam_string);
+        enter_CAM_value("SQRT", cnf_file, acqp_loc + 0x464, cam_type::cam_string);
         if(detector_type.find("NaI") == 0 || detector_type.find("nai") == 0 || detector_type.find("NAI") == 0)
         {
-            enter_CAM_value("-7.0", cnf_file, acqp_loc + 0x3C6, cam_float); //FWHMOFF
-            enter_CAM_value("2.0", cnf_file, acqp_loc + 0x3CA, cam_float);  //FWHMSLOPE
+            enter_CAM_value("-7.0", cnf_file, acqp_loc + 0x3C6, cam_type::cam_float); //FWHMOFF
+            enter_CAM_value("2.0", cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);  //FWHMSLOPE
         }
         else //use the Ge defualts
         {
-            enter_CAM_value("1.0", cnf_file, acqp_loc + 0x3C6, cam_float);
-            enter_CAM_value("0.3", cnf_file, acqp_loc + 0x3CA, cam_float);
+            enter_CAM_value("1.0", cnf_file, acqp_loc + 0x3C6, cam_type::cam_float);
+            enter_CAM_value("0.3", cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
         }
 
         //energy calibration
-        enter_CAM_value("POLY", cnf_file, acqp_loc + 0x5E, cam_string);
-        enter_CAM_value("POLY", cnf_file, acqp_loc + 0xFB, cam_string);
-        enter_CAM_value("keV", cnf_file, acqp_loc + 0x346, cam_string);
-        enter_CAM_value("1.0", cnf_file, acqp_loc + 0x312, cam_float);
+        enter_CAM_value("POLY", cnf_file, acqp_loc + 0x5E, cam_type::cam_string);
+        enter_CAM_value("POLY", cnf_file, acqp_loc + 0xFB, cam_type::cam_string);
+        enter_CAM_value("keV", cnf_file, acqp_loc + 0x346, cam_type::cam_string);
+        enter_CAM_value("1.0", cnf_file, acqp_loc + 0x312, cam_type::cam_float);
         //check if there is energy calibration infomation
-        if (!energy_cal_coeffs.empty) {
-            enter_CAM_value(energy_cal_coeffs.size(), cnf_file, acqp_loc + 0x46C, cam_string);
+        if (!energy_cal_coeffs.empty()) {
+            enter_CAM_value(energy_cal_coeffs.size(), cnf_file, acqp_loc + 0x46C, cam_type::cam_string);
             for (size_t i = 0; i < energy_cal_coeffs.size(); i++)
             {
-                enter_CAM_value(energy_cal_coeffs[i], cnf_file, acqp_loc + 0x32E + i * 0x4, cam_float);
+                enter_CAM_value(energy_cal_coeffs[i], cnf_file, acqp_loc + 0x32E + i * 0x4, cam_type::cam_float);
             }
-            enter_CAM_value(03, cnf_file, acqp_loc + 0x32A, cam_longword); //ECALFLAGS set to energy and shape calibration
+            enter_CAM_value(03, cnf_file, acqp_loc + 0x32A, cam_type::cam_longword); //ECALFLAGS set to energy and shape calibration
         }
         else 
         {
-            enter_CAM_value(02, cnf_file, acqp_loc + 0x32A, cam_longword); //ECALFLAGS set to just shape calibration
+            enter_CAM_value(02, cnf_file, acqp_loc + 0x32A, cam_type::cam_longword); //ECALFLAGS set to just shape calibration
         }
 
         //times
-        enter_CAM_value(live_time, cnf_file, acqp_loc + acqp_header[16] + 0x11, cam_duration);
-        enter_CAM_value(real_time, cnf_file, acqp_loc + acqp_header[16] + 0x09, cam_duration);
-        enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_datetime);
+        enter_CAM_value(live_time, cnf_file, acqp_loc + acqp_header[16] + 0x11, cam_type::cam_duration);
+        enter_CAM_value(real_time, cnf_file, acqp_loc + acqp_header[16] + 0x09, cam_type::cam_duration);
+        enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_type::cam_datetime);
 
 
         //enter the samp header
-        uint16_t samp_loc = samp_header[5];
-        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_longword); //block identifier
-        enter_CAM_value(0x12001, cnf_file, samp_loc, cam_longword);   //block identifier in block
+        size_t samp_loc = samp_header[5];
+        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_type::cam_longword); //block identifier
+        enter_CAM_value(0x12001, cnf_file, samp_loc, cam_type::cam_longword);   //block identifier in block
         //put in array of data
         for (size_t i = 0; i < 22; i++)
         {
-            uint16_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(samp_header[i], cnf_file, 0x70 + 0x30 + pos, cam_word);
-            enter_CAM_value(samp_header[i], cnf_file, samp_loc + pos, cam_word);
+            size_t pos = 0x4 + i * 0x2;
+            enter_CAM_value(samp_header[i], cnf_file, 0x70 + 0x30 + pos, cam_type::cam_word);
+            enter_CAM_value(samp_header[i], cnf_file, samp_loc + pos, cam_type::cam_word);
         }
         samp_loc += 0x30;
 
@@ -737,27 +767,27 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         }*/
         if (summed->has_gps_info()) 
         {
-            enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_double);
-            enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_double);
-            enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_double);
-            enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_datetime);
+            enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_type::cam_double);
+            enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_type::cam_double);
+            enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_type::cam_double);
+            enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_type::cam_datetime);
         }
         //enter the data header
-        uint16_t data_loc = data_header[5];
-        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_longword); //block identifier
-        enter_CAM_value(0x12001, cnf_file, data_loc, cam_longword);   //block identifier in block
+        size_t data_loc = data_header[5];
+        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_type::cam_longword); //block identifier
+        enter_CAM_value(0x12001, cnf_file, data_loc, cam_type::cam_longword);   //block identifier in block
         //put in array of data
         for (size_t i = 0; i < 22; i++)
         {
-            uint16_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(data_header[i], cnf_file, 0x70 + 2* 0x30 + pos, cam_word);
-            enter_CAM_value(data_header[i], cnf_file, data_loc + pos, cam_word);
+            size_t pos = 0x4 + i * 0x2;
+            enter_CAM_value(data_header[i], cnf_file, 0x70 + 2* 0x30 + pos, cam_type::cam_word);
+            enter_CAM_value(data_header[i], cnf_file, data_loc + pos, cam_type::cam_word);
         }
         data_loc += 0x30 + data_header[19];
         //put the data in
         for (size_t i = 0; i < gamma_channel_counts.size(); i++)
         {
-            enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_longword);
+            enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
         }
         //write the file
         output.write(cnf_file.data(), cnf_file.size());
