@@ -47,10 +47,27 @@ using namespace std;
 
 namespace
 {
+
+    typedef  char byte;
+
+    enum cam_type //name and size of bytes
+    {
+  
+        cam_float,     //any float
+        cam_double,    //any double
+        cam_byte,      //a byte
+        cam_word,      //int16
+        cam_longword,  //int
+        cam_quadword,  //int64     
+        cam_datetime ,   //date time
+        cam_duration,   //time duration 
+        cam_string,
+    };
+
 	//Convert data to CAM data formats
 	template <class T>
 	//IEEE-754 variables to CAM float (PDP-11)
-	static char* convert_to_CAM_float(const T &input) 
+	static void convert_to_CAM_float(const T &input, byte output[4])
 	{
 		//pdp-11 is a wordswaped float/4
 		float temp_f = static_cast<float>(input) * 4;
@@ -64,33 +81,28 @@ namespace
 			output[i] = temp[i + word_size];
 			output[i + word_size] = temp[i];
 		}
-		delete[] temp;
-		return output;
 	}
 	template <class T>
 	//IEEE variables to CAM double (PDP-11)
-	static char* convert_to_CAM_double(const T &input) 
-	{
-		//pdp-11 is a word swaped Double/4
-		double temp_d = static_cast<double>(input) * 4;
-		char* temp = reinterpret_cast<char*>(&temp_f);
-		const size_t word_size = sizeof(temp) / 4;
-		//create a containter
-		char output[sizeof(temp)];
-		//perform a word swap
-		for (size_t i = 0; i < word_size; i++)
-		{
-			output[i] = temp[i + word_size];					//IEEE second is PDP-11 first
-			output[i + word_size] = temp[i];					//IEEE first is PDP-11 second
-			output[i + 2 * word_size] = temp[i + 3 * word_size];//IEEE forth is PDP-11 third
-			output[i + 3 * word_size] = temp[i + 2 * word_size];//IEEE third is PDP-11 fouth
-		}
-		delete[] temp;
-		return output;
-	}
+    static void convert_to_CAM_double(const T &input, byte output[8])
+    {
+        //pdp-11 is a word swaped Double/4
+        double temp_d = static_cast<double>(input) * 4;
+        byte* temp = reinterpret_cast<byte*>(&temp_d);
+        const size_t word_size = sizeof(temp) / 4;
+
+        //perform a word swap
+        for (size_t i = 0; i < word_size; i++)
+        {
+            output[i + 3 * word_size] = temp[i];				//IEEE fourth is PDP-11 first
+            output[i + 2 * word_size] = temp[i + word_size];  //IEEE third is PDP-11 second
+            output[i + word_size] = temp[i + 2 * word_size];//IEEE second is PDP-11 third
+            output[i] = temp[i + 3 * word_size];            //IEEE first is PDP-11 fouth
+        }
+    }
 
 	//boost ptime to CAM DateTime
-	static char* convert_to_CAM_DateTime(const boost::posix_time::ptime &date_time) 
+	static void convert_to_CAM_datetime(const boost::posix_time::ptime &date_time, byte output[8])
 	{
 		//error checking
 		if (date_time.is_not_a_date_time)
@@ -102,46 +114,99 @@ namespace
 		
 		//covert to modified julian in usec
 		uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
-		return reinterpret_cast<char*>(&j_sec);
+		output =  reinterpret_cast<byte*>(&j_sec);
 	}
 
 	//float sec to CAM duration
-	static char* convert_to_CAM_duration(const float& duration) 
+	static void convert_to_CAM_duration(const float &duration, byte output[8])
 	{
 		//duration in usec is larger than a int64: covert to years
 		if (duration * 10000000 > INT64_MAX)
 		{
-			char c_duration[8] = {0};
+
 			//duration in years is larger than an int32, divide by a million years
 			if (duration / 31557600 > INT32_MAX) 
 			{
 				int32_t y_duration = static_cast<int32_t>(duration) / 1E6;
-				char* temp_dur = reinterpret_cast<char*>(&y_duration);
-				memcpy(c_duration, temp_dur, sizeof(temp_dur));
+                byte* temp_dur = reinterpret_cast<byte*>(&y_duration);
+				memcpy(output, temp_dur, sizeof(temp_dur)/8);
 				//set the flags
-				c_duration[7] = 0x80;
-				c_duration[4] = 0x01;
+                output[7] = 0x80;
+                output[4] = 0x01;
 			}
 			//duration can be represented in years
 			else 
 			{
 				int32_t y_duration = static_cast<int32_t>(duration);
-				char *temp_dur = reinterpret_cast<char*>(&y_duration);
-				memcpy(c_duration, temp_dur, sizeof(temp_dur));
+                byte* temp_dur = reinterpret_cast<byte*>(&y_duration);
+				memcpy(output, temp_dur, sizeof(temp_dur)/8);
 				//set the flag
-				c_duration[7] = 0x80;
+                output[7] = 0x80;
 			}
-			return c_duration;
 		}
 		//duration is able to be represented in usec
 		else
 		{
 			//cam time span is in usec and a negatve int64
 			int64_t t_duration = -1 * static_cast<int64_t>(duration) * 10000000L;
-			return reinterpret_cast<char*>(&t_duration);
+			output =  reinterpret_cast<byte*>(&t_duration);
 		}
 	}
-
+    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+    template <class T>
+    void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type &type)
+    {
+        switch (type)
+        {
+        case cam_float:
+            byte temp[4];
+            convert_to_CAM_float(input, temp);
+            std::copy(temp, temp + 4, destination.begin() + location);
+            break;
+        case cam_double:
+            byte temp[8];
+            convert_to_CAM_double(input, temp);
+            std::copy(temp, temp + 8, destination.begin() + location);
+            break;
+        case cam_duration:
+            byte temp[4];
+            convert_to_CAM_duration(input, temp);
+            std::copy(temp, temp + 4, destination.begin() + location);
+            break;
+        case cam_datetime:
+            byte temp[8];
+            convert_to_CAM_datetime(input, temp);
+            std::copy(temp, temp + 8, destination.begin() + location);
+            break;
+            break;
+        case cam_quadword:
+            int64_t t_longword = static_cast<int64_t>(input);
+            byte* temp = reinterpret_cast<byte*>(t_longword);
+            std::copy(temp, temp + 8, destination.begin() + location);
+            break;
+        case cam_longword:
+            int t_longword = static_cast<int>(input);
+            byte* temp = reinterpret_cast<byte*>(t_longword);
+            std::copy(temp, temp + 4, destination.begin() + location);
+            break;
+        case cam_word:
+            int16_t t_word = static_cast<int16_t>(input);
+            byte* temp = reinterpret_cast<byte*>(t_word);
+            std::copy(temp, temp + 2, destination.begin() + location);
+            break;
+        case cam_byte:
+            char t_byte = static_cast<char>(input);
+            byte* temp = reinterpret_cast<byte*>(t_byte);
+            std::copy(temp, temp + 2, destination.begin() + location);
+        case cam_string:
+            size_t length = input.length();
+            byte* temp = reinterpret_cast<byte*>(input);
+            std::copy(temp, temp + length, destination.begin() + location);
+            break;
+        default:
+            break;
+        }
+    }
 
 }//namespace
 
@@ -446,123 +511,265 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
                           const std::set<int> &det_nums ) const
 {
   
-  try
-  {
-    //First, lets take care of some boilerplate code.
-    std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-    
-    if( sample_nums.empty() )
-      sample_nums = sample_numbers_;
-    
-    const size_t ndet = detector_numbers_.size();
-    vector<bool> detectors( ndet, true );
-    if( !det_nums.empty() )
+    try
     {
-      for( size_t i = 0; i < ndet; ++i )
-        detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-    }//if( det_nums.empty() )
+        //First, lets take care of some boilerplate code.
+        std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+
+        if (sample_nums.empty())
+            sample_nums = sample_numbers_;
+
+        const size_t ndet = detector_numbers_.size();
+        vector<bool> detectors(ndet, true);
+        if (!det_nums.empty())
+        {
+            for (size_t i = 0; i < ndet; ++i)
+                detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
+        }//if( det_nums.empty() )
+
+
+        std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, detectors);
+
+        if (!summed || !summed->gamma_counts() || summed->gamma_counts()->empty())
+            return false;
+
+        //At this point we have the one spectrum (called summed) that we will write
+        //  to the CNF file.  If the input file only had a single spectrum, this is
+        //  now held in 'summed', otherwise the specified samples and detectors have
+        //  all been summed together/
+
+        //Gamma information
+        const float real_time = summed->real_time();
+        const float live_time = summed->live_time();
+        const vector<float> gamma_channel_counts = *summed->gamma_counts();
+
+        //CNF files use polynomial energy calibration, so if the input didnt also
+        //  use polynomial, we will convert to polynomial, or in the case of
+        //  lower channel or invalid, just clear the coefficients.
+        vector<float> energy_cal_coeffs = summed->calibration_coeffs();
+        switch (summed->energy_calibration_model())
+        {
+        case EnergyCalType::Polynomial:
+        case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+            //Energy calibration already polynomial, no need to do anything
+            break;
+
+        case EnergyCalType::FullRangeFraction:
+            //Convert to polynomial
+            energy_cal_coeffs = fullrangefraction_coef_to_polynomial(energy_cal_coeffs, gamma_channel_counts.size());
+            break;
+
+        case EnergyCalType::LowerChannelEdge:
+        case EnergyCalType::InvalidEquationType:
+            //No hope of converting energy calibration to the polynomial needed by CNF files.
+            energy_cal_coeffs.clear();
+            break;
+        }//switch( energy cal type coefficients are in )
+
+        //I'm not sure if CNF files can handle deviation pairs or not:
+        //It does not, it works in energy and scales all detectors to a single detector
+        //const vector<pair<float, float>>& deviation_pairs = summed->deviation_pairs();
+
+
+        //Neutron information:
+        const double sum_neutrons = summed->neutron_counts_sum();
+        //With short measurements or handheld detectors we may not have had any
+        //  neutron counts, but there was a detector, so lets check if the input
+        //  file had information about neutrons.
+        const bool had_neutrons = summed->contained_neutron();
+
+
+        //Measurement start time.             
+        //The start time may not be valid (e.g., if input file didnt have times),
+        // but if we're here we time is valid, just the unix epoch
+        const boost::posix_time::ptime& start_time = summed->start_time().is_special() ? 
+            boost::posix_time::time_from_string("1970-01-01 00:00:00.000"): summed->start_time();
+
+        //Check if we have RIID analysis results we could write to the output file.
+        if (detectors_analysis_ && !detectors_analysis_->is_empty())
+        {
+            //See DetectorAnalysis class for details; its a little iffy what
+            //  information from the original file makes it into the DetectorAnalysis.
+
+            const DetectorAnalysis& ana = *detectors_analysis_;
+            //ana.algorithm_result_description_
+            //ana.remarks_
+            //...
+
+            //Loop over individual results, usually different nuclides or sources.
+            for (const DetectorAnalysisResult& nucres : ana.results_)
+            {
+
+            }//for( loop over nuclides identified )
+
+        }//if( we have riid results from input file )
+
+        //We should have most of the information we need identified by here, so now
+        //  just need to write to the output stream.
+        //  ex., output.write( (const char *)my_data, 10 );
+
+        //create a containter for the file header
+        const uint16_t file_header_length = 0x800;
+        const uint16_t sec_header_length = 0x30;
+
+        //create the aquisition parameters (acqp) header
+        uint16_t acqp_header[] = { 0x0500, 0x0A00, 0x0000, 0x0000, sec_header_length, //has common data, size of block, size of header
+                                   0x0800, 0x0000,                                    //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
+                                   0x0000, 0x0001, 0x051C, 0x03D8, 0x02F7,            //number of records, size of record block, address of records in block, address of common tabular
+                                   0x0019, 0x04C2, 0X0009, 0x0000, 0x0000 };          //Always 0x19, address of entries in block, 
+        acqp_header[21] = acqp_header[4] + acqp_header[14] + acqp_header[15];
+
+        //create the sample header (SAMP)
+        uint16_t samp_header[] = { 0x0100, 0x0C00, 0x0000, 0x0000, sec_header_length, //has common data, size of header
+                                   0x1200, 0x0000,                                    //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
+                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,            //size of data item, address of the common tabular
+                                   0x0000, 0x1FFF, 0x0000, 0x0000, 0x0C00 };          //address of entires in block
+
+        //create the spectrum header (DATA)
+        uint16_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x0000, sec_header_length, //has common data, size of header
+                                   0x1E00, 0x0000,                                    //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
+                                   0x0000, 0x0000, 0x0004, 0x0000, 0x0000,            //size of data item
+                                   0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };          //address of entires in block, always 1
+
+        const size_t file_length = file_header_length + acqp_header[1] + samp_header[1] + data_header[1];
+
+        //compute the number of channels and the size of the block
+        data_header[19] = summed->num_gamma_channels();
+        data_header[1] = data_header[4] + data_header[18] + data_header[19] * data_header[14];
+
+
+        //create a vector to store all the bytes
+        std::vector<byte> cnf_file(file_length, 0x00);
+
+
+        //enter the file header
+        enter_CAM_value(0x400, cnf_file, 0x0, cam_word);
+        enter_CAM_value(0x400, cnf_file, 0x4, cam_byte);
+        enter_CAM_value(file_header_length, cnf_file, 0x6, cam_word);
+        enter_CAM_value(file_length, cnf_file, 0x6, cam_longword);
+        enter_CAM_value(sec_header_length, cnf_file, 0x10, cam_word);
+
+        //enter the acqp header
+        uint16_t acqp_loc = acqp_header[5];
+        enter_CAM_value(0x12000, cnf_file, 0x70, cam_longword);       //block identifier
+        enter_CAM_value(0x12000, cnf_file, acqp_loc, cam_longword);   //block identifier in block
+        //put in array of data
+        for (size_t i = 0; i < 22; i++)
+        {
+            uint16_t pos = 0x4 + i * 0x2;
+            enter_CAM_value(acqp_header[i], cnf_file, 0x70 + pos, cam_word);
+            enter_CAM_value(acqp_header[i], cnf_file, acqp_loc + pos, cam_word);
+        }
+        acqp_loc += 0x30;
+
+        //enter the aqcp data
+        enter_CAM_value("PHA ", cnf_file, acqp_loc + 0x80, cam_string);
+        enter_CAM_value(0x04, cnf_file, acqp_loc + 0x88, cam_word);         //BITES
+        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x8D, cam_word);         //ROWS
+        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x91, cam_word);         //GROUPS
+        enter_CAM_value(0x4, cnf_file, acqp_loc + 0x55, cam_word);          //BACKGNDCHNS
+        enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_longword);//Channels
+        
+        string title = summed->title(); //CTITLE
+        if (!title.empty()) {
+            enter_CAM_value(title.erase(title.begin() + 0x20, title.end()), cnf_file, acqp_loc + 0x89, cam_string);
+        }
+        
+ //TODO: implement converted shape calibration information into CNF files 
+        //shape calibration, just use the defualt values for NaI detectors if the type cotains any NaI, if not use Ge defaults
+        const string& detector_type = summed->detector_type();
+        enter_CAM_value("SQRT", cnf_file, acqp_loc + 0x464, cam_string);
+        if(detector_type.find("NaI") == 0 || detector_type.find("nai") == 0 || detector_type.find("NAI") == 0)
+        {
+            enter_CAM_value("-7.0", cnf_file, acqp_loc + 0x3C6, cam_float); //FWHMOFF
+            enter_CAM_value("2.0", cnf_file, acqp_loc + 0x3CA, cam_float);  //FWHMSLOPE
+        }
+        else //use the Ge defualts
+        {
+            enter_CAM_value("1.0", cnf_file, acqp_loc + 0x3C6, cam_float);
+            enter_CAM_value("0.3", cnf_file, acqp_loc + 0x3CA, cam_float);
+        }
+
+        //energy calibration
+        enter_CAM_value("POLY", cnf_file, acqp_loc + 0x5E, cam_string);
+        enter_CAM_value("POLY", cnf_file, acqp_loc + 0xFB, cam_string);
+        enter_CAM_value("keV", cnf_file, acqp_loc + 0x346, cam_string);
+        enter_CAM_value("1.0", cnf_file, acqp_loc + 0x312, cam_float);
+        //check if there is energy calibration infomation
+        if (!energy_cal_coeffs.empty) {
+            enter_CAM_value(energy_cal_coeffs.size(), cnf_file, acqp_loc + 0x46C, cam_string);
+            for (size_t i = 0; i < energy_cal_coeffs.size(); i++)
+            {
+                enter_CAM_value(energy_cal_coeffs[i], cnf_file, acqp_loc + 0x32E + i * 0x4, cam_float);
+            }
+            enter_CAM_value(03, cnf_file, acqp_loc + 0x32A, cam_longword); //ECALFLAGS set to energy and shape calibration
+        }
+        else 
+        {
+            enter_CAM_value(02, cnf_file, acqp_loc + 0x32A, cam_longword); //ECALFLAGS set to just shape calibration
+        }
+
+        //times
+        enter_CAM_value(live_time, cnf_file, acqp_loc + acqp_header[16] + 0x11, cam_duration);
+        enter_CAM_value(real_time, cnf_file, acqp_loc + acqp_header[16] + 0x09, cam_duration);
+        enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_datetime);
+
+
+        //enter the samp header
+        uint16_t samp_loc = samp_header[5];
+        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_longword); //block identifier
+        enter_CAM_value(0x12001, cnf_file, samp_loc, cam_longword);   //block identifier in block
+        //put in array of data
+        for (size_t i = 0; i < 22; i++)
+        {
+            uint16_t pos = 0x4 + i * 0x2;
+            enter_CAM_value(samp_header[i], cnf_file, 0x70 + 0x30 + pos, cam_word);
+            enter_CAM_value(samp_header[i], cnf_file, samp_loc + pos, cam_word);
+        }
+        samp_loc += 0x30;
+
+        //if there is a sample ID of some sort
+        /*if (!sample_ID.empty()) {
+            enter_CAM_value(sample_ID.erase(sample_ID.begin() + 0x10, sample_ID.end()), cnf_file, samp_loc + 0x40, cam_string);
+        }*/
+        if (summed->has_gps_info()) 
+        {
+            enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_double);
+            enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_double);
+            enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_double);
+            enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_datetime);
+        }
+        //enter the data header
+        uint16_t data_loc = data_header[5];
+        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_longword); //block identifier
+        enter_CAM_value(0x12001, cnf_file, data_loc, cam_longword);   //block identifier in block
+        //put in array of data
+        for (size_t i = 0; i < 22; i++)
+        {
+            uint16_t pos = 0x4 + i * 0x2;
+            enter_CAM_value(data_header[i], cnf_file, 0x70 + 2* 0x30 + pos, cam_word);
+            enter_CAM_value(data_header[i], cnf_file, data_loc + pos, cam_word);
+        }
+        data_loc += 0x30 + data_header[19];
+        //put the data in
+        for (size_t i = 0; i < gamma_channel_counts.size(); i++)
+        {
+            enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_longword);
+        }
+        //write the file
+        output.write(cnf_file.data(), cnf_file.size());
     
-    
-    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
-    
-    if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
+    }catch( std::exception &e )
+    {
+      //Print out why we failed for debug purposes.
+      cerr << "Failed to write CNF file: " << e.what() << endl;
       return false;
-    
-    //At this point we have the one spectrum (called summed) that we will write
-    //  to the CNF file.  If the input file only had a single spectrum, this is
-    //  now held in 'summed', otherwise the specified samples and detectors have
-    //  all been summed together/
-    
-    //Gamma information
-    const float real_time = summed->real_time();
-    const float live_time = summed->live_time();
-    const vector<float> gamma_channel_counts = *summed->gamma_counts();
-    
-    //CNF files use polynomial energy calibration, so if the input didnt also
-    //  use polynomial, we will convert to polynomial, or in the case of
-    //  lower channel or invalid, just clear the coefficients.
-    vector<float> energy_cal_coeffs = summed->calibration_coeffs();
-    switch( summed->energy_calibration_model() )
-    {
-      case EnergyCalType::Polynomial:
-      case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-        //Energy calibration already polynomial, no need to do anything
-        break;
-        
-      case EnergyCalType::FullRangeFraction:
-        //Convert to polynomial
-        energy_cal_coeffs = fullrangefraction_coef_to_polynomial( energy_cal_coeffs, gamma_channel_counts.size() );
-        break;
-        
-      case EnergyCalType::LowerChannelEdge:
-      case EnergyCalType::InvalidEquationType:
-        //No hope of converting energy calibration to the polynomial needed by CNF files.
-        energy_cal_coeffs.clear();
-        break;
-    }//switch( energy cal type coefficients are in )
-    
-    //I'm not sure if CNF files can handle deviation pairs or not:
-    const vector<pair<float,float>> &deviation_pairs = summed->deviation_pairs();
-    
-    
-    //Neutron information:
-    const double sum_neutrons = summed->neutron_counts_sum();
-    //With short measurements or handheld detectors we may not have had any
-    //  neutron counts, but there was a detector, so lets check if the input
-    //  file had information about neutrons.
-    const bool had_neutrons = summed->contained_neutron();
-    
-    
-    //Measurement start time.
-    const boost::posix_time::ptime &start_time = summed->start_time();
-    if( !start_time.is_special() )
-    {
-      //The start time may not be valid (e.g., if input file didnt have times),
-      // but if we're here we time is valid.
-      //const std::time_t seconds_since_unix_epoch = boost::posix_time::to_time_t(start_time);
-      
-      //Get the fractional seconds; will be be in range [0,1.0)
-      const double fractional_seconds = start_time.time_of_day().fractional_seconds()
-                    / double(boost::posix_time::time_duration::ticks_per_second());
-      
-      //...
-    }//if( we have start time )
-    
-	//SpecUtils::write_binary_data(output, (char)0x1); 
-
-
-    //Check if we have RIID analysis results we could write to the output file.
-    if( detectors_analysis_ && !detectors_analysis_->is_empty() )
-    {
-      //See DetectorAnalysis class for details; its a little iffy what
-      //  information from the original file makes it into the DetectorAnalysis.
-      
-      const DetectorAnalysis &ana = *detectors_analysis_;
-      //ana.algorithm_result_description_
-      //ana.remarks_
-      //...
-      
-      //Loop over individual results, usually different nuclides or sources.
-      for( const DetectorAnalysisResult &nucres : ana.results_ )
-      {
-        
-      }//for( loop over nuclides identified )
-      
-    }//if( we have riid results from input file )
-    
-    //We should have most of the information we need identified by here, so now
-    //  just need to write to the output stream.
-    //  ex., output.write( (const char *)my_data, 10 );
-    throw runtime_error( "Writing CNF files not yet implemented." );
-    
-  }catch( std::exception &e )
-  {
-    //Print out why we failed for debug purposes.
-    cerr << "Failed to write CNF file: " << e.what() << endl;
-    return false;
-  }
+    }
   
-  return true;
+    return true;
 }//write_cnf
 
 }//namespace SpecUtils
