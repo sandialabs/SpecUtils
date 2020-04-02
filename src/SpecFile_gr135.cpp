@@ -628,6 +628,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         const float nbin = static_cast<float>( nchannels );
         
         bool usingGuessedVal = false;
+        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
         
         if( is135v1 || is135v2 )
         {
@@ -674,10 +675,13 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
 
         }
         
-        meas->calibration_coeffs_.push_back( EgyCal[0] );
-        meas->calibration_coeffs_.push_back( EgyCal[1] );
-        meas->calibration_coeffs_.push_back( EgyCal[2] );
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
+        if( usingGuessedVal )
+        {
+          meas->calibration_coeffs_.push_back( EgyCal[0] );
+          meas->calibration_coeffs_.push_back( EgyCal[1] );
+          meas->calibration_coeffs_.push_back( EgyCal[2] );
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
+        }
       }//if( meas->calibration_coeffs_.empty() )
       
       if( j == 0 )

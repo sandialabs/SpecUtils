@@ -5761,7 +5761,8 @@ namespace SpecUtils
       
       if( hprds )
       {
-        const rapidxml::xml_node<char> *node = document_node->first_node( "OnsetDateTime", 13 );
+        const rapidxml::xml_node<char> *node = nullptr;
+        //node = document_node->first_node( "OnsetDateTime", 13 );
         node = document_node->first_node( "EventCategory", 13 );
         if( node && node->value_size() )
           remarks_.push_back( string("Event Category ") + xml_value_str(node) );

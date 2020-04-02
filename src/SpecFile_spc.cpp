@@ -405,23 +405,41 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         const size_t bpos = line.find( "b=" );
         const size_t cpos = line.find( "c=" );
         const size_t dpos = line.find( "d=" );
-        if( apos < (line.size()-2) )
+        const bool have_a = apos < (line.size()-2);
+        const bool have_b = bpos < (line.size()-2);
+        const bool have_c = cpos < (line.size()-2);
+        const bool have_d = dpos < (line.size()-2);
+        if( have_a )
           a = static_cast<float>( atof( line.c_str() + apos + 2 ) );
-        if( bpos < (line.size()-2) )
+        if( have_b )
           b = static_cast<float>( atof( line.c_str() + bpos + 2 ) );
-        if( cpos < (line.size()-2) )
+        if( have_c )
           c = static_cast<float>( atof( line.c_str() + cpos + 2 ) );
-        if( dpos < (line.size()-2) )
+        if( have_d )
           d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
-        //      if( a!=0.0 || b!=0.0 || d!=0.0 )
-        //        cerr << "SpecFile::load_from_iaea_spc(istream &)\n\tUnknown calibration coefficient meaning -"
-        //             << " wcjohns should check into this although he thinks it should "
-        //             << "be okay" << endl;
         
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_.resize( 2 );
-        meas->calibration_coeffs_[0] = b;
-        meas->calibration_coeffs_[1] = c;
+        meas->calibration_coeffs_.clear();
+        if( have_a && have_b && have_c && have_d
+            && (a!=0.0 || b!=0.0 || c!=0.0 ) )
+        {
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+          meas->calibration_coeffs_.push_back( d );
+          meas->calibration_coeffs_.push_back( c );
+          if( b != 0.0 || a != 0.0 )
+            meas->calibration_coeffs_.push_back( b );
+          if( a != 0.0 )
+            meas->calibration_coeffs_.push_back( a );
+        }else if( have_b && have_c && c!=0.0 )
+        {
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+          meas->calibration_coeffs_.resize( 2 );
+          meas->calibration_coeffs_[0] = b;
+          meas->calibration_coeffs_[1] = c;
+        }else
+        {
+          //should check into if we ever get here
+          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
+        }
       }else if( istarts_with( line, "NuclideID1" )
                || istarts_with( line, "NuclideID2" )
                || istarts_with( line, "NuclideID3" )
