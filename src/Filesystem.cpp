@@ -24,6 +24,7 @@
 #include <vector>
 #include <random>
 #include <fstream>
+#include <cstring>
 #include <algorithm>
 
 #include <iostream> //temporatry for debug
