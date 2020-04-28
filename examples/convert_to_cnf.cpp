@@ -66,13 +66,13 @@ int main( int argc, char **argv )
   }
 
   //Check if output file already exists, if so dont overwrite.
-  if( SpecUtils::is_file(argv[2]) )
-  {
-    cerr << "Output file '" << argv[2] << "' already exists - not overwriting!" << endl;
-    return EXIT_FAILURE;
-  }
+  //if( SpecUtils::is_file(argv[2]) )
+  //{
+  //  cerr << "Output file '" << argv[2] << "' already exists - not overwriting!" << endl;
+  //  return EXIT_FAILURE;
+  //}
 
-  ofstream output( argv[2], ios::out | ios::binary );
+  ofstream output( argv[2], ios::out | ios::binary | ios::trunc);
   
   if( !output )
   {

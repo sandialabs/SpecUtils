@@ -453,7 +453,7 @@ namespace SpecUtils
       
       //Check period is greater than three places to the right of a space
       bool aftertime = false;
-      for( size_t pos = period; period!=string::npos && period; --pos )
+      for( size_t pos = period; pos!=string::npos && period; --pos )
       {
         if( isspace(time_string[pos]) )
         {
@@ -507,6 +507,7 @@ namespace SpecUtils
         string normal = time_string.substr(0,period);
         if( last != string::npos )
           normal += time_string.substr(last);
+
         time_string = normal;
       }//if( period != string::npos )
     }//if( fraccolon != string::npos )

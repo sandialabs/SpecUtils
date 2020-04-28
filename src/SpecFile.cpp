@@ -6066,7 +6066,7 @@ std::string SpecFile::generate_psuedo_uuid() const
       && !measurements_[0]->start_time().is_special() )
     uuid = SpecUtils::to_iso_string( measurements_[0]->start_time() );
   else
-    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59" ) );
+    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59:000" ) );
   
   //uuid something like: "20020131T100001,123456789"
   if( uuid.size() >= 15 )

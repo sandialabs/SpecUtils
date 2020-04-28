@@ -46,6 +46,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 //Pull in WideCharToMultiByte(...), etc from WIndows
+#define NOMINMAX
 #include <windows.h>
 #endif
 
@@ -1111,7 +1112,7 @@ namespace SpecUtils
         {
           const float a = results[i];
           const float b = checked_result[i];
-          if( fabs(a-b) > 0.000001*std::max(fabs(a),fabs(b)) )
+          if( fabs(a-b) > 0.000001*(std::max(fabs(a),fabs(b)) ))
           {
             char errormsg[1024];
             snprintf( errormsg, sizeof(errormsg),
@@ -1289,7 +1290,7 @@ namespace SpecUtils
         
         const float a = static_cast<float>( value );
         const float b = (float) atof( string(start_pos, end).c_str() );
-        if( fabs(a-b) > 0.000001f*std::max(fabs(a),fabs(b)) )
+        if( fabs(a-b) > 0.000001f*(std::max(fabs(a),fabs(b)) ))
         {
           char errormsg[1024];
           snprintf( errormsg, sizeof(errormsg),

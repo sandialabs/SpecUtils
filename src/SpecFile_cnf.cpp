@@ -635,7 +635,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //The start time may not be valid (e.g., if input file didnt have times),
         // but if we're here we time is valid, just the unix epoch
         const boost::posix_time::ptime& start_time = summed->start_time().is_special() ? 
-            SpecUtils::time_from_string("1970-01-01 00:00:00.000"): summed->start_time();
+            SpecUtils::time_from_string("1970-01-01 00:00:00"): summed->start_time();
 
         //Check if we have RIID analysis results we could write to the output file.
         if (detectors_analysis_ && !detectors_analysis_->is_empty())
@@ -689,6 +689,10 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //compute the number of channels and the size of the block
         data_header[19] = summed->num_gamma_channels();
         data_header[1] = data_header[6] + data_header[18] + data_header[19] * data_header[14];
+        if (data_header[19] == 0x4000) 
+        {
+            data_header[2] = 0x01;
+        }
 
         const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + data_header[1];
         //create a vector to store all the bytes
@@ -722,13 +726,13 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         enter_CAM_value(0x01, cnf_file, acqp_loc + 0x8D, cam_type::cam_word);         //ROWS
         enter_CAM_value(0x01, cnf_file, acqp_loc + 0x91, cam_type::cam_word);         //GROUPS
         enter_CAM_value(0x4, cnf_file, acqp_loc + 0x55, cam_type::cam_word);          //BACKGNDCHNS
-        //enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_type::cam_longword);//Channels
-        enter_CAM_value(8192, cnf_file, acqp_loc + 0x89, cam_type::cam_longword);
+        enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_type::cam_longword);//Channels
+        //enter_CAM_value(8192, cnf_file, acqp_loc + 0x89, cam_type::cam_longword);
         string title = summed->title(); //CTITLE
         if (!title.empty()) 
         {
             std::string expectsString(title.begin(), title.begin() + 0x20);
-            enter_CAM_value(expectsString, cnf_file, acqp_loc + 0x89);
+            enter_CAM_value(expectsString, cnf_file, acqp_loc);
         }
         
  //TODO: implement converted shape calibration information into CNF files 
