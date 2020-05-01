@@ -3017,11 +3017,20 @@ namespace SpecUtils
         if( result.id_confidence_.size() )
         {
           //If result.id_confidence_ represents a number between 0 and 100, then
-          //  should use "NuclideIDConfidenceValue" instead of "NuclideIDConfidenceDescription"
-          val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
-          xml_node<char> *NuclideIDConfidenceDescription = doc->allocate_node( node_element, "NuclideIDConfidenceDescription", val );
-          nuclide_node->append_node( NuclideIDConfidenceDescription );
-        }
+          //  use "NuclideIDConfidenceValue" otherwise use "NuclideIDConfidenceDescription"
+          float dummy;
+          if( SpecUtils::parse_float(result.id_confidence_.c_str(), result.id_confidence_.size(), dummy) && (dummy>=0.0f) && (dummy<=100.0f) )
+          {
+            val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
+            xml_node<char> *NuclideIDConfidenceValue = doc->allocate_node( node_element, "NuclideIDConfidenceValue", val );
+            nuclide_node->append_node( NuclideIDConfidenceValue );
+          }else
+          {
+            val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
+            xml_node<char> *NuclideIDConfidenceDescription = doc->allocate_node( node_element, "NuclideIDConfidenceDescription", val );
+            nuclide_node->append_node( NuclideIDConfidenceDescription );
+          }
+        }//if( result.id_confidence_.size() )
         
         if( result.nuclide_type_.size() )
         {
@@ -3318,7 +3327,7 @@ namespace SpecUtils
       const string &name = component_versions_[i].first;
       const string &version = component_versions_[i].second;
       
-      if( SpecUtils::icontains( name, "Software") && version == "Unknown" )
+      if( SpecUtils::istarts_with( name, "Software") && version == "Unknown" )
         continue;
       
       std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -3680,7 +3689,7 @@ namespace SpecUtils
      }//for( size_t i = 0; i < measurements_.size(); ++i )
      */
     
-    if( !!detectors_analysis_ )
+    if( detectors_analysis_ )
       add_analysis_results_to_2012_N42( *detectors_analysis_,
                                        RadInstrumentData, xmldocmutex );
     
@@ -6128,11 +6137,16 @@ namespace SpecUtils
         const rapidxml::xml_node<char> *remark_node = nuclide_node->first_node( "Remark", 6 );
         const rapidxml::xml_node<char> *nuclide_name_node = nuclide_node->first_node( "NuclideName", 11 );
         const rapidxml::xml_node<char> *nuclide_type_node = nuclide_node->first_node( "NuclideType", 11 );
-        const rapidxml::xml_node<char> *confidence_node = nuclide_node->first_node( "NuclideIDConfidenceIndication", 29 );  //N42-2006?
+        const rapidxml::xml_node<char> *confidence_node = XML_FIRST_NODE( nuclide_node, "NuclideIDConfidenceIndication" );  //N42-2006?
         if( !confidence_node )
-          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIdentificationConfidence");  //N42-2012
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIdentificationConfidence");  //N42-2006?
         if( !confidence_node )
           confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidence");  //RadSeeker
+        if( !confidence_node )
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidenceValue");  //N42-2012
+        if( !confidence_node )
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidenceDescription");  //N42-2012
+        
         const rapidxml::xml_node<char> *id_desc_node = nuclide_node->first_node( "NuclideIDConfidenceDescription", 30 );
         const rapidxml::xml_node<char> *position_node = nuclide_node->first_node( "SourcePosition", 14 );
         const rapidxml::xml_node<char> *id_indicator_node = nuclide_node->first_node( "NuclideIdentifiedIndicator", 26 ); //says 'true' or 'false', seen in refZ077SD6DVZ
