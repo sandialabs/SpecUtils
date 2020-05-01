@@ -55,7 +55,9 @@
 #include <libgen.h>
 #endif
 
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include <sys/stat.h>
 
 #include "SpecUtils/StringAlgo.h"
@@ -71,6 +73,9 @@
 // Copied from linux libc sys/stat.h:
 #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+
+#undef min
+#undef max
 #endif
 
 //Currently CMakeLists.txt isnt setup to link against boost, so we'll rely on
