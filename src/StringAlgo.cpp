@@ -47,6 +47,9 @@
 #define WIN32_LEAN_AND_MEAN 1
 //Pull in WideCharToMultiByte(...), etc from WIndows
 #include <windows.h>
+
+#undef min
+#undef max
 #endif
 
 //#include <boost/config.hpp>
@@ -835,7 +838,7 @@ namespace SpecUtils
     size_t res = 1;
     for(++it; last != it; ++it, ++res)
     {
-      c = *it;
+      c = *reinterpret_cast<const unsigned char *>(it);
       
       //if highest value digit is not set, or if highest two digits are set
       //If the most significant bit isnt set, then its an ascii character.
@@ -847,9 +850,15 @@ namespace SpecUtils
       //  we will manually iterate incase there is an incorrect encoding.
       //
       //see: http://www.cprogramming.com/tutorial/unicode.html
-      // 0x80 --> 10000000
-      // 0xC0 --> 11000000
-      if( !(c & 0x80) || ((c & 0xC0) == 0xC0))
+      // 0x80 --> 10000000  //means not an ascii character
+      // 0xC0 --> 11000000  //means start of new charcter
+      const unsigned char not_ascii_bit = 0x80u;
+      const unsigned char utf8_start_bits = 0xC0u;
+
+      const bool is_ascii = !(c & not_ascii_bit);
+      const bool is_utf8_start = ((c & utf8_start_bits) == utf8_start_bits);
+      
+      if( is_ascii || is_utf8_start  )
         break;
     }
     
@@ -862,7 +871,7 @@ namespace SpecUtils
     //Assumes null-terminated string
     if( !(*it) )
       return 0;
-    
+
     unsigned char c;
     size_t res = 0;
     for( ; *it; ++it, ++res)

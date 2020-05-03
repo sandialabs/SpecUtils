@@ -70,7 +70,7 @@ namespace  SpecUtils
    when we can also switch to using std::chrono::time_point instead of
    boost::posix_time::ptime
    */
-#define USE_HH_DATE_LIB 0
+#define USE_HH_DATE_LIB 1
   
   //time_from_string(...):  Currently is a convience function for
   //  time_from_string_strptime(str,MiddleEndianFirst)

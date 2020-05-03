@@ -388,12 +388,12 @@ namespace SerialToDetectorModel
 #endif
     
     //Add when this file was written as a comment in the file
-    time_t rawtime;
-    struct tm *timeinfo;
-    char datebuffer[80];
-    time( &rawtime );
-    timeinfo = localtime( &rawtime );
-    strftime( datebuffer, sizeof(datebuffer), "%Y%m%d %H:%M:%S", timeinfo);
+    //time_t rawtime;
+    //struct tm *timeinfo;
+    //char datebuffer[80];
+    //time( &rawtime );
+    //timeinfo = localtime( &rawtime );
+    //strftime( datebuffer, sizeof(datebuffer), "%Y%m%d %H:%M:%S", timeinfo);
     
     strm << "SerialToDetectorModelVersion,"
          << SerialToDetectorModel_CURRENT_MAJOR_VERSION

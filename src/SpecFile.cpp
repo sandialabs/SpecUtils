@@ -1079,7 +1079,7 @@ void MeasurementCalibInfo::fill_binning()
       case SpecUtils::EnergyCalType::InvalidEquationType:
         break;
     }//switch( meas->energy_calibration_model_ )
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     cerr << "An invalid binning was specified, goign to default binning" << endl;
     if( nbin > 0 )

@@ -37,6 +37,11 @@
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
 
+#ifdef _WIN32
+#undef min
+#undef max
+#endif
+
 using namespace std;
 using namespace boost::unit_test;
 
@@ -158,7 +163,7 @@ BOOST_AUTO_TEST_CASE( testFindEnergy )
   const float accuracy = 0.001f;
   
   float binnum;
-  const float energies[] = { 1121.68, 1450.87, 1480.65 };
+  const float energies[] = { 1121.68f, 1450.87f, 1480.65f };
   const size_t nenergies = sizeof(energies)/sizeof(energies[0]);
   
   for( size_t i = 0; i < nenergies; ++i )

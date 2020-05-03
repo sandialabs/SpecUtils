@@ -29,7 +29,7 @@
 
 
 #if( USE_HH_DATE_LIB )
-#include "3rdparty/date_9a0ee25/include/date/date.h"
+#include "3rdparty/date/include/date/date.h"
 #else
 
 //#if( defined(_MSC_VER) && _MSC_VER < 1800 )
