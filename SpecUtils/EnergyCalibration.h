@@ -42,29 +42,50 @@
 namespace SpecUtils
 {
   /** The energy (or FWHM) calibration type that the calibration coefficients
-   should be interpreted as; typically also the type in the file.
+   should be interpreted as.
+   
+   When parsing spectrum files, the calibration type used will typically be the
+   type the file used.
    */
   enum class EnergyCalType : int
   {
-    /** for bin i, Energy_i = coef[0] + i*coef[1] + i*i*coef[2] + ... */
+    /**  Polynomial calibration.
+     Most common energy calibration type, and type used in nearly all N42 files.
+     
+     For bin i:
+     Energy_i = coef[0] + i*coef[1] + i*i*coef[2] + ...
+     */
     Polynomial,
     
-    /** */
+    /** Full range fraction (energy calibration).
+     Used by GADRAS-DRF in PCF files, and in a few niche other places.
+     
+     For bin i:
+     let x = i / nbin;
+     E_i = C_0 + x*C_1 + x*x*C_2 + x*x*x*C_3 + C_4/(1+60*x);
+     */
     FullRangeFraction,
     
-    /** The lower energies of each channel is specified. */
+    /** The lower energies of each channel is specified.
+     
+     Commonly used in CSV or TXT files, rarely in some N42 files, an
+     occasionally in a few other places.  May either specify the same number
+     of channels as the spectral data, or one more to specify the upper energy
+     of the last channel.
+     */
     LowerChannelEdge,
     
     /** Used for files that do not specify a energy calibration (that could be
      parsed).  For these files a polynomial energy calibration of 0 to 3 MeV
-     is used unless a guess of values for the specfic detector being parsed
+     is used unless a guess of values for the specific detector being parsed
      is known (in which case the known energy range is used).
      */
     UnspecifiedUsingDefaultPolynomial,
     
-    /** A placeholder to indicate an invalid calibration type.  After sucessfuly
-     parsing a spectrum file, no gamma spectrum will have this equation type.
-     ToDo: Could rename to NumberEquationTypes
+    /** A placeholder to indicate an invalid calibration type.  After
+     successfully parsing a spectrum file, no gamma spectrum will have this
+     equation type.
+     @ToDo: Could rename to NumberEquationTypes
      */
     InvalidEquationType
   };

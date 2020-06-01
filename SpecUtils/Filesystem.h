@@ -227,7 +227,7 @@ namespace  SpecUtils
    If the current working directory is not specified, then the directory
    returned by cwd() will be used, if the path is not already absolute.
    
-   Returns true if sucessful, and false if it fails for any reason.
+   Returns true if successful, and false if it fails for any reason.
    */
   bool make_canonical_path( std::string &path, const std::string &cwd = "" );
   
@@ -236,7 +236,7 @@ namespace  SpecUtils
    */
   static const size_t sm_recursive_ls_max_depth = 25;
   
-  /** The appriximate maximum number of file names any of the 'ls' functions can
+  /** The approximate maximum number of file names any of the 'ls' functions can
    return.
    */
   static const size_t sm_ls_max_results = 100000;
