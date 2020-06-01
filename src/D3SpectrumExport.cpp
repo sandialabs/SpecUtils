@@ -244,7 +244,11 @@ namespace D3SpectrumExport
   const char *spectrum_chart_setup_js(){ return SPECTRUM_CHART_SETUP_JS; }
   
   D3SpectrumOptions::D3SpectrumOptions()
-  :  peaks_json( "" ), line_color( "black" ), peak_color( "blue" ), display_scale_factor( 1.0 )
+  :  peaks_json( "" ),
+     line_color( "black" ),
+     peak_color( "blue" ),
+     display_scale_factor( 1.0 ),
+     neutron_scale_factor( std::numeric_limits<double>::infinity() )
   {
   }
 
@@ -735,6 +739,13 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       sf = 1.0;
 
     ostr << "\n\t\t\t" << q << "yScaleFactor" << q << ":" << sf;
+    
+    if( !IsInf(options.neutron_scale_factor)
+        && !IsNan(options.neutron_scale_factor)
+        && (options.neutron_scale_factor >= 0.0) )
+    {
+      ostr << ",\n\t\t\t" << q << "neutronScaleFactor" << q << ":" << options.neutron_scale_factor;
+    }
     
     ostr << "\n\t\t}";
     

@@ -4142,7 +4142,10 @@ SpectrumChartD3.prototype.updateLegend = function() {
           .text( "Real Time " + (sf*rt).toPrecision(4) );
           
       if( typeof neut === "number" ){
-        neut *= sf;
+        //We actually want the neutrons to be scaled by real times, not live times like gammas.
+        const neutsf = ((typeof spectrum.neutronScaleFactor === "number") ? spectrum.neutronScaleFactor : sf);
+        
+        neut *= neutsf;
         
         // Lets print the neutron counts as a human friendly number, to roughly
         //   the precision we would care about.  Could probably do a much better
@@ -5733,7 +5736,9 @@ SpectrumChartD3.prototype.cancelYAxisScalingAction = function() {
     
     if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
       spectrum.yScaleFactor = spectrum.startingYScaleFactor;
+      spectrum.neutronScaleFactor = spectrum.startingNeutronScaleFactor;
       spectrum.startingYScaleFactor = null;
+      spectrum.startingNeutronScaleFactor = null;
       self.endYAxisScalingAction()();
       self.redraw()();
       return;
@@ -5766,6 +5771,7 @@ SpectrumChartD3.prototype.endYAxisScalingAction = function() {
         spectrum.sliderToggle.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.7);
                                           
         spectrum.startingYScaleFactor = null;
+        spectrum.startingNeutronScaleFactor = null;
         scale = spectrum.yScaleFactor;
         break;
       }
@@ -5893,6 +5899,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
           spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.startingYScaleFactor = spectrum.yScaleFactor;
+          spectrum.startingNeutronScaleFactor = spectrum.neutronScaleFactor;
           self.currentlyAdjustingSpectrumScale = spectrum.type;
           spectrum.sliderText.style( "display", null )
           d3.event.preventDefault();
@@ -5906,6 +5913,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
           spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.startingYScaleFactor = spectrum.yScaleFactor;
+          spectrum.startingNeutronScaleFactor = spectrum.neutronScaleFactor;
           self.currentlyAdjustingSpectrumScale = spectrum.type;
           spectrum.sliderText.style( "display", null )
         })
@@ -6018,11 +6026,15 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     }
     
     var spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
-
+    
     spectrum.sliderToggle.attr("cy", newTogglePos );
     spectrum.sliderText.text( (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
-    self.rawData.spectra[linei].yScaleFactor = spectrumScaleFactor;
+    spectrum.yScaleFactor = spectrumScaleFactor;
 
+    if( (typeof spectrum.startingNeutronScaleFactor) === "number" ){
+      spectrum.neutronScaleFactor = sf*spectrum.startingNeutronScaleFactor;
+    }
+    
     // If we are using background subtract, we have to redraw the entire chart if we update the scale factors
     if (self.options.backgroundSubtract) self.redraw()();
     else scaleFactorChangeRedraw(spectrum, linei);
@@ -10813,22 +10825,6 @@ SpectrumChartD3.prototype.getSpectrumTitles = function() {
   return result;
 }
 
-/**
- * Returns a list of all scale factors from all spectra.
- */
-SpectrumChartD3.prototype.getYScaleFactors = function() {
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
-
-  var result = [];
-  for (var i = 0; i < self.rawData.spectra.length; ++i)
-    result.push(self.rawData.spectra[i].yScaleFactor);
-
-  /* Return a copy of the y-scale factors */
-  return result.slice();
-}
 
 /**
  * Returns the number of counts for a specific energy value.
