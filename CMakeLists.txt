@@ -83,9 +83,7 @@ if( NOT Boost_FOUND )
 endif( NOT Boost_FOUND )
 
 
-set( RAPID_XML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
-#find_path( RAPID_XML_DIR rapidxml/rapidxml.hpp ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty )
-
+set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
   FIND_PACKAGE(PythonLibs 2.7)
@@ -258,7 +256,7 @@ target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
 endif( MINGW )
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
-                            PRIVATE ${RAPID_XML_DIR} ${PYTHON_INCLUDE_DIRS} )
+                            PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
   add_subdirectory( regression_test )

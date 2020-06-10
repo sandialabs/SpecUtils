@@ -32,6 +32,9 @@
 #include <algorithm>
 #include <functional>
 
+// For template processing
+#include <inja/inja.hpp>;
+
 #define BOOST_DATE_TIME_NO_LIB
 #include <boost/date_time/posix_time/posix_time.hpp>
 
@@ -219,6 +222,9 @@ enum class SaveSpectrumAsType : int
   HtmlD3,
 #endif
   
+  /** See #SpecFile::write_template for details. */
+  Template,
+
   NumTypes
 };//enum SaveSpectrumAsType
 
@@ -1869,6 +1875,11 @@ public:
                       const std::set<int> &det_nums ) const;
 #endif
   
+  bool write_template( std::ostream &output,
+      const std:: string template_file,
+      std::set<int> sample_nums,
+      const std::set<int>& det_nums) const;
+
   //Incase InterSpec specific changes are made, please change this number
   //  Version 4: Made it so portal data that starts with a long background as
   //             its first sample will have the 'id' attribute of the
