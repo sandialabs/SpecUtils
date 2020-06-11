@@ -43,22 +43,66 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
 
- #include "inja/inja.hpp"
+#include "inja/inja.hpp"
 
 using namespace std;
+using namespace inja;
+using json = nlohmann::json;
 
 
 namespace SpecUtils
 {
+	void to_json(json& j, shared_ptr<const SpecUtils::Measurement> p)
+	{
+		j["detector_ecal_coeffs"] = p->calibration_coeffs();
   
-bool SpecFile::write_template( std::ostream& ostr, const std::string template_file ) const
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+		j["real_time"] = p->real_time();
+		j["live_time"] = p->live_time();
 
-  std::cout << "DEBUG: WRITING TEMPLATE FILE, TEMPLATE = " << template_file << std::endl;
-  
-  return !ostr.bad();
-}//bool write_template( std::ostream& ostr ) const
+		j["gamma_counts"] = (*(p->gamma_counts()));
+
+		//TODO: more stuff
+	}
+
+	bool SpecFile::write_template(std::ostream& ostr, const std::string template_file) const
+	{
+		std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+
+		Environment env;
+
+		// STEP 1 - read template file
+		Template temp;
+		try
+		{
+			temp = env.parse_template(template_file);
+		}
+		catch (std::exception& e)
+		{
+			cerr << "Error reading input template" << e.what() << endl;
+			return false;
+		}
+
+		// STEP 2 - populate JSON with data from input spectrum
+		json data;
+
+		data["measurements"] = measurements_;
+
+		data["gamma_live_time"] = gamma_live_time_;
+		data["gamma_real_time"] = gamma_real_time_;
+
+		// STEP 3 - render template using JSON data to the provided stream
+		try 
+		{
+			env.render_to(ostr, temp, data);
+		}
+		catch (std::exception& e)
+		{
+			cerr << "Error rendering output file" << e.what() << endl;
+			return false;
+		}
+
+		return !ostr.bad();
+	}//bool write_template( std::ostream& ostr ) const
 
 }//namespace SpecUtils
 
