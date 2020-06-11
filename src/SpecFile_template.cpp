@@ -49,7 +49,6 @@ using namespace std;
 using namespace inja;
 using json = nlohmann::json;
 
-
 namespace SpecUtils
 {
 	void to_json(json& j, shared_ptr<const SpecUtils::Measurement> p)
@@ -61,6 +60,11 @@ namespace SpecUtils
 
 		j["gamma_counts"] = (*(p->gamma_counts()));
 
+		// Add compressed data in case we want to use that in the file
+		vector<float> compressed_counts;
+		compress_to_counted_zeros(*(p->gamma_counts()), compressed_counts);
+		j["zero_compressed_counts"] = compressed_counts;
+
 		//TODO: more stuff
 	}
 
@@ -69,6 +73,14 @@ namespace SpecUtils
 		std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
 
 		Environment env;
+
+		env.add_callback("format", 2, [](Arguments& args) {
+			char buffer[256];
+			std::string format = args.at(0)->get<string>();
+			float value = args.at(1)->get<float>();
+			snprintf(buffer, sizeof(buffer), format.c_str(), value);
+			return std::string(buffer);
+		});
 
 		// STEP 1 - read template file
 		Template temp;
