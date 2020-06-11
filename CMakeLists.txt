@@ -101,6 +101,7 @@ set( sources
      src/SpecFile_chn.cpp
      src/SpecFile_spe.cpp
      src/SpecFile_csv.cpp
+     src/SpecFile_template.cpp
      src/SpecFile_gr135.cpp
      src/SpecFile_aram.cpp
      src/SpecFile_lis.cpp

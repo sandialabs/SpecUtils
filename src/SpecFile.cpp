@@ -6135,48 +6135,6 @@ bool SpecFile::write_d3_html( ostream &ostr,
 }
 #endif
 
-
-bool SpecFile::write_template(ostream& ostr,
-    const std::string template_file,
-    std::set<int> sample_nums,
-    const std::set<int>& det_nums) const
-{
-    try
-    {
-        std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
-
-        if (sample_nums.empty())
-            sample_nums = sample_numbers_;
-
-        const size_t ndet = detector_numbers_.size();
-        vector<bool> detectors(ndet, true);
-        if (!det_nums.empty())
-        {
-            for (size_t i = 0; i < ndet; ++i)
-                detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-        }//if( det_nums.empty() )
-
-
-        std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, detectors);
-
-        if (!summed || !summed->gamma_counts() || summed->gamma_counts()->empty())
-            return false;
-
-        //TODO: call template method here
-
-        return false;
-    }
-    catch (std::exception&)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-
-
-
 void Measurement::popuplate_channel_energies_from_coeffs()
 {
   if( !gamma_counts_ || gamma_counts_->empty() )
@@ -7493,8 +7451,9 @@ void SpecFile::write( std::ostream &strm,
 #endif
     case SaveSpectrumAsType::Template:  
     {
-      std::string templateFile; // TODO: read this from command line arguments
-      success = info.write_template(strm, templateFile, samples, detectors);
+      // BDE_TODO: figure out what is going on here, to write templates we would need to 
+      // get the template file argument into here somehow.
+      throw runtime_error("Templates not supported from this method");
       break;
     }
 
