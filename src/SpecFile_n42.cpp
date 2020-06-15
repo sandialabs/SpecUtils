@@ -4525,13 +4525,12 @@ namespace SpecUtils
       if( coef_val_node && coef_val_node->value_size() )
       {
         info.equation_type = SpecUtils::EnergyCalType::Polynomial;
-        vector<string> fields;
         const char *data = coef_val_node->value();
         const size_t len = coef_val_node->value_size();
         if( !split_to_floats( data, len, info.coefficients ) )
           throw runtime_error( "Invalid calibration value: " + xml_value_str(coef_val_node) );
         
-        while(!info.coefficients.empty() && info.coefficients.back()==0.0f )
+        while( !info.coefficients.empty() && info.coefficients.back()==0.0f )
           info.coefficients.erase( info.coefficients.end()-1 );
         
         if( info.coefficients.size() < 2 )
@@ -5686,6 +5685,7 @@ namespace SpecUtils
     // See note above about system that has multiple N42 documents in a single file.
     for( const rapidxml::xml_node<char> *rad_data_node = data_node; rad_data_node;
         rad_data_node = rad_data_node->next_sibling("RadInstrumentData") )
+    // TODO: convert to: XML_FOREACH_DAUGHTER( meas_node, data_node, "RadMeasurement" )
     {
       for( auto meas_node = XML_FIRST_NODE(rad_data_node, "RadMeasurement");
           meas_node;
