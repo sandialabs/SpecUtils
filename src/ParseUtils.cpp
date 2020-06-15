@@ -20,6 +20,7 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
+#include <cctype>
 #include <string>
 #include <limits>
 #include <sstream>

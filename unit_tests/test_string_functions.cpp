@@ -28,7 +28,9 @@
 #include <fstream>
 #include <iostream>
 #include <stdlib.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include <boost/algorithm/string.hpp>
 

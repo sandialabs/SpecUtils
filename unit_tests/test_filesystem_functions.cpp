@@ -28,7 +28,9 @@
 #include <vector>
 #include <cstdlib>
 #include <stdlib.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include <cstdlib>
 
 //#define BOOST_TEST_DYN_LINK

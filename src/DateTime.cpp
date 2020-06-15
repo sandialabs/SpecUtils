@@ -29,7 +29,7 @@
 
 
 #if( USE_HH_DATE_LIB )
-#include "3rdparty/date_9a0ee25/include/date/date.h"
+#include "3rdparty/date/include/date/date.h"
 #else
 
 //#if( defined(_MSC_VER) && _MSC_VER < 1800 )
@@ -49,6 +49,8 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
+#undef min
+#undef max
 #endif
 
 /** Checking ISO time string against boost requires linking to boost, so for now

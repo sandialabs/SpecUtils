@@ -397,7 +397,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       if (measurements[id].second.spectrum_type == SpecUtils::SpectrumType::Background) {
         while (!foregroundIDs.empty()) {
           size_t foregroundID = foregroundIDs.top();
-          backgroundIDs[foregroundID] = id;
+          backgroundIDs[foregroundID] = static_cast<int>( id );
           foregroundIDs.pop();
         }
       } else {
