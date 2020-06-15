@@ -66,11 +66,11 @@ namespace  SpecUtils
    is nearly a drop-in, header only solution for cross platform date parsing
    that appears to work well (all date/time unit tests pass on macOS at
    least).  If we use, we could probably totally get rid a ton of the
-   "pre-proccessing" string wrangling complexity too!  ...next release...,
+   "pre-processing" string wrangling complexity too!  ...next release...,
    when we can also switch to using std::chrono::time_point instead of
    boost::posix_time::ptime
    */
-#define USE_HH_DATE_LIB 0
+#define USE_HH_DATE_LIB 1
   
   //time_from_string(...):  Currently is a convience function for
   //  time_from_string_strptime(str,MiddleEndianFirst)
