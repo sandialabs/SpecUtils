@@ -132,22 +132,6 @@ namespace D3SpectrumExport
      */
     double display_scale_factor;
     
-    /** The scale factor to apply to neutron counts in the legend.  This is
-     typically the real-time normalization of the background measurement to
-     match the foreground measurement.
-     
-     By default this variable has a value of Inf, which results in no neutron
-     scale factor being written to the JS, which leads to the
-     #display_scale_factor being used if neutrons are present.
-     
-     Note: for measurement swith large amounts of gamma dead-time, this maye be
-     significantly different than #display_scale_factor.
-     
-     Note: this scale factor is not currently displayed on the legend, or
-     anywhere else on the chart.
-     */
-    double neutron_scale_factor;
-    
     SpecUtils::SpectrumType spectrum_type;  // spectrum type
   };//struct D3SpectrumOptions
   
