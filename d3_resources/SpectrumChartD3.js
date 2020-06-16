@@ -4179,7 +4179,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       //If we are displaying neutron CPS, and this is not a foreground, then lets add an easy way to compare this rate
       //  to the foreground
       if( isCps
-          && (spectrum.type === self.spectrumTypes.BACKGROUND)
+          && (spectrum.type === self.spectrumTypes.FOREGROUND)
           || (spectrum.type === self.spectrumTypes.SECONDARY) )
       {
         //Get the neutron info for the foreground; note uses first foreground
@@ -4189,7 +4189,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
         {
           const spec = spectra[j];
           if( spec && (j !== i)
-              && (spec.type === self.spectrumTypes.FOREGROUND)
+              && (spec.type === self.spectrumTypes.BACKGROUND)
               && ((typeof spec.neutronRealTime === "number") || (typeof spec.realTime === "number"))
               && (typeof spec.neutrons === "number") )
           {
@@ -4211,7 +4211,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
           thistxt.append('svg:tspan')
             .attr('x', "40")
             .attr('y', thisentry.node().getBBox().height)
-            .html( toLegendRateStr(nsigma,1) + " &sigma; " + (isneg ? "below" : "above") + " foreground" );
+            .html( "(" + toLegendRateStr(nsigma,1) + " &sigma; " + (isneg ? "below" : "above") + " bckgrnd)" );
         }//if( we have foreground neutron CPS info )
       }//if( this is not a foreground, and we are displaying neutron CPS )
       
