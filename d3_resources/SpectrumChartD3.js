@@ -4210,8 +4210,9 @@ SpectrumChartD3.prototype.updateLegend = function() {
           
           thistxt.append('svg:tspan')
             .attr('x', "40")
-            .attr('y', thisentry.node().getBBox().height)
-            .html( "(" + toLegendRateStr(nsigma,1) + " &sigma; " + (isneg ? "below" : "above") + " bckgrnd)" );
+            .attr('y', thisentry.node().getBBox().height - 4)
+            .attr('style', 'font-size: 75%')
+            .html( "(" + toLegendRateStr(nsigma,1) + " &sigma; " + (isneg ? "below" : "above") + " background)" );
         }//if( we have foreground neutron CPS info )
       }//if( this is not a foreground, and we are displaying neutron CPS )
       
