@@ -1079,7 +1079,7 @@ void MeasurementCalibInfo::fill_binning()
       case SpecUtils::EnergyCalType::InvalidEquationType:
         break;
     }//switch( meas->energy_calibration_model_ )
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     cerr << "An invalid binning was specified, goign to default binning" << endl;
     if( nbin > 0 )
@@ -5148,9 +5148,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     if( pt_averageRealTime <= 0.00000001 )
       is_passthrough = false;
     
-    pt_averageRealTime /= (pt_num_items ? pt_num_items : 1);
-    
     //In principle should check that measurements were taken sequentially as well
+    //pt_averageRealTime /= (pt_num_items ? pt_num_items : 1);
     //is_passthrough = is_passthrough && ( (pt_num_items>5) && (pt_averageRealTime < 2.5) );
     is_passthrough = is_passthrough && ( (pt_num_items>5) && pt_num_items > static_cast<size_t>(0.75*ngamma_meas) );
     //is_passthrough = true;

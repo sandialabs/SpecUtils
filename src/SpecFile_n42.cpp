@@ -3017,11 +3017,20 @@ namespace SpecUtils
         if( result.id_confidence_.size() )
         {
           //If result.id_confidence_ represents a number between 0 and 100, then
-          //  should use "NuclideIDConfidenceValue" instead of "NuclideIDConfidenceDescription"
-          val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
-          xml_node<char> *NuclideIDConfidenceDescription = doc->allocate_node( node_element, "NuclideIDConfidenceDescription", val );
-          nuclide_node->append_node( NuclideIDConfidenceDescription );
-        }
+          //  use "NuclideIDConfidenceValue" otherwise use "NuclideIDConfidenceDescription"
+          float dummy;
+          if( SpecUtils::parse_float(result.id_confidence_.c_str(), result.id_confidence_.size(), dummy) && (dummy>=0.0f) && (dummy<=100.0f) )
+          {
+            val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
+            xml_node<char> *NuclideIDConfidenceValue = doc->allocate_node( node_element, "NuclideIDConfidenceValue", val );
+            nuclide_node->append_node( NuclideIDConfidenceValue );
+          }else
+          {
+            val = doc->allocate_string( result.id_confidence_.c_str(), result.id_confidence_.size()+1 );
+            xml_node<char> *NuclideIDConfidenceDescription = doc->allocate_node( node_element, "NuclideIDConfidenceDescription", val );
+            nuclide_node->append_node( NuclideIDConfidenceDescription );
+          }
+        }//if( result.id_confidence_.size() )
         
         if( result.nuclide_type_.size() )
         {
@@ -3318,7 +3327,7 @@ namespace SpecUtils
       const string &name = component_versions_[i].first;
       const string &version = component_versions_[i].second;
       
-      if( SpecUtils::icontains( name, "Software") && version == "Unknown" )
+      if( SpecUtils::istarts_with( name, "Software") && version == "Unknown" )
         continue;
       
       std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -3680,7 +3689,7 @@ namespace SpecUtils
      }//for( size_t i = 0; i < measurements_.size(); ++i )
      */
     
-    if( !!detectors_analysis_ )
+    if( detectors_analysis_ )
       add_analysis_results_to_2012_N42( *detectors_analysis_,
                                        RadInstrumentData, xmldocmutex );
     
@@ -5490,169 +5499,180 @@ namespace SpecUtils
       }
     }//for( loop over remarks )
     
-    rapidxml::xml_node<char> *inst_info_node = data_node->first_node( "RadInstrumentInformation", 24 );
-    set_2012_N42_instrument_info( inst_info_node );
-    
     map<string,MeasurementCalibInfo> calibrations;
-    get_2012_N42_energy_calibrations( calibrations, data_node, remarks_, parse_warnings_ );
-    
-    //XXX - implement using RadItemInformation
-    //  for( const rapidxml::xml_node<char> *rad_item_node = data_node->first_node( "RadItemInformation", 18 );
-    //      rad_item_node;
-    //      rad_item_node = XML_NEXT_TWIN(rad_item_node) )
-    //  {
-    //    rapidxml::xml_attribute<char> *id_att = rad_item_node->first_attribute( "id", 2, false );
-    //    rapidxml::xml_node<char> *remark_node = rad_item_node->first_node( "Remark", 6 );
-    //    rapidxml::xml_node<char> *descrip_node = rad_item_node->first_node( "RadItemDescription", 18 );
-    //    rapidxml::xml_node<char> *quantity_node = rad_item_node->first_node( "RadItemQuantity", 15 );
-    //    rapidxml::xml_node<char> *geometry_node = rad_item_node->first_node( "RadItemMeasurementGeometryDescription", 37 );
-    //    rapidxml::xml_node<char> *characteristics_node = rad_item_node->first_node( "RadItemCharacteristics", 22 );
-    //    rapidxml::xml_node<char> *extension_node = rad_item_node->first_node( "RadItemInformationExtension", 27 );
-    //  }//for( loop over "RadItemInformation" nodes )
-    
-    //  map<string,int> detname_to_num; //only used when reading in InterSpec generated files
     map<string,pair<DetectionType,string> > id_to_dettype;
     
-    XML_FOREACH_DAUGHTER( info_node, data_node, "RadDetectorInformation" )
+    // A certain mobile system (see refJ3WSODVDEC) creates an N42 document for
+    //  each time slice, and then puts all the documents into a single file.
+    //  So we have to loop over <RadInstrumentData> nodes to reach all the
+    //  measurements.
+    //  (the one file I've seen looks like calibration is always the same, but
+    //  we will loop over all N42 documents to be sure).
+    for( auto rad_data_node = data_node; rad_data_node; rad_data_node = XML_NEXT_TWIN(rad_data_node) )
     {
-      rapidxml::xml_attribute<char> *id_att   = info_node->first_attribute( "id", 2, false );
-      //rapidxml::xml_node<char> *remark_node   = XML_FIRST_NODE( info_node, "Remark" );
-      rapidxml::xml_node<char> *name_node     = XML_FIRST_NODE( info_node, "RadDetectorName" );
-      rapidxml::xml_node<char> *category_node = XML_FIRST_NODE( info_node, "RadDetectorCategoryCode" );
-      
-      //<RadDetectorKindCode> returns "NaI", "HPGe", "PVT", "He3", etc (see determine_rad_detector_kind_code())
-      //  and should be utilized at some point.  But would require adding a field to MeasurementInfo
-      //  I think to kind of do it properly.
-      
-      //rapidxml::xml_node<char> *kind_node     = info_node->first_node( "RadDetectorKindCode" );
-      rapidxml::xml_node<char> *descrip_node  = XML_FIRST_NODE( info_node, "RadDetectorDescription" );
-      rapidxml::xml_node<char> *length_node   = XML_FIRST_NODE( info_node, "RadDetectorLengthValue" );
-      rapidxml::xml_node<char> *width_node    = XML_FIRST_NODE( info_node, "RadDetectorWidthValue" );
-      rapidxml::xml_node<char> *depth_node    = XML_FIRST_NODE( info_node, "RadDetectorDepthValue" );
-      rapidxml::xml_node<char> *diameter_node = XML_FIRST_NODE( info_node, "RadDetectorDiameterValue" );
-      rapidxml::xml_node<char> *volume_node   = XML_FIRST_NODE( info_node, "RadDetectorVolumeValue" );
-      rapidxml::xml_node<char> *characteristics_node = XML_FIRST_NODE( info_node, "RadDetectorCharacteristics" );
-      //    rapidxml::xml_node<char> *extension_node = XML_FIRST_NODE( info_node, "RadDetectorInformationExtension" );
-      
-      string name = xml_value_str(id_att);
-      if( name == s_unnamed_det_placeholder )
-      {
-        name.clear();
-      }else
-      {
-        if( name.empty() )
-          name = xml_value_str(name_node);
-        
-        if( name.empty() )
-        {
-          rapidxml::xml_attribute<char> *ref_att = info_node->first_attribute( "Reference", 9, false );
-          name = xml_value_str(ref_att);
-        }
-      }//if( name == s_unnamed_det_placeholder ) / else
-      
-      //    rapidxml::xml_node<char> *detinfo_extension_node = info_node->first_node( "RadDetectorInformationExtension", 31 );
-      //    rapidxml::xml_node<char> *det_num_node = detinfo_extension_node ? detinfo_extension_node->first_node( "InterSpec:DetectorNumber", 24 ) : (rapidxml::xml_node<char> *)0;
-      //    if( det_num_node && det_num_node->value() )
-      //    {
-      //      int detnum;
-      //      if( sscanf(det_num_node->value(), "%d", &detnum) == 1 )
-      //        detname_to_num[name] = detnum;
-      //    }
-      
-      DetectionType type = GammaDetection; //OtherDetection;
-      if( category_node && category_node->value_size() )
-      {
-        if( XML_VALUE_ICOMPARE(category_node, "Gamma") )
-          type = GammaDetection;
-        else if( XML_VALUE_ICOMPARE(category_node, "Neutron") )
-          type = NeutronDetection;
-        else
-          type = OtherDetection;
-        
-        //See refDUEL9G1II9, but basically if a detectors name ends with "Ntr",
-        //  force it to be a neutron detector (to make up for manufacturers error)
-        if( (type == GammaDetection)
-           && SpecUtils::iends_with(name, "Ntr") )
-        {
-          type = NeutronDetection;
-        }
-        
-        const string desc = xml_value_str( descrip_node );
-        if( icontains( desc, "Gamma" ) && icontains( desc, "Neutron" ) )
-          type = GammaAndNeutronDetection;
-        
-        if( type == OtherDetection )
-        {
-          const string idval = xml_value_str(id_att);
-          if( SpecUtils::icontains(idval, "gamma") )
-            type = GammaDetection;
-          else if( SpecUtils::icontains(idval, "neutron") )
-            type = NeutronDetection;
-        }//if( type == OtherDetection )
-      }//if( category_node && category_node->value_size() )
-      
-      string descrip; // = xml_value_str( kind_node );
-      
-      descrip = xml_value_str( descrip_node );
-      SpecUtils::ireplace_all( descrip, ", Gamma and Neutron", "" );
-      SpecUtils::ireplace_all( descrip, "Gamma and Neutron", "" );
-      
-      if( length_node && length_node->value_size() )
-      {
-        if( descrip.length() )
-          descrip += ", ";
-        descrip += string("Length: ") + xml_value_str(length_node) + string(" cm");
-      }
-      
-      if( width_node && width_node->value_size() )
-      {
-        if( descrip.length() )
-          descrip += ", ";
-        descrip += string("Width: ") + xml_value_str(width_node) + string(" cm");
-      }
-      
-      if( depth_node && depth_node->value_size() )
-      {
-        if( descrip.length() )
-          descrip += ", ";
-        descrip += string("Depth: ") + xml_value_str(depth_node) + string(" cm");
-      }
-      
-      if( diameter_node && diameter_node->value_size() )
-      {
-        if( descrip.length() )
-          descrip += ", ";
-        descrip += string("Diameter: ") + xml_value_str(diameter_node) + string(" cm");
-      }
-      
-      if( volume_node && volume_node->value_size() )
-      {
-        if( descrip.length() )
-          descrip += ", ";
-        descrip += string("Volume: ") + xml_value_str(volume_node) + string(" cc");
-      }
-      
-      for( auto character = XML_FIRST_NODE_CHECKED(characteristics_node, "Characteristic");
-          character; character = XML_NEXT_TWIN(character) )
-      {
-        const string charac_str = SpecFile::concat_2012_N42_characteristic_node(character);
-        if( charac_str.size() )
-          descrip += string(descrip.size() ? ", " : "") + "{" + charac_str + "}";
-      }//loop over characteristics
-      
-      
-      if( type==GammaDetection || type==NeutronDetection || type==GammaAndNeutronDetection )
-        id_to_dettype[name] = pair<DetectionType,string>(type,descrip);
-    }//for( loop over "RadDetectorInformation" nodes )
+      rapidxml::xml_node<char> *inst_info_node = rad_data_node->first_node( "RadInstrumentInformation", 24 );
+      set_2012_N42_instrument_info( inst_info_node );
+  
+      get_2012_N42_energy_calibrations( calibrations, rad_data_node, remarks_, parse_warnings_ );
     
-    rapidxml::xml_node<char> *analysis_node = data_node->first_node( "AnalysisResults", 15 );
-    if( analysis_node )
-    {
-      std::shared_ptr<DetectorAnalysis> analysis_info = std::make_shared<DetectorAnalysis>();
-      set_analysis_info_from_n42( analysis_node, *analysis_info );
-      //    if( analysis_info->results_.size() )
-      detectors_analysis_ = analysis_info;
-    }//if( analysis_node )
+      
+      
+      //XXX - implement using RadItemInformation
+      //  for( const rapidxml::xml_node<char> *rad_item_node = rad_data_node->first_node( "RadItemInformation", 18 );
+      //      rad_item_node;
+      //      rad_item_node = XML_NEXT_TWIN(rad_item_node) )
+      //  {
+      //    rapidxml::xml_attribute<char> *id_att = rad_item_node->first_attribute( "id", 2, false );
+      //    rapidxml::xml_node<char> *remark_node = rad_item_node->first_node( "Remark", 6 );
+      //    rapidxml::xml_node<char> *descrip_node = rad_item_node->first_node( "RadItemDescription", 18 );
+      //    rapidxml::xml_node<char> *quantity_node = rad_item_node->first_node( "RadItemQuantity", 15 );
+      //    rapidxml::xml_node<char> *geometry_node = rad_item_node->first_node( "RadItemMeasurementGeometryDescription", 37 );
+      //    rapidxml::xml_node<char> *characteristics_node = rad_item_node->first_node( "RadItemCharacteristics", 22 );
+      //    rapidxml::xml_node<char> *extension_node = rad_item_node->first_node( "RadItemInformationExtension", 27 );
+      //  }//for( loop over "RadItemInformation" nodes )
+      
+      
+      XML_FOREACH_DAUGHTER( info_node, rad_data_node, "RadDetectorInformation" )
+      {
+        rapidxml::xml_attribute<char> *id_att   = info_node->first_attribute( "id", 2, false );
+        //rapidxml::xml_node<char> *remark_node   = XML_FIRST_NODE( info_node, "Remark" );
+        rapidxml::xml_node<char> *name_node     = XML_FIRST_NODE( info_node, "RadDetectorName" );
+        rapidxml::xml_node<char> *category_node = XML_FIRST_NODE( info_node, "RadDetectorCategoryCode" );
+        
+        //<RadDetectorKindCode> returns "NaI", "HPGe", "PVT", "He3", etc (see determine_rad_detector_kind_code())
+        //  and should be utilized at some point.  But would require adding a field to MeasurementInfo
+        //  I think to kind of do it properly.
+        
+        //rapidxml::xml_node<char> *kind_node     = info_node->first_node( "RadDetectorKindCode" );
+        rapidxml::xml_node<char> *descrip_node  = XML_FIRST_NODE( info_node, "RadDetectorDescription" );
+        rapidxml::xml_node<char> *length_node   = XML_FIRST_NODE( info_node, "RadDetectorLengthValue" );
+        rapidxml::xml_node<char> *width_node    = XML_FIRST_NODE( info_node, "RadDetectorWidthValue" );
+        rapidxml::xml_node<char> *depth_node    = XML_FIRST_NODE( info_node, "RadDetectorDepthValue" );
+        rapidxml::xml_node<char> *diameter_node = XML_FIRST_NODE( info_node, "RadDetectorDiameterValue" );
+        rapidxml::xml_node<char> *volume_node   = XML_FIRST_NODE( info_node, "RadDetectorVolumeValue" );
+        rapidxml::xml_node<char> *characteristics_node = XML_FIRST_NODE( info_node, "RadDetectorCharacteristics" );
+        //    rapidxml::xml_node<char> *extension_node = XML_FIRST_NODE( info_node, "RadDetectorInformationExtension" );
+        
+        string name = xml_value_str(id_att);
+        if( name == s_unnamed_det_placeholder )
+        {
+          name.clear();
+        }else
+        {
+          if( name.empty() )
+            name = xml_value_str(name_node);
+          
+          if( name.empty() )
+          {
+            rapidxml::xml_attribute<char> *ref_att = info_node->first_attribute( "Reference", 9, false );
+            name = xml_value_str(ref_att);
+          }
+        }//if( name == s_unnamed_det_placeholder ) / else
+        
+        //    rapidxml::xml_node<char> *detinfo_extension_node = info_node->first_node( "RadDetectorInformationExtension", 31 );
+        //    rapidxml::xml_node<char> *det_num_node = detinfo_extension_node ? detinfo_extension_node->first_node( "InterSpec:DetectorNumber", 24 ) : (rapidxml::xml_node<char> *)0;
+        //    if( det_num_node && det_num_node->value() )
+        //    {
+        //      int detnum;
+        //      if( sscanf(det_num_node->value(), "%d", &detnum) == 1 )
+        //        detname_to_num[name] = detnum;
+        //    }
+        
+        DetectionType type = GammaDetection; //OtherDetection;
+        if( category_node && category_node->value_size() )
+        {
+          if( XML_VALUE_ICOMPARE(category_node, "Gamma") )
+            type = GammaDetection;
+          else if( XML_VALUE_ICOMPARE(category_node, "Neutron") )
+            type = NeutronDetection;
+          else
+            type = OtherDetection;
+          
+          //See refDUEL9G1II9, but basically if a detectors name ends with "Ntr",
+          //  force it to be a neutron detector (to make up for manufacturers error)
+          if( (type == GammaDetection)
+             && SpecUtils::iends_with(name, "Ntr") )
+          {
+            type = NeutronDetection;
+          }
+          
+          const string desc = xml_value_str( descrip_node );
+          if( icontains( desc, "Gamma" ) && icontains( desc, "Neutron" ) )
+            type = GammaAndNeutronDetection;
+          
+          if( type == OtherDetection )
+          {
+            const string idval = xml_value_str(id_att);
+            if( SpecUtils::icontains(idval, "gamma") )
+              type = GammaDetection;
+            else if( SpecUtils::icontains(idval, "neutron") )
+              type = NeutronDetection;
+          }//if( type == OtherDetection )
+        }//if( category_node && category_node->value_size() )
+        
+        string descrip; // = xml_value_str( kind_node );
+        
+        descrip = xml_value_str( descrip_node );
+        SpecUtils::ireplace_all( descrip, ", Gamma and Neutron", "" );
+        SpecUtils::ireplace_all( descrip, "Gamma and Neutron", "" );
+        
+        if( length_node && length_node->value_size() )
+        {
+          if( descrip.length() )
+            descrip += ", ";
+          descrip += string("Length: ") + xml_value_str(length_node) + string(" cm");
+        }
+        
+        if( width_node && width_node->value_size() )
+        {
+          if( descrip.length() )
+            descrip += ", ";
+          descrip += string("Width: ") + xml_value_str(width_node) + string(" cm");
+        }
+        
+        if( depth_node && depth_node->value_size() )
+        {
+          if( descrip.length() )
+            descrip += ", ";
+          descrip += string("Depth: ") + xml_value_str(depth_node) + string(" cm");
+        }
+        
+        if( diameter_node && diameter_node->value_size() )
+        {
+          if( descrip.length() )
+            descrip += ", ";
+          descrip += string("Diameter: ") + xml_value_str(diameter_node) + string(" cm");
+        }
+        
+        if( volume_node && volume_node->value_size() )
+        {
+          if( descrip.length() )
+            descrip += ", ";
+          descrip += string("Volume: ") + xml_value_str(volume_node) + string(" cc");
+        }
+        
+        for( auto character = XML_FIRST_NODE_CHECKED(characteristics_node, "Characteristic");
+            character; character = XML_NEXT_TWIN(character) )
+        {
+          const string charac_str = SpecFile::concat_2012_N42_characteristic_node(character);
+          if( charac_str.size() )
+            descrip += string(descrip.size() ? ", " : "") + "{" + charac_str + "}";
+        }//loop over characteristics
+        
+        
+        if( type==GammaDetection || type==NeutronDetection || type==GammaAndNeutronDetection )
+          id_to_dettype[name] = pair<DetectionType,string>(type,descrip);
+      }//for( loop over "RadDetectorInformation" nodes )
+      
+      rapidxml::xml_node<char> *analysis_node = rad_data_node->first_node( "AnalysisResults", 15 );
+      if( analysis_node )
+      {
+        std::shared_ptr<DetectorAnalysis> analysis_info = std::make_shared<DetectorAnalysis>();
+        set_analysis_info_from_n42( analysis_node, *analysis_info );
+        //    if( analysis_info->results_.size() )
+        detectors_analysis_ = analysis_info;
+      }//if( analysis_node )
+    }//for( loop over <RadInstrumentData> nodes - ya, I know we shouldnt have to )
     
     SpecUtilsAsync::ThreadPool workerpool;
     
@@ -5663,27 +5683,32 @@ namespace SpecUtils
     size_t numRadMeasNodes = 0;
     std::mutex meas_mutex, calib_mutex;
     
-    for( auto meas_node = XML_FIRST_NODE(data_node, "RadMeasurement");
-        meas_node;
-        meas_node = XML_NEXT_TWIN(meas_node) )
+    // See note above about system that has multiple N42 documents in a single file.
+    for( const rapidxml::xml_node<char> *rad_data_node = data_node; rad_data_node;
+        rad_data_node = rad_data_node->next_sibling("RadInstrumentData") )
     {
-      //see ref3Z3LPD6CY6
-      if( numRadMeasNodes > 32 && xml_value_compare(meas_node->first_attribute("id"), "ForegroundMeasureSum") )
+      for( auto meas_node = XML_FIRST_NODE(rad_data_node, "RadMeasurement");
+          meas_node;
+          meas_node = XML_NEXT_TWIN(meas_node) )
       {
-        continue;
-      }
-      
-      std::shared_ptr<std::mutex> mutexptr = std::make_shared<std::mutex>();
-      auto these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
-      
-      ++numRadMeasNodes;
-      meas_mutexs.push_back( mutexptr );
-      measurements_each_meas.push_back( these_meas );
-      
-      workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-        decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
-      } );
-    }//for( loop over "RadMeasurement" nodes )
+        //see ref3Z3LPD6CY6
+        if( numRadMeasNodes > 32 && xml_value_compare(meas_node->first_attribute("id"), "ForegroundMeasureSum") )
+        {
+          continue;
+        }
+        
+        std::shared_ptr<std::mutex> mutexptr = std::make_shared<std::mutex>();
+        auto these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
+        
+        ++numRadMeasNodes;
+        meas_mutexs.push_back( mutexptr );
+        measurements_each_meas.push_back( these_meas );
+        
+        workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
+          decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+        } );
+      }//for( loop over "RadMeasurement" nodes )
+    }//for( loop over "RadInstrumentData" nodes - I know )
     
     workerpool.join();
     
@@ -5692,6 +5717,7 @@ namespace SpecUtils
         measurements_.push_back( (*measurements_each_meas[i])[j] );
     
     //test for files like "file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42"
+    rapidxml::xml_node<char> *inst_info_node = data_node->first_node( "RadInstrumentInformation", 24 );
     if( measurements_.size() == 2
        && inst_info_node && inst_info_node->first_node( "RadInstrumentModel", 18 ) )
     {
@@ -5761,7 +5787,8 @@ namespace SpecUtils
       
       if( hprds )
       {
-        const rapidxml::xml_node<char> *node = document_node->first_node( "OnsetDateTime", 13 );
+        const rapidxml::xml_node<char> *node = nullptr;
+        //node = document_node->first_node( "OnsetDateTime", 13 );
         node = document_node->first_node( "EventCategory", 13 );
         if( node && node->value_size() )
           remarks_.push_back( string("Event Category ") + xml_value_str(node) );
@@ -6110,11 +6137,16 @@ namespace SpecUtils
         const rapidxml::xml_node<char> *remark_node = nuclide_node->first_node( "Remark", 6 );
         const rapidxml::xml_node<char> *nuclide_name_node = nuclide_node->first_node( "NuclideName", 11 );
         const rapidxml::xml_node<char> *nuclide_type_node = nuclide_node->first_node( "NuclideType", 11 );
-        const rapidxml::xml_node<char> *confidence_node = nuclide_node->first_node( "NuclideIDConfidenceIndication", 29 );  //N42-2006?
+        const rapidxml::xml_node<char> *confidence_node = XML_FIRST_NODE( nuclide_node, "NuclideIDConfidenceIndication" );  //N42-2006?
         if( !confidence_node )
-          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIdentificationConfidence");  //N42-2012
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIdentificationConfidence");  //N42-2006?
         if( !confidence_node )
           confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidence");  //RadSeeker
+        if( !confidence_node )
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidenceValue");  //N42-2012
+        if( !confidence_node )
+          confidence_node = XML_FIRST_NODE(nuclide_node, "NuclideIDConfidenceDescription");  //N42-2012
+        
         const rapidxml::xml_node<char> *id_desc_node = nuclide_node->first_node( "NuclideIDConfidenceDescription", 30 );
         const rapidxml::xml_node<char> *position_node = nuclide_node->first_node( "SourcePosition", 14 );
         const rapidxml::xml_node<char> *id_indicator_node = nuclide_node->first_node( "NuclideIdentifiedIndicator", 26 ); //says 'true' or 'false', seen in refZ077SD6DVZ

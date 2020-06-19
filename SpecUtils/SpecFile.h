@@ -315,7 +315,7 @@ enum class OccupancyStatus : int
 enum class SourceType : int
 {
   //Reported source type for a record; marked as Unknown unless
-  //  file format explicitly specifies, or can reasonably be infered.
+  //  file format explicitly specifies, or can reasonably be inferred.
   IntrinsicActivity, Calibration, Background, Foreground, Unknown
 };
 

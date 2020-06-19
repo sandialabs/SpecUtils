@@ -123,7 +123,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     if( startdate.empty() )
     {
       startdate = getval( "DATE=" );
-      startdate += getval( "TIME=" );
+      startdate += " " + getval( "TIME=" );
     }
     
     meas->start_time_ = SpecUtils::time_from_string( startdate.c_str() );
@@ -151,6 +151,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     //Other things we could look for:
     //"SHIFR=", "NOMER=", "CONFIGNAME=", "PREPBEGIN=", "PREPEND=", "OPERATOR=",
     //"GEOMETRY=", "SETTYPE=", "CONTTYPE=", "MATERIAL=", "DISTANCE=", "VOLUME="
+    //"WEIGHT=", "R_I_D=", "FILE_SPE="
     
     if( initial_read < filesize )
     {
