@@ -1384,8 +1384,8 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::Txt:                return "TXT";
     case SaveSpectrumAsType::Csv:                return "CSV";
     case SaveSpectrumAsType::Pcf:                return "PCF";
-    case SaveSpectrumAsType::N42_2006:                return "2006 N42";
-    case SaveSpectrumAsType::N42_2012:            return "2012 N42";
+    case SaveSpectrumAsType::N42_2006:           return "2006 N42";
+    case SaveSpectrumAsType::N42_2012:           return "2012 N42";
     case SaveSpectrumAsType::Chn:                return "CHN";
     case SaveSpectrumAsType::SpcBinaryInt:       return "Integer SPC";
     case SaveSpectrumAsType::SpcBinaryFloat:     return "Float SPC";
@@ -1393,7 +1393,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::ExploraniumGr130v0: return "GR130 DAT";
     case SaveSpectrumAsType::ExploraniumGr135v2: return "GR135v2 DAT";
     case SaveSpectrumAsType::SpeIaea:            return "IAEA SPE";
-    case SaveSpectrumAsType::Cnf:                return "Canberra CNF";
+    case SaveSpectrumAsType::Cnf:                return "CNF";
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif

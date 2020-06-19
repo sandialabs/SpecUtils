@@ -202,18 +202,30 @@ namespace
         case cam_type::cam_float:
         {
             const auto bytes = convert_to_CAM_float(input);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_float) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
         case cam_type::cam_double:
         {
             const auto bytes = convert_to_CAM_double(input);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_double) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
         case cam_type::cam_duration:
         {
             const auto bytes = convert_to_CAM_duration(input);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_duration) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -221,6 +233,10 @@ namespace
         {
             int64_t t_quadword = static_cast<int64_t>(input);
             const auto bytes = to_bytes(t_quadword);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_quadword) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -228,6 +244,10 @@ namespace
         {
             int32_t t_longword = static_cast<int32_t>(input);
             const auto bytes = to_bytes(t_longword);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_longword) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -235,6 +255,10 @@ namespace
         {
             int16_t t_word = static_cast<int16_t>(input);
             const auto bytes = to_bytes(t_word);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_word) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -265,7 +289,11 @@ namespace
         }
 
         const auto bytes = convert_to_CAM_datetime(input);
-        std::copy(begin(bytes), end(bytes) , destination.begin() + location);
+      
+      if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+        throw std::runtime_error( "enter_CAM_value(ptime) invalid write location" );
+       
+      std::copy(begin(bytes), end(bytes) , destination.begin() + location);
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
     void enter_CAM_value(const string& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
@@ -274,7 +302,10 @@ namespace
         {
             throw std::invalid_argument("error - Invalid converstion from: char*[]");
         }
-
+      
+      if( (std::begin(destination) + location + (std::end(input) - std::begin(input))) > std::end(destination) )
+        throw std::runtime_error( "enter_CAM_value(string) invalid write location" );
+      
         std::copy(input.begin(), input.end(), destination.begin() + location);
     }
 
