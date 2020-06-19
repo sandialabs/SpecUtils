@@ -214,6 +214,9 @@ enum class SaveSpectrumAsType : int
   /** See #SpecFile::write_iaea_spe for details. */
   SpeIaea,
 
+  /** See #SpecFile::write_cnf for details. */
+  Cnf,
+  
 #if( SpecUtils_ENABLE_D3_CHART )
   /** See #SpecFile::write_d3_html for details. */
   HtmlD3,
@@ -1858,10 +1861,41 @@ public:
   bool write_binary_exploranium_gr135v2( std::ostream &output ) const;
   
   
+  /** Write a SPE file to the output stream.
+   
+   SPE files can only contain a single spectrum and single neutron count (or at
+   least I've never seen a SPE file with multiple spectra), so you must specify
+   which samples numbers and detectors to sum to create the single spectrum.
+   
+   @param output Stream to write the output to.
+   @param sample_nums The sample numbers to sum to make the one output spectrum;
+          if empty will use all sample numbers.
+   @param det_nums The detector numbers to sum over to make the one output
+          spectrum; if empty will use all detectors.
+   @returns if file was successfully written to the output stream.
+   */
   virtual bool write_iaea_spe( std::ostream &output,
                                std::set<int> sample_nums,
                                const std::set<int> &det_nums ) const;
 
+  /** Write a CNF file to the output stream.
+  
+   CNF files can only contain a single spectrum and single neutron count, so you
+   must specify which samples numbers and detectors to sum to create the single
+   spectrum.
+   
+   @param output Stream to write the output to.
+   @param sample_nums The sample numbers to sum to make the one output spectrum;
+         if empty will use all sample numbers.
+   @param det_nums The detector numbers to sum over to make the one output
+         spectrum; if empty will use all detectors.
+   @returns if file was successfully written to the output stream.
+  */
+  virtual bool write_cnf( std::ostream &output,
+                          std::set<int> sample_nums,
+                          const std::set<int> &det_nums ) const;
+  
+  
 #if( SpecUtils_ENABLE_D3_CHART )
   bool write_d3_html( std::ostream &output,
                       const D3SpectrumExport::D3SpectrumChartOptions &options,

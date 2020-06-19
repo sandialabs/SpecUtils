@@ -42,7 +42,8 @@
 #include <io.h>
 #include <shlwapi.h>
 //We will need to link to Shlawapi.lib, which I think uncommenting the next line would do... untested
-//#pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib,"pathcch.lib") 
 #elif __APPLE__
 #include <sys/time.h>
 #include <sys/sysctl.h>
@@ -53,6 +54,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <libgen.h>
+#include <unistd.h>
 #endif
 
 #ifndef _WIN32
@@ -389,8 +391,8 @@ std::string filename( const std::string &path_and_name )
   const wstring wpath = convert_from_utf8_to_utf16(p);
 
   wchar_t drive[_MAX_DRIVE+1];
-  const size_t maxdirlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_DIR));
-  const size_t maxfilenamelen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_FNAME));
+  const size_t maxdirlen = (std::max)(2*wpath.size(),static_cast<size_t>(_MAX_DIR));
+  const size_t maxfilenamelen = (std::max)(2*wpath.size(),static_cast<size_t>(_MAX_FNAME));
   std::unique_ptr<wchar_t []> dir( new wchar_t [maxdirlen+1] );
   std::unique_ptr<wchar_t []> fname( new wchar_t [maxfilenamelen+1] );
   wchar_t ext[_MAX_EXT+1];
@@ -471,8 +473,8 @@ std::string parent_path( const std::string &path )
   std::wstring wpath = convert_from_utf8_to_utf16( p );
 
   wchar_t drive[_MAX_DRIVE+1];
-  const size_t maxdirlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_DIR)) + 1;
-  const size_t maxfilenamelen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_FNAME)) + 1;
+  const size_t maxdirlen = (std::max)(2*wpath.size(),static_cast<size_t>(_MAX_DIR)) + 1;
+  const size_t maxfilenamelen = (std::max)(2*wpath.size(),static_cast<size_t>(_MAX_FNAME)) + 1;
   std::unique_ptr<wchar_t []> dir( new wchar_t [maxdirlen+1] );
   std::unique_ptr<wchar_t []> fname( new wchar_t [maxfilenamelen+1] );
   wchar_t ext[_MAX_EXT+1];
@@ -504,7 +506,7 @@ std::string parent_path( const std::string &path )
   //      << L"', fname='" << fname.get() << L"', ext='" << ext << L"'" << endl;
   
   
-  const size_t maxpathlen = std::max(2*wpath.size(),static_cast<size_t>(_MAX_PATH));
+  const size_t maxpathlen = (std::max)(2*wpath.size(),static_cast<size_t>(_MAX_PATH));
   std::unique_ptr<wchar_t []> path_buffer( new wchar_t [maxpathlen+1] );
   
   err = _wmakepath_s( path_buffer.get(), maxpathlen, drive, dir.get(), nullptr, nullptr );
@@ -727,7 +729,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   //MinGW has trouble linking since its libraries dont have PathCchCanonicalizeEx(...) it doesnt look like
 #if( defined(_MSC_VER) )
   const ULONG flags = PATHCCH_ALLOW_LONG_PATHS;
-  const size_t pathlen = std::max( std::max( static_cast<size_t>(_MAX_PATH), static_cast<size_t>(2048) ), 2*wpath.size() );
+  const size_t pathlen = (std::max)( (std::max)( static_cast<size_t>(_MAX_PATH), static_cast<size_t>(2048) ), 2*wpath.size() );
   std::unique_ptr<wchar_t []> buffer( new wchar_t [pathlen+1] );
   if( !buffer )
     return false;

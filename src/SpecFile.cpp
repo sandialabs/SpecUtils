@@ -1350,6 +1350,7 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::ExploraniumGr130v0: return "dat";
     case SaveSpectrumAsType::ExploraniumGr135v2: return "dat";
     case SaveSpectrumAsType::SpeIaea:            return "spe";
+    case SaveSpectrumAsType::Cnf:                return "cnf";
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
@@ -1392,6 +1393,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::ExploraniumGr130v0: return "GR130 DAT";
     case SaveSpectrumAsType::ExploraniumGr135v2: return "GR135v2 DAT";
     case SaveSpectrumAsType::SpeIaea:            return "IAEA SPE";
+    case SaveSpectrumAsType::Cnf:                return "Canberra CNF";
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif
@@ -6063,7 +6065,7 @@ std::string SpecFile::generate_psuedo_uuid() const
       && !measurements_[0]->start_time().is_special() )
     uuid = SpecUtils::to_iso_string( measurements_[0]->start_time() );
   else
-    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59" ) );
+    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59:000" ) );
   
   //uuid something like: "20020131T100001,123456789"
   if( uuid.size() >= 15 )
@@ -7446,6 +7448,10 @@ void SpecFile::write( std::ostream &strm,
       success = info.write_iaea_spe( strm, samples, detectors );
       break;
 
+    case SaveSpectrumAsType::Cnf:
+      success = info.write_cnf( strm, samples, detectors );
+      break;
+      
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:
     {
