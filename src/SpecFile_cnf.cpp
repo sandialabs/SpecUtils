@@ -135,6 +135,24 @@ namespace
         return bytes;
     }
 
+    boost::posix_time::ptime convert_from_CAM_datetime( uint64_t time_raw )
+    {
+      boost::posix_time::ptime answer;
+      if( !time_raw )
+        return answer;
+
+      answer = boost::posix_time::ptime( boost::gregorian::date(1970, 1, 1) );
+
+      const int64_t secs = time_raw / 10000000L;
+      const int64_t sec_from_epoch = secs - 3506716800L;
+      
+      answer += boost::posix_time::seconds(sec_from_epoch);
+      answer += boost::posix_time::microseconds( secs % 10000000L );
+      
+      return answer;
+    }//convert_from_CAM_datetime(...)
+
+
     //float sec to CAM duration
     std::array< byte, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
     {
@@ -177,7 +195,7 @@ namespace
 
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    template<typename T, typename = std::enable_if<std::is_arithmetic<T>::value, T>::type>
+    template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
     void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type& type) 
     {
         switch (type) {
@@ -386,33 +404,14 @@ bool SpecFile::load_from_cnf( std::istream &input )
       throw runtime_error( "Invalid record offset" );
     }
     
-    uint32_t I, J;
+    
     input.seekg( record_offset, std::ios::beg );
-    read_binary_data( input, I );
-    read_binary_data( input, J );
-    const double seconds = J*429.4967296 + I/1.0E7;
     
-    //The Date Time offset is empiraccally found, and only tested with a handful
-    //  of files.  Nov 17 1858 is the commonly used "Modified Julian Date"
-    meas->start_time_ = boost::posix_time::ptime( boost::gregorian::date(1858,boost::gregorian::Nov,17),
-                                                 boost::posix_time::time_duration(0,0,0) );
+    uint64_t time_raw;
+    read_binary_data( input, time_raw );
+    meas->start_time_ = convert_from_CAM_datetime( time_raw );
     
-    //Make a feeble attempt to avoid overflow - which was happening on 32 bit
-    //  builds at first
-    const int64_t days = static_cast<int64_t>( seconds / (24.0*60.0*60.0) );
-    const int64_t remainder_secs = static_cast<int64_t>( seconds - days*24.0*60.0*60.0 );
-    const int64_t remainder_ms = static_cast<int64_t>( (seconds - (days*24.0*60.0*60.0) - remainder_secs)*1.0E3 );
-    
-    try
-    {
-      meas->start_time_ += boost::posix_time::hours( days*24 );
-      meas->start_time_ += boost::posix_time::seconds( remainder_secs );
-      meas->start_time_ += boost::posix_time::milliseconds( remainder_ms );
-    }catch(...)
-    {
-      meas->start_time_ = boost::posix_time::ptime();
-    }
-    
+    uint32_t I, J;
     read_binary_data( input, I );
     read_binary_data( input, J );
     I = 0xFFFFFFFF - I;
@@ -623,12 +622,14 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //const vector<pair<float, float>>& deviation_pairs = summed->deviation_pairs();
 
 
+        /// \TODO: Check if neutron counts are supported in CNF files.
         //Neutron information:
-        const double sum_neutrons = summed->neutron_counts_sum();
+        //const double sum_neutrons = summed->neutron_counts_sum();
+        
         //With short measurements or handheld detectors we may not have had any
         //  neutron counts, but there was a detector, so lets check if the input
         //  file had information about neutrons.
-        const bool had_neutrons = summed->contained_neutron();
+        //const bool had_neutrons = summed->contained_neutron();
 
 
         //Measurement start time.             
@@ -638,6 +639,8 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             SpecUtils::time_from_string("1970-01-01 00:00:00"): summed->start_time();
 
         //Check if we have RIID analysis results we could write to the output file.
+        /** \TODO: implement writing RIID analysis resukts to output file.
+         
         if (detectors_analysis_ && !detectors_analysis_->is_empty())
         {
             //See DetectorAnalysis class for details; its a little iffy what
@@ -655,7 +658,8 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             }//for( loop over nuclides identified )
 
         }//if( we have riid results from input file )
-
+        */
+      
         //We should have most of the information we need identified by here, so now
         //  just need to write to the output stream.
         //  ex., output.write( (const char *)my_data, 10 );
@@ -665,26 +669,26 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         const size_t sec_header_length = 0x30;
 
         //create the aquisition parameters (acqp) header
-        size_t acqp_header[] = { 0x0100, 0x0800, 0x0000, 0x0800,  //has common data, size of block, size of header
-                                   0x0000, 0x0000,  sec_header_length,                                  //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
-                                   0x0000, 0x0001, 0x0440, 0x02EA, 0x01FB,            //number of records, size of record block, address of records in block, address of common tabular
-                                   0x0019, 0x03E6, 0X0009, 0x0000, 0x0000 };          //Always 0x19, address of entries in block, 
+        size_t acqp_header[] = { 0x0100, 0x0800, 0x0000, 0x0800,              //has common data, size of block, size of header
+                                   0x0000, 0x0000,  sec_header_length,        //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+                                   0x0000, 0x0001, 0x0440, 0x02EA, 0x01FB,    //number of records, size of record block, address of records in block, address of common tabular
+                                   0x0019, 0x03E6, 0X0009, 0x0000, 0x0000 };  //Always 0x19, address of entries in block,
         acqp_header[21] = acqp_header[6] + acqp_header[14] + acqp_header[15];
 
         //create the sample header (SAMP)
-        size_t samp_header[] = { 0x0500, 0x0A00, 0x0000, 0x1000,  //has common data, size of header
-                                   0x0000, 0x0000,   sec_header_length,                                 //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
-                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,            //size of data item, address of the common tabular
-                                   0x0000, 0x7FFF, 0x0000, 0x0000, 0x0A00 };          //address of entires in block
+        size_t samp_header[] = { 0x0500, 0x0A00, 0x0000, 0x1000,              //has common data, size of header
+                                   0x0000, 0x0000,   sec_header_length,       //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,    //size of data item, address of the common tabular
+                                   0x0000, 0x7FFF, 0x0000, 0x0000, 0x0A00 };  //address of entires in block
 
         //create the spectrum header (DATA)
-        size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x1A00,  //has common data, size of header
-                                   0x0000, 0x0000, sec_header_length,                                   //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
-                                   0x0000, 0x0000, 0x0004, 0x0000, 0x0000,            //size of data item
-                                   0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };          //address of entires in block, always 1
+        size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x1A00,              //has common data, size of header
+                                   0x0000, 0x0000, sec_header_length,         //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+                                   0x0000, 0x0000, 0x0004, 0x0000, 0x0000,    //size of data item
+                                   0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };  //address of entires in block, always 1
 
         //compute the number of channels and the size of the block
         data_header[19] = summed->num_gamma_channels();
