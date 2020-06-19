@@ -777,9 +777,6 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         enter_CAM_value(real_time, cnf_file, acqp_loc + acqp_header[16] + 0x09, cam_type::cam_duration);
         enter_CAM_value(live_time, cnf_file, acqp_loc + acqp_header[16] + 0x11, cam_type::cam_duration);
 
-
-
-
         //enter the samp header
         size_t samp_loc = samp_header[3];
         enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_type::cam_longword); //block identifier
@@ -797,6 +794,12 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         /*if (!sample_ID.empty()) {
             enter_CAM_value(sample_ID.erase(sample_ID.begin() + 0x10, sample_ID.end()), cnf_file, samp_loc + 0x40, cam_string);
         }*/
+        //sample quanity cannot be zero
+        enter_CAM_value(1.0, cnf_file, samp_loc + 0x90, cam_type::cam_float);
+        //set the sample time to the aqusition start time
+        if (!start_time.is_not_a_date_time()) {
+            enter_CAM_value(start_time, cnf_file, samp_loc + 0xB4, cam_type::cam_datetime);
+        }
         if (summed->has_gps_info()) 
         {
             enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_type::cam_double);
