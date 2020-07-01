@@ -105,8 +105,6 @@ namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 
 namespace SpecUtils
 {
-  
-
 /** Enum used to specify which spectrum parsing function to call when opening a
  spectrum file.
  
@@ -168,12 +166,6 @@ enum class ParserType : int
 };//enum ParserType
 
 
-enum class SpectrumType : int
-{
-  Foreground,
-  SecondForeground,
-  Background
-};//enum SpecUtils::SpectrumType
 
 
 enum class SaveSpectrumAsType : int
@@ -333,16 +325,27 @@ enum class QualityStatus : int
   
 
   
+// \TODO: move #SpectrumType definition and related function out of this file; is used for D3 and InterSpec plotting
+//        only, so no need to have here.
+enum class SpectrumType : int
+{
+  Foreground,
+  SecondForeground,
+  Background
+};//enum SpecUtils::SpectrumType
+
+
 const char *descriptionText( const SpecUtils::SpectrumType type );
-  
-//suggestedNameEnding(): returns suggested lowercase file name ending for type
-//  passed in.  Does not contain the leading '.' for extentions
-const char *suggestedNameEnding( const SaveSpectrumAsType type );
-  
   
 //spectrumTypeFromDescription(..): the inverse of descriptionText(SpectrumType)
 //  throw runtiem_exception if doesnt match
 SpectrumType spectrumTypeFromDescription( const char *descrip );
+
+
+//suggestedNameEnding(): returns suggested lowercase file name ending for type
+//  passed in.  Does not contain the leading '.' for extentions
+const char *suggestedNameEnding( const SaveSpectrumAsType type );
+  
   
 const char *descriptionText( const SaveSpectrumAsType type );
 
@@ -354,8 +357,9 @@ class SpecFile;
 class Measurement;
 
 class DetectorAnalysis;
+struct EnergyCalibration;
+struct N42DecodeHelper2006;
 struct MeasurementCalibInfo; //defined in SpectrumDataStructs.cpp (used for parsing N42 2006/2012 files and rebinning)
-struct SpectrumNodeDecodeWorker;
 struct GrossCountNodeDecodeWorker;
 
 //Some typedefs and enums used for decode_2012_N42_rad_measurement_node(...)
@@ -417,53 +421,7 @@ const std::string &detectorTypeToString( const DetectorType type );
 
 
 
-/*
-//TODO: start using (something like) this EnergyCalibration struct to
-//      represent calibration.
-struct EnergyCalibration
-{
-  enum CalibrationModel
-  {
-    Polynomial,
-    FullRangeFraction,
-    LowerChannelEdge,
-    UnknownCalibrationModel
-  };//From ICD1 Spec Polynomial Pade Exponential PolyLogarithmic
-
-  CalibrationModel equation_type_;
-  
-  size_t nbin_;
-  std::vector<float> coefficients_;
-  std::vector< std::pair<float,float> > deviation_pairs_;
-  std::shared_ptr< const std::vector<float> > binning_;
-};//struct EnergyCalibration
-*/
  
-  
-/** A struct used internally while parsing files to
- @TODO Move this into something like the #EnergyCalibration commented above
-       and use the same struct in parsing and for representing data to users of
-       library.
- */
-struct MeasurementCalibInfo
-{
-  SpecUtils::EnergyCalType equation_type;
-  
-  size_t nbin;
-  std::vector<float> coefficients;
-  std::vector< std::pair<float,float> > deviation_pairs_;
-  std::shared_ptr<const std::vector<float>> original_binning;
-  mutable std::shared_ptr<const std::vector<float>> binning;
-  
-  std::string calib_id; //optional
-  
-  MeasurementCalibInfo( std::shared_ptr<Measurement> meas );
-  MeasurementCalibInfo();
-  void strip_end_zero_coeff();
-  void fill_binning();
-  bool operator<( const MeasurementCalibInfo &rhs ) const;
-  bool operator==( const MeasurementCalibInfo &rhs ) const;
-};//struct MeasurementCalibInfo
   
   
   
@@ -598,6 +556,9 @@ public:
   //  TODO: insert description of how to actually use these.
   const std::vector<std::pair<float,float>> &deviation_pairs() const;
   
+  /** Returns the energy calibration. Will not be null. */
+  std::shared_ptr<const EnergyCalibration> energy_calibration() const;
+  
   //channel_energies(): returns a vector containing the starting (lower) energy
   //  of the gamma channels, calculated using the energy calibration
   //  coefficients as well as the deviation pairs.  These channel energies are
@@ -611,8 +572,7 @@ public:
   //  calibration model files, channel_energies() may have 1 more channels (to
   //  indicate end of last channel energy).
   //  Returned pointer may be null if energy calibration is unknown/unspecified.
-  const std::shared_ptr< const std::vector<float> > &
-                                                       channel_energies() const;
+  const std::shared_ptr< const std::vector<float> > &channel_energies() const;
   
   //gamma_counts(): the channel counts of the gamma data.
   //  Returned pointer may be null if no gamma data present, or not thie
@@ -677,6 +637,10 @@ public:
   
   /** Set real and live times, as well as gamma counts.
    
+   If the number of channels is not compatible with the old energy calibration (i.e., different
+   number of channels), the energy calibration will be reset to an unknown state, which you
+   can then fix by calling #set_energy_calibration.
+   
    Updates gamma counts sum as well.
    
    @param counts The gamma channel counts to use; a copy is not made, but the
@@ -708,23 +672,6 @@ public:
    */
   void set_neutron_counts( const std::vector<float> &counts );
   
-  //set_channel_energies(...): XXX - should deprecate!
-  //  if channel_energies_ or gamma_counts_ must be same number channels as
-  //  before
-  void set_channel_energies( std::shared_ptr<const std::vector<float>> counts );
-
-  //popuplate_channel_energies_from_coeffs(): uses calibration_coeffs_ and 
-  //  deviation_pairs_ to populate channel_energies_.
-  //This function should not be used when this Measurement is part of a
-  //  SpecFile object (since this could waste memorry), but is intentded
-  //  for the case when this Measurement is saved all by itself to XML by 
-  //  write_2006_N42_xml() and then restored using
-  //  set_2006_N42_spectrum_node_info().
-  //Throws if gamma_counts_ or calibration_coeffs_ is empty, or if 
-  //  channel_energies_ is already populated, or if InvalidEquationType.
-  //channel_energies_ is garunteed to be valid after calling this function.
-  void popuplate_channel_energies_from_coeffs();
-
   //To set real and live times, see SpecFile::set_live_time(...)
   
   //Functions that mimmic ROOTs TH1 class
@@ -747,15 +694,18 @@ public:
   //I want to get rid of all the CERN ROOT inspired functions (who uses 1 based
   //  indexing?), so I am slowly re-writing them in a (more) sane manner below.
   
-  //num_gamma_channels(): returns the minimum number of channels of either
-  //  this->channel_energies_ or this->gamma_counts_; if either is not defined
-  //  0 is returned.
+  /** returns the number of channels in #gamma_counts_.
+   Note: energy calibration could still be invalid and not have channel energies defined, even
+   when this returns a non-zero value.
+   */
   size_t num_gamma_channels() const;
   
-  //find_gamma_channel(): returns gamma channel containing 'energy'.  If
-  //  'energy' is below the zeroth channel energy, 0 is returned; if 'energy'
-  //  is above last channels energy, the index for the last channel is returned.
-  //  If this->channel_energies_ is not defined, an exception is thrown.
+  /** Returns gamma channel containing 'energy'.
+   If 'energy' is below the zeroth channel energy, 0 is returned; if 'energy' is above last channels
+   energy, the index for the last channel is returned.
+   
+   Throws exception if energy calibration is not defined.
+   */
   size_t find_gamma_channel( const float energy ) const;
   
   //gamma_channel_content(): returns the gamma channel contents for the
@@ -765,30 +715,30 @@ public:
   
   //gamma_channel_lower(): returns the lower energy of the specified gamma
   //  channel.
-  //Throws exception if invalid channel number, or  !this->channel_energies_.
+  //Throws exception if invalid channel number, or no valid energy calibration.
   float gamma_channel_lower( const size_t channel ) const;
   
   //gamma_channel_center(): returns the central energy of the specified
   //  channel.  For the last channel, it is assumed its width is the same as
   //  the second to last channel.
-  //Throws exception if invalid channel number, or  !this->channel_energies_.
+  //Throws exception if invalid channel number, or no valid energy calibration.
   float gamma_channel_center( const size_t channel ) const;
 
   //gamma_channel_upper(): returns the energy just past the energy range the
   //  specified channel contains (e.g. the lower edge of the next bin).  For the
   //  last bin, the bin width is assumed to be the same as the previous bin.
-  //Throws exception if invalid channel number, or  !this->channel_energies_.
+  //Throws exception if invalid channel number, or no valid energy calibration.
   float gamma_channel_upper( const size_t channel ) const;
 
   //gamma_channel_width(): returns the energy width of the specified channel.
   //  For the last channel, it is assumed its width is the same as the second
   //  to last channel.
-  //Throws exception if invalid channel number, or  !this->channel_energies_.
+  //Throws exception if invalid channel number, or no valid energy calibration.
   float gamma_channel_width( const size_t channel ) const;
   
   //gamma_integral(): get the integral of gamma counts between lower_energy and
   //  upper_energy; linear approximation is used for fractions of channels.
-  //If this->channel_energies_ or this->gamma_counts_ is invalid, 0.0 is
+  //If no valid energy calibration or this->gamma_counts_ is invalid, 0.0 is
   //  returned.
   double gamma_integral( float lower_energy, float upper_energy ) const;
   
@@ -801,21 +751,21 @@ public:
   //  Returns 0 if this->gamma_counts_ is invalid (doesnt throw).
   double gamma_channels_sum( size_t startbin, size_t endbin ) const;
   
-  //gamma_channel_energies(): returns channel_energies_, the lower edge
-  //  energies of the gamma channels).
-  //  The returned shared pointer may be null.
-  //  The exact same as channel_energies(), just renamed to be consistent with
-  //  above accessors.
-  const std::shared_ptr< const std::vector<float> > &
-                                                 gamma_channel_energies() const;
+  /** Gives the lower energy of each gamma channel.
+   
+   @returns channel energies, the lower edge energies of the gamma channels.  May be nullptr.
+            See notes for #EnergyCalibration::channel_energies
+  
+  The exact same as channel_energies(), just renamed to be consistent with above accessors.
+   */
+  const std::shared_ptr< const std::vector<float> > &gamma_channel_energies() const;
   
   //gamma_channel_contents(): returns gamma_counts_, the gamma channel data
   //  (counts in each energy bin).
   //  The returned shared pointer may be null.
   //  The exact same as gamma_counts(), just renamed to be consistent with
   //  above accessors.
-  const std::shared_ptr< const std::vector<float> > &
-                                                 gamma_channel_contents() const;
+  const std::shared_ptr< const std::vector<float> > &gamma_channel_contents() const;
   
   float gamma_energy_min() const;
   float gamma_energy_max() const;
@@ -839,35 +789,7 @@ public:
   //  by reset() or set(...)
   void reset();
 
-protected:
   
-  //Functions to set the information in this Measurement object from external
-  //  sources
-  //set_n42_2006_spectrum_calibration_from_id(...) added for FLIR identiFINDER N42 files,
-  //  but also other N42 files which use the 'CalibrationIDs' attribute in the
-  //  <Spectrum> node
-  void set_n42_2006_spectrum_calibration_from_id(
-                                                 const rapidxml::xml_node<char> *doc_node,
-                                                 const rapidxml::xml_node<char> *spec_node );
-public:
-  //add_calibration_to_2012_N42_xml(): writes calibration information to the
-  //  xml document, with the "id" == caliId for the <EnergyCalibration> tag.
-  //  Note, this funciton should probably be protected or private, but isnt
-  //  currently due to an implementation detail.
-  void add_calibration_to_2012_N42_xml(
-                                       ::rapidxml::xml_node<char> *RadInstrumentData,
-                                       std::mutex &xmldocmutex,
-                                       const int caliId ) const;
-
-protected:
-  
-public:
-  //set_2006_N42_spectrum_node_info(...): sets information from a 2006 N42
-  //  <Spectrum> node.
-  //  Note channel_energies_ and deviation pairs will note be set.  Additionally
-  //  calibration information may not be set if the node did not contain it.
-  void set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char> *node );
-
 protected:
   
   void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data,
@@ -896,15 +818,6 @@ protected:
                                 const bool keep_under_over_flow );
   
   
-  //decode_n42_2006_binning(): parses coefficients and equation type from the input
-  //  xml node.
-  //  If equation type is not specified, but coefficients are found, the
-  //  equation type may be tried to be guessed.
-  //Throws exception if an invalid node, or un-recognized calibration type.
-  static void decode_n42_2006_binning( const rapidxml::xml_node<char> *calibration_node,
-                             std::vector<float> &coeffs,
-                             SpecUtils::EnergyCalType &eqnmodel );
-  
   //set_n42_2006_detector_data_node_info(): silently returns if information isnt found
   static void set_n42_2006_detector_data_node_info(
                           const rapidxml::xml_node<char> *det_data_node,
@@ -923,40 +836,26 @@ protected:
   //  Called from set_info_from_txt_or_csv().
   void set_info_from_avid_mobile_txt( std::istream &istr );
   
-  //Rebin the gamma_spectrum according to new_binning. new_binning should
-  //  be the lower edges of bins, in keV - this does not shift the energy of the
-  //  counts (eg peaks stay at same energy/width, just might have more or less
-  //  bins)
-  //Throws exception if (old or new) binning or channel energies arent defined
-  //  or have less than 4 or so bins.
-  void rebin_by_lower_edge( std::shared_ptr<const std::vector<float>> new_binning );
   
-  //rebin_by_eqn(...) should probably just be renamed rebin(....)
-  
-  //rebin_by_eqn(...): Does not shift the energy of the counts (eg
-  //  peaks stay at same energy).
-  //  Does not store the eqn for the case of LowerChannelEdge binning
-  //  Will throw std:runtime_error(...) if gamma_counts_ is not defined.
-  //  or called with InvalidEquationType
-  //Throws exception if 'type' is InvalidEquationType, or gamma_counts_ is empty
-  //  or not defined, or potentialy (but not necassirly) if input equation is
-  //  ill-specified.
-  void rebin_by_eqn( const std::vector<float> &eqn,
-                    const std::vector<std::pair<float,float>> &dev_pairs,
-                    SpecUtils::EnergyCalType type );
-  
-  //If the new binning has already been calculated when rebinning by polynomial
-  //  equation, you can use this to save re-caclulating the lower edeg energy
-  //  values, and also possibly save memmorry by sharing the vector among many
-  //  Measurement objects.
-  //No checks are made that new_binning is consistent with eqn!!!
-  //Throws exception if 'type' is InvalidEquationType, or gamma_counts_ is empty
-  //  or not defined, or potentialy (but not necassirly) if input equation is
-  //  ill-specified.
-  void rebin_by_eqn( const std::vector<float> &eqn,
-                    const std::vector<std::pair<float,float>> &dev_pairs,
-                    std::shared_ptr<const std::vector<float>> new_binning,
-                    SpecUtils::EnergyCalType type );
+  /** Rebin the gamma_spectrum to match the passed in #EnergyCalibration.
+   
+   Spectrum features (i.e., peaks, compton edges, etc) will stay at the same energy, but the channel
+   energy definitions will be changed, and coorispondingly the counts in each channel (i.e.
+   #gamma_counts_) will be changed.  This will lead to channels having non-integer number of counts,
+   and information being lost (e.g., doing a rebin followed by another rebin back to original energy
+   calibration will result the channel counts probably being notably different than originaly), so
+   use this function sparingly, and dont call multiple times.
+   
+   Both the current (and soon to be previous) and passed in EnergyCalibration are valid with
+   #EnergyCalibration::channel_energies fields valid with size at least four, or an
+   exception will be thrown.  The current (soon to be previous) energy calibration will always
+   satisfy these requirements if it was parsed from a file by this library, and this #Measurement
+   has gamma counts.
+   
+   After a succesful call to this function, #calibration will return the same value as passed into
+   this function.
+   */
+  void rebin( const std::shared_ptr<const EnergyCalibration> &cal );
   
   
   //recalibrate_by_eqn(...) passing in a valid binning
@@ -967,6 +866,7 @@ protected:
   //Throws exception if 'type' is InvalidEquationType, or potentially (but not
   //  necassirily) if input is ill-specified, or if the passed in binning doesnt
   //  have the proper number of channels.
+/*
   void recalibrate_by_eqn( const std::vector<float> &eqn,
                           const std::vector<std::pair<float,float>> &dev_pairs,
                           SpecUtils::EnergyCalType type,
@@ -975,6 +875,21 @@ protected:
                           = std::shared_ptr<const std::vector<float>>()  //todo: fix this more better
 #endif
                           );
+  */
+  
+  /** Sets the energy calibration to the passed in value.
+   
+   This operation does not change #gamma_counts_, but instead changes the energie bounds for the
+   gamma channels.
+   
+   Throws exception if nullptr is passed in, number of gamma channels dont match, or #gamma_counts_
+   is null or empty.  If calibration type is #EnergyCalType::LowerChannelEdge the passed in channel
+   energies must have at least, and any amount more, entries than #gamma_counts_.
+   
+   You should call #set_gamma_counts before this function if assembling a #Measurement not parsed
+   from a file.
+   */
+  void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal );
   
 public:
   
@@ -985,7 +900,7 @@ public:
   //Throws an std::exception with a brief explanaition when an issue is found.
   static void equalEnough( const Measurement &lhs, const Measurement &rhs );
 #endif
-  
+    
   
 protected:
   
@@ -1021,19 +936,22 @@ protected:
   //The following objects are for the energy calibration, note that there are
   //  similar quantities for resolution and such, that arent kept track of
   SourceType     source_type_;
-  SpecUtils::EnergyCalType   energy_calibration_model_;
+  
 
   std::vector<std::string>  remarks_;
   std::vector<std::string>  parse_warnings_;
   boost::posix_time::ptime  start_time_;
   
-  //ToDo: switch from ptime, to std::chrono::time_point
+  /// \ToDo: switch from ptime, to std::chrono::time_point
   //std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::milliseconds> start_timepoint_;
-
-  std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
-  std::vector<std::pair<float,float>>          deviation_pairs_;     //<energy,offset>
-
-  std::shared_ptr< const std::vector<float> >   channel_energies_;    //gamma channel_energies_[energy_channel]
+  
+  /** Pointer to EnergyCalibration.
+   This is a shared pointer to allow many #Measurement objects to share the same energy calibration
+   to save memory.
+   */
+  std::shared_ptr<const EnergyCalibration> energy_calibration_;
+  
+  
   std::shared_ptr< const std::vector<float> >   gamma_counts_;        //gamma_counts_[energy_channel]
   
   //neutron_counts_[neutron_tube].  I dont think this this is actually used
@@ -1051,7 +969,7 @@ protected:
 
   friend class ::SpecMeas;
   friend class SpecFile;
-  friend struct SpectrumNodeDecodeWorker;
+  friend struct N42DecodeHelper2006;
   friend struct GrossCountNodeDecodeWorker;
 };//class Measurement
 
@@ -1280,10 +1198,17 @@ public:
   //  (e.g. no measurements have been added or removed without 'cleaningup').
   void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
-  //combine_gamma_channels(): combines 'ncombine' gamma channels for every
-  //  Measurement that has exactly nchannels.  Returns number of Measurements
-  //  modified.
-  //  Throws exception if( (nchannels % ncombine) != 0 )
+  /** Combines the specified number of gamma channels together for all measurements with the given
+   number of channels.
+   
+   @param ncombine The number of channels to combine.
+   @param nchannels Only #Measurements with this number of channels will have their channels
+          combined.
+   
+   Throws exception if( (nchannels % ncombine) != 0 ).
+   Throws exception if gamma calibration becomes invalid - which probably shouldnt ever happen,
+   except for maybe real edge cases with crazy deviation pairs.
+  */
   size_t combine_gamma_channels( const size_t ncombine, const size_t nchannels );
   
   //combine_gamma_channels(): calls equivalent function on non-const version of
@@ -1292,13 +1217,17 @@ public:
   void combine_gamma_channels( const size_t ncombine,
                                const std::shared_ptr<const Measurement> &m );
   
-  //truncate_gamma_channels(): removes all channels below 'keep_first_channel'
-  //  and above 'keep_last_channel', for every measurement that has 'nchannels'.
-  //  If keep_under_over_flow is true, then removed channel counts will be added
-  //  to the first/last channel of the remaing data.
-  //  Returns number of modified Measurements.
-  //Throws exception if keep_last_channel>=nchannels, or if
-  //  keep_first_channel>=keep_last_channel.
+  /** Removes all channels below 'keep_first_channel' and above 'keep_last_channel', for every
+   measurement that has 'nchannels'.
+   If keep_under_over_flow is true, then removed channel counts will be added to the first/last
+   channel of the remaing data.
+   
+   @returns number of modified Measurements.
+  
+   Throws exception if keep_last_channel>=nchannels, or if keep_first_channel>=keep_last_channel,
+   or if the energy calibration becomes invalid (which I dont *think* should happen, except maybe
+   very rare edgecases).
+   */
   size_t truncate_gamma_channels( const size_t keep_first_channel,
                                   const size_t keep_last_channel,
                                   const size_t nchannels,
@@ -1399,7 +1328,7 @@ public:
   size_t memmorysize() const; //in bytes
 
   //gamma_channel_counts(): loops over the Measurements and returns a set<size_t>
-  //  containing all the channel_energies_->size() results
+  //  containing all the Measurement::num_gamma_channels() results
   std::set<size_t> gamma_channel_counts() const;
 
   //num_gamma_channels(): loops over the Measurements, and returns the size of
@@ -1638,21 +1567,54 @@ public:
    */
   void merge_neutron_meas_into_gamma_meas();
   
-  //Rebin the gamma_spectrum according to new_binning. new_binning should
-  //  be the lower edges of bins, in keV - note: alters individual bin contents.
-  //  Necassarily information losing, so use sparingly and dont compound calls.
-  void rebin_by_eqn( const std::vector<float> &eqn,
-                     const std::vector<std::pair<float,float>> &dev_pairs,
-                     SpecUtils::EnergyCalType type );
-
   
-  //Recalibrate the spectrum so the existing channel counts coorespond
-  //  to the energies of the new binning - note: does not alter bin contents.
-  //  Also not that the recalibration is applied to all gamma detectors
-  void recalibrate_by_lower_edge( std::shared_ptr<const std::vector<float>> binning );
-  void recalibrate_by_eqn( const std::vector<float> &eqn,
-                           const std::vector<std::pair<float,float>> &dev_pairs,
-                           SpecUtils::EnergyCalType type );
+  /** Rebins the given measurement to the specified energy calibration.
+   This does not change the energy of spectral features, but does alter the channel counts losing
+   information, so use sparingly and really try to not call multiple times.
+   For more information see documentation for #Measurement::rebin.
+   
+   Will throw exception if the measurement is not owned by this SpecFile, or the #EnergyCalibration
+   object is invalid.
+   */
+  void rebin_measurement( const std::shared_ptr<const EnergyCalibration> &cal,
+                          const std::shared_ptr<const Measurement> &measurement );
+  
+  
+  /** Rebins all measurements to the passed in energy calibration.
+   See notes for #SpecFile::rebin_measurement and #Measurement::rebin.
+   */
+  void rebin_all_measurements( const std::shared_ptr<const EnergyCalibration> &cal );
+  
+  
+  /** Sets the energy calibration for the specified #Measurement.
+   
+   This does not change the channel counts (i.e., #gamma_counts_), but does shift the energy of
+   spectral features (e.g., peaks, compton edges).
+   
+   Throws excpetion if energy calibration channel counts are incompatible, or passed in #Measurment
+   is not owned by the SpecFile.
+   */
+  void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
+                        const std::shared_ptr<const Measurement> &measurement );
+  
+  /** Sets the energy calibration for the specified sample numbers and detector names.
+   
+   @param cal The new energy calibration.
+   @param sample_numbers The sample numbers to apply calibration to.  If empty will apply to all.
+   @param detector_names The detector names to apply calibration to.  If empty will apply to all.
+   @returns number of changed #Measurement objects.
+   
+   Will not set the calibration for any matching #Measurement that does not have a gamma spectrum
+   (e.g., will skip that #Measurement, and not throw an exception - so its fine to pass in neutron
+   only detector names).
+   
+   Throws exception if any matching #Measurement has an incompatible (but non-zero) number of gamma
+   channels, or if energy calibration is nullptr.
+   */
+  size_t set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
+                               std::set<int> sample_numbers,
+                               std::vector<std::string> detector_names );
+  
   
   //If only certain detectors are specified, then those detectors will be
   //  recalibrated (channel contents not changed).  If rebin_other_detectors
@@ -1662,12 +1624,13 @@ public:
   //Will throw exception if an empty set of detectors is passed in, or if none
   //  of the passed in names match any of the available names, since these are
   //  both likely a mistakes
+  /*
   void recalibrate_by_eqn( const std::vector<float> &eqn,
                            const std::vector<std::pair<float,float>> &dev_pairs,
                            SpecUtils::EnergyCalType type,
                            const std::vector<std::string> &detectors,
                            const bool rebin_other_detectors );
-
+*/
   
   //Functions to export to various file formats
 
@@ -1956,10 +1919,6 @@ protected:
   //  Does not obtain a thread lock.
   void set_n42_2006_instrument_info_node_info( const rapidxml::xml_node<char> *info_node );
   
-  //set_n42_2006_deviation_pair_info(...): called from load_2006_N42_from_doc(...)
-  //  Does not obtain a thread lock.
-  void set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
-                            std::vector<std::shared_ptr<Measurement>> &measurs_to_update );
   
   /** Ensures unique detector-name sample-number combos.
    

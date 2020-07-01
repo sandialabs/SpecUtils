@@ -90,6 +90,144 @@ namespace SpecUtils
     InvalidEquationType
   };
   
+
+  /** Holds information about energy calibration.
+   */
+  struct EnergyCalibration
+  {
+    /** @returns the energy calibration type. */
+    EnergyCalType type() const;
+    
+    /** @returns the energy calibration coefficients.
+     
+     Will only be empty for #EnergyCalType::InvalidEquationType.
+     For #EnergyCalType::LowerChannelEdge returns values in #m_channel_energies.
+     */
+    const std::vector<float> &coefficients() const;
+    
+    /** @returns the deviation pairs. */
+    const std::vector<std::pair<float,float>> &deviation_pairs() const;
+    
+    /** @returns the lower channel energies. Will be a nullptr if
+     type is #EnergyCalType::InvalidEquationType, and otherwise will point to a non-empty vector.
+     
+     For polynomial and full range fraction will have same number of entries as the number of bins,
+     and for lower channel energies will have one more entry.
+     */
+    const std::shared_ptr<const std::vector<float>> &channel_energies() const;
+   
+    /** Returns the number of channels this energy calibration is for. */
+    size_t num_channels() const;
+    
+    /** Default contructs to type EnergyCalType::InvalidEquationType. */
+    EnergyCalibration();
+    
+    /** Sets the type to #EnergyCalType::Polynomial, and the coefficients and deviation pairs to
+     values passed in.  The channel energies will be created and have #num_channels entries.
+     
+     Will throw exception if an invalid calibration is passed in (<2 channels, or non increasing
+     channel energies), and no member variables will be changed.
+     */
+    void set_polynomial( const size_t num_channels,
+                         const std::vector<float> &coeffs,
+                         const std::vector<std::pair<float,float>> &dev_pairs );
+    
+    /** Functionally the same as #set_polynomial, but will set type to
+     #EnergyCalType::UnspecifiedUsingDefaultPolynomial.
+     
+     This function is useful for denoting that the energy calibration is polynomial, but wasnt
+     parsed from the file, but instead guessed.
+     */
+    void set_default_polynomial( const size_t num_channels,
+                                 const std::vector<float> &coeffs,
+                                 const std::vector<std::pair<float,float>> &dev_pairs );
+    
+    /** Sets the type to #EnergyCalType::FullRangeFraction, and the coefficients and deviation pairs
+    to values passed in.  The channel energies will be created and have #num_channels entries.
+    
+    Will throw exception if an invalid calibration is passed in (<2 channels, or non increasing
+    channel energies), and no member variables will be changed.
+    */
+    void set_full_range_fraction( const size_t num_channels,
+                                  const std::vector<float> &coeffs,
+                                  const std::vector<std::pair<float,float>> &dev_pairs );
+    
+    /** Sets the type to #EnergyCalType::LowerChannelEdge, and creates a new channel energies
+     matching the values passed in.
+    
+     @param num_channels The number of channels in the gamma spectrum.
+     @param channel_energies The lower energies for each channel, in keV.
+            At most the first num_channels+1 entries will be copied internally.  If this vector has
+            exactly num_channels entries, then one more will be added to the end to represent the
+            upper energy of the last channel.  If it has less entries than num_channels, than an
+            exception will be thrown.
+     
+    Will throw exception (without changing any member variables) if an invalid calibration is passed
+    in (<2 channels, or non monotonically increasing channel energies), or if channel energies does
+    not have at least num_channels entries.
+     
+    \TODO: overload this function call take a rvalue reference to the vector
+    */
+    void set_lower_channel_energy( const size_t num_channels,
+                                   const std::vector<float> &channel_energies );
+    
+    /** Overload to use of std::move semantics (rvalues).
+     Idealy you want channel_energies to have one more entry than num_channels.
+     */
+    void set_lower_channel_energy( const size_t num_channels,
+                                   std::vector<float> &&channel_energies );
+    
+    
+    /** Comparison operator so we can use this class as a key in associative containers.
+     Compares first by number of channels, then calibration type, then calibration coefficents,
+     then by deviation pairs.  Does not compare channel energies (except for
+     m_type==#EnergyCalType::LowerChannelEdge) as this should/would be redundant.
+     */
+    bool operator<( const EnergyCalibration &rhs ) const;
+    
+    /** Compares the value of type, coefficients, deviation pairs, and if channel energies are
+     defined, the number of them (doesnt compare each entry in channel energies).
+     
+     Note: the test is for exact matches, so float values off due to rounding somewhere will fail.
+     */
+    bool operator==( const EnergyCalibration &rhs ) const;
+    
+    /** Returns the oposite of operator==.
+     */
+    bool operator!=( const EnergyCalibration &rhs ) const;
+    
+    /** Returns the approximate number of bytes being taken up by *this. */
+    size_t memmorysize() const;
+    
+    
+    /// \TODO: add channel_energy( size_t channel ), find_channel( float energy ) and similar
+    
+#if( PERFORM_DEVELOPER_CHECKS )
+    /** Tests if the two calibrations passed in are equal for most intents and purposes.
+     
+     Allows some small numerical rounding to occur, and will allow polynomial and FRF to compare
+     equal if they are equivalent.
+    
+     Throws an std::exception with a brief explanaition when an issue is found.
+    */
+    static void equalEnough( const EnergyCalibration &lhs, const EnergyCalibration &rhs );
+#endif
+    
+  protected:
+    /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
+     increasnig values).
+     
+     Throws exception if error is found.
+     */
+    void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
+    
+    EnergyCalType m_type;
+    std::vector<float> m_coefficients;
+    std::vector<std::pair<float,float>> m_deviation_pairs;
+    std::shared_ptr<const std::vector<float>> m_channel_energies;
+  };//struct EnergyCalibration
+
+
   
   /** Returns each channels lower energy, based on the input polynomial
    calibration equation and deviation pairs.
@@ -104,6 +242,8 @@ namespace SpecUtils
           assumed they are sorted by energy already.
    @returns The lower energies of each gamma channels.  Will have 'nchannel'
             entries.
+   
+   Throws exception if an invalid energy calibration (i.e., channel energies not increasing)
    */
   std::shared_ptr< const std::vector<float> >
   polynomial_binning( const std::vector<float> &coeffs,
@@ -124,6 +264,8 @@ namespace SpecUtils
           assumed they are sorted by energy already.
    @returns The lower energies of each gamma channels.  Will have 'nchannel'
             entries.
+   
+   Throws exception if an invalid energy calibration (i.e., channel energies not increasing)
    */
   std::shared_ptr< const std::vector<float> >
   fullrangefraction_binning( const std::vector<float> &coeffs,
@@ -139,16 +281,34 @@ namespace SpecUtils
           edge of the channel.
    @param coeffs The full width fraction equation coefficients.
    @param nchannel Then number of gamma channels the returned answer will have.
-   @param deviation_pairs The deviation pairs defined for the calibration; it is
-          assumed they are sorted by energy already.
+   @param deviation_pairs The sorted deviation pairs defined for the calibration.
    @returns The energy of the specified channel.
+   
+   Doesnt perform a check that the coefficients or deviation pairs are actually valid.
+   Throws exception if deviation pairs are not sorted.
    */
-  float fullrangefraction_energy( float channel_number,
+  float fullrangefraction_energy( const float channel_number,
                                  const std::vector<float> &coeffs,
                                  const size_t nchannel,
                                  const std::vector<std::pair<float,float>> &deviation_pairs );
   
-  
+  /** Gives the energy cooresponding to the passed in _channel_number_.
+   
+   @param channel_number The channel number you would like the energy for.
+          This value may be non-integer (ex, if you want the energy of a peak
+          whose mean within a channel); an integer value gives you the lower
+          edge of the channel.
+   @param coeffs The polynomial equation coefficients.
+   @param deviation_pairs The sorted deviation pairs defined for the calibration.
+   @returns The energy of the specified channel.
+   
+   Doesnt perform a check that the coefficients or deviation pairs are actually valid.
+   Throws exception if deviation pairs are not sorted.
+   */
+  float polynomial_energy( const float channel_number,
+                           const std::vector<float> &coeffs,
+                           const std::vector<std::pair<float,float>> &deviation_pairs );
+
   
   /** Applies the deviation pairs to the energy given by polynomial/FRF
      calibration to return the actual energy.
@@ -215,6 +375,9 @@ namespace SpecUtils
    
    See discussion for #deviation_pair_correction for how deviation pairs
    are applied.
+   
+   Throws exception if resulting energy calibration wont be strictly increasing after applying
+   deviation pair.
    */
   std::shared_ptr<const std::vector<float>>
   apply_deviation_pair( const std::vector<float> &binning,

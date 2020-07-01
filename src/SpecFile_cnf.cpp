@@ -466,30 +466,25 @@ bool SpecFile::load_from_cnf( std::istream &input )
     vector<float> calib_params(3);
     input.seekg( energy_calib_offset, std::ios::beg );
     
-    meas->calibration_coeffs_.resize( 3 );
-    meas->calibration_coeffs_[0] = readCnfFloat( input );
-    meas->calibration_coeffs_[1] = readCnfFloat( input );
-    meas->calibration_coeffs_[2] = readCnfFloat( input );
-    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+    vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f };
+    cal_coefs[0] = readCnfFloat( input );
+    cal_coefs[1] = readCnfFloat( input );
+    cal_coefs[2] = readCnfFloat( input );
     
-    
-    std::vector< std::pair<float,float> > dummy_devpairs;
-    const bool validCalib
-    = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial,
-                                      meas->calibration_coeffs_,
-                                      dummy_devpairs, num_channels );
-    if( !validCalib )
+    try
+    {
+      auto newcal = make_shared<EnergyCalibration>();
+      newcal->set_polynomial( num_channels, cal_coefs, {} );
+      meas->energy_calibration_ = newcal;
+    }catch( std::exception &e )
     {
       bool allZeros = true;
-      for( const float v : meas->calibration_coeffs_ )
+      for( const float v : cal_coefs )
         allZeros = allZeros && (v==0.0f);
       
       if( !allZeros )
         throw runtime_error( "Calibration parameters were invalid" );
-      
-      meas->calibration_coeffs_.clear();
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
-    }//if( !validCalib )
+    }//try /catch set calibration
     
     input.seekg( mca_offset, std::ios::beg );
     input.read( buff, 8 );

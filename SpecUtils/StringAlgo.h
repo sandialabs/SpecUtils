@@ -249,6 +249,8 @@ namespace  SpecUtils
    assert( contents[0] == 7.99f );
    assert( contents[4] == 8.0f );
    \endcode
+   
+   \TODO: change this to be range based, instead of zero-terminated string input
    */
   bool split_to_floats( const char *input,
                        std::vector<float> &contents,

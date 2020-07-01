@@ -57,6 +57,7 @@ namespace SpecUtils
 #define XML_NAME_ICOMPARE( node, cstr ) (rapidxml::internal::compare((node)->name(), (node)->name_size(), cstr, SpecUtils::lengthof(cstr), false))
   
 #define XML_FIRST_NODE(node,name)((node)->first_node(name,SpecUtils::lengthof(name),true))
+#define XML_FIRST_INODE(node,name)((node)->first_node(name,SpecUtils::lengthof(name),false))
 #define XML_FIRST_ATTRIB(node,name)((node)->first_attribute(name,SpecUtils::lengthof(name),true))
   
 #define XML_FIRST_NODE_CHECKED(node,name)((node) ? (node)->first_node(name,SpecUtils::lengthof(name),true) : (rapidxml::xml_node<char> *)0)

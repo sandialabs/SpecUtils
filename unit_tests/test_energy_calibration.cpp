@@ -130,16 +130,26 @@ BOOST_AUTO_TEST_CASE( testCalibration )
   
   for( size_t i = 0; i < nbin; ++i )
   {
-    const float bin = static_cast<float>(i);
+    //const float bin = static_cast<float>(i);
     const float fwf = frf_binning->at(i);
+    const float poly_eqn_energy = polynomial_energy( i, poly_coefs, dev_pairs );
     const float poly = poly_binning->at(i);
     const float larger = std::max(fabs(fwf),fabs(poly));
+    
     BOOST_REQUIRE_MESSAGE( fabs(fwf-poly) <= 1.0E-5*larger, "" \
-                          "Lower channel energies for FWF and Polynomial coefficnets arent equal" \
+                           "Lower channel energies for FWF and Polynomial coefficnets arent equal" \
+                           " (starting) at bin " << i \
+                           << " got " << fwf << " and " << poly \
+                           << "respectively  for coefs=" << print_vec(frf_coefs) \
+                           << " giving values: " << fwf << " and " << poly << " respectively" );
+    
+    BOOST_REQUIRE_MESSAGE( fabs(poly_eqn_energy-poly) <= 1.0E-5*larger, "" \
+                          "Lower channel energy for polynomial_energy and Poly binning arent equal" \
                           " (starting) at bin " << i \
-                          << " got " << fwf << " and " << poly \
+                          << " got " << poly_eqn_energy << " and " << poly \
                           << "respectively  for coefs=" << print_vec(frf_coefs) \
-                          << " giving values: " << fwf << " and " << poly << " respectively" );
+                          << " giving values: " << poly_eqn_energy << " and " << poly
+                          << " respectively" );
   }
   //Need to do a lot more tests here...
 

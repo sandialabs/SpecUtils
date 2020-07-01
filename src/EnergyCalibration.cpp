@@ -21,6 +21,7 @@
 
 #include <cmath>
 #include <vector>
+#include <limits>
 #include <iostream>
 #include <iterator>
 #include <algorithm>
@@ -42,6 +43,437 @@ using namespace std;
 namespace SpecUtils
 {
 
+EnergyCalibration::EnergyCalibration()
+  : m_type( EnergyCalType::InvalidEquationType )
+{
+}
+
+
+EnergyCalType EnergyCalibration::type() const
+{
+  return m_type;
+}
+  
+ 
+const std::vector<float> &EnergyCalibration::coefficients() const
+{
+  if( m_type == EnergyCalType::LowerChannelEdge )
+    return (m_channel_energies ? *m_channel_energies : m_coefficients);  //ptr check JIC, but shouldnt be needed.
+
+  return m_coefficients;
+}
+
+
+const std::vector<std::pair<float,float>> &EnergyCalibration::deviation_pairs() const
+{
+  return m_deviation_pairs;
+}
+  
+
+const std::shared_ptr<const std::vector<float>> &EnergyCalibration::channel_energies() const
+{
+  return m_channel_energies;
+}
+ 
+
+size_t EnergyCalibration::num_channels() const
+{
+  switch ( m_type )
+  {
+    case EnergyCalType::Polynomial:
+    case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+    case EnergyCalType::FullRangeFraction:
+      assert( m_channel_energies );
+      return (m_channel_energies ? m_channel_energies->size() : size_t(0));
+      
+    case EnergyCalType::LowerChannelEdge:
+      assert( m_channel_energies );
+      return ((m_channel_energies && (m_channel_energies->size() > 1))
+               ? (m_channel_energies->size()-1) : size_t(0));
+      
+    case EnergyCalType::InvalidEquationType:
+      return 0;
+  }//switch ( m_type )
+  
+  assert( 0 );
+  return 0;
+}//num_channels()
+
+
+void EnergyCalibration::set_polynomial( const size_t num_channels,
+                                        const std::vector<float> &coeffs,
+                                        const std::vector<std::pair<float,float>> &dev_pairs )
+{
+  if( num_channels < 2 )
+    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with >=2 channels" );
+  
+  //Find the last non-zero coefficients (e.g., strip off trailing zeros)
+  size_t last_iter = coeffs.size();
+  while( last_iter!=0 && coeffs[last_iter-1]==0.0f )
+    --last_iter;
+  
+  if( last_iter < 2 )
+    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with >=2 coefficents" );
+  
+  // Do a sanity check on calibration coeffiecints that they are reasonable; #polynomial_binning
+  //  will check if the are strictly increasing.
+  if( (fabs(coeffs[0]) > 300.0)  //300 is arbitrary, but I have seen -160 in data.
+      || (fabs(coeffs[1]) > 450.0)  //450 is arbitrary, lets 7 channels span 3000 keV
+      || (last_iter==2 && coeffs[1]<=std::numeric_limits<float>::epsilon() )
+      || (last_iter>=3 && coeffs[1]<=std::numeric_limits<float>::epsilon()
+          && coeffs[2]<=std::numeric_limits<float>::epsilon()) )
+   {
+     throw runtime_error( "EnergyCalibration::set_polynomial: Coefficients are unreasonable" );
+   }
+  
+  m_channel_energies = SpecUtils::polynomial_binning( coeffs, num_channels, dev_pairs );
+  
+  m_type = EnergyCalType::Polynomial;
+  m_coefficients.clear();
+  m_coefficients.insert( end(m_coefficients), begin(coeffs), begin(coeffs)+last_iter );
+  m_deviation_pairs = dev_pairs;
+}//set_polynomial(...)
+  
+  
+void EnergyCalibration::set_default_polynomial( const size_t num_channels,
+                               const std::vector<float> &coeffs,
+                               const std::vector<std::pair<float,float>> &dev_pairs )
+{
+  set_polynomial( num_channels, coeffs, dev_pairs );
+  m_type = EnergyCalType::UnspecifiedUsingDefaultPolynomial;
+}//set_default_polynomial(...)
+  
+
+void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
+                                const std::vector<float> &coeffs,
+                                const std::vector<std::pair<float,float>> &dev_pairs )
+{
+  if( num_channels < 2 )
+    throw runtime_error( "EnergyCalibration::set_full_range_fraction: must be called with >=2"
+                         " channels" );
+  
+  //Find the last non-zero coefficients (e.g., strip off trailing zeros)
+   size_t last_iter = coeffs.size();
+   while( last_iter!=0 && coeffs[last_iter-1]==0.0f )
+     --last_iter;
+  
+  if( last_iter < 2 )
+    throw runtime_error( "EnergyCalibration::set_full_range_fraction: must be called with >=2"
+                         " coefficents" );
+  
+  m_channel_energies = SpecUtils::fullrangefraction_binning( coeffs, num_channels, dev_pairs );
+  
+  m_type = EnergyCalType::FullRangeFraction;
+  m_coefficients.clear();
+  m_coefficients.insert( end(m_coefficients), begin(coeffs), begin(coeffs)+last_iter );
+  m_deviation_pairs = dev_pairs;
+}//set_full_range_fraction(...)
+  
+
+void EnergyCalibration::check_lower_energies( const size_t num_channels,
+                                              const std::vector<float> &channel_energies )
+{
+  if( num_channels < 2 )
+    throw runtime_error( "EnergyCalibration::set_lower_channel_energy: must be called with >=2"
+                         " channels" );
+  
+  if( num_channels > channel_energies.size() )
+    throw runtime_error( "EnergyCalibration::set_lower_channel_energy: not enough channel energies"
+                         " for the specified number of channels." );
+  
+  const size_t numsrc_channels = std::min( num_channels+1, channel_energies.size() );
+  for( size_t i = 1; i < numsrc_channels; ++i )
+  {
+    if( channel_energies[i] < channel_energies[i-1] )
+      throw std::runtime_error( "EnergyCalibration::set_lower_channel_energy: invalid calibration"
+                                " passed in at channel " + std::to_string(i) );
+  }
+}//void check_lower_energies( const std::vector<float> &channel_energies )
+
+
+void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
+                                                  const std::vector<float> &channel_energies )
+{
+  cout << "calling non-std::move set_lower_channel_energy" << endl;
+  
+  check_lower_energies( num_channels, channel_energies );
+  
+  auto energies = std::make_shared<std::vector<float>>( num_channels + 1 );
+  const size_t numsrc_channels = std::min( num_channels+1, channel_energies.size() );
+  memcpy( &((*energies)[0]), &(channel_energies[0]), 4*numsrc_channels );
+  
+  if( numsrc_channels < (num_channels+1) )
+  {
+    assert( num_channels == channel_energies.size() );
+    assert( numsrc_channels == channel_energies.size() );
+    (*energies)[num_channels] = 2.0f*channel_energies[num_channels-1] - channel_energies[num_channels-2];
+  }
+  
+  m_coefficients.clear();
+  m_deviation_pairs.clear();
+  m_type = EnergyCalType::LowerChannelEdge;
+  m_channel_energies = energies;
+}//set_lower_channel_energy(...)
+
+
+void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
+                                                  std::vector<float> &&channel_energies )
+{
+  cout << "calling non-std::move set_lower_channel_energy, address of first element: " << &(channel_energies[0]) << endl;
+  
+  check_lower_energies( num_channels, channel_energies );
+  assert( channel_energies.size() >= num_channels );
+  
+  auto energies = std::make_shared<std::vector<float>>( std::move(channel_energies) );
+  
+  if( energies->size() < (num_channels+1) )
+    energies->push_back( 2.0f*((*energies)[num_channels-1]) - ((*energies)[num_channels-2]) );
+  if( energies->size() > (num_channels+1) )
+    energies->resize( num_channels+1 );
+  
+  m_coefficients.clear();
+  m_deviation_pairs.clear();
+  m_type = EnergyCalType::LowerChannelEdge;
+  m_channel_energies = energies;
+  
+  cout << "set_lower_channel_energy: After initialization address of first element is: " << &(channel_energies[0]) << endl;
+}//set_lower_channel_energy(...)
+
+
+size_t EnergyCalibration::memmorysize() const
+{
+  size_t nbytes = sizeof(EnergyCalibration);
+  nbytes += m_coefficients.capacity() * sizeof(float);
+  nbytes += m_deviation_pairs.capacity() * sizeof(std::pair<float,float>);
+  if( m_channel_energies )
+    nbytes += sizeof(std::vector<float>) + (m_channel_energies->capacity() * sizeof(float));
+  return nbytes;
+}//size_t memmorysize() const
+
+
+bool EnergyCalibration::operator==( const EnergyCalibration &rhs ) const
+{
+  if( this == &rhs )
+    return true;
+  
+  if( (m_type != rhs.m_type)
+      || (m_coefficients != rhs.m_coefficients)
+      || (m_deviation_pairs != rhs.m_deviation_pairs) )
+    return false;
+  
+  if( (!m_channel_energies) != (!rhs.m_channel_energies) )
+    return false;
+  
+  if( !m_channel_energies )
+    return true;
+  
+  return (m_channel_energies->size() == rhs.m_channel_energies->size());
+}//operator==
+
+
+bool EnergyCalibration::operator!=( const EnergyCalibration &rhs ) const
+{
+  return !(operator==(rhs));
+}//operator!=
+
+
+bool EnergyCalibration::operator<( const EnergyCalibration &rhs ) const
+{
+  const size_t nleftchannel = m_channel_energies ? m_channel_energies->size() : 0u;
+  const size_t nrightchannel = rhs.m_channel_energies ? rhs.m_channel_energies->size() : 0u;
+  
+  if( nleftchannel != nrightchannel )
+    return (nleftchannel < nrightchannel);
+  
+  if( m_type != rhs.m_type )
+    return (m_type < rhs.m_type);
+  
+  if( m_type == EnergyCalType::InvalidEquationType )
+    return false;
+  
+  const bool is_lower_edge = (m_type == EnergyCalType::LowerChannelEdge);
+  if( is_lower_edge )
+  {
+    assert( m_channel_energies );
+    assert( rhs.m_channel_energies );
+  }
+  
+  const vector<float> &lhscoef = (is_lower_edge ? *m_channel_energies : m_coefficients);
+  const vector<float> &rhscoef = (is_lower_edge ? *rhs.m_channel_energies : rhs.m_coefficients);
+  
+  if( lhscoef.size() != rhscoef.size() )
+    return (lhscoef.size() < rhscoef.size());
+  
+  for( size_t i = 0; i < lhscoef.size(); ++i )
+  {
+    const float leftcoef = lhscoef[i];
+    const float rightcoef = rhscoef[i];
+    const float maxcoef = std::max( fabs(leftcoef), fabs(rightcoef) );
+    if( fabs(leftcoef - rightcoef) > (1.0E-5 * maxcoef) )
+      return leftcoef < rightcoef;
+  }//for( size_t i = 0; i < coefficients.size(); ++i )
+  
+  if( m_deviation_pairs.size() != rhs.m_deviation_pairs.size() )
+    return (m_deviation_pairs.size() < rhs.m_deviation_pairs.size());
+  
+  for( size_t i = 0; i < m_deviation_pairs.size(); ++i )
+  {
+    const pair<float,float> &lv = m_deviation_pairs[i];
+    const pair<float,float> &rv = rhs.m_deviation_pairs[i];
+    const float maxenergy = std::max( fabs(lv.first), fabs(rv.first) );
+    const float epsilon = 1.0E-5f;
+    
+    if( fabs(lv.first - rv.first) > (epsilon * maxenergy))
+      return lv.first < rv.first;
+      
+    const float maxdeviation = std::max( fabs(lv.second), fabs(rv.second) );
+    
+    if( fabs(lv.second - rv.second) > (epsilon * maxdeviation) )
+      return lv.second < rv.second;
+  }//for( size_t i = 0; i < deviation_pairs_.size(); ++i )
+      
+  return false;
+}//bool operator<(...)
+      
+
+#if( PERFORM_DEVELOPER_CHECKS )
+void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyCalibration &rhs )
+{
+  char buffer[256] = { '\0' };
+  
+  auto floats_equiv = []( const float a, const float b ) -> bool {
+    const auto diff = fabs(a - b);
+    const auto maxval = std::max(fabs(a),fabs(b));
+    return (diff <= (1.0E-5f*maxval) && (diff < std::numeric_limits<float>::epsilon()));
+  };
+  
+  auto lhs_model = lhs.m_type;
+  auto rhs_model = rhs.m_type;
+  
+  if( lhs_model == EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+    lhs_model = EnergyCalType::Polynomial;
+  if( rhs_model == EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+    rhs_model = EnergyCalType::Polynomial;
+  
+  if( (lhs_model == rhs_model) && (lhs_model == EnergyCalType::InvalidEquationType) )
+    return;
+  
+  if( (lhs_model != rhs_model)
+      && (lhs_model == EnergyCalType::LowerChannelEdge || rhs_model == EnergyCalType::LowerChannelEdge) )
+  {
+    snprintf( buffer, sizeof(buffer), "Calibration model of LHS (%i) different from RHS (%i)",
+              int(lhs.m_type), int(rhs.m_type) );
+    throw runtime_error( buffer );
+  }
+  
+  //Models are now: {both LowerChannelEdge}, {both Polynomial}, {both FullRangeFraction}, or
+  //                {one Polynomial and one FullRangeFraction}
+   
+  assert( lhs.m_channel_energies );
+  assert( rhs.m_channel_energies );
+  
+  const size_t nchannel = lhs.m_channel_energies->size();
+  
+  if( nchannel != rhs.m_channel_energies->size() )
+  {
+    snprintf( buffer, sizeof(buffer),
+              "Calibrations have different number of channel energies (LHS %i, RHS %i)",
+              static_cast<int>(lhs.m_channel_energies->size()),
+              static_cast<int>(rhs.m_channel_energies->size()) );
+    throw runtime_error( buffer );
+  }
+  
+  const auto &lhsdev = lhs.m_deviation_pairs;
+  const auto &rhsdev = rhs.m_deviation_pairs;
+  
+  if( lhsdev.size() != rhsdev.size() )
+  {
+    snprintf( buffer, sizeof(buffer), "Number of deviation pairs of RHS (%i) doesnt match LHS (%i)",
+             static_cast<int>(lhsdev.size()), static_cast<int>(rhsdev.size()) );
+    throw runtime_error( buffer );
+  }
+  
+  for( size_t i = 0; i < lhsdev.size(); ++i )
+  {
+    if( fabs(lhsdev[i].first - rhsdev[i].first) > 0.001f )
+    {
+      snprintf( buffer, sizeof(buffer), "Deviation pair %i has RHS energy %f and LHS %f",
+                static_cast<int>(i), lhsdev[i].first, rhsdev[i].first );
+      throw runtime_error( buffer );
+    }
+    
+    if( fabs(lhsdev[i].second - rhsdev[i].second) > 0.001f )
+    {
+      snprintf( buffer, sizeof(buffer), "Deviation pair %i has RHS offset %f and LHS %f",
+                static_cast<int>(i), lhsdev[i].second, rhsdev[i].second );
+      throw runtime_error( buffer );
+    }
+  }//for( loop over deviation pairs )
+  
+  auto lhscoef = lhs.m_coefficients;
+  auto rhscoef = rhs.m_coefficients;
+  
+  //if( lhs_model == EnergyCalType::LowerChannelEdge )
+  //{
+  //  lhscoef = *lhs.m_channel_energies;
+  //  rhscoef = *rhs.m_channel_energies;
+  //}
+  
+  if( lhs_model != rhs_model )
+  {
+    if( lhs_model != EnergyCalType::Polynomial )
+      lhscoef = fullrangefraction_coef_to_polynomial( lhscoef, nchannel );
+    if( rhs_model != EnergyCalType::Polynomial )
+      rhscoef = fullrangefraction_coef_to_polynomial( rhscoef, nchannel );
+  }//if( lhs_model != rhs_model )
+  
+  while( lhscoef.size() && lhscoef.back() == 0.0f )
+    lhscoef.erase( lhscoef.end() - 1 );
+  while( rhscoef.size() && rhscoef.back() == 0.0f )
+    rhscoef.erase( rhscoef.end() - 1 );
+  
+  if( lhscoef.size() != rhscoef.size() )
+  {
+    snprintf( buffer, sizeof(buffer),
+              "Number of calibration coefficients LHS (%i) and RHS (%i) do not match%s",
+              static_cast<int>(lhscoef.size()), static_cast<int>(rhscoef.size()),
+              ((lhs_model==rhs_model) ? "" : " after converting to be same type") );
+    throw runtime_error( buffer );
+  }
+    
+  for( size_t i = 0; i < rhscoef.size(); ++i )
+  {
+    if( !floats_equiv(lhscoef[i],rhscoef[i]) )
+    {
+      snprintf( buffer, sizeof(buffer),
+                "Calibration coefficient %i of LHS (%1.8E) doesnt match RHS (%1.8E) (note, concerted calib type)",
+                static_cast<int>(i), lhscoef[i], rhscoef[i] );
+      throw runtime_error( buffer );
+    }
+  }//for( loop over coefficients )
+  
+  
+  for( size_t i = 0; i < nchannel; ++i )
+  {
+    const float lhsenergy = lhs.m_channel_energies->at(i);
+    const float rhsenergy = rhs.m_channel_energies->at(i);
+    const float diff = fabs(lhsenergy - rhsenergy );
+    if( diff > 0.00001*std::max(fabs(lhsenergy), fabs(rhsenergy)) && diff > 0.001 )
+    {
+      snprintf( buffer, sizeof(buffer),
+               "Energy of channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
+               int(i), lhs.m_channel_energies->at(i),
+               rhs.m_channel_energies->at(i) );
+      throw runtime_error( buffer );
+    }
+  }//for( loop over channel energies )
+  
+  
+}//equalEnough( lhs, rhs )
+#endif //PERFORM_DEVELOPER_CHECKS
+
+
+
 std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<float> &coeffs,
                                                                  const size_t nbin,
                                                                  const std::vector<std::pair<float,float>> &dev_pairs )
@@ -49,6 +481,7 @@ std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<flo
   auto answer = make_shared<vector<float>>(nbin, 0.0f);
   const size_t ncoeffs = coeffs.size();
   
+  float prev_energy = -std::numeric_limits<float>::infinity();
   for( size_t i = 0; i < nbin; i++ )
   {
     float val = 0.0f;
@@ -56,7 +489,21 @@ std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<flo
       val += coeffs[c] * pow( static_cast<float>(i), static_cast<float>(c) );
     answer->operator[](i) = val;
     
-    //ToDo: check for infs and NaNs, and if larger than last energy
+    //Note, #apply_deviation_pair will also check for strickly increasing, but _after_ applying
+    //  deviation pairs (since there you could have a FRF that is only valid with the dev pairs)
+    // \ToDo: check for infs and NaNs too
+    // \ToDo: could take derivative of coefficients instead and use that to check if negative
+    //        or zero derivative anywhere, and see if this is faster than checking every entry.
+    if( dev_pairs.empty() && (val <= prev_energy) )
+    {
+      string msg = "Invalid polynomial equation {";
+      for( size_t c = 0; c < ncoeffs; ++c )
+        msg += (c ? ", " : "") + std::to_string(coeffs[c]);
+      msg += "} starting at channel " + std::to_string(i);
+      throw std::runtime_error( msg );
+    }//if( invalid energy calibration )
+    
+    prev_energy = val;
   }//for( loop over bins, i )
   
   if( dev_pairs.empty() )
@@ -74,6 +521,7 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
   const size_t ncoeffs = std::min( coeffs.size(), size_t(4) );
   const float low_e_coef = (coeffs.size() > 4) ? coeffs[4] : 0.0f;
   
+  float prev_energy = -std::numeric_limits<float>::infinity();
   for( size_t i = 0; i < nbin; i++ )
   {
     const float x = static_cast<float>(i)/static_cast<float>(nbin);
@@ -82,17 +530,27 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
       val += coeffs[c] * pow(x,static_cast<float>(c) );
     val += low_e_coef / (1.0f+60.0f*x);
     
-    //ToDo: check for infs and NaNs, and if larger than last energy
-    
+    //Note, #apply_deviation_pair will also check for strickly increasing, but _after_ applying
+    //  deviation pairs (since there you could have a FRF that is only valid with the dev pairs)
+    // \ToDo: check for infs and NaNs too
+    if( dev_pairs.empty() && (val <= prev_energy) )
+    {
+      string msg = "Invalid FullRangeFranction equation {";
+      for( size_t c = 0; c < ncoeffs; ++c )
+        msg += (c ? ", " : "") + std::to_string(coeffs[c]);
+      msg += "} starting at channel " + std::to_string(i);
+      throw std::runtime_error( msg );
+    }//if( invalid energy calibration )
   }//for( loop over bins, i )
   
   if( dev_pairs.empty() )
     return answer;
+  
   return apply_deviation_pair( *answer, dev_pairs );
 }//std::shared_ptr< const std::vector<float> > fullrangefraction_binning(...)
   
   
-float fullrangefraction_energy( float bin_number,
+float fullrangefraction_energy( const float bin_number,
                                  const std::vector<float> &coeffs,
                                  const size_t nbin,
                                  const std::vector<std::pair<float,float>> &deviation_pairs )
@@ -104,7 +562,17 @@ float fullrangefraction_energy( float bin_number,
   return val + deviation_pair_correction( val, deviation_pairs );
 }//float fullrangefraction_energy(...)
 
-  
+
+float polynomial_energy( const float channel_number,
+                         const std::vector<float> &coeffs,
+                         const std::vector<std::pair<float,float>> &deviation_pairs )
+{
+  float val = 0.0f;
+  for( size_t i = 0; i < coeffs.size(); ++i )
+    val += coeffs[i] * pow( channel_number, static_cast<float>(i) );
+  return val + deviation_pair_correction( val, deviation_pairs );
+}//polynomial_energy(...)
+
   
 shared_ptr<const vector<float>> apply_deviation_pair( const vector<float> &binning,
                                       const vector<std::pair<float,float>> &dps )
@@ -151,7 +619,17 @@ shared_ptr<const vector<float>> apply_deviation_pair( const vector<float> &binni
       const double h = ex[i] - node.x;
       ex[i] += static_cast<float>( ((node.a*h + node.b)*h + node.c)*h + node.y );
     }
+    
     //ToDo: Check for infs and NaNs here
+    if( i && (ex[i] <= ex[i-1]) )
+    {
+      if( binning.at(i-1) >= binning.at(i) )
+        throw std::runtime_error( "Invalid energy calibration starting at channel "
+                                  + std::to_string(i) );
+      throw std::runtime_error( "apply_deviation_pair: application of deviation pairs caused"
+                                " calbration to become invalid starting at channel "
+                                + std::to_string(i) );
+    }
   }//for( size_t i = 0; i < ex.size(); ++i )
   
   return answer;
@@ -381,63 +859,94 @@ bool calibration_is_valid( const EnergyCalType type,
   //ToDo: also check that the energy range is halfway reasonable...
   //ToDo: its pretty easy to check polynomial algebraicly...
   
-  std::unique_ptr< std::vector<float> > frfeqn;
-  const std::vector<float> *eqn = &ineqn;
-  
-  if( type == EnergyCalType::Polynomial
-     || type == EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+#if( PERFORM_DEVELOPER_CHECKS )
+  auto double_check_binning = [ineqn,devpairs]( shared_ptr<const vector<float>> binning ){
+    for( size_t i = 1; i < binning->size(); ++i )
+    {
+      if( (*binning)[i] <= (*binning)[i-1] )
+      {
+        char buffer[512];
+        snprintf( buffer, sizeof(buffer),
+                 "Energy of bin %i is lower or equal to the one before it",
+                 int(i) );
+        stringstream msg;
+        msg << "Energy of bin " << i << " is lower or equal to the one before it"
+        << " for coefficients {";
+        for( size_t j = 0; j < ineqn.size(); ++j )
+          msg << (j ? ", " : "") << ineqn[j];
+        msg << "} and deviation pairs {";
+        
+        for( size_t j = 0; j < devpairs.size(); ++j )
+          msg << (j ? ", {" : "{") << devpairs[j].first << ", " << devpairs[j].second << "}";
+        msg << "}";
+        
+        log_developer_error( __func__, msg.str().c_str() );
+      }
+    }//for( size_t i = 1; i < binning->size(); ++i )
+  }; //double_check_binning lamda
+#endif
+
+  for( const float &val : ineqn )
   {
-    frfeqn.reset( new vector<float>() );
-    *frfeqn = polynomial_coef_to_fullrangefraction( ineqn, nbin );
-    eqn = frfeqn.get();
-  }//if( type == EnergyCalType::Polynomial )
+    if( IsInf(val) || IsNan(val) )
+      return false;
+  }
+  
   
   switch( type )
   {
     case EnergyCalType::Polynomial:
-    case EnergyCalType::FullRangeFraction:
     case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
-      for( const float &val : (*eqn) )
-      {
-        if( IsInf(val) || IsNan(val) )
-          return false;
-      }
-      
-      //ToDo:
-      const float nearend   = fullrangefraction_energy( float(nbin-2), *eqn, nbin, devpairs );
-      const float end       = fullrangefraction_energy( float(nbin-1), *eqn, nbin, devpairs );
-      const float begin     = fullrangefraction_energy( 0.0f,      *eqn, nbin, devpairs );
-      const float nearbegin = fullrangefraction_energy( 1.0f,      *eqn, nbin, devpairs );
+      // \TODO: Go through every channel or use derivatives if deviation pairs not available.
+      const float nearend   = polynomial_energy( float(nbin-2), ineqn, devpairs );
+      const float end       = polynomial_energy( float(nbin-1), ineqn, devpairs );
+      const float begin     = polynomial_energy( 0.0f,      ineqn, devpairs );
+      const float nearbegin = polynomial_energy( 1.0f,      ineqn, devpairs );
       
       const bool valid = !( (nearend >= end) || (begin >= nearbegin) );
       
 #if( PERFORM_DEVELOPER_CHECKS )
       if( valid )
       {
-        auto binning = fullrangefraction_binning( *eqn, nbin, devpairs );
-        for( size_t i = 1; i < binning->size(); ++i )
+        try
         {
-          if( (*binning)[i] <= (*binning)[i-1] )
-          {
-            char buffer[512];
-            snprintf( buffer, sizeof(buffer),
-                     "Energy of bin %i is lower or equal to the one before it",
-                     int(i) );
-            stringstream msg;
-            msg << "Energy of bin " << i << " is lower or equal to the one before it"
-            << " for coefficients {";
-            for( size_t j = 0; j < eqn->size(); ++j )
-              msg << (j ? ", " : "") << (*eqn)[j];
-            msg << "} and deviation pairs {";
-            
-            for( size_t j = 0; j < devpairs.size(); ++j )
-              msg << (j ? ", {" : "{") << devpairs[j].first << ", " << devpairs[j].second << "}";
-            msg << "}";
-            
-            log_developer_error( __func__, msg.str().c_str() );
-          }
-        }//for( size_t i = 1; i < binning->size(); ++i )
+          auto binning = polynomial_binning( ineqn, nbin, devpairs );
+          double_check_binning( binning );
+        }catch( std::exception &e )
+        {
+          log_developer_error( __func__, ("Couldnt enumerate polynomial binning for calibration"
+                                          " thought to be valid: " + std::string(e.what())).c_str() );
+        }
+      }//if( valid )
+#endif
+
+    
+      break;
+    }//case polynomial
+      
+    case EnergyCalType::FullRangeFraction:
+    {
+      // \TODO: Go through every channel or use derivatives if deviation pairs not available.
+      const float nearend   = fullrangefraction_energy( float(nbin-2), ineqn, nbin, devpairs );
+      const float end       = fullrangefraction_energy( float(nbin-1), ineqn, nbin, devpairs );
+      const float begin     = fullrangefraction_energy( 0.0f,      ineqn, nbin, devpairs );
+      const float nearbegin = fullrangefraction_energy( 1.0f,      ineqn, nbin, devpairs );
+      
+      const bool valid = !( (nearend >= end) || (begin >= nearbegin) );
+      
+#if( PERFORM_DEVELOPER_CHECKS )
+      if( valid )
+      {
+        try
+        {
+          auto binning = fullrangefraction_binning( ineqn, nbin, devpairs );
+          double_check_binning( binning );
+        }catch( std::exception &e )
+        {
+          log_developer_error( __func__, ("Couldnt enumerate FRF binning for calibration"
+                               " thought to be valid: " + std::string(e.what())).c_str() );
+        }
       }//if( valid )
 #endif
       return valid;
@@ -446,7 +955,7 @@ bool calibration_is_valid( const EnergyCalType type,
     case EnergyCalType::LowerChannelEdge:
     {
       for( size_t i = 1; i < ineqn.size(); ++i )
-        if( ineqn[i-1] >= ineqn[i] )
+        if( ineqn[i-1] > ineqn[i] )
           return false;
       return (!ineqn.empty() && (ineqn.size()>=nbin));
     }//case EnergyCalType::LowerChannelEdge:

@@ -20,12 +20,11 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
+#include <tuple>
 #include <vector>
 #include <memory>
 #include <string>
 #include <cctype>
-#include <limits>
-#include <numeric>
 #include <fstream>
 #include <cctype>
 #include <cstdlib>
@@ -34,7 +33,6 @@
 #include <cstdint>
 #include <stdexcept>
 #include <algorithm>
-#include <functional>
 
 
 #include "SpecUtils/SpecFile.h"
@@ -395,14 +393,14 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
     //Make sure its actually a gamma detector
     if( meas->gamma_counts_ && !meas->gamma_counts_->empty())
     {
-      has_some_dev_pairs |= (!meas->deviation_pairs_.empty());
+      has_some_dev_pairs |= (!meas->deviation_pairs().empty());
       if( name.size() >= 3
          && (name[1]=='c' || name[1]=='C' || name[1]=='d' || name[1]=='D')
          && (name[0]>='a' && name[0]<='g')
          && (name[2]>'0' && name[2]<'9') )
         need_compress_pairs = true;
       
-      dev_pairs[name] = meas->deviation_pairs_;
+      dev_pairs[name] = meas->deviation_pairs();
     }
   }//for( size_t i = 0; !detnames.empty() && i < measurements_.size(); ++i )
   
@@ -886,17 +884,22 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
         //  from, then could put 'K' or 'T'
       }
       
-      vector<float> calib_coef = meas->calibration_coeffs_;
-      if( num_channel && (meas->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial
-                          || meas->energy_calibration_model_ == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial) )
+      assert( meas->energy_calibration_ );
+      vector<float> calib_coef = meas->energy_calibration_->coefficients();
+      const auto caltype = meas->energy_calibration_->type();
+      
+      if( num_channel && (caltype == SpecUtils::EnergyCalType::Polynomial
+                          || caltype == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial) )
+      {
         calib_coef = SpecUtils::polynomial_coef_to_fullrangefraction( calib_coef, meas->gamma_counts_->size() );
+      }
       
       offset         = (calib_coef.size() > 0) ? calib_coef[0] : 0.0f;
       gain           = (calib_coef.size() > 1) ? calib_coef[1] : 0.0f;
       quadratic      = (calib_coef.size() > 2) ? calib_coef[2] : 0.0f;
       cubic          = (calib_coef.size() > 3) ? calib_coef[3] : 0.0f;
       low_energy     = 0.0f;
-      if( meas->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
+      if( caltype == SpecUtils::EnergyCalType::FullRangeFraction )
         low_energy   = (calib_coef.size() > 4) ? calib_coef[4] : 0.0f;
       
       if( lower_channel_energies && lower_channel_energies->size() > 7 )
@@ -1203,8 +1206,15 @@ bool SpecFile::load_from_pcf( std::istream &input )
     size_t record_number = 0;
     
     //If first record of PCF gives the lower channel energies, then we'll fill
-    //  out lower_channel_energies.
-    std::shared_ptr< vector<float> > lower_channel_energies;
+    //  out lower_channel_energy_cal.
+    shared_ptr<EnergyCalibration> lower_channel_energy_cal;
+    
+    //In order to re-use energy calibration coefficients (and not bother filling them out until
+    //  we've matched up all the non-linear deviation pairs), we will temporarily store the
+    //  calibration coefficients until we've ran through all the records, and then go back and set
+    //  the energy calbration.
+    map<vector<float>,vector<shared_ptr<Measurement>>> energy_coeffs_to_meas;
+    
     
     while( input.good() && static_cast<size_t>(input.tellg()) < (filelen-256) )
     {
@@ -1357,10 +1367,19 @@ bool SpecFile::load_from_pcf( std::istream &input )
         for( int32_t channel = 1; increasing && (channel < num_channel); ++channel )
           increasing = ((*channel_data)[channel] >= (*channel_data)[channel-1]);
         
-        if( increasing )
+        if( increasing && num_channel > 2 )
         {
           //It looks like we should also check that live and real times is 1.0f
-          lower_channel_energies = channel_data;
+          try
+          {
+            lower_channel_energy_cal = make_shared<EnergyCalibration>();
+            lower_channel_energy_cal->set_lower_channel_energy( channel_data->size() - 1,
+                                                                std::move(*channel_data) );
+          }catch( std::exception &e )
+          {
+            //shouldnt ever get here
+          }
+          
           continue;
         }//if( increasing )
       }//if( record_number == 1 and title=="Energy" )
@@ -1432,17 +1451,23 @@ bool SpecFile::load_from_pcf( std::istream &input )
       while( energy_cal_terms.size() && (energy_cal_terms.back()==0.0f) )
         energy_cal_terms.erase( energy_cal_terms.begin() + energy_cal_terms.size() - 1 );
       
-      if( lower_channel_energies )
+      if( lower_channel_energy_cal )
       {
         //Note: at least for DB.pcf I checked:
-        //  (lower_channel_energies->back()==(energy_cal_terms[0]+energy_cal_terms[1]))
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
-        meas->calibration_coeffs_.clear();
-        meas->channel_energies_ = lower_channel_energies;
+        //  (lower_channel_energy_cal->coefficients()->back()==(energy_cal_terms[0]+energy_cal_terms[1]))
+        if( lower_channel_energy_cal->coefficients().size() == (channel_data->size()+1) )
+        {
+          meas->energy_calibration_ = lower_channel_energy_cal;
+        }else
+        {
+          /// \TODO: if we have less energy channels, could make a new lower channel calibration...
+          meas->parse_warnings_.push_back( "PCF specified lower channel energies, but number of"
+                                           " channels didnt match up for this record." );
+          energy_coeffs_to_meas[energy_cal_terms].push_back( meas );
+        }
       }else
       {
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
-        meas->calibration_coeffs_ = energy_cal_terms;
+        energy_coeffs_to_meas[energy_cal_terms].push_back( meas );
       }
       
       meas->gamma_counts_ = channel_data;
@@ -1563,9 +1588,11 @@ bool SpecFile::load_from_pcf( std::istream &input )
      }
      */
     
+    //Now map from the detector name to deviation pairs it should use.
+    map<string,vector<pair<float,float>>> det_name_to_devs;
+    
     if( have_deviation_pairs )
     {
-      map<string,vector<pair<float,float>>> det_name_to_devs;
       bool used_deviation_pairs[4][8][8] = {}; //iniitalizes tp zero/false
       
       //Assign deviation pairs to detectors with names like "Aa1", "Ab2", etc.
@@ -1624,25 +1651,56 @@ bool SpecFile::load_from_pcf( std::istream &input )
         log_developer_error( __func__, "Read in deviation pairs that did not get assigned to a detector" );
       }//if( unused_dev_pairs )
 #endif
-      
-      for( auto &m : measurements_ )
-      {
-        auto dev_pos = det_name_to_devs.find(m->detector_name_);
-        if( dev_pos != end(det_name_to_devs) )
-        {
-          m->deviation_pairs_ = dev_pos->second;
-          
-          //stringstream msg;
-          //msg << "Assigning Det=" << m->detector_name_ << " deviation pairs: ";
-          //for( auto p : m->deviation_pairs_ )
-          //  msg << "{" << p.first << "," << p.second << "}, ";
-          //cout << msg.str() << endl;
-        }
-      }//for( auto &m : measurements_ )
     }//if( have_deviation_pairs )
     
+    //Finally set the energy calibration for Measurements in energy_coeffs_to_meas, now that we
+    //  have all the information we need.
+    //We will create a cache of energy calibration information to EnergyCalibration objects so we
+    //  can minimize memory usage.
+    typedef tuple<size_t,vector<float>,vector<pair<float,float>>> RawCalInfo_t;
+    map< RawCalInfo_t, shared_ptr<EnergyCalibration> > prev_cals;
+    for( auto &coef_to_measv : energy_coeffs_to_meas )
+    {
+      //Note: lower_channel_energy_cal may be valid here if for some reason some records have a
+      //      different number of channels that the channel energies given by the detector.
+      //assert( !lower_channel_energy_cal );
+      
+      const vector<float> &coefs = coef_to_measv.first;
+      
+      for( const auto &meas : coef_to_measv.second )
+      {
+        const size_t nchannel = meas->num_gamma_channels();
+        if( nchannel < 2 )
+          continue;
+        
+        RawCalInfo_t calinfo{ nchannel, coefs, {} };
+        if( have_deviation_pairs )
+        {
+          auto dev_pos = det_name_to_devs.find(meas->detector_name_);
+          if( dev_pos != end(det_name_to_devs) )
+            std::get<2>(calinfo) = dev_pos->second;
+        }//if( have_deviation_pairs )
+        
+        auto prevpos = prev_cals.find( calinfo );
+        if( prevpos != end(prev_cals) )
+        {
+          meas->energy_calibration_ = prevpos->second;
+        }else
+        {
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_full_range_fraction( nchannel, coefs, std::get<2>(calinfo) );
+            prev_cals[calinfo] = newcal;
+            meas->energy_calibration_ = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "PCF FRF calibration invalid: " + string(e.what()) );
+          }
+        }
+      }//for( loop over Measurements that share these coefficients )
+    }//for( auto &coef_to_measv : energy_coeffs_to_meas )
     
-    //if( any_contained_neutron && !all_contained_neutron )
     
     cleanup_after_load( DontChangeOrReorderSamples );
     

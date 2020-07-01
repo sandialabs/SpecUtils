@@ -188,14 +188,20 @@ bool SpecFile::load_from_phd( std::istream &input )
         meas->gamma_counts_ = counts;
         meas->gamma_count_sum_ = channelsum;
         
-        if( upper_energy > 0.0f )
+        if( upper_energy > 0.0f && nchannel > 0 )
         {
           //There is maybe better energy calibration in the file, but since I
           //  so rarely see this file format, I'm not bothering with parsing it.
-          meas->calibration_coeffs_.push_back( 0.0f );
-          meas->calibration_coeffs_.push_back( upper_energy );
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
-        }
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_full_range_fraction( nchannel, {0.0f,upper_energy}, {} );
+            meas->energy_calibration_ = newcal;
+          }catch( std::exception & )
+          {
+            //shouldnt ever get here.
+          }//try / catch
+        }//if( we have energy range info )
       }//if( SpecUtils::istarts_with( line, "#g_Spectrum") )
       
       if( SpecUtils::istarts_with( line, "#Calibration") )

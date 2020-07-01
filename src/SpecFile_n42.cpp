@@ -123,12 +123,134 @@ namespace
 //  the the index of a std::shared_ptr<Measurement> that has that binning
 namespace
 {
-  typedef std::map< std::shared_ptr< const std::vector<float> >, size_t > BinningToIndexMap;
+  typedef std::map< std::shared_ptr<const SpecUtils::EnergyCalibration>, size_t > EnergyCalToIndexMap;
   
+//add_calibration_to_2012_N42_xml(): writes calibration information to the
+//  xml document, with the "id" == caliId for the <EnergyCalibration> tag.
+//  Note, this funciton should probably be protected or private, but isnt
+//  currently due to an implementation detail.
+//  If invalid equation type, will throw exception.
+void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy_cal,
+                                      const size_t num_gamma_channel,
+                                      rapidxml::xml_node<char> *RadInstrumentData,
+                                      std::mutex &xmldocmutex,
+                                      const int cal_number )
+{
+  using namespace rapidxml;
+  const char *val = (const char *)0;
+  char buffer[32];
+  
+  rapidxml::xml_document<char> *doc = RadInstrumentData->document();
+  
+  const char *coefname = 0;
+  xml_node<char> *EnergyCalibration = 0, *node = 0;
+  
+  stringstream valuestrm;
+  vector<float> coefs;
+  const shared_ptr<const vector<float>> &energies = energy_cal.channel_energies();
+  
+  
+  switch( energy_cal.type() )
+  {
+    case SpecUtils::EnergyCalType::InvalidEquationType:
+      throw runtime_error( "add_calibration_to_2012_N42_xml:"
+                           " can not pass in EnergyCalType::InvalidEquationType" );
+      break;
+      
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+      assert( energies );
+      coefs = energy_cal.coefficients();
+      coefs = SpecUtils::fullrangefraction_coef_to_polynomial( coefs, energies->size() );
+      //note intential fallthrough
+      
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+    {
+      if( coefs.empty() )
+        coefs = energy_cal.coefficients();
+      
+      coefname = "CoefficientValues";
+      
+      //Technically this node must have exactly three coeficients, but here we'll
+      //  slip in some more if we have them...
+      const size_t ncoef = std::max( size_t(3), coefs.size() );
+      for( size_t j = 0; j < ncoef; ++j )
+      {
+        snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), (j<coefs.size() ? coefs[j] : 0.0f) );
+        valuestrm << buffer;
+      }
+      
+      break;
+    }//case SpecUtils::EnergyCalType::Polynomial:
+      
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
+    {
+      coefname = "EnergyBoundaryValues";
+      assert( energies );
+      const std::vector<float> &b = *energies;
+        
+      //This next part should be formatted better!
+      for( size_t j = 0; j < b.size(); ++j )
+        valuestrm << (j?" ":"") << b[j];
+      
+      //According to N42 2012 standard, we must give energy of upper channel
+      if( b.size() && b.size()<= num_gamma_channel )
+        valuestrm << " " << ((2.0f*b[b.size()-1])-b[b.size()-2]);
+      
+      break;
+    }//case SpecUtils::EnergyCalType::LowerChannelEdge:
+  }//switch( energy_calibration_model() )
+  
+  
+  if( coefname )
+  {
+    std::lock_guard<std::mutex> lock( xmldocmutex );
+    EnergyCalibration = doc->allocate_node( node_element, "EnergyCalibration" );
+    RadInstrumentData->append_node( EnergyCalibration );
+    
+    snprintf( buffer, sizeof(buffer), "EnergyCal%i", cal_number );
+    val = doc->allocate_string( buffer );
+    EnergyCalibration->append_attribute( doc->allocate_attribute( "id", val ) );
+    
+    val = doc->allocate_string( valuestrm.str().c_str() );
+    node = doc->allocate_node( node_element, coefname, val );
+    EnergyCalibration->append_node( node );
+  }//if( coefname )
+  
+  const vector<pair<float,float>> &devpairs = energy_cal.deviation_pairs();
+  if( devpairs.size() )
+  {
+    stringstream EnergyValuesStrm, EnergyDeviationValuesStrm;
+    for( size_t j = 0; j < devpairs.size(); ++j )
+    {
+      snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), devpairs[j].first );
+      EnergyValuesStrm << buffer;
+      snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), devpairs[j].second );
+      EnergyDeviationValuesStrm << buffer;
+    }
+    
+    std::lock_guard<std::mutex> lock( xmldocmutex );
+    if( !EnergyCalibration )
+    {
+      EnergyCalibration = doc->allocate_node( node_element, "EnergyCalibration" );
+      RadInstrumentData->append_node( EnergyCalibration );
+    }
+    
+    val = doc->allocate_string( EnergyValuesStrm.str().c_str() );
+    node = doc->allocate_node( node_element, "EnergyValues", val );
+    EnergyCalibration->append_node( node );
+    
+    val = doc->allocate_string( EnergyDeviationValuesStrm.str().c_str() );
+    node = doc->allocate_node( node_element, "EnergyDeviationValues", val );
+    EnergyCalibration->append_node( node );
+  }//if( devpairs.size() )
+}//void add_calibration_to_2012_N42_xml(...)
+
+
   void insert_N42_calibration_nodes( const std::vector< std::shared_ptr<SpecUtils::Measurement> > &measurements,
                                     ::rapidxml::xml_node<char> *RadInstrumentData,
                                     std::mutex &xmldocmutex,
-                                    BinningToIndexMap &calToSpecMap )
+                                    EnergyCalToIndexMap &calToSpecMap )
   {
     using namespace rapidxml;
     calToSpecMap.clear();
@@ -136,16 +258,17 @@ namespace
     for( size_t i = 0; i < measurements.size(); ++i )
     {
       const std::shared_ptr<SpecUtils::Measurement> &meas = measurements[i];
-      
-      if( !meas || !meas->gamma_counts() || meas->gamma_counts()->empty() )
+      if( !meas || !meas->gamma_counts() || meas->gamma_counts()->empty()
+          || (meas->energy_calibration()->type()==SpecUtils::EnergyCalType::InvalidEquationType) )
         continue;
       
-      std::shared_ptr< const std::vector<float> > binning = meas->channel_energies();
-      BinningToIndexMap::const_iterator iter = calToSpecMap.find( binning );
+      const auto energy_cal = meas->energy_calibration();
+      const auto iter = calToSpecMap.find( energy_cal );
       if( iter == calToSpecMap.end() )
       {
-        calToSpecMap[binning] = i;
-        meas->add_calibration_to_2012_N42_xml( RadInstrumentData, xmldocmutex, int(i) );
+        calToSpecMap[energy_cal] = i;
+        add_calibration_to_2012_N42_xml( *energy_cal, meas->gamma_counts()->size(),
+                                         RadInstrumentData, xmldocmutex, static_cast<int>(i) );
       }//if( iter == calToSpecMap.end() )
     }//for( size_t i = 0; i < measurements.size(); ++i )
   }//void insert_N42_calibration_nodes(...)
@@ -158,9 +281,7 @@ namespace
   //  usefull outside of this file
   
   //is_gamma_spectrum(): Trys to determine  if the spectrum_node cooresponds
-  //  to a gamma or neutron node in the XML.
-  //  Will throw std::runtime_exception if if cant unambiguosly tell if its a
-  //  gamma spectrum or not
+  //  to a gamma or neutron node in the XML.  If it cant tell, will return true.
   bool is_gamma_spectrum( const rapidxml::xml_attribute<char> *detector_attrib,
                          const rapidxml::xml_attribute<char> *type_attrib,
                          const rapidxml::xml_node<char> *det_type_node,
@@ -257,10 +378,9 @@ namespace
       }//while( (parent = det_type_node->parent()) )
     }//if( is_nuetron == is_gamma )
     
-    
+#if( PERFORM_DEVELOPER_CHECKS )
     if( is_nuetron == is_gamma )
     {
-      //We should probably just assume its a gamma detector here....
       stringstream msg;
       msg << SRC_LOCATION << "\n\tFound spectrum thats ";
       
@@ -281,42 +401,41 @@ namespace
       else
         msg << "NULL";
       
-      throw std::runtime_error( msg.str() );
+      log_developer_error( __func__, msg.str().c_str() );
     }//if( is_nuetron && is_gamma )
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
     
-    return is_gamma;
+    //Lets just assume its a gamma detector here....
+    return true;
   }//bool is_gamma_spectrum()
   
   
-  //is_occupied(): throws exception on error
-  bool is_occupied( const rapidxml::xml_node<char> *uccupied_node )
+  // Tries to get the occupancy status from the <Occupied> xml element
+  SpecUtils::OccupancyStatus parse_occupancy_status( const rapidxml::xml_node<char> *uccupied_node )
   {
-    if( uccupied_node && uccupied_node->value_size() )
-    {
-      bool occupied = false;
-      
-      if( uccupied_node->value()[0] == '0' )
-        occupied = false;
-      else if( uccupied_node->value()[0] == '1' )
-        occupied = true;
-      else if( XML_VALUE_ICOMPARE(uccupied_node, "true") )
-        occupied = true;
-      else if( XML_VALUE_ICOMPARE(uccupied_node, "false") )
-        occupied = false;
-      else
-      {
-        stringstream msg;
-        msg << SRC_LOCATION << "\n\tUnknown Occupied node value: '"
-        << SpecUtils::xml_value_str(uccupied_node) << "'";
-        cerr << msg.str() << endl;
-        throw std::runtime_error( msg.str() );
-      }
-      
-      return occupied;
-    }//if( uccupied_node is valid )
+    if( !uccupied_node || !uccupied_node->value_size() )
+      return SpecUtils::OccupancyStatus::Unknown;
     
-    throw std::runtime_error( "NULL <Occupied> node" );
-  }//bool is_occupied( rapidxml::xml_node<char> *uccupied_node )
+    if( uccupied_node->value()[0] == '0' )
+      return SpecUtils::OccupancyStatus::NotOccupied;
+    
+    if( uccupied_node->value()[0] == '1' )
+      return SpecUtils::OccupancyStatus::Occupied;
+    
+    if( XML_VALUE_ICOMPARE(uccupied_node, "true") )
+      return SpecUtils::OccupancyStatus::Occupied;
+    
+    if( XML_VALUE_ICOMPARE(uccupied_node, "false") )
+      return SpecUtils::OccupancyStatus::NotOccupied;
+    
+  #if( PERFORM_DEVELOPER_CHECKS )
+    const string errmsg = "Found un-expected occupancy status value '"
+                          + SpecUtils::xml_value_str(uccupied_node) + "'";
+    log_developer_error( __func__, errmsg.c_str() );
+  #endif  //#if( PERFORM_DEVELOPER_CHECKS )
+    
+    return SpecUtils::OccupancyStatus::Unknown;
+  }//bool parse_occupancy_status( rapidxml::xml_node<char> *uccupied_node )
   
   
   const rapidxml::xml_attribute<char> *find_detector_attribute( const rapidxml::xml_node<char> *spectrum )
@@ -448,161 +567,1228 @@ namespace
 }//namespace
 
 
+namespace SpecUtils
+{
+
+/** A struct used internally while parsing files to */
+struct MeasurementCalibInfo
+{
+  SpecUtils::EnergyCalType equation_type;
+  
+  size_t nbin;
+  std::vector<float> coefficients;
+  std::vector< std::pair<float,float> > deviation_pairs_;
+  
+  std::shared_ptr<const SpecUtils::EnergyCalibration> energy_cal;
+  std::string energy_cal_error;
+  
+  std::string calib_id; //optional
+  
+  MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measurement> meas );
+  MeasurementCalibInfo();
+  
+  void fill_binning();
+  bool operator<( const MeasurementCalibInfo &rhs ) const;
+  bool operator==( const MeasurementCalibInfo &rhs ) const;
+};//struct MeasurementCalibInfo
+  
+  
+MeasurementCalibInfo::MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measurement> meas )
+{
+  equation_type = meas->energy_calibration_model();
+  nbin = meas->gamma_counts()->size();
+  coefficients = meas->calibration_coeffs();
+  
+  deviation_pairs_ = meas->deviation_pairs();
+  energy_cal = meas->energy_calibration();
+  
+  if( equation_type == SpecUtils::EnergyCalType::InvalidEquationType
+     && !coefficients.empty() )
+  {
+#if( PERFORM_DEVELOPER_CHECKS )
+    log_developer_error( __func__, "Found case where equation_type!=Invalid, but there are coefficients - shouldnt happen!" );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+    coefficients.clear();
+    deviation_pairs_.clear();
+    energy_cal.reset();
+  }//
+}//MeasurementCalibInfo constructor
+
+
+MeasurementCalibInfo::MeasurementCalibInfo()
+{
+  nbin = 0;
+  equation_type = SpecUtils::EnergyCalType::InvalidEquationType;
+}//MeasurementCalibInfo constructor
+
+
+void MeasurementCalibInfo::fill_binning()
+{
+  if( energy_cal )
+    return;
+  
+  auto cal = make_shared<SpecUtils::EnergyCalibration>();
+  energy_cal = cal;
+  
+  try
+  {
+    switch( equation_type )
+    {
+      case SpecUtils::EnergyCalType::Polynomial:
+        cal->set_polynomial( nbin, coefficients, deviation_pairs_ );
+        break;
+        
+      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+        cal->set_default_polynomial( nbin, coefficients, deviation_pairs_ );
+        break;
+        
+      case SpecUtils::EnergyCalType::FullRangeFraction:
+        cal->set_full_range_fraction( nbin, coefficients, deviation_pairs_ );
+        break;
+        
+      case SpecUtils::EnergyCalType::LowerChannelEdge:
+        cal->set_lower_channel_energy( nbin, coefficients );
+        break;
+        
+      case SpecUtils::EnergyCalType::InvalidEquationType:
+        break;
+    }//switch( equation_type )
+  }catch( std::exception &e )
+  {
+    energy_cal_error = "An invalid energy calibration was found: " + std::string(e.what());
+  }//try / catch
+}//void fill_binning()
+
+
+  
+bool MeasurementCalibInfo::operator<( const MeasurementCalibInfo &rhs ) const
+{
+  if( nbin != rhs.nbin )
+    return (nbin < rhs.nbin);
+  
+  if( equation_type != rhs.equation_type )
+    return (equation_type < rhs.equation_type);
+  
+  if( coefficients.size() != rhs.coefficients.size() )
+    return (coefficients.size() < rhs.coefficients.size());
+  
+  
+  for( size_t i = 0; i < coefficients.size(); ++i )
+  {
+    const float leftcoef = coefficients[i];
+    const float rightcoef = rhs.coefficients[i];
+    const float maxcoef = std::max( fabs(leftcoef), fabs(rightcoef) );
+    if( fabs(leftcoef - rightcoef) > (1.0E-5 * maxcoef) )
+      return coefficients[i] < rhs.coefficients[i];
+  }//for( size_t i = 0; i < coefficients.size(); ++i )
+  
+  if( deviation_pairs_.size() != rhs.deviation_pairs_.size() )
+    return (deviation_pairs_.size() < rhs.deviation_pairs_.size());
+  
+  for( size_t i = 0; i < deviation_pairs_.size(); ++i )
+  {
+    const pair<float,float> &lv = deviation_pairs_[i];
+    const pair<float,float> &rv = rhs.deviation_pairs_[i];
+    const float maxenergy = std::max( fabs(lv.first), fabs(rv.first) );
+    const float epsilon = 1.0E-5f;
+    
+    if( fabs(lv.first - rv.first) > (epsilon * maxenergy))
+      return lv.first < rv.first;
+      
+    const float maxdeviation = std::max( fabs(lv.second), fabs(rv.second) );
+    
+    if( fabs(lv.second - rv.second) > (epsilon * maxdeviation) )
+      return lv.second < rv.second;
+  }//for( size_t i = 0; i < deviation_pairs_.size(); ++i )
+      
+  return false;
+}//bool operator<(...)
+
+
+bool MeasurementCalibInfo::operator==( const MeasurementCalibInfo &rhs ) const
+{
+  const bool rhsLt = operator<(rhs);
+  const bool lhsLt = rhs.operator<(*this);
+  return !lhsLt && !rhsLt;
+}
+}//namespace for MeasurementCalibInfo
+
+      
+namespace
+{
+/** Thread-safe class to handle creating, and re-using equivalent, energy calibration objects from
+  N42-2006 documents.
+ 
+ To be implemented after getting everything compiling (20200626)
+*/
+      
+
+class N42CalibrationCache2006
+{
+  std::mutex m_mutex;
+  
+  // Map from energy calibration to the object to use for it
+  std::map<SpecUtils::MeasurementCalibInfo,std::shared_ptr<const SpecUtils::EnergyCalibration>> m_cal;
+  
+  // Detector name to deviation pairs to use for it
+  std::map<std::string,vector<pair<float,float>>> m_det_to_devpair;
+      
+  //map from "ID" to the raw energy calibration coefficients, from before we know number of channels
+  //  (a N42 file could use same calibration for spectra with different number of channels, but
+  //   SpecUtils::EnergyCalibration cant have this, or similarly with deviation pairs)
+  typedef pair<SpecUtils::EnergyCalType,vector<float>> RawCalInfo_t;
+  std::map<std::string,RawCalInfo_t> m_id_cal_raw;
+  
+  void parse_dev_pairs_from_xml( const rapidxml::xml_node<char> * const doc_node );
+  void parse_cals_by_id_from_xml( const rapidxml::xml_node<char> * const doc_node );
+public:
+  N42CalibrationCache2006( const rapidxml::xml_node<char> * const doc_node )
+  {
+    parse_dev_pairs_from_xml( doc_node );
+    parse_cals_by_id_from_xml( doc_node );
+  }
+  
+  void get_spectrum_energy_cal( const rapidxml::xml_node<char> *spectrum_node,
+                                const size_t nchannels,
+                                shared_ptr<const SpecUtils::EnergyCalibration> &energy_cal,
+                                string &error_message );
+      
+  /// @returns True if probably parsed energy calibration parameters okay from <Calibration> node.
+  static bool parse_calibration_node( const rapidxml::xml_node<char> *calibration_node,
+                                      SpecUtils::EnergyCalType &type,
+                                      std::vector<float> &coefs );
+};//class N42CalibrationCache2006
+
+      
+void N42CalibrationCache2006::parse_dev_pairs_from_xml( const rapidxml::xml_node<char> * const doc_node )
+{
+  //spectrometer: <?xml> -> <N42InstrumentData> -> <Measurement "maybe many of these">
+  //                     -> <InstrumentInformation> -> no example of NonlinearityCorrection
+  // HPRDS:       <?xml> -> <Event> -> <N42InstrumentData> -> <InstrumentInformation>
+  //                     -> no example of NonlinearityCorrection
+  // Portal:      <?xml> -> <N42InstrumentData> -> <Measurement "one of these">
+  //                     -> <InstrumentInformation>
+  //                     -> <dndons:NonlinearityCorrection Detector="Aa1">
+  // Specification: In descriptive portion of spec <dndons:NonlinearityCorrection> elements parent is
+  //       <Spectrum>, although example gives as child of <InstrumentInformation>
+      
+  using namespace SpecUtils;
+  
+  // We will parse the deviation pairs from the first <InstrumentInformation> we find.  In principle
+  //  spectrometers could update these evenre <Measurement>, but in practice this makes no sense
+  
+  if( !doc_node )
+    return;
+  
+  const rapidxml::xml_node<char> *N42InstrumentData = doc_node;
+  if( !XML_NAME_ICOMPARE(N42InstrumentData, "N42InstrumentData") )
+    N42InstrumentData = XML_FIRST_INODE(N42InstrumentData,"N42InstrumentData");
+    
+  if( !N42InstrumentData )
+  {
+#if(PERFORM_DEVELOPER_CHECKS)
+    log_developer_error( __func__, "Could not find N42InstrumentData in XML document" );
+    assert( 0 );  //20200628: Can safely take this out after initial debug of new energy caliration
+#endif
+    return;
+  }//if( !N42InstrumentData )
+  
+  bool found_dp = false;
+  auto parse_pairs = [this,&found_dp]( const rapidxml::xml_node<char> *info_node ){
+    
+    for( const rapidxml::xml_node<char> *nl_corr_node = xml_first_node_nso( info_node, "NonlinearityCorrection", "dndons:" );
+         nl_corr_node;
+         nl_corr_node = XML_NEXT_TWIN(nl_corr_node) )
+    {
+      const rapidxml::xml_attribute<char> *det_attrib = XML_FIRST_ATTRIB( nl_corr_node, "Detector" );
+        
+      if( !det_attrib )
+      {
+#if(PERFORM_DEVELOPER_CHECKS)
+        log_developer_error( __func__, "Found NonlinearityCorrection without Detector tag" );
+#endif
+        continue;
+      }//if( !det_attrib )
+        
+      const string det_name = xml_value_str(det_attrib);
+        
+      vector< pair<float,float> > deviatnpairs;
+      for( const rapidxml::xml_node<char> *dev_node = xml_first_node_nso( nl_corr_node, "Deviation", "dndons:" );
+            dev_node;
+            dev_node = XML_NEXT_TWIN(dev_node) )
+      {
+        if( dev_node->value_size() )
+        {
+          vector<float> devpair;
+          const bool success = SpecUtils::split_to_floats( dev_node->value(), dev_node->value_size(), devpair );
+            
+          if( success && devpair.size()==2 )
+          {
+            deviatnpairs.push_back( pair<float,float>(devpair[0],devpair[1]) );
+          }else
+          {
+            cerr << "Could not put '" << xml_value_str(dev_node) << "' into deviation pair" << endl;
+          }
+        }//if( dev_node->value_size() )
+      }//for( loop over <dndons:Deviation> )
+        
+      found_dp = !deviatnpairs.empty();
+      std::unique_lock<std::mutex> scoped_lock( m_mutex );
+      m_det_to_devpair[det_name] = deviatnpairs;
+    }//for( loop over <dndons:NonlinearityCorrection> )
+  };//parse_pairs lambda
+     
+  //First try the HPRDS case
+  const rapidxml::xml_node<char> *inst_info = xml_first_node_nso( N42InstrumentData, "InstrumentInformation", "dndons:" );
+  parse_pairs( inst_info );
+  if( found_dp )
+    return;
+      
+  //Next try the portal and spectrometer cases
+  for( const rapidxml::xml_node<char> *Measurement = xml_first_node_nso( N42InstrumentData, "Measurement", "dndons:" );
+      !found_dp && Measurement;
+      Measurement = XML_NEXT_TWIN(Measurement) )
+  {
+    inst_info = xml_first_node_nso( Measurement, "InstrumentInformation", "dndons:" );
+    parse_pairs( inst_info );
+  }//for( lop over <Measurement> nodes )
+  
+  //We will take care of the "Specification" case seperately.
+}//void parse_dev_pairs_from_xml( rapidxml::xml_document<char> &doc )
+      
+     
+// For N42-2006 files that use the <Spectrum CalibrationIDs="..."> method of assigning energy
+//  calibrations, we will parse these calibrations once.
+void N42CalibrationCache2006::parse_cals_by_id_from_xml( const rapidxml::xml_node<char> * const doc_node )
+{
+  using namespace SpecUtils;
+  const string xmlns = ":dndons";
+      
+  if( !doc_node )
+    return;
+      
+  //We will collect all the <Calibration> nodes, and then go over them.
+  vector<const rapidxml::xml_node<char> *> cal_nodes;
+  auto add_cal_nodes = [&cal_nodes,xmlns]( const rapidxml::xml_node<char> * const parent ){
+    for( auto node = xml_first_node_nso( parent, "Calibration", xmlns );
+         node;
+         node = XML_NEXT_TWIN(node) )
+    {
+      cal_nodes.push_back( node );
+    }
+  };//add_cal_nodes lamda
+      
+  const rapidxml::xml_node<char> *N42InstrumentData = nullptr;
+  if( XML_NAME_ICOMPARE(doc_node, "N42InstrumentData") )
+    N42InstrumentData = doc_node;
+  else
+    N42InstrumentData = xml_first_node_nso( doc_node, "N42InstrumentData", xmlns );
+  
+  // <N42InstrumentData> -> <Calibration>
+  add_cal_nodes( N42InstrumentData );
+    
+  //Case from a legacy comment that I think can be gotten rid of now.
+  if( doc_node->parent() )
+    add_cal_nodes( doc_node->parent() );
+      
+  //HPRDS
+  if( N42InstrumentData != doc_node )
+  {
+    // <Event> -> <Calibration>
+    add_cal_nodes( doc_node );
+    
+    // <Event> -> <InstrumentInformation> -> <Calibration>
+    for( auto node = xml_first_node_nso( doc_node, "InstrumentInformation", xmlns );
+         node; node = XML_NEXT_TWIN(node) )
+    {
+      add_cal_nodes( node );
+    }
+  }//if( HPRDS )
+      
+  // <N42InstrumentData> -> <InstrumentInformation> -> <Calibration>
+  for( auto node = xml_first_node_nso( N42InstrumentData, "InstrumentInformation", xmlns );
+       node;
+       node = XML_NEXT_TWIN(node) )
+  {
+    add_cal_nodes( node );
+  }
+  
+  // <N42InstrumentData> -> <Measurement> -> <Calibration>
+  for( auto node = xml_first_node_nso( N42InstrumentData, "Measurement", xmlns );
+       node;
+       node = XML_NEXT_TWIN(node) )
+  {
+    add_cal_nodes( node );
+    
+    // <N42InstrumentData> -> <Measurement> -> <InstrumentInformation> -> <Calibration>
+    for( auto inst_node = xml_first_node_nso( node, "InstrumentInformation", xmlns );
+         inst_node;
+         inst_node = XML_NEXT_TWIN(inst_node) )
+    {
+      add_cal_nodes( inst_node );
+    }
+  }//for( loop over <Measurement> )
+      
+        
+  for( const auto cal_node : cal_nodes )
+  {
+    const auto spec_id_att = cal_node->first_attribute( "ID", 2, false );
+    const string spec_id = xml_value_str( spec_id_att );
+      
+    //parse_calibration_node(...) makes sure its not a FWHM calibration; what other types are there?
+    const auto type_att = XML_FIRST_ATTRIB( cal_node, "Type" );
+    if( type_att && !XML_VALUE_ICOMPARE(type_att, "Energy") )
+      continue;
+    
+    std::vector<float> coefs;
+    SpecUtils::EnergyCalType type;
+    
+    /// \TODO: add in a check we dont already have information for 'spec_id'
+    if( parse_calibration_node(cal_node, type, coefs) )
+      m_id_cal_raw[spec_id] = {type, std::move(coefs)};
+  }//for( loop over calibrations )
+}//void parse_cals_by_id_from_xml( rapidxml::xml_document<char> &doc )
+      
+      
+bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<char> *calibration_node,
+                             SpecUtils::EnergyCalType &type,
+                             std::vector<float> &coefs )
+{
+  type = SpecUtils::EnergyCalType::InvalidEquationType;
+  coefs.clear();
+      
+  if( !calibration_node )
+    return false;
+      
+  string xmlns = get_n42_xmlns(calibration_node);
+  if( xmlns.empty() && calibration_node->parent() )
+    xmlns = get_n42_xmlns(calibration_node->parent());
+  if( xmlns.empty() )
+    xmlns = ":dndons";
+      
+  const auto type_node = XML_FIRST_ATTRIB(calibration_node, "Type");
+       
+  if( type_node && type_node->value_size() )
+  {
+    if( XML_VALUE_ICOMPARE(type_node, "FWHM") )
+      return false;
+         
+    //20160601: Not adding in an explicit comparison for energy, but probably should...
+    //if( !XML_VALUE_ICOMPARE(type, "Energy") )
+    //  return false
+  }//if( type && type->value_size() )
+  
+  float units = 1.0f;
+  if( const auto units_node = XML_FIRST_ATTRIB(calibration_node,"EnergyUnits") )
+  {
+    const string unitstr = SpecUtils::xml_value_str(units_node);
+    if( unitstr == "eV" )
+      units = 0.001f;
+    else if( unitstr == "MeV" )
+      units = 1000.0f;
+  }//if( units attribute )
+      
+      
+  const auto equation_node = SpecUtils::xml_first_node_nso( calibration_node, "Equation", xmlns );
+      
+  if( equation_node )
+  {
+    const auto coeff_node = SpecUtils::xml_first_node_nso( equation_node, "Coefficients", xmlns );
+    if( !coeff_node )
+      return false;
+    
+    if( coeff_node->value_size() )
+    {
+      SpecUtils::split_to_floats( coeff_node->value(), coeff_node->value_size(), coefs );
+    }else
+    {
+      //SmithsNaI HPRDS
+      const auto subeqn = XML_FIRST_ATTRIB(coeff_node,"Subequation");
+      if( subeqn && subeqn->value_size() )
+        SpecUtils::split_to_floats( subeqn->value(), subeqn->value_size(), coefs );
+    }//if( coeff_node->value_size() ) / else
+           
+    while( coefs.size() && coefs.back()==0.0f )
+      coefs.erase( coefs.end()-1 );
+      
+    if( units != 1.0f )
+    {
+      for( float &f : coefs )
+        f *= units;
+    }
+                
+    const auto model_att = XML_FIRST_ATTRIB(equation_node,"Model");
+    const string modelstr = SpecUtils::xml_value_str(model_att);
+      
+    if( SpecUtils::iequals_ascii( modelstr, "Polynomial") )
+      type = SpecUtils::EnergyCalType::Polynomial;
+    else if( SpecUtils::iequals_ascii( modelstr, "FullRangeFraction") )
+      type = SpecUtils::EnergyCalType::FullRangeFraction;
+    else if( SpecUtils::iequals_ascii( modelstr, "LowerChannelEdge")
+             || SpecUtils::iequals_ascii( modelstr, "LowerBinEdge") )
+      type = SpecUtils::EnergyCalType::LowerChannelEdge;
+    else if( modelstr == "Other" )
+    {
+      const auto form_att = XML_FIRST_ATTRIB(equation_node,"Form");
+      const string formstr = SpecUtils::xml_value_str(form_att);
+      if( SpecUtils::icontains(formstr, "Lower edge") )
+        type = SpecUtils::EnergyCalType::LowerChannelEdge;
+    }//if( modelstr == ...) / if / else
+         
+    //Lets try to guess the equation type for Polynomial or FullRangeFraction
+    if( type == SpecUtils::EnergyCalType::InvalidEquationType )
+    {
+      if( (coefs.size() <= 5) && (coefs.size() > 1) && (coefs[0] < 300.0f) )
+      {
+        if( coefs[1] < 100.0 )
+          type = SpecUtils::EnergyCalType::Polynomial;
+        else if( coefs[1] > 1000.0 )
+          type = SpecUtils::EnergyCalType::FullRangeFraction;
+      }//if( coefs.size() <= 5 )
+    }//if( type == InvalidEquationType )
+      
+    if( type == SpecUtils::EnergyCalType::InvalidEquationType )
+      coefs.clear();
+  
+    if( coefs.size() < 2 )
+      type = SpecUtils::EnergyCalType::InvalidEquationType;
+      
+    // \TODO: we could probably do some more sanity checks here
+    if( type != SpecUtils::EnergyCalType::InvalidEquationType )
+      return true;
+  }//if( equation_node )
+      
+  const auto array_node = SpecUtils::xml_first_node_nso( calibration_node, "ArrayXY", xmlns );
+  if( !array_node )
+    return false;
+    
+  //This case has been added in for FLIR identiFINDER N42 files
+  //        <Calibration Type="Energy" ID="calibration" EnergyUnits="keV">
+  //          <ArrayXY X="Channel" Y="Energy">
+  //            <PointXY>
+  //              <X>1 0</X>
+  //              <Y>3 0</Y>
+  //            </PointXY>
+  //          </ArrayXY>
+  //        </Calibration>
+  //
+  // However, RIIDEye files look like
+  //      <Calibration Type="Energy" ID="en" EnergyUnits="keV">
+  //        <Remark>FSE=3072 GrpSz=512</Remark>
+  //        <CalibrationCreationDate>2018-07-18T13:54:29Z</CalibrationCreationDate>
+  //        <ArrayXY X="Channels" Y="keV">
+  //          <PointXY><X>0 0</X><Y>0 0</Y></PointXY>
+  //          <PointXY><X>1 0</X><Y>0 0</Y></PointXY>
+  //          <PointXY><X>2 0</X><Y>0 0</Y></PointXY>
+  //          <PointXY><X>3 0</X><Y>1.93823 0</Y></PointXY>
+  //          <PointXY><X>4 0</X><Y>4.63947 0</Y></PointXY>
+  //          <PointXY><X>5 0</X><Y>7.44489 0</Y></PointXY>
+  //          <PointXY><X>6 0</X><Y>10.3545 0</Y></PointXY>
+  //          ...
+                  
+  vector<pair<float,float>> points;
+                    
+  for( auto point_node = SpecUtils::xml_first_node_nso( array_node, "PointXY", xmlns );
+      point_node;
+      point_node = XML_NEXT_TWIN(point_node) )
+  {
+    const auto x_node = SpecUtils::xml_first_node_nso( point_node, "X", xmlns );
+    const auto y_node = SpecUtils::xml_first_node_nso( point_node, "Y", xmlns );
+                      
+    if( x_node && x_node->value_size() && y_node && y_node->value_size() )
+    {
+      float xval = 0.0f, yval = 0.0f;
+      if( xml_value_to_flt(x_node, xval) && xml_value_to_flt(y_node, yval) )
+        points.emplace_back(xval,yval);
+    }//if( x and y nodes )
+  }//for( loop over <PointXY> )
+                    
+  const size_t npoints = points.size();
+              
+  if( npoints == 1 && (points[0].second*units > 100.0f) && (points[0].second*units > 14000.0f) )
+  {
+    //FLIR identiFINDER style
+    type = SpecUtils::EnergyCalType::Polynomial;
+    coefs = {0.0f, points[0].second*units };
+    return true;
+  }else if( npoints > 6 ) //The files I've seen have (npoints==nchannel)
+  {
+    //We also need to make sure the 'x' values are monotonically increasing channel numbers
+    //  that start at zero or one.
+    bool increasing_bin = ((fabs(points[0].first) < FLT_EPSILON) || (fabs(points[1].first-1.0) < FLT_EPSILON));
+    for( size_t i = 1; increasing_bin && i < npoints; ++i )
+      increasing_bin = ((fabs(points[i].first-points[i-1].first-1.0f) < FLT_EPSILON) && (points[i].second>=points[i-1].second));
+                      
+    if( increasing_bin )
+    {
+      type = SpecUtils::EnergyCalType::LowerChannelEdge;
+      for( const auto &ff : points )
+        coefs.push_back( ff.second*units );
+      return true;
+    }else
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, "Couldnt interpret energy calibration PointXY (not monototonically increasing)" );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+    }
+  }//if( npoints == 1 ) / else
+
+  coefs.clear();
+  type = SpecUtils::EnergyCalType::InvalidEquationType;
+      
+  return false;
+}//parse_calibration_node(...)
+      
+      
+/// 20200628: put this as a member of energy calibration cache class and include deviation pairs and
+/// such.  SHould probably return an error code or something too.
+void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<char> *spectrum_node,
+                              const size_t nchannels,
+                              shared_ptr<const SpecUtils::EnergyCalibration> &energy_cal,
+                              string &error_message )
+{
+  using SpecUtils::xml_first_node_nso;
+        
+  energy_cal.reset();
+  error_message.clear();
+        
+  if( !nchannels || !spectrum_node )
+    return;
+  
+  auto make_energy_cal = [&error_message]( const SpecUtils::MeasurementCalibInfo &info )
+                          -> shared_ptr<SpecUtils::EnergyCalibration>{
+    try
+    {
+      auto energycal = make_shared<SpecUtils::EnergyCalibration>();
+      switch( info.equation_type )
+      {
+        case SpecUtils::EnergyCalType::Polynomial:
+          energycal->set_polynomial( info.nbin, info.coefficients, info.deviation_pairs_ );
+        break;
+    
+        case SpecUtils::EnergyCalType::FullRangeFraction:
+          energycal->set_full_range_fraction(info.nbin, info.coefficients, info.deviation_pairs_ );
+        break;
+     
+        case SpecUtils::EnergyCalType::LowerChannelEdge:
+          energycal->set_lower_channel_energy( info.nbin, info.coefficients );
+        break;
+    
+        case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          energycal->set_default_polynomial( info.nbin, info.coefficients, info.deviation_pairs_ );
+        break;
+    
+        case SpecUtils::EnergyCalType::InvalidEquationType:
+          assert( 0 );  //parse_calibration_node shouldnt return true for this case
+        break;
+      }//switch( type )
+    
+      return energycal;
+    }catch( std::exception &e )
+    {
+      error_message = e.what();
+    }//try / catch
+      
+    return nullptr;
+  };//make_energy_cal lamda
+      
+      
+  const string xmlns = ":dndons"; //get_n42_xmlns( spectrum_node );. <Spectrum> wont have a namespace but calibration could
+  const auto det_name_attrib = find_detector_attribute( spectrum_node );
+  const string det_name = SpecUtils::xml_value_str( det_name_attrib );
+      
+  for( auto cal_node = xml_first_node_nso( spectrum_node, "Calibration", xmlns );
+       cal_node;
+       cal_node = XML_NEXT_TWIN(cal_node) )
+  {
+    // \TODO: I havent seen any N42-2006 files that list deviation pairs under the spectrum or its
+    //        calibration, but I wouldnt be suprised, so this should maybe be implemented at some
+    //        point, I guess, maybe
+    //const rapidxml::xml_node<char> *nonlinarity_node = xml_first_node_nso( spectrum_node, "NonlinearityCorrection", xmlns );
+    //if( !nonlinarity_node )
+    //  nonlinarity_node = xml_first_node_nso( calibration_node, "NonlinearityCorrection", xmlns );
+          
+    vector<float> coeffs;
+    SpecUtils::EnergyCalType type;
+    
+    if( parse_calibration_node(cal_node, type, coeffs) )
+    {
+      assert( type != SpecUtils::EnergyCalType::InvalidEquationType );
+      
+      SpecUtils::MeasurementCalibInfo calinfo;
+      calinfo.equation_type = type;
+      calinfo.coefficients = coeffs;
+      calinfo.nbin = nchannels;
+      
+      std::unique_lock<std::mutex> scoped_lock( m_mutex );
+      
+      auto devpos = m_det_to_devpair.find(det_name);
+      //  We'll see if there are deviation pairs without a name, and if so use them...
+      if( !det_name.empty() && (devpos == end(m_det_to_devpair)) )
+        devpos = m_det_to_devpair.find("");
+      if( devpos != end(m_det_to_devpair) )
+        calinfo.deviation_pairs_ = devpos->second;
+      
+      auto calpos = m_cal.find(calinfo);
+      if( (calpos != end(m_cal)) && calpos->second )
+      {
+        energy_cal = calpos->second;
+        return;
+      }
+      
+      energy_cal = make_energy_cal(calinfo);
+      
+      if( energy_cal )
+      {
+        m_cal.insert( {calinfo,energy_cal} );
+        error_message.clear();
+        return;
+      }//if( energy_cal )
+    }//if( parse_calibration_node(cal_node, type, coeffs) )
+  }//for( loop over <Calibration> )
+    
+  //Lets see if we can find a calibration by ID
+  const auto cal_IDs_att = XML_FIRST_ATTRIB( spectrum_node, "CalibrationIDs" );
+  const string cal_IDs_str = SpecUtils::xml_value_str(cal_IDs_att);
+  vector<string> cal_ids;
+  SpecUtils::split( cal_ids, cal_IDs_str, " \t" );
+    
+  {//begin lock on m_mutex
+    std::unique_lock<std::mutex> scoped_lock( m_mutex );
+    if( m_id_cal_raw.size() == 1 )
+    {
+      if( cal_ids.empty() || (begin(m_id_cal_raw)->first == "") )
+        cal_ids.push_back( begin(m_id_cal_raw)->first );
+    }
+      
+    //This matching based on only first two letters, if we dont already have a match, was based
+    //  on the (legacy?) code 20200629 that didnt have any comments as to why it was done.
+    bool is_match = false;
+    for( const string &calid : cal_ids )
+      is_match = (is_match || m_id_cal_raw.count(calid));
+    
+    if( !is_match )
+    {
+      for( const auto &haveids : m_id_cal_raw )
+      {
+        string idid = haveids.first;
+        idid = idid.size()>1 ? idid.substr(0,2) : idid;
+      
+        for( string calid : cal_ids )
+        {
+          calid = calid.size()>1 ? calid.substr(0,2) : calid;
+          if( calid == idid )
+            cal_ids.push_back( haveids.first );
+        }
+      }//for( const auto &haveids : m_id_cal_raw )
+    }//if( !is_match )
+  }//end lock on m_mutex
+  
+      
+  for( const string &calid : cal_ids )
+  {
+    std::unique_lock<std::mutex> scoped_lock( m_mutex );
+      
+    const auto pos = m_id_cal_raw.find( calid );
+    if( pos == end(m_id_cal_raw) )
+      continue;
+      
+    const pair<SpecUtils::EnergyCalType,vector<float>> &info = pos->second;
+    
+    SpecUtils::MeasurementCalibInfo calinfo;
+    calinfo.nbin = nchannels;
+    calinfo.equation_type = info.first;
+    calinfo.coefficients = info.second;
+    
+    auto devpos = m_det_to_devpair.find(det_name);
+    //  We'll see if there are deviation pairs without a name, and if so use them...
+    if( !det_name.empty() && (devpos == end(m_det_to_devpair)) )
+      devpos = m_det_to_devpair.find("");
+    if( devpos != end(m_det_to_devpair) )
+      calinfo.deviation_pairs_ = devpos->second;
+    
+    auto calpos = m_cal.find(calinfo);
+    if( (calpos != end(m_cal)) && calpos->second )
+    {
+      error_message.clear();
+      energy_cal = calpos->second;
+      return;
+    }
+      
+    energy_cal = make_energy_cal(calinfo);
+      
+    if( energy_cal )
+    {
+      m_cal.insert( {calinfo,energy_cal} );
+      error_message.clear();
+      return;
+    }//if( energy_cal )
+  }//for( const string &calid : cal_ids )
+      
+  //No calibrations found
+#if( PERFORM_DEVELOPER_CHECKS )
+  string msg = "Failed to find calibration for ID='" + cal_IDs_str + "'";
+  log_developer_error( __func__, msg.c_str() );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+}//void get_spectrum_energy_cal(...)
+      
+}//namespace for N42CalibrationCache2006
+      
+
 //A private namespace to contain some structs to help us to mult-threaded decoding.
 namespace SpecUtils
 {
-  const string SpectrumNodeDecodeWorker_failed_decode_title = "AUniqueStringToMarkThatThisDecodingFailed";
-  struct SpectrumNodeDecodeWorker
-  {
-    const rapidxml::xml_node<char> *m_spec_node;
-    std::mutex *m_mutex;
-    std::shared_ptr<SpecUtils::Measurement> m_meas;
-    std::shared_ptr<SpecUtils::DetectorAnalysis> m_analysis_info;
-    const rapidxml::xml_node<char> *m_dose_data_parent;
-    const rapidxml::xml_node<char> *m_doc;
-    
-    SpectrumNodeDecodeWorker( const rapidxml::xml_node<char> *node_in,
-                             std::mutex *mutex_ptr,
-                             std::shared_ptr<SpecUtils::Measurement> meas,
-                             std::shared_ptr<SpecUtils::DetectorAnalysis> analysis_info_ptr,
-                             const rapidxml::xml_node<char> *dose_data_parent,
-                             const rapidxml::xml_node<char> *doc_node )
+const string N42DecodeHelper2006_failed_decode_title = "AUniqueStringToMarkThatThisDecodingFailed";
+struct N42DecodeHelper2006
+{
+  const rapidxml::xml_node<char> *m_spec_node;
+  std::mutex *m_mutex;
+  std::shared_ptr<SpecUtils::Measurement> m_meas;
+  std::shared_ptr<SpecUtils::DetectorAnalysis> m_analysis_info;
+  const rapidxml::xml_node<char> *m_dose_data_parent;
+  const rapidxml::xml_node<char> *m_doc;
+  N42CalibrationCache2006 &m_energy_cal;
+      
+  N42DecodeHelper2006( const rapidxml::xml_node<char> *node_in,
+                       std::mutex *mutex_ptr,
+                       std::shared_ptr<SpecUtils::Measurement> meas,
+                       std::shared_ptr<SpecUtils::DetectorAnalysis> analysis_info_ptr,
+                       const rapidxml::xml_node<char> *dose_data_parent,
+                       const rapidxml::xml_node<char> *doc_node,
+                       N42CalibrationCache2006 &energy_cal )
     : m_spec_node( node_in ),
     m_mutex( mutex_ptr ),
     m_meas( meas ),
     m_analysis_info( analysis_info_ptr ),
     m_dose_data_parent( dose_data_parent ),
-    m_doc( doc_node )
-    {}
+    m_doc( doc_node ),
+    m_energy_cal( energy_cal )
+  {}
     
-    static void filter_valid_measurements( vector< std::shared_ptr<SpecUtils::Measurement> > &meass )
+  static void filter_valid_measurements( vector< std::shared_ptr<SpecUtils::Measurement> > &meass )
+  {
+    vector< std::shared_ptr<SpecUtils::Measurement> > valid_meass;
+    valid_meass.reserve( meass.size() );
+      
+    for( auto &meas : meass )
     {
-      vector< std::shared_ptr<SpecUtils::Measurement> > valid_meass;
-      valid_meass.reserve( meass.size() );
-      
-      for( auto &meas : meass )
-      {
-        //      const bool hasGammaData = (meas->gamma_counts() && meas->gamma_counts()->size());
-        //      const bool hasNeutData = (meas->neutron_counts().size() || meas->contained_neutron_);
-        //      if( hasGammaData || hasNeutData )
+      //      const bool hasGammaData = (meas->gamma_counts() && meas->gamma_counts()->size());
+      //      const bool hasNeutData = (meas->neutron_counts().size() || meas->contained_neutron_);
+      //      if( hasGammaData || hasNeutData )
         
-        if( meas->title() != SpectrumNodeDecodeWorker_failed_decode_title )
-          valid_meass.push_back( meas );
-      }//for( std::shared_ptr<Measurement> &meas : meass )
+      if( meas->title() != N42DecodeHelper2006_failed_decode_title )
+        valid_meass.push_back( meas );
+    }//for( std::shared_ptr<Measurement> &meas : meass )
       
-      meass.swap( valid_meass );
-    }
+    meass.swap( valid_meass );
+  }
     
-    void operator()()
-    {
-      try
-      {
-        const string xmlns = get_n42_xmlns(m_spec_node);
-        
-        m_meas->set_2006_N42_spectrum_node_info( m_spec_node );
-        
-        if( m_meas->calibration_coeffs().empty()
-           && (!m_meas->channel_energies() || m_meas->channel_energies()->empty()) )
-        {
-          m_meas->set_n42_2006_spectrum_calibration_from_id( m_doc, m_spec_node );
-        }
-        
-        if( m_dose_data_parent )
-        {
-          //If m_spec_node has any immediate siblings, then we need to be careful in setting
-          //  The count dose informiaton, so lets count them
-          int nspectra = 0;
-          if( m_spec_node->parent() )
-          {
-            for( const rapidxml::xml_node<char> *node = m_spec_node->parent()->first_node( m_spec_node->name(), m_spec_node->name_size() );
-                node;
-                node = XML_NEXT_TWIN(node) )
-              ++nspectra;
-          }
+  void decode_2006_n42_spectrum_node()
+  {
+    if( !m_spec_node )
+      throw runtime_error( "set_2006_N42_spectrum_node_info: Recieved NULL 'Spectrum' node" );
           
-          for( const rapidxml::xml_node<char> *dose_data = xml_first_node_nso( m_dose_data_parent, "CountDoseData", xmlns );
-              dose_data;
-              (dose_data = XML_NEXT_TWIN(dose_data)))
-          {
-            if( nspectra < 2 )
-            {
-              m_meas->set_n42_2006_count_dose_data_info( dose_data, m_analysis_info, m_mutex );
-            }else
-            {
-              const rapidxml::xml_node<char> *starttime = XML_FIRST_NODE(dose_data, "StartTime");
-              //const rapidxml::xml_node<char> *realtime = XML_FIRST_NODE(dose_data, "SampleRealTime");
-              if( /*!realtime ||*/ !starttime )
-                continue;
-              
-              const boost::posix_time::ptime startptime = SpecUtils::time_from_string( xml_value_str(starttime).c_str() );
-              if( startptime.is_special() )
-                continue;
-              
-              boost::posix_time::time_duration thisdelta = startptime - m_meas->start_time_;
-              if( thisdelta < boost::posix_time::time_duration(0,0,0) )
-                thisdelta = -thisdelta;
-              //const float realtime = time_duration_string_to_seconds(realtime->value(), realtime->value_size());
-              
-              if( thisdelta < boost::posix_time::time_duration(0,0,10) )
-                m_meas->set_n42_2006_count_dose_data_info( dose_data, m_analysis_info, m_mutex );
-            }
-          }//for( loop over CountDoseData nodes, dos )
-        }//if( measurement_node_for_cambio )
+    const string xmlns = get_n42_xmlns( m_spec_node );
+      
+    for( const rapidxml::xml_node<char> *remark_node = xml_first_node_nso( m_spec_node, "Remark", xmlns );
+        remark_node;
+        remark_node = XML_NEXT_TWIN(remark_node) )
+    {
+      string remark_from_node = xml_value_str( remark_node );
+      
+      vector<string> remark_lines;
+      split( remark_lines, remark_from_node, "\r\n" );
         
-        
-        //HPRDS (see refF4TD3P2VTG) have start time and remark as siblings to
-        //  m_spec_node
-        const rapidxml::xml_node<char> *parent = m_spec_node->parent();
-        if( parent )
+      for( string &remark : remark_lines )
+      {
+        trim( remark );
+        if( remark.empty() )
+          continue;
+          
+        if( SpecUtils::istarts_with( remark, s_parser_warn_prefix) )
         {
-          for( const rapidxml::xml_node<char> *remark = xml_first_node_nso( parent, "Remark", xmlns );
+          SpecUtils::ireplace_all( remark, s_parser_warn_prefix, "" );
+          m_meas->parse_warnings_.emplace_back( std::move(remark) );
+          continue;
+        }
+          
+        if( SpecUtils::istarts_with( remark, "Title:") )
+        {
+          remark = remark.substr(6);
+          trim( remark );
+          m_meas->title_ = remark;
+          continue;
+        }
+          
+        m_meas->remarks_.push_back( remark );
+          
+        if( m_meas->sample_number_ < 0 )
+        {
+          m_meas->sample_number_ = sample_num_from_remark( m_meas->remarks_.back() );
+        }else
+        {
+          const int samplen = sample_num_from_remark( m_meas->remarks_.back() );
+          if( samplen != m_meas->sample_number_ && samplen>=0 )
+          {
+            m_meas->parse_warnings_.push_back( "Multiple remarks provided different sample numbers" );
+          }
+            
+          //marking it intrinsic activity will happen further down from the 'ID'
+          //  attribute, so we wont wast cpu time here checking the remark for itww
+          //      if( SpecUtils::icontains( remark, "intrinsic activity") )
+          //        m_meas->source_type_ = SourceType::IntrinsicActivity;
+        }
+          
+        const float thisspeed = speed_from_remark( remark );
+        if( thisspeed > 0.0f )
+          m_meas->speed_ = thisspeed;
+          
+        const string found_detector_name = detector_name_from_remark( m_meas->remarks_.back() );
+        if( !found_detector_name.empty() && m_meas->detector_name_.empty() )
+        {
+          m_meas->detector_name_ = found_detector_name;
+        }else if( m_meas->detector_name_ != found_detector_name )
+        {
+          string msg = "Found another detector name, '" + found_detector_name
+                        + "', for detector '" + m_meas->detector_name_ + "'";
+          m_meas->parse_warnings_.emplace_back( std::move(msg) );
+        }
+      }//for( string remark, remark_lines )
+    }//for( loop over remark_nodes )
+      
+      
+    const auto sample_num_att = XML_FIRST_ATTRIB(m_spec_node, "SampleNumber");
+    if( sample_num_att )
+    {
+      const string strvalue = xml_value_str( sample_num_att );
+        
+      int samplenum = -1;
+      if( toInt( strvalue, samplenum ) )
+      {
+        if( m_meas->sample_number_ >= 2 )
+        {
+          string msg = "Replaced sample number " + std::to_string(m_meas->sample_number_)
+                        + " with SampleNumber attribute value " + std::to_string(samplenum);
+          m_meas->parse_warnings_.emplace_back( std::move(msg) );
+        }
+          
+        m_meas->sample_number_ = samplenum;
+      }else if( !strvalue.empty() )
+      {
+        string msg = "Couldnt convert SampleNumber '" + strvalue + "' to an integer";
+        m_meas->parse_warnings_.emplace_back( std::move(msg) );
+      }
+    }//if( sample_num_att )
+      
+    const auto src_type_node = xml_first_node_nso( m_spec_node, "SourceType", xmlns );
+      
+    if( src_type_node )
+    {
+      if( XML_VALUE_ICOMPARE(src_type_node, "Item") )
+        m_meas->source_type_ = SourceType::Foreground;
+      else if( XML_VALUE_ICOMPARE(src_type_node, "Background") )
+        m_meas->source_type_ = SourceType::Background;
+      else if( XML_VALUE_ICOMPARE(src_type_node, "Calibration") )
+        m_meas->source_type_ = SourceType::Calibration;
+      else if( XML_VALUE_ICOMPARE(src_type_node, "Stabilization") ) //RadSeeker HPRDS files have the "Stabilization" source type, which looks like an intrinsic source
+        m_meas->source_type_ = SourceType::IntrinsicActivity;
+      else if( XML_VALUE_ICOMPARE(src_type_node, "IntrinsicActivity") )
+        m_meas->source_type_ = SourceType::IntrinsicActivity;
+      else
+        m_meas->source_type_ = SourceType::Unknown;
+    }//if( src_type_node )
+      
+    const rapidxml::xml_attribute<char> *id_att = m_spec_node->first_attribute( "ID", 2, false );
+    if( id_att && XML_VALUE_ICOMPARE(id_att, "intrinsicActivity") )
+      m_meas->source_type_ = SourceType::IntrinsicActivity;
+      
+    const rapidxml::xml_node<char> *uccupied_node = xml_first_node_nso( m_spec_node, "Occupied", xmlns );
+      
+    m_meas->occupied_ = parse_occupancy_status( uccupied_node );
+      
+    const rapidxml::xml_node<char> *det_type_node = xml_first_node_nso( m_spec_node, "DetectorType", xmlns );
+    if( det_type_node && det_type_node->value_size() )
+      m_meas->detector_description_ = xml_value_str( det_type_node );
+      
+    m_meas->quality_status_ = QualityStatus::Missing;
+    const rapidxml::xml_attribute<char> *quality_attrib = m_spec_node->first_attribute( "Quality", 7 );
+    if( quality_attrib && quality_attrib->value_size() )
+    {
+      if( XML_VALUE_ICOMPARE( quality_attrib, "Good" ) )
+        m_meas->quality_status_ = QualityStatus::Good;
+      else if( XML_VALUE_ICOMPARE( quality_attrib, "Suspect" ) )
+        m_meas->quality_status_ = QualityStatus::Suspect;
+      else if( XML_VALUE_ICOMPARE( quality_attrib, "Bad" ) )
+        m_meas->quality_status_ = QualityStatus::Bad;
+      else if( XML_VALUE_ICOMPARE( quality_attrib, "Missing" )
+                || XML_VALUE_ICOMPARE( quality_attrib, "Unknown" ) )
+        m_meas->quality_status_ = QualityStatus::Missing;
+      else
+        m_meas->parse_warnings_.push_back( "Unknow quality status '"
+                                            + SpecUtils::xml_value_str(quality_attrib) + "'" );
+    }//if( quality_attrib is valid )
+      
+    const rapidxml::xml_attribute<char> *detector_attrib = find_detector_attribute( m_spec_node );
+      
+    if( detector_attrib && detector_attrib->value_size() )
+    {
+      if( !m_meas->detector_name_.empty()
+          && (xml_value_str(detector_attrib) != m_meas->detector_name_) )
+      {
+      
+        string msg = "Replacing detector name '" + m_meas->detector_name_ + "' with '"
+                       + xml_value_str(detector_attrib) + "'";
+        m_meas->parse_warnings_.emplace_back( std::move(msg) );
+      }
+      
+      m_meas->detector_name_ = xml_value_str(detector_attrib);
+    }//if( detector_attrib && detector_attrib->value() )
+      
+    const rapidxml::xml_node<char> *live_time_node  = xml_first_node_nso( m_spec_node, "LiveTime", xmlns );
+    const rapidxml::xml_node<char> *real_time_node  = xml_first_node_nso( m_spec_node, "RealTime", xmlns );
+    const rapidxml::xml_node<char> *start_time_node = xml_first_node_nso( m_spec_node, "StartTime", xmlns );
+    
+    if( live_time_node )
+      m_meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
+    if( real_time_node )
+      m_meas->real_time_ = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
+      
+    if( !start_time_node )
+      start_time_node = xml_first_node_nso( m_spec_node->parent(), "StartTime", xmlns );
+      
+    if( start_time_node )
+      m_meas->start_time_ = time_from_string( xml_value_str(start_time_node).c_str() );
+      
+      
+    //XXX Things we should look for!
+    //Need to handle case <Calibration Type="FWHM" FWHMUnits="Channels"> instead of right now only handling <Calibration Type="Energy" EnergyUnits="keV">
+      
+    const rapidxml::xml_node<char> *channel_data_node = xml_first_node_nso( m_spec_node, "ChannelData", xmlns );  //can have attribute comsion, Start(The channel number (one-based) of the first value in this element), ListMode(string)
+      
+    if( !channel_data_node )
+    {
+      //The N42 analysis result file refU35CG8VWRM get here a lot (its not a valid
+      //  spectrum file)
+      throw runtime_error( "Error, didnt find <ChannelData> under <Spectrum>" );
+    }//if( !channel_data_node )
+      
+    const auto compress_attrib = channel_data_node->first_attribute( "Compression", 11 );
+    const string compress_type = xml_value_str( compress_attrib );
+    std::shared_ptr<std::vector<float>> contents = std::make_shared< vector<float> >();
+      
+    //Some variants have a <Data> tag under the <ChannelData> node.
+    const rapidxml::xml_node<char> *datanode = xml_first_node_nso( channel_data_node, "Data", xmlns );
+    if( datanode && datanode->value_size() )
+      channel_data_node = datanode;
+      
+      
+    const bool compressed_zeros = icontains(compress_type, "CountedZeroe");
+      
+    //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
+    SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
+      
+    if( compressed_zeros )
+    {
+      expand_counted_zeros( *contents, *contents );
+    }else if( (compress_type!="") && (contents->size()>2) && !icontains(compress_type, "Non" ) )
+    {
+      string msg = "Unknown spectrum Compression type: '" + compress_type + "', not applied.";
+      m_meas->parse_warnings_.emplace_back( std::move(msg) );
+    }
+      
+    //Fix cambio zero compression
+    if( compressed_zeros )
+    {
+      for( float &val : *contents )
+      {
+        if( val > 0.0f && val <= 2.0f*FLT_MIN )
+          val = 0.0f;
+      }
+    }//if( compressed_zeros )
+      
+    const rapidxml::xml_attribute<char> *type_attrib = m_spec_node->first_attribute( "Type", 4 );
+      
+    if( !type_attrib )
+      type_attrib = m_spec_node->first_attribute( "DetectorType", 12 );
+      
+    if( !type_attrib && m_spec_node->parent() )
+      type_attrib = m_spec_node->parent()->first_attribute( "DetectorType", 12 );            //<SpectrumMeasurement>
+    if( !type_attrib && m_spec_node->parent() && m_spec_node->parent()->parent() )
+      type_attrib = m_spec_node->parent()->parent()->first_attribute( "DetectorType", 12 );  //<DetectorMeasurement> node
+      
+    bool is_gamma = contents && !contents->empty();
+    if( is_gamma )
+      is_gamma = is_gamma_spectrum( detector_attrib, type_attrib, det_type_node, m_spec_node );
+      
+    if( is_gamma )
+    {
+      //The below handles a special case for Raytheon-Variant L-1 (see refSJHFSW1DZ4)
+      const rapidxml::xml_node<char> *specsize = m_spec_node->first_node( "ray:SpectrumSize", 16 );
+      if( specsize && specsize->value_size() )
+      {
+        vector<int> sizes;
+        const char *str = specsize->value();
+        const size_t strsize = specsize->value_size();
+        if( SpecUtils::split_to_ints(str, strsize, sizes) && (sizes.size() == 1) )
+        {
+          const size_t origlen = contents->size();
+          const size_t newlen = static_cast<size_t>(sizes[0]);
+          if( newlen >= 64
+              && newlen != origlen
+              && newlen < origlen
+              && (origlen % newlen)==0 )
+          {
+            contents->resize( newlen );
+              
+#if( PERFORM_DEVELOPER_CHECKS )
+            char buffer[512];
+            snprintf( buffer, sizeof(buffer),
+                       "Reducing channel data from %i to %i channels on advice of"
+                       " <ray:SpectrumSize>; note that this is throwing away %i"
+                       " channels", int(origlen), int(newlen), int(origlen-newlen) );
+            log_developer_error( __func__, buffer );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+          }
+        }//if( SpecUtils::split_to_ints( str, strsize, sizes ) )
+      }//if( specsize_node && specsize_node->value_size() )
+        
+        
+      m_meas->contained_neutron_ = false;
+      m_meas->gamma_counts_ = contents;
+        
+      std::string cal_error_msg;
+      shared_ptr<const EnergyCalibration> energy_cal;
+      m_energy_cal.get_spectrum_energy_cal( m_spec_node, contents->size(), energy_cal, cal_error_msg );
+          
+      if( energy_cal )
+      {
+        m_meas->energy_calibration_ = energy_cal;
+      }else if( !cal_error_msg.empty()
+            && !count(begin(m_meas->parse_warnings_), end(m_meas->parse_warnings_), cal_error_msg) )
+      {
+        m_meas->parse_warnings_.push_back( cal_error_msg );
+      }
+        
+      for( const float x : *(m_meas->gamma_counts_) )
+        m_meas->gamma_count_sum_ += x;
+    }else  //if( is_gamma )
+    {
+      m_meas->contained_neutron_ = true;
+      if( m_meas->neutron_counts_.size() < contents->size() )
+        m_meas->neutron_counts_.resize( contents->size(), 0.0 );
+        
+      for( size_t i = 0; i < contents->size(); ++i )
+      {
+        m_meas->neutron_counts_[i] += contents->operator[](i);
+        m_meas->neutron_counts_sum_ += contents->operator[](i);
+      }//for( loop over neutron counts )
+    }//if( is_gamma ) / else
+  }//void decode_2006_n42_spectrum_node()
+      
+      
+  void operator()()
+  {
+    try
+    {
+      decode_2006_n42_spectrum_node();
+      
+      const string xmlns = get_n42_xmlns(m_spec_node);
+      const rapidxml::xml_node<char> *spec_parent = m_spec_node->parent();
+        
+      if( m_dose_data_parent )
+      {
+        //If m_spec_node has any immediate siblings, then we need to be careful in setting
+        //  The count dose informiaton, so lets count them
+        int nspectra = 0;
+        if( spec_parent )
+        {
+          for( const rapidxml::xml_node<char> *node = spec_parent->first_node( m_spec_node->name(), m_spec_node->name_size() );
+              node;
+              node = XML_NEXT_TWIN(node) )
+            ++nspectra;
+        }
+          
+        for( const rapidxml::xml_node<char> *dose_data = xml_first_node_nso( m_dose_data_parent, "CountDoseData", xmlns );
+            dose_data;
+            (dose_data = XML_NEXT_TWIN(dose_data)))
+        {
+          if( nspectra < 2 )
+          {
+            m_meas->set_n42_2006_count_dose_data_info( dose_data, m_analysis_info, m_mutex );
+          }else
+          {
+            const rapidxml::xml_node<char> *starttime = XML_FIRST_NODE(dose_data, "StartTime");
+            //const rapidxml::xml_node<char> *realtime = XML_FIRST_NODE(dose_data, "SampleRealTime");
+            if( /*!realtime ||*/ !starttime )
+              continue;
+              
+            const boost::posix_time::ptime startptime = SpecUtils::time_from_string( xml_value_str(starttime).c_str() );
+            if( startptime.is_special() )
+              continue;
+              
+            boost::posix_time::time_duration thisdelta = startptime - m_meas->start_time_;
+            if( thisdelta < boost::posix_time::time_duration(0,0,0) )
+              thisdelta = -thisdelta;
+            //const float realtime = time_duration_string_to_seconds(realtime->value(), realtime->value_size());
+            
+            if( thisdelta < boost::posix_time::time_duration(0,0,10) )
+              m_meas->set_n42_2006_count_dose_data_info( dose_data, m_analysis_info, m_mutex );
+          }
+        }//for( loop over CountDoseData nodes, dos )
+      }//if( measurement_node_for_cambio )
+        
+        
+      //HPRDS (see refF4TD3P2VTG) have start time and remark as siblings to
+      //  m_spec_node
+      if( spec_parent )
+      {
+        for( const rapidxml::xml_node<char> *remark = xml_first_node_nso( spec_parent, "Remark", xmlns );
               remark;
               remark = XML_NEXT_TWIN(remark) )
-          {
-            string remarkstr = xml_value_str( remark );
-            trim( remarkstr );
-            
-            if( remarkstr.empty() )
-              continue;
-            
-            if( SpecUtils::istarts_with( remarkstr, s_parser_warn_prefix) )
-            {
-              SpecUtils::ireplace_all( remarkstr, s_parser_warn_prefix, "" );
-              m_meas->parse_warnings_.emplace_back( std::move(remarkstr) );
-            }else
-            {
-              m_meas->remarks_.push_back( remarkstr );
-            }
-          }//for( loop over spectrum parent remarks )
-          
-          
-          const rapidxml::xml_node<char> *start_time = xml_first_node_nso( parent, "StartTime", xmlns );
-          if( start_time && start_time->value_size() && m_meas->start_time_.is_special()
-             && m_meas->source_type_ != SourceType::IntrinsicActivity )
-            m_meas->start_time_ = time_from_string( xml_value_str(start_time).c_str() );
-        }//if( parent )
-      }
-#if(PERFORM_DEVELOPER_CHECKS)
-      catch( std::exception &e )
-      {
-        m_meas->reset();
-        m_meas->title_ = SpectrumNodeDecodeWorker_failed_decode_title;
-        if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
         {
-          char buffer[256];
-          snprintf( buffer, sizeof(buffer), "Caught: %s", e.what() );
-          log_developer_error( __func__, buffer );
-        }//if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
-      }//try / catch
-#else
-      catch( std::exception & )
+          string remarkstr = xml_value_str( remark );
+          trim( remarkstr );
+            
+          if( remarkstr.empty() )
+            continue;
+            
+          if( SpecUtils::istarts_with( remarkstr, s_parser_warn_prefix) )
+          {
+            SpecUtils::ireplace_all( remarkstr, s_parser_warn_prefix, "" );
+            m_meas->parse_warnings_.emplace_back( std::move(remarkstr) );
+          }else
+          {
+            m_meas->remarks_.push_back( remarkstr );
+          }
+        }//for( loop over spectrum spec_parent remarks )
+            
+        const rapidxml::xml_node<char> *start_time = xml_first_node_nso( spec_parent, "StartTime", xmlns );
+        if( start_time && start_time->value_size() && m_meas->start_time_.is_special()
+            && m_meas->source_type_ != SourceType::IntrinsicActivity )
+          m_meas->start_time_ = time_from_string( xml_value_str(start_time).c_str() );
+      }//if( spec_parent )
+    }
+#if(PERFORM_DEVELOPER_CHECKS)
+    catch( std::exception &e )
+    {
+      m_meas->reset();
+      m_meas->title_ = N42DecodeHelper2006_failed_decode_title;
+      if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
       {
-        m_meas->reset();
-        m_meas->title_ = SpectrumNodeDecodeWorker_failed_decode_title;
-      }
+        char buffer[256];
+        snprintf( buffer, sizeof(buffer), "Caught: %s", e.what() );
+        log_developer_error( __func__, buffer );
+      }//if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
+    }//try / catch
+#else
+    catch( std::exception & )
+    {
+      m_meas->reset();
+      m_meas->title_ = N42DecodeHelper2006_failed_decode_title;
+    }
 #endif
-    }//void operator()()
-  };//struct SpectrumNodeDecodeWorker
+  }//void operator()()
+};//struct N42DecodeHelper2006
   
   
   
@@ -842,73 +2028,6 @@ namespace SpecUtils
   
   
   
-  void SpecFile::set_n42_2006_deviation_pair_info( const rapidxml::xml_node<char> *info_node,
-                                                  std::vector<std::shared_ptr<Measurement>> &measurs_to_update )
-  {
-    if( !info_node )
-      return;
-    
-    set<string> det_names_set;
-    
-    for( const rapidxml::xml_node<char> *nl_corr_node = xml_first_node_nso( info_node, "NonlinearityCorrection", "dndons:" );
-        nl_corr_node;
-        nl_corr_node = XML_NEXT_TWIN(nl_corr_node) )
-    {
-      if( det_names_set.empty() )
-        det_names_set = find_detector_names();
-      
-      const rapidxml::xml_attribute<char> *det_attrib = XML_FIRST_ATTRIB( nl_corr_node, "Detector" );
-      
-      if( !det_attrib && det_names_set.size()>1 )
-      {
-        cerr << SRC_LOCATION << "\n\tWarning, no Detector attribute "
-        << "in <dndons:NonlinearityCorrection> node; skipping" << endl;
-        continue;
-      }//if( !det_attrib )
-      
-      const string det_name = det_attrib ? xml_value_str(det_attrib) : *(det_names_set.begin());
-      bool have_det_with_this_name = false;
-      for( const string &name : det_names_set )
-      {
-        //We may have appended "_intercal_" + "..." to the detector name, lets check
-        have_det_with_this_name = (name == det_name || (istarts_with(name, det_name) && icontains(name, "_intercal_")));
-        if( have_det_with_this_name )
-          break;
-      }
-      
-      if( !have_det_with_this_name )
-      {
-        cerr << SRC_LOCATION << "\n\tWarning: could find nedetctor name '"
-        << det_name << "' in Measurements loaded, skipping deviation "
-        << "pair" << endl;
-        continue;
-      }//if( an invalid detector name )
-      
-      vector< pair<float,float> > deviatnpairs;
-      for( const rapidxml::xml_node<char> *dev_node = xml_first_node_nso( nl_corr_node, "Deviation", "dndons:" );
-          dev_node;
-          dev_node = XML_NEXT_TWIN(dev_node) )
-      {
-        if( dev_node->value_size() )
-        {
-          vector<float> devpair;
-          const bool success = SpecUtils::split_to_floats( dev_node->value(), dev_node->value_size(), devpair );
-          
-          if( success && devpair.size()>=2 )
-            deviatnpairs.push_back( pair<float,float>(devpair[0],devpair[1]) );
-          else
-            cerr << "Could not put '" << xml_value_str(dev_node) << "' into deviation pair" << endl;
-        }//if( dev_node->value_size() )
-      }//for( loop over <dndons:Deviation> )
-      
-      for( auto &meas : measurs_to_update )
-        if( meas->detector_name_ == det_name ||
-           (istarts_with(meas->detector_name_, det_name) && icontains(meas->detector_name_, "_intercal_")) )
-          meas->deviation_pairs_ = deviatnpairs;
-    }//for( loop over <dndons:NonlinearityCorrection> )
-  }//void set_n42_2006_deviation_pair_info(...)
-  
-  
   void SpecFile::set_n42_2006_instrument_info_node_info( const rapidxml::xml_node<char> *info_node )
   {
     if( !info_node )
@@ -1084,27 +2203,27 @@ namespace SpecUtils
           det; det = XML_NEXT_TWIN(det) )
       {
         const rapidxml::xml_attribute<char> *type_attrib = XML_FIRST_ATTRIB( det, "Type" );
-        if( type_attrib && XML_VALUE_ICOMPARE(type_attrib,"MCA") )
+        if( !type_attrib || !XML_VALUE_ICOMPARE(type_attrib,"MCA") )
+          continue;
+        
+        const rapidxml::xml_node<char> *id_settings = XML_FIRST_NODE(det, "IdentificationSettings");
+        if( !id_settings )
+          continue;
+        
+        const rapidxml::xml_attribute<char> *Material = XML_FIRST_ATTRIB( id_settings, "Material" );
+        const rapidxml::xml_attribute<char> *Size = XML_FIRST_ATTRIB( id_settings, "Size" );
+        const rapidxml::xml_attribute<char> *Name = XML_FIRST_ATTRIB( id_settings, "Name" );
+        if( Material || Size || Name )
         {
-          const rapidxml::xml_node<char> *id_settings = XML_FIRST_NODE(det, "IdentificationSettings");
-          if( id_settings )
-          {
-            const rapidxml::xml_attribute<char> *Material = XML_FIRST_ATTRIB( id_settings, "Material" );
-            const rapidxml::xml_attribute<char> *Size = XML_FIRST_ATTRIB( id_settings, "Size" );
-            const rapidxml::xml_attribute<char> *Name = XML_FIRST_ATTRIB( id_settings, "Name" );
-            if( Material || Size || Name )
-            {
-              //string val = "Gamma Detector: " + xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
-              //remarks_.push_back( val );
+          //string val = "Gamma Detector: " + xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
+          //remarks_.push_back( val );
               
-              string val = xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
-              SpecUtils::trim( val );
-              SpecUtils::ireplace_all( val, "  ", " " );
-              if( instrument_model_.size() )
-                val = " " + val;
-              instrument_model_ += val;
-            }
-          }
+          string val = xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
+          SpecUtils::trim( val );
+          SpecUtils::ireplace_all( val, "  ", " " );
+          if( instrument_model_.size() )
+            val = " " + val;
+          instrument_model_ += val;
         }
       }
     }//if( det_setup )
@@ -1363,15 +2482,7 @@ namespace SpecUtils
       speed = speed_from_node( speed_node );
     }catch(...){}
     
-    try{
-      if( !occupancy_node )
-        occupied = OccupancyStatus::Unknown;
-      else if( is_occupied( occupancy_node ) )
-        occupied = OccupancyStatus::Occupied;
-      else
-        occupied = OccupancyStatus::NotOccupied;
-    }catch(...){}
-    
+    occupied = parse_occupancy_status( occupancy_node );
     
     for( auto &meas : measurs_to_update )
     {
@@ -1515,6 +2626,7 @@ namespace SpecUtils
   }//void set_n42_2006_measurement_location_information()
   
   
+      
   
   void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_node )
   {
@@ -1544,6 +2656,11 @@ namespace SpecUtils
     std::mutex queue_mutex;
     std::shared_ptr<DetectorAnalysis> analysis_info = make_shared<DetectorAnalysis>();
     
+    const rapidxml::xml_node<char> *actual_doc_node = document_node->document();
+    if( !actual_doc_node )
+      actual_doc_node = document_node;
+    N42CalibrationCache2006 energy_cal( actual_doc_node );
+      
     SpecUtilsAsync::ThreadPool workerpool;
     
     string xmlns = get_n42_xmlns(document_node);
@@ -1564,8 +2681,7 @@ namespace SpecUtils
     
     if( is_spectrometer )
     {
-      vector<const rapidxml::xml_node<char> *> countdoseNodes;
-      vector<const rapidxml::xml_node<char> *> locationNodes, instInfoNodes;
+      vector<const rapidxml::xml_node<char> *> countdoseNodes, locationNodes;
       
       for( const rapidxml::xml_node<char> *measurement = xml_first_node_nso( document_node, "Measurement", xmlns );
           measurement;
@@ -1578,9 +2694,9 @@ namespace SpecUtils
         {
           std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
           measurements_.push_back( meas );
-          workerpool.post( SpectrumNodeDecodeWorker( spectrum, &queue_mutex,
+          workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
                                                     meas, analysis_info,
-                                                    measurement, document_node ) );
+                                                    measurement, document_node, energy_cal ) );
         }
         
         for( const rapidxml::xml_node<char> *dose = xml_first_node_nso( measurement, "CountDoseData", xmlns );
@@ -1598,7 +2714,6 @@ namespace SpecUtils
         //  Calibration here
         const rapidxml::xml_node<char> *inst_info = xml_first_node_nso( measurement, "InstrumentInformation", xmlns );
         set_n42_2006_instrument_info_node_info( inst_info );
-        instInfoNodes.push_back( inst_info );
         
         const rapidxml::xml_node<char> *analysis_node = xml_first_node_nso( measurement, "AnalysisResults", xmlns );
         if( analysis_node && analysis_info )
@@ -1621,9 +2736,9 @@ namespace SpecUtils
       
       workerpool.join();
       
-      SpectrumNodeDecodeWorker::filter_valid_measurements( measurements_ );
+      N42DecodeHelper2006::filter_valid_measurements( measurements_ );
       
-      //This loop may be taken care of by SpectrumNodeDecodeWorker anyway
+      //This loop may be taken care of by N42DecodeHelper2006 anyway
       for( size_t i = 0; i < countdoseNodes.size(); ++i )
       {
         //Detectives N42 are what end up here.
@@ -1729,23 +2844,7 @@ namespace SpecUtils
           set_n42_2006_measurement_location_information( locationNodes[i], addedmeas );
         }//if( locationNodes[i] && measurements_[i] )
       }//for( size_t i = 0; i < locationNodes.size(); ++i )
-      
-      //Add in deviation pairs for the detectors.
-      //Note that this is a hack to read in deviation pairs saved from this code,
-      //  and I havent seen any simple spectrometer style files actually use this.
-      //Also, it is completely untested if it actually works.
-      //For the ref8TINMQY7PF, the below index based matching up shows this
-      //  approach may not always be correct...
-      for( size_t i = 0; i < instInfoNodes.size(); ++i )
-      {
-        if( instInfoNodes[i] && (i<measurements_.size()) && measurements_[i] )
-        {
-          vector<std::shared_ptr<Measurement>> addedmeas( 1, measurements_[i] );
-          set_n42_2006_deviation_pair_info( instInfoNodes[i], addedmeas );
-        }//if( instInfoNodes[i] && measurements_[i] )
-      }//for( size_t i = 0; i < locationNodes.size(); ++i )
-      
-    }else
+    }else  //if( is_spectrometer )
     {
       //This below loop could be parallized a bit more, in terms of all
       //  <Spectrum> tags of all <Measurement>'s being put in the queue to work
@@ -1810,16 +2909,16 @@ namespace SpecUtils
             {
               std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
               measurements_this_node.push_back( meas );
-              workerpool.post( SpectrumNodeDecodeWorker( spectrum, &queue_mutex,
+              workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
                                                         meas, analysis_info, NULL,
-                                                        document_node ) );
+                                                        document_node, energy_cal ) );
             }//for( rapidxml::xml_node<char> *spectrum = ... )
           }//for( const rapidxml::xml_node<char> *spec_meas_node = ... )
           
           workerpool.join();
           
           
-          SpectrumNodeDecodeWorker::filter_valid_measurements( measurements_this_node );
+          N42DecodeHelper2006::filter_valid_measurements( measurements_this_node );
           
           for( auto &meas : measurements_this_node )
           {
@@ -1851,7 +2950,7 @@ namespace SpecUtils
           
           
           //Only N42 files that I saw in refMK252OLFFE use this next loop
-          //  to initiate the SpectrumNodeDecodeWorkers
+          //  to initiate the N42DecodeHelper2006s
           for( const rapidxml::xml_node<char> *spectrum = xml_first_node_nso( det_data_node, "Spectrum", xmlns );
               spectrum;
               spectrum = XML_NEXT_TWIN(spectrum) )
@@ -1859,9 +2958,9 @@ namespace SpecUtils
             std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
             measurements_this_node.push_back( meas );
             
-            workerpool.post( SpectrumNodeDecodeWorker( spectrum, &queue_mutex,
+            workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
                                                       meas, analysis_info, (rapidxml::xml_node<char> *)0,
-                                                      document_node ) );
+                                                      document_node, energy_cal ) );
             
             if( spectrum->first_attribute( "CalibrationIDs", 14 ) )
               meas_to_spec_node.push_back( make_pair( meas, spectrum ) );
@@ -1887,8 +2986,8 @@ namespace SpecUtils
                 std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
                 measurements_this_node.push_back( meas );
                 
-                workerpool.post( SpectrumNodeDecodeWorker( spectrum, &queue_mutex,
-                                                          meas, analysis_info, det_meas_node, document_node ) );
+                workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
+                                                          meas, analysis_info, det_meas_node, document_node, energy_cal ) );
                 
                 if( XML_FIRST_ATTRIB(spectrum, "CalibrationIDs") )
                   meas_to_spec_node.push_back( make_pair( meas, spectrum ) );
@@ -1952,7 +3051,7 @@ namespace SpecUtils
           }//if( measurements_this_node.size() == gross_counts_this_node.size() )
           
           
-          SpectrumNodeDecodeWorker::filter_valid_measurements( measurements_this_node );
+          N42DecodeHelper2006::filter_valid_measurements( measurements_this_node );
           
           
           //Now go through and look for Measurements with neutron data, but no
@@ -2060,7 +3159,8 @@ namespace SpecUtils
                 if( !gamma_matches_neutron )
                   gamma_matches_neutron = ((spec->detector_name_+"N") == gross->detector_name_);
                 
-                //Some detectors will have names like "ChannelAGamma", "ChannelANeutron", "ChannelBGamma", "ChannelBNeutron", etc
+                //Some detectors will have names like "ChannelAGamma", "ChannelANeutron",
+                //   "ChannelBGamma", "ChannelBNeutron", etc.
                 if( !gamma_matches_neutron && SpecUtils::icontains(spec->detector_name_, "Gamma")
                    && SpecUtils::icontains(gross->detector_name_, "Neutron") )
                 {
@@ -2120,11 +3220,11 @@ namespace SpecUtils
             //Sanity check to make sure doing this matches the example data I have
             //  where this bizare fix is needed.
             if( !meas->gamma_counts_ || meas->gamma_counts_->size()!=2048
-               || meas->energy_calibration_model_!=SpecUtils::EnergyCalType::Polynomial )
+               || meas->energy_calibration_model()!=SpecUtils::EnergyCalType::Polynomial )
               continue;
             
-            if( meas->channel_energies_ && meas->channel_energies_->size() )
-              meas->channel_energies_.reset();
+            //if( meas->energy_calibration_->type() != EnergyCalType::InvalidEquationType )
+            //  meas->energy_calibration_ = make_shared<EnergyCalibration>();
             
             std::shared_ptr<const vector<float> > oldcounts = meas->gamma_counts_;
             auto lowerbins = std::make_shared<vector<float> >( oldcounts->begin(), oldcounts->begin()+1024 );
@@ -2143,11 +3243,19 @@ namespace SpecUtils
               newmeas->gamma_count_sum_ += a;
             
             vector<float> coeffs;
-            if( SpecUtils::split_to_floats( second_coefs->value(),
-                                           second_coefs->value_size(), coeffs )
-               && coeffs != meas->calibration_coeffs_ )
+            if( split_to_floats( second_coefs->value(), second_coefs->value_size(), coeffs )
+               && coeffs != meas->energy_calibration_->coefficients() )
             {
-              newmeas->calibration_coeffs_ = coeffs;
+              auto newcal = make_shared<EnergyCalibration>();
+              try
+              {
+                newcal->set_polynomial( newmeas->gamma_counts()->size(), coeffs, meas->energy_calibration_->deviation_pairs() );
+              }catch( std::exception &e )
+              {
+                newmeas->parse_warnings_.push_back( "Invalid 2.5MeV calibration coefficents: " + string(e.what()) );
+              }//try / catch
+      
+              newmeas->energy_calibration_ = newcal;
               
               //Should come up with better way to decide which calibrarion is which
               //  or make more general or something
@@ -2256,7 +3364,7 @@ namespace SpecUtils
               std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
               spectrum_nodes.push_back( node );
               measurements_this_node.push_back( meas );
-              workerpool.post( SpectrumNodeDecodeWorker( node, &queue_mutex, meas, analysis_info, NULL, document_node ) );
+              workerpool.post( N42DecodeHelper2006( node, &queue_mutex, meas, analysis_info, NULL, document_node, energy_cal ) );
             }
             
             for( node = xml_first_node_nso( gamma_data, "SpectrumSummed", "dndoarns:" );
@@ -2265,7 +3373,7 @@ namespace SpecUtils
               std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
               spectrum_nodes.push_back( node );
               measurements_this_node.push_back( meas );
-              workerpool.post( SpectrumNodeDecodeWorker( node, &queue_mutex, meas, analysis_info, NULL, document_node ) );
+              workerpool.post( N42DecodeHelper2006( node, &queue_mutex, meas, analysis_info, NULL, document_node, energy_cal ) );
             }//for( loop over <SpectrumSummed> )
             
             workerpool.join();
@@ -2275,7 +3383,7 @@ namespace SpecUtils
               //<dndoarns:SpectrumSummed dndoarns:DetectorSubset="Partial" dndoarns:NuclidesIdentified="Th-232-001 Ra-226-002">
               std::shared_ptr<Measurement> meas = measurements_this_node[i];
               vector<std::shared_ptr<Measurement> > measv( 1, meas );
-              SpectrumNodeDecodeWorker::filter_valid_measurements( measv );
+              N42DecodeHelper2006::filter_valid_measurements( measv );
               
               if( measv.empty() )
                 continue;
@@ -2285,19 +3393,19 @@ namespace SpecUtils
               {
                 meas->title_ += " " + string("Background");
                 
-                //Check if calibration is valid, and if not, fill it in from the
-                //  next spectrum... seems a little sketch but works on all the
-                //  example files I have.
-                if( SpecUtils::EnergyCalType::InvalidEquationType == meas->energy_calibration_model_
-                   && meas->calibration_coeffs_.empty()
+                //Check if calibration is valid, and if not, fill it in from the next spectrum...
+                //  seems a little sketch but works for all cases Ive encountered.
+                assert( meas->energy_calibration_ );
+                if( (meas->energy_calibration_->type() == EnergyCalType::InvalidEquationType)
                    && (i < (measurements_this_node.size()-1))
                    && measurements_this_node[i+1]
-                   && !measurements_this_node[i+1]->calibration_coeffs_.empty()
-                   && measurements_this_node[i+1]->energy_calibration_model_ != SpecUtils::EnergyCalType::InvalidEquationType )
+                   && measurements_this_node[i+1]->gamma_counts_
+                   && meas->gamma_counts_
+                   && !meas->gamma_counts_->empty()
+                   && (measurements_this_node[i+1]->gamma_counts_->size() == meas->gamma_counts_->size())
+                   && (measurements_this_node[i+1]->energy_calibration_->type() != EnergyCalType::InvalidEquationType) )
                 {
-                  meas->energy_calibration_model_ = measurements_this_node[i+1]->energy_calibration_model_;
-                  meas->calibration_coeffs_ = measurements_this_node[i+1]->calibration_coeffs_;
-                  meas->deviation_pairs_ = measurements_this_node[i+1]->deviation_pairs_;
+                  meas->energy_calibration_ = measurements_this_node[i+1]->energy_calibration_;
                 }
               }//if( SpecUtils::icontains(name, "BackgroundSpectrum" ) )
               
@@ -2383,7 +3491,6 @@ namespace SpecUtils
           item_info_node = xml_first_node_nso( measurement, "InstrumentLocation", xmlns );
         
         set_n42_2006_measurement_location_information( item_info_node, added_measurements );
-        set_n42_2006_deviation_pair_info( info_node, added_measurements );
         
         const rapidxml::xml_node<char> *analysis_node = xml_first_node_nso( measurement, "AnalysisResults", xmlns );
         
@@ -2688,108 +3795,7 @@ namespace SpecUtils
 
   
   
-  void Measurement::add_calibration_to_2012_N42_xml(
-                                                    rapidxml::xml_node<char> *RadInstrumentData,
-                                                    std::mutex &xmldocmutex,
-                                                    const int i ) const
-  {
-    using namespace rapidxml;
-    const char *val = (const char *)0;
-    char buffer[32];
-    
-    rapidxml::xml_document<char> *doc = RadInstrumentData->document();
-    
-    const char *coefname = 0;
-    xml_node<char> *EnergyCalibration = 0, *node = 0;
-    
-    stringstream valuestrm;
-    std::vector<float> coefs = calibration_coeffs();
-    const size_t nbin = gamma_counts()->size();
-    
-    switch( energy_calibration_model() )
-    {
-      case SpecUtils::EnergyCalType::FullRangeFraction:
-        coefs = SpecUtils::fullrangefraction_coef_to_polynomial( coefs, nbin );
-        //note intential fallthrough
-      case SpecUtils::EnergyCalType::Polynomial:
-      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-      {
-        coefname = "CoefficientValues";
-        
-        //Technically this node must have exactly three coeficients, but here we'll
-        //  slip in some more if we have them...
-        const size_t ncoef = std::max( size_t(3), coefs.size() );
-        for( size_t j = 0; j < ncoef; ++j )
-        {
-          snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), (j>=coefs.size() ? 0.0f : coefs[j]) );
-          valuestrm << buffer;
-        }
-        
-        break;
-      }//case SpecUtils::EnergyCalType::Polynomial:
-        
-      case SpecUtils::EnergyCalType::LowerChannelEdge:
-      case SpecUtils::EnergyCalType::InvalidEquationType:  //Taking a guess here (we should alway capture FRF, Poly, and LowrBinEnergy correctly,
-        if( !!channel_energies_ || calibration_coeffs().size() )
-        {
-          coefname = "EnergyBoundaryValues";
-          const std::vector<float> &b = (!!channel_energies_ ? *channel_energies_ : calibration_coeffs());
-          
-          //This next part should be formatted better!
-          for( size_t j = 0; j < b.size(); ++j )
-            valuestrm << (j?" ":"") << b[j];
-          
-          //According to N42 2012 standard, we must give energy of upper channel
-          if( b.size() && b.size()<=nbin )
-            valuestrm << " " << ((2.0f*b[b.size()-1])-b[b.size()-2]);
-        }//if( we have some sort of coefficients )
-        break;
-    }//switch( energy_calibration_model() )
-    
-    
-    if( coefname )
-    {
-      std::lock_guard<std::mutex> lock( xmldocmutex );
-      EnergyCalibration = doc->allocate_node( node_element, "EnergyCalibration" );
-      RadInstrumentData->append_node( EnergyCalibration );
-      
-      snprintf( buffer, sizeof(buffer), "EnergyCal%i", int(i) );
-      val = doc->allocate_string( buffer );
-      EnergyCalibration->append_attribute( doc->allocate_attribute( "id", val ) );
-      
-      val = doc->allocate_string( valuestrm.str().c_str() );
-      node = doc->allocate_node( node_element, coefname, val );
-      EnergyCalibration->append_node( node );
-    }//if( coefname )
-    
-    const std::vector<std::pair<float,float>> &devpairs = deviation_pairs();
-    if( devpairs.size() )
-    {
-      stringstream EnergyValuesStrm, EnergyDeviationValuesStrm;
-      for( size_t j = 0; j < devpairs.size(); ++j )
-      {
-        snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), devpairs[j].first );
-        EnergyValuesStrm << buffer;
-        snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), devpairs[j].second );
-        EnergyDeviationValuesStrm << buffer;
-      }
-      
-      std::lock_guard<std::mutex> lock( xmldocmutex );
-      if( !EnergyCalibration )
-      {
-        EnergyCalibration = doc->allocate_node( node_element, "EnergyCalibration" );
-        RadInstrumentData->append_node( EnergyCalibration );
-      }
-      
-      val = doc->allocate_string( EnergyValuesStrm.str().c_str() );
-      node = doc->allocate_node( node_element, "EnergyValues", val );
-      EnergyCalibration->append_node( node );
-      
-      val = doc->allocate_string( EnergyDeviationValuesStrm.str().c_str() );
-      node = doc->allocate_node( node_element, "EnergyDeviationValues", val );
-      EnergyCalibration->append_node( node );
-    }//if( devpairs.size() )
-  }//void add_calibration_to_2012_N42_xml(...)
+  
 
   
   
@@ -3150,7 +4156,7 @@ namespace SpecUtils
     using namespace rapidxml;
     
     std::mutex xmldocmutex;
-    BinningToIndexMap calToSpecMap;
+    EnergyCalToIndexMap calToSpecMap;
     
     std::shared_ptr<xml_document<char> > doc = std::make_shared<xml_document<char> >();
     
@@ -3540,16 +4546,25 @@ namespace SpecUtils
     for( set<int>::const_iterator sni = sample_numbers_.begin(); sni != sample_numbers_.end(); ++sni )
     {
       const int sample_num = *sni;
-      const vector< std::shared_ptr<const Measurement> > smeas
-      = sample_measurements( sample_num );
+      const vector< std::shared_ptr<const Measurement> > smeas = sample_measurements( sample_num );
       if( smeas.empty() )  //probably shouldnt happen, but jic
         continue;
       
       vector<size_t> calid;
       for( size_t i = 0; i < smeas.size(); ++i )
       {
-        const std::shared_ptr<const std::vector<float>> &binning = smeas[i]->channel_energies();
-        calid.push_back( calToSpecMap[binning] );
+        const auto iter = calToSpecMap.find( smeas[i]->energy_calibration_ );
+        if( iter != end(calToSpecMap) )
+        {
+          calid.push_back( calToSpecMap[smeas[i]->energy_calibration_] );
+        }else
+        {
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( __func__, "Serious unexpected error mapping energy calibrations" );
+#endif
+          calid.push_back( 0 );
+          assert( 0 );
+        }
       }
       
       
@@ -3672,7 +4687,8 @@ namespace SpecUtils
           }
           
           workerpool.post( [RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
-            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex ); } );
+            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex );
+          } );
         }//for( loop over measuremtns for this sample number )
       }//if( allsame ) / else
     }//for( )
@@ -4527,7 +5543,7 @@ namespace SpecUtils
         info.equation_type = SpecUtils::EnergyCalType::Polynomial;
         const char *data = coef_val_node->value();
         const size_t len = coef_val_node->value_size();
-        if( !split_to_floats( data, len, info.coefficients ) )
+        if( !SpecUtils::split_to_floats( data, len, info.coefficients ) )
           throw runtime_error( "Invalid calibration value: " + xml_value_str(coef_val_node) );
         
         while( !info.coefficients.empty() && info.coefficients.back()==0.0f )
@@ -4564,10 +5580,10 @@ namespace SpecUtils
             const char *devstrs = energy_deviation_node->value();
             const size_t devstrsize = energy_deviation_node->value_size();
             
-            if( !split_to_floats( energiesstr, energystrsize, energies ) )
+            if( !SpecUtils::split_to_floats( energiesstr, energystrsize, energies ) )
               throw runtime_error( "" );
             
-            if( !split_to_floats( devstrs, devstrsize, deviations ) )
+            if( !SpecUtils::split_to_floats( devstrs, devstrsize, deviations ) )
               throw runtime_error( "" );
             
             if( energies.size() != deviations.size() )
@@ -4592,7 +5608,7 @@ namespace SpecUtils
         const char *data = energy_boundry_node->value();
         const size_t len = energy_boundry_node->value_size();
         
-        if( !split_to_floats( data, len, info.coefficients ) )
+        if( !SpecUtils::split_to_floats( data, len, info.coefficients ) )
           throw runtime_error( "Failed to parse lower channel energies" );
       }else
       {
@@ -5044,12 +6060,11 @@ namespace SpecUtils
           }//if( !calib_att || !calib_att->value_size() )
           
           
-          const string detnam = xml_value_str(calib_att);
+          const string calib_id = xml_value_str(calib_att);
           
           std::lock_guard<std::mutex> lock( calib_mutex );
           
-          map<string,MeasurementCalibInfo>::iterator calib_iter
-          = calibrations_ptr->find( detnam );
+          map<string,MeasurementCalibInfo>::iterator calib_iter = calibrations_ptr->find( calib_id );
           
           //If there is only one energy calibration, use it, even if names dont
           //  match up.  IF more than one calibration then use default
@@ -5081,18 +6096,7 @@ namespace SpecUtils
           
           calib.nbin = meas->gamma_counts_->size();
           calib.fill_binning();
-          
-          if( !calib.binning )
-          {
-            cerr << "Calibration somehow invalid for '" << detnam
-            << "', skipping filling out." << endl;
-            continue;
-          }//if( !calib.binning )
-          
-          meas->calibration_coeffs_ = calib.coefficients;
-          meas->deviation_pairs_    = calib.deviation_pairs_;
-          meas->channel_energies_   = calib.binning;
-          meas->energy_calibration_model_  = calib.equation_type;
+          meas->energy_calibration_ = calib.energy_cal;
           
           if( calib.calib_id.size() )
             meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
@@ -6318,654 +7322,7 @@ namespace SpecUtils
   }//void set_analysis_info_from_n42(...)
   
   
-  void Measurement::set_2006_N42_spectrum_node_info( const rapidxml::xml_node<char> *spectrum )
-  {
-    
-    if( !spectrum )
-      throw runtime_error( "set_2006_N42_spectrum_node_info: Recieved NULL 'Spectrum' node" );
-    
-    const string xmlns = get_n42_xmlns( spectrum );
-    
-    for( const rapidxml::xml_node<char> *remark_node = xml_first_node_nso( spectrum, "Remark", xmlns );
-        remark_node;
-        remark_node = XML_NEXT_TWIN(remark_node) )
-    {
-      string remark_from_node = xml_value_str( remark_node );
-      
-      vector<string> remark_lines;
-      split( remark_lines, remark_from_node, "\r\n" );
-      
-      for( string &remark : remark_lines )
-      {
-        trim( remark );
-        if( remark.empty() )
-          continue;
-        
-        if( SpecUtils::istarts_with( remark, s_parser_warn_prefix) )
-        {
-          SpecUtils::ireplace_all( remark, s_parser_warn_prefix, "" );
-          parse_warnings_.emplace_back( std::move(remark) );
-          continue;
-        }
-        
-        if( SpecUtils::istarts_with( remark, "Title:") )
-        {
-          remark = remark.substr(6);
-          trim( remark );
-          title_ = remark;
-          continue;
-        }
-        
-        remarks_.push_back( remark );
-        
-        if( sample_number_ < 0 )
-        {
-          sample_number_ = sample_num_from_remark( remarks_.back() );
-        }else
-        {
-          const int samplen = sample_num_from_remark( remarks_.back() );
-          if( samplen!=sample_number_ && samplen>=0 )
-            cerr << "Got multiple sample_nums: " << sample_number_
-            << " vs: " << samplen << " from " << remarks_.back() << endl;
-          
-          //marking it intrinsic activity will happen further down from the 'ID'
-          //  attribute, so we wont wast cpu time here checking the remark for itww
-          //      if( SpecUtils::icontains( remark, "intrinsic activity") )
-          //        source_type_ = SourceType::IntrinsicActivity;
-        }
-        
-        const float thisspeed = speed_from_remark( remark );
-        if( thisspeed > 0.0f )
-          speed_ = thisspeed;
-        
-        const string found_detector_name = detector_name_from_remark( remarks_.back() );
-        if( !found_detector_name.empty() && detector_name_.empty() )
-          detector_name_ = found_detector_name;
-        else if( detector_name_ != found_detector_name )
-          cerr << "Got multiple detector names: " << detector_name_
-          << " vs " << found_detector_name << endl;
-      }//for( string remark, remark_lines )
-    }//for( loop over remark_nodes )
-    
-    const rapidxml::xml_attribute<char> *sample_num_att = spectrum->first_attribute( "SampleNumber", 12 );
-    if( sample_num_att )
-    {
-      const string strvalue = xml_value_str( sample_num_att );
-      
-      if( sample_number_ >= 2 )
-        cerr << SRC_LOCATION << "\n\tWarning: replacing sample_number_="
-        << sample_number_ << " with whatever will come from "
-        << strvalue << endl;
-      
-      
-      if( !toInt( strvalue, sample_number_ ) && !strvalue.empty() )
-        cerr << SRC_LOCATION << "\n\tWarning: couldnt convert '" << strvalue
-        << "' to an int" << endl;
-      else sample_number_ = 1;
-    }//if( sample_num_att )
-    
-    const rapidxml::xml_node<char> *src_type_node = xml_first_node_nso( spectrum, "SourceType", xmlns );
-    
-    if( src_type_node )
-    {
-      if( XML_VALUE_ICOMPARE(src_type_node, "Item") )
-        source_type_ = SourceType::Foreground;
-      else if( XML_VALUE_ICOMPARE(src_type_node, "Background") )
-        source_type_ = SourceType::Background;
-      else if( XML_VALUE_ICOMPARE(src_type_node, "Calibration") )
-        source_type_ = SourceType::Calibration;
-      else if( XML_VALUE_ICOMPARE(src_type_node, "Stabilization") ) //RadSeeker HPRDS files have the "Stabilization" source type, which looks like an intrinsic source
-        source_type_ = SourceType::IntrinsicActivity;
-      else if( XML_VALUE_ICOMPARE(src_type_node, "IntrinsicActivity") )
-        source_type_ = SourceType::IntrinsicActivity;
-      else
-        source_type_ = SourceType::Unknown;
-    }//if( src_type_node )
-    
-    const rapidxml::xml_attribute<char> *id_att = spectrum->first_attribute( "ID", 2, false );
-    if( id_att )
-    {
-      if( XML_VALUE_ICOMPARE( id_att, "intrinsicActivity" ) )
-        source_type_ = SourceType::IntrinsicActivity;
-    }// if( id_att )
-    
-    const rapidxml::xml_node<char> *uccupied_node = xml_first_node_nso( spectrum, "Occupied", xmlns );
-    
-    try
-    {
-      if( !uccupied_node )                  occupied_ = OccupancyStatus::Unknown;
-      else if( is_occupied(uccupied_node) ) occupied_ = OccupancyStatus::Occupied;
-      else                                  occupied_ = OccupancyStatus::NotOccupied;
-    }catch(...){                            occupied_ = OccupancyStatus::Unknown; }
-    
-    const rapidxml::xml_node<char> *det_type_node = xml_first_node_nso( spectrum, "DetectorType", xmlns );
-    if( det_type_node && det_type_node->value_size() )
-      detector_description_ = xml_value_str( det_type_node );
-    
-    const rapidxml::xml_attribute<char> *quality_attrib = spectrum->first_attribute( "Quality", 7 );
-    if( quality_attrib && quality_attrib->value_size() )
-    {
-      if( XML_VALUE_ICOMPARE( quality_attrib, "Good" ) )
-        quality_status_ = QualityStatus::Good;
-      else if( XML_VALUE_ICOMPARE( quality_attrib, "Suspect" ) )
-        quality_status_ = QualityStatus::Suspect;
-      else if( XML_VALUE_ICOMPARE( quality_attrib, "Bad" ) )
-        quality_status_ = QualityStatus::Bad;
-      else if( XML_VALUE_ICOMPARE( quality_attrib, "Missing" )
-              || XML_VALUE_ICOMPARE( quality_attrib, "Unknown" ) )
-        quality_status_ = QualityStatus::Missing;
-      else
-      {
-        cerr << SRC_LOCATION << "\n\tWarning: unknow quality status: '"
-        << quality_attrib->value() << "' setting to Missing." << endl;
-        quality_status_ = QualityStatus::Missing;
-      }//if(0.../else/...
-    }//if( quality_attrib is valid )
-    
-    const rapidxml::xml_attribute<char> *detector_attrib = find_detector_attribute( spectrum );
-    
-    if( detector_attrib && detector_attrib->value_size() )
-    {
-      if(!detector_name_.empty())
-        cerr << SRC_LOCATION << "\n\tWarning: replacing detector name '"
-        << detector_name_ << "'' with '" << xml_value_str(detector_attrib) << "'"
-        << endl;
-      detector_name_ = xml_value_str(detector_attrib);
-    }//if( detector_attrib && detector_attrib->value() )
-    
-    const rapidxml::xml_node<char> *live_time_node  = xml_first_node_nso( spectrum, "LiveTime", xmlns );
-    const rapidxml::xml_node<char> *real_time_node  = xml_first_node_nso( spectrum, "RealTime", xmlns );
-    const rapidxml::xml_node<char> *start_time_node = xml_first_node_nso( spectrum, "StartTime", xmlns );
-    
-    if( live_time_node )
-      live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
-    if( real_time_node )
-      real_time_ = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
-    
-    if( !start_time_node && spectrum->parent() )
-      start_time_node = xml_first_node_nso( spectrum->parent(), "StartTime", xmlns );
-    
-    if( start_time_node )
-      start_time_ = time_from_string( xml_value_str(start_time_node).c_str() );
-    
-    
-    //XXX Things we should look for!
-    //Need to handle case <Calibration Type="FWHM" FWHMUnits="Channels"> instead of right now only handling <Calibration Type="Energy" EnergyUnits="keV">
-    
-    const rapidxml::xml_node<char> *channel_data_node = xml_first_node_nso( spectrum, "ChannelData", xmlns );  //can have attribute comsion, Start(The channel number (one-based) of the first value in this element), ListMode(string)
-    
-    if( !channel_data_node )
-    {
-      //The N42 analysis result file refU35CG8VWRM get here a lot (its not a valid
-      //  spectrum file)
-      const char *msg = "Error, didnt find <ChannelData> under <Spectrum>";
-      throw runtime_error( msg );
-    }//if( !channel_data_node )
-    
-    const rapidxml::xml_attribute<char> *compress_attrib = channel_data_node->first_attribute(
-                                                                                              "Compression", 11 );
-    const string compress_type = xml_value_str( compress_attrib );
-    std::shared_ptr<std::vector<float>> contents = std::make_shared< vector<float> >();
-    
-    //Some variants have a <Data> tag under the <ChannelData> node.
-    const rapidxml::xml_node<char> *datanode = xml_first_node_nso( channel_data_node, "Data", xmlns );
-    if( datanode && datanode->value_size() )
-      channel_data_node = datanode;
-    
-    
-    const bool compressed_zeros = icontains(compress_type, "CountedZeroe");
-    
-    //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
-    SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
-    //  SpecUtils::split_to_floats( channel_data_node->value(), channel_data_node->value_size(), *contents );
-    
-    if( compressed_zeros )
-      expand_counted_zeros( *contents, *contents );
-    else if( (compress_type!="") && (contents->size()>2) && !icontains(compress_type, "Non" ) )
-    {
-      stringstream msg;
-      msg << SRC_LOCATION << "\n\tUnknown spectrum compression type: '"
-      << compress_type << "', Compression atribute value='"
-      << xml_value_str(compress_attrib) << "'";
-      
-      cerr << msg.str() << endl;
-      throw runtime_error( msg.str() );
-    }//if( counted zeros ) / else some other compression
-    
-    //Fix cambio zero compression
-    if( compressed_zeros )
-    {
-      for( float &val : *contents )
-      {
-        if( val > 0.0f && val <= 2.0f*FLT_MIN )
-          val = 0.0f;
-      }
-    }//if( compressed_zeros )
-    
-    const rapidxml::xml_attribute<char> *type_attrib = spectrum->first_attribute( "Type", 4 );
-    
-    if( !type_attrib )
-      type_attrib = spectrum->first_attribute( "DetectorType", 12 );
-    
-    if( !type_attrib && spectrum->parent() )
-      type_attrib = spectrum->parent()->first_attribute( "DetectorType", 12 );            //<SpectrumMeasurement>
-    if( !type_attrib && spectrum->parent() && spectrum->parent()->parent() )
-      type_attrib = spectrum->parent()->parent()->first_attribute( "DetectorType", 12 );  //<DetectorMeasurement> node
-    
-    bool is_gamma = true;
-    
-    try
-    {
-      is_gamma = is_gamma_spectrum( detector_attrib, type_attrib,
-                                   det_type_node, spectrum );
-    }catch( std::exception &e )
-    {
-      if( !channel_data_node || (channel_data_node->value_size() < 10) )
-        cerr << SRC_LOCATION << "\n\t: Coudlnt determine detector type: "
-        << e.what() << endl << "\tAssuming is a gamma detector" << endl;
-    }
-    
-    if( is_gamma )
-    {
-      //The below handles a special case for Raytheon-Variant L-1 (see refSJHFSW1DZ4)
-      const rapidxml::xml_node<char> *specsize = spectrum->first_node( "ray:SpectrumSize", 16 );
-      if( !!contents && contents->size() && specsize && specsize->value_size() )
-      {
-        vector<int> sizes;
-        const char *str = specsize->value();
-        const size_t strsize = specsize->value_size();
-        if( SpecUtils::split_to_ints( str, strsize, sizes )
-           && sizes.size() == 1 )
-        {
-          const size_t origlen = gamma_counts_->size();
-          const size_t newlen = static_cast<size_t>(sizes[0]);
-          if( newlen >= 64
-             && newlen != origlen
-             && newlen < origlen
-             && (origlen % newlen)==0 )
-          {
-            contents->resize( newlen );
-            
-#if( PERFORM_DEVELOPER_CHECKS )
-            char buffer[512];
-            snprintf( buffer, sizeof(buffer),
-                     "Reducing channel data from %i to %i channels on advice of"
-                     " <ray:SpectrumSize>; note that this is throwing away %i"
-                     " channels", int(origlen), int(newlen), int(origlen-newlen) );
-            log_developer_error( __func__, buffer );
-#endif  //#if( PERFORM_DEVELOPER_CHECKS )
-          }
-        }//if( SpecUtils::split_to_ints( str, strsize, sizes ) )
-      }//if( specsize_node && specsize_node->value_size() )
-      
-      
-      contained_neutron_ = false;
-      gamma_counts_ = contents;
-      
-      
-      for( const rapidxml::xml_node<char> *calibration_node = xml_first_node_nso( spectrum, "Calibration", xmlns );
-          calibration_node;
-          calibration_node = XML_NEXT_TWIN(calibration_node) )
-      {
-        try
-        {
-          decode_n42_2006_binning( calibration_node,
-                                  calibration_coeffs_, energy_calibration_model_ );
-          
-          break;
-        }catch( std::exception & )
-        {
-          calibration_coeffs_.clear();
-          energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
-        }
-      }
-      
-      //    const rapidxml::xml_node<char> *nonlinarity_node = xml_first_node_nso( spectrum, "NonlinearityCorrection", xmlns );
-      for( const float x : *(gamma_counts_) )
-        gamma_count_sum_ += x;
-    }else
-    {
-      contained_neutron_ = true;
-      if( neutron_counts_.size() < contents->size() )
-        neutron_counts_.resize( contents->size(), 0.0 );
-      
-      for( size_t i = 0; i < contents->size(); ++i )
-      {
-        neutron_counts_[i] += contents->operator[](i);
-        neutron_counts_sum_ += contents->operator[](i);
-      }//for( loop over neutron counts )
-    }//if( is_gamma ) / else
-  }//void set_2006_N42_spectrum_node_info( rapidxml::xml_node<char> *measurementNode )
   
-  
-  
-  void Measurement::set_n42_2006_spectrum_calibration_from_id( const rapidxml::xml_node<char> *doc_node,
-                                                              const rapidxml::xml_node<char> *spectrum_node )
-  {
-    if( !doc_node || !spectrum_node )
-      return;
-    
-    const string xmlns = get_n42_xmlns( spectrum_node );
-    
-    const rapidxml::xml_attribute<char> *cal_IDs_att = XML_FIRST_ATTRIB( spectrum_node, "CalibrationIDs" );
-    
-    vector<string> cal_ids;
-    split( cal_ids, xml_value_str(cal_IDs_att), " \t" );
-    
-    
-    //If there is only calibration node, but the ID we want doesnt match the only
-    //  calibration node, then let the match work off of the first two charcters
-    //  of the ID.
-    //This is to allow the N42 files in C:\GADRAS\Detector\HPRDS\SmithsNaI
-    //  to decode.
-    
-    int ncalnodes = 0;
-    for( const rapidxml::xml_node<char> *node = xml_first_node_nso( doc_node, "Calibration", xmlns );
-        node; node = XML_NEXT_TWIN(node) )
-    {
-      ++ncalnodes;
-    }
-    
-    if( !ncalnodes && doc_node && doc_node->parent() )
-    {
-      for( auto node = xml_first_node_nso(doc_node->parent(), "Calibration", xmlns); node; node = XML_NEXT_TWIN(node) )
-        ++ncalnodes;
-    }
-    
-    if( cal_ids.empty() && ncalnodes != 1 )
-      return;
-    
-    auto *cal_node = xml_first_node_nso( doc_node, "Calibration", xmlns );
-    if( !cal_node && doc_node  )
-      cal_node = xml_first_node_nso(doc_node->parent(), "Calibration", xmlns);
-    
-    for( ; cal_node; cal_node = XML_NEXT_TWIN(cal_node) )
-    {
-      const rapidxml::xml_attribute<char> *id_att = cal_node->first_attribute( "ID", 2, false );
-      
-      //    if( id_att && id_att->value_size()
-      //        && compare( cal_IDs_att->value(), cal_IDs_att->value_size(),
-      //                    id_att->value(), id_att->value_size(), case_sensitive) )
-      const string id = xml_value_str( id_att );
-      bool id_match = (!id.empty() && (std::find(cal_ids.begin(), cal_ids.end(), id) != cal_ids.end()));
-      
-      if( !id_match && ncalnodes==1 && id.empty() )
-        id_match = true;
-      
-      if( !id_match && ncalnodes==1 && cal_ids.empty() )
-        id_match = true;
-      
-      if( !id_match && ncalnodes==1 && cal_ids.size()==1 )
-      {
-        string calid = *cal_ids.begin();
-        calid = calid.size()>1 ? calid.substr(0,2) : calid;
-        string idid = id.size()>1 ? id.substr(0,2) : id;
-        id_match = (calid == idid);
-      }
-      
-      if( id_match )
-      {
-        const rapidxml::xml_attribute<char> *type_att = XML_FIRST_ATTRIB( cal_node, "Type" );
-        const rapidxml::xml_attribute<char> *unit_att = XML_FIRST_ATTRIB( cal_node, "EnergyUnits" );
-        
-        if( type_att && !XML_VALUE_ICOMPARE(type_att, "Energy") )
-        {
-          continue;
-        }//if( not energy calibration node )
-        
-        float units = 1.0f;
-        if( unit_att )
-        {
-          if( XML_VALUE_ICOMPARE(unit_att, "eV") )
-            units = 0.001f;
-          else if( XML_VALUE_ICOMPARE(unit_att, "keV") )
-            units = 1.0f;
-          else if( XML_VALUE_ICOMPARE(unit_att, "MeV") )
-            units = 1000.0f;
-        }//if( unit_att )
-        
-        const rapidxml::xml_node<char> *array_node = xml_first_node_nso( cal_node, "ArrayXY", xmlns );
-        const rapidxml::xml_node<char> *eqn_node = xml_first_node_nso( cal_node, "Equation", xmlns ); //hmm, was this a mistake
-        
-        if( array_node && !eqn_node )
-        {
-          //This function has been added in for FLIR identiFINDER N42 files
-          //        <Calibration Type="Energy" ID="calibration" EnergyUnits="keV">
-          //          <ArrayXY X="Channel" Y="Energy">
-          //            <PointXY>
-          //              <X>1 0</X>
-          //              <Y>3 0</Y>
-          //            </PointXY>
-          //          </ArrayXY>
-          //        </Calibration>
-          //
-          // However, RIIDEye files look like
-          //      <Calibration Type="Energy" ID="en" EnergyUnits="keV">
-          //        <Remark>FSE=3072 GrpSz=512</Remark>
-          //        <CalibrationCreationDate>2018-07-18T13:54:29Z</CalibrationCreationDate>
-          //        <ArrayXY X="Channels" Y="keV">
-          //          <PointXY><X>0 0</X><Y>0 0</Y></PointXY>
-          //          <PointXY><X>1 0</X><Y>0 0</Y></PointXY>
-          //          <PointXY><X>2 0</X><Y>0 0</Y></PointXY>
-          //          <PointXY><X>3 0</X><Y>1.93823 0</Y></PointXY>
-          //          <PointXY><X>4 0</X><Y>4.63947 0</Y></PointXY>
-          //          <PointXY><X>5 0</X><Y>7.44489 0</Y></PointXY>
-          //          <PointXY><X>6 0</X><Y>10.3545 0</Y></PointXY>
-          //          <PointXY><X>7 0</X><Y>13.2645 0</Y></PointXY>
-          //          <PointXY><X>8 0</X><Y>16.1747 0</Y></PointXY>
-          //          ...
-          
-          vector<pair<float,float>> points;
-          
-          for( const rapidxml::xml_node<char> *point_node = xml_first_node_nso( array_node, "PointXY", xmlns );
-              point_node;
-              point_node = XML_NEXT_TWIN_CHECKED(point_node) )
-          {
-            const rapidxml::xml_node<char> *x_node = xml_first_node_nso( point_node, "X", xmlns );
-            const rapidxml::xml_node<char> *y_node = xml_first_node_nso( point_node, "Y", xmlns );
-            
-            if( x_node && x_node->value_size() && y_node && y_node->value_size() )
-            {
-              float xval = 0.0f, yval = 0.0f;
-              if( xml_value_to_flt(x_node, xval)
-                 && xml_value_to_flt(y_node, yval) )
-              {
-                points.emplace_back(xval,yval);
-              }//if( could read x and y values )
-            }//if( x and y nodes )
-          }//for( ; point_node; point_node = XML_NEXT_TWIN_CHECKED(point_node) )
-          
-          const size_t npoints = points.size();
-          const size_t nchannel = gamma_counts_ ? gamma_counts_->size() : size_t(0);
-          
-          calibration_coeffs_.clear();
-          
-          if( npoints > 0 && npoints < 3 )  //3 is arbitrary, the cases I've seen has been ==1
-          {
-            //FLIR identiFINDER style
-            energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-            calibration_coeffs_.push_back( 0.0f );
-            calibration_coeffs_.push_back( points[0].second );
-          }else if( (nchannel>7) && ::abs_diff(npoints,nchannel)<3 ) //The files I've seen have (npoints==nchannel)
-          { //The 8 and 3 make sure its actually a gamma spectrum with eenergies given for each channel
-            //We also need to make sure the 'x' values are monotonically increasing channel numbers
-            //  that start at zero or one.
-            bool increasing_bin = ((fabs(points[0].first) < FLT_EPSILON) || (fabs(points[1].first-1.0) < FLT_EPSILON));
-            for( size_t i = 1; increasing_bin && i < npoints; ++i )
-              increasing_bin = ((fabs(points[i].first-points[i-1].first-1.0f) < FLT_EPSILON) && (points[i].second>=points[i-1].second));
-            
-            if( increasing_bin )
-            {
-              energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
-              for( const auto &ff : points )
-                calibration_coeffs_.push_back( ff.second );
-            }else
-            {
-              cerr << SRC_LOCATION << "\n\tI couldnt interpret energy calibration PointXY (not monototonically increasing)" << endl;
-              energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
-            }
-          }else
-          {
-            cerr << SRC_LOCATION << "\n\tI couldnt interpret energy calibration PointXY (unrecognized coefficient meaning, or no channel data)" << endl;
-            energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
-          }//
-          
-          if( units != 1.0f )
-            for( size_t i = 0; i < calibration_coeffs_.size(); ++i )
-              calibration_coeffs_[i] *= units;
-          
-          return;
-        }else if( eqn_node )
-        {
-          try
-          {
-            decode_n42_2006_binning( cal_node, calibration_coeffs_, energy_calibration_model_ );
-            return;
-          }catch( std::exception & )
-          {
-            //
-          }
-          
-        }//if( array_node ) else if( eqn_node )
-      }//if( this is the calibration we want )
-    }//for( loop over calibrations )
-  }//set_n42_2006_spectrum_calibration_from_id
-  
-  
-  void Measurement::decode_n42_2006_binning(  const rapidxml::xml_node<char> *calibration_node,
-                                            vector<float> &coeffs,
-                                            SpecUtils::EnergyCalType &eqnmodel )
-  {
-    coeffs.clear();
-    
-    if( !calibration_node )
-    {
-      const string msg = "decode_n42_2006_binning(...): Couldnt find node 'Calibration'";
-      throw std::runtime_error( msg );
-    }//if( !calibration_node )
-    
-    string xmlns = get_n42_xmlns(calibration_node);
-    if( xmlns.empty() && calibration_node->parent() )
-      xmlns = get_n42_xmlns(calibration_node->parent());
-    
-    const rapidxml::xml_attribute<char> *type = calibration_node->first_attribute( "Type", 4 );
-    
-    if( type && type->value_size() )
-    {
-      if( XML_VALUE_ICOMPARE(type, "FWHM") )
-        throw runtime_error( "decode_n42_2006_binning(...): passed in FWHM cal node" );
-      
-      //20160601: Not adding in an explicit comparison for energy, but probably should...
-      //if( !XML_VALUE_ICOMPARE(type, "Energy") )
-      //  throw runtime_error( "decode_n42_2006_binning(...): passed in non-energy cal node - " + xml_value_str(type) );
-    }//if( type && type->value_size() )
-    
-    const rapidxml::xml_attribute<char> *units = calibration_node->first_attribute( "EnergyUnits", 11 );
-    
-    string unitstr = xml_value_str(units);
-    
-    const rapidxml::xml_node<char> *equation_node = xml_first_node_nso( calibration_node, "Equation", xmlns );
-    
-    if( equation_node )
-    {
-      const rapidxml::xml_node<char> *coeff_node = xml_first_node_nso( equation_node, "Coefficients", xmlns );
-      
-      if( coeff_node )
-      {
-        if( coeff_node->value_size() )
-        {
-          coeffs.clear();
-          SpecUtils::split_to_floats( coeff_node->value(),
-                                     coeff_node->value_size(), coeffs );
-        }else
-        {
-          //SmithsNaI HPRDS
-          rapidxml::xml_attribute<char> *subeqn = coeff_node->first_attribute( "Subequation", 11 );
-          if( subeqn && subeqn->value_size() )
-          {
-            coeffs.clear();
-            SpecUtils::split_to_floats( subeqn->value(),
-                                       subeqn->value_size(), coeffs );
-          }
-        }//if( coeff_node->value_size() ) / else
-        
-        while( coeffs.size() && coeffs.back()==0.0f )
-          coeffs.erase( coeffs.end()-1 );
-        
-        float units = 1.0f;
-        if( unitstr == "eV" )
-          units = 0.001f;
-        else if( unitstr == "MeV" )
-          units = 1000.0f;
-        
-        if( units != 1.0f )
-        {
-          for( float &f : coeffs )
-            f *= units;
-        }
-        
-        //      static std::recursive_mutex maa;
-        //      std::unique_lock<std::recursive_mutex> scoped_lock( maa );
-        //      cerr << "coeffs.size()=" << coeffs.size() << "from '"
-        //           << coeff_node->value() << "'"
-        //           << " which has length " << value_size
-        //           << " and strlen of " << strlen(coeff_node->value()) << endl;
-      }else
-      {
-        const string msg = "Couldnt find node 'Coefficients'";
-        throw runtime_error( msg );
-      }//if( coeff_node ) / else
-      
-      
-      const rapidxml::xml_attribute<char> *model = equation_node->first_attribute( "Model", 5 );
-      //    rapidxml::xml_attribute<char> *units = equation_node->first_attribute( "Units", 5 );
-      
-      eqnmodel = SpecUtils::EnergyCalType::InvalidEquationType;
-      
-      string modelstr = xml_value_str(model);
-      if( modelstr == "Polynomial" )
-        eqnmodel = SpecUtils::EnergyCalType::Polynomial;
-      else if( modelstr == "FullRangeFraction" )
-        eqnmodel = SpecUtils::EnergyCalType::FullRangeFraction;
-      else if( modelstr == "LowerChannelEdge" || modelstr == "LowerBinEdge")
-        eqnmodel = SpecUtils::EnergyCalType::LowerChannelEdge;
-      else if( modelstr == "Other" )
-      {
-        rapidxml::xml_attribute<char> *form = equation_node->first_attribute( "Form", 4 );
-        const string formstr = xml_value_str(form);
-        if( icontains(formstr, "Lower edge") )
-          eqnmodel = SpecUtils::EnergyCalType::LowerChannelEdge;
-      }//if( modelstr == ...) / if / else
-      
-      //Lets try to guess the equation type for Polynomial or FullRangeFraction
-      if( eqnmodel == SpecUtils::EnergyCalType::InvalidEquationType )
-      {
-        if( (coeffs.size() < 5) && (coeffs.size() > 1) )
-        {
-          if( coeffs[1] < 10.0 )
-            eqnmodel = SpecUtils::EnergyCalType::Polynomial;
-          else if( coeffs[1] > 1000.0 )
-            eqnmodel = SpecUtils::EnergyCalType::FullRangeFraction;
-        }//if( coeffs.size() < 5 )
-      }//if( eqnmodel == InvalidEquationType )
-      
-      
-      if( eqnmodel == SpecUtils::EnergyCalType::InvalidEquationType )
-      {
-        coeffs.clear();
-        cerr << "Equation model is not polynomial" << endl;
-        const string msg = "Equation model is not polynomial or FullRangeFraction, but is " +
-        (modelstr.size()?modelstr:string("NULL"));
-        cerr << msg << endl;
-        throw runtime_error( msg );
-      }//if( model isnt defined )
-    }else
-    {
-      const string msg = "Couldnt find node 'Equation'";
-      throw runtime_error( msg );
-    }//if( equation_node ) / else
-    
-  }//void decode_n42_2006_binning(...)
 
   bool Measurement::write_2006_N42_xml( std::ostream& ostr ) const
   {
@@ -7153,13 +7510,15 @@ namespace SpecUtils
       case SourceType::Unknown: break;
     }//switch( source_type_ )
     
-    if(!detector_description_.empty())
+    if( !detector_description_.empty() )
       ostr << "      <DetectorType>" << detector_description_ << "</DetectorType>" << endline;
     
     ostr << "      <Calibration Type=\"Energy\" EnergyUnits=\"keV\">" << endline
-    << "        <Equation Model=\"";
+         << "        <Equation Model=\"";
     
-    switch( energy_calibration_model_ )
+    assert( energy_calibration_ );
+      
+    switch( energy_calibration_->type() )
     {
       case SpecUtils::EnergyCalType::Polynomial:
       case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
@@ -7169,24 +7528,15 @@ namespace SpecUtils
       case SpecUtils::EnergyCalType::FullRangeFraction:    ostr << "FullRangeFraction"; break;
       case SpecUtils::EnergyCalType::LowerChannelEdge:     ostr << "LowerChannelEdge";  break;
       case SpecUtils::EnergyCalType::InvalidEquationType:  ostr << "Unknown";           break;
-    }//switch( energy_calibration_model_ )
+    }//switch( energy_calibration_->type() )
     
     ostr << "\">" << endline;
     
     ostr << "          <Coefficients>";
-    for( size_t i = 0; i < calibration_coeffs_.size(); ++i )
-      ostr << (i ? " " : "") << calibration_coeffs_[i];
     
-    //Not certain we need this next loop, but JIC
-    if( energy_calibration_model_ == SpecUtils::EnergyCalType::LowerChannelEdge
-       && calibration_coeffs_.empty()
-       && !!channel_energies_
-       && !channel_energies_->empty())
-    {
-      for( size_t i = 0; i < channel_energies_->size(); ++i )
-        ostr << (i ? " " : "") << (*channel_energies_)[i];
-    }
-    
+    const vector<float> cal_coeffs = energy_calibration_->coefficients();
+    for( size_t i = 0; i < cal_coeffs.size(); ++i )
+      ostr << (i ? " " : "") << cal_coeffs[i];
     ostr << "</Coefficients>" << endline
     << "        </Equation>" << endline
     << "      </Calibration>" << endline;
@@ -7298,13 +7648,15 @@ namespace SpecUtils
       if( name == "" )
         name = s_unnamed_det_placeholder;
       
-      if( meas->deviation_pairs_.size() )
+      assert( meas->energy_calibration_ );
+      const auto &dev_pairs = meas->energy_calibration_->deviation_pairs();
+      if( dev_pairs.size() )
       {
         ostr << "    <dndons:NonlinearityCorrection Detector=\"" << name << "\">" << endline;
-        for( size_t j = 0; j < meas->deviation_pairs_.size(); ++j )
+        for( size_t j = 0; j < dev_pairs.size(); ++j )
         {
-          ostr << "      <dndons:Deviation>" << meas->deviation_pairs_[j].first
-          << " " << meas->deviation_pairs_[j].second << "</dndons:Deviation>" << endline;
+          ostr << "      <dndons:Deviation>" << dev_pairs[j].first
+               << " " << dev_pairs[j].second << "</dndons:Deviation>" << endline;
         }
         ostr << "    </dndons:NonlinearityCorrection>" << endline;
       }

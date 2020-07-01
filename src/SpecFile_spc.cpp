@@ -220,6 +220,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
     //  up to apply to all non-empty lines in the file.
     int linenum = 0, nnotrecognized = 0;
     bool tested_first_line = false;
+    vector<float> calibcoeff_poly;
     
     while( input.good() )
     {
@@ -418,27 +419,13 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         if( have_d )
           d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
         
-        meas->calibration_coeffs_.clear();
         if( have_a && have_b && have_c && have_d
             && (a!=0.0 || b!=0.0 || c!=0.0 ) )
         {
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          meas->calibration_coeffs_.push_back( d );
-          meas->calibration_coeffs_.push_back( c );
-          if( b != 0.0 || a != 0.0 )
-            meas->calibration_coeffs_.push_back( b );
-          if( a != 0.0 )
-            meas->calibration_coeffs_.push_back( a );
+          calibcoeff_poly = {d,c,b,a};
         }else if( have_b && have_c && c!=0.0 )
         {
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          meas->calibration_coeffs_.resize( 2 );
-          meas->calibration_coeffs_[0] = b;
-          meas->calibration_coeffs_[1] = c;
-        }else
-        {
-          //should check into if we ever get here
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
+          calibcoeff_poly = {b,c};
         }
       }else if( istarts_with( line, "NuclideID1" )
                || istarts_with( line, "NuclideID2" )
@@ -710,10 +697,21 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       
       ++linenum;
     }//while( input.good() )
+    
+    if( meas && meas->gamma_counts_ && (meas->gamma_counts_->size()>2) && !calibcoeff_poly.empty() )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( meas->gamma_counts_->size(), calibcoeff_poly, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
+      }//
+    }//if( we have energy calibration )
   }catch( std::exception & )
   {
-    //    cerr  << "SpecFile::load_from_iaea_spc(istream &) caught: " << e.what() << endl;
-    
     reset();
     input.clear();
     input.seekg( orig_pos, ios::beg );
@@ -890,16 +888,33 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     if( summed->contained_neutron_ )
       output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
     
-    vector<float> calcoefs;
+    assert( summed->energy_calibration_ );
     
-    if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
-      calcoefs = summed->calibration_coeffs_;
-    else if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
-      calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, summed->gamma_counts_->size() );
+    const size_t nchannel = summed->gamma_counts_ ? summed->gamma_counts_->size() : size_t(0);
+    vector<float> calcoefs = summed->energy_calibration_->coefficients();
+    switch( summed->energy_calibration_->type() )
+    {
+      case SpecUtils::EnergyCalType::Polynomial:
+      case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+        //coefficnets are already in format we want.
+        break;
+        
+      case EnergyCalType::FullRangeFraction:
+        calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( calcoefs, nchannel );
+        break;
+        
+      case EnergyCalType::LowerChannelEdge:
+      case EnergyCalType::InvalidEquationType:
+        calcoefs.clear(); //probably isnt necassary
+        break;
+    }//switch( summed->energy_calibration_->type() )
+    
     
     const size_t ncoef = calcoefs.size();
-    const float a = 0.0f, b = (ncoef ? calcoefs[0] : 0.0f),
-    c = (ncoef>1 ? calcoefs[1] : 0.0f), d = (ncoef>2 ? calcoefs[2] : 0.0f);
+    const float a = (ncoef>3 ? calcoefs[3] : 0.0f);
+    const float b = (ncoef>2 ? calcoefs[2] : 0.0f);
+    const float c = (ncoef>1 ? calcoefs[1] : 0.0f);
+    const float d = (ncoef>0 ? calcoefs[0] : 0.0f);
     
     snprintf( buffer, sizeof(buffer), "a=%.9e b=%.9e c=%.9e d=%.9e", a, b, c, d );
     output << pad_iaea_prefix( "CalibCoeff" ) << buffer << "\r\n";
@@ -2047,7 +2062,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     double total_neutrons = 0.0;
     float total_neutron_count_time = 0.0;
     std::shared_ptr<DetectorAnalysis> analysis;
-    auto channel_data = make_shared<vector<float>>( n_channel );
+    auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
     
     boost::posix_time::ptime meas_time;
@@ -2615,8 +2630,19 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     meas->gamma_counts_ = channel_data;
     meas->gamma_count_sum_ = sum_gamma;
     
-    meas->calibration_coeffs_ = calib_coefs;
-    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial; //SpecUtils::EnergyCalType::FullRangeFraction
+    assert( channel_data );
+    if( channel_data->size() > 1 )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( channel_data->size(), calib_coefs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Invalid SPC energy cal provided: " + string(e.what()) );
+      }
+    }//if( channel_data->size() > 1 )
     
     //File ref9HTGHJ9SXR has the neutron information in it, but
     //  the serial number claims this is a micro-DX (no neutron detector), and

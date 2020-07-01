@@ -202,11 +202,17 @@ bool SpecFile::load_from_lzs( std::istream &input )
         if( !IsNan(gain) && !IsInf(gain) && !IsNan(offset) && !IsInf(offset)
            && gain > 0.0f && fabs(offset) < 350.0f )
         {
-          meas->calibration_coeffs_.clear();
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          meas->calibration_coeffs_.push_back( offset );
-          meas->calibration_coeffs_.push_back( gain );
-        }
+          try
+          {
+            const size_t nchannel = spec ? spec->size() : size_t(0);
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_polynomial(nchannel, {offset, gain}, {} );
+            meas->energy_calibration_ = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Invalid energy calibration: " + string(e.what()) );
+          }
+        }//if( maybe calibration is valid )
       }//if( parsed all float values okay )
     }//if( got at least calibration points )
     

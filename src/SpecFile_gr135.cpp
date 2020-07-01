@@ -80,6 +80,9 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
     if( headers.empty() )
       throw runtime_error( "Not the GR135 header expected" );
     
+    //Calibration to use when none is specified
+    shared_ptr<EnergyCalibration> default_cal;
+    
     //each header will look like:
     // "1899715091 Oct. 09 2013  12:29:38 T counts Live time (s) 279.4 neutron 1 gieger 194"
     std::vector< std::shared_ptr<Measurement> > measurements;
@@ -91,7 +94,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       if( header.empty() )
         continue;
       
-      std::shared_ptr<Measurement> meas( new Measurement() );
+      auto meas = make_shared<Measurement>();
       
       string::size_type pos = header.find( ' ' );
       if( pos == string::npos )
@@ -169,10 +172,13 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       meas->sample_number_ = static_cast<int>(i) + 1;
       
       //Some default calibration coefficients that are kinda sorta close
-      //      meas->calibration_type_ = Measurement::GuesedCalibration;
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-      meas->calibration_coeffs_.push_back( 0 );
-      meas->calibration_coeffs_.push_back( 3.0 );
+      if( !default_cal )
+      {
+        default_cal = make_shared<EnergyCalibration>();
+        default_cal->set_default_polynomial(channelcounts->size(), {0.0f, 3.0f}, {} );
+      }
+      meas->energy_calibration_ = default_cal;
+      
       
       measurements.push_back( meas );
       gammacounts.push_back( channelcounts );
@@ -323,6 +329,8 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       }//if( valid )
     }//for( loop over file and identify starts of records )
     
+    shared_ptr<EnergyCalibration> energy_cal;
+    
     for( size_t j = 0; j < recordstarts.size(); ++j )
     {
       const char *data = start + recordstarts[j];
@@ -452,12 +460,6 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       else if( is135v2 || (is135v1 && (record_size==2124)) )
         calpos = 44;
       
-      if( calpos )
-      {
-        meas->calibration_coeffs_.resize( 3 );
-        memcpy( &(meas->calibration_coeffs_[0]), data + calpos, 3*4 );
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-      }//if( calpos )
       
       size_t datapos;
       uint16_t nchannels;
@@ -575,6 +577,30 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
           parse_warnings_.emplace_back( std::move(msg) );
       }
       
+      if( calpos )
+      {
+        vector<float> calcoeffs(3, 0.0f);
+        memcpy( &(calcoeffs[0]), data + calpos, 3*4 );
+        if( calcoeffs[2] == 0.0f )
+          calcoeffs.resize( 2 );
+        
+        if( !energy_cal
+            || (energy_cal->type() != EnergyCalType::Polynomial)
+            || (energy_cal->coefficients() != calcoeffs) )
+        {
+          try
+          {
+            energy_cal = make_shared<EnergyCalibration>();
+            energy_cal->set_polynomial( nchannels, calcoeffs, {} );
+            meas->energy_calibration_ = energy_cal;
+          }catch( std::exception & )
+          {
+            energy_cal.reset();
+          }
+        }//if( this energy cal doesnt match the previously seen one ).
+      }//if( calpos )
+      
+      
       auto gamma_counts = std::make_shared<vector<float> >( nchannels, 0.0f );
       meas->gamma_counts_ = gamma_counts;
       vector<float> &channel_data = *gamma_counts.get();
@@ -593,23 +619,32 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         }//for( size_t i = 0; i < nchannels; ++i )
       }
       
-      if( is135v1 && meas->calibration_coeffs_.empty() )
+      if( is135v1 && (meas->energy_calibration_->type() != EnergyCalType::Polynomial) )
       {
         const float nbin = static_cast<float>( nchannels );
         
         for( size_t i = 0; i < (record_size - 1024*2); ++i )
         {
-          float cal[3];
-          memcpy( cal, data+1, 12 );
+          vector<float> cal(3, 0.0f);
+          memcpy( &(cal[0]), data+1, 12 );
           const float x = cal[0] + cal[1]*1.0f + cal[2]*1.0f*1.0f;
           const float y = cal[0] + cal[1]*nbin + cal[2]*nbin*nbin;
           const bool valid = (x > -100.0f) && (x < 100.0f) && (y > 400.0f) && (y < 4000.0f);
           if( valid )
           {
-            meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-            meas->calibration_coeffs_.push_back( cal[0] );
-            meas->calibration_coeffs_.push_back( cal[1] );
-            meas->calibration_coeffs_.push_back( cal[2] );
+            if( !energy_cal || (energy_cal->type() != EnergyCalType::Polynomial)
+               || (cal!=energy_cal->coefficients()) )
+            {
+              try
+              {
+                energy_cal = make_shared<EnergyCalibration>();
+                energy_cal->set_polynomial( nchannels, cal, {} );
+                meas->energy_calibration_ = energy_cal;
+              }catch( exception & )
+              {
+                
+              }
+            }//if( we cant re-use energy_cal )
             
             string msg = "Irregular GR energy calibration apparently found.";
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -620,23 +655,22 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
             break;
           }//if( valid )
         }//for( size_t i = 0; i < (record_size - 1024*2); ++i )
-      }//if( is135v1 && meas->calibration_coeffs_.empty() )
+      }//if( is135v1 && (meas->energy_calibration_ != polynomial) )
       
-      if( meas->calibration_coeffs_.empty() )
+      if( meas->energy_calibration_->type() != EnergyCalType::Polynomial )
       {
-        float EgyCal[3] = { 0.0f };
-        const float nbin = static_cast<float>( nchannels );
-        
+        //We didnt find a (valid) energy calibration, so we will use a default one based off the
+        //  model
         bool usingGuessedVal = false;
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
+        vector<float> default_coefs = { 0.0f, 0.0f, 0.0f };
         
         if( is135v1 || is135v2 )
         {
           if( dtCzt )
           {
-            EgyCal[1] = (122.06f - 14.4f)/(126.0f - 10.0f);
-            EgyCal[0] = 14.4f - EgyCal[1]*10.0f;
-            EgyCal[2] = 0.0f;
+            default_coefs[1] = (122.06f - 14.4f)/(126.0f - 10.0f);
+            default_coefs[0] = 14.4f - default_coefs[1]*10.0f;
+            default_coefs[2] = 0.0f;
             usingGuessedVal = true;
             
             string msg = "Default GR135 energy calibration for CZT has been assumed.";
@@ -647,9 +681,9 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
               parse_warnings_.emplace_back( std::move(msg) );
           }else
           {
-            EgyCal[0] = 0.11533801f;
-            EgyCal[1] = 2.8760445f;
-            EgyCal[2] = 0.0006023737f;
+            default_coefs[0] = 0.11533801f;
+            default_coefs[1] = 2.8760445f;
+            default_coefs[2] = 0.0006023737f;
             usingGuessedVal = true;
             
             string msg = "Default GR135 energy calibration for NaI has been assumed.";
@@ -661,9 +695,11 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
           }
         }else if( is130v0 )
         {
-          EgyCal[0] = -21.84f;
-          EgyCal[1] = 3111.04f/(nbin+1.0f);
-          EgyCal[2] = 432.84f/(nbin+1.0f)/(nbin+1.0f);
+          const float nbin = static_cast<float>( nchannels );
+          
+          default_coefs[0] = -21.84f;
+          default_coefs[1] = 3111.04f/(nbin+1.0f);
+          default_coefs[2] = 432.84f/(nbin+1.0f)/(nbin+1.0f);
           usingGuessedVal = true;
           
           string msg = "Default GR130 energy calibration for NaI has been assumed.";
@@ -672,17 +708,26 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
 #endif
           if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )
             parse_warnings_.emplace_back( std::move(msg) );
-
         }
         
         if( usingGuessedVal )
         {
-          meas->calibration_coeffs_.push_back( EgyCal[0] );
-          meas->calibration_coeffs_.push_back( EgyCal[1] );
-          meas->calibration_coeffs_.push_back( EgyCal[2] );
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-        }
-      }//if( meas->calibration_coeffs_.empty() )
+          if( !energy_cal || (energy_cal->type() != EnergyCalType::Polynomial)
+             || (energy_cal->coefficients() != default_coefs) )
+          {
+            energy_cal = make_shared<EnergyCalibration>();
+            try
+            {
+              energy_cal->set_default_polynomial( nchannels, default_coefs, {} );
+            }catch( std::exception & )
+            {
+            }
+          }//if( we cant reuse energy_cal )
+          
+          assert( energy_cal );
+          meas->energy_calibration_ = energy_cal;
+        }//if( usingGuessedVal )
+      }//if( meas->energy_calibration_->type() != EnergyCalType::Polynomial )
       
       if( j == 0 )
       {
@@ -744,16 +789,16 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
       {
         const float min_e = meas.gamma_energy_min();
         const float delta_e = meas.gamma_energy_max() - min_e;
-        vector<float> coeffs;
-        coeffs.push_back( min_e );
-        coeffs.push_back( delta_e / noutchannel );
         
-        std::shared_ptr<const vector<float> > new_binning =
-        SpecUtils::polynomial_binning( coeffs, noutchannel, std::vector<std::pair<float,float>>() );
-        
-        meas.rebin_by_lower_edge( new_binning );
-        meas.recalibrate_by_eqn( coeffs, std::vector<std::pair<float,float>>(),
-                                SpecUtils::EnergyCalType::Polynomial, new_binning );
+        try
+        {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( noutchannel, {min_e,delta_e/noutchannel}, {} );
+        meas.rebin( newcal );
+        }catch(...)
+        {
+          
+        }
       }//
       
       //Lets write to a buffer before writing to the stream to make things a
@@ -868,17 +913,17 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       }else if( ninputchannel > noutchannel )
       {
         const float min_e = meas.gamma_energy_min();
-        const float delta_e = meas.gamma_energy_max() - min_e;
-        vector<float> coeffs;
-        coeffs.push_back( min_e );
-        coeffs.push_back( delta_e / noutchannel );
-        
-        std::shared_ptr<const vector<float> > new_binning =
-        SpecUtils::polynomial_binning( coeffs, noutchannel, std::vector<std::pair<float,float>>() );
-        
-        meas.rebin_by_lower_edge( new_binning );
-        meas.recalibrate_by_eqn( coeffs, std::vector<std::pair<float,float>>(),
-                                SpecUtils::EnergyCalType::Polynomial, new_binning );
+        const float max_e = meas.gamma_energy_max();
+        const float delta_e = max_e - min_e;
+        if( max_e <= min_e )
+        {
+          meas.truncate_gamma_channels( 0, noutchannel, true );
+        }else
+        {
+          auto newcal = make_shared<EnergyCalibration>();
+          newcal->set_polynomial( noutchannel, {min_e, delta_e/noutchannel}, {} );
+          meas.rebin( newcal );
+        }
       }//
       
       
@@ -936,8 +981,25 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       uint16_t softwareversion = 201;
       memcpy( buffer + 42, &softwareversion, 2 );
       
-      if( meas.calibration_coeffs_.size() )
-        memcpy( buffer + 44, &(meas.calibration_coeffs_[0]), 4*meas.calibration_coeffs_.size() );
+      vector<float> calcoeffs;
+      assert( meas.energy_calibration_ );
+      switch( meas.energy_calibration_->type() )
+      {
+        case EnergyCalType::Polynomial:
+        case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          calcoeffs = meas.energy_calibration_->coefficients();
+          break;
+        case EnergyCalType::FullRangeFraction:
+          calcoeffs = fullrangefraction_coef_to_polynomial( meas.energy_calibration_->coefficients(),
+                                                            meas.gamma_counts_->size() );
+          break;
+        case EnergyCalType::LowerChannelEdge:
+        case EnergyCalType::InvalidEquationType:
+          break;
+      }//switch( meas.energy_calibration_->type() )
+      
+      if( calcoeffs.size() )
+        memcpy( buffer + 44, &(calcoeffs[0]), 4*std::max(calcoeffs.size(),size_t(3)) );
       
       //57    char      temp[0]      display temperature
       //58    char      temp[1]      battery temperature
