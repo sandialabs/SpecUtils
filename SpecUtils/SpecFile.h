@@ -38,53 +38,47 @@
 
 /*
 Shortcommings that wcjohns should be addressed
-  -Many of the ICD1 fields possible are not checked for
-    -comments for multiple different tags, ...
- -Energy calibration should be made its own object and shared between 
-  Measurements.
- -Neutron meausruemtns should have their own live and real time
- -Neutron counts are typically merged into a gamma detectors Measurement if a
-  reasonable pairing can be made. When and if this is done needs to be clearly
-  specified, and either stopped of facilities added to keep neutron det. info.
-  (should probably instead make own neutron info object that can be associated
+ - Many of the N24 fields possible are not checked for
+    - comments for multiple different tags, ...
+ - Neutron meausruemtns should have their own live and real time
+ - Neutron counts are typically merged into a gamma detectors Measurement if a
+   reasonable pairing can be made. When and if this is done needs to be clearly
+   specified, and either stopped of facilities added to keep neutron det. info.
+   (should probably instead make own neutron info object that can be associated
    with a Measurement, maybe multiple neutron to a Measurement)
- -Should add a DetectorInfo object that Measurement objects point to and share.
-   -Should add things like dimention and RadDetectorKindCode to this object,
-    as well as characteristics (as defined in N42-2012, but in a few other file
-    formats)
-   -Should probably get rid of detector number, and just keep name
- -Should eliminate the <InterSpec:DetectorType> tag in written N42 2012 files.
- -Should consider adding explicit dead_time field 
- -Should add elevation and uncertainties to GPS coordinates
- -Should add detector and item orientation/positions
- -Should consider removing measurement_operator and inspection and make location 
-  part of detector location object
- -Should implement tracking N42 MeasurementGroupReferences to link Analysis
-  with appropriate spectra, and InterSpec can use to link to peaks and such.
- -Should add in InstrumentToItemDistance and InstrumentToItemBearing to
- -There is a degeneracy in SpecFile between: detector_type_,
-  instrument_type_, manufacturer_, and instrument_model_ - so this should 
-  be sorted out.
- -Should link derived spectra to analysis results (when applicable), and
-  I'm not sure if the derived spectra should be in with the rest of the spectra
- -When multiple copies of data is included in file with different energy
-  calibrations (different energy ranges, or linear vs log energy scale),
-  currently denote this by artificaually creating new detector and adding
-  "_intercal_<calid>" to its name; should impose a better mechanism to handle
-  this.
- -the generated UUID should maybe be more stable with respect to just the 
-  spectroscopic information.
- -Should rename DetectorType to SystemType or DetectionSystemType
- -Should add in tag that indicates original file type, which will survive 
-  serialization to N42-2012 and back in
- -For analysis result should add information on what isotopes where in the 
-  alarm templates
- -Should add a Dose field to Measurement; see CountDose for a starting point
- -Need to reduce the compilation memory requirments to allow compiling on 
-  devices with only 1 GB of ram and no swap space.
- -Should break implementation up into many files (ex SpectrumDataStructs_pcf.cpp
-  SpectrumDataStructs_2012N42.cpp, etc.
- -Should add in "Characteristics" a few places (for detectors, system,
+ - Should add a DetectorInfo object that Measurement objects point to and share.
+   - Should add things like dimention and RadDetectorKindCode to this object,
+     as well as characteristics (as defined in N42-2012, but in a few other file
+     formats)
+   - Should probably get rid of detector number, and just keep name
+ - Should eliminate the <InterSpec:DetectorType> tag in written N42 2012 files.
+ - Should consider adding explicit dead_time field
+ - Should add elevation and uncertainties to GPS coordinates
+ - Should add detector and item orientation/positions
+ - Should consider removing measurement_operator and inspection and make location
+   part of detector location object
+ - Should implement tracking N42 MeasurementGroupReferences to link Analysis
+   with appropriate spectra, and InterSpec can use to link to peaks and such.
+ - Should add in InstrumentToItemDistance and InstrumentToItemBearing to
+ - There is a degeneracy in SpecFile between: detector_type_,
+   instrument_type_, manufacturer_, and instrument_model_ - so this should
+   be sorted out.
+ - Should link derived spectra to analysis results (when applicable), and
+   I'm not sure if the derived spectra should be in with the rest of the spectra
+ - When multiple copies of data is included in file with different energy
+   calibrations (different energy ranges, or linear vs log energy scale),
+   currently denote this by artificaually creating new detector and adding
+   "_intercal_<calid>" to its name; should impose a better mechanism to handle
+   this.
+ - the generated UUID should maybe be more stable with respect to just the
+   spectroscopic information.
+ - Should rename DetectorType to SystemType or DetectionSystemType
+ - Should add in tag that indicates original file type, which will survive
+   serialization to N42-2012 and back in
+ - For analysis result should add information on what isotopes where in the
+   alarm templates
+ - Should add a Dose field to Measurement; see CountDose for a starting point
+ - Should add in "Characteristics" a few places (for detectors, system,
 */
 
 //Forward declarations not within SpecUtils namespace
@@ -518,13 +512,6 @@ public:
   //  formats if not known, 'Unknown' is returned.
   SourceType source_type() const;
   
-  //energy_calibration_model(): returns calibration model used for energy
-  //  binning.  If a value of 'InvalidEquationType' is returned, then
-  //  channel_energies() may or may not return a valid pointer; otherwise, if
-  //  this Measurement is part of a MeasurementInfo object constructed by parsing
-  //  a file, then channel_energies() pointer _should_ be valid.
-  SpecUtils::EnergyCalType energy_calibration_model() const;
-  
   //remarks(): the list of remarks found while parsing this record from the file
   //  that pertain to this record specifically.  See also
   //  MeasurementInformation::remarks().
@@ -542,6 +529,15 @@ public:
   //  boost::posix_time::not_a_date_time if could not be determined.
   const boost::posix_time::ptime start_time_copy() const;
   
+  //energy_calibration_model(): returns calibration model used for energy
+  //  binning.  If a value of 'InvalidEquationType' is returned, then
+  //  channel_energies() may or may not return a valid pointer; otherwise, if
+  //  this Measurement is part of a MeasurementInfo object constructed by parsing
+  //  a file, then channel_energies() pointer _should_ be valid.
+  //
+  //  \deprecated Please start using #EnergyCalibration returned by #energy_calibration.
+  SpecUtils::EnergyCalType energy_calibration_model() const;
+  
   //calibration_coeffs(): returns the energy calibration coeificients.
   //  Returned vector should have at least two elements for Polynomial and
   //  FullRangeFraction energy calibration models.  Polynomial may have an
@@ -549,11 +545,15 @@ public:
   //  five.  For LowerChannelEdge calibration model the returned vector will
   //  most likely be empty (a memory optimization, may be changed in the future)
   //  so you should instead call channel_energies().
+  //
+  //  \deprecated Please start using #EnergyCalibration returned by #energy_calibration.
   const std::vector<float> &calibration_coeffs() const;
   
   //deviation_pairs(): returns the energy deviation pairs.  Sometimes also
   // refered to as nonlinear deviation pairs.
   //  TODO: insert description of how to actually use these.
+  //
+  // \deprecated Please start using #EnergyCalibration returned by #energy_calibration.
   const std::vector<std::pair<float,float>> &deviation_pairs() const;
   
   /** Returns the energy calibration. Will not be null. */
@@ -572,6 +572,8 @@ public:
   //  calibration model files, channel_energies() may have 1 more channels (to
   //  indicate end of last channel energy).
   //  Returned pointer may be null if energy calibration is unknown/unspecified.
+  //
+  // \deprecated Please start using #EnergyCalibration returned by #energy_calibration.
   const std::shared_ptr< const std::vector<float> > &channel_energies() const;
   
   //gamma_counts(): the channel counts of the gamma data.
@@ -914,7 +916,17 @@ protected:
   //  0 counts were actually detected.
   bool contained_neutron_;
 
-  //sample_number_: first sample is typically 1 (not zero like in c++)
+  /** Sample number of this #Measurement.
+   
+   The combination of detector name and sample number will uniquely identify a #Measurement within
+   a #SpecFile.
+   
+   Sample numbers of Measurements in a #SpecFile typically starts at 1 (not zero like in c++), and
+   increase by one for each time interval, usually with all detectors sharing a sample number for
+   measurements taken during a common time period.  However, this is by no means a rule; may not
+   start at 1 and there may be missing/skipped numbers.  The sample number may either be determined
+   from the file as its parsed, or otherwise assigned by #SpecFile::cleanup_after_load.
+  */
   int sample_number_;
   
   //occupied_: for portal data indicates if vehicle in RPM.  If non-portal data
@@ -1963,22 +1975,6 @@ protected:
   //  Dose rates and gross sums not parsed
   //  Detector statuses and other information are also not supported
   void load_2012_N42_from_doc( const rapidxml::xml_node<char> *document_node );
-
-  
-  //add_spectra_to_measurement_node_in_2012_N42_xml(...): Adds the given
-  //  spectra to the specified RadMeasurementNode.  All measurements should
-  //  have the sample sample number, and the entries in calibid should
-  //  coorespond one to one to the entries in measurements.
-  //  If something drastically goes wrong, and an exception is thrown somewhere
-  //  this function will not throw, it will print an error to stderror and not
-  //  insert itself into the DOM; this is so this function is safe to call in
-  //  its own thread with no error handling.  I expect this to never happen, so
-  //  I'm not bothing with any better error handling.
-  static void add_spectra_to_measurement_node_in_2012_N42_xml(
-          ::rapidxml::xml_node<char> *RadMeasurementNode,
-          const std::vector< std::shared_ptr<const Measurement> > measurements,
-          const std::vector<size_t> calibids,
-          std::mutex &xmldocmutex );
   
   
   //2012 N42 helper functions for loading (may throw exceptions)

@@ -118,7 +118,7 @@ using SpecUtils::time_from_string;
 //  changes so everything besides remarks and parser comments can be validated;
 //  Differences will still be printed out, so can be manually inspected to make
 //  sure they are as expected.
-#define REQUIRE_REMARKS_COMPARE 1
+#define REQUIRE_REMARKS_COMPARE 0
 
 #if( !REQUIRE_REMARKS_COMPARE )
 #warning "Not requiring remarks and parse warnings to compare - this should be only for temporary development only."
@@ -3175,7 +3175,16 @@ void SpecFile::equalEnough( const SpecFile &lhs,
                               rhs.detector_names_.end() );
   
   if( lhsnames != rhsnames )
-    throw runtime_error( "SpecFile: Detector names do not match for LHS and RHS" );
+  {
+    string lhsnamesstr, rhsnamesstr;
+    for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+      lhsnamesstr += (i ? ", " : "") + lhs.detector_names_[i];
+    for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
+      rhsnamesstr += (i ? ", " : "") + rhs.detector_names_[i];
+    
+    throw runtime_error( "SpecFile: Detector names do not match for LHS ({"
+                         + lhsnamesstr + "}) and RHS ({" + rhsnamesstr + "})" );
+  }
  
   if( lhs.detector_numbers_.size() != rhs.detector_numbers_.size()
       || lhs.detector_numbers_.size() != lhs.detector_names_.size() )
@@ -4289,8 +4298,12 @@ void SpecFile::ensure_unique_sample_numbers()
   if( sample_numbers.size() == 1 )
   {
     for( auto &m : measurements_ )
-      if( m->sample_number_ <= 0 )
+    {
+      //Some files will give SampleNumber an attribute of the <Spectrum> tag, but those dont always
+      //  have the same meaning as how we want it to.
+      //if( m->sample_number_ <= 0 )
         m->sample_number_ = 1;
+    }
     return;
   }
   
@@ -4367,6 +4380,9 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     IntStrMap num_to_name_map;
     set<string> neut_det_names;  //If a measurement contains neutrons at all, will be added to this.
     map<string,shared_ptr<const EnergyCalibration>> missing_cal_fixs;
+    
+    
+    
     map<EnergyCalibration,shared_ptr<const EnergyCalibration>> unique_cals;
     vector<string>::const_iterator namepos;
     
@@ -4426,11 +4442,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
       {
         auto cal = meas->energy_calibration_;
+        
+        /// \TODO: This whole switch could be made to be done if PERFORM_DEVELOPER_CHECKS ...
         switch( cal->type() )
         {
           case EnergyCalType::Polynomial:
           case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
           case EnergyCalType::FullRangeFraction:
+          case EnergyCalType::LowerChannelEdge:
             if( !cal->channel_energies() || cal->channel_energies()->empty() )
             {
 #if( PERFORM_DEVELOPER_CHECKS )
@@ -4441,7 +4460,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
               cal = meas->energy_calibration_;
             }
             
-            if( cal->channel_energies()->size() != meas->gamma_counts_->size() )
+            if( cal->num_channels() != meas->gamma_counts_->size() )
             {
 #if( PERFORM_DEVELOPER_CHECKS )
               log_developer_error( __func__, "Found a energy calibration with different number"
@@ -4450,19 +4469,6 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
               meas->energy_calibration_ = make_shared<EnergyCalibration>();
               cal = meas->energy_calibration_;
             }
-            break;
-            
-          case EnergyCalType::LowerChannelEdge:
-#if( PERFORM_DEVELOPER_CHECKS )
-            if( !cal->channel_energies()
-               || (cal->channel_energies()->size() < meas->gamma_counts_->size()) )
-            {
-              log_developer_error( __func__, "Found a lower channel edge energy calibration with "
-                                  " not enough channels." );
-            }
-#endif
-            meas->energy_calibration_ = make_shared<EnergyCalibration>();
-            cal = meas->energy_calibration_;
             break;
             
           case EnergyCalType::InvalidEquationType:
@@ -4524,7 +4530,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
             const size_t nbin = meas->gamma_counts_->size();
             const float nbinf = std::max(meas->gamma_counts_->size()-1, size_t(1));
             def_cal = make_shared<EnergyCalibration>();
-            def_cal->set_default_polynomial( nbin, {0.0f, 3000.0f/nbinf}, {} );
+            if( nbin > 1 )  /// \TODO: maybe loosen poly/FRF to not have a number of bin requirement
+              def_cal->set_default_polynomial( nbin, {0.0f, 3000.0f/nbinf}, {} );
           }
           
           meas->energy_calibration_ = def_cal;
@@ -4852,9 +4859,9 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
 #endif
     
 #if( PERFORM_DEVELOPER_CHECKS )
-    static int ntest = 0;
-    if( ntest++ < 10 )
-      cerr << "Warning, testing rebingin ish" << endl;
+    //static int ntest = 0;
+    //if( ntest++ < 10 )
+    //  cerr << "Warning, testing rebingin ish" << endl;
     
     const double prev_gamma_count_sum_ = gamma_count_sum_;
     const double prev_neutron_counts_sum_ = neutron_counts_sum_;
@@ -4881,9 +4888,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
   }catch( std::exception &e )
   {
-    stringstream msg;
-    msg << "From " << SRC_LOCATION << " caught error:\n\t" << e.what();
-    throw runtime_error( msg.str() );
+    string msg = "From " + string(SRC_LOCATION) + " caught error:\n\t" + string(e.what());
+    throw runtime_error( msg );
   }//try / catch
   
   modified_ = modifiedSinceDecode_ = false;

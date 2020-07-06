@@ -171,15 +171,6 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       
       meas->sample_number_ = static_cast<int>(i) + 1;
       
-      //Some default calibration coefficients that are kinda sorta close
-      if( !default_cal )
-      {
-        default_cal = make_shared<EnergyCalibration>();
-        default_cal->set_default_polynomial(channelcounts->size(), {0.0f, 3.0f}, {} );
-      }
-      meas->energy_calibration_ = default_cal;
-      
-      
       measurements.push_back( meas );
       gammacounts.push_back( channelcounts );
       measurements_.push_back( meas );
@@ -210,6 +201,29 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
     const bool isPowerOfTwo = ((len != 0) && !(len & (len - 1)));
     if( !isPowerOfTwo )
       throw runtime_error( "Invalid number of channels" );
+    
+    try
+    {
+      //Some default calibration coefficients that are kinda sorta close
+      for( size_t i = 0; i < measurements.size(); ++i )
+      {
+        if( measurements[i]->energy_calibration_->type() == EnergyCalType::InvalidEquationType )
+        {
+          //The file doesnt provide energy calibration information, so we will always need to
+          //  go to a default energy calibration.
+          if( !default_cal )
+          {
+            default_cal = make_shared<EnergyCalibration>();
+            assert( len );
+            default_cal->set_default_polynomial(len, {0.0f, 3.0f}, {} );
+          }
+          measurements[i]->energy_calibration_ = default_cal;
+        }
+      }
+    }catch( std::exception & )
+    {
+      //we shouldnt ever get here
+    }
     
     cleanup_after_load();
     
@@ -329,7 +343,37 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       }//if( valid )
     }//for( loop over file and identify starts of records )
     
-    shared_ptr<EnergyCalibration> energy_cal;
+    //Map number of channels and polynomial coefficents to a EnergyCalibration object for re-use
+    //  for the different Measurements
+    map<pair<uint16_t,vector<float>>,shared_ptr<const EnergyCalibration>> energy_cals;
+    
+    auto set_energy_cal = [&energy_cals]( const uint16_t nchannel,
+                                          const vector<float> &coeffs,
+                                          shared_ptr<Measurement> meas )
+    {
+      auto energy_cal_pos = energy_cals.find({nchannel,coeffs});
+      if( energy_cal_pos == std::end(energy_cals) )
+      {
+        auto energy_cal = make_shared<EnergyCalibration>();
+        try
+        {
+          energy_cal->set_polynomial( nchannel, coeffs, {} );
+        }catch( std::exception &e )
+        {
+          //This warning wont make it to subsequent Measurements that re-use this calibration, but
+          // oh well for the moment
+          if( coeffs != vector<float>{0.0f,0.0f,0.0f} )
+            meas->parse_warnings_.push_back( "Provided energy calibration invalid: "
+                                              + string(e.what()) );
+        }
+        energy_cal_pos = energy_cals.insert( {{nchannel, coeffs}, energy_cal} ).first;
+      }//if( we have to create the energy calibration )
+        
+      meas->energy_calibration_ = energy_cal_pos->second;
+    };//set_energy_cal lamda
+    
+    
+    
     
     for( size_t j = 0; j < recordstarts.size(); ++j )
     {
@@ -460,7 +504,6 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       else if( is135v2 || (is135v1 && (record_size==2124)) )
         calpos = 44;
       
-      
       size_t datapos;
       uint16_t nchannels;
       
@@ -577,28 +620,10 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
           parse_warnings_.emplace_back( std::move(msg) );
       }
       
+      vector<float> calcoeffs = {0.0f, 0.0f, 0.0f};
       if( calpos )
-      {
-        vector<float> calcoeffs(3, 0.0f);
         memcpy( &(calcoeffs[0]), data + calpos, 3*4 );
-        if( calcoeffs[2] == 0.0f )
-          calcoeffs.resize( 2 );
-        
-        if( !energy_cal
-            || (energy_cal->type() != EnergyCalType::Polynomial)
-            || (energy_cal->coefficients() != calcoeffs) )
-        {
-          try
-          {
-            energy_cal = make_shared<EnergyCalibration>();
-            energy_cal->set_polynomial( nchannels, calcoeffs, {} );
-            meas->energy_calibration_ = energy_cal;
-          }catch( std::exception & )
-          {
-            energy_cal.reset();
-          }
-        }//if( this energy cal doesnt match the previously seen one ).
-      }//if( calpos )
+      set_energy_cal( nchannels, calcoeffs, meas );
       
       
       auto gamma_counts = std::make_shared<vector<float> >( nchannels, 0.0f );
@@ -621,31 +646,15 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       
       if( is135v1 && (meas->energy_calibration_->type() != EnergyCalType::Polynomial) )
       {
-        const float nbin = static_cast<float>( nchannels );
-        
         for( size_t i = 0; i < (record_size - 1024*2); ++i )
         {
-          vector<float> cal(3, 0.0f);
+          vector<float> cal = {0.0f, 0.0f, 0.0f};
           memcpy( &(cal[0]), data+1, 12 );
-          const float x = cal[0] + cal[1]*1.0f + cal[2]*1.0f*1.0f;
-          const float y = cal[0] + cal[1]*nbin + cal[2]*nbin*nbin;
-          const bool valid = (x > -100.0f) && (x < 100.0f) && (y > 400.0f) && (y < 4000.0f);
-          if( valid )
+          
+          set_energy_cal( nchannels, cal, meas );
+          
+          if( meas->energy_calibration_->type() != EnergyCalType::InvalidEquationType )
           {
-            if( !energy_cal || (energy_cal->type() != EnergyCalType::Polynomial)
-               || (cal!=energy_cal->coefficients()) )
-            {
-              try
-              {
-                energy_cal = make_shared<EnergyCalibration>();
-                energy_cal->set_polynomial( nchannels, cal, {} );
-                meas->energy_calibration_ = energy_cal;
-              }catch( exception & )
-              {
-                
-              }
-            }//if( we cant re-use energy_cal )
-            
             string msg = "Irregular GR energy calibration apparently found.";
 #if(PERFORM_DEVELOPER_CHECKS)
             log_developer_error( __func__, msg.c_str() );
@@ -711,22 +720,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         }
         
         if( usingGuessedVal )
-        {
-          if( !energy_cal || (energy_cal->type() != EnergyCalType::Polynomial)
-             || (energy_cal->coefficients() != default_coefs) )
-          {
-            energy_cal = make_shared<EnergyCalibration>();
-            try
-            {
-              energy_cal->set_default_polynomial( nchannels, default_coefs, {} );
-            }catch( std::exception & )
-            {
-            }
-          }//if( we cant reuse energy_cal )
-          
-          assert( energy_cal );
-          meas->energy_calibration_ = energy_cal;
-        }//if( usingGuessedVal )
+          set_energy_cal( nchannels, default_coefs, meas );
       }//if( meas->energy_calibration_->type() != EnergyCalType::Polynomial )
       
       if( j == 0 )
@@ -792,9 +786,9 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
         
         try
         {
-        auto newcal = make_shared<EnergyCalibration>();
-        newcal->set_polynomial( noutchannel, {min_e,delta_e/noutchannel}, {} );
-        meas.rebin( newcal );
+          auto newcal = make_shared<EnergyCalibration>();
+          newcal->set_polynomial( noutchannel, {min_e,delta_e/noutchannel}, {} );
+          meas.rebin( newcal );
         }catch(...)
         {
           

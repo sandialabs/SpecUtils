@@ -429,8 +429,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }//if( the line was made of 4 numbers )
       }//if( fields.size() == 4 )
       
-      std::shared_ptr<std::vector<float>> energies( new vector<float>() ), counts( new vector<float>());
-      std::shared_ptr<vector<int> > channels( new vector<int>() );
+      auto channels = make_shared<vector<int>>();
+      auto counts = make_shared<vector<float>>();
+      auto energies = make_shared<vector<float>>();
       
       //After we hit a line that no longer starts with numbers, we actually want
       // to leave istr at the beggining of that line so if another spectrum
@@ -512,7 +513,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         try
         {
           auto newcal = make_shared<EnergyCalibration>();
-          newcal->set_lower_channel_energy( counts->size(), std::move(*counts) );
+          newcal->set_lower_channel_energy( counts->size(), std::move(*energies) );
           energy_calibration_ = newcal;
         }catch( std::exception &e )
         {
@@ -554,9 +555,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
             //  Hopefully accounting for this doesnt erroneoulsy affect other formats
             string restofline = fields[i].substr(kevpos+5);
             SpecUtils::trim(restofline);
-            if( SpecUtils::istarts_with(restofline, "count")
-               || SpecUtils::istarts_with(restofline, "data")
-               || SpecUtils::istarts_with(restofline, "signal") )
+            if( istarts_with(restofline, "count")
+               || istarts_with(restofline, "data")
+               || istarts_with(restofline, "signal") )
             {
               column_map[i+1] = kCounts;
             }

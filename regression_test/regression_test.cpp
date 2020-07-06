@@ -489,7 +489,27 @@ void check_files_with_truth_n42( const string basedir )
     const string originalpath = fpath.string<string>();
     const string originalext = fpath.extension().string<string>();
     
-     SpecUtils::SpecFile original;
+    
+    //A little hack to only look at certain files when debugging; insert part of the filename
+    //  into 'files_interested_in' and re-compile.
+    set<string> files_interested_in, files_to_skip;
+    //files_interested_in.insert( "only_filename_to_check.csv" );
+    bool interested_in = files_interested_in.empty();
+    for( const string &namesubstr : files_interested_in )
+      interested_in |= (filename.find(namesubstr) != string::npos);
+    
+    files_to_skip.insert( "some_filename_to_skip.n42" );
+    for( const auto &namesubstr : files_to_skip )
+      interested_in &= (filename.find(namesubstr) == string::npos);
+    
+    if( !interested_in )
+    {
+      cerr << "Warning: skipping '" << filename << "' as requested in check_files_with_truth_n42\n";
+      continue;
+    }
+    
+    
+    SpecUtils::SpecFile original;
     
     const bool originalstatus
                 = original.load_file( originalpath, SpecUtils::ParserType::Auto, originalext );

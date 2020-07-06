@@ -104,6 +104,7 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
                                         const std::vector<float> &coeffs,
                                         const std::vector<std::pair<float,float>> &dev_pairs )
 {
+  /// \TODO: possibly loosen this up to not have a number of channel requirement... should be fine?
   if( num_channels < 2 )
     throw runtime_error( "EnergyCalibration::set_polynomial: must be called with >=2 channels" );
   
@@ -117,7 +118,7 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
   
   // Do a sanity check on calibration coeffiecints that they are reasonable; #polynomial_binning
   //  will check if the are strictly increasing.
-  if( (fabs(coeffs[0]) > 300.0)  //300 is arbitrary, but I have seen -160 in data.
+  if( (fabs(coeffs[0]) > 500.0)  //500 is arbitrary, but I have seen -450 in data!
       || (fabs(coeffs[1]) > 450.0)  //450 is arbitrary, lets 7 channels span 3000 keV
       || (last_iter==2 && coeffs[1]<=std::numeric_limits<float>::epsilon() )
       || (last_iter>=3 && coeffs[1]<=std::numeric_limits<float>::epsilon()
@@ -149,8 +150,7 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
                                 const std::vector<std::pair<float,float>> &dev_pairs )
 {
   if( num_channels < 2 )
-    throw runtime_error( "EnergyCalibration::set_full_range_fraction: must be called with >=2"
-                         " channels" );
+    throw runtime_error( "Full range fraction energy calibration requires >=2 channels" );
   
   //Find the last non-zero coefficients (e.g., strip off trailing zeros)
    size_t last_iter = coeffs.size();
@@ -158,8 +158,7 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
      --last_iter;
   
   if( last_iter < 2 )
-    throw runtime_error( "EnergyCalibration::set_full_range_fraction: must be called with >=2"
-                         " coefficents" );
+    throw runtime_error( "Full range fraction energy calibration requires >=2 coefficents" );
   
   m_channel_energies = SpecUtils::fullrangefraction_binning( coeffs, num_channels, dev_pairs );
   
@@ -194,8 +193,6 @@ void EnergyCalibration::check_lower_energies( const size_t num_channels,
 void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
                                                   const std::vector<float> &channel_energies )
 {
-  cout << "calling non-std::move set_lower_channel_energy" << endl;
-  
   check_lower_energies( num_channels, channel_energies );
   
   auto energies = std::make_shared<std::vector<float>>( num_channels + 1 );
@@ -219,8 +216,6 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
 void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
                                                   std::vector<float> &&channel_energies )
 {
-  cout << "calling non-std::move set_lower_channel_energy, address of first element: " << &(channel_energies[0]) << endl;
-  
   check_lower_energies( num_channels, channel_energies );
   assert( channel_energies.size() >= num_channels );
   
@@ -235,8 +230,6 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
   m_deviation_pairs.clear();
   m_type = EnergyCalType::LowerChannelEdge;
   m_channel_energies = energies;
-  
-  cout << "set_lower_channel_energy: After initialization address of first element is: " << &(channel_energies[0]) << endl;
 }//set_lower_channel_energy(...)
 
 
@@ -344,7 +337,7 @@ void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyC
   auto floats_equiv = []( const float a, const float b ) -> bool {
     const auto diff = fabs(a - b);
     const auto maxval = std::max(fabs(a),fabs(b));
-    return (diff <= (1.0E-5f*maxval) && (diff < std::numeric_limits<float>::epsilon()));
+    return (diff <= (1.0E-5f*maxval) || (diff < std::numeric_limits<float>::epsilon()));
   };
   
   auto lhs_model = lhs.m_type;
@@ -432,11 +425,20 @@ void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyC
   while( rhscoef.size() && rhscoef.back() == 0.0f )
     rhscoef.erase( rhscoef.end() - 1 );
   
+  string lhscoefstr = "{", rhscoefstr = "{";
+  for( size_t i = 0; i < lhscoef.size(); ++i )
+    lhscoefstr += (i ? ", " : "") + to_string(lhscoef[i]);
+  lhscoefstr += "}";
+  
+  for( size_t i = 0; i < rhscoef.size(); ++i )
+    rhscoefstr += (i ? ", " : "") + to_string(rhscoef[i]);
+  rhscoefstr += "}";
+  
   if( lhscoef.size() != rhscoef.size() )
   {
     snprintf( buffer, sizeof(buffer),
-              "Number of calibration coefficients LHS (%i) and RHS (%i) do not match%s",
-              static_cast<int>(lhscoef.size()), static_cast<int>(rhscoef.size()),
+              "Number of calibration coefficients LHS (%s) and RHS (%s) do not match%s",
+              lhscoefstr.c_str(), rhscoefstr.c_str(),
               ((lhs_model==rhs_model) ? "" : " after converting to be same type") );
     throw runtime_error( buffer );
   }
@@ -467,7 +469,6 @@ void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyC
       throw runtime_error( buffer );
     }
   }//for( loop over channel energies )
-  
   
 }//equalEnough( lhs, rhs )
 #endif //PERFORM_DEVELOPER_CHECKS

@@ -51,6 +51,7 @@ namespace
     std::string appTypeStr;
     int nchannels;
     std::vector<float> calibcoefs;
+    bool isDefualtCoefs;
     std::string algorithmVersion;
     //caputures max 1 attribute...
     struct params{ std::string name, value, attname, attval; };
@@ -116,6 +117,7 @@ namespace
     const string s1str( data, datalen );
     
     info.calibcoefs.clear();
+    info.isDefualtCoefs = false;
     
     vector<string> s1fields;
     SpecUtils::split( s1fields, s1str, "," );
@@ -161,14 +163,15 @@ namespace
       }//if( spacepos != string::npos )
     }//for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
     
-    //TODO 20200212: it isnt clear how or if energy calibration is set; should investigate.
-    //if( info.calibcoefs.empty() )
-    //{
-    //  cerr << "parse_s1_info(): warning, couldnt find calibration coeffecicents"
-    //       << endl;
-    //  info.calibcoefs.push_back( 0.0f );
-    //  info.calibcoefs.push_back( 3000.0f / std::max(info.nchannels-1, 1) );
-    //}//if( info.calibcoefs.empty() )
+    // It appears energy calibration parameters are not provided by the file.  It does however
+    //  provide deviation pairs... spectrum files just seem to be a land where sanity is optional.
+    if( info.calibcoefs.empty() )
+    {
+      //We will put some default energy calibration parameters here so we can preserve the deviation
+      //  pair information.
+      info.calibcoefs = { 0.0f, 3225.0f/std::max(info.nchannels-1,1) };
+      info.isDefualtCoefs = true;
+    }
     
     info.success = true;
   }//bool parse_s1_info( const std::string &s1str, DailyFileS1Info &info )
@@ -1212,6 +1215,9 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     if( gammaback )
     {
       std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
+
+      // \TODO: I'm not sure how/if DeviationPairs are applied before the summing is done; should
+      //        check this out a little.
       
       meas->detector_number_    = static_cast<int>( detNameToNum.size() );
       meas->detector_name_      = "sum";
@@ -1226,8 +1232,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         vector<pair<float,float>> thesedevpairs;
         if( devpairs )
         {
-          /// \TODO: I am totally not sure about these deviation pairs - need to check logic of
-          ///        getting them
+          // \TODO: We actually dont have deviation pairs for "sum"; should see if how this should
+          //        actually be handled can be infered from the data.
           auto pos = devpairs->find(meas->detector_name_);
           if( pos != end(*devpairs) )
             thesedevpairs = pos->second;
@@ -1244,7 +1250,10 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           try
           {
             auto newcal = make_shared<EnergyCalibration>();
-            newcal->set_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            if( sinfo.isDefualtCoefs )
+              newcal->set_default_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            else
+              newcal->set_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
             meas->energy_calibration_ = newcal;
             previous_cals[key] = newcal;
           }catch( std::exception &e )
@@ -1379,7 +1388,10 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           try
           {
             auto newcal = make_shared<EnergyCalibration>();
-            newcal->set_polynomial( nchannel, sinfo.calibcoefs, {} );
+            if( sinfo.isDefualtCoefs )
+              newcal->set_default_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            else
+              newcal->set_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
             meas->energy_calibration_ = newcal;
             previous_cals[key] = newcal;
           }catch( std::exception &e )
@@ -1458,14 +1470,9 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     if( s2pos != background_to_s2_num.end() && s2pos->second < ndets )
       devpairs = &(detname_to_devpairs[s2pos->second]);
     
-    const map<int,vector<std::shared_ptr<DailyFileGammaBackground> > >::const_iterator gammaback
-    = gamma_backgrounds.find(backnum);
-    
-    const map<int,std::shared_ptr<DailyFileNeutronBackground> >::const_iterator neutback
-    = neutron_backgrounds.find(backnum);
-    
-    const map<int, boost::posix_time::ptime >::const_iterator backtimestamp
-    = end_background.find(backnum);
+    const auto gammaback = gamma_backgrounds.find(backnum);
+    const auto neutback = neutron_backgrounds.find(backnum);
+    const auto backtimestamp = end_background.find(backnum);
     
     if( gammaback == gamma_backgrounds.end() )
     {

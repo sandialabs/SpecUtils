@@ -1666,8 +1666,26 @@ bool SpecFile::load_from_pcf( std::istream &input )
       //assert( !lower_channel_energy_cal );
       
       const vector<float> &coefs = coef_to_measv.first;
+      const vector<shared_ptr<Measurement>> &meas_for_coefs = coef_to_measv.second;
       
-      for( const auto &meas : coef_to_measv.second )
+      //If coefs is empty, the calibration coefficients were all zero; a default energy cal will be
+      //  assigned in cleanup_after_load.
+      if( coefs.size() == 0 )
+        continue;
+      
+      if( coefs.size() == 1 )
+      {
+        string msg = "PCF FRF calibration only had one coefficient (" + to_string(coefs[0]) + ")";
+#if(PERFORM_DEVELOPER_CHECKS)
+        //We probably shouldnt ever run into this, so log it, since it might be an error in this code
+        log_developer_error( __func__, msg.c_str() );
+#endif
+        for( const shared_ptr<Measurement> &meas : meas_for_coefs )
+          meas->parse_warnings_.push_back( std::move(msg) );
+        continue;  //Use default calibration
+      }//if( coefs.size() == 1 )
+      
+      for( const shared_ptr<Measurement> &meas : meas_for_coefs )
       {
         const size_t nchannel = meas->num_gamma_channels();
         if( nchannel < 2 )
