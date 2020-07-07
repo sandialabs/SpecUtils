@@ -81,6 +81,8 @@ namespace
   
   static const char * const s_enrgy_cal_not_availabel_remark = "Energy calibration not available.";
   
+  static const std::string s_frf_to_poly_remark = "Energy calibration was originally specified as full-range-fraction.";
+
   //Take absolute difference between unsigned integers.
   template<typename T>
   T abs_diff(T a, T b) {
@@ -197,9 +199,10 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
       valuestrm << "0 0 0";
       remark = s_enrgy_cal_not_availabel_remark;
       break;
-      
+
     case SpecUtils::EnergyCalType::FullRangeFraction:
-      remark = "Energy calibration was originally specified as full-range-fraction.";
+      /// \TODO: add a "EnergyCalibrationExtension" element to cover Full Range Fraction calibration
+      remark = s_frf_to_poly_remark;
       coefs = energy_cal.coefficients();
       coefs = SpecUtils::fullrangefraction_coef_to_polynomial( coefs, num_gamma_channel );
       //note intential fallthrough
@@ -322,6 +325,78 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
       }//if( iter == calToSpecMap.end() )
     }//for( size_t i = 0; i < measurements.size(); ++i )
   }//void insert_N42_calibration_nodes(...)
+
+/** Returns the N42-2012 <RadDetectorKindCode> element value - for the gamma detector
+*/
+std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
+{
+  string det_kind = "Other";
+  switch( sf.detector_type() )
+  {
+    case SpecUtils::DetectorType::DetectiveUnknown:
+    case SpecUtils::DetectorType::DetectiveEx:
+    case SpecUtils::DetectorType::DetectiveEx100:
+    case SpecUtils::DetectorType::DetectiveEx200:
+    case SpecUtils::DetectorType::Falcon5000:
+    case SpecUtils::DetectorType::MicroDetective:
+    case SpecUtils::DetectorType::DetectiveX:
+      det_kind = "HPGe";
+      break;
+      
+    case SpecUtils::DetectorType::Exploranium:
+    case SpecUtils::DetectorType::IdentiFinder:
+    case SpecUtils::DetectorType::IdentiFinderNG:
+    case SpecUtils::DetectorType::RadHunterNaI:
+    case SpecUtils::DetectorType::Rsi701:
+    case SpecUtils::DetectorType::Rsi705:
+    case SpecUtils::DetectorType::AvidRsi:
+    case SpecUtils::DetectorType::OrtecRadEagleNai:
+    case SpecUtils::DetectorType::Sam940:
+    case SpecUtils::DetectorType::Sam945:
+      det_kind = "NaI";
+      break;
+      
+    case SpecUtils::DetectorType::IdentiFinderLaBr3:
+    case SpecUtils::DetectorType::RadHunterLaBr3:
+    case SpecUtils::DetectorType::Sam940LaBr3:
+    case SpecUtils::DetectorType::OrtecRadEagleLaBr:
+      det_kind = "LaBr3";
+      break;
+      
+    case SpecUtils::DetectorType::OrtecRadEagleCeBr2Inch:
+    case SpecUtils::DetectorType::OrtecRadEagleCeBr3Inch:
+      det_kind = "CeBr3";
+      break;
+      
+    case SpecUtils::DetectorType::SAIC8:
+    case SpecUtils::DetectorType::Srpm210:
+      det_kind = "PVT";
+      break;
+      
+    case SpecUtils::DetectorType::MicroRaider:
+      det_kind = "CZT";
+      break;
+      
+    case SpecUtils::DetectorType::Unknown:
+    {
+      const size_t nchannel = sf.num_gamma_channels();
+      const string &manufacturer = sf.manufacturer();
+      const string &model = sf.instrument_model();
+      
+      if( nchannel > 4100 )
+        det_kind = "HPGe";
+      else if( manufacturer=="Raytheon" && SpecUtils::icontains(model,"Variant") )
+        det_kind = "NaI";
+      else if( manufacturer=="Mirion Technologies" && SpecUtils::icontains(model,"Pedestrian") )
+        det_kind = "NaI";
+      else if( manufacturer=="Nucsafe" && SpecUtils::icontains(model,"Predator") )
+        det_kind = "PVT";
+      break;
+    }
+  }//switch( detector_type_ )
+  
+  return det_kind;
+}//determine_gamma_detector_kind_code()
 }//namespace
 
 
@@ -434,6 +509,16 @@ namespace
         }//if( textstr.length() )
       }//while( (parent = det_type_node->parent()) )
     }//if( is_nuetron == is_gamma )
+    
+    
+    if( (is_nuetron == is_gamma) && !is_gamma && spectrum_node )
+    {
+      const auto node = XML_FIRST_INODE(spectrum_node,"ChannelData");
+      
+      //A cheap check to make sure the <ChannelData> is more than a single neutron count
+      is_gamma = (node && node->value() && node->value_size() > 11); //11 is arbitrary
+    }//if( is_nuetron == is_gamma && !is_gamma )
+    
     
 #if( PERFORM_DEVELOPER_CHECKS )
     if( is_nuetron == is_gamma )
@@ -2040,7 +2125,8 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
   //If there is a cal ID, or a <Calibration> node, but we didnt find a calibration, lets note this
   // but it may not actually be a problem
   if( nchannels > 1
-      && (!cal_IDs_str.empty() || xml_first_node_nso(spectrum_node, "Calibration", xmlns)) )
+      && (!cal_IDs_str.empty() || xml_first_node_nso(spectrum_node, "Calibration", xmlns))
+      && cal_IDs_str != "energy shape" )
   {
     string msg = "Failed to find calibration for ID='" + cal_IDs_str + "', Det='" + det_name + "'"
                  " (this may an issue with input file, and not parsing code)";
@@ -4020,11 +4106,7 @@ namespace SpecUtils
               //Convert to MeV, rounding to nearest MeV if above 4 MeV, or nearest 1/4 if below
               string newname;
               if( energy > 4000 )
-      {
                 newname = std::to_string( std::round(energy/1000) );
-      newname = "9";
-      cerr << "Fix this horrible hack for comparison to old values" << endl;
-      }
               else
                 newname = std::to_string( std::round(energy/500) / 2 );
       
@@ -5280,12 +5362,15 @@ namespace SpecUtils
         RadDetectorInformation->append_node( RadDetectorCategoryCode );
       }
       
-      const string det_kind = determine_rad_detector_kind_code();
+      /// \TODO: below 'det_kind' will be something like HPGe (since its based on the detection
+      ///        system), even if we are writing information on the neutron detector here -
+      ///        should fix this.
+      const string det_kind = determine_gamma_detector_kind_code( *this );
       val = doc->allocate_string( det_kind.c_str() );
       xml_node<char> *RadDetectorKindCode = doc->allocate_node( node_element, "RadDetectorKindCode", val );
       RadDetectorInformation->append_node( RadDetectorKindCode );
       
-      if(!rad_det_desc.empty())
+      if( !rad_det_desc.empty() )
       {
         val = doc->allocate_string( rad_det_desc.c_str(), rad_det_desc.size()+1 );
         xml_node<char> *RadDetectorDescription = doc->allocate_node( node_element, "RadDetectorDescription", val );
@@ -5310,13 +5395,9 @@ namespace SpecUtils
     }//for( size_t i = 0; i < ndetectors; ++i )
     
     
+    insert_N42_calibration_nodes( measurements_ , RadInstrumentData, xmldocmutex, calToSpecMap );
+      
     SpecUtilsAsync::ThreadPool workerpool;
-    
-    workerpool.post( [this,RadInstrumentData,&xmldocmutex,&calToSpecMap](){
-      insert_N42_calibration_nodes( measurements_ , RadInstrumentData, xmldocmutex, calToSpecMap );
-    });
-    
-    workerpool.join();  //ensures all calibrations have been written to the DOM and can be referenced using calToSpecMap
     
     //For the case of portal data, where the first sample is a long backgorund and
     //  the rest of the file is the occupancy, GADRAS has some "special"
@@ -5385,7 +5466,7 @@ namespace SpecUtils
         //  to have the same start time or real time as the other measurements in
         //  this sample.  This is to accomidate some portals whos RSPs may
         //  accumulate backgrounds a little weird, but none-the-less should all be
-        //  considered teh same sample.
+        //  considered the same sample.
         if( m->source_type() != SourceType::Background
            || (sample_num != (*sample_numbers_.begin())) )
         {
@@ -5832,8 +5913,11 @@ namespace SpecUtils
       if( remark_node && remark_node->value_size() )
       {
         const string remark_value = xml_value_str(remark_node);
-        if( !SpecUtils::icontains( remark_value, s_enrgy_cal_not_availabel_remark) )
+        if( !SpecUtils::icontains( remark_value, s_enrgy_cal_not_availabel_remark)
+           && !SpecUtils::icontains( remark_value, s_frf_to_poly_remark) )
+        {
           remarks.push_back( "Calibration for " + id + " remark: " + remark_value );
+        }
       }
       
       if( date_node && date_node->value_size() )
@@ -5929,9 +6013,28 @@ namespace SpecUtils
         continue;
       }
       
-      if( calibrations.count(id) != 0 )
-        cerr << "Warning, overwriting calibration '" << id << "'" << endl;
-      calibrations[id] = info;
+      if( calibrations.count(id) == 0 )
+      {
+        //We havent seen a calibration with this ID before
+        calibrations[id] = info;
+      }else
+      {
+        //We have seen a calibration with this ID.  We will only overwrite if its a different
+        // calibration.
+        MeasurementCalibInfo &oldcal = calibrations[id];
+        if( !(oldcal == info) )
+        {
+          const string msg = "Energy calibration with ID='" + id
+                          + "' was re-defined with different definition, which a file shouldnt do.";
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( __func__, msg.c_str() );
+#endif
+          if( std::find(begin(parse_warnings), end(parse_warnings), msg) == end(parse_warnings) )
+            parse_warnings.push_back( msg );
+        }
+      }//if( havent seen this ID ) / else
+      
+      
     }//for( loop over "Characteristic" nodes )
     
   }//get_2012_N42_energy_calibrations(...)
@@ -6055,7 +6158,7 @@ namespace SpecUtils
       SourceType spectra_type = SourceType::Unknown;
       OccupancyStatus occupied = OccupancyStatus::Unknown;
       
-      rapidxml::xml_attribute<char> *meas_att = meas_node->first_attribute( "id", 2, false );
+      const auto meas_att = SpecUtils::xml_first_iattribute(meas_node, "id");
       //    rapidxml::xml_attribute<char> *info_att = meas_node->first_attribute( "radItemInformationReferences", 28 );
       //    rapidxml::xml_attribute<char> *group_att = meas_node->first_attribute( "radMeasurementGroupReferences", 29 );
       
@@ -6250,7 +6353,8 @@ namespace SpecUtils
         
         //This next line is specific to file written by InterSpec
         //const string samp_det_str = xml_value_str( meas_att ); //This was used pre 20180225, however I believe this was wrong due to it probably not containing DetXXX - we'll see.
-        const string samp_det_str = xml_value_str( spectrum_node );
+        const auto spec_id = SpecUtils::xml_first_iattribute( spectrum_node, "id" );
+        const string samp_det_str = SpecUtils::xml_value_str(spec_id);
         if( samp_det_str.size() )
         {
           if( SpecUtils::istarts_with(samp_det_str, "background") )
@@ -6527,9 +6631,13 @@ namespace SpecUtils
           continue;
         }
         
-        //This next line is specific to file written by InterSpec
+        //This next line is specific to file written by InterSpec, and is used to make sure sample
+        // numbers kinda-sorta persist across writing to a N42-2012 and reading back in.  It isnt
+        // really necassary except for some poorly formed portal input in the N42-2006 format; it
+        // is definetly a hack.
         //const string sample_det_att = xml_value_str( meas_att ); //See notes above about pre 20180225,
-        const string sample_det_att = xml_value_str( gross_counts_node );
+        const auto gross_id = SpecUtils::xml_first_iattribute( gross_counts_node, "id" );
+        const string sample_det_att = SpecUtils::xml_value_str( gross_id );
         if( sample_det_att.size() )
         {
           if( SpecUtils::istarts_with(sample_det_att, "background") )
@@ -6548,12 +6656,15 @@ namespace SpecUtils
             meas->sample_number_ = 0;
           }else
           {
-#if(PERFORM_DEVELOPER_CHECKS)
-            char buffer[256];
-            snprintf( buffer, sizeof(buffer),
-                     "Unrecognized 'id' attribute of Spectrum node: '%s'", sample_det_att.c_str() );
-            log_developer_error( __func__, buffer );
-#endif
+            //We'll end up here with taks like: 'M-13 Aa1N', 'M113N', 'Foreground-20100127130220-Aa1N',
+            //  '4045bb4c-9c68-48fa-8121-48c5806f84d8-count', 'NeutronForeground58-CL1',
+            //  'ForegroundMeasure6afc5c3010001NeutronCounts', etc
+//#if(PERFORM_DEVELOPER_CHECKS)
+//            char buffer[256];
+//            snprintf( buffer, sizeof(buffer),
+//                     "Unrecognized 'id' attribute of Spectrum node: '%s'", sample_det_att.c_str() );
+//            log_developer_error( __func__, buffer );
+//#endif
           }
         }//if( sample_det_att.size() )
         
@@ -6855,7 +6966,7 @@ namespace SpecUtils
         rapidxml::xml_node<char> *name_node     = XML_FIRST_NODE( info_node, "RadDetectorName" );
         rapidxml::xml_node<char> *category_node = XML_FIRST_NODE( info_node, "RadDetectorCategoryCode" );
         
-        //<RadDetectorKindCode> returns "NaI", "HPGe", "PVT", "He3", etc (see determine_rad_detector_kind_code())
+        //<RadDetectorKindCode> returns "NaI", "HPGe", "PVT", "He3", etc (see determine_gamma_detector_kind_code())
         //  and should be utilized at some point.  But would require adding a field to MeasurementInfo
         //  I think to kind of do it properly.
         

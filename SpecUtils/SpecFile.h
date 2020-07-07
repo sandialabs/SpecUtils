@@ -44,8 +44,8 @@ Shortcommings that wcjohns should be addressed
  - Neutron counts are typically merged into a gamma detectors Measurement if a
    reasonable pairing can be made. When and if this is done needs to be clearly
    specified, and either stopped of facilities added to keep neutron det. info.
-   (should probably instead make own neutron info object that can be associated
-   with a Measurement, maybe multiple neutron to a Measurement)
+   (should probably instead make own neutron info object (or more generally gross count) that can be
+   associated with a Measurement, or maybe sample number, maybe multiple neutron to a Measurement)
  - Should add a DetectorInfo object that Measurement objects point to and share.
    - Should add things like dimention and RadDetectorKindCode to this object,
      as well as characteristics (as defined in N42-2012, but in a few other file
@@ -1999,9 +1999,7 @@ protected:
   static void decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
                                    const rapidxml::xml_node<char> *meas_node );
   
-  //Gets N42 2012 <RadDetectorKindCode> element value
-  std::string determine_rad_detector_kind_code() const;
-  
+
   //setMeasurementLocationInformation(...):  sets the measurement information
   //  for a particular <Measurement> section of N42 data.  The parced data
   //  sets both MeasurementInfo member variables, as well as member variables

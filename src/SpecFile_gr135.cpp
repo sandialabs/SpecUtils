@@ -334,8 +334,8 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       
       const size_t num_channels = (is130v0 ? 256 : 1024);
       const bool valid = (is135v2 || is135v1 || is130v0)
-      && (dtSpectrum || dtCzt)
-      && ((record_size > num_channels*2) || recordstarts.empty());
+                         && (dtSpectrum || dtCzt)
+                         && ((record_size > num_channels*2) || recordstarts.empty());
       if( valid )
       {
         recordstarts.push_back( i );
@@ -392,9 +392,9 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       if( is135v2 && !found1350 )
       {
         parse_warnings_.emplace_back( "The header is missing the string \"135\" at offsets 5, 6, and 7" );
-#if(PERFORM_DEVELOPER_CHECKS)
-        log_developer_error( __func__, "The header is missing the string \"135\" at offsets 5, 6, and 7" );
-#endif
+//#if(PERFORM_DEVELOPER_CHECKS)
+//        log_developer_error( __func__, "The header is missing the string \"135\" at offsets 5, 6, and 7" );
+//#endif
       }//if( is135v2 && !found1350 )
         
       if( is135v1 && !found1024 )
@@ -636,8 +636,10 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       {
         for( uint16_t i = 2; i < (nchannels-1); ++i )
         {
-          uint16_t counts;
-          memcpy( &counts, data + datapos + 2*i, 2 );
+          uint16_t counts = 0;
+          const auto chanpos = data + datapos + 2*i;
+          if( (chanpos+2) < end )  //probably not needed, but jic
+            memcpy( &counts, chanpos, 2 );
           const float val = static_cast<float>( counts );
           channel_data[i] = val;
           meas->gamma_count_sum_ += val;

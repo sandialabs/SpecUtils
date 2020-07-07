@@ -155,7 +155,7 @@ namespace  SpecUtils
 //Implementation
 namespace SpecUtils
 {
-  /** @TODO check if type is int/float/etc and alsoo check if host is big/little
+  /** @TODO check if type is int/float/etc and also check if host is big/little
             endian and if need be convert from little to host.
       @TODO add a template check for is_pod, eg std::enable_if_t<std::is_pod<T>{}, bool> =true
    */

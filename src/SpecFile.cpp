@@ -118,7 +118,7 @@ using SpecUtils::time_from_string;
 //  changes so everything besides remarks and parser comments can be validated;
 //  Differences will still be printed out, so can be manually inspected to make
 //  sure they are as expected.
-#define REQUIRE_REMARKS_COMPARE 0
+#define REQUIRE_REMARKS_COMPARE 1
 
 #if( !REQUIRE_REMARKS_COMPARE )
 #warning "Not requiring remarks and parse warnings to compare - this should be only for temporary development only."
@@ -4250,7 +4250,12 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
     vector<int> &meass = sampleNumsToSamples[m->sample_number_];
     
     if( std::find(meass.begin(),meass.end(),m->detector_number_) != meass.end() )
+    {
+      //cerr << "Unique check failed for sample with Start time "
+      //     << SpecUtils::to_iso_string(m->start_time()) << " detname=" << m->detector_name()
+      //     << " sample " << m->sample_number() << endl;
       return false;
+    }
     
     meass.push_back( m->detector_number_ );
     
@@ -5188,13 +5193,12 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
 #if( PERFORM_DEVELOPER_CHECKS )
         if( gamma_names.size() != 1 && (meas->detector_name_ != gamma_name) )
         {
-          stringstream errmsg;
-          errmsg << "Found a nuetron detector Measurement (DetName='" << meas->detector_name_
-                 << "', SampleNumber=" << meas->sample_number_
-                 << ", StartTime=" << SpecUtils::to_iso_string(meas->start_time_)
-                 << ") I couldnt find a gamma w/ DetName='"
-                 << gamma_name << "' and SampleNumber=" << meas->sample_number_ << ".";
-          log_developer_error( __func__, errmsg.str().c_str() );
+          string errmsg = "Found a nuetron detector Measurement (DetName='" + meas->detector_name_
+                 + "', SampleNumber=" + std::to_string(meas->sample_number_)
+                 + ", StartTime=" + SpecUtils::to_iso_string(meas->start_time_)
+                 + ") I couldnt find a gamma w/ DetName='"
+                 + gamma_name + "' and SampleNumber=" + std::to_string(meas->sample_number_) + ".";
+          log_developer_error( __func__, errmsg.c_str() );
         }
 #endif  //PERFORM_DEVELOPER_CHECKS
         
@@ -5671,69 +5675,7 @@ bool SpecFile::write_d3_html( ostream &ostr,
 }
 #endif
 
-std::string SpecFile::determine_rad_detector_kind_code() const
-{
-  string det_kind = "Other";
-  switch( detector_type_ )
-  {
-    case DetectorType::DetectiveUnknown:
-    case DetectorType::DetectiveEx:
-    case DetectorType::DetectiveEx100:
-    case DetectorType::DetectiveEx200:
-    case DetectorType::Falcon5000:
-    case DetectorType::MicroDetective:
-    case DetectorType::DetectiveX:
-      det_kind = "HPGe";
-      break;
-      
-    case DetectorType::Exploranium:
-    case DetectorType::IdentiFinder:
-    case DetectorType::IdentiFinderNG:
-    case DetectorType::RadHunterNaI:
-    case DetectorType::Rsi701:
-    case DetectorType::Rsi705:
-    case DetectorType::AvidRsi:
-    case DetectorType::OrtecRadEagleNai:
-    case DetectorType::Sam940:
-    case DetectorType::Sam945:
-      det_kind = "NaI";
-      break;
-      
-    case DetectorType::IdentiFinderLaBr3:
-    case DetectorType::RadHunterLaBr3:
-    case DetectorType::Sam940LaBr3:
-    case DetectorType::OrtecRadEagleLaBr:
-      det_kind = "LaBr3";
-      break;
-      
-    case DetectorType::OrtecRadEagleCeBr2Inch:
-    case DetectorType::OrtecRadEagleCeBr3Inch:
-      det_kind = "CeBr3";
-      break;
-      
-    case DetectorType::SAIC8:
-    case DetectorType::Srpm210:
-      det_kind = "PVT";
-      break;
-      
-    case DetectorType::MicroRaider:
-      det_kind = "CZT";
-      break;
-      
-    case DetectorType::Unknown:
-      if( num_gamma_channels() > 4100 )
-        det_kind = "HPGe";
-      else if( manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
-        det_kind = "NaI";
-      else if( manufacturer_=="Mirion Technologies" && instrument_model_=="model Pedestrian G" )
-        det_kind = "NaI";
-      else if( manufacturer_=="Nucsafe" && instrument_model_=="G4_Predator" )
-        det_kind = "PVT";
-      break;
-  }//switch( detector_type_ )
-  
-  return det_kind;
-}//determine_rad_detector_kind_code()
+
 
 
 void SpecFile::rebin_measurement( const std::shared_ptr<const EnergyCalibration> &cal,
