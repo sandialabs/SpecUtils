@@ -353,14 +353,9 @@ class Measurement;
 class DetectorAnalysis;
 struct EnergyCalibration;
 struct N42DecodeHelper2006;
+struct N42DecodeHelper2012;
 struct MeasurementCalibInfo; //defined in SpectrumDataStructs.cpp (used for parsing N42 2006/2012 files and rebinning)
 struct GrossCountNodeDecodeWorker;
-
-//Some typedefs and enums used for decode_2012_N42_rad_measurement_node(...)
-enum DetectionType{ GammaDetection, NeutronDetection, GammaAndNeutronDetection, OtherDetection };
-typedef std::map<std::string,std::pair<DetectionType,std::string> > IdToDetectorType;
-typedef std::map<std::string,MeasurementCalibInfo>                  DetectorToCalibInfo;
-
   
 /** Checks the first 512 bytes of data for a few magic strings that *should* be
    in N42 files; if it contains any of them, it returns true
@@ -587,10 +582,6 @@ public:
   //  returned vector will have a size 1 if the file contained neutron counts.
   const std::vector<float> &neutron_counts() const;
 
-  //compare_by_sample_det_time: compares by sample_number_, and then
-  //  detector_number_, then by start_time_, then source_type_
-  static bool compare_by_sample_det_time( const std::shared_ptr<const Measurement> &lhs,
-                                          const std::shared_ptr<const Measurement> &rhs );
   
   /** Sets the title property.
    
@@ -819,13 +810,6 @@ protected:
                                 const size_t keep_last_channel,
                                 const bool keep_under_over_flow );
   
-  
-  //set_n42_2006_detector_data_node_info(): silently returns if information isnt found
-  static void set_n42_2006_detector_data_node_info(
-                          const rapidxml::xml_node<char> *det_data_node,
-                          std::vector<std::shared_ptr<Measurement>> &measurs_to_update );
-
-  
   //set_info_from_txt_or_csv(...): throws upon failure
   //  XXX - currently doesnt make use of all the information written out by
   //         write_txt(...)
@@ -896,11 +880,11 @@ protected:
 public:
   
 #if( PERFORM_DEVELOPER_CHECKS )
-  //equalEnough(...): tests whether the passed in Measurement objects are
+  //equal_enough(...): tests whether the passed in Measurement objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
   //Throws an std::exception with a brief explanaition when an issue is found.
-  static void equalEnough( const Measurement &lhs, const Measurement &rhs );
+  static void equal_enough( const Measurement &lhs, const Measurement &rhs );
 #endif
     
   
@@ -982,6 +966,7 @@ protected:
   friend class ::SpecMeas;
   friend class SpecFile;
   friend struct N42DecodeHelper2006;
+  friend struct N42DecodeHelper2012;
   friend struct GrossCountNodeDecodeWorker;
 };//class Measurement
 
@@ -1006,27 +991,91 @@ public:
 };//class CountDose
 */
 
-//Should SpecFile be renamed to something better?
+
+/** Class that represents a spectrum file.
+ 
+ Can be used to parse spectrum file from disk, or to create a file from a sensors measurement and
+ write it out to disk.  This class may hold one or more #Measurement class objects that represents
+ a spectrum and/or a neutron gross count from a physical sensor for a given time interval.
+ 
+ This class kinda, sorta, roughly transforms input spectrum files to a N42-2012 like representation
+ suitable for use as part of user-display, analysis, or other programs.
+ 
+ An important concept is that a spectrum file may contain multiple spectra that may be from
+ multiple different physical detectors, and from multiple time periods.  Different physical
+ detectors are differentiated by #Measurement::detector_name(), and different time periods are
+ differentiated by #Measurement::sample_number(), such that usually all spectra that share a common
+ time period will all have the same sample number.  A single #Measurement can be uniquely specified
+ by a combination of sample number and detector name.
+ 
+ Example of reading a spectrum file and printing out a partial summary of its information, and then
+ saving to a different file format is:
+ ```cpp
+ #include <iostream>
+ #include "SpecUtils/SpecFile.h"
+ 
+ using namespace std;
+ using namespace SpecUtils;
+ 
+ int main()
+ {
+   SpecFile spec;
+   const bool loaded = spec.load_file( "/path/to/file.n42", ParserType::Auto );
+   if( !loaded )
+     return -1;
+ 
+   const set<int> &sample_numbers = spec.sample_numbers();
+   const vector<string> &detector_names = spec.detector_names();
+ 
+   for( const int sample_number : sample_numbers )
+   {
+     for( const string &det_name : detector_names )
+     {
+       shared_ptr<const Measurement> meas = spec.measurement( sample_number, det_name );
+       if( !meas )
+         continue;  //Its possible every sample number will have a #Measurement for each detector
+       
+       cout << "Sample " << sample_number << " Det " << det_name << " has real time "
+            << meas->real_time() << "s, and live time: " << meas->live_time() << "s";
+       
+       if( meas->contained_neutron() )
+         cout << " with " << meas->neutron_counts_sum() << " neutrons";
+ 
+       const shared_ptr<const vector<float>> &gamma_counts = meas->gamma_counts();
+       if( gamma_counts && gamma_counts->size() )
+       {
+         cout << " with " << gamma_counts->size() << " gamma channels with "
+              << meas->gamma_count_sum() << " total gammas";
+         
+         const shared_ptr<const vector<float>> &channel_energies = meas->channel_energies();
+         if( channel_energies ) //Will be null if input file didnt give a valid energy calibration
+         {
+           cout << " and energy range " << channel_energies->front() << " to "
+                << channel_energies->back() << " keV";
+         }//if( we have energy calibration info )
+       }//if( we have gamma data )
+ 
+       cout << endl;
+     }//for( loop over detectors )
+   }//for( loop over sample numbers )
+ 
+   //Write all samples and detectors to a PCF file; we could remove some if we wanted.
+   try
+   {
+     spec.write_to_file( "output.pcf", sample_numbers, detector_names, SaveSpectrumAsType::Pcf );
+   }catch( std::exception &e )
+   {
+     cerr << "Failed to write output file: " << e.what() << endl;
+     return -2;
+   }//try / catch
+ 
+   return 0;
+ }//main()
+ ```
+ 
+ */
 class SpecFile
 {
-public:
-  //ToDo:
-  //  -wcjohns needs to document how these classes are structured, now that
-  //   there development has stabilized
-  //     e.g. note things like how all Measurements in measurements_
-  //          may or may not have the same binning, or channel_energies()
-  //          may return a null pointer, or passthrough vehicles are
-  //          rebinned to a consistent FullWidthFraction binning
-  //  -clean code up
-  //  -see XXX notes below and in source
-  //  -Maybe add member function to save spectrum to various file types into
-  //   a buffer (string, stream, etc...), although is this best to do versus
-  //  -Allow initializing from istreams, instead of just files
-  //  -Make reporting of errors consistent (eg specify which exceptions can be
-  //   thrown, or if none can be thrown, specify this)
-  //
-  //  -The ASP 16k channels, 133 samples, 8 detectors takes up 66 MB memmorry
-
 public:
   SpecFile();
   SpecFile( const SpecFile &rhs );  //calls operator=
@@ -1899,11 +1948,11 @@ public:
 
 
 #if( PERFORM_DEVELOPER_CHECKS )
-  //equalEnough(...): tests whether the passed in SpecFile objects are
+  //equal_enough(...): tests whether the passed in SpecFile objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
   //Throws an std::exception with a brief explanaition when an issue is found.
-  static void equalEnough( const SpecFile &lhs, const SpecFile &rhs );
+  static void equal_enough( const SpecFile &lhs, const SpecFile &rhs );
   
   double deep_gamma_count_sum() const;
   double deep_neutron_count_sum() const;
@@ -1979,25 +2028,7 @@ protected:
   
   //2012 N42 helper functions for loading (may throw exceptions)
   void set_2012_N42_instrument_info( const rapidxml::xml_node<char> *inst_info_node );
-  static std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node );
   
-  //decode_2012_N42_rad_measurement_node: a function to help decode 2012 N42
-  //  RadMeasurement nodes in a mutlithreaded fashion. This helper function
-  //  has to be a member function in order to access the member variables.
-  //  I would preffer you didnt awknowledge the existence of this function.
-  //  id_to_dettypeany_ptr and calibrations_ptr must be valid.
-  static void decode_2012_N42_rad_measurement_node(
-                                std::vector< std::shared_ptr<Measurement> > &measurements,
-                                const rapidxml::xml_node<char> *meas_node,
-                                const IdToDetectorType *id_to_dettypeany_ptr,
-                                DetectorToCalibInfo *calibrations_ptr,
-                                std::mutex &meas_mutex,
-                                std::mutex &calib_mutex );
-
-  //decode_2012_N42_detector_state_and_quality: gets GPS and detector quality
-  //  status as well as InterSpec specific RadMeasurementExtension infor (title)
-  static void decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
-                                   const rapidxml::xml_node<char> *meas_node );
   
 
   //setMeasurementLocationInformation(...):  sets the measurement information
@@ -2199,6 +2230,8 @@ protected:
   mutable std::recursive_mutex mutex_;
 public:
   std::recursive_mutex &mutex() const { return mutex_; };
+  
+  friend struct N42DecodeHelper2012;
 };//class SpecFile
 
 
@@ -2248,7 +2281,7 @@ public:
   void reset();
   bool isEmpty() const;
 #if( PERFORM_DEVELOPER_CHECKS )
-  static void equalEnough( const DetectorAnalysisResult &lhs,
+  static void equal_enough( const DetectorAnalysisResult &lhs,
                            const DetectorAnalysisResult &rhs );
 #endif
 };//struct DetectorAnalysisResult
@@ -2319,7 +2352,7 @@ public:
   bool is_empty() const;
   
 #if( PERFORM_DEVELOPER_CHECKS )
-  static void equalEnough( const DetectorAnalysis &lhs,
+  static void equal_enough( const DetectorAnalysis &lhs,
                            const DetectorAnalysis &rhs );
 #endif
 };//struct DetectorAnalysisResults

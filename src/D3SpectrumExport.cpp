@@ -711,12 +711,11 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     {
       // foreground x-point values
       ostr << "\n\t" << q << "x" << q << ": [";
-      if( meas.num_gamma_channels() )
+      if( meas.num_gamma_channels() && meas.channel_energies() )
       {
         const vector<float> &x  = *meas.channel_energies();
         for( size_t i = 0; i < x.size(); ++i )
           ostr << (i ? "," : "") << x[i];
-        ostr << "," << 2.0f*x[x.size()-1] - x[x.size()-2];
       }
       ostr << "],";
     }//

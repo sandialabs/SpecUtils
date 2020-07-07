@@ -113,7 +113,7 @@ using SpecUtils::time_from_string;
 //For references in comments similar to 'refDXMA3HSRA6', see
 //  documentation/comment_refernce_to_ouo_source.txt for source file information
 
-//If the SpecFile and Measurement equalEnough functions should require remarks
+//If the SpecFile and Measurement equal_enough functions should require remarks
 //  and parse warnings to match - useful to disable when parsing significantly
 //  changes so everything besides remarks and parser comments can be validated;
 //  Differences will still be printed out, so can be manually inspected to make
@@ -209,7 +209,7 @@ namespace
     }//for( size_t i = 0; i < datas.size(); ++i )
   }//void sum_with_rebin(...)
   
-//Analogous to Measurement::compare_by_sample_det_time; compares by
+//Analogous to compare_by_sample_det_time; compares by
 // sample_number, and then detector_number_, but NOT by start_time_
 struct SpecFileLessThan
 {
@@ -231,6 +231,26 @@ struct SpecFileLessThan
     return (lhs->sample_number() < m_sample_number);
   }//operator()
 };//struct SpecFileLessThan
+
+//compare_by_sample_det_time: compares by sample_number_, and then
+//  detector_number_, then by start_time_, then source_type_
+bool compare_by_sample_det_time( const std::shared_ptr<const SpecUtils::Measurement> &lhs,
+                           const std::shared_ptr<const SpecUtils::Measurement> &rhs )
+{
+  if( !lhs || !rhs )
+    return false;
+
+  if( lhs->sample_number() != rhs->sample_number() )
+    return (lhs->sample_number() < rhs->sample_number());
+
+  if( lhs->detector_number() != rhs->detector_number() )
+    return (lhs->detector_number() < rhs->detector_number());
+
+  if( lhs->start_time() != rhs->start_time() )
+    return (lhs->start_time() < rhs->start_time());
+  
+  return (lhs->source_type() < rhs->source_type());
+}//compare_by_sample_det_time(...)
 
 }//anaomous namespace
 
@@ -833,20 +853,21 @@ size_t Measurement::find_gamma_channel( const float x ) const
 {
   assert( energy_calibration_ );
   const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
-  if( !energies || energies->empty() )
+  if( !energies || (energies->size() < 2) || !gamma_counts_ )
     throw std::runtime_error( "find_gamma_channel: channel energies not defined" );
+  
+  assert( (gamma_counts_->size()+1) == energies->size() );
   
   //Using upper_bound instead of lower_bound to properly handle the case
   //  where x == bin lower energy.
   const auto pos_iter = std::upper_bound( energies->begin(), energies->end(), x );
-  
   if( pos_iter == begin(*energies) )
     return 0;
   
-  if( pos_iter == end(*energies) )
-    return energies->size() - 1;
+  const size_t numchannel = energies->size() - 1;
+  const size_t pos_index = (pos_iter - begin(*energies)) - 1;
   
-  return (pos_iter - begin(*energies)) - 1;
+  return std::min( pos_index, numchannel );
 }//size_t find_gamma_channel( const float energy ) const
   
   
@@ -882,13 +903,10 @@ float Measurement::gamma_channel_upper( const size_t channel ) const
   assert( energy_calibration_ );
   const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
   
-  if( !energies || channel >= energies->size() || energies->size() < 2 )
+  if( !energies || (energies->size() < 2) || ((channel+1) >= energies->size()) )
     throw std::runtime_error( "gamma_channel_upper: channel energies not defined" );
   
-  if( channel < (energies->size()-1) )
-    return (*energies)[channel+1];
-  
-  return gamma_channel_lower(channel) + gamma_channel_width(channel);
+  return (*energies)[channel+1];
 }//float gamma_channel_upper( const size_t channel ) const
   
   
@@ -910,11 +928,8 @@ float Measurement::gamma_channel_width( const size_t channel ) const
   assert( energy_calibration_ );
   const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
   
-  if( !energies || channel >= energies->size() || energies->size() < 2 )
+  if( !energies || (energies->size() < 2) || ((channel+1) >= energies->size()) )
     throw std::runtime_error( "gamma_channel_width: channel energies not defined" );
-  
-  if( channel == (energies->size()-1) )
-    return (*energies)[channel] - (*energies)[channel-1];
   
   return (*energies)[channel+1] - (*energies)[channel];
 }//float gamma_channel_width( const size_t channel ) const
@@ -961,7 +976,7 @@ bool Measurement::CheckBinRange( int bin ) const
 {
   assert( energy_calibration_ );
   if( !energy_calibration_->channel_energies()
-      || bin < 1 || bin > static_cast<int>(energy_calibration_->channel_energies()->size()) )
+      || bin < 1 || bin >= static_cast<int>(energy_calibration_->channel_energies()->size()) )
     return false;
   return true;
 }
@@ -986,7 +1001,7 @@ float Measurement::gamma_energy_min() const
   
   if( !energies || energies->empty() )
     return 0.0f;
-  return (*energies)[0];
+  return energies->front();
 }
 
   
@@ -998,11 +1013,7 @@ float Measurement::gamma_energy_max() const
   if( !energies || energies->empty() )
     return 0.0f;
   
-  const size_t nbin = energies->size();
-  if( nbin < 2 )
-    return (*energies)[0];
-  
-  return 2.0f*(*energies)[nbin-1] - (*energies)[nbin-2];
+  return energies->back();
 }
 
 
@@ -1372,25 +1383,6 @@ size_t Measurement::memmorysize() const
 }//size_t Measurement::memmorysize() const
 
 
-bool Measurement::compare_by_sample_det_time( const std::shared_ptr<const Measurement> &lhs,
-                           const std::shared_ptr<const Measurement> &rhs )
-{
-  if( !lhs || !rhs )
-    return false;
-
-  if( lhs->sample_number_ != rhs->sample_number_ )
-    return (lhs->sample_number_ < rhs->sample_number_);
-
-  if( lhs->detector_number_ != rhs->detector_number_ )
-    return (lhs->detector_number_ < rhs->detector_number_);
-
-  if( lhs->start_time_ != rhs->start_time_ )
-    return (lhs->start_time_ < rhs->start_time_);
-  
-  return (lhs->source_type() < rhs->source_type());
-}//lesThan(...)
-
-
 void Measurement::reset()
 {
   live_time_ = 0.0f;
@@ -1602,7 +1594,7 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
     same_cals.push_back( m );
     
     if( m->energy_calibration_->channel_energies() )
-      nchannelset.insert( m->energy_calibration_->channel_energies()->size() );
+      nchannelset.insert( m->energy_calibration_->num_channels() );
     
     ++nchanged;
   }//for( size_t i = 0; i < measurements_.size(); ++i )
@@ -1942,7 +1934,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                          meas, &Measurement::compare_by_sample_det_time );
+                          meas, &compare_by_sample_det_time );
  
   if( (meas_pos!=measurements_.end()) && ((*meas_pos)==meas) )
     throw runtime_error( "SpecFile::add_measurement: duplicate meas" );
@@ -2002,7 +1994,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   sample_numbers_.insert( meas->sample_number_ );
   
   meas_pos = upper_bound( measurements_.begin(), measurements_.end(),
-                          meas, &Measurement::compare_by_sample_det_time );
+                          meas, &compare_by_sample_det_time );
   
   measurements_.insert( meas_pos, meas );
   
@@ -2089,7 +2081,7 @@ void SpecFile::remove_measurements(
    if( measurements_.size() > 100 )
    {
    pos = std::lower_bound( measurements_.begin(), measurements_.end(),
-   m, &Measurement::compare_by_sample_det_time );
+   m, &compare_by_sample_det_time );
    }else
    {
    pos = std::find( measurements_.begin(), measurements_.end(), m );
@@ -2510,14 +2502,10 @@ void Measurement::set_energy_calibration( const std::shared_ptr<const EnergyCali
     case EnergyCalType::FullRangeFraction:
     case EnergyCalType::LowerChannelEdge:
     {
-      assert( cal->channel_energies() );
-      bool same_channel = (gamma_counts_->size() == cal->channel_energies()->size());
-      if( !same_channel && (cal->type()==EnergyCalType::LowerChannelEdge) )
-        same_channel = (gamma_counts_->size() < cal->channel_energies()->size());
-          
+      const bool same_channel = (gamma_counts_->size() == cal->num_channels());
       if( !same_channel )
         throw runtime_error( "set_energy_calibration: calibration has "
-                              + std::to_string(cal->channel_energies()->size()) + " but there are "
+                              + std::to_string(cal->num_channels()) + " but there are "
                               + std::to_string(gamma_counts_->size()) + " gamma channels." );
       break;
     }//
@@ -2534,16 +2522,13 @@ void Measurement::set_energy_calibration( const std::shared_ptr<const EnergyCali
 void Measurement::rebin( const std::shared_ptr<const EnergyCalibration> &cal )
 {
   assert( energy_calibration_ );
-  if( !energy_calibration_->channel_energies()
-     || (energy_calibration_->channel_energies()->size() < 4) )
+  if( energy_calibration_->num_channels() < 4 )
     throw std::runtime_error( "Measurement::rebin(): invalid previous energy calibration" );
   
-  if( !cal
-      || !cal->channel_energies()
-      || (cal->channel_energies()->size() < 4) )
+  if( !cal || (cal->num_channels() < 4) )
     throw std::runtime_error( "Measurement::rebin(): invalid new energy calibration" );
       
-  const size_t new_nbin = cal->channel_energies()->size();
+  const size_t new_nbin = cal->num_channels();
   auto rebinned_gamma_counts = make_shared<vector<float>>(new_nbin);
   
   SpecUtils::rebin_by_lower_edge( *energy_calibration_->channel_energies(),
@@ -2576,7 +2561,7 @@ namespace
   };
 }//namespace
 
-void DetectorAnalysisResult::equalEnough( const DetectorAnalysisResult &lhs,
+void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
                                           const DetectorAnalysisResult &rhs )
 {
   if( lhs.remark_ != rhs.remark_ )
@@ -2636,10 +2621,10 @@ void DetectorAnalysisResult::equalEnough( const DetectorAnalysisResult &lhs,
              lhs.real_time_, rhs.real_time_ );
     throw runtime_error( buffer );
   }
-}//void DetectorAnalysisResult::equalEnough(...)
+}//void DetectorAnalysisResult::equal_enough(...)
 
 
-void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
+void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
                                     const DetectorAnalysis &rhs )
 {
   char buffer[1024];
@@ -2785,12 +2770,12 @@ void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
   std::sort( rhsres.begin(), rhsres.end(), &compare_DetectorAnalysisResult );
   
   for( size_t i = 0; i < rhsres.size(); ++i )
-    DetectorAnalysisResult::equalEnough( lhsres[i], rhsres[i] );
-}//void DetectorAnalysis::equalEnough(...)
+    DetectorAnalysisResult::equal_enough( lhsres[i], rhsres[i] );
+}//void DetectorAnalysis::equal_enough(...)
 
 
 
-void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
+void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 {
   char buffer[1024];
   
@@ -2899,7 +2884,7 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
 
   assert( lhs.energy_calibration_ );
   assert( rhs.energy_calibration_ );
-  EnergyCalibration::equalEnough( *lhs.energy_calibration_, *rhs.energy_calibration_ );
+  EnergyCalibration::equal_enough( *lhs.energy_calibration_, *rhs.energy_calibration_ );
   
   const set<string> nlhsremarkss( lhs.remarks_.begin(), lhs.remarks_.end() );
   const set<string> nrhsremarkss( rhs.remarks_.begin(), rhs.remarks_.end() );
@@ -3108,10 +3093,10 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
   if( lhs.title_ != rhs.title_ )
     throw runtime_error( "Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
-}//void equalEnough( const Measurement &lhs, const Measurement &rhs )
+}//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
-void SpecFile::equalEnough( const SpecFile &lhs,
+void SpecFile::equal_enough( const SpecFile &lhs,
                                    const SpecFile &rhs )
 {
   std::lock( lhs.mutex_, rhs.mutex_ );
@@ -3409,7 +3394,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
       
       try
       {
-        Measurement::equalEnough( *lhsptr, *rhsptr );
+        Measurement::equal_enough( *lhsptr, *rhsptr );
       }catch( std::exception &e )
       {
         snprintf( buffer, sizeof(buffer), "SpecFile: Sample %i, Detector name %s: %s",
@@ -3608,7 +3593,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   //Make UUID last, since its sensitive to the other variables changing, and we
   //  want to report on those first to make fixing easier.
   if( !!lhs.detectors_analysis_ )
-    DetectorAnalysis::equalEnough( *lhs.detectors_analysis_,
+    DetectorAnalysis::equal_enough( *lhs.detectors_analysis_,
                                   *rhs.detectors_analysis_ );
   
   /*
@@ -3621,7 +3606,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   
 //  bool modified_;
 //  bool modifiedSinceDecode_;
-}//void equalEnough( const Measurement &lhs, const Measurement &rhs )
+}//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
 
 
@@ -4229,7 +4214,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     
   }//if( measurements_.size() > 500 ) / else
   
-  stable_sort( measurements_.begin(), measurements_.end(), &Measurement::compare_by_sample_det_time );
+  stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
 }//void  set_sample_numbers_by_time_stamp()
 
 
@@ -4276,7 +4261,7 @@ void SpecFile::ensure_unique_sample_numbers()
   
   if( has_unique_sample_and_detector_numbers() )
   {
-    stable_sort( measurements_.begin(), measurements_.end(), &Measurement::compare_by_sample_det_time );
+    stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
   }else
   {
     set_sample_numbers_by_time_stamp();
@@ -4455,7 +4440,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
           case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
           case EnergyCalType::FullRangeFraction:
           case EnergyCalType::LowerChannelEdge:
-            if( !cal->channel_energies() || cal->channel_energies()->empty() )
+            if( !cal->num_channels() )
             {
 #if( PERFORM_DEVELOPER_CHECKS )
               log_developer_error( __func__, "Found a energy calibration with with missing"
@@ -4604,7 +4589,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
           properties_flags_ |= kNotTimeSortedOrder;
         
-        if( !Measurement::compare_by_sample_det_time(measurements_[i-1],measurements_[i]) )
+        if( !compare_by_sample_det_time(measurements_[i-1],measurements_[i]) )
           properties_flags_ |= kNotSampleDetectorTimeSorted;
       }//for( size_t i = 1; i < measurements_.size(); ++i )
     }else
@@ -5683,7 +5668,7 @@ void SpecFile::rebin_measurement( const std::shared_ptr<const EnergyCalibration>
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  if( !cal || !cal->channel_energies() || (cal->channel_energies()->size() < 4) )
+  if( !cal || (cal->num_channels() < 4) )
     throw runtime_error( "rebin_measurement: invalid calibration passed in" );
   
   std::shared_ptr<Measurement> meas;
@@ -5724,7 +5709,7 @@ void SpecFile::rebin_all_measurements( const std::shared_ptr<const EnergyCalibra
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  if( !cal || !cal->channel_energies() || (cal->channel_energies()->size() < 4) )
+  if( !cal || (cal->num_channels() < 4) )
     throw runtime_error( "rebin_measurement: invalid calibration passed in" );
   
   SpecUtilsAsync::ThreadPool threadpool;
@@ -5736,8 +5721,7 @@ void SpecFile::rebin_all_measurements( const std::shared_ptr<const EnergyCalibra
     
     if( !m->gamma_counts_
        || (m->gamma_counts_->size() < 4)
-       || !m->energy_calibration_->channel_energies()
-       || (m->energy_calibration_->channel_energies()->size() < 4) )
+       || (m->energy_calibration_->num_channels() < 4) )
     {
       continue;
     }
@@ -5754,19 +5738,14 @@ void SpecFile::rebin_all_measurements( const std::shared_ptr<const EnergyCalibra
 
 
 void SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
-                                const std::shared_ptr<const Measurement> &measurement )
+                                const std::shared_ptr<const Measurement> &constmeas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
           
-  if( !cal || !cal->channel_energies() )
+  if( !cal )
     throw runtime_error( "set_calibration: invalid calibration passed in" );
           
-  std::shared_ptr<Measurement> meas;
-  for( size_t i = 0; !meas && (i < measurements_.size()); ++i )
-  {
-    if( measurement == measurements_[i] )
-      meas = measurements_[i];
-  }
+  std::shared_ptr<Measurement> meas = measurement(constmeas);
           
   if( !meas )
     throw runtime_error( "set_calibration: invalid passed in measurement" );
@@ -5826,7 +5805,7 @@ size_t SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalib
   for( const auto &m : measurements_ )
   {
     const size_t nchannel = ((m && m->gamma_counts_) ? m->gamma_counts_->size() : 0u);
-    const size_t ncalchannel = (cal->channel_energies() ? cal->channel_energies()->size() : 0u);
+    const size_t ncalchannel = cal->num_channels();
     
     if( nchannel && is_wanted_sample(m->sample_number_) && is_wanted_det(m->detector_name_) )
     {
@@ -6161,9 +6140,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   
   const auto &energy_cal = dataH->energy_calibration_;
   assert( energy_cal );
-  const auto &channel_energies = energy_cal->channel_energies();
-  
-  const size_t nenergies = channel_energies ? channel_energies->size() : size_t(0);
+  const size_t nenergies = energy_cal->num_channels();
   
   bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
   
@@ -6242,16 +6219,17 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       
       const size_t spec_size = (spec ? spec->size() : (size_t)0);
       
-      //we'll allow measurement->channel_energies() to have more bins, since
+      //we'll allow measurement->energy_calibration()->num_channels() to have more bins, since
       //  if meas->energy_calibration_model() == LowerChannelEdge then there will be
       //  an extra entry to mark indicate upper edge of last channel.
       if( allBinningIsSame && (spec_size > nenergies) )
       {
-        stringstream msg;
-        msg << SRC_LOCATION << "\n\tspec.size()=" << spec_size
-            << "  measurement->channel_energies().size()=" << nenergies;
-        cerr << msg.str() << endl;
-        throw runtime_error( msg.str() );
+        string msg = "SpecFile::sum_measurements: spec.size()=" + std::to_string(spec_size)
+                     + "  measurement->channel_energies().size()=" + std::to_string(nenergies);
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, msg.c_str() );
+#endif
+        throw runtime_error( msg );
       }//if( spec.size() > (binning_ptr->size()) )
       
       //Could add consistency check here to make sure all spectra are same size
@@ -6469,14 +6447,14 @@ struct KeepNBinSpectraStruct
     for( MeasVecIter iter = m_start; iter != m_end; ++iter )
     {
       const std::shared_ptr<Measurement> &m = *iter;
-      const std::shared_ptr<const std::vector<float>> channel_energies = (m ? m->channel_energies()
-                                                   : std::shared_ptr<const std::vector<float>>());
+      if( !m )
+        continue;  //shouldnt ever happen, but JIC
+      
+      const size_t num_bin = m->gamma_counts() ? m->gamma_counts()->size() : size_t(0);
 
-      if( !( ( !channel_energies || channel_energies->size()!=m_nbin )
-          && (channel_energies || !channel_energies->empty()) ) )
-      {
+      //Keep if a neutrons only, or number of bins match wanted
+      if( (!num_bin && m->contained_neutron()) || (num_bin==m_nbin) )
         m_keepers->push_back( m );
-      }
     }//for( MeasVecIter iter = m_start; iter != m_end; ++iter )
   }//void operator()()
 };//struct KeepNBinSpectraStruct

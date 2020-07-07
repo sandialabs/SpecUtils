@@ -2596,6 +2596,62 @@ struct N42DecodeHelper2006
     }
 #endif
   }//void operator()()
+      
+  //set_n42_2006_detector_data_node_info(): silently returns if information isnt found
+  static void set_n42_2006_detector_data_node_info( const rapidxml::xml_node<char> *det_data_node,
+                                                         std::vector<std::shared_ptr<Measurement>> &measurs_to_update )
+  {
+    const string xmlns = get_n42_xmlns(det_data_node);
+    
+    const rapidxml::xml_node<char> *speed_node = xml_first_node_nso( det_data_node, "Speed", xmlns );
+    const rapidxml::xml_node<char> *occupancy_node = xml_first_node_nso( det_data_node, "Occupied", xmlns );
+    const rapidxml::xml_node<char> *start_time_node = xml_first_node_nso( det_data_node, "StartTime", xmlns );
+    const rapidxml::xml_node<char> *sample_real_time_node = xml_first_node_nso( det_data_node, "SampleRealTime", xmlns );
+    
+    float real_time = 0.0, speed = 0.0;
+    boost::posix_time::ptime start_time;
+    OccupancyStatus occupied = OccupancyStatus::Unknown;
+    
+    if( sample_real_time_node && sample_real_time_node->value_size() )
+      real_time = time_duration_string_to_seconds( sample_real_time_node->value(), sample_real_time_node->value_size() );
+    
+    if( start_time_node )
+      start_time = time_from_string( xml_value_str(start_time_node).c_str() );
+    
+    try{
+      speed = speed_from_node( speed_node );
+    }catch(...){}
+    
+    occupied = parse_occupancy_status( occupancy_node );
+    
+    for( auto &meas : measurs_to_update )
+    {
+      if( meas->occupied_ == OccupancyStatus::Unknown )
+        meas->occupied_ = occupied;
+      
+      if( meas->speed_ < 0.00000001f )
+        meas->speed_ = speed;
+      
+      //dont set the start time for identiFINDER IntrinsicActivity spectrum (which
+      //  doesnt have the time in the file), based on the StartTime node under
+      //  <DetectorData> (of which, this time disagrees with the actual spectrum
+      //  StartTime, so I dont know what to do about this anyway)
+      if( meas->start_time_.is_special()
+         && (meas->source_type_ != SourceType::IntrinsicActivity) )
+        meas->start_time_ = start_time;
+      
+      if( meas->real_time_ < 0.000001f )
+        meas->real_time_ = real_time;
+      
+      //For neutron only detectors, a lot of times live time isnt given, so fill
+      //  this out
+      if( meas->contained_neutron_ && meas->live_time_ < 0.000001f
+         && (!meas->gamma_counts_ || meas->gamma_counts_->empty()) )
+        meas->live_time_ = meas->real_time_;
+    }//foeach( std::shared_ptr<Measurement> &meas, measurements_this_node )
+  }//void set_n42_2006_detector_data_node_info(  )
+  
+
 };//struct N42DecodeHelper2006
   
   
@@ -2628,6 +2684,908 @@ struct N42DecodeHelper2006
 }//namespace
 
 
+//Implement N42DecodeHelper2012
+namespace SpecUtils
+{
+//Some typedefs and enums used for decode_2012_N42_rad_measurement_node(...)
+enum DetectionType{ GammaDetection, NeutronDetection, GammaAndNeutronDetection, OtherDetection };
+typedef std::map<std::string,std::pair<DetectionType,std::string> > IdToDetectorType;
+typedef std::map<std::string,MeasurementCalibInfo>                  DetectorToCalibInfo;
+
+      
+struct N42DecodeHelper2012
+{
+public:
+      
+  static std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node )
+  {
+    //      const rapidxml::xml_attribute<char> *char_id = char_node->first_attribute( "id", 2 );
+    const rapidxml::xml_attribute<char> *date = char_node->first_attribute( "valueDateTime", 13 );
+    const rapidxml::xml_attribute<char> *limits = char_node->first_attribute( "valueOutOfLimits", 16 );
+    const rapidxml::xml_node<char> *remark_node = char_node->first_node( "Remark", 6 );
+    const rapidxml::xml_node<char> *name_node = char_node->first_node( "CharacteristicName", 18 );
+    const rapidxml::xml_node<char> *value_node = char_node->first_node( "CharacteristicValue", 19 );
+    const rapidxml::xml_node<char> *unit_node = char_node->first_node( "CharacteristicValueUnits", 24 );
+    //  const rapidxml::xml_node<char> *class_node = char_node->first_node( "CharacteristicValueDataClassCode", 32 );
+        
+    string comment;
+    if( name_node && name_node->value_size() )
+      comment = xml_value_str( name_node );
+        
+    if( (date && date->value_size()) || (limits && limits->value_size())
+         || (remark_node && remark_node->value_size()) )
+    {
+      comment += "(";
+      comment += xml_value_str( date );
+      if( limits && limits->value_size() )
+      {
+        if( comment[comment.size()-1] != '(' )
+          comment += ", ";
+        comment += "value out of limits: ";
+        comment += xml_value_str(limits);
+      }//if( limits && limits->value_size() )
+        
+      if( remark_node && remark_node->value_size() )
+      {
+        if( comment[comment.size()-1] != '(' )
+          comment += ", ";
+        comment += "remark: ";
+        comment += xml_value_str(remark_node);
+      }//if( limits && limits->value_size() )
+      comment += ")";
+    }//if( an attribute has info )
+        
+    if( value_node )
+      comment += string(":") + xml_value_str(value_node);
+        
+    if( unit_node && !XML_VALUE_ICOMPARE(unit_node, "unit-less") )
+      comment += " " + xml_value_str(unit_node);
+        
+    return comment;
+  }//std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *node )
+      
+      
+  //decode_2012_N42_rad_measurement_node: a function to help decode 2012 N42
+  //  RadMeasurement nodes in a mutlithreaded fashion. This helper function
+  //  has to be a member function in order to access the member variables.
+  //  I would preffer you didnt awknowledge the existence of this function.
+  //  id_to_dettypeany_ptr and calibrations_ptr must be valid.
+  static void decode_2012_N42_rad_measurement_node(
+                                    std::vector< std::shared_ptr<Measurement> > &measurements,
+                                    const rapidxml::xml_node<char> *meas_node,
+                                    const IdToDetectorType *id_to_dettype_ptr,
+                                    DetectorToCalibInfo *calibrations_ptr,
+                                    std::mutex &meas_mutex,
+                                    std::mutex &calib_mutex )
+  {
+      assert( id_to_dettype_ptr );
+      assert( calibrations_ptr );
+      
+      try
+      {
+        //We will copy <remarks> and parse warnings from meas_node to each SpecUtils::Measurement that we will create from it
+        vector<string> remarks, parse_warnings;
+        float real_time = 0.0;
+        boost::posix_time::ptime start_time;
+        SourceType spectra_type = SourceType::Unknown;
+        OccupancyStatus occupied = OccupancyStatus::Unknown;
+        
+        const auto meas_att = SpecUtils::xml_first_iattribute(meas_node, "id");
+        //    rapidxml::xml_attribute<char> *info_att = meas_node->first_attribute( "radItemInformationReferences", 28 );
+        //    rapidxml::xml_attribute<char> *group_att = meas_node->first_attribute( "radMeasurementGroupReferences", 29 );
+        
+        //Try to grab sample number from the 'id' attribute of <RadMeasurement>
+        int sample_num_from_meas_node = -999;
+        const string meas_id_att_str = xml_value_str( meas_att );
+        if( meas_id_att_str.size() )
+        {
+          if( SpecUtils::icontains(meas_id_att_str,"background")
+             && !SpecUtils::icontains(meas_id_att_str,"Survey")
+             && !SpecUtils::icontains(meas_id_att_str,"Sample") )
+          {
+            sample_num_from_meas_node = 0;
+          }else if( sscanf( meas_id_att_str.c_str(), "Sample%i", &(sample_num_from_meas_node)) == 1 )
+          {
+          }else if( sscanf( meas_id_att_str.c_str(), "Survey %i", &(sample_num_from_meas_node)) == 1 )
+          {
+          }else if( sscanf( meas_id_att_str.c_str(), "Survey_%i", &(sample_num_from_meas_node)) == 1 )
+          {
+          }else if( sscanf( meas_id_att_str.c_str(), "Survey%i", &(sample_num_from_meas_node)) == 1 )
+          {
+          }//else ... another format I dont recall seeing.
+        }//if( samp_det_str.size() )
+        
+        for( rapidxml::xml_node<char> *remark_node = meas_node->first_node( "Remark", 6 );
+            remark_node;
+            remark_node = XML_NEXT_TWIN(remark_node) )
+        {
+          string remark = SpecUtils::trim_copy( xml_value_str(remark_node) );
+          
+          const bool parse_warning = SpecUtils::starts_with( remark, s_parser_warn_prefix );
+          if( parse_warning )
+          {
+            SpecUtils::ireplace_all( remark, s_parser_warn_prefix, "" );
+            parse_warnings.emplace_back( std::move(remark) );
+          }else if( remark.size() )
+          {
+            remarks.emplace_back( std::move(remark) );
+          }
+        }//for( loop over remarks _
+        
+        rapidxml::xml_node<char> *class_code_node = meas_node->first_node( "MeasurementClassCode", 20 ); //XML_FIRST_NODE( meas_node, "MeasurementClassCode" )
+        if( class_code_node && class_code_node->value_size() )
+        {
+          if( XML_VALUE_ICOMPARE(class_code_node, "Foreground") )
+            spectra_type = SourceType::Foreground;
+          else if( XML_VALUE_ICOMPARE(class_code_node, "Background") )
+            spectra_type = SourceType::Background;
+          else if( XML_VALUE_ICOMPARE(class_code_node, "Calibration") )
+            spectra_type = SourceType::Calibration;
+          else if( XML_VALUE_ICOMPARE(class_code_node, "IntrinsicActivity") )
+            spectra_type = SourceType::IntrinsicActivity;
+          else if( XML_VALUE_ICOMPARE(class_code_node, "NotSpecified") )
+            spectra_type = SourceType::Unknown;
+        }//if( class_code_node && class_code_node->value_size() )
+        
+        //Special check for RadSeeker.
+        if( spectra_type == SourceType::Unknown
+           && meas_att && XML_VALUE_ICOMPARE(meas_att, "Stabilization") )
+          spectra_type = SourceType::IntrinsicActivity;
+        
+        rapidxml::xml_node<char> *time_node = meas_node->first_node( "StartDateTime", 13 );
+        if( time_node && time_node->value_size() )
+        {
+          //ToDo: figure which endian-ess is best.  I've seen at leats one N42 file
+          //  that was little endian (ex "15-05-2017T18:51:50"), but by default
+          //  #time_from_string tries middle-endian first.
+          start_time = time_from_string( xml_value_str(time_node).c_str() );
+          //start_time = SpecUtils::time_from_string_strptime( xml_value_str(time_node).c_str(), SpecUtils::LittleEndianFirst );
+        }
+        
+        rapidxml::xml_node<char> *real_time_node = meas_node->first_node( "RealTimeDuration", 16 );
+        if( !real_time_node )
+          real_time_node = meas_node->first_node( "RealTime", 8 );
+        if( real_time_node && real_time_node->value_size() )
+          real_time = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
+        
+        rapidxml::xml_node<char> *occupancy_node = meas_node->first_node( "OccupancyIndicator", 18 );
+        if( occupancy_node && occupancy_node->value_size() )
+        {
+          if( XML_VALUE_ICOMPARE(occupancy_node, "true") || XML_VALUE_ICOMPARE(occupancy_node, "1") )
+            occupied = OccupancyStatus::Occupied;
+          else if( XML_VALUE_ICOMPARE(occupancy_node, "false") || XML_VALUE_ICOMPARE(occupancy_node, "0") )
+            occupied =  OccupancyStatus::NotOccupied;
+        }//if( occupancy_node && occupancy_node->value_size() )
+        
+        vector< std::shared_ptr<Measurement> > spectrum_meas, neutron_meas;
+        
+        //Lets track the Measurement to calibration id value incase multiple spectra
+        //  are given for the same detector and <RadMeasurement>, but with different
+        //  energy binnings.
+        vector< pair<std::shared_ptr<Measurement>,string> > meas_to_cal_id;
+        
+        
+        for( const rapidxml::xml_node<char> *spectrum_node = XML_FIRST_NODE(meas_node, "Spectrum");
+            spectrum_node;
+            spectrum_node = XML_NEXT_TWIN(spectrum_node) )
+        {
+          using rapidxml::internal::compare;
+          rapidxml::xml_attribute<char> *id_att = spectrum_node->first_attribute( "id", 2, false );
+          rapidxml::xml_attribute<char> *det_info_att = spectrum_node->first_attribute( "radDetectorInformationReference", 31, false );  //case sensitive false for refAO7WGOXDJ4
+          rapidxml::xml_attribute<char> *calib_att = spectrum_node->first_attribute( "energyCalibrationReference", 26, false );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "fullEnergyPeakEfficiencyCalibrationReference", 44 );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "FWHMCalibrationReference", 24 );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "intrinsicDoubleEscapePeakEfficiencyCalibrationReference", 55 );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "intrinsicFullEnergyPeakEfficiencyCalibrationReference", 53 );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "intrinsicSingleEscapePeakEfficiencyCalibrationReference", 55 );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "radRawSpectrumReferences", 24 );
+          //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "totalEfficiencyCalibrationReference", 35 );
+          
+          
+          auto meas = std::make_shared<Measurement>();
+          DetectionType det_type = GammaDetection;
+          
+          //Get the detector name from the XML det_info_att if we have it, otherwise
+          //  if there is only one detector description in the file, we will assume
+          //  this spetrum is from that.
+          if( det_info_att && det_info_att->value_size() )
+            meas->detector_name_ = xml_value_str( det_info_att );
+          else if( id_to_dettype_ptr->size()==1 )
+            meas->detector_name_ = id_to_dettype_ptr->begin()->first;
+          
+          if( meas->detector_name_ == s_unnamed_det_placeholder )
+            meas->detector_name_.clear();
+          
+          
+          auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
+          if( det_iter != end(*id_to_dettype_ptr) )
+          {
+            det_type = det_iter->second.first;
+            meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
+          }//if( det_iter != id_to_dettype_ptr->end() )
+          
+          const rapidxml::xml_node<char> *live_time_node = spectrum_node->first_node( "LiveTimeDuration", 16 );
+          if( !live_time_node )
+            live_time_node = spectrum_node->first_node( "LiveTime", 8 );
+          
+          //Some detectors mistakenly put the <LiveTimeDuration> tag under the
+          //  <RadMeasurement> tag
+          if( !live_time_node && spectrum_node->parent() )
+          {
+            live_time_node = XML_FIRST_NODE(spectrum_node->parent(), "LiveTimeDuration");
+            if( !live_time_node )
+              live_time_node = XML_FIRST_NODE(spectrum_node->parent(), "LiveTime");
+          }
+          
+          
+          const rapidxml::xml_node<char> *channel_data_node = spectrum_node->first_node( "ChannelData", 11 );
+          
+          for( size_t i = 0; i < remarks.size(); ++i )
+            meas->remarks_.push_back( remarks[i] );
+          
+          for( size_t i = 0; i < parse_warnings.size(); ++i )
+            meas->parse_warnings_.push_back( parse_warnings[i] );
+          
+          bool use_remark_real_time = false;
+          
+          for( rapidxml::xml_node<char> *remark_node = spectrum_node->first_node( "Remark", 6 );
+              remark_node;
+              remark_node = XML_NEXT_TWIN(remark_node) )
+          {
+            string remark = xml_value_str( remark_node );
+            trim( remark );
+            if( remark.empty() )
+              continue;
+            
+            if( SpecUtils::istarts_with( remark, s_parser_warn_prefix ) )
+            {
+              SpecUtils::ireplace_all( remark, s_parser_warn_prefix, "" );
+              meas->parse_warnings_.emplace_back( std::move(remark) );
+            }else if( SpecUtils::istarts_with( remark, "RealTime:") )
+            {
+              //Starting with SpecFile_2012N42_VERSION==3, a slightly more
+              //  accurate RealTime may be recorded in the remark if necassary...
+              //  see notes in create_2012_N42_xml() and add_spectra_to_measurement_node_in_2012_N42_xml()
+              //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
+              remark = SpecUtils::trim_copy( remark.substr(9) );
+              meas->real_time_ = time_duration_string_to_seconds( remark );
+              
+              use_remark_real_time = (meas->real_time_ > 0.0);
+            }else if( SpecUtils::istarts_with( remark, "Title:") )
+            {
+              //Starting with SpecFile_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
+              remark = SpecUtils::trim_copy( remark.substr(6) );
+              meas->title_ += remark;
+            }else if( remark.size() )
+            {
+              meas->remarks_.emplace_back( std::move(remark) );
+            }
+          }//for( loop over remarks )
+          
+          
+          //This next line is specific to file written by InterSpec
+          //const string samp_det_str = xml_value_str( meas_att ); //This was used pre 20180225, however I believe this was wrong due to it probably not containing DetXXX - we'll see.
+          const auto spec_id = SpecUtils::xml_first_iattribute( spectrum_node, "id" );
+          const string samp_det_str = SpecUtils::xml_value_str(spec_id);
+          if( samp_det_str.size() )
+          {
+            if( SpecUtils::istarts_with(samp_det_str, "background") )
+            {
+              meas->sample_number_ = 0;
+            }else if( sscanf( samp_det_str.c_str(), "Sample%i", &(meas->sample_number_)) == 1 )
+            {
+            }else if( sscanf( samp_det_str.c_str(), "Survey %i", &(meas->sample_number_)) == 1 )
+            {
+            }else if( sscanf( samp_det_str.c_str(), "Survey_%i", &(meas->sample_number_)) == 1 )
+            {
+            }else if( sscanf( samp_det_str.c_str(), "Survey%i", &(meas->sample_number_)) == 1 )
+            {
+            }else if( sample_num_from_meas_node != -999 )
+            {
+              meas->sample_number_ = sample_num_from_meas_node;
+            }
+          }else if( sample_num_from_meas_node != -999 )
+          {
+            meas->sample_number_ = sample_num_from_meas_node;
+          }//if( samp_det_str.size() )
+          
+  #if(PERFORM_DEVELOPER_CHECKS)
+          if( (sample_num_from_meas_node != -999) && (meas->sample_number_ != sample_num_from_meas_node) )
+          {
+            char buffer[512];
+            snprintf( buffer, sizeof(buffer),
+                     "Found a case where RadMeasurement id ('%s') gave a different"
+                     " sample number than Spectrum id ('%s').",
+                     meas_id_att_str.c_str(), samp_det_str.c_str() );
+            log_developer_error( __func__, buffer );
+          }
+  #endif
+          
+          if( !use_remark_real_time )
+            meas->real_time_ = real_time;
+          
+          //RealTime shouldnt be under Spectrum node (should be under RadMeasurement)
+          //  but some files mess this up, so check for real time under the spectrum
+          //  node if we dont have the real time yet
+          if(  meas->real_time_ <= 0.0f )
+          {
+            const rapidxml::xml_node<char> *real_time_node = XML_FIRST_NODE(spectrum_node, "RealTimeDuration");
+            if( !real_time_node )
+              real_time_node = XML_FIRST_NODE(spectrum_node, "RealTime");
+            if( real_time_node )
+              meas->real_time_ = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
+          }
+          
+          
+          meas->start_time_ = start_time;
+          meas->source_type_ = spectra_type;
+          
+          //For the sake of file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42
+          if( meas->source_type_ == SourceType::Unknown
+             && SpecUtils::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
+            meas->source_type_ = SourceType::IntrinsicActivity;
+          
+          meas->occupied_ = occupied;
+          
+          if( live_time_node && live_time_node->value_size() )
+            meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
+          
+          auto gamma_counts = std::make_shared<vector<float>>();
+          
+          if( channel_data_node && channel_data_node->value_size() )
+          {
+            const char *char_data = channel_data_node->value();
+            const size_t char_data_len = channel_data_node->value_size();
+            SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts );
+            
+            rapidxml::xml_attribute<char> *comp_att = channel_data_node->first_attribute( "compressionCode", 15 );
+            if( icontains( xml_value_str(comp_att), "CountedZeroes") )  //( comp_att && XML_VALUE_ICOMPARE(comp_att, "CountedZeroes") )
+              expand_counted_zeros( *gamma_counts, *gamma_counts );
+          }//if( channel_data_node && channel_data_node->value() )
+          
+          //Well swapp meas->gamma_count_sum_ and meas->neutron_counts_sum_ in a bit if we need to
+          meas->gamma_count_sum_ = 0.0;
+          for( const float a : *gamma_counts )
+            meas->gamma_count_sum_ += a;
+          
+          const rapidxml::xml_node<char> *RadItemState = meas_node->first_node( "RadItemState", 12 );
+          const rapidxml::xml_node<char> *StateVector = (RadItemState ? RadItemState->first_node( "StateVector", 11 ) : (const rapidxml::xml_node<char> *)0);
+          const rapidxml::xml_node<char> *SpeedValue = (StateVector ? StateVector->first_node( "SpeedValue", 10 ) : (const rapidxml::xml_node<char> *)0);
+          
+          if( SpeedValue && SpeedValue->value_size() )
+          {
+            const string val = xml_value_str( SpeedValue );
+            if( !(stringstream(val) >> (meas->speed_)) )
+              cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
+          }//if( speed_ > 0 )
+          
+          if( det_type == OtherDetection )
+            continue;
+          
+          bool is_gamma = (det_type == GammaDetection);
+          bool is_neutron = ((det_type == NeutronDetection) || (det_type == GammaAndNeutronDetection));
+          if( det_type == GammaAndNeutronDetection )
+          {
+            const string att_val = xml_value_str( id_att );
+            is_gamma = !(icontains(att_val,"Neutron") || icontains(att_val,"Ntr"));
+            
+            //If no calibration info is given, then assume it is not a gamma measurement
+            if( !calib_att || !calib_att->value_size() )
+              is_gamma = false;
+          }//if( det_type == GammaAndNeutronDetection )
+          
+          //Sometimes a gamma and neutron detector will have only neutron counts
+          
+          if( is_gamma && gamma_counts && !gamma_counts->empty() )
+          {
+            meas->gamma_counts_ = gamma_counts;
+            
+            if( !calib_att || !calib_att->value_size() )
+            {
+  #if(PERFORM_DEVELOPER_CHECKS)
+              log_developer_error( __func__, "Found a gamma spectrum without calibration information" );
+  #endif
+              //continue;
+            }//if( !calib_att || !calib_att->value_size() )
+            
+            
+            const string calib_id = xml_value_str(calib_att);
+            
+            std::lock_guard<std::mutex> lock( calib_mutex );
+            
+            map<string,MeasurementCalibInfo>::iterator calib_iter = calibrations_ptr->find( calib_id );
+            
+            //If there is only one energy calibration, use it, even if names dont
+            //  match up.  IF more than one calibration then use default
+            if( calib_iter == end(*calibrations_ptr) )
+            {
+              if( calibrations_ptr->size() == 1 )
+              {
+                calib_iter = calibrations_ptr->begin();
+              }else
+              {
+                const string defCalName = "DidntHaveCalSoUsingDefCal_" + std::to_string( meas->gamma_counts_->size() );
+                calib_iter = calibrations_ptr->find( defCalName );
+                if( calib_iter == end(*calibrations_ptr) )
+                {
+                  DetectorToCalibInfo::value_type info( defCalName, MeasurementCalibInfo() );
+                  info.second.equation_type = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
+                  info.second.nbin = meas->gamma_counts_->size();
+                  info.second.coefficients.push_back( 0.0f );
+                  info.second.coefficients.push_back( 3000.0f / std::max(info.second.nbin-1,size_t(1)) );
+                  //info.second.calib_id = defCalName;  //Leave commented out so wont get put into meas_to_cal_id
+                  calib_iter = calibrations_ptr->insert( std::move(info) ).first;
+                }//if( we havent yet created a default calibration )
+              }//if( we have a single calibration we can use ) / else
+            }//if( no calibration present already )
+            
+            assert( calib_iter != calibrations_ptr->end() );
+            
+            MeasurementCalibInfo &calib = calib_iter->second;
+            
+            calib.nbin = meas->gamma_counts_->size();
+            calib.fill_binning();
+            meas->energy_calibration_ = calib.energy_cal;
+            if( !calib.energy_cal_error.empty() )
+              meas->parse_warnings_.push_back( calib.energy_cal_error );
+        
+            if( calib.calib_id.size() )
+              meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
+            
+            meas->contained_neutron_ = false;
+          }else if( is_neutron && meas->gamma_counts_ && meas->gamma_counts_->size() < 6 && meas->gamma_counts_->size() > 0 )
+          {
+            meas->neutron_counts_sum_ = meas->gamma_count_sum_;
+            meas->gamma_count_sum_ = 0.0;
+            if( meas->gamma_counts_ && meas->gamma_counts_->size() )
+              meas->gamma_counts_ = std::make_shared<vector<float>>();
+            meas->contained_neutron_ = true;
+            //        if( gamma_counts )
+            //          meas->neutron_counts_.swap( *gamma_counts );
+          }else
+          {
+            continue;
+          }//if( is_gamma ) / else if ( neutron ) / else
+          //      const rapidxml::xml_node<char> *extension_node = meas_node->first_node( "SpectrumExtension", 17 );
+          
+          decode_2012_N42_detector_state_and_quality( meas, meas_node );
+          
+          spectrum_meas.push_back( meas );
+        }//for( loop over "Spectrum" nodes )
+        
+        //flir radHUNTER N42 files is the inspiration for this next loop that
+        // checks if there is a min, max, and total neutron <GrossCounts> node
+        //  for this <RadMeasurement> node.
+        bool min_neut = false, max_neut = false, total_neut = false, has_other = false;
+        
+        //XML_FOREACH_DAUGHTER( node, meas_node, "GrossCounts" )
+        for( auto node = XML_FIRST_NODE( meas_node, "GrossCounts" );
+            node;
+            node = XML_NEXT_TWIN(node) )
+        {
+          const rapidxml::xml_attribute<char> *att = node->first_attribute( "radDetectorInformationReference", 31, false );
+          const bool is_min = XML_VALUE_ICOMPARE(att, "minimumNeutrons");
+          const bool is_max = XML_VALUE_ICOMPARE(att, "maximumNeutrons");
+          const bool is_total = XML_VALUE_ICOMPARE(att, "totalNeutrons");
+          
+          min_neut = (min_neut || is_min);
+          max_neut = (max_neut || is_max);
+          total_neut = (total_neut || is_total);
+          has_other = (has_other || (!is_min && !is_max && !is_total));
+        }//for( loop over GrossCounts nodes )
+        
+        const bool has_min_max_total_neutron = ((min_neut && max_neut && total_neut) && !has_other);
+        
+        for( auto gross_counts_node = XML_FIRST_NODE( meas_node, "GrossCounts" );
+            gross_counts_node;
+            gross_counts_node = XML_NEXT_TWIN(gross_counts_node) )
+        {
+          const rapidxml::xml_node<char> *live_time_node = gross_counts_node->first_node( "LiveTimeDuration", 16 );
+          const rapidxml::xml_node<char> *count_data_node = gross_counts_node->first_node( "CountData", 9 );
+          const rapidxml::xml_attribute<char> *det_info_att = gross_counts_node->first_attribute( "radDetectorInformationReference", 31, false );
+          
+          std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
+          DetectionType det_type = GammaDetection;
+          
+          const string det_info_ref = xml_value_str( det_info_att );
+          
+          if( det_info_ref.empty() )
+          {
+            cerr << "Found GrossCounts node with no radDetectorInformationReference"
+            << endl;
+            continue;
+          }//if( det_info_ref.empty() )
+          
+          
+          if( has_min_max_total_neutron )
+          {
+            if( !SpecUtils::iequals_ascii(det_info_ref, "totalNeutrons") )
+              continue;
+          }
+          
+          meas->detector_name_ = det_info_ref;
+          if( meas->detector_name_ == s_unnamed_det_placeholder )
+            meas->detector_name_.clear();
+          
+          
+          auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
+          if( det_iter == end(*id_to_dettype_ptr) )
+          {
+            cerr << "No detector information for '" << meas->detector_name_
+            << "' so skipping" << endl;
+            continue;
+          }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
+          
+          
+          det_type = det_iter->second.first;
+          meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
+          
+          if( icontains( det_info_ref, "Neutrons" ) )
+            det_type = NeutronDetection;
+          
+          if( (det_type != NeutronDetection)
+             && (det_type != GammaAndNeutronDetection) )
+          {
+  #if(PERFORM_DEVELOPER_CHECKS)
+            auto  det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
+            if( det_iter == id_to_dettype_ptr->end() )
+            {
+              stringstream msg;
+              msg << "Found a non neutron GrossCount node (det info ref attrib='"
+              << det_info_ref << "'); child nodes are: {";
+              for( auto el = meas_node->first_node(); el; el = el->next_sibling() )
+                msg << xml_name_str(el) << ", ";
+              msg << "}. Skipping!!!";
+              log_developer_error( __func__, msg.str().c_str() );
+              cerr << endl;
+            }//if( det_iter == id_to_dettype_ptr->end() )
+  #endif
+            continue;
+          }
+          
+          //This next line is specific to file written by InterSpec, and is used to make sure sample
+          // numbers kinda-sorta persist across writing to a N42-2012 and reading back in.  It isnt
+          // really necassary except for some poorly formed portal input in the N42-2006 format; it
+          // is definetly a hack.
+          //const string sample_det_att = xml_value_str( meas_att ); //See notes above about pre 20180225,
+          const auto gross_id = SpecUtils::xml_first_iattribute( gross_counts_node, "id" );
+          const string sample_det_att = SpecUtils::xml_value_str( gross_id );
+          if( sample_det_att.size() )
+          {
+            if( SpecUtils::istarts_with(sample_det_att, "background") )
+            {
+              meas->sample_number_ = 0;
+            }else if( sscanf( sample_det_att.c_str(), "Sample%i", &(meas->sample_number_) ) == 1 )
+            {
+            }else if( sscanf( sample_det_att.c_str(), "Survey%i", &(meas->sample_number_) ) == 1 )
+            {
+            }else if( sscanf( sample_det_att.c_str(), "Survey %i", &(meas->sample_number_) ) == 1 )
+            {
+            }else if( sscanf( sample_det_att.c_str(), "Survey_%i", &(meas->sample_number_) ) == 1 )
+            {
+            }else if( sample_num_from_meas_node != -999 )
+            {
+              meas->sample_number_ = 0;
+            }else
+            {
+              //We'll end up here with taks like: 'M-13 Aa1N', 'M113N', 'Foreground-20100127130220-Aa1N',
+              //  '4045bb4c-9c68-48fa-8121-48c5806f84d8-count', 'NeutronForeground58-CL1',
+              //  'ForegroundMeasure6afc5c3010001NeutronCounts', etc
+  //#if(PERFORM_DEVELOPER_CHECKS)
+  //            char buffer[256];
+  //            snprintf( buffer, sizeof(buffer),
+  //                     "Unrecognized 'id' attribute of Spectrum node: '%s'", sample_det_att.c_str() );
+  //            log_developer_error( __func__, buffer );
+  //#endif
+            }
+          }//if( sample_det_att.size() )
+          
+          bool use_remark_real_time = false;
+          
+          for( size_t i = 0; i < remarks.size(); ++i )
+            meas->remarks_.push_back( remarks[i] );
+          
+          
+          for( auto remark_node = XML_FIRST_NODE(gross_counts_node, "Remark");
+              remark_node;
+              remark_node = XML_NEXT_TWIN(remark_node) )
+          {
+            string remark = SpecUtils::trim_copy( xml_value_str(remark_node) );
+            
+            if( SpecUtils::istarts_with( remark, "RealTime:") )
+            {
+              //See notes in equivalent portion of code for the <Spectrum> tag
+              remark = SpecUtils::trim_copy( remark.substr(9) );
+              meas->real_time_ = time_duration_string_to_seconds( remark );
+              use_remark_real_time = (meas->real_time_ > 0.0f);
+            }else if( SpecUtils::istarts_with( remark, "Title:") )
+            {
+              //See notes in equivalent portion of code for the <Spectrum> tag
+              meas->title_ += SpecUtils::trim_copy( remark.substr(6) );
+            }else if( !remark.empty() )
+            {
+              meas->remarks_.push_back( remark );
+            }
+          }//for( loop over remark nodes )
+          
+          if( !use_remark_real_time )
+            meas->real_time_ = real_time;
+          meas->start_time_ = start_time;
+          meas->source_type_ = spectra_type;
+          meas->occupied_ = occupied;
+          
+          if( live_time_node && live_time_node->value_size() )
+            meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
+          
+          const rapidxml::xml_node<char> *RadItemState = XML_FIRST_NODE(meas_node, "RadItemState");
+          const rapidxml::xml_node<char> *StateVector  = xml_first_node( RadItemState, "StateVector" );
+          const rapidxml::xml_node<char> *SpeedValue   = xml_first_node( StateVector, "SpeedValue" );
+          
+          if( SpeedValue && SpeedValue->value_size() )
+          {
+            const string val = xml_value_str( SpeedValue );
+            if( !(stringstream(val) >> (meas->speed_)) )
+              cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
+          }//if( speed_ > 0 )
+          
+          meas->contained_neutron_ = true;
+          
+          if( !count_data_node || !count_data_node->value_size() )
+            count_data_node = gross_counts_node->first_node( "GrossCountData", 14 );
+          
+          if( !count_data_node || !count_data_node->value_size() )
+          {
+            cerr << "Found a GrossCount node without a CountData node, skipping" << endl;
+            continue;
+          }
+          
+          SpecUtils::split_to_floats( count_data_node->value(),
+                                     count_data_node->value_size(),
+                                     meas->neutron_counts_ );
+          for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
+            meas->neutron_counts_sum_ += meas->neutron_counts_[i];
+          
+          decode_2012_N42_detector_state_and_quality( meas, meas_node );
+          
+          neutron_meas.push_back( meas );
+        }//for( loop over GrossCounts Node )
+        
+        vector<std::shared_ptr<Measurement>> meas_to_add;
+        if( spectrum_meas.size() == neutron_meas.size() )
+        {
+          for( size_t i = 0; i < spectrum_meas.size(); ++i )
+          {
+            std::shared_ptr<Measurement> &gamma = spectrum_meas[i];
+            std::shared_ptr<Measurement> &neutron = neutron_meas[i];
+            
+            gamma->neutron_counts_ = neutron->neutron_counts_;
+            gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
+            gamma->contained_neutron_ = neutron->contained_neutron_;
+            for( const string &s : neutron->remarks_ )
+            {
+              if( std::find(gamma->remarks_.begin(), gamma->remarks_.end(), s)
+                 == gamma->remarks_.end() )
+                gamma->remarks_.push_back( s );
+            }
+            
+            meas_to_add.push_back( gamma );
+          }//for( size_t i = 0; i < spectrum_meas.size(); ++i )
+        }else
+        {
+          vector< pair<std::shared_ptr<Measurement>,std::shared_ptr<Measurement>> > gamma_and_neut_pairs;
+          for( size_t i = 0; i < spectrum_meas.size(); ++i )
+          {
+            if( !spectrum_meas[i] )
+              continue;
+            
+            for( size_t j = 0; j < neutron_meas.size(); ++j )
+            {
+              if( !neutron_meas[j] )
+                continue;
+              
+              const string &gdetname = spectrum_meas[i]->detector_name_;
+              const string &ndetname = neutron_meas[j]->detector_name_;
+              if( gdetname.size() < 2 || ndetname.size() < 2 )
+                continue;
+              
+              if( (gdetname == ndetname)
+                 || (istarts_with(ndetname, gdetname) && SpecUtils::icontains(ndetname, "neut")) )
+              {
+                gamma_and_neut_pairs.push_back( make_pair(spectrum_meas[i], neutron_meas[j]) );
+                spectrum_meas[i].reset();
+                neutron_meas[j].reset();
+                break;
+              }
+            }//for( size_t j = 0; j < neutron_meas.size(); ++j )
+          }//for( size_t i = 0; i < spectrum_meas.size(); ++i )
+          
+          for( size_t i = 0; i < gamma_and_neut_pairs.size(); ++i )
+          {
+            std::shared_ptr<Measurement> &gamma = gamma_and_neut_pairs[i].first;
+            std::shared_ptr<Measurement> &neutron = gamma_and_neut_pairs[i].second;
+            
+            gamma->neutron_counts_ = neutron->neutron_counts_;
+            gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
+            gamma->contained_neutron_ = neutron->contained_neutron_;
+            for( const string &s : neutron->remarks_ )
+            {
+              if( std::find(gamma->remarks_.begin(), gamma->remarks_.end(), s)
+                 == gamma->remarks_.end() )
+                gamma->remarks_.push_back( s );
+            }
+            
+            meas_to_add.push_back( gamma );
+          }//for( size_t i = 0; i < gamma_and_neut_pairs.size(); ++i )
+          
+          
+          for( size_t i = 0; i < spectrum_meas.size(); ++i )
+            if( spectrum_meas[i] )
+              meas_to_add.push_back( spectrum_meas[i] );
+          
+          for( size_t i = 0; i < neutron_meas.size(); ++i )
+            if( neutron_meas[i] )
+              meas_to_add.push_back( neutron_meas[i] );
+        }//
+        
+        //XXX - todo - should implement the below
+        //    rapidxml::xml_node<char> *dose_rate_node = meas_node->first_node( "DoseRate", 8 );
+        //    rapidxml::xml_node<char> *total_dose_node = meas_node->first_node( "TotalDose", 9 );
+        //    rapidxml::xml_node<char> *exposure_rate_node = meas_node->first_node( "ExposureRate", 12 );
+        //    rapidxml::xml_node<char> *total_exposure_node = meas_node->first_node( "TotalExposure", 13 );
+        //    rapidxml::xml_node<char> *instrument_state_node = meas_node->first_node( "RadInstrumentState", 18 );
+        //    rapidxml::xml_node<char> *item_state_node = meas_node->first_node( "RadItemState", 12 );
+        
+        //Check for duplicate spectrum in spectrum_meas for the same detector, but
+        //  with different calibrations.
+        //  See comments for #energy_cal_variants and #keep_energy_cal_variant.
+        //Note: as of 20160531, this duplicate spectrum stuff is untested.
+        const vector<std::shared_ptr<Measurement>>::const_iterator beginmeas = meas_to_add.begin();
+        const vector<std::shared_ptr<Measurement>>::const_iterator endmeas = meas_to_add.end();
+        for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
+        {
+          std::shared_ptr<Measurement> &meas = meas_to_cal_id[i].first;
+          if( std::find(beginmeas,endmeas,meas) == endmeas )
+            continue;
+          
+          vector< pair<std::shared_ptr<Measurement>,string> > samenames;
+          for( size_t j = 0; j < i; ++j )
+          {
+            std::shared_ptr<Measurement> &innermeas = meas_to_cal_id[j].first;
+            
+            if( std::find(beginmeas,endmeas,innermeas) == endmeas )
+              continue;
+            
+            if( innermeas->detector_name_ == meas->detector_name_
+               && innermeas->start_time_ == meas->start_time_
+               && fabs(innermeas->real_time_ - meas->real_time_) < 0.01
+               && fabs(innermeas->live_time_ - meas->live_time_) < 0.01 )
+            {
+              samenames.push_back( make_pair(innermeas, meas_to_cal_id[j].second ) );
+            }
+          }//for( size_t j = 0; j < i; ++j )
+          
+          if( samenames.size() )
+          {
+            meas->detector_name_ += "_intercal_" + meas_to_cal_id[i].second;
+            for( size_t j = 0; j < samenames.size(); ++j )
+              samenames[j].first->detector_name_ += "_intercal_" + samenames[j].second;
+          }//if( samenames.size() )
+        }//for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
+        
+        {
+          std::lock_guard<std::mutex> lock( meas_mutex );
+          measurements.insert( measurements.end(), meas_to_add.begin(), meas_to_add.end() );
+        }
+      }catch( std::exception &e )
+      {
+        std::lock_guard<std::mutex> lock( meas_mutex );
+        cerr << "Error decoding SpecFile::decode2012N42SpectrumNode(...): "
+        << e.what() << endl;
+      }//try / catch
+  }//void decode_2012_N42_rad_measurement_node( const rapidxml::xml_node<char> *spectrum )
+    
+
+  //decode_2012_N42_detector_state_and_quality: gets GPS and detector quality
+  //  status as well as InterSpec specific RadMeasurementExtension infor (title)
+  static void decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
+                                                            const rapidxml::xml_node<char> *meas_node )
+  {
+    using rapidxml::internal::compare;
+    
+    if( !meas_node || !meas )
+      return;
+    
+    meas->quality_status_ = SpecUtils::QualityStatus::Good;  //2012 N42 defaults to good
+    const rapidxml::xml_node<char> *detector_state_node = meas_node->first_node( "RadDetectorState", 16 );
+    
+    if( detector_state_node )
+    {
+      const rapidxml::xml_node<char> *fault = detector_state_node->first_node( "Fault", 5 );
+      const rapidxml::xml_node<char> *remark = XML_FIRST_NODE( detector_state_node, "Remark" );
+      
+      if( fault && fault->value_size() )
+      {
+        if( XML_VALUE_ICOMPARE( fault, "Fatal" )
+           || XML_VALUE_ICOMPARE( fault, "Error" ) )
+          meas->quality_status_ = SpecUtils::QualityStatus::Bad;
+        else if( XML_VALUE_ICOMPARE( fault, "Warning" ) )
+          meas->quality_status_ = SpecUtils::QualityStatus::Suspect;
+      }else if( !detector_state_node->first_node() ||
+               (remark && SpecUtils::starts_with( xml_value_str(remark), "InterSpec could not")) )
+      {
+        meas->quality_status_ = SpecUtils::QualityStatus::Missing; //InterSpec Specific
+      }
+    }//if( detector_state_node )
+    
+    
+    const rapidxml::xml_node<char> *inst_state_node = XML_FIRST_NODE(meas_node, "RadInstrumentState" );
+    if( !inst_state_node )
+      inst_state_node = XML_FIRST_NODE(meas_node, "RadItemState" );
+    if( !inst_state_node )
+      inst_state_node = XML_FIRST_NODE(meas_node, "RadDetectorState");
+    
+    if( inst_state_node )
+    {
+      const rapidxml::xml_node<char> *StateVector = inst_state_node->first_node( "StateVector", 11 );
+      const rapidxml::xml_node<char> *GeographicPoint = (StateVector ? StateVector->first_node( "GeographicPoint", 15 ) : (const rapidxml::xml_node<char> *)0);
+      
+      if( GeographicPoint )
+      {
+        const rapidxml::xml_node<char> *longitude = GeographicPoint->first_node( "LongitudeValue", 14 );
+        const rapidxml::xml_node<char> *latitude = GeographicPoint->first_node( "LatitudeValue", 13 );
+        //      const rapidxml::xml_node<char> *elevation= GeographicPoint->first_node( "ElevationValue", 14 );
+        const rapidxml::xml_node<char> *time = GeographicPoint->first_node( "PositionTime", 12 ); //An InterSpec Addition
+        
+        if( !longitude )
+          longitude = GeographicPoint->first_node( "Longitude", 9 );
+        if( !latitude )
+          latitude = GeographicPoint->first_node( "Latitude", 8 );
+        //      if( !elevation )
+        //        elevation = GeographicPoint->first_node( "Elevation", 9 );
+        
+        const string longstr = xml_value_str( longitude );
+        const string latstr = xml_value_str( latitude );
+        //      const string elevstr = xml_value_str( elevation );
+        const string timestr = xml_value_str( time );
+        
+        if( longstr.size() )
+          meas->longitude_ = atof( longstr.c_str() );
+        if( latstr.size() )
+          meas->latitude_ = atof( latstr.c_str() );
+        //      if( elevstr.size() )
+        //        meas->elevation_ = atof( elevstr.c_str() );
+        
+        if( timestr.size()
+           && SpecUtils::valid_longitude(meas->longitude_)
+           && SpecUtils::valid_latitude(meas->latitude_) )
+          meas->position_time_ =  time_from_string( timestr.c_str() );
+        
+        //      static std::mutex sm;
+        //      {
+        //        std::lock_guard<std::mutex> lock(sm);
+        //        cerr << "time=" << time << ", timestr=" << timestr << ", meas->position_time_=" << SpecUtils::to_iso_string(meas->position_time_) << endl;
+        //      }
+      }//if( GeographicPoint )
+    }//if( RadInstrumentState )
+    
+    rapidxml::xml_node<char> *extension_node = meas_node->first_node( "RadMeasurementExtension", 23 );
+    
+    if( extension_node )
+    {
+      //This is vestigial for SpecFile_2012N42_VERSION==2
+      rapidxml::xml_node<char> *title_node = extension_node->first_node( "InterSpec:Title", 15 );
+      meas->title_ = xml_value_str( title_node );
+      
+      //This is vestigial for SpecFile_2012N42_VERSION==1
+      rapidxml::xml_node<char> *type_node = extension_node->first_node( "InterSpec:DetectorType", 22 );
+      meas->detector_description_ = xml_value_str( type_node );
+    }//if( detector_type_.size() || title_.size() )
+  }//void decode_2012_N42_detector_state_and_quality(...)
+  
+};//class N42DecodeHelper2012
+      
+}//SpecUtils namespace to implement N42DecodeHelper2012
+      
 
 namespace SpecUtils
 {
@@ -3258,58 +4216,6 @@ namespace SpecUtils
   }//void set_n42_2006_gross_count_node_info(...)
   
   
-  void Measurement::set_n42_2006_detector_data_node_info( const rapidxml::xml_node<char> *det_data_node,
-                                                         std::vector<std::shared_ptr<Measurement>> &measurs_to_update )
-  {
-    const string xmlns = get_n42_xmlns(det_data_node);
-    
-    const rapidxml::xml_node<char> *speed_node = xml_first_node_nso( det_data_node, "Speed", xmlns );
-    const rapidxml::xml_node<char> *occupancy_node = xml_first_node_nso( det_data_node, "Occupied", xmlns );
-    const rapidxml::xml_node<char> *start_time_node = xml_first_node_nso( det_data_node, "StartTime", xmlns );
-    const rapidxml::xml_node<char> *sample_real_time_node = xml_first_node_nso( det_data_node, "SampleRealTime", xmlns );
-    
-    float real_time = 0.0, speed = 0.0;
-    boost::posix_time::ptime start_time;
-    OccupancyStatus occupied = OccupancyStatus::Unknown;
-    
-    if( sample_real_time_node && sample_real_time_node->value_size() )
-      real_time = time_duration_string_to_seconds( sample_real_time_node->value(), sample_real_time_node->value_size() );
-    
-    if( start_time_node )
-      start_time = time_from_string( xml_value_str(start_time_node).c_str() );
-    
-    try{
-      speed = speed_from_node( speed_node );
-    }catch(...){}
-    
-    occupied = parse_occupancy_status( occupancy_node );
-    
-    for( auto &meas : measurs_to_update )
-    {
-      if( meas->occupied_ == OccupancyStatus::Unknown )
-        meas->occupied_ = occupied;
-      
-      if( meas->speed_ < 0.00000001f )
-        meas->speed_ = speed;
-      
-      //dont set the start time for identiFINDER IntrinsicActivity spectrum (which
-      //  doesnt have the time in the file), based on the StartTime node under
-      //  <DetectorData> (of which, this time disagrees with the actual spectrum
-      //  StartTime, so I dont know what to do about this anyway)
-      if( meas->start_time_.is_special()
-         && (meas->source_type_ != SourceType::IntrinsicActivity) )
-        meas->start_time_ = start_time;
-      
-      if( meas->real_time_ < 0.000001f )
-        meas->real_time_ = real_time;
-      
-      //For neutron only detectors, a lot of times live time isnt given, so fill
-      //  this out
-      if( meas->contained_neutron_ && meas->live_time_ < 0.000001f
-         && (!meas->gamma_counts_ || meas->gamma_counts_->empty()) )
-        meas->live_time_ = meas->real_time_;
-    }//foeach( std::shared_ptr<Measurement> &meas, measurements_this_node )
-  }//void set_n42_2006_detector_data_node_info(  )
   
   
   void SpecFile::set_n42_2006_measurement_location_information(
@@ -4002,7 +4908,7 @@ namespace SpecUtils
             }//for( const auto &gross : gross_counts_this_node )
           }//if( gross_counts_this_node.size() )
           
-          Measurement::set_n42_2006_detector_data_node_info( det_data_node, measurements_this_node );
+          N42DecodeHelper2006::set_n42_2006_detector_data_node_info( det_data_node, measurements_this_node );
           
           for( size_t multical_index = 0; multical_index < multiple_cals.size(); ++multical_index )
           {
@@ -5600,53 +6506,6 @@ namespace SpecUtils
   }//bool write_2012_N42( std::ostream& ostr ) const
   
   
-  std::string SpecFile::concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *char_node )
-  {
-    //      const rapidxml::xml_attribute<char> *char_id = char_node->first_attribute( "id", 2 );
-    const rapidxml::xml_attribute<char> *date = char_node->first_attribute( "valueDateTime", 13 );
-    const rapidxml::xml_attribute<char> *limits = char_node->first_attribute( "valueOutOfLimits", 16 );
-    const rapidxml::xml_node<char> *remark_node = char_node->first_node( "Remark", 6 );
-    const rapidxml::xml_node<char> *name_node = char_node->first_node( "CharacteristicName", 18 );
-    const rapidxml::xml_node<char> *value_node = char_node->first_node( "CharacteristicValue", 19 );
-    const rapidxml::xml_node<char> *unit_node = char_node->first_node( "CharacteristicValueUnits", 24 );
-    //  const rapidxml::xml_node<char> *class_node = char_node->first_node( "CharacteristicValueDataClassCode", 32 );
-    
-    string comment;
-    if( name_node && name_node->value_size() )
-      comment = xml_value_str( name_node );
-    
-    if( (date && date->value_size()) || (limits && limits->value_size())
-       || (remark_node && remark_node->value_size()) )
-    {
-      comment += "(";
-      comment += xml_value_str( date );
-      if( limits && limits->value_size() )
-      {
-        if( comment[comment.size()-1] != '(' )
-          comment += ", ";
-        comment += "value out of limits: ";
-        comment += xml_value_str(limits);
-      }//if( limits && limits->value_size() )
-      
-      if( remark_node && remark_node->value_size() )
-      {
-        if( comment[comment.size()-1] != '(' )
-          comment += ", ";
-        comment += "remark: ";
-        comment += xml_value_str(remark_node);
-      }//if( limits && limits->value_size() )
-      comment += ")";
-    }//if( an attribute has info )
-    
-    if( value_node )
-      comment += string(":") + xml_value_str(value_node);
-    
-    if( unit_node && !XML_VALUE_ICOMPARE(unit_node, "unit-less") )
-      comment += " " + xml_value_str(unit_node);
-    
-    return comment;
-  }//std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *node )
-  
   
   void SpecFile::set_2012_N42_instrument_info( const rapidxml::xml_node<char> *info_node )
   {
@@ -5821,7 +6680,7 @@ namespace SpecUtils
           char_node;
           char_node = XML_NEXT_TWIN(char_node) )
       {
-        const string comment = concat_2012_N42_characteristic_node( char_node );
+        const string comment = N42DecodeHelper2012::concat_2012_N42_characteristic_node( char_node );
         if(!comment.empty())
           remarks_.push_back( comment );
       }//for( loop over "Characteristic" nodes )
@@ -5864,7 +6723,7 @@ namespace SpecUtils
             measurement_operator_ = xml_value_str(value_node);
           }else
           {
-            const string comment = concat_2012_N42_characteristic_node( char_node );
+            const string comment = N42DecodeHelper2012::concat_2012_N42_characteristic_node( char_node );
             if(!comment.empty())
               remarks_.push_back( precursor + comment );
           }//
@@ -6038,840 +6897,7 @@ namespace SpecUtils
     }//for( loop over "Characteristic" nodes )
     
   }//get_2012_N42_energy_calibrations(...)
-  
-  
-  
-  
-  void SpecFile::decode_2012_N42_detector_state_and_quality( std::shared_ptr<Measurement> meas,
-                                                            const rapidxml::xml_node<char> *meas_node )
-  {
-    using rapidxml::internal::compare;
-    
-    if( !meas_node || !meas )
-      return;
-    
-    meas->quality_status_ = SpecUtils::QualityStatus::Good;  //2012 N42 defaults to good
-    const rapidxml::xml_node<char> *detector_state_node = meas_node->first_node( "RadDetectorState", 16 );
-    
-    if( detector_state_node )
-    {
-      const rapidxml::xml_node<char> *fault = detector_state_node->first_node( "Fault", 5 );
-      const rapidxml::xml_node<char> *remark = XML_FIRST_NODE( detector_state_node, "Remark" );
-      
-      if( fault && fault->value_size() )
-      {
-        if( XML_VALUE_ICOMPARE( fault, "Fatal" )
-           || XML_VALUE_ICOMPARE( fault, "Error" ) )
-          meas->quality_status_ = SpecUtils::QualityStatus::Bad;
-        else if( XML_VALUE_ICOMPARE( fault, "Warning" ) )
-          meas->quality_status_ = SpecUtils::QualityStatus::Suspect;
-      }else if( !detector_state_node->first_node() ||
-               (remark && SpecUtils::starts_with( xml_value_str(remark), "InterSpec could not")) )
-      {
-        meas->quality_status_ = SpecUtils::QualityStatus::Missing; //InterSpec Specific
-      }
-    }//if( detector_state_node )
-    
-    
-    const rapidxml::xml_node<char> *inst_state_node = XML_FIRST_NODE(meas_node, "RadInstrumentState" );
-    if( !inst_state_node )
-      inst_state_node = XML_FIRST_NODE(meas_node, "RadItemState" );
-    if( !inst_state_node )
-      inst_state_node = XML_FIRST_NODE(meas_node, "RadDetectorState");
-    
-    if( inst_state_node )
-    {
-      const rapidxml::xml_node<char> *StateVector = inst_state_node->first_node( "StateVector", 11 );
-      const rapidxml::xml_node<char> *GeographicPoint = (StateVector ? StateVector->first_node( "GeographicPoint", 15 ) : (const rapidxml::xml_node<char> *)0);
-      
-      if( GeographicPoint )
-      {
-        const rapidxml::xml_node<char> *longitude = GeographicPoint->first_node( "LongitudeValue", 14 );
-        const rapidxml::xml_node<char> *latitude = GeographicPoint->first_node( "LatitudeValue", 13 );
-        //      const rapidxml::xml_node<char> *elevation= GeographicPoint->first_node( "ElevationValue", 14 );
-        const rapidxml::xml_node<char> *time = GeographicPoint->first_node( "PositionTime", 12 ); //An InterSpec Addition
-        
-        if( !longitude )
-          longitude = GeographicPoint->first_node( "Longitude", 9 );
-        if( !latitude )
-          latitude = GeographicPoint->first_node( "Latitude", 8 );
-        //      if( !elevation )
-        //        elevation = GeographicPoint->first_node( "Elevation", 9 );
-        
-        const string longstr = xml_value_str( longitude );
-        const string latstr = xml_value_str( latitude );
-        //      const string elevstr = xml_value_str( elevation );
-        const string timestr = xml_value_str( time );
-        
-        if( longstr.size() )
-          meas->longitude_ = atof( longstr.c_str() );
-        if( latstr.size() )
-          meas->latitude_ = atof( latstr.c_str() );
-        //      if( elevstr.size() )
-        //        meas->elevation_ = atof( elevstr.c_str() );
-        
-        if( timestr.size()
-           && SpecUtils::valid_longitude(meas->longitude_)
-           && SpecUtils::valid_latitude(meas->latitude_) )
-          meas->position_time_ =  time_from_string( timestr.c_str() );
-        
-        //      static std::mutex sm;
-        //      {
-        //        std::lock_guard<std::mutex> lock(sm);
-        //        cerr << "time=" << time << ", timestr=" << timestr << ", meas->position_time_=" << SpecUtils::to_iso_string(meas->position_time_) << endl;
-        //      }
-      }//if( GeographicPoint )
-    }//if( RadInstrumentState )
-    
-    rapidxml::xml_node<char> *extension_node = meas_node->first_node( "RadMeasurementExtension", 23 );
-    
-    if( extension_node )
-    {
-      //This is vestigial for SpecFile_2012N42_VERSION==2
-      rapidxml::xml_node<char> *title_node = extension_node->first_node( "InterSpec:Title", 15 );
-      meas->title_ = xml_value_str( title_node );
-      
-      //This is vestigial for SpecFile_2012N42_VERSION==1
-      rapidxml::xml_node<char> *type_node = extension_node->first_node( "InterSpec:DetectorType", 22 );
-      meas->detector_description_ = xml_value_str( type_node );
-    }//if( detector_type_.size() || title_.size() )
-  }//void decode_2012_N42_detector_state_and_quality(...)
-  
-  
-  void SpecFile::decode_2012_N42_rad_measurement_node(
-                                                     vector< std::shared_ptr<Measurement> > &measurements,
-                                                     const rapidxml::xml_node<char> *meas_node,
-                                                     const IdToDetectorType *id_to_dettype_ptr,
-                                                     DetectorToCalibInfo *calibrations_ptr,
-                                                     std::mutex &meas_mutex,
-                                                     std::mutex &calib_mutex )
-  {
-    assert( id_to_dettype_ptr );
-    assert( calibrations_ptr );
-    
-    try
-    {
-      //We will copy <remarks> and parse warnings from meas_node to each SpecUtils::Measurement that we will create from it
-      vector<string> remarks, parse_warnings;
-      float real_time = 0.0;
-      boost::posix_time::ptime start_time;
-      SourceType spectra_type = SourceType::Unknown;
-      OccupancyStatus occupied = OccupancyStatus::Unknown;
-      
-      const auto meas_att = SpecUtils::xml_first_iattribute(meas_node, "id");
-      //    rapidxml::xml_attribute<char> *info_att = meas_node->first_attribute( "radItemInformationReferences", 28 );
-      //    rapidxml::xml_attribute<char> *group_att = meas_node->first_attribute( "radMeasurementGroupReferences", 29 );
-      
-      //Try to grab sample number from the 'id' attribute of <RadMeasurement>
-      int sample_num_from_meas_node = -999;
-      const string meas_id_att_str = xml_value_str( meas_att );
-      if( meas_id_att_str.size() )
-      {
-        if( SpecUtils::icontains(meas_id_att_str,"background")
-           && !SpecUtils::icontains(meas_id_att_str,"Survey")
-           && !SpecUtils::icontains(meas_id_att_str,"Sample") )
-        {
-          sample_num_from_meas_node = 0;
-        }else if( sscanf( meas_id_att_str.c_str(), "Sample%i", &(sample_num_from_meas_node)) == 1 )
-        {
-        }else if( sscanf( meas_id_att_str.c_str(), "Survey %i", &(sample_num_from_meas_node)) == 1 )
-        {
-        }else if( sscanf( meas_id_att_str.c_str(), "Survey_%i", &(sample_num_from_meas_node)) == 1 )
-        {
-        }else if( sscanf( meas_id_att_str.c_str(), "Survey%i", &(sample_num_from_meas_node)) == 1 )
-        {
-        }//else ... another format I dont recall seeing.
-      }//if( samp_det_str.size() )
-      
-      for( rapidxml::xml_node<char> *remark_node = meas_node->first_node( "Remark", 6 );
-          remark_node;
-          remark_node = XML_NEXT_TWIN(remark_node) )
-      {
-        string remark = SpecUtils::trim_copy( xml_value_str(remark_node) );
-        
-        const bool parse_warning = SpecUtils::starts_with( remark, s_parser_warn_prefix );
-        if( parse_warning )
-        {
-          SpecUtils::ireplace_all( remark, s_parser_warn_prefix, "" );
-          parse_warnings.emplace_back( std::move(remark) );
-        }else if( remark.size() )
-        {
-          remarks.emplace_back( std::move(remark) );
-        }
-      }//for( loop over remarks _
-      
-      rapidxml::xml_node<char> *class_code_node = meas_node->first_node( "MeasurementClassCode", 20 ); //XML_FIRST_NODE( meas_node, "MeasurementClassCode" )
-      if( class_code_node && class_code_node->value_size() )
-      {
-        if( XML_VALUE_ICOMPARE(class_code_node, "Foreground") )
-          spectra_type = SourceType::Foreground;
-        else if( XML_VALUE_ICOMPARE(class_code_node, "Background") )
-          spectra_type = SourceType::Background;
-        else if( XML_VALUE_ICOMPARE(class_code_node, "Calibration") )
-          spectra_type = SourceType::Calibration;
-        else if( XML_VALUE_ICOMPARE(class_code_node, "IntrinsicActivity") )
-          spectra_type = SourceType::IntrinsicActivity;
-        else if( XML_VALUE_ICOMPARE(class_code_node, "NotSpecified") )
-          spectra_type = SourceType::Unknown;
-      }//if( class_code_node && class_code_node->value_size() )
-      
-      //Special check for RadSeeker.
-      if( spectra_type == SourceType::Unknown
-         && meas_att && XML_VALUE_ICOMPARE(meas_att, "Stabilization") )
-        spectra_type = SourceType::IntrinsicActivity;
-      
-      rapidxml::xml_node<char> *time_node = meas_node->first_node( "StartDateTime", 13 );
-      if( time_node && time_node->value_size() )
-      {
-        //ToDo: figure which endian-ess is best.  I've seen at leats one N42 file
-        //  that was little endian (ex "15-05-2017T18:51:50"), but by default
-        //  #time_from_string tries middle-endian first.
-        start_time = time_from_string( xml_value_str(time_node).c_str() );
-        //start_time = SpecUtils::time_from_string_strptime( xml_value_str(time_node).c_str(), SpecUtils::LittleEndianFirst );
-      }
-      
-      rapidxml::xml_node<char> *real_time_node = meas_node->first_node( "RealTimeDuration", 16 );
-      if( !real_time_node )
-        real_time_node = meas_node->first_node( "RealTime", 8 );
-      if( real_time_node && real_time_node->value_size() )
-        real_time = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
-      
-      rapidxml::xml_node<char> *occupancy_node = meas_node->first_node( "OccupancyIndicator", 18 );
-      if( occupancy_node && occupancy_node->value_size() )
-      {
-        if( XML_VALUE_ICOMPARE(occupancy_node, "true") || XML_VALUE_ICOMPARE(occupancy_node, "1") )
-          occupied = OccupancyStatus::Occupied;
-        else if( XML_VALUE_ICOMPARE(occupancy_node, "false") || XML_VALUE_ICOMPARE(occupancy_node, "0") )
-          occupied =  OccupancyStatus::NotOccupied;
-      }//if( occupancy_node && occupancy_node->value_size() )
-      
-      vector< std::shared_ptr<Measurement> > spectrum_meas, neutron_meas;
-      
-      //Lets track the Measurement to calibration id value incase multiple spectra
-      //  are given for the same detector and <RadMeasurement>, but with different
-      //  energy binnings.
-      vector< pair<std::shared_ptr<Measurement>,string> > meas_to_cal_id;
-      
-      
-      for( const rapidxml::xml_node<char> *spectrum_node = XML_FIRST_NODE(meas_node, "Spectrum");
-          spectrum_node;
-          spectrum_node = XML_NEXT_TWIN(spectrum_node) )
-      {
-        using rapidxml::internal::compare;
-        rapidxml::xml_attribute<char> *id_att = spectrum_node->first_attribute( "id", 2, false );
-        rapidxml::xml_attribute<char> *det_info_att = spectrum_node->first_attribute( "radDetectorInformationReference", 31, false );  //case sensitive false for refAO7WGOXDJ4
-        rapidxml::xml_attribute<char> *calib_att = spectrum_node->first_attribute( "energyCalibrationReference", 26, false );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "fullEnergyPeakEfficiencyCalibrationReference", 44 );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "FWHMCalibrationReference", 24 );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "intrinsicDoubleEscapePeakEfficiencyCalibrationReference", 55 );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "intrinsicFullEnergyPeakEfficiencyCalibrationReference", 53 );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "intrinsicSingleEscapePeakEfficiencyCalibrationReference", 55 );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "radRawSpectrumReferences", 24 );
-        //      rapidxml::xml_attribute<char> *_att = spectrum_node->first_attribute( "totalEfficiencyCalibrationReference", 35 );
-        
-        
-        auto meas = std::make_shared<Measurement>();
-        DetectionType det_type = GammaDetection;
-        
-        //Get the detector name from the XML det_info_att if we have it, otherwise
-        //  if there is only one detector description in the file, we will assume
-        //  this spetrum is from that.
-        if( det_info_att && det_info_att->value_size() )
-          meas->detector_name_ = xml_value_str( det_info_att );
-        else if( id_to_dettype_ptr->size()==1 )
-          meas->detector_name_ = id_to_dettype_ptr->begin()->first;
-        
-        if( meas->detector_name_ == s_unnamed_det_placeholder )
-          meas->detector_name_.clear();
-        
-        
-        auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
-        if( det_iter != end(*id_to_dettype_ptr) )
-        {
-          det_type = det_iter->second.first;
-          meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
-        }//if( det_iter != id_to_dettype_ptr->end() )
-        
-        const rapidxml::xml_node<char> *live_time_node = spectrum_node->first_node( "LiveTimeDuration", 16 );
-        if( !live_time_node )
-          live_time_node = spectrum_node->first_node( "LiveTime", 8 );
-        
-        //Some detectors mistakenly put the <LiveTimeDuration> tag under the
-        //  <RadMeasurement> tag
-        if( !live_time_node && spectrum_node->parent() )
-        {
-          live_time_node = XML_FIRST_NODE(spectrum_node->parent(), "LiveTimeDuration");
-          if( !live_time_node )
-            live_time_node = XML_FIRST_NODE(spectrum_node->parent(), "LiveTime");
-        }
-        
-        
-        const rapidxml::xml_node<char> *channel_data_node = spectrum_node->first_node( "ChannelData", 11 );
-        
-        for( size_t i = 0; i < remarks.size(); ++i )
-          meas->remarks_.push_back( remarks[i] );
-        
-        for( size_t i = 0; i < parse_warnings.size(); ++i )
-          meas->parse_warnings_.push_back( parse_warnings[i] );
-        
-        bool use_remark_real_time = false;
-        
-        for( rapidxml::xml_node<char> *remark_node = spectrum_node->first_node( "Remark", 6 );
-            remark_node;
-            remark_node = XML_NEXT_TWIN(remark_node) )
-        {
-          string remark = xml_value_str( remark_node );
-          trim( remark );
-          if( remark.empty() )
-            continue;
-          
-          if( SpecUtils::istarts_with( remark, s_parser_warn_prefix ) )
-          {
-            SpecUtils::ireplace_all( remark, s_parser_warn_prefix, "" );
-            meas->parse_warnings_.emplace_back( std::move(remark) );
-          }else if( SpecUtils::istarts_with( remark, "RealTime:") )
-          {
-            //Starting with SpecFile_2012N42_VERSION==3, a slightly more
-            //  accurate RealTime may be recorded in the remark if necassary...
-            //  see notes in create_2012_N42_xml() and add_spectra_to_measurement_node_in_2012_N42_xml()
-            //snprintf( thisrealtime, sizeof(thisrealtime), "RealTime: PT%fS", realtime_used );
-            remark = SpecUtils::trim_copy( remark.substr(9) );
-            meas->real_time_ = time_duration_string_to_seconds( remark );
-            
-            use_remark_real_time = (meas->real_time_ > 0.0);
-          }else if( SpecUtils::istarts_with( remark, "Title:") )
-          {
-            //Starting with SpecFile_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
-            remark = SpecUtils::trim_copy( remark.substr(6) );
-            meas->title_ += remark;
-          }else if( remark.size() )
-          {
-            meas->remarks_.emplace_back( std::move(remark) );
-          }
-        }//for( loop over remarks )
-        
-        
-        //This next line is specific to file written by InterSpec
-        //const string samp_det_str = xml_value_str( meas_att ); //This was used pre 20180225, however I believe this was wrong due to it probably not containing DetXXX - we'll see.
-        const auto spec_id = SpecUtils::xml_first_iattribute( spectrum_node, "id" );
-        const string samp_det_str = SpecUtils::xml_value_str(spec_id);
-        if( samp_det_str.size() )
-        {
-          if( SpecUtils::istarts_with(samp_det_str, "background") )
-          {
-            meas->sample_number_ = 0;
-          }else if( sscanf( samp_det_str.c_str(), "Sample%i", &(meas->sample_number_)) == 1 )
-          {
-          }else if( sscanf( samp_det_str.c_str(), "Survey %i", &(meas->sample_number_)) == 1 )
-          {
-          }else if( sscanf( samp_det_str.c_str(), "Survey_%i", &(meas->sample_number_)) == 1 )
-          {
-          }else if( sscanf( samp_det_str.c_str(), "Survey%i", &(meas->sample_number_)) == 1 )
-          {
-          }else if( sample_num_from_meas_node != -999 )
-          {
-            meas->sample_number_ = sample_num_from_meas_node;
-          }
-        }else if( sample_num_from_meas_node != -999 )
-        {
-          meas->sample_number_ = sample_num_from_meas_node;
-        }//if( samp_det_str.size() )
-        
-#if(PERFORM_DEVELOPER_CHECKS)
-        if( (sample_num_from_meas_node != -999) && (meas->sample_number_ != sample_num_from_meas_node) )
-        {
-          char buffer[512];
-          snprintf( buffer, sizeof(buffer),
-                   "Found a case where RadMeasurement id ('%s') gave a different"
-                   " sample number than Spectrum id ('%s').",
-                   meas_id_att_str.c_str(), samp_det_str.c_str() );
-          log_developer_error( __func__, buffer );
-        }
-#endif
-        
-        if( !use_remark_real_time )
-          meas->real_time_ = real_time;
-        
-        //RealTime shouldnt be under Spectrum node (should be under RadMeasurement)
-        //  but some files mess this up, so check for real time under the spectrum
-        //  node if we dont have the real time yet
-        if(  meas->real_time_ <= 0.0f )
-        {
-          const rapidxml::xml_node<char> *real_time_node = XML_FIRST_NODE(spectrum_node, "RealTimeDuration");
-          if( !real_time_node )
-            real_time_node = XML_FIRST_NODE(spectrum_node, "RealTime");
-          if( real_time_node )
-            meas->real_time_ = time_duration_string_to_seconds( real_time_node->value(), real_time_node->value_size() );
-        }
-        
-        
-        meas->start_time_ = start_time;
-        meas->source_type_ = spectra_type;
-        
-        //For the sake of file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42
-        if( meas->source_type_ == SourceType::Unknown
-           && SpecUtils::iequals_ascii(meas->detector_name_, "intrinsicActivity")  )
-          meas->source_type_ = SourceType::IntrinsicActivity;
-        
-        meas->occupied_ = occupied;
-        
-        if( live_time_node && live_time_node->value_size() )
-          meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
-        
-        auto gamma_counts = std::make_shared<vector<float>>();
-        
-        if( channel_data_node && channel_data_node->value_size() )
-        {
-          const char *char_data = channel_data_node->value();
-          const size_t char_data_len = channel_data_node->value_size();
-          SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts );
-          
-          rapidxml::xml_attribute<char> *comp_att = channel_data_node->first_attribute( "compressionCode", 15 );
-          if( icontains( xml_value_str(comp_att), "CountedZeroes") )  //( comp_att && XML_VALUE_ICOMPARE(comp_att, "CountedZeroes") )
-            expand_counted_zeros( *gamma_counts, *gamma_counts );
-        }//if( channel_data_node && channel_data_node->value() )
-        
-        //Well swapp meas->gamma_count_sum_ and meas->neutron_counts_sum_ in a bit if we need to
-        meas->gamma_count_sum_ = 0.0;
-        for( const float a : *gamma_counts )
-          meas->gamma_count_sum_ += a;
-        
-        const rapidxml::xml_node<char> *RadItemState = meas_node->first_node( "RadItemState", 12 );
-        const rapidxml::xml_node<char> *StateVector = (RadItemState ? RadItemState->first_node( "StateVector", 11 ) : (const rapidxml::xml_node<char> *)0);
-        const rapidxml::xml_node<char> *SpeedValue = (StateVector ? StateVector->first_node( "SpeedValue", 10 ) : (const rapidxml::xml_node<char> *)0);
-        
-        if( SpeedValue && SpeedValue->value_size() )
-        {
-          const string val = xml_value_str( SpeedValue );
-          if( !(stringstream(val) >> (meas->speed_)) )
-            cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
-        }//if( speed_ > 0 )
-        
-        if( det_type == OtherDetection )
-          continue;
-        
-        bool is_gamma = (det_type == GammaDetection);
-        bool is_neutron = ((det_type == NeutronDetection) || (det_type == GammaAndNeutronDetection));
-        if( det_type == GammaAndNeutronDetection )
-        {
-          const string att_val = xml_value_str( id_att );
-          is_gamma = !(icontains(att_val,"Neutron") || icontains(att_val,"Ntr"));
-          
-          //If no calibration info is given, then assume it is not a gamma measurement
-          if( !calib_att || !calib_att->value_size() )
-            is_gamma = false;
-        }//if( det_type == GammaAndNeutronDetection )
-        
-        //Sometimes a gamma and neutron detector will have only neutron counts
-        
-        if( is_gamma && gamma_counts && !gamma_counts->empty() )
-        {
-          meas->gamma_counts_ = gamma_counts;
-          
-          if( !calib_att || !calib_att->value_size() )
-          {
-#if(PERFORM_DEVELOPER_CHECKS)
-            log_developer_error( __func__, "Found a gamma spectrum without calibration information" );
-#endif
-            //continue;
-          }//if( !calib_att || !calib_att->value_size() )
-          
-          
-          const string calib_id = xml_value_str(calib_att);
-          
-          std::lock_guard<std::mutex> lock( calib_mutex );
-          
-          map<string,MeasurementCalibInfo>::iterator calib_iter = calibrations_ptr->find( calib_id );
-          
-          //If there is only one energy calibration, use it, even if names dont
-          //  match up.  IF more than one calibration then use default
-          if( calib_iter == end(*calibrations_ptr) )
-          {
-            if( calibrations_ptr->size() == 1 )
-            {
-              calib_iter = calibrations_ptr->begin();
-            }else
-            {
-              const string defCalName = "DidntHaveCalSoUsingDefCal_" + std::to_string( meas->gamma_counts_->size() );
-              calib_iter = calibrations_ptr->find( defCalName );
-              if( calib_iter == end(*calibrations_ptr) )
-              {
-                DetectorToCalibInfo::value_type info( defCalName, MeasurementCalibInfo() );
-                info.second.equation_type = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-                info.second.nbin = meas->gamma_counts_->size();
-                info.second.coefficients.push_back( 0.0f );
-                info.second.coefficients.push_back( 3000.0f / std::max(info.second.nbin-1,size_t(1)) );
-                //info.second.calib_id = defCalName;  //Leave commented out so wont get put into meas_to_cal_id
-                calib_iter = calibrations_ptr->insert( std::move(info) ).first;
-              }//if( we havent yet created a default calibration )
-            }//if( we have a single calibration we can use ) / else
-          }//if( no calibration present already )
-          
-          assert( calib_iter != calibrations_ptr->end() );
-          
-          MeasurementCalibInfo &calib = calib_iter->second;
-          
-          calib.nbin = meas->gamma_counts_->size();
-          calib.fill_binning();
-          meas->energy_calibration_ = calib.energy_cal;
-          if( !calib.energy_cal_error.empty() )
-            meas->parse_warnings_.push_back( calib.energy_cal_error );
-      
-          if( calib.calib_id.size() )
-            meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
-          
-          meas->contained_neutron_ = false;
-        }else if( is_neutron && meas->gamma_counts_ && meas->gamma_counts_->size() < 6 && meas->gamma_counts_->size() > 0 )
-        {
-          meas->neutron_counts_sum_ = meas->gamma_count_sum_;
-          meas->gamma_count_sum_ = 0.0;
-          if( meas->gamma_counts_ && meas->gamma_counts_->size() )
-            meas->gamma_counts_ = std::make_shared<vector<float>>();
-          meas->contained_neutron_ = true;
-          //        if( gamma_counts )
-          //          meas->neutron_counts_.swap( *gamma_counts );
-        }else
-        {
-          continue;
-        }//if( is_gamma ) / else if ( neutron ) / else
-        //      const rapidxml::xml_node<char> *extension_node = meas_node->first_node( "SpectrumExtension", 17 );
-        
-        decode_2012_N42_detector_state_and_quality( meas, meas_node );
-        
-        spectrum_meas.push_back( meas );
-      }//for( loop over "Spectrum" nodes )
-      
-      //flir radHUNTER N42 files is the inspiration for this next loop that
-      // checks if there is a min, max, and total neutron <GrossCounts> node
-      //  for this <RadMeasurement> node.
-      bool min_neut = false, max_neut = false, total_neut = false, has_other = false;
-      
-      //XML_FOREACH_DAUGHTER( node, meas_node, "GrossCounts" )
-      for( auto node = XML_FIRST_NODE( meas_node, "GrossCounts" );
-          node;
-          node = XML_NEXT_TWIN(node) )
-      {
-        const rapidxml::xml_attribute<char> *att = node->first_attribute( "radDetectorInformationReference", 31, false );
-        const bool is_min = XML_VALUE_ICOMPARE(att, "minimumNeutrons");
-        const bool is_max = XML_VALUE_ICOMPARE(att, "maximumNeutrons");
-        const bool is_total = XML_VALUE_ICOMPARE(att, "totalNeutrons");
-        
-        min_neut = (min_neut || is_min);
-        max_neut = (max_neut || is_max);
-        total_neut = (total_neut || is_total);
-        has_other = (has_other || (!is_min && !is_max && !is_total));
-      }//for( loop over GrossCounts nodes )
-      
-      const bool has_min_max_total_neutron = ((min_neut && max_neut && total_neut) && !has_other);
-      
-      for( auto gross_counts_node = XML_FIRST_NODE( meas_node, "GrossCounts" );
-          gross_counts_node;
-          gross_counts_node = XML_NEXT_TWIN(gross_counts_node) )
-      {
-        const rapidxml::xml_node<char> *live_time_node = gross_counts_node->first_node( "LiveTimeDuration", 16 );
-        const rapidxml::xml_node<char> *count_data_node = gross_counts_node->first_node( "CountData", 9 );
-        const rapidxml::xml_attribute<char> *det_info_att = gross_counts_node->first_attribute( "radDetectorInformationReference", 31, false );
-        
-        std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
-        DetectionType det_type = GammaDetection;
-        
-        const string det_info_ref = xml_value_str( det_info_att );
-        
-        if( det_info_ref.empty() )
-        {
-          cerr << "Found GrossCounts node with no radDetectorInformationReference"
-          << endl;
-          continue;
-        }//if( det_info_ref.empty() )
-        
-        
-        if( has_min_max_total_neutron )
-        {
-          if( !SpecUtils::iequals_ascii(det_info_ref, "totalNeutrons") )
-            continue;
-        }
-        
-        meas->detector_name_ = det_info_ref;
-        if( meas->detector_name_ == s_unnamed_det_placeholder )
-          meas->detector_name_.clear();
-        
-        
-        auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
-        if( det_iter == end(*id_to_dettype_ptr) )
-        {
-          cerr << "No detector information for '" << meas->detector_name_
-          << "' so skipping" << endl;
-          continue;
-        }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
-        
-        
-        det_type = det_iter->second.first;
-        meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
-        
-        if( icontains( det_info_ref, "Neutrons" ) )
-          det_type = NeutronDetection;
-        
-        if( (det_type != NeutronDetection)
-           && (det_type != GammaAndNeutronDetection) )
-        {
-#if(PERFORM_DEVELOPER_CHECKS)
-          auto  det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
-          if( det_iter == id_to_dettype_ptr->end() )
-          {
-            stringstream msg;
-            msg << "Found a non neutron GrossCount node (det info ref attrib='"
-            << det_info_ref << "'); child nodes are: {";
-            for( auto el = meas_node->first_node(); el; el = el->next_sibling() )
-              msg << xml_name_str(el) << ", ";
-            msg << "}. Skipping!!!";
-            log_developer_error( __func__, msg.str().c_str() );
-            cerr << endl;
-          }//if( det_iter == id_to_dettype_ptr->end() )
-#endif
-          continue;
-        }
-        
-        //This next line is specific to file written by InterSpec, and is used to make sure sample
-        // numbers kinda-sorta persist across writing to a N42-2012 and reading back in.  It isnt
-        // really necassary except for some poorly formed portal input in the N42-2006 format; it
-        // is definetly a hack.
-        //const string sample_det_att = xml_value_str( meas_att ); //See notes above about pre 20180225,
-        const auto gross_id = SpecUtils::xml_first_iattribute( gross_counts_node, "id" );
-        const string sample_det_att = SpecUtils::xml_value_str( gross_id );
-        if( sample_det_att.size() )
-        {
-          if( SpecUtils::istarts_with(sample_det_att, "background") )
-          {
-            meas->sample_number_ = 0;
-          }else if( sscanf( sample_det_att.c_str(), "Sample%i", &(meas->sample_number_) ) == 1 )
-          {
-          }else if( sscanf( sample_det_att.c_str(), "Survey%i", &(meas->sample_number_) ) == 1 )
-          {
-          }else if( sscanf( sample_det_att.c_str(), "Survey %i", &(meas->sample_number_) ) == 1 )
-          {
-          }else if( sscanf( sample_det_att.c_str(), "Survey_%i", &(meas->sample_number_) ) == 1 )
-          {
-          }else if( sample_num_from_meas_node != -999 )
-          {
-            meas->sample_number_ = 0;
-          }else
-          {
-            //We'll end up here with taks like: 'M-13 Aa1N', 'M113N', 'Foreground-20100127130220-Aa1N',
-            //  '4045bb4c-9c68-48fa-8121-48c5806f84d8-count', 'NeutronForeground58-CL1',
-            //  'ForegroundMeasure6afc5c3010001NeutronCounts', etc
-//#if(PERFORM_DEVELOPER_CHECKS)
-//            char buffer[256];
-//            snprintf( buffer, sizeof(buffer),
-//                     "Unrecognized 'id' attribute of Spectrum node: '%s'", sample_det_att.c_str() );
-//            log_developer_error( __func__, buffer );
-//#endif
-          }
-        }//if( sample_det_att.size() )
-        
-        bool use_remark_real_time = false;
-        
-        for( size_t i = 0; i < remarks.size(); ++i )
-          meas->remarks_.push_back( remarks[i] );
-        
-        
-        for( auto remark_node = XML_FIRST_NODE(gross_counts_node, "Remark");
-            remark_node;
-            remark_node = XML_NEXT_TWIN(remark_node) )
-        {
-          string remark = SpecUtils::trim_copy( xml_value_str(remark_node) );
-          
-          if( SpecUtils::istarts_with( remark, "RealTime:") )
-          {
-            //See notes in equivalent portion of code for the <Spectrum> tag
-            remark = SpecUtils::trim_copy( remark.substr(9) );
-            meas->real_time_ = time_duration_string_to_seconds( remark );
-            use_remark_real_time = (meas->real_time_ > 0.0f);
-          }else if( SpecUtils::istarts_with( remark, "Title:") )
-          {
-            //See notes in equivalent portion of code for the <Spectrum> tag
-            meas->title_ += SpecUtils::trim_copy( remark.substr(6) );
-          }else if( !remark.empty() )
-          {
-            meas->remarks_.push_back( remark );
-          }
-        }//for( loop over remark nodes )
-        
-        if( !use_remark_real_time )
-          meas->real_time_ = real_time;
-        meas->start_time_ = start_time;
-        meas->source_type_ = spectra_type;
-        meas->occupied_ = occupied;
-        
-        if( live_time_node && live_time_node->value_size() )
-          meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
-        
-        const rapidxml::xml_node<char> *RadItemState = XML_FIRST_NODE(meas_node, "RadItemState");
-        const rapidxml::xml_node<char> *StateVector  = xml_first_node( RadItemState, "StateVector" );
-        const rapidxml::xml_node<char> *SpeedValue   = xml_first_node( StateVector, "SpeedValue" );
-        
-        if( SpeedValue && SpeedValue->value_size() )
-        {
-          const string val = xml_value_str( SpeedValue );
-          if( !(stringstream(val) >> (meas->speed_)) )
-            cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
-        }//if( speed_ > 0 )
-        
-        meas->contained_neutron_ = true;
-        
-        if( !count_data_node || !count_data_node->value_size() )
-          count_data_node = gross_counts_node->first_node( "GrossCountData", 14 );
-        
-        if( !count_data_node || !count_data_node->value_size() )
-        {
-          cerr << "Found a GrossCount node without a CountData node, skipping" << endl;
-          continue;
-        }
-        
-        SpecUtils::split_to_floats( count_data_node->value(),
-                                   count_data_node->value_size(),
-                                   meas->neutron_counts_ );
-        for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
-          meas->neutron_counts_sum_ += meas->neutron_counts_[i];
-        
-        decode_2012_N42_detector_state_and_quality( meas, meas_node );
-        
-        neutron_meas.push_back( meas );
-      }//for( loop over GrossCounts Node )
-      
-      vector<std::shared_ptr<Measurement>> meas_to_add;
-      if( spectrum_meas.size() == neutron_meas.size() )
-      {
-        for( size_t i = 0; i < spectrum_meas.size(); ++i )
-        {
-          std::shared_ptr<Measurement> &gamma = spectrum_meas[i];
-          std::shared_ptr<Measurement> &neutron = neutron_meas[i];
-          
-          gamma->neutron_counts_ = neutron->neutron_counts_;
-          gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
-          gamma->contained_neutron_ = neutron->contained_neutron_;
-          for( const string &s : neutron->remarks_ )
-          {
-            if( std::find(gamma->remarks_.begin(), gamma->remarks_.end(), s)
-               == gamma->remarks_.end() )
-              gamma->remarks_.push_back( s );
-          }
-          
-          meas_to_add.push_back( gamma );
-        }//for( size_t i = 0; i < spectrum_meas.size(); ++i )
-      }else
-      {
-        vector< pair<std::shared_ptr<Measurement>,std::shared_ptr<Measurement>> > gamma_and_neut_pairs;
-        for( size_t i = 0; i < spectrum_meas.size(); ++i )
-        {
-          if( !spectrum_meas[i] )
-            continue;
-          
-          for( size_t j = 0; j < neutron_meas.size(); ++j )
-          {
-            if( !neutron_meas[j] )
-              continue;
-            
-            const string &gdetname = spectrum_meas[i]->detector_name_;
-            const string &ndetname = neutron_meas[j]->detector_name_;
-            if( gdetname.size() < 2 || ndetname.size() < 2 )
-              continue;
-            
-            if( (gdetname == ndetname)
-               || (istarts_with(ndetname, gdetname) && SpecUtils::icontains(ndetname, "neut")) )
-            {
-              gamma_and_neut_pairs.push_back( make_pair(spectrum_meas[i], neutron_meas[j]) );
-              spectrum_meas[i].reset();
-              neutron_meas[j].reset();
-              break;
-            }
-          }//for( size_t j = 0; j < neutron_meas.size(); ++j )
-        }//for( size_t i = 0; i < spectrum_meas.size(); ++i )
-        
-        for( size_t i = 0; i < gamma_and_neut_pairs.size(); ++i )
-        {
-          std::shared_ptr<Measurement> &gamma = gamma_and_neut_pairs[i].first;
-          std::shared_ptr<Measurement> &neutron = gamma_and_neut_pairs[i].second;
-          
-          gamma->neutron_counts_ = neutron->neutron_counts_;
-          gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
-          gamma->contained_neutron_ = neutron->contained_neutron_;
-          for( const string &s : neutron->remarks_ )
-          {
-            if( std::find(gamma->remarks_.begin(), gamma->remarks_.end(), s)
-               == gamma->remarks_.end() )
-              gamma->remarks_.push_back( s );
-          }
-          
-          meas_to_add.push_back( gamma );
-        }//for( size_t i = 0; i < gamma_and_neut_pairs.size(); ++i )
-        
-        
-        for( size_t i = 0; i < spectrum_meas.size(); ++i )
-          if( spectrum_meas[i] )
-            meas_to_add.push_back( spectrum_meas[i] );
-        
-        for( size_t i = 0; i < neutron_meas.size(); ++i )
-          if( neutron_meas[i] )
-            meas_to_add.push_back( neutron_meas[i] );
-      }//
-      
-      //XXX - todo - should implement the below
-      //    rapidxml::xml_node<char> *dose_rate_node = meas_node->first_node( "DoseRate", 8 );
-      //    rapidxml::xml_node<char> *total_dose_node = meas_node->first_node( "TotalDose", 9 );
-      //    rapidxml::xml_node<char> *exposure_rate_node = meas_node->first_node( "ExposureRate", 12 );
-      //    rapidxml::xml_node<char> *total_exposure_node = meas_node->first_node( "TotalExposure", 13 );
-      //    rapidxml::xml_node<char> *instrument_state_node = meas_node->first_node( "RadInstrumentState", 18 );
-      //    rapidxml::xml_node<char> *item_state_node = meas_node->first_node( "RadItemState", 12 );
-      
-      //Check for duplicate spectrum in spectrum_meas for the same detector, but
-      //  with different calibrations.
-      //  See comments for #energy_cal_variants and #keep_energy_cal_variant.
-      //Note: as of 20160531, this duplicate spectrum stuff is untested.
-      const vector<std::shared_ptr<Measurement>>::const_iterator beginmeas = meas_to_add.begin();
-      const vector<std::shared_ptr<Measurement>>::const_iterator endmeas = meas_to_add.end();
-      for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
-      {
-        std::shared_ptr<Measurement> &meas = meas_to_cal_id[i].first;
-        if( std::find(beginmeas,endmeas,meas) == endmeas )
-          continue;
-        
-        vector< pair<std::shared_ptr<Measurement>,string> > samenames;
-        for( size_t j = 0; j < i; ++j )
-        {
-          std::shared_ptr<Measurement> &innermeas = meas_to_cal_id[j].first;
-          
-          if( std::find(beginmeas,endmeas,innermeas) == endmeas )
-            continue;
-          
-          if( innermeas->detector_name_ == meas->detector_name_
-             && innermeas->start_time_ == meas->start_time_
-             && fabs(innermeas->real_time_ - meas->real_time_) < 0.01
-             && fabs(innermeas->live_time_ - meas->live_time_) < 0.01 )
-          {
-            samenames.push_back( make_pair(innermeas, meas_to_cal_id[j].second ) );
-          }
-        }//for( size_t j = 0; j < i; ++j )
-        
-        if( samenames.size() )
-        {
-          meas->detector_name_ += "_intercal_" + meas_to_cal_id[i].second;
-          for( size_t j = 0; j < samenames.size(); ++j )
-            samenames[j].first->detector_name_ += "_intercal_" + samenames[j].second;
-        }//if( samenames.size() )
-      }//for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
-      
-      {
-        std::lock_guard<std::mutex> lock( meas_mutex );
-        measurements.insert( measurements.end(), meas_to_add.begin(), meas_to_add.end() );
-      }
-    }catch( std::exception &e )
-    {
-      std::lock_guard<std::mutex> lock( meas_mutex );
-      cerr << "Error decoding SpecFile::decode2012N42SpectrumNode(...): "
-      << e.what() << endl;
-    }//try / catch
-  }//void decode_2012_N42_rad_measurement_node( const rapidxml::xml_node<char> *spectrum )
-  
+
   
   void SpecFile::load_2012_N42_from_doc( const rapidxml::xml_node<char> *data_node )
   {
@@ -7081,7 +7107,7 @@ namespace SpecUtils
         for( auto character = XML_FIRST_NODE_CHECKED(characteristics_node, "Characteristic");
             character; character = XML_NEXT_TWIN(character) )
         {
-          const string charac_str = SpecFile::concat_2012_N42_characteristic_node(character);
+          const string charac_str = N42DecodeHelper2012::concat_2012_N42_characteristic_node(character);
           if( charac_str.size() )
             descrip += string(descrip.size() ? ", " : "") + "{" + charac_str + "}";
         }//loop over characteristics
@@ -7133,7 +7159,7 @@ namespace SpecUtils
         measurements_each_meas.push_back( these_meas );
         
         workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-          decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+          N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
         } );
       }//for( loop over "RadMeasurement" nodes )
     }//for( loop over "RadInstrumentData" nodes - I know )

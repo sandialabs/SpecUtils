@@ -80,12 +80,9 @@ size_t EnergyCalibration::num_channels() const
 {
   switch ( m_type )
   {
+    case EnergyCalType::FullRangeFraction:
     case EnergyCalType::Polynomial:
     case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-    case EnergyCalType::FullRangeFraction:
-      assert( m_channel_energies );
-      return (m_channel_energies ? m_channel_energies->size() : size_t(0));
-      
     case EnergyCalType::LowerChannelEdge:
       assert( m_channel_energies );
       return ((m_channel_energies && (m_channel_energies->size() > 1))
@@ -127,7 +124,7 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
      throw runtime_error( "EnergyCalibration::set_polynomial: Coefficients are unreasonable" );
    }
   
-  m_channel_energies = SpecUtils::polynomial_binning( coeffs, num_channels, dev_pairs );
+  m_channel_energies = SpecUtils::polynomial_binning( coeffs, num_channels + 1, dev_pairs );
   
   m_type = EnergyCalType::Polynomial;
   m_coefficients.clear();
@@ -160,7 +157,7 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
   if( last_iter < 2 )
     throw runtime_error( "Full range fraction energy calibration requires >=2 coefficents" );
   
-  m_channel_energies = SpecUtils::fullrangefraction_binning( coeffs, num_channels, dev_pairs );
+  m_channel_energies = fullrangefraction_binning( coeffs, num_channels, dev_pairs, true );
   
   m_type = EnergyCalType::FullRangeFraction;
   m_coefficients.clear();
@@ -330,7 +327,7 @@ bool EnergyCalibration::operator<( const EnergyCalibration &rhs ) const
       
 
 #if( PERFORM_DEVELOPER_CHECKS )
-void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyCalibration &rhs )
+void EnergyCalibration::equal_enough( const EnergyCalibration &lhs, const EnergyCalibration &rhs )
 {
   char buffer[256] = { '\0' };
   
@@ -365,9 +362,9 @@ void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyC
   assert( lhs.m_channel_energies );
   assert( rhs.m_channel_energies );
   
-  const size_t nchannel = lhs.m_channel_energies->size();
+  const size_t nchannel = lhs.num_channels();
   
-  if( nchannel != rhs.m_channel_energies->size() )
+  if( nchannel != rhs.num_channels() )
   {
     snprintf( buffer, sizeof(buffer),
               "Calibrations have different number of channel energies (LHS %i, RHS %i)",
@@ -454,8 +451,8 @@ void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyC
     }
   }//for( loop over coefficients )
   
-  
-  for( size_t i = 0; i < nchannel; ++i )
+  const size_t nenergies = std::min(lhs.m_channel_energies->size(), rhs.m_channel_energies->size());
+  for( size_t i = 0; i < nenergies; ++i )
   {
     const float lhsenergy = lhs.m_channel_energies->at(i);
     const float rhsenergy = rhs.m_channel_energies->at(i);
@@ -470,7 +467,7 @@ void EnergyCalibration::equalEnough( const EnergyCalibration &lhs, const EnergyC
     }
   }//for( loop over channel energies )
   
-}//equalEnough( lhs, rhs )
+}//equal_enough( lhs, rhs )
 #endif //PERFORM_DEVELOPER_CHECKS
 
 
@@ -515,15 +512,17 @@ std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<flo
   
   
 std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vector<float> &coeffs,
-                                                                        const size_t nbin,
-                                                                        const std::vector<std::pair<float,float>> &dev_pairs  )
+                                                         const size_t nbin,
+                                                         const vector<pair<float,float>> &dev_pairs,
+                                                        const bool include_upper_energy )
 {
-  auto answer = make_shared<vector<float>>(nbin, 0.0f);
+  const size_t nentries = nbin + (include_upper_energy ? 1 : 0);
+  auto answer = make_shared<vector<float>>( nentries, 0.0f );
   const size_t ncoeffs = std::min( coeffs.size(), size_t(4) );
   const float low_e_coef = (coeffs.size() > 4) ? coeffs[4] : 0.0f;
   
   float prev_energy = -std::numeric_limits<float>::infinity();
-  for( size_t i = 0; i < nbin; i++ )
+  for( size_t i = 0; i < nentries; i++ )
   {
     const float x = static_cast<float>(i)/static_cast<float>(nbin);
     float &val = answer->operator[](i);

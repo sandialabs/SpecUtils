@@ -92,6 +92,9 @@ namespace SpecUtils
   
 
   /** Holds information about energy calibration.
+   
+   \TODO: move find_gamma_channel, gamma_energy_min/max, gamma_channel_width,
+          gamma_channel_lower/upper/center, etc from #SpecUtils::Measurement to #EnergyCalibration
    */
   struct EnergyCalibration
   {
@@ -109,15 +112,14 @@ namespace SpecUtils
     const std::vector<std::pair<float,float>> &deviation_pairs() const;
     
     /** @returns the lower channel energies. Will be a nullptr if
-     type is #EnergyCalType::InvalidEquationType, and otherwise will point to a non-empty vector.
-     
-     For polynomial and full range fraction will have same number of entries as the number of bins,
-     and for lower channel energies will have one more entry.
+     type is #EnergyCalType::InvalidEquationType, and otherwise will point to a non-empty vector
+     with one more entry than the number of channels specified when setting calibration.
      */
     const std::shared_ptr<const std::vector<float>> &channel_energies() const;
    
     /** Returns the number of channels this energy calibration is for. */
     size_t num_channels() const;
+    
     
     /** Default contructs to type EnergyCalType::InvalidEquationType. */
     EnergyCalibration();
@@ -210,7 +212,7 @@ namespace SpecUtils
     
      Throws an std::exception with a brief explanaition when an issue is found.
     */
-    static void equalEnough( const EnergyCalibration &lhs, const EnergyCalibration &rhs );
+    static void equal_enough( const EnergyCalibration &lhs, const EnergyCalibration &rhs );
 #endif
     
   protected:
@@ -262,6 +264,8 @@ namespace SpecUtils
    @param nchannel Then number of gamma channels the returned answer will have.
    @param deviation_pairs The deviation pairs defined for the calibration; it is
           assumed they are sorted by energy already.
+   @param include_upper_energy If true, the reurned answer will have one more entry than 'nchannel'
+          that indicates the upper energy of the last bin
    @returns The lower energies of each gamma channels.  Will have 'nchannel'
             entries.
    
@@ -270,7 +274,8 @@ namespace SpecUtils
   std::shared_ptr< const std::vector<float> >
   fullrangefraction_binning( const std::vector<float> &coeffs,
                             const size_t nchannel,
-                            const std::vector<std::pair<float,float>> &dev_pairs );
+                            const std::vector<std::pair<float,float>> &dev_pairs,
+                            const bool include_upper_energy = false );
   
   
   /** Gives the energy cooresponding to the passed in _channel_number_.
