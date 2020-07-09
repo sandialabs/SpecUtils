@@ -783,19 +783,6 @@ public:
   void reset();
 
   
-protected:
-  
-  void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data,
-                                std::shared_ptr<DetectorAnalysis> analysis_info,
-                                std::mutex *analysis_mutex );
-  
-  //set_gross_count_node_info(...): throws exception on error
-  //  XXX - only implements nuetron gross gounts right now
-  void set_n42_2006_gross_count_node_info(
-                                 const rapidxml::xml_node<char> *gross_count_measu_node );
-
-  
-  
   //combine_gamma_channels(): combines every 'nchann' channel gamma channels
   //  together.  Will throw exception if (gamma_counts_->size() % nchann) != 0.
   //  If gamma_counts_ is undefined or empty, nothing will be done.
@@ -809,19 +796,6 @@ protected:
   void truncate_gamma_channels( const size_t keep_first_channel,
                                 const size_t keep_last_channel,
                                 const bool keep_under_over_flow );
-  
-  //set_info_from_txt_or_csv(...): throws upon failure
-  //  XXX - currently doesnt make use of all the information written out by
-  //         write_txt(...)
-  //  XXX - could be made more rebust to parse more inputs
-  //  XXX - currently very CPU innefiecient
-  //  XXX - should be documented data formats it accepts
-  void set_info_from_txt_or_csv( std::istream &istr );
-  
-  //set_info_from_avid_mobile_txt(): throws upon failure.
-  //  Called from set_info_from_txt_or_csv().
-  void set_info_from_avid_mobile_txt( std::istream &istr );
-  
   
   /** Rebin the gamma_spectrum to match the passed in #EnergyCalibration.
    
@@ -877,8 +851,7 @@ protected:
    */
   void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal );
   
-public:
-  
+
 #if( PERFORM_DEVELOPER_CHECKS )
   //equal_enough(...): tests whether the passed in Measurement objects are
   //  equal, for most intents and purposes.  Allows some small numerical
@@ -886,7 +859,39 @@ public:
   //Throws an std::exception with a brief explanaition when an issue is found.
   static void equal_enough( const Measurement &lhs, const Measurement &rhs );
 #endif
-    
+  
+  /** Sets information contained by the N42-2006 <Spectrum> node to this Measurement.
+   
+   Throws exception on error.
+   
+   \deprecated Will be removed; currently only used from InterSpec to de-serialize a peaks continuum
+               when it is defined using a spectrum.
+   */
+  void set_info_from_2006_N42_spectrum_node( const rapidxml::xml_node<char> * const spectrum );
+  
+protected: 
+  //set_info_from_txt_or_csv(...): throws upon failure
+  //  XXX - currently doesnt make use of all the information written out by
+  //         write_txt(...)
+  //  XXX - could be made more rebust to parse more inputs
+  //  XXX - currently very CPU innefiecient
+  //  XXX - should be documented data formats it accepts
+  void set_info_from_txt_or_csv( std::istream &istr );
+  
+  //set_info_from_avid_mobile_txt(): throws upon failure.
+  //  Called from set_info_from_txt_or_csv().
+  void set_info_from_avid_mobile_txt( std::istream &istr );
+  
+  void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data,
+                                std::shared_ptr<DetectorAnalysis> analysis_info,
+                                std::mutex *analysis_mutex );
+  
+  //set_gross_count_node_info(...): throws exception on error
+  //  XXX - only implements nuetron gross gounts right now
+  void set_n42_2006_gross_count_node_info(
+                                 const rapidxml::xml_node<char> *gross_count_measu_node );
+
+  
   
 protected:
   
@@ -1336,50 +1341,54 @@ public:
   //'det_to_use' must be same size as, and coorespond 1:1 with detector_numbers_
   //Throws exception if 'det_to_use' is wrong size, no measurements available, or
   //  other errors.
+  /// \deprecated Please use #suggested_sum_energy_calibration
   size_t suggested_gamma_binning_index( const std::set<int> &sample_numbers,
                                     const std::vector<bool> &det_to_use ) const;
   
-  //sum_measurements(...): sums the specified sample_numbers and det_to_use
-  //  (logically and-ed).
-  //'det_to_use' must be same size as, and coorespond 1:1 with detector_numbers_
-  //  or else an exception may be thrown.
-  //Requires the selected samples and detectors to have at least one spectrum
-  //  that can serve as gamma binning, or else nullptr will be returned.
-  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
-                                    const std::vector<bool> &det_to_use ) const;
+  /** For a given set of sample numbers and detector names, the #Measurement may have different
+   energy calibrations, number of channels, and/or energy ranges, meaning if you want to display
+   the summed data, you will most likely want to pick a common energy calibration to rebin to
+   for a reasonable display.
+   
+   This function attempts to provide the best EnergyCalibration object, from the indicated set of
+   samples and detectors to use to sum to.
+   
+   Currently, this function chooses the Measurement with the largest number of gamma channels.
+   
+   @param sample_numbers The sample numbers to consider; if empty, will return nullptr.
+   @param detector_names The detectors to consider; if empty, will return nullptr.
+   @returns pointer to suggested #EnergyCalibration object. Will be nullptr if no suitable energy
+            calibration is found (e.x., only neutron measurement are found, or no valid energy
+            calibration is found).
+   
+   Throws exception if any sample_number or detector_names entries is invalid.
+   */
+  std::shared_ptr<const EnergyCalibration> suggested_sum_energy_calibration(
+                                            const std::set<int> &sample_numbers,
+                                            const std::vector<std::string> &detector_names ) const;
   
-  //sum_measurements(...): a convienience function for calling the the other
-  //  form of this function.  'det_numbers' should contain the numbers of
-  //  the detectors you would like included in the sum.  If any invalid detector
-  //  numbers are included, an exception will be thrown.
-  //Requires the selected samples and detectors to have at least one spectrum
-  //  that can serve as gamma binning, or else nullptr will be returned.
-  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
-                                    const std::vector<int> &det_numbers ) const;
-  
-  /** A convienience function for calling the the other form of this function.
-   If an invalid sample number or detector name is specified an exception will
-   be thrown.
-   Requires the selected samples and detectors to have at least one spectrum
-   that can serve as gamma binning, or else nullptr will be returned.
+
+  /** Sum the gamma spectra, and neutron counts for the specified samples and detectors.
+   
+   @param sample_numbers The sample numbers to include in the sum.  If empty, will return nullptr.
+                         If any sample numbers are invalid numbers, will throw exception.
+   @param detector_names The names of detectors to include in the sum.  If empty, will return
+                         nullptr.  If any names are invalid, will throw exception.
+   @param energy_cal The energy calibration the result will use.  If nullptr, the energy calibration
+                     suggested by #suggested_sum_energy_calibration will be used, and if there are
+                     no valid calibrations, will return nullptr.  If EnergyCalibration::type() is
+                     #EnergyCalType::InvalidEquationType, will throw exception.
+   @returns a summed #Measurement of all the sample and detectors.  If no appropriate gamma spectra
+            (i.e., have valid energy calibration and 4 or more channels) are included with the sum,
+            will return nullptr.  I.e., if not null, returned #Measurement will have a valid gamma
+            spectrum and energy calibration.
+   
+   Throws exception if invalid inputs are provided.
+   Returns nullptr if no gamma spectra to sum are found.
    */
   std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
-                                      const std::vector<std::string> &det_names ) const;
-  
-  //sum_measurements(...): sums measurements similar to the other variants by
-  //  the same name, but uses the 'binTo' Measurement passed in as the bassis
-  //  for the energy calibration binning.
-  //'det_to_use' must be same size as, and coorespond 1:1 with detector_numbers_
-  //  or else an exception may be thrown.
-  //Requires the selected samples and detectors to have at least one spectrum
-  //  that can serve as gamma binning, or else nullptr will be returned.
-  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
-                                       const std::vector<bool> &det_to_use,
-                                       const std::shared_ptr<const Measurement> binTo ) const;
-  
-  std::shared_ptr<Measurement> sum_measurements( const std::set<int> &sample_numbers,
-                                      const std::vector<int> &det_numbers,
-                                      const std::shared_ptr<const Measurement> binTo ) const;
+                                  const std::vector<std::string> &detector_names,
+                                  std::shared_ptr<const EnergyCalibration> energy_cal ) const;
   
   
   
@@ -1811,8 +1820,8 @@ public:
   //write_integer_chn(): Sums over the passed in sample_nums and det_nums to
   //  write a single spectrum with integer count bins in CHN format to the
   //  stream.  If sample_nums and/or det_nums is empty, then all sample and/or
-  //  detector numbers are assumed to be wanted.  Values in det_nums coorespond
-  //  to values in detector_numbers_.
+  //  detector numbers are assumed to be wanted; if any invalid values are specified, will throw
+  //  excecption.  Values in det_nums coorespond to values in detector_numbers_.
   // This format preserves the gamma spectrum, measurement start time, spectrum
   //  title (up to 63 characters)," detector description, and energy
   //  calibration.
@@ -1910,9 +1919,11 @@ public:
    
    @param output Stream to write the output to.
    @param sample_nums The sample numbers to sum to make the one output spectrum;
-         if empty will use all sample numbers.
+         if empty will use all sample numbers.  If any invalid values are specified, will throw
+         exception.
    @param det_nums The detector numbers to sum over to make the one output
-         spectrum; if empty will use all detectors.
+         spectrum; if empty will use all detectors. If any invalid values are specified, will throw
+         exception.
    @returns if file was successfully written to the output stream.
   */
   virtual bool write_cnf( std::ostream &output,
@@ -1924,7 +1935,7 @@ public:
   bool write_d3_html( std::ostream &output,
                       const D3SpectrumExport::D3SpectrumChartOptions &options,
                       std::set<int> sample_nums,
-                      const std::set<int> &det_nums ) const;
+                      std::vector<std::string> det_names ) const;
 #endif
   
   //Incase InterSpec specific changes are made, please change this number

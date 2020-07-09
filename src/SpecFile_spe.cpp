@@ -1167,27 +1167,37 @@ bool SpecFile::write_iaea_spe( ostream &output,
 {
   //www.ortec-online.com/download/ortec-software-file-structure-manual.pdf
   
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_iaea_spe: invalid sample number (" + to_string(sample) + ")" );
+  }
+  if( sample_nums.empty() )
+    sample_nums = sample_numbers_;
+  
+  vector<string> det_names;
+  for( const int num : det_nums )
+  {
+    auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_iaea_spe: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos-begin(detector_numbers_)] );
+  }
+  
+  if( det_nums.empty() )
+    det_names = detector_names_;
+  
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
+  
+  if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
+    return false;
+  
   try
   {
-    std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-    
-    if( sample_nums.empty() )
-      sample_nums = sample_numbers_;
-    
-    const size_t ndet = detector_numbers_.size();
-    vector<bool> detectors( ndet, true );
-    if( !det_nums.empty() )
-    {
-      for( size_t i = 0; i < ndet; ++i )
-        detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-    }//if( det_nums.empty() )
-    
-    
-    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
-    
-    if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
-      return false;
-    
     char buffer[256];
     
     string title = summed->title();

@@ -2020,8 +2020,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
 }//void add_measurement( std::shared_ptr<Measurement> meas, bool doCleanup )
 
 
-void SpecFile::remove_measurements(
-                                         const vector<std::shared_ptr<const Measurement>> &meas )
+void SpecFile::remove_measurements( const vector<std::shared_ptr<const Measurement>> &meas )
 {
   if( meas.empty() )
     return;
@@ -5622,7 +5621,7 @@ std::string SpecFile::generate_psuedo_uuid() const
 bool SpecFile::write_d3_html( ostream &ostr,
                               const D3SpectrumExport::D3SpectrumChartOptions &options,
                               std::set<int> sample_nums,
-                              const std::set<int> &det_nums ) const
+                              std::vector<std::string> det_names ) const
 {
   try
   {
@@ -5631,16 +5630,10 @@ bool SpecFile::write_d3_html( ostream &ostr,
     if( sample_nums.empty() )
       sample_nums = sample_numbers_;
   
-    const size_t ndet = detector_numbers_.size();
-    vector<bool> detectors( ndet, true );
-    if( !det_nums.empty() )
-    {
-      for( size_t i = 0; i < ndet; ++i )
-        detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-    }//if( det_nums.empty() )
+    if( det_names.empty() )
+      det_names = detector_names_;
   
-  
-    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
+    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
   
     if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
       return false;
@@ -5989,122 +5982,148 @@ size_t SpecFile::suggested_gamma_binning_index(
 }//suggested_gamma_binning_index(...)
 
 
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sample_numbers,
-                                     const std::vector<std::string> &det_names ) const
+std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibration(
+                                                        const set<int> &sample_numbers,
+                                                        const vector<string> &detector_names ) const
 {
-  vector<bool> det_to_use( detector_numbers_.size(), false );
+  if( sample_numbers.empty() || detector_names.empty() )
+    return nullptr;
   
-  for( const std::string name : det_names )
+  for( const int sample : sample_numbers )
   {
-    const vector<string>::const_iterator pos = std::find( begin(detector_names_),
-                                                end(detector_names_),
-                                                name );
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "suggested_sum_energy_calibration: invalid sample number "
+                           + to_string(sample) );
+  }//for( check all sample numbers were valid )
+  
+  for( const string &name : detector_names )
+  {
+    const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
     if( pos == end(detector_names_) )
-      throw runtime_error( "SpecFile::sum_measurements(): invalid detector name in the input" );
+      throw runtime_error( "suggested_sum_energy_calibration: invalid detector name '"
+                           + name + "'" );
+  }//for( check all detector names were valid )
+  
+  size_t energy_cal_index = 0;
+  std::shared_ptr<const EnergyCalibration> energy_cal;
+  
+  const bool has_common = ((properties_flags_ & kHasCommonBinning) != 0);
+  const bool same_nchannel = ((properties_flags_ & kAllSpectraSameNumberChannels) != 0);
+  
+  for( size_t i = 0; i < measurements_.size(); ++i )
+  {
+    const std::shared_ptr<Measurement> &meas = measurements_[i];
+      
+    if( !sample_numbers.count(meas->sample_number_) )
+      continue;
     
-    const size_t index = pos - detector_names_.begin();
-    det_to_use[index] = true;
-  }//for( const int num : det_nums )
-  
-  return sum_measurements( sample_numbers, det_to_use );
-}//std::shared_ptr<Measurement> sum_measurements(...)
-
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements( const set<int> &sample_num,
-                                            const vector<int> &det_nums ) const
-{
-  vector<bool> det_to_use( detector_numbers_.size(), false );
- 
-  for( const int num : det_nums )
-  {
-    vector<int>::const_iterator pos = std::find( detector_numbers_.begin(),
-                                                 detector_numbers_.end(),
-                                                 num );
-    if( pos == detector_numbers_.end() )
-      throw runtime_error( "SpecFile::sum_measurements(): invalid detector number in the input" );
+    const auto pos = std::find( begin(detector_names), end(detector_names), meas->detector_name_);
+    if( pos == end(detector_names) )
+      continue;
     
-    const size_t index = pos - detector_numbers_.begin();
-    det_to_use[index] = true;
-  }//for( const int num : det_nums )
-  
-  return sum_measurements( sample_num, det_to_use );
-}//sum_measurements(...)
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements( const set<int> &sample_num,
-                                                     const vector<int> &det_nums,
-                                                     const std::shared_ptr<const Measurement> binTo ) const
-{
-  vector<bool> det_to_use( detector_numbers_.size(), false );
-  
-  for( const int num : det_nums )
-  {
-    vector<int>::const_iterator pos = std::find( detector_numbers_.begin(),
-                                                detector_numbers_.end(),
-                                                num );
-    if( pos == detector_numbers_.end() )
-      throw runtime_error( "SpecFile::sum_measurements(): invalid detector number in the input" );
+    const auto &this_cal = meas->energy_calibration();
+      
+    if( this_cal && (this_cal->type() != EnergyCalType::InvalidEquationType) )
+    {
+  #if(!PERFORM_DEVELOPER_CHECKS)
+      if( has_common )
+        return this_cal;
+      
+      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      {
+        energy_cal_index = i;
+        energy_cal = this_cal;
+        if( same_nchannel )
+          return energy_cal;
+      }//if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
+  #else
+      if( has_common && energy_cal && (energy_cal != this_cal) && ((*energy_cal) == (*this_cal)) )
+      {
+        string errmsg = "EnergyCalibration::equal_enough didnt find any differences";
+        try
+        {
+          EnergyCalibration::equal_enough( *this_cal, *energy_cal );
+        }catch( std::exception &e )
+        {
+          errmsg = e.what();
+        }
+        char buffer[512];
+        snprintf( buffer, sizeof(buffer), "Found case where expected common energy calibration"
+                 " but didnt actually have all the same binning, issue found: %s", errmsg.c_str() );
+        log_developer_error( __func__, buffer );
+      }//if( has_common, but energy calibration wasnt the same )
+      
+      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      {
+        if( same_nchannel && energy_cal
+            && (energy_cal->num_channels() != this_cal->num_channels()) )
+        {
+          char buffer[512];
+          snprintf( buffer, sizeof(buffer),
+                    "Found instance of differening number of gamma channels,"
+                    " when I shouldnt have; measurement %i had %i channels,"
+                    " while measurement %i had %i channels.",
+                    static_cast<int>(energy_cal_index),
+                    static_cast<int>(energy_cal->num_channels()),
+                    static_cast<int>(i),
+                    static_cast<int>(this_cal->num_channels()) );
+          log_developer_error( __func__, buffer );
+        }
+          
+        energy_cal_index = i;
+        energy_cal = this_cal;
+      }//if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
+  #endif
+    }//if( this binning is valid )
+  }//for( size_t i = 0; i < measurements_.size(); ++i )
     
-    const size_t index = pos - detector_numbers_.begin();
-    det_to_use[index] = true;
-  }//for( const int num : det_nums )
-  
-  return sum_measurements( sample_num, det_to_use, binTo );
-}//sum_measurements(...)
+  return energy_cal;
+}//suggested_sum_energy_calibration(...)
 
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements(
-                                         const std::set<int> &sample_numbers,
-                                         const vector<bool> &det_to_use ) const
-{
-  //For example example passthrough (using late 2011 mac book pro):
-  //  Not using multithreading:          It took  0.135964s wall, 0.130000s user + 0.000000s system = 0.130000s CPU (95.6%)
-  //  Using multithreading (4 threads):  It took  0.061113s wall, 0.220000s user + 0.000000s system = 0.220000s CPU (360.0%)
-  //For example example HPGe Ba133:
-  //  Not using multithreading:         It took  0.001237s wall, 0.000000s user
-  //  Using multithreading (2 threads): It took  0.001248s wall, 0.000000s user
-
-  size_t calIndex;
-  try
-  {
-    calIndex = suggested_gamma_binning_index( sample_numbers, det_to_use );
-  }catch(...)
-  {
-    return std::shared_ptr<Measurement>();
-  }
-  
-  return sum_measurements( sample_numbers, det_to_use, measurements_[calIndex] );
-}//sum_measurements(...)
 
 
 std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sample_numbers,
-                                      const vector<bool> &det_to_use,
-                                      const std::shared_ptr<const Measurement> binto ) const
+                                      const std::vector<std::string> &det_names,
+                                      std::shared_ptr<const EnergyCalibration> ene_cal ) const
 {
+  if( det_names.empty() || sample_numbers.empty() )
+    return nullptr;
+    
+  std::shared_ptr<Measurement> dataH = std::make_shared<Measurement>();
+  
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  if( !binto || !binto->gamma_counts_ || binto->gamma_counts_->empty() || measurements_.empty() )
-    return std::shared_ptr<Measurement>();
+  //Check all provided sample numbers are valid
+  for( const int sample : sample_numbers )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "sum_measurements: invalid sample number passed in ('"
+                           + to_string(sample) + "')" );
+  }
   
-  std::shared_ptr<Measurement> dataH = std::make_shared<Measurement>();
-  assert( binto->energy_calibration_ );
-  dataH->energy_calibration_ = binto->energy_calibration_;
+  //Check all provided detector names are valid
+  for( const string &name : det_names )
+  {
+    auto pos = std::find( begin(detector_names_), end(detector_names_), name );
+    if( pos == end(detector_names_) )
+      throw runtime_error( "sum_measurements: invalid detector name passed in ('" + name + "')" );
+  }
+  
+  if( !ene_cal )
+    ene_cal = suggested_sum_energy_calibration( sample_numbers, det_names );
+  
+  if( !ene_cal )
+    return nullptr;
+  
+  if( ene_cal->type() == EnergyCalType::InvalidEquationType )
+    throw runtime_error( "sum_measurements: callid with InvalidEquationType energy calibration" );
+  
+  dataH->energy_calibration_ = ene_cal;
   
   if( measurements_.size() == 1 )
     dataH->set_title( measurements_[0]->title_ );
   else
     dataH->set_title( filename_ );
-  
-  if( detector_names_.size() != det_to_use.size() )
-    throw runtime_error( "SpecFile::sum_measurements(...): "
-                        "det_to_use.size() != sample_measurements.size()" );
-  
-  size_t ndet_to_use = 0;
-  for( const bool i : det_to_use ) //could use std::count_if(...), for std::for_each(...) ...
-    ndet_to_use += static_cast<size_t>( i );
   
   dataH->contained_neutron_ = false;
   dataH->real_time_ = 0.0f;
@@ -6114,82 +6133,22 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   dataH->sample_number_ = -1;
   if( sample_numbers.size() == 1 )
     dataH->sample_number_ = *begin(sample_numbers);
+  dataH->start_time_ = boost::posix_time::pos_infin;
   
+  const size_t ndet_to_use = det_names.size();
   if( ndet_to_use == 1 )
   {
-    for( size_t i = 0; i < det_to_use.size(); ++i )
-    {
-      if( det_to_use[i] )
-      {
-        dataH->detector_name_ = detector_names_[i];
-        assert( detector_numbers_.size() == detector_names_.size() );
-        dataH->detector_number_ = detector_numbers_[i];
-        break;
-      }//if( this is the detector to use )
-    }//for( loop over det index )
+    const auto &name = det_names.front();
+    dataH->detector_name_ = name;
+    const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
+    assert( pos != end(detector_names_) );
+    dataH->detector_number_ = detector_numbers_[pos-begin(detector_names_)];
   }else
   {
     dataH->detector_name_ = "Summed";
     dataH->detector_number_ = -1;
   }
   
-  
-  if( sample_numbers.size() == 1 )
-    dataH->sample_number_ = *sample_numbers.begin();
-  dataH->start_time_ = boost::posix_time::pos_infin;
-  
-  const auto &energy_cal = dataH->energy_calibration_;
-  assert( energy_cal );
-  const size_t nenergies = energy_cal->num_channels();
-  
-  bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
-  
-#if( PERFORM_DEVELOPER_CHECKS )
-  if( allBinningIsSame )
-  {
-    shared_ptr<const EnergyCalibration> commoncal;
-    for( const auto &m : measurements_ )
-    {
-      assert( m );
-      assert( m->energy_calibration_ );
-      const auto &cal = m->energy_calibration_;
-      const bool has_cal = (m->gamma_counts_ && !m->gamma_counts_->empty()
-                            && (cal->type() != EnergyCalType::InvalidEquationType));
-      
-      if( !commoncal && has_cal  )
-        commoncal = cal;
-      
-      if( has_cal && (commoncal != cal) && (*commoncal != *cal) )
-      {
-        log_developer_error( __func__, "Found case where kHasCommonBinning bit is eroneously set" );
-        break;
-      }
-    }//for( auto m : measurements_ )
-  }//if( allBinningIsSame )
-#endif  //#if( PERFORM_DEVELOPER_CHECKS )
-  
-  if( allBinningIsSame )
-  {
-    const vector< std::shared_ptr<Measurement> >::const_iterator pos
-               = std::find( measurements_.begin(), measurements_.end(), binto );
-    const bool bintoInMeas = (pos != measurements_.end());
-    if( !bintoInMeas )
-    {
-      shared_ptr<const Measurement> first_spec;
-      for( const auto &m : measurements_ )
-      {
-        if( m->gamma_counts_ && !m->gamma_counts_->empty() )
-        {
-          allBinningIsSame = ((m->energy_calibration_ == binto->energy_calibration_)
-                              || (*(m->energy_calibration_) == *(binto->energy_calibration_)));
-          if( allBinningIsSame && m->energy_calibration_->type()==EnergyCalType::InvalidEquationType )
-            allBinningIsSame = (m->gamma_counts_->size() == binto->gamma_counts_->size());
-          break;
-        }
-      }//for( loop over measurements to find first one with a gamma spectra )
-    }//if( !bintoInMeas )
-  }//if( allBinningIsSame )
-
   //any less than 'min_per_thread' than the additional memorry allocation isnt
   //  worth it - briefly determined on my newer mbp using both example
   //  example passthrough (16k channel) and a 512 channel NaI portal passthrough
@@ -6207,98 +6166,100 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   set<string> remarks;
   for( const int sample_number : sample_numbers )
   {
-    for( size_t index = 0; index < detector_names_.size(); ++index )
+    for( const string &det : det_names )
     {
-      const std::string &det = detector_names_[index];
       std::shared_ptr<const Measurement> meas = measurement( sample_number, det );
-      
       if( !meas )
         continue;
       
       std::shared_ptr<const vector<float> > spec = meas->gamma_counts();
-      
       const size_t spec_size = (spec ? spec->size() : (size_t)0);
       
-      //we'll allow measurement->energy_calibration()->num_channels() to have more bins, since
-      //  if meas->energy_calibration_model() == LowerChannelEdge then there will be
-      //  an extra entry to mark indicate upper edge of last channel.
-      if( allBinningIsSame && (spec_size > nenergies) )
+      dataH->start_time_ = std::min( dataH->start_time_, meas->start_time_ );
+      dataH->neutron_counts_sum_ += meas->neutron_counts_sum();
+      dataH->contained_neutron_ |= meas->contained_neutron_;
+        
+      if( dataH->neutron_counts_.size() < meas->neutron_counts_.size() )
+        dataH->neutron_counts_.resize( meas->neutron_counts_.size(), 0.0f );
+      const size_t nneutchannel = meas->neutron_counts_.size();
+      for( size_t i = 0; i < nneutchannel; ++i )
+        dataH->neutron_counts_[i] += meas->neutron_counts_[i];
+        
+      for( const std::string &remark : meas->remarks_ )
+        remarks.insert( remark );
+        
+      if( spec_size > 3 )
       {
-        string msg = "SpecFile::sum_measurements: spec.size()=" + std::to_string(spec_size)
-                     + "  measurement->channel_energies().size()=" + std::to_string(nenergies);
-#if( PERFORM_DEVELOPER_CHECKS )
-        log_developer_error( __func__, msg.c_str() );
-#endif
-        throw runtime_error( msg );
-      }//if( spec.size() > (binning_ptr->size()) )
-      
-      //Could add consistency check here to make sure all spectra are same size
-      
-      if( det_to_use[index] )
-      {
-        dataH->start_time_ = std::min( dataH->start_time_, meas->start_time_ );
-        
-        if( binto->gamma_counts_ && (binto->gamma_counts_->size() > 3) )
-        {
-          if( meas->gamma_counts_ && (meas->gamma_counts_->size() > 3) )
-          {
-            dataH->live_time_ += meas->live_time();
-            dataH->real_time_ += meas->real_time();
-          }
-        }else
-        {
-          dataH->live_time_ += meas->live_time();
-          dataH->real_time_ += meas->real_time();
-        }
-        
-        dataH->neutron_counts_sum_ += meas->neutron_counts_sum();
-        dataH->contained_neutron_ |= meas->contained_neutron_;
-        
-        if( dataH->neutron_counts_.size() < meas->neutron_counts_.size() )
-          dataH->neutron_counts_.resize( meas->neutron_counts_.size(), 0.0f );
-        const size_t nneutchannel = meas->neutron_counts_.size();
-        for( size_t i = 0; i < nneutchannel; ++i )
-          dataH->neutron_counts_[i] += meas->neutron_counts_[i];
-        
-        for( const std::string &remark : meas->remarks_ )
-          remarks.insert( remark );
-        
-        if( spec_size )
-        {
-          dataH->gamma_count_sum_ += meas->gamma_count_sum();
-          const size_t thread_num = current_total_sample_num % num_thread;
-          specs[thread_num].push_back( meas );
-          spectrums[thread_num].push_back( meas->gamma_counts() );
-          ++current_total_sample_num;
-        }
-      }//if( det_to_use[index] )
+        dataH->live_time_ += meas->live_time();
+        dataH->real_time_ += meas->real_time();
+        dataH->gamma_count_sum_ += meas->gamma_count_sum();
+        const size_t thread_num = current_total_sample_num % num_thread;
+        specs[thread_num].push_back( meas );
+        spectrums[thread_num].push_back( meas->gamma_counts() );
+        ++current_total_sample_num;
+      }
     }//for( size_t index = 0; index < detector_names_.size(); ++index )
   }//for( const int sample_number : sample_numbers )
   
   if( !current_total_sample_num )
-    return dataH->contained_neutron_ ? dataH : std::shared_ptr<Measurement>();
+    return nullptr;
+
   
   //If we are only summing one sample, we can preserve some additional
   //  information
   if( current_total_sample_num == 1 )
   {
-    dataH->latitude_ = specs[0][0]->latitude_;
-    dataH->longitude_ = specs[0][0]->longitude_;
-    dataH->position_time_ = specs[0][0]->position_time_;
-    dataH->sample_number_ = specs[0][0]->sample_number_;
-    dataH->occupied_ = specs[0][0]->occupied_;
-    dataH->speed_ = specs[0][0]->speed_;
-    dataH->detector_name_ = specs[0][0]->detector_name_;
-    dataH->detector_number_ = specs[0][0]->detector_number_;
+    dataH->latitude_             = specs[0][0]->latitude_;
+    dataH->longitude_            = specs[0][0]->longitude_;
+    dataH->position_time_        = specs[0][0]->position_time_;
+    dataH->sample_number_        = specs[0][0]->sample_number_;
+    dataH->occupied_             = specs[0][0]->occupied_;
+    dataH->speed_                = specs[0][0]->speed_;
+    dataH->detector_name_        = specs[0][0]->detector_name_;
+    dataH->detector_number_      = specs[0][0]->detector_number_;
     dataH->detector_description_ = specs[0][0]->detector_description_;
-    dataH->quality_status_ = specs[0][0]->quality_status_;
+    dataH->quality_status_       = specs[0][0]->quality_status_;
   }//if( current_total_sample_num == 1 )
+  
+  
+  const bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
   
   if( allBinningIsSame )
   {
+#if( PERFORM_DEVELOPER_CHECKS )
+    shared_ptr<const EnergyCalibration> commoncal;
+    for( const auto &m : measurements_ )
+    {
+      assert( m );
+      assert( m->energy_calibration_ );
+      const auto &cal = m->energy_calibration_;
+      const bool valid_cal = (cal->type() != EnergyCalType::InvalidEquationType);
+      const bool has_cal = (m->gamma_counts_ && !m->gamma_counts_->empty() && valid_cal);
+      
+      if( !commoncal && has_cal  )
+        commoncal = cal;
+      
+      if( valid_cal && (!m->gamma_counts_ || m->gamma_counts_->empty()) )
+        log_developer_error( __func__, "Have valid energy calibration but no channel counts" );
+        
+      if( has_cal && (commoncal != cal) && (*commoncal != *cal) )
+      {
+        log_developer_error( __func__, "Found case where kHasCommonBinning bit is eroneously set" );
+        break;
+      }
+    }//for( auto m : measurements_ )
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+    
+    if( spectrums.size()<1 || spectrums[0].empty() )
+      throw runtime_error( string(SRC_LOCATION) + "\n\tSerious programming logic error" );
+    
+    const size_t spec_size = spectrums[0][0]->size();
+    auto result_vec = make_shared<vector<float>>( spec_size, 0.0 );
+    vector<float> &result_vec_ref = *result_vec;
+    dataH->gamma_counts_ = result_vec;
+    
     if( num_thread > 1 )
     {
-      //Should consider using calloc( )  and free...
       vector< vector<float> > results( num_thread );
     
       SpecUtilsAsync::ThreadPool threadpool;
@@ -6313,49 +6274,56 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       //Note: in principle for a multicore machine (>16 physical cores), we
       //      could combine results using a few different threads down to less
       //      than 'min_per_thread'
-      const size_t spec_size = results[0].size();
-      std::shared_ptr<vector<float> > result_vec = std::make_shared< vector<float> >(spec_size, 0.0f);
-      dataH->gamma_counts_ = result_vec;
-    
       for( size_t i = 0; i < num_thread; ++i )
       {
         if( results[i].size() )
         {
           const float *spec_array = &(results[i][0]);
           for( size_t bin = 0; bin < spec_size; ++bin )
-            result_vec->operator[](bin) += spec_array[bin];
+            result_vec_ref[bin] += spec_array[bin];
         }
       }//for( size_t i = 0; i < num_thread; ++i )
     }else
     {
-      if( spectrums.size()!=1 || spectrums[0].empty() )
-        throw runtime_error( string(SRC_LOCATION) + "\n\tSerious programming logic error" );
-    
       const vector< std::shared_ptr<const vector<float> > > &spectra = spectrums[0];
       const size_t num_spectra = spectra.size();
-    
-      const size_t spec_size = spectra[0]->size();
-      vector<float> *result_vec = new vector<float>( spec_size, 0.0 );
-      dataH->gamma_counts_.reset( result_vec );
-      float *result_vec_raw = &((*result_vec)[0]);
     
       for( size_t i = 0; i < num_spectra; ++i )
       {
         const size_t len = spectra[i]->size();
         const float *spec_array = &(spectra[i]->operator[](0));
-      
-        //Using size_t to get around possible variable size issues.
-        //  In principle I would expect this below loop to get vectorized by the
-        //  compiler - but I havent actually checked for this.
         for( size_t bin = 0; bin < spec_size && bin < len; ++bin )
-          result_vec_raw[bin] += spec_array[bin];
+          result_vec_ref[bin] += spec_array[bin];
       }//for( size_t i = 0; i < num_thread; ++i )
     }//if( num_thread > 1 ) / else
   
+    //If we are here, we know all the original Measurements had the same binning, but they may not
+    //  have the same binning as 'ene_cal'.
+    shared_ptr<const EnergyCalibration> orig_bin;
+    for( const auto &m : measurements_)
+    {
+      const auto &cal = m->energy_calibration();
+      if( cal->type() != EnergyCalType::InvalidEquationType )
+      {
+        if( (cal != ene_cal) && ((*cal) != (*ene_cal)) )
+          orig_bin = cal;
+        break;
+      }
+    }//for( check if new cal matches all Measurements cals )
+    
+    
+    if( orig_bin )
+    {
+      auto resulting_counts = make_shared<vector<float>>();
+      SpecUtils::rebin_by_lower_edge( *orig_bin->channel_energies(), result_vec_ref,
+                                      *ene_cal->channel_energies(), *resulting_counts );
+      dataH->gamma_counts_ = resulting_counts;
+    }
   }else //if( allBinningIsSame )
   {
-    if( sample_numbers.size() > 1 || det_to_use.size() > 1 )
-      cerr << "sum_measurements for case with without a common binning not tested yet!" << endl;
+    /// \TODO: We currently calling #rebin_by_lower_edge for every spectrum while summing; we could
+    ///        instead group by common energy calibration, some those respectively, and then
+    ///        sum the results using #rebin_by_lower_edge, which would be more accurate and faster.
     
     vector< vector<float> > results( num_thread );
     SpecUtilsAsync::ThreadPool threadpool;
@@ -6388,6 +6356,18 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );
 
+#if( PERFORM_DEVELOPER_CHECKS )
+  const size_t ngammchan = dataH->gamma_counts_ ? dataH->gamma_counts_->size() : size_t(0);
+  const size_t nenechan = ene_cal->num_channels();
+  if( ngammchan != nenechan )
+  {
+    string msg = "sum_measurements: final number of gamma channels doesnt match energy calibration"
+                " number of channels (" + to_string(ngammchan) + " vs " + to_string(nenechan) + ")";
+    log_developer_error( __func__, msg.c_str() );
+    assert( 0 );
+  }
+#endif
+  
   return dataH;
 }//std::shared_ptr<Measurement> sum_measurements( int &, int &, const SpecMeas & )
 
@@ -6844,10 +6824,14 @@ void SpecFile::write( std::ostream &strm,
       throw runtime_error( "Specified invalid sample number to write out" );
   }
   
+  vector<string> det_names;
   for( const int detnum : det_nums )
   {
-    if( std::find(detector_numbers_.begin(), detector_numbers_.end(), detnum) == detector_numbers_.end() )
+    const auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), detnum );
+    if( pos == end(detector_numbers_) )
       throw runtime_error( "Specified invalid detector number to write out" );
+    
+    det_names.push_back( detector_names_[pos - begin(detector_numbers_)] );
   }
   
   SpecFile info = *this;
@@ -6933,7 +6917,7 @@ void SpecFile::write( std::ostream &strm,
     case SaveSpectrumAsType::HtmlD3:
     {
       D3SpectrumExport::D3SpectrumChartOptions options;
-      success = info.write_d3_html( strm, options, samples, detectors );
+      success = info.write_d3_html( strm, options, samples, info.detector_names_ );
       break;
     }
 #endif

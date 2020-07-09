@@ -331,18 +331,29 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_integer_chn: invalid sample number (" + to_string(sample) + ")" );
+  }
+  
   if( sample_nums.empty() )
     sample_nums = sample_numbers_;
   
-  const size_t ndet = detector_numbers_.size();
-  vector<bool> detectors( ndet, true );
-  if( !det_nums.empty() )
+  vector<string> det_names;
+  for( const int num : det_nums )
   {
-    for( size_t i = 0; i < ndet; ++i )
-      detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-  }//if( det_nums.empty() )
+    const auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_integer_chn: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos - begin(detector_numbers_)] );
+  }
+  if( det_nums.empty() )
+    det_names = detector_names_;
   
-  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
   
   if( !summed || !summed->gamma_counts() )
     return false;

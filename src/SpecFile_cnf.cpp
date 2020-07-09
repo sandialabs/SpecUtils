@@ -587,108 +587,111 @@ bool SpecFile::load_from_cnf( std::istream &input )
 bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
                           const std::set<int> &det_nums ) const
 {
+  //First, lets take care of some boilerplate code.
+  std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_cnf: invalid sample number (" + to_string(sample) + ")" );
+  }
   
-    try
+  if( sample_nums.empty() )
+    sample_nums = sample_numbers_;
+  
+  vector<string> det_names;
+  for( const int num : det_nums )
+  {
+    auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_cnf: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos-begin(detector_numbers_)] );
+  }
+  
+  if( det_nums.empty() )
+    det_names = detector_names_;
+  
+  try
+  {
+    std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, det_names, nullptr);
+
+    if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
+      return false;
+
+    //At this point we have the one spectrum (called summed) that we will write
+    //  to the CNF file.  If the input file only had a single spectrum, this is
+    //  now held in 'summed', otherwise the specified samples and detectors have
+    //  all been summed together/
+
+    //Gamma information
+    const float real_time = summed->real_time();
+    const float live_time = summed->live_time();
+    const vector<float> gamma_channel_counts = *summed->gamma_counts();
+
+    //CNF files use polynomial energy calibration, so if the input didnt also
+    //  use polynomial, we will convert to polynomial, or in the case of
+    //  lower channel or invalid, just clear the coefficients.
+    vector<float> energy_cal_coeffs = summed->calibration_coeffs();
+    switch (summed->energy_calibration_model())
     {
-        //First, lets take care of some boilerplate code.
-        std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+      case EnergyCalType::Polynomial:
+      case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          //Energy calibration already polynomial, no need to do anything
+      break;
 
-        if (sample_nums.empty())
-            sample_nums = sample_numbers_;
+      case EnergyCalType::FullRangeFraction:
+        //Convert to polynomial
+        energy_cal_coeffs = fullrangefraction_coef_to_polynomial(energy_cal_coeffs, gamma_channel_counts.size());
+      break;
 
-        const size_t ndet = detector_numbers_.size();
-        vector<bool> detectors(ndet, true);
-        if (!det_nums.empty())
-        {
-            for (size_t i = 0; i < ndet; ++i)
-                detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-        }//if( det_nums.empty() )
+      case EnergyCalType::LowerChannelEdge:
+      case EnergyCalType::InvalidEquationType:
+        //No hope of converting energy calibration to the polynomial needed by CNF files.
+        energy_cal_coeffs.clear();
+      break;
+    }//switch( energy cal type coefficients are in )
 
-
-        std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, detectors);
-
-        if (!summed || !summed->gamma_counts() || summed->gamma_counts()->empty())
-            return false;
-
-        //At this point we have the one spectrum (called summed) that we will write
-        //  to the CNF file.  If the input file only had a single spectrum, this is
-        //  now held in 'summed', otherwise the specified samples and detectors have
-        //  all been summed together/
-
-        //Gamma information
-        const float real_time = summed->real_time();
-        const float live_time = summed->live_time();
-        const vector<float> gamma_channel_counts = *summed->gamma_counts();
-
-        //CNF files use polynomial energy calibration, so if the input didnt also
-        //  use polynomial, we will convert to polynomial, or in the case of
-        //  lower channel or invalid, just clear the coefficients.
-        vector<float> energy_cal_coeffs = summed->calibration_coeffs();
-        switch (summed->energy_calibration_model())
-        {
-        case EnergyCalType::Polynomial:
-        case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-            //Energy calibration already polynomial, no need to do anything
-            break;
-
-        case EnergyCalType::FullRangeFraction:
-            //Convert to polynomial
-            energy_cal_coeffs = fullrangefraction_coef_to_polynomial(energy_cal_coeffs, gamma_channel_counts.size());
-            break;
-
-        case EnergyCalType::LowerChannelEdge:
-        case EnergyCalType::InvalidEquationType:
-            //No hope of converting energy calibration to the polynomial needed by CNF files.
-            energy_cal_coeffs.clear();
-            break;
-        }//switch( energy cal type coefficients are in )
-
-        //I'm not sure if CNF files can handle deviation pairs or not:
-        //It does not, it works in energy and scales all detectors to a single detector
-        //const vector<pair<float, float>>& deviation_pairs = summed->deviation_pairs();
-
-
-        /// \TODO: Check if neutron counts are supported in CNF files.
-        //Neutron information:
-        //const double sum_neutrons = summed->neutron_counts_sum();
+  
+    /// \TODO: Check if neutron counts are supported in CNF files.
+    //Neutron information:
+    //const double sum_neutrons = summed->neutron_counts_sum();
         
-        //With short measurements or handheld detectors we may not have had any
-        //  neutron counts, but there was a detector, so lets check if the input
-        //  file had information about neutrons.
-        //const bool had_neutrons = summed->contained_neutron();
+    //With short measurements or handheld detectors we may not have had any
+    //  neutron counts, but there was a detector, so lets check if the input
+    //  file had information about neutrons.
+    //const bool had_neutrons = summed->contained_neutron();
 
 
-        //Measurement start time.             
-        //The start time may not be valid (e.g., if input file didnt have times),
-        // but if we're here we time is valid, just the unix epoch
-        const boost::posix_time::ptime& start_time = summed->start_time().is_special() ? 
+    //Measurement start time.
+    //The start time may not be valid (e.g., if input file didnt have times),
+    // but if we're here we time is valid, just the unix epoch
+    const boost::posix_time::ptime& start_time = summed->start_time().is_special() ?
             SpecUtils::time_from_string("1970-01-01 00:00:00"): summed->start_time();
 
-        //Check if we have RIID analysis results we could write to the output file.
-        /** \TODO: implement writing RIID analysis resukts to output file.
+    //Check if we have RIID analysis results we could write to the output file.
+    /** \TODO: implement writing RIID analysis resukts to output file.
          
-        if (detectors_analysis_ && !detectors_analysis_->is_empty())
-        {
-            //See DetectorAnalysis class for details; its a little iffy what
-            //  information from the original file makes it into the DetectorAnalysis.
+    if (detectors_analysis_ && !detectors_analysis_->is_empty())
+    {
+      //See DetectorAnalysis class for details; its a little iffy what
+      //  information from the original file makes it into the DetectorAnalysis.
 
-            const DetectorAnalysis& ana = *detectors_analysis_;
-            //ana.algorithm_result_description_
-            //ana.remarks_
-            //...
+      const DetectorAnalysis& ana = *detectors_analysis_;
+      //ana.algorithm_result_description_
+      //ana.remarks_
+      //...
 
-            //Loop over individual results, usually different nuclides or sources.
-            for (const DetectorAnalysisResult& nucres : ana.results_)
-            {
-
-            }//for( loop over nuclides identified )
-
-        }//if( we have riid results from input file )
-        */
+      //Loop over individual results, usually different nuclides or sources.
+      for (const DetectorAnalysisResult& nucres : ana.results_)
+      {
+      }//for( loop over nuclides identified )
+     
+    }//if( we have riid results from input file )
+    */
       
-        //We should have most of the information we need identified by here, so now
-        //  just need to write to the output stream.
-        //  ex., output.write( (const char *)my_data, 10 );
+    //We should have most of the information we need identified by here, so now
+    //  just need to write to the output stream.
+    //  ex., output.write( (const char *)my_data, 10 );
 
         //create a containter for the file header
         const size_t file_header_length = 0x800;
@@ -860,10 +863,12 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     
     }catch( std::exception &e )
     {
+#if( PERFORM_DEVELOPER_CHECKS )
       //Print out why we failed for debug purposes.
-      cerr << "Failed to write CNF file: " << e.what() << endl;
+      log_developer_error( __func__, ("Failed to write CNF file: " + string(e.what())).c_str() );
+#endif
       return false;
-    }
+    }//try / catch
   
     return true;
 }//write_cnf
