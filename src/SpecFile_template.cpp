@@ -60,11 +60,6 @@ namespace SpecUtils
 
 		j["gamma_counts"] = (*(p->gamma_counts()));
 
-		// Add compressed data in case we want to use that in the file
-		vector<float> compressed_counts;
-		compress_to_counted_zeros(*(p->gamma_counts()), compressed_counts);
-		j["zero_compressed_counts"] = compressed_counts;
-
 		//TODO: more stuff
 	}
 
@@ -80,6 +75,12 @@ namespace SpecUtils
 			float value = args.at(1)->get<float>();
 			snprintf(buffer, sizeof(buffer), format.c_str(), value);
 			return std::string(buffer);
+		});
+
+		env.add_callback("compress_countedzeros", 1, [](Arguments& args) {
+			vector<float> compressed_counts;
+			compress_to_counted_zeros(args.at(0)->get<std::vector<float>>(), compressed_counts);
+			return compressed_counts;
 		});
 
 		// STEP 1 - read template file
