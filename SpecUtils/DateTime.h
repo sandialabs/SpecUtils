@@ -135,7 +135,25 @@ namespace  SpecUtils
    */
   float time_duration_string_to_seconds( const std::string &duration );
   
-  
+  /** Converts a string formated like "[-]h[h][:mm][:ss][.fff]", (ex. "02:15:01.332") to number of
+   seconds.
+   
+   Durantion will be negative if first character is '-'.
+   Unlike boost::posix_time::duration_from_string (which uses delimiters "-:,."), the only valid
+   delimeter is a colon (':').  Leading and trailing whitespaces are ignored.
+   
+   Some examples:
+    - "1:13:1.2" is on hour, thirteen minutes, and 1.2 seconds
+    - "01:15" or equivalently "1:15" is on hour and fifteen minutes
+    - "-01:00" is negative one hour
+    - " \t13:12:1.1   " is thirteen hours, twelve minutes, and 1.1 seconds.
+    - Invalid examples: ":", ":32", ":32:16", "--01:32:16", "12:32a", "12::1", "12:01:-2", "12:32:"
+                        "12:32 a", "a12:13", "a 12:13"
+   
+   Throws exception if input is invalid.
+   */
+  double delimited_duration_string_to_seconds( const std::string &duration );
+
   /** \brief Gives the CPU time in seconds.
    
    Useful for timing things when you dont want to use chrono.

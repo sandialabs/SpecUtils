@@ -57,7 +57,7 @@ add_test( TestSafeGetLine ${EXECUTABLE_OUTPUT_PATH}/test_safe_get_line.exe --log
 
 add_executable( test_time_from_string.exe test_time_from_string.cpp )
 target_link_libraries( test_time_from_string.exe PRIVATE SpecUtils ${BOOST_LINK_LIBS} )
-set_target_properties( test_time_from_string.exe PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+set_target_properties( test_time_from_string.exe PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( TestTimeFromString ${EXECUTABLE_OUTPUT_PATH}/test_time_from_string.exe --log_level=test_suite --catch_system_error=yes "-- --indir=${testdir}" )
 
 

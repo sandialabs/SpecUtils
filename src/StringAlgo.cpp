@@ -183,7 +183,7 @@ namespace SpecUtils
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, true );
     
 #if(PERFORM_DEVELOPER_CHECKS)
-    const bool correctAnswer = boost::algorithm::istarts_with( line, label );
+    const bool correctAnswer = boost::algorithm::starts_with( line, label );
     
     if( answer != correctAnswer )
     {
@@ -964,6 +964,7 @@ namespace SpecUtils
     const char *end = begin + length;
     
 #if( BOOST_VERSION < 104500 )
+    errno = 0;
     const string inputstr(input, input+length);
     const char *delims = ", ";
     size_t prev_delim_end = 0;
@@ -979,6 +980,7 @@ namespace SpecUtils
         else
           val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
         
+        /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
         if( errno )
           ok = false;
         results.push_back( val );
@@ -998,6 +1000,8 @@ namespace SpecUtils
         val = strtol(inputstr.c_str()+prev_delim_end,nullptr,10);
       else
         val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
+      
+      /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
       if( !errno )
         results.push_back( val );
     }

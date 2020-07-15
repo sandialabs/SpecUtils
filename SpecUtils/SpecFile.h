@@ -1333,17 +1333,6 @@ public:
   std::shared_ptr<const Measurement> measurement( const int sample_number,
                                            const int detector_number ) const;
 
-  //suggested_gamma_binning_index(...): returns the index of measurements_ to use
-  //  as the binning, when you are summing over the specified sample numbers and
-  //  detectors.
-  //  This function chooses the Measurement with the largest number of gamma
-  //  channels, if the Measurements have varying number of gamma channels.
-  //'det_to_use' must be same size as, and coorespond 1:1 with detector_numbers_
-  //Throws exception if 'det_to_use' is wrong size, no measurements available, or
-  //  other errors.
-  /// \deprecated Please use #suggested_sum_energy_calibration
-  size_t suggested_gamma_binning_index( const std::set<int> &sample_numbers,
-                                    const std::vector<bool> &det_to_use ) const;
   
   /** For a given set of sample numbers and detector names, the #Measurement may have different
    energy calibrations, number of channels, and/or energy ranges, meaning if you want to display
