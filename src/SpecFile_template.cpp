@@ -58,9 +58,34 @@ namespace SpecUtils
 		j["real_time"] = p->real_time();
 		j["live_time"] = p->live_time();
 
-		j["gamma_counts"] = (*(p->gamma_counts()));
+		j["start_time"] = to_extended_iso_string(p->start_time());
 
-		//TODO: more stuff
+		j["gamma_counts"] = (*(p->gamma_counts()));
+		j["neutron_counts"] = p->neutron_counts();
+
+		j["gamma_count_sum"] = p->gamma_count_sum();
+		j["neutron_counts_sum"] = p->neutron_counts_sum();
+	}
+
+	void to_json(json& j, SpecUtils::DetectorAnalysisResult p)
+	{
+		j["remark"] = p.remark_;
+		j["dose_rate"] = p.dose_rate_;
+		j["dose_rate_units"] = "uSv";
+		j["real_time"] = p.real_time_;
+		j["distance"] = p.distance_;
+	}
+
+	void to_json(json& j, shared_ptr<const SpecUtils::DetectorAnalysis> p)
+	{
+		if (p != NULL)
+		{
+			j["results"] = p->results_;
+		}
+		else 
+		{
+			j["results"] = std::vector<SpecUtils::DetectorAnalysisResult>();
+		}
 	}
 
 	bool SpecFile::write_template(std::ostream& ostr, const std::string template_file) const
@@ -69,6 +94,7 @@ namespace SpecUtils
 
 		Environment env;
 
+		// Apply an arbitrary string formatting
 		env.add_callback("format", 2, [](Arguments& args) {
 			char buffer[256];
 			std::string format = args.at(0)->get<string>();
@@ -77,6 +103,18 @@ namespace SpecUtils
 			return std::string(buffer);
 		});
 
+		// Convert a value in seconds to the N42 format PT<minutes>M<seconds>S
+		env.add_callback("pt_min_sec", 1, [](Arguments& args) {
+			char buffer[256];
+			float valueInSeconds = args.at(0)->get<float>();
+			int minutes = (int)(valueInSeconds / 60);
+			float remainingSeconds = valueInSeconds - (60 * minutes);
+			//TODO: is three digits right here for seconds precision??
+			snprintf(buffer, sizeof(buffer), "PT%dM%0.3fS", minutes, remainingSeconds);
+			return std::string(buffer);
+		});
+
+		// Run the counted zeros compression on the given vector
 		env.add_callback("compress_countedzeros", 1, [](Arguments& args) {
 			vector<float> compressed_counts;
 			compress_to_counted_zeros(args.at(0)->get<std::vector<float>>(), compressed_counts);
@@ -91,17 +129,35 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cerr << "Error reading input template" << e.what() << endl;
+			cout << "Error reading input template" << e.what() << endl;
 			return false;
 		}
 
 		// STEP 2 - populate JSON with data from input spectrum
 		json data;
 
-		data["measurements"] = measurements_;
+		try
+		{
+			data["instrument_type"] = instrument_type_;
+			data["manufacturer"] = manufacturer_;
+			data["instrument_model"] = instrument_model_;
+			data["instrument_id"] = instrument_id_;
 
-		data["gamma_live_time"] = gamma_live_time_;
-		data["gamma_real_time"] = gamma_real_time_;
+			data["measurements"] = measurements_;
+
+			data["gamma_live_time"] = gamma_live_time_;
+			data["gamma_real_time"] = gamma_real_time_;
+			
+			data["gamma_count_sum"] = gamma_count_sum_;
+			data["neutron_counts_sum"] = neutron_counts_sum_;
+
+			data["detector_analysis"] = detectors_analysis_;
+		}
+		catch (std::exception& e)
+		{
+			cout << "Error building data structure" << e.what() << endl;
+			return false;
+		}
 
 		// STEP 3 - render template using JSON data to the provided stream
 		try 
@@ -110,7 +166,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cerr << "Error rendering output file" << e.what() << endl;
+			cout << "Error rendering output file" << e.what() << endl;
 			return false;
 		}
 
