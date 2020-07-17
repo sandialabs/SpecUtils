@@ -65,6 +65,11 @@ namespace SpecUtils
 
 		j["gamma_count_sum"] = p->gamma_count_sum();
 		j["neutron_counts_sum"] = p->neutron_counts_sum();
+
+		j["remarks"] = p->remarks();
+
+		j["detector_name"] = p->detector_name();
+		j["detector_type"] = p->detector_type();
 	}
 
 	void to_json(json& j, SpecUtils::DetectorAnalysisResult p)
@@ -104,13 +109,17 @@ namespace SpecUtils
 		});
 
 		// Convert a value in seconds to the N42 format PT<minutes>M<seconds>S
-		env.add_callback("pt_min_sec", 1, [](Arguments& args) {
+		// Second argument is for seconds precision
+		env.add_callback("pt_min_sec", 2, [](Arguments& args) {
 			char buffer[256];
 			float valueInSeconds = args.at(0)->get<float>();
+			int secondsPrecision = args.at(1)->get<int>();
 			int minutes = (int)(valueInSeconds / 60);
 			float remainingSeconds = valueInSeconds - (60 * minutes);
-			//TODO: is three digits right here for seconds precision??
-			snprintf(buffer, sizeof(buffer), "PT%dM%0.3fS", minutes, remainingSeconds);
+			char sformat[256];
+			snprintf(sformat, sizeof(sformat), "0.%d", secondsPrecision);
+			string totalFormat = "PT%dM%" + string(sformat) + "fS";
+			snprintf(buffer, sizeof(buffer), totalFormat.c_str(), minutes, remainingSeconds);
 			return std::string(buffer);
 		});
 
@@ -147,7 +156,7 @@ namespace SpecUtils
 
 			data["gamma_live_time"] = gamma_live_time_;
 			data["gamma_real_time"] = gamma_real_time_;
-			
+
 			data["gamma_count_sum"] = gamma_count_sum_;
 			data["neutron_counts_sum"] = neutron_counts_sum_;
 
