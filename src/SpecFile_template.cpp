@@ -79,6 +79,9 @@ namespace SpecUtils
 		j["dose_rate_units"] = "uSv";
 		j["real_time"] = p.real_time_;
 		j["distance"] = p.distance_;
+		j["nuclide"] = p.nuclide_;
+		j["nuclide_type"] = p.nuclide_type_;
+		j["id_confidence"] = p.id_confidence_;
 	}
 
 	void to_json(json& j, shared_ptr<const SpecUtils::DetectorAnalysis> p)
@@ -86,6 +89,11 @@ namespace SpecUtils
 		if (p != NULL)
 		{
 			j["results"] = p->results_;
+			j["algorithm_creator"] = p->algorithm_creator_;
+			j["algorithm_name"] = p->algorithm_name_;
+			j["algorithm_description"] = p->algorithm_description_;
+			j["algorithm_result_description"] = p->algorithm_result_description_;
+			j["algorithm_version_components"] = p->algorithm_component_versions_;
 		}
 		else 
 		{
@@ -151,6 +159,7 @@ namespace SpecUtils
 			data["manufacturer"] = manufacturer_;
 			data["instrument_model"] = instrument_model_;
 			data["instrument_id"] = instrument_id_;
+			data["version_components"] = component_versions_;
 
 			data["measurements"] = measurements_;
 
@@ -161,6 +170,8 @@ namespace SpecUtils
 			data["neutron_counts_sum"] = neutron_counts_sum_;
 
 			data["detector_analysis"] = detectors_analysis_;
+
+			data["remarks"] = remarks_;
 		}
 		catch (std::exception& e)
 		{
