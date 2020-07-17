@@ -667,26 +667,6 @@ public:
   
   //To set real and live times, see SpecFile::set_live_time(...)
   
-  //Functions that mimmic ROOTs TH1 class
-  //  XXX - note that I should _really_ convert these functions to be same
-  //        style as the rest of the member functions, and to use a 1-based
-  //        index instead of the stupid 1 based index they are using to mimic
-  //        ROOT cerns functionality.
-  //  Note that in following TH1, 'bin' is a 1-based system
-  //  e.g. the first binn is bin 1, NOT bin 0
-  //
-  //All of these functions are depreciated!  (dont use them anywhere new)
-  float GetBinContent( int bin ) const; //depreciated
-  float GetBinLowEdge( int bin ) const; //depreciated
-  float GetBinWidth( int bin ) const;   //depreciated
-  int GetNbinsX() const;                //depreciated
-  float Integral( int binx1=0, int binx2 = -1 ) const; //depreciated
-  int FindFixBin( float x ) const;      //depreciated
-  bool CheckBinRange( int bin ) const;  //depreciated
-
-  //I want to get rid of all the CERN ROOT inspired functions (who uses 1 based
-  //  indexing?), so I am slowly re-writing them in a (more) sane manner below.
-  
   /** returns the number of channels in #gamma_counts_.
    Note: energy calibration could still be invalid and not have channel energies defined, even
    when this returns a non-zero value.

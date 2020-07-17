@@ -90,24 +90,24 @@ enum FixableErrors
 };//enum FixableErrors
 
 //get_compare_error_type(): searches the what() given by the exception thrown
-//  by MeasurmentInfo::equalEnough() to determine error type.  Returns
+//  by MeasurmentInfo::equal_enough() to determine error type.  Returns
 //  NumFixableErrors if it wasnt recognized or is not fixable.
 FixableErrors get_compare_error_type( const string &msg );
 
 //check_files_with_truth_n42(): check files that have a cooresponding truth n42
 //  file, to be sure that the original and truth n42 files parse to similar
-//  results using the 'equalEnough(...)' test.
+//  results using the 'equal_enough(...)' test.
 void check_files_with_truth_n42( const string basedir );
 
 //check_serialization_to_n42(): for test files (that have truth N42 files) this
 //  function tests that the oringal file can be read in, written out to a 2011
-//  N42, and then read back in and ensured its equalEnough() to the original.
+//  N42, and then read back in and ensured its equal_enough() to the original.
 void check_serialization_to_n42( const string basedir );
 
 //add_truth_n42(): adds a truth n42 file for the  SpecUtils::SpecFile and path
 //  passed in.  Will fail if a truth n42 file already exists, unless force is
 //  specified to be true.  Checks the created n42 file to be sure it can be read
-//  back in and pass the 'equalEnough(...)' test, otherwise wont add truth n42
+//  back in and pass the 'equal_enough(...)' test, otherwise wont add truth n42
 //  file.  Will add resulting added file (and possibly directory) to GIT.
 //  Returns true if the truth N42 file was created.
 bool add_truth_n42( const  SpecUtils::SpecFile &m, const path &p, const bool force );
@@ -144,7 +144,7 @@ vector<path> candidates_without_truth_n42_files( const string basedir );
 int main( int argc, char **argv )
 {
   //TODO: add test that ensures serializing to N42 and back again pass
-  //      equalEnough(...) test.
+  //      equal_enough(...) test.
   
   //test_base_directory: the directory where the test file structure is based.
 #if( !defined(WIN32) )
@@ -493,12 +493,12 @@ void check_files_with_truth_n42( const string basedir )
     //A little hack to only look at certain files when debugging; insert part of the filename
     //  into 'files_interested_in' and re-compile.
     set<string> files_interested_in, files_to_skip;
-    //files_interested_in.insert( "only_filename_to_check.csv" );
+    //files_interested_in.insert( "T10011_CS01C_D20070418_T181528_O0019_U.n42" );
     bool interested_in = files_interested_in.empty();
     for( const string &namesubstr : files_interested_in )
       interested_in |= (filename.find(namesubstr) != string::npos);
     
-    files_to_skip.insert( "some_filename_to_skip.n42" );
+    //files_to_skip.insert( "some_filename_to_skip.n42" );
     for( const auto &namesubstr : files_to_skip )
       interested_in &= (filename.find(namesubstr) == string::npos);
     
@@ -554,7 +554,7 @@ void check_files_with_truth_n42( const string basedir )
     
     try
     {
-       SpecUtils::SpecFile::equalEnough( original, truth );
+       SpecUtils::SpecFile::equal_enough( original, truth );
       ++passed_tests;
     }catch( std::exception &e )
     {
@@ -622,7 +622,7 @@ void check_files_with_truth_n42( const string basedir )
                   break;
               }//switch( errortype )
               
-               SpecUtils::SpecFile::equalEnough( original, truth );
+               SpecUtils::SpecFile::equal_enough( original, truth );
               
               cout << "\nFixing the issue allowed the comparison test to pass."
                    << "\nWould you like to update the truth level information?"
@@ -741,7 +741,7 @@ void check_serialization_to_n42( const string basedir )
     
     try
     {
-       SpecUtils::SpecFile::equalEnough( info, reread );
+       SpecUtils::SpecFile::equal_enough( info, reread );
       ++npassed;
     }catch( std::exception &e )
     {
@@ -864,7 +864,7 @@ bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
     
     try
     {
-       SpecUtils::SpecFile::equalEnough( info, reloadedinfo );
+       SpecUtils::SpecFile::equal_enough( info, reloadedinfo );
     }catch( std::exception &e )
     {
       char option = '\0';
@@ -882,7 +882,7 @@ bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
       if( option == 'n' )
         throw runtime_error( "Failed to make the  SpecUtils::SpecFile--->N42"
                              "---> SpecUtils::SpecFile round trip" );
-    }//try / catch for equalEnoughs
+    }//try / catch for equal_enoughs
     
     if( !old_n42.empty() )
       try{ boost::filesystem::remove( old_n42 ); }catch(...){}
@@ -948,7 +948,7 @@ void handle_no_truth_files( const string basedir )
       cout << "File " << path << " does not have a truth N42 file, would you "
            << "like to:\n"
            << "\to: open\n"
-           << "\tt: open file in textmate\n"
+           << "\tt: open file in VS Code\n"
            << "\td: open containing directory\n"
            << "\tp: print summary\n"
            << "\tc: create truth N42 file\n"

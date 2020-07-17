@@ -170,9 +170,11 @@ namespace
   {
     assert( !!binning );
     
-    const std::shared_ptr<const std::vector<float>> &wantedenergies = binning->channel_energies();
+    const shared_ptr<const SpecUtils::EnergyCalibration> wantedcal = binning->energy_calibration();
+    assert( wantedcal );
+    const shared_ptr<const std::vector<float>> &wantedenergies = wantedcal->channel_energies();
     
-    const size_t nbin = wantedenergies->size();
+    const size_t nbin = wantedcal->num_channels();
     if( results.size() < nbin )
       results.resize( nbin, 0.0f );
     
@@ -181,7 +183,9 @@ namespace
     for( size_t i = 0; i < datas.size(); ++i )
     {
       const std::shared_ptr<const SpecUtils::Measurement> &d = datas[i];
-      const std::shared_ptr<const std::vector<float>> &dataenergies = d->channel_energies();
+      const shared_ptr<const SpecUtils::EnergyCalibration> datacal = d->energy_calibration();
+      assert( datacal );
+      const std::shared_ptr<const std::vector<float>> &dataenergies = datacal->channel_energies();
       const std::shared_ptr<const std::vector<float>> &channel_counts = d->gamma_counts();
       
       if( !dataenergies || !channel_counts )
@@ -190,8 +194,10 @@ namespace
         continue;
       }//if( !dataenergies )
       
-      if( dataenergies == wantedenergies )
+      if( datacal == wantedcal )  //|| (*datacal) == (*wantedcal) )
       {
+        assert( results.size() == channel_counts->size() );
+        
         for( size_t j = 0; j < nbin; ++j )
           results[j] += (*channel_counts)[j];
       }else if( channel_counts->size() > 3 )
@@ -200,10 +206,14 @@ namespace
         SpecUtils::rebin_by_lower_edge( *dataenergies, *channel_counts,
                             *wantedenergies, resulting_counts );
         
-        assert( resulting_counts.size() == nbin );
+        assert( ((nbin+1) == wantedenergies->size()) || (nbin == wantedenergies->size()) );
+        assert( resulting_counts.size() == wantedenergies->size() );
         
         for( size_t j = 0; j < nbin; ++j )
           results[j] += resulting_counts[j];
+        
+        if( (nbin+1) == resulting_counts.size() );
+          results.back() += resulting_counts.back();
       }//if( dataenergies == wantedenergies )
       
     }//for( size_t i = 0; i < datas.size(); ++i )
@@ -740,13 +750,9 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
   
   const auto &cal = *energy_calibration_;
   const size_t newnchan = gamma_counts_->size();
-  const size_t calnchan = (cal.channel_energies() ? cal.channel_energies()->size() : 0u);
+  const size_t calnchan = cal.num_channels();
   
-  if( (cal.type() == EnergyCalType::LowerChannelEdge) )
-  {
-    if( newnchan > calnchan )
-      energy_calibration_ = std::make_shared<const SpecUtils::EnergyCalibration>();
-  }else if( (newnchan != calnchan) && (cal.type() == EnergyCalType::InvalidEquationType) )
+  if( (newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge) )
   {
     //We could preserve the old coefficients for Polynomial and FRF, and just create a new
     //  calibration... it isnt clear if we should do that, or just clear out the calibration...
@@ -770,75 +776,6 @@ const std::vector<float> &Measurement::neutron_counts() const
 {
   return neutron_counts_;
 }
-  
-
-float Measurement::GetBinContent( int bin ) const
-{
-  if( bin==0 || !gamma_counts_ || (bin > static_cast<int>(gamma_counts_->size())) )
-    return 0.0f;
-  return (*gamma_counts_)[bin-1];
-}
-
-
-  
-float Measurement::GetBinLowEdge( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return -999.9f;
-  return energy_calibration_->channel_energies()->at(bin-1);
-}
-  
-  
-float Measurement::GetBinWidth( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return 0.0;
-  
-  const auto &energies = *energy_calibration_->channel_energies();
-  
-  if( energies.size()==1 )
-    return 0.0;
-  if( bin == static_cast<int>(energies.size()) )
-    --bin;
-  return energies[bin] - energies[bin-1];
-}
-  
-  
-int Measurement::GetNbinsX() const
-{
-  assert( energy_calibration_ );
-  if( !energy_calibration_->channel_energies() )
-  {
-    if( gamma_counts_ )
-      return static_cast<int>( gamma_counts_->size() );
-    return 0;
-  }
-  
-  return static_cast<int>( energy_calibration_->channel_energies()->size() );
-}
-  
-  
-float Measurement::Integral( int binx1, int binx2 ) const
-{
-  float answer = 0.0;
-  if( !gamma_counts_ )
-    return answer;
-  
-  --binx1;
-  --binx2;
-  
-  const int nbinsx = static_cast<int>( gamma_counts_->size() );
-  
-  if( binx1 < 0 )
-    binx1 = 0;
-  if( binx2 < 0 || binx2 < binx1 || binx2 >= nbinsx )
-    binx2 = nbinsx - 1;
-  
-  for( int i = binx1; i <= binx2; ++i )
-    answer += gamma_counts_->operator[](i);
-  return answer;
-}
-  
   
   
 size_t Measurement::num_gamma_channels() const
@@ -864,10 +801,10 @@ size_t Measurement::find_gamma_channel( const float x ) const
   if( pos_iter == begin(*energies) )
     return 0;
   
-  const size_t numchannel = energies->size() - 1;
+  const size_t last_channel = gamma_counts_->size() - 1;
   const size_t pos_index = (pos_iter - begin(*energies)) - 1;
   
-  return std::min( pos_index, numchannel );
+  return std::min( pos_index, last_channel );
 }//size_t find_gamma_channel( const float energy ) const
   
   
@@ -935,53 +872,6 @@ float Measurement::gamma_channel_width( const size_t channel ) const
 }//float gamma_channel_width( const size_t channel ) const
   
   
-  
-int Measurement::FindFixBin( float x ) const
-{
-  assert( energy_calibration_ );
-  const shared_ptr<const vector<float>> &energies_ptr = energy_calibration_->channel_energies();
-  
-  //Note, this function returns an index one-above what you would use to access
-  //  the channel_energies_ or gamma_counts_ arrays.  This is to be compatible
-  //  with CERNs ROOT package functions.
-  if( !energies_ptr )
-    return -1;
-  
-  const vector<float> &energies = *energies_ptr;
-  
-  //Using upper_bound instead of lower_bound to properly handle the case
-  //  where x == bin lower energy.
-  const auto pos_iter = std::upper_bound( begin(energies), end(energies), x );
-  
-  if( pos_iter == end(energies) )
-  {
-    float width = GetBinWidth( static_cast<int>(energies.size() ) );
-    if( x < (energies.back()+width) )
-      return static_cast<int>( energies.size() );
-    else return static_cast<int>( energies.size() + 1 );
-  }//if( pos_iter ==  channel_energies_->end() )
-  
-  if( pos_iter == begin(energies) )
-  {
-    if( x < energies.front() )
-      return 0;
-    return 1;
-  }//if( pos_iter ==  channel_energies_->begin() )
-  
-  return static_cast<int>( pos_iter - begin(energies) );
-}//int FindFixBin( float x ) const
-  
-  
-bool Measurement::CheckBinRange( int bin ) const
-{
-  assert( energy_calibration_ );
-  if( !energy_calibration_->channel_energies()
-      || bin < 1 || bin >= static_cast<int>(energy_calibration_->channel_energies()->size()) )
-    return false;
-  return true;
-}
-  
-  
 const std::string &Measurement::title() const
 {
   return title_;
@@ -1026,6 +916,7 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
   const double gamma_sum = hist->gamma_integral( minEnergy, maxEnergy );
 
 #if( PERFORM_DEVELOPER_CHECKS )
+  /*
   double check_sum = 0.0;
   
   const int lowBin = hist->FindFixBin( minEnergy );
@@ -1081,6 +972,7 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
               check_sum, gamma_sum, lowBin, highBin );
     log_developer_error( __func__, buffer );
   }//if( check_sum != gamma_sum )
+   */
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 
   return gamma_sum;
