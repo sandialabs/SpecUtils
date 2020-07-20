@@ -121,6 +121,12 @@ namespace D3SpectrumExport
     std::string line_color;  //standard css names, "steelblue", "black", etc
     std::string peak_color;
     
+    /** If empty, title from Measurement will be used, but if non-empty, will override Measurement.
+     
+     This is hopefully a temporary over-ride until proper escaping is implemented.
+     */
+    std::string title;
+    
     /** The y-axis scale factor to use for displaying the spectrum.
      This is typically used for live-time normalization of the background
      spectrum to match the foreground live-time.  Ex., if background live-time

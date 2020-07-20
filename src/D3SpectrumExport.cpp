@@ -638,7 +638,10 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     const char *q = "\"";  // for creating valid json format
     
     ostr << "\n\t\t{\n\t\t\t" << q << "title" << q << ":";
-    if( meas.title().size() )
+    if( options.title.size() )
+    {
+      ostr << q << escape_text( options.title ) << q << ",";
+    }else if( meas.title().size() )
       ostr << q << escape_text( meas.title() ) << q << ",";
     else
       ostr << "null,";

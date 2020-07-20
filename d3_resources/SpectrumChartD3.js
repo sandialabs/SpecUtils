@@ -4897,7 +4897,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   //  majorticksText.on("touchstart.drag", self.xaxisDrag());
   //}
 
-  if( this.options.compactXAxis ){
+  if( this.options.compactXAxis && self.xaxistitle ){
     /* We have to check every tick to see if it overlaps with the title */
     var xtitlex = self.xaxistitle.attr("x" );
     majorticks[0].forEach( function(tick){
