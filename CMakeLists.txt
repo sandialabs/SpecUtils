@@ -75,7 +75,6 @@ if( SpecUtils_JAVA_SWIG )
   SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
 endif( SpecUtils_JAVA_SWIG )
 
-
 find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
 
 if( NOT Boost_FOUND )
