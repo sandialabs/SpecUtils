@@ -5424,12 +5424,7 @@ namespace SpecUtils
       detectors_analysis_ = analysis_info;
     
     if( measurements_.empty() )
-    {
-      stringstream msg;
-      msg << SRC_LOCATION << "\n\rNo Measurements found inside ICD1/XML file";
-      throw runtime_error( msg.str() );
-    }//if( measurements_.empty() )
-    
+      throw runtime_error( "No Measurements found inside ICD1/XML file" );
     
     //Lets try to figure out if we can fill out detector_type_
     if( iequals_ascii( manufacturer_,"ORTEC" ) )
@@ -7419,7 +7414,7 @@ namespace SpecUtils
     
     try
     {
-      reset();
+      reset(); 
       
       data_end = convert_n42_utf16_xml_to_utf8( data, data_end );
       

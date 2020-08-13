@@ -349,6 +349,11 @@ const std::vector<int> &SpecFile::detector_numbers() const
   return detector_numbers_;
 }
 
+const std::vector<std::string> &SpecFile::gamma_detector_names() const
+{
+  return gamma_detector_names_;
+}
+
 const std::vector<std::string> &SpecFile::neutron_detector_names() const
 {
   return neutron_detector_names_;
@@ -1847,13 +1852,34 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
     detnum += 1;
     meas->detector_number_ = detnum;
     detector_numbers_.push_back( detnum );
-    if( meas->contained_neutron_ )
-      neutron_detector_names_.push_back( detname );
   }else
   {
     const size_t index = namepos - detector_names_.begin();
     meas->detector_number_ = detector_numbers_.at(index);
   }//if( we dont already have a detector with this name ) / else
+  
+  
+  if( meas->contained_neutron_ )
+  {
+    const auto neutpos
+               = std::find( begin(neutron_detector_names_), end(neutron_detector_names_), detname );
+    if( neutpos == end(neutron_detector_names_) )
+    {
+      neutron_detector_names_.push_back( detname );
+      std::sort( begin(neutron_detector_names_), end(neutron_detector_names_) );
+    }
+  }//if( measurement contained neutrons )
+  
+  if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+  {
+    const auto gammapos
+                = std::find( begin(gamma_detector_names_), end(gamma_detector_names_), detname );
+    if( gammapos == end(gamma_detector_names_) )
+    {
+      gamma_detector_names_.push_back( detname );
+      std::sort( begin(gamma_detector_names_), end(gamma_detector_names_) );
+    }
+  }//if( measurement contained gammas )
   
   const int detnum = meas->detector_number_;
   int samplenum = meas->sample_number();
@@ -2007,7 +2033,7 @@ void SpecFile::remove_measurement( std::shared_ptr<const Measurement> meas,
   measurements_.erase( pos );
   
   //Could actually fix up detector_names_, detector_numbers_,
-  //  neutron_detector_names_,
+  //  neutron_detector_names_, and gamma_detector_names_
   
   if( doCleanup )
   {
@@ -2210,12 +2236,33 @@ void SpecFile::change_detector_name( const string &origname,
     throw runtime_error( "change_detector_name: '" + newname + "'"
                         " is already a detector name" );
   
-  *pos = newname;
+  const auto oldindex = pos - begin(detector_names_);
+  assert( oldindex >= 0 && oldindex < detector_numbers_.size() );
+  const int detnum = detector_numbers_[oldindex];
+  
+  //Lets keep detector_names_ sorted
+  detector_names_.erase( pos );
+  detector_numbers_.erase( begin(detector_numbers_) + oldindex );
+  
+  auto newpos = std::lower_bound( begin(detector_names_), end(detector_names_),  newname );
+  assert( newpos==end(detector_names_) || (*newpos != newname) );
+  detector_names_.insert( newpos, newname );
+  const auto newindex = newpos - begin(detector_names_);
+  detector_numbers_.insert( begin(detector_numbers_) + newindex, detnum );
+  
+  auto gammapos = find( begin(gamma_detector_names_), end(gamma_detector_names_), origname );
+  if( gammapos != end(gamma_detector_names_) )
+  {
+    *gammapos = newname;
+    std::sort( begin(gamma_detector_names_), end(gamma_detector_names_) );
+  }
   
   auto neutpos = find( begin(neutron_detector_names_), end(neutron_detector_names_), origname );
   if( neutpos != end(neutron_detector_names_) )
+  {
     *neutpos = newname;
-  
+    std::sort( begin(neutron_detector_names_), end(neutron_detector_names_) );
+  }
   
   for( auto &m : measurements_ )
   {
@@ -3092,6 +3139,22 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   */
   
   
+  if( lhs.gamma_detector_names_.size() != rhs.gamma_detector_names_.size() )
+  {
+    snprintf( buffer, sizeof(buffer),
+             "SpecFile: Number of gamma detector names of LHS (%i) doesnt match RHS (%i)",
+             int(lhs.gamma_detector_names_.size()),
+             int(rhs.gamma_detector_names_.size()) );
+    throw runtime_error( buffer );
+  }
+  
+  const set<string> glhsnames( begin(lhs.gamma_detector_names_), end(lhs.gamma_detector_names_) );
+  const set<string> grhsnames( begin(rhs.gamma_detector_names_), end(rhs.gamma_detector_names_) );
+  
+  if( glhsnames != grhsnames )
+    throw runtime_error( "SpecFile: Gamma detector names dont match for LHS and RHS" );
+  
+  
   if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3101,10 +3164,10 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     throw runtime_error( buffer );
   }
   
-  const set<string> nlhsnames( lhs.neutron_detector_names_.begin(),
-                               lhs.neutron_detector_names_.end() );
-  const set<string> nrhsnames( rhs.neutron_detector_names_.begin(),
-                               rhs.neutron_detector_names_.end() );
+  const set<string> nlhsnames( begin(lhs.neutron_detector_names_),
+                               end(lhs.neutron_detector_names_) );
+  const set<string> nrhsnames( begin(rhs.neutron_detector_names_),
+                               end(rhs.neutron_detector_names_) );
   
   if( nlhsnames != nrhsnames )
     throw runtime_error( "SpecFile: Neutron detector names dont match for LHS and RHS" );
@@ -3541,6 +3604,7 @@ const SpecFile &SpecFile::operator=( const SpecFile &rhs )
   filename_               = rhs.filename_;
   detector_names_         = rhs.detector_names_;
   detector_numbers_       = rhs.detector_numbers_;
+  gamma_detector_names_   = rhs.gamma_detector_names_;
   neutron_detector_names_ = rhs.neutron_detector_names_;
 
   uuid_                   = rhs.uuid_;
@@ -4259,7 +4323,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     vector<string> names( det_names.begin(), det_names.end() );
     typedef map<int,string> IntStrMap;
     IntStrMap num_to_name_map;
-    set<string> neut_det_names;  //If a measurement contains neutrons at all, will be added to this.
+    set<string> gamma_det_names, neut_det_names;  //If a measurement contains neutrons at all, will be added to this.
     map<string,shared_ptr<const EnergyCalibration>> missing_cal_fixs;
     
     
@@ -4304,6 +4368,9 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         log_developer_error( __func__, buffer );
       }
 #endif
+      
+      if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+        gamma_det_names.insert( meas->detector_name_ );
       
       if( meas->contained_neutron_ )
         neut_det_names.insert( meas->detector_name_ );
@@ -4504,6 +4571,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     
     detector_numbers_.clear();
     detector_names_.clear();
+    gamma_detector_names_.clear();
     neutron_detector_names_.clear();
     
     for( const IntStrMap::value_type &t : num_to_name_map )
@@ -4512,6 +4580,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       detector_names_.push_back( t.second );
     }//for( const IntStrMap::value_type &t : num_to_name_map )
     
+    gamma_detector_names_.insert( end(gamma_detector_names_), begin(gamma_det_names), end(gamma_det_names) );
     neutron_detector_names_.insert( neutron_detector_names_.end(), neut_det_names.begin(), neut_det_names.end() );
     
     
@@ -4721,10 +4790,23 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     recalc_total_counts();
     
 #if( PERFORM_DEVELOPER_CHECKS )
-    //Check to make sure all neutron detector names can be found in detector names
+    //Check to make sure all gamma and neutron detector names can be found in detector names
     {
       const vector<string>::const_iterator begindet = detector_names_.begin();
       const vector<string>::const_iterator enddet = detector_names_.end();
+      
+      for( const std::string &gdet : gamma_detector_names_ )
+      {
+        if( std::find(begindet,enddet,gdet) == enddet )
+        {
+          char buffer[1024];
+          snprintf( buffer, sizeof(buffer),
+                   "Found a gamma detector name not in the list of all detector names: %s\n",
+                   gdet.c_str() );
+          log_developer_error( __func__, buffer );
+        }
+      }//for( loop over gamma detector names )
+      
       for( const std::string &ndet : neutron_detector_names_ )
       {
         if( std::find(begindet,enddet,ndet) == enddet )
@@ -4735,7 +4817,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
                    ndet.c_str() );
           log_developer_error( __func__, buffer );
         }
-      }
+      }//for( loop over neutron detector names )
     }
 #endif
     
@@ -4807,7 +4889,7 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
     return;
   
   
-  vector<string> gamma_only_dets = detector_names_;
+  vector<string> gamma_only_dets = gamma_detector_names_;
   vector<string> neutron_only_dets = neutron_detector_names_;
   for( const auto &n : neutron_only_dets )
   {
@@ -4973,28 +5055,31 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
 #if( PERFORM_DEVELOPER_CHECKS )
   set<size_t> gammas_we_added_neutron_to;
 #endif
-  set<string> new_neut_det_names;
-  set<string> new_all_det_names;
+  set<string> new_neut_det_names, new_gamma_det_names, new_all_det_names;
   vector<std::shared_ptr<Measurement>> meas_to_delete;
   
   for( size_t measindex = 0; measindex < measurements_.size(); ++measindex )
   {
     std::shared_ptr<Measurement> meas = measurements_[measindex];
     
+    
     if( !meas->contained_neutron_ )
     {
       new_all_det_names.insert( meas->detector_name_ );
+      if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+        new_gamma_det_names.insert( meas->detector_name_ );
+      
       continue;
     }
     
-    
-    if( meas->gamma_counts_ && meas->gamma_counts_->size() )
+    if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
       if( !gammas_we_added_neutron_to.count(measindex) )
         log_developer_error( __func__, "Found a nuetron detector Measurement that had gamma data - shouldnt have happened here." );
 #endif  //PERFORM_DEVELOPER_CHECKS
       new_all_det_names.insert( meas->detector_name_ );
+      new_gamma_det_names.insert( meas->detector_name_ );
       new_neut_det_names.insert( meas->detector_name_ );
       continue;
     }
@@ -5202,6 +5287,9 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
   
   detector_names_.clear();
   detector_names_.insert( end(detector_names_), begin(new_all_det_names), end(new_all_det_names) );
+  
+  gamma_detector_names_.clear();
+  gamma_detector_names_.insert( end(gamma_detector_names_), begin(new_gamma_det_names), end(new_gamma_det_names) );
   
   neutron_detector_names_.clear();
   neutron_detector_names_.insert( end(neutron_detector_names_), begin(new_neut_det_names), end(new_neut_det_names) );
@@ -5427,6 +5515,10 @@ std::string SpecFile::generate_psuedo_uuid() const
   boost::hash_combine( seed, detector_names_ );
 //  boost::hash_combine( seed, detector_numbers_ );
   boost::hash_combine( seed, neutron_detector_names_ );
+
+// Wont use gamma_detector_names_ for compatibility pre 20190813 when field was added
+//  boost::hash_combine( seed, gamma_detector_names_ );
+  
   if( !remarks_.empty() )
     boost::hash_combine( seed, remarks_ );
   //parse_warnings_
@@ -5757,6 +5849,8 @@ size_t SpecFile::memmorysize() const
   for( const string &s : detector_names_ )
     size += s.capacity()*sizeof(string::value_type);
   size += detector_numbers_.capacity()*sizeof(int);
+  for( const string &s : gamma_detector_names_ )
+    size += s.capacity()*sizeof(string::value_type);
   for( const string &s : neutron_detector_names_ )
     size += s.capacity()*sizeof(string::value_type);
 
@@ -6457,6 +6551,7 @@ void SpecFile::reset()
   filename_ =  "";
   detector_names_.clear();
   neutron_detector_names_.clear();
+  gamma_detector_names_.clear();
   uuid_.clear();
   remarks_.clear();
   parse_warnings_.clear();
@@ -6605,9 +6700,7 @@ void SpecFile::write_to_file( const std::string &filename,
   
     for( const std::string &name : det_names )
     {
-      const vector<string>::const_iterator pos = std::find( begin(detector_names_),
-                                                         end(detector_names_),
-                                                         name );
+      const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
       if( pos == end(detector_names_) )
         throw runtime_error( "SpecFile::write_to_file(): invalid detector name in the input" );
     

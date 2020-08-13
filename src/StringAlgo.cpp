@@ -1170,8 +1170,7 @@ namespace SpecUtils
     const char *end = begin + length;
     
     result = 0.0f;
-    
-    bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
+    const bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
     
     //  if( ok && (begin != end) )
     //    return false;
@@ -1179,6 +1178,24 @@ namespace SpecUtils
     return ok;
   }
   
+
+  bool parse_int( const char *input, const size_t length, int &result )
+  {
+    namespace qi = boost::spirit::qi;
+    
+    const char *begin = input;
+    const char *end = begin + length;
+    
+    result = 0;
+    const bool ok = qi::phrase_parse( begin, end, qi::int_, qi::space, result );
+    
+    //  if( ok && (begin != end) )
+    //    return false;
+    
+    return ok;
+  }
+
+
   bool split_to_floats( const char *input, vector<float> &contents,
                        const char * const delims,
                        const bool cambio_zero_compress_fix )

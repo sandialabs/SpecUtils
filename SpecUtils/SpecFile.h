@@ -1122,6 +1122,7 @@ public:
   const std::string &filename() const;
   const std::vector<std::string> &detector_names() const;
   const std::vector<int> &detector_numbers() const;
+  const std::vector<std::string> &gamma_detector_names() const;
   const std::vector<std::string> &neutron_detector_names() const;
   const std::string &uuid() const;
   const std::vector<std::string> &remarks() const;
@@ -2078,9 +2079,33 @@ protected:
   double gamma_count_sum_;      //sum over all measurements
   double neutron_counts_sum_;   //sum over all measurements
   std::string                 filename_;
-  std::vector<std::string>    detector_names_;          //Names may have "_intercal_..." appended to them to account for multiple binnings of the same data.
+  
+  /** Names of all detectors this SpecFile contains.
+   There are no duplicates in this vector, and entries should be sorted alphabetically.
+   
+   Note: Names may have "_intercal_..." appended to them to account for multiple binnings of the
+   same data.
+   
+   \TODO: add tests to make sure always sorted
+   */
+  std::vector<std::string>    detector_names_;
+  
+  /** The detector number cooresponding to the #detector_names_.
+   This vector has same number of entries as #detector_names_ and is ordered the same.
+   
+   \deprecated Please only use detector names.
+   */
   std::vector<int>            detector_numbers_;        //in same order as detector_names_
-  std::vector<std::string>    neutron_detector_names_;  //These are the names of detectors that may hold nuetron information
+  
+  /** Names of detectors that hold gamma data (i.e., at least one entry in
+   #Measurement::gamma_counts_ for at least one #Measurement in #SpecFile::measurements_).
+   */
+  std::vector<std::string>    gamma_detector_names_;
+  
+  /** Names of detectors that hold neutron data (i.e., at least one entry in
+   #SpecFile::measurements_ has !Measurement::contained_neutron_ set to true)
+   */
+  std::vector<std::string>    neutron_detector_names_;
 
   std::string uuid_;
   std::vector<std::string> remarks_;
