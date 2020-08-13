@@ -23,6 +23,7 @@
 #include <array>
 #include <vector>
 #include <cassert>
+#include <stdexcept>
 #include <algorithm>
 
 #include "SpecUtils/CubicSpline.h"
@@ -66,11 +67,11 @@ create_cubic_spline( const std::vector<std::pair<float,float>> &data,
   std::vector<double>  rhs( ndata );
   for( size_t i = 1; i < (ndata-1); ++i )
   {
-    A_matrix[i][0] = (data[i].first - data[i-1].first)/3.0;
-    A_matrix[i][1] = (data[i+1].first - data[i-1].first)/1.5;
-    A_matrix[i][2] = (data[i+1].first - data[i].first)/3.0;
+    A_matrix[i][0] = (static_cast<double>(data[i].first) - data[i-1].first)/3.0;
+    A_matrix[i][1] = (static_cast<double>(data[i+1].first) - data[i-1].first)/1.5;
+    A_matrix[i][2] = (static_cast<double>(data[i+1].first) - data[i].first)/3.0;
     rhs[i] = ((data[i+1].second - data[i].second) / (data[i+1].first - data[i].first))
-             - ((data[i].second - data[i-1].second) / (data[i].first - data[i-1].first));
+             - ((static_cast<double>(data[i].second) - data[i-1].second) / (static_cast<double>(data[i].first) - data[i-1].first));
   }
   
   //h = x - x'

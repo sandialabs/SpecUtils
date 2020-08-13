@@ -20,8 +20,10 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
+#include <string>
 #include <vector>
 #include <limits>
+#include <cassert>
 #include <iostream>
 #include <iterator>
 #include <algorithm>
