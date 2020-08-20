@@ -151,48 +151,68 @@ void SpecFile::pcf_file_channel_info( size_t &nchannel,
   for( const auto &meas : measurements_ )
   {
     const size_t nmeaschann = meas->num_gamma_channels();
-    const auto &these_energies = meas->gamma_channel_energies();
+    const auto &cal = meas->energy_calibration_;
+    if( !cal
+        || (cal->type()==EnergyCalType::InvalidEquationType)
+        || (cal->num_channels() <= 7) )
+      continue;
     
-    if( nmeaschann > 7 )
-    {
-      nchannel = std::max( nchannel, nmeaschann );
+    const size_t ncalchannel = cal->num_channels();
+    assert( ncalchannel == nmeaschann );
+    
+    const auto &these_energies = cal->channel_energies();
+    assert( these_energies );
       
-      if( (these_energies->size()+1)<nmeaschann
-         || meas->energy_calibration_model() != SpecUtils::EnergyCalType::LowerChannelEdge )
+    nchannel = std::max( nchannel, nmeaschann );
+    
+    if( (ncalchannel < nmeaschann)
+       || (meas->energy_calibration_model() != SpecUtils::EnergyCalType::LowerChannelEdge) )
+    {
+      use_lower_channel = false;
+      nchannel = 0;
+      return;
+    }
+    
+    //If we have already found a lower_e_bin, check if this current
+    //  one is either the same  one in memory, or if not, if its reasonably
+    //  close in numeric value.
+    if( use_lower_channel && lower_e_bin && (lower_e_bin!=these_energies) )
+    {
+      if( lower_e_bin->size() != these_energies->size() )
       {
         use_lower_channel = false;
+        lower_e_bin.reset();
+        nchannel = 0;
+        return;
       }
       
-      //If we have already found a lower_e_bin, check if this current
-      //  one is either the same  one in memory, or if not, if its reasonably
-      //  close in numeric value.
-      if( use_lower_channel && lower_e_bin && (lower_e_bin!=these_energies) )
+      for( size_t channel = 0; use_lower_channel && channel < lower_e_bin->size(); ++channel )
       {
-        if( lower_e_bin->size() != these_energies->size() )
+        //A better float test would be AlmostEquals() from
+        //  https://github.com/abseil/googletest/blob/master/googletest/include/gtest/internal/gtest-internal.h
+        const float lhs = (*lower_e_bin)[channel];
+        const float rhs = (*these_energies)[channel];
+        
+        if( fabs(lhs-rhs) > std::max(FLT_EPSILON,0.001f*lhs) )
         {
           use_lower_channel = false;
           lower_e_bin.reset();
+          nchannel = 0;
+          return;
         }
-        
-        for( size_t channel = 0; use_lower_channel && channel < lower_e_bin->size(); ++channel )
-        {
-          //A better float test would be AlmostEquals() from
-          //  https://github.com/abseil/googletest/blob/master/googletest/include/gtest/internal/gtest-internal.h
-          const float lhs = (*lower_e_bin)[channel];
-          const float rhs = (*these_energies)[channel];
-          
-          if( fabs(lhs-rhs) > std::max(FLT_EPSILON,0.001f*lhs) )
-          {
-            use_lower_channel = false;
-            lower_e_bin.reset();
-          }
-        }//for( size_t channel = 0; use_lower_channel && channel < lower_e_bin->size(); ++channel )
-      }else if( use_lower_channel && (lower_e_bin!=these_energies) )
-      {
-        lower_e_bin = these_energies;
-      }//if( we already have found lower_e_bin ) / else if( we might us the lower channel energies )
-    }//if( nmeaschann > 7 )
+      }//for( size_t channel = 0; use_lower_channel && channel < lower_e_bin->size(); ++channel )
+    }else if( use_lower_channel && (lower_e_bin!=these_energies) )
+    {
+      lower_e_bin = these_energies;
+    }//if( we already have found lower_e_bin ) / else if( we might us the lower channel energies )
   }//for( const auto &meas : measurements_ )
+  
+  if( !use_lower_channel || nchannel <= 7 || !lower_e_bin || lower_e_bin->size() <= 7 )
+  {
+    nchannel = 0;
+    return;
+  }
+  
   
   if( use_lower_channel && nchannel > 7 && lower_e_bin && lower_e_bin->size() > 7 )
   {

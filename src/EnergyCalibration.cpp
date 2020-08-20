@@ -243,6 +243,96 @@ size_t EnergyCalibration::memmorysize() const
 }//size_t memmorysize() const
 
 
+float EnergyCalibration::channel_for_energy( const float energy ) const
+{
+  
+  switch( m_type )
+  {
+    case EnergyCalType::InvalidEquationType:
+      throw runtime_error( "EnergyCalibration::channel_for_energy: InvalidEquationType" );
+      
+    case EnergyCalType::Polynomial:
+    case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+      return find_polynomial_channel( energy, m_coefficients, num_channels(),
+                                      m_deviation_pairs, 0.001 );
+      
+    case EnergyCalType::FullRangeFraction:
+      return find_fullrangefraction_channel( energy, m_coefficients, num_channels(),
+                                             m_deviation_pairs, 0.001 );
+      
+    case EnergyCalType::LowerChannelEdge:
+    {
+      assert( m_channel_energies && m_channel_energies->size() >= 2 );
+      const auto &energies = *m_channel_energies;
+      
+      //Using upper_bound instead of lower_bound to properly handle the case
+      //  where x == bin lower energy.
+      const auto iter = std::upper_bound( begin(energies), end(energies), energy );
+      
+      if( iter == begin(energies) )
+        throw runtime_error( "EnergyCalibration::channel_for_energy: input below defined range" );
+      
+      if( iter == end(energies) )
+        throw runtime_error( "EnergyCalibration::channel_for_energy: input above defined range" );
+      
+      //Linearly interpolate to get bin number.
+      //  \TODO: use some sort of spline interpolation or something to make better estimate
+      const float left_edge = *(iter - 1);
+      const float right_edge = *iter;
+      
+      assert( energy >= left_edge );
+      assert( energy <= right_edge );
+      assert( right_edge > left_edge );
+      const float fraction = (energy - left_edge) / (right_edge - left_edge);
+      
+      return (iter - begin(energies)) - 1 + fraction;
+    }//case LowerChannelEdge:
+  }//switch( m_type )
+  
+  assert( 0 );
+  throw runtime_error( "Invalid cal - type - something really wack" );
+  return 0.0;
+}//float channel_for_energy(...)
+
+
+float EnergyCalibration::energy_for_channel( const float channel ) const
+{
+  switch( m_type )
+  {
+    case EnergyCalType::InvalidEquationType:
+      throw runtime_error( "EnergyCalibration::energy_for_channel: InvalidEquationType" );
+    
+    case EnergyCalType::Polynomial:
+    case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+      return polynomial_energy( channel, m_coefficients, m_deviation_pairs );
+      
+    case EnergyCalType::FullRangeFraction:
+      return fullrangefraction_energy( channel, m_coefficients, num_channels(), m_deviation_pairs );
+      
+    case EnergyCalType::LowerChannelEdge:
+    {
+      assert( m_channel_energies && m_channel_energies->size() >= 2 );
+      const auto &energies = *m_channel_energies;
+      
+      if( channel < 0 )
+        throw runtime_error( "EnergyCalibration::energy_for_channel: channel below zero" );
+      
+      if( (channel + 1) > energies.size() )
+        throw runtime_error( "EnergyCalibration::energy_for_channel: channel to large" );
+      
+      const size_t chan = static_cast<size_t>( channel );
+      const float frac = channel - chan;
+      
+      return energies[chan] + frac*(energies[chan+1] - energies[chan]);
+    }//case EnergyCalType::LowerChannelEdge:
+  }//switch( m_type )
+  
+  assert( 0 );
+  throw runtime_error( "Invalid cal - type - something really wack" );
+  return 0.0;
+}//float energy_for_channel( const float channel ) const
+
+
 bool EnergyCalibration::operator==( const EnergyCalibration &rhs ) const
 {
   if( this == &rhs )
@@ -1037,14 +1127,16 @@ float find_fullrangefraction_channel( const double energy,
                                    const std::vector<std::pair<float,float>> &devpair,
                                    const double accuracy )
 {
-  size_t ncoefs = 0;
+  size_t ncoefs = 0; //Will be the index+1 of last non-zero coefficient
   for( size_t i = 0; i < coeffs.size(); ++i )
     if( fabs(coeffs[i]) > std::numeric_limits<float>::epsilon() )
       ncoefs = i+1;
   
+  if( nbin < 2 )
+    throw runtime_error( "find_fullrangefraction_channel: must have at least 2 channels" );
+  
   if( ncoefs < 2  )
-    throw std::runtime_error( "find_fullrangefraction_channel(...): must pass"
-                             " in at least two coefficients" );
+    throw runtime_error( "find_fullrangefraction_channel: must pass in at least two coefficients" );
   
   if( ncoefs < 4 && devpair.empty() )
   {
@@ -1071,70 +1163,74 @@ float find_fullrangefraction_channel( const double energy,
       const double root_1 = (-b + sqrt(sqrtarg))/(2.0f*c);
       const double root_2 = (-b - sqrt(sqrtarg))/(2.0f*c);
       
-      vector<double> roots;
-      if( root_1 > 0.0 && root_1 < static_cast<double>(nbin) )
-        roots.push_back( root_1 );
-      if( root_2 > 0.0 && root_2 < static_cast<double>(nbin) )
-        roots.push_back( root_2 );
+      // Check of one of the answers is in the expected range.
+      const bool root_1_valid = (root_1 >= 0.0 && root_1 <= static_cast<double>(nbin + 1));
+      const bool root_2_valid = (root_2 >= 0.0 && root_2 <= static_cast<double>(nbin + 1));
       
-      if( roots.size() == 1 )
-        return static_cast<float>( nbin * roots[0] );
+      // Preffer to return the answer within the defined bin range if only one of them is
+      if( root_1_valid != root_2_valid )
+        return static_cast<float>( nbin * (root_1_valid ? root_1 : root_2) );
+
+      // If both answers are positive, or both negative, return the one with smaller absolute value
+      if( (root_1 >= 0.0 && root_2 >= 0.0) || (root_1 <= 0.0 && root_2 <= 0.0) )
+        return static_cast<float>( nbin * ((fabs(root_1) < fabs(root_2)) ? root_1 : root_2) );
       
-      if( roots.size() == 2 )
-      {
-        const double e1 = coeffs[0] + coeffs[1]*root_1 + coeffs[2]*root_1*root_1;
-        const double e2 = coeffs[0] + coeffs[1]*root_2 + coeffs[2]*root_2*root_2;
-        if( fabs(e1-e2) < static_cast<double>(accuracy) )
-          return static_cast<float>( nbin * root_1 );
-      }//if( roots.size() == 2 )
-      
-#if( PERFORM_DEVELOPER_CHECKS )
-      stringstream msg;
-      msg << "find_fullrangefraction_channel(): found " << roots.size()
-      << " energy solutions, shouldnt have happened: "
-      << root_1 << " and " << root_2 << " for " << energy << " keV"
-      << " so root coorespond to "
-      << coeffs[0] + coeffs[1]*root_1 + coeffs[2]*root_1*root_1
-      << " and "
-      << coeffs[0] + coeffs[1]*root_2 + coeffs[2]*root_2*root_2
-      << ". I will attempt to recover, but please check results of operation.";
-      //    passMessage( msg.str(), "", 3 );
-      log_developer_error( __func__, msg.str().c_str() );
-#endif
-      cerr << __func__ << "\n\tWarning, couldnt algebraicly find bin number\n"
-      << "\tcoeffs[0]=" << coeffs[0] << ", coeffs[1]=" << coeffs[1]
-      << ", coeffs[2]=" << coeffs[2] << ", energy=" << energy << endl;
+      //  \TODO: determine upper valid bin (e.g., last channel were quadratic term doesnt overpower
+      //         linear term) and return the bin below that, and if that doesnt work, throw
+      //         exception.
+      const double linanswer = (energy - coeffs[0]) / coeffs[1];
+      const double d1 = fabs(root_1 - linanswer);
+      const double d2 = fabs(root_2 - linanswer);
+      return static_cast<float>(  nbin * ((d1 < d2) ? root_1 : root_2) );
     }//if( sqrtarg >= 0.0f )
   }//if( ncoefs < 4 && devpair.empty() )
   
+  if( accuracy <= 0.0 )
+    throw runtime_error( "find_fullrangefraction_channel: accuracy must be greater than zero" );
+  
+  const size_t max_iterations = 1000;
+  size_t iteration = 0;
   
   float lowbin = 0.0;
   float highbin = static_cast<float>( nbin );
   float testenergy = fullrangefraction_energy( highbin, coeffs, nbin, devpair );
-  while( testenergy < energy )
+  while( (testenergy < energy) && (iteration < max_iterations) )
   {
-    highbin *= 2.0f;
+    // At too high of channels the calibration can become invalid so we will only increase by
+    //  1/8 the spectrum at a time.  Worst case sceneriou this could take a while to get to
+    //  (if ncoefs < 3, then could double highbin safely)
+    highbin += std::max(0.125*nbin,2.0);
     testenergy = fullrangefraction_energy( highbin, coeffs, nbin, devpair );
+    ++iteration;
   }//while( testenergy < energy )
+  
+  if( iteration >= max_iterations )
+    throw runtime_error( "find_fullrangefraction_channel: failed to find channel high-enough" );
   
   testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, devpair );
-  while( testenergy > energy )
+  while( (testenergy > energy) && (iteration < max_iterations) )
   {
-    lowbin -= nbin;
+    lowbin -= std::max(0.125*nbin,2.0);
     testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, devpair );
+    ++iteration;
   }//while( testenergy < energy )
   
+  if( iteration >= max_iterations )
+    throw runtime_error( "find_fullrangefraction_channel: failed to find channel low-enough" );
   
   float bin = lowbin + ((highbin-lowbin)/2.0f);
   testenergy = fullrangefraction_energy( bin, coeffs, nbin, devpair );
   float dx = static_cast<float>( fabs(testenergy-energy) );
   
-  while( dx > accuracy )
+  while( (dx > accuracy) && (iteration < max_iterations) )
   {
     if( highbin == lowbin )
     {
-      cerr << "Possible error in find_fullrangefraction_channel... check out" << endl;
-      throw runtime_error( "find_fullrangefraction_channel(...): error finding bin coorespongin to deired energy (this shouldnt happen)" );
+#if( PERFORM_DEVELOPER_CHECKS )
+      log_developer_error( __func__, "Possible error in find_fullrangefraction_channel... check out" );
+#endif
+      throw runtime_error( "find_fullrangefraction_channel(...): error finding bin coorespongin to"
+                           " desired energy (this shouldnt happen)" );
     }
     
     if( testenergy == energy )
@@ -1147,12 +1243,156 @@ float find_fullrangefraction_channel( const double energy,
     bin = lowbin + ((highbin-lowbin)/2.0f);
     testenergy = fullrangefraction_energy( bin, coeffs, nbin, devpair );
     dx = static_cast<float>( fabs(testenergy-energy) );
+    ++iteration;
   }//while( dx > accuracy )
+  
+  if( iteration >= max_iterations )
+    throw runtime_error( "find_fullrangefraction_channel: failed to converge" );
   
   return bin;
 }//float find_fullrangefraction_channel(...)
   
 
+float find_polynomial_channel( const double energy, const vector<float> &coeffs,
+                               const size_t nchannel,
+                               const vector<pair<float,float>> &devpair,
+                               const double accuracy )
+{
+  size_t ncoefs = 0; //Will be the index+1 of last non-zero coefficient
+  for( size_t i = 0; i < coeffs.size(); ++i )
+    if( fabs(coeffs[i]) > std::numeric_limits<float>::epsilon() )
+      ncoefs = i+1;
+  
+  assert( coeffs.size() >= ncoefs );
+  
+  if( ncoefs < 2  )
+    throw std::runtime_error( "find_polynomial_channel: must pass in at least two coefficients" );
+  
+  if( ncoefs < 4  )
+  {
+    double polyenergy = energy;
+    if( !devpair.empty() )
+     polyenergy -= correction_due_to_dev_pairs(energy,devpair);
+    
+    if( ncoefs == 2  )
+    {
+      //  energy =  coeffs[0] + coeffs[1]*channel
+      return ((polyenergy - coeffs[0]) / coeffs[1]);
+    }//if( coeffs.size() == 2  )
+    
+    //Note purposeful use of double precision
+    const double a = double(coeffs[0]) - double(polyenergy);
+    const double b = coeffs[1];
+    const double c = coeffs[2];
+    
+    //polyenergy = coeffs[0] + coeffs[1]*bin + coeffs[2]*bin*bin
+    //--> 0 = a + b*bin + c*bin*bin
+    //roots at (-b +- sqrt(b*b-4*a*c))/(2c)
+    
+    const double sqrtarg = b*b - 4.0f*a*c;
+    
+    if( sqrtarg >= 0.0 )
+    {
+      const double root_1 = (-b + sqrt(sqrtarg))/(2.0f*c);
+      const double root_2 = (-b - sqrt(sqrtarg))/(2.0f*c);
+      
+      // Check of one of the answers is in the expected range.
+      const bool root_1_valid = (root_1 >= 0.0 && root_1 <= static_cast<double>(nchannel + 1));
+      const bool root_2_valid = (root_2 >= 0.0 && root_2 <= static_cast<double>(nchannel + 1));
+      
+      // Preffer to return the answer within the defined bin range if only one of them is
+      if( root_1_valid != root_2_valid )
+        return static_cast<float>( root_1_valid ? root_1 : root_2 );
+      
+      // If both answers are positive, or both negative, return the one with smaller absolute value
+      if( (root_1 >= 0.0 && root_2 >= 0.0) || (root_1 <= 0.0 && root_2 <= 0.0) )
+        return static_cast<float>( (fabs(root_1) < fabs(root_2)) ? root_1 : root_2 );
+      
+      // If one answer is positive, and one negative, return the one closest to what the linearly
+      //  truncated equation would give.
+      //  \TODO: determine upper valid bin (e.g., last channel were quadratic term doesnt overpower
+      //         linear term) and return the bin below that, and if that doesnt work, throw
+      //         exception.
+      //  Examples for Poly ceffs {-1.926107, 2.9493925, -0.00000831},
+      //                  polyenergy=-10: linanswer=-2.73748, root_1=-2.73746, root_2=354640
+      //                  polyenergy=60000: linanswer=20343.8, root_1=21667.7, root_2=332970
+      const double linanswer = ((polyenergy - coeffs[0]) / coeffs[1]);
+      
+      //cout << "For polyenergy=" << polyenergy << " linanswer=" << linanswer << ", root_1=" << root_1 << ", root_2=" << root_2 << endl;
+      const double d1 = fabs(root_1 - linanswer);
+      const double d2 = fabs(root_2 - linanswer);
+      return static_cast<float>( (d1 < d2) ? root_1 : root_2 );
+    }//if( sqrtarg >= 0.0f )
+  }//if( ncoefs < 4 && devpair.empty() )
+  
+  if( nchannel < 2 )
+    throw runtime_error( "find_polynomial_channel: accuracy must be greater than zero" );
+  
+  if( accuracy <= 0.0 )
+    throw runtime_error( "find_polynomial_channel: accuracy must be greater than zero" );
+  
+  const size_t max_iterations = 1000;
+  size_t iteration = 0;
+  
+  float lowbin = 0.0;
+  float highbin = nchannel;
+  float testenergy = polynomial_energy( highbin, coeffs, devpair );
+  while( (testenergy < energy) && (iteration < max_iterations) )
+  {
+    highbin += std::max(0.125*nchannel,2.0);
+    testenergy = polynomial_energy( highbin, coeffs, devpair );
+    ++iteration;
+  }//while( testenergy < energy )
+  
+  if( iteration >= max_iterations )
+    throw runtime_error( "find_polynomial_channel: failed to find channel high-enough" );
+  
+  iteration = 0;
+  testenergy = polynomial_energy( lowbin, coeffs, devpair );
+  while( testenergy > energy && (iteration < max_iterations)  )
+  {
+    lowbin -= std::max(0.125*nchannel,2.0);
+    testenergy = polynomial_energy( lowbin, coeffs, devpair );
+    ++iteration;
+  }//while( testenergy < energy )
+  
+  if( iteration >= max_iterations )
+    throw runtime_error( "find_polynomial_channel: failed to find channel low-enough" );
+  
+  float bin = lowbin + ((highbin-lowbin)/2.0f);
+  testenergy = polynomial_energy( bin, coeffs, devpair );
+  float dx = static_cast<float>( fabs(testenergy-energy) );
+  
+  iteration = 0;
+  while( (dx > accuracy) && (iteration < max_iterations) )
+  {
+    if( highbin == lowbin )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+      log_developer_error( __func__, "Possible error in find_polynomial_channel... check out" );
+#endif
+      throw runtime_error( "find_polynomial_channel(...): error finding bin coorespongin to"
+                          " desired energy (this shouldnt happen)" );
+    }
+    
+    if( testenergy == energy )
+      return bin;
+    if( testenergy > energy )
+      highbin = bin;
+    else
+      lowbin = bin;
+    
+    bin = lowbin + ((highbin-lowbin)/2.0f);
+    testenergy = polynomial_energy( bin, coeffs, devpair );
+    dx = static_cast<float>( fabs(testenergy-energy) );
+    ++iteration;
+  }//while( dx > accuracy )
+  
+  if( iteration >= max_iterations )
+    throw runtime_error( "find_polynomial_channel: failed to converge" );
+  
+  return bin;
+}//find_polynomial_channel
   
   
 void rebin_by_lower_edge( const std::vector<float> &original_energies,

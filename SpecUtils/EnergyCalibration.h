@@ -202,6 +202,29 @@ namespace SpecUtils
     size_t memmorysize() const;
     
     
+    /** Returns the fractional channel that cooresponds to energy.
+     
+     Throws exception if #EnergyCalType::InvalidEquationType, or if #EnergyCalType::LowerChannelEdge
+     and energy is outside range, or if outside range is valid for Polynomial and FullRangeFraction.
+     
+     For Polynomial or FullRangeFraction returned value may be below 0, or above number of channels.
+     */
+    float channel_for_energy( const float energy ) const;
+    
+    /** Returns the energy cooresponding to the fractional channel passed in.
+     
+     Note: for polynomial and full range fraction will return an answer, even if channel is less
+           than zero or greater than the number of channels.  No check is made that the channel
+           is in valid range (e.g., that quadratic order term isnt overpowering linear term.).
+     
+     Throws exception if #EnergyCalType::InvalidEquationType, or if #EnergyCalType::LowerChannelEdge
+     and channel is less than zero or greater than number of channels+1, or if outside range is
+     valid for Polynomial and FullRangeFraction.
+     */
+    float energy_for_channel( const float channel ) const;
+    
+    
+    
     /// \TODO: add channel_energy( size_t channel ), find_channel( float energy ) and similar
     
 #if( PERFORM_DEVELOPER_CHECKS )
@@ -307,7 +330,10 @@ namespace SpecUtils
    @param deviation_pairs The sorted deviation pairs defined for the calibration.
    @returns The energy of the specified channel.
    
-   Doesnt perform a check that the coefficients or deviation pairs are actually valid.
+   Note: doesnt perform a check that the coefficients or deviation pairs are actually valid.
+   Note: doesnt check that channel_number passed in is valid for given coefficients (e.g.,
+         quadratic term is overpowering linear term, etc).
+   
    Throws exception if deviation pairs are not sorted.
    */
   float polynomial_energy( const float channel_number,
@@ -361,7 +387,7 @@ namespace SpecUtils
    float channel = find_fullrangefraction_channel( frf_energy, frf_coeffs, nchannel, {} );
    \endcode
    
-   ToDo: Currently will return answer accurate within about 0.01 keV, but in the
+   \TODO: Currently will return answer accurate within about 0.01 keV, but in the
          future this should be able to be made exactly accuate (within numerical
          limits anyway).
    */
@@ -467,15 +493,15 @@ namespace SpecUtils
    specified energy.
    
    @param energy The energy to find the channel number for.
-   @param coeffs The polynomial equation coefficients.
-   @param nchannel Then number of gamma channels the returned answer will have.
+   @param coeffs The FullRangeFraction equation coefficients.
+   @param nchannel Then number of gamma channels of the spectrum, must be at least 2.
    @param deviation_pairs The deviation pairs defined for the calibration; it is
           assumed they are sorted by energy already.
    @param accuracy The accuracy, in keV, the returned answer will be of the
           true answer; only used if deviation pairs are specified (otherwise
           answer is always exact)
    
-   Will throw exception if there are not a t least two coefficients, or if a
+   Will throw exception if there are not at least two coefficients, or if a
    solution is failed to be found (e.g., invalid coefficients or deviation
    pairs).
    
@@ -483,15 +509,45 @@ namespace SpecUtils
    binary search is performed to find the bin that comes within the specified
    accuracy.
    
-   ToDo: Use #correction_due_to_dev_pairs to make it so algabraic approach can
-         always be used.
-*/
+   \TODO: Use #correction_due_to_dev_pairs to make it so algabraic approach can
+          always be used.
+  */
   float find_fullrangefraction_channel( const double energy,
                                    const std::vector<float> &coeffs,
                                    const size_t nchannel,
                                    const std::vector<std::pair<float,float>> &deviation_pairs,
                                    const double accuracy = 0.001 );
   
+  /** Gives the channel (including fractional portion) corresponding to the
+     specified energy.
+     
+     @param energy The energy to find the channel number for.
+     @param coeffs The Polynomial equation coefficients.
+     @param nchannel Then number of gamma channels of the spectrum; used to help determine
+                     correct answer when multiple solutions exist.
+     @param deviation_pairs The deviation pairs defined for the calibration; it is
+            assumed they are sorted by energy already.
+     @param accuracy The accuracy, in keV, the returned answer will be of the
+            true answer; only used if coefficents are grater than third order (otherwise answer is
+            always exact). Must be greater than zero.
+     
+     Will throw exception if there are not at least two coefficients, or if a
+     solution is failed to be found (e.g., invalid coefficients or deviation
+     pairs).
+     
+     If number of coefficients is three or less, than an algabraic approach is used, otherwise a
+     binary search is performed to find the bin that comes within the specified accuracy.
+   
+     Note: that #correction_due_to_dev_pairs is used to correct for deviation pairs when using the,
+     algebraic appoach, and currently (20200820) may be correct to only 0.01 keV.
+  */
+  float find_polynomial_channel( const double energy,
+                                 const std::vector<float> &coeffs,
+                                 const size_t nchannel,
+                                 const std::vector<std::pair<float,float>> &deviation_pairs,
+                                 const double accuracy = 0.001 );
+
+
   
   /** Converts channel counts defined by one set of channel lower energies, to
    instead be defined by a different set of lower energies.
