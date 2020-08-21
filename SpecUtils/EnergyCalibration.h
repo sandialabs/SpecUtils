@@ -101,6 +101,12 @@ namespace SpecUtils
     /** @returns the energy calibration type. */
     EnergyCalType type() const;
     
+    /** @returns true if a valid calibration.
+     
+     Shorthand for (EnergyCalibration::type() != EnergyCalType::InvalidEquationType).
+     */
+    bool valid() const;
+    
     /** @returns the energy calibration coefficients.
      
      Will only be empty for #EnergyCalType::InvalidEquationType.

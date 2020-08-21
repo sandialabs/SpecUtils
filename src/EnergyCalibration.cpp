@@ -56,6 +56,12 @@ EnergyCalType EnergyCalibration::type() const
   return m_type;
 }
   
+
+bool EnergyCalibration::valid() const
+{
+  return (m_type != EnergyCalType::InvalidEquationType);
+}
+
  
 const std::vector<float> &EnergyCalibration::coefficients() const
 {
