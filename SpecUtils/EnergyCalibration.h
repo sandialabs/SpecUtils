@@ -215,7 +215,7 @@ namespace SpecUtils
      
      For Polynomial or FullRangeFraction returned value may be below 0, or above number of channels.
      */
-    float channel_for_energy( const float energy ) const;
+    double channel_for_energy( const double energy ) const;
     
     /** Returns the energy cooresponding to the fractional channel passed in.
      
@@ -227,11 +227,24 @@ namespace SpecUtils
      and channel is less than zero or greater than number of channels+1, or if outside range is
      valid for Polynomial and FullRangeFraction.
      */
-    float energy_for_channel( const float channel ) const;
+    double energy_for_channel( const double channel ) const;
     
     
+    /// \TODO: add channel_for_energy and energy_for_channel equivalents that use lower channel
+    ///        energies
     
-    /// \TODO: add channel_energy( size_t channel ), find_channel( float energy ) and similar
+    /** @returns lower energy of first channel.
+     
+     Throws exception if #EnergyCalType::InvalidEquationType
+     */
+    float lower_energy() const;
+    
+    /** @returns upper energy of last channel.
+    
+    Throws exception if #EnergyCalType::InvalidEquationType
+    */
+    float upper_energy() const;
+    
     
 #if( PERFORM_DEVELOPER_CHECKS )
     /** Tests if the two calibrations passed in are equal for most intents and purposes.
@@ -321,7 +334,7 @@ namespace SpecUtils
    Doesnt perform a check that the coefficients or deviation pairs are actually valid.
    Throws exception if deviation pairs are not sorted.
    */
-  float fullrangefraction_energy( const float channel_number,
+  double fullrangefraction_energy( const double channel_number,
                                  const std::vector<float> &coeffs,
                                  const size_t nchannel,
                                  const std::vector<std::pair<float,float>> &deviation_pairs );
@@ -342,7 +355,7 @@ namespace SpecUtils
    
    Throws exception if deviation pairs are not sorted.
    */
-  float polynomial_energy( const float channel_number,
+  double polynomial_energy( const double channel_number,
                            const std::vector<float> &coeffs,
                            const std::vector<std::pair<float,float>> &deviation_pairs );
 
@@ -356,8 +369,8 @@ namespace SpecUtils
      An example use is:
      \code{.cpp}
      size_t channel_num = 100;
-     float polynomial_energy = C_0 + C_1*channel_num + C_2*channel_num*channel_num;
-     float correct_energy = polynomial_energy + deviation_pair_correction(polynomial_energy, deviation_pairs);
+     double polynomial_energy = C_0 + C_1*channel_num + C_2*channel_num*channel_num;
+     double correct_energy = polynomial_energy + deviation_pair_correction(polynomial_energy, deviation_pairs);
      \endcode
    
      A cubic interpolation is used for energies between deviation pairs.
@@ -378,7 +391,7 @@ namespace SpecUtils
      be set at 1460 keV
    - Deviation pairs set to zero would be defined for 239 keV and 2614 keV
    */
-  float deviation_pair_correction( const float polynomial_energy,
+  double deviation_pair_correction( const double polynomial_energy,
                                       const std::vector<std::pair<float,float>> &dev_pairs );
   
   
@@ -388,16 +401,16 @@ namespace SpecUtils
    Example usage to find channel correspoding to a peak at 511 keV:
    \code{.cpp}
    const size_t nchannel = 1024;
-   float obs_energy = 511.0f;
-   float frf_energy = obs_energy - correction_due_to_dev_pairs(obs_energy,deviation_pairs);
-   float channel = find_fullrangefraction_channel( frf_energy, frf_coeffs, nchannel, {} );
+   double obs_energy = 511.0;
+   double frf_energy = obs_energy - correction_due_to_dev_pairs(obs_energy,deviation_pairs);
+   double channel = find_fullrangefraction_channel( frf_energy, frf_coeffs, nchannel, {} );
    \endcode
    
    \TODO: Currently will return answer accurate within about 0.01 keV, but in the
          future this should be able to be made exactly accuate (within numerical
          limits anyway).
    */
-  float correction_due_to_dev_pairs( const float true_energy,
+  double correction_due_to_dev_pairs( const double true_energy,
                                      const std::vector<std::pair<float,float>> &dev_pairs );
   
   
@@ -518,7 +531,7 @@ namespace SpecUtils
    \TODO: Use #correction_due_to_dev_pairs to make it so algabraic approach can
           always be used.
   */
-  float find_fullrangefraction_channel( const double energy,
+  double find_fullrangefraction_channel( const double energy,
                                    const std::vector<float> &coeffs,
                                    const size_t nchannel,
                                    const std::vector<std::pair<float,float>> &deviation_pairs,
@@ -547,7 +560,7 @@ namespace SpecUtils
      Note: that #correction_due_to_dev_pairs is used to correct for deviation pairs when using the,
      algebraic appoach, and currently (20200820) may be correct to only 0.01 keV.
   */
-  float find_polynomial_channel( const double energy,
+  double find_polynomial_channel( const double energy,
                                  const std::vector<float> &coeffs,
                                  const size_t nchannel,
                                  const std::vector<std::pair<float,float>> &deviation_pairs,

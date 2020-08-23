@@ -86,7 +86,7 @@ namespace SpecUtils
    respecitvely (this is non-standard behaviour for cubic splines, but how
    non-linear deviation pairs are defined).
    */
-  float eval_cubic_spline( const float x,
+  double eval_cubic_spline( const double x,
                            const std::vector<CubicSplineNode> &nodes );
   
   

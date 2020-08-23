@@ -174,27 +174,27 @@ create_cubic_spline( const std::vector<std::pair<float,float>> &data,
 
   
   
-float eval_cubic_spline( const float x, const std::vector<CubicSplineNode> &nodes )
+double eval_cubic_spline( const double x, const std::vector<CubicSplineNode> &nodes )
 {
   if( nodes.empty() )
-    return 0.0f;
+    return 0.0;
   
   const auto it = std::upper_bound( std::begin(nodes), std::end(nodes), x,
-                                   []( const float energy, const CubicSplineNode &node ) -> bool {
+                                   []( const double energy, const CubicSplineNode &node ) -> bool {
                                      return energy < node.x;
                                    });
   
   if( it == std::begin(nodes) )
-    return static_cast<float>( nodes.front().y );
+    return nodes.front().y;
   
   //We should only do this next thing in the context of deviation pairs (or zero
   //  first and second upper derivatives)
   if( it == std::end(nodes) )
-    return static_cast<float>( nodes.back().y );
+    return nodes.back().y;
   
   const auto node = it - 1;
   const double h = x - node->x;
-  return static_cast<float>( ((node->a*h + node->b)*h + node->c)*h + node->y );
+  return ((node->a*h + node->b)*h + node->c)*h + node->y;
 }//eval_cubic_spline()
 
   
