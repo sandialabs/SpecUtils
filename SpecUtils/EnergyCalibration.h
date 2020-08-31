@@ -406,7 +406,7 @@ namespace SpecUtils
    double channel = find_fullrangefraction_channel( frf_energy, frf_coeffs, nchannel, {} );
    \endcode
    
-   \TODO: Currently will return answer accurate within about 0.01 keV, but in the
+   \TODO: Currently will return answer accurate within about 0.0001 keV, but in the
          future this should be able to be made exactly accuate (within numerical
          limits anyway).
    */

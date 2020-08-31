@@ -840,11 +840,11 @@ double correction_due_to_dev_pairs( const double true_energy,
     }//if( niters > 10 )
   }//while( fabs(diff) > tolerance )
   
-  cout << "Final answer after " << niters << " iterations is accruate within "
-       << diff << " keV; for true energy " << true_energy
-       << " with result "
-       << ((true_energy - answer) + eval_cubic_spline( true_energy - answer, spline ))
-       << endl;
+  //cout << "correction_due_to_dev_pairs: Final answer after " << std::dec << niters
+  //     << " iterations is accruate within " << diff << " keV; for true energy " << true_energy
+  //     << " with result "
+  //     << ((true_energy - answer) + eval_cubic_spline( true_energy - answer, spline ))
+  //     << endl;
   
   return answer;
 }//correction_due_to_dev_pairs

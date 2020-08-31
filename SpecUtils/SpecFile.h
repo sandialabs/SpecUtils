@@ -203,6 +203,9 @@ enum class SaveSpectrumAsType : int
   /** See #SpecFile::write_cnf for details. */
   Cnf,
   
+  /** See #SpecFile::write_tka for details. */
+  Tka,
+  
 #if( SpecUtils_ENABLE_D3_CHART )
   /** See #SpecFile::write_d3_html for details. */
   HtmlD3,
@@ -1897,6 +1900,25 @@ public:
    @returns if file was successfully written to the output stream.
   */
   virtual bool write_cnf( std::ostream &output,
+                          std::set<int> sample_nums,
+                          const std::set<int> &det_nums ) const;
+  
+  /** Write a TKA file to the output stream.
+   
+   TKA files can only contain a single gamma spectrum, so you must specify which samples numbers and
+   detectors to sum to create the single spectrum.  Files only contain real and live time, along
+   with channel counts.
+   
+   @param output Stream to write the output to.
+   @param sample_nums The sample numbers to sum to make the one output spectrum;
+         if empty will use all sample numbers.  If any invalid values are specified, will throw
+         exception.
+   @param det_nums The detector numbers to sum over to make the one output
+         spectrum; if empty will use all detectors. If any invalid values are specified, will throw
+         exception.
+   @returns if file was successfully written to the output stream.
+   */
+  virtual bool write_tka( std::ostream &output,
                           std::set<int> sample_nums,
                           const std::set<int> &det_nums ) const;
   

@@ -30,6 +30,51 @@
 
 
 using namespace std;
+
+namespace
+{
+/** Tells you if the passed in deviation pairs can be directly made into a spline, or if they need
+ some cleanup first.  Note that this function doesnt tell you if the deviation pairs are valid, just
+ if there are duplicates, or they arent sorted, or that there isnt at least two pairs.
+ */
+bool dev_pairs_need_cleanup( const vector<pair<float,float>> &orig )
+{
+  bool inputOk = (orig.size() >= 2);
+  for( size_t i = 1; inputOk && (i < orig.size()); ++i )
+    inputOk = (orig[i-1].first < orig[i].first);
+   
+  return !inputOk;
+}
+
+/** Prepares deviation pairs for creating a spine by sorting them, removing duplicates, and adding
+ in a base {0,0} if necassary.
+ */
+vector<pair<float,float>> cleanup_dev_pairs( const vector<pair<float,float>> &orig )
+{
+  vector<pair<float,float>> altered = orig;
+  
+  std::sort( begin(altered), end(altered) );
+    
+  const double epsilon = 0.1;
+  for( size_t i = 1; i < altered.size(); ++i )
+  {
+    if( fabs(altered[i].first - altered[i-1].first) < epsilon )
+      altered.erase( begin(altered) + i-- );
+  }
+    
+  if( (altered.size() == 1) && (fabs(altered[0].first) < epsilon) )
+  {
+    altered.clear();
+  }else if( (altered.size() == 1) && (altered[0].first > 0.0f) )
+  {
+    altered.insert( begin(altered), {0.0f,0.0f} );
+  }
+    
+  return altered;
+}//cleanup_dev_pairs(...)
+}//namespace
+
+
 namespace SpecUtils
 {
 
@@ -198,66 +243,47 @@ double eval_cubic_spline( const double x, const std::vector<CubicSplineNode> &no
 }//eval_cubic_spline()
 
   
-std::vector<CubicSplineNode> create_cubic_spline_for_dev_pairs( const std::vector<std::pair<float,float>> &dps )
+vector<CubicSplineNode> create_cubic_spline_for_dev_pairs( const vector<pair<float,float>> &dps )
 {
-  std::vector<std::pair<float,float>> offsets = dps;
+  if( dps.empty() || ((dps.size() == 1) && (dps[0].first < 0.1)) )
+    return vector<CubicSplineNode>{};
   
-  //Make sure ordered correctly.
-  std::sort( begin(offsets), end(offsets) );
+  vector<pair<float,float>> offsets;
+  if( dev_pairs_need_cleanup(dps) )
+    offsets = cleanup_dev_pairs( dps );  //probably unlikely, in general
+  else
+    offsets = dps;
   
-  if( offsets.size() < 2 )  //Should be a very rare occarunce, like actually never
-    offsets.insert( begin(offsets), std::make_pair(0.0f,0.0f) );
-  
-  //Remove duplicate energies (could do much better here)
-  for( int i = 0; i < static_cast<int>(offsets.size()-1); ++i )
-  {
-    if( fabs(offsets[i].first-offsets[i+1].first) < 0.01 )
-    {
-      offsets.erase( begin(offsets) + i );
-      i = -1;
-    }
-  }
-  
-  if( offsets.empty() )
-    return std::vector<CubicSplineNode>{};
-  
-  if( offsets.size() == 1 && offsets[0].first < 0.1 )
-    return std::vector<CubicSplineNode>{};
-  
+  if( offsets.empty() || ((offsets.size() == 1) && (offsets[0].first < 0.1)) )
+    return vector<CubicSplineNode>{};
+
+  // \TODO: This next step makes it so the deviation pairs could appear to be unsorted (in the
+  //        unusual case of the offset differences being larger than differences in energies),
+  //        which will cause #create_cubic_spline to throw an exception - should think through how
+  //        to handle this a little better
   for( size_t i = 0; i < offsets.size(); ++i )
     offsets[i].first -= offsets[i].second;
   
-  return create_cubic_spline( offsets,
-                             DerivativeType::Second, 0.0,
-                             DerivativeType::First, 0.0 );
+  return create_cubic_spline( offsets, DerivativeType::Second, 0.0, DerivativeType::First, 0.0 );
 }//create_cubic_spline_for_dev_pairs(...)
 
   
-  
-  
-std::vector<CubicSplineNode> create_inverse_dev_pairs_cubic_spline( const std::vector<std::pair<float,float>> &dps )
+vector<CubicSplineNode> create_inverse_dev_pairs_cubic_spline( const vector<pair<float,float>> &dps )
 {
-  if( dps.empty() )
-    return std::vector<CubicSplineNode>{};
+  if( dps.empty() || ((dps.size() == 1) && (dps[0].first < 0.1)) )
+    return vector<CubicSplineNode>{};
   
-  if( dps.size() == 1 && dps[0].first < 0.1 )
-    return std::vector<CubicSplineNode>{};
-  
-  if( dps.size() < 2 )  //Should be a very rare occarunce, like actually never
+  if( dev_pairs_need_cleanup(dps) )
   {
-    std::vector<std::pair<float,float>> offsets = dps;
-    offsets.insert( std::begin(offsets), std::make_pair(0.0f,0.0f) );
-    return create_cubic_spline( offsets,
-                               DerivativeType::Second, 0.0,
-                               DerivativeType::First, 0.0 );
-  }
+    // It is probably unlickely we will end up here
+    const auto offsets = cleanup_dev_pairs( dps );
+    if( offsets.empty() || ((offsets.size() == 1) && (offsets[0].first < 0.1)) )
+      return vector<CubicSplineNode>{};
+    
+    return create_cubic_spline( offsets, DerivativeType::Second, 0.0, DerivativeType::First, 0.0 );
+  }//if( the passed in deviation pairs needed cleaning up )
   
-  return create_cubic_spline( dps,
-                             DerivativeType::Second, 0.0,
-                             DerivativeType::First, 0.0  );
+  return create_cubic_spline( dps, DerivativeType::Second, 0.0, DerivativeType::First, 0.0 );
 }//create_inverse_dev_pairs_cubic_spline(...)
 
-  
-  
-  
 }//namespace SpecUtils
