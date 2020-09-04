@@ -1055,8 +1055,7 @@ bool calibration_is_valid( const EnergyCalType type,
       }//if( valid )
 #endif
 
-    
-      break;
+      return valid;
     }//case polynomial
       
     case EnergyCalType::FullRangeFraction:
@@ -1443,10 +1442,14 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
                            std::vector<float> &resulting_counts )
 {
   const size_t old_nbin = min( original_energies.size(), original_counts.size());
-  const size_t new_nbin = new_energies.size();
-  
   if( old_nbin < 4 )
     throw runtime_error( "rebin_by_lower_edge: input must have more than 3 bins" );
+  
+  if( new_energies.size() < 4 )
+    throw runtime_error( "rebin_by_lower_edge: output energy must have more than 3 bins" );
+  
+  const bool has_upper = ((original_counts.size() + 1) == original_energies.size());
+  const size_t new_nbin = new_energies.size() - (has_upper ? 1 : 0);
   
   if( original_energies.size() < original_counts.size() )
     throw runtime_error( "rebin_by_lower_edge: input energies and gamma counts"
@@ -1482,9 +1485,9 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   for( ; newbinnum < new_nbin; ++newbinnum )
   {
     const double newbin_lower = new_energies[newbinnum];
-    const double newbin_upper = ( ((newbinnum+1)<new_nbin)
+    const double newbin_upper = ( ((newbinnum+1)<new_energies.size())
                                  ? new_energies[newbinnum+1]
-                                 : (2.0*new_energies[new_nbin-1] - new_energies[new_nbin-2]));
+                                 : (2.0*new_energies[new_energies.size()-1] - new_energies[new_energies.size()-2]));
     
     double old_lower_low, old_lower_up, old_upper_low, old_upper_up;
     
@@ -1575,8 +1578,10 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   }//if( original_energies[0] < new_energies[0] )
   
   //Now capture the case where the old binning extends further than new binning
-  const float upper_old_energy = 2.0f*original_energies[old_nbin-1] - original_energies[old_nbin-2];
-  const float upper_new_energy = 2.0f*new_energies[new_nbin-1] - new_energies[new_nbin-2];
+  const float upper_old_energy = has_upper ? original_energies.back()
+                                           : 2.0f*original_energies[old_nbin-1] - original_energies[old_nbin-2];
+  const float upper_new_energy = has_upper ? new_energies.back()
+                                           : 2.0f*new_energies[new_nbin-1] - new_energies[new_nbin-2];
   if( upper_old_energy > upper_new_energy )
   {
     if( oldbinhigh < (old_nbin-1) )
@@ -1604,6 +1609,7 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
     {
       std::lock_guard<std::mutex> loc(m);
       ofstream output( "rebin_by_lower_edge_error.txt", ios::app );
+      output << "oldsum=" << oldsum << ", newsum=" << newsum << endl;
       output << "  std::vector<float> original_energies{" << std::setprecision(9);
       for( size_t i = 0; i < original_energies.size(); ++i )
         output << (i?", ":"") << original_energies[i];
@@ -1622,7 +1628,7 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
       output << "  std::vector<float> new_counts{" << std::setprecision(9);
       for( size_t i = 0; i < resulting_counts.size(); ++i )
         output << (i?", ":"") << resulting_counts[i];
-      output << "};" << endl << endl;
+      output << "};" << endl << endl << endl;
     }
     
     
@@ -1635,8 +1641,4 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
 #endif
 }//void rebin_by_lower_edge(...)
 
-  
-  //namespace details
-  //{
-  //}//namespace details
 }//namespace SpecUtils

@@ -125,6 +125,11 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       
       if( nchannel > 1 )
       {
+        //Sometimes coefficents are all zero, resulting in a parse warning of an invalid
+        //  calibratration, so lets avoid this
+        while( !cal_coeffs.empty() && (cal_coeffs.back() == 0.0f) )
+          cal_coeffs.resize( cal_coeffs.size() - 1 );
+        
         if( !cal_coeffs.empty() )
         {
           try
@@ -391,7 +396,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           //make sure the file didnt just have all zeros
           bool allZeros = true;
           for( const float c : cal_coeffs )
-            allZeros &= (fabs(c)<1.0E-08);
+            allZeros = allZeros && (fabs(c) < 1.0E-08);
             
           if( !allZeros && (cal_coeffs.size() != npar) )
           {

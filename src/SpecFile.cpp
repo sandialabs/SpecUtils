@@ -207,7 +207,8 @@ namespace
                             *wantedenergies, resulting_counts );
         
         assert( ((nbin+1) == wantedenergies->size()) || (nbin == wantedenergies->size()) );
-        assert( resulting_counts.size() == wantedenergies->size() );
+        assert( ((resulting_counts.size()+1) == wantedenergies->size())
+                 || (resulting_counts.size() == wantedenergies->size()) );
         
         for( size_t j = 0; j < nbin; ++j )
           results[j] += resulting_counts[j];
@@ -6169,7 +6170,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       throw runtime_error( string(SRC_LOCATION) + "\n\tSerious programming logic error" );
     
     const size_t spec_size = spectrums[0][0]->size();
-    auto result_vec = make_shared<vector<float>>( spec_size, 0.0 );
+    auto result_vec = make_shared<vector<float>>( spec_size, 0.0f );
     vector<float> &result_vec_ref = *result_vec;
     dataH->gamma_counts_ = result_vec;
     

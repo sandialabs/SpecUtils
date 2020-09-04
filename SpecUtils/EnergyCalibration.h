@@ -576,6 +576,10 @@ namespace SpecUtils
    @new_energies The lower channel energies to rebin the channel counts to
    @resulting_counts Results of the rebinning
    
+   If original_counts.size() is one less than original_energies.size, then resulting_counts.size()
+   will also be one less than new_energies.size(), otherwise new_energies and resulting_counts will
+   be same size.
+   
    Not incredably well tested, but appears to be better than the previous
    rebin_by_lower_edge(...), but it so it currently used.  There is some code in
    the function that does test this function if PERFORM_DEVELOPER_CHECKS is true.
