@@ -9818,7 +9818,7 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
 }
 
 /**
- This function is really similar to SpectrumChartD3.prototype.handleTouchMoveCountGammas; they should be compined as much as possible.
+ \TODO: This function is really similar to SpectrumChartD3.prototype.handleTouchMoveCountGammas; they should be compined as much as possible.
  */
 SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   var self = this
@@ -9928,8 +9928,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
 
   /* Display the count gammas text for all the spectrum */
-  var nforeground, nbackground;
-  var scaleBackground, backgroundScaleFactor, backgroundSigma, backgroundScaleSigma;
+  var nforeground, nbackground, backSF;
   var nsigma = 0, isneg;
   var asterickText = "";
   var rightPadding = 50;
@@ -9951,8 +9950,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
       nforeground = nspectrum;
     else if (spectrum.type === self.spectrumTypes.BACKGROUND) {
       nbackground = nspectrum;
-      backgroundScaleFactor = spectrumScaleFactor;
-      scaleBackground = nbackground * backgroundScaleFactor;
+      backSF = spectrumScaleFactor;
     }
 
     /* Get the text to be displayed from the spectrum information */
@@ -9983,11 +9981,11 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   });
 
   /* Get proper information for foreground-background sigma comparison */
-  if (nforeground && nbackground && backgroundScaleFactor) {
-    backgroundSigma = Math.sqrt(nbackground);
-    backgroundScaleSigma = backgroundScaleFactor * backgroundSigma;
-    nsigma = backgroundScaleSigma == 0 ? 0 : (Number((Math.abs(nforeground - scaleBackground) / backgroundScaleSigma).toFixed(3)));
-    isneg = scaleBackground > nforeground;
+  if (nforeground && nbackground && backSF) {
+    const backSigma = backSF * Math.sqrt(nbackground);
+    const sigma = Math.sqrt( backSigma*backSigma + nforeground );  //uncerFore = sqrt(nforeground) since foreground always scaled by 1.0
+    nsigma = backSigma == 0 ? 0 : (Number((Math.abs(nforeground - backSF*nbackground) / sigma).toFixed(3)));
+    isneg = ((backSF*nbackground) > nforeground);
   }
 
   /* Output foreground-background sigma information if it is available */
@@ -10190,8 +10188,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
   countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
 
   /* Display the count gammas text for all the spectrum */
-  var nforeground, nbackground;
-  var scaleBackground, backgroundScaleFactor, backgroundSigma, backgroundScaleSigma;
+  var nforeground, nbackground, backSF;
   var nsigma = 0, isneg;
   var asterickText = "";
   var rightPadding = 50;
@@ -10213,8 +10210,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
       nforeground = nspectrum;
     else if (spectrum.type === self.spectrumTypes.BACKGROUND) {
       nbackground = nspectrum;
-      backgroundScaleFactor = spectrumScaleFactor;
-      scaleBackground = nbackground * backgroundScaleFactor;
+      backSF = spectrumScaleFactor;
     }
 
     /* Get the text to be displayed from the spectrum information */
@@ -10245,11 +10241,11 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
   });
 
   /* Get proper information for foreground-background sigma comparison */
-  if (nforeground && nbackground && backgroundScaleFactor) {
-    backgroundSigma = Math.sqrt(nbackground);
-    backgroundScaleSigma = backgroundScaleFactor * backgroundSigma;
-    nsigma = backgroundScaleSigma == 0 ? 0 : (Number((Math.abs(nforeground - scaleBackground) / backgroundScaleSigma).toFixed(3)));
-    isneg = scaleBackground > nforeground;
+  if (nforeground && nbackground && backSF) {
+    const backSigma = backSF * Math.sqrt(nbackground);
+    const sigma = Math.sqrt(backSigma*backSigma + nforeground); //uncert_fore=sqrt(nforeground) since foregoround SF is always 1.0
+    nsigma = sigma == 0 ? 0 : (Number((Math.abs(nforeground - nbackground*backSF) / sigma).toFixed(3)));
+    isneg = ((nbackground*backSF) > nforeground);
   }
 
   /* Output foreground-background sigma information if it is available */
