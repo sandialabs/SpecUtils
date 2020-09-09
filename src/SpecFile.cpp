@@ -1331,26 +1331,21 @@ bool SpecFile::has_gps_info() const
   
 void Measurement::combine_gamma_channels( const size_t ncombine )
 {
-  if( !gamma_counts_ || gamma_counts_->empty() )
+  const size_t nchannelorig = gamma_counts_ ? gamma_counts_->size() : size_t(0);
+  
+  if( (nchannelorig < ncombine) || (ncombine < 2) )
     return;
-  
-  const size_t nchannelorig = gamma_counts_->size();
-  const size_t nnewchann = nchannelorig / ncombine;
-  
-  if( !nchannelorig || ncombine==1 )
-    return;
-  
-  if( !ncombine || ((nchannelorig % ncombine) != 0) || ncombine > nchannelorig )
-    throw runtime_error( "combine_gamma_channels: invalid input." );
 
+  const bool evenDivide = !(nchannelorig % ncombine);
+  const size_t nnewchann = (nchannelorig / ncombine) + (evenDivide ? 0 : 1);
+  
 #if( PERFORM_DEVELOPER_CHECKS )
   const double pre_gammasum = accumulate( begin(*gamma_counts_), end(*gamma_counts_), double(0.0) );
   const float pre_lower_e = gamma_energy_min();
   const float pre_upper_e = gamma_energy_max();  //(*channel_energies_)[nchannelorig - ncombine];
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
   
-  std::shared_ptr< vector<float> > newchanneldata
-                        = std::make_shared<vector<float> >( nnewchann, 0.0f );
+  auto newchanneldata = std::make_shared<vector<float> >( nnewchann, 0.0f );
   
   for( size_t i = 0; i < nchannelorig; ++i )
     (*newchanneldata)[i/ncombine] += (*gamma_counts_)[i];
@@ -1372,7 +1367,10 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
     {
       auto newcalcoefs = oldcal->coefficients();
       for( size_t i = 1; i < newcalcoefs.size(); ++i )
-        newcalcoefs[i] *= std::pow( float(ncombine), float(i) );
+      {
+        const double newcoef = newcalcoefs[i] * std::pow( double(ncombine), double(i) );
+        newcalcoefs[i] = static_cast<float>( newcoef );
+      }
       
       newcal->set_polynomial( nnewchann, newcalcoefs, oldcal->deviation_pairs() );
       break;
@@ -1380,7 +1378,25 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
       
     case SpecUtils::EnergyCalType::FullRangeFraction:
     {
-      newcal->set_full_range_fraction( nnewchann, oldcal->coefficients(), oldcal->deviation_pairs() );
+      if( evenDivide )
+      {
+        newcal->set_full_range_fraction( nnewchann, oldcal->coefficients(), oldcal->deviation_pairs() );
+      }else
+      {
+        //We need to account for the effective extra bins we are adding into the original spectrum
+        // \TODO: uncheced as of 20200909
+        const auto nextraequiv = ncombine - (nchannelorig % ncombine);
+        const float equivupper = oldcal->energy_for_channel( oldcal->num_channels() + nextraequiv );
+        
+        const float new_range = equivupper - oldcal->lower_energy();
+        const float prev_range = oldcal->upper_energy() - oldcal->lower_energy();
+        
+        vector<float> newcoefs = oldcal->coefficients();
+        if( newcoefs.size() > 1 )//should always be true, but JIC
+          newcoefs[1] *= (new_range / prev_range);
+        newcal->set_full_range_fraction( nnewchann, newcoefs, oldcal->deviation_pairs() );
+      }//if( evenDivide ) / else
+      
       break;
     }//case FRF
       

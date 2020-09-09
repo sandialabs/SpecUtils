@@ -765,11 +765,15 @@ public:
   //  by reset() or set(...)
   void reset();
 
-  
-  //combine_gamma_channels(): combines every 'nchann' channel gamma channels
-  //  together.  Will throw exception if (gamma_counts_->size() % nchann) != 0.
-  //  If gamma_counts_ is undefined or empty, nothing will be done.
-  void combine_gamma_channels( const size_t nchann );
+  /** Combines every 'nchannel' gamma channels together.
+   
+   if 'nchannel' doesnt evenly divide the original number of channels, than the last channel of the
+   results will represent the last (num_gamma_channels() % nchannel) channels only.
+   
+   Will throw exception if nchannel is zero, larger than num_gamma_channels(), or if gamma_counts_
+   is undefined or empty.
+   */
+  void combine_gamma_channels( const size_t nchannel );
   
   //truncate_gamma_channels(): removes channels below 'keep_first_channel'
   //  and above 'keep_last_channel'.  If 'keep_under_over_flow' is true, then
