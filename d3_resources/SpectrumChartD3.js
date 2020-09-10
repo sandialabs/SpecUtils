@@ -4160,9 +4160,9 @@ SpectrumChartD3.prototype.updateLegend = function() {
       let toLegendRateStr = function( val, ndig ){
         const powTen = Math.floor(Math.log10(Math.abs(val)));
         
-        if( Number.isInteger(val) )  //Write integers out as integers
+        if( Number.isInteger(val) || Number.isNaN(ndig) || Number.isNaN(powTen) )  //Write integers out as integers
           return '' + val;
-        else if( powTen < -4 )        //Numbers less than 0.0001, use scientific notation, ex. 6.096e-6 (where ndig==3)
+        else if( (powTen < -4) || (powTen > ndig) )        //Numbers less than 0.0001, use scientific notation, ex. 6.096e-6 (where ndig==3)
           return '' + val.toExponential(ndig);
         else if( powTen < 3 )         //Numbers between 0.0001 and 1000, ex. 0.06096 (where ndig==3)
           return '' + val.toFixed(ndig-powTen);
