@@ -213,7 +213,7 @@ namespace
         for( size_t j = 0; j < nbin; ++j )
           results[j] += resulting_counts[j];
         
-        if( (nbin+1) == resulting_counts.size() );
+        if( (nbin+1) == resulting_counts.size() )
           results.back() += resulting_counts.back();
       }//if( dataenergies == wantedenergies )
       

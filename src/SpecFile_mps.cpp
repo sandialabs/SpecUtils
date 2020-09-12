@@ -313,7 +313,7 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
             auto newcal = make_shared<EnergyCalibration>();
             newcal->set_polynomial(1024, {0.0f, (1460.0f/calPeakFound)}, {} );
             m->energy_calibration_ = newcal;
-          }catch( std::exception &e )
+          }catch( std::exception & )
           {
             //probably wont ever get here.
           }

@@ -206,7 +206,7 @@ bool SpecFile::write_tka( ostream &output, set<int> sample_nums, const set<int> 
     for( const float f : *summed->gamma_counts() )
       output << f << "\r\n";
     output << "\r\n" << std::flush;
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     return false;
   }

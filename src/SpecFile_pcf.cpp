@@ -1395,7 +1395,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
             lower_channel_energy_cal = make_shared<EnergyCalibration>();
             lower_channel_energy_cal->set_lower_channel_energy( channel_data->size() - 1,
                                                                 std::move(*channel_data) );
-          }catch( std::exception &e )
+          }catch( std::exception & )
           {
             //shouldnt ever get here
           }

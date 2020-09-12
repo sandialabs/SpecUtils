@@ -438,7 +438,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
         auto cal = make_shared<EnergyCalibration>();
         cal->set_polynomial( histogram->size(), {offset,gain,quadratic}, {} );
         meas->energy_calibration_ = cal;
-      }catch( std::exception &e )
+      }catch( std::exception & )
       {
         meas->parse_warnings_.push_back( "Energy calibration given in file of polynomial {"
                                          + std::to_string(offset) + ", "

@@ -357,7 +357,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                       energy_calibration_ = newcal;
                       gamma_counts_ = channels;
                       break;
-                    }catch( std::exception &e )
+                    }catch( std::exception & )
                     {
                       //I guess this wasnt a valid energy calibration, so assume not the spectrum we
                       //  want
@@ -411,7 +411,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                         energy_calibration_ = newcal;
                         gamma_counts_ = channels;
                         break;
-                      }catch( std::exception &e )
+                      }catch( std::exception & )
                       {
                         //I guess energy calibration really wasnt valid - probably shouldnt get here
                       }
@@ -936,7 +936,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     neutron_counts_sum_ = gamma_count_sum_ = 0.0;
     for( const float f : *counts )
       gamma_count_sum_ += f;
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     istr.seekg( orig_pos, ios::beg );
     throw;

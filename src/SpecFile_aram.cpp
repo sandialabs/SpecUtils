@@ -258,7 +258,7 @@ bool SpecFile::load_from_aram( std::istream &input )
           
           if( back_meas && back_meas->num_gamma_channels() )
             back_meas->energy_calibration_ = newcal;
-        }catch( std::exception &e )
+        }catch( std::exception & )
         {
           
         }

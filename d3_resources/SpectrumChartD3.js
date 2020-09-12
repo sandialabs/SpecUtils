@@ -2618,7 +2618,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         return function() {
 
           /* Emit the tap signal, unhighlight any peaks that are highlighted */
-          if (self.touchStart && self.dist([pageX, pageY], self.touchPageStart) < 5 && !self.touchHoldEmitted) {
+            if (self.touchStart && self.touchPageStart && self.dist([pageX, pageY], self.touchPageStart) < 5 && !self.touchHoldEmitted) {
             console.log( "Emit TAP HOLD (RIGHT TAP) signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y );
             self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY);
             self.unhighlightPeak(null);

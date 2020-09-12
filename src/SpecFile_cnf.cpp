@@ -476,7 +476,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
       auto newcal = make_shared<EnergyCalibration>();
       newcal->set_polynomial( num_channels, cal_coefs, {} );
       meas->energy_calibration_ = newcal;
-    }catch( std::exception &e )
+    }catch( std::exception & )
     {
       bool allZeros = true;
       for( const float v : cal_coefs )

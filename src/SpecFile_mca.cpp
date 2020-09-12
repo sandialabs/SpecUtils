@@ -176,7 +176,7 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
         auto newcal = make_shared<EnergyCalibration>();
         newcal->set_polynomial( counts->size(), {0.0f,energy_gain}, {} );
         meas->energy_calibration_ = newcal;
-      }catch( std::exception &e )
+      }catch( std::exception & )
       {
         //probably wont ever make it here
       }
