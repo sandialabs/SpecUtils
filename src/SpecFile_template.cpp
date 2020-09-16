@@ -168,6 +168,12 @@ namespace SpecUtils
 			return value1 - value2;
 			});
 
+		env.add_callback("modulus", 2, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			int value2 = args.at(1)->get<int>();
+			return value1 % value2;
+			});
+
 		// STEP 1 - read template file
 		Template temp;
 		try
