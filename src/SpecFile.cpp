@@ -7449,6 +7449,7 @@ void SpecFile::write( std::ostream &strm,
       break;
     }
 #endif
+#if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:  
     {
       // BDE_TODO: figure out what is going on here, to write templates we would need to 
@@ -7456,7 +7457,7 @@ void SpecFile::write( std::ostream &strm,
       throw runtime_error("Templates not supported from this method");
       break;
     }
-
+#endif
     case SaveSpectrumAsType::NumTypes:
       throw runtime_error( "Invalid output format specified" );
       break;

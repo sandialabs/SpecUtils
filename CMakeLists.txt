@@ -16,6 +16,7 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interact
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
@@ -101,7 +102,6 @@ set( sources
      src/SpecFile_chn.cpp
      src/SpecFile_spe.cpp
      src/SpecFile_csv.cpp
-     src/SpecFile_template.cpp
      src/SpecFile_gr135.cpp
      src/SpecFile_aram.cpp
      src/SpecFile_lis.cpp
@@ -138,6 +138,10 @@ set( headers
      SpecUtils/ParseUtils.h
      SpecUtils/RapidXmlUtils.hpp
 )
+
+if( SpecUtils_INJA_TEMPLATES )
+  list( APPEND sources src/SpecFile_template.cpp )
+endif ( SpecUtils_INJA_TEMPLATES )
 
 if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND sources src/D3SpectrumExport.cpp )

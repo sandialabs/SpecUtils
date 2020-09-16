@@ -219,8 +219,10 @@ enum class SaveSpectrumAsType : int
   HtmlD3,
 #endif
   
+#if( SpecUtils_INJA_TEMPLATES )
   /** See #SpecFile::write_template for details. */
   Template,
+#endif
 
   NumTypes
 };//enum SaveSpectrumAsType
