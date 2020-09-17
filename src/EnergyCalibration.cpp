@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <cstring>
 #include <cassert>
 #include <iostream>
 #include <iterator>
