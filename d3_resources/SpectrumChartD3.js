@@ -10414,7 +10414,8 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const upperEnergy = roi.upperEnergy;
 
   const mean = peak.Centroid[0].toFixed(2);
-  const fwhm = (2.35482 * peak.Width[0]).toFixed(2);
+  let fwhm = 2.35482 * peak.Width[0];
+  fwhm = fwhm.toFixed( ((fwhm < 10) ? ((fwhm < 1) ? 4 : 3) : 2) );
   const fwhmPerc = (235.482 * peak.Width[0] / peak.Centroid[0]).toFixed(2);
   const chi2 = peak.Chi2[0].toFixed(2);
   const area = peak.Amplitude[0].toFixed(1);
