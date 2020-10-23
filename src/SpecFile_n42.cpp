@@ -6994,7 +6994,7 @@ namespace SpecUtils
         rapidxml::xml_node<char> *category_node = XML_FIRST_NODE( info_node, "RadDetectorCategoryCode" );
         
         //<RadDetectorKindCode> returns "NaI", "HPGe", "PVT", "He3", etc (see determine_gamma_detector_kind_code())
-        //  and should be utilized at some point.  But would require adding a field to MeasurementInfo
+        //  and should be utilized at some point.  But would require adding a field to SpecUtils::SpecFile
         //  I think to kind of do it properly.
         
         //rapidxml::xml_node<char> *kind_node     = info_node->first_node( "RadDetectorKindCode" );
