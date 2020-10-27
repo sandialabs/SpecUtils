@@ -2618,7 +2618,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         return function() {
 
           /* Emit the tap signal, unhighlight any peaks that are highlighted */
-          if (self.touchStart && self.dist([pageX, pageY], self.touchPageStart) < 5 && !self.touchHoldEmitted) {
+            if (self.touchStart && self.touchPageStart && self.dist([pageX, pageY], self.touchPageStart) < 5 && !self.touchHoldEmitted) {
             console.log( "Emit TAP HOLD (RIGHT TAP) signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y );
             self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY);
             self.unhighlightPeak(null);
@@ -4098,25 +4098,24 @@ SpectrumChartD3.prototype.updateLegend = function() {
   this.legBody.selectAll("g").remove();
 
   var ypos = 0;
-  if (this.rawData && this.rawData.spectra) {
-    this.rawData.spectra.forEach( function(spectrum,i){
-      if( !spectrum || !spectrum.y.length )
-        return;
+  const spectra = self.rawData ? self.rawData.spectra : [];
+  spectra.forEach( function(spectrum,i){
+    if( !spectrum || !spectrum.y.length )
+      return;
       
+    const sf = ((typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor: 1);
+    const lt = spectrum.liveTime;
+    const rt = spectrum.realTime;
+    const neutsum = spectrum.neutrons;
       
-      const sf = ((typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor: 1);
-      const lt = spectrum.liveTime;
-      const rt = spectrum.realTime;
-      let neut = spectrum.neutrons;
-      
-      const nsum = sf*spectrum.dataSum;
-      const title = (spectrum.title ? spectrum.title : ("Spectrum " + (i+1)))
+    const nsum = sf*spectrum.dataSum;
+    const title = (spectrum.title ? spectrum.title : ("Spectrum " + (i+1)))
                     + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)";
     
-      let thisentry = self.legBody.append("g")
+    let thisentry = self.legBody.append("g")
         .attr("transform","translate(0," + ypos + ")");
       
-      thisentry.append("path")
+    thisentry.append("path")
         //.attr("id", "spectrum-legend-line-" + i)  // reference for when updating color
         //.attr("class", "line" )
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : "black")
@@ -4124,61 +4123,124 @@ SpectrumChartD3.prototype.updateLegend = function() {
         .attr("fill", 'none' )
         .attr("d", "M0,-5 L12,-5");
       
-      let thistxt = thisentry.append("text")
+    let thistxt = thisentry.append("text")
         .attr("class", "legentry")
         .attr( "x", 15 )
         .text(title);
+        
+    if( typeof lt === "number" )
+      thistxt.append('svg:tspan')
+        .attr('x', "20")
+        .attr('y', thisentry.node().getBBox().height)
+        .text( "Live Time: " + (sf*lt).toPrecision(4) + " s" );
       
-      if( typeof lt === "number" )
-        thistxt.append('svg:tspan')
-          .attr('x', "20")
-          .attr('y', thisentry.node().getBBox().height)
-          .text( "Live Time " + (sf*lt).toPrecision(4) );
-      
-      if( typeof rt === "number" )
-        thistxt.append('svg:tspan')
-          .attr('x', "20")
-          .attr('y', thisentry.node().getBBox().height)
-          .text( "Real Time " + (sf*rt).toPrecision(4) );
+    if( typeof rt === "number" )
+      thistxt.append('svg:tspan')
+        .attr('x', "20")
+        .attr('y', thisentry.node().getBBox().height)
+        .text( "Real Time: " + (sf*rt).toPrecision(4) + " s");
           
-      if( typeof neut === "number" ){
-        neut *= sf;
-        
-        // Lets print the neutron counts as a human friendly number, to roughly
-        //   the precision we would care about.  Could probably do a much better
-        //   with less code, but whatever for now.
-        // Note: could get 10's power using: Math.floor(Math.log10(Math.abs(neut)))
-        let neuttxt;
-        if( Number.isInteger(neut) )
-          neuttxt = '' + neut;
-        else if( neut < 0.01 )
-          neuttxt = neut.toExponential(3);
-        else if( neut < 0.1 )
-          neuttxt = neut.toFixed(4);
-        else if( neut < 1 )
-          neuttxt = neut.toFixed(3);
-        else if( neut < 10 )
-          neuttxt = neut.toFixed(2);
-        else if( neut < 100 )
-          neuttxt = neut.toFixed(1);
-        else
-          neuttxt = neut.toFixed(0);
-        
-        thistxt.append('svg:tspan')
-               .attr('x', "20")
-               .attr('y', thisentry.node().getBBox().height)
-               .text( "Neutron Count " + neuttxt );
-      }
+    if( sf != 1 )
+      thistxt.append('svg:tspan')
+        .attr('x', "20")
+        .attr('y', thisentry.node().getBBox().height)
+        .text( "Scaled by " + sf.toPrecision(4) );
+          
+    if( typeof neutsum === "number" ){
+      // \TODO: spectrum.neutronRealTime is currently never set by SpecUtils/InterSpec, but will be once parsing
+      //        sepearte neutron real times is implemented.
+      const nrt = (typeof spectrum.neutronRealTime === "number") ? spectrum.neutronRealTime : rt;
+      const isCps = (typeof nrt === "number");
+      const neut = isCps ? neutsum/nrt : neutsum*sf;
       
-      if( sf != 1 )
-        thistxt.append('svg:tspan')
-          .attr('x', "20")
-          .attr('y', thisentry.node().getBBox().height)
-          .text( "Scaled by " + sf.toPrecision(4) );
-                      
-      ypos += thisentry.node().getBBox().height + 5;
-    });
-  }
+        
+      // Lets print the neutron counts as a human friendly number, to roughly
+      //   the precision we would care about.  Could probably do a much better
+      //   with less code, but whatever for now.
+      let toLegendRateStr = function( val, ndig ){
+        const powTen = Math.floor(Math.log10(Math.abs(val)));
+        
+        if( Number.isInteger(val) || Number.isNaN(ndig) || Number.isNaN(powTen) )  //Write integers out as integers
+          return '' + val;
+        else if( (powTen < -4) || (powTen > ndig) )        //Numbers less than 0.0001, use scientific notation, ex. 6.096e-6 (where ndig==3)
+          return '' + val.toExponential(ndig);
+        else if( powTen < 3 )         //Numbers between 0.0001 and 1000, ex. 0.06096 (where ndig==3)
+          return '' + val.toFixed(ndig-powTen);
+        else                          //Numbers greater than 1000 just write as integer
+          return '' + val.toFixed(0);
+      };//toLegendRateStr
+        
+        
+      let neutspan = thistxt.append('svg:tspan')
+              .attr('x', "20")
+              .attr('y', thisentry.node().getBBox().height)
+              .text( "Neutrons: " + toLegendRateStr(neut,3) + (isCps ? " cps" : ""));
+      
+      //If we are displaying neutron CPS, and this is not a foreground, then lets add an easy way to compare this rate
+      //  to the foreground
+      if( isCps
+          && (spectrum.type === self.spectrumTypes.FOREGROUND)
+          || (spectrum.type === self.spectrumTypes.SECONDARY) )
+      {
+        //Get the neutron info for the foreground; note uses first foreground
+        let forNeut = null, forNeutLT = null;
+        
+        for( let j = 0; j < spectra.length; ++j )
+        {
+          const spec = spectra[j];
+          if( spec && (j !== i)
+              && (spec.type === self.spectrumTypes.BACKGROUND)
+              && ((typeof spec.neutronRealTime === "number") || (typeof spec.realTime === "number"))
+              && (typeof spec.neutrons === "number") )
+          {
+            forNeut = spec.neutrons;
+            forNeutLT = (typeof spec.neutronRealTime === "number") ? spec.neutronRealTime : spec.realTime;
+            break;
+          }
+        }//for( loop over spectrum )
+         
+        if( (typeof forNeut === "number") && (typeof forNeutLT === "number") && (neutsum>0 || forNeut>0) )
+        {
+          const forRate = forNeut/forNeutLT;
+          const forRateSigma = Math.sqrt(forNeut) / forNeutLT;
+          const rateSigma = Math.sqrt(neutsum) / nrt;
+          const sigma = Math.sqrt(rateSigma*rateSigma + forRateSigma*forRateSigma);
+          const nsigma = Math.abs(neut - forRate) / sigma;
+          const isneg = (neut < forRate);
+          
+          thistxt.append('svg:tspan')
+            .attr('x', "40")
+            .attr('y', thisentry.node().getBBox().height - 4)
+            .attr('style', 'font-size: 75%')
+            .html( "(" + toLegendRateStr(nsigma,1) + " &sigma; " + (isneg ? "below" : "above") + " background)" );
+        }//if( we have foreground neutron CPS info )
+      }//if( this is not a foreground, and we are displaying neutron CPS )
+      
+      
+      //It would be nice to display the total neutron
+      if( isCps ){
+        thisentry.neutinfo = thistxt.append('svg:tspan')
+          .attr('x', "40")
+          .attr('y', thisentry.node().getBBox().height - 5)
+          .attr('style', 'display: none')
+          .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof rt === "number" ? (" in " + rt.toPrecision(4) + " s") : "") );
+      
+        neutspan
+          .on("mouseover", function(){
+            thisentry.neutinfo.attr('style', 'font-size: 75%' )
+            self.legendBox.attr('height', self.legBody.node().getBBox().height + 10 );
+          } )
+          .on("mouseout", function(){
+            thisentry.neutinfo.attr('style', 'display: none;')
+            self.legendBox.attr('height', self.legBody.node().getBBox().height + 10 );
+          });
+       }// if( is CPS instead of sum neutrons )
+      
+    }//if( typeof neut === "number" )
+      
+    ypos += thisentry.node().getBBox().height + 5;
+  });//spectra.forEach
+  
                     
   /*Resize the box to match the text size */
   var w = this.legBody.node().getBBox().width + 15; 
@@ -4835,7 +4897,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   //  majorticksText.on("touchstart.drag", self.xaxisDrag());
   //}
 
-  if( this.options.compactXAxis ){
+  if( this.options.compactXAxis && self.xaxistitle ){
     /* We have to check every tick to see if it overlaps with the title */
     var xtitlex = self.xaxistitle.attr("x" );
     majorticks[0].forEach( function(tick){
@@ -6018,11 +6080,11 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     }
     
     var spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
-
+    
     spectrum.sliderToggle.attr("cy", newTogglePos );
     spectrum.sliderText.text( (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
-    self.rawData.spectra[linei].yScaleFactor = spectrumScaleFactor;
-
+    spectrum.yScaleFactor = spectrumScaleFactor;
+    
     // If we are using background subtract, we have to redraw the entire chart if we update the scale factors
     if (self.options.backgroundSubtract) self.redraw()();
     else scaleFactorChangeRedraw(spectrum, linei);
@@ -9756,7 +9818,7 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
 }
 
 /**
- This function is really similar to SpectrumChartD3.prototype.handleTouchMoveCountGammas; they should be compined as much as possible.
+ \TODO: This function is really similar to SpectrumChartD3.prototype.handleTouchMoveCountGammas; they should be compined as much as possible.
  */
 SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   var self = this
@@ -9866,8 +9928,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
 
   /* Display the count gammas text for all the spectrum */
-  var nforeground, nbackground;
-  var scaleBackground, backgroundScaleFactor, backgroundSigma, backgroundScaleSigma;
+  var nforeground, nbackground, backSF;
   var nsigma = 0, isneg;
   var asterickText = "";
   var rightPadding = 50;
@@ -9889,8 +9950,7 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
       nforeground = nspectrum;
     else if (spectrum.type === self.spectrumTypes.BACKGROUND) {
       nbackground = nspectrum;
-      backgroundScaleFactor = spectrumScaleFactor;
-      scaleBackground = nbackground * backgroundScaleFactor;
+      backSF = spectrumScaleFactor;
     }
 
     /* Get the text to be displayed from the spectrum information */
@@ -9921,11 +9981,11 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   });
 
   /* Get proper information for foreground-background sigma comparison */
-  if (nforeground && nbackground && backgroundScaleFactor) {
-    backgroundSigma = Math.sqrt(nbackground);
-    backgroundScaleSigma = backgroundScaleFactor * backgroundSigma;
-    nsigma = backgroundScaleSigma == 0 ? 0 : (Number((Math.abs(nforeground - scaleBackground) / backgroundScaleSigma).toFixed(3)));
-    isneg = scaleBackground > nforeground;
+  if (nforeground && nbackground && backSF) {
+    const backSigma = backSF * Math.sqrt(nbackground);
+    const sigma = Math.sqrt( backSigma*backSigma + nforeground );  //uncerFore = sqrt(nforeground) since foreground always scaled by 1.0
+    nsigma = backSigma == 0 ? 0 : (Number((Math.abs(nforeground - backSF*nbackground) / sigma).toFixed(3)));
+    isneg = ((backSF*nbackground) > nforeground);
   }
 
   /* Output foreground-background sigma information if it is available */
@@ -10128,8 +10188,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
   countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
 
   /* Display the count gammas text for all the spectrum */
-  var nforeground, nbackground;
-  var scaleBackground, backgroundScaleFactor, backgroundSigma, backgroundScaleSigma;
+  var nforeground, nbackground, backSF;
   var nsigma = 0, isneg;
   var asterickText = "";
   var rightPadding = 50;
@@ -10151,8 +10210,7 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
       nforeground = nspectrum;
     else if (spectrum.type === self.spectrumTypes.BACKGROUND) {
       nbackground = nspectrum;
-      backgroundScaleFactor = spectrumScaleFactor;
-      scaleBackground = nbackground * backgroundScaleFactor;
+      backSF = spectrumScaleFactor;
     }
 
     /* Get the text to be displayed from the spectrum information */
@@ -10183,11 +10241,11 @@ SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
   });
 
   /* Get proper information for foreground-background sigma comparison */
-  if (nforeground && nbackground && backgroundScaleFactor) {
-    backgroundSigma = Math.sqrt(nbackground);
-    backgroundScaleSigma = backgroundScaleFactor * backgroundSigma;
-    nsigma = backgroundScaleSigma == 0 ? 0 : (Number((Math.abs(nforeground - scaleBackground) / backgroundScaleSigma).toFixed(3)));
-    isneg = scaleBackground > nforeground;
+  if (nforeground && nbackground && backSF) {
+    const backSigma = backSF * Math.sqrt(nbackground);
+    const sigma = Math.sqrt(backSigma*backSigma + nforeground); //uncert_fore=sqrt(nforeground) since foregoround SF is always 1.0
+    nsigma = sigma == 0 ? 0 : (Number((Math.abs(nforeground - nbackground*backSF) / sigma).toFixed(3)));
+    isneg = ((nbackground*backSF) > nforeground);
   }
 
   /* Output foreground-background sigma information if it is available */
@@ -10356,7 +10414,8 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const upperEnergy = roi.upperEnergy;
 
   const mean = peak.Centroid[0].toFixed(2);
-  const fwhm = (2.35482 * peak.Width[0]).toFixed(2);
+  let fwhm = 2.35482 * peak.Width[0];
+  fwhm = fwhm.toFixed( ((fwhm < 10) ? ((fwhm < 1) ? 4 : 3) : 2) );
   const fwhmPerc = (235.482 * peak.Width[0] / peak.Centroid[0]).toFixed(2);
   const chi2 = peak.Chi2[0].toFixed(2);
   const area = peak.Amplitude[0].toFixed(1);
@@ -10813,22 +10872,6 @@ SpectrumChartD3.prototype.getSpectrumTitles = function() {
   return result;
 }
 
-/**
- * Returns a list of all scale factors from all spectra.
- */
-SpectrumChartD3.prototype.getYScaleFactors = function() {
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
-
-  var result = [];
-  for (var i = 0; i < self.rawData.spectra.length; ++i)
-    result.push(self.rawData.spectra[i].yScaleFactor);
-
-  /* Return a copy of the y-scale factors */
-  return result.slice();
-}
 
 /**
  * Returns the number of counts for a specific energy value.

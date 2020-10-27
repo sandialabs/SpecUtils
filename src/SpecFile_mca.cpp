@@ -123,18 +123,13 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
     if( !lineinfo.empty() )
       remarks_.push_back( "Description: " + lineinfo );
     
+    float energy_gain = 0.0f;
     lineinfo = getAmptekMcaLineInfo( filedata, "GAIN - " );
     if( !lineinfo.empty() )
     {
-      float gain;
-      if( toFloat(lineinfo,gain) )
-      {
-        meas->calibration_coeffs_.push_back( 0.0f );
-        meas->calibration_coeffs_.push_back( gain );
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-      }
+      if( !toFloat(lineinfo,energy_gain) )
+        energy_gain = 0.0f;
     }//if( !lineinfo.empty() )
-    
     
     lineinfo = getAmptekMcaLineInfo( filedata, "LIVE_TIME - " );
     if( !lineinfo.empty() )
@@ -171,8 +166,21 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
     
     const bool success = SpecUtils::split_to_floats(
                                                     filedata.c_str() + datastart, datalen, *counts );
-    if( !success )
+    if( !success || (counts->size() < 2) )
       throw runtime_error( "Couldnt parse channel data" );
+    
+    if( energy_gain > 0.0f && energy_gain < 100.0 )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( counts->size(), {0.0f,energy_gain}, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception & )
+      {
+        //probably wont ever make it here
+      }
+    }//if( parsed gain )
     
     meas->gamma_count_sum_ = 0.0;
     for( const float f : *counts )

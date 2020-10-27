@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(devPairApply) {
     binning[i] = i * ((3000.0f - 0.0f) / binning.size());
   }
 
-  auto newbinning =  SpecUtils::apply_deviation_pair( binning, devpairs );
+  auto newbinning = SpecUtils::apply_deviation_pair( binning, devpairs );
 
   BOOST_REQUIRE_MESSAGE( !!newbinning, "Failed to get binning with deviation pairs" );
   BOOST_REQUIRE_MESSAGE( newbinning->size() == binning.size(), "Binning with deviation pairs returned different number of bins" );
@@ -81,11 +81,14 @@ BOOST_AUTO_TEST_CASE(devPairApply) {
 
   for( size_t i = 0; i < binning.size(); ++i ){
     //const float from_eval = binning[i] + eval_cubic_spline( binning[i], nodes );
-    const float from_eval = binning[i] + deviation_pair_correction( binning[i], devpairs );
-
-    BOOST_CHECK_MESSAGE( fabs( (*newbinning)[i] - from_eval) < 0.00001, \
+    const double from_eval = binning[i] + deviation_pair_correction( binning[i], devpairs );
+    const double maxanswer = std::max( fabs((*newbinning)[i]), static_cast<float>(fabs(from_eval)) );
+    const double diff = fabs( (*newbinning)[i] - from_eval );
+    
+    BOOST_CHECK_MESSAGE( diff < (maxanswer * 1.0E-6), \
                          "apply_deviation_pair returned different answer than eval_cubic_spline: " \
-                         << from_eval << " vs " <<  (*newbinning)[i] );
+                        << from_eval << " vs " <<  (*newbinning)[i] << " with diff " \
+                        << fabs( (*newbinning)[i] - from_eval) );
   }
 }//BOOST_AUTO_TEST_CASE(devPairApply)
 
@@ -123,15 +126,15 @@ BOOST_AUTO_TEST_CASE(cubicSplineNonZeroAnchored) {
     
   for( size_t i = 0; i < ngammas; ++i )
   {
-     const float corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
+     const double corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
      //const float corr_to_normal = corrected - eval_cubic_spline( corrected, inv_nodes );
-     const float back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
+     const double back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
  
      BOOST_CHECK_MESSAGE( fabs(gamma_energies[i] - corrected) < 0.06, \
                          "Deviation pair CubicSpline interpolation failed: " \
                          << corrected << " vs expected " <<  gamma_energies[i] );
 
-     BOOST_CHECK_MESSAGE( fabs(back_corrected - no_dev_pairs_peak_means[i]) < 0.01, \
+     BOOST_CHECK_MESSAGE( fabs(back_corrected - no_dev_pairs_peak_means[i]) < 0.001, \
                          "Failed to go from true to polynomial energy: " \
                          << back_corrected << " vs expected " <<  no_dev_pairs_peak_means[i] );
   }
@@ -156,7 +159,8 @@ BOOST_AUTO_TEST_CASE(cubicSplineFromGadras) {
     };
     
     const vector<pair<float,float>> devpairs = {
-      {0.0f,0.00f}, {50.0f,5.0f}, {100.0f,5.00f}, {200.0f,15.00f}, {1000.0f,-5.00f}, {2614.0f,0.00f}, {3000.0f,0.00f} //The 3 MeV was in GADRAS
+      {0.0f,0.00f}, {50.0f,5.0f}, {100.0f,5.00f}, {200.0f,15.00f}, {1000.0f,-5.00f},
+      {2614.0f,0.00f}, {3000.0f,0.00f} //The 3 MeV was in GADRAS
     };
     
     assert( gamma_energies.size() == no_dev_pairs_peak_means.size() );
@@ -169,9 +173,9 @@ BOOST_AUTO_TEST_CASE(cubicSplineFromGadras) {
     
     for( size_t i = 0; i < ngammas; ++i )
     {
-      const float corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
+      const double corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
       //const float corr_to_normal = corrected - eval_cubic_spline( corrected, inv_nodes );
-      const float back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
+      const double back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
  
      BOOST_CHECK_MESSAGE( fabs(gamma_energies[i] - corrected) < 0.5, \
                          "Deviation pair CubicSpline interpolation failed: " \

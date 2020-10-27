@@ -219,7 +219,7 @@ bool SpecFile::load_from_aram( std::istream &input )
     
     measurements_.push_back( fore_meas );
     
-    //ToDO:
+    // \TODO: Add a time history to SpecFile for when the spectra arent available.
     //This file contains a time history of the gross count data (but only a single summed spectrum)
     const rapidxml::xml_node<char> *gamma_counts_node = XML_FIRST_NODE(gamma_node,"counts");
     if( gamma_counts_node )
@@ -242,14 +242,27 @@ bool SpecFile::load_from_aram( std::istream &input )
       
       if( coefs.size() > 1 && coefs.size() < 10 )
       {
-        fore_meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-        fore_meas->calibration_coeffs_ = coefs;
-        if( back_meas )
+        try
         {
-          back_meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          back_meas->calibration_coeffs_ = coefs;
+          auto newcal = make_shared<EnergyCalibration>();
+          newcal->set_polynomial( fore_meas->num_gamma_channels(), coefs, {} );
+          fore_meas->energy_calibration_ = newcal;
+          
+          if( back_meas
+              && (back_meas->num_gamma_channels() != fore_meas->num_gamma_channels())
+              && (back_meas->num_gamma_channels() > 0) )
+          {
+            newcal = make_shared<EnergyCalibration>();
+            newcal->set_polynomial( back_meas->num_gamma_channels(), coefs, {} );
+          }
+          
+          if( back_meas && back_meas->num_gamma_channels() )
+            back_meas->energy_calibration_ = newcal;
+        }catch( std::exception & )
+        {
+          
         }
-      }
+      }//if( we got the coefficients )
     }//if( we found the coefficients )
     
     vector<string> begin_remarks;

@@ -208,11 +208,11 @@ bool SpecFile::load_from_chn( std::istream &input )
 #endif
     }//if( bytes_left > 1 )
     
-    float calibcoefs[3] = { 0.0f, 0.0f, 0.0f };
+    vector<float> calibcoefs{ 0.0f, 0.0f, 0.0f };
     if( chntype == -102 && bytes_left >= 16 )
-      memcpy( calibcoefs, &(buffer[4]), 3*sizeof(float) );
+      memcpy( &(calibcoefs[0]), &(buffer[4]), 3*sizeof(float) );
     else if( bytes_left >= 12 )
-      memcpy( calibcoefs, &(buffer[4]), 2*sizeof(float) );
+      memcpy( &(calibcoefs[0]), &(buffer[4]), 2*sizeof(float) );
     //      float FWHM_Zero_32767 = *(float *)(&(buffer[16]));
     //      float FWHM Slope = *(float *)(&(buffer[20]));
     
@@ -254,32 +254,43 @@ bool SpecFile::load_from_chn( std::istream &input )
     if( (fabs(calibcoefs[0])<1.0E-12 && fabs(calibcoefs[1])<1.0E-12)
        || (fabs(calibcoefs[0])<1.0E-12 && fabs(calibcoefs[1]-1.0)<1.0E-8) )
     {
-      calibcoefs[0] = calibcoefs[1] = calibcoefs[2] = 0.0;
-      meas->calibration_coeffs_.clear();
-      //      meas->calibration_coeffs_.push_back( 0.0f );
-      //      meas->calibration_coeffs_.push_back( 1.0f );
+      //
     }else if( calibcoefs[1] > 1000 && calibcoefs[1] < 16000
              && fabs(calibcoefs[0]) < 100 )
     {
       //This is a guess at how to detect when FWHM is specified in the CHN file;
       //  probably will fail to detect it sometimes, and falsely detect others.
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
-      meas->calibration_coeffs_.push_back( calibcoefs[0] );
-      meas->calibration_coeffs_.push_back( calibcoefs[1] );
-      if( (calibcoefs[2] != 0.0f)
-         && (fabs(calibcoefs[2]) < 0.25*calibcoefs[1]) )
-        meas->calibration_coeffs_.push_back( calibcoefs[2] );
+      if( fabs(calibcoefs[2]) >= 0.25*calibcoefs[1] )
+        calibcoefs[2] = 0.0f;
+      
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_full_range_fraction( channel_data_ref.size(), calibcoefs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Invalid FRF energy cal: " + string(e.what()) );
+      }
     }else if( calibcoefs[1] < 1000 )
     {
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-      meas->calibration_coeffs_.push_back( calibcoefs[0] );
-      meas->calibration_coeffs_.push_back( calibcoefs[1] );
-      if( calibcoefs[2] != 0.0f )
-        meas->calibration_coeffs_.push_back( calibcoefs[2] );
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( channel_data_ref.size(), calibcoefs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Invalid polynomial energy cal: " + string(e.what()) );
+      }
     }else
     {
-      calibcoefs[0] = calibcoefs[1] = calibcoefs[2] = 0.0;
-      meas->calibration_coeffs_.clear();
+      if( (calibcoefs[0] != 0.0f) || (calibcoefs[1] != 0.0f) )
+      {
+        meas->parse_warnings_.push_back( "Could not identify CHN energy calibration with pars {"
+                                        + to_string(calibcoefs[0]) + ", " + to_string(calibcoefs[1])
+                                        + ", " + std::to_string(calibcoefs[2]) + "}." );
+      }
     }//if( calibcoefs[0]==0.0 && calibcoefs[1]==1.0 )
     
     
@@ -320,18 +331,29 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_integer_chn: invalid sample number (" + to_string(sample) + ")" );
+  }
+  
   if( sample_nums.empty() )
     sample_nums = sample_numbers_;
   
-  const size_t ndet = detector_numbers_.size();
-  vector<bool> detectors( ndet, true );
-  if( !det_nums.empty() )
+  vector<string> det_names;
+  for( const int num : det_nums )
   {
-    for( size_t i = 0; i < ndet; ++i )
-      detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-  }//if( det_nums.empty() )
+    const auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_integer_chn: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos - begin(detector_numbers_)] );
+  }
+  if( det_nums.empty() )
+    det_names = detector_names_;
   
-  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
   
   if( !summed || !summed->gamma_counts() )
     return false;
