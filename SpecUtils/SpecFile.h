@@ -211,6 +211,11 @@ enum class SaveSpectrumAsType : int
   HtmlD3,
 #endif
   
+#if( SpecUtils_INJA_TEMPLATES )
+  /** See #SpecFile::write_template for details. */
+  Template,
+#endif
+
   NumTypes
 };//enum SaveSpectrumAsType
 
@@ -1934,6 +1939,8 @@ public:
                       std::vector<std::string> det_names ) const;
 #endif
   
+  bool write_template( std::ostream &output, const std::string template_file ) const;
+
   //Incase InterSpec specific changes are made, please change this number
   //  Version 4: Made it so portal data that starts with a long background as
   //             its first sample will have the 'id' attribute of the

@@ -5656,9 +5656,9 @@ bool SpecFile::write_d3_html( ostream &ostr,
 }
 #endif
 
-
-
-
+  
+  
+  
 void SpecFile::rebin_measurement( const std::shared_ptr<const EnergyCalibration> &cal,
                                   const std::shared_ptr<const Measurement> &measurement )
 {
@@ -6856,7 +6856,15 @@ void SpecFile::write( std::ostream &strm,
       break;
     }
 #endif
-      
+#if( SpecUtils_INJA_TEMPLATES )
+    case SaveSpectrumAsType::Template:  
+    {
+      // BDE_TODO: figure out what is going on here, to write templates we would need to 
+      // get the template file argument into here somehow.
+      throw runtime_error("Templates not supported from this method");
+      break;
+    }
+#endif
     case SaveSpectrumAsType::NumTypes:
       throw runtime_error( "Invalid output format specified" );
       break;

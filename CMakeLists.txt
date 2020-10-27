@@ -16,6 +16,7 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interact
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
@@ -82,9 +83,7 @@ if( NOT Boost_FOUND )
 endif( NOT Boost_FOUND )
 
 
-set( RAPID_XML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
-#find_path( RAPID_XML_DIR rapidxml/rapidxml.hpp ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty )
-
+set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
   FIND_PACKAGE(PythonLibs 2.7)
@@ -138,6 +137,10 @@ set( headers
      SpecUtils/ParseUtils.h
      SpecUtils/RapidXmlUtils.hpp
 )
+
+if( SpecUtils_INJA_TEMPLATES )
+  list( APPEND sources src/SpecFile_template.cpp )
+endif ( SpecUtils_INJA_TEMPLATES )
 
 if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND sources src/D3SpectrumExport.cpp )
@@ -257,7 +260,7 @@ target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
 endif( MINGW )
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
-                            PRIVATE ${RAPID_XML_DIR} ${PYTHON_INCLUDE_DIRS} )
+                            PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
   add_subdirectory( regression_test )
