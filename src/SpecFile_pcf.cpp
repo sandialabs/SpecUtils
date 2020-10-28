@@ -137,6 +137,10 @@ namespace
 namespace SpecUtils
 {
   
+/** Gives the maximum number of channels any spectrum in the file will need to write to PCF file (rounded up to the nearest multiple of
+ 64 channels), as well as a sets a pointer to the lower channel energies to write to the first record, but only if lower channel energy
+ calibration should be used (if FRF should be used, then pointer will be reset to nulltr).
+ */
 void SpecFile::pcf_file_channel_info( size_t &nchannel,
                                        std::shared_ptr<const std::vector<float>> &lower_channel_energies ) const
 {
@@ -151,10 +155,9 @@ void SpecFile::pcf_file_channel_info( size_t &nchannel,
   for( const auto &meas : measurements_ )
   {
     const size_t nmeaschann = meas->num_gamma_channels();
+    
     const auto &cal = meas->energy_calibration_;
-    if( !cal
-        || (cal->type()==EnergyCalType::InvalidEquationType)
-        || (cal->num_channels() <= 7) )
+    if( !cal || (cal->type() == EnergyCalType::InvalidEquationType) || (nmeaschann <= 7) )
       continue;
     
     const size_t ncalchannel = cal->num_channels();
@@ -165,25 +168,22 @@ void SpecFile::pcf_file_channel_info( size_t &nchannel,
       
     nchannel = std::max( nchannel, nmeaschann );
     
-    if( (ncalchannel < nmeaschann)
-       || (meas->energy_calibration_model() != SpecUtils::EnergyCalType::LowerChannelEdge) )
+    if( meas->energy_calibration_model() != SpecUtils::EnergyCalType::LowerChannelEdge )
     {
       use_lower_channel = false;
-      nchannel = 0;
-      return;
+      continue;
     }
     
     //If we have already found a lower_e_bin, check if this current
-    //  one is either the same  one in memory, or if not, if its reasonably
+    //  one is either the same one in memory, or if not, if its reasonably
     //  close in numeric value.
-    if( use_lower_channel && lower_e_bin && (lower_e_bin!=these_energies) )
+    if( use_lower_channel && lower_e_bin && (lower_e_bin != these_energies) )
     {
       if( lower_e_bin->size() != these_energies->size() )
       {
         use_lower_channel = false;
         lower_e_bin.reset();
-        nchannel = 0;
-        return;
+        continue;
       }
       
       for( size_t channel = 0; use_lower_channel && channel < lower_e_bin->size(); ++channel )
@@ -197,24 +197,22 @@ void SpecFile::pcf_file_channel_info( size_t &nchannel,
         {
           use_lower_channel = false;
           lower_e_bin.reset();
-          nchannel = 0;
-          return;
+          continue;
         }
       }//for( size_t channel = 0; use_lower_channel && channel < lower_e_bin->size(); ++channel )
-    }else if( use_lower_channel && (lower_e_bin!=these_energies) )
+    }else if( use_lower_channel && (lower_e_bin != these_energies) )
     {
       lower_e_bin = these_energies;
     }//if( we already have found lower_e_bin ) / else if( we might us the lower channel energies )
   }//for( const auto &meas : measurements_ )
   
-  if( !use_lower_channel || nchannel <= 7 || !lower_e_bin || lower_e_bin->size() <= 7 )
+  if( nchannel <= 7 )
   {
     nchannel = 0;
     return;
   }
   
-  
-  if( use_lower_channel && nchannel > 7 && lower_e_bin && lower_e_bin->size() > 7 )
+  if( use_lower_channel && lower_e_bin && (lower_e_bin->size() > 7) )
   {
     nchannel += 1;  //GADRAS needs N+1 channels for the lower energy channels record
     if( lower_e_bin->size() == nchannel )
@@ -222,6 +220,7 @@ void SpecFile::pcf_file_channel_info( size_t &nchannel,
       lower_channel_energies = lower_e_bin;
     }else
     {
+      // After the great energy calibration re-factoring, I dont think we will ever get here...
       auto binning = make_shared<vector<float>>(nchannel);
       if( lower_e_bin->size() >= nchannel )
       {
@@ -620,7 +619,7 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
     
     
     std::basic_string<char> fileid;
-    int16_t NRPS = 1 + static_cast<int16_t>( 4.0*nchannel_file/256.0 );
+    const int16_t NRPS = 1 + static_cast<int16_t>( 4.0*nchannel_file/256.0 );
     //cout << "NRPS=" << int(NRPS) << endl;
     
     fileid.resize( 2, '\0' );

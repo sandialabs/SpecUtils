@@ -87,7 +87,7 @@ print "DetectorNumbers:", info.detectorNumbers()
 print "SampleNumbers:", info.sampleNumbers()
 
 
-summedmeas = info.sumMeasurements( [1,2], info.detectorNumbers() )
+summedmeas = info.sumMeasurements( [1,2], info.detectorNames() )
 print "Summed measurement has liveTime=", summedmeas.liveTime()
 
 
