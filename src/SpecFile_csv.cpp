@@ -235,28 +235,32 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     return;
   }catch(...)
   {
+    reset();
   }
   
   //I feel as though this function can be improved in terms of being more robust
   //  to reading input, as well as shortened or re-factored
   //Also, I hacked to make this function very quickly, so I'm sure the code is
   //  even more so crap that the rest in this file
-  reset();
+  //
+  // \TODO: Try parsing every line as SpecUtils::split_to_floats(...), and only if that fails do
+  //        all the other trimming, lower casing, splitting, and such - would probably be a lot
+  //        faster, and the code would probably be a lot cleaner
+  
   const int kChannel = 0, kEnergy = 1, kCounts = 2;//, kSecondRecord = 3;
   float energy_units = 1.0f;
   
   map<size_t,int> column_map;
   vector<string>::const_iterator pos;
   
-  //IF "calibcoeff" is provided in file, we need to wait until we know number of channels before
-  //  initializing energy calibration
-  vector<float> poly_calibcoeff;
+  //If "poly_calib_coeff" is provided in file, we need to wait until we know number of channels
+  //  before initializing energy calibration
+  vector<float> poly_calib_coeff;
   
   string line;
-  
   size_t nlines_used = 0, nlines_total = 0;
-  
   const size_t maxlen = 1024*1024; //should be long enough for even the largest spectra
+  
   while( SpecUtils::safe_get_line(istr, line, maxlen) )
   {
     if( line.size() > (maxlen-5) )
@@ -271,10 +275,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     ++nlines_total;
     
     vector<string> split_fields, fields;
-    const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");  //Dont allow a space delimiter until we have the columns mapped out to avoid things like "Energy (keV)" counting as two columns
+    
+    //Dont allow a space delimiter until we have the columns mapped out to avoid things like
+    //  "Energy (keV)" counting as two columns
+    const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");
     
     SpecUtils::split( split_fields, line, delim );
-    
+     
     fields.reserve( split_fields.size() );
     for( string s : split_fields )
     {
@@ -288,32 +295,50 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if( isdigit(fields.at(0).at(0)) )
+    if( isdigit(fields[0][0]) )
     {
-      if( column_map.empty() )
+      //Check if we have a valid column map defined yet, either because it is empty, or it has one
+      //  entry that is not counts.  This can happen if there was a header that was only partially
+      //  recognized, for example "Energy (Mev), Det. 0", since we are currently looking at column
+      //  header definitions seen in actual files like "counts", "data", "selection", "signal",
+      //  and "detector" (\TODO: figuring out header meaning could probably be generalized more)
+      
+      const bool no_column_map_yet = (column_map.empty()
+                        || ((column_map.size() == 1) && (column_map.begin()->second != kCounts)) );
+      if( no_column_map_yet )
       {
         if( nfields==1 )
         {
           column_map[0] = kCounts;
-        }if( nfields==2 && isdigit(fields.at(1).at(0)) )
+        }if( nfields==2 && isdigit(fields[1][0]) )
         {
           column_map[0] = kEnergy;
           column_map[1] = kCounts;
-        }else if( nfields<9
-                 && isdigit(fields.at(1).at(0)) && isdigit(fields.at(2).at(0)) )
+        }else if( (nfields > 2) && (nfields < 9) && isdigit(fields[1][0]) && isdigit(fields[2][0]) )
         {
-          column_map[0] = kChannel;
-          column_map[1] = kEnergy;
-          column_map[2] = kCounts;
+          if( fields[0].find('.') != string::npos )
+          {
+            // If first column has a decimal point in it, assume thats energy (so we don't try to
+            //  parse first column as a integer and fail latter on), and then just assume the next
+            //  column will be counts (following the only examples I've seen)
+            column_map[0] = kEnergy;
+            column_map[1] = kCounts;
+          }else
+          {
+            column_map[0] = kChannel;
+            column_map[1] = kEnergy;
+            column_map[2] = kCounts;
+          }
         }else
         {
           throw runtime_error( string("unrecognized line that started with digit '")
                               + fields[0][0] + string("'") );
         }
-      }//if( column_map.empty() )
+      }//if( no_column_map_yet )
       
-      if( fields.size() == 4 )
+      if( no_column_map_yet && (fields.size() == 4) )
       {
+        // \TODO: Move this section of code to its own function
         vector<float> cals;
         if( SpecUtils::split_to_floats( line.c_str(), line.size(), cals ) )
         {
@@ -356,7 +381,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                       newcal->set_polynomial( nchan, eqn, {} );
                       energy_calibration_ = newcal;
                       gamma_counts_ = channels;
-                      break;
+                      break;  //This breaks out of the primary while loop of this function
                     }catch( std::exception & )
                     {
                       //I guess this wasnt a valid energy calibration, so assume not the spectrum we
@@ -410,7 +435,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                         newcal->set_polynomial( channels->size(), eqn, devpairs );
                         energy_calibration_ = newcal;
                         gamma_counts_ = channels;
-                        break;
+                        break; //This breaks out of the primary while loop of this function
                       }catch( std::exception & )
                       {
                         //I guess energy calibration really wasnt valid - probably shouldnt get here
@@ -422,8 +447,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
               
             }//if( we could get a second line )
             
-            //If we didnt 'break' above, we werent successful at reading the
-            //  file
+            //If we didn't "break" out of the primary while loop above, we weren't successful at
+            //  reading the file, so go back and try the other CSV methods
             istr.seekg( current_pos, ios::beg );
           }//if( potentially calibration data )
         }//if( the line was made of 4 numbers )
@@ -465,7 +490,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }
         
         int channel = 0;
-        float energy = 0.0f, count = 0.0f;//, count2 = 0.0f;
+        float energy = 0.0f, count = 0.0f; //, count2 = 0.0f;
         for( size_t col = 0; col < fields.size(); ++col )
         {
           if( column_map.count(col) )
@@ -475,7 +500,11 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
               case kChannel:       channel = atoi(fields[col].c_str()); break;
               case kEnergy:        energy  = static_cast<float>(atof(fields[col].c_str())); break;
               case kCounts:        count   = static_cast<float>(atof(fields[col].c_str())); break;
-                //              case kSecondRecord: count2  = static_cast<float>(atof(fields[col].c_str()));  break;
+              //case kCounts + 1:    count2  = static_cast<float>(atof(fields[col].c_str())); break;
+              default:
+                // \TODO: Ignoring past the first record...
+                assert( column_map[col] > kCounts );
+                break;
             }//switch( column_map[col] )
           }//if( column_map.count(col) )
         }//for( size_t col = 0; col < fields.size(); ++col )
@@ -552,12 +581,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           {
             //Theramino produces a header like "Energy(KeV)    Counts    "
             //  but the rest of the lines are CSV
-            //  Hopefully accounting for this doesnt erroneoulsy affect other formats
+            //  Hopefully accounting for this doesn't erroneously affect other formats
             string restofline = fields[i].substr(kevpos+5);
             SpecUtils::trim(restofline);
             if( istarts_with(restofline, "count")
                || istarts_with(restofline, "data")
-               || istarts_with(restofline, "signal") )
+               || istarts_with(restofline, "signal")
+               || istarts_with(restofline, "detector") )
             {
               column_map[i+1] = kCounts;
             }
@@ -567,19 +597,17 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                  || starts_with( fields[i], "data" )
                  || starts_with( fields[i], "selection" )
                  || starts_with( fields[i], "signal" )
+                 || starts_with( fields[i], "detector" )
                  )
         {
-          //          bool hasRecordOne = false;
-          //          for( map<size_t,int>::const_iterator iter = column_map.begin();
-          //              iter != column_map.end(); ++iter )
-          //          {
-          //            hasRecordOne |= (iter->second == kCounts);
-          //          }
-          
-          //          if( hasRecordOne )
-          //            column_map[i] = kSecondRecord;
-          //          else
-          column_map[i] = kCounts;
+          // \TODO: currently, only the first "counts" column is used for channel data, but we could
+          //        have multiple columns for multi-detector systems; however, I haven't actually
+          //        seen any spectrum files where the additional columns are non-zero, so not
+          //        implementing for now
+          int numRecords = 0;
+          for( const auto &entry : column_map )
+            numRecords += (entry.second >= kCounts);
+          column_map[i] = kCounts + numRecords;
         }
       }//for( size_t i = 0; i < nfields; ++i )
       
@@ -755,7 +783,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
       
       if( c > 0 || b > 0 )
-        poly_calibcoeff = { d, c, b, a };
+        poly_calib_coeff = { d, c, b, a };
     }
     
   }//while( getline( istr, line ) )
@@ -769,13 +797,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
   }//
   
   const size_t nchannel = gamma_counts_ ? gamma_counts_->size() : size_t(0);
-  if( nchannel>=2 && !poly_calibcoeff.empty()
+  if( nchannel>=2 && !poly_calib_coeff.empty()
       && (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
   {
     try
     {
       auto newcal = make_shared<EnergyCalibration>();
-      newcal->set_polynomial( nchannel, poly_calibcoeff, {} );
+      newcal->set_polynomial( nchannel, poly_calib_coeff, {} );
       energy_calibration_ = newcal;
     }catch( std::exception &e )
     {
