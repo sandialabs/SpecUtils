@@ -192,7 +192,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
       //  first and last events timetampts
       uint64_t firsttimestamp = 0, lasttimestamp = 0;
       
-      //To track measurments longer than 35.79 minutes we need to keep track of
+      //To track measurements longer than 35.79 minutes we need to keep track of
       //  more than a 31 bit clock.
       uint64_t timeepoch = 0;
       
@@ -430,30 +430,28 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     meas->detector_description_ = meas->detector_name_ + " ListMode data";
     meas->quality_status_ = SpecUtils::QualityStatus::Missing;
     meas->source_type_ = SourceType::Unknown;
-    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     
+    if( energy_cal_valid && (gain != 0.0f || quadratic != 0.0f) )
+    {
+      try
+      {
+        auto cal = make_shared<EnergyCalibration>();
+        cal->set_polynomial( histogram->size(), {offset,gain,quadratic}, {} );
+        meas->energy_calibration_ = cal;
+      }catch( std::exception & )
+      {
+        meas->parse_warnings_.push_back( "Energy calibration given in file of polynomial {"
+                                         + std::to_string(offset) + ", "
+                                         + std::to_string(gain) + ", "
+                                         + std::to_string(quadratic) + "}, was invalid." );
+      }
+    }//if( energy calibration should be valid )
+  
     //std::vector<std::string>  remarks_;
     
     if( olestartdate > 0 )
       meas->start_time_ = datetime_ole_to_posix( olestartdate );
     
-    vector<float> energycoef;
-    energycoef.push_back( offset );
-    energycoef.push_back( gain );
-    if( quadratic != 0.0 )
-      energycoef.push_back( quadratic );
-    const std::vector<std::pair<float,float>> devpairs;
-    
-    
-    //Should check energyunits=="keV"
-    if( energy_cal_valid && (gain != 0 || quadratic != 0)
-       && calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, energycoef, devpairs, histogram->size() ) )
-    {
-      meas->calibration_coeffs_ = energycoef;
-    }
-    
-    meas->deviation_pairs_ = devpairs;
-    //meas->channel_energies_ = ...;
     meas->gamma_counts_ = histogram;
     //meas->neutron_counts_ = ...;
     //meas->latitude_;  //set to -999.9 if not specified
@@ -486,7 +484,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     cleanup_after_load();
     
     if( measurements_.empty() )
-      throw std::runtime_error( "no measurments" );
+      throw std::runtime_error( "no measurements" );
     
     return true;
   }catch( std::exception & )

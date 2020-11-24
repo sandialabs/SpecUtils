@@ -22,6 +22,8 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  
+#Note: on macOS you may need to rename the libSpecUtils.dylib library 
+#      created when building the library, to SpecUtils.so
 
 import SpecUtils
 
@@ -54,7 +56,7 @@ counts = meas.gammaCounts()
 startime = meas.startTime()
 
 numchannel = len(counts)
-print "For measurment started at", startime, ":"
+print "For measurement started at", startime, ":"
 print numchannel, "channels, with a few mid channels of the first measurement having counts:"
 
 print "\tChannel\tCounts"
@@ -65,9 +67,9 @@ print "With live time:", meas.liveTime(), "seconds, and total counts:", meas.gam
 
 nenergy = 511
 channel = meas.findGammaChannel(nenergy)
-content = meas.gammaChannelContent( channel );
-lenergy = meas.gammaChannelLower( channel );
-uenergy = meas.gammaChannelUpper( channel );
+content = meas.gammaChannelContent( channel )
+lenergy = meas.gammaChannelLower( channel )
+uenergy = meas.gammaChannelUpper( channel )
 print nenergy, "keV corresponds to channel ", channel, "which has", content, "counts, and energy range (", lenergy, ",", uenergy, ")"
 
 
@@ -85,13 +87,13 @@ print "DetectorNumbers:", info.detectorNumbers()
 print "SampleNumbers:", info.sampleNumbers()
 
 
-summedmeas = info.sumMeasurements( [1,2], info.detectorNumbers() )
+summedmeas = info.sumMeasurements( [1,2], info.detectorNames() )
 print "Summed measurement has liveTime=", summedmeas.liveTime()
 
 
 
 savetoname = "Cal_pyconverted.chn"
-f = open( savetoname, 'w' );
+f = open( savetoname, 'w' )
 
 sampleNums = info.sampleNumbers()
 detToUse = [0]
@@ -118,7 +120,7 @@ print "Wrote", savetoname
 
 
 savetoname = "Cal_pyconverted.n42"
-f = open( savetoname, 'w' );
+f = open( savetoname, 'w' )
 
 try:
     info.write2012N42Xml( f )
@@ -130,10 +132,10 @@ f.close()
 print "Wrote", savetoname
 
 #still having trouble reading from python source when seeking is done by the reader
-f = open( "Cal_pyconverted.pcf", 'r' );
+f = open( "Cal_pyconverted.pcf", 'r' )
 rereadinfo = SpecUtils.SpecFile()
 try:
-    rereadinfo.setInfoFromPcfFile( f );
+    rereadinfo.setInfoFromPcfFile( f )
 except RuntimeError as e:
     print "Failed to decode the converted PCF file: {0}.".format( e )
     exit( 1 )

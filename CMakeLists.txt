@@ -16,6 +16,7 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interact
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
@@ -27,7 +28,18 @@ option( TRY_TO_STATIC_LINK "Try to link to static libs whenever possible" OFF )
 if( TRY_TO_STATIC_LINK )
   set( Boost_USE_STATIC_LIBS ON )
   if( WIN32 )
-    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+    #find static libraries first
+	set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+	
+	#Link to static runtime
+	set( CMAKE_CXX_FLAGS "/MT ${CMAKE_CXX_FLAGS}" )
+  	set(CompilerFlags
+        CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELEASE
+        CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO
+        )
+    foreach(CompilerFlag ${CompilerFlags})
+        string(REGEX REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
+    endforeach()
   else( WIN32 )
     set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
   endif( WIN32 )
@@ -64,7 +76,6 @@ if( SpecUtils_JAVA_SWIG )
   SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
 endif( SpecUtils_JAVA_SWIG )
 
-
 find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
 
 if( NOT Boost_FOUND )
@@ -72,9 +83,7 @@ if( NOT Boost_FOUND )
 endif( NOT Boost_FOUND )
 
 
-set( RAPID_XML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
-#find_path( RAPID_XML_DIR rapidxml/rapidxml.hpp ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty )
-
+set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
   FIND_PACKAGE(PythonLibs 2.7)
@@ -128,6 +137,10 @@ set( headers
      SpecUtils/ParseUtils.h
      SpecUtils/RapidXmlUtils.hpp
 )
+
+if( SpecUtils_INJA_TEMPLATES )
+  list( APPEND sources src/SpecFile_template.cpp )
+endif ( SpecUtils_INJA_TEMPLATES )
 
 if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND sources src/D3SpectrumExport.cpp )
@@ -201,7 +214,7 @@ set( SpecUtils_LIB_TYPE STATIC )
 
 if( SpecUtils_PYTHON_BINDINGS )
   set( SpecUtils_LIB_TYPE SHARED )
-  list( APPEND sources bindings/python/SpectrumDataStructs_py.cpp )
+  list( APPEND sources bindings/python/SpecFile_py.cpp )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_JAVA_SWIG )
@@ -211,6 +224,10 @@ endif( SpecUtils_JAVA_SWIG )
 
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
+
+#For CMake 3.8+, could specify C++11 using the following so it will be propagated to down-line targets...
+#target_compile_features(SpecUtils PUBLIC cxx_std_11)
+#set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
 set_target_properties( SpecUtils PROPERTIES
   CXX_STANDARD 11
@@ -238,10 +255,12 @@ endif( SpecUtils_JAVA_SWIG )
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a )
+elseif( WIN32 )
+target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
 endif( MINGW )
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
-                            PRIVATE ${RAPID_XML_DIR} ${PYTHON_INCLUDE_DIRS} )
+                            PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
   add_subdirectory( regression_test )

@@ -235,24 +235,32 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     return;
   }catch(...)
   {
+    reset();
   }
   
   //I feel as though this function can be improved in terms of being more robust
   //  to reading input, as well as shortened or re-factored
   //Also, I hacked to make this function very quickly, so I'm sure the code is
   //  even more so crap that the rest in this file
-  reset();
+  //
+  // \TODO: Try parsing every line as SpecUtils::split_to_floats(...), and only if that fails do
+  //        all the other trimming, lower casing, splitting, and such - would probably be a lot
+  //        faster, and the code would probably be a lot cleaner
+  
   const int kChannel = 0, kEnergy = 1, kCounts = 2;//, kSecondRecord = 3;
   float energy_units = 1.0f;
   
   map<size_t,int> column_map;
   vector<string>::const_iterator pos;
   
+  //If "poly_calib_coeff" is provided in file, we need to wait until we know number of channels
+  //  before initializing energy calibration
+  vector<float> poly_calib_coeff;
+  
   string line;
-  
   size_t nlines_used = 0, nlines_total = 0;
-  
   const size_t maxlen = 1024*1024; //should be long enough for even the largest spectra
+  
   while( SpecUtils::safe_get_line(istr, line, maxlen) )
   {
     if( line.size() > (maxlen-5) )
@@ -267,10 +275,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     ++nlines_total;
     
     vector<string> split_fields, fields;
-    const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");  //Dont allow a space delimiter until we have the columns mapped out to avoid things like "Energy (keV)" counting as two columns
+    
+    //Dont allow a space delimiter until we have the columns mapped out to avoid things like
+    //  "Energy (keV)" counting as two columns
+    const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");
     
     SpecUtils::split( split_fields, line, delim );
-    
+     
     fields.reserve( split_fields.size() );
     for( string s : split_fields )
     {
@@ -284,32 +295,50 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if( isdigit(fields.at(0).at(0)) )
+    if( isdigit(fields[0][0]) )
     {
-      if( column_map.empty() )
+      //Check if we have a valid column map defined yet, either because it is empty, or it has one
+      //  entry that is not counts.  This can happen if there was a header that was only partially
+      //  recognized, for example "Energy (Mev), Det. 0", since we are currently looking at column
+      //  header definitions seen in actual files like "counts", "data", "selection", "signal",
+      //  and "detector" (\TODO: figuring out header meaning could probably be generalized more)
+      
+      const bool no_column_map_yet = (column_map.empty()
+                        || ((column_map.size() == 1) && (column_map.begin()->second != kCounts)) );
+      if( no_column_map_yet )
       {
         if( nfields==1 )
         {
           column_map[0] = kCounts;
-        }if( nfields==2 && isdigit(fields.at(1).at(0)) )
+        }if( nfields==2 && isdigit(fields[1][0]) )
         {
           column_map[0] = kEnergy;
           column_map[1] = kCounts;
-        }else if( nfields<9
-                 && isdigit(fields.at(1).at(0)) && isdigit(fields.at(2).at(0)) )
+        }else if( (nfields > 2) && (nfields < 9) && isdigit(fields[1][0]) && isdigit(fields[2][0]) )
         {
-          column_map[0] = kChannel;
-          column_map[1] = kEnergy;
-          column_map[2] = kCounts;
+          if( fields[0].find('.') != string::npos )
+          {
+            // If first column has a decimal point in it, assume thats energy (so we don't try to
+            //  parse first column as a integer and fail latter on), and then just assume the next
+            //  column will be counts (following the only examples I've seen)
+            column_map[0] = kEnergy;
+            column_map[1] = kCounts;
+          }else
+          {
+            column_map[0] = kChannel;
+            column_map[1] = kEnergy;
+            column_map[2] = kCounts;
+          }
         }else
         {
           throw runtime_error( string("unrecognized line that started with digit '")
                               + fields[0][0] + string("'") );
         }
-      }//if( column_map.empty() )
+      }//if( no_column_map_yet )
       
-      if( fields.size() == 4 )
+      if( no_column_map_yet && (fields.size() == 4) )
       {
+        // \TODO: Move this section of code to its own function
         vector<float> cals;
         if( SpecUtils::split_to_floats( line.c_str(), line.size(), cals ) )
         {
@@ -344,18 +373,20 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                 {
                   ++nlines_used;
                   const size_t nchan = channels->size();
-                  const bool validCalib
-                  = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn,
-                                                    devpairs, nchan );
-                  
-                  if( validCalib && nchan >= 128 )
+                  if( nchan >= 128 )
                   {
-                    gamma_counts_ = channels;
-                    energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-                    calibration_coeffs_ = eqn;
-                    channel_energies_ = SpecUtils::polynomial_binning( eqn, nchan, devpairs );
-                    
-                    break;
+                    try
+                    {
+                      auto newcal = make_shared<EnergyCalibration>();
+                      newcal->set_polynomial( nchan, eqn, {} );
+                      energy_calibration_ = newcal;
+                      gamma_counts_ = channels;
+                      break;  //This breaks out of the primary while loop of this function
+                    }catch( std::exception & )
+                    {
+                      //I guess this wasnt a valid energy calibration, so assume not the spectrum we
+                      //  want
+                    }
                   }//if( some reasonalbe number of channels )
                 }else if( channels->size() == 2 )
                 {
@@ -397,17 +428,18 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                       ++nlines_used;
                       
                       live_time_ = cals[0];
-                      gamma_counts_ = channels;
-                      energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-                      const size_t ncalcoef = size_t((cals[3]==0.0f) ? 2 : 3);
-                      calibration_coeffs_.resize( ncalcoef );
-                      for( size_t i = 0; i < ncalcoef; ++i )
-                        calibration_coeffs_[i] = cals[1+i];
-                      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_,
-                                                                        channels->size(),
-                                                                        std::vector<std::pair<float,float>>() );
                       
-                      break;
+                      try
+                      {
+                        auto newcal = make_shared<EnergyCalibration>();
+                        newcal->set_polynomial( channels->size(), eqn, devpairs );
+                        energy_calibration_ = newcal;
+                        gamma_counts_ = channels;
+                        break; //This breaks out of the primary while loop of this function
+                      }catch( std::exception & )
+                      {
+                        //I guess energy calibration really wasnt valid - probably shouldnt get here
+                      }
                     }//if( some reasonalbe number of channels )
                   }//if( !!channels )
                 }//if( there were exactly two lines ) / else
@@ -415,15 +447,16 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
               
             }//if( we could get a second line )
             
-            //If we didnt 'break' above, we werent successful at reading the
-            //  file
+            //If we didn't "break" out of the primary while loop above, we weren't successful at
+            //  reading the file, so go back and try the other CSV methods
             istr.seekg( current_pos, ios::beg );
           }//if( potentially calibration data )
         }//if( the line was made of 4 numbers )
       }//if( fields.size() == 4 )
       
-      std::shared_ptr<std::vector<float>> energies( new vector<float>() ), counts( new vector<float>());
-      std::shared_ptr<vector<int> > channels( new vector<int>() );
+      auto channels = make_shared<vector<int>>();
+      auto counts = make_shared<vector<float>>();
+      auto energies = make_shared<vector<float>>();
       
       //After we hit a line that no longer starts with numbers, we actually want
       // to leave istr at the beggining of that line so if another spectrum
@@ -457,7 +490,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }
         
         int channel = 0;
-        float energy = 0.0f, count = 0.0f;//, count2 = 0.0f;
+        float energy = 0.0f, count = 0.0f; //, count2 = 0.0f;
         for( size_t col = 0; col < fields.size(); ++col )
         {
           if( column_map.count(col) )
@@ -467,7 +500,11 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
               case kChannel:       channel = atoi(fields[col].c_str()); break;
               case kEnergy:        energy  = static_cast<float>(atof(fields[col].c_str())); break;
               case kCounts:        count   = static_cast<float>(atof(fields[col].c_str())); break;
-                //              case kSecondRecord: count2  = static_cast<float>(atof(fields[col].c_str()));  break;
+              //case kCounts + 1:    count2  = static_cast<float>(atof(fields[col].c_str())); break;
+              default:
+                // \TODO: Ignoring past the first record...
+                assert( column_map[col] > kCounts );
+                break;
             }//switch( column_map[col] )
           }//if( column_map.count(col) )
         }//for( size_t col = 0; col < fields.size(); ++col )
@@ -500,27 +537,19 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       
       gamma_counts_ = counts;
       
-      if( energies->size() && (energies->back()!=0.0f) )
+      if( (energies->size() >= counts->size()) && (energies->back()!=0.0f) )
       {
-        energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
-        calibration_coeffs_ = *energies;
-        //        channel_energies_ = energies;
-      }else //if( channels->size() && (channels->back()!=0) )
-      {
-        if( (energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial)
-           && (calibration_coeffs_.size() > 1) && (calibration_coeffs_.size() < 10) )
+        try
         {
-          //nothing to do here
-        }else
+          auto newcal = make_shared<EnergyCalibration>();
+          newcal->set_lower_channel_energy( counts->size(), std::move(*energies) );
+          energy_calibration_ = newcal;
+        }catch( std::exception &e )
         {
-          energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-          calibration_coeffs_.resize( 2 );
-          calibration_coeffs_[0] = 0.0f;
-          calibration_coeffs_[1] = 3000.0f / std::max( counts->size()-1, size_t(1) );
-          //        channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, counts->size(),
-          //                                                           std::vector<std::pair<float,float>>() );
+          parse_warnings_.push_back( "Lower channel energies provided were invalid: "
+                                     + string(e.what()) );
         }
-      }//if( energies ) / else channels
+      }//if( we have channel lower energies )
       
       break;
     }else if( column_map.empty()
@@ -552,12 +581,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           {
             //Theramino produces a header like "Energy(KeV)    Counts    "
             //  but the rest of the lines are CSV
-            //  Hopefully accounting for this doesnt erroneoulsy affect other formats
+            //  Hopefully accounting for this doesn't erroneously affect other formats
             string restofline = fields[i].substr(kevpos+5);
             SpecUtils::trim(restofline);
-            if( SpecUtils::istarts_with(restofline, "count")
-               || SpecUtils::istarts_with(restofline, "data")
-               || SpecUtils::istarts_with(restofline, "signal") )
+            if( istarts_with(restofline, "count")
+               || istarts_with(restofline, "data")
+               || istarts_with(restofline, "signal")
+               || istarts_with(restofline, "detector") )
             {
               column_map[i+1] = kCounts;
             }
@@ -567,19 +597,17 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                  || starts_with( fields[i], "data" )
                  || starts_with( fields[i], "selection" )
                  || starts_with( fields[i], "signal" )
+                 || starts_with( fields[i], "detector" )
                  )
         {
-          //          bool hasRecordOne = false;
-          //          for( map<size_t,int>::const_iterator iter = column_map.begin();
-          //              iter != column_map.end(); ++iter )
-          //          {
-          //            hasRecordOne |= (iter->second == kCounts);
-          //          }
-          
-          //          if( hasRecordOne )
-          //            column_map[i] = kSecondRecord;
-          //          else
-          column_map[i] = kCounts;
+          // \TODO: currently, only the first "counts" column is used for channel data, but we could
+          //        have multiple columns for multi-detector systems; however, I haven't actually
+          //        seen any spectrum files where the additional columns are non-zero, so not
+          //        implementing for now
+          int numRecords = 0;
+          for( const auto &entry : column_map )
+            numRecords += (entry.second >= kCounts);
+          column_map[i] = kCounts + numRecords;
         }
       }//for( size_t i = 0; i < nfields; ++i )
       
@@ -737,6 +765,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     }else if( starts_with( fields[0], "calibcoeff" ) )
     {
       //CalibCoeff   : a=0.000000000E+000 b=0.000000000E+000 c=3.000000000E+000 d=0.000000000E+000
+      // \TODO: better figure out meaning of these pars; right now logic based on IAEA SPC files.
       ++nlines_used;
       
       float a = 0.0f, b = 0.0f, c = 0.0f, d = 0.0f;
@@ -753,13 +782,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       if( dpos < (line.size()-2) )
         d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
       
-      if( c > 0 )
-      {
-        energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-        calibration_coeffs_.resize( 2 );
-        calibration_coeffs_[0] = b;
-        calibration_coeffs_[1] = c;
-      }
+      if( c > 0 || b > 0 )
+        poly_calib_coeff = { d, c, b, a };
     }
     
   }//while( getline( istr, line ) )
@@ -772,7 +796,24 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     throw runtime_error( "Not enough (useful) lines in the file." );
   }//
   
-  if( !gamma_counts_ || gamma_counts_->size() < 5 || calibration_coeffs_.empty() )
+  const size_t nchannel = gamma_counts_ ? gamma_counts_->size() : size_t(0);
+  if( nchannel>=2 && !poly_calib_coeff.empty()
+      && (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
+  {
+    try
+    {
+      auto newcal = make_shared<EnergyCalibration>();
+      newcal->set_polynomial( nchannel, poly_calib_coeff, {} );
+      energy_calibration_ = newcal;
+    }catch( std::exception &e )
+    {
+      parse_warnings_.push_back( "Provided energy calibration coefficients apear to be invalid: "
+                                 + string(e.what()) );
+    }
+  }//if( we have
+  
+  
+  if( nchannel < 5 || (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
   {
     reset();
     istr.seekg( orig_pos, ios::beg );
@@ -910,25 +951,20 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     if( nchannel < 127 )
       throw runtime_error(""); //"Not enought channels"
     
-    const vector< pair<float,float> > devpairs;
-    const bool validcalib
-    = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial, eqn, devpairs,
-                                      nchannel );
-    if( !validcalib )
-      throw runtime_error( "" ); //"Invalid calibration"
+    auto newcal = make_shared<EnergyCalibration>();
+    //Next line will throw exception if invalid calibration; we are requiring valid energy cal
+    newcal->set_polynomial( nchannel, eqn, {} );
+    energy_calibration_ = newcal;
     
     //    real_time_ = realtime;
     live_time_ = realtime;
     contained_neutron_ = false;
-    deviation_pairs_.clear();
-    calibration_coeffs_ = eqn;
-    energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
     neutron_counts_.clear();
     gamma_counts_ = counts;
     neutron_counts_sum_ = gamma_count_sum_ = 0.0;
     for( const float f : *counts )
       gamma_count_sum_ += f;
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     istr.seekg( orig_pos, ios::beg );
     throw;
@@ -1114,11 +1150,9 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
        float speed_;  //in m/s
        QualityStatus quality_status_;
        SourceType     source_type_;
-       SpecUtils::EnergyCalType   energy_calibration_model_;
+       shared_ptr<const EnergyCalibration> energy_calibration_
        std::vector<std::string>  remarks_;
        boost::posix_time::ptime  start_time_;
-       std::vector<float>        calibration_coeffs_;  //should consider making a shared pointer (for the case of LowerChannelEdge binning)
-       std::vector<std::pair<float,float>>          deviation_pairs_;     //<energy,offset>
        std::vector<float>        neutron_counts_;
        double latitude_;  //set to -999.9 if not specified
        double longitude_; //set to -999.9 if not specified
@@ -1140,7 +1174,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
     //lane_number_ = ;
     //measurement_location_name_ = "";
     //inspection_ = "";
-    //measurment_operator_ = "";
+    //measurement_operator_ = "";
     
     cleanup_after_load();
   }catch( std::exception & )
@@ -1203,7 +1237,7 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   }
   
   ostr << "EquationType ";
-  switch( energy_calibration_model_ )
+  switch( energy_calibration_->type() )
   {
     case SpecUtils::EnergyCalType::Polynomial:
     case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
@@ -1212,22 +1246,13 @@ bool Measurement::write_txt( std::ostream& ostr ) const
     case SpecUtils::EnergyCalType::FullRangeFraction:   ostr << "FullRangeFraction"; break;
     case SpecUtils::EnergyCalType::LowerChannelEdge:    ostr << "LowerChannelEdge"; break;
     case SpecUtils::EnergyCalType::InvalidEquationType: ostr << "Unknown"; break;
-  }//switch( energy_calibration_model_ )
+  }//switch( energy_calibration_->type() )
   
   
   ostr << endline << "Coefficients ";
-  for( size_t i = 0; i < calibration_coeffs_.size(); ++i )
-    ostr << (i ? " " : "") << calibration_coeffs_[i];
-  
-  if( energy_calibration_model_ == SpecUtils::EnergyCalType::LowerChannelEdge
-     && calibration_coeffs_.empty()
-     && !!channel_energies_
-     && channel_energies_->size() )
-  {
-    for( size_t i = 0; i < channel_energies_->size(); ++i )
-      ostr << (i ? " " : "") << (*channel_energies_)[i];
-  }
-  
+  const vector<float> &cal_coeffs = energy_calibration_->coefficients();
+  for( size_t i = 0; i < cal_coeffs.size(); ++i )
+    ostr << (i ? " " : "") << cal_coeffs[i];
   ostr << endline;
   
   if( contained_neutron_ )
@@ -1236,10 +1261,13 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   //  ostr "Channel" << " "
   //       << setw(12) << ios::left << "Energy" << " "
   //       << setw(12) << ios::left << "Counts" << endline;
-  ostr << "Channel" << " "
-  "Energy" << " "
-  "Counts" << endline;
-  const size_t nChannel = gamma_counts_->size();
+  
+  assert( energy_calibration_ );
+  const size_t nChannel = gamma_counts_ ? gamma_counts_->size() : size_t(0);
+  const auto channel_energies = energy_calibration_->channel_energies();
+  const bool has_energies = channel_energies && (channel_energies->size() >= nChannel);
+  
+  ostr << "Channel" << " " << (has_energies ? "Energy" : "Channel") << " " << "Counts" << endline;
   
   for( size_t i = 0; i < nChannel; ++i )
   {
@@ -1247,8 +1275,8 @@ bool Measurement::write_txt( std::ostream& ostr ) const
     //         << setw(12) << ios::right << channel_energies_->at(i)
     //         << setw(12) << ios::right << gamma_counts_->operator[](i)
     //         << endline;
-    ostr << i << " " << channel_energies_->at(i)
-    << " " << gamma_counts_->operator[](i)
+    ostr << i << " " << (has_energies ? (*channel_energies)[i] : static_cast<float>(i))
+         << " " << gamma_counts_->operator[](i)
     << endline;
   }//for( size_t i = 0; i < compressed_counts.size(); ++i )
   
@@ -1285,10 +1313,22 @@ bool Measurement::write_csv( std::ostream& ostr ) const
 {
   const char *endline = "\r\n";
   
-  ostr << "Energy, Data" << endline;
+  assert( energy_calibration_ );
+  const size_t nchannel = gamma_counts_ ? gamma_counts_->size() : size_t(0);
+  const auto channel_energies = energy_calibration_->channel_energies();
+  const bool has_energies = channel_energies && (channel_energies->size() >= nchannel);
   
-  for( size_t i = 0; i < gamma_counts_->size(); ++i )
-    ostr << channel_energies_->at(i) << "," << gamma_counts_->operator[](i) << endline;
+  if( has_energies )
+  {
+    ostr << "Energy, Data" << endline;
+    for( size_t i = 0; i < nchannel; ++i )
+      ostr << channel_energies->at(i) << "," << gamma_counts_->operator[](i) << endline;
+  }else
+  {
+    ostr << "Channel, Data" << endline;
+    for( size_t i = 0; i < nchannel; ++i )
+      ostr << i << "," << gamma_counts_->operator[](i) << endline;
+  }
   
   ostr << endline;
   

@@ -77,12 +77,13 @@ namespace D3SpectrumExport
                            const std::string &x_axis_title,
                            const std::string &y_axis_title );
   
-  /** Creates a var data_`div_name` that represents the measurments and options
+  /** Creates a var data_`div_name` that represents the measurements and options
       passed into this function, and calls setData on spec_chart_`div_name`.
       Does not create <script></script> tags
    */
-  bool write_and_set_data_for_chart( std::ostream &ostr, const std::string &div_name,
-                             const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements );
+  bool write_and_set_data_for_chart( std::ostream &ostr,
+                                     const std::string &div_name,
+                                     const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements );
   
   /** Sets the selected options to the chart dispayed in the div with id 
       specified by div_name.
@@ -119,7 +120,24 @@ namespace D3SpectrumExport
     std::string peaks_json;
     std::string line_color;  //standard css names, "steelblue", "black", etc
     std::string peak_color;
-    double display_scale_factor;  //
+    
+    /** If empty, title from Measurement will be used, but if non-empty, will override Measurement.
+     
+     This is hopefully a temporary over-ride until proper escaping is implemented.
+     */
+    std::string title;
+    
+    /** The y-axis scale factor to use for displaying the spectrum.
+     This is typically used for live-time normalization of the background
+     spectrum to match the foreground live-time.  Ex., if background live-time
+     is twice the foreground, you would want this factor to be 0.5 (e.g., the
+     ratio of the live-times).
+     
+     Note: this value is displayed on the legend, but no where else on the
+     chart.
+     */
+    double display_scale_factor;
+    
     SpecUtils::SpectrumType spectrum_type;  // spectrum type
   };//struct D3SpectrumOptions
   

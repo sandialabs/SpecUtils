@@ -47,14 +47,17 @@ void check_str( const std::string str, const size_t ncharacters )
 
 BOOST_AUTO_TEST_CASE( test_utf8_str_len )
 {
+  //With MSVC 2017, even with adding the /utf-8 definition, string literals like u8"÷aõa"
+  //  are not interpreted by the compiler right (or rather, how I would like - e.g., like
+  //  clang and gcc does), so will specify hex values
   check_str( "", 0 );
   check_str( "A", 1 );
   check_str( "AAA", 3 );
-  check_str( u8"÷aõa", 4 );
-  check_str( u8"ⓧⓧaaa", 5 );
-  check_str( u8"aⓧⓧaaa", 6 );
-  check_str( u8"aⓧaⓧaaa", 7 );
-  check_str( u8"aⓧ\nⓧaaa", 7 );
-  check_str( u8"aⓧ\nⓧaaa÷", 8 );
-  check_str( u8"aⓧ\nⓧaaa÷\n", 9 );
+  check_str( "\xc3\xb7\x61\xc3\xb5\x61", 4 );                                 //u8"÷aõa"
+  check_str( "\xe2\x93\xa7\xe2\x93\xa7\x61\x61\x61", 5 );                     //u8"ⓧⓧaaa"
+  check_str( "\x61\xe2\x93\xa7\xe2\x93\xa7\x61\x61\x61", 6 );                 //u8"aⓧⓧaaa"
+  check_str( "\x61\xe2\x93\xa7\x61\xe2\x93\xa7\x61\x61\x61", 7 );             //u8"aⓧaⓧaaa"
+  check_str( "\x61\xe2\x93\xa7\x0a\xe2\x93\xa7\x61\x61\x61", 7 );             //u8"aⓧ\nⓧaaa"
+  check_str( "\x61\xe2\x93\xa7\x0a\xe2\x93\xa7\x61\x61\x61\xc3\xb7", 8 );     //u8"aⓧ\nⓧaaa÷"
+  check_str( "\x61\xe2\x93\xa7\x0a\xe2\x93\xa7\x61\x61\x61\xc3\xb7\x0a", 9 ); //u8"aⓧ\nⓧaaa÷\n"
 }

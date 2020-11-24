@@ -22,6 +22,10 @@
 #include <string>
 #include <cctype>
 
+#if( __cplusplus >= 201703L )
+#include <charconv>
+#endif
+
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "SpecUtils/DateTime.h"
@@ -29,7 +33,7 @@
 
 
 #if( USE_HH_DATE_LIB )
-#include "3rdparty/date_9a0ee25/include/date/date.h"
+#include "3rdparty/date/include/date/date.h"
 #else
 
 //#if( defined(_MSC_VER) && _MSC_VER < 1800 )
@@ -379,7 +383,7 @@ namespace SpecUtils
     
     //strptime(....) cant handle GMT offset (ex '2014-10-24T08:05:43-04:00')
     //  so we will do this manually.
-    boost::posix_time::time_duration gmtoffset(0,0,0);
+    //boost::posix_time::time_duration gmtoffset(0,0,0);
     const size_t offsetcolon = time_string.find_first_of( ':' );
     if( offsetcolon != string::npos )
     {
@@ -397,13 +401,13 @@ namespace SpecUtils
         
         //normal will look like "2014-10-24T08:05:43"
         //offset will look like "-04:00"
-        try
-        {
-          gmtoffset = boost::posix_time::duration_from_string(offset);
-        }catch( std::exception & )
-        {
-          cerr << "Failed to convert '" << offset << "' to time duration, from string '" << time_string << "'" << endl;
-        }
+        //try
+        //{
+        //  gmtoffset = boost::posix_time::duration_from_string(offset);
+        //}catch( std::exception & )
+        //{
+        //  cerr << "Failed to convert '" << offset << "' to time duration, from string '" << time_string << "'" << endl;
+        //}
         
         
         //Should also make sure gmtoffset is a reasonalbe value.
@@ -791,6 +795,116 @@ namespace SpecUtils
   }//float time_duration_string_to_seconds( const char *duration_str )
 
   
+  double delimited_duration_string_to_seconds( const std::string &input )
+  {
+    //cout << "Input string: '" << input << "'" << endl;
+    double answer = 0.0;
+    
+    //Trim string end
+    size_t str_len = input.size();
+    while( str_len > 0 && isspace(input[str_len-1]) )
+      --str_len;
+    
+    //Trim string begining
+    size_t field_start = 0;
+    while( field_start < input.size() && isspace(input[field_start]) )
+      ++field_start;
+    
+    const bool is_neg = (field_start < str_len) && (input[field_start] == '-');
+    if( is_neg )
+      ++field_start;
+    
+    if( field_start >= str_len )
+      throw runtime_error( "empty input" );
+    
+    const std::string delims = ":";  //"-:,."
+    //for( auto c : delims ){ assert( !isspace(c) ); }
+    
+    size_t fieldnum = 0;
+    
+    do
+    {
+      size_t next_delim = input.find_first_of( delims, field_start );
+      if( next_delim == string::npos )
+        next_delim = str_len;
+      
+      const char *str_start = input.c_str() + field_start;
+      const char *str_end = input.c_str() + next_delim;
+      
+      //cout << "\tField " << fieldnum << ": '" << string(str_start,str_end) << "'" << endl;
+      
+      switch( fieldnum )
+      {
+        case 0:
+        case 1:
+        {   
+          for( const char *ch = str_start; ch != str_end; ++ch )
+          {
+            if( !isdigit(*ch) )
+              throw runtime_error( string("Invalid character ('") + (*ch) + string("')") );
+          }
+#if( __cplusplus >= 201703L )
+          unsigned long value;
+          const auto result = std::from_chars(str_start, str_end, value);
+          if( (bool)result.ec || (result.ptr != str_end) )
+            throw runtime_error( "Invalid hours  or minutes field: '" + std::string(str_start,str_end) + "'" );
+#else
+          const unsigned long value = std::stoul( std::string(str_start,str_end), nullptr, 10 );
+#endif
+          if( fieldnum == 1 && value >= 60 )
+            throw runtime_error( "Hours or Minutes is larger than 60 (" + std::to_string(value) + ")" );
+          
+          answer += value * (fieldnum==0 ? 3600.0 : 60.0);
+          break;
+        }//
+        
+        case 2:
+        {
+          size_t end_idx;
+//#if( __cplusplus >= 201703L )
+//My compiler doesnt support from_chars from doubles, so this hasnt been tested.
+//          double value;
+//          const auto result = std::from_chars(str_start, str_end, value, std::chars_format::general );
+//          if( (bool)result.ec || (result.ptr != str_end) )
+//            throw runtime_error( "Invalid second field: '" + std::string(str_start,str_end) + "'" );
+//#else
+          const double value = std::stod( std::string(str_start,str_end), &end_idx );
+          if( str_start+end_idx != str_end )
+            throw runtime_error( "Invalid second field: '" + std::string(str_start,str_end) + "'" );
+//#endif
+          if( value >= 60.0 )
+            throw runtime_error( "Seconds is larger than 60 (" + std::to_string(value) + ")" );
+          if( value < 0.0 )
+            throw runtime_error( "Seconds value is negative (" + std::to_string(value) + ")" );
+          
+          answer += value;
+        }
+          break;
+          
+        default:
+          throw std::runtime_error( "to many fields" );
+      }//switch( fieldnum )
+      
+      ++fieldnum;
+      field_start = next_delim + 1;
+      
+      //Check if the string finished with a delimiter
+      if( field_start == str_len )
+        throw runtime_error( "trailing delimiter" );
+    }while( field_start < str_len );
+    
+    if( fieldnum < 2 )
+      throw std::runtime_error( "no delimiters found" );
+    
+    if( is_neg )
+      answer *= -1.0;
+    
+    //cout << "\tvalue=" << answer << endl << endl;
+    
+    return answer;
+  }//double delimited_duration_string_to_seconds( std::string duration )
+
+
   //  Windows
 #ifdef _WIN32
   double get_wall_time()

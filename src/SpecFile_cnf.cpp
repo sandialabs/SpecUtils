@@ -135,6 +135,24 @@ namespace
         return bytes;
     }
 
+    boost::posix_time::ptime convert_from_CAM_datetime( uint64_t time_raw )
+    {
+      boost::posix_time::ptime answer;
+      if( !time_raw )
+        return answer;
+
+      answer = boost::posix_time::ptime( boost::gregorian::date(1970, 1, 1) );
+
+      const int64_t secs = time_raw / 10000000L;
+      const int64_t sec_from_epoch = secs - 3506716800L;
+      
+      answer += boost::posix_time::seconds(sec_from_epoch);
+      answer += boost::posix_time::microseconds( secs % 10000000L );
+      
+      return answer;
+    }//convert_from_CAM_datetime(...)
+
+
     //float sec to CAM duration
     std::array< byte, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
     {
@@ -177,25 +195,37 @@ namespace
 
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    template<typename T, typename = std::enable_if<std::is_arithmetic<T>::value, T>::type>
+    template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
     void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type& type) 
     {
         switch (type) {
         case cam_type::cam_float:
         {
             const auto bytes = convert_to_CAM_float(input);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_float) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
         case cam_type::cam_double:
         {
             const auto bytes = convert_to_CAM_double(input);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_double) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
         case cam_type::cam_duration:
         {
             const auto bytes = convert_to_CAM_duration(input);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_duration) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -203,6 +233,10 @@ namespace
         {
             int64_t t_quadword = static_cast<int64_t>(input);
             const auto bytes = to_bytes(t_quadword);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_quadword) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -210,6 +244,10 @@ namespace
         {
             int32_t t_longword = static_cast<int32_t>(input);
             const auto bytes = to_bytes(t_longword);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_longword) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -217,6 +255,10 @@ namespace
         {
             int16_t t_word = static_cast<int16_t>(input);
             const auto bytes = to_bytes(t_word);
+          
+          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+            throw std::runtime_error( "enter_CAM_value(cam_word) invalid write location" );
+          
             std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
         }
         break;
@@ -247,7 +289,11 @@ namespace
         }
 
         const auto bytes = convert_to_CAM_datetime(input);
-        std::copy(begin(bytes), end(bytes) , destination.begin() + location);
+      
+      if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+        throw std::runtime_error( "enter_CAM_value(ptime) invalid write location" );
+       
+      std::copy(begin(bytes), end(bytes) , destination.begin() + location);
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
     void enter_CAM_value(const string& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
@@ -256,7 +302,10 @@ namespace
         {
             throw std::invalid_argument("error - Invalid converstion from: char*[]");
         }
-
+      
+      if( (std::begin(destination) + location + (std::end(input) - std::begin(input))) > std::end(destination) )
+        throw std::runtime_error( "enter_CAM_value(string) invalid write location" );
+      
         std::copy(input.begin(), input.end(), destination.begin() + location);
     }
 
@@ -386,33 +435,14 @@ bool SpecFile::load_from_cnf( std::istream &input )
       throw runtime_error( "Invalid record offset" );
     }
     
-    uint32_t I, J;
+    
     input.seekg( record_offset, std::ios::beg );
-    read_binary_data( input, I );
-    read_binary_data( input, J );
-    const double seconds = J*429.4967296 + I/1.0E7;
     
-    //The Date Time offset is empiraccally found, and only tested with a handful
-    //  of files.  Nov 17 1858 is the commonly used "Modified Julian Date"
-    meas->start_time_ = boost::posix_time::ptime( boost::gregorian::date(1858,boost::gregorian::Nov,17),
-                                                 boost::posix_time::time_duration(0,0,0) );
+    uint64_t time_raw;
+    read_binary_data( input, time_raw );
+    meas->start_time_ = convert_from_CAM_datetime( time_raw );
     
-    //Make a feeble attempt to avoid overflow - which was happening on 32 bit
-    //  builds at first
-    const int64_t days = static_cast<int64_t>( seconds / (24.0*60.0*60.0) );
-    const int64_t remainder_secs = static_cast<int64_t>( seconds - days*24.0*60.0*60.0 );
-    const int64_t remainder_ms = static_cast<int64_t>( (seconds - (days*24.0*60.0*60.0) - remainder_secs)*1.0E3 );
-    
-    try
-    {
-      meas->start_time_ += boost::posix_time::hours( days*24 );
-      meas->start_time_ += boost::posix_time::seconds( remainder_secs );
-      meas->start_time_ += boost::posix_time::milliseconds( remainder_ms );
-    }catch(...)
-    {
-      meas->start_time_ = boost::posix_time::ptime();
-    }
-    
+    uint32_t I, J;
     read_binary_data( input, I );
     read_binary_data( input, J );
     I = 0xFFFFFFFF - I;
@@ -436,30 +466,25 @@ bool SpecFile::load_from_cnf( std::istream &input )
     vector<float> calib_params(3);
     input.seekg( energy_calib_offset, std::ios::beg );
     
-    meas->calibration_coeffs_.resize( 3 );
-    meas->calibration_coeffs_[0] = readCnfFloat( input );
-    meas->calibration_coeffs_[1] = readCnfFloat( input );
-    meas->calibration_coeffs_[2] = readCnfFloat( input );
-    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+    vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f };
+    cal_coefs[0] = readCnfFloat( input );
+    cal_coefs[1] = readCnfFloat( input );
+    cal_coefs[2] = readCnfFloat( input );
     
-    
-    std::vector< std::pair<float,float> > dummy_devpairs;
-    const bool validCalib
-    = SpecUtils::calibration_is_valid( SpecUtils::EnergyCalType::Polynomial,
-                                      meas->calibration_coeffs_,
-                                      dummy_devpairs, num_channels );
-    if( !validCalib )
+    try
+    {
+      auto newcal = make_shared<EnergyCalibration>();
+      newcal->set_polynomial( num_channels, cal_coefs, {} );
+      meas->energy_calibration_ = newcal;
+    }catch( std::exception & )
     {
       bool allZeros = true;
-      for( const float v : meas->calibration_coeffs_ )
+      for( const float v : cal_coefs )
         allZeros = allZeros && (v==0.0f);
       
       if( !allZeros )
         throw runtime_error( "Calibration parameters were invalid" );
-      
-      meas->calibration_coeffs_.clear();
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
-    }//if( !validCalib )
+    }//try /catch set calibration
     
     input.seekg( mca_offset, std::ios::beg );
     input.read( buff, 8 );
@@ -562,138 +587,137 @@ bool SpecFile::load_from_cnf( std::istream &input )
 bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
                           const std::set<int> &det_nums ) const
 {
+  //First, lets take care of some boilerplate code.
+  std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_cnf: invalid sample number (" + to_string(sample) + ")" );
+  }
   
-    try
+  if( sample_nums.empty() )
+    sample_nums = sample_numbers_;
+  
+  vector<string> det_names;
+  for( const int num : det_nums )
+  {
+    auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_cnf: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos-begin(detector_numbers_)] );
+  }
+  
+  if( det_nums.empty() )
+    det_names = detector_names_;
+  
+  try
+  {
+    std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, det_names, nullptr);
+
+    if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
+      return false;
+
+    //At this point we have the one spectrum (called summed) that we will write
+    //  to the CNF file.  If the input file only had a single spectrum, this is
+    //  now held in 'summed', otherwise the specified samples and detectors have
+    //  all been summed together/
+
+    //Gamma information
+    const float real_time = summed->real_time();
+    const float live_time = summed->live_time();
+    const vector<float> gamma_channel_counts = *summed->gamma_counts();
+
+    //CNF files use polynomial energy calibration, so if the input didnt also
+    //  use polynomial, we will convert to polynomial, or in the case of
+    //  lower channel or invalid, just clear the coefficients.
+    vector<float> energy_cal_coeffs = summed->calibration_coeffs();
+    switch (summed->energy_calibration_model())
     {
-        //First, lets take care of some boilerplate code.
-        std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+      case EnergyCalType::Polynomial:
+      case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          //Energy calibration already polynomial, no need to do anything
+      break;
 
-        if (sample_nums.empty())
-            sample_nums = sample_numbers_;
+      case EnergyCalType::FullRangeFraction:
+        //Convert to polynomial
+        energy_cal_coeffs = fullrangefraction_coef_to_polynomial(energy_cal_coeffs, gamma_channel_counts.size());
+      break;
 
-        const size_t ndet = detector_numbers_.size();
-        vector<bool> detectors(ndet, true);
-        if (!det_nums.empty())
-        {
-            for (size_t i = 0; i < ndet; ++i)
-                detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-        }//if( det_nums.empty() )
+      case EnergyCalType::LowerChannelEdge:
+      case EnergyCalType::InvalidEquationType:
+        //No hope of converting energy calibration to the polynomial needed by CNF files.
+        energy_cal_coeffs.clear();
+      break;
+    }//switch( energy cal type coefficients are in )
 
-
-        std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, detectors);
-
-        if (!summed || !summed->gamma_counts() || summed->gamma_counts()->empty())
-            return false;
-
-        //At this point we have the one spectrum (called summed) that we will write
-        //  to the CNF file.  If the input file only had a single spectrum, this is
-        //  now held in 'summed', otherwise the specified samples and detectors have
-        //  all been summed together/
-
-        //Gamma information
-        const float real_time = summed->real_time();
-        const float live_time = summed->live_time();
-        const vector<float> gamma_channel_counts = *summed->gamma_counts();
-
-        //CNF files use polynomial energy calibration, so if the input didnt also
-        //  use polynomial, we will convert to polynomial, or in the case of
-        //  lower channel or invalid, just clear the coefficients.
-        vector<float> energy_cal_coeffs = summed->calibration_coeffs();
-        switch (summed->energy_calibration_model())
-        {
-        case EnergyCalType::Polynomial:
-        case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-            //Energy calibration already polynomial, no need to do anything
-            break;
-
-        case EnergyCalType::FullRangeFraction:
-            //Convert to polynomial
-            energy_cal_coeffs = fullrangefraction_coef_to_polynomial(energy_cal_coeffs, gamma_channel_counts.size());
-            break;
-
-        case EnergyCalType::LowerChannelEdge:
-        case EnergyCalType::InvalidEquationType:
-            //No hope of converting energy calibration to the polynomial needed by CNF files.
-            energy_cal_coeffs.clear();
-            break;
-        }//switch( energy cal type coefficients are in )
-
-        //I'm not sure if CNF files can handle deviation pairs or not:
-        //It does not, it works in energy and scales all detectors to a single detector
-        //const vector<pair<float, float>>& deviation_pairs = summed->deviation_pairs();
+  
+    /// \TODO: Check if neutron counts are supported in CNF files.
+    //Neutron information:
+    //const double sum_neutrons = summed->neutron_counts_sum();
+        
+    //With short measurements or handheld detectors we may not have had any
+    //  neutron counts, but there was a detector, so lets check if the input
+    //  file had information about neutrons.
+    //const bool had_neutrons = summed->contained_neutron();
 
 
-        //Neutron information:
-        const double sum_neutrons = summed->neutron_counts_sum();
-        //With short measurements or handheld detectors we may not have had any
-        //  neutron counts, but there was a detector, so lets check if the input
-        //  file had information about neutrons.
-        const bool had_neutrons = summed->contained_neutron();
-
-
-        //Measurement start time.             
-        //The start time may not be valid (e.g., if input file didnt have times),
-        // but if we're here we time is valid, just the unix epoch
-        const boost::posix_time::ptime& start_time = summed->start_time().is_special() ? 
+    //Measurement start time.
+    //The start time may not be valid (e.g., if input file didnt have times),
+    // but if we're here we time is valid, just the unix epoch
+    const boost::posix_time::ptime& start_time = summed->start_time().is_special() ?
             SpecUtils::time_from_string("1970-01-01 00:00:00"): summed->start_time();
 
-        //Check if we have RIID analysis results we could write to the output file.
-        if (detectors_analysis_ && !detectors_analysis_->is_empty())
-        {
-            //See DetectorAnalysis class for details; its a little iffy what
-            //  information from the original file makes it into the DetectorAnalysis.
+    //Check if we have RIID analysis results we could write to the output file.
+    /** \TODO: implement writing RIID analysis resukts to output file.
+         
+    if (detectors_analysis_ && !detectors_analysis_->is_empty())
+    {
+      //See DetectorAnalysis class for details; its a little iffy what
+      //  information from the original file makes it into the DetectorAnalysis.
 
-            const DetectorAnalysis& ana = *detectors_analysis_;
-            //ana.algorithm_result_description_
-            //ana.remarks_
-            //...
+      const DetectorAnalysis& ana = *detectors_analysis_;
+      //ana.algorithm_result_description_
+      //ana.remarks_
+      //...
 
-            //Loop over individual results, usually different nuclides or sources.
-            for (const DetectorAnalysisResult& nucres : ana.results_)
-            {
-
-            }//for( loop over nuclides identified )
-
-        }//if( we have riid results from input file )
-
-        //We should have most of the information we need identified by here, so now
-        //  just need to write to the output stream.
-        //  ex., output.write( (const char *)my_data, 10 );
+      //Loop over individual results, usually different nuclides or sources.
+      for (const DetectorAnalysisResult& nucres : ana.results_)
+      {
+      }//for( loop over nuclides identified )
+     
+    }//if( we have riid results from input file )
+    */
+      
+    //We should have most of the information we need identified by here, so now
+    //  just need to write to the output stream.
+    //  ex., output.write( (const char *)my_data, 10 );
 
         //create a containter for the file header
         const size_t file_header_length = 0x800;
         const size_t sec_header_length = 0x30;
 
         //create the aquisition parameters (acqp) header
-        size_t acqp_header[] = { 0x0100, 0x0800, 0x0000, 0x0800,  //has common data, size of block, location
-                                   0x0000, 0x0000,  sec_header_length,                //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
-                                   0x0000, 0x0001, 0x0440, 0x02EA, 0x01FB,            //number of records, size of record block, address of records in block, address of common tabular
-                                   0x0019, 0x03E6, 0X0009, 0x0000, 0x0000 };          //Always 0x19, address of entries in block, 
+        size_t acqp_header[] = { 0x0100, 0x0800, 0x0000, 0x0800,              //has common data, size of block, size of header
+                                   0x0000, 0x0000,  sec_header_length,        //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+                                   0x0000, 0x0001, 0x0440, 0x02EA, 0x01FB,    //number of records, size of record block, address of records in block, address of common tabular
+                                   0x0019, 0x03E6, 0X0009, 0x0000, 0x0000 };  //Always 0x19, address of entries in block,
         acqp_header[21] = acqp_header[6] + acqp_header[14] + acqp_header[15];
 
         //create the sample header (SAMP)
-        size_t samp_header[] = { 0x0500, 0x0A00, 0x0000, 0x1000,  //has common data, size of block, location
-                                   0x0000, 0x0000,   sec_header_length,               //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
-                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,            //size of data item, address of the common tabular
-                                   0x0000, 0x7FFF, 0x0000, 0x0000, 0x0A00 };          //address of entires in block
-
-        //create the processing header (PROC)
-        size_t proc_header[] = { 0x0100, 0x0800, 0x0000, 0x1A00,  //has common data, size of block, location
-                                   0x0000, 0x0000, sec_header_length,                 //block locaton is acually a int32 but break it up for this
-                                   0x1C90, 0x000E, 0x0000, 0x0001, 0x003C,            //Values specific to PROC block, always 0x3C
-                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,            //size of data item, address of the common tabular
-                                   0x0000, 0x7FFF, 0x0000, 0x0000, 0x0800 };          //address of entires in block
+        size_t samp_header[] = { 0x0500, 0x0A00, 0x0000, 0x1000,              //has common data, size of header
+                                   0x0000, 0x0000,   sec_header_length,       //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,    //size of data item, address of the common tabular
+                                   0x0000, 0x7FFF, 0x0000, 0x0000, 0x0A00 };  //address of entires in block
 
         //create the spectrum header (DATA)
-        size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x2200,  //has common data, size of block, location
-                                   0x0000, 0x0000, sec_header_length,                 //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,            //always 0x3C
-                                   0x0000, 0x0000, 0x0004, 0x0000, 0x0000,            //size of data item
-                                   0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };          //address of entires in block, always 1
-
-
+        size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x1A00,              //has common data, size of header
+                                   0x0000, 0x0000, sec_header_length,         //block locaton is acually a int32 but break it up for this
+                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+                                   0x0000, 0x0000, 0x0004, 0x0000, 0x0000,    //size of data item
+                                   0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };  //address of entires in block, always 1
 
         //compute the number of channels and the size of the block
         data_header[19] = summed->num_gamma_channels();
@@ -703,9 +727,10 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             data_header[2] = 0x01;
         }
 
-        const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + proc_header[1]+ data_header[1];
+        const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + data_header[1];
         //create a vector to store all the bytes
         std::vector<byte> cnf_file(file_length, 0x00);
+
 
         //enter the file header
         enter_CAM_value(0x400, cnf_file, 0x0, cam_type::cam_word);
@@ -798,6 +823,10 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         }
         samp_loc += 0x30;
 
+        //if there is a sample ID of some sort
+        /*if (!sample_ID.empty()) {
+            enter_CAM_value(sample_ID.erase(sample_ID.begin() + 0x10, sample_ID.end()), cnf_file, samp_loc + 0x40, cam_string);
+        }*/
         //sample quanity cannot be zero
         enter_CAM_value(1.0, cnf_file, samp_loc + 0x90, cam_type::cam_float);
         //set the sample time to the aqusition start time
@@ -812,33 +841,15 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             if(!summed->position_time().is_not_a_date_time())
                 enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_type::cam_datetime);
         }
-        //enter the processing header
-        size_t proc_loc = proc_header[3];
-        enter_CAM_value(0x12003, cnf_file, 0x70 + 2*0x30, cam_type::cam_longword); //block identifier
-        enter_CAM_value(0x12003, cnf_file, proc_loc, cam_type::cam_longword);   //block identifier in block
-        //put in array of data
-        for (size_t i = 0; i < 22; i++)
-        {
-            size_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(proc_header[i], cnf_file, 0x70 + 2 * 0x30 + pos, cam_type::cam_word);
-            enter_CAM_value(proc_header[i], cnf_file, proc_loc + pos, cam_type::cam_word);
-        }
-        proc_loc += 0x30;
-        enter_CAM_value("uCi       ", cnf_file, proc_loc + 0x0, cam_type::cam_string);  //ACTIVUNIT
-        enter_CAM_value("STEP  ", cnf_file, proc_loc + 0x88, cam_type::cam_string); //ROIPSBTYP
-
-        enter_CAM_value(1.0, cnf_file, proc_loc + 0x10, cam_type::cam_float); //ACTIVMULT
-        enter_CAM_value(1.0, cnf_file, proc_loc + 0x11E, cam_type::cam_float); //SIGMA
-
         //enter the data header
         size_t data_loc = data_header[3];
-        enter_CAM_value(0x12005, cnf_file, 0x70 + 3*0x30, cam_type::cam_longword); //block identifier
+        enter_CAM_value(0x12005, cnf_file, 0x70 + 2*0x30, cam_type::cam_longword); //block identifier
         enter_CAM_value(0x12005, cnf_file, data_loc, cam_type::cam_longword);   //block identifier in block
         //put in array of data
         for (size_t i = 0; i < 22; i++)
         {
             size_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(data_header[i], cnf_file, 0x70 + 3* 0x30 + pos, cam_type::cam_word);
+            enter_CAM_value(data_header[i], cnf_file, 0x70 + 2* 0x30 + pos, cam_type::cam_word);
             enter_CAM_value(data_header[i], cnf_file, data_loc + pos, cam_type::cam_word);
         }
         data_loc += 0x30 + data_header[18];
@@ -852,10 +863,12 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     
     }catch( std::exception &e )
     {
+#if( PERFORM_DEVELOPER_CHECKS )
       //Print out why we failed for debug purposes.
-      cerr << "Failed to write CNF file: " << e.what() << endl;
+      log_developer_error( __func__, ("Failed to write CNF file: " + string(e.what())).c_str() );
+#endif
       return false;
-    }
+    }//try / catch
   
     return true;
 }//write_cnf

@@ -369,7 +369,7 @@ class SpecFile : public Napi::ObjectWrap<SpecFile>
   inline int lane_number() const;
   inline const std::string &measurement_location_name() const;
   inline const std::string &inspection() const;
-  inline const std::string &measurment_operator() const;
+  inline const std::string &measurement_operator() const;
   
   inline std::shared_ptr<const Measurement> measurement( size_t num ) const;
   */

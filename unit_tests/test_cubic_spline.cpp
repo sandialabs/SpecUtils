@@ -39,11 +39,11 @@ using namespace SpecUtils;
 BOOST_AUTO_TEST_CASE(cubicSplineSimple) {
    
   std::vector<std::pair<float,float>> data{
-    {0.1,0.1},
-    {0.4,0.7},
-    {1.2,0.6},
-    {1.8,1.1},
-    {2.0,0.9}
+    {0.1f,0.1f},
+    {0.4f,0.7f},
+    {1.2f,0.6f},
+    {1.8f,1.1f},
+    {2.0f,0.9f}
   };
   
   const std::vector<CubicSplineNode> nodes = create_cubic_spline( data,
@@ -61,9 +61,9 @@ BOOST_AUTO_TEST_CASE(cubicSplineSimple) {
 
 /** Test apply_deviation_pair(...) gives same answer as eval_cubic_spline(...) */
 BOOST_AUTO_TEST_CASE(devPairApply) {
-  const vector<pair<float,float>> devpairs = { {60,-23}, {81,-20.6}, {239,-32}, 
-    {356,-37}, {661,-37}, {898,-23.5}, {1332,-12}, {1460,0}, {1836,35}, {2223,70}, 
-    {2614,201}, {3000,320}
+  const vector<pair<float,float>> devpairs = { {60.0f,-23.0f }, {81.0f,-20.6f}, {239.0f,-32.0f },
+    {356.0f,-37.0f }, {661.0f,-37.0f }, {898.0f,-23.5f}, {1332.0f,-12.0f }, {1460.0f,0.0f }, {1836.0f,35.0f }, {2223.0f,70.0f },
+    {2614.0f,201.0f }, {3000.0f,320.0f }
   };
   
   vector<float> binning( 1024 );
@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(devPairApply) {
     binning[i] = i * ((3000.0f - 0.0f) / binning.size());
   }
 
-  auto newbinning =  SpecUtils::apply_deviation_pair( binning, devpairs );
+  auto newbinning = SpecUtils::apply_deviation_pair( binning, devpairs );
 
   BOOST_REQUIRE_MESSAGE( !!newbinning, "Failed to get binning with deviation pairs" );
   BOOST_REQUIRE_MESSAGE( newbinning->size() == binning.size(), "Binning with deviation pairs returned different number of bins" );
@@ -81,11 +81,14 @@ BOOST_AUTO_TEST_CASE(devPairApply) {
 
   for( size_t i = 0; i < binning.size(); ++i ){
     //const float from_eval = binning[i] + eval_cubic_spline( binning[i], nodes );
-    const float from_eval = binning[i] + deviation_pair_correction( binning[i], devpairs );
-
-    BOOST_CHECK_MESSAGE( fabs( (*newbinning)[i] - from_eval) < 0.00001, \
+    const double from_eval = binning[i] + deviation_pair_correction( binning[i], devpairs );
+    const double maxanswer = std::max( fabs((*newbinning)[i]), static_cast<float>(fabs(from_eval)) );
+    const double diff = fabs( (*newbinning)[i] - from_eval );
+    
+    BOOST_CHECK_MESSAGE( diff < (maxanswer * 1.0E-6), \
                          "apply_deviation_pair returned different answer than eval_cubic_spline: " \
-                         << from_eval << " vs " <<  (*newbinning)[i] );
+                        << from_eval << " vs " <<  (*newbinning)[i] << " with diff " \
+                        << fabs( (*newbinning)[i] - from_eval) );
   }
 }//BOOST_AUTO_TEST_CASE(devPairApply)
 
@@ -93,24 +96,24 @@ BOOST_AUTO_TEST_CASE(devPairApply) {
 BOOST_AUTO_TEST_CASE(cubicSplineNonZeroAnchored) {
   //Tests deviation pairs that arent anchored at 0 keV.  In this example K40 is used as the anchor.
 
-  const vector<float> no_dev_pairs_peak_means{ 87.47, 88.97, 331.64, 344.53, 352.78,
-    506.90, 627.52, 643.11, 650.94, 96.05, 98.07, 134.14, 148.28, 174.90,
-    237.42, 304.74, 312.32, 335.91, 364.51, 447.37, 501.76, 622.23, 824.28,
-    934.16, 2413.31, 1191.90, 1344.43, 921.53, 1801.03, 82.51, 100.85, 319.54,
-    401.62, 756.75 
+  const vector<float> no_dev_pairs_peak_means{ 87.47f, 88.97f, 331.64f, 344.53f, 352.78f,
+    506.90f, 627.52f, 643.11f, 650.94f, 96.05f, 98.07f, 134.14f, 148.28f, 174.90f,
+    237.42f, 304.74f, 312.32f, 335.91f, 364.51f, 447.37f, 501.76f, 622.23f, 824.28f,
+    934.16f, 2413.31f, 1191.90f, 1344.43f, 921.53f, 1801.03f, 82.51f, 100.85f, 319.54f,
+    401.62f, 756.75f 
   };
     
-  const vector<float> gamma_energies{ 65.12, 66.83, 295.96, 308.46,
-    316.51, 468.07, 588.58, 604.41, 612.47, 74.82, 77.11, 115.18, 129.06, 
-    153.98, 209.25, 270.25, 277.36, 300.09, 328.00, 409.46, 463.00, 583.19, 
-    794.95, 911.20, 2614.53, 1173.23, 1332.49, 898.04, 1836.06, 59.54, 80.19, 
-    284.31, 364.49, 722.91
+  const vector<float> gamma_energies{ 65.12f, 66.83f, 295.96f, 308.46f,
+    316.51f, 468.07f, 588.58f, 604.41f, 612.47f, 74.82f, 77.11f, 115.18f, 129.06f, 
+    153.98f, 209.25f, 270.25f, 277.36f, 300.09f, 328.00f, 409.46f, 463.00f, 583.19f, 
+    794.95f, 911.20f, 2614.53f, 1173.23f, 1332.49f, 898.04f, 1836.06f, 59.54f, 80.19f, 
+    284.31f, 364.49f, 722.91f
   };
     
 
-  const vector<pair<float,float>> devpairs = { {60,-23}, {81,-20.6}, {239,-32}, 
-    {356,-37}, {661,-37}, {898,-23.5}, {1332,-12}, {1460,0}, {1836,35}, {2223,70}, 
-    {2614,201}, {3000,320}
+  const vector<pair<float,float>> devpairs = { {60.0f,-23.0f}, {81.0f,-20.6f}, {239.0f,-32.0f },
+    {356.0f,-37.0f }, {661.0f,-37.0f }, {898.0f,-23.5f}, {1332.0f,-12.0f }, {1460.0f,0.0f }, {1836.0f,35.0f }, {2223.0f,70.0f },
+    {2614.0f,201.0f }, {3000.0f,320.0f }
   };
     
   assert( gamma_energies.size() == no_dev_pairs_peak_means.size() );
@@ -123,15 +126,15 @@ BOOST_AUTO_TEST_CASE(cubicSplineNonZeroAnchored) {
     
   for( size_t i = 0; i < ngammas; ++i )
   {
-     const float corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
+     const double corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
      //const float corr_to_normal = corrected - eval_cubic_spline( corrected, inv_nodes );
-     const float back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
+     const double back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
  
      BOOST_CHECK_MESSAGE( fabs(gamma_energies[i] - corrected) < 0.06, \
                          "Deviation pair CubicSpline interpolation failed: " \
                          << corrected << " vs expected " <<  gamma_energies[i] );
 
-     BOOST_CHECK_MESSAGE( fabs(back_corrected - no_dev_pairs_peak_means[i]) < 0.01, \
+     BOOST_CHECK_MESSAGE( fabs(back_corrected - no_dev_pairs_peak_means[i]) < 0.001, \
                          "Failed to go from true to polynomial energy: " \
                          << back_corrected << " vs expected " <<  no_dev_pairs_peak_means[i] );
   }
@@ -141,22 +144,23 @@ BOOST_AUTO_TEST_CASE(cubicSplineNonZeroAnchored) {
 
 
 BOOST_AUTO_TEST_CASE(cubicSplineFromGadras) {
-    const vector<float> gamma_energies{ 74.82, 77.11, 129.06, 153.98, 209.25,
-      238.63, 240.99, 270.25, 300.09, 328.00, 338.32, 340.96, 409.46, 463.00,
-      562.50, 583.19, 727.33, 772.29, 794.95, 830.49, 835.71, 840.38, 860.56,
-      911.20, 964.77, 968.97, 1078.62, 1110.61, 1247.08, 1460.75, 1495.91,
-      1501.57, 1512.70, 1580.53, 1620.50, 1630.63, 2614.53, 3000.0, -10.0
+    const vector<float> gamma_energies{ 74.82f, 77.11f, 129.06f, 153.98f, 209.25f,
+      238.63f, 240.99f, 270.25f, 300.09f, 328.00f, 338.32f, 340.96f, 409.46f, 463.00f,
+      562.50f, 583.19f, 727.33f, 772.29f, 794.95f, 830.49f, 835.71f, 840.38f, 860.56f,
+      911.20f, 964.77f, 968.97f, 1078.62f, 1110.61f, 1247.08f, 1460.75f, 1495.91f,
+      1501.57f, 1512.70f, 1580.53f, 1620.50f, 1630.63f, 2614.53f, 3000.0f, -10.0f
     };
     
-    const vector<float> no_dev_pairs_peak_means{ 69.61, 71.93, 122.39, 144.71,
-      193.13, 219.20, 221.36, 247.72, 275.08, 301.02, 310.72, 313.15, 378.92,
-      431.67, 532.93, 554.55, 708.14, 757.06, 781.74, 820.66, 826.33, 831.46,
-      853.52, 908.81, 967.06, 971.60, 1089.04, 1123.04, 1265.02, 1481.66,
-      1517.46, 1523.05, 1534.45, 1601.87, 1641.55, 1651.61, 2614.54, 3000.0, -10.0
+    const vector<float> no_dev_pairs_peak_means{ 69.61f, 71.93f, 122.39f, 144.71f,
+      193.13f, 219.20f, 221.36f, 247.72f, 275.08f, 301.02f, 310.72f, 313.15f, 378.92f,
+      431.67f, 532.93f, 554.55f, 708.14f, 757.06f, 781.74f, 820.66f, 826.33f, 831.46f,
+      853.52f, 908.81f, 967.06f, 971.60f, 1089.04f, 1123.04f, 1265.02f, 1481.66f,
+      1517.46f, 1523.05f, 1534.45f, 1601.87f, 1641.55f, 1651.61f, 2614.54f, 3000.0f, -10.0f
     };
     
     const vector<pair<float,float>> devpairs = {
-      {0,0.00}, {50,5}, {100,5.00}, {200,15.00}, {1000,-5.00}, {2614,0.00}, {3000.0,0.00} //The 3 MeV was in GADRAS
+      {0.0f,0.00f}, {50.0f,5.0f}, {100.0f,5.00f}, {200.0f,15.00f}, {1000.0f,-5.00f},
+      {2614.0f,0.00f}, {3000.0f,0.00f} //The 3 MeV was in GADRAS
     };
     
     assert( gamma_energies.size() == no_dev_pairs_peak_means.size() );
@@ -169,9 +173,9 @@ BOOST_AUTO_TEST_CASE(cubicSplineFromGadras) {
     
     for( size_t i = 0; i < ngammas; ++i )
     {
-      const float corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
+      const double corrected = no_dev_pairs_peak_means[i] + eval_cubic_spline( no_dev_pairs_peak_means[i], nodes );
       //const float corr_to_normal = corrected - eval_cubic_spline( corrected, inv_nodes );
-      const float back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
+      const double back_corrected = corrected - correction_due_to_dev_pairs( corrected, devpairs );
  
      BOOST_CHECK_MESSAGE( fabs(gamma_energies[i] - corrected) < 0.5, \
                          "Deviation pair CubicSpline interpolation failed: " \

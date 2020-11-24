@@ -24,6 +24,7 @@
 #include <vector>
 #include <random>
 #include <fstream>
+#include <cstring>
 #include <algorithm>
 
 #include <iostream> //temporatry for debug
@@ -56,7 +57,9 @@
 #include <unistd.h>
 #endif
 
-
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 #include <sys/stat.h>
 
 #include "SpecUtils/StringAlgo.h"
@@ -72,6 +75,9 @@
 // Copied from linux libc sys/stat.h:
 #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+
+#undef min
+#undef max
 #endif
 
 //Currently CMakeLists.txt isnt setup to link against boost, so we'll rely on
@@ -159,18 +165,27 @@ std::string temp_dir()
   
   if( !len )
   {
-    const wchar_t *val = 0;
-    (val = _wgetenv(L"temp" )) ||
-    (val = _wgetenv(L"TEMP"));
-    
+    //const wchar_t *val = 0;
+    //(val = _wgetenv(L"temp" )) ||
+    //(val = _wgetenv(L"TEMP"));
+
+    wchar_t *val = 0;
+    errno_t status = _wdupenv_s( &val, nullptr, L"temp" );
+    if( !val )
+      status = _wdupenv_s( &val, nullptr, L"TEMP" );
+
     if( val )
-      return convert_from_utf16_to_utf8( val );
-    
+    {
+      auto answer = convert_from_utf16_to_utf8( val );
+      free( val ); // It's OK to call free with NULL
+      return answer;
+    }
+
 #if(PERFORM_DEVELOPER_CHECKS)
     log_developer_error( __func__, "Couldnt find temp path on Windows" );
 #endif
     return "C:\\Temp";
-  }
+  }//if( !len )
   
   GetTempPathW( len + 1, &(buf[0]) );
   return convert_from_utf16_to_utf8( std::wstring( buf.begin(), buf.end() ) );

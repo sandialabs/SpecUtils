@@ -86,7 +86,7 @@ namespace SpecUtils
    respecitvely (this is non-standard behaviour for cubic splines, but how
    non-linear deviation pairs are defined).
    */
-  float eval_cubic_spline( const float x,
+  double eval_cubic_spline( const double x,
                            const std::vector<CubicSplineNode> &nodes );
   
   
@@ -108,7 +108,7 @@ namespace SpecUtils
    to think about this more.
    
    See #correction_due_to_dev_pairs for a functioned garuneteed to get you within
-   0.01 keV of the correct answer.
+   0.0001 keV of the correct answer.
    */
   std::vector<CubicSplineNode>
   create_inverse_dev_pairs_cubic_spline( const std::vector<std::pair<float,float>> &dps );

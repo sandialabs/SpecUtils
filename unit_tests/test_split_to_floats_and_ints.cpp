@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_SUITE( split_to_floats_and_ints_suite )
 BOOST_AUTO_TEST_CASE( split_to_floats  )
 {
 	string input_string1= "5.5 4.5 3.5,34000000,1.23456,1.234567,1.2345678,1.23456789,.1,.01,.001,.0001,.00001,.000001,.0000001,.00000001";
-	const vector<float> comparison_vector1{5.5, 4.5, 3.5,34000000,1.23456,1.234567,1.2345678,1.23456789,0.1,0.01,0.001,0.0001,0.00001,0.000001,0.0000001,0.00000001};
+	const vector<float> comparison_vector1{5.5f, 4.5f, 3.5f,34000000.0f,1.23456f,1.234567f,1.2345678f,1.23456789f,0.1f,0.01f,0.001f,0.0001f,0.00001f,0.000001f,0.0000001f,0.00000001f};
 	vector<float> output_vector1, alt_output_vector1;
 	SpecUtils::split_to_floats( input_string1, output_vector1 );
 	SpecUtils::split_to_floats( &(input_string1[0]), alt_output_vector1," ,\r\n\t", false );
@@ -78,13 +78,13 @@ BOOST_AUTO_TEST_CASE( parse_float )
   };
   
 	const float good_input_vals[] =  {
-    3.2, -3.2, +3.2, 3.2, 3.2,
-    3.2, 3.2, 3.2, 3.2, .2,
-    2., +.2, -.2, 1.23, 1.23E-6,
-    1.24E+4, 1.24E6, 1.24E06, +1.24E+06, +1.24E-06,
-    -1.24E-06, 1.2, 12, 12, 1.1,
-    -11, 0.0, 0.0, 0.2, 0.2,
-    -222.22, 13.2, 3.22, 3.2
+    3.2f, -3.2f, +3.2f, 3.2f, 3.2f,
+    3.2f, 3.2f, 3.2f, 3.2f, .2f,
+    2.0f, +.2f, -.2f, 1.23f, 1.23E-6f,
+    1.24E+4f, 1.24E6f, 1.24E06f, +1.24E+06f, +1.24E-06f,
+    -1.24E-06f, 1.2f, 12.0f, 12.0f, 1.1f,
+    -11.0f, 0.0f, 0.0f, 0.2f, 0.2f,
+    -222.22f, 13.2f, 3.22f, 3.2f
   };
 	const string bad_input_strs[] = {"", "aa", "a2.3", "?+1.2", "somestr 3.4", "-\03.2", "- 99" };	
 	
@@ -345,7 +345,7 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 
 
   string input_string5= "5.512345 4.512345 3.512345";
-	float temp5[] = {5.512345, 4.512345, 3.512345};
+	float temp5[] = {5.512345f, 4.512345f, 3.512345f};
   const size_t temp5_len = sizeof(temp5)/sizeof(temp5[0]);
 
 	vector<float> output_vector5,alt_output_vector5;
@@ -371,7 +371,7 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	}
 
   string input_string6= "5.5 1.234567";
-	float temp6[] = {5.5, 1.234567};
+	float temp6[] = {5.5f, 1.234567f};
   const size_t temp6_len = sizeof(temp6)/sizeof(temp6[0]);
 
 	vector<float> output_vector6,alt_output_vector6;
@@ -396,7 +396,7 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	}
 
   string input_string7= "5.5       4.67";
-	float temp7[] = {5.5, 4.67};
+	float temp7[] = {5.5f, 4.67f};
   const size_t temp7_len = sizeof(temp7)/sizeof(temp7[0]);
 
 	vector<float> output_vector7,alt_output_vector7;
@@ -448,7 +448,7 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
   //Note that the value before the decimal point must be smaller than 4294967296
 
   string input_string9= "-5.5 -4.5 -3.5,-3000000000,4294967000,5.0E9,-1.23456,-1.234567,-1.2345678,-1.23456789,-.1,-.01,-.001,-.0001,-.00001,-.000001,-.0000001,-.00000001,0,0.0,0.00,00.00,00.000,000.0000";
-	float temp9[] = {-5.5, -4.5, -3.5,-3000000000,4294967000.0f,5.0E9,-1.23456,-1.234567,-1.2345678,-1.23456789,-.1,-.01,-.001,-.0001,-.00001,-.000001,-.0000001,-.00000001,0,0,0,0,0,0};
+	float temp9[] = {-5.5f, -4.5f, -3.5f,-3000000000.0f,4294967000.0f,5.0E9f,-1.23456f,-1.234567f,-1.2345678f,-1.23456789f,-.1f,-.01f,-.001f,-.0001f,-.00001f,-.000001f,-.0000001f,-.00000001f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f };
   const size_t temp9_len = sizeof(temp9)/sizeof(temp9[0]);
 
 	vector<float> output_vector9, alt_output_vector9;
@@ -472,7 +472,7 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	}
 
   string input_string10= "2.5\r3.5\r4.5\r\n5.5\t6.5 +123,+1.23,-123,-1.23,-100,-1000,-10000,-100000,-1000000,-10000000,-100000000,-1000000000,-0,-0.0,-0.00,-0.000,-0.0,,0,1             2, 1\n\n\n\n2,1\r\r\r\r2,1\t\t\t\t2";
-	float temp10[] = {2.5,3.5,4.5,5.5,6.5,123,1.23,-123,-1.23,-100,-1000,-10000,-100000,-1000000,-10000000,-100000000,-1000000000,-0,-0.0,-0.00,-0,0,+0,1,2,1,2,1,2,1,2};
+	float temp10[] = {2.5f,3.5f,4.5f,5.5f,6.5f,123.0f,1.23f,-123.0f,-1.23f,-100.0f,-1000.0f,-10000.0f,-100000.0f,-1000000.0f,-10000000.0f,-100000000.0f,-1000000000.0f,-0.0f,-0.0f,-0.00f,-0.0f,0.0f,+0.0f,1.0f,2.0f,1.0f,2.0f,1.0f,2.0f,1.0f,2.0f};
   const size_t temp10_len = sizeof(temp10) / sizeof(temp10[0]);
 
 	vector<float> output_vector10,alt_output_vector10;

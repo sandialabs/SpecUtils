@@ -122,11 +122,11 @@ namespace SerialToDetectorModel
     
     string line;
     int line_num = 0;
-    while( SpecUtils::safe_get_line(input, line, 8192) )
+    while( SpecUtils::safe_get_line(input, line, 16384) )
     {
-      if( line.size() > 8190 )
+      if( line.size() > 16380 )
       {
-        std::cerr << "Error: line " << line_num << " is longer than max allowed length of 8190 characters; not reading in file" << std::endl;
+        std::cerr << "Error: line " << line_num << " is longer than max allowed length of 16380 characters; not reading in file" << std::endl;
         return nullptr;
       }
       
@@ -388,12 +388,12 @@ namespace SerialToDetectorModel
 #endif
     
     //Add when this file was written as a comment in the file
-    time_t rawtime;
-    struct tm *timeinfo;
-    char datebuffer[80];
-    time( &rawtime );
-    timeinfo = localtime( &rawtime );
-    strftime( datebuffer, sizeof(datebuffer), "%Y%m%d %H:%M:%S", timeinfo);
+    //time_t rawtime;
+    //struct tm *timeinfo;
+    //char datebuffer[80];
+    //time( &rawtime );
+    //timeinfo = localtime( &rawtime );
+    //strftime( datebuffer, sizeof(datebuffer), "%Y%m%d %H:%M:%S", timeinfo);
     
     strm << "SerialToDetectorModelVersion,"
          << SerialToDetectorModel_CURRENT_MAJOR_VERSION

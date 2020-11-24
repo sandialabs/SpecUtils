@@ -208,11 +208,11 @@ bool SpecFile::load_from_chn( std::istream &input )
 #endif
     }//if( bytes_left > 1 )
     
-    float calibcoefs[3] = { 0.0f, 0.0f, 0.0f };
+    vector<float> calibcoefs{ 0.0f, 0.0f, 0.0f };
     if( chntype == -102 && bytes_left >= 16 )
-      memcpy( calibcoefs, &(buffer[4]), 3*sizeof(float) );
+      memcpy( &(calibcoefs[0]), &(buffer[4]), 3*sizeof(float) );
     else if( bytes_left >= 12 )
-      memcpy( calibcoefs, &(buffer[4]), 2*sizeof(float) );
+      memcpy( &(calibcoefs[0]), &(buffer[4]), 2*sizeof(float) );
     //      float FWHM_Zero_32767 = *(float *)(&(buffer[16]));
     //      float FWHM Slope = *(float *)(&(buffer[20]));
     
@@ -254,32 +254,43 @@ bool SpecFile::load_from_chn( std::istream &input )
     if( (fabs(calibcoefs[0])<1.0E-12 && fabs(calibcoefs[1])<1.0E-12)
        || (fabs(calibcoefs[0])<1.0E-12 && fabs(calibcoefs[1]-1.0)<1.0E-8) )
     {
-      calibcoefs[0] = calibcoefs[1] = calibcoefs[2] = 0.0;
-      meas->calibration_coeffs_.clear();
-      //      meas->calibration_coeffs_.push_back( 0.0f );
-      //      meas->calibration_coeffs_.push_back( 1.0f );
+      //
     }else if( calibcoefs[1] > 1000 && calibcoefs[1] < 16000
              && fabs(calibcoefs[0]) < 100 )
     {
       //This is a guess at how to detect when FWHM is specified in the CHN file;
       //  probably will fail to detect it sometimes, and falsely detect others.
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::FullRangeFraction;
-      meas->calibration_coeffs_.push_back( calibcoefs[0] );
-      meas->calibration_coeffs_.push_back( calibcoefs[1] );
-      if( (calibcoefs[2] != 0.0f)
-         && (fabs(calibcoefs[2]) < 0.25*calibcoefs[1]) )
-        meas->calibration_coeffs_.push_back( calibcoefs[2] );
+      if( fabs(calibcoefs[2]) >= 0.25*calibcoefs[1] )
+        calibcoefs[2] = 0.0f;
+      
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_full_range_fraction( channel_data_ref.size(), calibcoefs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Invalid FRF energy cal: " + string(e.what()) );
+      }
     }else if( calibcoefs[1] < 1000 )
     {
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-      meas->calibration_coeffs_.push_back( calibcoefs[0] );
-      meas->calibration_coeffs_.push_back( calibcoefs[1] );
-      if( calibcoefs[2] != 0.0f )
-        meas->calibration_coeffs_.push_back( calibcoefs[2] );
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( channel_data_ref.size(), calibcoefs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Invalid polynomial energy cal: " + string(e.what()) );
+      }
     }else
     {
-      calibcoefs[0] = calibcoefs[1] = calibcoefs[2] = 0.0;
-      meas->calibration_coeffs_.clear();
+      if( (calibcoefs[0] != 0.0f) || (calibcoefs[1] != 0.0f) )
+      {
+        meas->parse_warnings_.push_back( "Could not identify CHN energy calibration with pars {"
+                                        + to_string(calibcoefs[0]) + ", " + to_string(calibcoefs[1])
+                                        + ", " + std::to_string(calibcoefs[2]) + "}." );
+      }
     }//if( calibcoefs[0]==0.0 && calibcoefs[1]==1.0 )
     
     
@@ -320,18 +331,29 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_integer_chn: invalid sample number (" + to_string(sample) + ")" );
+  }
+  
   if( sample_nums.empty() )
     sample_nums = sample_numbers_;
   
-  const size_t ndet = detector_numbers_.size();
-  vector<bool> detectors( ndet, true );
-  if( !det_nums.empty() )
+  vector<string> det_names;
+  for( const int num : det_nums )
   {
-    for( size_t i = 0; i < ndet; ++i )
-      detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-  }//if( det_nums.empty() )
+    const auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_integer_chn: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos - begin(detector_numbers_)] );
+  }
+  if( det_nums.empty() )
+    det_names = detector_names_;
   
-  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
   
   if( !summed || !summed->gamma_counts() )
     return false;
@@ -367,67 +389,52 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   //index=16
   
   if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.date().day_number()) );
-  ostr.write( buffer, 2 );
-  //index=18
-  
-  const char *monthstr = "   ";
-  
-  try
   {
-    switch( starttime.date().month().as_enum() )
+    strcpy( buffer, "00   0000000" );
+  }else
+  {
+    const char *monthstr = "   ";
+    try
     {
-      case boost::gregorian::Jan: monthstr = "Jan"; break;
-      case boost::gregorian::Feb: monthstr = "Feb"; break;
-      case boost::gregorian::Mar: monthstr = "Mar"; break;
-      case boost::gregorian::Apr: monthstr = "Apr"; break;
-      case boost::gregorian::May: monthstr = "May"; break;
-      case boost::gregorian::Jun: monthstr = "Jun"; break;
-      case boost::gregorian::Jul: monthstr = "Jul"; break;
-      case boost::gregorian::Aug: monthstr = "Aug"; break;
-      case boost::gregorian::Sep: monthstr = "Sep"; break;
-      case boost::gregorian::Oct: monthstr = "Oct"; break;
-      case boost::gregorian::Nov: monthstr = "Nov"; break;
-      case boost::gregorian::Dec: monthstr = "Dec"; break;
-      case boost::gregorian::NotAMonth:
-      case boost::gregorian::NumMonths:
-        break;
-    }//switch( starttime.date().month().as_enum() )
-  }catch(...)
-  {
-    //Here when month is invalid...
-  }
-  ostr.write( monthstr, 3 );
-  //index=21
+      //boost::gregorian::as_short_string(starttime.date().month().as_enum()) would give same answer
+      //  but require linking to boost date/time, which we are trying to avoid
+      switch( starttime.date().month().as_enum() )
+      {
+        case boost::gregorian::Jan: monthstr = "Jan"; break;
+        case boost::gregorian::Feb: monthstr = "Feb"; break;
+        case boost::gregorian::Mar: monthstr = "Mar"; break;
+        case boost::gregorian::Apr: monthstr = "Apr"; break;
+        case boost::gregorian::May: monthstr = "May"; break;
+        case boost::gregorian::Jun: monthstr = "Jun"; break;
+        case boost::gregorian::Jul: monthstr = "Jul"; break;
+        case boost::gregorian::Aug: monthstr = "Aug"; break;
+        case boost::gregorian::Sep: monthstr = "Sep"; break;
+        case boost::gregorian::Oct: monthstr = "Oct"; break;
+        case boost::gregorian::Nov: monthstr = "Nov"; break;
+        case boost::gregorian::Dec: monthstr = "Dec"; break;
+        case boost::gregorian::NotAMonth:
+        case boost::gregorian::NumMonths:
+          break;
+      }//switch( starttime.date().month().as_enum() )
+    }catch(...)
+    {
+      //Here when month is invalid, which I guess shouldn't ever happen
+    }
+    
+    // Most of the modulus's below are probably not necessary, but JIC since we want a string of
+    //  exactly 12 characters
+    snprintf( buffer, sizeof(buffer), "%02d%s%02d%s%02d%02d",
+              static_cast<int>( starttime.date().day() % 100 ),
+              monthstr,
+              static_cast<int>( starttime.date().year() % 100 ), //This mod is required
+              ((starttime.date().year() >= 2000) ? "1" : "0"),
+              static_cast<int>( starttime.time_of_day().hours() % 100 ),
+              static_cast<int>( starttime.time_of_day().minutes() % 100 )
+             );
+  }//if( starttime.is_special() ) / else
   
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.date().year()%100) );
-  ostr.write( buffer, 2 );
-  //index=23
-  
-  if( !starttime.is_special() && starttime.date().year() >= 2000 )
-    ostr.write( "1", 1 );
-  else
-    ostr.write( "0", 1 );
-  //index=24
-  
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.time_of_day().hours()) );
-  ostr.write( buffer, 2 );
-  //index=26
-  
-  
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.time_of_day().minutes()) );
-  ostr.write( buffer, 2 );
+  assert( strlen(buffer) == 12 );
+  ostr.write( buffer, 12 );
   //index=28
   
   uint16_t firstchannel = 0;

@@ -19,6 +19,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <tuple>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -50,6 +51,7 @@ namespace
     std::string appTypeStr;
     int nchannels;
     std::vector<float> calibcoefs;
+    bool isDefualtCoefs;
     std::string algorithmVersion;
     //caputures max 1 attribute...
     struct params{ std::string name, value, attname, attval; };
@@ -115,6 +117,7 @@ namespace
     const string s1str( data, datalen );
     
     info.calibcoefs.clear();
+    info.isDefualtCoefs = false;
     
     vector<string> s1fields;
     SpecUtils::split( s1fields, s1str, "," );
@@ -160,14 +163,15 @@ namespace
       }//if( spacepos != string::npos )
     }//for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
     
-    //TODO 20200212: it isnt clear how or if energy calibration is set; should investigate.
-    //if( info.calibcoefs.empty() )
-    //{
-    //  cerr << "parse_s1_info(): warning, couldnt find calibration coeffecicents"
-    //       << endl;
-    //  info.calibcoefs.push_back( 0.0f );
-    //  info.calibcoefs.push_back( 3000.0f / std::max(info.nchannels-1, 1) );
-    //}//if( info.calibcoefs.empty() )
+    // It appears energy calibration parameters are not provided by the file.  It does however
+    //  provide deviation pairs... spectrum files just seem to be a land where sanity is optional.
+    if( info.calibcoefs.empty() )
+    {
+      //We will put some default energy calibration parameters here so we can preserve the deviation
+      //  pair information.
+      info.calibcoefs = { 0.0f, 3225.0f/std::max(info.nchannels-1,1) };
+      info.isDefualtCoefs = true;
+    }
     
     info.success = true;
   }//bool parse_s1_info( const std::string &s1str, DailyFileS1Info &info )
@@ -585,7 +589,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   //So I think I'll just stick to single threaded parsing for now since it only
   //  increases speed by ~15% to do mutliithreaded, at the cost of memory.
   //
-  //TODO: Check whether creating the Measurment objects in a multithreaded
+  //TODO: Check whether creating the Measurement objects in a multithreaded
   //      fashion significantly helps things.
   //      Make it so the worker functions in the SpectroscopicDailyFile
   //      namespace dont re-copy all the strings passed in.
@@ -1134,9 +1138,13 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   for( const string &name : detectorNames )
     detNameToNum[name] = detnum++;
   
-  vector< std::shared_ptr<Measurement> > backgroundMeasurments, signalMeasurments;
+  vector< std::shared_ptr<Measurement> > backgroundMeasurements, signalMeasurements;
   
   int max_occupancie_num = 0;
+  
+  //Lets re-use energy calibrations were we can
+  typedef tuple<size_t,vector<float>,vector<pair<float,float>>> EnergyCalInfo_t;
+  map<EnergyCalInfo_t,shared_ptr<EnergyCalibration>> previous_cals;
   
   for( int occnum = 0; occnum < occupancy_num; ++occnum )
   {
@@ -1203,10 +1211,13 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     if( backiter != analyzed_neutron_backgrounds.end() )
       neutback = &backiter->second;
     
-    //Place the analyzed background into signalMeasurments
+    //Place the analyzed background into signalMeasurements
     if( gammaback )
     {
       std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
+
+      // \TODO: I'm not sure how/if DeviationPairs are applied before the summing is done; should
+      //        check this out a little.
       
       meas->detector_number_    = static_cast<int>( detNameToNum.size() );
       meas->detector_name_      = "sum";
@@ -1214,11 +1225,43 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       meas->sample_number_      = 1000*endrecord.occupancyNumber;
       meas->source_type_        = SourceType::Background;
       meas->occupied_           = OccupancyStatus::NotOccupied;
-      if( !sinfo.calibcoefs.empty() )
+      
+      const size_t nchannel = meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0);
+      if( !sinfo.calibcoefs.empty() && (nchannel > 1) )
       {
-        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_ = sinfo.calibcoefs;
-      }
+        vector<pair<float,float>> thesedevpairs;
+        if( devpairs )
+        {
+          // \TODO: We actually dont have deviation pairs for "sum"; should see if how this should
+          //        actually be handled can be infered from the data.
+          auto pos = devpairs->find(meas->detector_name_);
+          if( pos != end(*devpairs) )
+            thesedevpairs = pos->second;
+        }
+        
+        const EnergyCalInfo_t key{ nchannel, sinfo.calibcoefs, thesedevpairs };
+        auto pos = previous_cals.find( key );
+        if( pos != end(previous_cals) )
+        {
+          assert( pos->second );
+          meas->energy_calibration_ = pos->second;
+        }else
+        {
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            if( sinfo.isDefualtCoefs )
+              newcal->set_default_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            else
+              newcal->set_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            meas->energy_calibration_ = newcal;
+            previous_cals[key] = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Invalid energy cal found: " + string(e.what()) );
+          }
+        }//if( we can re-use calibration ) / else
+      }//if( we have calibration coeffcicents )
       
       meas->remarks_.push_back( "Analyzed Background (sum over all detectors" );
       meas->real_time_ = meas->live_time_ = 0.1f*detNameToNum.size()*gammaback->realTime;
@@ -1229,7 +1272,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
        {
        //This is a bit of a hack; I want the analyzed backgrounds to appear
        //  just before the analyzed spectra, so to keep this being the case
-       //  we have to falsify the time a bit, because the measurments will get
+       //  we have to falsify the time a bit, because the measurements will get
        //  sorted later on according to start time
        const int totalChunks = gammas[gammas.size()-1].timeChunkNumber;
        
@@ -1264,8 +1307,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           meas->gamma_count_sum_ += f;
       }//if( !!meas->gamma_counts_ )
       
-      signalMeasurments.push_back( meas );
-      //      backgroundMeasurments.push_back( meas );
+      signalMeasurements.push_back( meas );
+      //      backgroundMeasurements.push_back( meas );
     }//if( gammaback )
     
     for( size_t i = 0; i < gammas.size(); ++i )
@@ -1319,11 +1362,45 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       meas->sample_number_      = 1000*endrecord.occupancyNumber + gamma.timeChunkNumber;
       meas->source_type_        = SourceType::Foreground;
       meas->occupied_           = OccupancyStatus::Occupied;
-      if( !sinfo.calibcoefs.empty() )
+      const size_t nchannel = meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0);
+      
+      if( !sinfo.calibcoefs.empty() && nchannel > 1 )
       {
-        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_ = sinfo.calibcoefs;
-      }
+        vector<pair<float,float>> thesedevpairs;
+        if( devpairs )
+        {
+          /// \TODO: I am totally not sure about these deviation pairs - need to check logic of
+          ///        getting them
+          
+          auto pos = devpairs->find(meas->detector_name_);
+          if( pos != end(*devpairs) )
+            thesedevpairs = pos->second;
+        }
+        
+        const EnergyCalInfo_t key{ nchannel, sinfo.calibcoefs, thesedevpairs };
+        auto pos = previous_cals.find( key );
+        if( pos != end(previous_cals) )
+        {
+          assert( pos->second );
+          meas->energy_calibration_ = pos->second;
+        }else
+        {
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            if( sinfo.isDefualtCoefs )
+              newcal->set_default_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            else
+              newcal->set_polynomial( nchannel, sinfo.calibcoefs, thesedevpairs );
+            meas->energy_calibration_ = newcal;
+            previous_cals[key] = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Invalid energy cal found: " + string(e.what()) );
+          }
+        }//if( we can re-use calibration ) / else
+      }//if( we have energy cal info )
+      
       meas->speed_              = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
       meas->start_time_         = endrecord.lastStartTime;
       meas->remarks_.push_back( "ICD1 Filename: " + endrecord.icd1FileName );
@@ -1365,7 +1442,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       meas->start_time_ -= wholesec;
       meas->start_time_ -= fracsec;
       
-      signalMeasurments.push_back( meas );
+      signalMeasurements.push_back( meas );
     }//for( size_t i = 0; i < gammas.size(); ++i )
   }//for( int occnum = 0; occnum < occupancy_num; ++occnum )
   
@@ -1393,14 +1470,9 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     if( s2pos != background_to_s2_num.end() && s2pos->second < ndets )
       devpairs = &(detname_to_devpairs[s2pos->second]);
     
-    const map<int,vector<std::shared_ptr<DailyFileGammaBackground> > >::const_iterator gammaback
-    = gamma_backgrounds.find(backnum);
-    
-    const map<int,std::shared_ptr<DailyFileNeutronBackground> >::const_iterator neutback
-    = neutron_backgrounds.find(backnum);
-    
-    const map<int, boost::posix_time::ptime >::const_iterator backtimestamp
-    = end_background.find(backnum);
+    const auto gammaback = gamma_backgrounds.find(backnum);
+    const auto neutback = neutron_backgrounds.find(backnum);
+    const auto backtimestamp = end_background.find(backnum);
     
     if( gammaback == gamma_backgrounds.end() )
     {
@@ -1451,11 +1523,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       meas->detector_number_    = detNameToNum[back.detectorName];
       meas->gamma_counts_       = back.spectrum;
       meas->start_time_         = timestamp;
-      if( !sinfo.calibcoefs.empty() )
-      {
-        meas->energy_calibration_model_  = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_ = sinfo.calibcoefs;
-      }
+      
       meas->occupied_           =  OccupancyStatus::NotOccupied;
       
       meas->sample_number_ = 1000*(max_occupancie_num+1) + backnum;
@@ -1476,15 +1544,44 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #endif
       }//if( invalid gamma counts )...
       
-      if( devpairs )
+      
+      const size_t nchannel = meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0);
+      if( !sinfo.calibcoefs.empty() && (nchannel > 1) )
       {
-        map<string,vector< pair<float,float> > >::const_iterator pos
-        = devpairs->find( meas->detector_name_ );
-        meas->deviation_pairs_ = pos->second;
-      }//if( devpairs )
+        vector<pair<float,float>> thesedevpairs;
+        if( devpairs )
+        {
+          /// \TODO: I am totally not sure about these deviation pairs - need to check logic of
+          ///        getting them
+          
+          auto pos = devpairs->find(meas->detector_name_);
+          if( pos != end(*devpairs) )
+            thesedevpairs = pos->second;
+        }
+        
+        const EnergyCalInfo_t key{ nchannel, sinfo.calibcoefs, thesedevpairs };
+        auto pos = previous_cals.find( key );
+        if( pos != end(previous_cals) )
+        {
+          assert( pos->second );
+          meas->energy_calibration_ = pos->second;
+        }else
+        {
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_polynomial( nchannel, sinfo.calibcoefs, {} );
+            meas->energy_calibration_ = newcal;
+            previous_cals[key] = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Invalid energy cal found: " + string(e.what()) );
+          }
+        }//if( we can re-use calibration ) / else
+      }//if( we have energy calibration information )
       
       meas->gamma_count_sum_ = 0.0;
-      if( !!meas->gamma_counts_ )
+      if( meas->gamma_counts_ )
       {
         for( const float f : *meas->gamma_counts_ )
           meas->gamma_count_sum_ += f;
@@ -1520,15 +1617,15 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         }//if( meas->detector_number_ < neutbackground.counts.size() )
       }//if( neutback != neutron_backgrounds.end() )
       
-      backgroundMeasurments.push_back( meas );
+      backgroundMeasurements.push_back( meas );
     }//for( size_t i = 0; i < backgrounds.size(); ++i )
   }//for( int backnum = 0; backnum < background_num; ++backnum )
   
   
-  for( std::shared_ptr<Measurement> &m : signalMeasurments )
+  for( std::shared_ptr<Measurement> &m : signalMeasurements )
     measurements_.push_back( m );
   
-  for( std::shared_ptr<Measurement> &m : backgroundMeasurments )
+  for( std::shared_ptr<Measurement> &m : backgroundMeasurements )
     measurements_.push_back( m );
   
   

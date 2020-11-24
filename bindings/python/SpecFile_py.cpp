@@ -321,19 +321,19 @@ namespace
     return meas->start_time();
   }
   
-  boost::python::list get_measurments_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list get_measurements_wrapper( SpecUtils::SpecFile *info )
   {
     //This function overcomes an issue where returning a vector of
-    //  std::shared_ptr<const Measurment> objects to python, and then in python
+    //  std::shared_ptr<const measurement> objects to python, and then in python
     //  derefrencing an element and using it causes an issue in python to say
-    //  that std::shared_ptr<const Measurment> is an unknown class.
+    //  that std::shared_ptr<const measurement> is an unknown class.
     boost::python::list l;
     for( auto p : info->measurements() )
     l.append( p );
     return l;
   }
   
-  boost::python::list Measurment_remarks_wrapper( SpecUtils::Measurement *info )
+  boost::python::list measurement_remarks_wrapper( SpecUtils::Measurement *info )
   {
     boost::python::list l;
     for( const string &p : info->remarks() )
@@ -342,7 +342,7 @@ namespace
   }
   
   
-  boost::python::list MeasurmentInfo_remarks_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list SpecFile_remarks_wrapper( SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->remarks() )
@@ -394,20 +394,22 @@ namespace
   
   std::shared_ptr<SpecUtils::Measurement> sum_measurements_wrapper( SpecUtils::SpecFile *info,
                                                           boost::python::list py_samplenums,
-                                                          boost::python::list py_detnums )
+                                                          boost::python::list py_detnames )
   {
     set<int> samplenums;
-    vector<int> detnums;
+    set<string> detnames;
     
     boost::python::ssize_t n = boost::python::len( py_samplenums );
     for( boost::python::ssize_t i = 0; i < n; ++i )
       samplenums.insert( boost::python::extract<int>( py_samplenums[i] ) );
     
-    n = boost::python::len( py_detnums );
+    n = boost::python::len( py_detnames );
     for( boost::python::ssize_t i = 0; i < n; ++i )
-      detnums.push_back( boost::python::extract<int>( py_detnums[i] ) );
+      detnames.insert( boost::python::extract<std::string>( py_detnames[i] ) );
     
-    return info->sum_measurements(samplenums, detnums );
+    const vector<string> detname_vec( begin(detnames), end(detnames) );
+
+    return info->sum_measurements( samplenums, detname_vec, nullptr );
   }//sum_measurements_wrapper(...)
   
   
@@ -584,7 +586,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
     .def( "sourceType", &SpecUtils::Measurement::source_type )
     .def( "energyCalibrationModel", &SpecUtils::Measurement::energy_calibration_model )
     //      .def( "remarks", &SpecUtils::Measurement::remarks, return_internal_reference<>() )
-    .def( "remarks", &Measurment_remarks_wrapper )
+    .def( "remarks", &measurement_remarks_wrapper )
     //    .def( "startTime", &SpecUtils::Measurement::start_time, return_internal_reference<>() )
     .def( "startTime", &start_time_wrapper )
     .def( "calibrationCoeffs", &SpecUtils::Measurement::calibration_coeffs, return_internal_reference<>() )
@@ -655,7 +657,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   class_< std::vector<std::string> >("StringVec")
   .def( vector_indexing_suite<std::vector<std::string> >() );
   
-  class_< std::vector<std::shared_ptr<const SpecUtils::Measurement> > >("MeasurmentVec")
+  class_< std::vector<std::shared_ptr<const SpecUtils::Measurement> > >("MeasurementVec")
   .def( vector_indexing_suite<std::vector<std::shared_ptr<const SpecUtils::Measurement> > >() );
   
   
@@ -679,22 +681,22 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .def( "modified", &SpecUtils::SpecFile::modified,
         "Indicates if object has been modified since last save." )
   .def( "numMeasurements", &SpecUtils::SpecFile::num_measurements,
-        "Returns the number of measurments (sometimes called records) parsed." )
+        "Returns the number of measurements (sometimes called records) parsed." )
   .def( "measurement", meas_fcn_ptr, args("i"),
-        "Returns the i'th measurment, where valid values are between 0 and\n"
+        "Returns the i'th measurement, where valid values are between 0 and\n"
         "SpecFile.numMeasurements()-1.\n"
         "Throws RuntimeError if i is out of range." )
-  .def( "measurements", &get_measurments_wrapper,
-        "Returns a list of all Measurment's that were parsed." )
+  .def( "measurements", &get_measurements_wrapper,
+        "Returns a list of all Measurement's that were parsed." )
   .def( "gammaLiveTime", &SpecUtils::SpecFile::gamma_live_time,
-        "Returns the sum of detector live times of the all the parsed Measurments." )
+        "Returns the sum of detector live times of the all the parsed Measurements." )
   .def( "gammaRealTime", &SpecUtils::SpecFile::gamma_real_time,
         "Returns the sum of detector real times (wall/clock time) of the all the\n"
-        "parsed Measurments." )
+        "parsed Measurements." )
   .def( "gammaCountSum", &SpecUtils::SpecFile::gamma_count_sum,
-        "Returns the summed number of gamma counts from all parsed Measurments." )
+        "Returns the summed number of gamma counts from all parsed Measurements." )
   .def( "neutronCountsSum", &SpecUtils::SpecFile::neutron_counts_sum,
-        "Returns the summed number of neutron counts from all parsed Measurments." )
+        "Returns the summed number of neutron counts from all parsed Measurements." )
   .def( "filename", &SpecUtils::SpecFile::filename, return_value_policy<copy_const_reference>(),
         "Returns the filename of parsed file; if the \"file\" was parsed from a\n"
         "stream, then may be empty unless user specifically set it using \n"
@@ -714,7 +716,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
         "may have been specified in the input file itself, or if not, it is\n"
         "generated using the file contents.  This value will always be the same\n"
         "every time the file is parsed." )
-  .def( "remarks", &MeasurmentInfo_remarks_wrapper,
+  .def( "remarks", &SpecFile_remarks_wrapper,
         "Returns a list of remarks or comments found while parsing the spectrum file.\n"
         "May include parser generated warnings or notes." )
   .def( "laneNumber", &SpecUtils::SpecFile::lane_number,
@@ -726,17 +728,17 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .def( "inspection", &SpecUtils::SpecFile::inspection, return_value_policy<copy_const_reference>(),
         "Returns the inspection type (e.g. primary, secondary, etc.) specified\n"
         "in the spectrum file. If not specified an empty string will be returned." )
-  .def( "measurmentOperator", &SpecUtils::SpecFile::measurment_operator, return_value_policy<copy_const_reference>(),
+  .def( "measurementOperator", &SpecUtils::SpecFile::measurement_operator, return_value_policy<copy_const_reference>(),
         "Returns the detector operators name if specified in the spectrum file.\n"
         "If not specified an empty string will be returned." )
   .def( "sampleNumbers", &sample_numbers_wrapper,
-        "If a spectrum file contains multiple measurments (records) from multiple\n"
-        "detectors, the the measurments for the same time intervals will be grouped\n"
+        "If a spectrum file contains multiple measurements (records) from multiple\n"
+        "detectors, the the measurements for the same time intervals will be grouped\n"
         "into unique groupings of sample and detectors, with the sample number\n"
-        "generally increasing for measurments taken later in time.\n"
+        "generally increasing for measurements taken later in time.\n"
         "This function returns a list of all sample numbers in the parsed file." )
   .def( "numMeasurements", &SpecUtils::SpecFile::num_measurements,
-        "Returns the number of measurments (records) parsed from the spectrum file." )
+        "Returns the number of measurements (records) parsed from the spectrum file." )
   .def( "detectorType", &SpecUtils::SpecFile::detector_type,
         "Returns the detector type specified in the spectrum file, or an empty string\n"
         "if none was specified.  Example values could include: 'HPGe 50%' or 'NaI'.")
@@ -756,17 +758,17 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
         "file, or an empty string otherwise." )
   //     inline std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   .def( "hasGpsInfo", &SpecUtils::SpecFile::has_gps_info,
-        "Returns True if any of the measurments contained valid GPS data." )
+        "Returns True if any of the measurements contained valid GPS data." )
   .def( "meanLatitude", &SpecUtils::SpecFile::mean_latitude,
-        "Returns the mean latitidue of all measurments with valid GPS data.  If no\n"
+        "Returns the mean latitidue of all measurements with valid GPS data.  If no\n"
         "GPS data was availble, will return something close to -999.9." )
   .def( "meanLongitude", &SpecUtils::SpecFile::mean_longitude,
-        "Returns the mean longitude of all measurments with valid GPS data.  If no\n"
+        "Returns the mean longitude of all measurements with valid GPS data.  If no\n"
         "GPS data was availble, will return something close to -999.9." )
   .def( "memmorysize", &SpecUtils::SpecFile::memmorysize,
         "Returns the approximate (lower bound) of bytes this object takes up in memory." )
   .def( "gammaChannelCounts", &gamma_channel_counts_wrapper,
-        "Returns the set of number of channels the gamma data has. If all measurments\n"
+        "Returns the set of number of channels the gamma data has. If all measurements\n"
         "in the file contained the same number of channels, then the resulting list\n"
         "will have one entry with the number of channels (so typically 1024 for Nai,\n"
         "16384 for HPGe, etc.).  If there are detectors with different numbers of bins,\n"
@@ -780,11 +782,11 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .def( "reset", &SpecUtils::SpecFile::reset,
         "Resets the SpecUtils::SpecFile object to its initial (empty) state." )
   .def( "sumMeasurements", &sum_measurements_wrapper,
-        args("SampleNumbers", "DetectorNumbers"),
-        "Sums the measurments of the specified sample and detector numbers.\n"
-        "SampleNumbers and DetectorNumbers are both lists of integers.\n"
-        "If the measurments contain different energy binnings, one will be chosen\n"
-        "and the other measurments rebinned before summing so that energies stay\n"
+        args("SampleNumbers", "DetectorNames"),
+        "Sums the measurements of the specified sample and detector numbers.\n"
+        "SampleNumbers is a list of integers and DetectorNames is a list of strings.\n"
+        "If the measurements contain different energy binnings, one will be chosen\n"
+        "and the other measurements rebinned before summing so that energies stay\n"
         "consistent (e.g. not just a bin-by-bin summing).\n"
         "Throws RuntimeError if SampleNumbers or DetectorNumbers contain invalid\n"
         "entries." )
@@ -814,7 +816,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
         "sum neutron counts, and any file level remarks will be written on seperate\n"
         "labeled lines. Then after two blank lines each spectrum in the current file\n"
         "will be written, seperated by two blank lines.  Each spectrum will contain\n"
-        "all remarks, measurment start time (if valid), live and real times, sample\n"
+        "all remarks, measurement start time (if valid), live and real times, sample\n"
         "number, detector name, detector type, GPS coordinates/time (if valid), \n"
         "serial number (if present), energy calibration type and coefficient values,\n"
         "and neutron counts (if valid); the channel number, channel lower energy,\n"
@@ -840,13 +842,13 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
         "single spectrum, so you must specify the sample and detector numbers you\n"
         "would like summed; if SampleNumbers or DetectorNumbers are empty, then all\n"
         "samples or detectors will be used.\n"
-        "This format preserves the gamma spectrum, measurment start time, spectrum\n"
+        "This format preserves the gamma spectrum, measurement start time, spectrum\n"
         "title (up to 63 characters), detector description, and energy calibration.\n"
         "Energy deviation pairs and neutron counts, as well as any other meta\n"
         "information is not preserved.\n"
         "SampleNumbers and DetectorNumbers are both lists of integers.\n"
-        "If the measurments contain different energy binnings, one will be chosen\n"
-        "and the other measurments rebinned before summing so that energies stay\n"
+        "If the measurements contain different energy binnings, one will be chosen\n"
+        "and the other measurements rebinned before summing so that energies stay\n"
         "consistent (e.g. not just a bin-by-bin summing).\n"
         "Throws RuntimeError if SampleNumbers or DetectorNumbers contain invalid\n"
         "entries, or there is a error writing to OutputStream." )

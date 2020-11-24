@@ -48,6 +48,9 @@
 //Pull in WideCharToMultiByte(...), etc from WIndows
 #define NOMINMAX
 #include <windows.h>
+
+#undef min
+#undef max
 #endif
 
 //#include <boost/config.hpp>
@@ -180,7 +183,7 @@ namespace SpecUtils
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, true );
     
 #if(PERFORM_DEVELOPER_CHECKS)
-    const bool correctAnswer = boost::algorithm::istarts_with( line, label );
+    const bool correctAnswer = boost::algorithm::starts_with( line, label );
     
     if( answer != correctAnswer )
     {
@@ -836,7 +839,7 @@ namespace SpecUtils
     size_t res = 1;
     for(++it; last != it; ++it, ++res)
     {
-      c = *it;
+      c = *reinterpret_cast<const unsigned char *>(it);
       
       //if highest value digit is not set, or if highest two digits are set
       //If the most significant bit isnt set, then its an ascii character.
@@ -848,9 +851,15 @@ namespace SpecUtils
       //  we will manually iterate incase there is an incorrect encoding.
       //
       //see: http://www.cprogramming.com/tutorial/unicode.html
-      // 0x80 --> 10000000
-      // 0xC0 --> 11000000
-      if( !(c & 0x80) || ((c & 0xC0) == 0xC0))
+      // 0x80 --> 10000000  //means not an ascii character
+      // 0xC0 --> 11000000  //means start of new charcter
+      const unsigned char not_ascii_bit = 0x80u;
+      const unsigned char utf8_start_bits = 0xC0u;
+
+      const bool is_ascii = !(c & not_ascii_bit);
+      const bool is_utf8_start = ((c & utf8_start_bits) == utf8_start_bits);
+      
+      if( is_ascii || is_utf8_start  )
         break;
     }
     
@@ -863,7 +872,7 @@ namespace SpecUtils
     //Assumes null-terminated string
     if( !(*it) )
       return 0;
-    
+
     unsigned char c;
     size_t res = 0;
     for( ; *it; ++it, ++res)
@@ -955,6 +964,7 @@ namespace SpecUtils
     const char *end = begin + length;
     
 #if( BOOST_VERSION < 104500 )
+    errno = 0;
     const string inputstr(input, input+length);
     const char *delims = ", ";
     size_t prev_delim_end = 0;
@@ -970,6 +980,7 @@ namespace SpecUtils
         else
           val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
         
+        /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
         if( errno )
           ok = false;
         results.push_back( val );
@@ -989,6 +1000,8 @@ namespace SpecUtils
         val = strtol(inputstr.c_str()+prev_delim_end,nullptr,10);
       else
         val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
+      
+      /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
       if( !errno )
         results.push_back( val );
     }
@@ -1157,8 +1170,7 @@ namespace SpecUtils
     const char *end = begin + length;
     
     result = 0.0f;
-    
-    bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
+    const bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
     
     //  if( ok && (begin != end) )
     //    return false;
@@ -1166,6 +1178,24 @@ namespace SpecUtils
     return ok;
   }
   
+
+  bool parse_int( const char *input, const size_t length, int &result )
+  {
+    namespace qi = boost::spirit::qi;
+    
+    const char *begin = input;
+    const char *end = begin + length;
+    
+    result = 0;
+    const bool ok = qi::phrase_parse( begin, end, qi::int_, qi::space, result );
+    
+    //  if( ok && (begin != end) )
+    //    return false;
+    
+    return ok;
+  }
+
+
   bool split_to_floats( const char *input, vector<float> &contents,
                        const char * const delims,
                        const bool cambio_zero_compress_fix )

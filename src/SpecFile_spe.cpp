@@ -69,7 +69,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
 {
   //channel data in $DATA:
   //live time, real time in $MEAS_TIM:
-  //measurment datetime in $DATE_MEA:
+  //measurement datetime in $DATE_MEA:
   //Description in $SPEC_ID
   //Ploynomial calibration coefficients in $ENER_FIT: as well as $MCA_CAL:
   
@@ -110,6 +110,60 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     
     bool neutrons_were_cps = false;
     std::shared_ptr<DetectorAnalysis> anaresult;
+    vector<float> cal_coeffs;
+    vector<pair<float,float>> deviation_pairs;
+    
+    
+    //Lambda to set energy calibration and add the current Measurement to the SpecFile.
+    //  This is primarily incase there are files with multiple records (delineated by the
+    //  "$ENDRECORD:" tag), but I havent actually seen this, so mostly untested.
+    auto cleanup_current_meas = [&](){
+      if( !meas )
+        return;
+      
+      const size_t nchannel = meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0);
+      
+      if( nchannel > 1 )
+      {
+        //Sometimes coefficents are all zero, resulting in a parse warning of an invalid
+        //  calibratration, so lets avoid this
+        while( !cal_coeffs.empty() && (cal_coeffs.back() == 0.0f) )
+          cal_coeffs.resize( cal_coeffs.size() - 1 );
+        
+        if( !cal_coeffs.empty() )
+        {
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_polynomial( nchannel, cal_coeffs, deviation_pairs );
+            meas->energy_calibration_ = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
+          }//try / catch
+        }//if( !cal_coeffs.empty() )
+      }//if( nchannel > 1 )
+      
+      cal_coeffs.clear();
+      deviation_pairs.clear();
+      
+      if( neutrons_were_cps )
+      {
+        if( meas->real_time_ > 0.0f )
+        {
+          meas->neutron_counts_sum_ *= meas->real_time_;
+          for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
+            meas->neutron_counts_[i] *= meas->real_time_;
+        }else
+        {
+          meas->remarks_.push_back( "Neutron counts is in counts per second (real time was zero, so could not determine gross counts)" );
+        }
+      }//if( neutrons_were_cps )
+      
+      if( (measurements_.empty() || measurements_.back()!=meas) && nchannel > 0 )
+        measurements_.push_back( meas );
+    };//cleanup_current_meas lambda
+    
     
     do
     {
@@ -292,24 +346,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$ENER_FIT:")
                || starts_with(line,"$GAIN_OFFSET_XIA:") )
       {
-        if( !starts_with(line,"$GAIN_OFFSET_XIA:") || meas->calibration_coeffs_.empty() )
+        if( !starts_with(line,"$GAIN_OFFSET_XIA:") || cal_coeffs.empty() )
         {
           if( !SpecUtils::safe_get_line( istr, line ) )
             throw runtime_error( "Error reading ENER_FIT section of IAEA file" );
-          
           trim(line);
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          
-          vector<float> coefs;
-          if( SpecUtils::split_to_floats( line.c_str(), line.size(), coefs ) )
-          {
-            bool allZeros = true;
-            for( const float c : coefs )
-              allZeros &= (fabs(c)<1.0E-08);
-            
-            if( !allZeros )
-              meas->calibration_coeffs_ = coefs;
-          }
+          if( !SpecUtils::split_to_floats( line.c_str(), line.size(), cal_coeffs ) )
+            cal_coeffs.clear();
         }else
         {
           SpecUtils::safe_get_line( istr, line );
@@ -335,51 +378,31 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           if( !SpecUtils::safe_get_line( istr, line ) )
             throw runtime_error("Error reading MCA_CAL section of IAEA file");
           trim(line);
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
           
-          vector<float> coefs;
-          try
+          
+          //Often times the line will end with "keV".  Lets get rid of that to
+          //  not trip up developers checks
+          if( SpecUtils::iends_with(line, "kev") )
           {
-            //Often times the line will end with "keV".  Lets get rid of that to
-            //  not trip up developers checks
-            if( SpecUtils::iends_with(line, "kev") )
-            {
-              line = line.substr(0,line.size()-3);
-              SpecUtils::trim( line );
-            }
+            line = line.substr(0,line.size()-3);
+            SpecUtils::trim( line );
+          }
             
-            const bool success = SpecUtils::split_to_floats(
-                                                            line.c_str(), line.size(), coefs );
+          const bool success = split_to_floats( line.c_str(), line.size(), cal_coeffs );
             
-            if( !success )
-              coefs.clear();
+          if( !success )
+            cal_coeffs.clear();
             
-            //make sure the file didnt just have all zeros
-            bool allZeros = true;
-            for( const float c : coefs )
-              allZeros &= (fabs(c)<1.0E-08);
+          //make sure the file didnt just have all zeros
+          bool allZeros = true;
+          for( const float c : cal_coeffs )
+            allZeros = allZeros && (fabs(c) < 1.0E-08);
             
-            if( !allZeros && (coefs.size() == npar) )
-            {
-              meas->calibration_coeffs_ = coefs;
-            }else
-            {
-              coefs.clear();
-              if( allZeros )
-              {
-                //parse_warnings_.emplace_back( "Calibration in file is {0, 0, 0}; not using." );
-                meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-              }else
-              {
-                stringstream msg;
-                msg << "Unexpected number of calibration parameters in "
-                "IAEA file, expected " << npar << " found "
-                << coefs.size();
-                parse_warnings_.emplace_back( msg.str() );
-              }
-            }
-          }catch(...)
+          if( !allZeros && (cal_coeffs.size() != npar) )
           {
+            string msg = "Unexpected number of calibration parameters in IAEA file, expected "
+                         + to_string(npar) + " found " + to_string(cal_coeffs.size());
+            parse_warnings_.emplace_back( std::move(msg) );
           }
         }catch( exception &e )
         {
@@ -944,11 +967,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
            */
         }//while( SpecUtils::safe_get_line( istr, line ) )
         
-        if( calibcoefs.size() && !meas->calibration_coeffs_.size() )
-        {
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          meas->calibration_coeffs_ = calibcoefs;
-        }
+        if( calibcoefs.size() && !cal_coeffs.size() )
+          cal_coeffs = calibcoefs;
       }else if( starts_with(line,"$NON_LINEAR_DEVIATIONS:") )
       {
         SpecUtils::safe_get_line( istr, line );
@@ -982,7 +1002,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         
         if( pairs.size() == npairs )
         {
-          meas->deviation_pairs_ = pairs;
+          deviation_pairs = pairs;
         }else if( npairs || pairs.size() )
         {
           char buffer[256];
@@ -993,8 +1013,9 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }//if( pairs.size() == npairs )
       }else if( starts_with(line,"$ENDRECORD:") )
       {
-        measurements_.push_back( meas );
-        meas.reset( new Measurement() );
+        cleanup_current_meas();
+        
+        meas = make_shared<Measurement>();
       }else if( starts_with(line,"$RT:")
                || starts_with(line,"$DT:") )
       {
@@ -1126,25 +1147,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     }while( skip_getline || SpecUtils::safe_get_line( istr, line) );
     //  while( getline( istr, line ) )
     
-    if( neutrons_were_cps )
-    {
-      if( meas->real_time_ > 0.0f )
-      {
-        meas->neutron_counts_sum_ *= meas->real_time_;
-        for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
-          meas->neutron_counts_[i] *= meas->real_time_;
-      }else
-      {
-        meas->remarks_.push_back( "Neutron counts is in counts per second (real time was zero, so could not determine gross counts)" );
-      }
-    }//if( neutrons_were_cps )
+    cleanup_current_meas();
     
     if( anaresult )
       detectors_analysis_ = anaresult;
-    
-    if( (measurements_.empty() || measurements_.back()!=meas)
-       && meas && meas->gamma_counts_ && meas->gamma_counts_->size() )
-      measurements_.push_back( meas );
   }catch(...)
   {
     istr.clear();
@@ -1166,27 +1172,37 @@ bool SpecFile::write_iaea_spe( ostream &output,
 {
   //www.ortec-online.com/download/ortec-software-file-structure-manual.pdf
   
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_iaea_spe: invalid sample number (" + to_string(sample) + ")" );
+  }
+  if( sample_nums.empty() )
+    sample_nums = sample_numbers_;
+  
+  vector<string> det_names;
+  for( const int num : det_nums )
+  {
+    auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_iaea_spe: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos-begin(detector_numbers_)] );
+  }
+  
+  if( det_nums.empty() )
+    det_names = detector_names_;
+  
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
+  
+  if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
+    return false;
+  
   try
   {
-    std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-    
-    if( sample_nums.empty() )
-      sample_nums = sample_numbers_;
-    
-    const size_t ndet = detector_numbers_.size();
-    vector<bool> detectors( ndet, true );
-    if( !det_nums.empty() )
-    {
-      for( size_t i = 0; i < ndet; ++i )
-        detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-    }//if( det_nums.empty() )
-    
-    
-    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
-    
-    if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
-      return false;
-    
     char buffer[256];
     
     string title = summed->title();
@@ -1240,21 +1256,33 @@ bool SpecFile::write_iaea_spe( ostream &output,
       snprintf( buffer, sizeof(buffer), "%.5f %.5f", summed->live_time_, summed->real_time_ );
       output << "$MEAS_TIM:\r\n" << buffer << "\r\n";
     }
-    
+    vector<float> coefs;
     const vector<float> &counts = *summed->gamma_counts_;
     if( counts.size() )
     {
       output << "$DATA:\r\n0 " << (counts.size()-1) << "\r\n";
       for( size_t i = 0; i < counts.size(); ++i )
         output << counts[i] << "\r\n";
+      
+      assert( summed->energy_calibration_ );
+      coefs = summed->energy_calibration_->coefficients();
+      switch( summed->energy_calibration_->type() )
+      {
+        case EnergyCalType::Polynomial:
+        case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          coefs = summed->energy_calibration_->coefficients();
+          break;
+        
+        case EnergyCalType::FullRangeFraction:
+          coefs = summed->energy_calibration_->coefficients();
+          coefs = fullrangefraction_coef_to_polynomial( coefs, counts.size() );
+          break;
+          
+        case EnergyCalType::LowerChannelEdge:
+        case EnergyCalType::InvalidEquationType:
+          break;
+      }//switch( summed->energy_calibration_->type() )
     }//if( counts.size() )
-    
-    vector<float> coefs;
-    if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial
-       || summed->energy_calibration_model_ == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
-      coefs = summed->calibration_coeffs_;
-    else if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
-      coefs = SpecUtils::fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, counts.size() );
     
     if( coefs.size() )
     {

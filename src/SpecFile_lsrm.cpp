@@ -123,7 +123,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     if( startdate.empty() )
     {
       startdate = getval( "DATE=" );
-      startdate += getval( "TIME=" );
+      startdate += " " + getval( "TIME=" );
     }
     
     meas->start_time_ = SpecUtils::time_from_string( startdate.c_str() );
@@ -137,8 +137,19 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     instrument_id_ = getval( "DETECTOR=" );
     
     const string energy = getval( "ENERGY=" );
-    if( SpecUtils::split_to_floats( energy, meas->calibration_coeffs_ ) )
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+    vector<float> cal_coeffs;
+    if( SpecUtils::split_to_floats( energy, cal_coeffs ) )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( nchannel, cal_coeffs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Energy calibration invalid: " + string(e.what()) );
+      }
+    }//if( parsed energy cal coefficients )
     
     const string comment = getval( "COMMENT=" );
     if( !comment.empty() )
@@ -151,6 +162,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     //Other things we could look for:
     //"SHIFR=", "NOMER=", "CONFIGNAME=", "PREPBEGIN=", "PREPEND=", "OPERATOR=",
     //"GEOMETRY=", "SETTYPE=", "CONTTYPE=", "MATERIAL=", "DISTANCE=", "VOLUME="
+    //"WEIGHT=", "R_I_D=", "FILE_SPE="
     
     if( initial_read < filesize )
     {

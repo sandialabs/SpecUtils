@@ -202,7 +202,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
   
   const istream::pos_type orig_pos = input.tellg();
   
-  //There are quite a number of fileds that Measurment or MeasurmentInfo class
+  //There are quite a number of fields that Measurement or SpecFile class
   //  does not yet implement, so for now we will just put them into the remarks
   
   string detector_type = "";
@@ -220,6 +220,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
     //  up to apply to all non-empty lines in the file.
     int linenum = 0, nnotrecognized = 0;
     bool tested_first_line = false;
+    vector<float> calibcoeff_poly;
     
     while( input.good() )
     {
@@ -405,23 +406,27 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         const size_t bpos = line.find( "b=" );
         const size_t cpos = line.find( "c=" );
         const size_t dpos = line.find( "d=" );
-        if( apos < (line.size()-2) )
+        const bool have_a = apos < (line.size()-2);
+        const bool have_b = bpos < (line.size()-2);
+        const bool have_c = cpos < (line.size()-2);
+        const bool have_d = dpos < (line.size()-2);
+        if( have_a )
           a = static_cast<float>( atof( line.c_str() + apos + 2 ) );
-        if( bpos < (line.size()-2) )
+        if( have_b )
           b = static_cast<float>( atof( line.c_str() + bpos + 2 ) );
-        if( cpos < (line.size()-2) )
+        if( have_c )
           c = static_cast<float>( atof( line.c_str() + cpos + 2 ) );
-        if( dpos < (line.size()-2) )
+        if( have_d )
           d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
-        //      if( a!=0.0 || b!=0.0 || d!=0.0 )
-        //        cerr << "SpecFile::load_from_iaea_spc(istream &)\n\tUnknown calibration coefficient meaning -"
-        //             << " wcjohns should check into this although he thinks it should "
-        //             << "be okay" << endl;
         
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-        meas->calibration_coeffs_.resize( 2 );
-        meas->calibration_coeffs_[0] = b;
-        meas->calibration_coeffs_[1] = c;
+        if( have_a && have_b && have_c && have_d
+            && (a!=0.0 || b!=0.0 || c!=0.0 ) )
+        {
+          calibcoeff_poly = {d,c,b,a};
+        }else if( have_b && have_c && c!=0.0 )
+        {
+          calibcoeff_poly = {b,c};
+        }
       }else if( istarts_with( line, "NuclideID1" )
                || istarts_with( line, "NuclideID2" )
                || istarts_with( line, "NuclideID3" )
@@ -517,7 +522,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           instrument_model_ = line.substr(info_pos);
       }else if( istarts_with( line, "OperatorInformation" ) )
       {
-        measurment_operator_ = line.substr(info_pos);
+        measurement_operator_ = line.substr(info_pos);
       }else if( istarts_with( line, "GPSValid" ) )
       {
         if( SpecUtils::icontains(line, "no") )
@@ -692,10 +697,21 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       
       ++linenum;
     }//while( input.good() )
+    
+    if( meas && meas->gamma_counts_ && (meas->gamma_counts_->size()>2) && !calibcoeff_poly.empty() )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( meas->gamma_counts_->size(), calibcoeff_poly, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
+      }//
+    }//if( we have energy calibration )
   }catch( std::exception & )
   {
-    //    cerr  << "SpecFile::load_from_iaea_spc(istream &) caught: " << e.what() << endl;
-    
     reset();
     input.clear();
     input.seekg( orig_pos, ios::beg );
@@ -755,27 +771,37 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
                                  std::set<int> sample_nums,
                                  const std::set<int> &det_nums ) const
 {
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_ascii_spc: invalid sample number (" + to_string(sample) + ")" );
+  }
+  if( sample_nums.empty() )
+    sample_nums = sample_numbers_;
+  
+  vector<string> det_names;
+  for( const int num : det_nums )
+  {
+    auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_ascii_spc: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos-begin(detector_numbers_)] );
+  }
+  
+  if( det_nums.empty() )
+    det_names = detector_names_;
+  
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
+  
+  if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
+    return false;
+  
   try
   {
-    std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-    
-    if( sample_nums.empty() )
-      sample_nums = sample_numbers_;
-    
-    const size_t ndet = detector_numbers_.size();
-    vector<bool> detectors( ndet, true );
-    if( !det_nums.empty() )
-    {
-      for( size_t i = 0; i < ndet; ++i )
-        detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-    }//if( det_nums.empty() )
-    
-    
-    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
-    
-    if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
-      return false;
-    
     if(!summed->title().empty())
       output << pad_iaea_prefix( "SpectrumName" ) << summed->title() << "\r\n";
     else
@@ -872,16 +898,33 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     if( summed->contained_neutron_ )
       output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
     
-    vector<float> calcoefs;
+    assert( summed->energy_calibration_ );
     
-    if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
-      calcoefs = summed->calibration_coeffs_;
-    else if( summed->energy_calibration_model_ == SpecUtils::EnergyCalType::FullRangeFraction )
-      calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( summed->calibration_coeffs_, summed->gamma_counts_->size() );
+    const size_t nchannel = summed->gamma_counts_ ? summed->gamma_counts_->size() : size_t(0);
+    vector<float> calcoefs = summed->energy_calibration_->coefficients();
+    switch( summed->energy_calibration_->type() )
+    {
+      case SpecUtils::EnergyCalType::Polynomial:
+      case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+        //coefficnets are already in format we want.
+        break;
+        
+      case EnergyCalType::FullRangeFraction:
+        calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( calcoefs, nchannel );
+        break;
+        
+      case EnergyCalType::LowerChannelEdge:
+      case EnergyCalType::InvalidEquationType:
+        calcoefs.clear(); //probably isnt necassary
+        break;
+    }//switch( summed->energy_calibration_->type() )
+    
     
     const size_t ncoef = calcoefs.size();
-    const float a = 0.0f, b = (ncoef ? calcoefs[0] : 0.0f),
-    c = (ncoef>1 ? calcoefs[1] : 0.0f), d = (ncoef>2 ? calcoefs[2] : 0.0f);
+    const float a = (ncoef>3 ? calcoefs[3] : 0.0f);
+    const float b = (ncoef>2 ? calcoefs[2] : 0.0f);
+    const float c = (ncoef>1 ? calcoefs[1] : 0.0f);
+    const float d = (ncoef>0 ? calcoefs[0] : 0.0f);
     
     snprintf( buffer, sizeof(buffer), "a=%.9e b=%.9e c=%.9e d=%.9e", a, b, c, d );
     output << pad_iaea_prefix( "CalibCoeff" ) << buffer << "\r\n";
@@ -911,8 +954,8 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     if(!instrument_model_.empty())
       output << pad_iaea_prefix( "ModelNumber" ) << instrument_model_ << "\r\n";
     
-    if(!measurment_operator_.empty())
-      output << pad_iaea_prefix( "OperatorInformation" ) << measurment_operator_ << "\r\n";
+    if(!measurement_operator_.empty())
+      output << pad_iaea_prefix( "OperatorInformation" ) << measurement_operator_ << "\r\n";
     
     if( summed->has_gps_info() )
     {
@@ -1035,20 +1078,31 @@ bool SpecFile::write_binary_spc( std::ostream &output,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+  //Do a sanity check on samples and detectors, event though #sum_measurements would take care of it
+  //  (but doing it here indicates source a little better)
+  for( const auto sample : sample_nums )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "write_binary_spc: invalid sample number (" + to_string(sample) + ")" );
+  }
   if( sample_nums.empty() )
     sample_nums = sample_numbers_;
   
-  const size_t ndet = detector_numbers_.size();
-  vector<bool> detectors( ndet, true );
-  if( !det_nums.empty() )
+  vector<string> det_names;
+  for( const int num : det_nums )
   {
-    for( size_t i = 0; i < ndet; ++i )
-      detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-  }//if( det_nums.empty() )
+    auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), num );
+    if( pos == end(detector_numbers_) )
+      throw runtime_error( "write_binary_spc: invalid detector number (" + to_string(num) + ")" );
+    det_names.push_back( detector_names_[pos-begin(detector_numbers_)] );
+  }
+  
+  if( det_nums.empty() )
+    det_names = detector_names_;
   
   //const size_t initialpos = output.tellp();
   
-  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
+  std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
   
   if( !summed || !summed->gamma_counts() )
     return false;
@@ -2029,7 +2083,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     double total_neutrons = 0.0;
     float total_neutron_count_time = 0.0;
     std::shared_ptr<DetectorAnalysis> analysis;
-    auto channel_data = make_shared<vector<float>>( n_channel );
+    auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
     
     boost::posix_time::ptime meas_time;
@@ -2597,8 +2651,19 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     meas->gamma_counts_ = channel_data;
     meas->gamma_count_sum_ = sum_gamma;
     
-    meas->calibration_coeffs_ = calib_coefs;
-    meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial; //SpecUtils::EnergyCalType::FullRangeFraction
+    assert( channel_data );
+    if( channel_data->size() > 1 )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( channel_data->size(), calib_coefs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Invalid SPC energy cal provided: " + string(e.what()) );
+      }
+    }//if( channel_data->size() > 1 )
     
     //File ref9HTGHJ9SXR has the neutron information in it, but
     //  the serial number claims this is a micro-DX (no neutron detector), and
