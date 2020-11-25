@@ -78,6 +78,25 @@ namespace SpecUtils
 		j["detector_name"] = p->detector_name();
 		j["detector_type"] = p->detector_type();
 
+		switch (p->source_type()) {
+			case SourceType::Background:
+				j["source_type"] = "Background";
+				break;
+			case SourceType::Calibration:
+				j["source_type"] = "Calibration";
+				break;
+			case SourceType::Foreground:
+				j["source_type"] = "Foreground";
+				break;
+			case SourceType::IntrinsicActivity:
+				j["source_type"] = "IntrinsicActivity";
+				break;
+			case SourceType::Unknown:
+			default:
+				j["source_type"] = "Unknown";
+				break;
+		}
+
 		j["latitude"] = p->latitude();
 		j["longitude"] = p->longitude();
 		j["speed"] = p->speed();
