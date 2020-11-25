@@ -94,9 +94,11 @@ namespace  SpecUtils
   /** Checks that path passed in is a directory, and the current process can
    list directory contents, as well as change them.
    On Unix corresponds to +rwx.
-   On Windows it checks you can access the directory and write it (i.e., if you
-   remove the read permission, but still have write, this function will return
-   true).
+   On Windows it checks you can access the directory and that it does not have the read-only set;
+   however, even if this bit is set you still may be able to write in the directory, so it isnt
+   actually much use.
+   
+   \TODO: for windows move to using `AccessCheck(...)` or just remove this function.
    */
   bool can_rw_in_directory( const std::string &name );
   
@@ -227,7 +229,7 @@ namespace  SpecUtils
    If the current working directory is not specified, then the directory
    returned by cwd() will be used, if the path is not already absolute.
    
-   Returns true if sucessful, and false if it fails for any reason.
+   Returns true if successful, and false if it fails for any reason.
    */
   bool make_canonical_path( std::string &path, const std::string &cwd = "" );
   
@@ -236,7 +238,7 @@ namespace  SpecUtils
    */
   static const size_t sm_recursive_ls_max_depth = 25;
   
-  /** The appriximate maximum number of file names any of the 'ls' functions can
+  /** The approximate maximum number of file names any of the 'ls' functions can
    return.
    */
   static const size_t sm_ls_max_results = 100000;

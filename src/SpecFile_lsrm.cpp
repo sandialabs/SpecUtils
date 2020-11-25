@@ -137,8 +137,19 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     instrument_id_ = getval( "DETECTOR=" );
     
     const string energy = getval( "ENERGY=" );
-    if( SpecUtils::split_to_floats( energy, meas->calibration_coeffs_ ) )
-      meas->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
+    vector<float> cal_coeffs;
+    if( SpecUtils::split_to_floats( energy, cal_coeffs ) )
+    {
+      try
+      {
+        auto newcal = make_shared<EnergyCalibration>();
+        newcal->set_polynomial( nchannel, cal_coeffs, {} );
+        meas->energy_calibration_ = newcal;
+      }catch( std::exception &e )
+      {
+        meas->parse_warnings_.push_back( "Energy calibration invalid: " + string(e.what()) );
+      }
+    }//if( parsed energy cal coefficients )
     
     const string comment = getval( "COMMENT=" );
     if( !comment.empty() )

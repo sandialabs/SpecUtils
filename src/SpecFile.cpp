@@ -113,7 +113,7 @@ using SpecUtils::time_from_string;
 //For references in comments similar to 'refDXMA3HSRA6', see
 //  documentation/comment_refernce_to_ouo_source.txt for source file information
 
-//If the SpecFile and Measurement equalEnough functions should require remarks
+//If the SpecFile and Measurement equal_enough functions should require remarks
 //  and parse warnings to match - useful to disable when parsing significantly
 //  changes so everything besides remarks and parser comments can be validated;
 //  Differences will still be printed out, so can be manually inspected to make
@@ -170,9 +170,11 @@ namespace
   {
     assert( !!binning );
     
-    const std::shared_ptr<const std::vector<float>> &wantedenergies = binning->channel_energies();
+    const shared_ptr<const SpecUtils::EnergyCalibration> wantedcal = binning->energy_calibration();
+    assert( wantedcal );
+    const shared_ptr<const std::vector<float>> &wantedenergies = wantedcal->channel_energies();
     
-    const size_t nbin = wantedenergies->size();
+    const size_t nbin = wantedcal->num_channels();
     if( results.size() < nbin )
       results.resize( nbin, 0.0f );
     
@@ -181,7 +183,9 @@ namespace
     for( size_t i = 0; i < datas.size(); ++i )
     {
       const std::shared_ptr<const SpecUtils::Measurement> &d = datas[i];
-      const std::shared_ptr<const std::vector<float>> &dataenergies = d->channel_energies();
+      const shared_ptr<const SpecUtils::EnergyCalibration> datacal = d->energy_calibration();
+      assert( datacal );
+      const std::shared_ptr<const std::vector<float>> &dataenergies = datacal->channel_energies();
       const std::shared_ptr<const std::vector<float>> &channel_counts = d->gamma_counts();
       
       if( !dataenergies || !channel_counts )
@@ -190,8 +194,10 @@ namespace
         continue;
       }//if( !dataenergies )
       
-      if( dataenergies == wantedenergies )
+      if( datacal == wantedcal )  //|| (*datacal) == (*wantedcal) )
       {
+        assert( results.size() == channel_counts->size() );
+        
         for( size_t j = 0; j < nbin; ++j )
           results[j] += (*channel_counts)[j];
       }else if( channel_counts->size() > 3 )
@@ -200,15 +206,63 @@ namespace
         SpecUtils::rebin_by_lower_edge( *dataenergies, *channel_counts,
                             *wantedenergies, resulting_counts );
         
-        assert( resulting_counts.size() == nbin );
+        assert( ((nbin+1) == wantedenergies->size()) || (nbin == wantedenergies->size()) );
+        assert( ((resulting_counts.size()+1) == wantedenergies->size())
+                 || (resulting_counts.size() == wantedenergies->size()) );
         
         for( size_t j = 0; j < nbin; ++j )
           results[j] += resulting_counts[j];
+        
+        if( (nbin+1) == resulting_counts.size() )
+          results.back() += resulting_counts.back();
       }//if( dataenergies == wantedenergies )
       
     }//for( size_t i = 0; i < datas.size(); ++i )
   }//void sum_with_rebin(...)
   
+//Analogous to compare_by_sample_det_time; compares by
+// sample_number, and then detector_number_, but NOT by start_time_
+struct SpecFileLessThan
+{
+  const int m_sample_number, m_detector_number;
+  
+  SpecFileLessThan( int sample_num, int det_num )
+  : m_sample_number( sample_num ), m_detector_number( det_num )
+  {}
+  
+  bool operator()( const std::shared_ptr<SpecUtils::Measurement>& lhs,
+                   const std::shared_ptr<SpecUtils::Measurement> &dummy )
+  {
+    assert( !dummy );
+    if( !lhs )
+      return false;
+    
+    if( lhs->sample_number() == m_sample_number )
+      return (lhs->detector_number() < m_detector_number);
+    return (lhs->sample_number() < m_sample_number);
+  }//operator()
+};//struct SpecFileLessThan
+
+//compare_by_sample_det_time: compares by sample_number_, and then
+//  detector_number_, then by start_time_, then source_type_
+bool compare_by_sample_det_time( const std::shared_ptr<const SpecUtils::Measurement> &lhs,
+                           const std::shared_ptr<const SpecUtils::Measurement> &rhs )
+{
+  if( !lhs || !rhs )
+    return false;
+
+  if( lhs->sample_number() != rhs->sample_number() )
+    return (lhs->sample_number() < rhs->sample_number());
+
+  if( lhs->detector_number() != rhs->detector_number() )
+    return (lhs->detector_number() < rhs->detector_number());
+
+  if( lhs->start_time() != rhs->start_time() )
+    return (lhs->start_time() < rhs->start_time());
+  
+  return (lhs->source_type() < rhs->source_type());
+}//compare_by_sample_det_time(...)
+
 }//anaomous namespace
 
 
@@ -294,6 +348,11 @@ const std::vector<std::string> &SpecFile::detector_names() const
 const std::vector<int> &SpecFile::detector_numbers() const
 {
   return detector_numbers_;
+}
+
+const std::vector<std::string> &SpecFile::gamma_detector_names() const
+{
+  return gamma_detector_names_;
 }
 
 const std::vector<std::string> &SpecFile::neutron_detector_names() const
@@ -579,7 +638,8 @@ SourceType Measurement::source_type() const
 
 SpecUtils::EnergyCalType Measurement::energy_calibration_model() const
 {
-  return energy_calibration_model_;
+  assert( energy_calibration_ );
+  return energy_calibration_->type();
 }
 
 
@@ -606,19 +666,27 @@ const boost::posix_time::ptime Measurement::start_time_copy() const
   
 const std::vector<float> &Measurement::calibration_coeffs() const
 {
-  return calibration_coeffs_;
+  assert( energy_calibration_ );
+  return energy_calibration_->coefficients();
 }
 
   
 const std::vector<std::pair<float,float>> &Measurement::deviation_pairs() const
 {
-  return deviation_pairs_;
+  assert( energy_calibration_ );
+  return energy_calibration_->deviation_pairs();
 }
  
+std::shared_ptr<const EnergyCalibration> Measurement::energy_calibration() const
+{
+  assert( energy_calibration_ );
+  return energy_calibration_;
+}
   
 const std::shared_ptr< const std::vector<float> > &Measurement::channel_energies() const
 {
-  return channel_energies_;
+  assert( energy_calibration_ );
+  return energy_calibration_->channel_energies();
 }
 
   
@@ -676,21 +744,27 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
   real_time_ = realtime;
   gamma_count_sum_ = 0.0;
   
+  //const size_t oldnchan = gamma_counts_ ? gamma_counts_->size() : 0u;
+  
   if( !counts )
-  {
-    /// @TODO: Why is the behavior when a nullptr is passed in not consistent? Should fix once its determined why this was done.
-    
-    if( !gamma_counts_ )
-      return;
-    gamma_counts_ = std::make_shared<std::vector<float>>( gamma_counts_->size(), 0.0f );
-    return;
-  }//if( !counts )
-  
+    counts = std::make_shared<std::vector<float>>();
   gamma_counts_ = counts;
-  
   for( const float val : *counts )
     gamma_count_sum_ += val;
-}
+  
+  assert( energy_calibration_ );
+  
+  const auto &cal = *energy_calibration_;
+  const size_t newnchan = gamma_counts_->size();
+  const size_t calnchan = cal.num_channels();
+  
+  if( (newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge) )
+  {
+    //We could preserve the old coefficients for Polynomial and FRF, and just create a new
+    //  calibration... it isnt clear if we should do that, or just clear out the calibration...
+    energy_calibration_ = std::make_shared<const SpecUtils::EnergyCalibration>();
+  }
+}//set_gamma_counts
   
   
 void Measurement::set_neutron_counts( const std::vector<float> &counts )
@@ -702,21 +776,6 @@ void Measurement::set_neutron_counts( const std::vector<float> &counts )
   for( size_t i = 0; i < size; ++i )
     neutron_counts_sum_ += counts[i];
 }
-  
-  
-void Measurement::set_channel_energies( std::shared_ptr<const std::vector<float>> counts )  //if channel_energies_ or gamma_counts_ must be same number channels as before
-{
-  if( !counts )
-    return;
-  
-  if( (channel_energies_ && !channel_energies_->empty() && channel_energies_->size() != counts->size())
-     || ( gamma_counts_ && !gamma_counts_->empty() && gamma_counts_->size() != counts->size() ) )
-  {
-    throw std::runtime_error( "Measurement::set_channel_energies(...): number of bin mismatch" );
-  }//if( nbins mismatch )
-  
-  channel_energies_ = counts;
-}
 
   
 const std::vector<float> &Measurement::neutron_counts() const
@@ -724,103 +783,34 @@ const std::vector<float> &Measurement::neutron_counts() const
   return neutron_counts_;
 }
   
-
-float Measurement::GetBinContent( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return 0.0;
-  return (*gamma_counts_)[bin-1];
-}
-
-  
-float Measurement::GetBinLowEdge( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return (float)-999.9;
-  return  (*channel_energies_)[bin-1];
-}
-  
-  
-float Measurement::GetBinWidth( int bin ) const
-{
-  if( !CheckBinRange(bin) )
-    return 0.0;
-  if( channel_energies_->size()==1 )
-    return 0.0;
-  if( bin == static_cast<int>(channel_energies_->size()) )
-    --bin;
-  return ((*channel_energies_)[bin]) - ((*channel_energies_)[bin-1]);
-}
-  
-  
-int Measurement::GetNbinsX() const
-{
-  if( !channel_energies_ )
-  {
-    if( gamma_counts_ )
-      return static_cast<int>( gamma_counts_->size() );
-    return 0;
-  }//
-    
-  return static_cast<int>( channel_energies_->size() );
-}
-  
-  
-float Measurement::Integral( int binx1, int binx2 ) const
-{
-  float answer = 0.0;
-  if( !gamma_counts_ )
-    return answer;
-  
-  --binx1;
-  --binx2;
-  
-  const int nbinsx = static_cast<int>( gamma_counts_->size() );
-  
-  if( binx1 < 0 )
-    binx1 = 0;
-  if( binx2 < 0 || binx2 < binx1 || binx2 >= nbinsx )
-    binx2 = nbinsx - 1;
-  
-  for( int i = binx1; i <= binx2; ++i )
-    answer += gamma_counts_->operator[](i);
-  return answer;
-}
-  
-  
   
 size_t Measurement::num_gamma_channels() const
 {
-  if( !gamma_counts_ || !channel_energies_ )
+  if( !gamma_counts_ )
     return 0;
-  
-  if( channel_energies_->empty() )  //JIC we dont have an energy calibration
-    return gamma_counts_->size();
-  
-  return std::min( gamma_counts_->size(), channel_energies_->size() );
+  return gamma_counts_->size();
 }
   
   
 size_t Measurement::find_gamma_channel( const float x ) const
 {
-  if( !channel_energies_ || channel_energies_->empty() )
-  {
-    throw std::runtime_error( "Measurement::find_gamma_channel(): "
-                             "channel_energies_ not defined" );
-  }
+  assert( energy_calibration_ );
+  const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
+  if( !energies || (energies->size() < 2) || !gamma_counts_ )
+    throw std::runtime_error( "find_gamma_channel: channel energies not defined" );
+  
+  assert( (gamma_counts_->size()+1) == energies->size() );
+  
   //Using upper_bound instead of lower_bound to properly handle the case
   //  where x == bin lower energy.
-  const std::vector<float>::const_iterator pos_iter
-  = std::upper_bound( channel_energies_->begin(),
-                     channel_energies_->end(), x );
-  
-  if( pos_iter == channel_energies_->begin() )
+  const auto pos_iter = std::upper_bound( energies->begin(), energies->end(), x );
+  if( pos_iter == begin(*energies) )
     return 0;
   
-  if( pos_iter == channel_energies_->end() )
-    return channel_energies_->size() - 1;
+  const size_t last_channel = gamma_counts_->size() - 1;
+  const size_t pos_index = (pos_iter - begin(*energies)) - 1;
   
-  return (pos_iter - channel_energies_->begin()) - 1;
+  return std::min( pos_index, last_channel );
 }//size_t find_gamma_channel( const float energy ) const
   
   
@@ -835,11 +825,13 @@ float Measurement::gamma_channel_content( const size_t channel ) const
   
 float Measurement::gamma_channel_lower( const size_t channel ) const
 {
-  if( !channel_energies_ || channel >= channel_energies_->size() )
-    throw std::runtime_error( "Measurement::gamma_channel_lower(): "
-                               "channel_energies_ not defined" );
+  assert( energy_calibration_ );
+  const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
+  
+  if( !energies || channel >= energies->size() )
+    throw std::runtime_error( "gamma_channel_lower: channel energies not defined" );
     
-  return channel_energies_->operator[]( channel );
+  return energies->operator[]( channel );
 }//float gamma_channel_lower( const size_t channel ) const
   
   
@@ -851,27 +843,24 @@ float Measurement::gamma_channel_center( const size_t channel ) const
   
 float Measurement::gamma_channel_upper( const size_t channel ) const
 {
-  if( !channel_energies_ || channel >= channel_energies_->size()
-     || channel_energies_->size() < 2 )
-    throw std::runtime_error( "Measurement::gamma_channel_upper(): "
-                             "channel_energies_ not defined" );
+  assert( energy_calibration_ );
+  const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
   
-  if( channel < (channel_energies_->size()-1) )
-    return (*channel_energies_)[channel+1];
+  if( !energies || (energies->size() < 2) || ((channel+1) >= energies->size()) )
+    throw std::runtime_error( "gamma_channel_upper: channel energies not defined" );
   
-  return gamma_channel_lower(channel) + gamma_channel_width(channel);
+  return (*energies)[channel+1];
 }//float gamma_channel_upper( const size_t channel ) const
   
   
-const std::shared_ptr< const std::vector<float> > &
-  Measurement::gamma_channel_energies() const
+const std::shared_ptr< const std::vector<float> > &Measurement::gamma_channel_energies() const
 {
-  return channel_energies_;
+  assert( energy_calibration_ );
+  return energy_calibration_->channel_energies();
 }
   
   
-const std::shared_ptr< const std::vector<float> > &
-  Measurement::gamma_channel_contents() const
+const std::shared_ptr< const std::vector<float> > &Measurement::gamma_channel_contents() const
 {
   return gamma_counts_;
 }
@@ -879,59 +868,14 @@ const std::shared_ptr< const std::vector<float> > &
   
 float Measurement::gamma_channel_width( const size_t channel ) const
 {
-  if( !channel_energies_ || channel >= channel_energies_->size()
-     || channel_energies_->size() < 2 )
-    throw std::runtime_error( "Measurement::gamma_channel_width(): "
-                             "channel_energies_ not defined" );
+  assert( energy_calibration_ );
+  const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
   
-  if( channel == (channel_energies_->size()-1) )
-    return (*channel_energies_)[channel] - (*channel_energies_)[channel-1];
+  if( !energies || (energies->size() < 2) || ((channel+1) >= energies->size()) )
+    throw std::runtime_error( "gamma_channel_width: channel energies not defined" );
   
-  return (*channel_energies_)[channel+1] - (*channel_energies_)[channel];
+  return (*energies)[channel+1] - (*energies)[channel];
 }//float gamma_channel_width( const size_t channel ) const
-  
-  
-  
-int Measurement::FindFixBin( float x ) const
-{
-  //Note, this function returns an index one-above what you would use to access
-  //  the channel_energies_ or gamma_counts_ arrays.  This is to be compatible
-  //  with CERNs ROOT package functions.
-  if( !channel_energies_ )
-    return -1;
-  
-  //Using upper_bound instead of lower_bound to properly handle the case
-  //  where x == bin lower energy.
-  const std::vector<float>::const_iterator pos_iter
-  = std::upper_bound( channel_energies_->begin(),
-                     channel_energies_->end(), x );
-  
-  if( pos_iter == channel_energies_->end() )
-  {
-    float width = GetBinWidth( static_cast<int>(channel_energies_->size() ) );
-    if( x < (channel_energies_->back()+width) )
-      return static_cast<int>( channel_energies_->size() );
-    else return static_cast<int>( channel_energies_->size() + 1 );
-  }//if( pos_iter ==  channel_energies_->end() )
-  
-  if( pos_iter == channel_energies_->begin() )
-  {
-    if( x < channel_energies_->front() )
-      return 0;
-    return 1;
-  }//if( pos_iter ==  channel_energies_->begin() )
-  
-  return static_cast<int>( pos_iter - channel_energies_->begin() );
-}//int FindFixBin( float x ) const
-  
-  
-bool Measurement::CheckBinRange( int bin ) const
-{
-  if( !channel_energies_
-      || bin < 1 || bin > static_cast<int>(channel_energies_->size()) )
-    return false;
-  return true;
-}
   
   
 const std::string &Measurement::title() const
@@ -948,224 +892,25 @@ void Measurement::set_title( const std::string &title )
   
 float Measurement::gamma_energy_min() const
 {
-  if( !channel_energies_ || channel_energies_->empty() )
+  assert( energy_calibration_ );
+  const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
+  
+  if( !energies || energies->empty() )
     return 0.0f;
-  return (*channel_energies_)[0];
+  return energies->front();
 }
 
   
 float Measurement::gamma_energy_max() const
 {
-  if( !channel_energies_ || channel_energies_->empty() )
+  assert( energy_calibration_ );
+  const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
+  
+  if( !energies || energies->empty() )
     return 0.0f;
   
-  const size_t nbin = channel_energies_->size();
-  if( nbin < 2 )
-    return (*channel_energies_)[0];
-  
-  return 2.0f*(*channel_energies_)[nbin-1] - (*channel_energies_)[nbin-2];
+  return energies->back();
 }
-
-  
-  
-  
-//Analogous to Measurement::compare_by_sample_det_time; compares by
-// sample_number, and then detector_number_, but NOT by start_time_
-struct SpecFileLessThan
-{
-  const int sample_number, detector_number;
-  
-  SpecFileLessThan( int sample_num, int det_num )
-  : sample_number( sample_num ), detector_number( det_num ) {}
-  bool operator()( const std::shared_ptr<Measurement>& lhs, const std::shared_ptr<Measurement> &dummy )
-  {
-    assert( !dummy );
-    if( !lhs )
-      return false;
-    
-    if( lhs->sample_number() == sample_number )
-      return (lhs->detector_number() < detector_number);
-    return (lhs->sample_number() < sample_number);
-  }//operator()
-};//struct SpecFileLessThan
-
-
-  
-MeasurementCalibInfo::MeasurementCalibInfo( std::shared_ptr<Measurement> meas )
-{
-  equation_type = meas->energy_calibration_model();
-  nbin = meas->gamma_counts()->size();
-  coefficients = meas->calibration_coeffs();
-  
-  deviation_pairs_ = meas->deviation_pairs();
-  original_binning = meas->channel_energies();
-  if( meas->channel_energies() && !meas->channel_energies()->empty())
-    binning = meas->channel_energies();
-  
-  if( equation_type == SpecUtils::EnergyCalType::InvalidEquationType
-     && !coefficients.empty() )
-  {
-#if( PERFORM_DEVELOPER_CHECKS )
-    log_developer_error( __func__, "Found case where equation_type!=Invalid, but there are coefficients - shouldnt happen!" );
-#endif  //#if( PERFORM_DEVELOPER_CHECKS )
-    coefficients.clear();
-    binning.reset();
-  }//
-}//MeasurementCalibInfo constructor
-
-
-MeasurementCalibInfo::MeasurementCalibInfo()
-{
-  nbin = 0;
-  equation_type = SpecUtils::EnergyCalType::InvalidEquationType;
-}//MeasurementCalibInfo constructor
-
-void MeasurementCalibInfo::strip_end_zero_coeff()
-{
-  for( int i = static_cast<int>(coefficients.size()) - 1;
-      (i>=0) && (fabs(coefficients[i]) < 0.00000000001); --i )
-    coefficients.pop_back();
-}//void strip_end_zero_coeff()
-
-
-void MeasurementCalibInfo::fill_binning()
-{
-  if( binning && !binning->empty())
-    return;
-  
-  try
-  {
-    switch( equation_type )
-    {
-      case SpecUtils::EnergyCalType::Polynomial:
-      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-        binning = SpecUtils::polynomial_binning( coefficients, nbin, deviation_pairs_ );
-        break;
-        
-      case SpecUtils::EnergyCalType::FullRangeFraction:
-        binning = SpecUtils::fullrangefraction_binning( coefficients, nbin, deviation_pairs_ );
-        break;
-        
-      case SpecUtils::EnergyCalType::LowerChannelEdge:
-      {
-        std::shared_ptr< vector<float> > energies
-        = std::make_shared< vector<float> >();
-        
-        *energies  = coefficients;
-        
-        if( (nbin > 2) && (energies->size() == nbin) )
-        {
-          energies->push_back(2.0f*((*energies)[nbin-1]) - (*energies)[nbin-2]);
-        }else if( energies->size() < nbin )
-        {
-          //Deal with error
-          cerr << "fill_binning(): warning, not enough cahnnel energies to be"
-          " valid; expected at least " << nbin << ", but only got "
-          << energies->size() << endl;
-          energies.reset();
-        }else if( energies->size() > (nbin+1) )
-        {
-          //Make it so
-          cerr << "fill_binning(): warning, removing channel energy values!" << endl;
-          energies->resize( nbin + 1 );
-        }
-        
-        
-        binning = energies;
-        
-        break;
-      }//case SpecUtils::EnergyCalType::LowerChannelEdge:
-        
-      case SpecUtils::EnergyCalType::InvalidEquationType:
-        break;
-    }//switch( meas->energy_calibration_model_ )
-  }catch( std::exception & )
-  {
-    cerr << "An invalid binning was specified, goign to default binning" << endl;
-    if( nbin > 0 )
-    {
-      equation_type = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-      deviation_pairs_.clear();
-      coefficients.resize(2);
-      coefficients[0] = 0.0f;
-      coefficients[1] = 3000.0f / std::max(nbin-1, size_t(1));
-    }
-  }//try / catch
-  
-  if( !binning )
-    cerr << SRC_LOCATION << "\n\tWarning, failed to set binning" << endl;
-}//void fill_binning()
-
-  
-bool MeasurementCalibInfo::operator<( const MeasurementCalibInfo &rhs ) const
-{
-  if( nbin != rhs.nbin )
-    return (nbin < rhs.nbin);
-  
-  if( equation_type != rhs.equation_type )
-    return (equation_type < rhs.equation_type);
-  
-  if( coefficients.size() != rhs.coefficients.size() )
-    return (coefficients.size() < rhs.coefficients.size());
-  
-  
-  for( size_t i = 0; i < coefficients.size(); ++i )
-  {
-    const float leftcoef = coefficients[i];
-    const float rightcoef = rhs.coefficients[i];
-    const float maxcoef = std::max( fabs(leftcoef), fabs(rightcoef) );
-    if( fabs(leftcoef - rightcoef) > (1.0E-5 * maxcoef) )
-      return coefficients[i] < rhs.coefficients[i];
-  }//for( size_t i = 0; i < coefficients.size(); ++i )
-  
-  if( deviation_pairs_.size() != rhs.deviation_pairs_.size() )
-    return (deviation_pairs_.size() < rhs.deviation_pairs_.size());
-  
-  for( size_t i = 0; i < deviation_pairs_.size(); ++i )
-  {
-    const pair<float,float> &l = deviation_pairs_[i];
-    const pair<float,float> &r = rhs.deviation_pairs_[i];
-    const float maxenergy = std::max( fabs(l.first), fabs(r.first) );
-    
-    if( fabs(l.first - r.first) > (1.0E-5 * maxenergy) )
-      return l.first < r.first;
-    
-    const float maxdeviation = std::max( fabs(l.second), fabs(r.second) );
-    
-    if( fabs(l.second - r.second) > (1.0E-5 * maxdeviation) )
-      return l.second < r.second;
-  }//for( size_t i = 0; i < deviation_pairs_.size(); ++i )
-  
-  
-  if( original_binning && !original_binning->empty() )
-  {
-    if( !rhs.original_binning || rhs.original_binning->empty() )
-      return false;
-    
-    //a full lexicographical_compare is too much if the binnings are same, but
-    //  different objects, so well just look at the objects address for all
-    //  cases
-    return (original_binning.get() < rhs.original_binning.get());
-    
-    //      if( binning == rhs.binning )
-    //        return false;
-    //      return lexicographical_compare( binning->begin(), binning->end(),
-    //                                      rhs.binning->begin(), rhs.binning->end(), std::less<float>() );
-  }else if( rhs.original_binning && !rhs.original_binning->empty() )
-    return true;
-  
-  return false;
-}//bool operatr<(...)
-
-
-bool MeasurementCalibInfo::operator==( const MeasurementCalibInfo &rhs ) const
-{
-  const bool rhsLt = operator<(rhs);
-  const bool lhsLt = rhs.operator<(*this);
-  return !lhsLt && !rhsLt;
-}
-
-  
 
 
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
@@ -1177,6 +922,7 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
   const double gamma_sum = hist->gamma_integral( minEnergy, maxEnergy );
 
 #if( PERFORM_DEVELOPER_CHECKS )
+  /*
   double check_sum = 0.0;
   
   const int lowBin = hist->FindFixBin( minEnergy );
@@ -1232,6 +978,7 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
               check_sum, gamma_sum, lowBin, highBin );
     log_developer_error( __func__, buffer );
   }//if( check_sum != gamma_sum )
+   */
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 
   return gamma_sum;
@@ -1243,11 +990,13 @@ double Measurement::gamma_integral( float lowerx, float upperx ) const
 {
   double sum = 0.0;
   
-  if( !channel_energies_ || !gamma_counts_ || channel_energies_->size() < 2
+  const auto &channel_energies = energy_calibration_->channel_energies();
+      
+  if( !channel_energies || !gamma_counts_ || channel_energies->size() < 2
       || gamma_counts_->size() < 2 )
     return sum;
 
-  const vector<float> &x = *channel_energies_;
+  const vector<float> &x = *channel_energies;
   const vector<float> &y = *gamma_counts_;
   
   const size_t nchannel = x.size();
@@ -1350,6 +1099,8 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::ExploraniumGr130v0: return "dat";
     case SaveSpectrumAsType::ExploraniumGr135v2: return "dat";
     case SaveSpectrumAsType::SpeIaea:            return "spe";
+    case SaveSpectrumAsType::Cnf:                return "cnf";
+    case SaveSpectrumAsType::Tka:                return "tka";
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
@@ -1383,8 +1134,8 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::Txt:                return "TXT";
     case SaveSpectrumAsType::Csv:                return "CSV";
     case SaveSpectrumAsType::Pcf:                return "PCF";
-    case SaveSpectrumAsType::N42_2006:                return "2006 N42";
-    case SaveSpectrumAsType::N42_2012:            return "2012 N42";
+    case SaveSpectrumAsType::N42_2006:           return "2006 N42";
+    case SaveSpectrumAsType::N42_2012:           return "2012 N42";
     case SaveSpectrumAsType::Chn:                return "CHN";
     case SaveSpectrumAsType::SpcBinaryInt:       return "Integer SPC";
     case SaveSpectrumAsType::SpcBinaryFloat:     return "Float SPC";
@@ -1392,6 +1143,8 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::ExploraniumGr130v0: return "GR130 DAT";
     case SaveSpectrumAsType::ExploraniumGr135v2: return "GR135v2 DAT";
     case SaveSpectrumAsType::SpeIaea:            return "IAEA SPE";
+    case SaveSpectrumAsType::Cnf:                return "CNF";
+    case SaveSpectrumAsType::Tka:                return "TKA";
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif
@@ -1507,8 +1260,6 @@ Measurement::Measurement()
 }//Measurement()
 
 
-
-
 size_t Measurement::memmorysize() const
 {
   size_t size = sizeof(*this);
@@ -1524,35 +1275,12 @@ size_t Measurement::memmorysize() const
 
   if( gamma_counts_ )
     size += sizeof(*(gamma_counts_.get())) + gamma_counts_->capacity()*sizeof(float);
-  if( channel_energies_ )
-    size += sizeof(*(channel_energies_.get())) + channel_energies_->capacity()*sizeof(float);
-
-  size += calibration_coeffs_.capacity()*sizeof(float);
   size += neutron_counts_.capacity()*sizeof(float);
-
-  size += deviation_pairs_.capacity()*sizeof(std::pair<float,float>);
-
+      
+  size += energy_calibration_->memmorysize();
+  
   return size;
 }//size_t Measurement::memmorysize() const
-
-
-bool Measurement::compare_by_sample_det_time( const std::shared_ptr<const Measurement> &lhs,
-                           const std::shared_ptr<const Measurement> &rhs )
-{
-  if( !lhs || !rhs )
-    return false;
-
-  if( lhs->sample_number_ != rhs->sample_number_ )
-    return (lhs->sample_number_ < rhs->sample_number_);
-
-  if( lhs->detector_number_ != rhs->detector_number_ )
-    return (lhs->detector_number_ < rhs->detector_number_);
-
-  if( lhs->start_time_ != rhs->start_time_ )
-    return (lhs->start_time_ < rhs->start_time_);
-  
-  return (lhs->source_type() < rhs->source_type());
-}//lesThan(...)
 
 
 void Measurement::reset()
@@ -1564,14 +1292,13 @@ void Measurement::reset()
   occupied_ = OccupancyStatus::Unknown;
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
-  speed_ = 0.0;
+  speed_ = 0.0f;
   detector_name_ = "";
   detector_number_ = -1;
   detector_description_ = "";
   quality_status_ = QualityStatus::Missing;
 
   source_type_       = SourceType::Unknown;
-  energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
 
   contained_neutron_ = false;
 
@@ -1579,12 +1306,12 @@ void Measurement::reset()
   position_time_ = boost::posix_time::not_a_date_time;
 
   remarks_.clear();
+  parse_warnings_.clear();
   
   start_time_ = boost::posix_time::not_a_date_time;
-  calibration_coeffs_.clear();
-  deviation_pairs_.clear();
-  channel_energies_ = std::make_shared<vector<float> >();//XXX I should test not bothering to place an empty vector in this pointer
-  gamma_counts_ = std::make_shared<vector<float> >();  //XXX I should test not bothering to place an empty vector in this pointer
+  
+  energy_calibration_ = std::make_shared<EnergyCalibration>();
+  gamma_counts_ = std::make_shared<vector<float> >();  // \TODO: I should test not bothering to place an empty vector in this pointer
   neutron_counts_.clear();
 }//void reset()
 
@@ -1604,27 +1331,21 @@ bool SpecFile::has_gps_info() const
   
 void Measurement::combine_gamma_channels( const size_t ncombine )
 {
-  if( !gamma_counts_ )
+  const size_t nchannelorig = gamma_counts_ ? gamma_counts_->size() : size_t(0);
+  
+  if( (nchannelorig < ncombine) || (ncombine < 2) )
     return;
-  
-  const size_t nchannelorig = gamma_counts_->size();
-  const size_t nnewchann = nchannelorig / ncombine;
-  
-  if( !nchannelorig || ncombine==1 )
-    return;
-  
-  if( !ncombine || ((nchannelorig % ncombine) != 0) || ncombine > nchannelorig )
-    throw runtime_error( "combine_gamma_channels(): invalid input." );
 
+  const bool evenDivide = !(nchannelorig % ncombine);
+  const size_t nnewchann = (nchannelorig / ncombine) + (evenDivide ? 0 : 1);
+  
 #if( PERFORM_DEVELOPER_CHECKS )
-  const double pre_gammasum = std::accumulate( gamma_counts_->begin(),
-                                            gamma_counts_->end(), double(0.0) );
-  const float pre_lower_e = (*channel_energies_)[0];
-  const float pre_upper_e = (*channel_energies_)[nchannelorig - ncombine];
+  const double pre_gammasum = accumulate( begin(*gamma_counts_), end(*gamma_counts_), double(0.0) );
+  const float pre_lower_e = gamma_energy_min();
+  const float pre_upper_e = gamma_energy_max();  //(*channel_energies_)[nchannelorig - ncombine];
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
   
-  std::shared_ptr< vector<float> > newchanneldata
-                        = std::make_shared<vector<float> >( nnewchann, 0.0f );
+  auto newchanneldata = std::make_shared<vector<float> >( nnewchann, 0.0f );
   
   for( size_t i = 0; i < nchannelorig; ++i )
     (*newchanneldata)[i/ncombine] += (*gamma_counts_)[i];
@@ -1635,44 +1356,90 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   //for( size_t i = nchannelorig; i < gamma_counts_->size(); ++i )
     //(*newchanneldata)[nnewchann-1] += (*gamma_counts_)[i];
   
-  gamma_counts_ = newchanneldata;
-  
-  switch( energy_calibration_model_ )
+  assert( energy_calibration_ );
+  const auto oldcal = energy_calibration_;
+  auto newcal = make_shared<EnergyCalibration>();
+      
+  switch( oldcal->type() )
   {
     case SpecUtils::EnergyCalType::Polynomial:
     case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-      for( size_t i = 1; i < calibration_coeffs_.size(); ++i )
-        calibration_coeffs_[i] *= std::pow( float(ncombine), float(i) );
-      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, nnewchann,
-                                              deviation_pairs_ );
+    {
+      auto newcalcoefs = oldcal->coefficients();
+      for( size_t i = 1; i < newcalcoefs.size(); ++i )
+      {
+        const double newcoef = newcalcoefs[i] * std::pow( double(ncombine), double(i) );
+        newcalcoefs[i] = static_cast<float>( newcoef );
+      }
+      
+      newcal->set_polynomial( nnewchann, newcalcoefs, oldcal->deviation_pairs() );
       break;
+    }//case polynomial
       
     case SpecUtils::EnergyCalType::FullRangeFraction:
-      channel_energies_ = SpecUtils::fullrangefraction_binning( calibration_coeffs_,
-                                                   nnewchann, deviation_pairs_ );
+    {
+      if( evenDivide )
+      {
+        newcal->set_full_range_fraction( nnewchann, oldcal->coefficients(), oldcal->deviation_pairs() );
+      }else
+      {
+        //We need to account for the effective extra bins we are adding into the original spectrum
+        // \TODO: uncheced as of 20200909
+        const auto nextraequiv = ncombine - (nchannelorig % ncombine);
+        const float equivupper = oldcal->energy_for_channel( oldcal->num_channels() + nextraequiv );
+        
+        const float new_range = equivupper - oldcal->lower_energy();
+        const float prev_range = oldcal->upper_energy() - oldcal->lower_energy();
+        
+        vector<float> newcoefs = oldcal->coefficients();
+        if( newcoefs.size() > 1 )//should always be true, but JIC
+          newcoefs[1] *= (new_range / prev_range);
+        newcal->set_full_range_fraction( nnewchann, newcoefs, oldcal->deviation_pairs() );
+      }//if( evenDivide ) / else
+      
       break;
+    }//case FRF
       
     case SpecUtils::EnergyCalType::LowerChannelEdge:
-    case SpecUtils::EnergyCalType::InvalidEquationType:
-      if( !!channel_energies_ )
+    {
+      vector<float> newbinning( nnewchann+1, 0.0f );
+      const shared_ptr<const vector<float>> &old_energies_ptr = oldcal->channel_energies();
+      assert( old_energies_ptr );
+      const auto &old_energies = *old_energies_ptr;
+      const size_t oldnenergies = old_energies.size();
+     
+      assert( oldnenergies >= nchannelorig );
+      if( oldnenergies < nchannelorig )
       {
-        std::shared_ptr<vector<float> > newbinning
-                               = std::make_shared<vector<float> >(nnewchann);
-        
-        for( size_t i = 0; i < nchannelorig; i += ncombine )
-          (*newbinning)[i/ncombine] = (*channel_energies_)[i];
-        
-        channel_energies_ = newbinning;
-      }//if( !!channel_energies_ )
+        const string msg = "combine_gamma_channels: Unexpectedly found case where channel energies"
+                           " (size=" + std::to_string(oldnenergies) + ") wasnt as large as gamma"
+                           " channels (" + std::to_string(nchannelorig) + ")";
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, msg.c_str() );
+#endif
+        throw std::runtime_error( msg );
+      }//if( oldnenergies < nchannelorig )
+      
+      for( size_t i = 0; ((i/ncombine) < (nnewchann+1)) && (i < oldnenergies); i += ncombine )
+        newbinning[i/ncombine] = old_energies[i];
+      
+      newbinning[nnewchann] = old_energies.back();
+      
+      cout << "Before calling set_lower_channel_energy, address of first element: " << &(newbinning[0]) << endl;
+      newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
+    }//break
+      
+    case SpecUtils::EnergyCalType::InvalidEquationType:
       break;
-  }//switch( energy_calibration_model_ )
+  }//switch( oldcal->type() )
   
+  gamma_counts_ = newchanneldata;
+  energy_calibration_ = newcal;
   
 #if( PERFORM_DEVELOPER_CHECKS )
-  const double post_gammasum = std::accumulate( gamma_counts_->begin(),
-                                            gamma_counts_->end(), double(0.0) );
-  const float post_lower_e = channel_energies_->front();
-  const float post_upper_e = channel_energies_->back();
+  const double post_gammasum = accumulate( begin(*gamma_counts_),end(*gamma_counts_), double(0.0) );
+  const float post_lower_e = gamma_energy_min();
+  const float post_upper_e = gamma_energy_max();  //energy_calibration_->channel_energies()->back()
   
   if( fabs(post_gammasum - pre_gammasum) > (0.00001*std::max(fabs(post_gammasum),fabs(pre_gammasum))) )
   {
@@ -1690,7 +1457,6 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
               "%f to %f while combining channels.", pre_lower_e, post_lower_e );
     log_developer_error( __func__, buffer );
   }//if( lower energy changed )
-  
   
   if( fabs(post_upper_e - pre_upper_e) > 0.0001 )
   {
@@ -1713,8 +1479,8 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
   std::shared_ptr<Measurement> firstcombined;
   
   set<size_t> nchannelset, othernchannel;
-  set<MeasurementCalibInfo> othercalibs;
-  map<MeasurementCalibInfo, vector<std::shared_ptr<Measurement> > > calibs;
+  set<EnergyCalibration> othercalibs;
+  map<EnergyCalibration, vector<std::shared_ptr<Measurement> > > calibs;
   
   for( size_t i = 0; i < measurements_.size(); ++i )
   {
@@ -1727,10 +1493,8 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
       if( !!m->gamma_channel_contents() && !m->gamma_channel_contents()->empty())
       {
         othernchannel.insert( m->gamma_channel_contents()->size() );
-        MeasurementCalibInfo info(m);
-        info.binning.reset();
-        info.original_binning.reset();
-        othercalibs.insert( info );
+        assert( m->energy_calibration_ );
+        othercalibs.insert( *m->energy_calibration_ );
       }
       
       continue;
@@ -1738,26 +1502,22 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
     
     xform( m );
     
-    MeasurementCalibInfo info( m );
-    info.binning.reset();
-    info.original_binning.reset();
+    assert( m->energy_calibration_ );
     
-    if(!calibs[info].empty())
-    {
-      cerr << "Making it so measurement shared channel_energies_ with " << calibs[info][0].get() << endl;
-      m->channel_energies_ = calibs[info][0]->channel_energies_;
-    }
+    auto &same_cals = calibs[*m->energy_calibration_];
+    if( same_cals.size() )
+      m->set_energy_calibration( same_cals[0]->energy_calibration_ );
+    same_cals.push_back( m );
     
-    calibs[info].push_back( m );
-    if( !!m->channel_energies_ )
-      nchannelset.insert( m->channel_energies_->size() );
+    if( m->energy_calibration_->channel_energies() )
+      nchannelset.insert( m->energy_calibration_->num_channels() );
     
     ++nchanged;
   }//for( size_t i = 0; i < measurements_.size(); ++i )
   
   //ToDo: better test this function.
-  cerr << "There are calibs.size()=" << calibs.size() << endl;
-  cerr << "There are othercalibs.size()=" << othercalibs.size() << endl;
+  //cerr << "There are calibs.size()=" << calibs.size() << endl;
+  //cerr << "There are othercalibs.size()=" << othercalibs.size() << endl;
   
   if( nchanged )
   {
@@ -1765,11 +1525,11 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
        || (calibs.size()==1 && othercalibs.size()==1
            && !((calibs.begin()->first) == (*othercalibs.begin()))) )
     {
-      cerr << "Un-setting properties_flags_ kHasCommonBinning bit" << endl;
+      //cerr << "Un-setting properties_flags_ kHasCommonBinning bit" << endl;
       properties_flags_ &= (~kHasCommonBinning);
     }else
     {
-      cerr << "Setting properties_flags_ kHasCommonBinning bit" << endl;
+      //cerr << "Setting properties_flags_ kHasCommonBinning bit" << endl;
       properties_flags_ |= kHasCommonBinning;
     }
   
@@ -1777,11 +1537,11 @@ size_t SpecFile::do_channel_data_xform( const size_t nchannels,
        || (nchannelset.size()==1 && othernchannel.size()==1
            && (*nchannelset.begin())!=(*othernchannel.begin())) )
     {
-      cerr << "Un-setting properties_flags_ kAllSpectraSameNumberChannels bit" << endl;
+      //cerr << "Un-setting properties_flags_ kAllSpectraSameNumberChannels bit" << endl;
       properties_flags_ &= (~kAllSpectraSameNumberChannels);
     }else
     {
-      cerr << "Setting properties_flags_ kAllSpectraSameNumberChannels bit" << endl;
+      //cerr << "Setting properties_flags_ kAllSpectraSameNumberChannels bit" << endl;
       properties_flags_ |= kAllSpectraSameNumberChannels;
     }
   
@@ -1836,10 +1596,6 @@ void SpecFile::combine_gamma_channels( const size_t ncombine,
 }//void combine_gamma_channels( const int nchann, &meas )
 
 
-
-
-
-
 void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
                                           const size_t keep_last_channel,
                                           const bool keep_under_over_flow )
@@ -1850,10 +1606,10 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
   const size_t nprevchannel = gamma_counts_->size();
   
   if( keep_last_channel >= nprevchannel )
-    throw runtime_error( "Measurement::truncate_gamma_channels(): invalid upper channel." );
+    throw runtime_error( "truncate_gamma_channels: invalid upper channel." );
   
   if( keep_first_channel > keep_last_channel )
-    throw runtime_error( "Measurement::truncate_gamma_channels(): invalid channel range." );
+    throw runtime_error( "truncate_gamma_channels: invalid channel range." );
   
   double underflow = 0.0, overflow = 0.0;
   if( keep_under_over_flow )
@@ -1873,7 +1629,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
     (*newchannelcounts)[i-keep_first_channel] = (*gamma_counts_)[i];
   
   newchannelcounts->front() += static_cast<float>( underflow );
-  newchannelcounts->back()  += static_cast<float> ( overflow );
+  newchannelcounts->back()  += static_cast<float>( overflow );
 
   
 #if( PERFORM_DEVELOPER_CHECKS )
@@ -1893,99 +1649,94 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
   }//if( keep_under_over_flow )
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
   
-  gamma_counts_ = newchannelcounts;
   
-  if( !keep_under_over_flow )
-  {
-    gamma_count_sum_ = 0.0;
-    for( const float f : *gamma_counts_ )
-      gamma_count_sum_ += f;
-  }//if( !keep_under_over_flow )
-
-  
-#if( PERFORM_DEVELOPER_CHECKS )
-  std::shared_ptr<const std::vector<float>> old_binning = channel_energies_;
-#endif  //#if( PERFORM_DEVELOPER_CHECKS )
-  
-  const int n = static_cast<int>( keep_first_channel );
-  const vector<float> a = calibration_coeffs_;
-
-  
-  switch( energy_calibration_model_ )
+  assert( energy_calibration_ );
+  const auto old_cal = energy_calibration_;
+  auto newcal = make_shared<EnergyCalibration>();
+    
+  const int n_remove_front = static_cast<int>( keep_first_channel );
+  const auto &old_coefs = old_cal->coefficients();
+  const auto &old_dev = old_cal->deviation_pairs();
+      
+  switch( old_cal->type() )
   {
     case SpecUtils::EnergyCalType::Polynomial:
     case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
-      calibration_coeffs_ = SpecUtils::polynomial_cal_remove_first_channels( n, a );      
-      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_, nnewchannel,
-                                              deviation_pairs_ );
+      const auto new_coefs = polynomial_cal_remove_first_channels( n_remove_front, old_coefs );
+      newcal->set_polynomial( nnewchannel, new_coefs, old_dev );
       break;
     }//case Polynomial:
       
     case SpecUtils::EnergyCalType::FullRangeFraction:
     {
-      const vector<float> oldpoly = SpecUtils::fullrangefraction_coef_to_polynomial( a,
-                                                              nprevchannel );
+      const auto oldpoly = fullrangefraction_coef_to_polynomial( old_coefs, nprevchannel );
+      const auto newpoly = polynomial_cal_remove_first_channels( n_remove_front, oldpoly );
+      auto newfwf = polynomial_coef_to_fullrangefraction( newpoly, nnewchannel );
       
-      const vector<float> newpoly = SpecUtils::polynomial_cal_remove_first_channels( n,
-                                                                    oldpoly );
-      
-      vector<float> newfwf = SpecUtils::polynomial_coef_to_fullrangefraction(
-                                                        newpoly, nnewchannel );
-      
-      if( a.size() > 4 )
+      if( old_coefs.size() > 4 )
       {
 //        const float x = static_cast<float>(i)/static_cast<float>(nbin);
 //        const float low_e_coef = (a.size() > 4) ? a[4] : 0.0f;
 //        val += low_e_coef / (1.0f+60.0f*x);
 
-        //XXX - fix up here, if doable.  I dont think this can be exactly done,
+        // \TODO: - fix up here, if doable.  I dont think this can be exactly done,
         //  but maybye make it match up at the bottom binning, since this term
         //  only effects low energy.
       }//if( a.size() > 4 )
       
-      calibration_coeffs_ = newfwf;
-      channel_energies_ = SpecUtils::fullrangefraction_binning( calibration_coeffs_,
-                                            nnewchannel, deviation_pairs_ );
+      newcal->set_full_range_fraction( nnewchannel, newfwf, old_dev );
       break;
     }//case FullRangeFraction:
       
     case SpecUtils::EnergyCalType::LowerChannelEdge:
-    case SpecUtils::EnergyCalType::InvalidEquationType:
-      if( !!channel_energies_ )
-      {
-        std::shared_ptr< vector<float> > newbinning
-                             = std::make_shared<vector<float> >(nnewchannel);
-        
-        for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
-          (*newbinning)[i-keep_first_channel] = (*channel_energies_)[i];
-        
-        channel_energies_ = newbinning;
-      }//if( !!channel_energies_ )
+    {
+      vector<float> new_energies( nnewchannel + 1, 0.0f );
+      for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
+        new_energies.at(i-keep_first_channel) = old_coefs.at(i);
+      new_energies[nnewchannel] = old_coefs.at(keep_last_channel+1);
+      
+      newcal->set_lower_channel_energy( nnewchannel, std::move(new_energies) );
       break;
-  }//switch( energy_calibration_model_ )
+    }
+      
+    case SpecUtils::EnergyCalType::InvalidEquationType:
+    break;
+  }//switch( old_cal->type() )
+      
+  energy_calibration_ = newcal;
+  gamma_counts_ = newchannelcounts;
   
+  if( !keep_under_over_flow )
+    gamma_count_sum_ = std::accumulate( begin(*gamma_counts_), end(*gamma_counts_), double(0.0) );
   
 #if( PERFORM_DEVELOPER_CHECKS )
-  if( !!old_binning && !!channel_energies_ )
+  if( old_cal->channel_energies() )
   {
-    for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
+    if( !newcal->channel_energies() )
     {
-      const float newval = (*channel_energies_)[i-keep_first_channel];
-      const float oldval = (*old_binning)[i];
-      if( fabs(newval-oldval) > 0.001f )
+      log_developer_error( __func__, "Old energy calibration had channel energies,"
+                                     " but new one doesnt" );
+    }else
+    {
+      for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
       {
-        char buffer[512];
-        snprintf( buffer, sizeof(buffer),
-                  "Cropping channel counts resulted in disagreement of channel"
+        const float newval = newcal->channel_energies()->at(i-keep_first_channel);
+        const float oldval = old_cal->channel_energies()->at(i);
+        if( fabs(newval-oldval) > 0.001f )
+        {
+          char buffer[512];
+          snprintf( buffer, sizeof(buffer),
+                    "Cropping channel counts resulted in disagreement of channel"
                   " energies by old channel %i which had energy %f but now has"
-                  " energy %f (new channel number %i)",
-                  int(i), oldval, newval, int(i-keep_first_channel) );
-        log_developer_error( __func__, buffer );
-        break;
-      }//if( fabs(newval-oldval) > 0.001f )
-    }//for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
-  }//if( !!old_binning && !!channel_energies_ )
+                    " energy %f (new channel number %i)",
+                    int(i), oldval, newval, int(i-keep_first_channel) );
+          log_developer_error( __func__, buffer );
+          break;
+        }//if( fabs(newval-oldval) > 0.001f )
+      }//for( size_t i = keep_first_channel; i <= keep_last_channel; ++i )
+    }//if( new vcal doesnt have binnig ) / else
+  }//if( old_cal->channel_energies() )
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 }//size_t Measurement::truncate_gamma_channels(...)
 
@@ -2071,6 +1822,7 @@ void SpecFile::set_live_time( const float lt,
   modified_ = modifiedSinceDecode_ = true;
 }//set_live_time(...)
 
+      
 void SpecFile::set_real_time( const float rt, std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -2098,7 +1850,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                          meas, &Measurement::compare_by_sample_det_time );
+                          meas, &compare_by_sample_det_time );
  
   if( (meas_pos!=measurements_.end()) && ((*meas_pos)==meas) )
     throw runtime_error( "SpecFile::add_measurement: duplicate meas" );
@@ -2119,13 +1871,34 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
     detnum += 1;
     meas->detector_number_ = detnum;
     detector_numbers_.push_back( detnum );
-    if( meas->contained_neutron_ )
-      neutron_detector_names_.push_back( detname );
   }else
   {
     const size_t index = namepos - detector_names_.begin();
     meas->detector_number_ = detector_numbers_.at(index);
   }//if( we dont already have a detector with this name ) / else
+  
+  
+  if( meas->contained_neutron_ )
+  {
+    const auto neutpos
+               = std::find( begin(neutron_detector_names_), end(neutron_detector_names_), detname );
+    if( neutpos == end(neutron_detector_names_) )
+    {
+      neutron_detector_names_.push_back( detname );
+      std::sort( begin(neutron_detector_names_), end(neutron_detector_names_) );
+    }
+  }//if( measurement contained neutrons )
+  
+  if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+  {
+    const auto gammapos
+                = std::find( begin(gamma_detector_names_), end(gamma_detector_names_), detname );
+    if( gammapos == end(gamma_detector_names_) )
+    {
+      gamma_detector_names_.push_back( detname );
+      std::sort( begin(gamma_detector_names_), end(gamma_detector_names_) );
+    }
+  }//if( measurement contained gammas )
   
   const int detnum = meas->detector_number_;
   int samplenum = meas->sample_number();
@@ -2158,7 +1931,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   sample_numbers_.insert( meas->sample_number_ );
   
   meas_pos = upper_bound( measurements_.begin(), measurements_.end(),
-                          meas, &Measurement::compare_by_sample_det_time );
+                          meas, &compare_by_sample_det_time );
   
   measurements_.insert( meas_pos, meas );
   
@@ -2184,8 +1957,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
 }//void add_measurement( std::shared_ptr<Measurement> meas, bool doCleanup )
 
 
-void SpecFile::remove_measurements(
-                                         const vector<std::shared_ptr<const Measurement>> &meas )
+void SpecFile::remove_measurements( const vector<std::shared_ptr<const Measurement>> &meas )
 {
   if( meas.empty() )
     return;
@@ -2245,7 +2017,7 @@ void SpecFile::remove_measurements(
    if( measurements_.size() > 100 )
    {
    pos = std::lower_bound( measurements_.begin(), measurements_.end(),
-   m, &Measurement::compare_by_sample_det_time );
+   m, &compare_by_sample_det_time );
    }else
    {
    pos = std::find( measurements_.begin(), measurements_.end(), m );
@@ -2280,7 +2052,7 @@ void SpecFile::remove_measurement( std::shared_ptr<const Measurement> meas,
   measurements_.erase( pos );
   
   //Could actually fix up detector_names_, detector_numbers_,
-  //  neutron_detector_names_,
+  //  neutron_detector_names_, and gamma_detector_names_
   
   if( doCleanup )
   {
@@ -2483,12 +2255,33 @@ void SpecFile::change_detector_name( const string &origname,
     throw runtime_error( "change_detector_name: '" + newname + "'"
                         " is already a detector name" );
   
-  *pos = newname;
+  const auto oldindex = pos - begin(detector_names_);
+  assert( oldindex >= 0 && oldindex < detector_numbers_.size() );
+  const int detnum = detector_numbers_[oldindex];
+  
+  //Lets keep detector_names_ sorted
+  detector_names_.erase( pos );
+  detector_numbers_.erase( begin(detector_numbers_) + oldindex );
+  
+  auto newpos = std::lower_bound( begin(detector_names_), end(detector_names_),  newname );
+  assert( newpos==end(detector_names_) || (*newpos != newname) );
+  detector_names_.insert( newpos, newname );
+  const auto newindex = newpos - begin(detector_names_);
+  detector_numbers_.insert( begin(detector_numbers_) + newindex, detnum );
+  
+  auto gammapos = find( begin(gamma_detector_names_), end(gamma_detector_names_), origname );
+  if( gammapos != end(gamma_detector_names_) )
+  {
+    *gammapos = newname;
+    std::sort( begin(gamma_detector_names_), end(gamma_detector_names_) );
+  }
   
   auto neutpos = find( begin(neutron_detector_names_), end(neutron_detector_names_), origname );
   if( neutpos != end(neutron_detector_names_) )
+  {
     *neutpos = newname;
-  
+    std::sort( begin(neutron_detector_names_), end(neutron_detector_names_) );
+  }
   
   for( auto &m : measurements_ )
   {
@@ -2651,169 +2444,61 @@ vector<std::shared_ptr<const Measurement>> SpecFile::sample_measurements( const 
 
 
 
-
-
-
-
-void Measurement::recalibrate_by_eqn( const std::vector<float> &eqn,
-                                      const std::vector<std::pair<float,float>> &dev_pairs,
-                                      SpecUtils::EnergyCalType type,
-                                      std::shared_ptr<const std::vector<float>> binning )
+void Measurement::set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal )
 {
-  // Note: this will run multiple times per calibration
-
-  if( !binning && gamma_counts_ && gamma_counts_->size() )
+  if( !cal )
+    throw runtime_error( "set_energy_calibration: called with null input" );
+      
+  if( !gamma_counts_ && (cal->type() != EnergyCalType::InvalidEquationType) )
+    throw runtime_error( "set_energy_calibration: Measurement does not contain gamma counts" );
+      
+  switch( cal->type() )
   {
-    switch( type )
+    case EnergyCalType::Polynomial:
+    case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+    case EnergyCalType::FullRangeFraction:
+    case EnergyCalType::LowerChannelEdge:
     {
-      case SpecUtils::EnergyCalType::Polynomial:
-      case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-        binning = SpecUtils::polynomial_binning( eqn, gamma_counts_->size(), dev_pairs );
+      const bool same_channel = (gamma_counts_->size() == cal->num_channels());
+      if( !same_channel )
+        throw runtime_error( "set_energy_calibration: calibration has "
+                              + std::to_string(cal->num_channels()) + " but there are "
+                              + std::to_string(gamma_counts_->size()) + " gamma channels." );
       break;
-
-      case SpecUtils::EnergyCalType::FullRangeFraction:
-        binning = SpecUtils::fullrangefraction_binning( eqn, gamma_counts_->size(), dev_pairs );
+    }//
+    
+    case EnergyCalType::InvalidEquationType:
       break;
-
-      case SpecUtils::EnergyCalType::LowerChannelEdge:
-        cerr << SRC_LOCATION << "\n\tWarning, you probabhouldnt be calling "
-             << "this function for EquationType==LowerChannelEdge, as its probably "
-             << "not as efficient as the other version of this function"
-             << endl;
-        binning.reset( new vector<float>(eqn) );
-      break;
-
-      case SpecUtils::EnergyCalType::InvalidEquationType:
-        throw runtime_error( "Measurement::recalibrate_by_eqn(...): Can not call with EquationType==InvalidEquationType" );
-    }//switch( type )
-  }//if( !binning )
+  }//switch( cal->type() )
+                            
+                            
+  energy_calibration_ = cal;
+}//void set_energy_calibration(...)
 
 
-  if( !binning || ((binning->size() != gamma_counts_->size())
-      && (type!=SpecUtils::EnergyCalType::LowerChannelEdge || gamma_counts_->size()>binning->size())) )
-  {
-    stringstream msg;
-    msg << "Measurement::recalibrate_by_eqn(...): "
-           "You can not use this funtion to change the number"
-           " of bins. The spectrum has " << gamma_counts_->size()
-        << " bins, you tried to give it " << binning->size() << " bins."
-        << endl;
-    throw runtime_error( msg.str() );
-  }//if( channel_energies_->size() != gamma_counts_->size() )
-
-
-  channel_energies_   = binning;
-  if( type != SpecUtils::EnergyCalType::LowerChannelEdge )
-    calibration_coeffs_ = eqn;
-  else
-    calibration_coeffs_.clear();
-  energy_calibration_model_  = type;
-  deviation_pairs_ = dev_pairs;
-  
-  if( type == SpecUtils::EnergyCalType::LowerChannelEdge )
-    deviation_pairs_.clear();
-  
-}//void recalibrate_by_eqn( const std::vector<float> &eqn )
-
-
-void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
-                                const std::vector<std::pair<float,float>> &dev_pairs,
-                                SpecUtils::EnergyCalType type )
+void Measurement::rebin( const std::shared_ptr<const EnergyCalibration> &cal )
 {
-  if( !gamma_counts_ || gamma_counts_->empty() )
-    throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
-                              "gamma_counts_ must be defined");
-
-  std::shared_ptr<const std::vector<float>> binning;
-  const size_t nbin = gamma_counts_->size(); //channel_energies_->size();
-
-  switch( type )
-  {
-    case SpecUtils::EnergyCalType::Polynomial:
-    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-      binning = SpecUtils::polynomial_binning( eqn, nbin, dev_pairs );
-    break;
-
-    case SpecUtils::EnergyCalType::FullRangeFraction:
-      binning = SpecUtils::fullrangefraction_binning( eqn, nbin, dev_pairs );
-    break;
-
-    case SpecUtils::EnergyCalType::LowerChannelEdge:
-      binning.reset( new vector<float>(eqn) );
-    break;
-
-    case SpecUtils::EnergyCalType::InvalidEquationType:
-      throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
-                                "can not be called with type==InvalidEquationType");
-    break;
-  }//switch( type )
-
-  rebin_by_eqn( eqn, dev_pairs, binning, type );
-}//void rebin_by_eqn( const std::vector<float> eqn )
-
-
-void Measurement::rebin_by_eqn( const std::vector<float> &eqn,
-                                const std::vector<std::pair<float,float>> &dev_pairs,
-                                std::shared_ptr<const std::vector<float>> binning,
-                                SpecUtils::EnergyCalType type )
-{
-  rebin_by_lower_edge( binning );
-
-  if( type == SpecUtils::EnergyCalType::InvalidEquationType )
-    throw std::runtime_error( "Measurement::rebin_by_eqn(...): "
-                              "can not be called with type==InvalidEquationType");
-
-  if( type != SpecUtils::EnergyCalType::LowerChannelEdge )
-    calibration_coeffs_ = eqn;
-  else
-    calibration_coeffs_.clear();
-
-  deviation_pairs_    = dev_pairs;
-  energy_calibration_model_  = type;
-}//void rebin_by_eqn(...)
-
-
-
-
-
-void Measurement::rebin_by_lower_edge( std::shared_ptr<const std::vector<float>> new_binning_shrd )
-{
-  if( new_binning_shrd.get() == channel_energies_.get() )
-    return;
-
-  if( !gamma_counts_ )
-    return;
+  assert( energy_calibration_ );
+  if( energy_calibration_->num_channels() < 4 )
+    throw std::runtime_error( "Measurement::rebin(): invalid previous energy calibration" );
   
-  {//being codeblock to do work
-    if( !new_binning_shrd )
-      throw runtime_error( "rebin_by_lower_edge: invalid new binning" );
+  if( !cal || (cal->num_channels() < 4) )
+    throw std::runtime_error( "Measurement::rebin(): invalid new energy calibration" );
+      
+  const size_t new_nbin = cal->num_channels();
+  auto rebinned_gamma_counts = make_shared<vector<float>>(new_nbin);
+  
+  SpecUtils::rebin_by_lower_edge( *energy_calibration_->channel_energies(),
+                                  *gamma_counts_,
+                                  *cal->channel_energies(),
+                                  *rebinned_gamma_counts );
     
-    if( !channel_energies_ || channel_energies_->empty() )
-      throw runtime_error( "rebin_by_lower_edge: no initial binning" );
-    
-    const size_t new_nbin = new_binning_shrd->size();
-    std::shared_ptr<std::vector<float>> rebinned_gamma_counts( new vector<float>(new_nbin) );
-    
-    SpecUtils::rebin_by_lower_edge( *channel_energies_, *gamma_counts_,
-                            *new_binning_shrd, *rebinned_gamma_counts );
-    
-    channel_energies_ = new_binning_shrd;
-    gamma_counts_ = rebinned_gamma_counts;
-    
-    deviation_pairs_.clear();
-    calibration_coeffs_.clear();
-    energy_calibration_model_ = SpecUtils::EnergyCalType::LowerChannelEdge;
-  }//end codeblock to do works
-}//void rebin_by_lower_edge(...)
-
-
-
-
-
+  gamma_counts_ = rebinned_gamma_counts;
+  energy_calibration_ = cal;
+}//rebin( )
 
 
 #if( PERFORM_DEVELOPER_CHECKS )
-
 namespace
 {
 #define compare_field(l,r,f) if( (l.f) != (r.f) ) return (l.f) < (r.f);
@@ -2833,7 +2518,7 @@ namespace
   };
 }//namespace
 
-void DetectorAnalysisResult::equalEnough( const DetectorAnalysisResult &lhs,
+void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
                                           const DetectorAnalysisResult &rhs )
 {
   if( lhs.remark_ != rhs.remark_ )
@@ -2893,10 +2578,10 @@ void DetectorAnalysisResult::equalEnough( const DetectorAnalysisResult &lhs,
              lhs.real_time_, rhs.real_time_ );
     throw runtime_error( buffer );
   }
-}//void DetectorAnalysisResult::equalEnough(...)
+}//void DetectorAnalysisResult::equal_enough(...)
 
 
-void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
+void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
                                     const DetectorAnalysis &rhs )
 {
   char buffer[1024];
@@ -3042,12 +2727,12 @@ void DetectorAnalysis::equalEnough( const DetectorAnalysis &lhs,
   std::sort( rhsres.begin(), rhsres.end(), &compare_DetectorAnalysisResult );
   
   for( size_t i = 0; i < rhsres.size(); ++i )
-    DetectorAnalysisResult::equalEnough( lhsres[i], rhsres[i] );
-}//void DetectorAnalysis::equalEnough(...)
+    DetectorAnalysisResult::equal_enough( lhsres[i], rhsres[i] );
+}//void DetectorAnalysis::equal_enough(...)
 
 
 
-void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
+void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 {
   char buffer[1024];
   
@@ -3154,56 +2839,9 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( buffer );
   }
 
-  auto lhs_cal_model = lhs.energy_calibration_model_;
-  auto rhs_cal_model = rhs.energy_calibration_model_;
-  
-  if( lhs_cal_model == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
-    lhs_cal_model = SpecUtils::EnergyCalType::Polynomial;
-  if( rhs_cal_model == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
-    rhs_cal_model = SpecUtils::EnergyCalType::Polynomial;
-
-  if( lhs_cal_model != rhs_cal_model && !!lhs.channel_energies_ )
-  {
-    if( (lhs_cal_model == SpecUtils::EnergyCalType::Polynomial
-         && rhs_cal_model == SpecUtils::EnergyCalType::FullRangeFraction)
-       || (lhs_cal_model == SpecUtils::EnergyCalType::FullRangeFraction
-           && rhs_cal_model == SpecUtils::EnergyCalType::Polynomial) )
-    {
-      const size_t nbin = lhs.channel_energies_->size();
-      vector<float> lhscoefs = lhs.calibration_coeffs_;
-      vector<float> rhscoefs = rhs.calibration_coeffs_;
-      
-      if( rhs.energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
-        rhscoefs = SpecUtils::polynomial_coef_to_fullrangefraction( rhscoefs, nbin );
-      if( lhs.energy_calibration_model_ == SpecUtils::EnergyCalType::Polynomial )
-        lhscoefs = SpecUtils::polynomial_coef_to_fullrangefraction( lhscoefs, nbin );
-      
-      if( rhscoefs.size() != lhscoefs.size() )
-        throw runtime_error( "Calibration coefficients LHS and RHS do not match size after converting to be same type" );
-      
-      for( size_t i = 0; i < rhscoefs.size(); ++i )
-      {
-        const float a = lhscoefs[i];
-        const float b = rhscoefs[i];
-        
-        if( fabs(a - b) > (1.0E-5*std::max(fabs(a),fabs(b))) )
-        {
-          snprintf( buffer, sizeof(buffer),
-                   "Calibration coefficient %i of LHS (%1.8E) doesnt match RHS (%1.8E) (note, concerted calib type)",
-                   int(i), a, b );
-          throw runtime_error( buffer );
-        }
-      }
-    }else if( lhs.gamma_count_sum_>0.0 || rhs.gamma_count_sum_>0.0 )
-    {
-      snprintf( buffer, sizeof(buffer),
-               "Calibration model of LHS (%i) different from RHS (%i)",
-               int(lhs.energy_calibration_model_),
-               int(rhs.energy_calibration_model_) );
-      throw runtime_error( buffer );
-    }
-  }
-  
+  assert( lhs.energy_calibration_ );
+  assert( rhs.energy_calibration_ );
+  EnergyCalibration::equal_enough( *lhs.energy_calibration_, *rhs.energy_calibration_ );
   
   const set<string> nlhsremarkss( lhs.remarks_.begin(), lhs.remarks_.end() );
   const set<string> nrhsremarkss( rhs.remarks_.begin(), rhs.remarks_.end() );
@@ -3311,99 +2949,6 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
                         + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   }
 
-  if( lhs.energy_calibration_model_ == rhs.energy_calibration_model_ )
-  {
-    vector<float> lhscalcoef = lhs.calibration_coeffs_;
-    vector<float> rhscalcoef = rhs.calibration_coeffs_;
-    
-    while( lhscalcoef.size() && lhscalcoef.back() == 0.0f )
-      lhscalcoef.erase( lhscalcoef.end() - 1 );
-    while( rhscalcoef.size() && rhscalcoef.back() == 0.0f )
-      rhscalcoef.erase( rhscalcoef.end() - 1 );
-
-    if( lhscalcoef.size() != rhscalcoef.size() )
-    {
-      snprintf( buffer, sizeof(buffer),
-               "Number of calibration coefficients of LHS (%i) doesnt match RHS (%i)",
-               int(lhscalcoef.size()),
-               int(rhscalcoef.size()) );
-      throw runtime_error( buffer );
-    }
-  
-    for( size_t i = 0; i < rhscalcoef.size(); ++i )
-    {
-      const float a = lhscalcoef[i];
-      const float b = rhscalcoef[i];
-    
-      if( fabs(a - b) > (1.0E-5*std::max(fabs(a),fabs(b))) )
-      {
-        snprintf( buffer, sizeof(buffer),
-                 "Calibration coefficient %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-                 int(i), a, b );
-        throw runtime_error( buffer );
-      }
-    }
-  }//if( energy_calibration_model_ == rhs.energy_calibration_model_ )
-  
-  if( lhs.deviation_pairs_.size() != rhs.deviation_pairs_.size() )
-    throw runtime_error( "Number of deviation pairs of LHS and RHS dont match" );
-  
-  for( size_t i = 0; i < lhs.deviation_pairs_.size(); ++i )
-  {
-    if( fabs(lhs.deviation_pairs_[i].first - rhs.deviation_pairs_[i].first) > 0.001 )
-    {
-      snprintf( buffer, sizeof(buffer),
-               "Energy of deviation pair %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-               int(i), lhs.deviation_pairs_[i].first,
-               rhs.deviation_pairs_[i].first );
-      throw runtime_error( buffer );
-    }
-    
-    if( fabs(lhs.deviation_pairs_[i].second - rhs.deviation_pairs_[i].second) > 0.001 )
-    {
-      snprintf( buffer, sizeof(buffer),
-               "Offset of deviation pair %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-               int(i), lhs.deviation_pairs_[i].second,
-               rhs.deviation_pairs_[i].second );
-      throw runtime_error( buffer );
-    }
-  }//for( size_t i = 0; i < lhs.deviation_pairs_.size(); ++i )
-  
-  if( (!lhs.channel_energies_) != (!rhs.channel_energies_) )
-  {
-    snprintf( buffer, sizeof(buffer), "Channel energies avaialblity for LHS (%s)"
-             " doesnt match RHS (%s)",
-             (!lhs.channel_energies_?"missing":"available"),
-             (!rhs.channel_energies_?"missing":"available") );
-    throw runtime_error(buffer);
-  }
-  
-  if( !!lhs.channel_energies_ )
-  {
-    if( lhs.channel_energies_->size() != rhs.channel_energies_->size() )
-    {
-      snprintf( buffer, sizeof(buffer),
-               "Number of channel energies of LHS (%i) doesnt match RHS (%i)",
-               int(lhs.channel_energies_->size()),
-               int(rhs.channel_energies_->size()) );
-      throw runtime_error( buffer );
-    }
-    
-    for( size_t i = 0; i < lhs.channel_energies_->size(); ++i )
-    {
-      const float lhsenergy = lhs.channel_energies_->at(i);
-      const float rhsenergy = rhs.channel_energies_->at(i);
-      const float diff = fabs(lhsenergy - rhsenergy );
-      if( diff > 0.00001*std::max(fabs(lhsenergy), fabs(rhsenergy)) && diff > 0.001 )
-      {
-        snprintf( buffer, sizeof(buffer),
-                 "Energy of channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-                 int(i), lhs.channel_energies_->at(i),
-                 rhs.channel_energies_->at(i) );
-        throw runtime_error( buffer );
-      }
-    }
-  }//if( !!channel_energies_ )
   
   if( (!lhs.gamma_counts_) != (!rhs.gamma_counts_) )
   {
@@ -3505,10 +3050,10 @@ void Measurement::equalEnough( const Measurement &lhs, const Measurement &rhs )
   if( lhs.title_ != rhs.title_ )
     throw runtime_error( "Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
-}//void equalEnough( const Measurement &lhs, const Measurement &rhs )
+}//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
-void SpecFile::equalEnough( const SpecFile &lhs,
+void SpecFile::equal_enough( const SpecFile &lhs,
                                    const SpecFile &rhs )
 {
   std::lock( lhs.mutex_, rhs.mutex_ );
@@ -3572,7 +3117,16 @@ void SpecFile::equalEnough( const SpecFile &lhs,
                               rhs.detector_names_.end() );
   
   if( lhsnames != rhsnames )
-    throw runtime_error( "SpecFile: Detector names do not match for LHS and RHS" );
+  {
+    string lhsnamesstr, rhsnamesstr;
+    for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+      lhsnamesstr += (i ? ", " : "") + lhs.detector_names_[i];
+    for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
+      rhsnamesstr += (i ? ", " : "") + rhs.detector_names_[i];
+    
+    throw runtime_error( "SpecFile: Detector names do not match for LHS ({"
+                         + lhsnamesstr + "}) and RHS ({" + rhsnamesstr + "})" );
+  }
  
   if( lhs.detector_numbers_.size() != rhs.detector_numbers_.size()
       || lhs.detector_numbers_.size() != lhs.detector_names_.size() )
@@ -3604,6 +3158,22 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   */
   
   
+  if( lhs.gamma_detector_names_.size() != rhs.gamma_detector_names_.size() )
+  {
+    snprintf( buffer, sizeof(buffer),
+             "SpecFile: Number of gamma detector names of LHS (%i) doesnt match RHS (%i)",
+             int(lhs.gamma_detector_names_.size()),
+             int(rhs.gamma_detector_names_.size()) );
+    throw runtime_error( buffer );
+  }
+  
+  const set<string> glhsnames( begin(lhs.gamma_detector_names_), end(lhs.gamma_detector_names_) );
+  const set<string> grhsnames( begin(rhs.gamma_detector_names_), end(rhs.gamma_detector_names_) );
+  
+  if( glhsnames != grhsnames )
+    throw runtime_error( "SpecFile: Gamma detector names dont match for LHS and RHS" );
+  
+  
   if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3613,10 +3183,10 @@ void SpecFile::equalEnough( const SpecFile &lhs,
     throw runtime_error( buffer );
   }
   
-  const set<string> nlhsnames( lhs.neutron_detector_names_.begin(),
-                               lhs.neutron_detector_names_.end() );
-  const set<string> nrhsnames( rhs.neutron_detector_names_.begin(),
-                               rhs.neutron_detector_names_.end() );
+  const set<string> nlhsnames( begin(lhs.neutron_detector_names_),
+                               end(lhs.neutron_detector_names_) );
+  const set<string> nrhsnames( begin(rhs.neutron_detector_names_),
+                               end(rhs.neutron_detector_names_) );
   
   if( nlhsnames != nrhsnames )
     throw runtime_error( "SpecFile: Neutron detector names dont match for LHS and RHS" );
@@ -3797,7 +3367,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
       
       try
       {
-        Measurement::equalEnough( *lhsptr, *rhsptr );
+        Measurement::equal_enough( *lhsptr, *rhsptr );
       }catch( std::exception &e )
       {
         snprintf( buffer, sizeof(buffer), "SpecFile: Sample %i, Detector name %s: %s",
@@ -3996,7 +3566,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   //Make UUID last, since its sensitive to the other variables changing, and we
   //  want to report on those first to make fixing easier.
   if( !!lhs.detectors_analysis_ )
-    DetectorAnalysis::equalEnough( *lhs.detectors_analysis_,
+    DetectorAnalysis::equal_enough( *lhs.detectors_analysis_,
                                   *rhs.detectors_analysis_ );
   
   /*
@@ -4009,7 +3579,7 @@ void SpecFile::equalEnough( const SpecFile &lhs,
   
 //  bool modified_;
 //  bool modifiedSinceDecode_;
-}//void equalEnough( const Measurement &lhs, const Measurement &rhs )
+}//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
 
 
@@ -4053,6 +3623,7 @@ const SpecFile &SpecFile::operator=( const SpecFile &rhs )
   filename_               = rhs.filename_;
   detector_names_         = rhs.detector_names_;
   detector_numbers_       = rhs.detector_numbers_;
+  gamma_detector_names_   = rhs.gamma_detector_names_;
   neutron_detector_names_ = rhs.neutron_detector_names_;
 
   uuid_                   = rhs.uuid_;
@@ -4118,15 +3689,11 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   quality_status_ = rhs.quality_status_;
 
   source_type_ = rhs.source_type_;
-  energy_calibration_model_ = rhs.energy_calibration_model_;
 
   remarks_ = rhs.remarks_;
   start_time_ = rhs.start_time_;
 
-  calibration_coeffs_ = rhs.calibration_coeffs_;
-  deviation_pairs_ = rhs.deviation_pairs_;
-
-  channel_energies_ = rhs.channel_energies_;
+  energy_calibration_ = rhs.energy_calibration_;
   gamma_counts_ = rhs.gamma_counts_;
 
 //  if( rhs.gamma_counts_ )
@@ -4621,7 +4188,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     
   }//if( measurements_.size() > 500 ) / else
   
-  stable_sort( measurements_.begin(), measurements_.end(), &Measurement::compare_by_sample_det_time );
+  stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
 }//void  set_sample_numbers_by_time_stamp()
 
 
@@ -4642,7 +4209,12 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
     vector<int> &meass = sampleNumsToSamples[m->sample_number_];
     
     if( std::find(meass.begin(),meass.end(),m->detector_number_) != meass.end() )
+    {
+      //cerr << "Unique check failed for sample with Start time "
+      //     << SpecUtils::to_iso_string(m->start_time()) << " detname=" << m->detector_name()
+      //     << " sample " << m->sample_number() << endl;
       return false;
+    }
     
     meass.push_back( m->detector_number_ );
     
@@ -4663,7 +4235,7 @@ void SpecFile::ensure_unique_sample_numbers()
   
   if( has_unique_sample_and_detector_numbers() )
   {
-    stable_sort( measurements_.begin(), measurements_.end(), &Measurement::compare_by_sample_det_time );
+    stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
   }else
   {
     set_sample_numbers_by_time_stamp();
@@ -4690,8 +4262,12 @@ void SpecFile::ensure_unique_sample_numbers()
   if( sample_numbers.size() == 1 )
   {
     for( auto &m : measurements_ )
-      if( m->sample_number_ <= 0 )
+    {
+      //Some files will give SampleNumber an attribute of the <Spectrum> tag, but those dont always
+      //  have the same meaning as how we want it to.
+      //if( m->sample_number_ <= 0 )
         m->sample_number_ = 1;
+    }
     return;
   }
   
@@ -4754,6 +4330,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
   //  SpecFile::rebin_by_polunomial_eqn
   try
   {
+    map<size_t,shared_ptr<EnergyCalibration>> default_energy_cal;
     set<string> gamma_detector_names; //can be gamma+nutron
     const set<string> det_names = find_detector_names();
     
@@ -4765,8 +4342,17 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     vector<string> names( det_names.begin(), det_names.end() );
     typedef map<int,string> IntStrMap;
     IntStrMap num_to_name_map;
-    set<string> neut_det_names;  //If a measurement contains neutrons at all, will be added to this.
+    set<string> gamma_det_names, neut_det_names;  //If a measurement contains neutrons at all, will be added to this.
+    map<string,shared_ptr<const EnergyCalibration>> missing_cal_fixs;
+    
+    
+    
+    map<EnergyCalibration,shared_ptr<const EnergyCalibration>> unique_cals;
     vector<string>::const_iterator namepos;
+    
+    int numNeutronAndGamma = 0, numWithGammas = 0, numWithNeutrons = 0;
+    bool neutronMeasDoNotHaveGamma = true, haveNeutrons = false, haveGammas = false;
+    
     
     for( size_t meas_index = 0; meas_index < measurements_.size(); ++meas_index )
     {
@@ -4778,7 +4364,15 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         meas->detector_number_ = static_cast<int>( namepos - names.begin() );
         num_to_name_map[meas->detector_number_] = meas->detector_name_;
       }else
-        cerr << "Couldnt find detector '" << meas->detector_name_ << "'!" << endl;
+      {
+#if( PERFORM_DEVELOPER_CHECKS )
+        char buffer[1024];
+        snprintf( buffer, sizeof(buffer),
+                  "Couldnt find detector '%s' in names - probably shouldnt ever happen",
+                  meas->detector_name_.c_str() );
+        log_developer_error( __func__, buffer );
+#endif
+      }
       
       if( meas->gamma_counts_ && meas->gamma_counts_->size() )
         gamma_detector_names.insert( meas->detector_name_ );
@@ -4794,85 +4388,131 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       }
 #endif
       
+      if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+        gamma_det_names.insert( meas->detector_name_ );
+      
       if( meas->contained_neutron_ )
         neut_det_names.insert( meas->detector_name_ );
       
-      //make sure the file didnt just have all zeros for the linear and
-      //  higher calibration coefficients
-      bool allZeros = true, invalid_calib = false;
-      for( size_t i = 1; i < meas->calibration_coeffs_.size(); ++i )
-        allZeros &= (fabs(meas->calibration_coeffs_[i])<1.0E-14);
+      const bool thisMeasHasGamma = (meas->gamma_counts_ && !meas->gamma_counts_->empty());
+      haveGammas = (haveGammas || thisMeasHasGamma);
+      haveNeutrons = (haveNeutrons || meas->contained_neutron_);
+      
+      numWithGammas += thisMeasHasGamma;
+      numWithNeutrons += meas->contained_neutron_;
+      numNeutronAndGamma += (meas->contained_neutron_ && thisMeasHasGamma);
+      
+      if( meas->contained_neutron_ && thisMeasHasGamma )
+        neutronMeasDoNotHaveGamma = false;
       
       //Do a basic sanity check of is the calibration is reasonable.
-      if( !allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
+      if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
       {
-        switch( meas->energy_calibration_model_ )
+        auto cal = meas->energy_calibration_;
+        
+        /// \TODO: This whole switch could be made to be done if PERFORM_DEVELOPER_CHECKS ...
+        switch( cal->type() )
         {
-          case SpecUtils::EnergyCalType::Polynomial:
-          case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-            if( meas->calibration_coeffs_.size() < 2
-                || fabs(meas->calibration_coeffs_[0])>300.0  //300 is arbitrary, but I have seen -160 in data.
-                || fabs(meas->calibration_coeffs_[1])>450.0  //450 is arbitrary, lets 7 channels span 3000 keV
-                || (meas->calibration_coeffs_.size()==2 && meas->calibration_coeffs_[1]<=FLT_EPSILON)
-                || (meas->calibration_coeffs_.size()>=3 && meas->calibration_coeffs_[1]<=FLT_EPSILON
-                      && meas->calibration_coeffs_[2]<=FLT_EPSILON)
-               //TODO: Could aso check that the derivative of energy polynomial does not go negative by meas->gamma_counts_->size()
-               //      Could call calibration_is_valid(...)
-               )
+          case EnergyCalType::Polynomial:
+          case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+          case EnergyCalType::FullRangeFraction:
+          case EnergyCalType::LowerChannelEdge:
+            if( !cal->num_channels() )
             {
-              allZeros = true;
-              invalid_calib = true;
+#if( PERFORM_DEVELOPER_CHECKS )
+              log_developer_error( __func__, "Found a energy calibration with with missing"
+                                  " channel energies " );
+#endif //#if( PERFORM_DEVELOPER_CHECKS )
+              meas->energy_calibration_ = make_shared<EnergyCalibration>();
+              cal = meas->energy_calibration_;
+            }
+            
+            if( cal->num_channels() != meas->gamma_counts_->size() )
+            {
+#if( PERFORM_DEVELOPER_CHECKS )
+              log_developer_error( __func__, "Found a energy calibration with different number"
+                                   " of channels than gamma spectrum" );
+#endif //#if( PERFORM_DEVELOPER_CHECKS )
+              meas->energy_calibration_ = make_shared<EnergyCalibration>();
+              cal = meas->energy_calibration_;
             }
             break;
             
-          case SpecUtils::EnergyCalType::FullRangeFraction:
-            if( meas->calibration_coeffs_.size() < 2
-               || fabs(meas->calibration_coeffs_[0]) > 1000.0f
-               || meas->calibration_coeffs_[1] < (FLT_EPSILON*meas->gamma_counts_->size()) )
-            {
-              allZeros = true;
-              invalid_calib = true;
-            }
-            break;
-            
-          case SpecUtils::EnergyCalType::LowerChannelEdge:
-            //should check that at least as many energies where provided as
-            //  meas->gamma_counts_->size()
-            break;
-          
-          case SpecUtils::EnergyCalType::InvalidEquationType:
+          case EnergyCalType::InvalidEquationType:
             //Nothing to check here.
             break;
-        }//switch( meas->energy_calibration_model_ )
-      }//if( !allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
-      
-      if( allZeros && (meas->energy_calibration_model_==SpecUtils::EnergyCalType::Polynomial
-           || meas->energy_calibration_model_==SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial
-           || meas->energy_calibration_model_==SpecUtils::EnergyCalType::FullRangeFraction)
-          && meas->gamma_counts_ && meas->gamma_counts_->size() )
-      {
-        if( invalid_calib )
-        {
-          stringstream remark;
-          remark << "Energy calibration provided by detector was invalid {";
-          for( size_t i = 0; i < meas->calibration_coeffs_.size(); ++i )
-            remark << (i?", ":"") << meas->calibration_coeffs_[i];
-          remark << "}";
-          meas->remarks_.push_back( remark.str() );
-        }//if( invalid_calib )
+        }//switch( cal->type() )
         
-        meas->energy_calibration_model_ = SpecUtils::EnergyCalType::InvalidEquationType;
-        meas->calibration_coeffs_.clear();
-        meas->deviation_pairs_.clear();
-        meas->channel_energies_.reset();
-      }//if( we dont have a calibration...)
+        //If we dont have a energy calibration, but do have a gamma spectrum, lets look for a
+        //  calibration from the same detector, but other Measurement.  If we cant do that then lets
+        //  at least have all the EnergyCalType::InvalidEquationType point to the same object.
+        if( meas->energy_calibration_->type() == EnergyCalType::InvalidEquationType )
+        {
+          shared_ptr<const EnergyCalibration> fix_cal = missing_cal_fixs[meas->detector_name_];
+          
+          for( size_t otherindex = 0; !fix_cal && (otherindex < measurements_.size()); ++otherindex )
+          {
+            if( otherindex == meas_index )
+              continue;
+            
+            const auto &othermeas = measurements_[otherindex];
+            if( othermeas->energy_calibration_ == meas->energy_calibration_ )
+              continue;
+            
+            if( othermeas->energy_calibration_->type() == EnergyCalType::InvalidEquationType )
+            {
+              meas->energy_calibration_ = othermeas->energy_calibration_;
+              continue;
+            }
+            
+            if( othermeas->detector_name_ != meas->detector_name_ )
+              continue;
+            
+            fix_cal = othermeas->energy_calibration_;
+          }//for( const auto &othermeas : measurements_ )
+          
+          if( fix_cal )
+            missing_cal_fixs[meas->detector_name_] = fix_cal;
+          else
+            missing_cal_fixs[meas->detector_name_] = meas->energy_calibration_;
+          
+          if( fix_cal )
+          {
+            meas->energy_calibration_ = fix_cal;
+          
+            if( (fix_cal->type() != EnergyCalType::InvalidEquationType)
+                && (fix_cal->type() != EnergyCalType::UnspecifiedUsingDefaultPolynomial) )
+            meas->parse_warnings_.push_back( "Energy calibration was not specified for this record,"
+                                   " so using calibration from another record for this detector" );
+          }//if( fix_cal )
+        }//if( invalid equation type )
+        
+        //If the energy calibration is still invalid by here - we're not going to find one for it,
+        //  so we will assign a default one.
+        if( meas->energy_calibration_->type() == EnergyCalType::InvalidEquationType )
+        {
+          shared_ptr<EnergyCalibration> &def_cal = default_energy_cal[meas->gamma_counts_->size()];
+          if( !def_cal )
+          {
+            const size_t nbin = meas->gamma_counts_->size();
+            const float nbinf = std::max(meas->gamma_counts_->size()-1, size_t(1));
+            def_cal = make_shared<EnergyCalibration>();
+            if( nbin > 1 )  /// \TODO: maybe loosen poly/FRF to not have a number of bin requirement
+              def_cal->set_default_polynomial( nbin, {0.0f, 3000.0f/nbinf}, {} );
+          }
+          
+          meas->energy_calibration_ = def_cal;
+          missing_cal_fixs[meas->detector_name_] = def_cal;
+        }//if( invalid equation type )
+        
+        //Check if an equivalent calibration has been seen, and if so, use that
+        shared_ptr<const EnergyCalibration> &equivcal = unique_cals[*meas->energy_calibration_];
+        if( !equivcal )
+          equivcal = meas->energy_calibration_;
+        else
+          meas->energy_calibration_ = equivcal;
+      }//if( this is a gamma measurment )
       
-      if( allZeros && meas->gamma_counts_ && meas->gamma_counts_->size() )
-      {
-        //TODO: look to see if we can grab a calibration for this same detector from another sample.
-        //std::shared_ptr<Measurement> &meas = measurements_[meas_index];
-        //invalid_calib
-      }//if( allZeros )
       
       if( meas->has_gps_info() )
       {
@@ -4926,15 +4566,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
           properties_flags_ |= kNotTimeSortedOrder;
         
-        if( !Measurement::compare_by_sample_det_time(measurements_[i-1],measurements_[i]) )
+        if( !compare_by_sample_det_time(measurements_[i-1],measurements_[i]) )
           properties_flags_ |= kNotSampleDetectorTimeSorted;
       }//for( size_t i = 1; i < measurements_.size(); ++i )
     }else
     {
       ensure_unique_sample_numbers();
       
-      //ToDo: we can probably add this next bit of logic to another loop so it
-      //      isnt so expensive.
+      /// @TODO: we can probably add this next bit of logic to another loop so it isnt so expensive.
       for( size_t i = 1; i < measurements_.size(); ++i )
       {
         if( !measurements_[i-1]->start_time_.is_special()
@@ -4951,6 +4590,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     
     detector_numbers_.clear();
     detector_names_.clear();
+    gamma_detector_names_.clear();
     neutron_detector_names_.clear();
     
     for( const IntStrMap::value_type &t : num_to_name_map )
@@ -4959,55 +4599,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       detector_names_.push_back( t.second );
     }//for( const IntStrMap::value_type &t : num_to_name_map )
     
+    gamma_detector_names_.insert( end(gamma_detector_names_), begin(gamma_det_names), end(gamma_det_names) );
     neutron_detector_names_.insert( neutron_detector_names_.end(), neut_det_names.begin(), neut_det_names.end() );
-    
-    //Make a set of all unique calibrations, so we can later allow Measurements
-    //  with the same calibration share a vector<float> of bin energies.
-    set<MeasurementCalibInfo> calib_infos_set;
-    
-    //Build up a mapping from detector names, to _a_ calibration for it, so if
-    //  any spectra for that detector doesnt have a calibration associated with
-    //  it, we can assign it this one.  Note: the MeasurementCalibInfo wont be
-    //  used to assign calibration from, it will be used to index
-    //  calib_infos_set.
-    map<string,MeasurementCalibInfo> detname_to_calib_map;
-    
-    int numNeutronAndGamma = 0, numWithGammas = 0, numWithNeutrons = 0;
-    bool neutronMeasDoNotHaveGamma = true, haveNeutrons = false, haveGammas = false;
-    
-    //Need to go through and set binning on spectrums here
-    for( auto &meas : measurements_ )
-    {
-      const bool thisMeasHasGamma = (meas->gamma_counts_ && !meas->gamma_counts_->empty());
-      haveGammas = (haveGammas || thisMeasHasGamma);
-      haveNeutrons = (haveNeutrons || meas->contained_neutron_);
-      
-      numWithGammas += thisMeasHasGamma;
-      numWithNeutrons += meas->contained_neutron_;
-      numNeutronAndGamma += (meas->contained_neutron_ && thisMeasHasGamma);
-      
-      if( meas->contained_neutron_ && thisMeasHasGamma )
-        neutronMeasDoNotHaveGamma = false;
-      
-      if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
-        continue;
-      
-      MeasurementCalibInfo info( meas );
-      
-      if( info.coefficients.size()
-         || (info.binning && info.binning->size()) )
-      {
-        info.fill_binning();
-        calib_infos_set.insert( info );
-        
-        const string &name = meas->detector_name_;
-        //        if( detname_to_calib_map.find(name) != detname_to_calib_map.end()
-        //            && !(detname_to_calib_map[name] == info) )
-        //          cerr << SRC_LOCATION << "\n\tWarning same detector " << name
-        //               << " has multiple calibrations" << endl;
-        detname_to_calib_map[name] = info;
-      }//if( a non-empty info ) / else
-    }//for( auto &meas : measurements_ )
     
     
     //If none of the Measurements that have neutrons have gammas, then lets see
@@ -5018,7 +4611,6 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       merge_neutron_meas_into_gamma_meas();
     }
     
-    int n_times_guess_cal = 0;
     size_t nbins = 0;
     bool all_same_num_bins = true;
     
@@ -5039,6 +4631,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     const size_t nmeas = measurements_.size();
     size_t ngamma_meas = 0;
     
+    /// @TODO: we could probably move this next loop into one of the above to be more efficient
     for( size_t measn = 0; measn < nmeas; ++measn )
     {
       std::shared_ptr<Measurement> &meas = measurements_[measn];
@@ -5078,65 +4671,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
             pos = samplenum_to_starttime.insert( make_pair(samplenum, make_pair(st,rt)) ).first;
           pos->second.second = max( rt, pos->second.second );
         }
-        
-        
       }//if( a candidate for a passthrough spectrum )
-      
-      MeasurementCalibInfo thisinfo( meas );
-      set<MeasurementCalibInfo>::const_iterator pos = calib_infos_set.find(thisinfo); //
-      
-      //If this Measurement doesnt have a calibration, see if another one for
-      //  the same detector exists.
-      if( pos == calib_infos_set.end() )
-        pos = calib_infos_set.find(detname_to_calib_map[meas->detector_name_]);
-      
-      try
-      {
-        if( pos == calib_infos_set.end() )
-          throw runtime_error( "" );
-      
-        //pos->fill_binning();
-        meas->channel_energies_ = pos->binning;
-        meas->calibration_coeffs_ = pos->coefficients;
-        meas->deviation_pairs_ = pos->deviation_pairs_;
-        meas->energy_calibration_model_ = pos->equation_type;
-        
-        if( !meas->channel_energies_ )
-          throw runtime_error( "" );
-          
-        //Force calibration_coeffs_ to free the memory for LowerChannelEdge
-        if( pos->equation_type == SpecUtils::EnergyCalType::LowerChannelEdge )
-          vector<float>().swap( meas->calibration_coeffs_ );
-      }catch( std::exception & )
-      {
-        if( meas->gamma_counts_ && !meas->gamma_counts_->empty())
-        {
-          ++n_times_guess_cal;
-          meas->energy_calibration_model_ = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-          meas->calibration_coeffs_.resize( 2 );
-          meas->calibration_coeffs_[0] = 0.0f;
-          meas->calibration_coeffs_[1] = 3000.0f / std::max(meas->gamma_counts_->size()-1, size_t(1));
-          MeasurementCalibInfo info( meas );
-        
-          pos = calib_infos_set.find(info);
-        
-          if( pos == calib_infos_set.end() )
-          {
-            info.fill_binning();
-            calib_infos_set.insert( info );
-            pos = calib_infos_set.find(info);
-          }//if( pos == calib_infos_set.end() )
-        
-          if( pos != calib_infos_set.end() )
-          {
-            meas->channel_energies_ = pos->binning;
-          }else
-          {
-            //shouldnt ever get here! - but JIC
-            meas->channel_energies_ = info.binning;
-          }//if( pos != calib_infos_set.end() )  e;se
-        }//if( meas->gamma_counts_ && meas->gamma_counts_->size() )
-      }//try( to fill binning ) / catch
+    
     }//for( auto &meas : measurements_ )
     
 
@@ -5192,91 +4728,61 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     if( is_passthrough )
       properties_flags_ |= kPassthroughOrSearchMode;
     
-    //XXX - as of 20121130, the below code which makes sure all samples
-    //      of passthrough data has bining information (as apposed to just first
-    //      detector that some of the detector manufactureers do), has not been
-    //      well tested - just kinda seems to work for SAIC detectors.
-    if( is_passthrough )
-    {
-      const int first_sample_number = *sample_numbers_.begin();
-      map<string,std::shared_ptr<Measurement>> det_meas_map;
-      
-      for( const auto &meas : measurements_ )
-      {
-        if( meas->sample_number() == first_sample_number
-           && meas->gamma_counts_ && !meas->gamma_counts_->empty()
-                                     && (!meas->calibration_coeffs_.empty()
-                                         || (meas->channel_energies_ && !meas->channel_energies_->empty())) )
-          det_meas_map[meas->detector_name_] = meas;
-      }//for( const auto &meas : measurements_ )
-      
-      for( const auto &meas : measurements_ )
-      {
-        if( meas->sample_number() == first_sample_number )
-          continue;
-        
-        const string &name = meas->detector_name_;
-        if( meas->gamma_counts_ && !meas->gamma_counts_->empty()
-            && det_meas_map.count(name) && meas->calibration_coeffs_.empty()
-            && ( !meas->channel_energies_ || meas->channel_energies_->empty()
-                 || (det_meas_map[name]->energy_calibration_model_ == SpecUtils::EnergyCalType::LowerChannelEdge
-                     && meas->energy_calibration_model_==SpecUtils::EnergyCalType::InvalidEquationType )
-               )
-           )
-        {
-          if( !meas->channel_energies_ || meas->channel_energies_->empty())
-          {
-            meas->channel_energies_   = det_meas_map[name]->channel_energies_;
-            meas->deviation_pairs_    = det_meas_map[name]->deviation_pairs_;
-          }//if( !meas->channel_energies_ || !meas->channel_energies_->size() )
-          
-          meas->energy_calibration_model_  = det_meas_map[name]->energy_calibration_model_;
-          meas->calibration_coeffs_ = det_meas_map[name]->calibration_coeffs_;
-        }
-      }//for( const std::shared_ptr<Measurement> &meas : measurements_ )
-    }//if( is_passthrough )
-    
     
     if( rebinToCommonBinning && all_same_num_bins && !measurements_.empty()
        && ((gamma_detector_names.size() > 1) || is_passthrough) )
     {
-      properties_flags_ |= kHasCommonBinning;
-      
-      if( (calib_infos_set.size() > 1) )
+      if( unique_cals.size() <= 1 )
       {
-        properties_flags_ |= kRebinnedToCommonBinning;
-        
+        properties_flags_ |= kHasCommonBinning;
+      }else
+      {
         //If we have more than one gamma detector, than we have to move them
         //  to have a common energy binning, to display properly
         size_t nbin = 0;
         float min_energy = 99999.9f, max_energy = -99999.9f;
         for( const auto &meas : measurements_ )
         {
-          nbin = max( nbin , meas->channel_energies_->size() );
-          if(!meas->channel_energies_->empty())
+          nbin = max( nbin , (meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0)) );
+          if( meas->energy_calibration_->type() != EnergyCalType::InvalidEquationType )
           {
-            min_energy = min( min_energy, meas->channel_energies_->front() );
-            max_energy = max( max_energy, meas->channel_energies_->back() );
+            min_energy = min( min_energy, meas->gamma_energy_min() );
+            max_energy = max( max_energy, meas->gamma_energy_max() );
           }//if( meas->channel_energies_.size() )
         }//for( const auto &meas : measurements_ )
         
-        size_t nbinShift = nbin - 1;
-        const float channel_width = (max_energy - min_energy) /
-        static_cast<float>( nbinShift );
-        vector<float> poly_eqn( 2, 0.0 );
-        poly_eqn[0] = min_energy;  // - 0.5*channel_width; // min_energy;
-        poly_eqn[1] = channel_width;
-        
-        for( const auto &meas : measurements_ )
+        try
         {
-          if( meas->gamma_counts_->size() > 16 )//dont rebin SAIC or LUDLUMS
+          const size_t nbinShift = nbin - 1;
+          const float channel_width = (max_energy - min_energy) / nbinShift;
+          auto new_cal = make_shared<EnergyCalibration>();
+          new_cal->set_polynomial( nbin, {min_energy,channel_width}, {} );
+          
+          for( const auto &meas : measurements_ )
           {
-            rebin_by_eqn( poly_eqn, std::vector<std::pair<float,float>>(), SpecUtils::EnergyCalType::Polynomial );
-            break;
-          }//if( meas->gamma_counts_->size() > 16 )
-        }//for( const auto &meas : measurements_ )
+            if( meas->gamma_counts_->size() > 4 )
+            {
+              rebin_all_measurements( new_cal );
+              properties_flags_ |= kHasCommonBinning;
+              properties_flags_ |= kRebinnedToCommonBinning;
+              break;
+            }//if( meas->gamma_counts_->size() > 16 )
+          }//for( const auto &meas : measurements_ )
+        }catch( std::exception &e )
+        {
+          char buffer[1024];
+          snprintf( buffer, sizeof(buffer), "Error rebining measurements to a common binning: %s",
+                   e.what() );
+          
+          parse_warnings_.push_back( buffer );
+#if( PERFORM_DEVELOPER_CHECKS )
+          log_developer_error( __func__, buffer );
+#endif
+        }//try ? catch
+        
+        
       }//if( calib_infos_set.size() > 1 )
-    }else if( all_same_num_bins && !measurements_.empty() && calib_infos_set.size()==1 )
+    }else if( all_same_num_bins && !measurements_.empty() && unique_cals.size()<=1 )
     {
       properties_flags_ |= kHasCommonBinning;
     }else if( !all_same_num_bins )
@@ -5303,10 +4809,23 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     recalc_total_counts();
     
 #if( PERFORM_DEVELOPER_CHECKS )
-    //Check to make sure all neutron detector names can be found in detector names
+    //Check to make sure all gamma and neutron detector names can be found in detector names
     {
       const vector<string>::const_iterator begindet = detector_names_.begin();
       const vector<string>::const_iterator enddet = detector_names_.end();
+      
+      for( const std::string &gdet : gamma_detector_names_ )
+      {
+        if( std::find(begindet,enddet,gdet) == enddet )
+        {
+          char buffer[1024];
+          snprintf( buffer, sizeof(buffer),
+                   "Found a gamma detector name not in the list of all detector names: %s\n",
+                   gdet.c_str() );
+          log_developer_error( __func__, buffer );
+        }
+      }//for( loop over gamma detector names )
+      
       for( const std::string &ndet : neutron_detector_names_ )
       {
         if( std::find(begindet,enddet,ndet) == enddet )
@@ -5317,14 +4836,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
                    ndet.c_str() );
           log_developer_error( __func__, buffer );
         }
-      }
+      }//for( loop over neutron detector names )
     }
 #endif
     
 #if( PERFORM_DEVELOPER_CHECKS )
-    static int ntest = 0;
-    if( ntest++ < 10 )
-      cerr << "Warning, testing rebingin ish" << endl;
+    //static int ntest = 0;
+    //if( ntest++ < 10 )
+    //  cerr << "Warning, testing rebingin ish" << endl;
     
     const double prev_gamma_count_sum_ = gamma_count_sum_;
     const double prev_neutron_counts_sum_ = neutron_counts_sum_;
@@ -5351,9 +4870,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
   }catch( std::exception &e )
   {
-    stringstream msg;
-    msg << "From " << SRC_LOCATION << " caught error:\n\t" << e.what();
-    throw runtime_error( msg.str() );
+    string msg = "From " + string(SRC_LOCATION) + " caught error:\n\t" + string(e.what());
+    throw runtime_error( msg );
   }//try / catch
   
   modified_ = modifiedSinceDecode_ = false;
@@ -5390,7 +4908,7 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
     return;
   
   
-  vector<string> gamma_only_dets = detector_names_;
+  vector<string> gamma_only_dets = gamma_detector_names_;
   vector<string> neutron_only_dets = neutron_detector_names_;
   for( const auto &n : neutron_only_dets )
   {
@@ -5556,28 +5074,31 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
 #if( PERFORM_DEVELOPER_CHECKS )
   set<size_t> gammas_we_added_neutron_to;
 #endif
-  set<string> new_neut_det_names;
-  set<string> new_all_det_names;
+  set<string> new_neut_det_names, new_gamma_det_names, new_all_det_names;
   vector<std::shared_ptr<Measurement>> meas_to_delete;
   
   for( size_t measindex = 0; measindex < measurements_.size(); ++measindex )
   {
     std::shared_ptr<Measurement> meas = measurements_[measindex];
     
+    
     if( !meas->contained_neutron_ )
     {
       new_all_det_names.insert( meas->detector_name_ );
+      if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+        new_gamma_det_names.insert( meas->detector_name_ );
+      
       continue;
     }
     
-    
-    if( meas->gamma_counts_ && meas->gamma_counts_->size() )
+    if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
       if( !gammas_we_added_neutron_to.count(measindex) )
         log_developer_error( __func__, "Found a nuetron detector Measurement that had gamma data - shouldnt have happened here." );
 #endif  //PERFORM_DEVELOPER_CHECKS
       new_all_det_names.insert( meas->detector_name_ );
+      new_gamma_det_names.insert( meas->detector_name_ );
       new_neut_det_names.insert( meas->detector_name_ );
       continue;
     }
@@ -5652,13 +5173,12 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
 #if( PERFORM_DEVELOPER_CHECKS )
         if( gamma_names.size() != 1 && (meas->detector_name_ != gamma_name) )
         {
-          stringstream errmsg;
-          errmsg << "Found a nuetron detector Measurement (DetName='" << meas->detector_name_
-                 << "', SampleNumber=" << meas->sample_number_
-                 << ", StartTime=" << SpecUtils::to_iso_string(meas->start_time_)
-                 << ") I couldnt find a gamma w/ DetName='"
-                 << gamma_name << "' and SampleNumber=" << meas->sample_number_ << ".";
-          log_developer_error( __func__, errmsg.str().c_str() );
+          string errmsg = "Found a nuetron detector Measurement (DetName='" + meas->detector_name_
+                 + "', SampleNumber=" + std::to_string(meas->sample_number_)
+                 + ", StartTime=" + SpecUtils::to_iso_string(meas->start_time_)
+                 + ") I couldnt find a gamma w/ DetName='"
+                 + gamma_name + "' and SampleNumber=" + std::to_string(meas->sample_number_) + ".";
+          log_developer_error( __func__, errmsg.c_str() );
         }
 #endif  //PERFORM_DEVELOPER_CHECKS
         
@@ -5786,6 +5306,9 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
   
   detector_names_.clear();
   detector_names_.insert( end(detector_names_), begin(new_all_det_names), end(new_all_det_names) );
+  
+  gamma_detector_names_.clear();
+  gamma_detector_names_.insert( end(gamma_detector_names_), begin(new_gamma_det_names), end(new_gamma_det_names) );
   
   neutron_detector_names_.clear();
   neutron_detector_names_.insert( end(neutron_detector_names_), begin(new_neut_det_names), end(new_neut_det_names) );
@@ -6011,6 +5534,10 @@ std::string SpecFile::generate_psuedo_uuid() const
   boost::hash_combine( seed, detector_names_ );
 //  boost::hash_combine( seed, detector_numbers_ );
   boost::hash_combine( seed, neutron_detector_names_ );
+
+// Wont use gamma_detector_names_ for compatibility pre 20190813 when field was added
+//  boost::hash_combine( seed, gamma_detector_names_ );
+  
   if( !remarks_.empty() )
     boost::hash_combine( seed, remarks_ );
   //parse_warnings_
@@ -6063,7 +5590,7 @@ std::string SpecFile::generate_psuedo_uuid() const
       && !measurements_[0]->start_time().is_special() )
     uuid = SpecUtils::to_iso_string( measurements_[0]->start_time() );
   else
-    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59" ) );
+    uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59:000" ) );
   
   //uuid something like: "20020131T100001,123456789"
   if( uuid.size() >= 15 )
@@ -6097,7 +5624,7 @@ std::string SpecFile::generate_psuedo_uuid() const
 bool SpecFile::write_d3_html( ostream &ostr,
                               const D3SpectrumExport::D3SpectrumChartOptions &options,
                               std::set<int> sample_nums,
-                              const std::set<int> &det_nums ) const
+                              std::vector<std::string> det_names ) const
 {
   try
   {
@@ -6106,16 +5633,10 @@ bool SpecFile::write_d3_html( ostream &ostr,
     if( sample_nums.empty() )
       sample_nums = sample_numbers_;
   
-    const size_t ndet = detector_numbers_.size();
-    vector<bool> detectors( ndet, true );
-    if( !det_nums.empty() )
-    {
-      for( size_t i = 0; i < ndet; ++i )
-        detectors[i] = (det_nums.count(detector_numbers_[i]) != 0);
-    }//if( det_nums.empty() )
+    if( det_names.empty() )
+      det_names = detector_names_;
   
-  
-    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, detectors );
+    std::shared_ptr<Measurement> summed = sum_measurements( sample_nums, det_names, nullptr );
   
     if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
       return false;
@@ -6135,303 +5656,206 @@ bool SpecFile::write_d3_html( ostream &ostr,
 }
 #endif
 
-void Measurement::popuplate_channel_energies_from_coeffs()
-{
-  if( !gamma_counts_ || gamma_counts_->empty() )
-    throw runtime_error( "popuplate_channel_energies_from_coeffs():"
-                         " no gamma counts" );
   
-  if( calibration_coeffs_.size() < 2 )
-    throw runtime_error( "popuplate_channel_energies_from_coeffs():"
-                         " no calibration coefficients" );
   
-  if( !!channel_energies_ && !channel_energies_->empty() )
-    throw runtime_error( "popuplate_channel_energies_from_coeffs():"
-                         " channel energies already populated" );
   
-  const size_t nbin = gamma_counts_->size();
-    
-  switch( energy_calibration_model_ )
-  {
-    case SpecUtils::EnergyCalType::Polynomial:
-    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-      channel_energies_ = SpecUtils::polynomial_binning( calibration_coeffs_,
-                                              nbin, deviation_pairs_ );
-      break;
-        
-    case SpecUtils::EnergyCalType::FullRangeFraction:
-      channel_energies_ = SpecUtils::fullrangefraction_binning( calibration_coeffs_,
-                                                    nbin, deviation_pairs_ );
-      break;
-        
-    case SpecUtils::EnergyCalType::LowerChannelEdge:
-      channel_energies_.reset( new vector<float>(calibration_coeffs_) );
-      break;
-        
-    case SpecUtils::EnergyCalType::InvalidEquationType:
-      throw runtime_error( "popuplate_channel_energies_from_coeffs():"
-                           " unknown equation type" );
-      break;
-  }//switch( meas->energy_calibration_model_ )
-}//void popuplate_channel_energies_from_coeffs()
-
-
-
-std::string SpecFile::determine_rad_detector_kind_code() const
-{
-  string det_kind = "Other";
-  switch( detector_type_ )
-  {
-    case DetectorType::DetectiveUnknown:
-    case DetectorType::DetectiveEx:
-    case DetectorType::DetectiveEx100:
-    case DetectorType::DetectiveEx200:
-    case DetectorType::Falcon5000:
-    case DetectorType::MicroDetective:
-    case DetectorType::DetectiveX:
-      det_kind = "HPGe";
-      break;
-      
-    case DetectorType::Exploranium:
-    case DetectorType::IdentiFinder:
-    case DetectorType::IdentiFinderNG:
-    case DetectorType::RadHunterNaI:
-    case DetectorType::Rsi701:
-    case DetectorType::Rsi705:
-    case DetectorType::AvidRsi:
-    case DetectorType::OrtecRadEagleNai:
-    case DetectorType::Sam940:
-    case DetectorType::Sam945:
-      det_kind = "NaI";
-      break;
-      
-    case DetectorType::IdentiFinderLaBr3:
-    case DetectorType::RadHunterLaBr3:
-    case DetectorType::Sam940LaBr3:
-    case DetectorType::OrtecRadEagleLaBr:
-      det_kind = "LaBr3";
-      break;
-      
-    case DetectorType::OrtecRadEagleCeBr2Inch:
-    case DetectorType::OrtecRadEagleCeBr3Inch:
-      det_kind = "CeBr3";
-      break;
-      
-    case DetectorType::SAIC8:
-    case DetectorType::Srpm210:
-      det_kind = "PVT";
-      break;
-      
-    case DetectorType::MicroRaider:
-      det_kind = "CZT";
-      break;
-      
-    case DetectorType::Unknown:
-      if( num_gamma_channels() > 4100 )
-        det_kind = "HPGe";
-      else if( manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
-        det_kind = "NaI";
-      else if( manufacturer_=="Mirion Technologies" && instrument_model_=="model Pedestrian G" )
-        det_kind = "NaI";
-      else if( manufacturer_=="Nucsafe" && instrument_model_=="G4_Predator" )
-        det_kind = "PVT";
-      break;
-  }//switch( detector_type_ )
-  
-  return det_kind;
-}//determine_rad_detector_kind_code()
-
-
-
-
-
-
-
-
-
-
-
-void SpecFile::rebin_by_eqn( const std::vector<float> &eqn,
-                                    const std::vector<std::pair<float,float>> &dev_pairs,
-                                    SpecUtils::EnergyCalType type )
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-
-  std::shared_ptr<const std::vector<float>> new_binning; //to save memory we will only create one binning object
-
-  SpecUtilsAsync::ThreadPool threadpool;
-
-  for( auto &m : measurements_ )
-  {
-    if( !m->gamma_counts_ || m->gamma_counts_->empty() )
-      continue;
-
-    const bool noRecalNeeded = ( m->energy_calibration_model_ == type
-                                 && ((type==SpecUtils::EnergyCalType::LowerChannelEdge && m->channel_energies_ && (*(m->channel_energies_)==eqn))
-                                     || (type!=SpecUtils::EnergyCalType::LowerChannelEdge && m->calibration_coeffs_ == eqn) )
-                                 && m->channel_energies_->size() > 0
-                                 && m->deviation_pairs_ == dev_pairs );
-
-    if( !new_binning )
-    {
-      if( !noRecalNeeded )
-        m->rebin_by_eqn( eqn, dev_pairs, type );
-      new_binning = m->channel_energies_;
-    }//if( !new_binning )
-
-    if( !noRecalNeeded )
-	    threadpool.post( [m,&new_binning](){ m->rebin_by_lower_edge(new_binning); });
-  }//for( auto &m : measurements_ )
-
-  threadpool.join();
-
-  for( auto &m : measurements_ )
-  {
-    m->calibration_coeffs_ = eqn;
-    m->deviation_pairs_    = dev_pairs;
-    m->energy_calibration_model_  = type;
-  }//for( auto &m : measurements_ )
-  
-  properties_flags_ |= kHasCommonBinning;
-  
-  modified_ = modifiedSinceDecode_ = true;
-}//void rebin_by_eqn( const std::vector<float> &eqn )
-
-
-void SpecFile::recalibrate_by_lower_edge( std::shared_ptr<const std::vector<float>> binning )
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-
-  for( auto &m : measurements_ )
-    if( m->gamma_counts_ && !m->gamma_counts_->empty() )
-      m->recalibrate_by_eqn( vector<float>(), std::vector<std::pair<float,float>>(), SpecUtils::EnergyCalType::LowerChannelEdge, binning );
-  
-  modified_ = modifiedSinceDecode_ = true;
-}//void recalibrate_by_lower_edge( const std::vector<float> &binning )
-
-
-
-void SpecFile::recalibrate_by_eqn( const std::vector<float> &eqn,
-                                          const std::vector<std::pair<float,float>> &dev_pairs,
-                                          SpecUtils::EnergyCalType type )
-{
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-
-
-  std::shared_ptr<const std::vector<float>> new_binning; //to save memory we will only create one binning object
-
-  for( auto &m : measurements_ )
-  {
-    if( m->gamma_counts_->size() < 3 )  //GM tubes can be recorded as gamma - this should be corrected
-      continue;
-
-    if( !new_binning )
-    {
-      m->recalibrate_by_eqn( eqn, dev_pairs, type, std::shared_ptr<const std::vector<float>>() );
-      new_binning = m->channel_energies_;
-    }else
-    {
-      m->recalibrate_by_eqn( eqn, dev_pairs, type, new_binning );
-    }
-  }//for( auto &m : measurements_ )
-  
-  properties_flags_ |= kHasCommonBinning;
-  
-  modified_ = modifiedSinceDecode_ = true;
-}//void recalibrate_by_eqn( const std::vector<float> &eqn )
-
-
-//If only certain detectors are specified, then those detectors will be
-//  recalibrated, and the other detectors will be rebinned.
-void SpecFile::recalibrate_by_eqn( const std::vector<float> &eqn,
-                                          const std::vector<std::pair<float,float>> &dev_pairs,
-                                          SpecUtils::EnergyCalType type,
-                                          const vector<string> &detectors,
-                                          const bool rebin_other_detectors )
+void SpecFile::rebin_measurement( const std::shared_ptr<const EnergyCalibration> &cal,
+                                  const std::shared_ptr<const Measurement> &measurement )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  if( detectors.empty() )
-    throw runtime_error( "recalibrate_by_eqn(...): an empty set of detectors"
-                         " to recalibrate was passed in." );
+  if( !cal || (cal->num_channels() < 4) )
+    throw runtime_error( "rebin_measurement: invalid calibration passed in" );
   
-  //If we are recalibrating all the detectors, lets just call the other version
-  //  of this function, but it doenst really matter if we dont
-  if( detectors == detector_names_ )
+  std::shared_ptr<Measurement> meas;
+  for( size_t i = 0; !meas && (i < measurements_.size()); ++i )
   {
-    recalibrate_by_eqn( eqn, dev_pairs, type );
+    if( measurement == measurements_[i] )
+      meas = measurements_[i];
+  }
+  
+  if( !meas )
+    throw runtime_error( "rebin_measurement: invalid passed in measurement" );
+  
+  if( cal == meas->energy_calibration_ )
     return;
-  }//if( detectors == detector_names_ )
   
+  meas->rebin( cal );
   
-  std::shared_ptr<const std::vector<float>> new_binning; //to save memory we will only create one binning object
-  vector<std::shared_ptr<Measurement>> rebinned;
+  if( (properties_flags_ & kHasCommonBinning) && (measurements_.size() > 1) )
+  {
+    //only unset kHasCommonBinning bit if there is more than on gamma measurement (could tighten up
+    //  and also check if all calibrations now match, and if so set flag)
+    bool other_gamma_meas = false;
+    for( size_t i = 0; !other_gamma_meas && (i < measurements_.size()); ++i )
+    {
+      const auto &m = measurements_[i];
+      other_gamma_meas = (m && m->gamma_counts_ && !m->gamma_counts_->empty()
+                          && (m->energy_calibration_ != cal));
+    }
+    if( other_gamma_meas )
+      properties_flags_ &= ~kHasCommonBinning;
+  }//if( unset kHasCommonBinning flag )
+  
+  modified_ = modifiedSinceDecode_ = true;
+}//rebin_measurement(...)
+                            
+                            
+void SpecFile::rebin_all_measurements( const std::shared_ptr<const EnergyCalibration> &cal )
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  if( !cal || (cal->num_channels() < 4) )
+    throw runtime_error( "rebin_measurement: invalid calibration passed in" );
+  
+  SpecUtilsAsync::ThreadPool threadpool;
   
   for( auto &m : measurements_ )
   {
-    if( !m->gamma_counts_ || m->gamma_counts_->empty() )
-      continue;
+    assert( m );
+    assert( m->energy_calibration_ );
     
-    vector<string>::const_iterator name_pos = std::find( detectors.begin(),
-                                        detectors.end(), m->detector_name() );
-    if( name_pos == detectors.end() )
+    if( !m->gamma_counts_
+       || (m->gamma_counts_->size() < 4)
+       || (m->energy_calibration_->num_channels() < 4) )
     {
-      rebinned.push_back( m );
-    }else if( !new_binning )
-    {
-      m->recalibrate_by_eqn( eqn, dev_pairs, type, std::shared_ptr<const std::vector<float>>() );
-      new_binning = m->channel_energies_;
-    }else
-    {
-      m->recalibrate_by_eqn( eqn, dev_pairs, type, new_binning );
+      continue;
     }
+    
+    threadpool.post( [m,&cal](){ m->rebin(cal); } );
   }//for( auto &m : measurements_ )
   
-  if( !new_binning )
-    throw runtime_error( "recalibrate_by_eqn(...): no valid detector"
-                        " names were passed in to recalibrate." );
+  threadpool.join();
   
-  if( rebin_other_detectors && rebinned.size() )
-  {
-    if( rebinned.size() > 4 )
-    {
-    SpecUtilsAsync::ThreadPool threadpool;
-    for( auto &m : rebinned )
-		  threadpool.post( [m,&new_binning](){ m->rebin_by_lower_edge(new_binning); } );
-    threadpool.join();
-    }else
-    {
-      for( auto &m : rebinned )
-        m->rebin_by_lower_edge( new_binning );
-    }
-  
-    for( auto &m : rebinned )
-    {
-      m->calibration_coeffs_ = eqn;
-      m->deviation_pairs_    = dev_pairs;
-      m->energy_calibration_model_  = type;
-    }//for( auto &m : rebinned )
-    
-    properties_flags_ |= kHasCommonBinning;
-  }else
-  {
-    //check to see if the binning of all the measurements_ happens to be same
-    bool allsame = true;
-    for( size_t i = 0; allsame && i < rebinned.size(); ++i )
-      allsame = ((rebinned[i]->energy_calibration_model_ == type)
-                 && (rebinned[i]->calibration_coeffs_ == eqn)
-                 && (rebinned[i]->deviation_pairs_ == dev_pairs));
-
-    if( allsame )
-      properties_flags_ |= kHasCommonBinning;
-    else
-      properties_flags_ &= (~kHasCommonBinning);
-  }//if( rebin_other_detectors && rebinned.size() )
-
+  properties_flags_ |= kHasCommonBinning;
   modified_ = modifiedSinceDecode_ = true;
-}//void recalibrate_by_eqn(...)
+}//rebin_all_measurements(...)
 
 
+
+void SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
+                                const std::shared_ptr<const Measurement> &constmeas )
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+          
+  if( !cal )
+    throw runtime_error( "set_calibration: invalid calibration passed in" );
+          
+  std::shared_ptr<Measurement> meas = measurement(constmeas);
+          
+  if( !meas )
+    throw runtime_error( "set_calibration: invalid passed in measurement" );
+          
+  if( cal == meas->energy_calibration_ )
+    return;
+    
+  meas->set_energy_calibration( cal );
+
+  if( (properties_flags_ & kHasCommonBinning) && (measurements_.size() > 1) )
+  {
+    //only unset kHasCommonBinning bit if there is more than on gamma measurement (could tighten up
+    //  and also check if all calibrations now match, and if so set flag)
+    bool other_gamma_meas = false;
+    for( size_t i = 0; !other_gamma_meas && (i < measurements_.size()); ++i )
+    {
+      const auto &m = measurements_[i];
+      other_gamma_meas = (m && m->gamma_counts_ && !m->gamma_counts_->empty()
+                          && (m->energy_calibration_ != cal));
+    }
+    if( other_gamma_meas )
+      properties_flags_ &= ~kHasCommonBinning;
+  }//if( unset kHasCommonBinning flag )
+  
+  modified_ = modifiedSinceDecode_ = true;
+}//set_energy_calibration(...)
+                            
+
+size_t SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
+                                       std::set<int> sample_numbers,
+                                       std::vector<std::string> detectors )
+{
+  if( !cal )
+    throw runtime_error( "set_energy_calibration: null calibration passed in" );
+  
+  if( sample_numbers.empty() )
+    sample_numbers = sample_numbers_;
+  if( detectors.empty() )
+    detectors = detector_names_;
+  
+  std::sort( begin(detectors), end(detectors) );
+  auto is_wanted_det = [&detectors]( const std::string &name ) -> bool {
+    const auto pos = lower_bound( begin(detectors), end(detectors), name );
+    return ((pos != end(detectors)) && (name == (*pos)));
+  };//is_wanted_det(...)
+  
+  auto is_wanted_sample = [&sample_numbers]( const int sample ) -> bool {
+    return (sample_numbers.count(sample) != 0);
+  };//is_wanted_sample(...)
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  //Grab the matching measurements, and also check they are compatible with passed in binning before
+  //  making any changes.
+  vector<shared_ptr<Measurement>> matching_meas;
+  
+  for( const auto &m : measurements_ )
+  {
+    const size_t nchannel = ((m && m->gamma_counts_) ? m->gamma_counts_->size() : 0u);
+    const size_t ncalchannel = cal->num_channels();
+    
+    if( nchannel && is_wanted_sample(m->sample_number_) && is_wanted_det(m->detector_name_) )
+    {
+      //Check that binning is compatible so wont throw an excpetion later when we actually set the
+      //  calibration
+      switch( cal->type() )
+      {
+        case EnergyCalType::Polynomial:
+        case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+        case EnergyCalType::FullRangeFraction:
+        case EnergyCalType::LowerChannelEdge:
+          assert( cal->channel_energies() );
+          //For LowerChannelEdge we'll let the number of calibration channels be larger than
+          //  spectrum channels since some formats specify an upper energy.  (although we should
+          //  probably limit the size to one more, but we dont otherplaces yet, so wont here yet).
+          if( (ncalchannel != nchannel)
+              && ((cal->type()!=EnergyCalType::LowerChannelEdge) || (ncalchannel<nchannel)) )
+            throw runtime_error( "set_energy_calibration: incomatible number of channels ("
+                                 + std::to_string(nchannel) + " vs the calibrations "
+                                 + std::to_string(ncalchannel) + ")" );
+        break;
+          
+        case EnergyCalType::InvalidEquationType:
+        break;
+      }//switch( cal->type() )
+      
+      matching_meas.push_back( m );
+    }//if( is this a wanted Measurement )
+  }//for( const auto &m : measurements_ )
+  
+  for( auto m : matching_meas )
+    m->set_energy_calibration( cal );
+  
+  //Check if we can have common binning set -
+  //  \TODO: this will miss the case the user specified only the gamma measurements, so should fix
+  bool has_common = (matching_meas.size() == measurements_.size());
+  if( !has_common
+      && (sample_numbers==sample_numbers_)
+      && (detectors.size()==detector_names_.size()) )
+  {
+    auto sorted_dets = detector_names_;
+    std::sort( begin(sorted_dets), end(sorted_dets) );
+    has_common = (sorted_dets == detectors);
+  }
+  
+  if( has_common )
+    properties_flags_ |= kHasCommonBinning;
+  else
+    properties_flags_ &= ~kHasCommonBinning;
+    
+  modified_ = modifiedSinceDecode_ = true;
+  
+  return matching_meas.size();
+}//set_energy_calibration(...)
 
 
 size_t SpecFile::memmorysize() const
@@ -6444,6 +5868,8 @@ size_t SpecFile::memmorysize() const
   for( const string &s : detector_names_ )
     size += s.capacity()*sizeof(string::value_type);
   size += detector_numbers_.capacity()*sizeof(int);
+  for( const string &s : gamma_detector_names_ )
+    size += s.capacity()*sizeof(string::value_type);
   for( const string &s : neutron_detector_names_ )
     size += s.capacity()*sizeof(string::value_type);
 
@@ -6466,21 +5892,16 @@ size_t SpecFile::memmorysize() const
 
   size += measurements_.capacity() * sizeof( std::shared_ptr<Measurement> );
 
-  map< const vector<float> *, int> binnings;
+  //keep from double counting energy calibrations shared between Measurement objects.
+  set<const EnergyCalibration *> calibrations_seen;
   for( const auto &m : measurements_ )
   {
     size += m->memmorysize();
-    const vector<float> *bin_ptr = m->channel_energies_.get();
-    if( binnings.find( bin_ptr ) == binnings.end() )
-      binnings[ bin_ptr ] = 0;
-    ++binnings[bin_ptr];
+    assert( m->energy_calibration_ );
+    if( calibrations_seen.count( m->energy_calibration_.get() ) )
+      size -= m->energy_calibration_->memmorysize();
+    calibrations_seen.insert( m->energy_calibration_.get() );
   }//for( const auto &m, measurements_ )
-
-  //What about this->channel_energies_ ?  In principle we've already counted
-  //  the size of this->channel_energies_
-  for( const map< const vector<float> *, int>::value_type &entry : binnings )
-    if( entry.first && entry.second > 1 )
-      size -= ((entry.second-1)*( sizeof(*(entry.first)) + entry.first->capacity()*sizeof(float)));
 
   return size;
 }//size_t memmorysize() const
@@ -6493,192 +5914,148 @@ bool SpecFile::passthrough() const
 }//bool passthrough() const
 
 
-size_t SpecFile::suggested_gamma_binning_index(
-                                            const std::set<int> &sample_numbers,
-                                            const vector<bool> &det_to_use ) const
+std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibration(
+                                                        const set<int> &sample_numbers,
+                                                        const vector<string> &detector_names ) const
 {
-  //XXX - this function is a quickly implemented (temporary?) hack
-  size_t index;
-  std::shared_ptr<const std::vector<float>> binning_ptr;
-    
-  if( detector_numbers_.size() != det_to_use.size() )
-    throw runtime_error( "SpecFile::suggested_gamma_binning_index():"
-                         " invalid det_to_use" );
+  if( sample_numbers.empty() || detector_names.empty() )
+    return nullptr;
   
+  for( const int sample : sample_numbers )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "suggested_sum_energy_calibration: invalid sample number "
+                           + to_string(sample) );
+  }//for( check all sample numbers were valid )
+  
+  for( const string &name : detector_names )
+  {
+    const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
+    if( pos == end(detector_names_) )
+      throw runtime_error( "suggested_sum_energy_calibration: invalid detector name '"
+                           + name + "'" );
+  }//for( check all detector names were valid )
+  
+  size_t energy_cal_index = 0;
+  std::shared_ptr<const EnergyCalibration> energy_cal;
+  
+  const bool has_common = ((properties_flags_ & kHasCommonBinning) != 0);
   const bool same_nchannel = ((properties_flags_ & kAllSpectraSameNumberChannels) != 0);
   
   for( size_t i = 0; i < measurements_.size(); ++i )
   {
     const std::shared_ptr<Measurement> &meas = measurements_[i];
-    
-    if( !sample_numbers.empty() && !sample_numbers.count(meas->sample_number_) )
+      
+    if( !sample_numbers.count(meas->sample_number_) )
       continue;
     
-    const size_t det_index = std::find( detector_numbers_.begin(),
-                                        detector_numbers_.end(),
-                                        meas->detector_number_ )
-                              - detector_numbers_.begin();
+    const auto pos = std::find( begin(detector_names), end(detector_names), meas->detector_name_);
+    if( pos == end(detector_names) )
+      continue;
     
-    const std::shared_ptr<const std::vector<float>> &thisbinning = meas->channel_energies();
-    
-    if( det_to_use.at(det_index) && !!thisbinning && !thisbinning->empty() )
+    const auto &this_cal = meas->energy_calibration();
+      
+    if( this_cal && (this_cal->type() != EnergyCalType::InvalidEquationType) )
     {
-#if(!PERFORM_DEVELOPER_CHECKS)
-      if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
+  #if(!PERFORM_DEVELOPER_CHECKS)
+      if( has_common )
+        return this_cal;
+      
+      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
       {
+        energy_cal_index = i;
+        energy_cal = this_cal;
         if( same_nchannel )
-          return i;
-        
-        index = i;
-        binning_ptr = thisbinning;
+          return energy_cal;
       }//if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
-#else
-      if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
+  #else
+      if( has_common && energy_cal && (energy_cal != this_cal) && ((*energy_cal) == (*this_cal)) )
       {
-        if( !!binning_ptr
-            && (binning_ptr->size() != thisbinning->size())
-            && same_nchannel )
+        string errmsg = "EnergyCalibration::equal_enough didnt find any differences";
+        try
+        {
+          EnergyCalibration::equal_enough( *this_cal, *energy_cal );
+        }catch( std::exception &e )
+        {
+          errmsg = e.what();
+        }
+        char buffer[512];
+        snprintf( buffer, sizeof(buffer), "Found case where expected common energy calibration"
+                 " but didnt actually have all the same binning, issue found: %s", errmsg.c_str() );
+        log_developer_error( __func__, buffer );
+      }//if( has_common, but energy calibration wasnt the same )
+      
+      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      {
+        if( same_nchannel && energy_cal
+            && (energy_cal->num_channels() != this_cal->num_channels()) )
         {
           char buffer[512];
           snprintf( buffer, sizeof(buffer),
                     "Found instance of differening number of gamma channels,"
                     " when I shouldnt have; measurement %i had %i channels,"
                     " while measurement %i had %i channels.",
-                   static_cast<int>(index),
-                   static_cast<int>(binning_ptr->size()),
-                   static_cast<int>(i),
-                   static_cast<int>(thisbinning->size() ) );
+                    static_cast<int>(energy_cal_index),
+                    static_cast<int>(energy_cal->num_channels()),
+                    static_cast<int>(i),
+                    static_cast<int>(this_cal->num_channels()) );
           log_developer_error( __func__, buffer );
         }
-        
-        index = i;
-        binning_ptr = thisbinning;
+          
+        energy_cal_index = i;
+        energy_cal = this_cal;
       }//if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
-#endif
-    }//if( use thisbinning )
+  #endif
+    }//if( this binning is valid )
   }//for( size_t i = 0; i < measurements_.size(); ++i )
-  
-  if( !binning_ptr )
-    throw runtime_error( "SpecFile::suggested_gamma_binning_index():"
-                         " no valid measurements." );
-  
-  return index;
-}//suggested_gamma_binning_index(...)
+    
+  return energy_cal;
+}//suggested_sum_energy_calibration(...)
 
 
 
 std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sample_numbers,
-                                     const std::vector<std::string> &det_names ) const
+                                      const std::vector<std::string> &det_names,
+                                      std::shared_ptr<const EnergyCalibration> ene_cal ) const
 {
-  vector<bool> det_to_use( detector_numbers_.size(), false );
-  
-  for( const std::string name : det_names )
-  {
-    const vector<string>::const_iterator pos = std::find( begin(detector_names_),
-                                                end(detector_names_),
-                                                name );
-    if( pos == end(detector_names_) )
-      throw runtime_error( "SpecFile::sum_measurements(): invalid detector name in the input" );
+  if( det_names.empty() || sample_numbers.empty() )
+    return nullptr;
     
-    const size_t index = pos - detector_names_.begin();
-    det_to_use[index] = true;
-  }//for( const int num : det_nums )
-  
-  return sum_measurements( sample_numbers, det_to_use );
-}//std::shared_ptr<Measurement> sum_measurements(...)
-
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements( const set<int> &sample_num,
-                                            const vector<int> &det_nums ) const
-{
-  vector<bool> det_to_use( detector_numbers_.size(), false );
- 
-  for( const int num : det_nums )
-  {
-    vector<int>::const_iterator pos = std::find( detector_numbers_.begin(),
-                                                 detector_numbers_.end(),
-                                                 num );
-    if( pos == detector_numbers_.end() )
-      throw runtime_error( "SpecFile::sum_measurements(): invalid detector number in the input" );
-    
-    const size_t index = pos - detector_numbers_.begin();
-    det_to_use[index] = true;
-  }//for( const int num : det_nums )
-  
-  return sum_measurements( sample_num, det_to_use );
-}//sum_measurements(...)
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements( const set<int> &sample_num,
-                                                     const vector<int> &det_nums,
-                                                     const std::shared_ptr<const Measurement> binTo ) const
-{
-  vector<bool> det_to_use( detector_numbers_.size(), false );
-  
-  for( const int num : det_nums )
-  {
-    vector<int>::const_iterator pos = std::find( detector_numbers_.begin(),
-                                                detector_numbers_.end(),
-                                                num );
-    if( pos == detector_numbers_.end() )
-      throw runtime_error( "SpecFile::sum_measurements(): invalid detector number in the input" );
-    
-    const size_t index = pos - detector_numbers_.begin();
-    det_to_use[index] = true;
-  }//for( const int num : det_nums )
-  
-  return sum_measurements( sample_num, det_to_use, binTo );
-}//sum_measurements(...)
-
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements(
-                                         const std::set<int> &sample_numbers,
-                                         const vector<bool> &det_to_use ) const
-{
-  //For example example passthrough (using late 2011 mac book pro):
-  //  Not using multithreading:          It took  0.135964s wall, 0.130000s user + 0.000000s system = 0.130000s CPU (95.6%)
-  //  Using multithreading (4 threads):  It took  0.061113s wall, 0.220000s user + 0.000000s system = 0.220000s CPU (360.0%)
-  //For example example HPGe Ba133:
-  //  Not using multithreading:         It took  0.001237s wall, 0.000000s user
-  //  Using multithreading (2 threads): It took  0.001248s wall, 0.000000s user
-
-  size_t calIndex;
-  try
-  {
-    calIndex = suggested_gamma_binning_index( sample_numbers, det_to_use );
-  }catch(...)
-  {
-    return std::shared_ptr<Measurement>();
-  }
-  
-  return sum_measurements( sample_numbers, det_to_use, measurements_[calIndex] );
-}//sum_measurements(...)
-
-
-std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sample_numbers,
-                                      const vector<bool> &det_to_use,
-                                      const std::shared_ptr<const Measurement> binto ) const
-{
-  if( !binto || measurements_.empty() )
-    return std::shared_ptr<Measurement>();
-  
   std::shared_ptr<Measurement> dataH = std::make_shared<Measurement>();
   
-  dataH->energy_calibration_model_  = binto->energy_calibration_model_;
-  dataH->calibration_coeffs_ = binto->calibration_coeffs_;
-  dataH->deviation_pairs_    = binto->deviation_pairs_;
-  dataH->channel_energies_   = binto->channel_energies();
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  //Check all provided sample numbers are valid
+  for( const int sample : sample_numbers )
+  {
+    if( !sample_numbers_.count(sample) )
+      throw runtime_error( "sum_measurements: invalid sample number passed in ('"
+                           + to_string(sample) + "')" );
+  }
+  
+  //Check all provided detector names are valid
+  for( const string &name : det_names )
+  {
+    auto pos = std::find( begin(detector_names_), end(detector_names_), name );
+    if( pos == end(detector_names_) )
+      throw runtime_error( "sum_measurements: invalid detector name passed in ('" + name + "')" );
+  }
+  
+  if( !ene_cal )
+    ene_cal = suggested_sum_energy_calibration( sample_numbers, det_names );
+  
+  if( !ene_cal )
+    return nullptr;
+  
+  if( ene_cal->type() == EnergyCalType::InvalidEquationType )
+    throw runtime_error( "sum_measurements: callid with InvalidEquationType energy calibration" );
+  
+  dataH->energy_calibration_ = ene_cal;
   
   if( measurements_.size() == 1 )
     dataH->set_title( measurements_[0]->title_ );
   else
     dataH->set_title( filename_ );
-  
-  if( detector_names_.size() != det_to_use.size() )
-    throw runtime_error( "SpecFile::sum_measurements(...): "
-                        "det_to_use.size() != sample_measurements.size()" );
   
   dataH->contained_neutron_ = false;
   dataH->real_time_ = 0.0f;
@@ -6686,30 +6063,24 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   dataH->gamma_count_sum_ = 0.0;
   dataH->neutron_counts_sum_ = 0.0;
   dataH->sample_number_ = -1;
-  dataH->detector_name_ = "Summed";
-  dataH->detector_number_ = -1;
   if( sample_numbers.size() == 1 )
-    dataH->sample_number_ = *sample_numbers.begin();
+    dataH->sample_number_ = *begin(sample_numbers);
   dataH->start_time_ = boost::posix_time::pos_infin;
   
-  const size_t nenergies = dataH->channel_energies_ ? dataH->channel_energies_->size() : size_t(0);
-  
-  size_t ndet_to_use = 0;
-  for( const bool i : det_to_use ) //could use std::count_if(...), for std::for_each(...) ...
-    ndet_to_use += static_cast<size_t>( i );
-
-  
-  bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
-  
-  if( allBinningIsSame )
+  const size_t ndet_to_use = det_names.size();
+  if( ndet_to_use == 1 )
   {
-    const vector< std::shared_ptr<Measurement> >::const_iterator pos
-               = std::find( measurements_.begin(), measurements_.end(), binto );
-    const bool bintoInMeas = (pos != measurements_.end());
-    if( !bintoInMeas )
-      allBinningIsSame = (measurements_[0]->channel_energies() == binto->channel_energies());
-  }//if( allBinningIsSame && measurements_.size() )
-
+    const auto &name = det_names.front();
+    dataH->detector_name_ = name;
+    const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
+    assert( pos != end(detector_names_) );
+    dataH->detector_number_ = detector_numbers_[pos-begin(detector_names_)];
+  }else
+  {
+    dataH->detector_name_ = "Summed";
+    dataH->detector_number_ = -1;
+  }
+  
   //any less than 'min_per_thread' than the additional memorry allocation isnt
   //  worth it - briefly determined on my newer mbp using both example
   //  example passthrough (16k channel) and a 512 channel NaI portal passthrough
@@ -6727,97 +6098,100 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   set<string> remarks;
   for( const int sample_number : sample_numbers )
   {
-    for( size_t index = 0; index < detector_names_.size(); ++index )
+    for( const string &det : det_names )
     {
-      const std::string &det = detector_names_[index];
       std::shared_ptr<const Measurement> meas = measurement( sample_number, det );
-      
       if( !meas )
         continue;
       
       std::shared_ptr<const vector<float> > spec = meas->gamma_counts();
-      
       const size_t spec_size = (spec ? spec->size() : (size_t)0);
       
-      //we'll allow measurement->channel_energies() to have more bins, since
-      //  if meas->energy_calibration_model() == LowerChannelEdge then ther will be
-      //  an extra bin to mark overflow
-      if( allBinningIsSame && (spec_size > nenergies) )
+      dataH->start_time_ = std::min( dataH->start_time_, meas->start_time_ );
+      dataH->neutron_counts_sum_ += meas->neutron_counts_sum();
+      dataH->contained_neutron_ |= meas->contained_neutron_;
+        
+      if( dataH->neutron_counts_.size() < meas->neutron_counts_.size() )
+        dataH->neutron_counts_.resize( meas->neutron_counts_.size(), 0.0f );
+      const size_t nneutchannel = meas->neutron_counts_.size();
+      for( size_t i = 0; i < nneutchannel; ++i )
+        dataH->neutron_counts_[i] += meas->neutron_counts_[i];
+        
+      for( const std::string &remark : meas->remarks_ )
+        remarks.insert( remark );
+        
+      if( spec_size > 3 )
       {
-        stringstream msg;
-        msg << SRC_LOCATION << "\n\tspec.size()=" << spec_size
-            << "  measurement->channel_energies().size()=" << nenergies;
-        cerr << msg.str() << endl;
-        throw runtime_error( msg.str() );
-      }//if( spec.size() > (binning_ptr->size()) )
-      
-      //Could add consistency check here to make sure all spectra are same size
-      
-      if( det_to_use[index] )
-      {
-        dataH->start_time_ = std::min( dataH->start_time_, meas->start_time_ );
-        
-        if( binto->gamma_counts_ && (binto->gamma_counts_->size() > 3) )
-        {
-          if( meas->gamma_counts_ && (meas->gamma_counts_->size() > 3) )
-          {
-            dataH->live_time_ += meas->live_time();
-            dataH->real_time_ += meas->real_time();
-          }
-        }else
-        {
-          dataH->live_time_ += meas->live_time();
-          dataH->real_time_ += meas->real_time();
-        }
-        
-        dataH->neutron_counts_sum_ += meas->neutron_counts_sum();
-        dataH->contained_neutron_ |= meas->contained_neutron_;
-        
-        if( dataH->neutron_counts_.size() < meas->neutron_counts_.size() )
-          dataH->neutron_counts_.resize( meas->neutron_counts_.size(), 0.0f );
-        const size_t nneutchannel = meas->neutron_counts_.size();
-        for( size_t i = 0; i < nneutchannel; ++i )
-          dataH->neutron_counts_[i] += meas->neutron_counts_[i];
-        
-        for( const std::string &remark : meas->remarks_ )
-          remarks.insert( remark );
-        
-        if( spec_size )
-        {
-          dataH->gamma_count_sum_ += meas->gamma_count_sum();
-          const size_t thread_num = current_total_sample_num % num_thread;
-          specs[thread_num].push_back( meas );
-          spectrums[thread_num].push_back( meas->gamma_counts() );
-          ++current_total_sample_num;
-        }
-      }//if( det_to_use[index] )
+        dataH->live_time_ += meas->live_time();
+        dataH->real_time_ += meas->real_time();
+        dataH->gamma_count_sum_ += meas->gamma_count_sum();
+        const size_t thread_num = current_total_sample_num % num_thread;
+        specs[thread_num].push_back( meas );
+        spectrums[thread_num].push_back( meas->gamma_counts() );
+        ++current_total_sample_num;
+      }
     }//for( size_t index = 0; index < detector_names_.size(); ++index )
   }//for( const int sample_number : sample_numbers )
   
   if( !current_total_sample_num )
-    return dataH->contained_neutron_ ? dataH : std::shared_ptr<Measurement>();
+    return nullptr;
+
   
   //If we are only summing one sample, we can preserve some additional
   //  information
   if( current_total_sample_num == 1 )
   {
-    dataH->latitude_ = specs[0][0]->latitude_;
-    dataH->longitude_ = specs[0][0]->longitude_;
-    dataH->position_time_ = specs[0][0]->position_time_;
-    dataH->sample_number_ = specs[0][0]->sample_number_;
-    dataH->occupied_ = specs[0][0]->occupied_;
-    dataH->speed_ = specs[0][0]->speed_;
-    dataH->detector_name_ = specs[0][0]->detector_name_;
-    dataH->detector_number_ = specs[0][0]->detector_number_;
+    dataH->latitude_             = specs[0][0]->latitude_;
+    dataH->longitude_            = specs[0][0]->longitude_;
+    dataH->position_time_        = specs[0][0]->position_time_;
+    dataH->sample_number_        = specs[0][0]->sample_number_;
+    dataH->occupied_             = specs[0][0]->occupied_;
+    dataH->speed_                = specs[0][0]->speed_;
+    dataH->detector_name_        = specs[0][0]->detector_name_;
+    dataH->detector_number_      = specs[0][0]->detector_number_;
     dataH->detector_description_ = specs[0][0]->detector_description_;
-    dataH->quality_status_ = specs[0][0]->quality_status_;
+    dataH->quality_status_       = specs[0][0]->quality_status_;
   }//if( current_total_sample_num == 1 )
+  
+  
+  const bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
   
   if( allBinningIsSame )
   {
+#if( PERFORM_DEVELOPER_CHECKS )
+    shared_ptr<const EnergyCalibration> commoncal;
+    for( const auto &m : measurements_ )
+    {
+      assert( m );
+      assert( m->energy_calibration_ );
+      const auto &cal = m->energy_calibration_;
+      const bool valid_cal = (cal->type() != EnergyCalType::InvalidEquationType);
+      const bool has_cal = (m->gamma_counts_ && !m->gamma_counts_->empty() && valid_cal);
+      
+      if( !commoncal && has_cal  )
+        commoncal = cal;
+      
+      if( valid_cal && (!m->gamma_counts_ || m->gamma_counts_->empty()) )
+        log_developer_error( __func__, "Have valid energy calibration but no channel counts" );
+        
+      if( has_cal && (commoncal != cal) && (*commoncal != *cal) )
+      {
+        log_developer_error( __func__, "Found case where kHasCommonBinning bit is eroneously set" );
+        break;
+      }
+    }//for( auto m : measurements_ )
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+    
+    if( spectrums.size()<1 || spectrums[0].empty() )
+      throw runtime_error( string(SRC_LOCATION) + "\n\tSerious programming logic error" );
+    
+    const size_t spec_size = spectrums[0][0]->size();
+    auto result_vec = make_shared<vector<float>>( spec_size, 0.0f );
+    vector<float> &result_vec_ref = *result_vec;
+    dataH->gamma_counts_ = result_vec;
+    
     if( num_thread > 1 )
     {
-      //Should consider using calloc( )  and free...
       vector< vector<float> > results( num_thread );
     
       SpecUtilsAsync::ThreadPool threadpool;
@@ -6832,49 +6206,56 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       //Note: in principle for a multicore machine (>16 physical cores), we
       //      could combine results using a few different threads down to less
       //      than 'min_per_thread'
-      const size_t spec_size = results[0].size();
-      std::shared_ptr<vector<float> > result_vec = std::make_shared< vector<float> >(spec_size, 0.0f);
-      dataH->gamma_counts_ = result_vec;
-    
       for( size_t i = 0; i < num_thread; ++i )
       {
         if( results[i].size() )
         {
           const float *spec_array = &(results[i][0]);
           for( size_t bin = 0; bin < spec_size; ++bin )
-            result_vec->operator[](bin) += spec_array[bin];
+            result_vec_ref[bin] += spec_array[bin];
         }
       }//for( size_t i = 0; i < num_thread; ++i )
     }else
     {
-      if( spectrums.size()!=1 || spectrums[0].empty() )
-        throw runtime_error( string(SRC_LOCATION) + "\n\tSerious programming logic error" );
-    
       const vector< std::shared_ptr<const vector<float> > > &spectra = spectrums[0];
       const size_t num_spectra = spectra.size();
-    
-      const size_t spec_size = spectra[0]->size();
-      vector<float> *result_vec = new vector<float>( spec_size, 0.0 );
-      dataH->gamma_counts_.reset( result_vec );
-      float *result_vec_raw = &((*result_vec)[0]);
     
       for( size_t i = 0; i < num_spectra; ++i )
       {
         const size_t len = spectra[i]->size();
         const float *spec_array = &(spectra[i]->operator[](0));
-      
-        //Using size_t to get around possible variable size issues.
-        //  In principle I would expect this below loop to get vectorized by the
-        //  compiler - but I havent actually checked for this.
         for( size_t bin = 0; bin < spec_size && bin < len; ++bin )
-          result_vec_raw[bin] += spec_array[bin];
+          result_vec_ref[bin] += spec_array[bin];
       }//for( size_t i = 0; i < num_thread; ++i )
     }//if( num_thread > 1 ) / else
   
+    //If we are here, we know all the original Measurements had the same binning, but they may not
+    //  have the same binning as 'ene_cal'.
+    shared_ptr<const EnergyCalibration> orig_bin;
+    for( const auto &m : measurements_)
+    {
+      const auto &cal = m->energy_calibration();
+      if( cal->type() != EnergyCalType::InvalidEquationType )
+      {
+        if( (cal != ene_cal) && ((*cal) != (*ene_cal)) )
+          orig_bin = cal;
+        break;
+      }
+    }//for( check if new cal matches all Measurements cals )
+    
+    
+    if( orig_bin )
+    {
+      auto resulting_counts = make_shared<vector<float>>();
+      SpecUtils::rebin_by_lower_edge( *orig_bin->channel_energies(), result_vec_ref,
+                                      *ene_cal->channel_energies(), *resulting_counts );
+      dataH->gamma_counts_ = resulting_counts;
+    }
   }else //if( allBinningIsSame )
   {
-    if( sample_numbers.size() > 1 || det_to_use.size() > 1 )
-      cerr << "sum_measurements for case with without a common binning not tested yet!" << endl;
+    /// \TODO: We currently calling #rebin_by_lower_edge for every spectrum while summing; we could
+    ///        instead group by common energy calibration, some those respectively, and then
+    ///        sum the results using #rebin_by_lower_edge, which would be more accurate and faster.
     
     vector< vector<float> > results( num_thread );
     SpecUtilsAsync::ThreadPool threadpool;
@@ -6888,8 +6269,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
 	  threadpool.join();
     
     const size_t spec_size = results[0].size();
-    vector<float> *result_vec = new vector<float>( results[0] );
-    dataH->gamma_counts_.reset( result_vec );
+    auto result_vec = make_shared<vector<float>>( results[0] );
+    dataH->gamma_counts_ = result_vec;
     float *result_vec_raw = &((*result_vec)[0]);
     
     for( size_t i = 1; i < num_thread; ++i )
@@ -6907,6 +6288,18 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );
 
+#if( PERFORM_DEVELOPER_CHECKS )
+  const size_t ngammchan = dataH->gamma_counts_ ? dataH->gamma_counts_->size() : size_t(0);
+  const size_t nenechan = ene_cal->num_channels();
+  if( ngammchan != nenechan )
+  {
+    string msg = "sum_measurements: final number of gamma channels doesnt match energy calibration"
+                " number of channels (" + to_string(ngammchan) + " vs " + to_string(nenechan) + ")";
+    log_developer_error( __func__, msg.c_str() );
+    assert( 0 );
+  }
+#endif
+  
   return dataH;
 }//std::shared_ptr<Measurement> sum_measurements( int &, int &, const SpecMeas & )
 
@@ -6919,9 +6312,12 @@ set<size_t> SpecFile::gamma_channel_counts() const
   set<size_t> answer;
 
   for( const auto &meas : measurements_ )
-    if( meas && meas->channel_energies_ && !meas->channel_energies_->empty() )
-      answer.insert( meas->channel_energies_->size() );
-
+  {
+    const size_t nchannel = meas->num_gamma_channels();
+    if( nchannel )
+      answer.insert( meas->num_gamma_channels() );
+  }
+  
   return answer;
 }//std::set<size_t> gamma_channel_counts() const
 
@@ -6963,14 +6359,14 @@ struct KeepNBinSpectraStruct
     for( MeasVecIter iter = m_start; iter != m_end; ++iter )
     {
       const std::shared_ptr<Measurement> &m = *iter;
-      const std::shared_ptr<const std::vector<float>> channel_energies = (m ? m->channel_energies()
-                                                   : std::shared_ptr<const std::vector<float>>());
+      if( !m )
+        continue;  //shouldnt ever happen, but JIC
+      
+      const size_t num_bin = m->gamma_counts() ? m->gamma_counts()->size() : size_t(0);
 
-      if( !( ( !channel_energies || channel_energies->size()!=m_nbin )
-          && (channel_energies || !channel_energies->empty()) ) )
-      {
+      //Keep if a neutrons only, or number of bins match wanted
+      if( (!num_bin && m->contained_neutron()) || (num_bin==m_nbin) )
         m_keepers->push_back( m );
-      }
     }//for( MeasVecIter iter = m_start; iter != m_end; ++iter )
   }//void operator()()
 };//struct KeepNBinSpectraStruct
@@ -7065,7 +6461,7 @@ size_t SpecFile::remove_neutron_measurements()
   {
     std::shared_ptr<Measurement> &m = measurements_[i];
     if( m->contained_neutron_
-        && (!m->channel_energies_ || m->channel_energies_->empty()) )
+        && (!m->gamma_counts_ || m->gamma_counts_->empty()) )
     {
       ++nremoved;
       measurements_.erase( measurements_.begin()+i );
@@ -7174,6 +6570,7 @@ void SpecFile::reset()
   filename_ =  "";
   detector_names_.clear();
   neutron_detector_names_.clear();
+  gamma_detector_names_.clear();
   uuid_.clear();
   remarks_.clear();
   parse_warnings_.clear();
@@ -7322,9 +6719,7 @@ void SpecFile::write_to_file( const std::string &filename,
   
     for( const std::string &name : det_names )
     {
-      const vector<string>::const_iterator pos = std::find( begin(detector_names_),
-                                                         end(detector_names_),
-                                                         name );
+      const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
       if( pos == end(detector_names_) )
         throw runtime_error( "SpecFile::write_to_file(): invalid detector name in the input" );
     
@@ -7360,10 +6755,14 @@ void SpecFile::write( std::ostream &strm,
       throw runtime_error( "Specified invalid sample number to write out" );
   }
   
+  vector<string> det_names;
   for( const int detnum : det_nums )
   {
-    if( std::find(detector_numbers_.begin(), detector_numbers_.end(), detnum) == detector_numbers_.end() )
+    const auto pos = std::find( begin(detector_numbers_), end(detector_numbers_), detnum );
+    if( pos == end(detector_numbers_) )
       throw runtime_error( "Specified invalid detector number to write out" );
+    
+    det_names.push_back( detector_names_[pos - begin(detector_numbers_)] );
   }
   
   SpecFile info = *this;
@@ -7441,11 +6840,19 @@ void SpecFile::write( std::ostream &strm,
       success = info.write_iaea_spe( strm, samples, detectors );
       break;
 
+    case SaveSpectrumAsType::Cnf:
+      success = info.write_cnf( strm, samples, detectors );
+      break;
+      
+    case SaveSpectrumAsType::Tka:
+      success = info.write_tka( strm, samples, detectors );
+      break;
+      
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:
     {
       D3SpectrumExport::D3SpectrumChartOptions options;
-      success = info.write_d3_html( strm, options, samples, detectors );
+      success = info.write_d3_html( strm, options, samples, info.detector_names_ );
       break;
     }
 #endif
@@ -7465,7 +6872,6 @@ void SpecFile::write( std::ostream &strm,
   
   if( !success )
     throw runtime_error( "Failed to write to output" );
-  
 }//write_to_file(...)
 
 }//namespace SpecUtils

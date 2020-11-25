@@ -56,6 +56,76 @@ using namespace boost::gregorian;
 //time_from_string_boost ?
 
 
+
+void compare_delim_duration_from_str( const string test, const double truth )
+{
+  const double dur = SpecUtils::delimited_duration_string_to_seconds( test );
+  
+  BOOST_CHECK_MESSAGE( fabs(truth - dur) < 1.0E-7*fabs(truth),
+    "Delimited duration formatted '" << test << "' gave " << dur
+     << " seconds, while we expected " << truth << " seconds (diff of "
+     << fabs(truth - dur) << ")." );
+}//compare_delim_duration_from_str(...)
+
+
+BOOST_AUTO_TEST_CASE(durationFromString)
+{
+  const double minute = 60;
+  const double hour = 3600;
+  
+  compare_delim_duration_from_str("-03:15:12.12", -(3*hour + 15*minute + 12.12) );
+  compare_delim_duration_from_str("03:15:12.12", (3*hour + 15*minute + 12.12) );
+  compare_delim_duration_from_str("3:15:12.12", (3*hour + 15*minute + 12.12) );
+  compare_delim_duration_from_str("3:15:12", (3*hour + 15*minute + 12) );
+  compare_delim_duration_from_str("3:05:12", (3*hour + 05*minute + 12) );
+  compare_delim_duration_from_str("03:05:12", (3*hour + 05*minute + 12) );
+  compare_delim_duration_from_str("03:05:01", (3*hour + 05*minute + 1) );
+  compare_delim_duration_from_str("03:05:01.12345", (3*hour + 05*minute + 1.12345) );
+  compare_delim_duration_from_str("5:00:00", 5*hour );
+  compare_delim_duration_from_str("00:01:00", 1*minute );
+  compare_delim_duration_from_str("-00:01:00", -1*minute );
+  compare_delim_duration_from_str("-00:01:00", -1*minute );
+  compare_delim_duration_from_str("5:00", 5*hour );
+  compare_delim_duration_from_str("5:0", 5*hour );
+  compare_delim_duration_from_str("5:0:1", 5*hour + 1 );
+  compare_delim_duration_from_str("5:0:1.10000", 5*hour + 1.1 );
+  compare_delim_duration_from_str("   5:0:1.10000", 5*hour + 1.1 );
+  compare_delim_duration_from_str("\t5:0:1.10000", 5*hour + 1.1 );
+  compare_delim_duration_from_str("\t5:0:1. ", 5*hour + 1 );
+  compare_delim_duration_from_str("\t5:0:1.", 5*hour + 1 );
+  compare_delim_duration_from_str("\t5:0:1. ", 5*hour + 1 );
+  compare_delim_duration_from_str("\t5:0:1.\t", 5*hour + 1 );
+  compare_delim_duration_from_str("5:0:1.\t", 5*hour + 1 );
+  compare_delim_duration_from_str("5:0:1. ", 5*hour + 1 );
+  compare_delim_duration_from_str("5:0:1.      ", 5*hour + 1 );
+  compare_delim_duration_from_str("5:0:1      ", 5*hour + 1 );
+  compare_delim_duration_from_str("  5:0:1.0      ", 5*hour + 1 );
+  compare_delim_duration_from_str("  -1:0:0      ", -1*hour );
+  
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":32"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":32:16"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("--01:32:16"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:32a"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("a 12:32"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(" a 12:32"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(" a12:32"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12::1"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12::1:"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01:-2"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01:2a"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:32:"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:-32:15.121"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("123:60"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("123:61"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("a12:01"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01a"), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01a "), std::exception );
+  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01 a"), std::exception );
+}//BOOST_AUTO_TEST_CASE(durationFromString)
+
 void compare_from_str( const string test, const string truth )
 {
   const ptime testptime = SpecUtils::time_from_string( test.c_str() );

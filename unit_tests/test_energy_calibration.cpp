@@ -21,6 +21,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <random>
 #include <string>
 #include <vector>
 #include <limits>
@@ -43,6 +44,7 @@
 #endif
 
 using namespace std;
+using namespace SpecUtils;
 using namespace boost::unit_test;
 
 
@@ -130,16 +132,26 @@ BOOST_AUTO_TEST_CASE( testCalibration )
   
   for( size_t i = 0; i < nbin; ++i )
   {
-    const float bin = static_cast<float>(i);
+    //const float bin = static_cast<float>(i);
     const float fwf = frf_binning->at(i);
+    const float poly_eqn_energy = polynomial_energy( i, poly_coefs, dev_pairs );
     const float poly = poly_binning->at(i);
     const float larger = std::max(fabs(fwf),fabs(poly));
+    
     BOOST_REQUIRE_MESSAGE( fabs(fwf-poly) <= 1.0E-5*larger, "" \
-                          "Lower channel energies for FWF and Polynomial coefficnets arent equal" \
+                           "Lower channel energies for FWF and Polynomial coefficnets arent equal" \
+                           " (starting) at bin " << i \
+                           << " got " << fwf << " and " << poly \
+                           << "respectively  for coefs=" << print_vec(frf_coefs) \
+                           << " giving values: " << fwf << " and " << poly << " respectively" );
+    
+    BOOST_REQUIRE_MESSAGE( fabs(poly_eqn_energy-poly) <= 1.0E-5*larger, "" \
+                          "Lower channel energy for polynomial_energy and Poly binning arent equal" \
                           " (starting) at bin " << i \
-                          << " got " << fwf << " and " << poly \
+                          << " got " << poly_eqn_energy << " and " << poly \
                           << "respectively  for coefs=" << print_vec(frf_coefs) \
-                          << " giving values: " << fwf << " and " << poly << " respectively" );
+                          << " giving values: " << poly_eqn_energy << " and " << poly
+                          << " respectively" );
   }
   //Need to do a lot more tests here...
 
@@ -149,8 +161,14 @@ BOOST_AUTO_TEST_CASE( testCalibration )
 //  BOOST_CHECK( false );
 }//BOOST_AUTO_TEST_CASE( testCalibration )
 
-BOOST_AUTO_TEST_CASE( testFindEnergy )
+BOOST_AUTO_TEST_CASE( testFullRangeFractionFindEnergy )
 {
+  // \TODO: Further tests to make:
+  //        - Add deviation pairs
+  //        - Test channels less than zero or greater than nbin
+  //        - Test with 64k channels
+  //        - Test with invalid calibration
+  //        - Test with 2, 4 and 5 coefficents
   using namespace SpecUtils;
 
   const size_t nbin = 1024;
@@ -182,4 +200,121 @@ BOOST_AUTO_TEST_CASE( testFindEnergy )
   
   //...
 
-}//BOOST_AUTO_TEST_CASE( testFindEnergy )
+}//BOOST_AUTO_TEST_CASE( testFullRangeFractionFindEnergy )
+
+
+
+
+BOOST_AUTO_TEST_CASE( testPolynomialFindEnergy )
+{
+  // \TODO: Further tests to make:
+  //        - Add more deviation pairs
+  //        - Test channels less than zero or greater than nbin
+  //        - Test with 64k channels
+  //        - Test with invalid calibration
+  //        - Test with 2, 4 and 5 coefficents
+  const size_t nbin = 1024;
+  
+  vector<float> poly_coefs = { -1.926107f, 2.9493925f, -0.00000831663990020752f };
+  vector<pair<float,float>> dev_pairs = { {0.0f,0.0f}, {1460.0f,-10.0f}, {2614.0f,0.0f} };
+  const float accuracy = 0.001f;
+  
+  float binnum;
+  const float energies[] = { -100.0f, -10.0f, 511.0f, 1121.68f, 1450.87f, 1480.65f, 60000.0f };
+  
+  for( const float energy : energies )
+  {
+    BOOST_CHECK_NO_THROW( binnum = find_polynomial_channel( energy, poly_coefs, nbin, dev_pairs, accuracy ) );
+    const float binenergy = polynomial_energy( binnum, poly_coefs, dev_pairs );
+    
+    //Note: this doesnt test the case for multiple solution that the wanted solution is returned,
+    //      it just checks the solution is correct.
+    
+    BOOST_REQUIRE_MESSAGE( fabs(binenergy-energy) < 0.1, "Found bin " << binnum \
+                           << " for energy " << energy \
+                           << " but found bin actually cooresponds to " \
+                           << binenergy << " keV" );
+  }//for( loop over energies )
+
+}//BOOST_AUTO_TEST_CASE( testPolynomialFindEnergy )
+
+
+BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyLinearSimple )
+{
+  const float energies[] = { -100.1f, -10.0f, 511.005f, 1121.68f, 1450.87f, 1480.65f, 60000.0f };
+  
+  for( const float energy : energies )
+  {
+    float binnum;
+    BOOST_CHECK_NO_THROW( binnum = find_polynomial_channel( energy, {0.0f, 1.0f}, 1024, {}, 0.001f ) );
+    BOOST_REQUIRE_MESSAGE( fabs(binnum - energy) < 0.1, "Found bin " << binnum \
+                           << " for energy " << energy \
+                           << " but found bin actually cooresponds to " \
+                           << binnum << " keV" );
+  }//for( loop over energies )
+}//BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyLinearSimple )
+
+
+BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyRand )
+{
+  const size_t nbin = 1024;
+  const vector<float> poly_coefs = { -10.0f, 3.0f, -1.0f/(4.0f*nbin) };
+  const vector<pair<float,float>> dev_pairs = { {0.0f,0.0f}, {661.0f,-19.0f}, {1460.0f,-10.0f}, {2614.0f,0.0f} };
+  const float accuracy = 0.001f;
+  
+  std::random_device rd;
+  std::mt19937 mt(rd());
+  std::uniform_real_distribution<float> dist(-4.0*nbin, 4.0*nbin);
+  
+  //We will loop over bin-nummbers and make sure find channels returns the same channel-number as
+  //  wanted
+  for( size_t i = 0; i < 10000; ++i )
+  {
+    const float channel = dist(mt);
+    const float channel_energy = polynomial_energy( channel, poly_coefs, dev_pairs );
+    float found_channel;
+    BOOST_CHECK_NO_THROW( found_channel = find_polynomial_channel( channel_energy, poly_coefs, nbin, dev_pairs, accuracy ) );
+    BOOST_REQUIRE_MESSAGE( fabs(channel - found_channel) < 0.01, "Found channel " << found_channel \
+                           << " for channel_energy " << channel_energy \
+                           << " but actually wanted channel " << channel );
+  }//for( loop over energies )
+}//BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyRand )
+
+
+BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
+{
+  const size_t nbin = 1024;
+  vector<float> lower_channel( nbin + 1, 0.0f );
+  for( size_t i = 0; i <= nbin; ++i )
+    lower_channel[i] = i;
+  
+  EnergyCalibration cal;
+  BOOST_CHECK_NO_THROW( cal.set_lower_channel_energy( nbin, lower_channel ) );
+  
+  BOOST_CHECK_THROW( cal.channel_for_energy(nbin+2), std::exception );
+  BOOST_CHECK_THROW( cal.channel_for_energy( -1 ), std::exception );
+  BOOST_CHECK_THROW( cal.energy_for_channel( nbin+2 ), std::exception );
+  BOOST_CHECK_THROW( cal.energy_for_channel( -1 ), std::exception );
+  
+  std::random_device rd;
+  std::mt19937 mt(rd());
+  std::uniform_real_distribution<float> dist( 0.0, nbin );
+  
+  for( size_t i = 0; i < 2000; ++i )
+  {
+    const float energy = dist(mt);
+    
+    float found_channel;
+    BOOST_CHECK_NO_THROW( found_channel = cal.channel_for_energy( energy ) );
+    BOOST_REQUIRE_MESSAGE( fabs(found_channel - energy) < 0.001, "Found channel " << found_channel \
+                           << " for energy " << energy );
+    
+    const float channel = dist(mt);
+    const float found_energy = cal.energy_for_channel( channel );
+    BOOST_REQUIRE_MESSAGE( fabs(found_energy - channel) < 0.001, "Found energy " << found_energy \
+                           << " for channel " << channel );
+  }//for( loop over energies )
+  
+}//BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
+
+

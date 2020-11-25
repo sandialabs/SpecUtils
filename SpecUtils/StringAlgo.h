@@ -215,6 +215,20 @@ namespace  SpecUtils
    */
   bool parse_float( const char *input, const size_t length, float &result );
   
+
+  /** \brief Parses a string of ascii characters to their integer representation.
+   
+   The ascii int may have preceding whitespaces, and any text afterwards;
+   both of which are ignored.
+   
+   \param input Pointer to start of ascii string.  May be null only if length
+   is zero.
+   \param length Number of bytes long the string to be parsed is.  A length
+   of zero will always result in failed parsing.
+   \param result The result of parsing.  If parsing failed, will be 0.
+   \returns True if was able to parse a number, false otherwise.
+   */
+  bool parse_int( const char *input, const size_t length, int &result );
   
   /** \brief Parses a string of ascii floats seperated by user specified
    delimters into a std::vector<float>.
@@ -249,6 +263,8 @@ namespace  SpecUtils
    assert( contents[0] == 7.99f );
    assert( contents[4] == 8.0f );
    \endcode
+   
+   \TODO: change this to be range based, instead of zero-terminated string input
    */
   bool split_to_floats( const char *input,
                        std::vector<float> &contents,
@@ -280,6 +296,7 @@ namespace  SpecUtils
    \TODO: Investigate performance of using:
      - https://github.com/lemire/fast_double_parser
      - https://github.com/abseil/abseil-cpp/blob/master/absl/strings/charconv.h
+     - https://github.com/simdjson/simdjson/blob/master/src/generic/stage2/numberparsing.h
    */
   bool split_to_floats( const char *input, const size_t length,
                        std::vector<float> &results );

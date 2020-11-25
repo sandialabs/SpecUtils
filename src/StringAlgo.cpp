@@ -46,6 +46,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 //Pull in WideCharToMultiByte(...), etc from WIndows
+#define NOMINMAX
 #include <windows.h>
 
 #undef min
@@ -182,7 +183,7 @@ namespace SpecUtils
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, true );
     
 #if(PERFORM_DEVELOPER_CHECKS)
-    const bool correctAnswer = boost::algorithm::istarts_with( line, label );
+    const bool correctAnswer = boost::algorithm::starts_with( line, label );
     
     if( answer != correctAnswer )
     {
@@ -963,6 +964,7 @@ namespace SpecUtils
     const char *end = begin + length;
     
 #if( BOOST_VERSION < 104500 )
+    errno = 0;
     const string inputstr(input, input+length);
     const char *delims = ", ";
     size_t prev_delim_end = 0;
@@ -978,6 +980,7 @@ namespace SpecUtils
         else
           val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
         
+        /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
         if( errno )
           ok = false;
         results.push_back( val );
@@ -997,6 +1000,8 @@ namespace SpecUtils
         val = strtol(inputstr.c_str()+prev_delim_end,nullptr,10);
       else
         val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
+      
+      /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
       if( !errno )
         results.push_back( val );
     }
@@ -1120,7 +1125,7 @@ namespace SpecUtils
         {
           const float a = results[i];
           const float b = checked_result[i];
-          if( fabs(a-b) > 0.000001*std::max(fabs(a),fabs(b)) )
+          if( fabs(a-b) > 0.000001*(std::max(fabs(a),fabs(b)) ))
           {
             char errormsg[1024];
             snprintf( errormsg, sizeof(errormsg),
@@ -1165,8 +1170,7 @@ namespace SpecUtils
     const char *end = begin + length;
     
     result = 0.0f;
-    
-    bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
+    const bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
     
     //  if( ok && (begin != end) )
     //    return false;
@@ -1174,6 +1178,24 @@ namespace SpecUtils
     return ok;
   }
   
+
+  bool parse_int( const char *input, const size_t length, int &result )
+  {
+    namespace qi = boost::spirit::qi;
+    
+    const char *begin = input;
+    const char *end = begin + length;
+    
+    result = 0;
+    const bool ok = qi::phrase_parse( begin, end, qi::int_, qi::space, result );
+    
+    //  if( ok && (begin != end) )
+    //    return false;
+    
+    return ok;
+  }
+
+
   bool split_to_floats( const char *input, vector<float> &contents,
                        const char * const delims,
                        const bool cambio_zero_compress_fix )
@@ -1298,7 +1320,7 @@ namespace SpecUtils
         
         const float a = static_cast<float>( value );
         const float b = (float) atof( string(start_pos, end).c_str() );
-        if( fabs(a-b) > 0.000001f*std::max(fabs(a),fabs(b)) )
+        if( fabs(a-b) > 0.000001f*(std::max(fabs(a),fabs(b)) ))
         {
           char errormsg[1024];
           snprintf( errormsg, sizeof(errormsg),

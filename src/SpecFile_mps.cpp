@@ -308,12 +308,15 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
         
         if( calPeakFound != 0 )
         {
-          m->energy_calibration_model_ = SpecUtils::EnergyCalType::Polynomial;
-          //        m->start_time_ = ;
-          m->calibration_coeffs_.push_back( 0.0f );
-          //        m->calibration_coeffs_.push_back( 3.0 );
-          m->calibration_coeffs_.push_back( 1460.0f / calPeakFound );
-          //        m->channel_energies_  //dont need to fill out here
+          try
+          {
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_polynomial(1024, {0.0f, (1460.0f/calPeakFound)}, {} );
+            m->energy_calibration_ = newcal;
+          }catch( std::exception & )
+          {
+            //probably wont ever get here.
+          }
         }//if( calPeakFound != 0 ) / else
         
         vector<float> *gammacounts = new vector<float>( 1024 );
