@@ -78,6 +78,8 @@ namespace SpecUtils
 		j["detector_name"] = p->detector_name();
 		j["detector_type"] = p->detector_type();
 
+		j["sample_number"] = p->sample_number();
+
 		switch (p->source_type()) {
 			case SourceType::Background:
 				j["source_type"] = "Background";
