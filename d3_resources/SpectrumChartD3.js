@@ -10412,6 +10412,8 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const referenceEnergy = roi.referenceEnergy;
   const lowerEnergy = roi.lowerEnergy;
   const upperEnergy = roi.upperEnergy;
+  const roiSumCounts = ((typeof roi.roiCounts) === 'number') ? roi.roiCounts : null;
+  
 
   const mean = peak.Centroid[0].toFixed(2);
   let fwhm = 2.35482 * peak.Width[0];
@@ -10434,7 +10436,7 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
     nuc = nuc + ")";
   }
   
-
+  // Note: info.roiCounts and info.cpsTxt added to InterSpec 20201129, should deprecate contArea
   const contArea = self.offset_integral(roi,lowerEnergy, upperEnergy).toFixed(1);
   
   const info = {
@@ -10443,7 +10445,9 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
     fwhmPerc: fwhmPerc, 
     chi2: chi2, 
     area: area, 
-    areaUncert: areaUncert, 
+    areaUncert: areaUncert,
+    roiCounts: roiSumCounts,
+    cpsTxt: (((typeof peak.cpsTxt) === 'string') ? peak.cpsTxt : null),
     contArea: contArea, 
     spectrumIndex: spectrumIndex,
     nuclide: nuc
@@ -10506,8 +10510,18 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
 
   self.hidePeakInfo();
 
-  let boxy = areMultipleSpectrumPeaksShown ? -7.1 : -6.1;
-  let boxheight = areMultipleSpectrumPeaksShown ? 6.5 : 5.5;
+  let boxy = -6.1, boxheight = 5.5;
+  
+  if( areMultipleSpectrumPeaksShown ){
+    boxy -= 1;
+    boxheight += 1;
+  }
+  
+  if( info.cpsTxt ){
+    boxy -= 1;
+    boxheight += 1;
+  }
+  
   if( info.nuclide ){
     boxy -= 1;
     boxheight += 1;
@@ -10536,8 +10550,16 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
         .attr('dy', "-1em")
         .text( info.nuclide );
   }
-    
-  createPeakInfoText(text, "cont. area", info.contArea);
+  
+  // Note: info.roiCounts and info.cpsTxt added to InterSpec 20201129, should deprecate contArea
+  if( (typeof info.roiCounts) === 'number' )
+    createPeakInfoText(text, "ROI counts", info.roiCounts);
+  else
+    createPeakInfoText(text, "cont. area", info.contArea);
+  
+  if( info.cpsTxt )
+    createPeakInfoText(text, "peak cps", info.cpsTxt);
+  
   createPeakInfoText(text, "peak area", info.area + String.fromCharCode(0x00B1) + info.areaUncert);
   createPeakInfoText(text, String.fromCharCode(0x03C7) + "2/dof", info.chi2);
   createPeakInfoText(text, "FWHM", info.fwhm + " keV (" + info.fwhmPerc + "%)");
