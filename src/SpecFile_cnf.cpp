@@ -720,7 +720,46 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
                                    0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };  //address of entires in block, always 1
 
         //compute the number of channels and the size of the block
-        data_header[19] = summed->num_gamma_channels();
+        //data_header[19] = summed->num_gamma_channels();
+        //CAM file is required to hvae one of fixed (0x400 - 0x10000) channel numbers
+        size_t num_channels = summed->num_gamma_channels();
+        if (num_channels <= 0x200)
+        {
+            data_header[19] = 0x200;
+        }
+        if (num_channels > 0x200 && num_channels <= 0x400)
+        {
+            data_header[19] = 0x400;
+        }
+        else if (num_channels > 0x400 && num_channels <= 0x800)
+        {
+            data_header[19] = 0x800;
+        }
+        else if (num_channels > 0x800 && num_channels <= 0x1000)
+        {
+            data_header[19] = 0x1000;
+        }
+        else if (num_channels > 0x1000 && num_channels <= 0x2000)
+        {
+            data_header[19] = 0x2000;
+        }
+        else if (num_channels > 0x2000 && num_channels <= 0x4000)
+        {
+            data_header[19] = 0x4000;
+        }
+        else if (num_channels > 0x4000 && num_channels <= 0x8000)
+        {
+            data_header[19] = 0x8000;
+        }
+        else if (num_channels > 0x8000 && num_channels <= 0x10000)
+        {
+            data_header[19] = 0x10000;
+        }
+        else
+        {
+            data_header[19] = num_channels;
+        }
+
         data_header[1] = data_header[6] + data_header[18] + data_header[19] * data_header[14];
         if (data_header[19] == 0x4000) 
         {
