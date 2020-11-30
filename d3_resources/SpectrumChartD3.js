@@ -6785,8 +6785,19 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     const origx = labelx;
     
     //First, lets try making the label go higher until we either have no collisions, or we reach the top
+    let iterNum = 0;
     let reachedTop = false;
     for( let otherindex = 0; !reachedTop && otherindex < drawnlabels.length; ++otherindex ){
+      
+      // Just in case, lets keep from an infinite loop - I dont think this should ever happen,
+      //  but JIC.  On a LaBr spectrum with lots of peaks/labels, I never saw over 20 iterations,
+      //  and its usually much less
+      if( ++iterNum > 50 )
+      {
+        console.log( "Breaking out of peak label placement search at " + iterNum + " iterations" );
+        break;
+      }
+      
       let otherlabel = drawnlabels[otherindex];
       let othernode = otherlabel.node();
       
@@ -6797,7 +6808,9 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       
       if( x_overlap > 0 && y_overlap > 0  ){
         let newy = otherlabel.node().getBBox().y - 0.5*labelh - 2;
-        if( newy > labely )  //Make sure we only move the label up, so the loop will be garunteed to terminate
+        
+        //Make sure we only move the label up, and by at least a few pixels, so the loop will be guaranteed to terminate
+        if( newy >= (labely - 0.1*labelh) )
           newy = labely - 0.5*labelh;
          
         reachedTop = (newy < (2+0.5*labelh));
