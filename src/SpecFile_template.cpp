@@ -78,6 +78,39 @@ namespace SpecUtils
 		j["detector_name"] = p->detector_name();
 		j["detector_type"] = p->detector_type();
 
+		j["sample_number"] = p->sample_number();
+
+		switch (p->occupied()) {
+			case OccupancyStatus::Occupied:
+				j["occupied"] = "true";
+				break;
+			case OccupancyStatus::NotOccupied:
+				j["occupied"] = "false";
+				break;
+			case OccupancyStatus::Unknown:
+				j["occupied"] = "unknown";
+				break;
+		}
+
+		switch (p->source_type()) {
+			case SourceType::Background:
+				j["source_type"] = "Background";
+				break;
+			case SourceType::Calibration:
+				j["source_type"] = "Calibration";
+				break;
+			case SourceType::Foreground:
+				j["source_type"] = "Foreground";
+				break;
+			case SourceType::IntrinsicActivity:
+				j["source_type"] = "IntrinsicActivity";
+				break;
+			case SourceType::Unknown:
+			default:
+				j["source_type"] = "Unknown";
+				break;
+		}
+
 		j["latitude"] = p->latitude();
 		j["longitude"] = p->longitude();
 		j["speed"] = p->speed();
@@ -117,6 +150,10 @@ namespace SpecUtils
 		std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
 
 		Environment env;
+
+		//You can control the template whitespace processing here, but its tricky and messes with the file line endings
+		//env.set_trim_blocks(true);
+		//env.set_lstrip_blocks(true);
 
 		// Apply an arbitrary string formatting
 		env.add_callback("format", 2, [](Arguments& args) {
