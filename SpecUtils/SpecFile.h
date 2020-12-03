@@ -517,7 +517,7 @@ public:
   
   //remarks(): the list of remarks found while parsing this record from the file
   //  that pertain to this record specifically.  See also
-  //  MeasurementInformation::remarks().
+  //  SpecFile::remarks().
   const std::vector<std::string> &remarks() const;
   
   /** Warnings from parsing that apply to this measurement.
@@ -535,7 +535,7 @@ public:
   //energy_calibration_model(): returns calibration model used for energy
   //  binning.  If a value of 'InvalidEquationType' is returned, then
   //  channel_energies() may or may not return a valid pointer; otherwise, if
-  //  this Measurement is part of a MeasurementInfo object constructed by parsing
+  //  this Measurement is part of a SpecFile object constructed by parsing
   //  a file, then channel_energies() pointer _should_ be valid.
   //
   //  \deprecated Please start using #EnergyCalibration returned by #energy_calibration.
@@ -566,7 +566,7 @@ public:
   //  of the gamma channels, calculated using the energy calibration
   //  coefficients as well as the deviation pairs.  These channel energies are
   //  calculated during file parsing, or any subsequent re-calibrations;  the
-  //  owining MeasurementInfo object will make an attempt so that multiple
+  //  owining SpecFile object will make an attempt so that multiple
   //  Measurements that it owns, that have the same calibration, will also return
   //  pointers from channel_energies() that point to the same spot in memory
   //  (this is primarily a memory usage optimization).
@@ -1186,7 +1186,7 @@ public:
 
   //set_start_time(...), set_remarks(...), set_spectra_type(...) allow
   //  setting the relevant variables of the 'measurement' passed in.  The reason
-  //  you have to set these variables from MeasurementInfo class, instead of
+  //  you have to set these variables from SpecFile class, instead of
   //  directly from the Measurement class is because you should only be dealing
   //  with const pointers to these object for both the sake of the modified_
   //  flag, but also to ensure some amount of thread safety.
@@ -1229,7 +1229,7 @@ public:
   void change_detector_name( const std::string &original_name,
                              const std::string &new_name );
   
-  //add_measurement(...): adds the measurement to this MeasurementInfo object and
+  //add_measurement(...): adds the measurement to this SpecFile object and
   //  if 'doCleanup' is specified, then all sums will be recalculated, and
   //  binnings made consistent.  If you do not specify 'doCleanup' then
   //  things will be roughly updated, but the more thorough cleanup_after_load()
@@ -1243,7 +1243,7 @@ public:
   //  all use cases, but good enough for now.
   void add_measurement( std::shared_ptr<Measurement> meas, const bool doCleanup );
   
-  //remove_measurement(...): removes the measurement from this MeasurementInfo
+  //remove_measurement(...): removes the measurement from this SpecFile
   //  object and if 'doCleanup' is specified, then all sums will be
   //  recalculated.  If you do not specify 'doCleanup' then make sure to call
   //  cleanup_after_load() once you are done adding/removing Measurements if a
@@ -1253,7 +1253,7 @@ public:
   
   //remove_measurements(): similar to remove_measurement(...), but more efficient
   //  for removing large numbers of measurements.  This function assumes
-  //  the internal state of this MeasurementInfo object is consistent
+  //  the internal state of this SpecFile object is consistent
   //  (e.g. no measurements have been added or removed without 'cleaningup').
   void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
@@ -2047,7 +2047,7 @@ protected:
 
   //setMeasurementLocationInformation(...):  sets the measurement information
   //  for a particular <Measurement> section of N42 data.  The parced data
-  //  sets both MeasurementInfo member variables, as well as member variables
+  //  sets both SpecFile member variables, as well as member variables
   //  (particularly gps) of the Measurnment's passed in (that should belong to
   //  the same <Measurement> section of the N42 file, since there may be
   //  multiple spectrums per measurement).

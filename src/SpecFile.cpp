@@ -1054,13 +1054,13 @@ double Measurement::gamma_channels_sum( size_t startbin, size_t endbin ) const
   
   const size_t nchannels = gamma_counts_->size();
   
+  if( startbin > endbin )
+    std::swap( startbin, endbin );
+  
   if( startbin >= nchannels )
     return sum;
   
   endbin = std::min( endbin, nchannels-1 );
-  
-  if( startbin > endbin )
-    std::swap( startbin, endbin );
   
   for( size_t channel = startbin; channel <= endbin; ++channel )
     sum += (*gamma_counts_)[channel];

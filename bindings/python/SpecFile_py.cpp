@@ -394,20 +394,22 @@ namespace
   
   std::shared_ptr<SpecUtils::Measurement> sum_measurements_wrapper( SpecUtils::SpecFile *info,
                                                           boost::python::list py_samplenums,
-                                                          boost::python::list py_detnums )
+                                                          boost::python::list py_detnames )
   {
     set<int> samplenums;
-    vector<int> detnums;
+    set<string> detnames;
     
     boost::python::ssize_t n = boost::python::len( py_samplenums );
     for( boost::python::ssize_t i = 0; i < n; ++i )
       samplenums.insert( boost::python::extract<int>( py_samplenums[i] ) );
     
-    n = boost::python::len( py_detnums );
+    n = boost::python::len( py_detnames );
     for( boost::python::ssize_t i = 0; i < n; ++i )
-      detnums.push_back( boost::python::extract<int>( py_detnums[i] ) );
+      detnames.insert( boost::python::extract<std::string>( py_detnames[i] ) );
     
-    return info->sum_measurements(samplenums, detnums );
+    const vector<string> detname_vec( begin(detnames), end(detnames) );
+
+    return info->sum_measurements( samplenums, detname_vec, nullptr );
   }//sum_measurements_wrapper(...)
   
   
@@ -780,9 +782,9 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .def( "reset", &SpecUtils::SpecFile::reset,
         "Resets the SpecUtils::SpecFile object to its initial (empty) state." )
   .def( "sumMeasurements", &sum_measurements_wrapper,
-        args("SampleNumbers", "DetectorNumbers"),
+        args("SampleNumbers", "DetectorNames"),
         "Sums the measurements of the specified sample and detector numbers.\n"
-        "SampleNumbers and DetectorNumbers are both lists of integers.\n"
+        "SampleNumbers is a list of integers and DetectorNames is a list of strings.\n"
         "If the measurements contain different energy binnings, one will be chosen\n"
         "and the other measurements rebinned before summing so that energies stay\n"
         "consistent (e.g. not just a bin-by-bin summing).\n"

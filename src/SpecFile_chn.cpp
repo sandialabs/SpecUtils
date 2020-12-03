@@ -389,67 +389,52 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   //index=16
   
   if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.date().day_number()) );
-  ostr.write( buffer, 2 );
-  //index=18
-  
-  const char *monthstr = "   ";
-  
-  try
   {
-    switch( starttime.date().month().as_enum() )
+    strcpy( buffer, "00   0000000" );
+  }else
+  {
+    const char *monthstr = "   ";
+    try
     {
-      case boost::gregorian::Jan: monthstr = "Jan"; break;
-      case boost::gregorian::Feb: monthstr = "Feb"; break;
-      case boost::gregorian::Mar: monthstr = "Mar"; break;
-      case boost::gregorian::Apr: monthstr = "Apr"; break;
-      case boost::gregorian::May: monthstr = "May"; break;
-      case boost::gregorian::Jun: monthstr = "Jun"; break;
-      case boost::gregorian::Jul: monthstr = "Jul"; break;
-      case boost::gregorian::Aug: monthstr = "Aug"; break;
-      case boost::gregorian::Sep: monthstr = "Sep"; break;
-      case boost::gregorian::Oct: monthstr = "Oct"; break;
-      case boost::gregorian::Nov: monthstr = "Nov"; break;
-      case boost::gregorian::Dec: monthstr = "Dec"; break;
-      case boost::gregorian::NotAMonth:
-      case boost::gregorian::NumMonths:
-        break;
-    }//switch( starttime.date().month().as_enum() )
-  }catch(...)
-  {
-    //Here when month is invalid...
-  }
-  ostr.write( monthstr, 3 );
-  //index=21
+      //boost::gregorian::as_short_string(starttime.date().month().as_enum()) would give same answer
+      //  but require linking to boost date/time, which we are trying to avoid
+      switch( starttime.date().month().as_enum() )
+      {
+        case boost::gregorian::Jan: monthstr = "Jan"; break;
+        case boost::gregorian::Feb: monthstr = "Feb"; break;
+        case boost::gregorian::Mar: monthstr = "Mar"; break;
+        case boost::gregorian::Apr: monthstr = "Apr"; break;
+        case boost::gregorian::May: monthstr = "May"; break;
+        case boost::gregorian::Jun: monthstr = "Jun"; break;
+        case boost::gregorian::Jul: monthstr = "Jul"; break;
+        case boost::gregorian::Aug: monthstr = "Aug"; break;
+        case boost::gregorian::Sep: monthstr = "Sep"; break;
+        case boost::gregorian::Oct: monthstr = "Oct"; break;
+        case boost::gregorian::Nov: monthstr = "Nov"; break;
+        case boost::gregorian::Dec: monthstr = "Dec"; break;
+        case boost::gregorian::NotAMonth:
+        case boost::gregorian::NumMonths:
+          break;
+      }//switch( starttime.date().month().as_enum() )
+    }catch(...)
+    {
+      //Here when month is invalid, which I guess shouldn't ever happen
+    }
+    
+    // Most of the modulus's below are probably not necessary, but JIC since we want a string of
+    //  exactly 12 characters
+    snprintf( buffer, sizeof(buffer), "%02d%s%02d%s%02d%02d",
+              static_cast<int>( starttime.date().day() % 100 ),
+              monthstr,
+              static_cast<int>( starttime.date().year() % 100 ), //This mod is required
+              ((starttime.date().year() >= 2000) ? "1" : "0"),
+              static_cast<int>( starttime.time_of_day().hours() % 100 ),
+              static_cast<int>( starttime.time_of_day().minutes() % 100 )
+             );
+  }//if( starttime.is_special() ) / else
   
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.date().year()%100) );
-  ostr.write( buffer, 2 );
-  //index=23
-  
-  if( !starttime.is_special() && starttime.date().year() >= 2000 )
-    ostr.write( "1", 1 );
-  else
-    ostr.write( "0", 1 );
-  //index=24
-  
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.time_of_day().hours()) );
-  ostr.write( buffer, 2 );
-  //index=26
-  
-  
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.time_of_day().minutes()) );
-  ostr.write( buffer, 2 );
+  assert( strlen(buffer) == 12 );
+  ostr.write( buffer, 12 );
   //index=28
   
   uint16_t firstchannel = 0;
