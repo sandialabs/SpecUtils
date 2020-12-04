@@ -838,7 +838,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   this.rawData = data;
 
   this.rawData.spectra.forEach( function(spectrum,i){
-    if( !spectrum || !spectrum.y.length )
+    if( !spectrum || !spectrum.y || !spectrum.y.length )
       return;
     if( spectrum.xeqn && spectrum.xeqn.length>1 && !spectrum.x && spectrum.y && spectrum.y.length )
     {
@@ -999,10 +999,7 @@ SpectrumChartD3.prototype.update = function() {
   if (!this.rawData || !this.rawData.spectra || !this.rawData.spectra.length)
     return;
 
-  // Figure out which set of points to use
-  //  Use background subtract if we're in that view mode, otherwise use the normal set of points
-  const key = this.options.backgroundSubtract ? 'bgsubtractpoints' : 'points';
-
+  
   this.rawData.spectra.forEach(function(spectrum, i) {
     var line = self.vis.select("#spectrumline"+i);
   
@@ -1010,6 +1007,11 @@ SpectrumChartD3.prototype.update = function() {
       line.attr('visibility', self.options.backgroundSubtract ? 'hidden' : 'visible');
       if (self.options.backgroundSubtract) return;
     }
+  
+    // Figure out which set of points to use
+    //  Use background subtract if we're in that view mode, otherwise use the normal set of points
+    const key = self.options.backgroundSubtract && ('bgsubtractpoints' in self.rawData.spectra[i]) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
+    
     line.attr("d", self['line'+i](self.rawData.spectra[i][key]));
   });
 
@@ -5230,13 +5232,16 @@ SpectrumChartD3.prototype.drawSliderChartLines = function()  {
     let spectrum = self.rawData.spectra[i];
     if (self.options.backgroundSubtract && spectrum.type == self.spectrumTypes.BACKGROUND) continue;
 
-    if (self['line'+i] && self.size.height>0 && self.size.sliderChartHeight>0 )
+    if (self['line'+i] && self.size.height>0 && self.size.sliderChartHeight>0 ){
+      const key = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
+      
       self['sliderLine'+i] = self.sliderChartBody.append("path")
         .attr("id", 'sliderLine'+i)
         .attr("class", 'sline sliderLine')
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : 'black')
-        .attr("d", self['line'+i](spectrum[self.options.backgroundSubtract ? 'bgsubtractpoints' : 'points']))
+        .attr("d", self['line'+i](spectrum[key]))
         .attr("transform","scale(1," + (self.size.sliderChartHeight / self.size.height) + ")");
+    }
   }
 }
 
@@ -6107,8 +6112,10 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
       self.yScale.domain(self.getYAxisDomain());
 
       self.rawData.spectra.forEach(function(spec, speci) {
-        if (self["sliderLine"+speci])
-          self["sliderLine"+speci].attr("d", self["line"+speci](spec[self.options.backgroundSubtract ? 'bgsubtractpoints' : 'points']));
+        if (self["sliderLine"+speci]){
+          const key = self.options.backgroundSubtract && ('bgsubtractpoints' in spec) ? 'bgsubtractpoints' : 'points';
+          self["sliderLine"+speci].attr("d", self["line"+speci](spec[key]));
+        }
       })
       
 
@@ -10811,17 +10818,21 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   var bisector = d3.bisector(function(point) { return point.x });
 
   self.rawData.spectra.forEach(function(spectrum) {
+    
+    if( 'bgsubtractpoints' in spectrum )
+      delete spectrum.bgsubtractpoints;
+    
     // We don't need to generate the points for background subtract for a background spectrum
     if (spectrum.type === self.spectrumTypes.BACKGROUND) return;
-
-    // Initialize background subtract points for this spectrum to be empty
-    spectrum.bgsubtractpoints = [];
 
     const background = self.getSpectrumByID(spectrum.backgroundID);
 
     // Don't add any points if there is no associated background with this spectrum
     if (!background) return;
 
+    // Initialize background subtract points for this spectrum to be empty
+    spectrum.bgsubtractpoints = [];
+    
     // Get points for background subtract for this spectrum by getting the nearest background point and subtracting y-values
     spectrum.bgsubtractpoints = spectrum.points.map(function(point) {
       const x = point.x;
@@ -10871,7 +10882,7 @@ SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
 }
 
 /**
- * Returns the spectrum with a given ID. If no specturm is found, then null is returned.
+ * Returns the spectrum with a given ID. If no spectrum is found, then null is returned.
  * Assumes valid data, so if there are multiple spectra with same ID, then the first one is returned.
  */
 SpectrumChartD3.prototype.getSpectrumByID = function(id) {
@@ -10941,26 +10952,28 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
     return [0, 3000];
   
-  var key = self.options.backgroundSubtract ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
   var y0, y1;
   var minx = self.xScale.domain()[0], maxx = self.xScale.domain()[1];
   var foreground = self.rawData.spectra[0];
   var firstData = self.displayed_start(foreground);
   var lastData = self.displayed_end(foreground);
   
+  
   if( firstData >= 0 ){
-    y0 = y1 = foreground[key][firstData].y;
+    const forkey = self.options.backgroundSubtract && ('bgsubtractpoints' in foreground) ? 'bgsubtractpoints' : 'points';
+    y0 = y1 = foreground[forkey][firstData].y;
     
     self.rawData.spectra.forEach(function(spectrum) {
       // Don't consider background spectrum if we're viewing the Background Subtract
       if (self.options.backgroundSubtract && spectrum.type === self.spectrumTypes.BACKGROUND) return;
       firstData = self.displayed_start(spectrum);
       lastData = self.displayed_end(spectrum);
+      var speckey = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
       
       for (var i = firstData; i < lastData; i++) {
-        if (spectrum[key][i]) {
-          y0 = Math.min( y0, spectrum[key][i].y );
-          y1 = Math.max( y1, spectrum[key][i].y );
+        if (spectrum[speckey][i]) {
+          y0 = Math.min( y0, spectrum[speckey][i].y );
+          y1 = Math.max( y1, spectrum[speckey][i].y );
         }
       }
     });
