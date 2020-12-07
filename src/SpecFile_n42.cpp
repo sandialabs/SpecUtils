@@ -3170,14 +3170,17 @@ public:
             node = XML_NEXT_TWIN(node) )
         {
           const rapidxml::xml_attribute<char> *att = node->first_attribute( "radDetectorInformationReference", 31, false );
-          const bool is_min = XML_VALUE_ICOMPARE(att, "minimumNeutrons");
-          const bool is_max = XML_VALUE_ICOMPARE(att, "maximumNeutrons");
-          const bool is_total = XML_VALUE_ICOMPARE(att, "totalNeutrons");
+          if( att )
+          {
+            const bool is_min = XML_VALUE_ICOMPARE(att, "minimumNeutrons");
+            const bool is_max = XML_VALUE_ICOMPARE(att, "maximumNeutrons");
+            const bool is_total = XML_VALUE_ICOMPARE(att, "totalNeutrons");
           
-          min_neut = (min_neut || is_min);
-          max_neut = (max_neut || is_max);
-          total_neut = (total_neut || is_total);
-          has_other = (has_other || (!is_min && !is_max && !is_total));
+            min_neut = (min_neut || is_min);
+            max_neut = (max_neut || is_max);
+            total_neut = (total_neut || is_total);
+            has_other = (has_other || (!is_min && !is_max && !is_total));
+          }//if( att )
         }//for( loop over GrossCounts nodes )
         
         const bool has_min_max_total_neutron = ((min_neut && max_neut && total_neut) && !has_other);

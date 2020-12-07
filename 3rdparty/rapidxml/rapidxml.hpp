@@ -1636,7 +1636,7 @@ namespace rapidxml
       static void skip(Ch *&text, Ch * const text_end )
       {
         Ch *tmp = text;
-        while ( tmp != text_end && StopPred::test(*tmp))
+        while ( (tmp != text_end) && ((tmp+1) != text_end) && StopPred::test(*tmp))
           ++tmp;
         text = tmp;
       }
@@ -2528,13 +2528,13 @@ namespace rapidxml
           if (Flags & parse_normalize_whitespace)
           {
             // Whitespace is already condensed to single space characters by skipping function, so just trim 1 char off the end
-            if (*(end - 1) == Ch(' '))
+            if (*(end - 1) == Ch(' ') && (end > value) )
               --end;
           }
           else
           {
             // Backup until non-whitespace character is found
-            while (whitespace_pred::test(*(end - 1)))
+            while ((end > value) && whitespace_pred::test(*(end - 1)) )
               --end;
           }
         }
@@ -3155,6 +3155,15 @@ namespace rapidxml
           Ch *contents_start = text;      // Store start of node contents before whitespace is skipped
           skip<whitespace_pred, Flags>(text, text_end);
           Ch next_char = *text;
+          
+          
+          if( text == text_end || (text+1) == text_end )
+          {
+            if( (Flags & allow_sloppy_parse) ) //wcjohns added in
+              return;  //Make it so incomplete N42 files will still parse even if all tags are not closed...
+            else
+              RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+          }
           
           // After data nodes, instead of continuing the loop, control jumps here.
           // This is because zero termination inside parse_and_append_data() function

@@ -228,9 +228,9 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
     cleanup_after_load();
     
     return true;
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
-    cerr << "load_from_Gr135_txt(...) caught: " << e.what() << endl;
+    // cerr << "load_from_Gr135_txt(...) caught: " << e.what() << endl;
   }//try / catch
   
   input.clear();
