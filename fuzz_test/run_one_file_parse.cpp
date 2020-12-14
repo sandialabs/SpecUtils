@@ -27,10 +27,26 @@
 
 #include "fuzz_interface.h"
 #include "SpecUtils/SpecFile.h"
+#include "SpecUtils/Filesystem.h"
 
-using namespace std;
-
-extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size ) 
+/** This program runs fuzz test cases to enable tracing down where the 
+ * problem is, and fixing it.
+*/
+int main( int argc, char **argv )
 {
-  return run_file_parse_fuzz( data, size );
-}
+  try
+  {
+    const char *crash_filename = "/path/to/file/crash-...";
+    std::vector<char> data;
+    SpecUtils::load_file_data( crash_filename, data );
+    assert( data.size() > 1 );
+    std::vector<char> data_actual( begin(data), end(data) - 1 ); //strip trailing '\0' inserted by SpecUtils::load_file_data
+    
+    const int rval = run_file_parse_fuzz( (uint8_t *)(&(data_actual[0])), data_actual.size() );
+  }catch( std::exception &e )
+  {
+    std::cerr << "Caught exception: " << e.what() << std::endl;
+  }//try / catch
+  
+  return EXIT_SUCCESS;
+}// int main(argc,argv)

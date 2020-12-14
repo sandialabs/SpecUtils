@@ -242,6 +242,15 @@ namespace
   {
     const string line( data, datalen );
     std::string::size_type pos1 = line.find( ',' );
+    if( pos1 == string::npos )
+    {
+#if(PERFORM_DEVELOPER_CHECKS)
+      log_developer_error( __func__, "parse_analyzed_background: unexpected EOL 0" );
+#endif
+      info.success = false;
+      return;
+    }//if( pos1 == string::npos )
+    
     assert( line.substr(0,pos1) == "AB" );
     std::string::size_type pos2 = line.find( ',', pos1+1 );
     if( pos2 == string::npos )
@@ -594,8 +603,11 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   //      Make it so the worker functions in the SpectroscopicDailyFile
   //      namespace dont re-copy all the strings passed in.
   
-
+  reset();
+  const istream::pos_type orig_pos = input.tellg();
   
+  try
+  {
   int occupancy_num = 0, background_num = 0, s1_num = 0, s2_num = 0;
   vector<DailyFileS1Info> s1infos;
   vector< map<string,vector< pair<float,float> > > > detname_to_devpairs;
@@ -618,11 +630,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   
   
   set<string> detectorNames;
-  
-  reset();
-  const istream::pos_type orig_pos = input.tellg();
-  
-  
+
   
   //TODO 20180817 - only niavely addressed below:
   //Files like refRA2PVFVA5I look a lot like these types of files because they
@@ -633,14 +641,15 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   {//begin test for wierd format
     string line;
     if( !SpecUtils::safe_get_line( input, line, 2048 ) )
-      return false;
+      throw runtime_error( "" );
+    
     int ndash = 0;
     auto pos = line.find_last_of( ',' );
     for( ; pos < line.size(); ++pos )
       ndash += (line[pos] == '-');
     
     if( ndash > 1 || pos == string::npos )
-      return false;
+      throw runtime_error( "" );
     input.seekg( orig_pos, ios::beg );
   }//end test for wierd format
   
@@ -648,7 +657,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   
 #if( DO_SDF_MULTITHREAD )
   if( !input.good() )
-    return false;
+    throw runtime_error( "" );
   
   vector<char> filedata;
   input.seekg( 0, ios::end );
@@ -659,11 +668,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   filedata.resize( filelength + 1 );
   input.read( &filedata[0], filelength );
   if( !input.good() )
-  {
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-    return false;
-  }
+    throw runtime_error( "" );
   
   filedata[filelength] = '\0';
   
@@ -701,12 +706,26 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #endif
       
       ++nLines;
-      if( linelen < 3 )
+      if( linelen < 4 )
+        continue;
+      
+      // We expect the first two characters to be like "NB" or "GB" or something, and the third
+      //  character to be ','.  We'll be sloppy here and allow a spaces or tabs before the comma,
+      //  although I dont think we need to.
+      bool next_is_comma = false;
+      for( size_t i = 2; !next_is_comma && (i < linelen); ++i )
+      {
+        next_is_comma = (linestart[i] == ',');
+        if( (linestart[i] != ',') && (linestart[i] != ' ') && (linestart[i] != '\t') )
+          break;
+      }
+      
+      if( !next_is_comma )
         continue;
       
       const string linetype(linestart,2);
       
-      //dates are writtn as yyyy-mm-ddThh:mm:ss.000Z-hh:mm
+      //dates are written as yyyy-mm-ddThh:mm:ss.000Z-hh:mm
       
       if( linetype == "S1" )
       {
@@ -739,9 +758,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): S1 line invalid" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          return false;
+          throw runtime_error( "load_from_spectroscopic_daily_file(): S1 line invalid" );
         }
         
         s1infos.push_back( info );
@@ -790,10 +807,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
             log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Not a daily file we can decode (probably - giving up)" );
 #endif
-            input.clear();
-            input.seekg( orig_pos, ios::beg );
-            
-            return false;
+            throw runtime_error( "Not a daily file we can decode (probably - giving up)" );
           }
         }//if( nGammaLines == 0 )
         
@@ -809,10 +823,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Error Parsing gamma background" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
+          throw runtime_error( "Error Parsing gamma background" );
         }//if( !info->success )
         
         detectorNames.insert( info->detectorName );
@@ -844,10 +855,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Error Parsing neutron background" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
+          throw runtime_error( "Error Parsing neutron background" );
         }
 #endif
         
@@ -864,10 +872,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): invalid BX line lenght" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
+          throw runtime_error( "invalid BX line lenght" );
         }
         
         const string line( linestart, linelen );
@@ -921,10 +926,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Error Parsing gamma signal" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
           
-          return false;
+          throw runtime_error( "Error Parsing gamma signal" );
         }//if( !info->success )
         
         detectorNames.insert( info->detectorName );
@@ -958,10 +961,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "Error Parsing neutron signal" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
+          throw runtime_error( "Error Parsing neutron signal" );
         }//if( !info->success )
 #endif
         
@@ -1010,10 +1010,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "Error Parsing analyzed background" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
+          throw runtime_error( "Error Parsing analyzed background" );
         }
         
         if( info.type == DailyFileAnalyzedBackground::Gamma )
@@ -1050,10 +1047,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "Error Parsing end of record line" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
-          
-          return false;
+          throw runtime_error( "Error Parsing end of record line" );
         }
         
         end_occupancy[occupancy_num] = info;
@@ -1072,11 +1066,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           ++nUnrecognizedLines;
           const double fracBad = double(nUnrecognizedLines) / nLines;
           if( (nUnrecognizedLines > 10) && (fracBad > 0.1) )
-          {
-            input.clear();
-            input.seekg( orig_pos, ios::beg );
-            return false;
-          }
+            throw runtime_error( "To many bad lines" );
           
 #if(PERFORM_DEVELOPER_CHECKS)
           string msg = "unrecognized line begining: " + linetype;
@@ -1108,10 +1098,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
     log_developer_error( __func__, "Either S1 line missing" );
 #endif
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-    
-    return false;
+    throw runtime_error( "Either S1 line missing" );
   }//
   
   
@@ -1156,10 +1143,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Serious programing logic error in 0" );
 #endif
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
-      
-      return false;
+      throw runtime_error( "Serious programing logic error in 0" );
     }
     
     const DailyFileS1Info &sinfo = s1infos[s1pos->second];
@@ -1174,10 +1158,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Serious programing logic error in 1" );
 #endif
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
       
-      return false;
+      throw runtime_error( "Serious programing logic error in 1" );
     }//if( gammaiter == gamma_signal.end() )
     
     const map<int,vector<std::shared_ptr<DailyFileNeutronSignal> > >::const_iterator neutiter
@@ -1190,10 +1172,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Serious programing logic error in 2" );
 #endif
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
       
-      return false;
+      throw runtime_error( "Serious programing logic error in 2" );
     }//if( endrecorditer == end_occupancy.end() )
     
     const DailyFileEndRecord &endrecord = endrecorditer->second;
@@ -1322,10 +1302,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
         log_developer_error( __func__, "Error Parsing gamma signal" );
 #endif
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
         
-        return false;
+        throw runtime_error( "Error Parsing gamma signal" );
       }//if( !gamma.success )
 #endif
       
@@ -1347,10 +1325,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
         log_developer_error( __func__, "Error Parsing neutron signal" );
 #endif
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
         
-        return false;
+        throw runtime_error( "Error Parsing neutron signal" );
       }//if( neut && !neut->success )
 #endif
       
@@ -1458,10 +1434,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Serious programing logic error in 1" );
 #endif
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
       
-      return false;
+      throw runtime_error( "Serious programing logic error in 1" );
     }
     
     const DailyFileS1Info &sinfo = s1infos[s1pos->second];
@@ -1479,10 +1453,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Serious programing logic error in 1.1" );
 #endif
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
       
-      return false;
+      throw runtime_error( "Serious programing logic error in 1.1" );
     }
     
     if( backtimestamp == end_background.end() )
@@ -1490,10 +1462,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Serious programing logic error in 1.2" );
 #endif
-      input.clear();
-      input.seekg( orig_pos, ios::beg );
       
-      return false;
+      throw runtime_error( "Serious programing logic error in 1.2" );
     }
     
     const vector<std::shared_ptr<DailyFileGammaBackground> > &backgrounds = gammaback->second;
@@ -1509,10 +1479,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
         log_developer_error( __func__, "Error Parsing gamma background" );
 #endif
-        input.clear();
-        input.seekg( orig_pos, ios::beg );
         
-        return false;
+        throw runtime_error( "Error Parsing gamma background" );
       }//if( !back.success )
 #endif
       
@@ -1598,10 +1566,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if(PERFORM_DEVELOPER_CHECKS)
           log_developer_error( __func__, "Error Parsing neutron background" );
 #endif
-          input.clear();
-          input.seekg( orig_pos, ios::beg );
           
-          return false;
+          throw runtime_error( "Error Parsing neutron background" );
         }
 #endif
         
@@ -1658,6 +1624,15 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #else
   cleanup_after_load();
 #endif
+  }catch( std::exception & )
+  {
+    reset();
+    
+    input.clear();
+    input.seekg( orig_pos, ios::beg );
+    
+    return false;
+  }//try / catch
   
   //if( properties_flags_ & kNotSampleDetectorTimeSorted )
   //  cerr << "load_from_spectroscopic_daily_file: kNotSampleDetectorTimeSorted is set" << endl;

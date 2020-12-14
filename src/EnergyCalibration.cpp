@@ -112,7 +112,10 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
 {
   /// \TODO: possibly loosen this up to not have a number of channel requirement... should be fine?
   if( num_channels < 2 )
-    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with >=2 channels" );
+    throw runtime_error( "EnergyCalibration::set_polynomial: requires >=2 channels" );
+  
+  if( num_channels > (65536 + 8) )
+    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with <= 64k channels" );
   
   //Find the last non-zero coefficients (e.g., strip off trailing zeros)
   size_t last_iter = coeffs.size();
@@ -120,9 +123,15 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
     --last_iter;
   
   if( last_iter < 2 )
-    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with >=2 coefficents" );
+    throw runtime_error( "EnergyCalibration::set_polynomial: requires >=2 coefficients" );
   
-  // Do a sanity check on calibration coeffiecints that they are reasonable; #polynomial_binning
+  for( size_t i = 0; i < last_iter; ++i )
+  {
+    if( IsNan(coeffs[i]) || IsInf(coeffs[i]) )
+      throw runtime_error( "EnergyCalibration::set_polynomial: inf or nan coefficient" );
+  }
+  
+  // Do a sanity check on calibration coefficients that they are reasonable; #polynomial_binning
   //  will check if the are strictly increasing.
   if( (fabs(coeffs[0]) > 500.0)  //500 is arbitrary, but I have seen -450 in data!
       || (fabs(coeffs[1]) > 450.0)  //450 is arbitrary, lets 7 channels span 3000 keV
@@ -158,6 +167,9 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
   if( num_channels < 2 )
     throw runtime_error( "Full range fraction energy calibration requires >=2 channels" );
   
+  if( num_channels > (65536 + 8) )
+    throw runtime_error( "Full range fraction energy calibration must have <= 64k channels" );
+  
   //Find the last non-zero coefficients (e.g., strip off trailing zeros)
    size_t last_iter = coeffs.size();
    while( last_iter!=0 && coeffs[last_iter-1]==0.0f )
@@ -165,6 +177,12 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
   
   if( last_iter < 2 )
     throw runtime_error( "Full range fraction energy calibration requires >=2 coefficents" );
+  
+  for( size_t i = 0; i < last_iter; ++i )
+  {
+    if( IsNan(coeffs[i]) || IsInf(coeffs[i]) )
+      throw runtime_error( "Full range fraction has inf or nan coefficient" );
+  }
   
   m_channel_energies = fullrangefraction_binning( coeffs, num_channels, dev_pairs, true );
   
@@ -479,19 +497,20 @@ void EnergyCalibration::equal_enough( const EnergyCalibration &lhs, const Energy
   //Models are now: {both LowerChannelEdge}, {both Polynomial}, {both FullRangeFraction}, or
   //                {one Polynomial and one FullRangeFraction}
    
-  assert( lhs.m_channel_energies );
-  assert( rhs.m_channel_energies );
-  
   const size_t nchannel = lhs.num_channels();
-  
-  if( nchannel != rhs.num_channels() )
+  const size_t rhs_nchannel = rhs.num_channels();
+  if( nchannel != rhs_nchannel )
   {
     snprintf( buffer, sizeof(buffer),
               "Calibrations have different number of channel energies (LHS %i, RHS %i)",
-              static_cast<int>(lhs.m_channel_energies->size()),
-              static_cast<int>(rhs.m_channel_energies->size()) );
+              static_cast<int>(nchannel),
+              static_cast<int>(rhs_nchannel) );
     throw runtime_error( buffer );
   }
+  
+  assert( lhs.m_channel_energies );
+  assert( rhs.m_channel_energies );
+  
   
   const auto &lhsdev = lhs.m_deviation_pairs;
   const auto &rhsdev = rhs.m_deviation_pairs;

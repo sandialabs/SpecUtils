@@ -340,10 +340,8 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       //}
       else if( istarts_with( line, "XUnit" ) )
       {//XUnit        : keV
-        if( info_pos != string::npos
-           && !istarts_with( line.substr(info_pos), "keV") )
-          cerr << "SpecFile::load_from_iaea_spc(istream &)\n\t" << "Unexpected x-unit: "
-          << line.substr(info_pos) << endl;
+        if( info_pos != string::npos && !istarts_with( line.substr(info_pos), "keV") )
+          meas->parse_warnings_.push_back( "Unexpected x-unit: " +  line.substr(info_pos) );
       }else if( istarts_with( line, "YUnit" ) ) //        :
       {
       }else if( istarts_with( line, "Length" ) )
@@ -710,6 +708,50 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
       }//
     }//if( we have energy calibration )
+    
+    
+    //identiFINDER 2 NGH spectrum files will have spectrum number as their UUID,
+    //  so to create a bit more unique UUID, lets add in the serial number to the
+    //  UUID, like in the other identiFINDER formats.
+    if(!uuid_.empty() && uuid_.size() < 5 && !instrument_id_.empty())
+      uuid_ = instrument_id_ + "/" + uuid_;
+    
+    if( !meas->gamma_counts_ || meas->gamma_counts_->size() < 9 )
+    {
+      reset();
+      //    cerr << "SpecFile::load_from_iaea_spc(...): did not read any spectrum info"
+      //         << endl;
+      return false;
+    }//if( meas->gamma_counts_->empty() )
+    
+    measurements_.push_back( meas );
+    
+    detectors_analysis_ = analysis;
+    
+    //A temporary message untile I debug detector_type_ a little more
+    if( icontains(instrument_model_,"identiFINDER")
+       && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
+      detector_type_ = DetectorType::IdentiFinderNG;
+    else if( icontains(detector_type,"La") && !detector_type.empty())
+    {
+      cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
+      //XXX - this doesnt actually catch all LaBr3 detectors
+      detector_type_ = DetectorType::IdentiFinderLaBr3;
+    }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
+    {
+      cout << "Untested IdentiFinderLaBr3 association!" << endl;
+      detector_type_ = DetectorType::IdentiFinderLaBr3;
+    }else if( icontains(instrument_model_,"identiFINDER") )
+    {
+      detector_type_ = DetectorType::IdentiFinder;
+    }
+    
+    //  if( detector_type_ == Unknown )
+    //  {
+    //    cerr << "I couldnt find detector type for ASCII SPC file" << endl;
+    //  }
+    
+    cleanup_after_load();
   }catch( std::exception & )
   {
     reset();
@@ -717,50 +759,6 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
     input.seekg( orig_pos, ios::beg );
     return false;
   }
-  
-  
-  //identiFINDER 2 NGH spectrum files will have spectrum number as their UUID,
-  //  so to create a bit more unique UUID, lets add in the serial number to the
-  //  UUID, like in the other identiFINDER formats.
-  if(!uuid_.empty() && uuid_.size() < 5 && !instrument_id_.empty())
-    uuid_ = instrument_id_ + "/" + uuid_;
-  
-  if( !meas->gamma_counts_ || meas->gamma_counts_->size() < 9 )
-  {
-    reset();
-    //    cerr << "SpecFile::load_from_iaea_spc(...): did not read any spectrum info"
-    //         << endl;
-    return false;
-  }//if( meas->gamma_counts_->empty() )
-  
-  measurements_.push_back( meas );
-  
-  detectors_analysis_ = analysis;
-  
-  //A temporary message untile I debug detector_type_ a little more
-  if( icontains(instrument_model_,"identiFINDER")
-     && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-    detector_type_ = DetectorType::IdentiFinderNG;
-  else if( icontains(detector_type,"La") && !detector_type.empty())
-  {
-    cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
-    //XXX - this doesnt actually catch all LaBr3 detectors
-    detector_type_ = DetectorType::IdentiFinderLaBr3;
-  }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
-  {
-    cout << "Untested IdentiFinderLaBr3 association!" << endl;
-    detector_type_ = DetectorType::IdentiFinderLaBr3;
-  }else if( icontains(instrument_model_,"identiFINDER") )
-  {
-    detector_type_ = DetectorType::IdentiFinder;
-  }
-  
-  //  if( detector_type_ == Unknown )
-  //  {
-  //    cerr << "I couldnt find detector type for ASCII SPC file" << endl;
-  //  }
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_iaea_spc( std::istream &input )
@@ -2082,6 +2080,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     double sum_gamma = 0.0;
     double total_neutrons = 0.0;
     float total_neutron_count_time = 0.0;
+    vector<string> parse_warnings;
     std::shared_ptr<DetectorAnalysis> analysis;
     auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
@@ -2194,7 +2193,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       if( recordID != 111 )
       {
         gpsPointer = firstReportPtr = 0;
-        cerr << "Binary SPC file has invalid expansion header" << endl;
+        parse_warnings.push_back( "Binary SPC file has invalid expansion header" );
       }//if( recordID != 111 )
       
       if( gpsPointer )
@@ -2218,7 +2217,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         //        {
         //          cerr << "Failed to be able to read GPS REcord" << endl;
         //        }
-        cerr << "Binary SPC file has not yet implemented GPS coordinates decoding" << endl;
+        parse_warnings.push_back( "Binary SPC file does not have GPS coordinates iplemented" );
       }
       
       
@@ -2639,7 +2638,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     detector_type_      = type_detector;
     detectors_analysis_ = analysis;
     instrument_id_      = instrument_id;
-    
+                                 
     std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
     
     if( sLVTMDT < 0.0 || sRLTMDT < 0.0 )
@@ -2649,8 +2648,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     meas->real_time_ = sRLTMDT;
     meas->start_time_ = meas_time;
     meas->gamma_counts_ = channel_data;
+    meas->parse_warnings_ = parse_warnings;
     meas->gamma_count_sum_ = sum_gamma;
-    
+                                 
     assert( channel_data );
     if( channel_data->size() > 1 )
     {

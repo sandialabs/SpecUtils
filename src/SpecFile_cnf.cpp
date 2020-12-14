@@ -460,7 +460,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     read_binary_data( input, num_channels );
     
     const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
-    if( !isPowerOfTwo && (num_channels>=64 && num_channels<=65536) )
+    if( !isPowerOfTwo || (num_channels < 16) || (num_channels > (65536 + 8)) )
       throw runtime_error( "Invalid number of channels" );
     
     vector<float> calib_params(3);
@@ -569,6 +569,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     
     measurements_.push_back( meas );
+    
+    cleanup_after_load();
   }catch ( std::exception & )
   {
     input.clear();
@@ -577,8 +579,6 @@ bool SpecFile::load_from_cnf( std::istream &input )
     reset();
     return false;
   }//try / catch to read the file
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_cnf( std::istream &input )

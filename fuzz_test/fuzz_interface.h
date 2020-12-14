@@ -1,6 +1,12 @@
-/**
- SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
- Copyright (C) 2016 William Johnson
+#ifndef SpecUtils_Fuzz_Interface_h
+#define SpecUtils_Fuzz_Interface_h
+/* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
+ 
+ Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC
+ (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
+ Government retains certain rights in this software.
+ For questions contact William Johnson via email at wcjohns@sandia.gov, or
+ alternative emails of interspec@sandia.gov.
  
  This library is free software; you can redistribute it and/or
  modify it under the terms of the GNU Lesser General Public
@@ -19,18 +25,10 @@
 
 #include "SpecUtils_config.h"
 
-#include <stdint.h>
-#include <stddef.h>
 
 #include <cstdint>
-#include <sstream>
 
-#include "fuzz_interface.h"
-#include "SpecUtils/SpecFile.h"
+int run_file_parse_fuzz( const uint8_t *data, size_t size );
 
-using namespace std;
 
-extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size ) 
-{
-  return run_file_parse_fuzz( data, size );
-}
+#endif //SpecUtils_Fuzz_Interface_h

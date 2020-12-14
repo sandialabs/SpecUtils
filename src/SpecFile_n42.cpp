@@ -620,7 +620,11 @@ namespace
       stringstream msg;
       msg << SRC_LOCATION << "\n\tUnable to convert '" << SpecUtils::xml_value_str(speed_node)
       << "' to a float";
-      cerr << msg.str() << endl;
+
+#if(PERFORM_DEVELOPER_CHECKS)
+      log_developer_error( __func__, msg.str().c_str() );
+#endif
+      
       throw runtime_error( msg.str() );
     }//if( couldnt convert to float
     
@@ -630,8 +634,11 @@ namespace
     const rapidxml::xml_attribute<char> *unit_attrib = XML_FIRST_ATTRIB( speed_node, "Units" );
     if( !unit_attrib || !unit_attrib->value_size() )
     {
-      cerr << SRC_LOCATION << "\n\t:Warning no units attribut avaliable in "
-      << "<Speed> node, assuming m/s" << endl;
+#if(PERFORM_DEVELOPER_CHECKS)
+      const string msg = "Warning no units attribute available in <Speed> node, assuming m/s";
+      cerr << "\n\t" << msg << endl;
+#endif
+
       return speed;
     }//if( no unit attribute" )
     
@@ -643,11 +650,12 @@ namespace
     if( units == "m/s" )
       return speed;
     
-    stringstream msg;
-    msg << SRC_LOCATION << "\n\tUnknown speed units: '" << speed
-    << "' - please fix";
-    cerr << msg.str() << endl;
-    throw std::runtime_error( msg.str() );
+    const string msg = "Unknown speed units: '" + units + "' - please fix";
+#if( PERFORM_DEVELOPER_CHECKS )
+    log_developer_error( __func__, msg.c_str() );
+#endif
+    
+    throw std::runtime_error( msg );
     
     return speed;
   }//float speed_from_node( rapidxml::xml_node<char> *speed_node )
@@ -1208,7 +1216,10 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
     
   }catch( std::exception &e )
   {
-    cerr << "Measurement::add_spectra_to_measurement_node_in_2012_N42_xml(...): something horrible happened!: " << e.what() << endl;
+#if( PERFORM_DEVELOPER_CHECKS )
+    string msg = "Measurement::add_spectra_to_measurement_node_in_2012_N42_xml(...): something horrible happened!: " + string(e.what());
+    log_developer_error( __func__, msg.c_str() );
+#endif
   }//try catch
 }//void Measurement::add_to_2012_N42_xml(...)
 }//namespace
@@ -1571,7 +1582,9 @@ void N42CalibrationCache2006::parse_dev_pairs_from_xml( const rapidxml::xml_node
             deviatnpairs.push_back( pair<float,float>(devpair[0],devpair[1]) );
           }else
           {
-            cerr << "Could not put '" << xml_value_str(dev_node) << "' into deviation pair" << endl;
+#if( PERFORM_DEVELOPER_CHECKS )
+            log_developer_error( __func__, ("Could not put '" + xml_value_str(dev_node) + "' into deviation pair").c_str() );
+#endif
           }
         }//if( dev_node->value_size() )
       }//for( loop over <dndons:Deviation> )
@@ -3062,7 +3075,9 @@ public:
           {
             const string val = xml_value_str( SpeedValue );
             if( !(stringstream(val) >> (meas->speed_)) )
-              cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
+            {
+              meas->parse_warnings_.push_back( "Failed to convert '" + val + "' to a numeric speed" );
+            }
           }//if( speed_ > 0 )
           
           if( det_type == OtherDetection )
@@ -3200,8 +3215,9 @@ public:
           
           if( det_info_ref.empty() )
           {
-            cerr << "Found GrossCounts node with no radDetectorInformationReference"
-            << endl;
+#if(PERFORM_DEVELOPER_CHECKS)
+            cerr << "Found GrossCounts node with no radDetectorInformationReference" << endl;
+#endif
             continue;
           }//if( det_info_ref.empty() )
           
@@ -3220,8 +3236,8 @@ public:
           auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
           if( det_iter == end(*id_to_dettype_ptr) )
           {
-            cerr << "No detector information for '" << meas->detector_name_
-            << "' so skipping" << endl;
+            //cerr << "No detector information for '" << meas->detector_name_
+            //     << "' so skipping" << endl;
             continue;
           }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
           
@@ -3246,7 +3262,6 @@ public:
                 msg << xml_name_str(el) << ", ";
               msg << "}. Skipping!!!";
               log_developer_error( __func__, msg.str().c_str() );
-              cerr << endl;
             }//if( det_iter == id_to_dettype_ptr->end() )
   #endif
             continue;
@@ -3344,7 +3359,7 @@ public:
           
           if( !count_data_node || !count_data_node->value_size() )
           {
-            cerr << "Found a GrossCount node without a CountData node, skipping" << endl;
+            //cerr << "Found a GrossCount node without a CountData node, skipping" << endl;
             continue;
           }
           
@@ -3485,12 +3500,19 @@ public:
           std::lock_guard<std::mutex> lock( meas_mutex );
           measurements.insert( measurements.end(), meas_to_add.begin(), meas_to_add.end() );
         }
+#if(PERFORM_DEVELOPER_CHECKS)
       }catch( std::exception &e )
       {
         std::lock_guard<std::mutex> lock( meas_mutex );
         cerr << "Error decoding SpecFile::decode2012N42SpectrumNode(...): "
-        << e.what() << endl;
+             << e.what() << endl;
       }//try / catch
+#else
+      }catch( std::exception &e )
+      {
+        //
+      }//try / catch
+#endif
   }//void decode_2012_N42_rad_measurement_node( const rapidxml::xml_node<char> *spectrum )
     
 
@@ -4107,7 +4129,11 @@ namespace SpecUtils
           else if( m->neutron_counts_.size() == 1 )
             m->neutron_counts_[0] += neut_counts;
           else
+          {
+#if(PERFORM_DEVELOPER_CHECKS)
             cerr << "Have both neutron spectrum and neutron dose count" << endl;
+#endif
+          }
           
           //XXX
           //  We get this dose rate info from Cambio wether or not there was
@@ -4116,8 +4142,12 @@ namespace SpecUtils
           //   ... I'm not a huge fan of this...
           m->contained_neutron_ |= (m->neutron_counts_[0]>0.0);
         }else
+        {
+#if(PERFORM_DEVELOPER_CHECKS)
           cerr << "Error converting neutron counts '" << xml_value_str(counts)
           << "' to float; ignoring" << endl;
+#endif
+        }
       }//if( counts )
     }else if( XML_VALUE_ICOMPARE(det_attrib, "Gamma") )
     {
@@ -4891,8 +4921,9 @@ namespace SpecUtils
                 if( spec->contained_neutron_
                    && (spec->neutron_counts_ != gross->neutron_counts_) )
                 {
-                  cerr << SRC_LOCATION << "\n\tWarning: confusing gross count"
-                  << " situation" << endl;
+#if(PERFORM_DEVELOPER_CHECKS)
+                  log_developer_error( __func__,  "Warning: confusing gross count situation" );
+#endif
                   continue;
                 }//if( spec->neutron_counts_sum_ > 0.000001 )
                 
@@ -4964,6 +4995,17 @@ namespace SpecUtils
               continue;
             }//if( number of channels dont match up )
       
+            if( (num_lower_bins + 1) >= norig_channel )
+            {
+#if(PERFORM_DEVELOPER_CHECKS)
+              const string msg = "Found multiple calibrations, but size ("
+              + to_string(num_lower_bins) + ") was larger than channel size ("
+              + to_string(norig_channel) + ")";
+              log_developer_error( __func__,  msg.c_str() );
+#endif
+              continue;
+            }//if( we cant split the bins up )
+            
             std::shared_ptr<const vector<float> > oldcounts = meas->gamma_counts_;
             auto lowerbins = make_shared<vector<float> >( oldcounts->begin(), oldcounts->begin()+num_lower_bins );
             auto upperbins = make_shared<vector<float> >( oldcounts->begin()+num_lower_bins, oldcounts->end() );
@@ -5400,7 +5442,11 @@ namespace SpecUtils
       if( info_node )
       {
         if( instrument_type_.size() )
-          cerr << "SpecFile::load_2006_N42_from_doc(): may be overwriting InstrumentInformation already gathered from a specific spectrum" << endl;
+        {
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( __func__,  "SpecFile::load_2006_N42_from_doc(): may be overwriting InstrumentInformation already gathered from a specific spectrum" );
+#endif
+        }
         set_n42_2006_instrument_info_node_info( info_node );
       }
     }
@@ -5536,6 +5582,7 @@ namespace SpecUtils
       //    if( (manufacturer_=="ICx Technologies" && instrument_model_=="identiFINDER") )
       //    {
       //    }
+#if(PERFORM_DEVELOPER_CHECKS)
       //In priniciple we should add all of these following detectors to the
       //  DetectorType enum, but being lazy for now.
       if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
@@ -5556,8 +5603,11 @@ namespace SpecUtils
          && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
          && !(manufacturer_=="" && instrument_model_=="")
          )
-        cerr << "Unknown detector type: maufacturer=" << manufacturer_ << ", ins_model=" << instrument_model_ << endl;
-      
+      {
+        string msg = "Unknown detector type: maufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
+        log_developer_error( __func__, msg.c_str() );
+      }
+#endif
       //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_CS
       //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_DL
       //Unknown detector type: maufacturer=Princeton Gamma-Tech Instruments, Inc., ins_model=RIIDEye, Ext2x2
@@ -6551,7 +6601,9 @@ namespace SpecUtils
         if( !(stringstream(val.substr(lanepos+5) ) >> lane_number_) )
         {
           lanepos = string::npos;
-          cerr << "Failed to read lane number from '" << val << "'" << endl;
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( __func__, ("Failed to read lane number from '" + val + "'").c_str() );
+#endif
         }
       }//if( lanepos != string::npos )
       
@@ -6807,14 +6859,18 @@ namespace SpecUtils
         {
           if( info.coefficients.empty() && nread_coeffs >= 2 )
           {
-            //The coefficients were all zero - this is usually used to indicate
+            //The coefficients were all zero - this is usually used to indicate no calibration known
+            //  or applicable.  We'll keep these around incase its intentional.  We see this when
+            //  we write out a HPRDS file to n42-2012, an invalid energy cal (all zeros) gets put in
+            //  for the GMTube
+            info.equation_type = SpecUtils::EnergyCalType::InvalidEquationType;
           }else
           {
             parse_warnings.push_back( "An invalid EnergyCalibration CoefficientValues was"
                                       " encountered with value '" + string(data,data+len)
                                       + "', and wont be used" );
+            continue;
           }
-          continue;
         }//if( info.coefficients.size() < 2 )
         
         info.calib_id = xml_value_str( coef_val_node->first_attribute( "id", 2 ) );
@@ -6872,7 +6928,9 @@ namespace SpecUtils
           throw runtime_error( "Failed to parse lower channel energies" );
       }else
       {
-        cerr << "Warning, found an invalid EnergyCalibration node" <<endl;
+        const string msg = "Warning, found an invalid EnergyCalibration node";
+        if( std::find(begin(parse_warnings), end(parse_warnings), msg) == end(parse_warnings) )
+          parse_warnings.push_back( msg );
         continue;
       }
       

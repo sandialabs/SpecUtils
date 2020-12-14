@@ -1254,6 +1254,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
       string spectrum_desc; //ex '<T>HPGe 50%</T>' or '<T>Gamma</T>'
       string source_list;
       
+      
       title_description_source.resize( 180 );
       input.read( &(title_description_source[0]), 180 );
       
@@ -1353,14 +1354,19 @@ bool SpecFile::load_from_pcf( std::istream &input )
       std::shared_ptr< vector<float> > channel_data = std::make_shared<vector<float> >( num_channel );
       input.read( (char *)&(channel_data->operator[](0)), 4*num_channel );
       
+      auto meas = std::make_shared<Measurement>();
+      
       const istream::pos_type specend = input.tellg();
       const size_t speclen = static_cast<size_t>( 0 + specend - specstart );
       if( speclen != bytes_per_record )
       {
         if( speclen > bytes_per_record )
-          cerr << "SpecFile::load_from_pcf(...):\n\tUnexpected record length, expected "
-          << (256*NRPS) << " but got length " << speclen << ", warning, am "
-          << " forcing correct position in file" << endl;
+        {
+          const string msg = "SpecFile::load_from_pcf(...):\n\tUnexpected record length, expected "
+                             + std::to_string(256*NRPS) + " but got length "
+                             + std::to_string(speclen) + ", - am forcing correct position in file";
+          meas->parse_warnings_.push_back( msg );
+        }//
         
         //For the last spectrum in the file may extend beyond the end of the
         //  file since NRPS may be larger than necessary to capture all the
@@ -1403,9 +1409,9 @@ bool SpecFile::load_from_pcf( std::istream &input )
         }//if( increasing )
       }//if( record_number == 1 and title=="Energy" )
       
-      auto meas = std::make_shared<Measurement>();
-      measurements_.push_back( meas );
+      //If we're here, were keeping meas.
       
+      measurements_.push_back( meas );
       meas->live_time_ = live_time;
       meas->real_time_ = true_time;
       meas->latitude_  = latitude;

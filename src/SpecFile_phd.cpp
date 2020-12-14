@@ -247,6 +247,8 @@ bool SpecFile::load_from_phd( std::istream &input )
       throw runtime_error( "Didnt find gamma spectrum" );
     
     measurements_.push_back( meas );
+    
+    cleanup_after_load();
   }catch( std::exception & )
   {
     //cerr  << SRC_LOCATION << "caught: " << e.what() << endl;
@@ -255,9 +257,6 @@ bool SpecFile::load_from_phd( std::istream &input )
     input.seekg( orig_pos, ios::beg );
     return false;
   }
-  
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_phd( std::istream &input );

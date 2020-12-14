@@ -205,30 +205,56 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         
         //XXX - for some reason I think this next test condition is a little
         //      fragile...
+        int num_cd_error = 0, num_cd_error_current = 0;
         while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
+          
           if( starts_with(line,"$") )
           {
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
+
+          if( line.empty() )
+            continue;
           
           vector<float> linevalues;
           const bool ok = SpecUtils::split_to_floats( line.c_str(), line.size(), linevalues );
           
           if( !ok )
           {
+            num_cd_error += 1;
+            num_cd_error_current += 1;
+            
             char buffer[1024];
             snprintf( buffer, sizeof(buffer),
                      "Error converting channel data to counts for line: '%s'",
                      line.c_str() );
-            cerr << buffer << endl;
+            buffer[sizeof(buffer)-1] = '\0';
+            if( num_cd_error < 2 )
+            {
+              meas->parse_warnings_.emplace_back( buffer );
 #if(PERFORM_DEVELOPER_CHECKS)
-            log_developer_error( __func__, buffer );
+              log_developer_error( __func__, buffer );
 #endif
+            }//if( num_cd_error < 2 )
+            
+            // We'll allow for one poorly defined line in a row, then we'll abort the $DATA section.
+            //  Note: this condition is not based on any particular data files seen
+            if( num_cd_error_current > 1 )
+            {
+              meas->parse_warnings_.emplace_back( "$DATA section seems to be improperly terminated" );
+#if(PERFORM_DEVELOPER_CHECKS)
+              log_developer_error( __func__, buffer );
+#endif
+              break;
+            }
+            
             continue;
           }//if( !ok )
+          
+          num_cd_error_current = 0;
           
           //          sum += std::accumulate( linevalues.begin(), linevalues.end(), std::plus<float>() );
           for( size_t i = 0; i < linevalues.size(); ++i )
@@ -407,10 +433,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }catch( exception &e )
         {
 #if(PERFORM_DEVELOPER_CHECKS)
-          stringstream msg;
-          msg << "SpecFile::load_from_iaea(...):\n\terror in MCA_CAL section of IAEA file\n\t" << e.what();
-          log_developer_error( __func__, msg.str().c_str() );
-          cerr << msg.str() << endl;
+          const string msg = "Error in MCA_CAL section of IAEA file\n\t" + string(e.what());
+          log_developer_error( __func__, msg.c_str() );
 #endif
         }
       }else if( starts_with(line,"$GPS:") )
@@ -1079,7 +1103,9 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( !line.empty() && line != "END" )
       {
-        cerr << "Unrecognized line '" << line << "'" << endl;
+#if(PERFORM_DEVELOPER_CHECKS)
+        log_developer_error( __func__, ("Unrecognized line '" + line + "'").c_str() );
+#endif
       }
       
       /*
@@ -1151,6 +1177,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     
     if( anaresult )
       detectors_analysis_ = anaresult;
+    
+    cleanup_after_load();
   }catch(...)
   {
     istr.clear();
@@ -1158,8 +1186,6 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     reset();
     return false;
   }
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_iaea( std::istream& ostr )
