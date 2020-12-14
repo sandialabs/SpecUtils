@@ -271,7 +271,7 @@ namespace rapidxml
     //! If this option is enabled, make sure to check attribute values are not
   //! NULL before reading them. e.g., if( attribute()->value() ){ ... }
     //!
-    //! ToDo: Add in an auto-tag-closing feature, so to accomidate situations
+    //! ToDo: Add in an auto-tag-closing feature, so to accommodate situations
     //! like "<A><b>SomeTxt</A>", where <b> can be auto-closed.
     const int allow_sloppy_parse = 0x1000;
   
@@ -1804,8 +1804,16 @@ namespace rapidxml
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
       template<class StopPred, class StopPredPure, int Flags>
-      static Ch *skip_and_expand_character_refs(Ch *&text, Ch * const text_end )
+      static Ch *skip_and_expand_character_refs( Ch *&text, Ch * const text_end, const bool is_attrib )
       {
+        // 'text' is the beginning of the value (e.g., first character after the quote).
+        // Returns the character just past the string value (e.g., the quote character, which is
+        //   also where '\0' will go)
+        //
+        // Note: when called for attribute value:
+        //   - StopPred returns true for anything besides \0 and either ' or "
+        //   - StopPredPure returns true for anything but \0 & and either ' or "
+        
         // If entity translation, whitespace condense and whitespace trimming is disabled, use plain skip
         if (Flags & parse_no_entity_translation &&
             !(Flags & parse_normalize_whitespace) &&
@@ -1815,8 +1823,42 @@ namespace rapidxml
           return text;
         }
         
-        // Use simple skip until first modification is detected
-        skip<StopPredPure, Flags>(text,text_end);
+        if( (Flags & allow_sloppy_parse) && is_attrib )
+        {
+          Ch *tmp = text;
+          while ( ((tmp+1) < text_end) && StopPredPure::test(*tmp))
+          {
+            if( (*tmp) == Ch('<') )
+            {
+              // The '>' character is allowed inside attribute values, but '<' is not, meaning
+              // somebody forgot too close an attribute value.  We'll go back to were we started and
+              //  look for the first '>' character and close the attribute value there.  A few
+              //  things to note are:
+              //  - We are only doing this if there are no character entities to translate (e.g.,
+              //    nothing like '&gt;')
+              //  - We are only doing this for attribute values
+              //  - We could also look for the '=' character, and try to salvage any remaining
+              //    attributes, but we'll leave this for later
+              //  - Someone could have forgotten to translate < into &lt;, in which case we are
+              //    messing things up here - oh well.
+              Ch *tmp2 = text;
+              while( (tmp2 != tmp) && ((*tmp2) != Ch('>')) )
+                ++tmp2;
+              
+              text = tmp2;
+              return text;
+            }else
+            {
+              ++tmp;
+            }
+          }
+          
+          text = tmp;
+        }else
+        {
+          // Use simple skip until first modification is detected
+          skip<StopPredPure, Flags>(text,text_end);
+        }
         
         // Use translation skip
         Ch *src = text;
@@ -2552,9 +2594,9 @@ namespace rapidxml
         // Skip until end of data
         Ch *value = text, *end;
         if (Flags & parse_normalize_whitespace)
-          end = skip_and_expand_character_refs<text_pred, text_pure_with_ws_pred, Flags>(text, text_end);
+          end = skip_and_expand_character_refs<text_pred, text_pure_with_ws_pred, Flags>(text, text_end, false);
         else
-          end = skip_and_expand_character_refs<text_pred, text_pure_no_ws_pred, Flags>(text, text_end);
+          end = skip_and_expand_character_refs<text_pred, text_pure_no_ws_pred, Flags>(text, text_end, false);
         
         assert( text < text_end );
         
@@ -3555,6 +3597,13 @@ namespace rapidxml
           {
             if( (Flags & allow_sloppy_parse) )
             {
+              // Should we put an attribute with no value here? - skip for now since it doesn't
+              //  affect spectrum file parsing.
+              //xml_attribute<Ch> *attribute = this->allocate_attribute();
+              //attribute->name(name, name_end - name);
+              //node->append_attribute(attribute);
+              //if (!(Flags & parse_no_string_terminators))
+              //  attribute->name()[attribute->name_size()] = 0;
               continue;
             }else
             {
@@ -3621,7 +3670,7 @@ namespace rapidxml
                 return;
               }
               
-              //If there is a whitespace immediately folowing the '=' sign, and no quote, assume they forgot to include value....
+              //If there is a whitespace immediately following the '=' sign, and no quote, assume they forgot to include value....
               if( whitespace_pred::test(*valstart) )
               {
                 text = valstart;
@@ -3638,29 +3687,29 @@ namespace rapidxml
             ++text;
           }
           
-          if( (text == text_end) || ((text+1) == text_end) )
+          if( ((text+1) >= text_end) )
           {
+            text = text_end - 1;
+            
             if( (Flags & allow_sloppy_parse) )
             {
-              text = text_end - 1;
-              attribute->value(NULL, 0);
+              attribute->value(0, 0);
               return;
             }
             RAPIDXML_PARSE_ERROR("expected attribute value", text);
           }
           
           // Extract attribute value and expand char refs in it
-          Ch *value = text, *end;
+          Ch *value = text, *end;  //'value' is character right after opening quote
           const int AttFlags = Flags & ~parse_normalize_whitespace;   // No whitespace normalization in attributes
           if (quote == Ch('\''))
-            end = skip_and_expand_character_refs<attribute_value_pred<Ch('\'')>, attribute_value_pure_pred<Ch('\'')>, AttFlags>(text,text_end);
+            end = skip_and_expand_character_refs<attribute_value_pred<Ch('\'')>, attribute_value_pure_pred<Ch('\'')>, AttFlags>(text,text_end,true);
           else if( quote == Ch('\"') )
-            end = skip_and_expand_character_refs<attribute_value_pred<Ch('"')>, attribute_value_pure_pred<Ch('"')>, AttFlags>(text,text_end);
+            end = skip_and_expand_character_refs<attribute_value_pred<Ch('"')>, attribute_value_pure_pred<Ch('"')>, AttFlags>(text,text_end,true);
           else //else, dont expand characters,
           {
             //We have a poorly formed attribute value, assume first whitespace ends the attribute value...
-            while( (text != text_end)
-                  && ((text+1) != text_end)
+            while( ((text+1) < text_end)
                   && !whitespace_pred::test(*text)
                   && (*text)!=Ch('>')
                   && (*text)!=Ch('\"')
@@ -3678,22 +3727,59 @@ namespace rapidxml
           attribute->value(value, end - value);
           
           // Make sure that end quote is present
-          if ( (quote==Ch('\"') || quote==Ch('\'')) && ( text==text_end || (text+1)==text_end || *text != quote) )
+          if ( (quote==Ch('\"') || quote==Ch('\'')) && (((text+1) >= text_end) || (*text != quote)) )
           {
             if( (Flags & allow_sloppy_parse) )
             {
-              if( (text == text_end) || ((text+1) == text_end) )
+              // Add terminating zero after value
+              if (!(Flags & parse_no_string_terminators))
               {
-                text = text_end - 1;
-                attribute->value(0, 0);
+                if( (text+1) >= text_end )
+                {
+                  text = text_end - 1;  //shouldn't be necessary
+                  *text = 0;
+                  if( (text - value) < 1 )
+                    attribute->value( 0, 0 );
+                  else
+                    attribute->value(value, text - value - 1);
+                  return;
+                }//if( we hit end of file )
+                
+                if( (*text) == Ch('>') )
+                {
+                  if( end == value )
+                  {
+                    attribute->value( 0, 0 );
+                  }else
+                  {
+                    //We dont want to overwrite the '>' character with a '\0', so
+                    // instead we will overwrite the quote character
+                    for( Ch *pos = value; pos != end; ++pos )
+                      *(pos-1) = *pos;
+                    attribute->value( value-1, (end - value) );
+                  }
+                }//if( attribute value ended on a '>' )
+                
+                if( attribute->value_size() )
+                {
+                  Ch *val_end = attribute->value() + attribute->value_size();
+                  if( val_end < text_end )
+                    *val_end = 0;
+                  else
+                    *(text_end-1) = 0;
+                }
+                
+                assert( text < text_end );
+                
                 return;
-              }
-            }
-            
-            RAPIDXML_PARSE_ERROR("CASE 2: expected ' or \"", text);
-          }
+              }//if( put in string terminators )
+            }else
+            {
+              RAPIDXML_PARSE_ERROR("CASE 2: expected ' or \"", text);
+            }//if( sloppy parse ) / else
+          }//if( ending quote is present )
           
-          if( (text != text_end) && ((*text)==Ch('\"') || (*text)==Ch('\'')) )
+          if( ((text+1) <= text_end) && ((*text)==Ch('\"') || (*text)==Ch('\'')) )
           {
             //Normal quotes here
             if( (text+1) < text_end )
@@ -3709,14 +3795,14 @@ namespace rapidxml
               attribute->value(0, 0);
             }else
             {
-              if( text != text_end )
+              if( (text+1) <= text_end )
               {
                 if (!(Flags & parse_no_string_terminators))
                 {
                   if( (*text) == Ch('>') )
                   {
-                    //We dont want to overright the '>' character with a '\0', so
-                    // instead we will overight the '=' sign
+                    //We dont want to overwrite the '>' character with a '\0', so
+                    // instead we will overwrite the '=' sign
                     for( Ch *pos = value; pos != end; ++pos )
                     {
                       *(pos-1) = *pos;
@@ -3739,7 +3825,10 @@ namespace rapidxml
               {
                 //File ended in the middle of an attribute value
                 if (!(Flags & parse_no_string_terminators))
-                  attribute->value()[attribute->value_size()-1] = 0;
+                {
+                  if( attribute->value_size() )
+                    attribute->value()[attribute->value_size()-1] = 0;
+                }
               }
             }
           }
