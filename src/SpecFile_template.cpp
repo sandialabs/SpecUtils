@@ -198,6 +198,20 @@ namespace SpecUtils
 			return compressed_counts;
 			});
 
+		// Sum two arrays element-wise
+		env.add_callback("sum_arrays", 2, [](Arguments& args) {
+			vector<float> a = args.at(0)->get<std::vector<float>>();
+			vector<float> b = args.at(1)->get<std::vector<float>>();
+
+			assert(a.size() == b.size());
+
+			std::vector<float> result;
+			result.reserve(a.size());
+
+			std::transform(a.begin(), a.end(), b.begin(), std::back_inserter(result), std::plus<float>());
+			return result;
+			});
+
 		// Doesn't seem to be any basic math, may need to expand on this
 		env.add_callback("subtract", 2, [](Arguments& args) {
 			float value1 = args.at(0)->get<float>();
