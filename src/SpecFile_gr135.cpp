@@ -379,15 +379,14 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
     {
       const char *data = start + recordstarts[j];
       
-      const bool is135v2 = (asc.find(data[8])!=string::npos);
-      const bool is135v1 = (asc.find(data[4])!=string::npos);
-      const bool is130v0 = (asd.find(data[6])!=string::npos);
+      const bool is135v2 = (asc.find(data[8]) != string::npos);
+      const bool is135v1 = (asc.find(data[4]) != string::npos);
+      const bool is130v0 = (asd.find(data[6]) != string::npos);
       
-      const bool dtCzt = (is135v2 && (data[8] == 'C'))
-      || (is135v1 && (data[4] == 'C'));
+      const bool dtCzt = ((is135v2 && (data[8] == 'C')) || (is135v1 && (data[4] == 'C')));
       
       const bool found1350 = (data[4] == '1') && (data[5] == '3') && (data[6] == '5');
-      const bool found1024 = (data[5] == 0x0) && (data[6] == 0x4);
+      const bool found1024 = ((data[5] == 0x0) && (data[6] == 0x4));
       
       if( is135v2 && !found1350 )
       {
@@ -409,13 +408,17 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
                                   ? (size - recordstarts[j])
                                   : (recordstarts[j+1] - recordstarts[j]));
       
-      std::shared_ptr<Measurement> meas( new Measurement() );
+      if( (record_size < 2048) || (record_size > 5*1024) )
+        throw runtime_error( "Invalid record_size" );
+        
+      auto meas = make_shared<Measurement>();
       
       //try to get the date/time
       const char *datepos = data + 7;
       if( is130v0 )
+      {
         datepos = data + 7;
-      else if( is135v1 )
+      }else if( is135v1 )
       {
         if( record_size == 2099 )
           datepos = data + 7;
@@ -424,7 +427,9 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         else if( record_size == 2127 )
           datepos = data + 13;
       }else //if( is135v2 )
+      {
         datepos = data + 13;
+      }
       
       uint8_t timeinfo[6]; //= {year, month, day, hour, minutes, seconds}
       for( size_t i = 0; i < 6; ++i )
@@ -646,7 +651,10 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         }//for( size_t i = 0; i < nchannels; ++i )
       }
       
-      if( is135v1 && (meas->energy_calibration_->type() != EnergyCalType::Polynomial) )
+      if( is135v1
+         && (meas->energy_calibration_->type() != EnergyCalType::Polynomial)
+         && (record_size > 1024*2)    //Require record size to be at least 2048 bytes
+         && (record_size < 5*1024) )  //
       {
         for( size_t i = 0; i < (record_size - 1024*2); ++i )
         {

@@ -251,7 +251,7 @@ namespace
       return;
     }//if( pos1 == string::npos )
     
-    assert( line.substr(0,pos1) == "AB" );
+    assert( line.substr(0,std::min(pos1,std::string::size_type(2))) == "AB" );
     std::string::size_type pos2 = line.find( ',', pos1+1 );
     if( pos2 == string::npos )
     {

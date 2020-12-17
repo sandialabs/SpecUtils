@@ -1901,6 +1901,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     if( (32u*static_cast<uint32_t>(wSPCRCN)) < n_channel )
       throw runtime_error( "Not enough records for claimed number of channels" );
     
+    if( n_channel < 8 )  // A minimum of eight channels is arbitrarily chosen
+      throw runtime_error( "Invalid number of channels" );
+    
     read_binary_data( input, wABSTCHN ); // Physical start channel for data
     read_binary_data( input, sACQTIM ); // Date and time acquisition start in DECDAY format
     read_binary_data( input, dACQTI8 ); // Date and time as double precision DECDAY
@@ -2082,6 +2085,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     float total_neutron_count_time = 0.0;
     vector<string> parse_warnings;
     std::shared_ptr<DetectorAnalysis> analysis;
+    
     auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
     
@@ -2625,6 +2629,8 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     {
       input.read( (char *) &(counts_ref[0]), 4*n_channel );
     }//if( file is integer channel data ) / else float data
+    
+    assert( n_channel > 0 );
     
     counts_ref[0] = 0;
     counts_ref[n_channel-1] = 0;

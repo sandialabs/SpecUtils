@@ -97,7 +97,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
   if( !input.good() )
     return false;
   
-  const istream::pos_type orig_pos = input.tellg();
+  const streampos orig_pos = input.tellg();
   
   try
   {
@@ -110,7 +110,6 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     //  2147.483647s = 35.79m (e.g. 31 bit clock us overflows every ~36 minutes)
     //  2^30 = 1073741824
     //  1073741.824 = 298 hours (e.g. digiBASE-E ms overflows every ~12 days, can ignore)
-    const streampos orig_pos = input.tellg();
     
     double olestartdate;
     uint8_t energy_cal_valid, shape_cal_valid;
@@ -124,9 +123,11 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     
     if( !input.read( (char *)&magicnum, 4) )
       throw runtime_error( "" );  //Failed to read from input stream
-    
+
+#if( !SpecUtils_BUILD_FUZZING_TESTS )
     if( magicnum != -13 )
       throw runtime_error( "Incorrect leading 4 bytes for .LIS file" );
+#endif
     
     if( !input.read( (char *)&lmstyle, 4) )
       throw runtime_error( "" );  //Failed to read from input stream
@@ -177,7 +178,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
       case 4: ninitialbin = 2048; break;
     }
     
-    std::shared_ptr< vector<float> > histogram = std::make_shared< vector<float> >( ninitialbin, 0.0f );
+    auto histogram = std::make_shared< vector<float> >( ninitialbin, 0.0f );
     
     uint32_t event;
     
@@ -224,8 +225,8 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
       else
         time_msb = firsttimestamps[0];
       
-      input.seekg( orig_pos + streampos(256) );
-      
+      if( !input.seekg( orig_pos + streampos(256) ) )
+        throw runtime_error( "" );
       
       for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
       {
@@ -291,7 +292,10 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     {
       uint32_t firstlivetimes[2] = { 0 }, firstrealtimes[2] = { 0 };
       
-      for( int i = 0, j = 0, k = 0; (i < 2 || j < 2) && input.read((char *)&event, 4); ++k)
+      if( !input.good() )
+        throw runtime_error("");
+      
+      for( int i = 0, j = 0, k = 0; (i < 2 && j < 2) && input.read((char *)&event, 4); ++k)
       {
         const bool msb = (event & 0x80000000);
         const bool ssb = (event & 0x40000000);
@@ -313,6 +317,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
         }
       }
       
+      size_t num_out_of_order = 0, num_events = 0;
       uint64_t firsttimestamp = 0, lasttimestamp = 0;
       uint64_t realtime_ns = 10*1000000 * uint64_t(firstrealtimes[0]);
       uint64_t livetime_ns = 10*1000000 * uint64_t(firstlivetimes[0]);
@@ -323,7 +328,9 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
       //time_msb = firsttimestamps[0];
       
       
-      input.seekg( orig_pos + streampos(256) );
+      if( !input.seekg( orig_pos + streampos(256) ) )
+        throw runtime_error( "" );
+      
       for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
       {
         //Untested!
@@ -341,13 +348,17 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
           const uint64_t timestamp_ns = realtime_ns + 80*ticks;
           
           firsttimestamp = (!firsttimestamp ? timestamp_ns : firsttimestamp);
+          
+          num_events += 1;
+          num_out_of_order += (timestamp_ns < lasttimestamp);
+          
           lasttimestamp = timestamp_ns;
           
           
           //Have 2048 channels
           uint32_t amplitude = (uint32_t(event & 0x0FFE0000) >> 17);
           
-          if( amplitude > 16384 )
+          if( amplitude > 16384 )  // I dont think this will ever trigger
             throw runtime_error( "To high of a channel number" );
           
           if( amplitude >= histogram->size() )
@@ -389,6 +400,15 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
         }
       }//for( int64_t eventnum = 0; input.read((char *)&event, 4); ++eventnum )
       
+      if( num_events == 0 )
+        throw runtime_error( "No events detected" );
+      
+      // If more than 1% of events are out of order, reject this as a valid file.  The 1% figure
+      //  is not based on anything.
+      if( (num_out_of_order > 2) && (num_out_of_order > (num_events/100)) )
+        throw runtime_error( "Too many out-of-order listmode events" );
+      
+      
       //realtime=33.02, from hits->32.62
       //livetime=33.02, from hits->32.2
       //cout << "realtime=" << realtime << ", from hits->" << (1.0E-9*(lasttimestamp - firsttimestamp)) << endl;
@@ -401,12 +421,12 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
         livetime = 1.0E-9f*(livetime_ns - (10*1000000 * uint64_t(firstlivetimes[0])));
     }else if( lmstyle == 2 )
     {
-      assert( 0 );
-      //This one is pretty complicated, so I would definetly need some example
+      throw runtime_error( "Unsupported listmode type 2" );
+      //This one is pretty complicated, so I would definitely need some example
       //  data to test against.
     }else
     {
-      assert( 0 );
+      throw runtime_error( "Unsupported listmode type " + std::to_string(lmstyle) );
     }//if( lmstyle == 1 ) / else
     
     
@@ -486,8 +506,13 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     if( measurements_.empty() )
       throw std::runtime_error( "no measurements" );
     
+#if( SpecUtils_BUILD_FUZZING_TESTS )
+    if( magicnum != -13 )
+      throw runtime_error( "Incorrect leading 4 bytes for .LIS file" );
+#endif
+    
     return true;
-  }catch( std::exception & )
+  }catch( std::exception &e )
   {
     reset();
     input.clear();
