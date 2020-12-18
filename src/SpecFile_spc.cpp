@@ -1297,6 +1297,8 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::RIIDEyeLaBr:
     case DetectorType::RadSeekerNaI:
     case DetectorType::RadSeekerLaBr:
+    case DetectorType::IdentiFinderR500NaI:
+    case DetectorType::IdentiFinderR500LaBr:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
       
