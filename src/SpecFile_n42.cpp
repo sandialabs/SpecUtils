@@ -355,6 +355,8 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::OrtecRadEagleNai:
     case SpecUtils::DetectorType::Sam940:
     case SpecUtils::DetectorType::Sam945:
+    case SpecUtils::DetectorType::RIIDEyeNaI:
+    case SpecUtils::DetectorType::RadSeekerNaI:
       det_kind = "NaI";
       break;
       
@@ -362,6 +364,8 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::RadHunterLaBr3:
     case SpecUtils::DetectorType::Sam940LaBr3:
     case SpecUtils::DetectorType::OrtecRadEagleLaBr:
+    case SpecUtils::DetectorType::RIIDEyeLaBr:
+    case SpecUtils::DetectorType::RadSeekerLaBr:
       det_kind = "LaBr3";
       break;
       
@@ -3858,16 +3862,39 @@ namespace SpecUtils
       vector<string> fields;
       SpecUtils::split( fields, val, "," );
       
-      if( fields.size() == 1 )
+      //Sam940s make it here
+      for( string &field : fields )
       {
+        trim( field );
+        if( SpecUtils::istarts_with( field, "Serial") )
+        {
+          // SAM940 makes it here
+          instrument_id_ += ", Probe " + field;
+          continue;
+        }
+        
+        if( SpecUtils::istarts_with( field, "Type") )
+        {
+          // SAM940 makes it here
+          instrument_model_ += "," + field.substr(4);
+          continue;
+        }
+      
         //identiFINDER 2 NGH make it here
         //  "Gamma Detector: NaI 35x51 Neutron Detector: ³He tube 3He3/608/15NS"
+        //  or "Gamma Detector: NaI 35 mm x 51 mm, Neutron Detector: ³He tube 8000 mBar/14.0 mm x 29.0 mm"
         //RadEagle will also:
         //  "Gamma Detector: NaI 3x1 GM Tube: 6x25 Type 716 Neutron: He3"
         
-        trim( fields[0] );
-        string lowered = fields[0];  //We will make searches case independent
-        SpecUtils::to_lower_ascii( lowered ); //We are relying on to_lower_ascii() not adding/removing bytes from string, which it doesnt since it is dumb (e.g., ASCII).
+        string lowered = SpecUtils::to_lower_ascii_copy( field );
+      
+        if( lowered.size() != field.size() )
+        {
+          lowered.resize( field.size(), ' ' ); //things will get messed up, but at least not crash
+#if(PERFORM_DEVELOPER_CHECKS)
+          log_developer_error( __func__,  "to_lower_ascii_copy() changed string length" );
+#endif
+        }//if( lowered.size() != field.size() )
         
         size_t gamma_pos = lowered.find( "gamma detector:" );
         if( gamma_pos == string::npos )
@@ -3892,26 +3919,15 @@ namespace SpecUtils
           size_t len = string::npos;
           if( (i+1) < posvec.size() )
             len = posvec[i+1] - posvec[i];
-          remarks_.push_back( SpecUtils::trim_copy( fields[0].substr( posvec[i], len ) ) );
+          remarks_.push_back( SpecUtils::trim_copy( field.substr( posvec[i], len ) ) );
         }
         
         if( posvec.empty() )
         {
           //identiFINDER 2 NG makes it here. "Gamma Detector: NaI 35x51"
-          remarks_.push_back( fields[0] );
+          remarks_.push_back( field );
         }
-      }else
-      {
-        //Sam940s make it here
-        for( string &field : fields )
-        {
-          trim( field );
-          if( SpecUtils::istarts_with( field, "Serial") )
-            instrument_id_ += ", Probe " + field;
-          else if( SpecUtils::istarts_with( field, "Type") )
-            instrument_model_ += "," + field.substr(4);
-        }//for( string &field : fields )
-      }
+      }//for( string &field : fields )
     }//if( probe_node && !XML_VALUE_COMPARE(probe_node, "unknown") )
     
     
@@ -5507,8 +5523,8 @@ namespace SpecUtils
           }
         }
         if( m->gamma_counts_ || m->contained_neutron_ )
-          m->remarks_.push_back( "Gamma/Neutron counts have been multiplied by live time, "
-                                "to account for observed shortcomings of this detectors N42-2006 format." );
+          m->remarks_.push_back( "Gamma/Neutron counts have been mutliplied by live time, "
+                                "to account for observed shortcommings of this detectors N42-2006 format." );
       }//for( auto &m : measurements_ )
     }//if( SSC Pacific that need to
     

@@ -287,15 +287,19 @@ enum class DetectorType : int
   OrtecRadEagleCeBr2Inch,
   OrtecRadEagleCeBr3Inch,
   OrtecRadEagleLaBr,
-  /** The LaBr3 may not always be detector, and then it will be assigned
-      kSame940
-   */
+  /** The LaBr3 may not always be detector, and then it will be assigned Sam940 */
   Sam940LaBr3,
   Sam940,
   Sam945,
   Srpm210,
-  //RadSeekerLaBr1.5x1.5
-  //RadSeekerNaI2x2 (although should check for this, see SpecFile::set_n42_2006_instrument_info_node_info
+  
+  /** Also covers RIIDEye X-G (or -GN) with 2x2 NaI */
+  RIIDEyeNaI,
+  /** Also covers RIIDEye X-H (or -HN) with 1.5x1.5 LaBr */
+  RIIDEyeLaBr,
+  
+  RadSeekerNaI,
+  RadSeekerLaBr,
   
   Unknown
 };//enum DetectorType

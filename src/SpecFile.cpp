@@ -1179,6 +1179,8 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
   static const string sm_Sam945DetectorStr            = "SAM945";
   static const string sm_Srpm210DetectorStr           = "SRPM-210";
+  static const string sm_RIIDEyeNaIStr                = "RIIDEye-NaI";
+  static const string sm_RIIDEyeLaBrStr               = "RIIDEye-LaBr3";
   static const string sm_Rsi701DetectorStr            = "RS-701";
   static const string sm_Rsi705DetectorStr            = "RS-705";
   static const string sm_RadHunterNaIDetectorStr      = "RadHunterNaI";
@@ -1188,6 +1190,8 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_RadEagleCeBr2InDetectorStr   = "RadEagle CeBr3 2x1";
   static const string sm_RadEagleCeBr3InDetectorStr   = "RadEagle CeBr3 3x0.8";
   static const string sm_RadEagleLaBrDetectorStr      = "RadEagle LaBr3 2x1";
+  static const string sm_RadSeekerNaIStr              = "RadSeeker-CS";
+  static const string sm_RadSeekerLaBrStr             = "RadSeeker-CL";
   
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
@@ -1237,6 +1241,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_Sam945DetectorStr;
     case DetectorType::Srpm210:
       return sm_Srpm210DetectorStr;
+    case DetectorType::RIIDEyeNaI:
+      return sm_RIIDEyeNaIStr;
+    case DetectorType::RIIDEyeLaBr:
+      return sm_RIIDEyeLaBrStr;
     case DetectorType::Sam940LaBr3:
       return sm_Sam940Labr3DetectorStr;
     case DetectorType::Rsi701:
@@ -1257,6 +1265,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_RadEagleCeBr3InDetectorStr;
     case DetectorType::OrtecRadEagleLaBr:
       return sm_RadEagleLaBrDetectorStr;
+    case DetectorType::RadSeekerNaI:
+      return sm_RadSeekerNaIStr;
+    case DetectorType::RadSeekerLaBr:
+      return sm_RadSeekerLaBrStr;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -3286,8 +3298,9 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   if( lhs.detector_type_ != rhs.detector_type_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "SpecFile: LHS detector type (%i) doesnt match RHS (%i)",
-             int(lhs.detector_type_), int(rhs.detector_type_) );
+             "SpecFile: LHS detector type (%i - %s) doesnt match RHS (%i - %s)",
+             int(lhs.detector_type_), detectorTypeToString(lhs.detector_type_).c_str(),
+             int(rhs.detector_type_), detectorTypeToString(rhs.detector_type_).c_str() );
     throw runtime_error( buffer );
   }
   
@@ -5390,6 +5403,13 @@ void SpecFile::set_detector_type_from_other_info()
   }
   
   
+  if( icontains(manufacturer_,"innoRIID")
+     && !icontains(manufacturer_,"ortec")
+     && (istarts_with(model, "RE ") || icontains(model, "RadEagle")) )
+  {
+      manufacturer_ += " (Ortec)";
+  }
+    
   if( (icontains(model,"Rad") && icontains(model,"Eagle"))
       || istarts_with(model, "RE-") || istarts_with(model, "RE ") )
   {
@@ -5415,6 +5435,7 @@ void SpecFile::set_detector_type_from_other_info()
     //Make the modle human readable
     if( istarts_with(model, "RE ") )
       instrument_model_ = "RadEagle " + instrument_model_.substr(3);
+    
     
     return;
   }//if( a rad eagle )
@@ -5453,6 +5474,7 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }
   
+  
   if( icontains(instrument_model_,"identiFINDER") || icontains(model,"R400") )
   {
     //From: https://www.flir.com/r400/ 20201218
@@ -5487,9 +5509,32 @@ void SpecFile::set_detector_type_from_other_info()
       return;
     }
     
-    cout << "identiFINDER: instrument_model_='" << instrument_model_ << "', manufacturer_='" << manufacturer_ << "'" << endl;
+    for( const auto &remark : remarks_ )
+    {
+      if( (SpecUtils::contains(remark, "35 mm") && SpecUtils::contains(remark, "51 mm"))
+          || (SpecUtils::contains(remark, "35mm") && SpecUtils::contains(remark, "51mm"))
+          || SpecUtils::contains(remark, "35x51")
+         || SpecUtils::contains(remark, "35 x 51"))
+      {
+        detector_type_ = DetectorType::IdentiFinderNG;
+        return;
+      }
+       
+      if( SpecUtils::contains(remark, "30x30")
+         || SpecUtils::contains(remark, "30 x 30")
+         || SpecUtils::contains(remark, "30mm")
+         || SpecUtils::contains(remark, "LaBr") )
+      {
+        detector_type_ = DetectorType::IdentiFinderLaBr3;
+        return;
+      }
+    }//for( const auto &remark : remarks_ )
     
-    detector_type_ = DetectorType::IdentiFinderUnknown;
+    
+    cout << "identiFINDER: instrument_model_='" << instrument_model_ << "', manufacturer_='" << manufacturer_ << "'" << endl;
+    if( detector_type_ == DetectorType::Unknown )
+      detector_type_ = DetectorType::IdentiFinderUnknown;
+    
     return;
   }//if( icontains(instrument_model_,"identiFINDER") )
   
@@ -5500,82 +5545,81 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }
   
-  if( icontains(instrument_model_,"SAM940") || icontains(instrument_model_,"SAM 940") || icontains(instrument_model_,"SAM Eagle") )
+  
+  //Thermo Fisher Scientific, ins_model=RIIDEye, LaBr15x15, or ins_model=RIIDEye, NaI2x2
+  if( icontains(model,"RIIDEye") )
   {
-    if( icontains(instrument_model_,"LaBr") )
+    if( icontains(model,"LaBr") )
+    {
+      detector_type_ = DetectorType::RIIDEyeLaBr;
+      return;
+    }
+    
+    if( icontains(model,"NaI") )
+    {
+      detector_type_ = DetectorType::RIIDEyeNaI;
+      return;
+    }
+  }//if( icontains(model,"RIIDEye") )
+  
+  
+  if( icontains(model,"SAM940") || icontains(model,"SAM 940") || icontains(model,"SAM Eagle") )
+  {
+    if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
     else
       detector_type_ = DetectorType::Sam940;
-  }else if( istarts_with(instrument_model_,"RE ") || icontains(instrument_model_,"RadEagle") || icontains(instrument_model_,"Rad Eagle" ) )
-  {
-    if( !manufacturer_.empty() && !icontains(manufacturer_, "ortec") )
-      manufacturer_ += " (Ortec)";
-    else if( !icontains(manufacturer_, "ortec") )
-      manufacturer_ = "Ortec";
-    //set_detector_type_from_other_info() will set detector_type_ ...
-  }else if( icontains(instrument_model_,"SAM") && icontains(instrument_model_,"945") )
+    
+    return;
+  }
+  
+  
+  if( icontains(model,"SAM") && icontains(model,"945") )
   {
     detector_type_ = DetectorType::Sam945;
-  }else if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
-           && icontains(instrument_model_,"Raider") )
+    return;
+  }
+  
+  
+  if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
+           && icontains(model,"Raider") )
   {
     detector_type_ = DetectorType::MicroRaider;
-  }else if( icontains(manufacturer_,"Canberra Industries, Inc.") )
-  {
-    //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
-    //  exist and if its made up of other detectors, get rid of those spectra
-    
-  }else if( icontains(instrument_type_,"SpecPortal")
-           && icontains(manufacturer_,"SSC Pacific")
-           && icontains(instrument_model_,"MPS Pod") )
-  {
-    //Gamma spectrum is in CPS, so multiply each spectrum by live time.
-    //  Note that there is no indication of this in the file, other than
-    //  fracitonal counts
-    for( auto &m : measurements_ )
-    {
-      if( !m || (m->live_time_ < 1.0f) )  //1 second is arbitrary
-        continue;
-      
-      //We could probably add some count rate sanity check here too.
-      
-      if( m->contained_neutron_ )
-      {
-        for( auto &f : m->neutron_counts_ )
-          f *= m->live_time_;
-        m->neutron_counts_sum_ *= m->live_time_;
-      }
-      
-      if( m->gamma_counts_ )
-      {
-        m->gamma_count_sum_ = 0.0;
-        for( auto &f : const_cast<vector<float>&>(*m->gamma_counts_) )  //We know this is safe right here.
-        {
-          f *= m->live_time_;
-          m->gamma_count_sum_ += f;
-        }
-      }
-      if( m->gamma_counts_ || m->contained_neutron_ )
-        m->remarks_.push_back( "Gamma/Neutron counts have been mutliplied by live time, "
-                              "to account for observed shortcommings of this detectors N42-2006 format." );
-    }//for( auto &m : measurements_ )
-  }else if( icontains(instrument_model_,"SRPM") && icontains(instrument_model_,"210") )
+    return;
+  }
+  
+  
+  if( icontains(model,"SRPM") && icontains(model,"210") )
   {
     if( manufacturer_.size() < 2 )
       manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
     detector_type_ = DetectorType::Srpm210;
-  }else if( (icontains(instrument_type_,"innoRIID") || icontains(instrument_type_,"ortec"))
-           && istarts_with(instrument_model_, "RE ") )
-  {
     
-  }else if( manufacturer_.size() || instrument_model_.size() )
+    return;
+  }//if( SRPM 210 )
+  
+  
+  if( icontains(model,"RadSeeker") /* && icontains(manufacturer_, "Smiths") */ )
   {
-    //    if( (manufacturer_=="ICx Technologies" && instrument_model_=="identiFINDER") )
-    //    {
-    //    }
+    if( icontains(model,"CS") )
+      detector_type_ = DetectorType::RadSeekerNaI;
+    else if( icontains(model,"CL") || icontains(model,"DL") || icontains(model, "LaBr") )
+      detector_type_ = DetectorType::RadSeekerLaBr;
+    
+    return;
+  }//if( icontains(model,"RadSeeker") )
+  
+  if( icontains(manufacturer_,"Canberra Industries, Inc.") )
+  {
+    //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
+    //  exist and if its made up of other detectors, get rid of those spectra
+  }//
+  
+  
+  if( manufacturer_.size() || instrument_model_.size() )
+  {
 #if(PERFORM_DEVELOPER_CHECKS)
-    //In priniciple we should add all of these following detectors to the
-    //  DetectorType enum, but being lazy for now.
+    //In principle we should some of the following detectors to the DetectorType enum
     if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
        && !(manufacturer_=="ICx Technologies" && instrument_model_=="")
        && !(manufacturer_=="Radiation Solutions Inc." /* && instrument_model_=="RS-701"*/)
@@ -5587,11 +5631,18 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="Model 135")
        && !(manufacturer_=="" && instrument_model_=="Self-Occuluding Quad NaI Configuration")
        && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
-       && !(manufacturer_=="Berkeley Nucleonics Corp." && instrument_model_=="SAM 945")
        && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
-       && !(manufacturer_=="Smiths Detection" && instrument_model_=="RadSeeker_DL")
-       && !(manufacturer_=="Smiths Detection" && instrument_model_=="RADSEEKER LaBr 1.5x1.5 J422")
        && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
+       && !(manufacturer_=="Unknown" && instrument_model_=="Unknown")
+       && !icontains( manufacturer_, "RIDs R Us")
+       && !icontains( manufacturer_, "SRPMs R Us")
+       && !icontains( manufacturer_, "RIIDs R Us")
+       && !icontains( manufacturer_, "Mobiles R Us")
+       && !icontains( manufacturer_, "SPRDs R Us")
+       && !(manufacturer_=="BTI" && instrument_model_=="FlexSpec")
+       && !(manufacturer_=="labZY")
+       && !icontains( manufacturer_, "SSC Pacific")
+       && !icontains( instrument_model_, "ASP-")
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {

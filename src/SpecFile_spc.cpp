@@ -317,7 +317,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
               if( instrument_model_.empty() )
                 instrument_model_ = "IdentiFINDER-LaBr3";
               detector_type_ = DetectorType::IdentiFinderLaBr3;
-            }else if( SpecUtils::icontains( info, "T1") || SpecUtils::icontains( info, "T2") )
+            }else if( SpecUtils::icontains( info, "400 T1") || SpecUtils::icontains( info, "400 T2") )
             {
               if( instrument_model_.empty() )
                 instrument_model_ = "identiFINDER-T";
@@ -1284,6 +1284,10 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::Srpm210:
     case DetectorType::RadHunterNaI:
     case DetectorType::RadHunterLaBr3:
+    case DetectorType::RIIDEyeNaI:
+    case DetectorType::RIIDEyeLaBr:
+    case DetectorType::RadSeekerNaI:
+    case DetectorType::RadSeekerLaBr:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
       
