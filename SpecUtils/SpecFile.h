@@ -242,12 +242,16 @@ enum class DetectorType : int
    */
   IdentiFinder,
   
-  /** Used for both the NG and NGH since same crystal size (NGH has neutron
+  /** Used for the NG and NGH, and R400 models since same crystal size (NGH has neutron
       tube)
   */
   IdentiFinderNG,
   
   IdentiFinderLaBr3,
+  
+  IdentiFinderTungsten,
+  
+  IdentiFinderUnknown,
   
   /** The DetectiveUnknown is a default for when the type of detective cant be
       determined, not an actual detector type.
@@ -272,6 +276,7 @@ enum class DetectorType : int
   Falcon5000,
   MicroDetective,
   MicroRaider,
+  Interceptor,
   RadHunterNaI,
   RadHunterLaBr3,
   Rsi701,

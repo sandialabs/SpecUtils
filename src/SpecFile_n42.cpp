@@ -346,6 +346,8 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::Exploranium:
     case SpecUtils::DetectorType::IdentiFinder:
     case SpecUtils::DetectorType::IdentiFinderNG:
+    case SpecUtils::DetectorType::IdentiFinderUnknown:
+    case SpecUtils::DetectorType::IdentiFinderTungsten:
     case SpecUtils::DetectorType::RadHunterNaI:
     case SpecUtils::DetectorType::Rsi701:
     case SpecUtils::DetectorType::Rsi705:
@@ -374,6 +376,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       break;
       
     case SpecUtils::DetectorType::MicroRaider:
+    case SpecUtils::DetectorType::Interceptor:
       det_kind = "CZT";
       break;
       
@@ -5472,75 +5475,14 @@ namespace SpecUtils
     if( analysis_info && analysis_info->results_.size() )
       detectors_analysis_ = analysis_info;
     
-    if( measurements_.empty() )
-      throw runtime_error( "No Measurements found inside ICD1/XML file" );
-    
-    //Lets try to figure out if we can fill out detector_type_
-    if( iequals_ascii( manufacturer_,"ORTEC" ) )
-    {
-      if( iequals_ascii(instrument_model_,"OSASP") )
-        detector_type_ = DetectorType::DetectiveEx200;
-      else if( icontains(instrument_model_,"100") )
-        detector_type_ = DetectorType::DetectiveEx100;
-      else if( icontains(instrument_model_,"Detective-EX") )
-        detector_type_ = DetectorType::DetectiveEx;
-      else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
-        detector_type_ = DetectorType::DetectiveEx100;
-      else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
-        detector_type_ = DetectorType::MicroDetective;
-      else if( icontains(instrument_model_,"Detective") )
-        detector_type_ = DetectorType::DetectiveUnknown;
-    }else if( iequals_ascii(instrument_type_,"PVT Portal")
-             && iequals_ascii(manufacturer_,"SAIC") )
-    {
-      detector_type_ = DetectorType::SAIC8;
-    }else if( icontains(instrument_model_,"identiFINDER")
-             //&& icontains(manufacturer_,"FLIR")
-             )
-    {
-      //WE could probably get more specific detector fine tuning here, cause we have:
-      //      <InstrumentModel>identiFINDER 2 ULCS-TNG</InstrumentModel>
-      //      <InstrumentVersion>Hardware: 4C  Firmware: 5.00.54  Operating System: 1.2.040  Application: 2.37</InstrumentVersion>
-      
-      if( icontains(instrument_model_,"LG") )
-        detector_type_ = DetectorType::IdentiFinderLaBr3;
-      else
-        detector_type_ = DetectorType::IdentiFinderNG;
-    }else if( icontains(manufacturer_,"FLIR") || icontains(instrument_model_,"Interceptor") )
-    {
-      
-    }else if( icontains(instrument_model_,"SAM940") || icontains(instrument_model_,"SAM 940") || icontains(instrument_model_,"SAM Eagle") )
-    {
-      if( icontains(instrument_model_,"LaBr") )
-        detector_type_ = DetectorType::Sam940LaBr3;
-      else
-        detector_type_ = DetectorType::Sam940;
-    }else if( istarts_with(instrument_model_,"RE ") || icontains(instrument_model_,"RadEagle") || icontains(instrument_model_,"Rad Eagle" ) )
-    {
-      if( !manufacturer_.empty() && !icontains(manufacturer_, "ortec") )
-        manufacturer_ += " (Ortec)";
-      else if( !icontains(manufacturer_, "ortec") )
-        manufacturer_ = "Ortec";
-      //set_detector_type_from_other_info() will set detector_type_ ...
-    }else if( icontains(instrument_model_,"SAM") && icontains(instrument_model_,"945") )
-    {
-      detector_type_ = DetectorType::Sam945;
-    }else if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
-             && icontains(instrument_model_,"Raider") )
-    {
-      detector_type_ = DetectorType::MicroRaider;
-    }else if( icontains(manufacturer_,"Canberra Industries, Inc.") )
-    {
-      //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
-      //  exist and if its made up of other detectors, get rid of those spectra
-      
-    }else if( icontains(instrument_type_,"SpecPortal")
+    // Do a instrument specific have to fix CPS --> counts
+    if( icontains(instrument_type_,"SpecPortal")
              && icontains(manufacturer_,"SSC Pacific")
              && icontains(instrument_model_,"MPS Pod") )
     {
       //Gamma spectrum is in CPS, so multiply each spectrum by live time.
       //  Note that there is no indication of this in the file, other than
-      //  fracitonal counts
+      //  fractional counts
       for( auto &m : measurements_ )
       {
         if( !m || (m->live_time_ < 1.0f) )  //1 second is arbitrary
@@ -5565,53 +5507,13 @@ namespace SpecUtils
           }
         }
         if( m->gamma_counts_ || m->contained_neutron_ )
-          m->remarks_.push_back( "Gamma/Neutron counts have been mutliplied by live time, "
-                                "to account for observed shortcommings of this detectors N42-2006 format." );
+          m->remarks_.push_back( "Gamma/Neutron counts have been multiplied by live time, "
+                                "to account for observed shortcomings of this detectors N42-2006 format." );
       }//for( auto &m : measurements_ )
-    }else if( icontains(instrument_model_,"SRPM") && icontains(instrument_model_,"210") )
-    {
-      if( manufacturer_.size() < 2 )
-        manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
-      detector_type_ = DetectorType::Srpm210;
-    }else if( (icontains(instrument_type_,"innoRIID") || icontains(instrument_type_,"ortec"))
-             && istarts_with(instrument_model_, "RE ") )
-    {
-      
-    }else if( manufacturer_.size() || instrument_model_.size() )
-    {
-      //    if( (manufacturer_=="ICx Technologies" && instrument_model_=="identiFINDER") )
-      //    {
-      //    }
-#if(PERFORM_DEVELOPER_CHECKS)
-      //In priniciple we should add all of these following detectors to the
-      //  DetectorType enum, but being lazy for now.
-      if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
-         && !(manufacturer_=="ICx Technologies" && instrument_model_=="")
-         && !(manufacturer_=="Radiation Solutions Inc." /* && instrument_model_=="RS-701"*/)
-         && !(manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
-         && !(manufacturer_=="Avid Annotated Spectrum" /* && instrument_model_==""*/)
-         && !(manufacturer_=="Mirion Technologies" && instrument_model_=="model Pedestrian G")
-         && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="")
-         && !(manufacturer_=="Nucsafe" && instrument_model_=="G4_Predator")
-         && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="Model 135")
-         && !(manufacturer_=="" && instrument_model_=="Self-Occuluding Quad NaI Configuration")
-         && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
-         && !(manufacturer_=="Berkeley Nucleonics Corp." && instrument_model_=="SAM 945")
-         && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
-         && !(manufacturer_=="Smiths Detection" && instrument_model_=="RadSeeker_DL")
-         && !(manufacturer_=="Smiths Detection" && instrument_model_=="RADSEEKER LaBr 1.5x1.5 J422")
-         && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
-         && !(manufacturer_=="" && instrument_model_=="")
-         )
-      {
-        string msg = "Unknown detector type: maufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
-        log_developer_error( __func__, msg.c_str() );
-      }
-#endif
-      //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_CS
-      //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_DL
-      //Unknown detector type: maufacturer=Princeton Gamma-Tech Instruments, Inc., ins_model=RIIDEye, Ext2x2
-    }
+    }//if( SSC Pacific that need to
+    
+    if( measurements_.empty() )
+      throw runtime_error( "No Measurements found inside ICD1/XML file" );
     
     cleanup_after_load();
   }//bool load_2006_N42_from_doc( rapidxml::xml_node<char> *document_node )

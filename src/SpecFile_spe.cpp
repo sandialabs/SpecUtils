@@ -701,22 +701,35 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             break;
           }//if( we have overrun the data section )
           
-          if( SpecUtils::icontains( line, "identiFINDER 2 LG" ) )
+          if( SpecUtils::icontains(line, "identiFINDER") )
           {
-            detector_type_ = DetectorType::IdentiFinderLaBr3;
-            instrument_model_ = line;
-            manufacturer_ = "FLIR";
-            
-            if( SpecUtils::icontains( line, "LGH" ) )
-              meas->contained_neutron_ = true;
-          }else if( SpecUtils::icontains( line, "identiFINDER 2 NG") ) //"nanoRaider ZH"
-          {
-            detector_type_ = DetectorType::IdentiFinderNG;
-            instrument_model_ = line;
-            manufacturer_ = "FLIR";
-            
-            if( SpecUtils::icontains( line, "NGH" ) )
-              meas->contained_neutron_ = true;
+            if( SpecUtils::icontains(line, "LG") )
+            {
+              detector_type_ = DetectorType::IdentiFinderLaBr3;
+              instrument_model_ = line;
+              manufacturer_ = "FLIR";
+              
+              if( SpecUtils::icontains( line, "LGH" ) )
+                meas->contained_neutron_ = true;
+            }else if( SpecUtils::icontains( line, "NG") )
+            {
+              detector_type_ = DetectorType::IdentiFinderNG;
+              instrument_model_ = line;
+              manufacturer_ = "FLIR";
+              
+              if( SpecUtils::icontains( line, "NGH" ) )
+                meas->contained_neutron_ = true;
+            }else if( SpecUtils::icontains( line, "T1") || SpecUtils::icontains( line, "T2") )
+            {
+              detector_type_ = DetectorType::IdentiFinderTungsten;
+              instrument_model_ = line;
+              manufacturer_ = "FLIR";
+            }else
+            {
+              instrument_model_ = line;
+              manufacturer_ = "FLIR";
+              detector_type_ = DetectorType::IdentiFinderUnknown;
+            }
           }else if( SpecUtils::istarts_with( line, "SN#") )
           {
             line = line.substr(3);

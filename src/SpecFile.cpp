@@ -1162,6 +1162,8 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_IdentiFinderDetectorStr      = "IdentiFINDER";
   static const string sm_IdentiFinderNGDetectorStr    = "IdentiFINDER-NG";
   static const string sm_IdentiFinderLaBr3DetectorStr = "IdentiFINDER-LaBr3";
+  static const string sm_IdentiFinderTungstenStr      = "IdentiFINDER-T";
+  static const string sm_IdentiFinderUnknownStr       = "IdentiFINDER-Unknown";
   static const string sm_DetectiveDetectorStr         = "Detective";
   static const string sm_DetectiveExDetectorStr       = "Detective-EX";
   static const string sm_DetectiveEx100DetectorStr    = "Detective-EX100";
@@ -1172,6 +1174,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_UnknownDetectorStr           = "Unknown";
   static const string sm_MicroDetectiveDetectorStr    = "MicroDetective";
   static const string sm_MicroRaiderDetectorStr       = "MicroRaider";
+  static const string sm_InterceptorStr               = "Interceptor";
   static const string sm_Sam940DetectorStr            = "SAM940";
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
   static const string sm_Sam945DetectorStr            = "SAM945";
@@ -1202,6 +1205,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_IdentiFinderDetectorStr;
     case DetectorType::IdentiFinderLaBr3:
       return sm_IdentiFinderLaBr3DetectorStr;
+    case DetectorType::IdentiFinderTungsten:
+      return sm_IdentiFinderTungstenStr;
+    case DetectorType::IdentiFinderUnknown:
+      return sm_IdentiFinderUnknownStr;
     case DetectorType::DetectiveUnknown:
       return sm_DetectiveDetectorStr;
     case DetectorType::DetectiveEx:
@@ -1222,6 +1229,8 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_MicroDetectiveDetectorStr;
     case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
+    case DetectorType::Interceptor:
+      return sm_InterceptorStr;
     case DetectorType::Sam940:
       return sm_Sam940DetectorStr;
     case DetectorType::Sam945:
@@ -5324,7 +5333,8 @@ void SpecFile::set_detector_type_from_other_info()
   using SpecUtils::icontains;
   
   
-  if( detector_type_ != DetectorType::Unknown )
+  if( (detector_type_ != DetectorType::Unknown)
+     && (detector_type_ != DetectorType::IdentiFinderUnknown) )
     return;
   
   const string &model = instrument_model_;
@@ -5349,19 +5359,6 @@ void SpecFile::set_detector_type_from_other_info()
       //detector_type_ = Sam945LaBr3;
     //else
     detector_type_ = DetectorType::Sam945;
-    return;
-  }
-  
-  //Dont know what the 'ULCS' that some models have in their name is
-  if( icontains(model,"identiFINDER") && icontains(model,"NG") )
-  {
-    detector_type_ = DetectorType::IdentiFinderNG;
-    return;
-  }
-  
-  if( icontains(model,"identiFINDER") && icontains(model,"LG") )
-  {
-    detector_type_ = DetectorType::IdentiFinderLaBr3;
     return;
   }
   
@@ -5421,6 +5418,197 @@ void SpecFile::set_detector_type_from_other_info()
     
     return;
   }//if( a rad eagle )
+  
+  
+  
+  //Lets try to figure out if we can fill out detector_type_
+  if( iequals_ascii( manufacturer_,"ORTEC" ) )
+  {
+    if( iequals_ascii(instrument_model_,"OSASP") )
+      detector_type_ = DetectorType::DetectiveEx200;
+    else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"200") )
+      detector_type_ = DetectorType::DetectiveEx200;
+    else if( icontains(instrument_model_,"100") )
+      detector_type_ = DetectorType::DetectiveEx100;
+    else if( icontains(instrument_model_,"Detective-EX") )
+      detector_type_ = DetectorType::DetectiveEx;
+    else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
+      detector_type_ = DetectorType::DetectiveEx100;
+    else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
+      detector_type_ = DetectorType::MicroDetective;
+    else if( iequals_ascii(instrument_model_,"Detective X") )
+      detector_type_ = DetectorType::DetectiveX;
+    else if( icontains(instrument_model_,"Detective") )
+      detector_type_ = DetectorType::DetectiveUnknown;
+    
+    return;
+  }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
+  
+  
+  
+  if( iequals_ascii(instrument_type_,"PVT Portal") && iequals_ascii(manufacturer_,"SAIC") )
+  {
+    detector_type_ = DetectorType::SAIC8;
+    
+    return;
+  }
+  
+  if( icontains(instrument_model_,"identiFINDER") || icontains(model,"R400") )
+  {
+    //From: https://www.flir.com/r400/ 20201218
+    // - R400: three variants: NaI with seed, LaBr, NaI with LED
+    // - R400 LG: LaBr, 30 x 30 mm, GM, LED
+    // - R400 NGH: NaI 35 x 51, GM, He-3
+    // - R400 T1: NaI 23 x 21mm - Tungsten shielded, GM
+    // - R400 T2: NaI 23 x 21mm - Tungsten shielded, GM
+    // - R400 UCLS-NGH: NaI 35 x 51mm, GM, He-3
+    // - R400 ULK-NG: NaI 35 x 51mm, GM
+    // - R400 ULK-NGH: NaI 35 x 51mm, GM, He-3
+    // - R400 UW-NG: NaI 35 x 51mm, GM
+    // - R400 UW-NGH: NaI 35 x 51mm, GM, He-3
+    // - R400 UW-ULCS-NG: NaI 35 x 51mm, GM, LED
+    // - R400 UW-ULCS-NG: NaI 35 x 51mm, GM, He-3, LED
+    
+    if( icontains(model,"NG") || (icontains(model,"2") && !icontains(model,"LG")) )
+    {
+      detector_type_ = DetectorType::IdentiFinderNG;
+      return;
+    }
+    
+    if( icontains(model,"LG") )
+    {
+      detector_type_ = DetectorType::IdentiFinderLaBr3;
+      return;
+    }
+    
+    if( icontains(model,"T1") || icontains(model,"T2") )
+    {
+      detector_type_ = DetectorType::IdentiFinderTungsten;
+      return;
+    }
+    
+    cout << "identiFINDER: instrument_model_='" << instrument_model_ << "', manufacturer_='" << manufacturer_ << "'" << endl;
+    
+    detector_type_ = DetectorType::IdentiFinderUnknown;
+    return;
+  }//if( icontains(instrument_model_,"identiFINDER") )
+  
+  
+  if( icontains(manufacturer_,"FLIR") || icontains(instrument_model_,"Interceptor") )
+  {
+    detector_type_ = DetectorType::Interceptor;
+    return;
+  }
+  
+  if( icontains(instrument_model_,"SAM940") || icontains(instrument_model_,"SAM 940") || icontains(instrument_model_,"SAM Eagle") )
+  {
+    if( icontains(instrument_model_,"LaBr") )
+      detector_type_ = DetectorType::Sam940LaBr3;
+    else
+      detector_type_ = DetectorType::Sam940;
+  }else if( istarts_with(instrument_model_,"RE ") || icontains(instrument_model_,"RadEagle") || icontains(instrument_model_,"Rad Eagle" ) )
+  {
+    if( !manufacturer_.empty() && !icontains(manufacturer_, "ortec") )
+      manufacturer_ += " (Ortec)";
+    else if( !icontains(manufacturer_, "ortec") )
+      manufacturer_ = "Ortec";
+    //set_detector_type_from_other_info() will set detector_type_ ...
+  }else if( icontains(instrument_model_,"SAM") && icontains(instrument_model_,"945") )
+  {
+    detector_type_ = DetectorType::Sam945;
+  }else if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
+           && icontains(instrument_model_,"Raider") )
+  {
+    detector_type_ = DetectorType::MicroRaider;
+  }else if( icontains(manufacturer_,"Canberra Industries, Inc.") )
+  {
+    //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
+    //  exist and if its made up of other detectors, get rid of those spectra
+    
+  }else if( icontains(instrument_type_,"SpecPortal")
+           && icontains(manufacturer_,"SSC Pacific")
+           && icontains(instrument_model_,"MPS Pod") )
+  {
+    //Gamma spectrum is in CPS, so multiply each spectrum by live time.
+    //  Note that there is no indication of this in the file, other than
+    //  fracitonal counts
+    for( auto &m : measurements_ )
+    {
+      if( !m || (m->live_time_ < 1.0f) )  //1 second is arbitrary
+        continue;
+      
+      //We could probably add some count rate sanity check here too.
+      
+      if( m->contained_neutron_ )
+      {
+        for( auto &f : m->neutron_counts_ )
+          f *= m->live_time_;
+        m->neutron_counts_sum_ *= m->live_time_;
+      }
+      
+      if( m->gamma_counts_ )
+      {
+        m->gamma_count_sum_ = 0.0;
+        for( auto &f : const_cast<vector<float>&>(*m->gamma_counts_) )  //We know this is safe right here.
+        {
+          f *= m->live_time_;
+          m->gamma_count_sum_ += f;
+        }
+      }
+      if( m->gamma_counts_ || m->contained_neutron_ )
+        m->remarks_.push_back( "Gamma/Neutron counts have been mutliplied by live time, "
+                              "to account for observed shortcommings of this detectors N42-2006 format." );
+    }//for( auto &m : measurements_ )
+  }else if( icontains(instrument_model_,"SRPM") && icontains(instrument_model_,"210") )
+  {
+    if( manufacturer_.size() < 2 )
+      manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
+    detector_type_ = DetectorType::Srpm210;
+  }else if( (icontains(instrument_type_,"innoRIID") || icontains(instrument_type_,"ortec"))
+           && istarts_with(instrument_model_, "RE ") )
+  {
+    
+  }else if( manufacturer_.size() || instrument_model_.size() )
+  {
+    //    if( (manufacturer_=="ICx Technologies" && instrument_model_=="identiFINDER") )
+    //    {
+    //    }
+#if(PERFORM_DEVELOPER_CHECKS)
+    //In priniciple we should add all of these following detectors to the
+    //  DetectorType enum, but being lazy for now.
+    if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
+       && !(manufacturer_=="ICx Technologies" && instrument_model_=="")
+       && !(manufacturer_=="Radiation Solutions Inc." /* && instrument_model_=="RS-701"*/)
+       && !(manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
+       && !(manufacturer_=="Avid Annotated Spectrum" /* && instrument_model_==""*/)
+       && !(manufacturer_=="Mirion Technologies" && instrument_model_=="model Pedestrian G")
+       && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="")
+       && !(manufacturer_=="Nucsafe" && instrument_model_=="G4_Predator")
+       && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="Model 135")
+       && !(manufacturer_=="" && instrument_model_=="Self-Occuluding Quad NaI Configuration")
+       && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
+       && !(manufacturer_=="Berkeley Nucleonics Corp." && instrument_model_=="SAM 945")
+       && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
+       && !(manufacturer_=="Smiths Detection" && instrument_model_=="RadSeeker_DL")
+       && !(manufacturer_=="Smiths Detection" && instrument_model_=="RADSEEKER LaBr 1.5x1.5 J422")
+       && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
+       && !(manufacturer_=="" && instrument_model_=="")
+       )
+    {
+      string msg = "Unknown detector type: maufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
+      log_developer_error( __func__, msg.c_str() );
+    }
+#endif
+    //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_CS
+    //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_DL
+    //Unknown detector type: maufacturer=Princeton Gamma-Tech Instruments, Inc., ins_model=RIIDEye, Ext2x2
+}
+   
+  
+  
+  
+  
+  
 }//void set_detector_type_from_other_info()
 
 

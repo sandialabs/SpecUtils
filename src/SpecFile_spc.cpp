@@ -60,7 +60,7 @@ namespace
   {
     "Comment", "AcquisitionMode", "CrystalType", "Confidence",
     "MinDoseRate", "MaxDoseRate", "AvgDoseRate", "MinNeutrons", "MaxNeutrons",
-    "DetectorLength", "DetectorDiameter", "BuiltInSrcType", "BuiltInSrcActivity",
+    "BuiltInSrcType", "BuiltInSrcActivity",
     "HousingType", "GMType", "He3Pressure", "He3Length", "He3Diameter",
     "ModMaterial", "ModVolume", "ModThickness", "LastSourceStabTime",
     "LastSourceStabFG", "LastCalibTime", "LastCalibSource", "LastCalibFG",
@@ -205,7 +205,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
   //There are quite a number of fields that Measurement or SpecFile class
   //  does not yet implement, so for now we will just put them into the remarks
   
-  string detector_type = "";
+  string detector_type, det_length, det_diameter, gamma_det;
   
   try
   {
@@ -302,27 +302,54 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             remarks_.emplace_back( std::move(msg) );
 #endif
         }
+        
+        if( istarts_with( line, "GammaDetector" ) && (info_pos != string::npos) )
+          gamma_det = line.substr(info_pos);
       }else if( istarts_with( line, "SpectrumName" ) )
       {//SpectrumName        : ident903558-21_2012-07-26_07-10-55-003.spc
         if( info_pos != string::npos )
         {
-          if( SpecUtils::icontains( line.substr(info_pos), "ident") )
+          const string info = line.substr(info_pos);
+          if( SpecUtils::icontains( info, "ident") || SpecUtils::icontains(info, "Field") )
           {
-            detector_type_ = DetectorType::IdentiFinderNG;
-            //TODO: IdentiFinderLaBr3
-            manufacturer_ = "FLIR";
-            instrument_model_ = "identiFINDER";
+            if( SpecUtils::icontains( info, "LaBr") )  //ex. "Identifinder LGH (LaBr)", "Ultra LGH LaBr"
+            {
+              if( instrument_model_.empty() )
+                instrument_model_ = "IdentiFINDER-LaBr3";
+              detector_type_ = DetectorType::IdentiFinderLaBr3;
+            }else if( SpecUtils::icontains( info, "T1") || SpecUtils::icontains( info, "T2") )
+            {
+              if( instrument_model_.empty() )
+                instrument_model_ = "identiFINDER-T";
+              detector_type_ = DetectorType::IdentiFinderTungsten;
+            }else
+            {
+              if( instrument_model_.empty() )
+                instrument_model_ = "identiFINDER";
+              detector_type_ = DetectorType::IdentiFinderUnknown;
+            }
           }else if( SpecUtils::icontains(line, "Raider") )
           {
             detector_type_ = DetectorType::MicroRaider;
-            instrument_model_ = "MicroRaider";
-            manufacturer_ = "FLIR";
+            if( instrument_model_.empty() )
+              instrument_model_ = "MicroRaider";
+            if( manufacturer_.empty() )
+              manufacturer_ = "FLIR";
           }
         }//if( info_pos != string::npos )
       }else if( istarts_with( line, "DetectorType" ) )
       {//DetectorType        : NaI
-        if( info_pos != string::npos )
+        // Note that at least some LaBr identiFINDERs appear to say NaI
+        if( info_pos != string::npos  && (detector_type_ != DetectorType::IdentiFinderUnknown) )
           detector_type = line.substr(info_pos);
+      }else if( istarts_with( line, "DetectorLength" ) )
+      {
+        if( info_pos != string::npos )
+          det_length = line.substr(info_pos);
+      }else if( istarts_with( line, "DetectorDiameter" ) )
+      {
+        if( info_pos != string::npos )
+          det_diameter = line.substr(info_pos);
       }
       //"GammaDetector" now included in ns_iaea_comment_labels[].
       //else if( istarts_with( line, "GammaDetector" ) )
@@ -724,32 +751,30 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       return false;
     }//if( meas->gamma_counts_->empty() )
     
+    if( detector_type_ == DetectorType::IdentiFinderUnknown )
+    {
+      if( (icontains(det_length, "51") && icontains(det_diameter, "35"))
+         || (icontains(gamma_det, "51") && icontains(gamma_det, "35")) )
+      {
+        detector_type_ = DetectorType::IdentiFinderNG;
+      }else if( (icontains(det_length, "38") && icontains(det_diameter, "30"))
+               || (icontains(gamma_det, "38") && icontains(gamma_det, "30")) )
+      {
+        detector_type_ = DetectorType::IdentiFinder;
+      }else if( icontains(det_length, "30") && icontains(det_diameter, "30") )
+      {
+        // I havent seen anything that makes it here
+        detector_type_ = DetectorType::IdentiFinderLaBr3;
+      }else if( icontains(det_length, "21") && icontains(det_diameter, "23") )
+      {
+        // Tungsten shielded; havent seen anything that makes it here
+        detector_type_ = DetectorType::IdentiFinderTungsten;
+      }
+    }//if( an identifinder, but we dont know which type
+    
     measurements_.push_back( meas );
     
     detectors_analysis_ = analysis;
-    
-    //A temporary message untile I debug detector_type_ a little more
-    if( icontains(instrument_model_,"identiFINDER")
-       && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-      detector_type_ = DetectorType::IdentiFinderNG;
-    else if( icontains(detector_type,"La") && !detector_type.empty())
-    {
-      cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
-      //XXX - this doesnt actually catch all LaBr3 detectors
-      detector_type_ = DetectorType::IdentiFinderLaBr3;
-    }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
-    {
-      cout << "Untested IdentiFinderLaBr3 association!" << endl;
-      detector_type_ = DetectorType::IdentiFinderLaBr3;
-    }else if( icontains(instrument_model_,"identiFINDER") )
-    {
-      detector_type_ = DetectorType::IdentiFinder;
-    }
-    
-    //  if( detector_type_ == Unknown )
-    //  {
-    //    cerr << "I couldnt find detector type for ASCII SPC file" << endl;
-    //  }
     
     cleanup_after_load();
   }catch( std::exception & )
@@ -1034,32 +1059,6 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
      $FLIR_REACHBACK:
      
      */
-    
-    //Still need to fix up DetectorType, and deal with instrument model coorectly
-    /*
-     }else if( istarts_with( line, "DetectorType" ) )
-     {//DetectorType        : NaI
-     if( info_pos != string::npos )
-     detector_type = line.substr(info_pos);
-     }
-     //A temporary message untile I debug detector_type_ a little more
-     if( icontains(instrument_model_,"identiFINDER")
-     && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-     detector_type_ = DetectorType::IdentiFinderNG;
-     else if( icontains(detector_type,"La") && detector_type.size() )
-     {
-     cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
-     //XXX - this doesnt actually catch all LaBr3 detectors
-     detector_type_ = IdentiFinderLaBr3;
-     }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
-     {
-     cout << "Untested IdentiFinderLaBr3 association!" << endl;
-     detector_type_ = IdentiFinderLaBr3;
-     }else if( icontains(instrument_model_,"identiFINDER") )
-     {
-     detector_type_ = kIdentiFinderDetector;
-     }
-     */
   }catch( std::exception & )
   {
     return false;
@@ -1266,8 +1265,13 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   const char *defaultname = 0;
   switch( detector_type_ )
   {
-    case DetectorType::Exploranium:    case DetectorType::IdentiFinder:
-    case DetectorType::IdentiFinderNG: case DetectorType::IdentiFinderLaBr3:
+    case DetectorType::Exploranium:
+    case DetectorType::IdentiFinder:
+    case DetectorType::IdentiFinderNG:
+    case DetectorType::IdentiFinderLaBr3:
+    case DetectorType::IdentiFinderTungsten:
+    case DetectorType::IdentiFinderUnknown:
+    case DetectorType::Interceptor:
     case DetectorType::SAIC8:          case DetectorType::Falcon5000:
     case DetectorType::Unknown:        case DetectorType::MicroRaider:
     case DetectorType::Rsi701: case DetectorType::Rsi705:
