@@ -251,6 +251,9 @@ enum class DetectorType : int
   
   IdentiFinderTungsten,
   
+  IdentiFinderR500NaI,
+  IdentiFinderR500LaBr,
+  
   IdentiFinderUnknown,
   
   /** The DetectiveUnknown is a default for when the type of detective cant be

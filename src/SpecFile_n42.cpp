@@ -348,6 +348,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::IdentiFinderNG:
     case SpecUtils::DetectorType::IdentiFinderUnknown:
     case SpecUtils::DetectorType::IdentiFinderTungsten:
+    case SpecUtils::DetectorType::IdentiFinderR500NaI:
     case SpecUtils::DetectorType::RadHunterNaI:
     case SpecUtils::DetectorType::Rsi701:
     case SpecUtils::DetectorType::Rsi705:
@@ -361,6 +362,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       break;
       
     case SpecUtils::DetectorType::IdentiFinderLaBr3:
+    case SpecUtils::DetectorType::IdentiFinderR500LaBr:
     case SpecUtils::DetectorType::RadHunterLaBr3:
     case SpecUtils::DetectorType::Sam940LaBr3:
     case SpecUtils::DetectorType::OrtecRadEagleLaBr:

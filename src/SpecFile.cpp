@@ -1163,6 +1163,8 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_IdentiFinderNGDetectorStr    = "IdentiFINDER-NG";
   static const string sm_IdentiFinderLaBr3DetectorStr = "IdentiFINDER-LaBr3";
   static const string sm_IdentiFinderTungstenStr      = "IdentiFINDER-T";
+  static const string sm_IdentiFinderR500NaIStr       = "IdentiFINDER-R500-NaI";
+  static const string sm_IdentiFinderR500LaBrStr      = "IdentiFINDER-R500-LaBr3";
   static const string sm_IdentiFinderUnknownStr       = "IdentiFINDER-Unknown";
   static const string sm_DetectiveDetectorStr         = "Detective";
   static const string sm_DetectiveExDetectorStr       = "Detective-EX";
@@ -1211,6 +1213,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_IdentiFinderLaBr3DetectorStr;
     case DetectorType::IdentiFinderTungsten:
       return sm_IdentiFinderTungstenStr;
+    case DetectorType::IdentiFinderR500NaI:
+      return sm_IdentiFinderR500NaIStr;
+    case DetectorType::IdentiFinderR500LaBr:
+      return sm_IdentiFinderR500LaBrStr;
     case DetectorType::IdentiFinderUnknown:
       return sm_IdentiFinderUnknownStr;
     case DetectorType::DetectiveUnknown:
@@ -5475,7 +5481,7 @@ void SpecFile::set_detector_type_from_other_info()
   }
   
   
-  if( icontains(instrument_model_,"identiFINDER") || icontains(model,"R400") )
+  if( icontains(instrument_model_,"identiFINDER") || icontains(model,"R400") || icontains(model,"R500") )
   {
     //From: https://www.flir.com/r400/ 20201218
     // - R400: three variants: NaI with seed, LaBr, NaI with LED
@@ -5490,6 +5496,30 @@ void SpecFile::set_detector_type_from_other_info()
     // - R400 UW-NGH: NaI 35 x 51mm, GM, He-3
     // - R400 UW-ULCS-NG: NaI 35 x 51mm, GM, LED
     // - R400 UW-ULCS-NG: NaI 35 x 51mm, GM, He-3, LED
+    //
+    // - R500 ULCS-NGH: NaI 102 x 19mm, GM, LED
+    // - R500 UL-LG: 38 x 38mm, LaBr, GM, LED
+    // - R500 UL-LG: 102 x 19mm, NaI, GM, LED //Same model number?
+    //    - An actual file with these dimensions gives model as R500 ULCS-NG, so will continue
+    //      assuming "LG" is LaBr
+    // - R500 UL-LGH: 38 x 38mm, LaBr, GM, LED, He-3
+    
+    if( icontains(model,"R500") )
+    {
+      if( icontains(model,"ULCS") || icontains(model,"NaI") )
+      {
+        detector_type_ = DetectorType::IdentiFinderR500NaI;
+        return;
+      }
+      
+      if( icontains(model,"LG") || icontains(model,"LaBr") )
+      {
+        detector_type_ = DetectorType::IdentiFinderR500LaBr;
+        return;
+      }
+      
+      return;
+    }//if( icontains(model,"R500") )
     
     if( icontains(model,"NG") || (icontains(model,"2") && !icontains(model,"LG")) )
     {

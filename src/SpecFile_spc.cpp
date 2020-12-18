@@ -312,22 +312,31 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           const string info = line.substr(info_pos);
           if( SpecUtils::icontains( info, "ident") || SpecUtils::icontains(info, "Field") )
           {
-            if( SpecUtils::icontains( info, "LaBr") )  //ex. "Identifinder LGH (LaBr)", "Ultra LGH LaBr"
+            if( SpecUtils::icontains( info, "R500") )
             {
-              if( instrument_model_.empty() )
-                instrument_model_ = "IdentiFINDER-LaBr3";
-              detector_type_ = DetectorType::IdentiFinderLaBr3;
-            }else if( SpecUtils::icontains( info, "400 T1") || SpecUtils::icontains( info, "400 T2") )
-            {
-              if( instrument_model_.empty() )
-                instrument_model_ = "identiFINDER-T";
-              detector_type_ = DetectorType::IdentiFinderTungsten;
+              if( icontains(info,"LG") || icontains(info,"LaBr") )
+                detector_type_ = DetectorType::IdentiFinderR500LaBr;
+              else if( icontains(info,"ULCS") || icontains(info,"NaI") )
+                detector_type_ = DetectorType::IdentiFinderR500NaI;
             }else
             {
-              if( instrument_model_.empty() )
-                instrument_model_ = "identiFINDER";
-              detector_type_ = DetectorType::IdentiFinderUnknown;
-            }
+              if( SpecUtils::icontains( info, "LaBr") )  //ex. "Identifinder LGH (LaBr)", "Ultra LGH LaBr"
+              {
+                if( instrument_model_.empty() )
+                  instrument_model_ = "IdentiFINDER-LaBr3";
+                detector_type_ = DetectorType::IdentiFinderLaBr3;
+              }else if( SpecUtils::icontains( info, "400 T1") || SpecUtils::icontains( info, "400 T2") )
+              {
+                if( instrument_model_.empty() )
+                  instrument_model_ = "identiFINDER-T";
+                detector_type_ = DetectorType::IdentiFinderTungsten;
+              }else
+              {
+                if( instrument_model_.empty() )
+                  instrument_model_ = "identiFINDER";
+                detector_type_ = DetectorType::IdentiFinderUnknown;
+              }
+            }//if( R500 ) / else
           }else if( SpecUtils::icontains(line, "Raider") )
           {
             detector_type_ = DetectorType::MicroRaider;
