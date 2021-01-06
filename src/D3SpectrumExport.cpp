@@ -198,7 +198,7 @@ namespace
   
 
   
-  void sanitizeUnicode( stringstream &sout, const std::string& text )
+  void sanitize_unicode( stringstream &sout, const std::string& text )
   {
     char buf[4];
     
@@ -214,14 +214,47 @@ namespace
   }
   
   
+  /// This function is probably pretty specialized for just legend text, and is hugely inefficient
   string escape_text( const string &input )
   {
     stringstream sout;
-    sanitizeUnicode( sout, input );
+    sanitize_unicode( sout, input );
     
-    //ToDo: implement EscapeOStream.C/.h ...
+    //ToDo: implement, or call out to EscapeOStream.C/.h ...
+    string answer = sout.str();
     
-    return sout.str();
+    //Get rid of spaces and newlines on either side of txt
+    SpecUtils::trim( answer );
+    
+    // Now keep html or JS content from being injected into legend titles.
+    //  Note that this is probable a incomplete list of things to replace, and is also pretty
+    //  inefficient - it also misses things like escaped quotes and stuff you may want to go through
+    const vector<pair<char,const char *>> replacements = {
+      { '&', "&amp;" },
+      { '<', "&lt;" },
+      { '>', "&gt;" },
+      //{ '\'', "\\'" },
+      //{ '\"', "\\\"" },
+      { '\"', "&#34;" },
+      { '\'', "&#39;" },
+      //{ '\n', "<br />" },
+      { '\n', " " },
+      { '\r', " " },
+      { '\t', " " },
+      { '\\', "\\\\" },
+      //{ '\n', "\\n" },
+      //{ '\r', "\\r" },
+      //{ '\t', "\\t" }
+    };//replacements
+    
+    
+    for( const auto &p : replacements )
+    {
+      char pattern[2] = { p.first, '\0' };
+      SpecUtils::ireplace_all( answer, pattern, p.second );
+    }
+    
+    return answer;
   }
   
 }//namespace
