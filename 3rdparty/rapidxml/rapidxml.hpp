@@ -1458,14 +1458,14 @@ namespace rapidxml
         {
           // Skip whitespace before node
           skip<whitespace_pred, Flags>(text,text_end);
-          if( text==text_end || (text+1)==text_end )
+          if( (text+1) >= text_end )
             break;
           
           // Parse and append new child
           if (*text == Ch('<'))
           {
             ++text;     // Skip '<'
-            if( text == text_end )
+            if( (text+1) >= text_end )
               break;
             
             if (xml_node<Ch> *node = parse_node<Flags>(text,text_end))
@@ -1640,8 +1640,12 @@ namespace rapidxml
       template<class StopPred, int Flags>
       static void skip(Ch *&text, Ch * const text_end )
       {
+        assert( (text+1) <= text_end );
+        if( (text+1) >= text_end )
+          text = text_end - 1;  //shouldn't be needed, but jic
+        
         Ch *tmp = text;
-        while ( (tmp != text_end) && ((tmp+1) != text_end) && StopPred::test(*tmp))
+        while ( ((tmp+1) < text_end) && StopPred::test(*tmp))
           ++tmp;
         text = tmp;
         assert( text < text_end );
@@ -2079,7 +2083,7 @@ namespace rapidxml
       template<int Flags>
       xml_node<Ch> *parse_xml_declaration(Ch *&text, Ch * const text_end )
       {
-        if( (text == text_end) || ((text+1) == text_end) )
+        if( (text+1) >= text_end )
           return 0;
         
         // If parsing of declaration is disabled
@@ -2188,7 +2192,7 @@ namespace rapidxml
             }
             ++text;
           }
-          if ( (text+3) == text_end )
+          if ( (text+3) >= text_end )
             text = text_end - 1;
           else
             text += 3;     // Skip '-->'
@@ -2199,18 +2203,20 @@ namespace rapidxml
         Ch *value = text;
         
         // Skip until end of comment
-        while ( ((text+3) != text_end)
+        while ( ((text_end - text) > 3)
                && (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>')) )
         {
           ++text;
         }
         
-        if( ((text+3) == text_end) && (text[2] != Ch('>')) )
+        if( ((text_end - text) == 3) && (text[2] != Ch('>')) )
         {
           if( !(Flags & allow_sloppy_parse) )
             RAPIDXML_PARSE_ERROR("unexpected end of data", text);
           text = text_end - 1;
         }
+        
+        assert( (text_end - text) >= 1 );
         
         // Create comment node
         xml_node<Ch> *comment = this->allocate_node(node_comment);
@@ -2300,7 +2306,7 @@ namespace rapidxml
       template<int Flags>
       xml_node<Ch> *parse_doctype(Ch *&text, Ch * const text_end )
       {
-        if( (text == text_end) || ((text+1) == text_end) )
+        if( ((text+1) >= text_end) )
           return 0;
         
         // Remember value start
@@ -2318,7 +2324,7 @@ namespace rapidxml
             case Ch('['):
             {
               ++text;     // Skip '['
-              if( (text == text_end) || ((text+1) == text_end) )
+              if( ((text+1) >= text_end) )
               {
                 if( !(Flags & allow_sloppy_parse) )
                   RAPIDXML_PARSE_ERROR("unexpected end of data", text);
@@ -2336,7 +2342,7 @@ namespace rapidxml
                 }
                 
                 ++text;
-                if( (text == text_end) || ((text+1) == text_end) )
+                if( ((text+1) >= text_end) )
                 {
                   if( !(Flags & allow_sloppy_parse) )
                     RAPIDXML_PARSE_ERROR("unexpected end of data", text);
@@ -2446,8 +2452,11 @@ namespace rapidxml
       template<int Flags>
       xml_node<Ch> *parse_pi(Ch *&text, Ch * const text_end )
       {
-        if( (text == text_end) || ((text+1) == text_end) )
+        if( ((text+1) >= text_end) )
+        {
+          text = text_end - 1;
           return 0;
+        }
         
         // If creation of PI nodes is enabled
         if (Flags & parse_pi_nodes)
@@ -2471,7 +2480,7 @@ namespace rapidxml
           // Skip to '?>'
           while( ((text_end - text) > 1) && ((text[0] != Ch('?')) || (text[1] != Ch('>'))) )
           {
-            if ( (text+1) == text_end )
+            if ( (text+1) >= text_end )
             {
               if( (Flags & allow_sloppy_parse) )
                 break;
@@ -2500,7 +2509,7 @@ namespace rapidxml
           // Skip to '?>'
           while ( ((text_end - text) > 1) && ((text[0] != Ch('?') || text[1] != Ch('>'))) )
           {
-            if( (text+1) == text_end )
+            if( (text+1) >= text_end )
             {
               if( !(Flags & allow_sloppy_parse) )
                 RAPIDXML_PARSE_ERROR("unexpected end of data", text);
@@ -2692,7 +2701,7 @@ namespace rapidxml
       {
         assert( text < text_end );
         
-        if( text == text_end || (text+1) == text_end || (text+2) == text_end )
+        if( (text+2) >= text_end )
         {
           text = text_end - 1;
           return 0;
@@ -2705,7 +2714,7 @@ namespace rapidxml
           while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
           {
             ++text;
-            if( (text+2) == text_end )
+            if( (text+2) >= text_end )
             {
               if( (Flags & allow_sloppy_parse) ) //wcjohns added in
               {
@@ -2914,12 +2923,12 @@ namespace rapidxml
         {
           if( (Flags & allow_sloppy_parse) )
           {
-            if( (*text == Ch('\0')) || (text == text_end) || ((text+1) == text_end) )
+            if( (*text == Ch('\0')) || ((text+1) >= text_end) )
             {
               // Place zero terminator after name
               if (!(Flags & parse_no_string_terminators))
               {
-                if( (text == text_end) || ((text+1) == text_end) )
+                if( ((text+1) >= text_end) )
                   *(text_end-1) = Ch('\0');
                 else
                   element->name()[element->name_size()] = Ch('\0');
@@ -2952,7 +2961,7 @@ namespace rapidxml
         // Place zero terminator after name
         if (!(Flags & parse_no_string_terminators))
         {
-          if( (text == text_end) || ((text+1) == text_end) )
+          if( ((text+1) >= text_end) )
             *(text_end-1) = Ch('\0');
           else
             element->name()[element->name_size()] = Ch('\0');
@@ -3058,7 +3067,7 @@ namespace rapidxml
         //assert( text[-1] == '<' );
         assert( text < text_end );
         
-        if( (text == text_end) || ((text+1) == text_end) )
+        if( ((text+1) >= text_end) )
           return 0;
         
         // Parse proper node type
@@ -3165,7 +3174,7 @@ namespace rapidxml
             ++text;     // Skip !
             while (*text != Ch('>'))
             {
-              if( (text == text_end) || ((text+1) == text_end) )
+              if( ((text+1) >= text_end) )
               {
                 if( (Flags & allow_sloppy_parse) )
                   return 0;
@@ -3277,12 +3286,12 @@ namespace rapidxml
         assert( text < text_end );
         
         // For all children and text
-        if( (text == text_end) || ((text+1) == text_end) )
+        if( ((text+1) >= text_end) )
           return;
         
         while (1)
         {
-          if( (text == text_end) || ((text+1) == text_end) )
+          if( ((text+1) >= text_end) )
           {
             if( (Flags & allow_sloppy_parse) ) //wcjohns added in
               return;  //Make it so incomplete N42 files will still parse even if all tags are not closed...
@@ -3305,7 +3314,7 @@ namespace rapidxml
           // Also, skipping whitespace after data nodes is unnecessary.
         after_data_node:
           
-          if( (text == text_end) || ((text+1) == text_end) )
+          if( ((text+1) >= text_end) )
           {
             if( (Flags & allow_sloppy_parse) ) //wcjohns added in
               return;  //Make it so incomplete N42 files will still parse even if all tags are not closed...
@@ -3544,7 +3553,7 @@ namespace rapidxml
         
         if( ((text+1) >= text_end) )
         {
-          text = text_end - 1;
+          text = text_end - 1;  //shouldnt be needed, but jic
           
           if( (Flags & allow_sloppy_parse) )
             return;
@@ -3560,9 +3569,9 @@ namespace rapidxml
           ++text;     // Skip first character of attribute name
           skip<attribute_name_pred, Flags>(text,text_end);
           
-          if( (text == name) || (text == text_end) || ((text+1) == text_end) )
+          if( ((text+1) >= text_end) )
           {
-            if( text == text_end )  //should be needed, I dont think so
+            if( text >= text_end )  //should be needed, but jic
               text = text_end - 1;
             
             if( (Flags & allow_sloppy_parse) )
@@ -3631,11 +3640,11 @@ namespace rapidxml
           
           Ch *valstart = text;
           
-          if( (text == text_end) || ((text+1) == text_end) )
+          if( ((text+1) >= text_end) )
           {
             if( (Flags & allow_sloppy_parse) )
             {
-              text = text_end - 1; //I dont think actually needed
+              text = text_end - 1; //I dont think actually needed, but jic
               break;
             }else
             {
