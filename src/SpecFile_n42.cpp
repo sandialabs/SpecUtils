@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
+#include <type_traits>
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_print.hpp"
@@ -358,6 +359,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::Sam945:
     case SpecUtils::DetectorType::RIIDEyeNaI:
     case SpecUtils::DetectorType::RadSeekerNaI:
+    case SpecUtils::DetectorType::VerifinderNaI:
       det_kind = "NaI";
       break;
       
@@ -368,6 +370,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::OrtecRadEagleLaBr:
     case SpecUtils::DetectorType::RIIDEyeLaBr:
     case SpecUtils::DetectorType::RadSeekerLaBr:
+    case SpecUtils::DetectorType::VerifinderLaBr:
       det_kind = "LaBr3";
       break;
       
@@ -884,7 +887,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       const size_t calibid = calibids[i];
       const std::shared_ptr<const Measurement> m = measurements[i];
       
-      char livetime[32], calibstr[32], spec_idstr[48];
+      char livetime[32], calibstr[32], spec_id_cstr[48];
       
       string neutcounts;
       snprintf( livetime, sizeof(livetime), "PT%fS", m->live_time() );
@@ -895,17 +898,47 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         //This is case where all measurements of a sample number did not have a similar
         //  start time or background/foreground status so each sample/detector
         //  gets its own <RadMeasurement> element, with an id like "Sample3Det1"
-        snprintf( spec_idstr, sizeof(spec_idstr), "%sSpectrum", radMeasID.c_str() );
+        snprintf( spec_id_cstr, sizeof(spec_id_cstr), "%sSpectrum", radMeasID.c_str() );
       }else if( !radMeasID.empty() )
       {
         //radMeasID will be "Background", "Survey XXX" if passthrough() that
         //  starts with a long background, and "SampleXXX" otherwise.
-        snprintf( spec_idstr, sizeof(spec_idstr), "%sDet%iSpectrum", radMeasID.c_str(), m->detector_number() );
+        snprintf( spec_id_cstr, sizeof(spec_id_cstr), "%sDet%iSpectrum", radMeasID.c_str(), m->detector_number() );
       }else
       {
         //Probably shouldnt ever make it here.
-        snprintf( spec_idstr, sizeof(spec_idstr), "Sample%iDet%iSpectrum", m->sample_number(), m->detector_number() );
+        snprintf( spec_id_cstr, sizeof(spec_id_cstr), "Sample%iDet%iSpectrum", m->sample_number(), m->detector_number() );
       }
+      
+      spec_id_cstr[sizeof(spec_id_cstr) - 1] = '0'; //jic
+      string spec_idstr = spec_id_cstr;
+      
+      // If this is a derived data Measurement, we will append derived data properties to the "id"
+      //  attribute value - painful I know, but seems to be the de facto standard.
+      if( m->derived_data_properties() )
+      {
+        typedef Measurement::DerivedDataProperties DerivedProps;
+        auto check_bit = [&m]( const DerivedProps &p ) -> bool {
+          typedef std::underlying_type<DerivedProps>::type DerivedProps_t;
+          return (m->derived_data_properties() & static_cast<DerivedProps_t>(p));
+        };//check_bit
+        
+        //Note: these next four strings are detected in #N42DecodeHelper2012::set_deriv_data and
+        //      #SpecFile::create_2012_N42_xml as well, so if you alter these strings, change them
+        //      there as well
+        
+        if( check_bit(DerivedProps::ItemOfInterestSum) )
+          spec_idstr += "-MeasureSum";
+        
+        if( check_bit(DerivedProps::UsedForAnalysis) )
+          spec_idstr += "-Analysis";
+        
+        if( check_bit(DerivedProps::ProcessedFurther) )
+          spec_idstr += "-Processed";
+        
+        if( check_bit(DerivedProps::BackgroundSubtracted) )
+          spec_idstr += "-BGSub";
+      }//if( m->derived_data_properties_ )
       
       
       const string detnam = !m->detector_name().empty() ? m->detector_name() : s_unnamed_det_placeholder;
@@ -1039,7 +1072,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         Spectrum->append_attribute( doc->allocate_attribute( "radDetectorInformationReference", val, 31, detnam.size() ) );
         
         //Add required ID attribute
-        val = doc->allocate_string( spec_idstr );
+        val = doc->allocate_string( spec_idstr.c_str(), spec_idstr.size() + 1 );
         Spectrum->append_attribute( doc->allocate_attribute( "id", val ) );
         
         if( m->live_time() > 0.0f )
@@ -2772,6 +2805,62 @@ public:
     return comment;
   }//std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *node )
       
+  
+  static void set_deriv_data( shared_ptr<Measurement> &meas, const string &dd_id, const string &spec_id )
+  {
+    typedef Measurement::DerivedDataProperties DerivedProps;
+    
+    const auto set_bit = [&meas]( const DerivedProps &p ){
+      typedef std::underlying_type<DerivedProps>::type DerivedProps_t;
+      meas->derived_data_properties_ |= static_cast<DerivedProps_t>(p);
+    };
+    
+    set_bit( DerivedProps::IsDerived );
+    
+    
+    if( icontains( dd_id, "MeasureSum" ) || icontains( spec_id, "SumGamma" ) )
+      set_bit( DerivedProps::ItemOfInterestSum );
+    
+    if( meas->source_type_ == SourceType::Unknown )
+    {
+      if( icontains(spec_id, "BGGamma") || icontains(spec_id, "Background") )
+        meas->source_type_ = SourceType::Background;
+      else if( icontains(spec_id, "Foreground") || icontains(spec_id, "Foreground") )
+        meas->source_type_ = SourceType::Foreground;
+    }//if( meas->source_type_ == SourceType::Unknown )
+    
+    
+    if( icontains( dd_id, "Analysis" ) || icontains( spec_id, "Analysis" ) )
+      set_bit( DerivedProps::UsedForAnalysis );
+    
+    if( !(icontains( dd_id, "raw" ) || icontains( spec_id, "raw" ))
+       && (icontains( dd_id, "Processed" ) || icontains( spec_id, "Processed" )) )
+      set_bit( DerivedProps::ProcessedFurther );
+    
+    if( icontains( dd_id, "BGSub" ) || icontains( spec_id, "BGSub" ) )
+      set_bit( DerivedProps::BackgroundSubtracted );
+    
+    // The de facto convention seems to be to put the description of the sample/measurement
+    //  into the "id" tags of the <DerivedData> and <Spectrum> elements, so we'll add this
+    //  to the #Measurement title.
+    //  But we'll only do this if the title doesnt already have the ID values, and the title doesnt
+    //   have any of the strings we write to attribute values of <DerivedData> (e.g., "-MeasureSum",
+    //   "-Analysis", "-Processed", "-BGSub" - see #SpecFile::create_2012_N42_xml and also
+    //   #add_spectra_to_measurement_node_in_2012_N42_xml ).
+    if( !icontains(meas->title_, dd_id)
+       && !icontains(meas->title_, spec_id)
+       && !icontains(meas->title_, "-MeasureSum")
+       && !icontains(meas->title_, "-Analysis")
+       && !icontains(meas->title_, "-Processed")
+       && !icontains(meas->title_, "-BGSub") )
+    {
+      meas->title_ += (meas->title_.empty() ? "" : " ") + dd_id + " " + spec_id;
+    }
+  }//set_deriv_data(..)
+  
+  
+  
+  
       
   //decode_2012_N42_rad_measurement_node: a function to help decode 2012 N42
   //  RadMeasurement nodes in a mutlithreaded fashion. This helper function
@@ -2786,9 +2875,10 @@ public:
                                     std::mutex &meas_mutex,
                                     std::mutex &calib_mutex )
   {
-      assert( id_to_dettype_ptr );
-      assert( calibrations_ptr );
-      
+    assert( meas_node );
+    assert( id_to_dettype_ptr );
+    assert( calibrations_ptr );
+    
       try
       {
         //We will copy <remarks> and parse warnings from meas_node to each SpecUtils::Measurement that we will create from it
@@ -2797,6 +2887,10 @@ public:
         boost::posix_time::ptime start_time;
         SourceType spectra_type = SourceType::Unknown;
         OccupancyStatus occupied = OccupancyStatus::Unknown;
+        
+        // The <DerivedData> node is close enough <RadMeasurement> we will parse them both with the
+        //  same code.
+        const bool derived_data = XML_NAME_ICOMPARE(meas_node, "DerivedData");
         
         const auto meas_att = SpecUtils::xml_first_iattribute(meas_node, "id");
         //    rapidxml::xml_attribute<char> *info_att = meas_node->first_attribute( "radItemInformationReferences", 28 );
@@ -3180,6 +3274,14 @@ public:
           
           decode_2012_N42_detector_state_and_quality( meas, meas_node );
           
+          if( derived_data )
+          {
+            const string dd_id = xml_value_str( xml_first_iattribute(meas_node, "id") );
+            const string spec_id = xml_value_str( xml_first_iattribute(spectrum_node, "id") );
+            set_deriv_data( meas, dd_id, spec_id );
+          }//if( derived_data )
+            
+          
           spectrum_meas.push_back( meas );
         }//for( loop over "Spectrum" nodes )
         
@@ -3379,6 +3481,15 @@ public:
             meas->neutron_counts_sum_ += meas->neutron_counts_[i];
           
           decode_2012_N42_detector_state_and_quality( meas, meas_node );
+          
+          
+          if( derived_data )
+          {
+            const string dd_id = xml_value_str( xml_first_iattribute(meas_node, "id") );
+            const string spec_id = xml_value_str( xml_first_iattribute(gross_counts_node, "id") );
+            set_deriv_data( meas, dd_id, spec_id );
+          }//if( derived_data )
+          
           
           neutron_meas.push_back( meas );
         }//for( loop over GrossCounts Node )
@@ -6279,7 +6390,7 @@ namespace SpecUtils
       
     SpecUtilsAsync::ThreadPool workerpool;
     
-    //For the case of portal data, where the first sample is a long backgorund and
+    //For the case of portal data, where the first sample is a long background and
     //  the rest of the file is the occupancy, GADRAS has some "special"
     //  requirements on id attribute values...
     bool first_sample_was_back = false;
@@ -6288,156 +6399,235 @@ namespace SpecUtils
     for( set<int>::const_iterator sni = sample_numbers_.begin(); sni != sample_numbers_.end(); ++sni )
     {
       const int sample_num = *sni;
-      const vector< std::shared_ptr<const Measurement> > smeas = sample_measurements( sample_num );
-      if( smeas.empty() )  //probably shouldnt happen, but jic
-        continue;
       
-      vector<size_t> calid;
-      for( size_t i = 0; i < smeas.size(); ++i )
+      // <DerivedData> are pretty much the same as <RadMeasurement> elements, so we'll use the same
+      //  code to define both (we have to keep derived data Measurement's under <DerivedData> and
+      //  non-derived data elements under <RadMeasurement>).
+      auto add_sample_specs_lambda = [this,sample_num,&calToSpecMap,&first_sample_was_back,
+                               &sample_nums_vec,&xmldocmutex,&doc,&workerpool,
+                               &RadInstrumentData]( const vector< std::shared_ptr<const Measurement> > &smeas, const bool is_derived )
       {
-        const auto iter = calToSpecMap.find( smeas[i]->energy_calibration_ );
-        if( iter != end(calToSpecMap) )
-        {
-          calid.push_back( static_cast<int>(calToSpecMap[smeas[i]->energy_calibration_]) );
-        }else
-        {
-          if( smeas[i]->gamma_counts_ && !smeas[i]->gamma_counts_->empty() )
-          {
-#if(PERFORM_DEVELOPER_CHECKS)
-            log_developer_error( __func__, "Serious unexpected error mapping energy calibrations" );
-            assert( 0 );
-#endif
-          }
-      
-          calid.push_back( 0 );
-        }
-      }//for( size_t i = 0; i < smeas.size(); ++i )
-      
-      
-      //Check if all smeas have same start and real times, if so, write them under
-      //  a single <RadMeasurement> tag, otherwise write under sepearte ones.
-      //Note: this test is abit brittle, and maybe not quite fair.  For example on
-      //  my portal the neutron
-      bool allsame = true;
-      boost::posix_time::ptime starttime = smeas[0]->start_time();
-      float rtime = smeas[0]->real_time();
-      
-      //Below allows up to (an arbitrarily chosen) 50 ms difference in start and
-      //  real times to allow rounding errors during parsing; There are also some
-      //  multi-detector systems (ex Anthony NM HPGe)  where the various
-      //  sub-detectors arnet perfectly synced, but they are close enough to
-      //  capture the intent of the <RadMeasurement> node.  Note that this does
-      //  mess with real time (and dead time) a little for some RPM systems where
-      //  the real time for each subdetector isnt always the same for each
-      //  timeslice; to make up for this, a <Remark>LiveTime: ...</Remark> live
-      //  time is added in these situations...
-      for( size_t i = 1; i < smeas.size(); ++i )
-      {
-        const boost::posix_time::ptime tst = smeas[i]->start_time();
-        starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
-        rtime = max( rtime, smeas[i]->real_time() );
-      }
-      
-      for( size_t i = 1; allsame && (i < smeas.size()); ++i )
-      {
-        std::shared_ptr<const Measurement> m = smeas[i];
-        
-        //Allow the first record in the file, if it is a background, to not need
-        //  to have the same start time or real time as the other measurements in
-        //  this sample.  This is to accomidate some portals whos RSPs may
-        //  accumulate backgrounds a little weird, but none-the-less should all be
-        //  considered the same sample.
-        if( m->source_type() != SourceType::Background
-           || (sample_num != (*sample_numbers_.begin())) )
-        {
-          if( starttime != m->start_time() )
-          {
-            const boost::posix_time::time_duration diff = starttime - m->start_time();
-            if( diff.is_special() || std::abs( diff.total_microseconds() ) > 50000 )
-              allsame = false;
-          }
-          if( fabs(rtime - m->real_time()) > 0.05f )
-            allsame = false;
-        }//if( not background or not first sample )
-        
-        allsame = allsame && (smeas[i]->source_type() == smeas[0]->source_type());
-      }//for( check if all measurements can go under a single <RadMeasurement> tag )
-      
-      
-      //allsame = false;
-      
-      if( allsame )
-      {
-        char RadMeasurementId[32];
-        xml_node<char> *RadMeasurement = 0;
-        
-        if( passthrough() )
-        {
-          //Catch the case where its a searchmode file, or a portal file where
-          //  the first sample is a long background.  Apparently GADRAS relies
-          //  on the "id" attribute of RadMeasurement for this...
-          if( (sample_num == (*sample_numbers_.begin()))
-             && (smeas[0]->source_type() == SourceType::Background)
-             && smeas[0]->live_time() > 10.0 )
-          {
-            first_sample_was_back = true;
-            snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Background" );
-          }else
-          {
-            int sn = sample_num;
-            if( first_sample_was_back )
-            {
-              auto pos = lower_bound(begin(sample_nums_vec), end(sample_nums_vec), sample_num );
-              sn = static_cast<int>( pos - begin(sample_nums_vec) );
-            }
-            
-            snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey%i", sn );
-          }
-        }else
-        {
-          snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Sample%i", sample_num );
-        }
-        
-        {
-          std::lock_guard<std::mutex> lock( xmldocmutex );
-          RadMeasurement = doc->allocate_node( node_element, "RadMeasurement" );
-          RadInstrumentData->append_node( RadMeasurement );
-          
-          char *val = doc->allocate_string( RadMeasurementId );
-          auto *attr = doc->allocate_attribute( "id", val );
-          RadMeasurement->append_attribute( attr );
-        }
-        
-        workerpool.post( [&xmldocmutex,RadMeasurement,smeas,calid](){
-          add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
-        } );
-      }else //if( allsame )
-      {
+        vector<size_t> calid;
         for( size_t i = 0; i < smeas.size(); ++i )
         {
-          const vector< std::shared_ptr<const Measurement> > thismeas(1,smeas[i]);
-          const vector<size_t> thiscalid( 1, calid[i] );
+          const auto iter = calToSpecMap.find( smeas[i]->energy_calibration_ );
+          if( iter != end(calToSpecMap) )
+          {
+            calid.push_back( static_cast<int>(calToSpecMap[smeas[i]->energy_calibration_]) );
+          }else
+          {
+            if( smeas[i]->gamma_counts_ && !smeas[i]->gamma_counts_->empty() )
+            {
+#if(PERFORM_DEVELOPER_CHECKS)
+              log_developer_error( __func__, "Serious unexpected error mapping energy calibrations" );
+              assert( 0 );
+#endif
+            }
+            
+            calid.push_back( 0 );
+          }
+        }//for( size_t i = 0; i < smeas.size(); ++i )
+        
+        
+        if( smeas.empty() )  //probably should only happen when all measurements for this sample are derived data
+          return;
+        
+        //Check if all smeas have same start and real times, if so, write them under
+        //  a single <RadMeasurement> tag, otherwise write under separate ones.
+        //Note: this test is a bit brittle, and maybe not quite fair.  For example on
+        //  my portal the neutron
+        bool allsame = true;
+        boost::posix_time::ptime starttime = smeas[0]->start_time();
+        float rtime = smeas[0]->real_time();
+        
+        //Below allows up to (an arbitrarily chosen) 50 ms difference in start and
+        //  real times to allow rounding errors during parsing; There are also some
+        //  multi-detector systems (ex Anthony NM HPGe)  where the various
+        //  sub-detectors arnet perfectly synced, but they are close enough to
+        //  capture the intent of the <RadMeasurement> node.  Note that this does
+        //  mess with real time (and dead time) a little for some RPM systems where
+        //  the real time for each subdetector isnt always the same for each
+        //  timeslice; to make up for this, a <Remark>LiveTime: ...</Remark> live
+        //  time is added in these situations...
+        for( size_t i = 1; i < smeas.size(); ++i )
+        {
+          const boost::posix_time::ptime tst = smeas[i]->start_time();
+          starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
+          rtime = max( rtime, smeas[i]->real_time() );
+        }
+        
+        for( size_t i = 1; allsame && (i < smeas.size()); ++i )
+        {
+          std::shared_ptr<const Measurement> m = smeas[i];
           
+          //Allow the first record in the file, if it is a background, to not need
+          //  to have the same start time or real time as the other measurements in
+          //  this sample.  This is to accomidate some portals whos RSPs may
+          //  accumulate backgrounds a little weird, but none-the-less should all be
+          //  considered the same sample.
+          if( m->source_type() != SourceType::Background
+             || (sample_num != (*sample_numbers_.begin())) )
+          {
+            if( starttime != m->start_time() )
+            {
+              const boost::posix_time::time_duration diff = starttime - m->start_time();
+              if( diff.is_special() || std::abs( diff.total_microseconds() ) > 50000 )
+                allsame = false;
+            }
+            if( fabs(rtime - m->real_time()) > 0.05f )
+              allsame = false;
+          }//if( not background or not first sample )
+          
+          allsame = allsame && (smeas[i]->source_type() == smeas[0]->source_type());
+        }//for( check if all measurements can go under a single <RadMeasurement> tag )
+        
+        
+        // Define a lambda to append a DerivedData specific string to the "id" attribute value.
+        //  This seems to be the de facto way to specify properties of DerivedData elements...
+        auto derived_id_extension_lambda = [&smeas,is_derived]() -> std::string {
+          string id_attrib_val;
+          
+          if( !is_derived )
+            return id_attrib_val;
+          
+          uint32_t common_bits = 0xFFFFFFFF;
+          for( const auto &m : smeas )
+            common_bits &= m->derived_data_properties_;
+          
+          typedef Measurement::DerivedDataProperties DerivedProps;
+          auto check_bit = [common_bits]( const DerivedProps &p ) -> bool {
+            typedef std::underlying_type<DerivedProps>::type DerivedProps_t;
+            return (common_bits & static_cast<DerivedProps_t>(p));
+          };//check_bit
+          
+          //Note: these next four strings are detected in N42DecodeHelper2012::set_deriv_data(...)
+          //      as well, and also added in #add_spectra_to_measurement_node_in_2012_N42_xml,
+          //      so if you alter these strings, change them in those places as well (this is to
+          //      keep the round-trip from memory -> N42-2012 -> memory matching; brittle, but I
+          //      guess thats just how N42 is (we could define an DerivedData extension, but thats
+          //      too much trouble at this point).
+          
+          if( check_bit(DerivedProps::ItemOfInterestSum) )
+            id_attrib_val += "-MeasureSum";
+          
+          if( check_bit(DerivedProps::UsedForAnalysis) )
+            id_attrib_val += "-Analysis";
+          
+          if( check_bit(DerivedProps::ProcessedFurther) )
+            id_attrib_val += "-Processed";
+          
+          if( check_bit(DerivedProps::BackgroundSubtracted) )
+            id_attrib_val += "-BGSub";
+          
+          return id_attrib_val;
+        };//derived_id_extension_lambda
+        
+        //allsame = false;
+        
+        if( allsame )
+        {
           char RadMeasurementId[32];
           xml_node<char> *RadMeasurement = 0;
-          snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Sample%iDet%i", sample_num, smeas[i]->detector_number_ );
+          
+          if( passthrough() )
+          {
+            //Catch the case where its a searchmode file, or a portal file where
+            //  the first sample is a long background.  Apparently GADRAS relies
+            //  on the "id" attribute of RadMeasurement for this...
+            if( (sample_num == (*sample_numbers_.begin()))
+               && (smeas[0]->source_type() == SourceType::Background)
+               && smeas[0]->live_time() > 10.0 )
+            {
+              first_sample_was_back = true;
+              snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Background" );
+            }else
+            {
+              int sn = sample_num;
+              if( first_sample_was_back )
+              {
+                auto pos = lower_bound(begin(sample_nums_vec), end(sample_nums_vec), sample_num );
+                sn = static_cast<int>( pos - begin(sample_nums_vec) );
+              }
+              
+              snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Survey%i", sn );
+            }
+          }else
+          {
+            snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Sample%i", sample_num );
+          }
+          
+          RadMeasurementId[sizeof(RadMeasurementId)-1] = '\0'; //jic
+          
+          string id_attrib_val = RadMeasurementId;
+          id_attrib_val += derived_id_extension_lambda();
+          
           
           {
             std::lock_guard<std::mutex> lock( xmldocmutex );
-            RadMeasurement = doc->allocate_node( node_element, "RadMeasurement" );
+            RadMeasurement = doc->allocate_node( node_element, (is_derived ? "DerivedData" : "RadMeasurement") );
             RadInstrumentData->append_node( RadMeasurement );
             
-            char *val = doc->allocate_string( RadMeasurementId );
-            xml_attribute<> *attr = doc->allocate_attribute( "id", val );
+            char *val = doc->allocate_string( id_attrib_val.c_str(), id_attrib_val.size() + 1 );
+            auto *attr = doc->allocate_attribute( "id", val );
             RadMeasurement->append_attribute( attr );
           }
           
-          workerpool.post( [RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
-            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex );
+          workerpool.post( [&xmldocmutex,RadMeasurement,smeas,calid](){
+            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
           } );
-        }//for( loop over measuremtns for this sample number )
-      }//if( allsame ) / else
-    }//for( )
+        }else //if( allsame )
+        {
+          for( size_t i = 0; i < smeas.size(); ++i )
+          {
+            const vector< std::shared_ptr<const Measurement> > thismeas(1,smeas[i]);
+            const vector<size_t> thiscalid( 1, calid[i] );
+            
+            char RadMeasurementId[32];
+            xml_node<char> *RadMeasurement = 0;
+            snprintf( RadMeasurementId, sizeof(RadMeasurementId), "Sample%iDet%i", sample_num, smeas[i]->detector_number_ );
+            
+            string id_attrib_val = RadMeasurementId;
+            id_attrib_val += derived_id_extension_lambda();
+            
+            
+            {
+              std::lock_guard<std::mutex> lock( xmldocmutex );
+              RadMeasurement = doc->allocate_node( node_element, (is_derived ? "DerivedData" : "RadMeasurement") );
+              RadInstrumentData->append_node( RadMeasurement );
+              
+              char *val = doc->allocate_string( id_attrib_val.c_str(), id_attrib_val.size() + 1 );
+              xml_attribute<> *attr = doc->allocate_attribute( "id", val );
+              RadMeasurement->append_attribute( attr );
+            }
+            
+            workerpool.post( [RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
+              add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex );
+            } );
+          }//for( loop over measuremtns for this sample number )
+        }//if( allsame ) / else
+      };//add_sample_specs_lambda lamda
+      
+      
+      vector< std::shared_ptr<const Measurement> > sample_meas, sample_derived_data;
+      const vector< std::shared_ptr<const Measurement> > all_sample_meas = sample_measurements( sample_num );
+      
+      for( const auto &m : all_sample_meas )
+      {
+        if( !m->derived_data_properties_ )
+          sample_meas.push_back( m );
+        else
+          sample_derived_data.push_back( m );
+      }//for( size_t i = 0; i < all_sample_meas.size(); ++i )
+      
+      if( !sample_meas.empty() )
+        add_sample_specs_lambda( sample_meas, false );
+      
+      if( !sample_derived_data.empty() )
+        add_sample_specs_lambda( sample_derived_data, true );
+    }//for( set<int>::const_iterator sni = sample_numbers_.begin(); sni != sample_numbers_.end(); ++sni )
+    
+    
+    
     
     /*
      for( size_t i = 0; i < measurements_.size(); ++i )
@@ -6978,7 +7168,7 @@ namespace SpecUtils
         //  and should be utilized at some point.  But would require adding a field to SpecUtils::SpecFile
         //  I think to kind of do it properly.
         
-        //rapidxml::xml_node<char> *kind_node     = info_node->first_node( "RadDetectorKindCode" );
+        rapidxml::xml_node<char> *kind_node     = info_node->first_node( "RadDetectorKindCode" );
         rapidxml::xml_node<char> *descrip_node  = XML_FIRST_NODE( info_node, "RadDetectorDescription" );
         rapidxml::xml_node<char> *length_node   = XML_FIRST_NODE( info_node, "RadDetectorLengthValue" );
         rapidxml::xml_node<char> *width_node    = XML_FIRST_NODE( info_node, "RadDetectorWidthValue" );
@@ -7051,6 +7241,10 @@ namespace SpecUtils
         SpecUtils::ireplace_all( descrip, ", Gamma and Neutron", "" );
         SpecUtils::ireplace_all( descrip, "Gamma and Neutron", "" );
         
+        
+        if( kind_node && kind_node->value_size() )
+          descrip += (descrip.length() ? ", " : "") + string("Kind: ") + xml_value_str(kind_node);
+          
         if( length_node && length_node->value_size() )
         {
           if( descrip.length() )
@@ -7114,6 +7308,7 @@ namespace SpecUtils
     //  Need to make order in measurements_ reproducable
     vector<std::shared_ptr<std::mutex> > meas_mutexs;
     vector< std::shared_ptr< vector<std::shared_ptr<Measurement> > > > measurements_each_meas;
+    vector< std::shared_ptr< vector<std::shared_ptr<Measurement> > > > measurements_each_derived;
     
     size_t numRadMeasNodes = 0;
     std::mutex meas_mutex, calib_mutex;
@@ -7144,6 +7339,20 @@ namespace SpecUtils
           N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
         } );
       }//for( loop over "RadMeasurement" nodes )
+      
+      
+      //Pickup "DerivedData".  As of 20210103 only tested for a single file, see refZYCXWZEO6Y
+      XML_FOREACH_DAUGHTER( meas_node, rad_data_node, "DerivedData" )
+      {
+        std::shared_ptr<std::mutex> mutexptr = std::make_shared<std::mutex>();
+        auto these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
+        meas_mutexs.push_back( mutexptr );
+        measurements_each_derived.push_back( these_meas );
+        
+        workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
+          N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+        } );
+      }//for( loop over "DerivedData" nodes )
     }//for( loop over "RadInstrumentData" nodes - I know )
     
     workerpool.join();
@@ -7151,6 +7360,10 @@ namespace SpecUtils
     for( size_t i = 0; i < measurements_each_meas.size(); ++i )
       for( size_t j = 0; j < measurements_each_meas[i]->size(); ++j )
         measurements_.push_back( (*measurements_each_meas[i])[j] );
+    
+    for( size_t i = 0; i < measurements_each_derived.size(); ++i )
+      for( size_t ii = 0; ii < measurements_each_derived[i]->size(); ++ii )
+        measurements_.push_back( (*measurements_each_derived[i])[ii] );
     
     //test for files like "file_format_test_spectra/n42_2006/identiFINDER/20130228_184247Preliminary2010.n42"
     rapidxml::xml_node<char> *inst_info_node = data_node->first_node( "RadInstrumentInformation", 24 );

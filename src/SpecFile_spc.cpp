@@ -1281,11 +1281,15 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::IdentiFinderTungsten:
     case DetectorType::IdentiFinderUnknown:
     case DetectorType::Interceptor:
-    case DetectorType::SAIC8:          case DetectorType::Falcon5000:
-    case DetectorType::Unknown:        case DetectorType::MicroRaider:
-    case DetectorType::Rsi701: case DetectorType::Rsi705:
-    case DetectorType::AvidRsi: case DetectorType::Sam940LaBr3:
-    case DetectorType::Sam940: case DetectorType::OrtecRadEagleNai:
+    case DetectorType::SAIC8:
+    case DetectorType::Falcon5000:
+    case DetectorType::MicroRaider:
+    case DetectorType::Rsi701:
+    case DetectorType::Rsi705:
+    case DetectorType::AvidRsi:
+    case DetectorType::Sam940LaBr3:
+    case DetectorType::Sam940:
+    case DetectorType::OrtecRadEagleNai:
     case DetectorType::OrtecRadEagleCeBr2Inch:
     case DetectorType::OrtecRadEagleCeBr3Inch:
     case DetectorType::OrtecRadEagleLaBr:
@@ -1299,6 +1303,9 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::RadSeekerLaBr:
     case DetectorType::IdentiFinderR500NaI:
     case DetectorType::IdentiFinderR500LaBr:
+    case DetectorType::VerifinderNaI:
+    case DetectorType::VerifinderLaBr:
+    case DetectorType::Unknown:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
       

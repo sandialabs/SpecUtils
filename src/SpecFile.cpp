@@ -913,6 +913,12 @@ float Measurement::gamma_energy_max() const
 }
 
 
+uint32_t Measurement::derived_data_properties() const
+{
+  return derived_data_properties_;
+}
+
+
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {
@@ -1194,7 +1200,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_RadEagleLaBrDetectorStr      = "RadEagle LaBr3 2x1";
   static const string sm_RadSeekerNaIStr              = "RadSeeker-CS";
   static const string sm_RadSeekerLaBrStr             = "RadSeeker-CL";
-  
+  static const string sm_VerifinderNaI                = "Verifinder-NaI";
+  static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
+    
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
 //  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger
@@ -1275,6 +1283,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_RadSeekerNaIStr;
     case DetectorType::RadSeekerLaBr:
       return sm_RadSeekerLaBrStr;
+    case DetectorType::VerifinderNaI:
+      return sm_VerifinderNaI;
+    case DetectorType::VerifinderLaBr:
+      return sm_VerifinderLaBr;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -1320,9 +1332,9 @@ void Measurement::reset()
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
   speed_ = 0.0f;
-  detector_name_ = "";
+  detector_name_.clear();
   detector_number_ = -1;
-  detector_description_ = "";
+  detector_description_.clear();
   quality_status_ = QualityStatus::Missing;
 
   source_type_       = SourceType::Unknown;
@@ -1340,6 +1352,10 @@ void Measurement::reset()
   energy_calibration_ = std::make_shared<EnergyCalibration>();
   gamma_counts_ = std::make_shared<vector<float> >();  // \TODO: I should test not bothering to place an empty vector in this pointer
   neutron_counts_.clear();
+  
+  title_.clear();
+  
+  derived_data_properties_ = 0;
 }//void reset()
 
   
@@ -2503,6 +2519,9 @@ void Measurement::set_energy_calibration( const std::shared_ptr<const EnergyCali
 }//void set_energy_calibration(...)
 
 
+
+
+
 void Measurement::rebin( const std::shared_ptr<const EnergyCalibration> &cal )
 {
   assert( energy_calibration_ );
@@ -3077,6 +3096,12 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( lhs.title_ != rhs.title_ )
     throw runtime_error( "Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
+  
+  if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
+    throw runtime_error( "Derived data flags for LHS ('"
+                        + std::to_string(lhs.derived_data_properties_)
+                        + "') doesnt match RHS ('"
+                        + std::to_string(rhs.derived_data_properties_) + "')" );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
@@ -3350,7 +3375,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   if( lhs.properties_flags_ != rhs.properties_flags_ )
   {
     string failingBits;
-    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurementPorperties p, const string label ) {
+    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurementProperties p, const string label ) {
       if( (lhs.properties_flags_ & p) != (rhs.properties_flags_ & p) ) {
         failingBits += failingBits.empty() ? "": ", ";
         failingBits += (lhs.properties_flags_ & p) ? "LHS" : "RHS";
@@ -3737,6 +3762,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
 
   title_ = rhs.title_;
 
+  derived_data_properties_ = rhs.derived_data_properties_;
+  
   return *this;
 }//const Measurement &operator=( const Measurement &rhs )
 
@@ -4432,6 +4459,11 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       if( meas->contained_neutron_ && thisMeasHasGamma )
         neutronMeasDoNotHaveGamma = false;
+      
+      // Check if 'meas' is N42-2012 DerivedData or not
+      const bool nonDerived = !meas->derived_data_properties_;
+      properties_flags_ |= (nonDerived ? MeasurementProperties::kNonDerivedDataMeasurements
+                                       : MeasurementProperties::kDerivedDataMeasurements);
       
       //Do a basic sanity check of is the calibration is reasonable.
       if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
@@ -5359,15 +5391,14 @@ void SpecFile::set_detector_type_from_other_info()
   const string &model = instrument_model_;
 //  const string &id = instrument_id_;
   
-  if( icontains(model,"SAM")
-      && (contains(model,"940") || icontains(model,"Eagle+")) )
+  if( icontains(model,"SAM") && (contains(model,"940") || icontains(model,"Eagle+")) )
   {
     if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
     else
       detector_type_ = DetectorType::Sam940;
     
-    cerr << "ASAm940 model=" << model << endl;
+    //cerr << "ASAm940 model=" << model << endl;
     
     return;
   }
@@ -5561,7 +5592,7 @@ void SpecFile::set_detector_type_from_other_info()
     }//for( const auto &remark : remarks_ )
     
     
-    cout << "identiFINDER: instrument_model_='" << instrument_model_ << "', manufacturer_='" << manufacturer_ << "'" << endl;
+    //cout << "identiFINDER: instrument_model_='" << instrument_model_ << "', manufacturer_='" << manufacturer_ << "'" << endl;
     if( detector_type_ == DetectorType::Unknown )
       detector_type_ = DetectorType::IdentiFinderUnknown;
     
@@ -5638,6 +5669,65 @@ void SpecFile::set_detector_type_from_other_info()
     
     return;
   }//if( icontains(model,"RadSeeker") )
+  
+  
+  if( icontains(manufacturer_, "Symetrica") )
+  {
+    // The <RadInstrumentModelName> tag seems to be "SN20", "SN23-N", etc, but sample size is small.
+    // \TODO: verify general form Verifinders will have in this element
+    const bool isVerifinder = ( (model.length() >= 4)
+                                && (model[0] == 'S' || model[0] == 's')
+                                && (model[1] == 'N' || model[1] == 'n')
+                                && (model[2] == '2')
+                                && std::isdigit(model[3]) );
+    
+    //Could also look that has Verifinder has an N42 entry like (I havent seen a LaBr system):
+    //  <RadDetectorInformation id="DetectorInfoGamma">
+    //    <RadDetectorCategoryCode>Gamma</RadDetectorCategoryCode>
+    //    <RadDetectorKindCode>NaI</RadDetectorKindCode>
+    //    <RadDetectorLengthValue>3.8</RadDetectorLengthValue>
+    //    <RadDetectorDiameterValue>3.8</RadDetectorDiameterValue>
+    //  ...
+    
+    if( isVerifinder )
+    {
+      bool isLaBr = false;
+      
+      for( size_t i = 0; i < measurements_.size() && i < 4; ++i )
+      {
+        std::shared_ptr<Measurement> &meas = measurements_[i];
+        const auto &desc = meas->detector_description_;
+        
+        const char *key = "Kind: ";
+        const auto pos = desc.find( key );
+        if( pos != string::npos )
+        {
+          const size_t keylen = strlen(key);
+          const char * const str_begin = desc.c_str() + pos + keylen;
+          assert( desc.size() >= (pos + keylen) );
+          const string::size_type max_len = desc.size() - pos - keylen;
+          
+          string value( str_begin, std::min( max_len, size_t(8) ) );
+          if( icontains(value, "LaBr") || icontains(value, "La-Br") || icontains(value, "Br3") )
+          {
+            isLaBr = true;
+            break;
+          }
+          
+          if( icontains(value, "NaI") )
+          {
+            isLaBr = false;
+            break;
+          }
+        }//if( pos != string::npos )
+      }//for( size_t i = 0; i < measurements_.size(); ++i )
+      
+      detector_type_ = isLaBr ? DetectorType::VerifinderLaBr : DetectorType::VerifinderNaI;
+      return;
+    }//if( isVerifinder )
+
+  }//if( icontains(manufacturer_, "Symetrica") )
+    
   
   if( icontains(manufacturer_,"Canberra Industries, Inc.") )
   {
@@ -6182,6 +6272,18 @@ bool SpecFile::passthrough() const
   return (properties_flags_ & kPassthroughOrSearchMode);
 }//bool passthrough() const
 
+
+bool SpecFile::contains_derived_data() const
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  return (properties_flags_ & kDerivedDataMeasurements);
+}
+
+bool SpecFile::contains_non_derived_data() const
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  return (properties_flags_ & kNonDerivedDataMeasurements);
+}//
 
 std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibration(
                                                         const set<int> &sample_numbers,
@@ -6776,9 +6878,17 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   const set<string> origvaraints = energy_cal_variants();
   
   if( !origvaraints.count(variant) )
-    throw runtime_error( "SpecFile::keep_energy_cal_variant():"
-                         " measurement did not contain an energy variant named '"
-                         + variant + "'" );
+  {
+    string msg = "SpecFile::keep_energy_cal_variant():"
+    " measurement did not contain an energy variant named '"
+    + variant + "', only contained:";
+    for( auto iter = begin(origvaraints); iter != end(origvaraints); ++iter )
+      msg += " '" + (*iter) + "',";
+    if( origvaraints.empty() )
+      msg += " none";
+    
+    throw runtime_error( msg );
+  }//if( !origvaraints.count(variant) )
   
   if( origvaraints.size() == 1 )
     return 0;
@@ -6810,6 +6920,51 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   return (keepers.size() - measurements_.size());
 }//void keep_energy_cal_variant( const std::string variant )
 
+
+size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep tokeep )
+{
+  std::vector< std::shared_ptr<Measurement> > keepers;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+ 
+  switch( tokeep )
+  {
+    case DerivedVariantToKeep::NonDerived:
+      if( !(properties_flags_ & MeasurementProperties::kDerivedDataMeasurements) )
+        return 0;
+      break;
+      
+    case DerivedVariantToKeep::Derived:
+      if( !(properties_flags_ & MeasurementProperties::kNonDerivedDataMeasurements) )
+        return 0;
+      break;
+  }//switch( tokeep )
+
+  keepers.reserve( measurements_.size() );
+  
+  for( auto &ptr : measurements_ )
+  {
+    switch( tokeep )
+    {
+      case DerivedVariantToKeep::NonDerived:
+        if( !ptr->derived_data_properties_ )
+          keepers.push_back( ptr );
+        break;
+        
+      case DerivedVariantToKeep::Derived:
+        if( ptr->derived_data_properties_ )
+          keepers.push_back( ptr );
+        break;
+    }//switch( tokeep )
+  }//for( auto &ptr : measurements_ )
+  
+  measurements_.swap( keepers );
+  cleanup_after_load();
+  
+  modified_ = modifiedSinceDecode_ = true;
+  
+  return (keepers.size() - measurements_.size());
+}//size_t SpecFile::keep_derived_data_variant( const DerivedVariantToKeep tokeep )
 
 
 int SpecFile::background_sample_number() const
