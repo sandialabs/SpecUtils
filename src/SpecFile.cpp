@@ -220,8 +220,8 @@ namespace
     }//for( size_t i = 0; i < datas.size(); ++i )
   }//void sum_with_rebin(...)
   
-//Analogous to compare_by_sample_det_time; compares by
-// sample_number, and then detector_number_, but NOT by start_time_
+//Analogous to compare_by_derived_sample_det_time; compares by
+// is_derived, sample_number, and then detector_number_, but NOT by start_time_
 struct SpecFileLessThan
 {
   const int m_sample_number, m_detector_number;
@@ -243,14 +243,19 @@ struct SpecFileLessThan
   }//operator()
 };//struct SpecFileLessThan
 
-//compare_by_sample_det_time: compares by sample_number_, and then
+//compare_by_derived_sample_det_time: compares by is_derived, sample_number_, and then
 //  detector_number_, then by start_time_, then source_type_
-bool compare_by_sample_det_time( const std::shared_ptr<const SpecUtils::Measurement> &lhs,
+bool compare_by_derived_sample_det_time( const std::shared_ptr<const SpecUtils::Measurement> &lhs,
                            const std::shared_ptr<const SpecUtils::Measurement> &rhs )
 {
   if( !lhs || !rhs )
     return false;
 
+  const bool lhsNotDerived = !lhs->derived_data_properties();
+  const bool rhsNotDerived = !rhs->derived_data_properties();
+  if( lhsNotDerived != rhsNotDerived )
+    return (lhsNotDerived > rhsNotDerived);
+  
   if( lhs->sample_number() != rhs->sample_number() )
     return (lhs->sample_number() < rhs->sample_number());
 
@@ -261,7 +266,7 @@ bool compare_by_sample_det_time( const std::shared_ptr<const SpecUtils::Measurem
     return (lhs->start_time() < rhs->start_time());
   
   return (lhs->source_type() < rhs->source_type());
-}//compare_by_sample_det_time(...)
+}//compare_by_derived_sample_det_time(...)
 
 }//anaomous namespace
 
@@ -1893,7 +1898,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                          meas, &compare_by_sample_det_time );
+                          meas, &compare_by_derived_sample_det_time );
  
   if( (meas_pos!=measurements_.end()) && ((*meas_pos)==meas) )
     throw runtime_error( "SpecFile::add_measurement: duplicate meas" );
@@ -1974,7 +1979,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   sample_numbers_.insert( meas->sample_number_ );
   
   meas_pos = upper_bound( measurements_.begin(), measurements_.end(),
-                          meas, &compare_by_sample_det_time );
+                          meas, &compare_by_derived_sample_det_time );
   
   measurements_.insert( meas_pos, meas );
   
@@ -2060,7 +2065,7 @@ void SpecFile::remove_measurements( const vector<std::shared_ptr<const Measureme
    if( measurements_.size() > 100 )
    {
    pos = std::lower_bound( measurements_.begin(), measurements_.end(),
-   m, &compare_by_sample_det_time );
+   m, &compare_by_derived_sample_det_time );
    }else
    {
    pos = std::find( measurements_.begin(), measurements_.end(), m );
@@ -4114,7 +4119,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
 
   if( measurements_.size() > 500 )
   {
-    vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background;
+    vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background, sorted_derived;
 
     sorted_meas.reserve( measurements_.size() );
 
@@ -4122,6 +4127,12 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       if( !m )
         continue;
+      
+      if( m->derived_data_properties() )
+      {
+        sorted_derived.push_back( m );
+        continue;
+      }
       
       switch( m->source_type_ )
       {
@@ -4144,15 +4155,17 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     stable_sort( sorted_calibration.begin(), sorted_calibration.end(), &comp_by_start_time_source );
     stable_sort( sorted_background.begin(), sorted_background.end(), &comp_by_start_time_source );
     stable_sort( sorted_foreground.begin(), sorted_foreground.end(), &comp_by_start_time_source );
-
+    stable_sort( sorted_derived.begin(), sorted_derived.end(), &comp_by_start_time_source );
+    
     sorted_meas.insert( end(sorted_meas), sorted_calibration.begin(), sorted_calibration.end() );
     sorted_meas.insert( end(sorted_meas), sorted_background.begin(), sorted_background.end() );
     sorted_meas.insert( end(sorted_meas), sorted_foreground.begin(), sorted_foreground.end() );
+    sorted_meas.insert( end(sorted_meas), sorted_derived.begin(), sorted_derived.end() );
   
     
     int sample_num = 1;
     vector<std::shared_ptr<Measurement>>::iterator start, end, iter;
-    for( start=end=sorted_meas.begin(); start != sorted_meas.end(); start=end )
+    for( start = end = sorted_meas.begin(); start != sorted_meas.end(); start = end )
     {
       //Incremement sample numbers for each new start time.
       //  Also, some files (see refMIONLOV4PS) will mix occupied/non-occupied
@@ -4187,10 +4200,15 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
 
   }else
   {
+    using boost::posix_time::ptime;
     typedef std::map<int, vector<std::shared_ptr<Measurement> > > SampleToMeasMap;
     typedef map<boost::posix_time::ptime, SampleToMeasMap > TimeToSamplesMeasMap;
     
+    //If derived data, we'll put it after non-derived data
+    //If the time is invalid, we'll put this measurement after all the others, but before derived
+    //If its an IntrinsicActivity, we'll put it before any of the others.
     TimeToSamplesMeasMap time_meas_map;
+    SampleToMeasMap intrinsics, derived_data, invalid_times;
 
     for( const auto &m : measurements_ )
     {
@@ -4199,15 +4217,42 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
       
       const int detnum = m->detector_number_;
       
-      //If the time is invalid, we'll put this measurement after all the others.
-      //If its an IntrinsicActivity, we'll put it before any of the others.
-      if( m->source_type() == SourceType::IntrinsicActivity )
-        time_meas_map[boost::posix_time::neg_infin][detnum].push_back( m );
+      if( m->derived_data_properties() )
+        derived_data[detnum].push_back( m );
+      else if( m->source_type() == SourceType::IntrinsicActivity )
+        intrinsics[detnum].push_back( m );
       else if( m->start_time_.is_special() )
-        time_meas_map[boost::posix_time::pos_infin][detnum].push_back( m );
+        invalid_times[detnum].push_back( m );
       else
         time_meas_map[m->start_time_][detnum].push_back( m );
     }//for( auto &m : measurements_ )
+    
+    //Now for simpleness, lets toss intrinsics, derived_data, and invalid_times into time_meas_map
+    const ptime intrinsics_time = (time_meas_map.empty()
+                                     ? ptime(boost::gregorian::date(1970, 1, 1))
+                                     : time_meas_map.begin()->first)
+                                   - boost::gregorian::years(1);
+    const ptime invalids_time = (time_meas_map.empty()
+                                   ? ptime(boost::gregorian::date(1970, 1, 1))
+                                   : time_meas_map.rbegin()->first)
+                                 + boost::gregorian::years(1);
+    const ptime derived_time = (time_meas_map.empty()
+                                   ? ptime(boost::gregorian::date(1970, 1, 1))
+                                   : time_meas_map.rbegin()->first)
+                                 + boost::gregorian::years(2);
+    
+    for( const auto &sample_meass : intrinsics )
+      for( const auto &m : sample_meass.second )
+        time_meas_map[intrinsics_time][sample_meass.first].push_back( m );
+    
+    for( const auto &sample_meass : invalid_times )
+      for( const auto &m : sample_meass.second )
+        time_meas_map[invalids_time][sample_meass.first].push_back( m );
+    
+    for( const auto &sample_meass : derived_data )
+      for( const auto &m : sample_meass.second )
+        time_meas_map[derived_time][sample_meass.first].push_back( m );
+    
     
     int sample = 1;
     
@@ -4215,10 +4260,10 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       SampleToMeasMap &measmap = t.second;
       
-      //Make an attempt to sort the measurements in a reproducable, unique way
+      //Make an attempt to sort the measurements in a reproducible, unique way
       //  because measurements wont be in the same order due to the decoding
       //  being multithreaded for some of the parsers.
-//20150609: I think the multithreaded parsing has been fixed to yeild a
+//20150609: I think the multithreaded parsing has been fixed to yield a
 //  deterministic ordering always.  This only really matters for spectra where
 //  the same start time is given for all records, or no start time at all is
 //  given.  I think in these cases we want to assume the order that the
@@ -4243,7 +4288,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     
   }//if( measurements_.size() > 500 ) / else
   
-  stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
+  stable_sort( begin(measurements_), end(measurements_), &compare_by_derived_sample_det_time );
 }//void  set_sample_numbers_by_time_stamp()
 
 
@@ -4290,7 +4335,7 @@ void SpecFile::ensure_unique_sample_numbers()
   
   if( has_unique_sample_and_detector_numbers() )
   {
-    stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
+    stable_sort( measurements_.begin(), measurements_.end(), &compare_by_derived_sample_det_time );
   }else
   {
     set_sample_numbers_by_time_stamp();
@@ -4626,7 +4671,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
           properties_flags_ |= kNotTimeSortedOrder;
         
-        if( !compare_by_sample_det_time(measurements_[i-1],measurements_[i]) )
+        if( !compare_by_derived_sample_det_time(measurements_[i-1],measurements_[i]) )
           properties_flags_ |= kNotSampleDetectorTimeSorted;
       }//for( size_t i = 1; i < measurements_.size(); ++i )
     }else
@@ -4647,6 +4692,15 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
     }//if( flags & DontChangeOrReorderSamples ) / else
     
+    
+#if( PERFORM_DEVELOPER_CHECKS )
+    bool sampleNumSorted = true;
+    for( size_t i = 1; sampleNumSorted && (i < measurements_.size()); ++i )
+      sampleNumSorted = (measurements_[i-1]->sample_number_ <= measurements_[i]->sample_number_);
+    if( !sampleNumSorted )
+      log_developer_error( __func__, "Found a case where sample numbers weren't sorted!" );
+    assert( sampleNumSorted );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
     
     detector_numbers_.clear();
     detector_names_.clear();
