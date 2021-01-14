@@ -158,11 +158,11 @@ namespace
     {
         std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
         //duration in usec is larger than a int64: covert to years
-        if (duration * 10000000 > INT64_MAX)
+        if ( (static_cast<double>(duration) * 10000000.0) > static_cast<double>(INT64_MAX) )
         {
             double t_duration = duration / 31557600;
             //duration in years is larger than an int32, divide by a million years
-            if (duration / 31557600 > INT32_MAX)
+            if ( (duration / 31557600.0) > static_cast<double>(INT32_MAX) )
             {
                 int32_t y_duration = static_cast<int32_t>(t_duration / 1e6);
                 const auto y_bytes = to_bytes(y_duration);

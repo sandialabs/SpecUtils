@@ -450,8 +450,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           string valuestr;
           const string::size_type pos = line.find( "=" );
-          if( pos != string::npos )
-            valuestr = line.substr( pos );
+          if( pos != string::npos && ((pos+1) < line.size()) )
+            valuestr = line.substr( pos + 1 );
           trim( valuestr );
           
           if( starts_with( line, "Lon=") )

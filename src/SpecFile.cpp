@@ -2871,8 +2871,16 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
      && ("LaBr3, " + lhs.detector_description_) != rhs.detector_description_
      && ("unknown, " + lhs.detector_description_) != rhs.detector_description_
      )
-    throw runtime_error( "Detector description for LHS ('" + lhs.detector_description_
-                        + "') doesnt match RHS ('" + rhs.detector_description_ + "')" );
+  {
+    //static std::atomic<int> ntimesprint(0);
+    //if( ntimesprint++ < 10 )
+    //{
+      const string msg = "Detector description for LHS ('" + lhs.detector_description_
+                      + "') doesnt match RHS ('" + rhs.detector_description_ + "')";
+    //  cerr << "Warning check for detector description falure not being enforced: " << msg << endl;
+    //}
+    throw runtime_error( msg );
+  }
 
   if( lhs.quality_status_ != rhs.quality_status_ )
   {
@@ -3494,7 +3502,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     {
       snprintf( buffer, sizeof(buffer),
                "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
-               int(i), nlhsremarkss[i].c_str(), nrhsremarkss[i].c_str() );
+               int(i), lhsremark.c_str(), rhsremark.c_str() );
 #if( REQUIRE_REMARKS_COMPARE )
       throw runtime_error( buffer );
 #endif
@@ -4621,7 +4629,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       if( meas->has_gps_info() )
       {
-        //        a lat long of (0 0) probably isnt a valid GPS coordinate
+        //  a lat long of (0 0) probably isnt a valid GPS coordinate
         if( (fabs(meas->latitude_) < 1.0E-6)
            && (fabs(meas->longitude_) < 1.0E-6) )
         {
@@ -4638,12 +4646,12 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         meas->position_time_ = boost::posix_time::not_a_date_time;
       }
       
-      meas->contained_neutron_ |= (meas->neutron_counts_sum_>0.0
-                                   || !meas->neutron_counts_.empty());
+      meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
+                                     || !meas->neutron_counts_.empty() );
     }//for( auto &meas : measurements_ )
     
     
-    if( nGpsCoords == 0
+    if( (nGpsCoords == 0)
        || (fabs(mean_latitude_)<1.0E-6 && fabs(mean_longitude_)<1.0E-6) )
     {
       mean_latitude_ = mean_longitude_ = -999.9;
@@ -4694,12 +4702,15 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     
     
 #if( PERFORM_DEVELOPER_CHECKS )
-    bool sampleNumSorted = true;
-    for( size_t i = 1; sampleNumSorted && (i < measurements_.size()); ++i )
-      sampleNumSorted = (measurements_[i-1]->sample_number_ <= measurements_[i]->sample_number_);
-    if( !sampleNumSorted )
-      log_developer_error( __func__, "Found a case where sample numbers weren't sorted!" );
-    assert( sampleNumSorted );
+    if( !(properties_flags_ & kNotSampleDetectorTimeSorted) )
+    {
+      bool sampleNumSorted = true;
+      for( size_t i = 1; sampleNumSorted && (i < measurements_.size()); ++i )
+        sampleNumSorted = (measurements_[i-1]->sample_number_ <= measurements_[i]->sample_number_);
+      if( !sampleNumSorted )
+        log_developer_error( __func__, "Found a case where sample numbers weren't sorted!" );
+      assert( sampleNumSorted );
+    }
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
     
     detector_numbers_.clear();
@@ -4714,13 +4725,16 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     }//for( const IntStrMap::value_type &t : num_to_name_map )
     
     gamma_detector_names_.insert( end(gamma_detector_names_), begin(gamma_det_names), end(gamma_det_names) );
-    neutron_detector_names_.insert( neutron_detector_names_.end(), neut_det_names.begin(), neut_det_names.end() );
+    neutron_detector_names_.insert( end(neutron_detector_names_), begin(neut_det_names), end(neut_det_names) );
     
     
     //If none of the Measurements that have neutrons have gammas, then lets see
     //  if it makes sense to add the neutrons to the gamma Measurement
-    //if( numNeutronAndGamma < (numWithGammas/10) )
-    if( haveNeutrons && haveGammas && neutronMeasDoNotHaveGamma )
+    // TODO: get rid of merge_neutron_meas_into_gamma_meas(), and just keep neutrons how specified
+    //       in the spectrum file; either with the gamma, or separate.  Also remove the similar
+    //       functioning code from decode_2012_N42_rad_measurement_node(...)
+    if( haveNeutrons && haveGammas && neutronMeasDoNotHaveGamma
+       && !(flags & DontChangeOrReorderSamples) )
     {
       merge_neutron_meas_into_gamma_meas();
     }
@@ -4809,7 +4823,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     //  portions of the file.  The background portion, as well as the transition
     //  between background/foreground/etc is a little harder to deal with since
     //  background may have gaps, or may have been taken a while before the item
-    if( !is_passthrough && samplenum_to_starttime.size() > 20 )
+    if( !is_passthrough && (samplenum_to_starttime.size() > 20) )
     {
       int nnotadjacent = 0, nadjacent = 0;
       
@@ -4993,7 +5007,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
 
     
     
-    
+// TODO: get rid of this function, and also similarly for the code in
+//      decode_2012_N42_rad_measurement_node(...) that does similar
 void SpecFile::merge_neutron_meas_into_gamma_meas()
 {
   //Check to make sure sample numbers arent whack (they havent been finally
@@ -5747,7 +5762,7 @@ void SpecFile::set_detector_type_from_other_info()
     {
       bool isLaBr = false;
       
-      for( size_t i = 0; i < measurements_.size() && i < 4; ++i )
+      for( size_t i = 0; (i < 12) && i < measurements_.size(); ++i )
       {
         std::shared_ptr<Measurement> &meas = measurements_[i];
         const auto &desc = meas->detector_description_;

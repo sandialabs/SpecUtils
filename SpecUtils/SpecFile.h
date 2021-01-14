@@ -40,14 +40,16 @@
 Shortcommings that wcjohns should be addressed
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
- - Neutron meausruemtns should have their own live and real time
+ - Neutron measurements should have their own live and real time
  - Neutron counts are typically merged into a gamma detectors Measurement if a
    reasonable pairing can be made. When and if this is done needs to be clearly
    specified, and either stopped of facilities added to keep neutron det. info.
    (should probably instead make own neutron info object (or more generally gross count) that can be
    associated with a Measurement, or maybe sample number, maybe multiple neutron to a Measurement)
+    - This should be stopped.  It also solves the issue with neutron and gamma having own real/live
+      times, as if they do differ, they can just be put in different Measurements
  - Should add a DetectorInfo object that Measurement objects point to and share.
-   - Should add things like dimention and RadDetectorKindCode to this object,
+   - Should add things like dimension and RadDetectorKindCode to this object,
      as well as characteristics (as defined in N42-2012, but in a few other file
      formats)
    - Should probably get rid of detector number, and just keep name
