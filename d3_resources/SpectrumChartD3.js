@@ -3577,12 +3577,26 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   /* EXIT */
   /* Remove old elements as needed. */
   gy.exit().remove();
-
-  /*Now update the height of all the lines.  If we did this in the gye.append("line") */
+  
+  /* Now update the height of all the lines.  If we did this in the gye.append("line") */
   /*  line above then the values for existing lines wouldnt be updated (only */
   /*  the new lines would have correct height) */
+  const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2); };
+  
+  /*
+  const y2Log = function(d){
+    // We will map so that b.r. of zero will give a value at the bottom of the y-axis, and
+    //  the max visible b.r. will give a value at the maximum of the y-axis.  I'm not happy with
+    //  the results.
+    const ydomain = self.yScale.domain();
+    const equiv_data = ydomain[1] + (ydomain[0] - ydomain[1]) * (d.h / d.parent.maxVisibleAmp);
+    return Math.min( self.yScale( equiv_data ), h-2 );
+  };
+  */
+  
   gy.select("line")
-    .attr("y2", function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2) ; } )
+    .attr("y2", y2Lin )
+    //.attr("y2", y2Log )
     .attr("y1", h );  //needed for initial load sometimes
 }
 
