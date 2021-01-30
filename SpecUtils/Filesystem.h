@@ -230,6 +230,11 @@ namespace  SpecUtils
    returned by cwd() will be used, if the path is not already absolute.
    
    Returns true if successful, and false if it fails for any reason.
+   
+   On Windows, currently the path must be less than _MAX_PATH (260
+   UTF-16 characters); there is is commented out code that supports
+   arbitrary length, but this would then require dropping support for
+   Windows 7.
    */
   bool make_canonical_path( std::string &path, const std::string &cwd = "" );
   

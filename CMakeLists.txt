@@ -257,7 +257,10 @@ endif( SpecUtils_JAVA_SWIG )
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a )
 elseif( WIN32 )
-target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
+  #Pathcch.lib is for PathCchCanonicalizeEx, and is available only on Windows 8 and newer, Desktop and UWP
+  #Shlwapi.lib is desktop Windows only, XP and newer
+  #target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
+  target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}

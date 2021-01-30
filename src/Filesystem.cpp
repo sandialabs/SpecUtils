@@ -701,32 +701,13 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
   }//if( !is_absolute_path(path) )
   
 #if( defined(_WIN32) )
-  
-  //SpecUtils::ireplace_all( path, "/", "\\");
-  
-  /*
-   - path empty, return.
-   - Replace each slash character in the root-name with a preferred-separator.
-   - Replace each directory-separator with a preferred-separator.
-   - Remove each dot filename and any immediately following directory-separator.
-   - As long as any appear, remove a non-dot-dot filename immediately followed
-   by a directory-separator and a dot-dot filename, along with any immediately
-   following directory-separator.
-   - If there is a root-directory, remove all dot-dot filenames and any
-   directory-separators immediately following them.
-   - If the last filename is dot-dot, remove any trailing directory-separator.
-   - If the path is empty, add a dot.
-   */
-  
-  
-  //wchar_t full[_MAX_PATH];
-  //if( _wfullpath( full, partialPath, _MAX_PATH ) != NULL )
-  //{
-  //}
   const std::wstring wpath = convert_from_utf8_to_utf16( path );
   
-  
   //MinGW has trouble linking since its libraries dont have PathCchCanonicalizeEx(...) it doesnt look like
+  //PathCchCanonicalizeEx requires linking to "Pathcch.lib", and is only supported on Windows 8 and
+  //  newer, but both Desktop and UWP
+  //PathCanonicalizeW Is supported on Windows XP on, but only on desktop
+/*
 #if( defined(_MSC_VER) )
   const ULONG flags = PATHCCH_ALLOW_LONG_PATHS;
   const size_t pathlen = (std::max)( (std::max)( static_cast<size_t>(_MAX_PATH), static_cast<size_t>(2048) ), 2*wpath.size() );
@@ -743,6 +724,7 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
     path.clear();
   }
 #else
+*/
   wchar_t buffer[_MAX_PATH];
   if( PathCanonicalizeW( buffer, wpath.c_str() ) )
   {
@@ -750,8 +732,9 @@ bool make_canonical_path( std::string &path, const std::string &cwd )
     return true;
   }
   path.clear();
+/*
 #endif
-  
+*/
   return false;
 #else //WIN32
   vector<char> resolved_name(PATH_MAX + 1, '\0');
