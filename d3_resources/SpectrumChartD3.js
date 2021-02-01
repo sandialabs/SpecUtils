@@ -575,6 +575,120 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
   Wt.emit.apply(Wt, [elem, event].concat(args));
 }
 
+
+SpectrumChartD3.prototype.getStaticSvg = function(){
+  try{
+    //console.log( 'In SpectrumChartD3::getStaticSvg: svgchart' );
+    
+    const w = this.svg.attr("width");
+    const h = this.svg.attr("height");
+        
+    //We will need to propagate all the styles we can dynamically set in the SVG
+    //  to the <defs> section of the new SVG.  We could define these in the C++ and pass them to the
+    //  JS, or we can dynamically grab them in JS, which is what we're doing here, but was maybe a
+    //  mistake; its a real pain and probably not complete.
+    
+    // The c++ sets the following rules:
+    // ".xgrid > .tick, .ygrid > .tick", "stroke: #b3b3b3" );
+    // ".minorgrid", "stroke: #e6e6e6" );
+    // ".xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis", "stroke: " + c );
+    // ".xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick, .yaxistick", "stroke: " + m_axisColor.cssText() );
+    // ".peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine", "stroke: " + m_axisColor.cssText() );
+    // "#" + id() + " > svg", "background: " + color.cssText() );
+    // "#chartarea" + id(), "fill: " + c );
+    
+    let getStyle = function( sel ){
+      
+      let el = document.querySelector(sel);
+      if( !el ) return null;
+      return window.getComputedStyle( el );
+    };
+    
+    let getSvgFill = function( sel ){
+      let style = getStyle( sel );
+      let fill = style && style.fill ? style.fill : "";
+      let comps = fill.match(/\d+/g);
+      if( (comps && (comps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) > 0.01))
+      || (fill.length > 2 && fill.substr(0,1)=='#') )
+      return fill;
+      return null;
+    };
+    
+    
+    var domstyle = getStyle( '.Wt-domRoot' );
+    var dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
+    
+    // Check of dom background is something other than "rgba(0, 0, 0, 0)"; not perfect yet, but kinda works
+    if( dombackground )
+    {
+      let bgrndcomps = dombackground.match(/\d+/g); //Note: the double backslash is for the C++ compiler, if move to JS file, make into a single backslash
+      if( !bgrndcomps
+      || ((bgrndcomps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) < 0.01)
+      && (dombackground.length < 2 || dombackground.substr(0,1)=='#')) )
+      dombackground = null;
+    }
+    
+    // If the SVG doesnt have a defined fill
+    let svgback = getSvgFill('#' + this.id + ' > svg');
+    if( !svgback )
+    svgback = dombackground;
+    
+    let chartAreaFill = getSvgFill('#chartarea' + this.id);
+    
+    let legStyle = getStyle( '.legend' );
+    let legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
+    let legColor = legStyle && legStyle.color ? legStyle.color : null;
+    
+    let legBackStyle = getStyle( '.legendBack' );
+    let legBackFill = legBackStyle && legBackStyle.fill ? legBackStyle.fill : null;
+    let legBackStroke = legBackStyle && legBackStyle.stroke ? legBackStyle.stroke : null;
+    
+    let axisStyle = getStyle( '.xaxis' );
+    let axisStroke = axisStyle && axisStyle.stroke ? axisStyle.stroke : null;
+    
+    let tickStyle = getStyle( '.xaxis > .tick > line' );
+    let tickStroke = tickStyle && tickStyle.stroke ? tickStyle.stroke : null;
+    
+    let gridTickStyle = getStyle( '.xgrid > .tick' );
+    let gridTickStroke = gridTickStyle && gridTickStyle.stroke ? gridTickStyle.stroke : null;
+    
+    let minorGridStyle = getStyle( '.minorgrid' );
+    let minorGridStroke = minorGridStyle && minorGridStyle.stroke ? minorGridStyle.stroke : null;
+    
+    
+    let svgDefs = '<defs><style type="text/css">\n'
+    + 'svg{ background-color:' + (svgback ? svgback : 'rgb(255,255,255)') + ';}\n'
+    + '.chartarea{ fill: ' + (chartAreaFill ? chartAreaFill : 'rgba(0,0,0,0)') + ';}\n'
+    + '.legend{ ' + (legFontSize ? 'font-size: ' + legFontSize + ';' : "")
+    + (legColor ? 'fill: ' + legColor + ';' : "")
+    + ' }\n'
+    + '.legendBack{ ' + (legBackFill ? 'fill:' + legBackFill + ';' : "")
+    + (legBackStroke ? 'stroke: ' + legBackStroke + ';' : "")
+    + ' }\n'
+    + (axisStroke ? '.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis{ fill: ' + axisStroke + '; }\n' : "")
+    + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
+    + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick{ stroke: ' + gridTickStroke + ';}\n' : "" )
+    + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
+    //+ '.peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine { stroke: black; }\n'
+    + '</style></defs>';
+    
+    
+    let svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg"' + ' width="'  + w + '"' + ' height="' + h + '"' + '>'
+    + svgDefs
+    + this.svg.node().innerHTML.toString()
+    +'</svg>';
+    
+    return svgMarkup;
+  }catch(e){
+    throw 'Error creating SVG spectrum: ' + e;
+  }
+  
+  return null;
+}//getStaticSvg
+
+
+
+
 SpectrumChartD3.prototype.dataPointDrag = function() {
   var self = this;
   return function(d) {
