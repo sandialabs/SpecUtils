@@ -19,6 +19,8 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
 Feature TODO list (created 20160220):
   - Need to go through and list out all member variables that get set, and where and when they get set.  I think we can eliminate a number of these, and make use of the remaining more consisten.
   - The touch implementation is especially bad.  Getting things like pageX, or dealing with touches is really inconsistent; some time needs to be spent to go through and clean up.
+  - If you tap on a peak, where its actually drawn, this isnt propogated to the vis, and the peak isnt highlighted like it should be, meaning the tapend signal has to cancel the self.touchHold timer, which isnt right, and the peak never gets outlined.  Needs to be fixed.
+  - Could probably emit back to the c++ immediately when a single finger starts touching (from none) so the context menu can be hidden immeditately, or whatever
   - For the y-axis scalers, should add some padding on either side of that area
     and also make the width of each slider more than 20px if a touch device and
     also increase radius of sliderToggle.
@@ -2026,7 +2028,7 @@ SpectrumChartD3.prototype.handleChartTouchStart = function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
 
-    console.log('handleChartTouchStart: nchart=' + d3.touches(d3.select(this.chart)).length + ', ndoc=' + d3.touches(document.body).length);
+    //console.log('handleChartTouchStart: nchart=' + d3.touches(d3.select(this.chart)).length + ', ndoc=' + d3.touches(document.body).length);
     //console.log( 'handleChartTouchStart' );
   }
 }
@@ -2651,6 +2653,9 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
   }
 
   function isAltShiftSwipe() {
+    if( !self.touchesOnChart )
+      return false;
+
     var keys = Object.keys(self.touchesOnChart);
 
     if( keys.length !== 2 ) 
@@ -2767,16 +2772,17 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
       */
      var changedTouches = d3.event.changedTouches;
      //console.log( 'changedTouches:', changedTouches, ', self.touchPageStart:', self.touchPageStart );
-      if( t.length > 1 || !self.touchPageStart || (changedTouches.length !== 1) 
+     if (self.touchHold) { 
+       if( t.length > 1 || !self.touchPageStart || (changedTouches.length !== 1) 
           || self.dist([changedTouches[0].pageX, changedTouches[0].pageY], self.touchPageStart) > 5 ) {
         // Note that touchPageStart is from the current touch, so its ending position should be close to its start
         //  Not tested this condition works well
         // console.log( 'Clearing timeout' );
-        if (self.touchHold) {
+        
           window.clearTimeout(self.touchHold);
           self.touchHold = null;
-        }
-      }
+        }//if( we know this isnt a touchHold anymore )
+      }//if (self.touchHold)
 
 
       /* Update mouse coordinates, feature markers on a touch pan action */
@@ -2907,6 +2913,11 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
       self.tapWait = null;
     }
 
+    if( self.touchHold ){
+      window.clearTimeout(self.touchHold);
+      self.touchHold = null;
+    }
+
     /* Detect tap/double tap signals */
     if (t.length === 1 && self.touchStart ) {
       /* Get page, chart coordinates of event */
@@ -2934,48 +2945,46 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
             self.dist([self.lastTapEvent.changedTouches[0].pageX, self.lastTapEvent.changedTouches[0].pageY], [pageX, pageY]) < tapRadius) {
 
               /* Emit the double-tap signal, clear any touch lines/highlighted peaks in chart */
+              console.log( "Emit TAP doubleclicked signal! energy=", energy, ', count=', count );
               self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count);
               deleteTouchLine();
               self.unhighlightPeak(null);
         } else {
 
               /* Create the single-tap wait emit action in case there is no more taps within double tap time interval */
-              self.tapWait = window.setTimeout((function(e) {
+              self.tapWait = window.setTimeout( function() {
 
                 /* Move the feature markers to tapped coordinate */
                 self.updateFeatureMarkers(self.xScale.invert(x));    /* update the sum peak where user clicked */
 
                 /* Don't emit the tap signal if there was a tap-hold */
                 if (self.touchHoldEmitted)
-                  return false;
+                  return;
 
-                return function() {
+                /* Emit the tap signal, unhighlight any peaks that are highlighted */
+                console.log( "Emit TAP signal!", "\nx = ", x, ", y = ", y, ", pageX = ", pageX, ", pageY = ", pageY );
+                self.unhighlightPeak(null);
+                var touchStartPosition = self.touchStart;
 
-                  /* Emit the tap signal, unhighlight any peaks that are highlighted */
-                  console.log( "Emit TAP signal!", "\nx = ", x, ", y = ", y, ", pageX = ", pageX, ", pageY = ", pageY );
-                  self.unhighlightPeak(null);
-                  var touchStartPosition = self.touchStart;
-
-                  /* Highlight peaks where tap position falls */
-                  if (self.peakPaths) {
-                    const xen = self.xScale.invert(x);
-                    for (i = self.peakPaths.length-1; i >= 0; i--) {
-                      if (xen >= self.peakPaths[i].lowerEnergy && xen <= self.peakPaths[i].upperEnergy) {
-                        const path = self.peakPaths[i].path;
-                        const paths = self.peakPaths[i].paths;
-                        const roi = self.peakPaths[i].roi;
-                        self.handleMouseOverPeak(path);
-                        break;
-                      }
+                /* Highlight peaks where tap position falls */
+                if (self.peakPaths) {
+                  const xen = self.xScale.invert(x);
+                  for (i = self.peakPaths.length-1; i >= 0; i--) {
+                    if (xen >= self.peakPaths[i].lowerEnergy && xen <= self.peakPaths[i].upperEnergy) {
+                      const path = self.peakPaths[i].path;
+                      const paths = self.peakPaths[i].paths;
+                      const roi = self.peakPaths[i].roi;
+                      self.handleMouseOverPeak(path);
+                      break;
                     }
                   }
+                }
 
-                  self.WtEmit(self.chart.id, {name: 'leftclicked'}, energy, count, pageX, pageY);
+                self.WtEmit(self.chart.id, {name: 'leftclicked'}, energy, count, pageX, pageY);
                   
                   /* Clear the single-tap wait, the signal has already been emitted */
-                  self.tapWait = null;
-                }     
-              })(d3.event), doubleTapTimeInterval);
+                self.tapWait = null;     
+              }, doubleTapTimeInterval);
         }//if( we have last tap event ) / else
 
         /* Set last tap event to current one */
@@ -6525,7 +6534,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
 
       function onRightClickOnPeak() {
-        console.log("Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
+        console.log("Should (but not hooked up) Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
       }
 
       var peakind = (num-1) % roi.peaks.length;
@@ -6563,7 +6572,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       if( isOutline ){
         path.on("mouseover", function(){ self.handleMouseOverPeak(this); } )
             .on("mousemove", self.handleMouseMovePeak())
-            .on("touchend", function(){ self.handleMouseOverPeak(this);} )
+            .on("touchstart", function(){ /*self.handleMouseOverPeak(this); */console.log('touchstart should handleMouseOverPeak'); } )
+            .on("touchend", function(){ 
+              // TODO: when you tap on a peak, handleVisTouchStart() will get called, but not handleVisTouchEnd().
+              //       Should figure out why, so we can get rid of this here, and highlight the peak approriately on touch
+              if( self.touchHold ){
+                clearTimeout( self.touchHold );
+                self.touchHold = null;
+              }
+              self.handleMouseOverPeak(this);
+            } )
             .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, peak, pathsAndRange.paths); } );
       }
       
@@ -7598,17 +7616,24 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
   /* Christian: Just catching this weird error whenever user initially clicks the checkbox for one of the feature markers.
                 I'm guessing it is thrown because the mouse does not exist for the vis element, so we don't update the feature markers.
    */
+  
+  /* Positional variables (for mouse and touch) */
+  var m, t;
   try {
-    d3.mouse(self.vis[0][0])
-  } catch (error) {
-    console.log( "updateFeatureMarkers: source event is null, returning" );
-    return;
+    m = d3.mouse(self.vis[0][0])
+  } catch (e) {
   }
 
-  /* Positional variables (for mouse and touch) */
-  var m = d3.mouse(self.vis[0][0]),
-      t = d3.touches(self.vis[0][0]);
+  try{
+    t = d3.touches(self.vis[0][0]);
+  }catch (e) {
+  }
 
+  if( !m && (!t || !t.length) ){
+    //console.log( "updateFeatureMarkers: no mouse or touches, returning" );
+    return;
+  }
+  
   /* Adjust the mouse position accordingly to touch (because some of these functions use mouse position in touch devices) */
   if (t.length > 0)
     m = t[0];
