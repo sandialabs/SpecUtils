@@ -1054,15 +1054,14 @@ namespace SpecUtils
     return split_to_floats( input.c_str(), input.length(), results );
   }
   
-  bool split_to_floats( const char *input, const size_t length,
-                       vector<float> &results )
+  bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
     results.clear();
     
     if( !input || !length )
       return true;
     
-    results.reserve( length/2 );
+    results.reserve( std::min( length/2, size_t(65536) ) );
     
     namespace qi = boost::spirit::qi;
     
@@ -1227,7 +1226,7 @@ namespace SpecUtils
     if( input_size )
     {
       contents.clear();
-      contents.reserve( input_size / 2 );
+      contents.reserve( std::min( input_size/2, size_t(65536) ) );
     }//if( input_size )
     
     if( !input || !(*input) )

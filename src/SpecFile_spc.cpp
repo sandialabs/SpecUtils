@@ -60,7 +60,7 @@ namespace
   {
     "Comment", "AcquisitionMode", "CrystalType", "Confidence",
     "MinDoseRate", "MaxDoseRate", "AvgDoseRate", "MinNeutrons", "MaxNeutrons",
-    "DetectorLength", "DetectorDiameter", "BuiltInSrcType", "BuiltInSrcActivity",
+    "BuiltInSrcType", "BuiltInSrcActivity",
     "HousingType", "GMType", "He3Pressure", "He3Length", "He3Diameter",
     "ModMaterial", "ModVolume", "ModThickness", "LastSourceStabTime",
     "LastSourceStabFG", "LastCalibTime", "LastCalibSource", "LastCalibFG",
@@ -205,7 +205,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
   //There are quite a number of fields that Measurement or SpecFile class
   //  does not yet implement, so for now we will just put them into the remarks
   
-  string detector_type = "";
+  string detector_type, det_length, det_diameter, gamma_det;
   
   try
   {
@@ -302,27 +302,63 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             remarks_.emplace_back( std::move(msg) );
 #endif
         }
+        
+        if( istarts_with( line, "GammaDetector" ) && (info_pos != string::npos) )
+          gamma_det = line.substr(info_pos);
       }else if( istarts_with( line, "SpectrumName" ) )
       {//SpectrumName        : ident903558-21_2012-07-26_07-10-55-003.spc
         if( info_pos != string::npos )
         {
-          if( SpecUtils::icontains( line.substr(info_pos), "ident") )
+          const string info = line.substr(info_pos);
+          if( SpecUtils::icontains( info, "ident") || SpecUtils::icontains(info, "Field") )
           {
-            detector_type_ = DetectorType::IdentiFinderNG;
-            //TODO: IdentiFinderLaBr3
-            manufacturer_ = "FLIR";
-            instrument_model_ = "identiFINDER";
+            if( SpecUtils::icontains( info, "R500") )
+            {
+              if( icontains(info,"LG") || icontains(info,"LaBr") )
+                detector_type_ = DetectorType::IdentiFinderR500LaBr;
+              else if( icontains(info,"ULCS") || icontains(info,"NaI") )
+                detector_type_ = DetectorType::IdentiFinderR500NaI;
+            }else
+            {
+              if( SpecUtils::icontains( info, "LaBr") )  //ex. "Identifinder LGH (LaBr)", "Ultra LGH LaBr"
+              {
+                if( instrument_model_.empty() )
+                  instrument_model_ = "IdentiFINDER-LaBr3";
+                detector_type_ = DetectorType::IdentiFinderLaBr3;
+              }else if( SpecUtils::icontains( info, "400 T1") || SpecUtils::icontains( info, "400 T2") )
+              {
+                if( instrument_model_.empty() )
+                  instrument_model_ = "identiFINDER-T";
+                detector_type_ = DetectorType::IdentiFinderTungsten;
+              }else
+              {
+                if( instrument_model_.empty() )
+                  instrument_model_ = "identiFINDER";
+                detector_type_ = DetectorType::IdentiFinderUnknown;
+              }
+            }//if( R500 ) / else
           }else if( SpecUtils::icontains(line, "Raider") )
           {
             detector_type_ = DetectorType::MicroRaider;
-            instrument_model_ = "MicroRaider";
-            manufacturer_ = "FLIR";
+            if( instrument_model_.empty() )
+              instrument_model_ = "MicroRaider";
+            if( manufacturer_.empty() )
+              manufacturer_ = "FLIR";
           }
         }//if( info_pos != string::npos )
       }else if( istarts_with( line, "DetectorType" ) )
       {//DetectorType        : NaI
-        if( info_pos != string::npos )
+        // Note that at least some LaBr identiFINDERs appear to say NaI
+        if( info_pos != string::npos  && (detector_type_ != DetectorType::IdentiFinderUnknown) )
           detector_type = line.substr(info_pos);
+      }else if( istarts_with( line, "DetectorLength" ) )
+      {
+        if( info_pos != string::npos )
+          det_length = line.substr(info_pos);
+      }else if( istarts_with( line, "DetectorDiameter" ) )
+      {
+        if( info_pos != string::npos )
+          det_diameter = line.substr(info_pos);
       }
       //"GammaDetector" now included in ns_iaea_comment_labels[].
       //else if( istarts_with( line, "GammaDetector" ) )
@@ -340,10 +376,8 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       //}
       else if( istarts_with( line, "XUnit" ) )
       {//XUnit        : keV
-        if( info_pos != string::npos
-           && !istarts_with( line.substr(info_pos), "keV") )
-          cerr << "SpecFile::load_from_iaea_spc(istream &)\n\t" << "Unexpected x-unit: "
-          << line.substr(info_pos) << endl;
+        if( info_pos != string::npos && !istarts_with( line.substr(info_pos), "keV") )
+          meas->parse_warnings_.push_back( "Unexpected x-unit: " +  line.substr(info_pos) );
       }else if( istarts_with( line, "YUnit" ) ) //        :
       {
       }else if( istarts_with( line, "Length" ) )
@@ -710,6 +744,48 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
       }//
     }//if( we have energy calibration )
+    
+    
+    //identiFINDER 2 NGH spectrum files will have spectrum number as their UUID,
+    //  so to create a bit more unique UUID, lets add in the serial number to the
+    //  UUID, like in the other identiFINDER formats.
+    if(!uuid_.empty() && uuid_.size() < 5 && !instrument_id_.empty())
+      uuid_ = instrument_id_ + "/" + uuid_;
+    
+    if( !meas->gamma_counts_ || meas->gamma_counts_->size() < 9 )
+    {
+      reset();
+      //    cerr << "SpecFile::load_from_iaea_spc(...): did not read any spectrum info"
+      //         << endl;
+      return false;
+    }//if( meas->gamma_counts_->empty() )
+    
+    if( detector_type_ == DetectorType::IdentiFinderUnknown )
+    {
+      if( (icontains(det_length, "51") && icontains(det_diameter, "35"))
+         || (icontains(gamma_det, "51") && icontains(gamma_det, "35")) )
+      {
+        detector_type_ = DetectorType::IdentiFinderNG;
+      }else if( (icontains(det_length, "38") && icontains(det_diameter, "30"))
+               || (icontains(gamma_det, "38") && icontains(gamma_det, "30")) )
+      {
+        detector_type_ = DetectorType::IdentiFinder;
+      }else if( icontains(det_length, "30") && icontains(det_diameter, "30") )
+      {
+        // I havent seen anything that makes it here
+        detector_type_ = DetectorType::IdentiFinderLaBr3;
+      }else if( icontains(det_length, "21") && icontains(det_diameter, "23") )
+      {
+        // Tungsten shielded; havent seen anything that makes it here
+        detector_type_ = DetectorType::IdentiFinderTungsten;
+      }
+    }//if( an identifinder, but we dont know which type
+    
+    measurements_.push_back( meas );
+    
+    detectors_analysis_ = analysis;
+    
+    cleanup_after_load();
   }catch( std::exception & )
   {
     reset();
@@ -717,50 +793,6 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
     input.seekg( orig_pos, ios::beg );
     return false;
   }
-  
-  
-  //identiFINDER 2 NGH spectrum files will have spectrum number as their UUID,
-  //  so to create a bit more unique UUID, lets add in the serial number to the
-  //  UUID, like in the other identiFINDER formats.
-  if(!uuid_.empty() && uuid_.size() < 5 && !instrument_id_.empty())
-    uuid_ = instrument_id_ + "/" + uuid_;
-  
-  if( !meas->gamma_counts_ || meas->gamma_counts_->size() < 9 )
-  {
-    reset();
-    //    cerr << "SpecFile::load_from_iaea_spc(...): did not read any spectrum info"
-    //         << endl;
-    return false;
-  }//if( meas->gamma_counts_->empty() )
-  
-  measurements_.push_back( meas );
-  
-  detectors_analysis_ = analysis;
-  
-  //A temporary message untile I debug detector_type_ a little more
-  if( icontains(instrument_model_,"identiFINDER")
-     && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-    detector_type_ = DetectorType::IdentiFinderNG;
-  else if( icontains(detector_type,"La") && !detector_type.empty())
-  {
-    cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
-    //XXX - this doesnt actually catch all LaBr3 detectors
-    detector_type_ = DetectorType::IdentiFinderLaBr3;
-  }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
-  {
-    cout << "Untested IdentiFinderLaBr3 association!" << endl;
-    detector_type_ = DetectorType::IdentiFinderLaBr3;
-  }else if( icontains(instrument_model_,"identiFINDER") )
-  {
-    detector_type_ = DetectorType::IdentiFinder;
-  }
-  
-  //  if( detector_type_ == Unknown )
-  //  {
-  //    cerr << "I couldnt find detector type for ASCII SPC file" << endl;
-  //  }
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_iaea_spc( std::istream &input )
@@ -1036,32 +1068,6 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
      $FLIR_REACHBACK:
      
      */
-    
-    //Still need to fix up DetectorType, and deal with instrument model coorectly
-    /*
-     }else if( istarts_with( line, "DetectorType" ) )
-     {//DetectorType        : NaI
-     if( info_pos != string::npos )
-     detector_type = line.substr(info_pos);
-     }
-     //A temporary message untile I debug detector_type_ a little more
-     if( icontains(instrument_model_,"identiFINDER")
-     && ( (icontains(instrument_model_,"2") && !icontains(instrument_model_,"LG")) || icontains(instrument_model_,"NG")))
-     detector_type_ = DetectorType::IdentiFinderNG;
-     else if( icontains(detector_type,"La") && detector_type.size() )
-     {
-     cerr << "Has " << detector_type << " is this a LaBr3? Cause I'm assuming it is" << endl;
-     //XXX - this doesnt actually catch all LaBr3 detectors
-     detector_type_ = IdentiFinderLaBr3;
-     }else if( icontains(instrument_model_,"identiFINDER") && icontains(instrument_model_,"LG") )
-     {
-     cout << "Untested IdentiFinderLaBr3 association!" << endl;
-     detector_type_ = IdentiFinderLaBr3;
-     }else if( icontains(instrument_model_,"identiFINDER") )
-     {
-     detector_type_ = kIdentiFinderDetector;
-     }
-     */
   }catch( std::exception & )
   {
     return false;
@@ -1268,13 +1274,22 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   const char *defaultname = 0;
   switch( detector_type_ )
   {
-    case DetectorType::Exploranium:    case DetectorType::IdentiFinder:
-    case DetectorType::IdentiFinderNG: case DetectorType::IdentiFinderLaBr3:
-    case DetectorType::SAIC8:          case DetectorType::Falcon5000:
-    case DetectorType::Unknown:        case DetectorType::MicroRaider:
-    case DetectorType::Rsi701: case DetectorType::Rsi705:
-    case DetectorType::AvidRsi: case DetectorType::Sam940LaBr3:
-    case DetectorType::Sam940: case DetectorType::OrtecRadEagleNai:
+    case DetectorType::Exploranium:
+    case DetectorType::IdentiFinder:
+    case DetectorType::IdentiFinderNG:
+    case DetectorType::IdentiFinderLaBr3:
+    case DetectorType::IdentiFinderTungsten:
+    case DetectorType::IdentiFinderUnknown:
+    case DetectorType::Interceptor:
+    case DetectorType::SAIC8:
+    case DetectorType::Falcon5000:
+    case DetectorType::MicroRaider:
+    case DetectorType::Rsi701:
+    case DetectorType::Rsi705:
+    case DetectorType::AvidRsi:
+    case DetectorType::Sam940LaBr3:
+    case DetectorType::Sam940:
+    case DetectorType::OrtecRadEagleNai:
     case DetectorType::OrtecRadEagleCeBr2Inch:
     case DetectorType::OrtecRadEagleCeBr3Inch:
     case DetectorType::OrtecRadEagleLaBr:
@@ -1282,6 +1297,15 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::Srpm210:
     case DetectorType::RadHunterNaI:
     case DetectorType::RadHunterLaBr3:
+    case DetectorType::RIIDEyeNaI:
+    case DetectorType::RIIDEyeLaBr:
+    case DetectorType::RadSeekerNaI:
+    case DetectorType::RadSeekerLaBr:
+    case DetectorType::IdentiFinderR500NaI:
+    case DetectorType::IdentiFinderR500LaBr:
+    case DetectorType::VerifinderNaI:
+    case DetectorType::VerifinderLaBr:
+    case DetectorType::Unknown:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
       
@@ -1903,6 +1927,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     if( (32u*static_cast<uint32_t>(wSPCRCN)) < n_channel )
       throw runtime_error( "Not enough records for claimed number of channels" );
     
+    if( n_channel < 8 )  // A minimum of eight channels is arbitrarily chosen
+      throw runtime_error( "Invalid number of channels" );
+    
     read_binary_data( input, wABSTCHN ); // Physical start channel for data
     read_binary_data( input, sACQTIM ); // Date and time acquisition start in DECDAY format
     read_binary_data( input, dACQTI8 ); // Date and time as double precision DECDAY
@@ -2082,7 +2109,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     double sum_gamma = 0.0;
     double total_neutrons = 0.0;
     float total_neutron_count_time = 0.0;
+    vector<string> parse_warnings;
     std::shared_ptr<DetectorAnalysis> analysis;
+    
     auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
     
@@ -2194,7 +2223,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       if( recordID != 111 )
       {
         gpsPointer = firstReportPtr = 0;
-        cerr << "Binary SPC file has invalid expansion header" << endl;
+        parse_warnings.push_back( "Binary SPC file has invalid expansion header" );
       }//if( recordID != 111 )
       
       if( gpsPointer )
@@ -2218,7 +2247,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         //        {
         //          cerr << "Failed to be able to read GPS REcord" << endl;
         //        }
-        cerr << "Binary SPC file has not yet implemented GPS coordinates decoding" << endl;
+        parse_warnings.push_back( "Binary SPC file does not have GPS coordinates iplemented" );
       }
       
       
@@ -2627,6 +2656,8 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       input.read( (char *) &(counts_ref[0]), 4*n_channel );
     }//if( file is integer channel data ) / else float data
     
+    assert( n_channel > 0 );
+    
     counts_ref[0] = 0;
     counts_ref[n_channel-1] = 0;
     
@@ -2639,7 +2670,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     detector_type_      = type_detector;
     detectors_analysis_ = analysis;
     instrument_id_      = instrument_id;
-    
+                                 
     std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
     
     if( sLVTMDT < 0.0 || sRLTMDT < 0.0 )
@@ -2649,8 +2680,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     meas->real_time_ = sRLTMDT;
     meas->start_time_ = meas_time;
     meas->gamma_counts_ = channel_data;
+    meas->parse_warnings_ = parse_warnings;
     meas->gamma_count_sum_ = sum_gamma;
-    
+                                 
     assert( channel_data );
     if( channel_data->size() > 1 )
     {

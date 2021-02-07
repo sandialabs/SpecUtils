@@ -1036,6 +1036,7 @@ void print_summary( const  SpecUtils::SpecFile &info, std::ostream &out )
     out << "\tmanufacturer: " << info.manufacturer() << "\n";
   if( info.instrument_model().size() )
     out << "\tinstrument_model: " << info.instrument_model() << "\n";
+  out << "\tIdentified Model: " << SpecUtils::detectorTypeToString( info.detector_type() ) << "\n";
   if( info.instrument_id().size() )
     out << "\tinstrument_id (serial #): " << info.instrument_id() << "\n";
   if( info.uuid().size() )

@@ -40,14 +40,16 @@
 Shortcommings that wcjohns should be addressed
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
- - Neutron meausruemtns should have their own live and real time
+ - Neutron measurements should have their own live and real time
  - Neutron counts are typically merged into a gamma detectors Measurement if a
    reasonable pairing can be made. When and if this is done needs to be clearly
    specified, and either stopped of facilities added to keep neutron det. info.
    (should probably instead make own neutron info object (or more generally gross count) that can be
    associated with a Measurement, or maybe sample number, maybe multiple neutron to a Measurement)
+    - This should be stopped.  It also solves the issue with neutron and gamma having own real/live
+      times, as if they do differ, they can just be put in different Measurements
  - Should add a DetectorInfo object that Measurement objects point to and share.
-   - Should add things like dimention and RadDetectorKindCode to this object,
+   - Should add things like dimension and RadDetectorKindCode to this object,
      as well as characteristics (as defined in N42-2012, but in a few other file
      formats)
    - Should probably get rid of detector number, and just keep name
@@ -242,12 +244,19 @@ enum class DetectorType : int
    */
   IdentiFinder,
   
-  /** Used for both the NG and NGH since same crystal size (NGH has neutron
+  /** Used for the NG and NGH, and R400 models since same crystal size (NGH has neutron
       tube)
   */
   IdentiFinderNG,
   
   IdentiFinderLaBr3,
+  
+  IdentiFinderTungsten,
+  
+  IdentiFinderR500NaI,
+  IdentiFinderR500LaBr,
+  
+  IdentiFinderUnknown,
   
   /** The DetectiveUnknown is a default for when the type of detective cant be
       determined, not an actual detector type.
@@ -272,6 +281,7 @@ enum class DetectorType : int
   Falcon5000,
   MicroDetective,
   MicroRaider,
+  Interceptor,
   RadHunterNaI,
   RadHunterLaBr3,
   Rsi701,
@@ -282,15 +292,23 @@ enum class DetectorType : int
   OrtecRadEagleCeBr2Inch,
   OrtecRadEagleCeBr3Inch,
   OrtecRadEagleLaBr,
-  /** The LaBr3 may not always be detector, and then it will be assigned
-      kSame940
-   */
+  /** The LaBr3 may not always be detector, and then it will be assigned Sam940 */
   Sam940LaBr3,
   Sam940,
   Sam945,
   Srpm210,
-  //RadSeekerLaBr1.5x1.5
-  //RadSeekerNaI2x2 (although should check for this, see SpecFile::set_n42_2006_instrument_info_node_info
+  
+  /** Also covers RIIDEye X-G (or -GN) with 2x2 NaI */
+  RIIDEyeNaI,
+  /** Also covers RIIDEye X-H (or -HN) with 1.5x1.5 LaBr */
+  RIIDEyeLaBr,
+  
+  RadSeekerNaI,
+  RadSeekerLaBr,
+  
+  /** Symetrica Verifinder. Only tested from N42-2012 spectrum files, that all seem report model number "SN20", or "SN23-N" */
+  VerifinderNaI,
+  VerifinderLaBr,
   
   Unknown
 };//enum DetectorType
@@ -752,6 +770,47 @@ public:
   float gamma_energy_max() const;
   
   
+  /** Derived data is currently minimally supported for N42-2012 input spectrum files.
+   
+   Currently, a number of features are not supported, including:
+   - The <spectrum> elements radRawSpectrumReferences attribute is ignored; e.g., there is no linkage from the derived spectrum back to the original raw spectrum.
+   - The <AnalysisResults> elements derivedDataReferences attribute is ignored; e.g., there is no linkage from the analysis result back to the derived data used to get it.
+   - The de facto standard seems to be to specify information about the derived spectra in the "id" elements; this isnt fully decoded for all detectors I've seen derived data in
+   - The 'title_' field is set to the concatenated "id" tags of the <DerivedData> and <Spectrum> elements
+   
+   \sa properties_flags_
+   \sa MeasurementProperties::
+   */
+  enum class DerivedDataProperties : uint32_t
+  {
+    /** Bit always set if this #Measurement is "derived", according to the N42-2012 standard. */
+    IsDerived            = (1 << 0),
+    
+    /** Bit set if it was detected this #Measurement is a sum over the foreground/occupied/relevant-time-period.
+     May not always be reliably detected (i.e., this bit being absent does not mean this isnt a sum spectrum).
+     */
+    ItemOfInterestSum    = (1 << 1),
+    
+    /** Set if file indicated this #Measurement was used in an analysis result present in the file.
+     May not always be reliably detected (i.e., even if this bit is not set, this spectrum still may have been used for the analysis).
+     */
+    UsedForAnalysis      = (1 << 2),
+    
+    /** Bit indicating the spectrum were processed, for example, energy re-binned to a sqrt(energy) scale.
+     May not always be reliably detected (i.e., even if this bit is not set, the spectrum still may have been processed).
+     */
+    ProcessedFurther     = (1 << 3),
+    
+    /** Bit indicating it was detected the spectrum is background-subtracted.
+     May not always be reliably detected (i.e., even if this bit is absent, the spectrum/gross-count may still be background subtracted).
+     */
+    BackgroundSubtracted = (1 << 4)
+  };//enum class DerivedDataProperties
+  
+  uint32_t derived_data_properties() const;
+  
+  
+  
   //Functions to write this Measurement object out to external formats
   
   //write_2006_N42_xml(...): similar schema as Cambio uses, but with some added
@@ -842,6 +901,7 @@ public:
    from a file.
    */
   void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal );
+  
   
 
 #if( PERFORM_DEVELOPER_CHECKS )
@@ -959,7 +1019,10 @@ protected:
   boost::posix_time::ptime position_time_;
   
   std::string title_;  //Actually used for a number of file formats
-
+  
+  /** Bits set according to #DerivedDataProperties.  Will be zero if not derived data. */
+  uint32_t derived_data_properties_;
+  
   friend class ::SpecMeas;
   friend class SpecFile;
   friend struct N42DecodeHelper2006;
@@ -1162,6 +1225,15 @@ public:
   //passthrough(): returns true if it looked like this data was from a portal
   //  or search mode data.  Not 100% right always, but pretty close.
   bool passthrough() const;
+  
+  /** Returns true if any #Measurement is a derived data (e.g., originated from a N42-2012 <DerivedData> section).  Derived data is
+   usually a spectrum or gross-count record that is not raw from the detector, but has been re-processed, typically for use in an analysis
+   algorithm.
+   */
+  bool contains_derived_data() const;
+  
+  /** Returns true if and #Measurement is not a derived data. */
+  bool contains_non_derived_data() const;
   
   //simple setters (no thread locks are aquired)
   void set_filename( const std::string &n );
@@ -1413,6 +1485,19 @@ public:
   //Returns return number of removed spectra.
   //Throws exception if you pass in an invalid variant.
   size_t keep_energy_cal_variant( const std::string variant );
+  
+  
+  /** Enum to indicate "derived data" variant to keep. */
+  enum class DerivedVariantToKeep{ NonDerived, Derived };
+  
+  /** When a spectrum file contains both "derived" and non-derived data, we may want to use only one of these variants of the data;
+   this functions lets you discard the variant you arent interested in.
+   
+   \sa Measurement::DerivedDataProperties
+   \sa SpecFile::contains_derived_data
+   \sa SpecFile::contains_non_derived_data
+   */
+  size_t keep_derived_data_variant( const DerivedVariantToKeep tokeep );
   
   
   //rremove_neutron_measurements() only removes neutron measurements that do not
@@ -2212,7 +2297,7 @@ protected:
   //  These flags are calculated and set in the cleanup_after_load() function.
   //  This value is also not included in the computation of the hash of this
   //  object in generate_psuedo_uuid().
-  enum MeasurementPorperties
+  enum MeasurementProperties
   {
     //kPassthroughOrSearchMode: gretaer than 5 samples, with average real time
     //  less than 2.5 seconds.  May be improved in the future to ensure
@@ -2245,8 +2330,20 @@ protected:
     //  May be marked when cleanup_after_load() is called with the
     //  DontChangeOrReorderSamples flag.  If not set, then each measurement for
     //  a sample number has a the same start time.
-    kNotUniqueSampleDetectorNumbers = (1 << 6)
-  };//enum MeasurementPorperties
+    kNotUniqueSampleDetectorNumbers = (1 << 6),
+    
+    /** Set if the #SpecFile contains any #Measurement that is not "derived" (e.g., a normal spectra; spectra are normally not derived).
+     \sa Measurement::DerivedDataProperties
+     \sa Measurement::derived_data_properties_
+     */
+    kNonDerivedDataMeasurements = (1 << 7),
+    
+    /** Set if the #SpecFile contains any #Measurement that is "derived" (e.g., from a N42-2012 <DerivedData> elemet).
+     \sa Measurement::DerivedDataProperties
+     \sa Measurement::derived_data_properties_
+     */
+    kDerivedDataMeasurements  = (1 << 8),
+  };//enum MeasurementProperties
   
   uint32_t properties_flags_;
   

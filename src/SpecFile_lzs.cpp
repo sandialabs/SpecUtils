@@ -262,6 +262,8 @@ bool SpecFile::load_from_lzs( std::istream &input )
     manufacturer_ = "labZY";
     
     measurements_.push_back( meas );
+    
+    cleanup_after_load();
   }catch( std::exception & )
   {
     reset();
@@ -269,8 +271,6 @@ bool SpecFile::load_from_lzs( std::istream &input )
     input.seekg( start_pos, ios::beg );
     return false;
   }//try / catch
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_lzs( std::istream &input )

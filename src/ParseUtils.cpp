@@ -121,7 +121,17 @@ std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxl
 void expand_counted_zeros( const vector<float> &data, vector<float> &return_answer )
 {
   vector<float> answer;
-  answer.reserve( 1024 );
+  const size_t ninput = data.size();
+  
+  // Reserve up to the next power of two, since spectra are almost always a power of two
+  //  and this will limit us down to one memory allocation (hopefully)
+  //nreserve = pow(2, ceil(log2(nreserve)));
+  size_t nreserve = 1;
+  while( (nreserve < ninput) && (nreserve < 65536) )
+    nreserve *= 2;
+  
+  answer.reserve( std::max( nreserve, ninput ) );
+  
   vector<float>::const_iterator iter;
   for( iter = data.begin(); iter != data.end(); iter++)
   {

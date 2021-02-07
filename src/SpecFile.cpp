@@ -220,8 +220,8 @@ namespace
     }//for( size_t i = 0; i < datas.size(); ++i )
   }//void sum_with_rebin(...)
   
-//Analogous to compare_by_sample_det_time; compares by
-// sample_number, and then detector_number_, but NOT by start_time_
+//Analogous to compare_by_derived_sample_det_time; compares by
+// is_derived, sample_number, and then detector_number_, but NOT by start_time_
 struct SpecFileLessThan
 {
   const int m_sample_number, m_detector_number;
@@ -243,14 +243,19 @@ struct SpecFileLessThan
   }//operator()
 };//struct SpecFileLessThan
 
-//compare_by_sample_det_time: compares by sample_number_, and then
+//compare_by_derived_sample_det_time: compares by is_derived, sample_number_, and then
 //  detector_number_, then by start_time_, then source_type_
-bool compare_by_sample_det_time( const std::shared_ptr<const SpecUtils::Measurement> &lhs,
+bool compare_by_derived_sample_det_time( const std::shared_ptr<const SpecUtils::Measurement> &lhs,
                            const std::shared_ptr<const SpecUtils::Measurement> &rhs )
 {
   if( !lhs || !rhs )
     return false;
 
+  const bool lhsNotDerived = !lhs->derived_data_properties();
+  const bool rhsNotDerived = !rhs->derived_data_properties();
+  if( lhsNotDerived != rhsNotDerived )
+    return (lhsNotDerived > rhsNotDerived);
+  
   if( lhs->sample_number() != rhs->sample_number() )
     return (lhs->sample_number() < rhs->sample_number());
 
@@ -261,7 +266,7 @@ bool compare_by_sample_det_time( const std::shared_ptr<const SpecUtils::Measurem
     return (lhs->start_time() < rhs->start_time());
   
   return (lhs->source_type() < rhs->source_type());
-}//compare_by_sample_det_time(...)
+}//compare_by_derived_sample_det_time(...)
 
 }//anaomous namespace
 
@@ -913,6 +918,12 @@ float Measurement::gamma_energy_max() const
 }
 
 
+uint32_t Measurement::derived_data_properties() const
+{
+  return derived_data_properties_;
+}
+
+
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {
@@ -1162,6 +1173,10 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_IdentiFinderDetectorStr      = "IdentiFINDER";
   static const string sm_IdentiFinderNGDetectorStr    = "IdentiFINDER-NG";
   static const string sm_IdentiFinderLaBr3DetectorStr = "IdentiFINDER-LaBr3";
+  static const string sm_IdentiFinderTungstenStr      = "IdentiFINDER-T";
+  static const string sm_IdentiFinderR500NaIStr       = "IdentiFINDER-R500-NaI";
+  static const string sm_IdentiFinderR500LaBrStr      = "IdentiFINDER-R500-LaBr3";
+  static const string sm_IdentiFinderUnknownStr       = "IdentiFINDER-Unknown";
   static const string sm_DetectiveDetectorStr         = "Detective";
   static const string sm_DetectiveExDetectorStr       = "Detective-EX";
   static const string sm_DetectiveEx100DetectorStr    = "Detective-EX100";
@@ -1172,10 +1187,13 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_UnknownDetectorStr           = "Unknown";
   static const string sm_MicroDetectiveDetectorStr    = "MicroDetective";
   static const string sm_MicroRaiderDetectorStr       = "MicroRaider";
+  static const string sm_InterceptorStr               = "Interceptor";
   static const string sm_Sam940DetectorStr            = "SAM940";
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
   static const string sm_Sam945DetectorStr            = "SAM945";
   static const string sm_Srpm210DetectorStr           = "SRPM-210";
+  static const string sm_RIIDEyeNaIStr                = "RIIDEye-NaI";
+  static const string sm_RIIDEyeLaBrStr               = "RIIDEye-LaBr3";
   static const string sm_Rsi701DetectorStr            = "RS-701";
   static const string sm_Rsi705DetectorStr            = "RS-705";
   static const string sm_RadHunterNaIDetectorStr      = "RadHunterNaI";
@@ -1185,7 +1203,11 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_RadEagleCeBr2InDetectorStr   = "RadEagle CeBr3 2x1";
   static const string sm_RadEagleCeBr3InDetectorStr   = "RadEagle CeBr3 3x0.8";
   static const string sm_RadEagleLaBrDetectorStr      = "RadEagle LaBr3 2x1";
-  
+  static const string sm_RadSeekerNaIStr              = "RadSeeker-CS";
+  static const string sm_RadSeekerLaBrStr             = "RadSeeker-CL";
+  static const string sm_VerifinderNaI                = "Verifinder-NaI";
+  static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
+    
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
 //  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger
@@ -1202,6 +1224,14 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_IdentiFinderDetectorStr;
     case DetectorType::IdentiFinderLaBr3:
       return sm_IdentiFinderLaBr3DetectorStr;
+    case DetectorType::IdentiFinderTungsten:
+      return sm_IdentiFinderTungstenStr;
+    case DetectorType::IdentiFinderR500NaI:
+      return sm_IdentiFinderR500NaIStr;
+    case DetectorType::IdentiFinderR500LaBr:
+      return sm_IdentiFinderR500LaBrStr;
+    case DetectorType::IdentiFinderUnknown:
+      return sm_IdentiFinderUnknownStr;
     case DetectorType::DetectiveUnknown:
       return sm_DetectiveDetectorStr;
     case DetectorType::DetectiveEx:
@@ -1222,12 +1252,18 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_MicroDetectiveDetectorStr;
     case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
+    case DetectorType::Interceptor:
+      return sm_InterceptorStr;
     case DetectorType::Sam940:
       return sm_Sam940DetectorStr;
     case DetectorType::Sam945:
       return sm_Sam945DetectorStr;
     case DetectorType::Srpm210:
       return sm_Srpm210DetectorStr;
+    case DetectorType::RIIDEyeNaI:
+      return sm_RIIDEyeNaIStr;
+    case DetectorType::RIIDEyeLaBr:
+      return sm_RIIDEyeLaBrStr;
     case DetectorType::Sam940LaBr3:
       return sm_Sam940Labr3DetectorStr;
     case DetectorType::Rsi701:
@@ -1248,6 +1284,14 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_RadEagleCeBr3InDetectorStr;
     case DetectorType::OrtecRadEagleLaBr:
       return sm_RadEagleLaBrDetectorStr;
+    case DetectorType::RadSeekerNaI:
+      return sm_RadSeekerNaIStr;
+    case DetectorType::RadSeekerLaBr:
+      return sm_RadSeekerLaBrStr;
+    case DetectorType::VerifinderNaI:
+      return sm_VerifinderNaI;
+    case DetectorType::VerifinderLaBr:
+      return sm_VerifinderLaBr;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -1293,9 +1337,9 @@ void Measurement::reset()
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
   speed_ = 0.0f;
-  detector_name_ = "";
+  detector_name_.clear();
   detector_number_ = -1;
-  detector_description_ = "";
+  detector_description_.clear();
   quality_status_ = QualityStatus::Missing;
 
   source_type_       = SourceType::Unknown;
@@ -1313,6 +1357,10 @@ void Measurement::reset()
   energy_calibration_ = std::make_shared<EnergyCalibration>();
   gamma_counts_ = std::make_shared<vector<float> >();  // \TODO: I should test not bothering to place an empty vector in this pointer
   neutron_counts_.clear();
+  
+  title_.clear();
+  
+  derived_data_properties_ = 0;
 }//void reset()
 
   
@@ -1850,7 +1898,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   meas_pos = lower_bound( measurements_.begin(), measurements_.end(),
-                          meas, &compare_by_sample_det_time );
+                          meas, &compare_by_derived_sample_det_time );
  
   if( (meas_pos!=measurements_.end()) && ((*meas_pos)==meas) )
     throw runtime_error( "SpecFile::add_measurement: duplicate meas" );
@@ -1931,7 +1979,7 @@ void SpecFile::add_measurement( std::shared_ptr<Measurement> meas,
   sample_numbers_.insert( meas->sample_number_ );
   
   meas_pos = upper_bound( measurements_.begin(), measurements_.end(),
-                          meas, &compare_by_sample_det_time );
+                          meas, &compare_by_derived_sample_det_time );
   
   measurements_.insert( meas_pos, meas );
   
@@ -2017,7 +2065,7 @@ void SpecFile::remove_measurements( const vector<std::shared_ptr<const Measureme
    if( measurements_.size() > 100 )
    {
    pos = std::lower_bound( measurements_.begin(), measurements_.end(),
-   m, &compare_by_sample_det_time );
+   m, &compare_by_derived_sample_det_time );
    }else
    {
    pos = std::find( measurements_.begin(), measurements_.end(), m );
@@ -2476,6 +2524,9 @@ void Measurement::set_energy_calibration( const std::shared_ptr<const EnergyCali
 }//void set_energy_calibration(...)
 
 
+
+
+
 void Measurement::rebin( const std::shared_ptr<const EnergyCalibration> &cal )
 {
   assert( energy_calibration_ );
@@ -2820,8 +2871,16 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
      && ("LaBr3, " + lhs.detector_description_) != rhs.detector_description_
      && ("unknown, " + lhs.detector_description_) != rhs.detector_description_
      )
-    throw runtime_error( "Detector description for LHS ('" + lhs.detector_description_
-                        + "') doesnt match RHS ('" + rhs.detector_description_ + "')" );
+  {
+    //static std::atomic<int> ntimesprint(0);
+    //if( ntimesprint++ < 10 )
+    //{
+      const string msg = "Detector description for LHS ('" + lhs.detector_description_
+                      + "') doesnt match RHS ('" + rhs.detector_description_ + "')";
+    //  cerr << "Warning check for detector description falure not being enforced: " << msg << endl;
+    //}
+    throw runtime_error( msg );
+  }
 
   if( lhs.quality_status_ != rhs.quality_status_ )
   {
@@ -3050,6 +3109,12 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( lhs.title_ != rhs.title_ )
     throw runtime_error( "Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
+  
+  if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
+    throw runtime_error( "Derived data flags for LHS ('"
+                        + std::to_string(lhs.derived_data_properties_)
+                        + "') doesnt match RHS ('"
+                        + std::to_string(rhs.derived_data_properties_) + "')" );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
@@ -3277,8 +3342,9 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   if( lhs.detector_type_ != rhs.detector_type_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "SpecFile: LHS detector type (%i) doesnt match RHS (%i)",
-             int(lhs.detector_type_), int(rhs.detector_type_) );
+             "SpecFile: LHS detector type (%i - %s) doesnt match RHS (%i - %s)",
+             int(lhs.detector_type_), detectorTypeToString(lhs.detector_type_).c_str(),
+             int(rhs.detector_type_), detectorTypeToString(rhs.detector_type_).c_str() );
     throw runtime_error( buffer );
   }
   
@@ -3322,7 +3388,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   if( lhs.properties_flags_ != rhs.properties_flags_ )
   {
     string failingBits;
-    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurementPorperties p, const string label ) {
+    auto testBitEqual = [&lhs,&rhs,&failingBits]( MeasurementProperties p, const string label ) {
       if( (lhs.properties_flags_ & p) != (rhs.properties_flags_ & p) ) {
         failingBits += failingBits.empty() ? "": ", ";
         failingBits += (lhs.properties_flags_ & p) ? "LHS" : "RHS";
@@ -3436,7 +3502,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     {
       snprintf( buffer, sizeof(buffer),
                "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
-               int(i), nlhsremarkss[i].c_str(), nrhsremarkss[i].c_str() );
+               int(i), lhsremark.c_str(), rhsremark.c_str() );
 #if( REQUIRE_REMARKS_COMPARE )
       throw runtime_error( buffer );
 #endif
@@ -3709,6 +3775,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
 
   title_ = rhs.title_;
 
+  derived_data_properties_ = rhs.derived_data_properties_;
+  
   return *this;
 }//const Measurement &operator=( const Measurement &rhs )
 
@@ -4059,7 +4127,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
 
   if( measurements_.size() > 500 )
   {
-    vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background;
+    vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background, sorted_derived;
 
     sorted_meas.reserve( measurements_.size() );
 
@@ -4067,6 +4135,12 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       if( !m )
         continue;
+      
+      if( m->derived_data_properties() )
+      {
+        sorted_derived.push_back( m );
+        continue;
+      }
       
       switch( m->source_type_ )
       {
@@ -4089,15 +4163,17 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     stable_sort( sorted_calibration.begin(), sorted_calibration.end(), &comp_by_start_time_source );
     stable_sort( sorted_background.begin(), sorted_background.end(), &comp_by_start_time_source );
     stable_sort( sorted_foreground.begin(), sorted_foreground.end(), &comp_by_start_time_source );
-
+    stable_sort( sorted_derived.begin(), sorted_derived.end(), &comp_by_start_time_source );
+    
     sorted_meas.insert( end(sorted_meas), sorted_calibration.begin(), sorted_calibration.end() );
     sorted_meas.insert( end(sorted_meas), sorted_background.begin(), sorted_background.end() );
     sorted_meas.insert( end(sorted_meas), sorted_foreground.begin(), sorted_foreground.end() );
+    sorted_meas.insert( end(sorted_meas), sorted_derived.begin(), sorted_derived.end() );
   
     
     int sample_num = 1;
     vector<std::shared_ptr<Measurement>>::iterator start, end, iter;
-    for( start=end=sorted_meas.begin(); start != sorted_meas.end(); start=end )
+    for( start = end = sorted_meas.begin(); start != sorted_meas.end(); start = end )
     {
       //Incremement sample numbers for each new start time.
       //  Also, some files (see refMIONLOV4PS) will mix occupied/non-occupied
@@ -4132,10 +4208,15 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
 
   }else
   {
+    using boost::posix_time::ptime;
     typedef std::map<int, vector<std::shared_ptr<Measurement> > > SampleToMeasMap;
     typedef map<boost::posix_time::ptime, SampleToMeasMap > TimeToSamplesMeasMap;
     
+    //If derived data, we'll put it after non-derived data
+    //If the time is invalid, we'll put this measurement after all the others, but before derived
+    //If its an IntrinsicActivity, we'll put it before any of the others.
     TimeToSamplesMeasMap time_meas_map;
+    SampleToMeasMap intrinsics, derived_data, invalid_times;
 
     for( const auto &m : measurements_ )
     {
@@ -4144,15 +4225,42 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
       
       const int detnum = m->detector_number_;
       
-      //If the time is invalid, we'll put this measurement after all the others.
-      //If its an IntrinsicActivity, we'll put it before any of the others.
-      if( m->source_type() == SourceType::IntrinsicActivity )
-        time_meas_map[boost::posix_time::neg_infin][detnum].push_back( m );
+      if( m->derived_data_properties() )
+        derived_data[detnum].push_back( m );
+      else if( m->source_type() == SourceType::IntrinsicActivity )
+        intrinsics[detnum].push_back( m );
       else if( m->start_time_.is_special() )
-        time_meas_map[boost::posix_time::pos_infin][detnum].push_back( m );
+        invalid_times[detnum].push_back( m );
       else
         time_meas_map[m->start_time_][detnum].push_back( m );
     }//for( auto &m : measurements_ )
+    
+    //Now for simpleness, lets toss intrinsics, derived_data, and invalid_times into time_meas_map
+    const ptime intrinsics_time = (time_meas_map.empty()
+                                     ? ptime(boost::gregorian::date(1970, 1, 1))
+                                     : time_meas_map.begin()->first)
+                                   - boost::gregorian::years(1);
+    const ptime invalids_time = (time_meas_map.empty()
+                                   ? ptime(boost::gregorian::date(1970, 1, 1))
+                                   : time_meas_map.rbegin()->first)
+                                 + boost::gregorian::years(1);
+    const ptime derived_time = (time_meas_map.empty()
+                                   ? ptime(boost::gregorian::date(1970, 1, 1))
+                                   : time_meas_map.rbegin()->first)
+                                 + boost::gregorian::years(2);
+    
+    for( const auto &sample_meass : intrinsics )
+      for( const auto &m : sample_meass.second )
+        time_meas_map[intrinsics_time][sample_meass.first].push_back( m );
+    
+    for( const auto &sample_meass : invalid_times )
+      for( const auto &m : sample_meass.second )
+        time_meas_map[invalids_time][sample_meass.first].push_back( m );
+    
+    for( const auto &sample_meass : derived_data )
+      for( const auto &m : sample_meass.second )
+        time_meas_map[derived_time][sample_meass.first].push_back( m );
+    
     
     int sample = 1;
     
@@ -4160,10 +4268,10 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       SampleToMeasMap &measmap = t.second;
       
-      //Make an attempt to sort the measurements in a reproducable, unique way
+      //Make an attempt to sort the measurements in a reproducible, unique way
       //  because measurements wont be in the same order due to the decoding
       //  being multithreaded for some of the parsers.
-//20150609: I think the multithreaded parsing has been fixed to yeild a
+//20150609: I think the multithreaded parsing has been fixed to yield a
 //  deterministic ordering always.  This only really matters for spectra where
 //  the same start time is given for all records, or no start time at all is
 //  given.  I think in these cases we want to assume the order that the
@@ -4188,7 +4296,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     
   }//if( measurements_.size() > 500 ) / else
   
-  stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
+  stable_sort( begin(measurements_), end(measurements_), &compare_by_derived_sample_det_time );
 }//void  set_sample_numbers_by_time_stamp()
 
 
@@ -4235,7 +4343,7 @@ void SpecFile::ensure_unique_sample_numbers()
   
   if( has_unique_sample_and_detector_numbers() )
   {
-    stable_sort( measurements_.begin(), measurements_.end(), &compare_by_sample_det_time );
+    stable_sort( measurements_.begin(), measurements_.end(), &compare_by_derived_sample_det_time );
   }else
   {
     set_sample_numbers_by_time_stamp();
@@ -4405,6 +4513,11 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       if( meas->contained_neutron_ && thisMeasHasGamma )
         neutronMeasDoNotHaveGamma = false;
       
+      // Check if 'meas' is N42-2012 DerivedData or not
+      const bool nonDerived = !meas->derived_data_properties_;
+      properties_flags_ |= (nonDerived ? MeasurementProperties::kNonDerivedDataMeasurements
+                                       : MeasurementProperties::kDerivedDataMeasurements);
+      
       //Do a basic sanity check of is the calibration is reasonable.
       if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
       {
@@ -4516,7 +4629,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       if( meas->has_gps_info() )
       {
-        //        a lat long of (0 0) probably isnt a valid GPS coordinate
+        //  a lat long of (0 0) probably isnt a valid GPS coordinate
         if( (fabs(meas->latitude_) < 1.0E-6)
            && (fabs(meas->longitude_) < 1.0E-6) )
         {
@@ -4533,12 +4646,12 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         meas->position_time_ = boost::posix_time::not_a_date_time;
       }
       
-      meas->contained_neutron_ |= (meas->neutron_counts_sum_>0.0
-                                   || !meas->neutron_counts_.empty());
+      meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
+                                     || !meas->neutron_counts_.empty() );
     }//for( auto &meas : measurements_ )
     
     
-    if( nGpsCoords == 0
+    if( (nGpsCoords == 0)
        || (fabs(mean_latitude_)<1.0E-6 && fabs(mean_longitude_)<1.0E-6) )
     {
       mean_latitude_ = mean_longitude_ = -999.9;
@@ -4566,7 +4679,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
           properties_flags_ |= kNotTimeSortedOrder;
         
-        if( !compare_by_sample_det_time(measurements_[i-1],measurements_[i]) )
+        if( !compare_by_derived_sample_det_time(measurements_[i-1],measurements_[i]) )
           properties_flags_ |= kNotSampleDetectorTimeSorted;
       }//for( size_t i = 1; i < measurements_.size(); ++i )
     }else
@@ -4588,6 +4701,18 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     }//if( flags & DontChangeOrReorderSamples ) / else
     
     
+#if( PERFORM_DEVELOPER_CHECKS )
+    if( !(properties_flags_ & kNotSampleDetectorTimeSorted) )
+    {
+      bool sampleNumSorted = true;
+      for( size_t i = 1; sampleNumSorted && (i < measurements_.size()); ++i )
+        sampleNumSorted = (measurements_[i-1]->sample_number_ <= measurements_[i]->sample_number_);
+      if( !sampleNumSorted )
+        log_developer_error( __func__, "Found a case where sample numbers weren't sorted!" );
+      assert( sampleNumSorted );
+    }
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+    
     detector_numbers_.clear();
     detector_names_.clear();
     gamma_detector_names_.clear();
@@ -4600,13 +4725,16 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     }//for( const IntStrMap::value_type &t : num_to_name_map )
     
     gamma_detector_names_.insert( end(gamma_detector_names_), begin(gamma_det_names), end(gamma_det_names) );
-    neutron_detector_names_.insert( neutron_detector_names_.end(), neut_det_names.begin(), neut_det_names.end() );
+    neutron_detector_names_.insert( end(neutron_detector_names_), begin(neut_det_names), end(neut_det_names) );
     
     
     //If none of the Measurements that have neutrons have gammas, then lets see
     //  if it makes sense to add the neutrons to the gamma Measurement
-    //if( numNeutronAndGamma < (numWithGammas/10) )
-    if( haveNeutrons && haveGammas && neutronMeasDoNotHaveGamma )
+    // TODO: get rid of merge_neutron_meas_into_gamma_meas(), and just keep neutrons how specified
+    //       in the spectrum file; either with the gamma, or separate.  Also remove the similar
+    //       functioning code from decode_2012_N42_rad_measurement_node(...)
+    if( haveNeutrons && haveGammas && neutronMeasDoNotHaveGamma
+       && !(flags & DontChangeOrReorderSamples) )
     {
       merge_neutron_meas_into_gamma_meas();
     }
@@ -4695,7 +4823,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     //  portions of the file.  The background portion, as well as the transition
     //  between background/foreground/etc is a little harder to deal with since
     //  background may have gaps, or may have been taken a while before the item
-    if( !is_passthrough && samplenum_to_starttime.size() > 20 )
+    if( !is_passthrough && (samplenum_to_starttime.size() > 20) )
     {
       int nnotadjacent = 0, nadjacent = 0;
       
@@ -4879,7 +5007,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
 
     
     
-    
+// TODO: get rid of this function, and also similarly for the code in
+//      decode_2012_N42_rad_measurement_node(...) that does similar
 void SpecFile::merge_neutron_meas_into_gamma_meas()
 {
   //Check to make sure sample numbers arent whack (they havent been finally
@@ -5324,21 +5453,21 @@ void SpecFile::set_detector_type_from_other_info()
   using SpecUtils::icontains;
   
   
-  if( detector_type_ != DetectorType::Unknown )
+  if( (detector_type_ != DetectorType::Unknown)
+     && (detector_type_ != DetectorType::IdentiFinderUnknown) )
     return;
   
   const string &model = instrument_model_;
 //  const string &id = instrument_id_;
   
-  if( icontains(model,"SAM")
-      && (contains(model,"940") || icontains(model,"Eagle+")) )
+  if( icontains(model,"SAM") && (contains(model,"940") || icontains(model,"Eagle+")) )
   {
     if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
     else
       detector_type_ = DetectorType::Sam940;
     
-    cerr << "ASAm940 model=" << model << endl;
+    //cerr << "ASAm940 model=" << model << endl;
     
     return;
   }
@@ -5349,19 +5478,6 @@ void SpecFile::set_detector_type_from_other_info()
       //detector_type_ = Sam945LaBr3;
     //else
     detector_type_ = DetectorType::Sam945;
-    return;
-  }
-  
-  //Dont know what the 'ULCS' that some models have in their name is
-  if( icontains(model,"identiFINDER") && icontains(model,"NG") )
-  {
-    detector_type_ = DetectorType::IdentiFinderNG;
-    return;
-  }
-  
-  if( icontains(model,"identiFINDER") && icontains(model,"LG") )
-  {
-    detector_type_ = DetectorType::IdentiFinderLaBr3;
     return;
   }
   
@@ -5393,6 +5509,13 @@ void SpecFile::set_detector_type_from_other_info()
   }
   
   
+  if( icontains(manufacturer_,"innoRIID")
+     && !icontains(manufacturer_,"ortec")
+     && (istarts_with(model, "RE ") || icontains(model, "RadEagle")) )
+  {
+      manufacturer_ += " (Ortec)";
+  }
+    
   if( (icontains(model,"Rad") && icontains(model,"Eagle"))
       || istarts_with(model, "RE-") || istarts_with(model, "RE ") )
   {
@@ -5419,8 +5542,313 @@ void SpecFile::set_detector_type_from_other_info()
     if( istarts_with(model, "RE ") )
       instrument_model_ = "RadEagle " + instrument_model_.substr(3);
     
+    
     return;
   }//if( a rad eagle )
+  
+  
+  
+  //Lets try to figure out if we can fill out detector_type_
+  if( iequals_ascii( manufacturer_,"ORTEC" ) )
+  {
+    if( iequals_ascii(instrument_model_,"OSASP") )
+      detector_type_ = DetectorType::DetectiveEx200;
+    else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"200") )
+      detector_type_ = DetectorType::DetectiveEx200;
+    else if( icontains(instrument_model_,"100") )
+      detector_type_ = DetectorType::DetectiveEx100;
+    else if( icontains(instrument_model_,"Detective-EX") )
+      detector_type_ = DetectorType::DetectiveEx;
+    else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
+      detector_type_ = DetectorType::DetectiveEx100;
+    else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
+      detector_type_ = DetectorType::MicroDetective;
+    else if( iequals_ascii(instrument_model_,"Detective X") )
+      detector_type_ = DetectorType::DetectiveX;
+    else if( icontains(instrument_model_,"Detective") )
+      detector_type_ = DetectorType::DetectiveUnknown;
+    
+    return;
+  }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
+  
+  
+  
+  if( iequals_ascii(instrument_type_,"PVT Portal") && iequals_ascii(manufacturer_,"SAIC") )
+  {
+    detector_type_ = DetectorType::SAIC8;
+    
+    return;
+  }
+  
+  
+  if( icontains(instrument_model_,"identiFINDER") || icontains(model,"R400") || icontains(model,"R500") )
+  {
+    //From: https://www.flir.com/r400/ 20201218
+    // - R400: three variants: NaI with seed, LaBr, NaI with LED
+    // - R400 LG: LaBr, 30 x 30 mm, GM, LED
+    // - R400 NGH: NaI 35 x 51, GM, He-3
+    // - R400 T1: NaI 23 x 21mm - Tungsten shielded, GM
+    // - R400 T2: NaI 23 x 21mm - Tungsten shielded, GM
+    // - R400 UCLS-NGH: NaI 35 x 51mm, GM, He-3
+    // - R400 ULK-NG: NaI 35 x 51mm, GM
+    // - R400 ULK-NGH: NaI 35 x 51mm, GM, He-3
+    // - R400 UW-NG: NaI 35 x 51mm, GM
+    // - R400 UW-NGH: NaI 35 x 51mm, GM, He-3
+    // - R400 UW-ULCS-NG: NaI 35 x 51mm, GM, LED
+    // - R400 UW-ULCS-NG: NaI 35 x 51mm, GM, He-3, LED
+    //
+    // - R500 ULCS-NGH: NaI 102 x 19mm, GM, LED
+    // - R500 UL-LG: 38 x 38mm, LaBr, GM, LED
+    // - R500 UL-LG: 102 x 19mm, NaI, GM, LED //Same model number?
+    //    - An actual file with these dimensions gives model as R500 ULCS-NG, so will continue
+    //      assuming "LG" is LaBr
+    // - R500 UL-LGH: 38 x 38mm, LaBr, GM, LED, He-3
+    
+    if( icontains(model,"R500") )
+    {
+      if( icontains(model,"ULCS") || icontains(model,"NaI") )
+      {
+        detector_type_ = DetectorType::IdentiFinderR500NaI;
+        return;
+      }
+      
+      if( icontains(model,"LG") || icontains(model,"LaBr") )
+      {
+        detector_type_ = DetectorType::IdentiFinderR500LaBr;
+        return;
+      }
+      
+      return;
+    }//if( icontains(model,"R500") )
+    
+    if( icontains(model,"NG") || (icontains(model,"2") && !icontains(model,"LG")) )
+    {
+      detector_type_ = DetectorType::IdentiFinderNG;
+      return;
+    }
+    
+    if( icontains(model,"LG") )
+    {
+      detector_type_ = DetectorType::IdentiFinderLaBr3;
+      return;
+    }
+    
+    if( icontains(model,"T1") || icontains(model,"T2") )
+    {
+      detector_type_ = DetectorType::IdentiFinderTungsten;
+      return;
+    }
+    
+    for( const auto &remark : remarks_ )
+    {
+      if( (SpecUtils::contains(remark, "35 mm") && SpecUtils::contains(remark, "51 mm"))
+          || (SpecUtils::contains(remark, "35mm") && SpecUtils::contains(remark, "51mm"))
+          || SpecUtils::contains(remark, "35x51")
+         || SpecUtils::contains(remark, "35 x 51"))
+      {
+        detector_type_ = DetectorType::IdentiFinderNG;
+        return;
+      }
+       
+      if( SpecUtils::contains(remark, "30x30")
+         || SpecUtils::contains(remark, "30 x 30")
+         || SpecUtils::contains(remark, "30mm")
+         || SpecUtils::contains(remark, "LaBr") )
+      {
+        detector_type_ = DetectorType::IdentiFinderLaBr3;
+        return;
+      }
+    }//for( const auto &remark : remarks_ )
+    
+    
+    //cout << "identiFINDER: instrument_model_='" << instrument_model_ << "', manufacturer_='" << manufacturer_ << "'" << endl;
+    if( detector_type_ == DetectorType::Unknown )
+      detector_type_ = DetectorType::IdentiFinderUnknown;
+    
+    return;
+  }//if( icontains(instrument_model_,"identiFINDER") )
+  
+  
+  if( icontains(manufacturer_,"FLIR") || icontains(instrument_model_,"Interceptor") )
+  {
+    detector_type_ = DetectorType::Interceptor;
+    return;
+  }
+  
+  
+  //Thermo Fisher Scientific, ins_model=RIIDEye, LaBr15x15, or ins_model=RIIDEye, NaI2x2
+  if( icontains(model,"RIIDEye") )
+  {
+    if( icontains(model,"LaBr") )
+    {
+      detector_type_ = DetectorType::RIIDEyeLaBr;
+      return;
+    }
+    
+    if( icontains(model,"NaI") )
+    {
+      detector_type_ = DetectorType::RIIDEyeNaI;
+      return;
+    }
+  }//if( icontains(model,"RIIDEye") )
+  
+  
+  if( icontains(model,"SAM940") || icontains(model,"SAM 940") || icontains(model,"SAM Eagle") )
+  {
+    if( icontains(model,"LaBr") )
+      detector_type_ = DetectorType::Sam940LaBr3;
+    else
+      detector_type_ = DetectorType::Sam940;
+    
+    return;
+  }
+  
+  
+  if( icontains(model,"SAM") && icontains(model,"945") )
+  {
+    detector_type_ = DetectorType::Sam945;
+    return;
+  }
+  
+  
+  if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
+           && icontains(model,"Raider") )
+  {
+    detector_type_ = DetectorType::MicroRaider;
+    return;
+  }
+  
+  
+  if( icontains(model,"SRPM") && icontains(model,"210") )
+  {
+    if( manufacturer_.size() < 2 )
+      manufacturer_ = "Leidos";  //"EXPLORANIUM" would be the other option
+    detector_type_ = DetectorType::Srpm210;
+    
+    return;
+  }//if( SRPM 210 )
+  
+  
+  if( icontains(model,"RadSeeker") /* && icontains(manufacturer_, "Smiths") */ )
+  {
+    if( icontains(model,"CS") )
+      detector_type_ = DetectorType::RadSeekerNaI;
+    else if( icontains(model,"CL") || icontains(model,"DL") || icontains(model, "LaBr") )
+      detector_type_ = DetectorType::RadSeekerLaBr;
+    
+    return;
+  }//if( icontains(model,"RadSeeker") )
+  
+  
+  if( icontains(manufacturer_, "Symetrica") )
+  {
+    // The <RadInstrumentModelName> tag seems to be "SN20", "SN23-N", etc, but sample size is small.
+    // \TODO: verify general form Verifinders will have in this element
+    const bool isVerifinder = ( (model.length() >= 4)
+                                && (model[0] == 'S' || model[0] == 's')
+                                && (model[1] == 'N' || model[1] == 'n')
+                                && (model[2] == '2')
+                                && std::isdigit(model[3]) );
+    
+    //Could also look that has Verifinder has an N42 entry like (I havent seen a LaBr system):
+    //  <RadDetectorInformation id="DetectorInfoGamma">
+    //    <RadDetectorCategoryCode>Gamma</RadDetectorCategoryCode>
+    //    <RadDetectorKindCode>NaI</RadDetectorKindCode>
+    //    <RadDetectorLengthValue>3.8</RadDetectorLengthValue>
+    //    <RadDetectorDiameterValue>3.8</RadDetectorDiameterValue>
+    //  ...
+    
+    if( isVerifinder )
+    {
+      bool isLaBr = false;
+      
+      for( size_t i = 0; (i < 12) && i < measurements_.size(); ++i )
+      {
+        std::shared_ptr<Measurement> &meas = measurements_[i];
+        const auto &desc = meas->detector_description_;
+        
+        const char *key = "Kind: ";
+        const auto pos = desc.find( key );
+        if( pos != string::npos )
+        {
+          const size_t keylen = strlen(key);
+          const char * const str_begin = desc.c_str() + pos + keylen;
+          assert( desc.size() >= (pos + keylen) );
+          const string::size_type max_len = desc.size() - pos - keylen;
+          
+          string value( str_begin, std::min( max_len, size_t(8) ) );
+          if( icontains(value, "LaBr") || icontains(value, "La-Br") || icontains(value, "Br3") )
+          {
+            isLaBr = true;
+            break;
+          }
+          
+          if( icontains(value, "NaI") )
+          {
+            isLaBr = false;
+            break;
+          }
+        }//if( pos != string::npos )
+      }//for( size_t i = 0; i < measurements_.size(); ++i )
+      
+      detector_type_ = isLaBr ? DetectorType::VerifinderLaBr : DetectorType::VerifinderNaI;
+      return;
+    }//if( isVerifinder )
+
+  }//if( icontains(manufacturer_, "Symetrica") )
+    
+  
+  if( icontains(manufacturer_,"Canberra Industries, Inc.") )
+  {
+    //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
+    //  exist and if its made up of other detectors, get rid of those spectra
+  }//
+  
+  
+  if( manufacturer_.size() || instrument_model_.size() )
+  {
+#if(PERFORM_DEVELOPER_CHECKS)
+    //In principle we should some of the following detectors to the DetectorType enum
+    if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
+       && !(manufacturer_=="ICx Technologies" && instrument_model_=="")
+       && !(manufacturer_=="Radiation Solutions Inc." /* && instrument_model_=="RS-701"*/)
+       && !(manufacturer_=="Raytheon" && instrument_model_=="Variant L" )
+       && !(manufacturer_=="Avid Annotated Spectrum" /* && instrument_model_==""*/)
+       && !(manufacturer_=="Mirion Technologies" && instrument_model_=="model Pedestrian G")
+       && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="")
+       && !(manufacturer_=="Nucsafe" && instrument_model_=="G4_Predator")
+       && !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="Model 135")
+       && !(manufacturer_=="" && instrument_model_=="Self-Occuluding Quad NaI Configuration")
+       && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
+       && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
+       && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
+       && !(manufacturer_=="Unknown" && instrument_model_=="Unknown")
+       && !icontains( manufacturer_, "RIDs R Us")
+       && !icontains( manufacturer_, "SRPMs R Us")
+       && !icontains( manufacturer_, "RIIDs R Us")
+       && !icontains( manufacturer_, "Mobiles R Us")
+       && !icontains( manufacturer_, "SPRDs R Us")
+       && !(manufacturer_=="BTI" && instrument_model_=="FlexSpec")
+       && !(manufacturer_=="labZY")
+       && !icontains( manufacturer_, "SSC Pacific")
+       && !icontains( instrument_model_, "ASP-")
+       && !(manufacturer_=="" && instrument_model_=="")
+       )
+    {
+      string msg = "Unknown detector type: maufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
+      log_developer_error( __func__, msg.c_str() );
+    }
+#endif
+    //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_CS
+    //Unknown detector type: maufacturer=Smiths Detection, ins_model=RadSeeker_DL
+    //Unknown detector type: maufacturer=Princeton Gamma-Tech Instruments, Inc., ins_model=RIIDEye, Ext2x2
+}
+   
+  
+  
+  
+  
+  
 }//void set_detector_type_from_other_info()
 
 
@@ -5913,6 +6341,18 @@ bool SpecFile::passthrough() const
   return (properties_flags_ & kPassthroughOrSearchMode);
 }//bool passthrough() const
 
+
+bool SpecFile::contains_derived_data() const
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  return (properties_flags_ & kDerivedDataMeasurements);
+}
+
+bool SpecFile::contains_non_derived_data() const
+{
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  return (properties_flags_ & kNonDerivedDataMeasurements);
+}//
 
 std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibration(
                                                         const set<int> &sample_numbers,
@@ -6507,9 +6947,17 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   const set<string> origvaraints = energy_cal_variants();
   
   if( !origvaraints.count(variant) )
-    throw runtime_error( "SpecFile::keep_energy_cal_variant():"
-                         " measurement did not contain an energy variant named '"
-                         + variant + "'" );
+  {
+    string msg = "SpecFile::keep_energy_cal_variant():"
+    " measurement did not contain an energy variant named '"
+    + variant + "', only contained:";
+    for( auto iter = begin(origvaraints); iter != end(origvaraints); ++iter )
+      msg += " '" + (*iter) + "',";
+    if( origvaraints.empty() )
+      msg += " none";
+    
+    throw runtime_error( msg );
+  }//if( !origvaraints.count(variant) )
   
   if( origvaraints.size() == 1 )
     return 0;
@@ -6541,6 +6989,51 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   return (keepers.size() - measurements_.size());
 }//void keep_energy_cal_variant( const std::string variant )
 
+
+size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep tokeep )
+{
+  std::vector< std::shared_ptr<Measurement> > keepers;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+ 
+  switch( tokeep )
+  {
+    case DerivedVariantToKeep::NonDerived:
+      if( !(properties_flags_ & MeasurementProperties::kDerivedDataMeasurements) )
+        return 0;
+      break;
+      
+    case DerivedVariantToKeep::Derived:
+      if( !(properties_flags_ & MeasurementProperties::kNonDerivedDataMeasurements) )
+        return 0;
+      break;
+  }//switch( tokeep )
+
+  keepers.reserve( measurements_.size() );
+  
+  for( auto &ptr : measurements_ )
+  {
+    switch( tokeep )
+    {
+      case DerivedVariantToKeep::NonDerived:
+        if( !ptr->derived_data_properties_ )
+          keepers.push_back( ptr );
+        break;
+        
+      case DerivedVariantToKeep::Derived:
+        if( ptr->derived_data_properties_ )
+          keepers.push_back( ptr );
+        break;
+    }//switch( tokeep )
+  }//for( auto &ptr : measurements_ )
+  
+  measurements_.swap( keepers );
+  cleanup_after_load();
+  
+  modified_ = modifiedSinceDecode_ = true;
+  
+  return (keepers.size() - measurements_.size());
+}//size_t SpecFile::keep_derived_data_variant( const DerivedVariantToKeep tokeep )
 
 
 int SpecFile::background_sample_number() const

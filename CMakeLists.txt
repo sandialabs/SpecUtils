@@ -12,6 +12,7 @@ option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (o
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING "Rebins all spectra in spectrum file to the same energy calibration" OFF )
 option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
+option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
@@ -271,6 +272,10 @@ IF( SpecUtils_BUILD_UNIT_TESTS )
   add_subdirectory( unit_tests )
 ENDIF( SpecUtils_BUILD_UNIT_TESTS )
 
+
+if( SpecUtils_BUILD_FUZZING_TESTS )
+  add_subdirectory( fuzz_test )
+endif( SpecUtils_BUILD_FUZZING_TESTS )
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in

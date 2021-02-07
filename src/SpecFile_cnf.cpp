@@ -158,11 +158,11 @@ namespace
     {
         std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
         //duration in usec is larger than a int64: covert to years
-        if (duration * 10000000 > INT64_MAX)
+        if ( (static_cast<double>(duration) * 10000000.0) > static_cast<double>(INT64_MAX) )
         {
             double t_duration = duration / 31557600;
             //duration in years is larger than an int32, divide by a million years
-            if (duration / 31557600 > INT32_MAX)
+            if ( (duration / 31557600.0) > static_cast<double>(INT32_MAX) )
             {
                 int32_t y_duration = static_cast<int32_t>(t_duration / 1e6);
                 const auto y_bytes = to_bytes(y_duration);
@@ -460,7 +460,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     read_binary_data( input, num_channels );
     
     const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
-    if( !isPowerOfTwo && (num_channels>=64 && num_channels<=65536) )
+    if( !isPowerOfTwo || (num_channels < 16) || (num_channels > (65536 + 8)) )
       throw runtime_error( "Invalid number of channels" );
     
     vector<float> calib_params(3);
@@ -569,6 +569,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     
     measurements_.push_back( meas );
+    
+    cleanup_after_load();
   }catch ( std::exception & )
   {
     input.clear();
@@ -577,8 +579,6 @@ bool SpecFile::load_from_cnf( std::istream &input )
     reset();
     return false;
   }//try / catch to read the file
-  
-  cleanup_after_load();
   
   return true;
 }//bool load_from_cnf( std::istream &input )
