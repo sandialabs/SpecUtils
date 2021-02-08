@@ -35,8 +35,8 @@
  ToDo:
  - There is probably plenty of other energy calibration related stuff that could
    be moved into EnergyCalibration.h/.cpp
- - Define an energy calibraiton information struct that holds all the energy
-   calibration stuff Measurement uses, and use it instead of the piec-meal stuff
+ - Define an energy calibration information struct that holds all the energy
+   calibration stuff Measurement uses, and use it instead of the piece-meal stuff
    it currently uses.
  */
 namespace SpecUtils

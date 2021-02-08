@@ -42,7 +42,7 @@ namespace SpecUtils
   };//enum class DerivativeType
 
   
-  /** Struct used to hold the parameters to calcuate values of a cubic spline
+  /** Struct used to hold the parameters to calculate values of a cubic spline
    within an interval.
    
    f(x) = a*(x-x_i)^3 + b*(x-x_i)^2 + c*(x-x_i) + y_i
@@ -54,7 +54,7 @@ namespace SpecUtils
     /** The starting x-value of the interval. */
     double x;
     
-    /** The input data value of the left hand side (e.g., that cooresponds to
+    /** The input data value of the left hand side (e.g., that corresponds to
      #CubicSplineNode::x).
      */
     double y;
@@ -83,7 +83,7 @@ namespace SpecUtils
   /** Evaluates the cubic spline at the specified x-value.
    If 'x' is less than the first CubicSplineNode.x, or larger than the last
    CubicSplineNode.x, then returns the first or last CubicSplineNode.y value
-   respecitvely (this is non-standard behaviour for cubic splines, but how
+   respectively (this is non-standard behavior for cubic splines, but how
    non-linear deviation pairs are defined).
    */
   double eval_cubic_spline( const double x,
@@ -92,7 +92,7 @@ namespace SpecUtils
   
   /**  Creates the Cubic spline coefficients.
    Does some filtering of intput to make sure they are sorted and there are
-   no duplicate x values (if there are dublicates, the one with the smallest
+   no duplicate x values (if there are duplicates, the one with the smallest
    y-value is used).
    */
   std::vector<CubicSplineNode>
@@ -107,7 +107,7 @@ namespace SpecUtils
    incorrect, or just an issue with boundary conditions or something... I need
    to think about this more.
    
-   See #correction_due_to_dev_pairs for a functioned garuneteed to get you within
+   See #correction_due_to_dev_pairs for a functioned guaranteed to get you within
    0.0001 keV of the correct answer.
    */
   std::vector<CubicSplineNode>
