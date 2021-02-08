@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <chrono>
 #include <cstdint>
 #include <sstream>
 
@@ -42,7 +43,14 @@ int main( int argc, char **argv )
     assert( data.size() > 1 );
     std::vector<char> data_actual( begin(data), end(data) - 1 ); //strip trailing '\0' inserted by SpecUtils::load_file_data
     
+    auto t1 = std::chrono::high_resolution_clock::now();
+    
     const int rval = run_file_parse_fuzz( (uint8_t *)(&(data_actual[0])), data_actual.size() );
+    
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+    
+    std::cout << "Parsing took " << duration << " micro-seconds" << std::endl;
   }catch( std::exception &e )
   {
     std::cerr << "Caught exception: " << e.what() << std::endl;
