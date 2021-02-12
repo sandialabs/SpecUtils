@@ -704,18 +704,30 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     // foreground live time
     ostr << "\n\t\t\t" << q << "liveTime" << q << ":";
-    ostr << meas.live_time() << ",";
+    float lt = meas.live_time();
+    if( lt <= 0.0f || IsInf(lt) || IsNan(lt) )
+      lt = 0.0f;
+    ostr << lt << ",";
     
     // foreground real time
     ostr << "\n\t\t\t" << q << "realTime" << q << ":";
-    ostr << meas.real_time() << ",";
+    float rt = meas.real_time();
+    if( rt <= 0.0f || IsInf(rt) || IsNan(rt) )
+      rt = 0.0f;
+    ostr << rt << ",";
     
     // foreground neutron count
     ostr << "\n\t\t\t" << q << "neutrons" << q << ":";
     if( meas.contained_neutron() )
-      ostr << meas.neutron_counts_sum() << ",";
-    else
+    {
+      double ns = meas.neutron_counts_sum();
+      if( ns <= 0.0 || IsInf(ns) || IsNan(ns) )
+        ns = 0.0;
+      ostr << ns << ",";
+    }else
+    {
       ostr << "null,";
+    }
     
     // line color
     ostr << "\n\t\t\t" << q << "lineColor" << q << ":" << q
@@ -763,7 +775,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     {
       const vector<float> &y0 = *meas.gamma_channel_contents();
       for( size_t i = 0; i < y0.size(); ++i )
-        ostr << (i ? "," : "") << y0[i];
+        ostr << (i ? "," : "") << ((IsNan(y0[i]) || IsInf(y0[i])) ? 0.0f : y0[i]);
     }
     ostr << "],";
     

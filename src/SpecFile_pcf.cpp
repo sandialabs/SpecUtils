@@ -1354,6 +1354,25 @@ bool SpecFile::load_from_pcf( std::istream &input )
       std::shared_ptr< vector<float> > channel_data = std::make_shared<vector<float> >( num_channel );
       input.read( (char *)&(channel_data->operator[](0)), 4*num_channel );
       
+      // We'll do a little sanity check to make sure all teh floats we read are valid-ish and wont
+      //  cause problems later on.
+      auto ensure_valid_float = []( float &f ){
+        if( IsNan(f) || IsInf(f) )
+          f = 0.0f;
+      };//ensure_valid_pos_float lambda
+      
+      ensure_valid_float( live_time );
+      ensure_valid_float( true_time );
+      live_time = (live_time < 0.0f) ? 0.0f : live_time;
+      true_time = (true_time < 0.0f) ? 0.0f : true_time;
+      
+      ensure_valid_float( neutron_counts );
+      for( float &f : energy_cal_terms )
+        ensure_valid_float( f );
+      
+      for( float &f : *channel_data )  //This should probably be vectorized or something
+        ensure_valid_float( f );
+      
       auto meas = std::make_shared<Measurement>();
       
       const istream::pos_type specend = input.tellg();
@@ -1378,7 +1397,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
           input.seekg( 0 + specstart + bytes_per_record, ios::beg );
       }//if( speclen != (4*NRPS) )
       
-      if( spectrum_multiplier > 1.0f )
+      if( spectrum_multiplier > 1.0f && !IsInf(spectrum_multiplier) && !IsNan(spectrum_multiplier) )
       {
         for( float &f : *channel_data )
           f *= spectrum_multiplier;
