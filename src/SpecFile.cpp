@@ -4937,6 +4937,22 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     recalc_total_counts();
     
 #if( PERFORM_DEVELOPER_CHECKS )
+    // Make sure energy calibrations have same number of channels as spectrums
+    {
+      for( const auto &m : measurements_ )
+      {
+        assert( m );
+        const size_t ngammachan = m->gamma_counts_ ? m->gamma_counts_->size() : size_t(0);
+        const auto &cal = m->energy_calibration_;
+        if( cal && cal->valid() )
+        {
+          assert( cal->num_channels() == ngammachan );
+        }
+      }//for( const auto &m : measurements_ )
+    }
+#endif
+    
+#if( PERFORM_DEVELOPER_CHECKS )
     //Check to make sure all gamma and neutron detector names can be found in detector names
     {
       const vector<string>::const_iterator begindet = detector_names_.begin();

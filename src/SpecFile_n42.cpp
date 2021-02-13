@@ -1276,11 +1276,11 @@ struct MeasurementCalibInfo
 {
   SpecUtils::EnergyCalType equation_type;
   
-  size_t nbin;
   std::vector<float> coefficients;
   std::vector< std::pair<float,float> > deviation_pairs_;
   
-  std::shared_ptr<const SpecUtils::EnergyCalibration> energy_cal;
+  //Map from number of channels to energy cal
+  std::map<size_t,std::shared_ptr<const SpecUtils::EnergyCalibration>> energy_cals;
   std::string energy_cal_error;
   
   std::string calib_id; //optional
@@ -1288,7 +1288,7 @@ struct MeasurementCalibInfo
   MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measurement> meas );
   MeasurementCalibInfo();
   
-  void fill_binning();
+  void fill_binning( const size_t nbin );
   bool operator<( const MeasurementCalibInfo &rhs ) const;
   bool operator==( const MeasurementCalibInfo &rhs ) const;
 };//struct MeasurementCalibInfo
@@ -1296,12 +1296,13 @@ struct MeasurementCalibInfo
   
 MeasurementCalibInfo::MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measurement> meas )
 {
+  energy_cals.clear();
   equation_type = meas->energy_calibration_model();
-  nbin = meas->gamma_counts()->size();
+  const size_t nbin = meas->gamma_counts()->size();
   coefficients = meas->calibration_coeffs();
   
   deviation_pairs_ = meas->deviation_pairs();
-  energy_cal = meas->energy_calibration();
+  energy_cals[nbin] = meas->energy_calibration();
   
   if( equation_type == SpecUtils::EnergyCalType::InvalidEquationType
      && !coefficients.empty() )
@@ -1311,25 +1312,24 @@ MeasurementCalibInfo::MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measureme
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
     coefficients.clear();
     deviation_pairs_.clear();
-    energy_cal.reset();
+    energy_cals.clear();
   }//
 }//MeasurementCalibInfo constructor
 
 
 MeasurementCalibInfo::MeasurementCalibInfo()
 {
-  nbin = 0;
   equation_type = SpecUtils::EnergyCalType::InvalidEquationType;
 }//MeasurementCalibInfo constructor
 
 
-void MeasurementCalibInfo::fill_binning()
+void MeasurementCalibInfo::fill_binning( const size_t nbin )
 {
-  if( energy_cal )
+  if( energy_cals.count(nbin) )
     return;
   
   auto cal = make_shared<SpecUtils::EnergyCalibration>();
-  energy_cal = cal;
+  energy_cals[nbin] = cal;
   
   if( nbin < 2 )  /// \TODO: maybe loosen up polynomial and FRF to not have nbin requirement.
     return;
@@ -1364,18 +1364,13 @@ void MeasurementCalibInfo::fill_binning()
 }//void fill_binning()
 
 
-  
 bool MeasurementCalibInfo::operator<( const MeasurementCalibInfo &rhs ) const
 {
-  if( nbin != rhs.nbin )
-    return (nbin < rhs.nbin);
-  
   if( equation_type != rhs.equation_type )
     return (equation_type < rhs.equation_type);
   
   if( coefficients.size() != rhs.coefficients.size() )
     return (coefficients.size() < rhs.coefficients.size());
-  
   
   for( size_t i = 0; i < coefficients.size(); ++i )
   {
@@ -1432,7 +1427,7 @@ class N42CalibrationCache2006
   std::mutex m_mutex;
   
   // Map from energy calibration to the object to use for it
-  std::map<SpecUtils::MeasurementCalibInfo,std::shared_ptr<const SpecUtils::EnergyCalibration>> m_cal;
+  std::set<SpecUtils::MeasurementCalibInfo> m_cal;
   
   // Detector name to deviation pairs to use for it
   std::map<std::string,vector<pair<float,float>>> m_det_to_devpair;
@@ -1490,6 +1485,7 @@ public:
            is not changed (e.g., not cleared when no error)
     */
   static void make_energy_cal( const SpecUtils::MeasurementCalibInfo &info,
+                               const size_t nchannels,
                                shared_ptr<const SpecUtils::EnergyCalibration> &energy_cal,
                                string &error_message );
 };//class N42CalibrationCache2006
@@ -1972,7 +1968,6 @@ void N42CalibrationCache2006::get_calibration_energy_cal( const rapidxml::xml_no
   SpecUtils::MeasurementCalibInfo calinfo;
   calinfo.equation_type = type;
   calinfo.coefficients = coeffs;
-  calinfo.nbin = nchannels;
   
   {//begin lock on m_mutex
     std::unique_lock<std::mutex> scoped_lock( m_mutex );
@@ -1984,25 +1979,37 @@ void N42CalibrationCache2006::get_calibration_energy_cal( const rapidxml::xml_no
     if( devpos != end(m_det_to_devpair) )
       calinfo.deviation_pairs_ = devpos->second;
         
-    auto calpos = m_cal.find(calinfo);
-    if( (calpos != end(m_cal)) && calpos->second )
+    auto calinfopos = m_cal.find(calinfo);
+    if( (calinfopos != end(m_cal)) && calinfopos->energy_cals.count(nchannels) )
     {
       //We have already cached and equivalent calibration - lets return it.
       error_message.clear();
+      const auto calpos = calinfopos->energy_cals.find(nchannels);
+      assert( calpos != end(calinfopos->energy_cals) );
       energy_cal = calpos->second;
       m_detname_to_cal[det_name] = energy_cal;
       return;
     }
   }//end lock on m_mutex
       
-  make_energy_cal( calinfo, energy_cal, error_message );
+  make_energy_cal( calinfo, nchannels, energy_cal, error_message );
         
   if( energy_cal )
   {
     //Add this new calibration into the cache.
     error_message.clear();
     std::unique_lock<std::mutex> scoped_lock( m_mutex );
-    m_cal.insert( {calinfo,energy_cal} );
+    
+    auto calinfopos = m_cal.find(calinfo);
+    if( calinfopos != end(m_cal) )
+    {
+      calinfo = *calinfopos;
+      m_cal.erase(calinfopos);
+    }
+    
+    calinfo.energy_cals[nchannels] = energy_cal;
+    
+    calinfopos = m_cal.insert( calinfo ).first;
     m_detname_to_cal[det_name] = energy_cal;
   }//if( energy_cal )
 }//get_calibration_energy_cal( ... )
@@ -2010,6 +2017,7 @@ void N42CalibrationCache2006::get_calibration_energy_cal( const rapidxml::xml_no
       
 void N42CalibrationCache2006::make_energy_cal(
                               const SpecUtils::MeasurementCalibInfo &info,
+                              const size_t nchannels,
                               shared_ptr<const SpecUtils::EnergyCalibration> &energycal,
                               string &error_message )
 {
@@ -2020,19 +2028,19 @@ void N42CalibrationCache2006::make_energy_cal(
     switch( info.equation_type )
     {
       case SpecUtils::EnergyCalType::Polynomial:
-        energycal_tmp->set_polynomial( info.nbin, info.coefficients, info.deviation_pairs_ );
+        energycal_tmp->set_polynomial( nchannels, info.coefficients, info.deviation_pairs_ );
       break;
       
       case SpecUtils::EnergyCalType::FullRangeFraction:
-        energycal_tmp->set_full_range_fraction(info.nbin, info.coefficients, info.deviation_pairs_ );
+        energycal_tmp->set_full_range_fraction( nchannels, info.coefficients, info.deviation_pairs_ );
       break;
       
       case SpecUtils::EnergyCalType::LowerChannelEdge:
-        energycal_tmp->set_lower_channel_energy( info.nbin, info.coefficients );
+        energycal_tmp->set_lower_channel_energy( nchannels, info.coefficients );
       break;
       
       case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-        energycal_tmp->set_default_polynomial( info.nbin, info.coefficients, info.deviation_pairs_ );
+        energycal_tmp->set_default_polynomial( nchannels, info.coefficients, info.deviation_pairs_ );
       break;
       
       case SpecUtils::EnergyCalType::InvalidEquationType:
@@ -2130,7 +2138,6 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
     const pair<SpecUtils::EnergyCalType,vector<float>> &info = pos->second;
     
     SpecUtils::MeasurementCalibInfo calinfo;
-    calinfo.nbin = nchannels;
     calinfo.equation_type = info.first;
     calinfo.coefficients = info.second;
     
@@ -2142,19 +2149,28 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
       calinfo.deviation_pairs_ = devpos->second;
     
     auto calpos = m_cal.find(calinfo);
-    if( (calpos != end(m_cal)) && calpos->second )
+    if( (calpos != end(m_cal)) && calpos->energy_cals.count(nchannels) )
     {
       error_message.clear();
-      energy_cal = calpos->second;
+      const auto calptrpos = calpos->energy_cals.find(nchannels);
+      assert( calptrpos != end(calpos->energy_cals) );
+      energy_cal = calptrpos->second;
       m_detname_to_cal[det_name] = energy_cal;
       return;
     }
       
-    make_energy_cal( calinfo, energy_cal, error_message );
+    make_energy_cal( calinfo, nchannels, energy_cal, error_message );
       
     if( energy_cal )
     {
-      m_cal.insert( {calinfo,energy_cal} );
+      if( calpos != end(m_cal) )
+      {
+        calinfo = *calpos;
+        m_cal.erase( calpos );
+      }
+      
+      calinfo.energy_cals[nchannels] = energy_cal;
+      calpos = m_cal.insert(calinfo).first;
       m_detname_to_cal[det_name] = energy_cal;
       error_message.clear();
       return;
@@ -2435,7 +2451,10 @@ struct N42DecodeHelper2006
       throw runtime_error( "Error, didnt find <ChannelData> under <Spectrum>" );
     }//if( !channel_data_node )
       
-    const auto compress_attrib = channel_data_node->first_attribute( "Compression", 11 );
+    auto compress_attrib = channel_data_node->first_attribute( "Compression", 11 );
+    if( !compress_attrib )
+      compress_attrib = XML_FIRST_IATTRIB(channel_data_node, "compressionCode");
+    
     const string compress_type = xml_value_str( compress_attrib );
     std::shared_ptr<std::vector<float>> contents = std::make_shared< vector<float> >();
       
@@ -2445,7 +2464,7 @@ struct N42DecodeHelper2006
       channel_data_node = datanode;
       
       
-    const bool compressed_zeros = icontains(compress_type, "CountedZeroe");
+    const bool compressed_zeros = icontains(compress_type, "Counted"); //"CountedZeroes", at least one file has "CountedZeros"
       
     //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
     SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
@@ -3159,8 +3178,8 @@ public:
             const size_t char_data_len = channel_data_node->value_size();
             SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts );
             
-            rapidxml::xml_attribute<char> *comp_att = channel_data_node->first_attribute( "compressionCode", 15 );
-            if( icontains( xml_value_str(comp_att), "CountedZeroes") )  //( comp_att && XML_VALUE_ICOMPARE(comp_att, "CountedZeroes") )
+            rapidxml::xml_attribute<char> *comp_att = XML_FIRST_IATTRIB(channel_data_node, "compressionCode");
+            if( icontains( xml_value_str(comp_att), "Counted") )  //"CountedZeroes" or at least one file has "CountedZeros"
               expand_counted_zeros( *gamma_counts, *gamma_counts );
           }//if( channel_data_node && channel_data_node->value() )
           
@@ -3233,9 +3252,12 @@ public:
                 {
                   DetectorToCalibInfo::value_type info( defCalName, MeasurementCalibInfo() );
                   info.second.equation_type = SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial;
-                  info.second.nbin = meas->gamma_counts_->size();
+                  
+                  size_t nbin = meas->gamma_counts_->size();
+                  if( nbin < 2 )
+                    nbin = 2;
                   info.second.coefficients.push_back( 0.0f );
-                  info.second.coefficients.push_back( 3000.0f / std::max(info.second.nbin-1,size_t(1)) );
+                  info.second.coefficients.push_back( 3000.0f / (nbin-1) );
                   //info.second.calib_id = defCalName;  //Leave commented out so wont get put into meas_to_cal_id
                   calib_iter = calibrations_ptr->insert( std::move(info) ).first;
                 }//if( we havent yet created a default calibration )
@@ -3246,9 +3268,14 @@ public:
             
             MeasurementCalibInfo &calib = calib_iter->second;
             
-            calib.nbin = meas->gamma_counts_->size();
-            calib.fill_binning();
-            meas->energy_calibration_ = calib.energy_cal;
+            const size_t nbin = meas->gamma_counts_->size();
+            calib.fill_binning( nbin );
+            
+            auto calptrpos = calib.energy_cals.find(nbin);
+            assert( calptrpos != end(calib.energy_cals) );
+            assert( calptrpos->second );
+            
+            meas->energy_calibration_ = calptrpos->second;
             if( !calib.energy_cal_error.empty() )
               meas->parse_warnings_.push_back( calib.energy_cal_error );
         

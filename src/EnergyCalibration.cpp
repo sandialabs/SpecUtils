@@ -1471,9 +1471,14 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   const bool has_upper = ((original_counts.size() + 1) == original_energies.size());
   const size_t new_nbin = new_energies.size() - (has_upper ? 1 : 0);
   
-  if( original_energies.size() < original_counts.size() )
+  const size_t num_orig_counts = original_counts.size();
+  const size_t num_orig_energies = original_energies.size();
+  if( num_orig_energies < num_orig_counts )
+  {
     throw runtime_error( "rebin_by_lower_edge: input energies and gamma counts"
-                        " have mismatched number of channels" );
+                        " have mismatched number of channels; " + std::to_string(num_orig_energies)
+                        + " energies, vs " + std::to_string(num_orig_counts) + " channels." );
+  }
   
   if( new_nbin < 4 )
     throw runtime_error( "rebin_by_lower_edge: output have more than 3 bins" );
