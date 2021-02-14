@@ -115,7 +115,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       timestampStr = timestampStr.substr( 0, pos );  //"Oct. 09 2013  13:08:29"
       
       meas->start_time_ = time_from_string( timestampStr.c_str() );
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       if( meas->start_time_.is_special() )
         log_developer_error( __func__, ("Failed to extract measurement start time from: '" + header  + "' timestampStr='" + timestampStr + "'").c_str() );
 #endif

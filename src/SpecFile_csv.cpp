@@ -1013,7 +1013,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
 #endif
     }//for( auto &field : header )
     
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( header_names_check.size() != header_names_check.size() )
       log_developer_error( __func__, ("There was a duplicate detector name in SRPM CSV file: '" + line + "' - who knows what will happen").c_str() );
 #endif
@@ -1052,7 +1052,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
       vector<float> line_data;
       if( !SpecUtils::split_to_floats(line, line_data) )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, ("Failed in parsing line of SRPM file: '" + line + "'").c_str() );
 #endif
         continue;
@@ -1088,13 +1088,13 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
           //Meh, ignore this I guess
         }else
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, ("Unrecognized neutron type in SRPM file: '" + key + "'").c_str() );
 #endif
         }
       }else
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
 #endif
       }//if( key is specific value ) / else

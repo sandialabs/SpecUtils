@@ -1441,7 +1441,7 @@ class N42CalibrationCache2006
   // Keep track of the last new calibration used for each detector incase a <Spectrum> doesnt
   //  indicate a calibration to use (a number of N42-2006 variants only give the energy calibration
   //  for the first sample)
-  std::map<std::string,std::shared_ptr<const SpecUtils::EnergyCalibration>> m_detname_to_cal;
+  std::map<std::string,std::map<size_t,std::shared_ptr<const SpecUtils::EnergyCalibration>>> m_detname_to_cal;
       
   void parse_dev_pairs_from_xml( const rapidxml::xml_node<char> * const doc_node );
   void parse_cals_by_id_from_xml( const rapidxml::xml_node<char> * const doc_node );
@@ -1579,7 +1579,7 @@ void N42CalibrationCache2006::parse_dev_pairs_from_xml( const rapidxml::xml_node
     
   if( !N42InstrumentData )
   {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     log_developer_error( __func__, "Could not find N42InstrumentData in XML document" );
 #endif
     return;
@@ -1598,7 +1598,7 @@ void N42CalibrationCache2006::parse_dev_pairs_from_xml( const rapidxml::xml_node
         
       if( !det_attrib )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, "Found NonlinearityCorrection without Detector tag" );
 #endif
         continue;
@@ -1987,7 +1987,7 @@ void N42CalibrationCache2006::get_calibration_energy_cal( const rapidxml::xml_no
       const auto calpos = calinfopos->energy_cals.find(nchannels);
       assert( calpos != end(calinfopos->energy_cals) );
       energy_cal = calpos->second;
-      m_detname_to_cal[det_name] = energy_cal;
+      m_detname_to_cal[det_name][nchannels] = energy_cal;
       return;
     }
   }//end lock on m_mutex
@@ -2010,7 +2010,7 @@ void N42CalibrationCache2006::get_calibration_energy_cal( const rapidxml::xml_no
     calinfo.energy_cals[nchannels] = energy_cal;
     
     calinfopos = m_cal.insert( calinfo ).first;
-    m_detname_to_cal[det_name] = energy_cal;
+    m_detname_to_cal[det_name][nchannels] = energy_cal;
   }//if( energy_cal )
 }//get_calibration_energy_cal( ... )
       
@@ -2155,7 +2155,7 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
       const auto calptrpos = calpos->energy_cals.find(nchannels);
       assert( calptrpos != end(calpos->energy_cals) );
       energy_cal = calptrpos->second;
-      m_detname_to_cal[det_name] = energy_cal;
+      m_detname_to_cal[det_name][nchannels] = energy_cal;
       return;
     }
       
@@ -2171,7 +2171,7 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
       
       calinfo.energy_cals[nchannels] = energy_cal;
       calpos = m_cal.insert(calinfo).first;
-      m_detname_to_cal[det_name] = energy_cal;
+      m_detname_to_cal[det_name][nchannels] = energy_cal;
       error_message.clear();
       return;
     }//if( energy_cal )
@@ -2183,17 +2183,21 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
     const auto pos = m_detname_to_cal.find(det_name);
     if( pos != end(m_detname_to_cal) )
     {
-      assert( pos->second );
-      energy_cal = pos->second;
-      error_message.clear();
-      m_detname_to_cal[det_name] = energy_cal;
+      const auto nchanpos = pos->second.find(nchannels);
+      if( nchanpos != end(pos->second) )
+      {
+        assert( nchanpos->second );
+        energy_cal = nchanpos->second;
+        error_message.clear();
+        m_detname_to_cal[det_name][nchannels] = energy_cal;
+      }
       return;
     }//if( we have seen a calibration for this detector )
   }//end lock on m_mutex
   
       
   //No calibrations found
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
   //If there is a cal ID, or a <Calibration> node, but we didnt find a calibration, lets note this
   // but it may not actually be a problem
   if( nchannels > 1
@@ -3129,7 +3133,7 @@ public:
             meas->sample_number_ = sample_num_from_meas_node;
           }//if( samp_det_str.size() )
           
-  #if(PERFORM_DEVELOPER_CHECKS)
+  #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           if( (sample_num_from_meas_node != -999) && (meas->sample_number_ != sample_num_from_meas_node) )
           {
             char buffer[512];

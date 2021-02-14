@@ -730,7 +730,7 @@ namespace SpecUtils
     
     //cout << "Couldnt parse" << endl;
     
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( develop_orig_str.size() > 5 //5 is arbitrary
        && develop_orig_str.find("NA")==string::npos
        && std::count( begin(develop_orig_str), end(develop_orig_str), '0') < 8 )

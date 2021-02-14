@@ -235,7 +235,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             if( num_cd_error < 2 )
             {
               meas->parse_warnings_.emplace_back( buffer );
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
               log_developer_error( __func__, buffer );
 #endif
             }//if( num_cd_error < 2 )
@@ -245,7 +245,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             if( num_cd_error_current > 1 )
             {
               meas->parse_warnings_.emplace_back( "$DATA section seems to be improperly terminated" );
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
               log_developer_error( __func__, buffer );
 #endif
               break;
@@ -432,7 +432,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           }
         }catch( exception &e )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           const string msg = "Error in MCA_CAL section of IAEA file\n\t" + string(e.what());
           log_developer_error( __func__, msg.c_str() );
 #endif
@@ -1116,7 +1116,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }//while( SpecUtils::safe_get_line( istr, line ) )
       }else if( !line.empty() && line != "END" )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, ("Unrecognized line '" + line + "'").c_str() );
 #endif
       }

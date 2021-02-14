@@ -40,7 +40,7 @@
  */
 namespace  SpecUtils
 {
-  /** \brief Removes leading and trailing whitespaces (" \f\n\r\t\v"). */
+  /** \brief Removes leading and trailing whitespaces (ex, " \f\n\r\t\v") according to std::isspace. */
   void trim( std::string &str );
   
   /** \brief Removes leading and trailing whitespaces (" \f\n\r\t\v"). */

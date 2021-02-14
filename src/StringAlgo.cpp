@@ -366,6 +366,7 @@ namespace SpecUtils
 #if( defined(_WIN32) && _DEBUG )
   //I get the MSVC debug runtime asserts on for character values less than -1, which since chars are signed by default
   //  happens on unicode characters.  So I'll make a crappy workaround
+  // Note whitespaces are considered (space \n \r \t)
   //  https://social.msdn.microsoft.com/Forums/vstudio/en-US/d57d4078-1fab-44e3-b821-40763b119be0/assertion-in-isctypec?forum=vcgeneral
   bool not_whitespace( char c )
   {
@@ -403,8 +404,8 @@ namespace SpecUtils
 #else
     s.erase(std::find_if(s.rbegin(), s.rend(), [](int val)->bool { return !std::isspace(val); } ).base(), s.end());
 #endif
-    //remove null terminating characters.  Boost doesnt do this, but is
-    //  necassary when reading fixed width binary data.
+    //remove null terminating characters.  Boost doesn't do this, but is
+    //  necessary when reading fixed width binary data.
     const size_t pos = s.find_last_not_of( '\0' );
     if( pos != string::npos && (pos+1) < s.size() )
       s.erase( s.begin() + pos + 1, s.end() );
@@ -417,12 +418,15 @@ namespace SpecUtils
   // trim from both ends
   void trim( std::string &s )
   {
+/*
 #if(PERFORM_DEVELOPER_CHECKS)
     string copystr = s;
 #endif
+*/
     
     ltrim( rtrim(s) );
     
+/*
 #if(PERFORM_DEVELOPER_CHECKS)
     //boost::algorithm::trim doesnt remove trailing null characters.
     
@@ -443,9 +447,12 @@ namespace SpecUtils
       snprintf( errormsg, sizeof(errormsg),
                "Trimmed strings not equal expect: '%s' (len %i), got: '%s' (len %i, from boost)",
                s.c_str(), int(s.size()), copystr.c_str(), int(copystr.size()) );
+#if( !SpecUtils_BUILD_FUZZING_TESTS )
       log_developer_error( __func__, errormsg );
+#endif
     }
 #endif
+*/
   }//trim(...)
   
   std::string trim_copy( std::string str )
@@ -1092,7 +1099,7 @@ namespace SpecUtils
 #else
     const bool ok = qi::phrase_parse( begin, end, (*qi::float_) % qi::eol, qi::lit(",")|qi::space, results );
 #endif
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( !ok )
     {
       if( *input && isdigit(*input) )
@@ -1297,7 +1304,7 @@ namespace SpecUtils
       const bool ok = boost::spirit::qi::parse( pos, end, boost::spirit::qi::double_, value );
       
       
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       if( !ok )
       {
         if( input && isdigit(*input) )
@@ -1388,7 +1395,7 @@ namespace SpecUtils
        */
       if( errno )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         char errormsg[1024];
         snprintf( errormsg, sizeof(errormsg),
                  "Couldnt convert string '%s' to a float using atof(), error %i",

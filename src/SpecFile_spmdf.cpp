@@ -123,7 +123,7 @@ namespace
     SpecUtils::split( s1fields, s1str, "," );
     if( s1fields.size() < 5 )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_s1_info(): Invalid S1 line" );
 #endif
       info.success = false;
@@ -137,7 +137,7 @@ namespace
     
     if( info.nchannels <= 0 )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_s1_info(): Invalid claimed number of channels" );
 #endif
       info.nchannels = 512;
@@ -244,7 +244,7 @@ namespace
     std::string::size_type pos1 = line.find( ',' );
     if( pos1 == string::npos )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_analyzed_background: unexpected EOL 0" );
 #endif
       info.success = false;
@@ -255,7 +255,7 @@ namespace
     std::string::size_type pos2 = line.find( ',', pos1+1 );
     if( pos2 == string::npos )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_analyzed_background: unexpected EOL 1" );
 #endif
       info.success = false;
@@ -269,7 +269,7 @@ namespace
       info.type = DailyFileAnalyzedBackground::Neutrons;
     else
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       string msg = "parse_analyzed_background: invalid type '" + type + "'";
       log_developer_error( __func__, msg.c_str() );
 #endif
@@ -283,7 +283,7 @@ namespace
     
     if( pos1 == string::npos )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_analyzed_background: unexpected EOL 2" );
 #endif
       info.success = false;
@@ -305,7 +305,7 @@ namespace
       
       if( !success )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, "parse_analyzed_background: did not decode spectrum" );
 #endif
         info.success = false;
@@ -332,9 +332,10 @@ namespace
     
     vector<float> vals;
     const bool success = SpecUtils::split_to_floats( start, len, vals );
-    if( !success || vals.size() < 2 )
+    if( !success || vals.size() < 2 || IsInf(vals[0])
+        || IsNan(vals[0]) || IsInf(vals[1]) || IsNan(vals[1]) )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_neutron_signal: did not decode spectrum" );
 #endif
       info.success = false;
@@ -385,7 +386,7 @@ namespace
     const bool success = SpecUtils::split_to_floats( start, len, *info.spectrum );
     if( !success || info.spectrum->size() < 2 )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_gamma_signal: did not decode spectrum" );
 #endif
       info.success = false;
@@ -423,7 +424,7 @@ namespace
     const bool success = SpecUtils::split_to_floats( start, len, *info.spectrum );
     if( !success || info.spectrum->size() < 2 )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_gamma_background: did not decode spectrum" );
 #endif
       info.success = false;
@@ -462,7 +463,7 @@ namespace
     const bool success = SpecUtils::split_to_floats( start, len, info.counts );
     if( !success || info.counts.size() < 2 )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_neutron_background: did not decode counts" );
 #endif
       info.success = false;
@@ -755,7 +756,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         parse_s1_info( linestart, linelen, info );
         if( !info.success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): S1 line invalid" );
 #endif
           throw runtime_error( "load_from_spectroscopic_daily_file(): S1 line invalid" );
@@ -804,7 +805,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           //See "TODO 20180817" above
           if( (line.size()<50) && (line.find("00-00-")!=string::npos) )
           {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
             log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Not a daily file we can decode (probably - giving up)" );
 #endif
             throw runtime_error( "Not a daily file we can decode (probably - giving up)" );
@@ -820,7 +821,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         if( !info->success )  //See "TODO 20180817" above
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Error Parsing gamma background" );
 #endif
           throw runtime_error( "Error Parsing gamma background" );
@@ -852,7 +853,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         if( !info->success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Error Parsing neutron background" );
 #endif
           throw runtime_error( "Error Parsing neutron background" );
@@ -869,7 +870,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
          */
         if( linelen < 4 )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): invalid BX line lenght" );
 #endif
           throw runtime_error( "invalid BX line lenght" );
@@ -923,7 +924,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         if( !info->success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "load_from_spectroscopic_daily_file(): Error Parsing gamma signal" );
 #endif
           
@@ -958,7 +959,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         if( !info->success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "Error Parsing neutron signal" );
 #endif
           throw runtime_error( "Error Parsing neutron signal" );
@@ -1007,7 +1008,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         if( !info.success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "Error Parsing analyzed background" );
 #endif
           throw runtime_error( "Error Parsing analyzed background" );
@@ -1044,7 +1045,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         if( !info.success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "Error Parsing end of record line" );
 #endif
           throw runtime_error( "Error Parsing end of record line" );
@@ -1068,7 +1069,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
           if( (nUnrecognizedLines > 10) && (fracBad > 0.1) )
             throw runtime_error( "To many bad lines" );
           
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           string msg = "unrecognized line begining: " + linetype;
           log_developer_error( __func__, msg.c_str() );
 #endif
@@ -1095,7 +1096,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   //Heres what we have to work with:
   if( s1infos.empty() )
   {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     log_developer_error( __func__, "Either S1 line missing" );
 #endif
     throw runtime_error( "Either S1 line missing" );
@@ -1299,7 +1300,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if( DO_SDF_MULTITHREAD )
       if( !gamma.success )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, "Error Parsing gamma signal" );
 #endif
         
@@ -1322,7 +1323,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if( DO_SDF_MULTITHREAD )
       if( neut && !neut->success )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, "Error Parsing neutron signal" );
 #endif
         
@@ -1413,10 +1414,13 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       const int totalChunks = gammas[gammas.size()-1]->timeChunkNumber;
       const float dtMeasStart = meas->real_time_ * (totalChunks - 1);
       const float timecor = dtMeasStart * float(totalChunks-gamma.timeChunkNumber)/float(totalChunks);
-      const boost::posix_time::seconds wholesec( static_cast<int>(floor(timecor)) );
-      const boost::posix_time::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
-      meas->start_time_ -= wholesec;
-      meas->start_time_ -= fracsec;
+      if( !IsNan(timecor) && !IsInf(timecor) ) //protect against UB
+      {
+        const boost::posix_time::seconds wholesec( static_cast<int>(floor(timecor)) );
+        const boost::posix_time::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
+        meas->start_time_ -= wholesec;
+        meas->start_time_ -= fracsec;
+      }//if( !IsNan(timecor) && !IsInf(timecor) )
       
       signalMeasurements.push_back( meas );
     }//for( size_t i = 0; i < gammas.size(); ++i )
@@ -1431,7 +1435,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     
     if( s1pos == background_to_s1_num.end() || s1pos->second >= int(s1infos.size()) )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "Serious programing logic error in 1" );
 #endif
       
@@ -1450,7 +1454,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     
     if( gammaback == gamma_backgrounds.end() )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "Serious programing logic error in 1.1" );
 #endif
       
@@ -1459,7 +1463,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     
     if( backtimestamp == end_background.end() )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "Serious programing logic error in 1.2" );
 #endif
       
@@ -1476,7 +1480,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if( DO_SDF_MULTITHREAD )
       if( !back.success )
       {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, "Error Parsing gamma background" );
 #endif
         
@@ -1499,7 +1503,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       if( !meas->gamma_counts_ )
       {
         meas->parse_warnings_.emplace_back( "Warning, invalid gamma counts" );
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, meas->parse_warnings_.back().c_str() );
 #endif
       }else if( static_cast<int>(meas->gamma_counts_->size()) != sinfo.nchannels )
@@ -1507,7 +1511,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         meas->parse_warnings_.emplace_back( "Warning, mismatch in spectrum size, got "
                                         + std::to_string(meas->gamma_counts_->size())
                                         + " expected " + std::to_string(sinfo.nchannels) );;
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, meas->parse_warnings_.back().c_str() );
 #endif
       }//if( invalid gamma counts )...
@@ -1563,7 +1567,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if( DO_SDF_MULTITHREAD )
         if( !neutbackground.success )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "Error Parsing neutron background" );
 #endif
           

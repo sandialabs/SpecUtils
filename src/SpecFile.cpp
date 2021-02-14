@@ -4451,7 +4451,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     typedef map<int,string> IntStrMap;
     IntStrMap num_to_name_map;
     set<string> gamma_det_names, neut_det_names;  //If a measurement contains neutrons at all, will be added to this.
-    map<string,shared_ptr<const EnergyCalibration>> missing_cal_fixs;
+    map<string,map<size_t,shared_ptr<const EnergyCalibration>>> missing_cal_fixs;
     
     
     
@@ -4519,7 +4519,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
                                        : MeasurementProperties::kDerivedDataMeasurements);
       
       //Do a basic sanity check of is the calibration is reasonable.
-      if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+      const size_t nchannel = (meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0));
+      if( nchannel >= 2 )
       {
         auto cal = meas->energy_calibration_;
         
@@ -4543,6 +4544,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
             if( cal->num_channels() != meas->gamma_counts_->size() )
             {
 #if( PERFORM_DEVELOPER_CHECKS )
+              assert( cal->num_channels() == meas->gamma_counts_->size() );
               log_developer_error( __func__, "Found a energy calibration with different number"
                                    " of channels than gamma spectrum" );
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
@@ -4561,7 +4563,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         //  at least have all the EnergyCalType::InvalidEquationType point to the same object.
         if( meas->energy_calibration_->type() == EnergyCalType::InvalidEquationType )
         {
-          shared_ptr<const EnergyCalibration> fix_cal = missing_cal_fixs[meas->detector_name_];
+          shared_ptr<const EnergyCalibration> fix_cal = missing_cal_fixs[meas->detector_name_][nchannel];
           
           for( size_t otherindex = 0; !fix_cal && (otherindex < measurements_.size()); ++otherindex )
           {
@@ -4581,13 +4583,57 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
             if( othermeas->detector_name_ != meas->detector_name_ )
               continue;
             
-            fix_cal = othermeas->energy_calibration_;
+            if( othermeas->energy_calibration_->num_channels() != nchannel )
+            {
+              try
+              {
+                auto newcal = make_shared<EnergyCalibration>();
+                
+                const auto &othercal = othermeas->energy_calibration_;
+                switch( othercal->type() )
+                {
+                  case EnergyCalType::Polynomial:
+                    newcal->set_polynomial( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
+                    break;
+                  case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+                    newcal->set_default_polynomial( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
+                    break;
+                    
+                  case EnergyCalType::FullRangeFraction:
+                    newcal->set_full_range_fraction( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
+                    break;
+                    
+                  case EnergyCalType::LowerChannelEdge:
+                    if( othercal->num_channels() < nchannel )
+                    {
+                      newcal.reset();
+                    }else
+                    {
+                      assert( othercal->channel_energies() );
+                      newcal->set_lower_channel_energy( nchannel, *othercal->channel_energies() );
+                    }
+                    break;
+                    
+                  case EnergyCalType::InvalidEquationType:
+                    assert(0);
+                    break;
+                }//switch( othercal->type() )
+                
+                fix_cal = newcal;
+              }catch( std::exception & )
+              {
+                fix_cal.reset();
+              }//try / catch
+            }else
+            {
+              fix_cal = othermeas->energy_calibration_;
+            }
           }//for( const auto &othermeas : measurements_ )
           
           if( fix_cal )
-            missing_cal_fixs[meas->detector_name_] = fix_cal;
+            missing_cal_fixs[meas->detector_name_][nchannel] = fix_cal;
           else
-            missing_cal_fixs[meas->detector_name_] = meas->energy_calibration_;
+            missing_cal_fixs[meas->detector_name_][nchannel] = meas->energy_calibration_;
           
           if( fix_cal )
           {
@@ -4607,15 +4653,13 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
           shared_ptr<EnergyCalibration> &def_cal = default_energy_cal[meas->gamma_counts_->size()];
           if( !def_cal )
           {
-            const size_t nbin = meas->gamma_counts_->size();
-            const float nbinf = std::max(meas->gamma_counts_->size()-1, size_t(1));
+            const float nbinf = ((nchannel > 1) ? static_cast<float>(nchannel - 1): 1.0f);
             def_cal = make_shared<EnergyCalibration>();
-            if( nbin > 1 )  /// \TODO: maybe loosen poly/FRF to not have a number of bin requirement
-              def_cal->set_default_polynomial( nbin, {0.0f, 3000.0f/nbinf}, {} );
+            def_cal->set_default_polynomial( nchannel, {0.0f, 3000.0f/nbinf}, {} );
           }
           
           meas->energy_calibration_ = def_cal;
-          missing_cal_fixs[meas->detector_name_] = def_cal;
+          missing_cal_fixs[meas->detector_name_][nchannel] = def_cal;
         }//if( invalid equation type )
         
         //Check if an equivalent calibration has been seen, and if so, use that
@@ -4946,6 +4990,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         const auto &cal = m->energy_calibration_;
         if( cal && cal->valid() )
         {
+          if( cal->num_channels() != ngammachan )
+            cerr << "cal->num_channels()=" << cal->num_channels() << ", ngammachan=" << ngammachan << endl;
           assert( cal->num_channels() == ngammachan );
         }
       }//for( const auto &m : measurements_ )
@@ -5823,7 +5869,7 @@ void SpecFile::set_detector_type_from_other_info()
   
   if( manufacturer_.size() || instrument_model_.size() )
   {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     //In principle we should some of the following detectors to the DetectorType enum
     if( !(manufacturer_=="Princeton Gamma-Tech Instruments, Inc." && instrument_model_=="RIIDEye")
        && !(manufacturer_=="ICx Technologies" && instrument_model_=="")

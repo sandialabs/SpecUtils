@@ -723,7 +723,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         if( nnotrecognized > 15 && nnotrecognized >= linenum )
           throw runtime_error( "To many unregognized begining lines" );
         
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         cerr << "Warning: SpecFile::load_from_iaea_spc(...):  I didnt recognize line: '"
         << line << "'" << endl;
 #endif
@@ -2729,9 +2729,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     cleanup_after_load();
   }catch( std::exception &e )
   {
-#if(PERFORM_DEVELOPER_CHECKS)
-    cerr  << "SpecFile::load_from_binary_spc(istream &) caught:\n" << e.what() << endl;
-#endif
+//#if(PERFORM_DEVELOPER_CHECKS)
+    //cerr  << "SpecFile::load_from_binary_spc(istream &) caught:\n" << e.what() << endl;
+//#endif
     reset();
     input.clear();
     input.seekg( orig_pos, ios::beg );

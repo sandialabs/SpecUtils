@@ -15,7 +15,7 @@ Once you do this, you can run a fuzz job, use a command like:
 ```bash
 # Fuzz for 5 minutes with max file size of 2.5 MB, using 8 different processes 
 #  (using -workers=16 argument doesnt seem to cause significantly more cpu use than a single worker)
-./fuzz_test/file_parse_fuzz CORPUS_DIR -max_len=2621440 -jobs=8 -print_final_stats=1 -max_total_time=300
+./fuzz_test/file_parse_fuzz CORPUS_DIR -max_len=2621440 -jobs=8 -print_final_stats=1 -rss_limit_mb=3072 -max_total_time=300
 ```
 
 
