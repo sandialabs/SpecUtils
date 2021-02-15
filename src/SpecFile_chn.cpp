@@ -197,7 +197,7 @@ bool SpecFile::load_from_chn( std::istream &input )
       
       memcpy( &chntype, &(buffer[0]), sizeof(int16_t) );
       
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS &&  !SpecUtils_BUILD_FUZZING_TESTS )
       //Files such as ref985OS89O82 can have value chntype=-1
       if( chntype != -102 && chntype != -101 && chntype != 1 )
       {

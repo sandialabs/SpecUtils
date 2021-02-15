@@ -5240,7 +5240,7 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
     {
       neutron_to_gamma_names.clear();
       
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       stringstream devmsg;
       devmsg << "Unable to uniquly map neutron to gamma detector names; neutron"
                 " and gammas are seperate measurements, but mapping between"
@@ -5299,7 +5299,7 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
     auto namepos = neutron_to_gamma_names.find(meas->detector_name_);
     if( namepos == end(neutron_to_gamma_names) )
     {
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       log_developer_error( __func__, "Found a nuetron detector Measurement I couldnt map to a gamma meas - should investigate." );
 #endif  //PERFORM_DEVELOPER_CHECKS
       new_all_det_names.insert( meas->detector_name_ );
@@ -5361,7 +5361,7 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
         if( aDetNotInterCal && (gamma_name.find("_intercal_") == string::npos) )
           continue;
         
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
         if( gamma_names.size() != 1 && (meas->detector_name_ != gamma_name) )
         {
           string errmsg = "Found a nuetron detector Measurement (DetName='" + meas->detector_name_
@@ -5595,7 +5595,7 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::OrtecRadEagleLaBr;
     }else
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       log_developer_error( __func__, ("Unrecognized RadEagle Model: " + model).c_str() );
 #endif
     }
@@ -5990,6 +5990,7 @@ void SpecFile::recalc_total_counts()
             " on if a shallow or deep count was done: %9f for shallow, %9f for"
             " deep\n", gamma_count_sum_, deep_gamma_sum );
     log_developer_error( __func__, buffer );
+    assert( 0 );
   }
   
   if( fabs(deep_neutron_sum - neutron_counts_sum_) > 0.1 )
@@ -6000,6 +6001,7 @@ void SpecFile::recalc_total_counts()
               " on if a shallow or deep count was done: %9f for shallow, %9f for"
               " deep\n", neutron_counts_sum_, deep_neutron_sum );
     log_developer_error( __func__, buffer );
+    assert( 0 );
   }
   
 #endif //#if( PERFORM_DEVELOPER_CHECKS )

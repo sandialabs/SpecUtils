@@ -1675,7 +1675,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         }//for( int col = 0; col < (compressed_devpair ? 4 : 2); ++col )
       }//for( const string &name : detector_names )
       
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS&& !SpecUtils_BUILD_FUZZING_TESTS)
       bool unused_dev_pairs = false;
       for( int col = 0; col < (compressed_devpair ? 4 : 2); ++col )
       {

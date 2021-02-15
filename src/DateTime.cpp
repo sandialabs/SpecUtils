@@ -491,13 +491,17 @@ namespace SpecUtils
         
         
         double numres = 0.0;
-        if( (stringstream(fracstr) >> numres) )
+        if( (stringstream(fracstr) >> numres) && !IsNan(numres) && !IsInf(numres) )
         {
           const double frac = std::round( numres * nticks * 1.0E-9 );
           const auto fractions = static_cast<boost::posix_time::time_duration::fractional_seconds_type>( frac );
           fraction = boost::posix_time::time_duration(0,0,0,fractions);
         }else
-          cerr << "Failed to convert fraction '" << fracstr << "' to double" << endl;
+        {
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+          log_developer_error( __func__, ("Failed to convert fraction '" + fracstr + "' to double").c_str() );
+#endif
+        }
         
         //int64_t numres = 0;  //using int will get rounding wrong
         //if( (stringstream(fracstr) >> numres) )

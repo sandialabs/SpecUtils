@@ -221,6 +221,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
     int linenum = 0, nnotrecognized = 0;
     bool tested_first_line = false;
     vector<float> calibcoeff_poly;
+    shared_ptr<vector<float>> channel_counts;
     
     while( input.good() )
     {
@@ -650,18 +651,23 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         analysis->results_.push_back( result );
       }else if( line.length() && isdigit(line[0]) && ((linenum - nnotrecognized) > 1)  )
       {
-        auto channel_data = std::make_shared< std::vector<float> >();
+        if( channel_counts && !channel_counts->empty() )
+        {
+          string warning = "Multiple spectra elements found in IAEA SPC file - combining into single spectrum.";
+          if( std::find(begin(meas->parse_warnings_), end(meas->parse_warnings_), warning ) == end(meas->parse_warnings_) )
+            meas->parse_warnings_.push_back( std::move(warning) );
+        }//if( we have already seend some channel_counts )
         
         input.seekg( sol_pos, ios::beg );
-        while( SpecUtils::safe_get_line( input, line ) )
+        while( SpecUtils::safe_get_line( input, line, 64*1024*16 ) ) //max 64k channels, 16 characters per float
         {
           trim(line);
           
-          if( line.empty() && Length>=0 && channel_data->size()==Length )
+          if( line.empty() && channel_counts && (Length >= 0) && (channel_counts->size() == Length) )
           {
             //ref8MLQDKLR3E seems to have a bunch of extra zeros at the end of the
             //  file (after a line break), so lets deal with this in a way that we
-            //  can still try to enforce Length==channel_data->size() at the end
+            //  can still try to enforce Length==channel_counts->size() at the end
             if( !input.eof() )
             {
               istream::pos_type pos;
@@ -685,29 +691,55 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           
           vector<float> linefloats;
           SpecUtils::split_to_floats( line.c_str(), line.length(), linefloats );
-          channel_data->insert( channel_data->end(), linefloats.begin(), linefloats.end() );
+          for( float &f : linefloats )  //could probably use vector instructions here...
+          {
+            if( IsInf(f) || IsNan(f) )
+              f = 0.0f;
+          }
+          
+          if( !channel_counts )
+          {
+            channel_counts = make_shared<vector<float>>( std::move(linefloats) );
+          }else
+          {
+            channel_counts->insert( channel_counts->end(), begin(linefloats), end(linefloats) );
+          }
+          
+          assert( channel_counts );
+          if( channel_counts->size() > (64*1024 + 1) )
+          {
+            meas->parse_warnings_.push_back( "Exceeded max of 64k channels for IAEA SPC file; skipping further channels" );
+            break;
+          }
         }//while( SpecUtils::safe_get_line( input, line ) )
         
-        if( size_t(Length) != channel_data->size() )
+        if( (Length > 1) && channel_counts && (size_t(Length) != channel_counts->size()) )
         {
           bool isPowerOfTwo = ((Length != 0) && !(Length & (Length - 1)));
-          if( isPowerOfTwo && Length >= 1024 && size_t(Length) < channel_data->size() )
+          if( isPowerOfTwo && (Length >= 1024) && (size_t(Length) < channel_counts->size()) )
           {
-            channel_data->resize( Length );
+            meas->parse_warnings_.push_back( "Reducing channel counts in IAEA SPC file to specified length from "
+                                            + std::to_string(channel_counts->size()) + " read, to "
+                                            + std::to_string(Length) );
+            channel_counts->resize( Length );
           }else if( Length > 0 )
           {
-            stringstream msg;
-            msg << "SpecFile::load_from_iaea_spc(istream &)\n\tExpected to read "
-                << Length << " channel datas, but instead read " << channel_data->size();
-            throw std::runtime_error( msg.str() );
+            string msg = "SpecFile::load_from_iaea_spc(istream &)\n\tExpected to read "
+                + std::to_string(Length) + " channel datas, but instead read "
+                + std::to_string(channel_counts->size());
+            throw std::runtime_error( msg );
           }//if( Length > 0 && size_t(Length) != channel_data->size() )
         }//if( size_t(Length) != channel_data->size() )
         
-        meas->gamma_counts_ = channel_data;
-        for( const float a : *channel_data )
-          meas->gamma_count_sum_ += a;
-      }
-      else
+        
+        if( channel_counts )
+        {
+          meas->gamma_counts_ = channel_counts;
+          meas->gamma_count_sum_ = 0.0;
+          for( const float a : *channel_counts )
+            meas->gamma_count_sum_ += a;
+        }//if( channel_counts )
+      }else //if( we know this tag ) / else / else if(...) / else if(...) ...
       {
         if( !linenum && line.length() )
         {
@@ -2654,6 +2686,12 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     }else //if( wFILTYP == 5 )
     {
       input.read( (char *) &(counts_ref[0]), 4*n_channel );
+      
+      for( float &f : counts_ref )
+      {
+        if( IsInf(f) || IsNan(f) )
+          f = 0.0f;
+      }
     }//if( file is integer channel data ) / else float data
     
     assert( n_channel > 0 );

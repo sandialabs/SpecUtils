@@ -140,6 +140,10 @@ void expand_counted_zeros( const vector<float> &data, vector<float> &return_answ
     else
     {
       iter++;
+      
+      if( IsNan(*iter) || IsInf(*iter) )
+        throw runtime_error( "Invalid counted zeros: inf or NaN number of elements specified" );
+      
       const size_t nZeroes = ((iter==data.end()) ? 0u : static_cast<size_t>(floor(*iter + 0.5f)) );
       
       if( ((*iter) <= 0.5f) || ((answer.size() + nZeroes) > 131072) )

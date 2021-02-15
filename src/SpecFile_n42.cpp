@@ -533,7 +533,7 @@ namespace
     }//if( is_nuetron == is_gamma && !is_gamma )
     
     
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
     if( is_nuetron == is_gamma )
     {
       stringstream msg;
@@ -586,7 +586,7 @@ namespace
     if( XML_VALUE_ICOMPARE(uccupied_node, "false") )
       return SpecUtils::OccupancyStatus::NotOccupied;
     
-  #if( PERFORM_DEVELOPER_CHECKS )
+  #if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
     const string errmsg = "Found un-expected occupancy status value '"
                           + SpecUtils::xml_value_str(uccupied_node) + "'";
     log_developer_error( __func__, errmsg.c_str() );
@@ -634,7 +634,7 @@ namespace
       msg << SRC_LOCATION << "\n\tUnable to convert '" << SpecUtils::xml_value_str(speed_node)
       << "' to a float";
 
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       log_developer_error( __func__, msg.str().c_str() );
 #endif
       
@@ -647,7 +647,7 @@ namespace
     const rapidxml::xml_attribute<char> *unit_attrib = XML_FIRST_ATTRIB( speed_node, "Units" );
     if( !unit_attrib || !unit_attrib->value_size() )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       const string msg = "Warning no units attribute available in <Speed> node, assuming m/s";
       cerr << "\n\t" << msg << endl;
 #endif
@@ -664,7 +664,7 @@ namespace
       return speed;
     
     const string msg = "Unknown speed units: '" + units + "' - please fix";
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
     log_developer_error( __func__, msg.c_str() );
 #endif
     
@@ -1259,7 +1259,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
     
   }catch( std::exception &e )
   {
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
     string msg = "Measurement::add_spectra_to_measurement_node_in_2012_N42_xml(...): something horrible happened!: " + string(e.what());
     log_developer_error( __func__, msg.c_str() );
 #endif
@@ -1621,7 +1621,7 @@ void N42CalibrationCache2006::parse_dev_pairs_from_xml( const rapidxml::xml_node
             deviatnpairs.push_back( pair<float,float>(devpair[0],devpair[1]) );
           }else
           {
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
             log_developer_error( __func__, ("Could not put '" + xml_value_str(dev_node) + "' into deviation pair").c_str() );
 #endif
           }
@@ -1928,7 +1928,7 @@ bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<c
       return true;
     }else
     {
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
         log_developer_error( __func__, "Couldnt interpret energy calibration PointXY (not monototonically increasing)" );
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
     }
@@ -2661,7 +2661,7 @@ struct N42DecodeHelper2006
           m_meas->start_time_ = time_from_string( xml_value_str(start_time).c_str() );
       }//if( spec_parent )
     }
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
     catch( std::exception &e )
     {
       m_meas->reset();
@@ -3228,7 +3228,7 @@ public:
             
             if( !calib_att || !calib_att->value_size() )
             {
-  #if(PERFORM_DEVELOPER_CHECKS)
+  #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
               log_developer_error( __func__, "Found a gamma spectrum without calibration information" );
   #endif
               //continue;
@@ -3351,7 +3351,7 @@ public:
           
           if( det_info_ref.empty() )
           {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
             cerr << "Found GrossCounts node with no radDetectorInformationReference" << endl;
 #endif
             continue;
@@ -3386,7 +3386,7 @@ public:
           
           if( (det_type != NeutronDetection) && (det_type != GammaAndNeutronDetection) )
           {
-  #if(PERFORM_DEVELOPER_CHECKS)
+  #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
             auto  det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
             if( det_iter == id_to_dettype_ptr->end() )
             {
@@ -3481,7 +3481,11 @@ public:
           {
             const string val = xml_value_str( SpeedValue );
             if( !(stringstream(val) >> (meas->speed_)) )
-              cerr << "Failed to convert '" << val << "' to a numeric speed" << endl;
+            {
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+              log_developer_error( __func__,  ("Failed to convert '" + val + "' to a numeric speed").c_str() );
+#endif
+            }
           }//if( speed_ > 0 )
           
           meas->contained_neutron_ = true;
@@ -3648,7 +3652,7 @@ public:
           std::lock_guard<std::mutex> lock( meas_mutex );
           measurements.insert( measurements.end(), meas_to_add.begin(), meas_to_add.end() );
         }
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       }catch( std::exception &e )
       {
         std::lock_guard<std::mutex> lock( meas_mutex );
@@ -4032,7 +4036,7 @@ namespace SpecUtils
         if( lowered.size() != field.size() )
         {
           lowered.resize( field.size(), ' ' ); //things will get messed up, but at least not crash
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
           log_developer_error( __func__,  "to_lower_ascii_copy() changed string length" );
 #endif
         }//if( lowered.size() != field.size() )
@@ -4290,7 +4294,7 @@ namespace SpecUtils
             m->neutron_counts_[0] += neut_counts;
           else
           {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
             cerr << "Have both neutron spectrum and neutron dose count" << endl;
 #endif
           }
@@ -4303,7 +4307,7 @@ namespace SpecUtils
           m->contained_neutron_ |= (m->neutron_counts_[0]>0.0);
         }else
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
           cerr << "Error converting neutron counts '" << xml_value_str(counts)
           << "' to float; ignoring" << endl;
 #endif
@@ -5081,7 +5085,7 @@ namespace SpecUtils
                 if( spec->contained_neutron_
                    && (spec->neutron_counts_ != gross->neutron_counts_) )
                 {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
                   log_developer_error( __func__,  "Warning: confusing gross count situation" );
 #endif
                   continue;
@@ -5124,7 +5128,7 @@ namespace SpecUtils
             if( find( measurements_this_node.begin(), measurements_this_node.end(), meas )
                 == measurements_this_node.end() )
             {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS  && !SpecUtils_BUILD_FUZZING_TESTS )
               log_developer_error( __func__,  "Got Measurement not in measurements_this_node" );
 #endif
               continue; //shouldnt ever happen
@@ -5146,7 +5150,7 @@ namespace SpecUtils
             const size_t norig_channel = meas->gamma_counts_ ? meas->gamma_counts_->size() : size_t(0);
             if( norig_channel && (norig_channel != (2*num_lower_bins)) )
             {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
               const string msg = "Found multiple calibrations, but size ("
                                  + to_string(num_lower_bins) + ") wasnt 1/2 of channel size ("
                                  + to_string(norig_channel) + ")";
@@ -5157,7 +5161,7 @@ namespace SpecUtils
       
             if( (num_lower_bins + 1) >= norig_channel )
             {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
               const string msg = "Found multiple calibrations, but size ("
               + to_string(num_lower_bins) + ") was larger than channel size ("
               + to_string(norig_channel) + ")";
@@ -5603,7 +5607,7 @@ namespace SpecUtils
       {
         if( instrument_type_.size() )
         {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
           log_developer_error( __func__,  "SpecFile::load_2006_N42_from_doc(): may be overwriting InstrumentInformation already gathered from a specific spectrum" );
 #endif
         }
@@ -6510,7 +6514,7 @@ namespace SpecUtils
           {
             if( smeas[i]->gamma_counts_ && !smeas[i]->gamma_counts_->empty() )
             {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
               log_developer_error( __func__, "Serious unexpected error mapping energy calibrations" );
               assert( 0 );
 #endif
@@ -6804,7 +6808,7 @@ namespace SpecUtils
         if( !(stringstream(val.substr(lanepos+5) ) >> lane_number_) )
         {
           lanepos = string::npos;
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
           log_developer_error( __func__, ("Failed to read lane number from '" + val + "'").c_str() );
 #endif
         }
@@ -7150,7 +7154,7 @@ namespace SpecUtils
         {
           const string msg = "Energy calibration with ID='" + id
                           + "' was re-defined with different definition, which a file shouldnt do.";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
           log_developer_error( __func__, msg.c_str() );
 #endif
           if( std::find(begin(parse_warnings), end(parse_warnings), msg) == end(parse_warnings) )
