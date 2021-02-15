@@ -138,6 +138,17 @@ bool SpecFile::load_from_phd( std::istream &input )
       
       if( SpecUtils::istarts_with( line, "#g_Spectrum") )
       {
+        // We should only see this element once, so lets check for an unexpected format; we'll just
+        //  add a warning, and not full-blown support since I havent actually seen a file like this.
+        if( meas->gamma_counts_ && !meas->gamma_counts_->empty() )
+        {
+          auto &prevwarn = meas->parse_warnings_;
+          string warning = "Multiple spectrum elements found in PHD file; only using last one.";
+          const auto warnpos = std::find( begin(prevwarn), end(prevwarn), warning );
+          if( warnpos == end(prevwarn) )
+            prevwarn.push_back( std::move(warning) );
+        }//if( we have already set the gamma counts )
+        
         SpecUtils::safe_get_line( input, line, max_len );
         ++linenum;
         trim( line );
@@ -152,7 +163,7 @@ bool SpecFile::load_from_phd( std::istream &input )
         const size_t nchannel = static_cast<size_t>( fields[0] );
         auto counts = std::make_shared< vector<float> >(nchannel,0.0f);
         
-        double channelsum = 0.0;
+        
         size_t last_channel = 0;
         while( SpecUtils::safe_get_line(input, line, max_len) )
         {
@@ -170,23 +181,31 @@ bool SpecFile::load_from_phd( std::istream &input )
           if( fields.size() == 1 )  //you need at least two rows for phd format
             throw runtime_error( "Unexpected spectrum data line-size" );
           
-          if( (floorf(fields[0]) != fields[0]) || (fields[0] < 0.0f) )
-            throw runtime_error( "First col of spectrum data must be positive integer" );
+          if( (floorf(fields[0]) != fields[0]) || (fields[0] < 1.0f) || IsNan(fields[0]) || IsInf(fields[0]) )
+            throw runtime_error( "First col of spectrum data must be integer >= 1" );
           
           const size_t start_channel = static_cast<size_t>( fields[0] );
           
           if( (start_channel <= last_channel) || (start_channel > nchannel) )
             throw runtime_error( "Channels not ordered as expected" );
+
+          //We'll let the fuzzing test give us out-of-order channels, but otherwise require the file
+          //  to give us channels in-order
+#if( !SpecUtils_BUILD_FUZZING_TESTS )
+          last_channel = start_channel;
+#endif
           
           for( size_t i = 1; (i < fields.size()) && (start_channel+i-2)<nchannel; ++i )
-          {
-            channelsum += fields[i];
             (*counts)[start_channel + i - 2] = fields[i];
-          }
         }//while( spectrum data )
         
         meas->gamma_counts_ = counts;
-        meas->gamma_count_sum_ = channelsum;
+        
+        // We could probably sum the counts as we read them in, but we'll just wait to do it here
+        //  incase we have multiple #g_Spectrum (of which, we'll take just the last one)
+        meas->gamma_count_sum_ = 0.0;
+        for( const float &cc : *counts )
+          meas->gamma_count_sum_ += cc;
         
         if( upper_energy > 0.0f && nchannel > 0 )
         {
