@@ -591,7 +591,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     //console.log( 'In SpectrumChartD3::getStaticSvg: svgchart' );
     
     const w = this.svg.attr("width");
-    const h = this.svg.attr("height");
+    let h = this.svg.attr("height");
         
     //We will need to propagate all the styles we can dynamically set in the SVG
     //  to the <defs> section of the new SVG.  We could define these in the C++ and pass them to the
@@ -683,10 +683,24 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + '</style></defs>';
     
     
+    // Hide mouse information, and slider chart
+    this.refLineInfo.style("display", "none");
+    this.mouseInfo.style("display", "none");
+    if( this.sliderChart && this.size.sliderChartHeight ){
+      //  Remove slider chart from SVG, and also adjust height
+      h -= this.size.sliderChartHeight;
+      this.sliderChart.style("display", "none");
+    }
+    
     let svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg"' + ' width="'  + w + '"' + ' height="' + h + '"' + '>'
     + svgDefs
     + this.svg.node().innerHTML.toString()
     +'</svg>';
+    
+    
+    // Make slider chart visible again, if it should be showing
+    if( this.sliderChart && this.size.sliderChartHeight )
+      this.sliderChart.style("display", null );
     
     return svgMarkup;
   }catch(e){
