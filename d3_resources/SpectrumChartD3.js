@@ -654,7 +654,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     let legBackStroke = legBackStyle && legBackStyle.stroke ? legBackStyle.stroke : null;
     
     let axisStyle = getStyle( '.xaxis' );
-    let axisStroke = axisStyle && axisStyle.stroke ? axisStyle.stroke : null;
+    let axisFill = axisStyle && axisStyle.fill ? axisStyle.fill : null;
     
     let tickStyle = getStyle( '.xaxis > .tick > line' );
     let tickStroke = tickStyle && tickStyle.stroke ? tickStyle.stroke : null;
@@ -675,7 +675,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + '.legendBack{ ' + (legBackFill ? 'fill:' + legBackFill + ';' : "")
     + (legBackStroke ? 'stroke: ' + legBackStroke + ';' : "")
     + ' }\n'
-    + (axisStroke ? '.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis{ fill: ' + axisStroke + '; }\n' : "")
+    + (axisFill ? '.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis{ fill: ' + axisFill + '; }\n' : "")
     + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick{ stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
@@ -7787,7 +7787,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
   
   const titleElement = document.querySelector('.xaxistitle');
   const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
+  txtcolor = titleStyle && titleStyle.fill ? titleStyle.fill : 'black';
   
   //Spacing between lines of text
   let linehspace = 13;
