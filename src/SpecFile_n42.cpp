@@ -5506,7 +5506,8 @@ namespace SpecUtils
           set_analysis_info_from_n42( analysis_node, *analysis_info );
         
         
-        //THe identiFINDER has its neutron info in a <CountDoseData> node under the <Measurement> node
+        //The identiFINDER has its neutron info in a <CountDoseData> node under the <Measurement> node
+        bool haveUsedNeutMeas = false;
         for( const rapidxml::xml_node<char> *count_dose_data_node = xml_first_node_nso( measurement, "CountDoseData", xmlns );
             count_dose_data_node;
             count_dose_data_node = XML_NEXT_TWIN(count_dose_data_node) )
@@ -5540,8 +5541,18 @@ namespace SpecUtils
             //            is all likely not yet correct (example measurements that
             //            did contain neutrons in SPE file, didnt have them in the
             //            N42 file, so something may be odd).
-            if( XML_VALUE_ICOMPARE(remark_node,"Minimum") || XML_VALUE_ICOMPARE(remark_node,"Maximum") )
+            if( XML_VALUE_ICOMPARE(remark_node,"Minimum") )
               continue;
+            
+            if( XML_VALUE_ICOMPARE(remark_node,"Maximum")  )
+            {
+              if( !has_count_rate_node )
+                continue;
+              
+              const string units = xml_value_str( XML_FIRST_IATTRIB(count_rate_node, "Units") );
+              if( haveUsedNeutMeas || units != "CPS" )
+                continue;
+            }//if( maximum says MAXIMUM )
           }//if( remark_node )
           
           float counts;
@@ -5585,6 +5596,7 @@ namespace SpecUtils
             if( fabs(realtimesec - meas->real_time_) >= 1.0 )
               continue;
             
+            haveUsedNeutMeas = true;
             meas->contained_neutron_ = true;
             meas->neutron_counts_.resize( 1 );
             meas->neutron_counts_[0] = counts;
