@@ -69,8 +69,19 @@ namespace  SpecUtils
    "pre-processing" string wrangling complexity too!  ...next release...,
    when we can also switch to using std::chrono::time_point instead of
    boost::posix_time::ptime
+   
+   Note though it looks like HH Date lib doesnt work with GCC 4.8.4 at least, so we'll use the old
+   code for now until we drop gcc 4.8 support (e.g., Ubuntu 14)
    */
+#if( defined(_MSC_VER) \
+     || (__cplusplus >= 201103L && (!defined(__GLIBCXX__) || (__cplusplus >= 201402L) || (defined(_GLIBCXX_RELEASE) && _GLIBCXX_RELEASE > 4))))
 #define USE_HH_DATE_LIB 1
+#else
+#define USE_HH_DATE_LIB 0
+#warning "Using deprecated date-time parsing - support for this compiler will be removed soon"
+#endif
+
+
   
   //time_from_string(...):  Currently is a convience function for
   //  time_from_string_strptime(str,MiddleEndianFirst)
