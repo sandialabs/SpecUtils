@@ -399,7 +399,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       if( is135v1 && !found1024 )
       {
         parse_warnings_.emplace_back( "The header is missing the 16-bit integer \"1024\" at offsets 6 and 7'" );
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, "The header is missing the 16-bit integer \"1024\" at offsets 6 and 7'" );
 #endif
       }//if( is135v1 && !found1024 )
@@ -618,7 +618,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
           nchannels = expected_num_channels;
         
         string msg = "The expected and read number of channels didnt agree";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         log_developer_error( __func__, msg.c_str() );
 #endif
         if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )
@@ -666,7 +666,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
           if( meas->energy_calibration_->type() != EnergyCalType::InvalidEquationType )
           {
             string msg = "Irregular GR energy calibration apparently found.";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
             log_developer_error( __func__, msg.c_str() );
 #endif
             if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )
@@ -693,7 +693,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
             usingGuessedVal = true;
             
             string msg = "Default GR135 energy calibration for CZT has been assumed.";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
             log_developer_error( __func__, msg.c_str() );
 #endif
             if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )
@@ -706,7 +706,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
             usingGuessedVal = true;
             
             string msg = "Default GR135 energy calibration for NaI has been assumed.";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
             log_developer_error( __func__, msg.c_str() );
 #endif
             if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )
@@ -722,7 +722,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
           usingGuessedVal = true;
           
           string msg = "Default GR130 energy calibration for NaI has been assumed.";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, msg.c_str() );
 #endif
           if( std::find( std::begin(parse_warnings_), std::end(parse_warnings_), msg) == std::end(parse_warnings_) )

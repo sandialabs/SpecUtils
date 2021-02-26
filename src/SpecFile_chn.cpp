@@ -127,7 +127,7 @@ bool SpecFile::load_from_chn( std::istream &input )
     //    if( !evenNumChnnel || numchannels<2 ) // || !isPowerOfTwo
     //      throw runtime_error( "CHN file with unexpected number of data channels: " + std::to_string(numchannels) );
     
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( firstchannel != 0 )
     {
       //if( firstchannel==1 ), we should shift the bin contents over by 1 to the left

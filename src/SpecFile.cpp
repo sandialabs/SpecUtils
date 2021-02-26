@@ -5982,7 +5982,7 @@ void SpecFile::recalc_total_counts()
   const double deep_neutron_sum = deep_neutron_count_sum();
   
   if( fabs(deep_gamma_sum - gamma_count_sum_) > 0.1
-      && fabs(deep_gamma_sum - gamma_count_sum_) > 1.0E-7*max(deep_gamma_sum, gamma_count_sum_) )
+      && fabs(deep_gamma_sum - gamma_count_sum_) > 1.0E-7*max(fabs(deep_gamma_sum), fabs(gamma_count_sum_)) )
   {
     char buffer[1024];
     snprintf( buffer, sizeof(buffer),

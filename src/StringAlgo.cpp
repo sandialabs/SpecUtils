@@ -675,7 +675,7 @@ namespace SpecUtils
     if( input.empty() )
       return;
     
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     string strcopy = input, original = input;
     size_t reslen = strcopy.size() + 1;
     while( reslen != strcopy.size() )
@@ -713,7 +713,7 @@ namespace SpecUtils
       }//if( found )
     }//while( found )
     
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( strcopy != input )
     {
       stringstream msg;

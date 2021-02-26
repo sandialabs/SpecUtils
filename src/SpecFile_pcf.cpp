@@ -1192,7 +1192,13 @@ bool SpecFile::load_from_pcf( std::istream &input )
            || !SpecUtils::valid_longitude(longitude) )
         {
           latitude = longitude = -999.9;
-#if(PERFORM_DEVELOPER_CHECKS)
+          
+          string warn_msg = "Could not interpret GPS coordinates in file.";
+          auto pos = std::find( begin(parse_warnings_), end(parse_warnings_), warn_msg );
+          if( pos == end(parse_warnings_) )
+            parse_warnings_.push_back( std::move(warn_msg) );
+          
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           char buffer[256];
           snprintf( buffer, sizeof(buffer),
                    "PCF file had non empty coordinates string '%s', but didnt return valid coordinates", meas_coords.c_str() );
@@ -1549,7 +1555,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         
         if( first_sample >= measurements_.size() )  //SHouldnt ever happen
         {
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "Logic error: someSamplesHaveNumbers is true, but could find meas now!" );
 #endif //PERFORM_DEVELOPER_CHECKS
           throw runtime_error( "someSamplesHaveNumbers was a lie!" );
@@ -1720,12 +1726,12 @@ bool SpecFile::load_from_pcf( std::istream &input )
       if( coefs.size() == 1 )
       {
         string msg = "PCF FRF calibration only had one coefficient (" + to_string(coefs[0]) + ")";
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
         //We probably shouldnt ever run into this, so log it, since it might be an error in this code
         log_developer_error( __func__, msg.c_str() );
 #endif
         for( const shared_ptr<Measurement> &meas : meas_for_coefs )
-          meas->parse_warnings_.push_back( std::move(msg) );
+          meas->parse_warnings_.push_back( msg );
         continue;  //Use default calibration
       }//if( coefs.size() == 1 )
       

@@ -2407,7 +2407,7 @@ struct N42DecodeHelper2006
                 || XML_VALUE_ICOMPARE( quality_attrib, "Unknown" ) )
         meas.quality_status_ = QualityStatus::Missing;
       else
-        meas.parse_warnings_.push_back( "Unknow quality status '"
+        meas.parse_warnings_.push_back( "Unknown quality status '"
                                             + SpecUtils::xml_value_str(quality_attrib) + "'" );
     }//if( quality_attrib is valid )
       
@@ -2562,6 +2562,13 @@ struct N42DecodeHelper2006
         
       for( const float x : *(meas.gamma_counts_) )
         meas.gamma_count_sum_ += x;
+      
+      
+      if( (meas.gamma_count_sum_ <= DBL_EPSILON)
+         && (meas.quality_status_ == QualityStatus::Missing) )
+      {
+        throw runtime_error( "Spectrum marked as missing, and all zeros" );
+      }
     }else  //if( is_gamma )
     {
       meas.contained_neutron_ = true;

@@ -178,7 +178,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     for( size_t i = 0; i < nchannel; ++i )
     {
       (*channel_counts)[i] = static_cast<float>( spectrumint[i] );
-      meas->gamma_count_sum_ += spectrumint[i];
+      meas->gamma_count_sum_ += (*channel_counts)[i];
     }
     meas->gamma_counts_ = channel_counts;
     
