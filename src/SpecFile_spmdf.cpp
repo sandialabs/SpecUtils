@@ -1141,7 +1141,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     
     if( s1pos == occupancy_num_to_s1_num.end() || s1pos->second >= int(s1infos.size()) )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "Serious programing logic error in 0" );
 #endif
       throw runtime_error( "Serious programing logic error in 0" );
@@ -1156,7 +1156,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     = gamma_signal.find( occnum );
     if( gammaiter == gamma_signal.end() )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "Serious programing logic error in 1" );
 #endif
       
@@ -1170,7 +1170,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     = end_occupancy.find( occnum );
     if( endrecorditer == end_occupancy.end() )
     {
-#if(PERFORM_DEVELOPER_CHECKS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "Serious programing logic error in 2" );
 #endif
       

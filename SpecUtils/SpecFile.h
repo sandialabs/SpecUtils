@@ -1229,10 +1229,15 @@ public:
   /** Returns true if any #Measurement is a derived data (e.g., originated from a N42-2012 <DerivedData> section).  Derived data is
    usually a spectrum or gross-count record that is not raw from the detector, but has been re-processed, typically for use in an analysis
    algorithm.
+   
+   \sa keep_derived_data_variant
    */
   bool contains_derived_data() const;
   
-  /** Returns true if and #Measurement is not a derived data. */
+  /** Returns true if and #Measurement is not a derived data.
+   
+   \sa keep_derived_data_variant
+   */
   bool contains_non_derived_data() const;
   
   //simple setters (no thread locks are aquired)
@@ -1489,6 +1494,11 @@ public:
   
   /** Enum to indicate "derived data" variant to keep. */
   enum class DerivedVariantToKeep{ NonDerived, Derived };
+  
+  /** Returns the measurements that are the specified derived data type.
+   */
+  std::vector<std::shared_ptr<const Measurement>>
+  get_derived_data_variant_measurements( const DerivedVariantToKeep variant ) const;
   
   /** When a spectrum file contains both "derived" and non-derived data, we may want to use only one of these variants of the data;
    this functions lets you discard the variant you arent interested in.
