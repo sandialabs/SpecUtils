@@ -1222,8 +1222,12 @@ public:
   double mean_latitude() const;
   double mean_longitude() const;
 
-  //passthrough(): returns true if it looked like this data was from a portal
-  //  or search mode data.  Not 100% right always, but pretty close.
+  /** Tells you if this data looks like it was from either a search-mode system, or a radiation portal monitor system.
+   
+   E.g., measurements are mostly of short duration and immediately consecutive to each other.
+   
+   The current heuristic used to determine this is not 100% correct, but pretty close.
+   */
   bool passthrough() const;
   
   /** Returns true if any #Measurement is a derived data (e.g., originated from a N42-2012 <DerivedData> section).  Derived data is

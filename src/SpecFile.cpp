@@ -4798,7 +4798,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     
     typedef std::pair<boost::posix_time::ptime,float> StartAndRealTime;
     typedef map<int, StartAndRealTime > SampleToTimeInfoMap;
-    SampleToTimeInfoMap samplenum_to_starttime;
+    SampleToTimeInfoMap samplenum_to_starttime; //used to determine if passthrough or not
     
     const size_t nmeas = measurements_.size();
     size_t ngamma_meas = 0;
@@ -4827,6 +4827,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
          && meas->sample_number() >= 0
          && meas->live_time() > 0.00000001
          && meas->real_time() > 0.00000001
+         && !meas->derived_data_properties()  //make sure not derived data
          && meas->real_time() < 15.0 )  //20181108: some search systems will take one spectra every like ~10 seconds
       {
         ++pt_num_items;
