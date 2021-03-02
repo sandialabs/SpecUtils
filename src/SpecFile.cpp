@@ -6609,6 +6609,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       if( !meas )
         continue;
       
+      assert( meas->sample_number_ == sample_number );
+      
       std::shared_ptr<const vector<float> > spec = meas->gamma_counts();
       const size_t spec_size = (spec ? spec->size() : (size_t)0);
       

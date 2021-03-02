@@ -804,7 +804,11 @@ public:
     /** Bit indicating it was detected the spectrum is background-subtracted.
      May not always be reliably detected (i.e., even if this bit is absent, the spectrum/gross-count may still be background subtracted).
      */
-    BackgroundSubtracted = (1 << 4)
+    BackgroundSubtracted = (1 << 4),
+    
+    /** Bit set if it was detected this #Measurement was used and the background in the analysis.  This is not always detected.
+     */
+    IsBackground = (1 << 5)
   };//enum class DerivedDataProperties
   
   uint32_t derived_data_properties() const;

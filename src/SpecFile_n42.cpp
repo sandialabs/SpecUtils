@@ -2876,6 +2876,11 @@ public:
     if( icontains( dd_id, "BGSub" ) || icontains( spec_id, "BGSub" ) )
       set_bit( DerivedProps::BackgroundSubtracted );
     
+    if( (icontains( dd_id, "background" ) || icontains( spec_id, "background" )
+         || icontains( dd_id, "BGGamma" ) || icontains( spec_id, "BGGamma" ))
+        && !(icontains( dd_id, "sub" ) || icontains( spec_id, "sub" )) )
+      set_bit( DerivedProps::IsBackground );
+    
     // The de facto convention seems to be to put the description of the sample/measurement
     //  into the "id" tags of the <DerivedData> and <Spectrum> elements, so we'll add this
     //  to the #Measurement title.
@@ -3042,9 +3047,29 @@ public:
           //  if there is only one detector description in the file, we will assume
           //  this spetrum is from that.
           if( det_info_att && det_info_att->value_size() )
+          {
             meas->detector_name_ = xml_value_str( det_info_att );
-          else if( id_to_dettype_ptr->size()==1 )
+          }else if( id_to_dettype_ptr->size()==1 )
+          {
             meas->detector_name_ = id_to_dettype_ptr->begin()->first;
+          }else if( meas->detector_name_.empty() && (id_to_dettype_ptr->size() > 1) )
+          {
+            //We will look to see if there is only one gamma, and if so, use it.
+            for( const auto &info : *id_to_dettype_ptr ) //std::map<std::string,std::pair<DetectionType,std::string> >
+            {
+              if( !icontains(info.first, "neut" ) && (info.second.first != DetectionType::NeutronDetection) )
+              {
+                if( meas->detector_name_.empty() )
+                {
+                  meas->detector_name_ = info.first;
+                }else
+                {
+                  meas->detector_name_ = "";
+                  break;
+                }
+              }//if( !icontains(info.first, "neut" ) )
+            }//for( loop over detector types )
+          }//
           
           if( meas->detector_name_ == s_unnamed_det_placeholder )
             meas->detector_name_.clear();
@@ -3315,6 +3340,7 @@ public:
           {
             const string dd_id = xml_value_str( xml_first_iattribute(meas_node, "id") );
             const string spec_id = xml_value_str( xml_first_iattribute(spectrum_node, "id") );
+            
             set_deriv_data( meas, dd_id, spec_id );
           }//if( derived_data )
             
