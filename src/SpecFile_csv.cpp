@@ -366,7 +366,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
               if( post_pos == eof_pos )
                 istr.setstate( ios::eofbit );
               
-              std::shared_ptr<vector<float> > channels( new vector<float>() );
+              auto channels = std::make_shared<vector<float>>();
               if( SpecUtils::split_to_floats( channeldata.c_str(), channeldata.size(), *channels ) )
               {
                 if( post_pos == eof_pos )
@@ -810,8 +810,29 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       parse_warnings_.push_back( "Provided energy calibration coefficients apear to be invalid: "
                                  + string(e.what()) );
     }
-  }//if( we have
+  }
   
+  if( nchannel>=2 && (nchannel < 65540) && column_map.size()
+           && (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
+  {
+    // We will check if we have a channel column, and NOT an energy column, otherwise if we would
+    //  have already set energy calibration
+    bool have_channel_col = false, have_energy_col = false;
+    for( const auto &vp : column_map )
+    {
+      have_channel_col |= (vp.second == kCounts);
+      have_energy_col |= (vp.second == kEnergy);
+    }
+    
+    if( have_channel_col && !have_energy_col )
+    {
+      //We have at least two channels, and 64k or less (both 2 and 64k arbitrarily chosen, just to be
+      //  reasonable)
+      auto newcal = make_shared<EnergyCalibration>();
+      newcal->set_default_polynomial( nchannel, {0.0f,3000.0f/nchannel}, {} );
+      energy_calibration_ = newcal;
+    }
+  }//if( poly calibration ) / else (all we had was raw channel numbers)
   
   if( nchannel < 5 || (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
   {
