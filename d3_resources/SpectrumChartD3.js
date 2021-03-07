@@ -590,7 +590,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
     //console.log( 'In SpectrumChartD3::getStaticSvg: svgchart' );
     
-    const w = this.svg.attr("width");
+    let w = this.svg.attr("width");
     let h = this.svg.attr("height");
         
     //We will need to propagate all the styles we can dynamically set in the SVG
@@ -692,15 +692,22 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.sliderChart.style("display", "none");
     }
     
+    if( this.scalerWidget ){
+      w -= this.scalerWidget.node().getBBox().width;
+      this.scalerWidget.style("display", "none");
+    }
+    
     let svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg"' + ' width="'  + w + '"' + ' height="' + h + '"' + '>'
     + svgDefs
     + this.svg.node().innerHTML.toString()
     +'</svg>';
     
     
-    // Make slider chart visible again, if it should be showing
+    // Make slider chart and/or scalerWidget visible again, if they should be showing
     if( this.sliderChart && this.size.sliderChartHeight )
       this.sliderChart.style("display", null );
+    if( this.scalerWidget )
+      this.scalerWidget.style("display", null );
     
     return svgMarkup;
   }catch(e){
