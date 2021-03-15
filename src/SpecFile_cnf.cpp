@@ -337,7 +337,7 @@ bool SpecFile::load_cnf_file( const std::string &filename )
 bool SpecFile::load_from_cnf( std::istream &input )
 {
   //Function to find a specific block (e.g., 512kb) of information in a CNF file.
-  auto findCnfBlock = []( const uint8_t B, const size_t SBeg, size_t &pos,
+  auto findCnfSegment = []( const uint8_t B, const size_t SBeg, size_t &pos,
                          std::istream &input, const size_t streamsize ) -> bool {
     for( pos = SBeg; (pos+512) < streamsize; pos += 512 )
     {
@@ -348,11 +348,11 @@ bool SpecFile::load_from_cnf( std::istream &input )
         return true;
     }
     return false;
-  };//findCnfBlock(...)
+  };//findCnfSegment(...)
   
   
   //Function to read a 32bit float (i.e., energy calibration coefficient) from a
-  //  CNF file
+  //  CNF file in PDP-11 format to IEEE
   auto readCnfFloat = []( std::istream &input ) -> float {
     float val;
     uint8_t Buf[4], TmpBuf[4];
@@ -385,13 +385,26 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     const size_t size = static_cast<size_t>( 0 + eof_pos - orig_pos );
     
+    input.seekg( 0, ios::beg );
+    
+    // A buffer we will use to read textual information from the file into.
     char buff[65];
-    size_t SBeg = 0, SPos = 0;
+    
+    // We will use "segment_search_start" to mark _where_ to start searching for a particular
+    //  segment from.  We will pass this value to the lambda findCnfSegment(...) defined above to
+    //  tell it where to start looking.
+    size_t segment_search_start = 0;
+    
+    // We will use "segment_position" to mark start of the segment we are currently extracting
+    //  information from; this value will be set from the lambda findCnfSegment(...) defined above.
+    size_t segment_position = 0;
+    
+    // The Measurement we will place all information into.
     auto meas = std::make_shared<Measurement>();
     
-    if( findCnfBlock(0x1, SBeg, SPos, input, size) )
+    if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
     {
-      input.seekg( SPos + 32 + 16, std::ios::beg );
+      input.seekg( segment_position + 32 + 16, std::ios::beg );
       input.read( buff, 64 );
       string title( buff, buff+64 );
       input.read( buff, 16 );
@@ -403,24 +416,28 @@ bool SpecFile::load_from_cnf( std::istream &input )
       
       if( sampleid.size() )
         meas->remarks_.push_back( "Sample ID: " + sampleid );
-    }//if( findCnfBlock(0x1, SBeg, SPos, input, size) )
+    }//if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
     
-    if( !findCnfBlock(0x0, SBeg, SPos, input, size) )
+    if( !findCnfSegment(0x0, segment_search_start, segment_position, input, size) )
       throw runtime_error( "Couldnt find record data" );
     
+    // segment_position will be a multiple of 512, ex 2048
+    
     uint16_t w34, w36;
-    input.seekg( SPos+34, std::ios::beg );
+    if( !input.seekg( segment_position+34, std::ios::beg ) )
+      throw runtime_error( "Failed seek to record offsets" );
+    
     read_binary_data( input, w34 );
     read_binary_data( input, w36 );
     
-    const size_t record_offset = SPos + w36 + 48 + 1;
-    const size_t num_channel_offset = SPos + 48 + 137;
-    const size_t energy_calib_offset = SPos + w34 + 48 + 68;
-    const size_t mca_offset = SPos+w34+48+156;
-    const size_t instrument_offset = SPos+w34+48+1;
-    const size_t generic_detector_offset = SPos+w34+48+732;
-    const size_t specific_detector_offset = SPos+w34+48+26;
-    const size_t serial_num_offset = SPos+w34+48+940;
+    const size_t num_channel_offset       = segment_position + 48 + 137;
+    const size_t record_offset            = segment_position + w36 + 48 + 1;
+    const size_t energy_calib_offset      = segment_position + w34 + 48 + 68;
+    const size_t mca_offset               = segment_position + w34 + 48 + 156;
+    const size_t instrument_offset        = segment_position + w34 + 48 + 1;
+    const size_t generic_detector_offset  = segment_position + w34 + 48 + 732;
+    const size_t specific_detector_offset = segment_position + w34 + 48 + 26;
+    const size_t serial_num_offset        = segment_position + w34 + 48 + 940;
     
     if( (record_offset+24) > size
        || (energy_calib_offset+12) > size
@@ -435,8 +452,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
       throw runtime_error( "Invalid record offset" );
     }
     
-    
-    input.seekg( record_offset, std::ios::beg );
+    if( !input.seekg( record_offset, std::ios::beg ) )
+      throw std::runtime_error( "Failed seek CNF record start" );
     
     uint64_t time_raw;
     read_binary_data( input, time_raw );
@@ -456,7 +473,9 @@ bool SpecFile::load_from_cnf( std::istream &input )
     meas->live_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
     
     uint32_t num_channels;
-    input.seekg( num_channel_offset, std::ios::beg );
+    if( !input.seekg( num_channel_offset, std::ios::beg ) )
+      throw std::runtime_error( "Failed seek for num channels" );
+    
     read_binary_data( input, num_channels );
     
     const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
@@ -464,7 +483,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
       throw runtime_error( "Invalid number of channels" );
     
     vector<float> calib_params(3);
-    input.seekg( energy_calib_offset, std::ios::beg );
+    if( !input.seekg( energy_calib_offset, std::ios::beg ) )
+      throw std::runtime_error( "Failed seek for energy calibration" );
     
     vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f };
     cal_coefs[0] = readCnfFloat( input );
@@ -480,7 +500,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     {
       bool allZeros = true;
       for( const float v : cal_coefs )
-        allZeros = allZeros && (v==0.0f);
+        allZeros = allZeros && (v == 0.0f);
       
       if( !allZeros )
         throw runtime_error( "Calibration parameters were invalid" );
@@ -496,11 +516,10 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     input.seekg( instrument_offset, std::ios::beg );
     input.read( buff, 31 );
-    string instrument_name( buff, buff+31 );
+    string instrument_name( buff, buff + 31 );
     trim( instrument_name );
     if( instrument_name.size() )
       meas->detector_name_ = instrument_name;
-    //      remarks_.push_back( "Instrument Name: " + instrument_name );
     
     input.seekg( generic_detector_offset, std::ios::beg );
     input.read( buff, 8 );
@@ -534,39 +553,53 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //       cerr << i << "\t" << serial_num[i] << "\t" << int( *(uint8_t *)&(serial_num[i]) ) << endl;
     
     
-    SBeg = 0;
-    if( !findCnfBlock(0x5, SBeg, SPos, input, size) )
+    segment_search_start = 0;
+    if( !findCnfSegment(0x5, segment_search_start, segment_position, input, size) )
       throw runtime_error( "Couldnt locate channel data portion of file" );
     
+    segment_position += 512;
+    // NOTE: Previous to 20210315 I looked for a second 0x5 segment, and if found, used it.
+    //  However, none of the CNF files I have around need this, and at least one file will be
+    //  messed up if this search is done.
+    //if( findCnfSegment(0x5, segment_search_start+, segment_position, input, size) )
+    //{
+    //  if( (segment_position + 512 + 4*num_channels) <= size )
+    //    segment_position += 512;
+    //  else
+    //   segment_position = segment_search_start;
+    //}else
+    //{
+    //  segment_position = segment_search_start;
+    //}
+    
+    
+    input.seekg( segment_position, std::ios::beg );
+    
+    if( (segment_position + 4*num_channels) > size )
+      throw runtime_error( "Invalid file size for num channels" );
+    
     vector<uint32_t> channeldata( num_channels );
-    
-    SBeg = SPos + 512;
-    if( findCnfBlock(0x5, SBeg, SPos, input, size) )
-      input.seekg( SPos+512, std::ios::beg );
-    else
-      input.seekg( SBeg, std::ios::beg );
-    
-    if( (SBeg+4*num_channels) > size )
-      throw runtime_error( "Invalid file size" );
-    input.read( (char *)&channeldata[0], 4*num_channels );
+    if( !input.read( (char *)&channeldata[0], 4*num_channels ) )
+      throw std::runtime_error( "Error reading channel data" );
     
     //Get rid of live time and real time that may be in the first two channels
     channeldata[0] = channeldata[1] = 0;
     
-    vector<float> *channel_data = new vector<float>(num_channels);
-    meas->gamma_counts_.reset( channel_data );
+    auto channel_data = make_shared<vector<float>>( num_channels );
     for( size_t i = 0; i < num_channels; ++i )
     {
+      
       const float val = static_cast<float>( channeldata[i] );
       meas->gamma_count_sum_ += val;
       (*channel_data)[i] = val;
     }//set gamma channel data
     
+    meas->gamma_counts_ = channel_data;
+    
     //    manufacturer_;
     //    instrument_model_;
     //    instrument_id_;
     //    manufacturer_;
-    
     
     measurements_.push_back( meas );
     
