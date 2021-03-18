@@ -92,6 +92,12 @@ namespace SpecUtilsAsync
        -Convert do_asyncronous_work to use std::async, at least on MSVC which
         uses a threadpool (other OSs could use async as well, without much 
         penalty).
+        - Or explicitly use threadpoolapiset.h, see
+          https://docs.microsoft.com/en-us/windows/win32/api/threadpoolapiset/
+          which has a nice explanatory blog posts at
+     https://docs.microsoft.com/en-us/archive/msdn-magazine/2011/august/windows-with-c-the-windows-thread-pool-and-work
+          and
+     https://docs.microsoft.com/en-us/archive/msdn-magazine/2011/september/windows-with-c-the-thread-pool-environment
      */
   public:
     ThreadPool();
