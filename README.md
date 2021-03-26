@@ -56,6 +56,7 @@ int main() {
 * Parses &gt;100 spectrum file format variants.
 * Writes 13 of the most useful output file formats.
 * Multithreaded and time-efficient code.  For example a ~125 MB N42 file takes less than 5 seconds to parse.  Accessing any of the extracted information after that is nearly instant as all the work is done upfront, and the original file is no longer referenced after the initial parse.
+* Can be used from C++, Java, Python, and node.js.
 * Supports Polynomial, Full Width Fraction, Lower Channel Energy, and non-Linear Deviation pair energy calibrations.  
 * Supports creating spectrum files from raw data (ex, can be used in a detector to write output file).
 * Extracts RIID results, GPS location information, and a lot of other meta-information, depending on the input file format.
