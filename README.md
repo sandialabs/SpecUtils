@@ -65,17 +65,18 @@ int main() {
 * And more!
 
 ## Testing
-This library uses a few methods to test the code, but unfortunately still likely contains many bugs and issues as resources are not available to implement comprehensive test coverage.
+This library uses a few methods to test the code, but unfortunately still likely contains bugs or issues, especially related to specific file format variants.
 
 The testing methods are:
-* Peppered throughout the code there are `#if( PERFORM_DEVELOPER_CHECKS )` statements that perform additional tests at runtime that make sure the correct answer was computed or action taken.  Most of these blocks of code will either recompute a quantity using an independent implementation, or in someway perform additional sanity checks, and when issues are found, they are logged to a file for fixing in the future.  This seems to work well as the primary developer of this library is also the primary user.
-* An assortment of unit tests have been created and are occasionally run, but by no means offer anywhere near 100% coverage.  Since many of the test contain proprietary data, they are not distributed with the library.
+* Peppered throughout the code there are `#if( PERFORM_DEVELOPER_CHECKS )` statements that perform additional tests at runtime that make sure the correct answer was computed or action taken.  Most of these blocks of code will either recompute a quantity using an independent implementation, or in someway perform additional sanity checks, and when issues are found, they are logged to a file for fixing in the future.  This seems to work well as the primary developer of this library uses the library heavily.
+* An assortment of unit tests have been created and are occasionally run, but by no means offer anywhere near 100% coverage.  Since many of the test contain proprietary data, they are not all distributed with the library.
 * As the primary developer of this library comes across new file formats, or new variants of file formats, they get added to a library after manually verifying they are parsed sufficiently well.  Then [testing/regression_test.cpp](https://github.com/sandialabs/specutils/tree/master/testing/regression_test.cpp) is used to ensure the files continue to be parsed exactly the same as when they were manually verified.  Any changes to the information extracted from these files will then be manually verified to be an improvement to the parsing (like adding the ability to extract GPS coordinates from a format), or the issue will be corrected.  This helps keep regressions from occurring.  A keystone piece to this testing is that all information extracted from any file format can be written out to a N42-2012 file; when this N42-2012 file is read back in, the exact same information is available as from the original file (this property is of course also tested for).
-* Daily use to parse a wide variety of formats by the primary developer.
+* [Fuzz testing](https://github.com/sandialabs/specutils/tree/master/fuzz_test/) is periodically performed.
+* Near daily use to parse a wide variety of formats by the primary developer, as well as use by users of the applications built against SpecUtils.
 
 
 ## History
-**SpecUtils** started to extract live-time and channel counts from two very specific detectors, for a specific application.  However, over time it was split out into its own library, and new file formats and capabilities have been continually bolted on as needs arose, with out the time available to do a proper refactoring of code.  It is hoped that at some point in the future resources will become available to refactor the interface to the library.  Currently the library is developed primarily as part of [InterSpec](https://github.com/sandialabs/InterSpec), but used by a number of other applications and websites.
+**SpecUtils** started to extract live-time and channel counts from two very specific detectors, for a specific application.  However, over time it was split out into its own library, and new file formats and capabilities have been continually bolted on as needs arose.  As such there near continual smaller changes to the interface and when resources become available larger, refactorings (there are a number planned when possible in the future).  Currently the library is developed primarily as part of [InterSpec](https://github.com/sandialabs/InterSpec), but used by a number of other applications and websites.
   
   
 
