@@ -74,7 +74,7 @@ namespace  SpecUtils
    code for now until we drop gcc 4.8 support (e.g., Ubuntu 14)
    */
 #if( defined(_MSC_VER) \
-     || (__cplusplus >= 201103L && (!defined(__GLIBCXX__) || (__cplusplus >= 201402L) || (defined(_GLIBCXX_RELEASE) && _GLIBCXX_RELEASE > 4))))
+     || (__cplusplus >= 201103L && (!defined(__GLIBCXX__) || (__cplusplus >= 201402L) || (defined(__GNUC__) && __GNUC__ > 4))))
 #define USE_HH_DATE_LIB 1
 #else
 #define USE_HH_DATE_LIB 0
