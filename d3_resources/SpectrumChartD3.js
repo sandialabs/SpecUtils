@@ -3869,7 +3869,8 @@ SpectrumChartD3.prototype.setGridY = function( onstate ) {
         .attr("transform", "translate(0,0)")
         .call( this.yGrid );
   } else {
-    this.yGridBody.remove();
+    if( this.yGridBody )
+      this.yGridBody.remove();
     this.yGrid = null;
     this.yGridBody = null;
   }
