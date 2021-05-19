@@ -2258,29 +2258,29 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         parse_warnings.push_back( "Binary SPC file has invalid expansion header" );
       }//if( recordID != 111 )
       
-      if( gpsPointer )
-      {
-        //See refD3BAVOI7JG
-        //        input.seekg( 128*(gpsPointer-1) + orig_pos, ios::beg );
-        
-        //        if( input.good() )
-        //        {
-        //          uint16_t ntxtbytes;
-        //          read_binary_data( input, ntxtbytes );
-        //
-        //          cerr << "ntxtbytes=" << ntxtbytes << endl;
-        //          ntxtbytes = std::min(ntxtbytes, uint16_t(120));
-        //          vector<char> data(ntxtbytes+1);
-        //          data[ntxtbytes] = '\0';
-        //          input.read( &data[0], ntxtbytes );
-        //          for( size_t i = 0; i < ntxtbytes; ++i )
-        //            cout << i << ": " << int(data[i]) << ", '" << data[i] << "'" << endl;
-        //        }else
-        //        {
-        //          cerr << "Failed to be able to read GPS REcord" << endl;
-        //        }
-        parse_warnings.push_back( "Binary SPC file does not have GPS coordinates iplemented" );
-      }
+//      if( gpsPointer )
+//      {
+//        //See refD3BAVOI7JG
+//        input.seekg( 128*(gpsPointer-1) + orig_pos, ios::beg );
+//
+//        if( input.good() )
+//        {
+//          uint16_t ntxtbytes;
+//          read_binary_data( input, ntxtbytes );
+//
+//          cerr << "ntxtbytes=" << ntxtbytes << endl;
+//          ntxtbytes = std::min(ntxtbytes, uint16_t(120));
+//          vector<char> data(ntxtbytes+1);
+//          data[ntxtbytes] = '\0';
+//          input.read( &data[0], ntxtbytes );
+//          for( size_t i = 0; i < ntxtbytes; ++i )
+//          cout << i << ": " << int(data[i]) << ", '" << data[i] << "'" << endl;
+//        }else
+//        {
+//          cerr << "Failed to be able to read GPS REcord" << endl;
+//        }
+//        parse_warnings.push_back( "Binary SPC file does not have GPS coordinates implemented" );
+//      }
       
       
       if( firstReportPtr > 0 )

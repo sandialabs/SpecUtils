@@ -4256,7 +4256,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
   var ypos = 0;
   const spectra = self.rawData ? self.rawData.spectra : [];
   spectra.forEach( function(spectrum,i){
-    if( !spectrum || !spectrum.y.length )
+    if( !spectrum || !spectrum.y || !spectrum.y.length )
       return;
       
     const sf = ((typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor: 1);
