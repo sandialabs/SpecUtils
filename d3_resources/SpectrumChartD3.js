@@ -6285,7 +6285,7 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
   if( roi.type === 'NoOffset' || x0===x1 )
     return 0.0;
   
-  if( roi.type === 'External' ){
+  if( (roi.type === 'External') || (roi.type === 'LinearStep') ){
     //console.log( roi );
 
     let energies = roi.continuumEnergies;
@@ -6325,7 +6325,7 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
     for( let i = cstartind+1; i < cendind; ++i )
       sum += counts[i];
     return sum;
-  }//if( roi.type === 'External' )
+  }//if( roi.type is 'External' or 'LinearStep' )
 
   x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
   var answer = 0.0;
@@ -6623,7 +6623,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
         && roi.type !== 'Linear' && roi.type !== 'Quadratic'
         && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
-        && roi.type !== 'Cubic' && roi.type !== 'External' ){
+        && roi.type !== 'Cubic' && roi.type !== 'LinearStep'
+        && roi.type !== 'External' ){
       console.log( 'unrecognized roi.type: ' + roi.type );
       return;
     }
