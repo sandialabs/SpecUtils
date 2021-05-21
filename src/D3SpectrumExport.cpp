@@ -741,6 +741,10 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "null";
     ostr << ",";
     
+    // Increase precision for calibration coefficients or energy channel boundries
+    const auto oldprecision = ostr.precision();
+    ostr << std::setprecision(std::numeric_limits<float>::digits10 + 1);
+    
     const SpecUtils::EnergyCalType caltype = meas.energy_calibration_model();
     if( (caltype == SpecUtils::EnergyCalType::Polynomial
          || caltype == SpecUtils::EnergyCalType::FullRangeFraction
@@ -753,7 +757,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       
       ostr << "\n\t" << q << "xeqn" << q << ": [";
       for( size_t i = 0; i < calcoefs.size(); ++i )
-          ostr << (i ? "," : "") << calcoefs[i];
+        ostr << (i ? "," : "") << calcoefs[i];
       ostr << "],";
     }else// if( caltype == SpecUtils::EnergyCalType::LowerChannelEdge )
     {
@@ -761,12 +765,17 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "\n\t" << q << "x" << q << ": [";
       if( meas.num_gamma_channels() && meas.channel_energies() )
       {
+        ostr << std::setprecision(std::numeric_limits<float>::digits10 + 1);
         const vector<float> &x  = *meas.channel_energies();
         for( size_t i = 0; i < x.size(); ++i )
+        {
           ostr << (i ? "," : "") << x[i];
+        }
       }
       ostr << "],";
     }//
+    
+    ostr << std::setprecision(oldprecision);
     
     
     // foreground y-point values

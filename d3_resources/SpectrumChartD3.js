@@ -6288,6 +6288,9 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
   if( (roi.type === 'External') || (roi.type === 'LinearStep') ){
     //console.log( roi );
 
+    //let doDebug = false;
+    //if( doDebug ) console.log( 'x0=' + x0 + ', x1=' + x1 );
+    
     let energies = roi.continuumEnergies;
     let counts = roi.continuumCounts;
 
@@ -6302,23 +6305,32 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
     
     if( cstartind >= (energies.length-1) )
       return 0.0;  //shouldnt ever happen
+      
     if( cendind >= (energies.length-1) )
-      cendind = cendind - 1;
+      cendind = energies.length - 1;
 
     if( cstartind > 0 && energies[cstartind] > x0 )
       cstartind = cstartind - 1;
-    if( cendind > 0 && energies[cendind] > x1 )
+    if( cendind > 0 && energies[cendind] >= x1 )
       cendind = cendind - 1;
 
     if( cstartind === cendind ){
+      //if( doDebug ) console.log( 'counts[' + cstartind + ']=' + counts[cstartind] );
       return counts[cstartind] * (x1-x0) / (energies[cstartind+1] - energies[cstartind]);
     }
 
     //figure out fraction of first bin
     let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
     let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
-      
-    //console.log( 'x0=' + x0 + ', cstartind=' + cstartind + ', energy={' + energies[cstartind] + ',' + energies[cstartind+1] + '}, frac_first=' + frac_first );
+    
+    //if( doDebug )
+    //{
+    //  console.log( 'frac_first=' + frac_first + ', frac_last=' + frac_last );
+    //  for( var i = cstartind; i <= cendind; i++ )
+    //  {
+    //    console.log( 'index=' + i + ', energy={' + energies[i] + ',' + energies[i+1] + '}' );
+    //  }
+    //}
     //console.log( 'x1=' + x1 + ', cendind=' + cendind + ', energy={' + energies[cendind] + ',' + energies[cendind+1] + '}, frac_last=' + frac_last);
 
     let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
@@ -6420,6 +6432,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       paths[0] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
       
+      //console.log( "[points[" + i + "].x,points[" + "i+1" + "].x,thisy,yScale(thisy)]={", points[i].x,points[i+1].x,thisy, self.yScale(thisy), "}");
+      
       for( let j = 0; j < roi.peaks.length; ++j ) {
         m = roi.peaks[j].Centroid[0];
         s = roi.peaks[j].Width[0];
@@ -6449,6 +6463,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
     }//for( var i = xstartind; i < xendind; ++i )
 
+    
     function erf(x) {
       /* http://stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function
          Error is less than 1.5 * 10-7 for all inputs
@@ -6482,12 +6497,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     
     //Go from right to left drawing the peak lines that sit on the continuum.
     //  we will also 
-    for( var xindex = xendind - 1; xindex >= xstartind; --xindex ) {
+    for( let xindex = xendind - 1; xindex >= xstartind; --xindex ) {
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
       //thisx = 0.5*(points[xindex].x + points[xindex+1].x);
       thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(points[xindex].x + points[xindex+1].x))));
-      
       
       cont_area = self.offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
 
