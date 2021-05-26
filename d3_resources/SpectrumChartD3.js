@@ -478,6 +478,11 @@ SpectrumChartD3 = function(elem, options) {
         .style("text-anchor","middle");
         /*.attr("transform","translate(" + -40 + " " + this.size.height/2+") rotate(-90)"); */
   }
+  
+  if( this.options.gridx )
+    this.setGridX(this.options.gridx,true);
+  if( this.options.gridy )
+    this.setGridY(this.options.gridy,true);
 }
 
 registerKeyboardHandler = function(callback) {
@@ -1104,6 +1109,11 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     });
   }
 
+  if( this.options.gridx )
+    this.setGridX(this.options.gridx,true);
+  if( this.options.gridy )
+    this.setGridY(this.options.gridy,true);
+  
   this.addMouseInfoBox();
 
   this.updateLegend();
@@ -3817,12 +3827,14 @@ SpectrumChartD3.prototype.setShowRefLineInfoForMouseOver = function( show ) {
 /**
  * -------------- Grid Lines Functions --------------
  */
-SpectrumChartD3.prototype.setGridX = function( onstate ) {
-  if( this.options.gridx == onstate )
-    return;
-
+SpectrumChartD3.prototype.setGridX = function( onstate, dontRedraw ) {
   this.options.gridx = onstate;
 
+  if( this.xGridBody )
+    this.xGridBody.remove();
+  this.xGrid = null;
+  this.xGridBody = null;
+  
   if( onstate ) {
     this.xGrid = d3.svg.axis().scale(this.xScale)
                    .orient("bottom")
@@ -3838,22 +3850,20 @@ SpectrumChartD3.prototype.setGridX = function( onstate ) {
         .attr("class", "xgrid" )
         .attr("transform", "translate(0," + this.size.height + ")")
         .call( this.xGrid );
-  } else {
-    if( this.xGridBody )
-      this.xGridBody.remove();
-    this.xGrid = null;
-    this.xGridBody = null;
   }
-
-  this.redraw(true)();
+  
+  if( !dontRedraw )
+    this.redraw(true)();
 }
 
-SpectrumChartD3.prototype.setGridY = function( onstate ) {
-  if( this.options.gridy == onstate )
-    return;
-
+SpectrumChartD3.prototype.setGridY = function( onstate, dontRedraw ) {
   this.options.gridy = onstate;
 
+  if( this.yGridBody )
+    this.yGridBody.remove();
+  this.yGrid = null;
+  this.yGridBody = null;
+  
   if( onstate ) {
     this.yGrid = d3.svg.axis().scale(this.yScale)
                    .orient("left")
@@ -3868,14 +3878,10 @@ SpectrumChartD3.prototype.setGridY = function( onstate ) {
         .attr("class", "ygrid" )
         .attr("transform", "translate(0,0)")
         .call( this.yGrid );
-  } else {
-    if( this.yGridBody )
-      this.yGridBody.remove();
-    this.yGrid = null;
-    this.yGridBody = null;
   }
 
-  this.redraw()();
+  if( !dontRedraw )
+    this.redraw()();
 }
 
 
