@@ -112,6 +112,10 @@ namespace SpecUtilsAsync
     std::unique_lock<std::mutex> lock( sm_npool_mutex );
     sm_npools -= 1;
 #endif
+    
+#if( defined(ThreadPool_USING_GCD) )
+    dispatch_release( m_queue );
+#endif
   }//~ThreadPool()
   
   
