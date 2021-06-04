@@ -591,6 +591,32 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
 }
 
 
+/** Returns color of a D3 element in *this* chart.
+ You pass in a string selector for a component in this chart, such as '.tick', or '.xaxistitle'
+ and this function returns back to you its line color.
+ The function is needed as some of the CSS rules are set dynamically in document CSS, and sometimes
+ elements have a stroke, and sometimes a fill, so this function should be reasonably robust.
+ 
+ TODO: cleanup and improve this function.
+      Is it better to use document.querySelector(...) thank d3.select(...)?
+ */
+SpectrumChartD3.prototype.getElementLineColor = function( selstr ){
+  
+  let eltest = d3.select('#' + this.chart.id + ' ' + selstr);
+  document
+  if( eltest.empty() )
+    eltest = d3.select(selstr);
+  if( eltest.empty() ) return 'black';
+  
+  const tickStyle = getComputedStyle( eltest[0][0] );
+  if( !tickStyle ) return 'black';
+  if( tickStyle.stroke && (tickStyle.stroke !== 'none') ) return tickStyle.stroke;
+  if( tickStyle.fill && (tickStyle.fill !== 'none') ) return tickStyle.fill;
+  return 'black';
+}
+
+
+
 SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
     //console.log( 'In SpectrumChartD3::getStaticSvg: svgchart' );
@@ -1794,9 +1820,8 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
     // .attr("class", "roiDragBox" )
     // .attr("transform", "translate(" + ((isOnLower ? lpx : upx) - 5) + "," + this.size.height + ")")
     
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    
+    let axiscolor = self.getElementLineColor('.tick');
     self.roiBeingDragged.axiscolor = axiscolor;
     
     self.roiDragBox.append("rect")
@@ -2363,7 +2388,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             window.clearTimeout(self.mousewait);
             self.mousewait = null;
           }
-          console.log("Emit DOUBLE CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y);
+          
+          //console.log("Emit DOUBLE CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y);
           self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count);
 
         } else {
@@ -2371,7 +2397,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.updateFeatureMarkers(self.xScale.invert( x ));    /* update the sum peak where user clicked */
 
             return function() {
-              console.log( "Emit CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", pageX = ", pageX, ", pageY = ", pageY );
+              //console.log( "Emit CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", pageX = ", pageX, ", pageY = ", pageY );
               self.WtEmit(self.chart.id, {name: 'leftclicked'}, energy, count, pageX, pageY);
 
               self.unhighlightPeak(null);
@@ -5231,10 +5257,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
-    axiscolor = 'black';
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    axiscolor = self.getElementLineColor('.tick');
     
     // G element of the slider chart
     self.sliderChart = d3.select("svg").append("g")
@@ -5295,10 +5318,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   // Add the slider draggable box and edges
   if (!self.sliderBox) {
     if( !axiscolor ){
-      axiscolor = 'black';
-      const tickElement = document.querySelector('.tick');
-      const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-      axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+      axiscolor = self.getElementLineColor('.tick');
     }
     
     // Slider box
@@ -6052,15 +6072,8 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var ypos = 15;
 
   //Get axis color, text color and spec
-  let axiscolor = 'black', txtcolor = 'black';
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
-  const titleElement = document.querySelector('.xaxistitle');
-  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
-  
+  let txtcolor = self.getElementLineColor('.xaxistitle');
+  let axiscolor = self.getElementLineColor('.tick')
   
   var scalenum = 0;
   self.rawData.spectra.forEach(function(spectrum,i) {
@@ -6291,7 +6304,7 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
   if( roi.type === 'NoOffset' || x0===x1 )
     return 0.0;
   
-  if( (roi.type === 'External') || (roi.type === 'LinearStep') ){
+  if( (roi.type === 'External') || (roi.type === 'FlatStep') || (roi.type === 'LinearStep')|| (roi.type === 'BiLinearStep') ){
     //console.log( roi );
 
     //let doDebug = false;
@@ -6343,7 +6356,7 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
     for( let i = cstartind+1; i < cendind; ++i )
       sum += counts[i];
     return sum;
-  }//if( roi.type is 'External' or 'LinearStep' )
+  }//if( roi.type is 'External' or 'Step' )
 
   x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
   var answer = 0.0;
@@ -6643,7 +6656,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
         && roi.type !== 'Linear' && roi.type !== 'Quadratic'
         && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
-        && roi.type !== 'Cubic' && roi.type !== 'LinearStep'
+        && roi.type !== 'Cubic' && roi.type !== 'FlatStep'
+        && roi.type !== 'LinearStep' && roi.type !== 'BiLinearStep'
         && roi.type !== 'External' ){
       console.log( 'unrecognized roi.type: ' + roi.type );
       return;
@@ -6816,11 +6830,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   
   const chartw = chartBox.width;
   const charth = chartBox.height;
-  
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  const axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
+  const axiscolor = self.getElementLineColor('.tick');
   
   /*
    labelinfos is an array of objects that look like:
@@ -7808,15 +7818,8 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
   var cursorIsOutOfBounds = (t && t.length > 0) ? (t[0][0] < 0 || t[0][0] > xmax) : (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
 
-  
-  let axiscolor = 'black', txtcolor = 'black';
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
-  const titleElement = document.querySelector('.xaxistitle');
-  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.fill ? titleStyle.fill : 'black';
+  const axiscolor = self.getElementLineColor('.tick');
+  const txtcolor = self.getElementLineColor('.xaxistitle');
   
   //Spacing between lines of text
   let linehspace = 13;
@@ -9633,10 +9636,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   //ToDo: get exiscolor
   let axiscolor = 'black'
   if (recalibrationStartLine.empty()) {
-    
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    axiscolor = self.getElementLineColor('.tick');
     
     recalibrationStartLine = self.vis.append("line")
       .attr("id", "recalibrationStartLine")
@@ -11009,10 +11009,7 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
     y2 = (labelbbox.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
   
   //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
-  
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+  const axiscolor = self.getElementLineColor('.tick');
   
   //Only draw line between label and peak if it will be at least 10 pixels.
   if( Math.sqrt( Math.pow(x1-x2,2) + Math.pow(y1-y2,2) ) > 10 )
