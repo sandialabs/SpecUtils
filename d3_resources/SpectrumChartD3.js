@@ -597,21 +597,15 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
  The function is needed as some of the CSS rules are set dynamically in document CSS, and sometimes
  elements have a stroke, and sometimes a fill, so this function should be reasonably robust.
  
- TODO: cleanup and improve this function.
-      Is it better to use document.querySelector(...) thank d3.select(...)?
+ TODO: Is it better to use document.querySelector(...) than d3.select(...)?  should check into
  */
 SpectrumChartD3.prototype.getElementLineColor = function( selstr ){
-  
-  let eltest = d3.select('#' + this.chart.id + ' ' + selstr);
-  document
-  if( eltest.empty() )
-    eltest = d3.select(selstr);
-  if( eltest.empty() ) return 'black';
-  
-  const tickStyle = getComputedStyle( eltest[0][0] );
-  if( !tickStyle ) return 'black';
-  if( tickStyle.stroke && (tickStyle.stroke !== 'none') ) return tickStyle.stroke;
-  if( tickStyle.fill && (tickStyle.fill !== 'none') ) return tickStyle.fill;
+  let el = d3.select('#' + this.chart.id + ' ' + selstr);
+  if( el.empty() )
+    el = d3.select(selstr);
+  const s = el.empty() ? null : getComputedStyle( el[0][0] );
+  if( s && s.stroke && (s.stroke !== 'none') ) return s.stroke;
+  if( s && s.fill && (s.fill !== 'none') ) return s.fill;
   return 'black';
 }
 
