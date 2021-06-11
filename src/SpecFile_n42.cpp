@@ -7231,7 +7231,8 @@ namespace SpecUtils
       
       //A certain HPGe detector always writes the same UUID, making it not unique...
       //  See ref3J9DRAPSZ1
-      if( SpecUtils::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" ) )
+      if( SpecUtils::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" )
+         || SpecUtils::istarts_with( uuid_, "64a170f5-4c39-4bd8" ) )
         uuid_ = "";
     }
     //In the next call, the location in memory pointed to by 'data_node' may be
