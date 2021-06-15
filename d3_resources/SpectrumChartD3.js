@@ -362,8 +362,8 @@ SpectrumChartD3 = function(elem, options) {
     .on("mouseup", self.handleCancelAllMouseEvents())
     .on("mousemove", function() {
         if( d3.event && (self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown || self.currentlyAdjustingSpectrumScale) ) {
-          d3.event.preventDefault();
-          d3.event.stopPropagation();
+          //d3.event.preventDefault();
+          //d3.event.stopPropagation();
         }
       });
 
@@ -1625,8 +1625,8 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       return;
 
     /* Prevent and stop default events from ocurring */
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
+    //d3.event.preventDefault();
+    //d3.event.stopPropagation();
 
 
 
@@ -2463,8 +2463,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     self.rightClickDrag = false;
 
     /* Cancel default d3 event properties */
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
+    //d3.event.preventDefault();
+    //d3.event.stopPropagation();
 
     /* Not zooming in anymore */
     self.zooming_plot = false;
@@ -5491,8 +5491,12 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
   var self = this;
 
   return function() {
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
+    
+    if (self.leftDragRegionDown || self.rightDragRegionDown || self.leftDragRegionDown) {
+      d3.event.preventDefault();
+      d3.event.stopPropagation();
+    }
+    
     /* console.log("sliderboxdown = ", self.sliderBoxDown); */
     /* console.log("leftDragRegionDown = ", self.leftDragRegionDown); */
     /* console.log("rightDragRegionDown = ", self.rightDragRegionDown); */
