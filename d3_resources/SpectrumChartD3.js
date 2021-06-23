@@ -15,8 +15,12 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
    License along with this library; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-   
+   As of 20210623 this file is 11334 lines long!  It is not allowed to grow, and even with fixes
+   or feature additions, we must refactor and improve code to keep LOC this size or smaller
+   (e.g., things are out of hand, lets keep it from getting worse).
+ 
 Feature TODO list (created 20160220):
+
   - Need to go through and list out all member variables that get set, and where and when they get set.  I think we can eliminate a number of these, and make use of the remaining more consisten.
   - The touch implementation is especially bad.  Getting things like pageX, or dealing with touches is really inconsistent; some time needs to be spent to go through and clean up.
   - If you tap on a peak, where its actually drawn, this isnt propogated to the vis, and the peak isnt highlighted like it should be, meaning the tapend signal has to cancel the self.touchHold timer, which isnt right, and the peak never gets outlined.  Needs to be fixed.
@@ -57,11 +61,13 @@ SpectrumChartD3 = function(elem, options) {
   
   //if( (typeof this.options.yscale) !== 'string' || (['lin', 'log', 'sqrt'].indexOf(this.options.yscale) < 0) ) this.options.yscale = "lin";
   if( (typeof this.options.yscale) !== 'string' ) this.options.yscale = "lin";
+  if( (typeof this.options.ylabel) !== 'string' ) this.options.ylabel = "Counts";
   if( (typeof this.options.gridx) !== 'boolean' ) this.options.gridx = false;
   if( (typeof this.options.gridy) !== 'boolean' ) this.options.gridy = false;
   if( (typeof this.options.compactXAxis) !== 'boolean' ) this.options.compactXAxis = false;
   if( (typeof this.options.adjustYAxisPadding) !== 'boolean' ) this.options.adjustYAxisPadding = true;
   if( (typeof this.options.wheelScrollYAxis) !== 'boolean' ) this.options.wheelScrollYAxis = true;
+  
   
   //if( (typeof this.options.) !== '' ) this.options. = ;
   
@@ -151,12 +157,6 @@ SpectrumChartD3 = function(elem, options) {
     SECONDARY: 'SECONDARY',
   };
 
-  /*pre IE9 support */
-  if (!Array.isArray) {
-    Array.isArray = function(arg) {
-      return Object.prototype.toString.call(arg) === '[object Array]';
-    };
-  }
 
   /*When dragging the plot, both dragging_plot and zooming_plot will be */
   /*  true.  When only zooming (e.g. mouse wheel), then only zooming_plot */
@@ -257,8 +257,8 @@ SpectrumChartD3 = function(elem, options) {
     return Math.min(i + 1, spectrum.points.length);
   };
 
-  this.firstRaw = this.lastRaw = this.rebinFactor = -1;
-
+  this.rebinFactor = 1;
+  this.firstRaw = this.lastRaw = -1;
   this.do_rebin();
 
   this.setYAxisDomain = function(){
@@ -468,19 +468,18 @@ SpectrumChartD3 = function(elem, options) {
         .style("text-anchor","middle");
   }
 
-  /* add y-axis label */
-  if (this.options.ylabel) {
-    this.vis.append("g")
-      .attr('id', 'yaxistitle-container') // Christian: To allow changing the y-axis title
-      .append("text")
-        .attr("class", "yaxistitle")
-        .text(this.options.ylabel + (this.rebinFactor > 1 ? (" per " + this.rebinFactor + " Channels") : "") )
-        .style("text-anchor","middle");
-        /*.attr("transform","translate(" + -40 + " " + this.size.height/2+") rotate(-90)"); */
-  }
+  /* Add the y-axis label. */
+  this.vis.append("g")
+    .append("text")
+    .attr("class", "yaxistitle")
+    .text( "" )
+    .style("text-anchor","middle");
+  
+  this.updateYAxisTitleText();
   
   if( this.options.gridx )
     this.setGridX(this.options.gridx,true);
+  
   if( this.options.gridy )
     this.setGridY(this.options.gridy,true);
 }
@@ -763,27 +762,36 @@ SpectrumChartD3.prototype.do_rebin = function() {
     return;
   }
 
+  // We will choose the rebin factor based on spectrum with the least number of channels.  This is
+  //  driven by case of comparing a HPGe spectrum (~16k channel) to a NaI spectrum (~1k channels),
+  //  we dont want to lose the definition in the NaI spectrum by combining a bunch of channels.
+  //  The side-effect of this is that the HPGe spectrum may have way more points than pixels...
+  let newRebin = 9999;
   this.rawData.spectra.forEach(function(spectrum, spectrumi) {
-    var newRebin = 1;
-    spectrum.points = [];
-
-    var firstRaw = self.displayed_raw_start(spectrum);
-    var lastRaw = self.displayed_raw_end(spectrum);
-
-    var npoints = lastRaw - firstRaw;
-    if( npoints > 1 && self.size.width > 2 ) {
-      newRebin = Math.ceil( self.options.spectrumLineWidth * npoints / (self.size.width) );
+    const firstRaw = self.displayed_raw_start(spectrum);
+    const lastRaw = self.displayed_raw_end(spectrum);
+    const npoints = lastRaw - firstRaw;
+    
+    if( npoints > 1 && self.size.width > 2 ){
+      const thisrebin = Math.max( 1, Math.ceil(self.options.spectrumLineWidth * npoints / self.size.width) );
+      newRebin = ((thisrebin > 0) && (thisrebin < newRebin)) ? thisrebin : newRebin;
     }
-
-    if( newRebin != spectrum.rebinFactor || self.firstRaw !== firstRaw || self.lastRaw !== lastRaw ){
+  } );
+  
+  if( newRebin === 9999 )
+    newRebin = 1;
+  
+  if( this.rebinFactor !== newRebin ){
+    this.rebinFactor = newRebin;
+    this.updateYAxisTitleText();
+  }
+  
+  this.rawData.spectra.forEach(function(spectrum, spectrumi) {
+    let firstRaw = self.displayed_raw_start(spectrum);
+    let lastRaw = self.displayed_raw_end(spectrum);
+    
+    if( newRebin != spectrum.rebinFactor || spectrum.firstRaw !== firstRaw || spectrum.lastRaw !== lastRaw ){
       spectrum.points = [];
-
-      if( spectrum.rebinFactor != newRebin ){
-        var txt = self.options.ylabel ? self.options.ylabel : "";
-        if( newRebin !== 1 )
-          txt += " per " + newRebin + " Channels"
-        self.vis.select(".yaxistitle").text( txt );
-      }
 
       spectrum.rebinFactor = newRebin;
       spectrum.firstRaw = firstRaw;
@@ -805,91 +813,59 @@ SpectrumChartD3.prototype.do_rebin = function() {
       /*Also, could _maybe_ use energy range, rather than indexes to track if we */
       /*  need to rebin the data or not... */
 
-      /*console.log( "self.rebinFactor=" + self.rebinFactor ); */
-
       for( var i = firstRaw; i < lastRaw; i += newRebin ){
-        var thisdata = { };
-        if (i >= spectrum.x.length) {
-          thisdata['x'] = spectrum.x[spectrum.x.length-1];
-        }
+        let thisdata = { x: 0, y: 0 };
+        if (i >= spectrum.x.length)
+          thisdata.x = spectrum.x[spectrum.x.length-1];
         else
-          thisdata['x'] = spectrum.x[i];
+          thisdata.x = spectrum.x[i];
 
-        if (spectrum.y.length > 0) {
-          var key = 'y';
-          thisdata[key] = 0;
-          for( var j = 0; j < newRebin && i+j<spectrum.y.length; ++j )
-            thisdata[key] += spectrum.y[i+j];
-          thisdata[key] *= spectrum.yScaleFactor;
-        }
+        for( let j = 0; (j < newRebin) && ((i+j) < spectrum.y.length); ++j )
+          thisdata.y += spectrum.y[i+j];
+        thisdata.y *= spectrum.yScaleFactor;
+
         spectrum.points.push( thisdata );
       }
     }
   });
 }
 
-SpectrumChartD3.prototype.rebinSpectrum = function(spectrumToBeAdjusted, linei) {
-  var self = this;
+SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumToBeAdjusted, linei) {
+  let self = this;
 
   if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra.length ) 
     return;
 
   /* Check for the which corresponding spectrum line is the specified one to be rebinned */
-  if (linei == null || !spectrumToBeAdjusted) 
+  if( linei == null || !spectrumToBeAdjusted )
     return;
+    
+  let firstRaw = self.displayed_raw_start(spectrumToBeAdjusted);
+  let lastRaw = self.displayed_raw_end(spectrumToBeAdjusted);
 
-  var newRebin = 1;
+  const rebinFactor = spectrumToBeAdjusted.rebinFactor; //should be same as this.rebinFactor
 
-  var firstRaw = self.displayed_raw_start(spectrumToBeAdjusted);
-  var lastRaw = self.displayed_raw_end(spectrumToBeAdjusted);
-
-  var npoints = lastRaw - firstRaw;
-  if( npoints > 1 && this.size.width > 2 )
-    newRebin = Math.ceil( npoints / this.size.width );
-
-  /* Since we can only adjust scale factors for background/secondary/others, we don't need to adjust y-axis title */
-  /*
-  if( spectrumToBeAdjusted.rebinFactor != newRebin ){
-    var txt = this.options.ylabel ? this.options.ylabel : "";
-    if( newRebin !== 1 )
-      txt += " per " + newRebin + " Channels"
-    d3.select(".yaxistitle").text( txt );
-  }
-  */
-
-  spectrumToBeAdjusted.rebinFactor = newRebin;
   spectrumToBeAdjusted.firstRaw = firstRaw;
   spectrumToBeAdjusted.lastRaw = lastRaw;
 
-  /*Round firstRaw and lastRaw down and up to even multiples of newRebin */
-  firstRaw -= (firstRaw % newRebin);
-  lastRaw += newRebin - (lastRaw % newRebin);
-  if( firstRaw >= newRebin )
-    firstRaw -= newRebin;
+  /* Round firstRaw and lastRaw down and up to even multiples of rebinFactor */
+  firstRaw -= (firstRaw % rebinFactor);
+  lastRaw += rebinFactor - (lastRaw % rebinFactor);
+  if( firstRaw >= rebinFactor )
+    firstRaw -= rebinFactor;
   if( lastRaw > spectrumToBeAdjusted.x.length )
     lastRaw = spectrumToBeAdjusted.x.length;
 
+  let i = firstRaw;
+  for( let pointi = 0; pointi < spectrumToBeAdjusted.points.length; pointi++ ){
+    let thisdata = spectrumToBeAdjusted.points[pointi];
 
-  /*could do some optimizations here where we actually do a slightly larger */
-  /*  range than displayed, so that next time we might not have to go back */
-  /*  through the data to recompute things (it isnt clear if D3 will plot */
-  /*  these datas, should check on this.) */
-  /*Also, could _maybe_ use energy range, rather than indexes to track if we */
-  /*  need to rebin the data or not... */
+    thisdata.y = 0;
+    for( let j = 0; (j < rebinFactor) && ((i+j) < spectrumToBeAdjusted.y.length); ++j )
+      thisdata.y += spectrumToBeAdjusted.y[i+j];
+    thisdata.y *= spectrumToBeAdjusted.yScaleFactor;
 
-  /*console.log( "self.rebinFactor=" + self.rebinFactor ); */
-  var i = firstRaw;
-  for( var pointi = 0; pointi < spectrumToBeAdjusted.points.length; pointi++ ){
-    var thisdata = spectrumToBeAdjusted.points[pointi];
-
-    if( spectrumToBeAdjusted.y.length > 0 ) {
-      thisdata.y = 0;
-      for( var j = 0; j < newRebin && i+j<spectrumToBeAdjusted.y.length; ++j )
-        thisdata.y += spectrumToBeAdjusted.y[i+j];
-      thisdata.y *= spectrumToBeAdjusted.yScaleFactor;
-    }
-
-    i += newRebin;
+    i += rebinFactor;
   }
 }
 
@@ -985,7 +961,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove(); // Clear x-axis slider chart lines if present
 
   this.rawData = null;
-  this.firstRaw = this.lastRaw = this.rebinFactor = -1; /*force rebin calc */
+  this.rebinFactor = -1; /*force rebin calc */
 
   try
   {
@@ -1365,23 +1341,18 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title) {
 }
 
 SpectrumChartD3.prototype.setYAxisTitle = function(title) {
-  var self = this;
-
-  self.options.ylabel = null;
-  self.vis.select('#yaxistitle-container').remove();
-
-  if( (title == null || typeof title !== 'string') || title.length === 0 )
-    return;
+  this.options.ylabel = (typeof title === 'string') ? title : "";
   
-  self.options.ylabel = title;
-  self.vis.append("g")
-    .attr('id', 'yaxistitle-container')
-    .append("text")
-      .attr("class", "yaxistitle")
-      .text(self.options.ylabel + (self.rebinFactor > 1 ? (" per " + self.rebinFactor + " Channels") : "") )
-      .style("text-anchor","middle");
+  this.updateYAxisTitleText();
+  
+  this.handleResize( true );
+}
 
-  self.handleResize( true );
+SpectrumChartD3.prototype.updateYAxisTitleText = function() {
+  if( (this.options.ylabel.length === 0) || (this.rebinFactor === 1) )
+    this.vis.select(".yaxistitle").text( this.options.ylabel );
+  else
+    this.vis.select(".yaxistitle").text( this.options.ylabel + " per " + this.rebinFactor + " Channels" );
 }
 
 
@@ -1472,8 +1443,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.xaxistitle.attr("y", this.size.height);
   }
 
- /* this.vis.selectAll(".yaxistitle") */
-    /* .attr("transform","translate(" + -40 + " " + this.size.height/2+") rotate(-90)"); */
   this.xAxisBody.attr("width", this.size.width )
                 .attr("height", this.size.height )
                 .attr("transform", "translate(0," + this.size.height + ")");
@@ -3245,6 +3214,7 @@ SpectrumChartD3.prototype.mousemove = function () {
     if( self.rawData && self.rawData.spectra && self.rawData.spectra.length ) {
       var foreground = self.rawData.spectra[0];
       var lowerchanval = d3.bisector(function(d){return d.x;}).left(foreground.points,energy,1) - 1;
+      
       var counts = foreground.points[lowerchanval].y;
       var lefteenergy = foreground.points[lowerchanval].x;
       var rightenergy = foreground.points[lowerchanval+1>=foreground.points.length ? foreground.points.length-1 : lowerchanval+1].x;
@@ -5230,7 +5200,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .on("touchstart", self.handleTouchStartRightSliderDrag())
         .on("touchmove", self.handleTouchMoveRightSliderDrag(false));
     }
-  }
+  };//function drawDragRegionLines()
 
   // Store the original x and y-axis domain (we'll use these to draw the slider lines and position the slider box)
   var origdomain = self.xScale.domain();
@@ -6186,7 +6156,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
   */
   function scaleFactorChangeRedraw(spectrum, linei) {
     self.updateLegend();
-    self.rebinSpectrum(spectrum, linei);
+    self.adjustYScaleOfDisplayedDataPoints(spectrum, linei);
     self.do_rebin();
     self.rebinForBackgroundSubtract();
     self.setYAxisDomain();
