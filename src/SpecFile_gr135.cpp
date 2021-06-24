@@ -408,7 +408,8 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
                                   ? (size - recordstarts[j])
                                   : (recordstarts[j+1] - recordstarts[j]));
       
-      if( (record_size < 2048) || (record_size > 5*1024) )
+      // The GR-130 record size looks to be 560 bytes
+      if( (record_size < 512) || (record_size > 5*1024) )
         throw runtime_error( "Invalid record_size" );
         
       auto meas = make_shared<Measurement>();
