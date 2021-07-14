@@ -248,6 +248,42 @@ namespace SpecUtils
 
 			});
 
+		// For time series data, if you have multiple Poisson samples GADRAS just 
+		// outputs all the records in a big lump. We want to reorganize them 
+		// so we can more easily step through the sequence and deal with statistics.
+		env.add_callback("organize_poisson", 3, [](Arguments& args) {
+			json dataToProcess = args.at(0)->get<json>();
+			int nSamples = args.at(1)->get<int>();
+			std::string sourceFilter = args.at(2)->get<std::string>();
+
+			json organized = {};
+
+			int sampleCounter = 0;
+			int currentIndex = 0;
+
+			for (auto& element : dataToProcess) {
+				std::string sourceType = element["source_type"];
+
+				if (sourceType != sourceFilter) continue; // Skip this one, not the right source type
+
+				if (sampleCounter == 0) { // first one, create a new array
+					organized[currentIndex] = {};
+				}
+
+				organized[currentIndex].push_back(element);
+
+				sampleCounter++;
+
+				if (sampleCounter == nSamples) {
+					currentIndex++; // go on to the next array
+					sampleCounter = 0; // reset the sample counter
+				}
+			}
+
+			return organized;
+
+			});
+
 		// Sum the counts in the provided channels, using interpolation if needed for fractional bounds on the energy window
 		env.add_callback("sum_counts_in_window", 3, [](Arguments& args) {
 			vector<float> counts = args.at(0)->get<std::vector<float>>();
