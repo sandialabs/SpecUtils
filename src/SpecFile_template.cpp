@@ -212,11 +212,17 @@ namespace SpecUtils
 			return result;
 			});
 
-		// Doesn't seem to be any basic math, may need to expand on this
+		// Doesn't seem to be any basic math in inja, so provide some here
 		env.add_callback("subtract", 2, [](Arguments& args) {
 			float value1 = args.at(0)->get<float>();
 			float value2 = args.at(1)->get<float>();
 			return value1 - value2;
+			});
+
+		env.add_callback("divide", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
+			return value1 / value2;
 			});
 
 		env.add_callback("modulus", 2, [](Arguments& args) {
@@ -224,6 +230,61 @@ namespace SpecUtils
 			int value2 = args.at(1)->get<int>();
 			return value1 % value2;
 			});
+
+		// This is to filter a JSON array based on a provided property and value
+		env.add_callback("filter", 3, [](Arguments& args) {
+			json dataToFilter = args.at(0)->get<json>();
+			std::string filterProp = args.at(1)->get<string>();
+			std::string filterValue = args.at(2)->get<string>();
+			json filtered;
+
+			for (auto& element : dataToFilter) {
+				if (element[filterProp] == filterValue) {
+					filtered.push_back(element);
+				}
+			}
+
+			return filtered;
+
+			});
+
+		// Sum the counts in the provided channels, using interpolation if needed for fractional bounds on the energy window
+		env.add_callback("sum_counts_in_window", 3, [](Arguments& args) {
+			vector<float> counts = args.at(0)->get<std::vector<float>>();
+			float lld = args.at(1)->get<float>();
+			float uld = args.at(2)->get<float>();
+
+			float sum = 0;
+			float chn_last = 0;
+
+			for (int i = 0; i < counts.size(); i++) {
+				int chnNbr = i + 1;
+				if (chnNbr >= lld && chnNbr < uld) {
+					float lld_extra = 0;
+					float uld_minus = 0;
+
+					float lld_interp = chnNbr - lld;
+					float uld_interp = uld - chnNbr;
+
+					float chn = counts.at(i);
+
+					if (lld_interp < 1 && lld_interp > 0) {
+						// do the interpolation on the lower end of the energy window
+						lld_extra = lld_interp * chn_last;
+					}
+					if (uld_interp < 1 && uld_interp > 0) {
+						//do the interpolation on the Upper end of the energy window
+						uld_minus = (1 - uld_interp) * chn;
+					}
+					
+					sum += chn + lld_extra - uld_minus;
+					chn_last = chn;
+				}
+			}
+
+			return sum;
+			});
+
 
 		// STEP 1 - read template file
 		Template temp;
