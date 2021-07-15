@@ -191,6 +191,23 @@ namespace SpecUtils
 			return std::string(buffer);
 			});
 
+		// Convert a value in seconds to the format <hours>:<minutes>:<seconds>
+		// Second argument is for seconds precision
+		env.add_callback("hr_min_sec", 2, [](Arguments& args) {
+			char buffer[256];
+			float valueInSeconds = args.at(0)->get<float>();
+			int secondsPrecision = args.at(1)->get<int>();
+			int hours = (int)(valueInSeconds / 3600);
+			float remainingSeconds = valueInSeconds - (60 * 60 * hours);
+			int minutes = (int)(remainingSeconds / 60);
+			remainingSeconds = remainingSeconds - (60 * minutes);
+			char sformat[256];
+			snprintf(sformat, sizeof(sformat), "0%d.%d", secondsPrecision+3 /* plus 3 for first two digits plus decimal */, secondsPrecision);
+			string totalFormat = "%02d:%02d:%" + string(sformat) + "f";
+			snprintf(buffer, sizeof(buffer), totalFormat.c_str(), hours, minutes, remainingSeconds);
+			return std::string(buffer);
+			});
+
 		// Run the counted zeros compression on the given vector
 		env.add_callback("compress_countedzeros", 1, [](Arguments& args) {
 			vector<float> compressed_counts;
@@ -347,6 +364,37 @@ namespace SpecUtils
 
 			return sum;
 			});
+
+		env.add_callback("init_queue", 1, [](Arguments& args) {
+			int sizeParam = args.at(0)->get<int>();
+
+			json arr;
+			for (int i = 0; i < sizeParam; i++) {
+				arr.push_back(0);
+			}
+			return arr;
+			});
+
+		env.add_callback("push_queue", 2, [](Arguments& args) {
+			json arr = args.at(0)->get<json>();
+			float newValue = args.at(1)->get<float>();
+
+			arr.erase(0);
+			arr.push_back(newValue);
+
+			return arr;
+			});
+
+		env.add_callback("sum_queue", 1, [](Arguments& args) {
+			json arr = args.at(0)->get<json>();
+
+			float sum = 0;
+			for (auto& element : arr) {
+				sum += element;
+			}
+			return sum;
+			});
+
 
 
 		// STEP 1 - read template file
