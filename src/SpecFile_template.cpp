@@ -213,10 +213,22 @@ namespace SpecUtils
 			});
 
 		// Doesn't seem to be any basic math in inja, so provide some here
+		env.add_callback("add", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
+			return value1 + value2;
+			});
+
 		env.add_callback("subtract", 2, [](Arguments& args) {
 			float value1 = args.at(0)->get<float>();
 			float value2 = args.at(1)->get<float>();
 			return value1 - value2;
+			});
+
+		env.add_callback("multiply", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
+			return value1 * value2;
 			});
 
 		env.add_callback("divide", 2, [](Arguments& args) {
@@ -225,10 +237,31 @@ namespace SpecUtils
 			return value1 / value2;
 			});
 
+		env.add_callback("sqrt", 1, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			return sqrt(value1);
+			});
+
+		env.add_callback("pow", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(0)->get<float>();
+			return pow(value1, value2);
+			});
+
 		env.add_callback("modulus", 2, [](Arguments& args) {
 			int value1 = args.at(0)->get<int>();
 			int value2 = args.at(1)->get<int>();
 			return value1 % value2;
+			});
+
+		env.add_callback("increment", 1, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			return ++value1;
+			});
+
+		env.add_callback("decrement", 1, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			return --value1;
 			});
 
 		// This is to filter a JSON array based on a provided property and value
@@ -258,26 +291,20 @@ namespace SpecUtils
 
 			json organized = {};
 
+			for (int i = 0; i < nSamples; i++) {
+				organized[i] = {};
+			}
+
 			int sampleCounter = 0;
-			int currentIndex = 0;
 
 			for (auto& element : dataToProcess) {
 				std::string sourceType = element["source_type"];
 
 				if (sourceType != sourceFilter) continue; // Skip this one, not the right source type
 
-				if (sampleCounter == 0) { // first one, create a new array
-					organized[currentIndex] = {};
-				}
-
-				organized[currentIndex].push_back(element);
+				organized[sampleCounter % nSamples].push_back(element);
 
 				sampleCounter++;
-
-				if (sampleCounter == nSamples) {
-					currentIndex++; // go on to the next array
-					sampleCounter = 0; // reset the sample counter
-				}
 			}
 
 			return organized;
