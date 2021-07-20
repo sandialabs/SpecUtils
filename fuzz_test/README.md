@@ -23,9 +23,10 @@ Once you do this, you can run a fuzz job, use a command like:
 See https://llvm.org/docs/LibFuzzer.html for 
 
 # Potential Future work
-- Add compiler flags "-fprofile-instr-generate -fcoverage-mapping" on the SpecUtils code in order to see code coverage
-    - see https://clang.llvm.org/docs/SourceBasedCodeCoverage.html
 - The fuzzing is probably really niave and could be made way more effective
 - Figure out memory limit to use, with an argument like '-rss_limit_mb=64' 
 - Add fuzzing for all the string, datetime, and filesystem utilities
 - Could target each type of spectrum file parser using candidate files targeted specifically to them, instead of trying each parser for each input
+- Also try writing output files whenever the parsing was successful
+
+
