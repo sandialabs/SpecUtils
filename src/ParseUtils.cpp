@@ -327,12 +327,28 @@ float speed_from_remark( std::string remark )
   to_lower_ascii( remark );
   size_t pos = remark.find( "speed" );
   
-  if( pos == string::npos )
-    return 0.0;
-  
-  pos = remark.find_first_not_of( "= \t", pos+5 );
-  if( pos == string::npos )
-    return 0.0;
+  if (pos != string::npos) 
+  {
+      pos = remark.find_first_not_of("= \t", pos + 5);
+      if (pos == string::npos)
+          return 0.0;
+  }
+  else 
+  {
+      // try "v="
+      pos = remark.find("v=");
+      if (pos != string::npos) 
+      {
+          pos = remark.find_first_not_of(" \t", pos + 2);
+          if (pos == string::npos)
+              return 0.0;
+      }
+      else 
+      {
+          // No speed information found in the remark
+          return 0.0;
+      }
+  }
   
   const string speedstr = remark.substr( pos );
   
@@ -349,7 +365,7 @@ float speed_from_remark( std::string remark )
   
   for( size_t i = 0; i < speedstr.size(); ++i )
   {
-    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') )
+    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') && (speedstr[i] != '.'))
     {
       float convertion = 0.0f;
       
@@ -360,6 +376,8 @@ float speed_from_remark( std::string remark )
         convertion = 1.0f;
       else if( unitstrlen>=3 && unitstr.substr(0,3) == "mph" )
         convertion = 0.44704f;
+      else if (unitstrlen >= 4 && unitstr.substr(0, 4) == "cm/s")
+          convertion = 0.01f;
       else
       {
 #if( PERFORM_DEVELOPER_CHECKS )

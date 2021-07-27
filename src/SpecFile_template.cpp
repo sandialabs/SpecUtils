@@ -271,6 +271,15 @@ namespace SpecUtils
 			return value1 % value2;
 			});
 
+		env.add_callback("rand", 2, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			int value2 = args.at(1)->get<int>();
+			// return a random number between [value1,value2] (inclusive)
+			// From stdlib notes, this is NOT a true uniform distribution!
+			return rand() % (value2 - value1 + 1) + value1;
+			});
+
+
 		env.add_callback("increment", 1, [](Arguments& args) {
 			int value1 = args.at(0)->get<int>();
 			return ++value1;
