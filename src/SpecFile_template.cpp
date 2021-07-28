@@ -295,6 +295,11 @@ namespace SpecUtils
 			return --value1;
 			});
 
+		env.add_callback("truncate", 1, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			return (int)value1;
+			});
+
 		// This is to filter a JSON array based on a provided property and value
 		env.add_callback("filter", 3, [](Arguments& args) {
 			json dataToFilter = args.at(0)->get<json>();
@@ -315,10 +320,14 @@ namespace SpecUtils
 		// For time series data, if you have multiple Poisson samples GADRAS just 
 		// outputs all the records in a big lump. We want to reorganize them 
 		// so we can more easily step through the sequence and deal with statistics.
-		env.add_callback("organize_poisson", 3, [](Arguments& args) {
+		env.add_callback("reslice_data", 4, [](Arguments& args) {
 			json dataToProcess = args.at(0)->get<json>();
 			int nSamples = args.at(1)->get<int>();
 			std::string sourceFilter = args.at(2)->get<std::string>();
+
+			// Some N42 files have each sample duplicated, while some of them have the entire occupancy duplicated with the samples already in order
+			// We need to be able to handle it both ways.
+			bool samplesInOrder = args.at(3)->get<bool>();
 
 			json organized = {};
 
@@ -327,13 +336,44 @@ namespace SpecUtils
 			}
 
 			int sampleCounter = 0;
+			int rowCounter = 0;
+
+			int numDataPoints = 0;
+
+			if (samplesInOrder) {
+				int filteredSampleCount = 0;
+
+				for (auto& element : dataToProcess) {
+					std::string sourceType = element["source_type"];
+
+					if (sourceType != sourceFilter) continue; // Skip this one, not the right source type
+
+					filteredSampleCount++;
+				}
+
+				numDataPoints = filteredSampleCount / nSamples;
+			}
 
 			for (auto& element : dataToProcess) {
 				std::string sourceType = element["source_type"];
 
 				if (sourceType != sourceFilter) continue; // Skip this one, not the right source type
 
-				organized[sampleCounter % nSamples].push_back(element);
+				if (samplesInOrder)
+				{
+					// Samples are in order already so add them sequentially
+					organized[rowCounter].push_back(element);
+
+					if (sampleCounter % numDataPoints == (numDataPoints - 1))
+					{
+						rowCounter++;
+					}
+				}
+				else 
+				{
+					// Each sample is duplicated before moving on to the next, so reorder things here
+					organized[sampleCounter % nSamples].push_back(element);
+				}
 
 				sampleCounter++;
 			}
@@ -409,17 +449,16 @@ namespace SpecUtils
 			return sum;
 			});
 
-
-
 		// STEP 1 - read template file
 		Template temp;
 		try
 		{
+			cout << "Parsing template '" << template_file << "'" << endl;
 			temp = env.parse_template(template_file);
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error reading input template" << e.what() << endl;
+			cout << "Error reading input template " << e.what() << endl;
 			return false;
 		}
 
@@ -428,6 +467,8 @@ namespace SpecUtils
 
 		try
 		{
+			cout << "Populating data..." << endl;
+
 			data["instrument_type"] = instrument_type_;
 			data["manufacturer"] = manufacturer_;
 			data["instrument_model"] = instrument_model_;
@@ -435,6 +476,8 @@ namespace SpecUtils
 			data["version_components"] = component_versions_;
 
 			data["measurements"] = measurements_;
+
+			cout << "\tFound " << measurements_.size() << " input measurements" << endl;
 
 			data["gamma_live_time"] = gamma_live_time_;
 			data["gamma_real_time"] = gamma_real_time_;
@@ -448,18 +491,19 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error building data structure" << e.what() << endl;
+			cout << "Error building data structure " << e.what() << endl;
 			return false;
 		}
 
 		// STEP 3 - render template using JSON data to the provided stream
 		try
 		{
+			cout << "Rendering output file..." << endl;
 			env.render_to(ostr, temp, data);
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error rendering output file" << e.what() << endl;
+			cout << "Error rendering output file " << e.what() << endl;
 			return false;
 		}
 
