@@ -118,6 +118,18 @@ namespace  SpecUtils
    */
   std::string detector_name_from_remark( const std::string &remark );
   
+  /** Looks for x position information in remark
+  
+  * ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+  */
+  float dx_from_remark( std::string remark );
+
+  /** Looks for y position information in remark
+
+* ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+*/
+  float dy_from_remark(std::string remark);
+
   
   /** Returns the dose units indicated by the string, in units such that ia
    micro-sievert per hour is equal to 1.0.

@@ -114,6 +114,8 @@ namespace SpecUtils
 		j["latitude"] = p->latitude();
 		j["longitude"] = p->longitude();
 		j["speed"] = p->speed();
+		j["dx"] = p->dx();
+		j["dy"] = p->dy();
 	}
 
 	void to_json(json& j, SpecUtils::DetectorAnalysisResult p)
@@ -145,15 +147,15 @@ namespace SpecUtils
 		}
 	}
 
-	bool SpecFile::write_template(std::ostream& ostr, const std::string template_file) const
+	bool SpecFile::write_template(std::ostream& ostr, const std::string template_file, bool strip_blocks) const
 	{
 		std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
 
 		Environment env;
 
 		//You can control the template whitespace processing here, but its tricky and messes with the file line endings
-		//env.set_trim_blocks(true);
-		//env.set_lstrip_blocks(true);
+		env.set_trim_blocks(strip_blocks);
+		env.set_lstrip_blocks(strip_blocks);
 
 		// Apply an arbitrary string formatting
 		env.add_callback("format", 2, [](Arguments& args) {
@@ -271,9 +273,12 @@ namespace SpecUtils
 			return value1 % value2;
 			});
 
+		srand(time(NULL)); // This is important for the random numbers to work correctly
+
 		env.add_callback("rand", 2, [](Arguments& args) {
 			int value1 = args.at(0)->get<int>();
 			int value2 = args.at(1)->get<int>();
+
 			// return a random number between [value1,value2] (inclusive)
 			// From stdlib notes, this is NOT a true uniform distribution!
 			return rand() % (value2 - value1 + 1) + value1;

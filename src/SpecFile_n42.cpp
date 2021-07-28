@@ -3138,6 +3138,10 @@ public:
               if (thisspeed > 0.0f)
                   meas->speed_ = thisspeed;
 
+              // Try to get dx/dy from remark
+              meas->dx_ = dx_from_remark(remark);
+              meas->dy_ = dy_from_remark(remark);
+
             }else if( remark.size() )
             {
               meas->remarks_.emplace_back( std::move(remark) );
