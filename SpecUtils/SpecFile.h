@@ -493,6 +493,14 @@ public:
   //  known.  Otherwise return 0.0.
   float speed() const;
   
+  //dx(): returns the dx of the vehicle, object or detector, if
+  //  known.  Otherwise return 0.0.
+  float dx() const;
+
+  //dy(): returns the dy of the vehicle, object or detector, if
+//  known.  Otherwise return 0.0.
+  float dy() const;
+
   //latitude(): returns the latitude of the measurement, in degrees, if known.
   //  Returns -999.9 otherwise.
   double latitude() const;
@@ -981,6 +989,8 @@ protected:
   double gamma_count_sum_;
   double neutron_counts_sum_;
   float speed_;  //in m/s
+  float dx_;
+  float dy_;
   std::string detector_name_;
   int detector_number_;
   std::string detector_description_;  //e.x. "HPGe 50%". Roughly the equivalent N42 2012 "RadDetectorDescription" node
@@ -2042,7 +2052,7 @@ public:
                       std::vector<std::string> det_names ) const;
 #endif
   
-  bool write_template( std::ostream &output, const std::string template_file ) const;
+  bool write_template( std::ostream &output, const std::string template_file, bool strip_blocks ) const;
 
   //Incase InterSpec specific changes are made, please change this number
   //  Version 4: Made it so portal data that starts with a long background as

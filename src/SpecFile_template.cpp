@@ -114,6 +114,8 @@ namespace SpecUtils
 		j["latitude"] = p->latitude();
 		j["longitude"] = p->longitude();
 		j["speed"] = p->speed();
+		j["dx"] = p->dx();
+		j["dy"] = p->dy();
 	}
 
 	void to_json(json& j, SpecUtils::DetectorAnalysisResult p)
@@ -145,15 +147,15 @@ namespace SpecUtils
 		}
 	}
 
-	bool SpecFile::write_template(std::ostream& ostr, const std::string template_file) const
+	bool SpecFile::write_template(std::ostream& ostr, const std::string template_file, bool strip_blocks) const
 	{
 		std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
 
 		Environment env;
 
 		//You can control the template whitespace processing here, but its tricky and messes with the file line endings
-		//env.set_trim_blocks(true);
-		//env.set_lstrip_blocks(true);
+		env.set_trim_blocks(strip_blocks);
+		env.set_lstrip_blocks(strip_blocks);
 
 		// Apply an arbitrary string formatting
 		env.add_callback("format", 2, [](Arguments& args) {
@@ -191,6 +193,23 @@ namespace SpecUtils
 			return std::string(buffer);
 			});
 
+		// Convert a value in seconds to the format <hours>:<minutes>:<seconds>
+		// Second argument is for seconds precision
+		env.add_callback("hr_min_sec", 2, [](Arguments& args) {
+			char buffer[256];
+			float valueInSeconds = args.at(0)->get<float>();
+			int secondsPrecision = args.at(1)->get<int>();
+			int hours = (int)(valueInSeconds / 3600);
+			float remainingSeconds = valueInSeconds - (60 * 60 * hours);
+			int minutes = (int)(remainingSeconds / 60);
+			remainingSeconds = remainingSeconds - (60 * minutes);
+			char sformat[256];
+			snprintf(sformat, sizeof(sformat), "0%d.%d", secondsPrecision+3 /* plus 3 for first two digits plus decimal */, secondsPrecision);
+			string totalFormat = "%02d:%02d:%" + string(sformat) + "f";
+			snprintf(buffer, sizeof(buffer), totalFormat.c_str(), hours, minutes, remainingSeconds);
+			return std::string(buffer);
+			});
+
 		// Run the counted zeros compression on the given vector
 		env.add_callback("compress_countedzeros", 1, [](Arguments& args) {
 			vector<float> compressed_counts;
@@ -212,11 +231,40 @@ namespace SpecUtils
 			return result;
 			});
 
-		// Doesn't seem to be any basic math, may need to expand on this
+		// Doesn't seem to be any basic math in inja, so provide some here
+		env.add_callback("add", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
+			return value1 + value2;
+			});
+
 		env.add_callback("subtract", 2, [](Arguments& args) {
 			float value1 = args.at(0)->get<float>();
 			float value2 = args.at(1)->get<float>();
 			return value1 - value2;
+			});
+
+		env.add_callback("multiply", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
+			return value1 * value2;
+			});
+
+		env.add_callback("divide", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
+			return value1 / value2;
+			});
+
+		env.add_callback("sqrt", 1, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			return sqrt(value1);
+			});
+
+		env.add_callback("pow", 2, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			float value2 = args.at(0)->get<float>();
+			return pow(value1, value2);
 			});
 
 		env.add_callback("modulus", 2, [](Arguments& args) {
@@ -225,15 +273,192 @@ namespace SpecUtils
 			return value1 % value2;
 			});
 
+		srand(time(NULL)); // This is important for the random numbers to work correctly
+
+		env.add_callback("rand", 2, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			int value2 = args.at(1)->get<int>();
+
+			// return a random number between [value1,value2] (inclusive)
+			// From stdlib notes, this is NOT a true uniform distribution!
+			return rand() % (value2 - value1 + 1) + value1;
+			});
+
+
+		env.add_callback("increment", 1, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			return ++value1;
+			});
+
+		env.add_callback("decrement", 1, [](Arguments& args) {
+			int value1 = args.at(0)->get<int>();
+			return --value1;
+			});
+
+		env.add_callback("truncate", 1, [](Arguments& args) {
+			float value1 = args.at(0)->get<float>();
+			return (int)value1;
+			});
+
+		// This is to filter a JSON array based on a provided property and value
+		env.add_callback("filter", 3, [](Arguments& args) {
+			json dataToFilter = args.at(0)->get<json>();
+			std::string filterProp = args.at(1)->get<string>();
+			std::string filterValue = args.at(2)->get<string>();
+			json filtered;
+
+			for (auto& element : dataToFilter) {
+				if (element[filterProp] == filterValue) {
+					filtered.push_back(element);
+				}
+			}
+
+			return filtered;
+
+			});
+
+		// For time series data, if you have multiple Poisson samples GADRAS just 
+		// outputs all the records in a big lump. We want to reorganize them 
+		// so we can more easily step through the sequence and deal with statistics.
+		env.add_callback("reslice_data", 4, [](Arguments& args) {
+			json dataToProcess = args.at(0)->get<json>();
+			int nSamples = args.at(1)->get<int>();
+			std::string sourceFilter = args.at(2)->get<std::string>();
+
+			// Some N42 files have each sample duplicated, while some of them have the entire occupancy duplicated with the samples already in order
+			// We need to be able to handle it both ways.
+			bool samplesInOrder = args.at(3)->get<bool>();
+
+			json organized = {};
+
+			for (int i = 0; i < nSamples; i++) {
+				organized[i] = {};
+			}
+
+			int sampleCounter = 0;
+			int rowCounter = 0;
+
+			int numDataPoints = 0;
+
+			if (samplesInOrder) {
+				int filteredSampleCount = 0;
+
+				for (auto& element : dataToProcess) {
+					std::string sourceType = element["source_type"];
+
+					if (sourceType != sourceFilter) continue; // Skip this one, not the right source type
+
+					filteredSampleCount++;
+				}
+
+				numDataPoints = filteredSampleCount / nSamples;
+			}
+
+			for (auto& element : dataToProcess) {
+				std::string sourceType = element["source_type"];
+
+				if (sourceType != sourceFilter) continue; // Skip this one, not the right source type
+
+				if (samplesInOrder)
+				{
+					// Samples are in order already so add them sequentially
+					organized[rowCounter].push_back(element);
+
+					if (sampleCounter % numDataPoints == (numDataPoints - 1))
+					{
+						rowCounter++;
+					}
+				}
+				else 
+				{
+					// Each sample is duplicated before moving on to the next, so reorder things here
+					organized[sampleCounter % nSamples].push_back(element);
+				}
+
+				sampleCounter++;
+			}
+
+			return organized;
+
+			});
+
+		// Sum the counts in the provided channels, using interpolation if needed for fractional bounds on the energy window
+		env.add_callback("sum_counts_in_window", 3, [](Arguments& args) {
+			vector<float> counts = args.at(0)->get<std::vector<float>>();
+			float lld = args.at(1)->get<float>();
+			float uld = args.at(2)->get<float>();
+
+			float sum = 0;
+			float chn_last = 0;
+
+			for (int i = 0; i < counts.size(); i++) {
+				int chnNbr = i + 1;
+				if (chnNbr >= lld && chnNbr < uld) {
+					float lld_extra = 0;
+					float uld_minus = 0;
+
+					float lld_interp = chnNbr - lld;
+					float uld_interp = uld - chnNbr;
+
+					float chn = counts.at(i);
+
+					if (lld_interp < 1 && lld_interp > 0) {
+						// do the interpolation on the lower end of the energy window
+						lld_extra = lld_interp * chn_last;
+					}
+					if (uld_interp < 1 && uld_interp > 0) {
+						//do the interpolation on the Upper end of the energy window
+						uld_minus = (1 - uld_interp) * chn;
+					}
+					
+					sum += chn + lld_extra - uld_minus;
+					chn_last = chn;
+				}
+			}
+
+			return sum;
+			});
+
+		env.add_callback("init_queue", 1, [](Arguments& args) {
+			int sizeParam = args.at(0)->get<int>();
+
+			json arr;
+			for (int i = 0; i < sizeParam; i++) {
+				arr.push_back(0);
+			}
+			return arr;
+			});
+
+		env.add_callback("push_queue", 2, [](Arguments& args) {
+			json arr = args.at(0)->get<json>();
+			float newValue = args.at(1)->get<float>();
+
+			arr.erase(0);
+			arr.push_back(newValue);
+
+			return arr;
+			});
+
+		env.add_callback("sum_queue", 1, [](Arguments& args) {
+			json arr = args.at(0)->get<json>();
+
+			float sum = 0;
+			for (auto& element : arr) {
+				sum += element;
+			}
+			return sum;
+			});
+
 		// STEP 1 - read template file
 		Template temp;
 		try
 		{
+			cout << "Parsing template '" << template_file << "'" << endl;
 			temp = env.parse_template(template_file);
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error reading input template" << e.what() << endl;
+			cout << "Error reading input template " << e.what() << endl;
 			return false;
 		}
 
@@ -242,6 +467,8 @@ namespace SpecUtils
 
 		try
 		{
+			cout << "Populating data..." << endl;
+
 			data["instrument_type"] = instrument_type_;
 			data["manufacturer"] = manufacturer_;
 			data["instrument_model"] = instrument_model_;
@@ -249,6 +476,8 @@ namespace SpecUtils
 			data["version_components"] = component_versions_;
 
 			data["measurements"] = measurements_;
+
+			cout << "\tFound " << measurements_.size() << " input measurements" << endl;
 
 			data["gamma_live_time"] = gamma_live_time_;
 			data["gamma_real_time"] = gamma_real_time_;
@@ -262,18 +491,19 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error building data structure" << e.what() << endl;
+			cout << "Error building data structure " << e.what() << endl;
 			return false;
 		}
 
 		// STEP 3 - render template using JSON data to the provided stream
 		try
 		{
+			cout << "Rendering output file..." << endl;
 			env.render_to(ostr, temp, data);
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error rendering output file" << e.what() << endl;
+			cout << "Error rendering output file " << e.what() << endl;
 			return false;
 		}
 

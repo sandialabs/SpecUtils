@@ -3132,6 +3132,16 @@ public:
               //Starting with SpecFile_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
               remark = SpecUtils::trim_copy( remark.substr(6) );
               meas->title_ += remark;
+
+              // Try to get speed from remark, this will get overwritten later if there is a <Speed> node
+              const float thisspeed = speed_from_remark(remark);
+              if (thisspeed > 0.0f)
+                  meas->speed_ = thisspeed;
+
+              // Try to get dx/dy from remark
+              meas->dx_ = dx_from_remark(remark);
+              meas->dy_ = dy_from_remark(remark);
+
             }else if( remark.size() )
             {
               meas->remarks_.emplace_back( std::move(remark) );
