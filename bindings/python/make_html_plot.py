@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 
 # SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
 # 
@@ -48,32 +48,37 @@ for filename in sys.argv[1:]:
         info.loadFile( filename, SpecUtils.ParserType.Auto )
         
     except RuntimeError as e:
-        print "Failed to open spectrum file: {0}".format( e )
+        print( "Failed to open spectrum file: {0}".format( e ) )
         exit( 1 )
 
-    print "Loaded " + filename
     
     # If the file contains multiple measurements, we will sum together each
     # sample (e.g., sum all detectors that made a measurement for the same
     # time interval), and then add it to what we will plot
     sampleNums = info.sampleNumbers()
 
+    print( "Loaded {} that has {} sample numbers".format(filename, len(sampleNums)) )
+
     for sample in sampleNums:
         detNames = info.detectorNames()
         m = info.sumMeasurements( [sample], detNames )
 
         # If this measurement doesnt have a spectrum (e.g., maybe a neutron-only meas), skip it
-        if m.numGammaChannels > 7:
+        if m.numGammaChannels() < 7:
             continue
 
         opt = SpecUtils.D3SpectrumOptions()
         # set the line color to a valid CSS line color - here we'll just do some nonsense color progression
-        opt.line_color = "rgb(" + str( ((7*len(spectra_to_plot))%255 ) + "," + ((19*len(spectra_to_plot))%255) + "," + ((37*len(spectra_to_plot))%255) + ")" )
+        r = ( 7*len(spectra_to_plot)) % 255
+        g = (19*len(spectra_to_plot)) % 255
+        b = (37*len(spectra_to_plot)) % 255
+        opt.line_color = "rgb({},{},{})".format(r, g, b)
+        
         opt.display_scale_factor = 1.0
 
         # If we have already added a plot, lets live-time normalize to it
         if len(spectra_to_plot) > 0:
-            opt.display_scale_factor = spectra_to_plot[0][1].liveTime() / m.liveTime()
+            opt.display_scale_factor = spectra_to_plot[0][0].liveTime() / m.liveTime()
 
         opt.title = filename + " sample " + str(sample)
         opt.spectrum_type = SpecUtils.SpectrumType.Foreground  #SecondForeground, or Background
@@ -81,15 +86,15 @@ for filename in sys.argv[1:]:
         spectra_to_plot.append( (m,opt) )
 
 if len(spectra_to_plot) < 1:
-    print "No spectra to plot"
+    print( "No spectra to plot" )
     exit( 1 ) 
 
-print "Will add " + str( len(spectra_to_plot) ) + " plots to output.html"
+print( "Will add {} plots to output.html".format(len(spectra_to_plot)) )
 
 f = open( "output.html", 'w' )
 
 # Set options for displaying the chart
-options = SpecUtils.D3SpectrumOptions()
+options = SpecUtils.D3SpectrumChartOptions()
 #options.title = "Some Title"
 options.x_axis_title = "Energy (keV)"
 #options.y_axis_title = "Counts"
@@ -110,6 +115,6 @@ options.allow_drag_roi_extent = False
 
 SpecUtils.write_d3_html( f, spectra_to_plot, options )
 
-print "Wrote output.html"
+print( "Wrote output.html" )
 
 exit( 1 )

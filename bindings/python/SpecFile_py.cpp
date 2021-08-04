@@ -148,15 +148,27 @@ namespace
     
     std::streamsize write( const char *buffer, std::streamsize buffer_size )
     {
-      boost::python::str data(buffer, buffer_size);
       boost::python::object pywrite = object_.attr( "write" );
       
       if( pywrite.is_none() )
-        throw std::runtime_error( "Python stream has no attibute 'write'" );
+        throw std::runtime_error( "Python stream has no attribute 'write'" );
       
-      boost::python::object pynwrote = pywrite( data );
-      const boost::python::extract<std::streamsize> bytes_written( pynwrote );
-      return bytes_written.check() ? bytes_written : buffer_size;
+      // If we are writing a large output (buffer_size >= 4096), we wont necassarily write
+      //  all the bytes in one go.  When this happens, it seems future writes fail, and we dont
+      //  get the output we want.  So instead, we will do a loop here to force writing everything...
+      std::streamsize nwritten = 0;
+      while( nwritten < buffer_size )
+      {
+        const auto buff_start = buffer + nwritten;
+        const auto nbytes_to_write = buffer_size - nwritten;
+        boost::python::str data(buff_start, nbytes_to_write);
+        boost::python::object pynwrote = pywrite( data );
+        const boost::python::extract<std::streamsize> bytes_written( pynwrote );
+        
+        nwritten += bytes_written.check() ? bytes_written : nbytes_to_write;
+      }
+
+      return nwritten;
     }
     
     bool flush()

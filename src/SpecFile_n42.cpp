@@ -31,6 +31,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
+#include <float.h>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>

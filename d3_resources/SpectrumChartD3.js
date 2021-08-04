@@ -4646,7 +4646,7 @@ SpectrumChartD3.prototype.drawYTicks = function() {
   var self = this;
   var stroke = function(d) { return d ? "#ccc" : "#666"; };
   
-  /* Regenerate y-ticks… */
+  /* Regenerate y-ticks */
     var ytick = self.yticks();
     var ytickvalues = ytick.map(function(d){return d.value;} );
     self.yScale.ticks(ytickvalues);
@@ -5015,7 +5015,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   self.xAxis.tickValues( xtickvalues );
      
   /**
-   * Regenerate x-ticks…
+   * Regenerate x-ticks
    * Christian [032818]: Commented out for performance improvement, D3 will reuse current tick nodes when
    *  using new axis tick values, so we don't need to remove the current ones
    */
@@ -6807,8 +6807,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
    centroidMinYPx: 43.0
    centroidXPx: 111.4
    energy: 244.162
-   peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), …}
-   roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2), …}
+   peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), ...}
+   roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2),...}
    roiPeakIndex: 0
    userLabel: undefined
    }
