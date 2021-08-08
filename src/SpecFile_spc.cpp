@@ -584,7 +584,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           meas->longitude_ = conventional_lat_or_long_str_to_flt( lonstr );
         }else
         {
-          cerr << "SpecFile::load_from_iaea_spc(istream &): couldnt split lat lon" << endl;
+          meas->parse_warnings_.push_back( "Couldnt parse lat/lon." );
         }
       }else if( istarts_with( line, "DeviceId" ) )
       {
