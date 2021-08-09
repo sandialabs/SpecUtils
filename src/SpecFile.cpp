@@ -6600,6 +6600,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   vector< vector< std::shared_ptr<const vector<float> > > > spectrums( num_thread );
   
   int current_total_sample_num = 0;
+  set<SourceType> source_types;
   set<string> remarks;
   for( const int sample_number : sample_numbers )
   {
@@ -6627,6 +6628,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       for( const std::string &remark : meas->remarks_ )
         remarks.insert( remark );
         
+      source_types.insert( meas->source_type() );
+      
       if( spec_size > 3 )
       {
         dataH->live_time_ += meas->live_time();
@@ -6643,6 +6646,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   if( !current_total_sample_num )
     return nullptr;
 
+  if( source_types.size() == 1 )
+    dataH->source_type_ = *begin(source_types);
   
   //If we are only summing one sample, we can preserve some additional
   //  information
