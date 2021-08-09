@@ -25,12 +25,13 @@
 #include <memory>
 #include <string>
 #include <cctype>
-#include <fstream>
 #include <cctype>
+#include <float.h>
+#include <fstream>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <cstdint>
+#include <iostream>
 #include <stdexcept>
 #include <algorithm>
 
@@ -1081,7 +1082,11 @@ bool SpecFile::load_from_pcf( std::istream &input )
     //        offset (float uncompressed, or int16_t compressed)
     set<string> detector_names;
     std::vector< std::pair<float,float> > deviation_pairs[4][8][8];
-    bool have_deviation_pairs = (header.find("DeviationPairsInFile") != string::npos);
+    
+    // We should have the string "DeviationPairsInFile" in the header if there are deviation pairs
+    //  present.  However, I have seen at one case where the file only had "DeviationPairs",
+    //  so we will just test for that (I dont think this should produce any false-positives...).
+    bool have_deviation_pairs = (header.find("DeviationPairs") != string::npos);
     const bool compressed_devpair = (header.find("DeviationPairsInFileCompressed") != string::npos);
     
     if( have_deviation_pairs )
@@ -1453,6 +1458,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
       meas->neutron_counts_[0] = neutron_counts;
       meas->neutron_counts_sum_ = neutron_counts;
       meas->speed_ = speed_from_remark( spectrum_title );
+      meas->dx_ = dx_from_remark(spectrum_title);
+      meas->dy_ = dy_from_remark(spectrum_title);
       meas->detector_name_ = detector_name_from_remark( spectrum_title );
       
       

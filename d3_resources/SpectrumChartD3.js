@@ -15,8 +15,12 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
    License along with this library; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-   
+   As of 20210623 this file is 11334 lines long!  It is not allowed to grow, and even with fixes
+   or feature additions, we must refactor and improve code to keep LOC this size or smaller
+   (e.g., things are out of hand, lets keep it from getting worse).
+ 
 Feature TODO list (created 20160220):
+
   - Need to go through and list out all member variables that get set, and where and when they get set.  I think we can eliminate a number of these, and make use of the remaining more consisten.
   - The touch implementation is especially bad.  Getting things like pageX, or dealing with touches is really inconsistent; some time needs to be spent to go through and clean up.
   - If you tap on a peak, where its actually drawn, this isnt propogated to the vis, and the peak isnt highlighted like it should be, meaning the tapend signal has to cancel the self.touchHold timer, which isnt right, and the peak never gets outlined.  Needs to be fixed.
@@ -57,11 +61,13 @@ SpectrumChartD3 = function(elem, options) {
   
   //if( (typeof this.options.yscale) !== 'string' || (['lin', 'log', 'sqrt'].indexOf(this.options.yscale) < 0) ) this.options.yscale = "lin";
   if( (typeof this.options.yscale) !== 'string' ) this.options.yscale = "lin";
+  if( (typeof this.options.ylabel) !== 'string' ) this.options.ylabel = "Counts";
   if( (typeof this.options.gridx) !== 'boolean' ) this.options.gridx = false;
   if( (typeof this.options.gridy) !== 'boolean' ) this.options.gridy = false;
   if( (typeof this.options.compactXAxis) !== 'boolean' ) this.options.compactXAxis = false;
   if( (typeof this.options.adjustYAxisPadding) !== 'boolean' ) this.options.adjustYAxisPadding = true;
   if( (typeof this.options.wheelScrollYAxis) !== 'boolean' ) this.options.wheelScrollYAxis = true;
+  
   
   //if( (typeof this.options.) !== '' ) this.options. = ;
   
@@ -151,12 +157,6 @@ SpectrumChartD3 = function(elem, options) {
     SECONDARY: 'SECONDARY',
   };
 
-  /*pre IE9 support */
-  if (!Array.isArray) {
-    Array.isArray = function(arg) {
-      return Object.prototype.toString.call(arg) === '[object Array]';
-    };
-  }
 
   /*When dragging the plot, both dragging_plot and zooming_plot will be */
   /*  true.  When only zooming (e.g. mouse wheel), then only zooming_plot */
@@ -257,8 +257,8 @@ SpectrumChartD3 = function(elem, options) {
     return Math.min(i + 1, spectrum.points.length);
   };
 
-  this.firstRaw = this.lastRaw = this.rebinFactor = -1;
-
+  this.rebinFactor = 1;
+  this.firstRaw = this.lastRaw = -1;
   this.do_rebin();
 
   this.setYAxisDomain = function(){
@@ -362,8 +362,8 @@ SpectrumChartD3 = function(elem, options) {
     .on("mouseup", self.handleCancelAllMouseEvents())
     .on("mousemove", function() {
         if( d3.event && (self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown || self.currentlyAdjustingSpectrumScale) ) {
-          d3.event.preventDefault();
-          d3.event.stopPropagation();
+          //d3.event.preventDefault();
+          //d3.event.stopPropagation();
         }
       });
 
@@ -468,16 +468,20 @@ SpectrumChartD3 = function(elem, options) {
         .style("text-anchor","middle");
   }
 
-  /* add y-axis label */
-  if (this.options.ylabel) {
-    this.vis.append("g")
-      .attr('id', 'yaxistitle-container') // Christian: To allow changing the y-axis title
-      .append("text")
-        .attr("class", "yaxistitle")
-        .text(this.options.ylabel + (this.rebinFactor > 1 ? (" per " + this.rebinFactor + " Channels") : "") )
-        .style("text-anchor","middle");
-        /*.attr("transform","translate(" + -40 + " " + this.size.height/2+") rotate(-90)"); */
-  }
+  /* Add the y-axis label. */
+  this.vis.append("g")
+    .append("text")
+    .attr("class", "yaxistitle")
+    .text( "" )
+    .style("text-anchor","middle");
+  
+  this.updateYAxisTitleText();
+  
+  if( this.options.gridx )
+    this.setGridX(this.options.gridx,true);
+  
+  if( this.options.gridy )
+    this.setGridY(this.options.gridy,true);
 }
 
 registerKeyboardHandler = function(callback) {
@@ -584,6 +588,26 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
   // Wt.emit( elem, event, ...args);  // ES6 syntax
   Wt.emit.apply(Wt, [elem, event].concat(args));
 }
+
+
+/** Returns color of a D3 element in *this* chart.
+ You pass in a string selector for a component in this chart, such as '.tick', or '.xaxistitle'
+ and this function returns back to you its line color.
+ The function is needed as some of the CSS rules are set dynamically in document CSS, and sometimes
+ elements have a stroke, and sometimes a fill, so this function should be reasonably robust.
+ 
+ TODO: Is it better to use document.querySelector(...) than d3.select(...)?  should check into
+ */
+SpectrumChartD3.prototype.getElementLineColor = function( selstr ){
+  let el = d3.select('#' + this.chart.id + ' ' + selstr);
+  if( el.empty() )
+    el = d3.select(selstr);
+  const s = el.empty() ? null : getComputedStyle( el[0][0] );
+  if( s && s.stroke && (s.stroke !== 'none') ) return s.stroke;
+  if( s && s.fill && (s.fill !== 'none') ) return s.fill;
+  return 'black';
+}
+
 
 
 SpectrumChartD3.prototype.getStaticSvg = function(){
@@ -738,27 +762,36 @@ SpectrumChartD3.prototype.do_rebin = function() {
     return;
   }
 
+  // We will choose the rebin factor based on spectrum with the least number of channels.  This is
+  //  driven by case of comparing a HPGe spectrum (~16k channel) to a NaI spectrum (~1k channels),
+  //  we dont want to lose the definition in the NaI spectrum by combining a bunch of channels.
+  //  The side-effect of this is that the HPGe spectrum may have way more points than pixels...
+  let newRebin = 9999;
   this.rawData.spectra.forEach(function(spectrum, spectrumi) {
-    var newRebin = 1;
-    spectrum.points = [];
-
-    var firstRaw = self.displayed_raw_start(spectrum);
-    var lastRaw = self.displayed_raw_end(spectrum);
-
-    var npoints = lastRaw - firstRaw;
-    if( npoints > 1 && self.size.width > 2 ) {
-      newRebin = Math.ceil( self.options.spectrumLineWidth * npoints / (self.size.width) );
+    const firstRaw = self.displayed_raw_start(spectrum);
+    const lastRaw = self.displayed_raw_end(spectrum);
+    const npoints = lastRaw - firstRaw;
+    
+    if( npoints > 1 && self.size.width > 2 ){
+      const thisrebin = Math.max( 1, Math.ceil(self.options.spectrumLineWidth * npoints / self.size.width) );
+      newRebin = ((thisrebin > 0) && (thisrebin < newRebin)) ? thisrebin : newRebin;
     }
-
-    if( newRebin != spectrum.rebinFactor || self.firstRaw !== firstRaw || self.lastRaw !== lastRaw ){
+  } );
+  
+  if( newRebin === 9999 )
+    newRebin = 1;
+  
+  if( this.rebinFactor !== newRebin ){
+    this.rebinFactor = newRebin;
+    this.updateYAxisTitleText();
+  }
+  
+  this.rawData.spectra.forEach(function(spectrum, spectrumi) {
+    let firstRaw = self.displayed_raw_start(spectrum);
+    let lastRaw = self.displayed_raw_end(spectrum);
+    
+    if( newRebin != spectrum.rebinFactor || spectrum.firstRaw !== firstRaw || spectrum.lastRaw !== lastRaw ){
       spectrum.points = [];
-
-      if( spectrum.rebinFactor != newRebin ){
-        var txt = self.options.ylabel ? self.options.ylabel : "";
-        if( newRebin !== 1 )
-          txt += " per " + newRebin + " Channels"
-        self.vis.select(".yaxistitle").text( txt );
-      }
 
       spectrum.rebinFactor = newRebin;
       spectrum.firstRaw = firstRaw;
@@ -780,91 +813,59 @@ SpectrumChartD3.prototype.do_rebin = function() {
       /*Also, could _maybe_ use energy range, rather than indexes to track if we */
       /*  need to rebin the data or not... */
 
-      /*console.log( "self.rebinFactor=" + self.rebinFactor ); */
-
       for( var i = firstRaw; i < lastRaw; i += newRebin ){
-        var thisdata = { };
-        if (i >= spectrum.x.length) {
-          thisdata['x'] = spectrum.x[spectrum.x.length-1];
-        }
+        let thisdata = { x: 0, y: 0 };
+        if (i >= spectrum.x.length)
+          thisdata.x = spectrum.x[spectrum.x.length-1];
         else
-          thisdata['x'] = spectrum.x[i];
+          thisdata.x = spectrum.x[i];
 
-        if (spectrum.y.length > 0) {
-          var key = 'y';
-          thisdata[key] = 0;
-          for( var j = 0; j < newRebin && i+j<spectrum.y.length; ++j )
-            thisdata[key] += spectrum.y[i+j];
-          thisdata[key] *= spectrum.yScaleFactor;
-        }
+        for( let j = 0; (j < newRebin) && ((i+j) < spectrum.y.length); ++j )
+          thisdata.y += spectrum.y[i+j];
+        thisdata.y *= spectrum.yScaleFactor;
+
         spectrum.points.push( thisdata );
       }
     }
   });
 }
 
-SpectrumChartD3.prototype.rebinSpectrum = function(spectrumToBeAdjusted, linei) {
-  var self = this;
+SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumToBeAdjusted, linei) {
+  let self = this;
 
   if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra.length ) 
     return;
 
   /* Check for the which corresponding spectrum line is the specified one to be rebinned */
-  if (linei == null || !spectrumToBeAdjusted) 
+  if( linei == null || !spectrumToBeAdjusted )
     return;
+    
+  let firstRaw = self.displayed_raw_start(spectrumToBeAdjusted);
+  let lastRaw = self.displayed_raw_end(spectrumToBeAdjusted);
 
-  var newRebin = 1;
+  const rebinFactor = spectrumToBeAdjusted.rebinFactor; //should be same as this.rebinFactor
 
-  var firstRaw = self.displayed_raw_start(spectrumToBeAdjusted);
-  var lastRaw = self.displayed_raw_end(spectrumToBeAdjusted);
-
-  var npoints = lastRaw - firstRaw;
-  if( npoints > 1 && this.size.width > 2 )
-    newRebin = Math.ceil( npoints / this.size.width );
-
-  /* Since we can only adjust scale factors for background/secondary/others, we don't need to adjust y-axis title */
-  /*
-  if( spectrumToBeAdjusted.rebinFactor != newRebin ){
-    var txt = this.options.ylabel ? this.options.ylabel : "";
-    if( newRebin !== 1 )
-      txt += " per " + newRebin + " Channels"
-    d3.select(".yaxistitle").text( txt );
-  }
-  */
-
-  spectrumToBeAdjusted.rebinFactor = newRebin;
   spectrumToBeAdjusted.firstRaw = firstRaw;
   spectrumToBeAdjusted.lastRaw = lastRaw;
 
-  /*Round firstRaw and lastRaw down and up to even multiples of newRebin */
-  firstRaw -= (firstRaw % newRebin);
-  lastRaw += newRebin - (lastRaw % newRebin);
-  if( firstRaw >= newRebin )
-    firstRaw -= newRebin;
+  /* Round firstRaw and lastRaw down and up to even multiples of rebinFactor */
+  firstRaw -= (firstRaw % rebinFactor);
+  lastRaw += rebinFactor - (lastRaw % rebinFactor);
+  if( firstRaw >= rebinFactor )
+    firstRaw -= rebinFactor;
   if( lastRaw > spectrumToBeAdjusted.x.length )
     lastRaw = spectrumToBeAdjusted.x.length;
 
+  let i = firstRaw;
+  for( let pointi = 0; pointi < spectrumToBeAdjusted.points.length; pointi++ ){
+    let thisdata = spectrumToBeAdjusted.points[pointi];
 
-  /*could do some optimizations here where we actually do a slightly larger */
-  /*  range than displayed, so that next time we might not have to go back */
-  /*  through the data to recompute things (it isnt clear if D3 will plot */
-  /*  these datas, should check on this.) */
-  /*Also, could _maybe_ use energy range, rather than indexes to track if we */
-  /*  need to rebin the data or not... */
+    thisdata.y = 0;
+    for( let j = 0; (j < rebinFactor) && ((i+j) < spectrumToBeAdjusted.y.length); ++j )
+      thisdata.y += spectrumToBeAdjusted.y[i+j];
+    thisdata.y *= spectrumToBeAdjusted.yScaleFactor;
 
-  /*console.log( "self.rebinFactor=" + self.rebinFactor ); */
-  var i = firstRaw;
-  for( var pointi = 0; pointi < spectrumToBeAdjusted.points.length; pointi++ ){
-    var thisdata = spectrumToBeAdjusted.points[pointi];
-
-    if( spectrumToBeAdjusted.y.length > 0 ) {
-      thisdata.y = 0;
-      for( var j = 0; j < newRebin && i+j<spectrumToBeAdjusted.y.length; ++j )
-        thisdata.y += spectrumToBeAdjusted.y[i+j];
-      thisdata.y *= spectrumToBeAdjusted.yScaleFactor;
-    }
-
-    i += newRebin;
+    i += rebinFactor;
   }
 }
 
@@ -960,7 +961,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove(); // Clear x-axis slider chart lines if present
 
   this.rawData = null;
-  this.firstRaw = this.lastRaw = this.rebinFactor = -1; /*force rebin calc */
+  this.rebinFactor = -1; /*force rebin calc */
 
   try
   {
@@ -1104,6 +1105,11 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     });
   }
 
+  if( this.options.gridx )
+    this.setGridX(this.options.gridx,true);
+  if( this.options.gridy )
+    this.setGridY(this.options.gridy,true);
+  
   this.addMouseInfoBox();
 
   this.updateLegend();
@@ -1335,23 +1341,18 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title) {
 }
 
 SpectrumChartD3.prototype.setYAxisTitle = function(title) {
-  var self = this;
-
-  self.options.ylabel = null;
-  self.vis.select('#yaxistitle-container').remove();
-
-  if( (title == null || typeof title !== 'string') || title.length === 0 )
-    return;
+  this.options.ylabel = (typeof title === 'string') ? title : "";
   
-  self.options.ylabel = title;
-  self.vis.append("g")
-    .attr('id', 'yaxistitle-container')
-    .append("text")
-      .attr("class", "yaxistitle")
-      .text(self.options.ylabel + (self.rebinFactor > 1 ? (" per " + self.rebinFactor + " Channels") : "") )
-      .style("text-anchor","middle");
+  this.updateYAxisTitleText();
+  
+  this.handleResize( true );
+}
 
-  self.handleResize( true );
+SpectrumChartD3.prototype.updateYAxisTitleText = function() {
+  if( (this.options.ylabel.length === 0) || (this.rebinFactor === 1) )
+    this.vis.select(".yaxistitle").text( this.options.ylabel );
+  else
+    this.vis.select(".yaxistitle").text( this.options.ylabel + " per " + this.rebinFactor + " Channels" );
 }
 
 
@@ -1442,8 +1443,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.xaxistitle.attr("y", this.size.height);
   }
 
- /* this.vis.selectAll(".yaxistitle") */
-    /* .attr("transform","translate(" + -40 + " " + this.size.height/2+") rotate(-90)"); */
   this.xAxisBody.attr("width", this.size.width )
                 .attr("height", this.size.height )
                 .attr("transform", "translate(0," + this.size.height + ")");
@@ -1595,8 +1594,8 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       return;
 
     /* Prevent and stop default events from ocurring */
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
+    //d3.event.preventDefault();
+    //d3.event.stopPropagation();
 
 
 
@@ -1784,9 +1783,8 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info){
     // .attr("class", "roiDragBox" )
     // .attr("transform", "translate(" + ((isOnLower ? lpx : upx) - 5) + "," + this.size.height + ")")
     
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    
+    let axiscolor = self.getElementLineColor('.tick');
     self.roiBeingDragged.axiscolor = axiscolor;
     
     self.roiDragBox.append("rect")
@@ -2353,7 +2351,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             window.clearTimeout(self.mousewait);
             self.mousewait = null;
           }
-          console.log("Emit DOUBLE CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y);
+          
+          //console.log("Emit DOUBLE CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", x, ", y = ", y);
           self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count);
 
         } else {
@@ -2361,7 +2360,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.updateFeatureMarkers(self.xScale.invert( x ));    /* update the sum peak where user clicked */
 
             return function() {
-              console.log( "Emit CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", pageX = ", pageX, ", pageY = ", pageY );
+              //console.log( "Emit CLICK signal!", "\nenergy = ", energy, ", count = ", count, ", pageX = ", pageX, ", pageY = ", pageY );
               self.WtEmit(self.chart.id, {name: 'leftclicked'}, energy, count, pageX, pageY);
 
               self.unhighlightPeak(null);
@@ -2433,8 +2432,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     self.rightClickDrag = false;
 
     /* Cancel default d3 event properties */
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
+    //d3.event.preventDefault();
+    //d3.event.stopPropagation();
 
     /* Not zooming in anymore */
     self.zooming_plot = false;
@@ -3215,6 +3214,7 @@ SpectrumChartD3.prototype.mousemove = function () {
     if( self.rawData && self.rawData.spectra && self.rawData.spectra.length ) {
       var foreground = self.rawData.spectra[0];
       var lowerchanval = d3.bisector(function(d){return d.x;}).left(foreground.points,energy,1) - 1;
+      
       var counts = foreground.points[lowerchanval].y;
       var lefteenergy = foreground.points[lowerchanval].x;
       var rightenergy = foreground.points[lowerchanval+1>=foreground.points.length ? foreground.points.length-1 : lowerchanval+1].x;
@@ -3817,12 +3817,14 @@ SpectrumChartD3.prototype.setShowRefLineInfoForMouseOver = function( show ) {
 /**
  * -------------- Grid Lines Functions --------------
  */
-SpectrumChartD3.prototype.setGridX = function( onstate ) {
-  if( this.options.gridx == onstate )
-    return;
-
+SpectrumChartD3.prototype.setGridX = function( onstate, dontRedraw ) {
   this.options.gridx = onstate;
 
+  if( this.xGridBody )
+    this.xGridBody.remove();
+  this.xGrid = null;
+  this.xGridBody = null;
+  
   if( onstate ) {
     this.xGrid = d3.svg.axis().scale(this.xScale)
                    .orient("bottom")
@@ -3838,22 +3840,20 @@ SpectrumChartD3.prototype.setGridX = function( onstate ) {
         .attr("class", "xgrid" )
         .attr("transform", "translate(0," + this.size.height + ")")
         .call( this.xGrid );
-  } else {
-    if( this.xGridBody )
-      this.xGridBody.remove();
-    this.xGrid = null;
-    this.xGridBody = null;
   }
-
-  this.redraw(true)();
+  
+  if( !dontRedraw )
+    this.redraw(true)();
 }
 
-SpectrumChartD3.prototype.setGridY = function( onstate ) {
-  if( this.options.gridy == onstate )
-    return;
-
+SpectrumChartD3.prototype.setGridY = function( onstate, dontRedraw ) {
   this.options.gridy = onstate;
 
+  if( this.yGridBody )
+    this.yGridBody.remove();
+  this.yGrid = null;
+  this.yGridBody = null;
+  
   if( onstate ) {
     this.yGrid = d3.svg.axis().scale(this.yScale)
                    .orient("left")
@@ -3868,13 +3868,10 @@ SpectrumChartD3.prototype.setGridY = function( onstate ) {
         .attr("class", "ygrid" )
         .attr("transform", "translate(0,0)")
         .call( this.yGrid );
-  } else {
-    this.yGridBody.remove();
-    this.yGrid = null;
-    this.yGridBody = null;
   }
 
-  this.redraw()();
+  if( !dontRedraw )
+    this.redraw()();
 }
 
 
@@ -4255,7 +4252,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
   var ypos = 0;
   const spectra = self.rawData ? self.rawData.spectra : [];
   spectra.forEach( function(spectrum,i){
-    if( !spectrum || !spectrum.y.length )
+    if( !spectrum || !spectrum.y || !spectrum.y.length )
       return;
       
     const sf = ((typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor: 1);
@@ -4649,7 +4646,7 @@ SpectrumChartD3.prototype.drawYTicks = function() {
   var self = this;
   var stroke = function(d) { return d ? "#ccc" : "#666"; };
   
-  /* Regenerate y-ticks… */
+  /* Regenerate y-ticks */
     var ytick = self.yticks();
     var ytickvalues = ytick.map(function(d){return d.value;} );
     self.yScale.ticks(ytickvalues);
@@ -5018,7 +5015,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   self.xAxis.tickValues( xtickvalues );
      
   /**
-   * Regenerate x-ticks…
+   * Regenerate x-ticks
    * Christian [032818]: Commented out for performance improvement, D3 will reuse current tick nodes when
    *  using new axis tick values, so we don't need to remove the current ones
    */
@@ -5203,7 +5200,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .on("touchstart", self.handleTouchStartRightSliderDrag())
         .on("touchmove", self.handleTouchMoveRightSliderDrag(false));
     }
-  }
+  };//function drawDragRegionLines()
 
   // Store the original x and y-axis domain (we'll use these to draw the slider lines and position the slider box)
   var origdomain = self.xScale.domain();
@@ -5224,10 +5221,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
-    axiscolor = 'black';
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    axiscolor = self.getElementLineColor('.tick');
     
     // G element of the slider chart
     self.sliderChart = d3.select("svg").append("g")
@@ -5288,10 +5282,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   // Add the slider draggable box and edges
   if (!self.sliderBox) {
     if( !axiscolor ){
-      axiscolor = 'black';
-      const tickElement = document.querySelector('.tick');
-      const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-      axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+      axiscolor = self.getElementLineColor('.tick');
     }
     
     // Slider box
@@ -5470,8 +5461,12 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
   var self = this;
 
   return function() {
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
+    
+    if (self.leftDragRegionDown || self.rightDragRegionDown || self.leftDragRegionDown) {
+      d3.event.preventDefault();
+      d3.event.stopPropagation();
+    }
+    
     /* console.log("sliderboxdown = ", self.sliderBoxDown); */
     /* console.log("leftDragRegionDown = ", self.leftDragRegionDown); */
     /* console.log("rightDragRegionDown = ", self.rightDragRegionDown); */
@@ -6045,15 +6040,8 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   var ypos = 15;
 
   //Get axis color, text color and spec
-  let axiscolor = 'black', txtcolor = 'black';
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
-  const titleElement = document.querySelector('.xaxistitle');
-  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.stroke ? titleStyle.stroke : 'black';
-  
+  let txtcolor = self.getElementLineColor('.xaxistitle');
+  let axiscolor = self.getElementLineColor('.tick')
   
   var scalenum = 0;
   self.rawData.spectra.forEach(function(spectrum,i) {
@@ -6168,7 +6156,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
   */
   function scaleFactorChangeRedraw(spectrum, linei) {
     self.updateLegend();
-    self.rebinSpectrum(spectrum, linei);
+    self.adjustYScaleOfDisplayedDataPoints(spectrum, linei);
     self.do_rebin();
     self.rebinForBackgroundSubtract();
     self.setYAxisDomain();
@@ -6284,9 +6272,12 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
   if( roi.type === 'NoOffset' || x0===x1 )
     return 0.0;
   
-  if( roi.type === 'External' ){
+  if( (roi.type === 'External') || (roi.type === 'FlatStep') || (roi.type === 'LinearStep')|| (roi.type === 'BiLinearStep') ){
     //console.log( roi );
 
+    //let doDebug = false;
+    //if( doDebug ) console.log( 'x0=' + x0 + ', x1=' + x1 );
+    
     let energies = roi.continuumEnergies;
     let counts = roi.continuumCounts;
 
@@ -6301,30 +6292,39 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
     
     if( cstartind >= (energies.length-1) )
       return 0.0;  //shouldnt ever happen
+      
     if( cendind >= (energies.length-1) )
-      cendind = cendind - 1;
+      cendind = energies.length - 1;
 
     if( cstartind > 0 && energies[cstartind] > x0 )
       cstartind = cstartind - 1;
-    if( cendind > 0 && energies[cendind] > x1 )
+    if( cendind > 0 && energies[cendind] >= x1 )
       cendind = cendind - 1;
 
     if( cstartind === cendind ){
+      //if( doDebug ) console.log( 'counts[' + cstartind + ']=' + counts[cstartind] );
       return counts[cstartind] * (x1-x0) / (energies[cstartind+1] - energies[cstartind]);
     }
 
     //figure out fraction of first bin
     let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
     let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
-      
-    //console.log( 'x0=' + x0 + ', cstartind=' + cstartind + ', energy={' + energies[cstartind] + ',' + energies[cstartind+1] + '}, frac_first=' + frac_first );
+    
+    //if( doDebug )
+    //{
+    //  console.log( 'frac_first=' + frac_first + ', frac_last=' + frac_last );
+    //  for( var i = cstartind; i <= cendind; i++ )
+    //  {
+    //    console.log( 'index=' + i + ', energy={' + energies[i] + ',' + energies[i+1] + '}' );
+    //  }
+    //}
     //console.log( 'x1=' + x1 + ', cendind=' + cendind + ', energy={' + energies[cendind] + ',' + energies[cendind+1] + '}, frac_last=' + frac_last);
 
     let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
     for( let i = cstartind+1; i < cendind; ++i )
       sum += counts[i];
     return sum;
-  }//if( roi.type === 'External' )
+  }//if( roi.type is 'External' or 'Step' )
 
   x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
   var answer = 0.0;
@@ -6419,6 +6419,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       paths[0] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
       
+      //console.log( "[points[" + i + "].x,points[" + "i+1" + "].x,thisy,yScale(thisy)]={", points[i].x,points[i+1].x,thisy, self.yScale(thisy), "}");
+      
       for( let j = 0; j < roi.peaks.length; ++j ) {
         m = roi.peaks[j].Centroid[0];
         s = roi.peaks[j].Width[0];
@@ -6448,6 +6450,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
     }//for( var i = xstartind; i < xendind; ++i )
 
+    
     function erf(x) {
       /* http://stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function
          Error is less than 1.5 * 10-7 for all inputs
@@ -6481,12 +6484,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     
     //Go from right to left drawing the peak lines that sit on the continuum.
     //  we will also 
-    for( var xindex = xendind - 1; xindex >= xstartind; --xindex ) {
+    for( let xindex = xendind - 1; xindex >= xstartind; --xindex ) {
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
       //thisx = 0.5*(points[xindex].x + points[xindex+1].x);
       thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(points[xindex].x + points[xindex+1].x))));
-      
       
       cont_area = self.offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
 
@@ -6622,7 +6624,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
         && roi.type !== 'Linear' && roi.type !== 'Quadratic'
         && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
-        && roi.type !== 'Cubic' && roi.type !== 'External' ){
+        && roi.type !== 'Cubic' && roi.type !== 'FlatStep'
+        && roi.type !== 'LinearStep' && roi.type !== 'BiLinearStep'
+        && roi.type !== 'External' ){
       console.log( 'unrecognized roi.type: ' + roi.type );
       return;
     }
@@ -6794,11 +6798,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   
   const chartw = chartBox.width;
   const charth = chartBox.height;
-  
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  const axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
+  const axiscolor = self.getElementLineColor('.tick');
   
   /*
    labelinfos is an array of objects that look like:
@@ -6807,8 +6807,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
    centroidMinYPx: 43.0
    centroidXPx: 111.4
    energy: 244.162
-   peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), …}
-   roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2), …}
+   peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), ...}
+   roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2),...}
    roiPeakIndex: 0
    userLabel: undefined
    }
@@ -7786,15 +7786,8 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
   var cursorIsOutOfBounds = (t && t.length > 0) ? (t[0][0] < 0 || t[0][0] > xmax) : (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
 
-  
-  let axiscolor = 'black', txtcolor = 'black';
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
-  
-  const titleElement = document.querySelector('.xaxistitle');
-  const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
-  txtcolor = titleStyle && titleStyle.fill ? titleStyle.fill : 'black';
+  const axiscolor = self.getElementLineColor('.tick');
+  const txtcolor = self.getElementLineColor('.xaxistitle');
   
   //Spacing between lines of text
   let linehspace = 13;
@@ -9611,10 +9604,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   //ToDo: get exiscolor
   let axiscolor = 'black'
   if (recalibrationStartLine.empty()) {
-    
-    const tickElement = document.querySelector('.tick');
-    const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-    axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+    axiscolor = self.getElementLineColor('.tick');
     
     recalibrationStartLine = self.vis.append("line")
       .attr("id", "recalibrationStartLine")
@@ -10987,10 +10977,7 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
     y2 = (labelbbox.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
   
   //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
-  
-  const tickElement = document.querySelector('.tick');
-  const tickStyle = tickElement ? getComputedStyle(tickElement) : null;
-  let axiscolor = tickStyle && tickStyle.stroke ? tickStyle.stroke : 'black';
+  const axiscolor = self.getElementLineColor('.tick');
   
   //Only draw line between label and peak if it will be at least 10 pixels.
   if( Math.sqrt( Math.pow(x1-x2,2) + Math.pow(y1-y2,2) ) > 10 )

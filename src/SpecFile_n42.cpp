@@ -31,6 +31,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
+#include <float.h>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -3132,6 +3133,16 @@ public:
               //Starting with SpecFile_2012N42_VERSION==3, title is encoded as a remark prepended with 'Title: '
               remark = SpecUtils::trim_copy( remark.substr(6) );
               meas->title_ += remark;
+
+              // Try to get speed from remark, this will get overwritten later if there is a <Speed> node
+              const float thisspeed = speed_from_remark(remark);
+              if (thisspeed > 0.0f)
+                  meas->speed_ = thisspeed;
+
+              // Try to get dx/dy from remark
+              meas->dx_ = dx_from_remark(remark);
+              meas->dy_ = dy_from_remark(remark);
+
             }else if( remark.size() )
             {
               meas->remarks_.emplace_back( std::move(remark) );
@@ -7231,7 +7242,8 @@ namespace SpecUtils
       
       //A certain HPGe detector always writes the same UUID, making it not unique...
       //  See ref3J9DRAPSZ1
-      if( SpecUtils::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" ) )
+      if( SpecUtils::istarts_with( uuid_, "d72b7fa7-4a20-43d4-b1b2-7e3b8c6620c1" )
+         || SpecUtils::istarts_with( uuid_, "64a170f5-4c39-4bd8" ) )
         uuid_ = "";
     }
     //In the next call, the location in memory pointed to by 'data_node' may be

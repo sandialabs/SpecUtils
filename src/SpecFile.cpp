@@ -615,6 +615,16 @@ float Measurement::speed() const
   return speed_;
 }
 
+float Measurement::dx() const
+{
+    return dx_;
+}
+
+float Measurement::dy() const
+{
+    return dy_;
+}
+
 const std::string &Measurement::detector_name() const
 {
   return detector_name_;
@@ -1337,6 +1347,8 @@ void Measurement::reset()
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
   speed_ = 0.0f;
+  dx_ = 0.0f;
+  dy_ = 0.0f;
   detector_name_.clear();
   detector_number_ = -1;
   detector_description_.clear();
@@ -2851,6 +2863,22 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( buffer );
   }
 
+  if (fabs(lhs.dx_ - rhs.dx_) > 0.01)
+  {
+      snprintf(buffer, sizeof(buffer),
+          "dx of LHS (%1.8E) doesnt match RHS (%1.8E)",
+          lhs.dx_, rhs.dx_);
+      throw runtime_error(buffer);
+  }
+
+  if (fabs(lhs.dy_ - rhs.dy_) > 0.01)
+  {
+      snprintf(buffer, sizeof(buffer),
+          "dy of LHS (%1.8E) doesnt match RHS (%1.8E)",
+          lhs.dy_, rhs.dy_);
+      throw runtime_error(buffer);
+  }
+
   if( lhs.detector_name_ != rhs.detector_name_ )
     throw runtime_error( "Detector name for LHS ('" + lhs.detector_name_
                         + "') doesnt match RHS ('" + rhs.detector_name_ + "')" );
@@ -3749,6 +3777,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   gamma_count_sum_ = rhs.gamma_count_sum_;
   neutron_counts_sum_ = rhs.neutron_counts_sum_;
   speed_ = rhs.speed_;
+  dx_ = rhs.dx_;
+  dy_ = rhs.dy_;
   detector_name_ = rhs.detector_name_;
   detector_number_ = rhs.detector_number_;
   detector_description_ = rhs.detector_description_;
@@ -6659,6 +6689,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     dataH->sample_number_        = specs[0][0]->sample_number_;
     dataH->occupied_             = specs[0][0]->occupied_;
     dataH->speed_                = specs[0][0]->speed_;
+    dataH->dx_                   = specs[0][0]->dx_;
+    dataH->dy_                   = specs[0][0]->dy_;
     dataH->detector_name_        = specs[0][0]->detector_name_;
     dataH->detector_number_      = specs[0][0]->detector_number_;
     dataH->detector_description_ = specs[0][0]->detector_description_;
