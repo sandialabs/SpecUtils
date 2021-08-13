@@ -330,12 +330,28 @@ float speed_from_remark( std::string remark )
   to_lower_ascii( remark );
   size_t pos = remark.find( "speed" );
   
-  if( pos == string::npos )
-    return 0.0;
-  
-  pos = remark.find_first_not_of( "= \t", pos+5 );
-  if( pos == string::npos )
-    return 0.0;
+  if (pos != string::npos) 
+  {
+      pos = remark.find_first_not_of("= \t", pos + 5);
+      if (pos == string::npos)
+          return 0.0;
+  }
+  else 
+  {
+      // try "v="
+      pos = remark.find("v=");
+      if (pos != string::npos) 
+      {
+          pos = remark.find_first_not_of(" \t", pos + 2);
+          if (pos == string::npos)
+              return 0.0;
+      }
+      else 
+      {
+          // No speed information found in the remark
+          return 0.0;
+      }
+  }
   
   const string speedstr = remark.substr( pos );
   
@@ -352,7 +368,7 @@ float speed_from_remark( std::string remark )
   
   for( size_t i = 0; i < speedstr.size(); ++i )
   {
-    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') )
+    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') && (speedstr[i] != '.'))
     {
       float convertion = 0.0f;
       
@@ -363,6 +379,8 @@ float speed_from_remark( std::string remark )
         convertion = 1.0f;
       else if( unitstrlen>=3 && unitstr.substr(0,3) == "mph" )
         convertion = 0.44704f;
+      else if (unitstrlen >= 4 && unitstr.substr(0, 4) == "cm/s")
+          convertion = 0.01f;
       else
       {
 #if( PERFORM_DEVELOPER_CHECKS )
@@ -434,8 +452,71 @@ std::string detector_name_from_remark( const std::string &remark )
   return "";
 }//std::string detector_name_from_remark( const std::string &remark )
   
-  
-  
+float dx_from_remark(std::string remark)
+{
+    to_lower_ascii(remark);
+    size_t pos = remark.find("dx=");
+
+    if (pos != string::npos)
+    {
+        pos = remark.find_first_not_of(" \t", pos + 3);
+        if (pos == string::npos)
+            return 0.0;
+    }
+    else
+    {
+        // No dx information found in the remark
+        return 0.0;
+    }
+
+    const string dxstr = remark.substr(pos);
+
+    float dx = 0.0;
+    if (!toFloat(dxstr, dx))
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+        string msg = "dx_from_remark(...): couldnt convert to number: '" + dxstr + "' to float";
+        log_developer_error(__func__, msg.c_str());
+#endif
+        return 0.0;
+    }
+
+    return dx;
+}//float dx_from_remark( const std::string &remark )  
+
+float dy_from_remark(std::string remark)
+{
+    to_lower_ascii(remark);
+    size_t pos = remark.find("dy=");
+
+    if (pos != string::npos)
+    {
+        pos = remark.find_first_not_of(" \t", pos + 3);
+        if (pos == string::npos)
+            return 0.0;
+    }
+    else
+    {
+        // No dy information found in the remark
+        return 0.0;
+    }
+
+    const string dystr = remark.substr(pos);
+
+    float dy = 0.0;
+    if (!toFloat(dystr, dy))
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+        string msg = "dy_from_remark(...): couldnt convert to number: '" + dystr + "' to float";
+        log_developer_error(__func__, msg.c_str());
+#endif
+        return 0.0;
+    }
+
+    return dy;
+}//float dy_from_remark( const std::string &remark )  
+
+
 float dose_units_usvPerH( const char *str, const size_t str_length )
 {
   if( !str )

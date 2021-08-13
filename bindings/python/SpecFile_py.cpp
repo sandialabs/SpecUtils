@@ -24,6 +24,14 @@
 #include "SpecUtils/EnergyCalibration.h"
 
 
+#if( SpecUtils_ENABLE_D3_CHART )
+#include "SpecUtils/D3SpectrumExport.h"
+static_assert( SpecUtils_D3_SUPPORT_FILE_STATIC,
+               "For python support you should enable static D3 resources (although this isnt"
+               " strictly necessary... you can comment out this static_assert at your own risk)" );
+#endif //SpecUtils_ENABLE_D3_CHART
+
+
 #include <set>
 #include <iosfwd>
 #include <vector>
@@ -109,10 +117,10 @@ namespace
       boost::python::object pytell = object_.attr( "tell" );
       
       if( pyseek.is_none() )
-        throw std::runtime_error( "Python stream has no attibute 'seek'" );
+        throw std::runtime_error( "Python stream has no attribute 'seek'" );
       
       if( pytell.is_none() )
-        throw std::runtime_error( "Python stream has no attibute 'tell'" );
+        throw std::runtime_error( "Python stream has no attribute 'tell'" );
       
       const boost::python::object pynewpos = pyseek( offset, pway );
       const boost::python::object pyoffset = pytell();
@@ -140,15 +148,27 @@ namespace
     
     std::streamsize write( const char *buffer, std::streamsize buffer_size )
     {
-      boost::python::str data(buffer, buffer_size);
       boost::python::object pywrite = object_.attr( "write" );
       
       if( pywrite.is_none() )
-        throw std::runtime_error( "Python stream has no attibute 'write'" );
+        throw std::runtime_error( "Python stream has no attribute 'write'" );
       
-      boost::python::object pynwrote = pywrite( data );
-      const boost::python::extract<std::streamsize> bytes_written( pynwrote );
-      return bytes_written.check() ? bytes_written : buffer_size;
+      // If we are writing a large output (buffer_size >= 4096), we wont necassarily write
+      //  all the bytes in one go.  When this happens, it seems future writes fail, and we dont
+      //  get the output we want.  So instead, we will do a loop here to force writing everything...
+      std::streamsize nwritten = 0;
+      while( nwritten < buffer_size )
+      {
+        const auto buff_start = buffer + nwritten;
+        const auto nbytes_to_write = buffer_size - nwritten;
+        boost::python::str data(buff_start, nbytes_to_write);
+        boost::python::object pynwrote = pywrite( data );
+        const boost::python::extract<std::streamsize> bytes_written( pynwrote );
+        
+        nwritten += bytes_written.check() ? bytes_written : nbytes_to_write;
+      }
+
+      return nwritten;
     }
     
     bool flush()
@@ -156,7 +176,7 @@ namespace
       boost::python::object flush = object_.attr( "flush" );
       
       if( flush.is_none() )
-        throw std::runtime_error( "Python stream has no attibute 'flush'" );
+        throw std::runtime_error( "Python stream has no attribute 'flush'" );
         
       flush();
       return true;
@@ -167,9 +187,9 @@ namespace
   };//class PythonOutputDevice
   
   
-  //wcjohns got the datetime convertion code 20150515 from
+  //wcjohns got the datetime convention code 20150515 from
   //  http://en.sharejs.com/python/13125
-  //There is also a time duration convertion code as wel, but removed it.
+  //There is also a time duration conversion code as wel, but removed it.
   /**
    * Convert boost::posix_ptime objects (ptime and time_duration)
    * to/from python datetime objects (datetime and timedelta).
@@ -490,11 +510,109 @@ namespace
       throw std::runtime_error( "Failed to decode input as a valid PCF file." );
   }//setInfoFromPcfFile_wrapper(...)
   
+
+#if( SpecUtils_ENABLE_D3_CHART )
+bool write_spectrum_data_js_wrapper( boost::python::object pystream,
+                                    const SpecUtils::Measurement *meas,
+                                    const D3SpectrumExport::D3SpectrumOptions *options,
+                                    const size_t specID, const int backgroundID )
+{
+  boost::iostreams::stream<PythonOutputDevice> output( pystream );
+  
+  return D3SpectrumExport::write_spectrum_data_js( output, *meas, *options, specID, backgroundID );
+}
+
+
+ 
+bool write_d3_html_wrapper( boost::python::object pystream,
+                            boost::python::list meas_list,
+                            D3SpectrumExport::D3SpectrumChartOptions options )
+{
+  boost::iostreams::stream<PythonOutputDevice> output( pystream );
+ 
+  // From python the list would be like: [(meas_0,options_0),(meas_1,options_1),(meas_2,options_2)]
+  
+  vector<pair<const SpecUtils::Measurement *,D3SpectrumExport::D3SpectrumOptions>> meass;
+  
+  boost::python::ssize_t n = boost::python::len(meas_list);
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+  {
+    boost::python::tuple elem = boost::python::extract<boost::python::tuple>( meas_list[i] )();
+    const SpecUtils::Measurement * meas = boost::python::extract<const SpecUtils::Measurement *>( elem[0] )();
+    D3SpectrumExport::D3SpectrumOptions opts = boost::python::extract<D3SpectrumExport::D3SpectrumOptions>( elem[1] )();
+    meass.push_back( std::make_pair(meas,opts) );
+  }
+  
+  return D3SpectrumExport::write_d3_html( output, meass, options );
+}
+ 
+bool write_and_set_data_for_chart_wrapper( boost::python::object pystream,
+                                           const std::string &div_name,
+                                           boost::python::list meas_list )
+ {
+   boost::iostreams::stream<PythonOutputDevice> output( pystream );
+ 
+   vector<pair<const SpecUtils::Measurement *,D3SpectrumExport::D3SpectrumOptions>> meass;
+   
+   boost::python::ssize_t n = boost::python::len(meas_list);
+   for( boost::python::ssize_t i = 0; i < n; ++i )
+   {
+     boost::python::tuple elem = boost::python::extract<boost::python::tuple>( meas_list[i] )();
+     const SpecUtils::Measurement * meas = boost::python::extract<const SpecUtils::Measurement *>( elem[0] )();
+     D3SpectrumExport::D3SpectrumOptions opts = boost::python::extract<D3SpectrumExport::D3SpectrumOptions>( elem[1] )();
+     meass.push_back( std::make_pair(meas,opts) );
+   }
+
+   return write_and_set_data_for_chart( output, div_name, meass );
+ }
+
+
+bool write_html_page_header_wrapper( boost::python::object pystream, const std::string &page_title )
+{
+  
+  
+  boost::iostreams::stream<PythonOutputDevice> output( pystream );
+  return D3SpectrumExport::write_html_page_header( output, page_title );
+}
+
+
+bool write_js_for_chart_wrapper( boost::python::object pystream, const std::string &div_name,
+                        const std::string &chart_title,
+                        const std::string &x_axis_title,
+                        const std::string &y_axis_title )
+{
+  boost::iostreams::stream<PythonOutputDevice> output( pystream );
+  
+  return D3SpectrumExport::write_js_for_chart( output, div_name, chart_title,
+                                                      x_axis_title, y_axis_title );
+}
+
+
+
+bool write_set_options_for_chart_wrapper( boost::python::object pystream,
+                                          const std::string &div_name,
+                                          const D3SpectrumExport::D3SpectrumChartOptions &options )
+{
+  boost::iostreams::stream<PythonOutputDevice> output( pystream );
+  
+  return write_set_options_for_chart( output, div_name, options );
+}
+
+bool write_html_display_options_for_chart_wrapper( boost::python::object pystream,
+                                                   const std::string &div_name,
+                                                   const D3SpectrumExport::D3SpectrumChartOptions &options )
+{
+  boost::iostreams::stream<PythonOutputDevice> output( pystream );
+  
+  return write_html_display_options_for_chart( output, div_name, options );
+}
+#endif
+ 
 }//namespace
 
 
 
-//Begin defintion of python functions
+//Begin definition of python functions
 
 //make is so loadFile will take at least 3 arguments, but can take 4 (e.g. allow
 //  default last argument)
@@ -561,7 +679,11 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .value( "Srpm210", SpecUtils::DetectorType::Srpm210 )
   .value( "Unknown", SpecUtils::DetectorType::Unknown );
 
-
+  
+  enum_<SpecUtils::SpectrumType>( "SpectrumType" )
+    .value( "Foreground", SpecUtils::SpectrumType::Foreground )
+    .value( "SecondForeground", SpecUtils::SpectrumType::SecondForeground )
+    .value( "Background", SpecUtils::SpectrumType::Background );
 
   
   {//begin Measurement class scope
@@ -870,5 +992,66 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   
   //... lots more functions here
   ;
+  
+  
+#if( SpecUtils_ENABLE_D3_CHART )
+  using namespace D3SpectrumExport;
+
+  
+  // TODO: document these next member variables
+  class_<D3SpectrumExport::D3SpectrumChartOptions>("D3SpectrumChartOptions")
+  .def_readwrite("title", &D3SpectrumChartOptions::m_title )
+  .def_readwrite("x_axis_title", &D3SpectrumChartOptions::m_xAxisTitle )
+  .def_readwrite("y_axis_title", &D3SpectrumChartOptions::m_yAxisTitle )
+  .def_readwrite("data_title", &D3SpectrumChartOptions::m_dataTitle )
+  .def_readwrite("use_log_y_axis", &D3SpectrumChartOptions::m_useLogYAxis )
+  .def_readwrite("show_vertical_grid_lines", &D3SpectrumChartOptions::m_showVerticalGridLines )
+  .def_readwrite("show_horizontal_grid_lines", &D3SpectrumChartOptions::m_showHorizontalGridLines )
+  .def_readwrite("legend_enabled", &D3SpectrumChartOptions::m_legendEnabled )
+  .def_readwrite("compact_x_axis", &D3SpectrumChartOptions::m_compactXAxis )
+  .def_readwrite("show_peak_user_labels", &D3SpectrumChartOptions::m_showPeakUserLabels )
+  .def_readwrite("show_peak_energy_labels", &D3SpectrumChartOptions::m_showPeakEnergyLabels )
+  .def_readwrite("show_peak_nuclide_labels", &D3SpectrumChartOptions::m_showPeakNuclideLabels )
+  .def_readwrite("show_peak_nuclide_energy_labels", &D3SpectrumChartOptions::m_showPeakNuclideEnergyLabels )
+  .def_readwrite("show_escape_peak_marker", &D3SpectrumChartOptions::m_showEscapePeakMarker )
+  .def_readwrite("show_compton_peak_marker", &D3SpectrumChartOptions::m_showComptonPeakMarker )
+  .def_readwrite("show_compton_edge_marker", &D3SpectrumChartOptions::m_showComptonEdgeMarker )
+  .def_readwrite("show_sum_peak_marker", &D3SpectrumChartOptions::m_showSumPeakMarker )
+  .def_readwrite("background_subtract", &D3SpectrumChartOptions::m_backgroundSubtract )
+  .def_readwrite("allow_drag_roi_extent", &D3SpectrumChartOptions::m_allowDragRoiExtent )
+  .def_readwrite("x_min", &D3SpectrumChartOptions::m_xMin )
+  .def_readwrite("x_max", &D3SpectrumChartOptions::m_xMax )
+  //.def_readwrite("m_reference_lines_json", &D3SpectrumChartOptions::m_reference_lines_json )
+  ;
+  
+  
+  class_<D3SpectrumExport::D3SpectrumOptions>("D3SpectrumOptions")
+  //  .def_readwrite("peaks_json", &D3SpectrumOptions::peaks_json )
+    .def_readwrite("line_color", &D3SpectrumOptions::line_color, "A valid CSS color for the line" )
+    .def_readwrite("peak_color", &D3SpectrumOptions::peak_color, "A valid CSS color for the peak"  )
+    .def_readwrite("title", &D3SpectrumOptions::title,
+                "If empty, title from Measurement will be used, but if non-empty, will override Measurement." )
+    .def_readwrite("display_scale_factor", &D3SpectrumOptions::display_scale_factor,
+                 "The y-axis scale factor to use for displaying the spectrum.\n"
+                 "This is typically used for live-time normalization of the background\n"
+                 "spectrum to match the foreground live-time.  Ex., if background live-time\n"
+                 "is twice the foreground, you would want this factor to be 0.5 (e.g., the\n"
+                 "ratio of the live-times).\n"
+                 "\n"
+                 "Note: this value is displayed on the legend, but no where else on the\n"
+                 "chart." )
+    .def_readwrite("spectrum_type", &D3SpectrumOptions::spectrum_type )
+  ;
+  
+  // TODO: document these next functions
+  def( "write_spectrum_data_js", &write_spectrum_data_js_wrapper );
+  def( "write_html_page_header", &write_html_page_header_wrapper );
+  def( "write_js_for_chart", &write_js_for_chart_wrapper );
+  def( "write_set_options_for_chart", &write_set_options_for_chart_wrapper );
+  def( "write_html_display_options_for_chart", &write_html_display_options_for_chart_wrapper );
+  def( "write_d3_html", &write_d3_html_wrapper );
+  def( "write_and_set_data_for_chart", &write_and_set_data_for_chart_wrapper );
+   
+#endif
   
 }//BOOST_PYTHON_MODULE(SpecUtils)

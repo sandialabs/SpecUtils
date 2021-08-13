@@ -26,11 +26,11 @@
 #include <string>
 #include <cctype>
 #include <cctype>
+#include <float.h>
 #include <fstream>
-#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <float.h>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -1460,6 +1460,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
       meas->neutron_counts_[0] = neutron_counts;
       meas->neutron_counts_sum_ = neutron_counts;
       meas->speed_ = speed_from_remark( spectrum_title );
+      meas->dx_ = dx_from_remark(spectrum_title);
+      meas->dy_ = dy_from_remark(spectrum_title);
       meas->detector_name_ = detector_name_from_remark( spectrum_title );
       
       
