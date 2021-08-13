@@ -1610,9 +1610,11 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   if( upper_old_energy > upper_new_energy )
   {
     if( oldbinhigh < (old_nbin-1) )
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh] * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh+1]-original_energies[oldbinhigh]);
+      resulting_counts[new_nbin-1] += original_counts[oldbinhigh]
+                                      * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh+1]-original_energies[oldbinhigh]);
     else
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh] * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh]-original_energies[oldbinhigh-1]);
+      resulting_counts[new_nbin-1] += original_counts[old_nbin-1]
+                                       * (upper_old_energy - upper_new_energy)/(upper_old_energy - original_energies[old_nbin-1]);
     
     for( ; oldbinhigh < old_nbin; ++oldbinhigh )
       resulting_counts[new_nbin-1] += original_counts[oldbinhigh];

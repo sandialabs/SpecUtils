@@ -1473,7 +1473,6 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
       
       newbinning[nnewchann] = old_energies.back();
       
-      cout << "Before calling set_lower_channel_energy, address of first element: " << &(newbinning[0]) << endl;
       newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
     }//break
       
