@@ -87,7 +87,7 @@ SpectrumChartD3 = function(elem, options) {
   
   if( (typeof this.options.showLegend) !== 'boolean' ) this.options.showLegend = true;
   if( (typeof this.options.scaleBackgroundSecondary) !== 'boolean' ) this.options.scaleBackgroundSecondary = false;
-
+  if( (typeof this.options.noEventsToServer) !== 'boolean' ) this.options.noEventsToServer = false;
 
   this.options.refLineTopPad = 30;
   
@@ -579,6 +579,9 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
     return;
   }
 
+  if( this.options.noEventsToServer )
+    return;
+  
   //console.log( 'Emitting Wt event "' + ((event && event.name) ? event.name : 'null') + '", with ' + SpectrumChartD3.prototype.WtEmit.length + " arguments");
 
   // To support ES5 syntax in IE11, we replace spread operator with this
