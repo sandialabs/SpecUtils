@@ -7130,15 +7130,16 @@ size_t SpecFile::num_gamma_channels() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
+  size_t max_num_channel = 0;
   for( const auto &meas : measurements_ )
-    if( meas->num_gamma_channels() )
-      return meas->num_gamma_channels();
-  
-  //if( meas && meas->channel_energies_ && !meas->channel_energies_->empty()
-  //   && meas->gamma_counts_ && !meas->gamma_counts_->empty() )
-  //  return std::min( meas->channel_energies_->size(), meas->gamma_counts_->size() );
+  {
+    const size_t nchannel = meas->num_gamma_channels();
+    if( nchannel > 6 )
+      return nchannel;
+    max_num_channel = std::max( max_num_channel, nchannel );
+  }
 
-  return 0;
+  return max_num_channel;
 }//size_t SpecFile::num_gamma_channels() const
 
 

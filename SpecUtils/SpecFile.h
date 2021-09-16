@@ -1479,7 +1479,11 @@ public:
   std::set<size_t> gamma_channel_counts() const;
 
   //num_gamma_channels(): loops over the Measurements, and returns the size of
-  //  the first Measurement that reports non-zero channels.
+  //  the first Measurement that reports greater than 6 channels.  If no
+  //  measurements with more channels than 6 is found, then the maximum number
+  //  of channels is returned.
+  //  The 6 is fairly arbitrary, but chosen to avoid GM tubes that have a single
+  //  channel from causing this function to return "1".
   size_t num_gamma_channels() const;
 
   //keep_n_bin_spectra_only(..): return number of removed spectra
