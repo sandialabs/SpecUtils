@@ -114,6 +114,9 @@ bool SpecFile::load_from_chn( std::istream &input )
     memcpy( &firstchannel, &(buffer[28]), sizeof(uint16_t) );
     memcpy( &numchannels, &(buffer[30]), sizeof(uint16_t) );
     
+    // If numchannels is non-zero - we'll trust the value given, and not require min/max value
+    //  checks, or it to be a power of two.  If numchannels is zero, we'll tighten up requirements
+    //  so we filter out some non-CHN files.
     if( numchannels == 0 )
     {
       numchannels = (size - header_size - 512) / 4;
@@ -121,11 +124,6 @@ bool SpecFile::load_from_chn( std::istream &input )
       if( !isPowerOfTwo || numchannels < 128 || numchannels > 32768 )
         throw runtime_error( "Invalid number of channels" );
     }//if( numchannels == 0 )
-    
-    //    const bool isPowerOfTwo = ((numchannels != 0) && !(numchannels & (numchannels - 1)));
-    //    const bool evenNumChnnel = ((numchannels%2)==0) || (numchannels==16383);
-    //    if( !evenNumChnnel || numchannels<2 ) // || !isPowerOfTwo
-    //      throw runtime_error( "CHN file with unexpected number of data channels: " + std::to_string(numchannels) );
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( firstchannel != 0 )
@@ -186,13 +184,17 @@ bool SpecFile::load_from_chn( std::istream &input )
     }//if( numchannels > 2 )
     
     const istream::pos_type current_pos = input.tellg();
-    const size_t bytes_left = static_cast<size_t>( 0 + eof_pos - current_pos );
+    const size_t nbytes_after_spectrum = static_cast<size_t>( 0 + eof_pos - current_pos );
+    
+    // We'll cap the trailing bytes off at 512, since this is the most we're going to use anyway
+    //  TODO: investigate if we should throw an error if the number of bytes is significantly off from expected.
+    const size_t trailer_bytes = std::min( nbytes_after_spectrum, size_t(512) );
     
     int16_t chntype = 0;
-    if( bytes_left > 1 )
+    if( trailer_bytes > 1 )
     {
-      buffer.resize( bytes_left );
-      if( !input.read( &buffer[0], bytes_left ) )
+      buffer.resize( trailer_bytes );
+      if( !input.read( &buffer[0], trailer_bytes ) )
         throw runtime_error( "SpecFile::load_from_chn(...):  Error reading remaining file contents from file stream" );
       
       memcpy( &chntype, &(buffer[0]), sizeof(int16_t) );
@@ -206,45 +208,45 @@ bool SpecFile::load_from_chn( std::istream &input )
         log_developer_error( __func__, msg.str().c_str() );
       }
 #endif
-    }//if( bytes_left > 1 )
+    }//if( trailer_bytes > 1 )
     
     vector<float> calibcoefs{ 0.0f, 0.0f, 0.0f };
-    if( chntype == -102 && bytes_left >= 16 )
+    if( chntype == -102 && trailer_bytes >= 16 )
       memcpy( &(calibcoefs[0]), &(buffer[4]), 3*sizeof(float) );
-    else if( bytes_left >= 12 )
+    else if( trailer_bytes >= 12 )
       memcpy( &(calibcoefs[0]), &(buffer[4]), 2*sizeof(float) );
     //      float FWHM_Zero_32767 = *(float *)(&(buffer[16]));
     //      float FWHM Slope = *(float *)(&(buffer[20]));
     
     //at 256 we have 1 byte for DetDescLength, and then 63 bytes for DetDesc
     string detdesc;
-    if( bytes_left >= 257 )
+    if( trailer_bytes >= 257 )
     {
       uint8_t DetDescLength;
       memcpy( &DetDescLength, &(buffer[256]), 1 );
       const size_t det_desc_index = 257;
       const size_t enddet_desc = det_desc_index + DetDescLength;
-      if( DetDescLength && enddet_desc < bytes_left && DetDescLength < 64 )
+      if( DetDescLength && enddet_desc < trailer_bytes && DetDescLength < 64 )
       {
         detdesc = string( &(buffer[det_desc_index]), &(buffer[enddet_desc]) );
         trim( detdesc );
-      }//if( title_index < bytes_left )
-    }//if( bytes_left >= 257 )
+      }//if( title_index < trailer_bytes )
+    }//if( trailer_bytes >= 257 )
     
     
     string title;
-    if( bytes_left >= 322 )
+    if( trailer_bytes >= 322 )
     {
       uint8_t SampleDescLength;
       memcpy( &SampleDescLength, &(buffer[320]), 1 );
       const size_t title_index = 321;
       const size_t endtitle = title_index + SampleDescLength;
-      if( SampleDescLength && endtitle < bytes_left && SampleDescLength < 64 )
+      if( SampleDescLength && endtitle < trailer_bytes && SampleDescLength < 64 )
       {
         title = string( &(buffer[title_index]), &(buffer[endtitle]) );
         trim( title );
-      }//if( title_index < bytes_left )
-    }//if( bytes_left >= 322 )
+      }//if( title_index < trailer_bytes )
+    }//if( trailer_bytes >= 322 )
     
     std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
     meas->live_time_ = liveTime;
@@ -306,8 +308,11 @@ bool SpecFile::load_from_chn( std::istream &input )
     if( title.size() )
       meas->title_ = title;
     
+    // TODO: it appears detdesc may be the serial number for some detectors - should evaluate how
+    //       often this is the case, and if we can reasonably reliably detect it.  It could be the
+    //       case if its an integer, then its a serial number.
     if( detdesc.size() )
-      meas->remarks_.push_back( "Detector Description: " + detdesc );
+      remarks_.push_back( "Detector Description: " + detdesc );
     
     measurements_.push_back( meas );
     
