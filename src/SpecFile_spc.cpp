@@ -584,7 +584,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           meas->longitude_ = conventional_lat_or_long_str_to_flt( lonstr );
         }else
         {
-          cerr << "SpecFile::load_from_iaea_spc(istream &): couldnt split lat lon" << endl;
+          meas->parse_warnings_.push_back( "Couldnt parse lat/lon." );
         }
       }else if( istarts_with( line, "DeviceId" ) )
       {
@@ -1412,10 +1412,8 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   pos += 10;
   output.write( timestr, 10 );
   
-  const int rtint = int(floor(summed->live_time()+0.5f));
-  const int ltint = int(floor(summed->real_time()+0.5f));
-  string ltIntStr = std::to_string(rtint );
-  string rtIntStr = std::to_string(ltint);
+  string ltIntStr = std::to_string( std::lround(summed->live_time()) );
+  string rtIntStr = std::to_string( std::lround(summed->real_time()) );
   ltIntStr.resize( 11, '\0' );
   rtIntStr.resize( 11, '\0' );
   
@@ -1660,8 +1658,8 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     if( summed->contained_neutron() )
     {
       char buffer[256] = { '\0' };
-      const int nneut = static_cast<int>( floor(summed->neutron_counts_sum()+0.5) );
-      snprintf( buffer, sizeof(buffer)-1, "Total neutron counts = %d\n", nneut );
+      const double nneut = std::round( summed->neutron_counts_sum() );
+      snprintf( buffer, sizeof(buffer)-1, "Total neutron counts = %.0f\n", nneut );
       information += buffer;
       
       for( const string &s : remarks_ )
@@ -1722,7 +1720,11 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   {
     vector<uint32_t> int_channel_data( n_channel );
     for( uint16_t i = 0; i < n_channel; ++i )
-      int_channel_data[i] = static_cast<uint32_t>( channel_data[i] );  //should we round instead of truncate?
+    {
+      float counts = std::max( 0.0f, std::round(channel_data[i]) );
+      counts = std::min( counts, static_cast<float>(std::numeric_limits<uint32_t>::max()) );
+      int_channel_data[i] = static_cast<uint32_t>( counts );
+    }
     output.write( (const char *)&int_channel_data[0], 4*n_channel );
   }else
   {

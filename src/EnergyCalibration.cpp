@@ -1461,6 +1461,13 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
                            const std::vector<float> &new_energies,
                            std::vector<float> &resulting_counts )
 {
+  // TODO: it turns out this function can really be a bottleneck!
+  //       And niavely it looks to be due, in some good part, memory access patterns being not
+  //       to great... need to cleanup memory access ordering
+  // TODO: remove all uses of 'old_nbin', and make sure logic of accessing counts/energies are correct
+  // TODO: reason through things, and cleanup where possible.
+  // TODO: make a version of this function that sums from one binning into another - this could save a lot of time
+  
   const size_t old_nbin = min( original_energies.size(), original_counts.size());
   if( old_nbin < 4 )
     throw runtime_error( "rebin_by_lower_edge: input must have more than 3 bins" );
@@ -1468,11 +1475,13 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   if( new_energies.size() < 4 )
     throw runtime_error( "rebin_by_lower_edge: output energy must have more than 3 bins" );
   
-  const bool has_upper = ((original_counts.size() + 1) == original_energies.size());
-  const size_t new_nbin = new_energies.size() - (has_upper ? 1 : 0);
-  
   const size_t num_orig_counts = original_counts.size();
   const size_t num_orig_energies = original_energies.size();
+  
+  const bool has_upper = (num_orig_energies > num_orig_counts); //((num_orig_counts + 1) == num_orig_energies);
+  const size_t new_nbin = new_energies.size() - (has_upper ? 1 : 0);
+  
+  
   if( num_orig_energies < num_orig_counts )
   {
     throw runtime_error( "rebin_by_lower_edge: input energies and gamma counts"
@@ -1483,8 +1492,15 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   if( new_nbin < 4 )
     throw runtime_error( "rebin_by_lower_edge: output have more than 3 bins" );
   
-  resulting_counts.resize( new_nbin, 0.0f );
   
+  const double old_right = (num_orig_energies > num_orig_counts)
+                            ? original_energies[num_orig_counts]
+                            : 2.0*original_energies[num_orig_energies-1]-original_energies[num_orig_energies-2];
+  const double new_right = (num_orig_energies > num_orig_counts)
+                           ? new_energies.back()
+                           : 2.0f*new_energies[new_energies.size()-1] - new_energies[new_energies.size()-2];
+  
+  resulting_counts.resize( new_nbin, 0.0f );
   size_t newbinnum = 0;
   while( new_energies[newbinnum] < original_energies[0] && newbinnum < (new_nbin-1) )
     resulting_counts[newbinnum++] = 0.0f;
@@ -1510,19 +1526,19 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   for( ; newbinnum < new_nbin; ++newbinnum )
   {
     const double newbin_lower = new_energies[newbinnum];
-    const double newbin_upper = ( ((newbinnum+1)<new_energies.size())
-                                 ? new_energies[newbinnum+1]
-                                 : (2.0*new_energies[new_energies.size()-1] - new_energies[new_energies.size()-2]));
+    const double newbin_upper = ( ((newbinnum+1) < new_energies.size())
+                                 ? static_cast<double>(new_energies[newbinnum+1])
+                                 : new_right );
     
     double old_lower_low, old_lower_up, old_upper_low, old_upper_up;
     
     for( ; oldbinlow < old_nbin; ++oldbinlow )
     {
       old_lower_low = original_energies[oldbinlow];
-      if( (oldbinlow+1) < old_nbin )
+      if( (oldbinlow+1) < num_orig_energies )
         old_lower_up = original_energies[oldbinlow+1];
       else
-        old_lower_up = 2.0*original_energies[oldbinlow]-original_energies[oldbinlow-1];
+        old_lower_up = old_right;
       
       if( newbin_lower >= old_lower_low && newbin_lower < old_lower_up )
         break;
@@ -1532,10 +1548,10 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
     for( oldbinhigh = oldbinlow; oldbinhigh < old_nbin; ++oldbinhigh )
     {
       old_upper_low = original_energies[oldbinhigh];
-      if( (oldbinhigh+1) < old_nbin )
+      if( (oldbinhigh+1) < num_orig_energies )
         old_upper_up = original_energies[oldbinhigh+1];
       else
-        old_upper_up = 2.0*original_energies[oldbinhigh]-original_energies[oldbinhigh-1];
+        old_upper_up = old_right;
       
       if( newbin_upper >= old_upper_low && newbin_upper < old_upper_up )
         break;
@@ -1544,20 +1560,20 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
     
     //new binning goes higher than old binning, lets take care of the last
     //  fraction of a bin, and zero everything else out
-    if( oldbinhigh == old_nbin )
+    if( oldbinhigh == num_orig_counts )
     {
-      old_upper_low = original_energies[old_nbin-1];
-      old_upper_up = 2.0*original_energies[old_nbin-1]-original_energies[old_nbin-2];
+      old_upper_low = original_energies[num_orig_counts-1];
+      old_upper_up = old_right;
       
       //maybe more numerically accurate if we remove the next line, and uncomment
       //  the next two commented lines.  Didnt do because I didnt want to test
       resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper );
       
-      if( oldbinlow != old_nbin )
+      if( oldbinlow != num_orig_counts )
       {
         const double lower_old_width = old_lower_up - old_lower_low;
-        const double lower_bin_delta_counts = original_counts[oldbinlow];
         const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
+        const double lower_bin_delta_counts = original_counts[oldbinlow];
         const double lower_frac_energy = lower_delta_energy/lower_old_width;
         
         //        sum_lower_to_upper -= lower_bin_delta_counts*lower_frac_energy;
@@ -1573,13 +1589,15 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
     }
     
     const double lower_old_width = old_lower_up - old_lower_low;
-    const double lower_bin_delta_counts = original_counts[oldbinlow];
-    const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
-    const double lower_frac_energy = lower_delta_energy/lower_old_width;
-    
     const double upper_old_width = old_upper_up - old_upper_low;
+    
+    const double lower_bin_delta_counts = original_counts[oldbinlow];
     const double upper_bin_delta_counts = original_counts[oldbinhigh];
+    
+    const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
     const double upper_delta_energy = double(newbin_upper)-double(original_energies[oldbinhigh]);
+    
+    const double lower_frac_energy = lower_delta_energy/lower_old_width;
     const double upper_frac_energy = upper_delta_energy/upper_old_width;
     
     //interpolate sum height at newbin_lower
@@ -1593,26 +1611,26 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   if( original_energies[0] < new_energies[0] )
   {
     size_t i = 0;
-    while( (original_energies[i+1]<new_energies[0]) && (i<(old_nbin-1)) )
+    while( (original_energies[i+1]<new_energies[0]) && (i<(num_orig_counts-1)) )
       resulting_counts[0] += original_counts[i++];
     
     //original_energies[i] is now >= new_energies[0]
     
-    if( i < old_nbin )
+    if( i < num_orig_counts )
       resulting_counts[0] += static_cast<float>( original_counts[i]*(double(new_energies[0])-double(original_energies[i]))/(double(original_energies[i+1])-original_energies[i]) );
   }//if( original_energies[0] < new_energies[0] )
   
   //Now capture the case where the old binning extends further than new binning
-  const float upper_old_energy = has_upper ? original_energies.back()
-                                           : 2.0f*original_energies[old_nbin-1] - original_energies[old_nbin-2];
-  const float upper_new_energy = has_upper ? new_energies.back()
-                                           : 2.0f*new_energies[new_nbin-1] - new_energies[new_nbin-2];
+  const float upper_old_energy = static_cast<float>( old_right );
+  const float upper_new_energy = static_cast<float>( new_right );
   if( upper_old_energy > upper_new_energy )
   {
     if( oldbinhigh < (old_nbin-1) )
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh] * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh+1]-original_energies[oldbinhigh]);
+      resulting_counts[new_nbin-1] += original_counts[oldbinhigh]
+                                      * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh+1]-original_energies[oldbinhigh]);
     else
-      resulting_counts[new_nbin-1] += original_counts[oldbinhigh] * (original_energies[oldbinhigh]-upper_new_energy)/(original_energies[oldbinhigh]-original_energies[oldbinhigh-1]);
+      resulting_counts[new_nbin-1] += original_counts[old_nbin-1]
+                                       * (upper_old_energy - upper_new_energy)/(upper_old_energy - original_energies[old_nbin-1]);
     
     for( ; oldbinhigh < old_nbin; ++oldbinhigh )
       resulting_counts[new_nbin-1] += original_counts[oldbinhigh];

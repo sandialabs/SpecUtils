@@ -834,7 +834,9 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
       //buffer[13] = uint8_t(3.3*10);
       //buffer[13] = (((buffer[13] / 10) << 4) | (buffer[13] % 10));
       
-      const uint16_t real_time = static_cast<uint16_t>( floor(meas.real_time_ + 0.5f) );
+      float real_time_f = std::round( std::max( 0.0f, meas.real_time_ ) );
+      real_time_f = std::min( real_time_f, static_cast<float>(std::numeric_limits<uint16_t>::max()) );
+      const uint16_t real_time = static_cast<uint16_t>( real_time_f );
       memcpy( buffer + 14, &real_time, 2 );
       buffer[16] = (meas.gamma_energy_max() > 2000.0f ? 1 : 0); //coarse gain (0=1.5MeV, 1=3.0MeV)
       buffer[17] = 0; //Fgain: fine gain (0-255)
@@ -855,13 +857,25 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
       
       //buffer[32] throughw buffer[46] 15 bytes spare
       
-      const uint32_t ltime = static_cast<uint32_t>( floor( 1000.0f * meas.live_time() + 0.5f) );
+      uint32_t ltime = 0;
+      const double lt_f = std::max( 0.0, std::round(1000.0 * meas.live_time()) );
+      if( lt_f > numeric_limits<uint32_t>::max() )
+        ltime = numeric_limits<uint32_t>::max();
+      else
+        ltime = static_cast<uint32_t>( lt_f );
       memcpy( buffer + 47, &ltime, 4 );
       
       const vector<float> &gammcounts = *meas.gamma_counts_;
       vector<uint16_t> channelcounts( gammcounts.size(), 0 );
       for( size_t i = 0; i < gammcounts.size(); ++i )
-        channelcounts[i] = static_cast<uint16_t>( static_cast<uint32_t>(gammcounts[i]) );  //ToDo: check if we want the wrap-around behaviour, or just take uint16_t
+      {
+        //TODO: check if we want the wrap-around behaviour, or just take uint16_t
+        const double counts = std::round( std::max( 0.0f, gammcounts[i] ) );
+        if( counts > std::numeric_limits<uint16_t>::max() )
+          channelcounts[i] = std::numeric_limits<uint16_t>::max();
+        else
+          channelcounts[i] = static_cast<uint16_t>( counts );
+      }
       
       if( gammcounts.size() <= 256 )
         memcpy( buffer + 51, &channelcounts[2], (2*gammcounts.size() - 6) );
@@ -934,7 +948,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       //Lets write to a buffer before writing to the stream to make things a
       //  little easier in terms of keeping track of position.
-      char buffer[76+2*noutchannel];
+      char buffer[76+2*noutchannel] = { '\0' };
       memset( buffer, 0, sizeof(buffer) );
       
       memcpy( buffer + 0, "ZZZZ", 4 );
@@ -951,7 +965,11 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       if( !meas.start_time_.is_special() && meas.start_time_.date().year() > 2000 )
       {
-        buffer[13] = static_cast<uint8_t>(meas.start_time_.date().year() - 2000);
+        if( meas.start_time_.date().year() > 100 )
+          buffer[13] = 0;
+        else
+          buffer[13] = static_cast<uint8_t>(meas.start_time_.date().year() - 2000);
+        
         buffer[14] = static_cast<uint8_t>(meas.start_time_.date().month());
         buffer[15] = static_cast<uint8_t>(meas.start_time_.date().day());
         buffer[16] = static_cast<uint8_t>(meas.start_time_.time_of_day().hours());
@@ -964,7 +982,10 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       memcpy( buffer + 19, &noutchannel, sizeof(noutchannel) );
       
-      const uint32_t real_time_thousanths = static_cast<uint32_t>( floor(1000*meas.real_time_ + 0.5f) );
+      double rt_f = std::round( 1000 * meas.real_time_ );
+      rt_f = std::min( rt_f, static_cast<double>(std::numeric_limits<uint32_t>::max()) );
+      
+      const uint32_t real_time_thousanths = static_cast<uint32_t>( rt_f );
       memcpy( buffer + 21, &real_time_thousanths, 4 );
       
       //26,27    unsigned int    gain      gain ( 0 - 1023)
@@ -973,7 +994,10 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       //32    unsigned char    unit      dose meter unit ('R', 'G', 'S')
       //33-36    unsigned long    geiger      GM tube accumulated dose
       
-      const uint16_t nneutron = static_cast<uint16_t>( floor(meas.neutron_counts_sum() + 0.5) );
+      double neutcount = std::max( 0.0, std::round(meas.neutron_counts_sum()) );
+      neutcount = std::min( neutcount, static_cast<double>(numeric_limits<uint16_t>::max()) );
+      
+      const uint16_t nneutron = static_cast<uint16_t>( neutcount );
       memcpy( buffer + 36, &nneutron, 2 );
       
       //39,40    unsigned int    pileup      pileup pulses
@@ -1004,7 +1028,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       }//switch( meas.energy_calibration_->type() )
       
       if( calcoeffs.size() )
-        memcpy( buffer + 44, &(calcoeffs[0]), 4*std::max(calcoeffs.size(),size_t(3)) );
+        memcpy( buffer + 44, &(calcoeffs[0]), 4*std::min(calcoeffs.size(),size_t(3)) );
       
       //57    char      temp[0]      display temperature
       //58    char      temp[1]      battery temperature
@@ -1012,18 +1036,33 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       //60-75    char      spare      16 bytes
       
       //live time isnt in the spec, but it was found here in the parsing code.
-      const uint32_t live_time_thousanths = static_cast<uint32_t>( floor(1000*meas.live_time_ + 0.5f) );
+      uint32_t live_time_thousanths = 0;
+      
+      if( !IsInf(meas.live_time_) && !IsNan(meas.live_time_) && (meas.live_time_ >= 0.0) )
+      {
+        double lt = std::max( 0.0, std::round( 1000.0*meas.live_time_ ) );
+        lt = std::min( lt, static_cast<double>(numeric_limits<uint32_t>::max()) );
+        live_time_thousanths = static_cast<uint32_t>( lt );
+      }
+      
       memcpy( buffer + 75, &live_time_thousanths, sizeof(uint32_t) ); // live time in mSec (channels 1,2)
       
       const vector<float> &counts = *meas.gamma_counts_;
       vector<uint16_t> channelcounts( counts.size(), 0 );
       for( size_t i = 0; i < counts.size(); ++i )
-        channelcounts[i] = static_cast<uint16_t>( min( counts[i], 65535.0f ) );
+      {
+        float c = std::max( 0.0f, std::round(counts[i]) );
+        c = std::min( c, static_cast<float>(numeric_limits<uint16_t>::max()) );
+        channelcounts[i] = static_cast<uint16_t>( c );
+      }
       
-      if( counts.size() <= noutchannel )
-        memcpy( buffer + 79, &channelcounts[2], 2*counts.size() - 4 );
-      else
-        memcpy( buffer + 79, &channelcounts[2], 2*(noutchannel-2) );
+      if( channelcounts.size() > 2 )
+      {
+        if( counts.size() <= noutchannel )
+          memcpy( buffer + 79, &channelcounts[2], 2*counts.size() - 4 );
+        else
+          memcpy( buffer + 79, &channelcounts[2], 2*(noutchannel-2) );
+      }//if( channelcounts.size() > 2 )
       
       //2*nch+76  unsigned char    CHSUM    check sum
       

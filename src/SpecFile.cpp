@@ -69,6 +69,21 @@
 #include "SpecUtils/D3SpectrumExport.h"
 #endif
 
+// Should move to using a library for SIMD operations; some potential candidate libraries include:
+//   https://github.com/p12tic/libsimdpp (boost license) #include <simdpp/simd.h>
+//   https://github.com/VcDevel/Vc (BSD 3 Clause)
+//   https://github.com/xtensor-stack/xsimd (BSD 3 Clause)
+//
+//  Will wait to actually enable, and include in CMake build options, and actually use places, but
+//   there are gains to be had probably
+#define ENABLE_CPU_VECTOR 0
+
+#if( ENABLE_CPU_VECTOR )
+#if( defined(__x86_64__) || defined(__i386__) )
+#include <immintrin.h>
+#endif
+#endif //ENABLE_CPU_VECTOR
+
 
 static_assert( RAPIDXML_USE_SIZED_INPUT_WCJOHNS == 1,
               "The modified version of RapidXml is somehow not being used to compile SpecFile" );
@@ -1485,7 +1500,6 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
       
       newbinning[nnewchann] = old_energies.back();
       
-      cout << "Before calling set_lower_channel_energy, address of first element: " << &(newbinning[0]) << endl;
       newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
     }//break
       
@@ -6616,6 +6630,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     dataH->detector_number_ = -1;
   }
   
+  const bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
+  
+  
   //any less than 'min_per_thread' than the additional memorry allocation isnt
   //  worth it - briefly determined on my newer mbp using both example
   //  example passthrough (16k channel) and a 512 channel NaI portal passthrough
@@ -6626,10 +6643,41 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   num_thread = min( num_thread, num_potential_specta/min_per_thread );
   num_thread = max( size_t(1), num_thread );
   
-  vector< vector< std::shared_ptr<const Measurement> > > specs( num_thread );
-  vector< vector< std::shared_ptr<const vector<float> > > > spectrums( num_thread );
+  vector< vector< shared_ptr<const Measurement> > > meas_per_thread( num_thread );
+  vector< vector< shared_ptr<const vector<float> > > > spectrum_per_thread( num_thread );
   
-  int current_total_sample_num = 0;
+  // If we do the previous thing of just use num_thread to call sum_with_rebin(...) for every
+  //  measurement (which calls rebin_by_lower_edge for every measurement), for a couple cases took:
+  //    wall=38.8735s, cpu=309.827s (pathological?)
+  //    wall=0.2413590s, cpu=1.63878s (example passthrough)
+  //    wall=0.0069361s, cpu=0.048806 (Verifinder)
+  //    wall=0.0795112s, cpu=0.629063 (portal p1)
+  //    wall=0.0240741s, cpu=0.164865s (portal range 2)
+  //    wall=0.0482988s, cpu=0.39505s (portal range 3)
+  //
+  //  But if we group by the same energy calibration, and just bin-by-bin sum all spectra for each
+  //  energy calibration, then call rebin_by_lower_edge(...) to combine the sum for each energy
+  //  calibration, that same respective cases took "just":
+  //    wall=0.242603s, cpu=2.95812s
+  //    wall=0.026771s, cpu=0.09360s
+  //    wall=0.009272s, cpu=0.04039s
+  //    wall=0.004495s, cpu=0.04022s
+  //    wall=0.002311s, cpu=0.01358s
+  //    wall=0.002978s, cpu=0.03313s
+  //
+  //  E.g., about a ~10x to 100x speed increase usually
+  //
+  //  However, using 'GROUP_BY_ENE_CAL_BEFORE_SUM' method has not been extensively tested yet
+  //  TODO: we could also remove inserting into 'meas_per_thread' and 'spectrum_per_thread', or
+  //        anything related to 'num_thread' for the case (allBinningIsSame == false)
+#define GROUP_BY_ENE_CAL_BEFORE_SUM 1
+  
+#if( GROUP_BY_ENE_CAL_BEFORE_SUM )
+  map< shared_ptr<const EnergyCalibration>, vector<shared_ptr<const vector<float>>> > cal_to_meas;
+#endif
+  
+  size_t total_num_gamma_spec = 0;
+  set<SourceType> source_types;
   set<string> remarks;
   for( const int sample_number : sample_numbers )
   {
@@ -6657,43 +6705,59 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       for( const std::string &remark : meas->remarks_ )
         remarks.insert( remark );
         
-      if( spec_size > 3 )
+      source_types.insert( meas->source_type() );
+      
+      if( spec_size > 3 && meas->energy_calibration() && meas->energy_calibration()->valid() )
       {
         dataH->live_time_ += meas->live_time();
         dataH->real_time_ += meas->real_time();
         dataH->gamma_count_sum_ += meas->gamma_count_sum();
-        const size_t thread_num = current_total_sample_num % num_thread;
-        specs[thread_num].push_back( meas );
-        spectrums[thread_num].push_back( meas->gamma_counts() );
-        ++current_total_sample_num;
+        const size_t thread_num = total_num_gamma_spec % num_thread;
+        meas_per_thread[thread_num].push_back( meas );
+        spectrum_per_thread[thread_num].push_back( meas->gamma_counts() );
+        total_num_gamma_spec += 1;
+        
+#if( GROUP_BY_ENE_CAL_BEFORE_SUM )
+        if( !allBinningIsSame )
+        {
+          const auto cal = meas->energy_calibration();
+          const auto meascounts = meas->gamma_counts();
+          auto iter = cal_to_meas.find(cal);
+          if( iter != end(cal_to_meas) )
+            iter->second.push_back( meascounts );
+          else
+            cal_to_meas[cal].push_back( meascounts );
+        }//if( !allBinningIsSame )
+#endif //GROUP_BY_ENE_CAL_BEFORE_SUM
       }
     }//for( size_t index = 0; index < detector_names_.size(); ++index )
   }//for( const int sample_number : sample_numbers )
   
-  if( !current_total_sample_num )
+  if( !total_num_gamma_spec )
     return nullptr;
 
+  if( source_types.size() == 1 )
+    dataH->source_type_ = *begin(source_types);
   
   //If we are only summing one sample, we can preserve some additional
   //  information
-  if( current_total_sample_num == 1 )
+  if( total_num_gamma_spec == 1 )
   {
-    dataH->latitude_             = specs[0][0]->latitude_;
-    dataH->longitude_            = specs[0][0]->longitude_;
-    dataH->position_time_        = specs[0][0]->position_time_;
-    dataH->sample_number_        = specs[0][0]->sample_number_;
-    dataH->occupied_             = specs[0][0]->occupied_;
-    dataH->speed_                = specs[0][0]->speed_;
-    dataH->dx_                   = specs[0][0]->dx_;
-    dataH->dy_                   = specs[0][0]->dy_;
-    dataH->detector_name_        = specs[0][0]->detector_name_;
-    dataH->detector_number_      = specs[0][0]->detector_number_;
-    dataH->detector_description_ = specs[0][0]->detector_description_;
-    dataH->quality_status_       = specs[0][0]->quality_status_;
-  }//if( current_total_sample_num == 1 )
+    dataH->latitude_             = meas_per_thread[0][0]->latitude_;
+    dataH->longitude_            = meas_per_thread[0][0]->longitude_;
+    dataH->position_time_        = meas_per_thread[0][0]->position_time_;
+    dataH->sample_number_        = meas_per_thread[0][0]->sample_number_;
+    dataH->occupied_             = meas_per_thread[0][0]->occupied_;
+    dataH->speed_                = meas_per_thread[0][0]->speed_;
+    dataH->dx_                   = meas_per_thread[0][0]->dx_;
+    dataH->dy_                   = meas_per_thread[0][0]->dy_;
+    dataH->detector_name_        = meas_per_thread[0][0]->detector_name_;
+    dataH->detector_number_      = meas_per_thread[0][0]->detector_number_;
+    dataH->detector_description_ = meas_per_thread[0][0]->detector_description_;
+    dataH->quality_status_       = meas_per_thread[0][0]->quality_status_;
+  }//if( total_num_gamma_spec == 1 )
   
   
-  const bool allBinningIsSame = ((properties_flags_ & kHasCommonBinning) != 0);
   
   if( allBinningIsSame )
   {
@@ -6721,10 +6785,10 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     }//for( auto m : measurements_ )
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
     
-    if( spectrums.size()<1 || spectrums[0].empty() )
+    if( spectrum_per_thread.size()<1 || spectrum_per_thread[0].empty() )
       throw runtime_error( string(SRC_LOCATION) + "\n\tSerious programming logic error" );
     
-    const size_t spec_size = spectrums[0][0]->size();
+    const size_t spec_size = spectrum_per_thread[0][0]->size();
     auto result_vec = make_shared<vector<float>>( spec_size, 0.0f );
     vector<float> &result_vec_ref = *result_vec;
     dataH->gamma_counts_ = result_vec;
@@ -6737,7 +6801,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       for( size_t i = 0; i < num_thread; ++i )
       {
         vector<float> *dest = &(results[i]);
-        const vector< std::shared_ptr<const vector<float> > > *spec = &(spectrums[i]);
+        const vector< std::shared_ptr<const vector<float> > > *spec = &(spectrum_per_thread[i]);
         threadpool.post( [dest,spec](){ add_to(*dest, *spec); } );
       }
       threadpool.join();
@@ -6756,7 +6820,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       }//for( size_t i = 0; i < num_thread; ++i )
     }else
     {
-      const vector< std::shared_ptr<const vector<float> > > &spectra = spectrums[0];
+      const vector< std::shared_ptr<const vector<float> > > &spectra = spectrum_per_thread[0];
       const size_t num_spectra = spectra.size();
     
       for( size_t i = 0; i < num_spectra; ++i )
@@ -6792,20 +6856,195 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     }
   }else //if( allBinningIsSame )
   {
-    /// \TODO: We currently calling #rebin_by_lower_edge for every spectrum while summing; we could
-    ///        instead group by common energy calibration, some those respectively, and then
-    ///        sum the results using #rebin_by_lower_edge, which would be more accurate and faster.
+#if( GROUP_BY_ENE_CAL_BEFORE_SUM )
+    assert( !cal_to_meas.empty() );
+    
+#if( PERFORM_DEVELOPER_CHECKS )
+    const double start_new_time = get_wall_time();
+    const double start_new_cpu = get_cpu_time();
+#endif
+    
+    // results and calibrations will be one-to-one; we may have multiple entries for a
+    //  EnergyCalibration to keep the worker threads more balanced
+    vector< unique_ptr<vector<float>> > results;
+    vector< shared_ptr<const EnergyCalibration>> calibrations;
+    
+    const size_t nominal_per_thread = total_num_gamma_spec / std::max( num_thread, size_t(1) );
+    
+    SpecUtilsAsync::ThreadPool threadpool;
+    
+    for( const auto &iter : cal_to_meas )
+    {
+      const shared_ptr<const EnergyCalibration> cal = iter.first;
+      assert( cal );
+      assert( cal->num_channels() > 2 );
+      assert( cal->channel_energies() );
+      assert( cal->channel_energies()->size() > 2 );
+      
+      const vector< std::shared_ptr<const vector<float> > > &this_cals_specs = iter.second;
+      const size_t nspec = this_cals_specs.size();
+      
+      size_t npec_per_result = nspec;
+      if( nspec >= 2*nominal_per_thread )
+      {
+        const size_t div = nspec / nominal_per_thread;
+        //round up so we might have a little more than nominal_per_thread to avoid a thread with only a few
+        npec_per_result = (nspec / div) + ((nspec % div) ? 1 : 0);
+      }
+      
+      for( size_t specn = 0; specn < nspec; specn += npec_per_result )
+      {
+        calibrations.push_back( cal );
+        // Note: we will copy in the first spectrum, and later start summing with second spectrum
+        results.emplace_back( new vector<float>( begin(*this_cals_specs[specn]), end(*this_cals_specs[specn]) ) );
+        
+        if( (nspec == 1) || (npec_per_result == 1) )
+          continue;
+        
+        vector<float> * const result_ptr = results.back().get();
+        
+        const shared_ptr<const vector<float> > * const start_spec = &(this_cals_specs[specn]);
+        
+        const size_t num_spectra_sum = ((specn + npec_per_result) <= nspec) ? npec_per_result : (nspec - specn);
+        const shared_ptr<const vector<float> > * const end_spec = start_spec + num_spectra_sum;
+        
+        threadpool.post( [start_spec,end_spec,result_ptr](){
+          vector<float> &result = *result_ptr;
+          // Note we are summing in starting with the second spectrum (we created result with the first one)
+          for( const shared_ptr<const vector<float> > *iter = start_spec + 1; iter != end_spec; ++iter )
+          {
+            const vector<float> &curraray = *(*iter);
+            const size_t size = curraray.size();
+            assert( size == result.size() );
+            
+#if( ENABLE_CPU_VECTOR && (defined(__x86_64__) || defined(__i386__)) )
+            const size_t aligendN = (size > 3) ? (size - (size % 4)) : 0;
+            for( size_t i = 0; i < aligendN; i += 4 )
+            {
+              _mm_storeu_ps(&result[i],
+                            _mm_add_ps(_mm_loadu_ps(&result[i]),
+                                       _mm_loadu_ps(&curraray[i])));
+              
+              // If using simdpp would do
+              //#include <simdpp/simd.h>
+              //float32<4> xmmA = load(&result[i]);    //loads 4 floats into xmmA
+              //float32<4> xmmB = load(&curraray[i]);  //loads 4 floats into xmmB
+              //float32<4> xmmC = add(xmmA, xmmB);     //Vector add of xmmA and xmmB
+              //store(&result[i], xmmC);               //Store result into the vector
+            }
+            
+            for( size_t i = aligendN; i < size; ++i )
+              result[i] += curraray[i];
+#else
+            for( size_t i = 0; i < size; ++i )
+              result[i] += curraray[i];
+#endif
+
+          }
+        } );
+      }//for( size_t specn = 0; specn < nspec; specn += npec_per_result )
+    }//for( const auto &iter : cal_to_meas )
+    
+    
+    const size_t spec_size = ene_cal->num_channels();
+    auto result_vec = make_shared<vector<float>>( spec_size, 0.0f );
+    dataH->gamma_counts_ = result_vec;
+    
+    vector<float> &summed_counts = *result_vec;
+    const vector<float> &out_energies = *ene_cal->channel_energies();
+    
+    assert( (spec_size + 1) == out_energies.size() );
+    assert( calibrations.size() == results.size() );
+    
+    threadpool.join();
+    
+    // We could do a pass here and do a simple sum for every results/calibrations that have the
+    //  same calibrations.., but probably not with the bother for now.
+    
+    // Multithreading this next loop doesnt seem to help much in practice, so wont bother for now
+    assert( results.size() == calibrations.size() );
+    for( size_t index = 0; index < results.size(); ++index )
+    {
+      assert( results[index] );
+      assert( calibrations[index] );
+      
+      const shared_ptr<const EnergyCalibration> &cal = calibrations[index];
+      
+      const vector<float> &in_counts = *results[index];
+      const vector<float> &in_energies = *cal->channel_energies();
+      
+      vector<float> out_counts( spec_size, 0.0f );
+      SpecUtils::rebin_by_lower_edge( in_energies, in_counts, out_energies, out_counts );
+      
+      assert( summed_counts.size() == out_counts.size() );
+      for( size_t i = 0; i < spec_size; ++i )
+        summed_counts[i] += out_counts[i];
+    }//for( const auto &iter : cal_to_meas )
+  
+    
+#if( PERFORM_DEVELOPER_CHECKS )
+    const double finish_new_time = get_wall_time();
+    const double finish_new_cpu = get_cpu_time();
+    
+    // With limited testing, it doesnt look like we need this...
+    {// begin check of other implementation
+      vector< vector<float> > check_results( num_thread );
+      
+      for( size_t i = 0; i < num_thread; ++i )
+      {
+        vector<float> *dest = &(check_results[i]);
+        const vector< std::shared_ptr<const Measurement> > *measvec = &(meas_per_thread[i]);
+        threadpool.post( [dest,&dataH,measvec](){ sum_with_rebin( *dest, dataH, *measvec ); } );
+      }
+      
+      threadpool.join();
+      
+      const size_t spec_size = check_results[0].size();
+      vector<float> check_result_vec = check_results[0];
+      
+      for( size_t i = 1; i < num_thread; ++i )
+      {
+        const size_t len = check_results[i].size();
+        assert( len == check_result_vec.size() );
+        const float *spec_array = &(check_results[i][0]);
+        for( size_t bin = 0; bin < spec_size && bin < len; ++bin )
+          check_result_vec[bin] += spec_array[bin];
+      }//for( size_t i = 0; i < num_thread; ++i )
+      
+      assert( summed_counts.size() == check_result_vec.size() );
+      for( size_t i = 0; i < check_result_vec.size(); ++i )
+      {
+        const float diff = fabs(summed_counts[i] - check_result_vec[i]);
+        
+        if( (diff > 1.0E-12) && (diff > (1.0E-5*max(summed_counts[i],check_result_vec[i]))) )
+        {
+          cerr << "Found diff! diff=" << diff
+               << ", summed_counts[" << i << "]=" << summed_counts[i]
+               << ", check_result_vec[" << i << "]=" << check_result_vec[i] << endl;
+        }
+      }//
+    }// begin check of other implementation
+    
+    const double finish_old_time = get_wall_time();
+    const double finish_old_cpu = get_cpu_time();
+    
+    cerr << "New way: wall=" << (finish_new_time - start_new_time) << " s, cpu=" << (finish_new_cpu - start_new_cpu) << endl;
+    cerr << "Old way: wall=" << (finish_old_time - finish_new_time) << " s, cpu=" << (finish_old_cpu - finish_new_cpu) << endl;
+#endif //PERFORM_DEVELOPER_CHECKS
+    
+#else // GROUP_BY_ENE_CAL_BEFORE_SUM
+    SpecUtilsAsync::ThreadPool threadpool;
     
     vector< vector<float> > results( num_thread );
-    SpecUtilsAsync::ThreadPool threadpool;
-    for( size_t i = 0; i < num_thread; ++i )
-	  {
-      vector<float> *dest = &(results[i]);
-      const vector< std::shared_ptr<const Measurement> > *measvec = &(specs[i]);
-      threadpool.post( [dest,&dataH,measvec](){ sum_with_rebin( *dest, dataH, *measvec ); } );
-	  }
     
-	  threadpool.join();
+    for( size_t i = 0; i < num_thread; ++i )
+    {
+      vector<float> *dest = &(results[i]);
+      const vector< std::shared_ptr<const Measurement> > *measvec = &(meas_per_thread[i]);
+      threadpool.post( [dest,&dataH,measvec](){ sum_with_rebin( *dest, dataH, *measvec ); } );
+    }
+    
+    threadpool.join();
     
     const size_t spec_size = results[0].size();
     auto result_vec = make_shared<vector<float>>( results[0] );
@@ -6817,8 +7056,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       const size_t len = results[i].size();
       const float *spec_array = &(results[i][0]);
       for( size_t bin = 0; bin < spec_size && bin < len; ++bin )
-        result_vec_raw[bin] += spec_array[bin];
+      result_vec_raw[bin] += spec_array[bin];
     }//for( size_t i = 0; i < num_thread; ++i )
+#endif // GROUP_BY_ENE_CAL_BEFORE_SUM
   }//if( allBinningIsSame ) / else
   
   if( dataH->start_time_.is_infinity() )
@@ -6837,6 +7077,31 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     log_developer_error( __func__, msg.c_str() );
     assert( 0 );
   }
+  
+  /*
+   // This next test will probably fail often as gamma counts may get truncated
+  double pre_sum = 0.0, post_sum = 0.0;
+  for( const vector< shared_ptr<const vector<float> > > specs : spectrum_per_thread )
+  {
+    for( shared_ptr<const vector<float> > s : specs )
+    {
+      for( const float f : *s )
+        pre_sum += f;
+    }
+  }
+  
+  assert( dataH->gamma_counts_ );
+  for( const float f : dataH->gamma_counts_ )
+    post_sum += f;
+  
+  if( fabs(post_sum - pre_sum) > 0.000001*std::max(pre_sum,post_sum) )
+  {
+    string msg = "sum_measurements: final number of gamma doesnt match input num gammas: "
+                 + to_string(pre_sum) + " (input) vs " + to_string(post_sum) + " (output)";
+    log_developer_error( __func__, msg.c_str() );
+    assert( 0 );
+  }
+   */
 #endif
   
   return dataH;
@@ -6865,15 +7130,16 @@ size_t SpecFile::num_gamma_channels() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
+  size_t max_num_channel = 0;
   for( const auto &meas : measurements_ )
-    if( meas->num_gamma_channels() )
-      return meas->num_gamma_channels();
-  
-  //if( meas && meas->channel_energies_ && !meas->channel_energies_->empty()
-  //   && meas->gamma_counts_ && !meas->gamma_counts_->empty() )
-  //  return std::min( meas->channel_energies_->size(), meas->gamma_counts_->size() );
+  {
+    const size_t nchannel = meas->num_gamma_channels();
+    if( nchannel > 6 )
+      return nchannel;
+    max_num_channel = std::max( max_num_channel, nchannel );
+  }
 
-  return 0;
+  return max_num_channel;
 }//size_t SpecFile::num_gamma_channels() const
 
 

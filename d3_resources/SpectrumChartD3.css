@@ -32,9 +32,7 @@
   
 }
 
-
-.yaxis, .yaxislabel { font: sans-serif; font-size: 0.9em; }
-.xaxis { font: sans-serif; font-size: 0.9em; }
+.yaxis, .xaxis, .yaxislabel { font: sans-serif; font-size: 0.9em; }
 
 .xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke-width: 1px; }
 

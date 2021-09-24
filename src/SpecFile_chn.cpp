@@ -387,8 +387,14 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   ostr.write( buffer, 2 );
   //index=8
   
-  const uint32_t realTimeTimesFifty = static_cast<uint32_t>(50.0f*summed->real_time_);
-  const uint32_t liveTimeTimesFifty = static_cast<uint32_t>(50.0f*summed->live_time_);
+  double rt50 = 50.0 * std::max(summed->real_time_,0.0f);
+  rt50 = std::min( rt50, static_cast<double>(std::numeric_limits<uint32_t>::max()) );
+  
+  double lt50 = 50.0f * std::max(summed->live_time_,0.0f);
+  lt50 = std::min( lt50, static_cast<double>(std::numeric_limits<uint32_t>::max()) );
+  
+  const uint32_t realTimeTimesFifty = static_cast<uint32_t>( rt50 );
+  const uint32_t liveTimeTimesFifty = static_cast<uint32_t>( lt50 );
   ostr.write( (const char *)&realTimeTimesFifty, 4 );
   ostr.write( (const char *)&liveTimeTimesFifty, 4 );
   //index=16
@@ -455,7 +461,11 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   //  Also, not certain about values in first channel or two...
   vector<uint32_t> intcounts( numchannels );
   for( uint16_t i = 0; i < numchannels; ++i )
-    intcounts[i] = static_cast<uint32_t>( (*fgammacounts)[i] + 0.5f );
+  {
+    float counts = std::max( 0.0f, std::round( (*fgammacounts)[i] ) );
+    counts = std::min( counts, static_cast<float>(std::numeric_limits<uint32_t>::max()) );
+    intcounts[i] = static_cast<uint32_t>( counts );
+  }
   ostr.write( (const char *)&intcounts[0], numchannels*4 );
   
   vector<float> calibcoef = summed->calibration_coeffs();

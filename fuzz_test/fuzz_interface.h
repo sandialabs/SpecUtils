@@ -28,7 +28,13 @@
 
 #include <cstdint>
 
+namespace SpecUtils
+{
+class SpecFile;
+}
+
 int run_file_parse_fuzz( const uint8_t *data, size_t size );
 
+void test_write_output( const SpecUtils::SpecFile &spec );
 
 #endif //SpecUtils_Fuzz_Interface_h

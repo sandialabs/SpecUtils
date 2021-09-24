@@ -242,7 +242,9 @@ namespace
         break;
         case cam_type::cam_longword:
         {
-            int32_t t_longword = static_cast<int32_t>(input);
+            T t_trunc = std::min( input, static_cast<T>(std::numeric_limits<int32_t>::max()) );
+            t_trunc = std::max( t_trunc, static_cast<T>(std::numeric_limits<int32_t>::min()) );
+            int32_t t_longword = static_cast<int32_t>(t_trunc);
             const auto bytes = to_bytes(t_longword);
           
           if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
@@ -836,7 +838,8 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         string title = summed->title(); //CTITLE
         if (!title.empty()) 
         {
-            std::string expectsString(title.begin(), title.begin() + 0x20);
+            std::string expectsString(title.begin(), title.end());
+            expectsString.resize( 0x20, '\0');
             enter_CAM_value(expectsString, cnf_file, acqp_loc);
         }
         

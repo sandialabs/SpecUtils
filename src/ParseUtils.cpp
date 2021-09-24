@@ -144,10 +144,13 @@ void expand_counted_zeros( const vector<float> &data, vector<float> &return_answ
       if( IsNan(*iter) || IsInf(*iter) )
         throw runtime_error( "Invalid counted zeros: inf or NaN number of elements specified" );
       
+      if( (*iter) <= 0.5f )
+        throw runtime_error( "Invalid counted zeros: less than one number of zeros" );
+      
       const size_t nZeroes = ((iter==data.end()) ? 0u : static_cast<size_t>(floor(*iter + 0.5f)) );
       
-      if( ((*iter) <= 0.5f) || ((answer.size() + nZeroes) > 131072) )
-        throw runtime_error( "Invalid counted zeros: too many total elements, or negative number of zeros" );
+      if( (answer.size() + nZeroes) > 131072 )
+        throw runtime_error( "Invalid counted zeros: too many total elements" );
       
       for( size_t k = 0; k < nZeroes; ++k )
         answer.push_back( 0.0f );
@@ -251,7 +254,7 @@ bool parse_deg_min_sec_lat_lon( const char *str, const size_t len,
       if( !isalnum(latstr[i]) && latstr[i]!='.' )
         latstr[i] = ' ';
     for( size_t i = 0; i < lonstr.size(); ++i )
-      if( !isalnum(lonstr[i]) && latstr[i]!='.' )
+      if( !isalnum(lonstr[i]) && lonstr[i]!='.' )
         lonstr[i] = ' ';
     
     ireplace_all( latstr, "degree", " " );

@@ -514,10 +514,12 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
   {
     if( unwritten_dets.size() != dev_pairs.size() )
     {
+#if( !SpecUtils_BUILD_FUZZING_TESTS )
       cerr << "Warning: " << unwritten_dets.size() << " of the "
       << dev_pairs.size() << " gamma detectors didnt have conforming"
       << " names, so they are being written in the first available"
       << " spot in the PCF file." << endl;
+#endif
     }
     
     for( const auto &name : unwritten_dets )
@@ -980,9 +982,9 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
 #else
     return !ostr.bad();
 #endif
-  }catch( std::exception &e )
+  }catch( std::exception & /* e */ )
   {
-    cerr << "SpecFile::write_pcf(): \n\tCaught " << e.what() << endl;
+    //cerr << "SpecFile::write_pcf(): \n\tCaught " << e.what() << endl;
   }
   
   return false;

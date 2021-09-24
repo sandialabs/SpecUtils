@@ -8,7 +8,7 @@
   fill: white;
 }
 
-.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis{
+.xaxistitle, .yaxistitle, .yaxis, .xaxis{
   stroke: black;
 }
 

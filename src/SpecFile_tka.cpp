@@ -24,6 +24,7 @@
 #include <float.h>
 #include <cstring>
 #include <fstream>
+#include <float.h>
 #include <iostream>
 #include <stdexcept>
 

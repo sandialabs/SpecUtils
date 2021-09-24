@@ -41,11 +41,19 @@ namespace
   {
     static const boost::gregorian::date ole_zero(1899,12,30);
     
-    boost::gregorian::days d( static_cast<long>(ole_dt) );
+    const double max_long = static_cast<double>( numeric_limits<long>::max() );
+    
+    const long days = (ole_dt > max_long) ? numeric_limits<long>::max()
+                                          : static_cast<long>( std::floor(ole_dt) );
+    
+    boost::gregorian::days d( days );
     boost::posix_time::ptime pt(ole_zero + d);
     
     ole_dt -= d.days();
     ole_dt *= 24 * 60 * 60 * 1000;
+    
+    if( ole_dt > static_cast<double>( numeric_limits<int64_t>::max() ) )
+      return pt + boost::posix_time::milliseconds( numeric_limits<int64_t>::max() );
     
     return pt + boost::posix_time::milliseconds( std::abs( static_cast<int64_t>(ole_dt) ) );
     

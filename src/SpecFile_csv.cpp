@@ -25,6 +25,7 @@
 #include <string>
 #include <cctype>
 #include <limits>
+#include <float.h>
 #include <numeric>
 #include <fstream>
 #include <cctype>

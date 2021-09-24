@@ -3975,6 +3975,9 @@ namespace SpecUtils
       std::vector<char> data;
       SpecUtils::load_file_data( filename.c_str(), data );
       
+      if( data.empty() )
+        throw runtime_error( "Empty file." );
+      
       const bool loaded = SpecFile::load_N42_from_data( &data.front(), (&data.front())+data.size() );
       
       if( !loaded )
@@ -6514,7 +6517,7 @@ namespace SpecUtils
         && is_passthrough
         && (notUniqueSamples || notSampleSorted || notTimeSorted) )
     {
-      cout << "Checking well_behaving_samples for " << filename() << endl;
+      //cout << "Checking well_behaving_samples for " << filename() << endl;
       for( size_t i = 0; well_behaving_samples && (i < sample_nums_vec.size()); ++i )
       {
         const int sample = sample_nums_vec[i];
@@ -6541,7 +6544,7 @@ namespace SpecUtils
         }//for( check if all measurements can go under a single <RadMeasurement> tag )
       }//for( auto sni = begin(sample_numbers_); well_behaving_samples && (sni != end(sample_numbers_)); ++sni )
       
-      cout << "\twell_behaving_samples=" << well_behaving_samples << endl;
+      //cout << "\twell_behaving_samples=" << well_behaving_samples << endl;
     }//if( notUniqueSamples || notSampleSorted || notTimeSorted )
     
     ///////////////
