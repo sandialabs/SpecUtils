@@ -1114,6 +1114,68 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             break;
           }//if( we have overrun the data section )
         }//while( SpecUtils::safe_get_line( istr, line ) )
+      }else if( starts_with(line,"$KROMEK_INFO:") )
+      {
+        //  "$DATE_MEA:" appears to be the *end* of the measurement, so we'll correct for that
+        if( meas->start_time_.is_special()
+           || (meas->real_time_ <= FLT_EPSILON)
+           || IsInf(meas->real_time_)
+           || IsNan(meas->real_time_) )
+        {
+          parse_warnings_.emplace_back( "Not correcting Kromek time to be start of measurement" );
+        }else
+        {
+          meas->start_time_ -= boost::posix_time::milliseconds( static_cast<int64_t>( std::round(1000.0*meas->real_time_) ) );
+        }
+        
+        
+        // These files will have one line like "LLD:" followed by another line with its actual value
+        //  We'll grab some of this info, and stuff others in a comment
+        vector<string> kromek_lines;
+        while( SpecUtils::safe_get_line( istr, line ) )
+        {
+          trim(line);
+          if( starts_with(line,"$") )
+          {
+            skip_getline = true;
+            break;
+          }//if( we have overrun the data section )
+          
+          kromek_lines.push_back( line );
+        }//while( SpecUtils::safe_get_line( istr, line ) )
+        
+
+        for( size_t index = 0; (index + 1) < kromek_lines.size(); ++index )
+        {
+          const string &label = kromek_lines[index];
+          const string &value = kromek_lines[index+1];
+          
+          if( label.find(':') == string::npos ) //make sure we actually do label: value right
+            continue;
+          
+          if( (label == "DETECTOR_SERIAL_NO:")
+             || (label == "PRODUCT_SERIAL_NO:")
+             || (label == "DEVICE_SERIAL_NO:") )
+          {
+            if( !instrument_id_.empty() )
+              instrument_id_ += ", ";
+            if( instrument_id_.find(value) == string::npos )
+              instrument_id_ += value;
+          }else if( (label == "DETECTOR_TYPE:")
+                   || (label == "DETECTOR_TYPE_ID:")
+                   || (label == "PRODUCT_FAMILY:") )
+          {
+            if( !instrument_model_.empty() )
+              instrument_model_ += ", ";
+            if( instrument_model_.find(value) == string::npos )
+              instrument_model_ += value;
+          }else
+          {
+            // TODO: this should probably correspond to some parameters or something.
+            remarks_.push_back( label + " " + value );
+          }
+        }//for( size_t index = 0; (index + 1) < kromek_lines.size(); ++index )
+  
       }else if( !line.empty() && line != "END" )
       {
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
