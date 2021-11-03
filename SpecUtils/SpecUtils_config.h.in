@@ -32,7 +32,6 @@
 #cmakedefine01 SpecUtils_D3_SUPPORT_FILE_STATIC
 #cmakedefine01 SpecUtils_INJA_TEMPLATES
 #cmakedefine01 SpecUtils_BUILD_FUZZING_TESTS
-#cmakedefine SpecUtils_CNF_IMP_FILE "@SpecUtils_CNF_IMP_FILE@"
 
 #cmakedefine01 SpecUtils_PYTHON_BINDINGS
 #cmakedefine01 SpecUtils_JAVA_SWIG
