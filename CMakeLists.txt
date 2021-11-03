@@ -18,6 +18,7 @@ option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
+option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )

@@ -36,6 +36,8 @@
 #cmakedefine01 SpecUtils_PYTHON_BINDINGS
 #cmakedefine01 SpecUtils_JAVA_SWIG
 
+#cmakedefine01 SpecUtils_USE_SIMD
+
 #define BOOST_DATE_TIME_NO_LIB
 
 #if( defined(_WIN32) && defined(_MSC_VER) )

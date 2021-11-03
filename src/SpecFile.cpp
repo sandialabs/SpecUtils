@@ -69,20 +69,20 @@
 #include "SpecUtils/D3SpectrumExport.h"
 #endif
 
+
+#if( SpecUtils_USE_SIMD )
 // Should move to using a library for SIMD operations; some potential candidate libraries include:
 //   https://github.com/p12tic/libsimdpp (boost license) #include <simdpp/simd.h>
 //   https://github.com/VcDevel/Vc (BSD 3 Clause)
 //   https://github.com/xtensor-stack/xsimd (BSD 3 Clause)
+//   https://github.com/simd-everywhere/simde (MIT)
 //
-//  Will wait to actually enable, and include in CMake build options, and actually use places, but
-//   there are gains to be had probably
-#define ENABLE_CPU_VECTOR 0
-
-#if( ENABLE_CPU_VECTOR )
 #if( defined(__x86_64__) || defined(__i386__) )
 #include <immintrin.h>
+#else
+static_assert( 0, "SpecUtils_USE_SIMD is currently only enabled for i386/x86" );
 #endif
-#endif //ENABLE_CPU_VECTOR
+#endif //SpecUtils_USE_SIMD
 
 
 static_assert( RAPIDXML_USE_SIZED_INPUT_WCJOHNS == 1,
@@ -173,8 +173,21 @@ namespace
       if( size > results.size() )  //should never evaluate to true, but JIC
         results.resize( size, 0.0f );
       
+#if( SpecUtils_USE_SIMD )
+      const size_t aligendN = size - (size % 4);
+      for( size_t i = 0; i < aligendN; i += 4 )
+      {
+        _mm_storeu_ps(&result[i],
+                      _mm_add_ps(_mm_loadu_ps(&result[i]),
+                                 _mm_loadu_ps(&curraray[i])));
+      }
+      
+      for( size_t i = aligendN; i < size; ++i )
+        result[i] += curraray[i];
+#else
       for( size_t i = 0; i < size; ++i )
         results[i] += curraray[i];
+#endif
     }
   }//add_to(...)
   
@@ -6814,8 +6827,22 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         if( results[i].size() )
         {
           const float *spec_array = &(results[i][0]);
+          
+#if( SpecUtils_USE_SIMD )
+          const size_t aligendN = spec_size - (spec_size % 4);
+          for( size_t i = 0; i < aligendN; i += 4 )
+          {
+            _mm_storeu_ps( &(result_vec_ref[i]),
+                          _mm_add_ps( _mm_loadu_ps( &(result_vec_ref[i]) ),
+                                     _mm_loadu_ps( &(spec_array[i]) )));
+          }
+          
+          for( size_t i = aligendN; i < spec_size; ++i )
+            result_vec_ref[i] += spec_array[i];
+#else
           for( size_t bin = 0; bin < spec_size; ++bin )
             result_vec_ref[bin] += spec_array[bin];
+#endif
         }
       }//for( size_t i = 0; i < num_thread; ++i )
     }else
@@ -6917,20 +6944,19 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
             const size_t size = curraray.size();
             assert( size == result.size() );
             
-#if( ENABLE_CPU_VECTOR && (defined(__x86_64__) || defined(__i386__)) )
-            const size_t aligendN = (size > 3) ? (size - (size % 4)) : 0;
+#if( SpecUtils_USE_SIMD )
+            const size_t aligendN = size - (size % 4);
             for( size_t i = 0; i < aligendN; i += 4 )
             {
+              // TODO: check performance of using intermediate variables
+              //__m128 xmmA = _mm_loadu_ps(&result[i]);
+              //__m128 xmmB = _mm_loadu_ps(&curraray[i]);
+              //__m128 xmmC = _mm_add_ps( xmmA, xmmB );
+              //_mm_storeu_ps( &result[i], xmmC );
+              
               _mm_storeu_ps(&result[i],
                             _mm_add_ps(_mm_loadu_ps(&result[i]),
                                        _mm_loadu_ps(&curraray[i])));
-              
-              // If using simdpp would do
-              //#include <simdpp/simd.h>
-              //float32<4> xmmA = load(&result[i]);    //loads 4 floats into xmmA
-              //float32<4> xmmB = load(&curraray[i]);  //loads 4 floats into xmmB
-              //float32<4> xmmC = add(xmmA, xmmB);     //Vector add of xmmA and xmmB
-              //store(&result[i], xmmC);               //Store result into the vector
             }
             
             for( size_t i = aligendN; i < size; ++i )
@@ -6977,8 +7003,25 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       SpecUtils::rebin_by_lower_edge( in_energies, in_counts, out_energies, out_counts );
       
       assert( summed_counts.size() == out_counts.size() );
+      
+#if( SpecUtils_USE_SIMD )
+      const size_t aligendN = spec_size - (spec_size % 4);
+      for( size_t i = 0; i < aligendN; i += 4 )
+      {
+        __m128 xmmA = _mm_loadu_ps(&summed_counts[i]);
+        __m128 xmmB = _mm_loadu_ps(&out_counts[i]);
+        __m128 xmmC = _mm_add_ps( xmmA, xmmB );
+        _mm_storeu_ps( &summed_counts[i], xmmC );
+      }
+      
+      for( size_t i = aligendN; i < spec_size; ++i )
+        summed_counts[i] += out_counts[i];
+#else
       for( size_t i = 0; i < spec_size; ++i )
         summed_counts[i] += out_counts[i];
+#endif
+      
+      
     }//for( const auto &iter : cal_to_meas )
   
     
