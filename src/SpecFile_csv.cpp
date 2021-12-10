@@ -174,6 +174,7 @@ bool SpecFile::load_from_txt_or_csv( std::istream &istr )
   
   istr.seekg( startpos, ios::beg );
   
+  double gamma_sum = 0.0, neutron_sum = 0.0;
   while( istr.good() )
   {
     try
@@ -184,6 +185,9 @@ bool SpecFile::load_from_txt_or_csv( std::istream &istr )
       if( m->num_gamma_channels() < 7 && !m->contained_neutron() )
         break;
       
+      gamma_sum += m->gamma_count_sum();
+      neutron_sum += m->neutron_counts_sum();
+      
       measurements_.push_back( m );
     }catch( exception & )
     {
@@ -191,6 +195,15 @@ bool SpecFile::load_from_txt_or_csv( std::istream &istr )
       break;
     }
   }//while( istr.good() )
+  
+  
+  if( (gamma_sum < FLT_EPSILON) && (neutron_sum < FLT_EPSILON) )
+  {
+    reset();
+    istr.clear();
+    istr.seekg( startpos, ios::end );
+    return false;
+  }
   
   
   if( measurements_.empty() )
@@ -856,13 +869,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
   for( const float f : *gamma_counts_ )
     gamma_count_sum_ += f;
   
-  if( (gamma_count_sum_ < FLT_EPSILON) && !contained_neutron() )
-  {
-    reset();
-    istr.seekg( orig_pos, ios::beg );
-    istr.clear( ios::failbit );
-    throw runtime_error( "Measurement::set_info_from_txt_or_csv(...)\n\tFailed to find gamma or neutron counts" );
-  }
+  //if( (gamma_count_sum_ < FLT_EPSILON) && !contained_neutron() )
+  //{
+  //  reset();
+  //  istr.seekg( orig_pos, ios::beg );
+  //  istr.clear( ios::failbit );
+  //  throw runtime_error( "Measurement::set_info_from_txt_or_csv(...)\n\tFailed to find gamma or neutron counts" );
+  //}
   
   //Some CSV files only contain live or real time, so just set them equal
   if( real_time_ > FLT_EPSILON && fabs(live_time_) < FLT_EPSILON )

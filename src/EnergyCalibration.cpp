@@ -142,11 +142,12 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
      throw runtime_error( "EnergyCalibration::set_polynomial: Coefficients are unreasonable" );
    }
   
-  m_channel_energies = SpecUtils::polynomial_binning( coeffs, num_channels + 1, dev_pairs );
+  vector<float> finalcoefs( begin(coeffs), begin(coeffs) + last_iter );
+  
+  m_channel_energies = SpecUtils::polynomial_binning( finalcoefs, num_channels + 1, dev_pairs );
   
   m_type = EnergyCalType::Polynomial;
-  m_coefficients.clear();
-  m_coefficients.insert( end(m_coefficients), begin(coeffs), begin(coeffs)+last_iter );
+  m_coefficients.swap( finalcoefs );
   m_deviation_pairs = dev_pairs;
 }//set_polynomial(...)
   
@@ -184,11 +185,12 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
       throw runtime_error( "Full range fraction has inf or nan coefficient" );
   }
   
-  m_channel_energies = fullrangefraction_binning( coeffs, num_channels, dev_pairs, true );
+  vector<float> finalcoefs( begin(coeffs), begin(coeffs)+last_iter );
+  
+  m_channel_energies = fullrangefraction_binning( finalcoefs, num_channels, dev_pairs, true );
   
   m_type = EnergyCalType::FullRangeFraction;
-  m_coefficients.clear();
-  m_coefficients.insert( end(m_coefficients), begin(coeffs), begin(coeffs)+last_iter );
+  m_coefficients.swap( finalcoefs );
   m_deviation_pairs = dev_pairs;
 }//set_full_range_fraction(...)
   

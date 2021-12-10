@@ -2645,11 +2645,12 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     throw runtime_error( buffer );
   }
   
-  if( fabs(lhs.distance_ - rhs.distance_) > 0.001 )
+  const double dist_diff = fabs(lhs.distance_ - rhs.distance_);
+  if( (dist_diff > 0.001) && (dist_diff > 1.0E-5*std::max(fabs(lhs.distance_),fabs(rhs.distance_))) )
   {
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult distance of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.activity_, rhs.activity_ );
+             lhs.distance_, rhs.distance_ );
     throw runtime_error( buffer );
   }
   
