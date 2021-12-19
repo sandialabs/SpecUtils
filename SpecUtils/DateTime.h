@@ -39,12 +39,12 @@ namespace  SpecUtils
   //to_iso_string(...) and to_extended_iso_string(...) are implemented here
   //  to avoid having to link to the boost datetime library
   
-  /** Converts the input time to a iso formated string.
+  /** Converts the input time to an iso formatted string.
    Ex. "20140414T141201.621543"
    */
   std::string to_iso_string( const boost::posix_time::ptime &t );
   
-  /** Converts the input time to a extended iso formated string.
+  /** Converts the input time to an extended iso formatted string.
    Ex. "2014-04-14T14:12:01.621543"
    */
   std::string to_extended_iso_string( const boost::posix_time::ptime &t );

@@ -61,17 +61,17 @@
  */
 namespace  SpecUtils
 { 
-  //The below uses home-spun methods, and hasnt been tested with symbolic links.
-  /** \brief Removes file from the filesystem, returning true if succesful. */
+  //The below uses home-spun methods, and hasn't been tested with symbolic links.
+  /** \brief Removes file from the filesystem, returning true if successful. */
   bool remove_file( const std::string &name );
   
   
-  /** \brief Returns if the specified name cooresponds to a file that can be
+  /** \brief Returns if the specified name corresponds to a file that can be
    read. */
   bool is_file( const std::string &name );
   
   /** Renames a file from source to destination, returning if operation was
-   sucessfull.
+   successful.
    
    Will fail if source is not a file.
    Will fail if destination already exists.
@@ -154,7 +154,7 @@ namespace  SpecUtils
    POSIX dirname(), since the ".." are resolved before getting the parent,
    rather than it just being a simple string operation.
    
-   Note: does not resolve symbolic links or anything; strickly string
+   Note: does not resolve symbolic links or anything; strictly string
    operations.
    
    This function operated in the passed in path string, not the absolute
@@ -266,7 +266,7 @@ namespace  SpecUtils
    \param sourcedir Directory to recursively search through.  If not a directory
    results will be returned empty.
    \param ending If not empty, only files ending with the specified string will
-   be returned; ending is not case sensistive.
+   be returned; ending is not case sensitive.
    */
   std::vector<std::string> recursive_ls( const std::string &sourcedir,
                                         const std::string &ending = "" );
@@ -341,12 +341,12 @@ namespace  SpecUtils
           the current working path.
    @param to_path The destination filesystem location.  If not absolute, will be
           prepended by the current working path.
-   @returns The path necassary to get from 'from_path' to 'to_path'
+   @returns The path necessary to get from 'from_path' to 'to_path'
    
    Note: files are not resolved, so they do not need to exist.  File links are
    not accounted for.  When passing in non-absolute paths, be careful that
    the paths do not have so many ".." elements such that they would go up above
-   the root path from the current working durectory, in which case, the extra
+   the root path from the current working directory, in which case, the extra
    ".." elements are discarded, and not accounted for.
    
    assert( fs_relative( "/a/b/c/d", "/a/b/foo/bar" ) == "../../foo/bar" );
@@ -358,7 +358,7 @@ namespace  SpecUtils
   /** Removes all "." elements; for absolute paths will resolve/remove all ".."
    elements, and for relative paths will resolve/remove all ".." elements that
    wont cause a loss of path information. Preserves trailing slash
-   Similar to #SpecUtils::make_canonical_path, but this function is strickly
+   Similar to #SpecUtils::make_canonical_path, but this function is strictly
    string based, so passed in file does not need to exist.
    
    Examples:
@@ -382,7 +382,7 @@ namespace  SpecUtils
    */
   std::string lexically_normalize_path( const std::string &input );
   
-  //ToDo: add in path comparisons (which dont resolve files, just use strings)
+  //ToDo: add in path comparisons (which don't resolve files, just use strings)
   //std::string lexically_normalize_path( std::string &input );
   //std::string fs_lexically_relative( const std::string &source, const std::string &target );
   
@@ -406,7 +406,7 @@ namespace  SpecUtils
   
   
   /** Returns true if the file is likely a spectrum file, based off of file
-    extenstion, file size, etc..  By no means definitive, but useful when
+    extension, file size, etc..  By no means definitive, but useful when
    looping through a large amount of files in order to filter out files likely
     to not be spectrum files (but may also filter out a small amount of actual
     spectrum files in practice).

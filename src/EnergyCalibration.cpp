@@ -306,8 +306,8 @@ double EnergyCalibration::channel_for_energy( const double energy ) const
       const float left_edge = *(iter - 1);
       const float right_edge = *iter;
       
-      assert( energy >= left_edge );
-      assert( energy <= right_edge );
+      assert( static_cast<float>(energy) >= left_edge );
+      assert( static_cast<float>(energy) <= right_edge );
       assert( right_edge > left_edge );
       const float fraction = (energy - left_edge) / (right_edge - left_edge);
       
