@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
+#include <cfloat>
 
 
 #include "SpecUtils/SpecFile.h"
