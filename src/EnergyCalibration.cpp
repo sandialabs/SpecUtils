@@ -295,11 +295,25 @@ double EnergyCalibration::channel_for_energy( const double energy ) const
       //  where x == bin lower energy.
       const auto iter = upper_bound( begin(energies), end(energies), static_cast<float>(energy) );
       
-      if( iter == begin(energies) )
-        throw runtime_error( "EnergyCalibration::channel_for_energy: input below defined range" );
+      // TODO: decide what/if we want to return for case energy is the upper defined energy
+      //if( iter == end(energies) )
+      //{
+      //  const float upper_energy = energies.back();
+      //  if( static_cast<float>(energy) == upper_energy )
+      //    return energies.size();
+      //}//if( iter == end(energies) )
       
-      if( iter == end(energies) )
-        throw runtime_error( "EnergyCalibration::channel_for_energy: input above defined range" );
+      if( (iter == begin(energies)) || (iter == end(energies)) )
+      {
+        const float lower_energy = energies.front();
+        const float upper_energy = energies.back();
+        const string above_below = (iter == begin(energies)) ? "below" : "above";
+        throw runtime_error( "EnergyCalibration::channel_for_energy:"
+                             " input " + above_below + " defined range; energy "
+                             + std::to_string(energy) + " keV, where calibration is from "
+                             + std::to_string(lower_energy)
+                             + " to " + std::to_string(upper_energy) + " keV." );
+      }//if( above or below valid range )
       
       //Linearly interpolate to get bin number.
       //  \TODO: use some sort of spline interpolation or something to make better estimate

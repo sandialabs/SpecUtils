@@ -1037,19 +1037,23 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
 
 double Measurement::gamma_integral( float lowerx, float upperx ) const
 {
-  double sum = 0.0;
-  
   const auto &channel_energies = energy_calibration_->channel_energies();
       
-  if( !channel_energies || !gamma_counts_ || channel_energies->size() < 2
-      || gamma_counts_->size() < 2 )
-    return sum;
+  if( !channel_energies || !gamma_counts_
+      || (channel_energies->size() < 2)
+      || (gamma_counts_->size() < 2) )
+  {
+    return 0.0;
+  }
 
+  assert( (gamma_counts_->size() + 1) == channel_energies->size() );
+  
+  double sum = 0.0;
   const vector<float> &x = *channel_energies;
   const vector<float> &y = *gamma_counts_;
   
   const size_t nchannel = x.size();
-  const float maxX = 2.0f*x[nchannel-1] - x[nchannel-2];
+  const float maxX = x[nchannel-1];
   
   lowerx = std::min( maxX, std::max( lowerx, x[0] ) );
   upperx = std::max( x[0], std::min( upperx, maxX ) );
