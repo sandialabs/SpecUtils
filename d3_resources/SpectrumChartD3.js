@@ -724,6 +724,9 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.scalerWidget.style("display", "none");
     }
     
+    if( this.peakInfo )
+      this.peakInfo.style("display", "none");
+    
     let svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg"' + ' width="'  + w + '"' + ' height="' + h + '"' + '>'
     + svgDefs
     + this.svg.node().innerHTML.toString()
@@ -732,10 +735,11 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     
     // Make slider chart and/or scalerWidget visible again, if they should be showing
     if( this.sliderChart && this.size.sliderChartHeight )
-      this.sliderChart.style("display", null );
+      this.sliderChart.style("display", null);
     if( this.scalerWidget )
-      this.scalerWidget.style("display", null );
-    
+      this.scalerWidget.style("display", null);
+    if( this.peakInfo )
+      this.peakInfo.style("display", null);
     return svgMarkup;
   }catch(e){
     throw 'Error creating SVG spectrum: ' + e;
