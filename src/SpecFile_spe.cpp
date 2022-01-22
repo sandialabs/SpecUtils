@@ -1118,7 +1118,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       {
         //  "$DATE_MEA:" appears to be the *end* of the measurement, so we'll correct for that
         if( meas->start_time_.is_special()
-           || (meas->real_time_ <= FLT_EPSILON)
+           || (meas->real_time_ <= std::numeric_limits<float>::epsilon())
            || IsInf(meas->real_time_)
            || IsNan(meas->real_time_) )
         {
