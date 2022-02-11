@@ -3226,7 +3226,10 @@ public:
             SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts );
             
             rapidxml::xml_attribute<char> *comp_att = XML_FIRST_IATTRIB(channel_data_node, "compressionCode");
-            if( icontains( xml_value_str(comp_att), "Counted") )  //"CountedZeroes" or at least one file has "CountedZeros"
+            if( !comp_att )
+              comp_att = XML_FIRST_IATTRIB(channel_data_node, "Compression");
+            
+            if( comp_att && icontains( xml_value_str(comp_att), "Counted") )  //"CountedZeroes" or at least one file has "CountedZeros"
               expand_counted_zeros( *gamma_counts, *gamma_counts );
           }//if( channel_data_node && channel_data_node->value() )
           

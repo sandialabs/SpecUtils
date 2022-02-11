@@ -2772,7 +2772,7 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
                       + "')" );
   
   
-  if( fabs(lhs.analysis_computation_duration_ - rhs.analysis_computation_duration_) > FLT_EPSILON )
+  if( fabs(lhs.analysis_computation_duration_ - rhs.analysis_computation_duration_) > std::numeric_limits<float>::epsilon() )
     throw runtime_error( "Analysis duration time for LHS ('"
       + std::to_string(lhs.analysis_computation_duration_)
       + "') doesnt match RHS ('"
