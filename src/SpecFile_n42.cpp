@@ -3024,7 +3024,7 @@ public:
         //Lets track the Measurement to calibration id value incase multiple spectra
         //  are given for the same detector and <RadMeasurement>, but with different
         //  energy binnings.
-        vector< pair<std::shared_ptr<Measurement>,string> > meas_to_cal_id;
+        vector< pair<std::shared_ptr<Measurement>,string> > meas_to_cal_id, meas_to_spec_id;
         
         XML_FOREACH_DAUGHTER( spectrum_node, meas_node, "Spectrum" )
         {
@@ -3254,12 +3254,12 @@ public:
           if( det_type == OtherDetection )
             continue;
           
+          const string id_att_val = xml_value_str( id_att );
           bool is_gamma = (det_type == GammaDetection);
           bool is_neutron = ((det_type == NeutronDetection) || (det_type == GammaAndNeutronDetection));
           if( det_type == GammaAndNeutronDetection )
           {
-            const string att_val = xml_value_str( id_att );
-            is_gamma = !(icontains(att_val,"Neutron") || icontains(att_val,"Ntr"));
+            is_gamma = !(icontains(id_att_val,"Neutron") || icontains(id_att_val,"Ntr"));
             
             //If no calibration info is given, then assume it is not a gamma measurement
             if( !calib_att || !calib_att->value_size() )
@@ -3331,6 +3331,8 @@ public:
         
             if( calib.calib_id.size() )
               meas_to_cal_id.push_back( make_pair(meas,calib.calib_id) );
+            
+            meas_to_spec_id.push_back( make_pair(meas, id_att_val ) );
             
             meas->contained_neutron_ = false;
           }else if( is_neutron && meas->gamma_counts_ && meas->gamma_counts_->size() < 6 && meas->gamma_counts_->size() > 0 )
@@ -3648,7 +3650,7 @@ public:
           for( size_t i = 0; i < neutron_meas.size(); ++i )
             if( neutron_meas[i] )
               meas_to_add.push_back( neutron_meas[i] );
-        }//
+        }//if( spectrum_meas.size() == neutron_meas.size() ) / else
         
         //XXX - todo - should implement the below
         //    rapidxml::xml_node<char> *dose_rate_node = XML_FIRST_NODE(meas_node, "DoseRate" );
@@ -3683,12 +3685,81 @@ public:
                && fabs(innermeas->real_time_ - meas->real_time_) < 0.01
                && fabs(innermeas->live_time_ - meas->live_time_) < 0.01 )
             {
-              samenames.push_back( make_pair(innermeas, meas_to_cal_id[j].second ) );
-            }
+              if( meas_to_cal_id[i].second == meas_to_cal_id[j].second )
+              {
+                // If detector name, start, real, and live times are all the same AND energy
+                //  calibration is the same, this could either be a duplicate spectrum, or it
+                //  appears some (for example see refHTVA65VHTL) detection systems will contain
+                //  multiple spectra with these properties.  In this case we will check the ID
+                //  tag of the spectrum and if they have a common base-name that is reasonably long
+                //  enough, we'll use that to create unique detector names.
+                
+                string outer_id, inner_id;
+                for( const auto &p : meas_to_spec_id )
+                {
+                  if( p.first == meas )
+                    outer_id = p.second;
+                  else if( p.first == innermeas )
+                    inner_id = p.second;
+                }//for( const auto &p : meas_to_spec_id )
+                
+                string common_substr;
+                for( size_t k = 0;
+                    k < outer_id.size() && k < inner_id.size() && outer_id[k] == inner_id[k];
+                    ++k )
+                {
+                  common_substr += inner_id[k];
+                }
+                
+                if( (outer_id != inner_id) && (common_substr.size() > 4) ) //4 is arbitrary
+                {
+                  // meas_to_cal_id[j].second could already be in samenames, so lets remove it if it
+                  //  is.
+                  samenames.erase(
+                    std::remove_if( begin(samenames), end(samenames),
+                      [inner_id]( const pair<std::shared_ptr<Measurement>,string> &info ){
+                        return info.second == inner_id;
+                    }), end(samenames) );
+                  
+                  outer_id = outer_id.substr( common_substr.size() );
+                  inner_id = inner_id.substr( common_substr.size() );
+                  
+                  if( !inner_id.empty() )
+                  {
+                    if( inner_id[0] != '-' )
+                      inner_id += '-';
+                    meas_to_cal_id[j].second += inner_id;
+                    meas_to_cal_id[j].first->detector_name_ += inner_id;
+                  }
+                  
+                  if( !outer_id.empty() )
+                  {
+                    if( outer_id[0] != '-' )
+                      outer_id += '-';
+                    meas_to_cal_id[i].second += outer_id;
+                    meas_to_cal_id[i].first->detector_name_ += outer_id;
+                  }
+                }else
+                {
+                  // I think cleanup after load should take care of just making a new sample for the
+                  //  duplicate spectrum
+                }
+              }else
+              {
+                // Detector name, start, real, and live times are all the same, but energy
+                //  calibration is different, we will use the "_intercal_" detector renaming
+                //  convention.
+                samenames.push_back( make_pair(innermeas, meas_to_cal_id[j].second ) );
+              }//if( energy calibrations are the same ) / else
+            }//if( detector name, real, live, and start times are all the same )
           }//for( size_t j = 0; j < i; ++j )
           
           if( samenames.size() )
           {
+            // Usually when we're here it means that the same spectrum was placed into the spectrum
+            //  file multiple times, but with different energy calibrations (maybe one with data up
+            //  to 3 MEV, and the other up to 9 MeV, or maybe one is linearized, while the other is
+            //  binned according to sqrt(energy), etc).
             meas->detector_name_ += "_intercal_" + meas_to_cal_id[i].second;
             for( size_t j = 0; j < samenames.size(); ++j )
               samenames[j].first->detector_name_ += "_intercal_" + samenames[j].second;
