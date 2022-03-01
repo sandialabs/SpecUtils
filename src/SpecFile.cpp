@@ -3170,11 +3170,48 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( "Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
   
-  if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
+  uint32_t lhs_deriv_props = lhs.derived_data_properties_;
+  uint32_t rhs_deriv_props = rhs.derived_data_properties_;
+  if( lhs_deriv_props != rhs_deriv_props )
+  {
+    if( rhs.source_type_ == SourceType::Background )
+      rhs_deriv_props |= static_cast<uint32_t>(DerivedDataProperties::IsBackground);
+    
+    if( lhs.source_type_ == SourceType::Background )
+      lhs_deriv_props |= static_cast<uint32_t>(DerivedDataProperties::IsBackground);
+  }//if( lhs_deriv_props != rhs_deriv_props )
+  
+  if( lhs_deriv_props != rhs_deriv_props )
+  {
+    auto list_of_deriv_props = []( const uint32_t val ) -> string {
+      const vector<pair<DerivedDataProperties,string>> props{
+        {DerivedDataProperties::IsDerived,"IsDerived"},
+        {DerivedDataProperties::ItemOfInterestSum,"ItemOfInterestSum"},
+        {DerivedDataProperties::UsedForAnalysis,"UsedForAnalysis"},
+        {DerivedDataProperties::ProcessedFurther,"ProcessedFurther"},
+        {DerivedDataProperties::BackgroundSubtracted,"BackgroundSubtracted"},
+        {DerivedDataProperties::IsBackground,"IsBackground"}
+      };
+      
+      if( val == 0 )
+        return "{none}";
+      
+      string answer = "{";
+      for( const auto i : props )
+      {
+        if( val & static_cast<uint32_t>(i.first) )
+          answer += ((answer.size() > 3) ? ", " : "") + i.second;
+      }
+      answer += "}";
+      
+      return answer;
+    };//enum class DerivedDataProperties
+    
     throw runtime_error( "Derived data flags for LHS ('"
-                        + std::to_string(lhs.derived_data_properties_)
+                        + list_of_deriv_props(lhs.derived_data_properties_)
                         + "') doesnt match RHS ('"
-                        + std::to_string(rhs.derived_data_properties_) + "')" );
+                        + list_of_deriv_props(rhs.derived_data_properties_) + "')" );
+  }//if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
@@ -3230,10 +3267,16 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   
   if( lhs.detector_names_.size() != rhs.detector_names_.size() )
   {
-    snprintf( buffer, sizeof(buffer),
-             "SpecFile: Number of detector names of LHS (%i) doesnt match RHS (%i)",
-             int(lhs.detector_names_.size()), int(rhs.detector_names_.size()) );
-    throw runtime_error( buffer );
+    string message = "SpecFile: Number of detector names of LHS ("
+                     + to_string(lhs.detector_names_.size()) + ": ";
+    for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+      message += (i ? ", '" : "'") + lhs.detector_names_[i] + "'";
+    message += ") doesnt match RHS (" + to_string(rhs.detector_names_.size()) + ": ";
+    for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
+      message += (i ? ", '" : "'") + rhs.detector_names_[i] + "'";
+    message += ")";
+    
+    throw runtime_error( message );
   }
   
   const set<string> lhsnames( lhs.detector_names_.begin(),
@@ -4523,6 +4566,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     int numNeutronAndGamma = 0, numWithGammas = 0, numWithNeutrons = 0;
     bool neutronMeasDoNotHaveGamma = true, haveNeutrons = false, haveGammas = false;
     
+    SpecUtils::trim( instrument_id_ );
     
     for( size_t meas_index = 0; meas_index < measurements_.size(); ++meas_index )
     {
@@ -6901,7 +6945,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     vector< unique_ptr<vector<float>> > results;
     vector< shared_ptr<const EnergyCalibration>> calibrations;
     
-    const size_t nominal_per_thread = total_num_gamma_spec / std::max( num_thread, size_t(1) );
+    const size_t nominal_per_thread = std::max( size_t(1), total_num_gamma_spec / std::max( num_thread, size_t(1) ) );
     
     SpecUtilsAsync::ThreadPool threadpool;
     
