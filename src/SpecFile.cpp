@@ -296,7 +296,7 @@ bool compare_by_derived_sample_det_time( const std::shared_ptr<const SpecUtils::
   return (lhs->source_type() < rhs->source_type());
 }//compare_by_derived_sample_det_time(...)
 
-}//anaomous namespace
+}//anonymous namespace
 
 
 
@@ -544,6 +544,14 @@ void SpecFile::set_remarks( const std::vector<std::string> &n )
   remarks_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
+
+
+void SpecFile::set_parse_warnings( const std::vector<std::string> &warnings )
+{
+  parse_warnings_ = warnings;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
 
 void SpecFile::set_uuid( const std::string &n )
 {

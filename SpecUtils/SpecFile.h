@@ -1261,6 +1261,7 @@ public:
   //simple setters (no thread locks are aquired)
   void set_filename( const std::string &n );
   void set_remarks( const std::vector<std::string> &n );
+  void set_parse_warnings( const std::vector<std::string> &warnings );
   void set_uuid( const std::string &n );
   void set_lane_number( const int num );
   void set_measurement_location_name( const std::string &n );
@@ -1270,7 +1271,6 @@ public:
   void set_manufacturer( const std::string &n );
   void set_instrument_model( const std::string &n );
   void set_instrument_id( const std::string &n );
-
 
   //A little more complex setters:
   //set_live_time(...) and set_real_time(...) update both the measurement
