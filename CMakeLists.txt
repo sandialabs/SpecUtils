@@ -1,3 +1,7 @@
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
+endif()
+
 cmake_minimum_required(VERSION 3.1...3.13)
 
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
@@ -22,33 +26,6 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
-
-#I cant quite seem to get rpath stuff to work on macOS for regression_test and
-# python targets when using boost in a non-standard location, so instead just
-# statically link... sorry!
-option( TRY_TO_STATIC_LINK "Try to link to static libs whenever possible" OFF )
-if( TRY_TO_STATIC_LINK )
-  set( Boost_USE_STATIC_LIBS ON )
-  if( WIN32 )
-    #find static libraries first
-	set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-	
-	#Link to static runtime
-	set( CMAKE_CXX_FLAGS "/MT ${CMAKE_CXX_FLAGS}" )
-  	set(CompilerFlags
-        CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELEASE
-        CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO
-        )
-    foreach(CompilerFlag ${CompilerFlags})
-        string(REGEX REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
-    endforeach()
-  else( WIN32 )
-    set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-  endif( WIN32 )
-else( TRY_TO_STATIC_LINK )
-  set( Boost_USE_STATIC_LIBS OFF )
-  set( CMAKE_FIND_LIBRARY_SUFFIXES .so .dylib ${CMAKE_FIND_LIBRARY_SUFFIXES} )
-endif( TRY_TO_STATIC_LINK )
 
 
 if( SpecUtils_BUILD_UNIT_TESTS )
