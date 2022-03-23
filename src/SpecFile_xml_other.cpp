@@ -76,12 +76,11 @@ bool is_candidate_scan_data( std::istream &input )
 }//bool is_candidate_scan_data( const char * data, const char * const data_end )
 
 // Maps from RSP number, to N42 panel number - this is just a guess at the moment.
-string rsp_name( rapidxml::xml_node<char> *RspId )
+string rsp_name( const string &name )
 {
   const char * const rspm_names[8] = { "Aa1", "Aa2", "Ba1", "Ba2", "Ca1", "Ca2", "Da1", "Da2" };
   
   int rsp_num = 0;
-  const string name = SpecUtils::xml_value_str( RspId );
   
   if( SpecUtils::parse_int(name.c_str(), name.size(),rsp_num) && ((rsp_num >= 1) && (rsp_num <= 8)))
     return rspm_names[rsp_num - 1];
@@ -191,7 +190,8 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     
     XML_FOREACH_DAUGHTER( SegmentResults, scanData, "SegmentResults" )
     {
-      const string RspId_str = rsp_name( XML_FIRST_NODE(SegmentResults,"RspId") );
+      const rapidxml::xml_node<char> *RspId = XML_FIRST_NODE(SegmentResults,"RspId");
+      const string RspId_str = SpecUtils::xml_value_str( RspId );
       if( RspId_str.empty() )
         throw runtime_error( "Empty or missing RspId under SegmentResults." );
       
@@ -301,7 +301,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
           parse_int( SampleId->value(), SampleId->value_size(), sample_num );
         
         auto meas = make_shared<Measurement>();
-        meas->detector_name_ = RspId_str;
+        meas->detector_name_ = rsp_name( RspId_str );
         meas->energy_calibration_ = get_energy_cal( gamma_counts.size() );
         meas->contained_neutron_ = did_contained_neutrons;
         meas->neutron_counts_ = neutron_counts;
