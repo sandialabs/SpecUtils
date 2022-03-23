@@ -1546,7 +1546,7 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
                                  ? static_cast<double>(new_energies[newbinnum+1])
                                  : new_right );
     
-    double old_lower_low, old_lower_up, old_upper_low, old_upper_up;
+    double old_lower_low = 0.0, old_lower_up = 0.0, old_upper_low = 0.0, old_upper_up = 0.0;
     
     for( ; oldbinlow < old_nbin; ++oldbinlow )
     {

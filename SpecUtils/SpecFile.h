@@ -153,6 +153,8 @@ enum class ParserType : int
   Phd,
   /** LabZY XML based files. */
   Lzs,
+  /** Scan Data XML */
+  ScanDataXml,
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -959,10 +961,10 @@ protected:
   
 protected:
   
-  //live_time_: in units of seconds.  Typially 0.0f if not specified.
+  //live_time_: in units of seconds.  Typically 0.0f if not specified.
   float live_time_;
   
-  //real_time_: in units of seconds.  Typially 0.0f if not specified.
+  //real_time_: in units of seconds.  Typically 0.0f if not specified.
   float real_time_;
 
   //contained_neutron_: used to specify if there was a neutron detector, but
@@ -1584,6 +1586,7 @@ public:
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
+  bool load_xml_scan_data_file( const std::string &filename );
   
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1669,6 +1672,11 @@ public:
    As of 20200131 only tested on a few files.
    */
   bool load_from_lzs( std::istream &input );
+  
+  /** Load from a one-off scan data xml format.
+   */
+  bool load_from_xml_scan_data( std::istream &input );
+  
   
   //bool load_from_iaea(...): an ASCII format standardized by the IAEA; not all
   //  portions of the standard have been implemented, since they are either

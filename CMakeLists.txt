@@ -1,5 +1,5 @@
 if(POLICY CMP0091)
-  cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
+  cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of CMAKE_MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
 endif()
 
 cmake_minimum_required(VERSION 3.1...3.13)
@@ -92,6 +92,7 @@ set( sources
      src/SpecFile_mps.cpp
      src/SpecFile_multiact.cpp
      src/SpecFile_uraider.cpp
+     src/SpecFile_xml_other.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp

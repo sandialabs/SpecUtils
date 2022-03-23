@@ -185,6 +185,10 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
   
   rapidxml::xml_document<char> *doc = RadInstrumentData->document();
   
+  assert( doc );
+  if( !doc )
+    throw runtime_error( "add_calibration_to_2012_N42_xml: failed to get xml document." );
+  
   const char *coefname = 0;
   xml_node<char> *EnergyCalibration = 0, *node = 0;
   
@@ -762,13 +766,17 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       throw runtime_error( "measurements.size != calibids.size" );
     
     string radMeasID;
-    xml_document<char> *doc = 0;
+    xml_document<char> *doc = nullptr;
     
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
       doc = RadMeasurement->document();
       radMeasID = xml_value_str( XML_FIRST_ATTRIB(RadMeasurement, "id") );
     }
+    
+    assert( doc );
+    if( !doc )
+      throw runtime_error( "failed to get xml document." );
     
     const char *val = 0;
     char buffer[256];
@@ -5820,7 +5828,11 @@ namespace SpecUtils
     
     ::rapidxml::xml_document<char> *doc = RadInstrumentData->document();
     
-    xml_node<char> *AnalysisResults = 0;
+    assert( doc );
+    if( !doc )
+      throw runtime_error( "add_analysis_results_to_2012_N42: failed to get xml document." );
+    
+    xml_node<char> *AnalysisResults = nullptr;
     
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -6007,7 +6019,7 @@ namespace SpecUtils
         
         xml_node<char> *NuclideExtension = 0;
         
-        if( result.real_time_ > 0.0f )
+        if( result.real_time_ >= 0.0f )
         {
           NuclideExtension = doc->allocate_node( node_element, "NuclideExtension" );
           nuclide_node->append_node( NuclideExtension );
@@ -6017,7 +6029,7 @@ namespace SpecUtils
           NuclideExtension->append_node( SampleRealTime );
         }//if( we should record some more info )
         
-        if( result.distance_ > 0.0f )
+        if( result.distance_ >= 0.0f )
         {
           xml_node<char> *SourcePosition = doc->allocate_node( node_element, "SourcePosition" );
           nuclide_node->append_node( SourcePosition );

@@ -3979,6 +3979,10 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_lzs_file( filename );
       break;
       
+    case ParserType::ScanDataXml:
+      success = load_xml_scan_data_file( filename );
+      break;
+      
     case ParserType::MicroRaider:
       success = load_micro_raider_file( filename );
     break;
@@ -3991,7 +3995,7 @@ bool SpecFile::load_file( const std::string &filename,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
-          triedLzs = false;
+      triedLzs = false, triedXmlScanData = false;;
       
       if( !orig_file_ending.empty() )
       {
@@ -4130,6 +4134,10 @@ bool SpecFile::load_file( const std::string &filename,
           triedMicroRaider = true;
           success = load_micro_raider_file( filename );
           if( success ) break;
+          
+          triedXmlScanData = true;
+          success = load_xml_scan_data_file( filename );
+          if( success ) break;
         }//if( orig_file_ending=="xml" )
       }//if( !orig_file_ending.empty() ) / else
 
@@ -4189,6 +4197,9 @@ bool SpecFile::load_file( const std::string &filename,
       
       if( !success && !triedOrtecLM )
         success = load_ortec_listmode_file( filename );
+      
+      if( !success && !triedXmlScanData )
+        success = load_xml_scan_data_file( filename );
       
        break;
     }//case Auto
