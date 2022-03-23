@@ -200,7 +200,6 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
       
       string time_str = xml_value_str( XML_FIRST_NODE(SegmentResults,"GammaLastBackgroundTime") );
       
-      bool did_contained_neutrons = false;
       vector<float> gamma_counts, neutron_counts;
       XML_FOREACH_DAUGHTER( GammaBackground, SegmentResults, "GammaBackground" )
       {
@@ -224,8 +223,6 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
           
           if( !parse_float( el->value(), el->value_size(), neutron_counts[i-1] ) )
             throw runtime_error( "Failed to parse NeutronBackground float" );
-          
-          did_contained_neutrons = true;
         }//if( el )
       }//for( loop over potential neutrons )
       
@@ -241,22 +238,46 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
       if( gamma_counts.size() == 10 )
         gamma_counts.erase( begin(gamma_counts) );
       
-      auto meas = make_shared<Measurement>();
-      meas->detector_name_ = RspId_str;
-      meas->energy_calibration_ = get_energy_cal( gamma_counts.size() );
-      meas->contained_neutron_ = did_contained_neutrons;
-      meas->neutron_counts_ = neutron_counts;
-      meas->gamma_counts_ = make_shared<vector<float>>( gamma_counts );
-      meas->start_time_ = time_from_string( time_str.c_str() );
-      meas->source_type_ = SourceType::Background;
-      meas->occupied_ = OccupancyStatus::NotOccupied;
-      meas->sample_number_ = 0;
+      // We will make a separate Measurement for gammas and neutrons, although I think
+      //  cleanup_after_load will maybe merge them back together - but we'll let that function
+      //  do things consistently.
+      if( gamma_counts.size() )
+      {
+        auto meas = make_shared<Measurement>();
+        meas->detector_name_ = rsp_name(RspId_str);
+        meas->energy_calibration_ = get_energy_cal( gamma_counts.size() );
+        meas->contained_neutron_ = false;
+        meas->gamma_counts_ = make_shared<vector<float>>( gamma_counts );
+        meas->start_time_ = time_from_string( time_str.c_str() );
+        meas->source_type_ = SourceType::Background;
+        meas->occupied_ = OccupancyStatus::NotOccupied;
+        meas->sample_number_ = 0;
+        
+        // The XML doesnt contain live/real time, but 1 seconds is my best guess based on one file.
+        meas->live_time_ = 1.0f;
+        meas->real_time_ = 1.0f;
+        
+        measurements_.push_back( meas );
+      }//if( gamma_counts.size() )
       
-      // The XML doesnt contain live/real time, but 1 seconds is my best guess based on one file.
-      meas->live_time_ = 1.0f;
-      meas->real_time_ = 1.0f;
       
-      measurements_.push_back( meas );
+      if( neutron_counts.size() )
+      {
+        auto meas = make_shared<Measurement>();
+        meas->detector_name_ = rsp_name(RspId_str) + "N";
+        meas->contained_neutron_ = true;
+        meas->neutron_counts_ = neutron_counts;
+        meas->start_time_ = time_from_string( time_str.c_str() );
+        meas->source_type_ = SourceType::Background;
+        meas->occupied_ = OccupancyStatus::NotOccupied;
+        meas->sample_number_ = 0;
+        
+        // The XML doesnt contain live/real time, but 1 seconds is my best guess based on one file.
+        meas->live_time_ = 1.0f;
+        meas->real_time_ = 1.0f;
+        
+        measurements_.push_back( meas );
+      }//if( neutron_counts.size() )
     }//for( loop over <SegmentResults> elements )
     
     
@@ -300,22 +321,44 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
         if( SampleId )
           parse_int( SampleId->value(), SampleId->value_size(), sample_num );
         
-        auto meas = make_shared<Measurement>();
-        meas->detector_name_ = rsp_name( RspId_str );
-        meas->energy_calibration_ = get_energy_cal( gamma_counts.size() );
-        meas->contained_neutron_ = did_contained_neutrons;
-        meas->neutron_counts_ = neutron_counts;
-        meas->gamma_counts_ = make_shared<vector<float>>( gamma_counts );
-        meas->start_time_ = time_from_string( time_str.c_str() );
-        meas->source_type_ = SourceType::Foreground;
-        meas->occupied_ = OccupancyStatus::Occupied;
-        meas->sample_number_ = sample_num;
+        // See notes above on creating a separate Measurement for gamma and neutron.
+        if( gamma_counts.size() )
+        {
+          auto meas = make_shared<Measurement>();
+          meas->detector_name_ = rsp_name( RspId_str );
+          meas->energy_calibration_ = get_energy_cal( gamma_counts.size() );
+          meas->contained_neutron_ = false;
+          meas->gamma_counts_ = make_shared<vector<float>>( gamma_counts );
+          meas->start_time_ = time_from_string( time_str.c_str() );
+          meas->source_type_ = SourceType::Foreground;
+          meas->occupied_ = OccupancyStatus::Occupied;
+          meas->sample_number_ = sample_num;
+          
+          // The XML doesnt contain live/real time, but we know its 0.1s real-time
+          meas->live_time_ = 0.1f;
+          meas->real_time_ = 0.1f;
+          
+          measurements_.push_back( meas );
+        }//if( gamma_counts.size() )
         
-        // The XML doesnt contain live/real time, but 2 minutes seems reasonable.
-        meas->live_time_ = 0.1f;
-        meas->real_time_ = 0.1f;
         
-        measurements_.push_back( meas );
+        if( neutron_counts.size() )
+        {
+          auto meas = make_shared<Measurement>();
+          meas->detector_name_ = rsp_name( RspId_str ) + "N";
+          meas->contained_neutron_ = true;
+          meas->neutron_counts_ = neutron_counts;
+          meas->start_time_ = time_from_string( time_str.c_str() );
+          meas->source_type_ = SourceType::Foreground;
+          meas->occupied_ = OccupancyStatus::Occupied;
+          meas->sample_number_ = sample_num;
+          
+          // The XML doesnt contain live/real time, but we know its 0.1s real-time
+          meas->live_time_ = 0.1f;
+          meas->real_time_ = 0.1f;
+          
+          measurements_.push_back( meas );
+        }//if( gamma_counts.size() )
       }//for( loop over <item>
     }//for( loop over <PanelDataList> )
     
@@ -332,15 +375,11 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
         continue;
       
       pool.post( [m](){
-        m->gamma_count_sum_ = m->neutron_counts_sum_ = 0;
         if( m->gamma_counts_ )
-        {
-          for( const float v : *m->gamma_counts_ )
-            m->gamma_count_sum_ += v;
-        }
-        
-        for( const float v : m->neutron_counts_ )
-          m->neutron_counts_sum_ += v;
+          m->gamma_count_sum_ = std::accumulate( begin(*m->gamma_counts_),
+                                                 end(*m->gamma_counts_), double(0.0) );
+        m->neutron_counts_sum_ = std::accumulate( begin(m->neutron_counts_),
+                                                  end(m->neutron_counts_), double(0.0) );
       } );
     }//for( size_t i = 0; i < measurements_.size(); ++i )
     pool.join();
