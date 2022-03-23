@@ -236,10 +236,10 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
       if( gamma_counts.empty() && neutron_counts.empty() )
         continue;
       
-      // The background gamma counts have 10 channels, but the regular measurements have 9 channels,
-      //  to we'll just discard the 10th background channel to be consistent...
+      // The background gamma counts have 10 channels, but the regular measurements have 9 channels;
+      //  if we remove the first channel, then channel counts seem to match up about right
       if( gamma_counts.size() == 10 )
-        gamma_counts.resize( 9 );
+        gamma_counts.erase( begin(gamma_counts) );
       
       auto meas = make_shared<Measurement>();
       meas->detector_name_ = RspId_str;
@@ -252,9 +252,9 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
       meas->occupied_ = OccupancyStatus::NotOccupied;
       meas->sample_number_ = 0;
       
-      // The XML doesnt contain live/real time, but 2 seconds is my best guess based on one file.
-      meas->live_time_ = 2.0f;
-      meas->real_time_ = 2.0f;
+      // The XML doesnt contain live/real time, but 1 seconds is my best guess based on one file.
+      meas->live_time_ = 1.0f;
+      meas->real_time_ = 1.0f;
       
       measurements_.push_back( meas );
     }//for( loop over <SegmentResults> elements )
