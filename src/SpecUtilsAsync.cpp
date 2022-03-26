@@ -107,7 +107,6 @@ namespace SpecUtilsAsync
   ThreadPool::~ThreadPool()
   {
     join();
-    
 #if( defined(ThreadPool_USING_WT) )
     std::unique_lock<std::mutex> lock( sm_npool_mutex );
     sm_npools -= 1;
@@ -231,7 +230,15 @@ namespace SpecUtilsAsync
         ++m_nJobsLeft;
       }
       
-      io.post( std::bind(&ThreadPool::dowork, this, worker) );
+      // Starting with Wt commit e3726036 (https://github.com/emweb/wt/commit/e372603613022094729f81374be98a4542446d87)
+      //  (Mar 30, 2016) `Wt::WIOService::post(...)` started posting to a strand, so only a single
+      //  posted function would execute at a time.  This means if we were to post to this strand
+      //  and create a ThreadPool from within another ThreadPools workers, things will deadlock.
+      //  So instead, because WIOService inherits from boost::asio::io_service we will use
+      //  `boost::asio::io_service::post` to post the work
+      io.boost::asio::io_service::post( [this,worker](){
+        this->dowork(worker);
+      } );
     }else
     {
       m_nonPostedWorkers.push_back( std::bind( &ThreadPool::doworkasync, this, worker ) );
