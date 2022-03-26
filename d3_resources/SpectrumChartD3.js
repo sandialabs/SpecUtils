@@ -49,9 +49,6 @@ Feature TODO list (created 20160220):
 SpectrumChartD3 = function(elem, options) {
   var self = this;
 
-  // Add any polyfills needed to run D3 code
-  browserPolyfill();
-
   this.chart = typeof elem === 'string' ? document.getElementById(elem) : elem; 
 
   this.cx = this.chart.clientWidth;
@@ -487,81 +484,6 @@ SpectrumChartD3 = function(elem, options) {
 registerKeyboardHandler = function(callback) {
   var callback = callback;
   d3.select(window).on("keydown", callback);
-}
-
-/**
- * Adds polyfills needed to run D3 code on older browsers such as IE11.
- */
-browserPolyfill = function() {
-
-  // Thanks to: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign
-  //  Christian: Added to support Object.assign(...) method for IE11
-  if (typeof Object.assign != 'function') {
-    // Must be writable: true, enumerable: false, configurable: true
-    Object.defineProperty(Object, "assign", {
-      value: function assign(target, varArgs) { // .length of function is 2
-        'use strict';
-        if (target == null) { // TypeError if undefined or null
-          throw new TypeError('Cannot convert undefined or null to object');
-        }
-  
-        var to = Object(target);
-  
-        for (var index = 1; index < arguments.length; index++) {
-          var nextSource = arguments[index];
-  
-          if (nextSource != null) { // Skip over if undefined or null
-            for (var nextKey in nextSource) {
-              // Avoid bugs when hasOwnProperty is shadowed
-              if (Object.prototype.hasOwnProperty.call(nextSource, nextKey)) {
-                to[nextKey] = nextSource[nextKey];
-              }
-            }
-          }
-        }
-        return to;
-      },
-      writable: true,
-      configurable: true
-    });
-  }
-
-  // Thanks to: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/log10
-  //  Christian: Added to support Math.log10(...) method for IE11
-  Math.log10 = Math.log10 || function(x) {
-    return Math.log(x) * Math.LOG10E;
-  };
-
-  // Thanks to: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/endsWith
-  //  Christian: Added to support the String method endsWith(...)
-  if (!String.prototype.endsWith) {
-    String.prototype.endsWith = function(search, this_len) {
-      if (this_len === undefined || this_len > this.length) {
-        this_len = this.length;
-      }
-      return this.substring(this_len - search.length, this_len) === search;
-    };
-  }
-
-  // Thank to: https://developer.mozilla.org/en-US/docs/Web/API/ChildNode/remove
-  //  from:https://github.com/jserz/js_piece/blob/master/DOM/ChildNode/remove()/remove().md
-  //  Christian: Added to support the remove(...) method of HTML Element nodes
-(function (arr) {
-  arr.forEach(function (item) {
-    if (item.hasOwnProperty('remove')) {
-      return;
-    }
-    Object.defineProperty(item, 'remove', {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: function remove() {
-        if (this.parentNode !== null)
-          this.parentNode.removeChild(this);
-      }
-    });
-  });
-})([Element.prototype, CharacterData.prototype, DocumentType.prototype]);
 }
 
 
@@ -6696,7 +6618,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
             yRangePx: pathsAndRange.yRangePx,
             color: peakColor,
             isOutline: isOutline,
-            isFill: isFill
+            isFill: isFill,
+            peak: peak
       });
 
       path/* .attr("class", "peak") */
@@ -10903,6 +10826,15 @@ SpectrumChartD3.prototype.highlightPeak = function( peakElem, highlightLabelTo )
     self.highlightLabel(this,true);
   });
 }//SpectrumChartD3.prototype.highlightPeak = ...
+
+
+/** Highlights a peak -specified by energy, as if you had moused over it. */
+SpectrumChartD3.prototype.highlightPeakAtEnergy = function(energy) {
+  const self = this;
+  this.peakVis.select('path[data-energy="' + energy.toFixed(2) + '"]').each( function(){
+    self.highlightPeak( this, true );
+  });
+}//SpectrumChartD3.prototype.highlightPeakAtEnergy
 
 
 SpectrumChartD3.prototype.unhighlightPeak = function(highlightedPeak) {
