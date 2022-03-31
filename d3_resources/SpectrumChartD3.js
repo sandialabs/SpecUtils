@@ -15,7 +15,7 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
    License along with this library; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-   As of 20210623 this file is 11334 lines long!  It is not allowed to grow, and even with fixes
+   As of 20220331 this file is 11255 lines long!  It is not allowed to grow, and even with fixes
    or feature additions, we must refactor and improve code to keep LOC this size or smaller
    (e.g., things are out of hand, lets keep it from getting worse).
  
@@ -8961,28 +8961,20 @@ SpectrumChartD3.prototype.redrawYAxis = function() {
 }
 
 SpectrumChartD3.prototype.setYAxisMinimum = function( minimum ) {
-  var self = this;
-
-  const maximum = self.yScale.domain()[0];
-
-  self.yScale.domain([maximum, minimum]);
-  self.redrawYAxis()();
+  const maximum = this.yScale.domain()[0];
+  this.yScale.domain([maximum,minimum]);
+  this.redrawYAxis()();
 }
 
 SpectrumChartD3.prototype.setYAxisMaximum = function( maximum ) {
-  var self = this;
-
-  const minimum = self.yScale.domain()[1];
-
-  self.yScale.domain([maximum, minimum]);
-  self.redrawYAxis()();
+  const minimum = this.yScale.domain()[1];
+  this.yScale.domain([maximum,minimum]);
+  this.redrawYAxis()();
 }
 
 SpectrumChartD3.prototype.setYAxisRange = function( minimum, maximum ) {
-  var self = this;
-
-  self.yScale.domain([maximum, minimum]);
-  self.redrawYAxis()();
+  this.yScale.domain([maximum,minimum]);
+  this.redrawYAxis()();
 }
 
 SpectrumChartD3.prototype.handleMouseMoveZoomInY = function () {
