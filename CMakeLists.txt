@@ -217,8 +217,11 @@ set_target_properties( SpecUtils PROPERTIES
 
 
 if( SpecUtils_USE_WT_THREADPOOL )
-  include( ${CMAKE_SOURCE_DIR}/cmake/FindWt.cmake)
-  target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+  if( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+    message( FATAL "Wt not found; either find before adding SpecUtils, or set SpecUtils_USE_WT_THREADPOOL OFF" )
+  else( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+    target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+  endif( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
 endif( SpecUtils_USE_WT_THREADPOOL )
 
 
