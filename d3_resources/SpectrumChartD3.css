@@ -1,10 +1,14 @@
 
 /* In order to dynamically set color values from within Wt, we cant specify colors
-   in the CSS file; so this fil is the same as SpectrumChartD3.js, just without
+   in the CSS file; so this fiel is the same as SpectrumChartD3.js, just without
    color values for things we will want to maybe dynamically change.
 */
 
 /*******************/
+.SpectrumChartD3 {
+  /* This is the <svg> element. */
+}
+
 .roiDragBox {
   fill-opacity: 0.2;
   stroke-width: 1px;
@@ -175,8 +179,8 @@
   fill: none;
   stroke: steelblue;
 }
-.title { font-size: 1.5em; }
-.chart {
+.SpectrumChartD3 .title { font-size: 1.5em; }
+.SpectrumChartD3 .chart {
   background-color: #F7F2C5;
   width: 80%;
   margin-left: auto;

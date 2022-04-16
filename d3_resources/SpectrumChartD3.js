@@ -275,6 +275,7 @@ SpectrumChartD3 = function(elem, options) {
   this.vis = d3.select(this.chart).append("svg")
       .attr("width",  this.cx)
       .attr("height", this.cy)
+      .attr("class", "SpectrumChartD3" )
       .append("g")
       .attr("transform", "translate(" + this.padding.leftComputed + "," + this.padding.topComputed + ")");
 
@@ -1226,13 +1227,12 @@ SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
   var titleh = 0;
   if( (title == null || typeof title !== 'string') || title.length === 0 ){
     this.options.title = null;
-    this.svg.select('#chartTitle').remove();
+    this.svg.select('.title').remove();
   } else {
     if( this.options.title )
       titleh = this.svg.selectAll(".title").text( title ).node().getBBox().height;
     else
       titleh = this.svg.append("text")
-          .attr("id", "chartTitle")
           .attr("class", "title")
           .text(title)
           .attr("x", this.cx/2)
@@ -1688,6 +1688,10 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
   if( !self.roiDragBoxes ){
     //self.roiDragBoxes will hold the vertical line and little box and stuff
     //  We will move self.roiDragBoxes as we move the mouse
+    // TODO: maybe make SVG rects for the entire area of the drag, and use that to control checking
+    //       if we need to modify the mouse cursor, or to detect dragging start (e.g., handleStartDragRoi())
+    //       or whatever.  Probably simplify the logic quite a bit, as well as provide an easy way
+    //       to adjust the size of the potential drag-region for when its a touch that starts things
     self.roiDragBoxes = [];
     self.roiDragLines = [];
     
