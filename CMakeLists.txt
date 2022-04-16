@@ -2,7 +2,7 @@ if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of CMAKE_MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
 endif()
 
-cmake_minimum_required(VERSION 3.1...3.13)
+cmake_minimum_required(VERSION 3.1...3.20)
 
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
