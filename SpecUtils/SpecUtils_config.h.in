@@ -38,7 +38,9 @@
 
 #cmakedefine01 SpecUtils_USE_SIMD
 
-#define BOOST_DATE_TIME_NO_LIB
+#ifndef BOOST_DATE_TIME_NO_LIB
+  #define BOOST_DATE_TIME_NO_LIB
+#endif
 
 #if( defined(_WIN32) && defined(_MSC_VER) )
 #include <stdio.h>

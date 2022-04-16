@@ -5749,7 +5749,8 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::DetectiveEx;
     else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
       detector_type_ = DetectorType::DetectiveEx100;
-    else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
+    else if( icontains(instrument_model_,"uDetective")
+            || (icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro")) )
       detector_type_ = DetectorType::MicroDetective;
     else if( iequals_ascii(instrument_model_,"Detective X") )
       detector_type_ = DetectorType::DetectiveX;
