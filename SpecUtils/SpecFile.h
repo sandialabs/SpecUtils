@@ -250,14 +250,27 @@ enum class DetectorType : int
   
   /** Used for the NG and NGH, and R400 models since same crystal size (NGH has neutron
       tube)
+      R400 {NGH, UCLS-NGH, ULK-NG, ULK-NGH, UW-NG, UW-NGH, UW-ULCS-NG, UW-ULCS-NG}: NaI 35 x 51,
+      with various He-3 or LED options.
   */
   IdentiFinderNG,
   
+  /** IdentiFinder-LG
+      R400 LG: LaBr, 30 x 30 mm, GM, LED
+   */
   IdentiFinderLaBr3,
   
+  /** R400 T1: NaI 23 x 21mm - Tungsten shielded, GM
+      R400 T2: NaI 23 x 21mm - Tungsten shielded, GM
+   */
   IdentiFinderTungsten,
   
+  /** R500 UL-LG: 38 x 38mm, LaBr, GM, LED
+      R500 UL-LGH: 38 x 38mm, LaBr, GM
+   */
   IdentiFinderR500NaI,
+  
+  /** R500 UL-LG: 38 x 38mm, LaBr, GM, LED */
   IdentiFinderR500LaBr,
   
   IdentiFinderUnknown,
