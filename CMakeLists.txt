@@ -2,7 +2,7 @@ if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of CMAKE_MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
 endif()
 
-cmake_minimum_required(VERSION 3.1...3.20)
+cmake_minimum_required(VERSION 3.1...3.22)
 
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
@@ -55,11 +55,13 @@ if( SpecUtils_JAVA_SWIG )
   SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
 endif( SpecUtils_JAVA_SWIG )
 
-find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
 
-if( NOT Boost_FOUND )
-  message(FATAL_ERROR "Couldnt Find Boost")
-endif( NOT Boost_FOUND )
+if( NOT DEFINED boost_SOURCE_DIR )
+  find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
+  if( NOT Boost_FOUND )
+    message(FATAL_ERROR "Couldnt Find Boost")
+  endif( NOT Boost_FOUND )
+endif( NOT DEFINED boost_SOURCE_DIR )
 
 
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
@@ -217,8 +219,18 @@ set_target_properties( SpecUtils PROPERTIES
 
 
 if( SpecUtils_USE_WT_THREADPOOL )
-  include( ${CMAKE_SOURCE_DIR}/cmake/FindWt.cmake)
-  target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+  if( DEFINED wt_SOURCE_DIR )
+    target_include_directories( SpecUtils PUBLIC "${wt_SOURCE_DIR}/src" "${wt_BINARY_DIR}" )
+    
+    # We'll need to pick up all the includes Wt/WApplication will require
+    target_link_libraries( SpecUtils PUBLIC Boost::any Boost::asio Boost::signals2 )
+  else( DEFINED wt_SOURCE_DIR )
+    if( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+      message( FATAL "Wt not found; either find before adding SpecUtils, or set SpecUtils_USE_WT_THREADPOOL OFF" )
+    else( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+      target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+    endif( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+  endif( DEFINED wt_SOURCE_DIR )
 endif( SpecUtils_USE_WT_THREADPOOL )
 
 
@@ -226,6 +238,10 @@ if( SpecUtils_PYTHON_BINDINGS )
   #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
   target_link_libraries( SpecUtils PUBLIC ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
+
+if( DEFINED boost_SOURCE_DIR )
+  target_link_libraries( SpecUtils PUBLIC Boost::date_time Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )
+endif( DEFINED boost_SOURCE_DIR )
 
 
 if( SpecUtils_JAVA_SWIG )
