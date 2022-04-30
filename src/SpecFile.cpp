@@ -177,13 +177,13 @@ namespace
       const size_t aligendN = size - (size % 4);
       for( size_t i = 0; i < aligendN; i += 4 )
       {
-        _mm_storeu_ps(&result[i],
-                      _mm_add_ps(_mm_loadu_ps(&result[i]),
+        _mm_storeu_ps(&results[i],
+                      _mm_add_ps(_mm_loadu_ps(&results[i]),
                                  _mm_loadu_ps(&curraray[i])));
       }
       
       for( size_t i = aligendN; i < size; ++i )
-        result[i] += curraray[i];
+        results[i] += curraray[i];
 #else
       for( size_t i = 0; i < size; ++i )
         results[i] += curraray[i];
