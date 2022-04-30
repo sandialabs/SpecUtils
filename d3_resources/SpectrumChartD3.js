@@ -81,7 +81,7 @@ SpectrumChartD3 = function(elem, options) {
   if( (typeof this.options.scaleBackgroundSecondary) !== 'boolean' ) this.options.scaleBackgroundSecondary = false;
   if( (typeof this.options.noEventsToServer) !== 'boolean' ) this.options.noEventsToServer = false;
 
-  if( (typeof this.options.doubleClickDelay) !== 'number' ) this.options.doubleClickDelay = 500;
+  if( (typeof this.options.doubleClickDelay) !== 'number' ) this.options.doubleClickDelay = 200;
   
   this.options.refLineTopPad = 30;
   
