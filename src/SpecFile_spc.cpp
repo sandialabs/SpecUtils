@@ -150,39 +150,6 @@ bool SpecFile::load_spc_file( const std::string &filename )
 }//bool load_spc_file( const std::string &filename )
   
   
-
-bool SpecFile::load_iaea_file( const std::string &filename )
-{
-  reset();
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
-#ifdef _WIN32
-  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  if( !file.is_open() )
-    return false;
-  
-  uint8_t firstbyte;
-  file.read( (char *) (&firstbyte), 1 );
-  file.seekg( 0, ios::beg );
-  
-  if( firstbyte != '$' )
-  {
-    //    cerr << "IAEA file '" << filename << "'does not have expected first chacter"
-    //         << " of '$', firstbyte=" << int(firstbyte)
-    //         << " (" << char(firstbyte) << ")" << endl;
-    return false;
-  }//if( wrong first byte )
-  
-  const bool loaded = load_from_iaea( file );
-  
-  if( loaded )
-    filename_ = filename;
-  
-  return loaded;
-}//bool load_iaea_file(...)
   
   
 bool SpecFile::load_from_iaea_spc( std::istream &input )

@@ -65,6 +65,119 @@ namespace
 namespace SpecUtils
 {
   
+bool SpecFile::load_iaea_file( const std::string &filename )
+{
+  reset();
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
+  ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
+  if( !file.is_open() )
+    return false;
+  
+  uint8_t first_bytes[4] = { 0, 0, 0, 0 };
+  file.read( (char *) (&first_bytes), 4 );
+  file.seekg( 0, ios::beg );
+  
+  // Usually the '$' character is the first character in the file, however, there may be a
+  //  Byte Order Mark (BOM) indicating UTF-8, UTF-16 little-endian, or UTF-16 big-endian (We'll ignore
+  const bool is_ascii = (first_bytes[0] == '$');
+  
+  const bool is_utf8 = ((first_bytes[0] == 0xEF)
+                        && (first_bytes[1] == 0xBB)
+                        && (first_bytes[2] == 0xBF)
+                        && (first_bytes[3] == '$'));
+  
+  const bool is_utf16_big_endian = ((first_bytes[0] == 0xFE)
+                                    && (first_bytes[1] == 0xFF)
+                                    && (first_bytes[3] == '$'));
+  
+  const bool is_utf16_little_endian = ((first_bytes[0] == 0xFF)
+                                       && (first_bytes[1] == 0xFE)
+                                       && (first_bytes[2] == '$'));
+  
+  // TODO: accept UTF-32 (BE) = {0x00, 0x00, 0xFE, 0xFF }, UTF-32 (LE) = { 0xFF, 0xFE, 0x00, 0x00 }
+  
+  if( !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
+  {
+    //    cerr << "IAEA file '" << filename << "'does not have expected first character"
+    //         << " of '$', firstbyte=" << int(first_bytes[0])
+    //         << " (" << char(first_bytes[0]) << ")" << endl;
+    return false;
+  }//if( (first_bytes[0] != '$') && (first_bytes[2] != '$') )
+  
+  
+  bool loaded = false;
+  
+  if( is_ascii || is_utf8 )
+  {
+    if( is_utf8 )
+      file.seekg( 3, ios::beg );
+    
+    loaded = load_from_iaea( file );
+  }else if( is_utf16_big_endian || is_utf16_little_endian )
+  {
+    file.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = file.tellg();
+    file.seekg( 2, ios::beg );
+    const size_t filelen = static_cast<size_t>( 0 + eof_pos );
+    
+    // If larger than 1 MB, this probably isnt an ASCII SPE file
+    if( filelen > 1024*1024 || filelen <= 256 )
+      return false;
+    
+    const size_t content_len_bytes = (filelen - 2) + (filelen % 2);
+    const size_t content_len_wchar = content_len_bytes / 2;
+    
+    assert( (content_len_bytes % 2) == 0 );
+    assert( 2*content_len_wchar == content_len_bytes );
+    
+    stringstream file_contents_utf8;
+    
+    // Read file contents into wide-string, and then convert to UTF-8; we'll do it scoped to release
+    //  memory as we can.
+    {//begin read wide and convert to utf-8
+      std::wstring wide_contents( content_len_wchar, wchar_t('\0') );
+      
+      std::vector<char> raw_data;
+      file.unsetf(ios::skipws);
+      raw_data.resize( content_len_bytes, '\0' );
+      
+      //
+      if( !file.read( &raw_data.front(), static_cast<streamsize>(filelen - 2) ) )
+      {
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+        log_developer_error( __func__, "Error reading UTF-16 file contents into memory" );
+#endif
+        return false;
+      }//if( !file.read( &raw_data.front(), static_cast<streamsize>(filelen - 2) ) )
+      
+      
+      for( size_t i = 0; (i + 1) < raw_data.size(); i += 2 )
+      {
+        wchar_t lower_byte = is_utf16_little_endian ? raw_data[i] : raw_data[i+1];
+        wchar_t upper_byte = is_utf16_little_endian ? raw_data[i+1] : raw_data[i];
+        wchar_t &val = wide_contents[i/2];
+        val = (lower_byte | (upper_byte << 1));
+      }
+      
+      file_contents_utf8 = stringstream( convert_from_utf16_to_utf8(wide_contents) );
+    }//end read wide and convert to utf-8
+
+    
+    loaded = load_from_iaea( file_contents_utf8 );
+  }//if( is_ascii ) / else
+  
+  if( loaded )
+    filename_ = filename;
+  
+  return loaded;
+}//bool load_iaea_file(...)
+
+
 bool SpecFile::load_from_iaea( std::istream& istr )
 {
   //channel data in $DATA:
