@@ -34,7 +34,7 @@ using namespace std;
 
 /**
 TODO: If a file opens successfully, go through and try all the different accessors and modifiers.
-TODO: when testin writing output, try different combinations of sample and detector numbers.
+TODO: when testing writing output, try different combinations of sample and detector numbers.
 */
 
 void test_write_output( const SpecUtils::SpecFile &spec )
@@ -265,98 +265,15 @@ int run_file_parse_fuzz( const uint8_t *data, size_t size )
     if( spec.load_from_aram( strm ) )
       test_write_output( spec );
   }
+
   
-  
-  /*
-   for( SpecUtils::ParserType parser_type = SpecUtils::ParserType(0);
-   static_cast<int>(parser_type) < static_cast<int>(SpecUtils::ParserType::Auto);
-   parser_type = SpecUtils::ParserType(static_cast<int>(parser_type) + 1 ) )
-   {
-   
-   
-   switch( parser_type )
-   {
-   case ParserType::N42_2006:
-   case ParserType::N42_2012:
-   success = spec.load_N42_from_data( data, data + size );
-   break;
-   
-   case ParserType::Spc:
-   success = load_spc_file( filename );
-   break;
-   
-   case ParserType::Exploranium:
-   success = load_binary_exploranium_file( filename );
-   break;
-   
-   case ParserType::Pcf:
-   success = load_pcf_file( filename );
-   break;
-   
-   case ParserType::Chn:
-   success = load_chn_file( filename );
-   break;
-   
-   case ParserType::SpeIaea:
-   success = load_iaea_file( filename );
-   break;
-   
-   case ParserType::TxtOrCsv:
-   success = load_txt_or_csv_file( filename );
-   break;
-   
-   case ParserType::Cnf:
-   success = load_cnf_file( filename );
-   break;
-   
-   case ParserType::TracsMps:
-   success = load_tracs_mps_file( filename );
-   break;
-   
-   case ParserType::Aram:
-   success = load_aram_file( filename );
-   break;
-   
-   case ParserType::SPMDailyFile:
-   success = load_spectroscopic_daily_file( filename );
-   break;
-   
-   case ParserType::AmptekMca:
-   success = load_amptek_file( filename );
-   break;
-   
-   case ParserType::OrtecListMode:
-   success = load_ortec_listmode_file( filename );
-   break;
-   
-   case ParserType::LsrmSpe:
-   success = load_lsrm_spe_file( filename );
-   break;
-   
-   case ParserType::Tka:
-   success = load_tka_file( filename );
-   break;
-   
-   case ParserType::MultiAct:
-   success = load_multiact_file( filename );
-   break;
-   
-   case ParserType::Phd:
-   success = load_phd_file( filename );
-   break;
-   
-   case ParserType::Lzs:
-   success = load_lzs_file( filename );
-   break;
-   
-   case ParserType::MicroRaider:
-   success = load_micro_raider_file( filename );
-   break;
-   
-   case ParserType::Auto:
-   break;
-   };//switch( parser_type )
-   */
-  
+  {
+    SpecUtils::SpecFile spec;
+    stringstream strm( datastr, ios_base::in );
+    if( spec.load_from_xml_scan_data( strm ) )
+      test_write_output( spec );
+  }
+
+
   return 0;
 }

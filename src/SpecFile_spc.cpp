@@ -927,7 +927,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     
     
     if( summed->contained_neutron_ )
-      output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
+      output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int64_t>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
     
     assert( summed->energy_calibration_ );
     
@@ -1685,12 +1685,15 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   const vector<float> &channel_data = *summed->gamma_counts();
   if( type == IntegerSpcType )
   {
+#define FLT_UINT_MAX_PLUS1 static_cast<float>((1 + (std::numeric_limits<uint32_t>::max()/2)) * 2.0f)
+    
     vector<uint32_t> int_channel_data( n_channel );
     for( uint16_t i = 0; i < n_channel; ++i )
     {
       float counts = std::max( 0.0f, std::round(channel_data[i]) );
-      counts = std::min( counts, static_cast<float>(std::numeric_limits<uint32_t>::max()) );
-      int_channel_data[i] = static_cast<uint32_t>( counts );
+      const bool can_convert = ( (counts < FLT_UINT_MAX_PLUS1)
+                                 && (counts - static_cast<float>(std::numeric_limits<uint32_t>::max()) > -1.0f) );
+      int_channel_data[i] = can_convert ? static_cast<uint32_t>( counts ) : std::numeric_limits<uint32_t>::max();
     }
     output.write( (const char *)&int_channel_data[0], 4*n_channel );
   }else

@@ -122,6 +122,8 @@ namespace  SpecUtils
    "/"                      --> ""
    "."                      --> ""
    ".."                     --> ""
+   
+   May throw exception, although very unlikely.
    */
   std::string filename( const std::string &path_and_name );
   
@@ -159,6 +161,8 @@ namespace  SpecUtils
    
    This function operated in the passed in path string, not the absolute
    path on the filesystem.
+   
+   May throw exception, although rare and not expected to.
    */
   std::string parent_path( const std::string &path );
   

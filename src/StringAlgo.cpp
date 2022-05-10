@@ -893,23 +893,32 @@ namespace SpecUtils
   }//size_t utf8_str_iterator( IterType& it, const IterType& last )
   
   
-  size_t utf8_str_len( const char * const str, size_t str_size_bytes )
+  size_t utf8_str_len( const char * const str, const size_t str_size_bytes )
   {
     size_t len = 0;
-    
-    if( !str_size_bytes )
+    if( !str )
+      return len;
+  
+    const char * const end = str + str_size_bytes;
+    for( const char *ptr = str; ptr != end; utf8_iterate(ptr, end) )
     {
-      for( const char *ptr = str; *ptr; utf8_iterate(ptr) )
-        ++len;
-    }else
-    {
-      for( const char *ptr = str, * const end = str + str_size_bytes;
-          ptr != end; utf8_iterate(ptr, end) )
-        ++len;
+      ++len;
     }
-    
+  
     return len;
   }//size_t utf8_str_len( const char * const str, size_t str_size_bytes )
+
+  size_t utf8_str_len( const char * const str )
+  {
+    size_t len = 0;
+    if( !str )
+      return len;
+  
+    for( const char *ptr = str; *ptr; utf8_iterate(ptr) )
+      ++len;
+  
+    return len;
+  }
   
   
   void utf8_limit_str_size( std::string &str, const size_t max_bytes )
@@ -1439,7 +1448,7 @@ std::string convert_from_utf16_to_utf8(const std::wstring &winput)
 #ifdef _WIN32
   std::string answer;
   int requiredSize = WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, 0, 0, 0, 0);
-  if(requiredSize > 0)
+  if( requiredSize > 0 )
   {
     std::vector<char> buffer(requiredSize);
     WideCharToMultiByte(CP_UTF8, 0, winput.c_str(), -1, &buffer[0], requiredSize, 0, 0);
@@ -1447,11 +1456,19 @@ std::string convert_from_utf16_to_utf8(const std::wstring &winput)
   }
   return answer;
 #else
+  
+  try
+  {
 #if( HAS_STD_CODECVT )
-  return std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes( winput );
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes( winput );
 #else
-  return boost::locale::conv::utf_to_utf<char>(winput.c_str(), winput.c_str() + winput.size());
+    return boost::locale::conv::utf_to_utf<char>(winput.c_str(), winput.c_str() + winput.size());
 #endif
+  }catch( std::exception & )
+  {
+  }
+  
+  return "";
 #endif
 }//std::string convert_from_utf16_to_utf8(const std::wstring &winput)
   
@@ -1471,11 +1488,19 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
   
   return answer;
 #else
+  
+  try
+  {
 #if( HAS_STD_CODECVT )
-  return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(input);
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(input);
 #else
-  return boost::locale::conv::utf_to_utf<wchar_t>(input.c_str(), input.c_str() + input.size());
+    return boost::locale::conv::utf_to_utf<wchar_t>(input.c_str(), input.c_str() + input.size());
 #endif
+  }catch( std::exception & )
+  {
+  }
+  
+  return L"";
 #endif
 }//std::wstring convert_from_utf8_to_utf16( const std::string &str );
   

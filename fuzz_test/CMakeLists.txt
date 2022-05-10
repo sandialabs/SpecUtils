@@ -15,3 +15,7 @@ set_target_properties( file_parse_fuzz PROPERTIES CXX_STANDARD 11 CXX_STANDARD_R
 add_executable( run_one_file_parse run_one_file_parse.cpp fuzz_interface.h fuzz_interface.cpp )
 target_link_libraries( run_one_file_parse PRIVATE SpecUtils )
 set_target_properties( run_one_file_parse PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+
+add_executable( fuzz_str_utils fuzz_str_utils.cpp )
+target_link_libraries( fuzz_str_utils PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Clang>:-fsanitize=fuzzer,address,undefined> )
+set_target_properties( run_one_file_parse PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )

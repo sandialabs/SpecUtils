@@ -165,15 +165,25 @@ namespace  SpecUtils
   //
   /** \brief Counts the number of UTF8 encoded characters of the string,
    not the number of bytes the string length is.
-   
+ 
    \param str input UTF8 encoded string.
+              Note that a null character will not terminate counting; it will
+              count until \p str_size_bytes.
+              Invalid UTF-8 characters (ex, '\0', not properly ended, etc)
+              will be counted as characters.
    \param str_size_bytes Specifies how many bytes the string is
-   (ex: str+str_size_bytes will typically point to a '\0' character, but
-   doesnt have to).  If <em>str_size_bytes</em> is 0, then
-   'str' must must be null-terminated, and length will be determined from
-   that.
+   (ex: `str + str_size_bytes` will typically point to a '\0' character, but
+   doesnt have to).
    */
-  size_t utf8_str_len( const char * const str, size_t str_size_bytes );
+  size_t utf8_str_len( const char * const str, const size_t str_size_bytes );
+
+
+  /** \brief Counts the number of UTF8 encoded characters of the string,
+   not the number of bytes the string length is.
+ 
+   \param str input UTF8 encoded string that MUST be null terminated.
+   */
+  size_t utf8_str_len( const char * const str );
   
   /** \brief Reduces string size to the specified number of bytes, or the
    nearest valid smaller size, where the last character is a valid UTF8
@@ -329,6 +339,8 @@ namespace  SpecUtils
     all the file path functions encode everything as UTF-8, however on Windows
     you must call the "wide" version of functions related to file paths to work
     correctly (the narrow versions use the current code range, not UTF-8).
+   
+   If input is improperly encoded, or other error, will return empty string.
     */
    std::string convert_from_utf16_to_utf8( const std::wstring &wstr );
  
@@ -338,6 +350,8 @@ namespace  SpecUtils
   so if you want to open a file path given by one of the functions in this
   library on Windows, you should first convert it to UTF-16 before calling into
   the C or C++ standard library functions, or Windows provided functions.
+   
+  If input is improperly encoded, or other error, will return empty string.
   */
   std::wstring convert_from_utf8_to_utf16( const std::string &str );
  
