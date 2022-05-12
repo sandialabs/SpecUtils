@@ -534,7 +534,7 @@ namespace SpecUtils
           int value;
           if( stringstream(time_string.substr(i,4)) >> value )
           {
-            //XXX - I havent yet determined what year this issue starts at
+            //TODO: I havent yet determined what year this issue starts at
             if( value > 2030 && value < 2100 )
             {
               char buffer[8];
@@ -682,27 +682,39 @@ namespace SpecUtils
       std::chrono::time_point<ClockType> tp{};
       std::istringstream input(timestr);
 
-      if( (input >> date::parse(formats[i], tp)) )
+      try
       {
-        //time_t tt = ClockType::to_time_t( tp );
-        //return boost::posix_time::from_time_t( tt ) + fraction + boost::gregorian::years( add100Years ? 100 : 0 );
-        
-        date::sys_days dp = date::floor<date::days>(tp);
-        auto ymd = date::year_month_day{dp};
-        
-        if( add100Years  )
-          ymd += date::years(100);
-        
-        auto time = date::make_time( std::chrono::duration_cast<std::chrono::microseconds>(tp-dp) );
-        if( static_cast<int>(ymd.year()) < 1400 || static_cast<int>(ymd.year()) >= 10000 )  //protect against boost throwing an exception
-          continue;
-        
-        const boost::gregorian::date bdate( static_cast<int>(ymd.year()),
-                                            static_cast<unsigned int>(ymd.month()),
-                                            static_cast<unsigned int>(ymd.day()));
-        const boost::posix_time::time_duration btime( time.hours().count(), time.minutes().count(), time.seconds().count() );
-        
-        return boost::posix_time::ptime(bdate, btime) + fraction;
+        //From fuzz testing, date::parse can throw an exception of type
+        //  "type std::invalid_argument: stold: no conversion", so we'll use a try catch, in
+        //  addition to the actual test.
+        //  We want to return an invalid date/time, rather than throw an exception from this
+        //  function.
+        //  (note: this was found using the version of the Date library downloaded 20200502 with
+        //         git hash e12095f, so can be re-evaluated when the library is updated.)
+        if( (input >> date::parse(formats[i], tp)) )
+        {
+          //time_t tt = ClockType::to_time_t( tp );
+          //return boost::posix_time::from_time_t( tt ) + fraction + boost::gregorian::years( add100Years ? 100 : 0 );
+          
+          date::sys_days dp = date::floor<date::days>(tp);
+          auto ymd = date::year_month_day{dp};
+          
+          if( add100Years  )
+            ymd += date::years(100);
+          
+          auto time = date::make_time( std::chrono::duration_cast<std::chrono::microseconds>(tp-dp) );
+          if( static_cast<int>(ymd.year()) < 1400 || static_cast<int>(ymd.year()) >= 10000 )  //protect against boost throwing an exception
+            continue;
+          
+          const boost::gregorian::date bdate( static_cast<int>(ymd.year()),
+                                             static_cast<unsigned int>(ymd.month()),
+                                             static_cast<unsigned int>(ymd.day()));
+          const boost::posix_time::time_duration btime( time.hours().count(), time.minutes().count(), time.seconds().count() );
+          
+          return boost::posix_time::ptime(bdate, btime) + fraction;
+        }
+      }catch( std::exception & )
+      {
       }
 #else
       struct tm t = std::tm();
@@ -851,7 +863,7 @@ namespace SpecUtils
           unsigned long value;
           const auto result = std::from_chars(str_start, str_end, value);
           if( (bool)result.ec || (result.ptr != str_end) )
-            throw runtime_error( "Invalid hours  or minutes field: '" + std::string(str_start,str_end) + "'" );
+            throw runtime_error( "Invalid hours or minutes field: '" + std::string(str_start,str_end) + "'" );
 #else
           const unsigned long value = std::stoul( std::string(str_start,str_end), nullptr, 10 );
 #endif

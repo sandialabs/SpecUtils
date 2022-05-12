@@ -56,6 +56,7 @@ void test_write_output( const SpecUtils::SpecFile &spec )
     try
     {
       stringstream strm;
+      strm.ignore( std::numeric_limits<std::streamsize>::max() - 256 ); //dont bother storing stuff to memory
       spec.write( strm, sample_numbers, detnums, type );
     }catch( std::exception & )
     {

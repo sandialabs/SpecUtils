@@ -512,7 +512,7 @@ std::string parent_path( const std::string &path )
   err = _wmakepath_s( path_buffer.get(), maxpathlen, drive, dir.get(), nullptr, nullptr );
   
   if( err != 0 )
-    throw runtime_error( "Failed to make pathin parent_path" );
+    throw runtime_error( "Failed to make path in parent_path" );
   
   string answer = convert_from_utf16_to_utf8( path_buffer.get() );
   
@@ -535,6 +535,9 @@ std::string parent_path( const std::string &path )
   memcpy( &(pathvec[0]), path.c_str(), path.size() + 1 );
   
   char *bname = basename( &(pathvec[0]) );
+  
+  if( !bname )
+    throw runtime_error( "Failed to make path in parent_path" );
   
   int nparent = 0;
   while( strcmp(bname,"..") == 0 )
@@ -559,6 +562,9 @@ std::string parent_path( const std::string &path )
   //dirname is supposedly thread safe, and also you arent supposed to free what
   //  it returns
   char *parname = dirname( &(pathvec[0]) );
+
+  if( !parname )
+    throw runtime_error( "Failed to make dirname in parent_path" );
   
   string answer = parname;
   
@@ -1476,41 +1482,50 @@ void load_file_data( const char * const filename, std::vector<char> &data )
   
 bool likely_not_spec_file( const std::string &fullpath )
 {
-  const std::string extension = SpecUtils::file_extension( fullpath );
-  const std::string filename = SpecUtils::filename( fullpath );
-  const std::string dir = SpecUtils::parent_path( fullpath );
-  
-  const char * const bad_exts[] = { ".jpg", ".jpeg", ".zip", ".docx", ".png",
-    ".pdf", ".html", ".xtk3d", ".xtk", ".doc", /*".txt",*/ ".An1", ".rpt",
-    ".ufo", ".bmp", ".IIF", ".xls", ".xlsx", ".ds_store", ".kmz", ".msg",
-    ".exe", ".jp2", ".wmv", /*".gam",*/ ".pptx", ".htm", ".ppt", ".mht",
-    ".ldb", ".lis", ".zep", ".ana", ".eft", ".clb", ".lib", ".wav", ".gif",
-    ".wmf", /*".phd",*/ ".log", ".vi", ".incident", ".tiff", ".cab", ".ANS",
-    ".menc", ".tif", ".psd", ".mdb", ".drill", ".lnk", ".mov", ".rtf", ".shx",
-    ".dbf", ".prj", ".sbn", ".shb", ".inp1", ".bat", ".xps", ".svy", ".ini",
-    ".2", ".mp4", ".sql", ".gz", ".url", ".zipx", ".001", ".002", ".003",
-    ".html", ".sqlite3"
-  };
-  const size_t num_bad_exts = sizeof(bad_exts) / sizeof(bad_exts[0]);
-  
-  for( size_t i = 0; i < num_bad_exts; ++i )
+  try
+  {
+    const std::string extension = SpecUtils::file_extension( fullpath );
+    const std::string filename = SpecUtils::filename( fullpath );
+    const std::string dir = SpecUtils::parent_path( fullpath );
+    
+    const char * const bad_exts[] = { ".jpg", ".jpeg", ".zip", ".docx", ".png",
+      ".pdf", ".html", ".xtk3d", ".xtk", ".doc", /*".txt",*/ ".An1", ".rpt",
+      ".ufo", ".bmp", ".IIF", ".xls", ".xlsx", ".ds_store", ".kmz", ".msg",
+      ".exe", ".jp2", ".wmv", /*".gam",*/ ".pptx", ".htm", ".ppt", ".mht",
+      ".ldb", ".lis", ".zep", ".ana", ".eft", ".clb", ".lib", ".wav", ".gif",
+      ".wmf", /*".phd",*/ ".log", ".vi", ".incident", ".tiff", ".cab", ".ANS",
+      ".menc", ".tif", ".psd", ".mdb", ".drill", ".lnk", ".mov", ".rtf", ".shx",
+      ".dbf", ".prj", ".sbn", ".shb", ".inp1", ".bat", ".xps", ".svy", ".ini",
+      ".2", ".mp4", ".sql", ".gz", ".url", ".zipx", ".001", ".002", ".003",
+      ".html", ".sqlite3"
+    };
+    const size_t num_bad_exts = sizeof(bad_exts) / sizeof(bad_exts[0]);
+    
+    for( size_t i = 0; i < num_bad_exts; ++i )
     if( SpecUtils::iequals_ascii(extension, bad_exts[i]) )
       return true;
-  
-  if( //(filename.find("_AA_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
-     //|| (filename.find("_AN_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
-     filename.find("Neutron.n42") != std::string::npos
-     || filename.find(".xml.XML") != std::string::npos
-     || filename.find("results.xml") != std::string::npos
-     || filename.find("Rebin.dat") != std::string::npos
-     || filename.find("Detector.dat") != std::string::npos
-     || SpecUtils::iends_with( fullpath, ".html")
-     || filename.empty()
-     || filename[0] == '.'
-     || extension.empty()
-     || SpecUtils::file_size(fullpath) < 100
-     )
+    
+    if( //(filename.find("_AA_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
+       //|| (filename.find("_AN_")!=std::string::npos && SpecUtils::iequals_ascii(extension, ".n42") )
+       filename.find("Neutron.n42") != std::string::npos
+       || filename.find(".xml.XML") != std::string::npos
+       || filename.find("results.xml") != std::string::npos
+       || filename.find("Rebin.dat") != std::string::npos
+       || filename.find("Detector.dat") != std::string::npos
+       || SpecUtils::iends_with( fullpath, ".html")
+       || filename.empty()
+       || filename[0] == '.'
+       || extension.empty()
+       || SpecUtils::file_size(fullpath) < 100
+       )
+    {
+      return true;
+    }
+  }catch( std::exception & )
+  {
+    //we only get here when SpecUtils::filename(fullpath) is an invalid file path
     return true;
+  }
   
   return false;
 }//bool likely_not_spec_file( const std::string &file )

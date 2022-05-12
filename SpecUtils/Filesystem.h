@@ -162,7 +162,8 @@ namespace  SpecUtils
    This function operated in the passed in path string, not the absolute
    path on the filesystem.
    
-   May throw exception, although rare and not expected to.
+   May throw exception if input path has illegal characters (e.g., basename(...)
+   (unix) or _wsplitpath_s (win32) fails.
    */
   std::string parent_path( const std::string &path );
   
@@ -173,6 +174,9 @@ namespace  SpecUtils
    ex. "/path/to/some/file.txt" --> ".txt"
    "/path/to/filename"      --> ""
    ".profile"               --> ".profile"
+   
+   May throw exception if input path has illegal characters (e.g., basename(...)
+   (unix) or _wsplitpath_s (win32) fails.
    */
   std::string file_extension( const std::string &path );
   

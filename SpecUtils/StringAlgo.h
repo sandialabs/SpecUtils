@@ -357,7 +357,7 @@ namespace  SpecUtils
  
 
   /** \brief Turns a set of numbers with possible many sub-sequences with values
-   that are adjacent into a convient human-readable string.
+   that are adjacent into a convenient human-readable string.
    
    For sequences such as {0,1,2,3,4,5,10,99,100,101,102,200}, will return a
    human readable string similar to "1-5,10,99-102,200"
@@ -370,9 +370,21 @@ namespace  SpecUtils
   
   
   /** \brief Gives the case-insensitive distance between two strings.
+   
+   \param source Input string one
+   \param source Input string two
+   \param max_str_len The maximum number of characters to consider from
+          \p source or \target.  This function would take
+          (source.size()+1)*(target.size()+1) time and memory, so feeding
+          in large strings on accident could cause excessive memory use, so
+          this parameter keeps that from happening, unless it is explicitly
+          wanted.  Passing a \p max_str_len of zero will cause this function
+          to return 0.  The default value of 128 is arbitrary, but still
+          larger than any of the expected use cases in SpecUtils/InterSpec/Cambio.
    */
   unsigned int levenshtein_distance( const std::string &source,
-                                    const std::string &target );
+                                    const std::string &target,
+                                    const size_t max_str_len = 128 );
   
 }//namespace SpecUtils
 

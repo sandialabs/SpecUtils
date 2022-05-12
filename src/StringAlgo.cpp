@@ -859,7 +859,7 @@ namespace SpecUtils
       //
       //see: http://www.cprogramming.com/tutorial/unicode.html
       // 0x80 --> 10000000  //means not an ascii character
-      // 0xC0 --> 11000000  //means start of new charcter
+      // 0xC0 --> 11000000  //means start of new character
       const unsigned char not_ascii_bit = 0x80u;
       const unsigned char utf8_start_bits = 0xC0u;
 
@@ -871,7 +871,7 @@ namespace SpecUtils
     }
     
     return res;
-  }//size_t utf8_str_iterator( IterType& it, const IterType& last )
+  }//size_t utf8_iterate( IterType& it, const IterType& last )
   
   
   size_t utf8_iterate( const char * &it )
@@ -890,7 +890,7 @@ namespace SpecUtils
     }
     
     return res;
-  }//size_t utf8_str_iterator( IterType& it, const IterType& last )
+  }//size_t utf8_iterate( IterType& it )
   
   
   size_t utf8_str_len( const char * const str, const size_t str_size_bytes )
@@ -914,8 +914,12 @@ namespace SpecUtils
     if( !str )
       return len;
   
-    for( const char *ptr = str; *ptr; utf8_iterate(ptr) )
-      ++len;
+    for( const char *ptr = str; *ptr; ++len )
+    {
+      const size_t nbytes = utf8_iterate(ptr);
+      if( nbytes == 0 )
+        break;
+    }
   
     return len;
   }
@@ -1547,7 +1551,8 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
   }
   
   
-  unsigned int levenshtein_distance( const string &source, const string &target )
+  unsigned int levenshtein_distance( const string &source, const string &target,
+                                    const size_t max_str_len )
   {
     //This function largely derived from code found at:
     //  http://www.merriampark.com/ldcpp.htm  (by Anders Johnasen).
@@ -1555,15 +1560,21 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
     //  similar-but-seperate implementations on the internet, I take the code in
     //  this function to be licensed under a 'do-what-you-will' public domain
     //  license. --Will Johnson 20100824
+    
+    
     //This function is case insensitive.
-    const size_t n = source.length();
-    const size_t m = target.length();
+    if( !max_str_len )
+      return 0;
+    
+    const size_t n = std::min( source.length(), max_str_len );
+    const size_t m = std::min( target.length(), max_str_len );
     if( !n )
       return static_cast<unsigned int>(m);
     
     if( !m )
       return static_cast<unsigned int>(n);
     
+    // TODO: it looks like this function could be implemented with a much smaller memory footprint for larger string.
     vector< vector<size_t> > matrix( n+1, vector<size_t>(m+1,0) );
     
     for( size_t i = 0; i <= n; i++)
