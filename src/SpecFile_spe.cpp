@@ -387,6 +387,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         {
           meas->live_time_ = static_cast<float>( atof( fields[0].c_str() ) );
           meas->real_time_ = static_cast<float>( atof( fields[1].c_str() ) );
+          if( meas->real_time_ <= std::numeric_limits<float>::epsilon() )
+            meas->real_time_ = meas->live_time_;
         }else
         {
           parse_warnings_.emplace_back( "Error reading MEAS_TIM section of IAEA file, "

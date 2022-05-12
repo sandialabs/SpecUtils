@@ -1659,6 +1659,9 @@ public:
   /** Load the CSV format from SRPM210 files */
   bool load_from_srpm210_csv( std::istream &input );
   
+  /** Load the CSV based Kromek D3S raw data log file. */
+  bool load_from_D3S_raw( std::istream &input );
+  
   //setInfoFromAmetekMcaFiles(...): asncii file format used by Ametek MCA
   //  devices;
   bool load_from_amptek_mca( std::istream &input );
