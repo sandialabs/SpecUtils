@@ -116,6 +116,9 @@ SpectrumChartD3 = function(elem, options) {
 
   this.options.maxScaleFactor = 10;
 
+  // When you click on a ROI, or mouse over the edge of a ROI, roiDragLineExtent gives the number of pixels for the lines to extend above/below the ROI; also controls how far above or below the ROI your mouse can be
+  self.options.roiDragLineExtent = (typeof options.roiDragLineExtent == 'number') ? options.roiDragLineExtent : 20;
+  
   this.padding = {
      "top":  5,
      "titlePad" : 5,
@@ -326,7 +329,7 @@ SpectrumChartD3 = function(elem, options) {
   this.vis
     .call(this.zoom)
     //.on("click", function(){ console.log( 'Single CLick!' ); } )
-    //.on("dblclick", function(){ console.log( 'DOuble CLick!' ); } )  //ToDo: Use 'dblclick' signal rahter than custom one
+    //.on("dblclick", function(){ console.log( 'Double CLick!' ); } )  //ToDo: Use 'dblclick' signal rahter than custom one
     .on("mousedown", self.handleVisMouseDown())
     .on("mouseup", self.handleVisMouseUp())
     .on("wheel", self.handleVisWheel())
@@ -1623,7 +1626,10 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         const lpx = self.xScale(info.roi.lowerEnergy);
         const upx = self.xScale(info.roi.upperEnergy);
         const yrangepx = info.yRangePx;
-        const within_y = (yrangepx && (yrangepx.length==2) && (y >= (lpx-10) && y <= (yrangepx[1]+10)) );
+        const within_y = (yrangepx && (yrangepx.length==2)
+                          && (y >= (lpx - self.options.roiDragLineExtent)
+                          && y <= (yrangepx[1]+self.options.roiDragLineExtent)));
+                          
         const within_x = ((x - lpx) > -5) && ((upx - x) > -5);
         const is_on_edge = ((Math.abs(lpx-x) < 5) || (Math.abs(upx-x) < 5));
         
@@ -1648,7 +1654,8 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         
           //Make mouse be within ROI in y.
           const yrangepx = info.yRangePx;
-          if( yrangepx && (yrangepx.length==2) && (y < (yrangepx[0]-10) || y > (yrangepx[1]+10)) )
+          if( yrangepx && (yrangepx.length==2)
+              && (y < (yrangepx[0] - self.options.roiDragLineExtent) || y > (yrangepx[1] + self.options.roiDragLineExtent)) )
             continue;
         
           onRoiEdge = true;
@@ -1741,8 +1748,8 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
     
   let y1 = 0, y2 = self.size.height
   if( info.yRangePx && info.yRangePx.length==2 ){
-    y1 = Math.max(0,info.yRangePx[0]-10);
-    y2 = Math.min(y2,info.yRangePx[1]+10);
+    y1 = Math.max(0,info.yRangePx[0] - self.options.roiDragLineExtent);
+    y2 = Math.min(y2,info.yRangePx[1] + self.options.roiDragLineExtent);
   }
   
   const y_middle = 0.5*(y1 + y2);
@@ -1805,8 +1812,8 @@ SpectrumChartD3.prototype.handleRoiDrag = function(m){
   
   let y1 = 0, y2 = self.size.height;
   if( roiinfo.yRangePx && roiinfo.yRangePx.length==2 ){
-    y1 = Math.max(0,roiinfo.yRangePx[0]-10);
-    y2 = Math.min(y2,roiinfo.yRangePx[1]+10);
+    y1 = Math.max(0,roiinfo.yRangePx[0] - self.options.roiDragLineExtent);
+    y2 = Math.min(y2,roiinfo.yRangePx[1] + self.options.roiDragLineExtent);
   }
   
   const y_middle = 0.5*(y2 + y1);

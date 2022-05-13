@@ -1436,8 +1436,31 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   if( (nchannelorig < ncombine) || (ncombine < 2) )
     return;
 
+  assert( energy_calibration_ );
+  const auto oldcal = energy_calibration_;
+  shared_ptr<EnergyCalibration> newcal;
+  if( oldcal && oldcal->valid() && oldcal->num_channels() )
+    newcal = energy_cal_combine_channels( *oldcal, ncombine );
+  
+  if( !newcal )
+    newcal = make_shared<EnergyCalibration>();
+  
+  // We wont just take `nnewchann = newcal->num_channels()` as the calibration could be empty, but
+  // the gamma data is not empty.
   const bool evenDivide = !(nchannelorig % ncombine);
   const size_t nnewchann = (nchannelorig / ncombine) + (evenDivide ? 0 : 1);
+  
+  assert( !newcal->valid() || (newcal->num_channels() == nnewchann) );
+  
+  // We shouldnt ever encounter the number of channels not matching up; but we'll check, jic, since
+  //  its cheap.
+  if( newcal->valid() && (newcal->num_channels() != nnewchann) )
+  {
+#if( PERFORM_DEVELOPER_CHECKS )
+    log_developer_error( __func__, "Totally unexpected number of channels logic error" );
+#endif
+    throw logic_error( "Measurement::combine_gamma_channels: num channels logic error." );
+  }
   
 #if( PERFORM_DEVELOPER_CHECKS )
   const double pre_gammasum = accumulate( begin(*gamma_counts_), end(*gamma_counts_), double(0.0) );
@@ -1455,82 +1478,6 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   //  jic
   //for( size_t i = nchannelorig; i < gamma_counts_->size(); ++i )
     //(*newchanneldata)[nnewchann-1] += (*gamma_counts_)[i];
-  
-  assert( energy_calibration_ );
-  const auto oldcal = energy_calibration_;
-  auto newcal = make_shared<EnergyCalibration>();
-      
-  switch( oldcal->type() )
-  {
-    case SpecUtils::EnergyCalType::Polynomial:
-    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-    {
-      auto newcalcoefs = oldcal->coefficients();
-      for( size_t i = 1; i < newcalcoefs.size(); ++i )
-      {
-        const double newcoef = newcalcoefs[i] * std::pow( double(ncombine), double(i) );
-        newcalcoefs[i] = static_cast<float>( newcoef );
-      }
-      
-      newcal->set_polynomial( nnewchann, newcalcoefs, oldcal->deviation_pairs() );
-      break;
-    }//case polynomial
-      
-    case SpecUtils::EnergyCalType::FullRangeFraction:
-    {
-      if( evenDivide )
-      {
-        newcal->set_full_range_fraction( nnewchann, oldcal->coefficients(), oldcal->deviation_pairs() );
-      }else
-      {
-        //We need to account for the effective extra bins we are adding into the original spectrum
-        // \TODO: uncheced as of 20200909
-        const auto nextraequiv = ncombine - (nchannelorig % ncombine);
-        const float equivupper = oldcal->energy_for_channel( oldcal->num_channels() + nextraequiv );
-        
-        const float new_range = equivupper - oldcal->lower_energy();
-        const float prev_range = oldcal->upper_energy() - oldcal->lower_energy();
-        
-        vector<float> newcoefs = oldcal->coefficients();
-        if( newcoefs.size() > 1 )//should always be true, but JIC
-          newcoefs[1] *= (new_range / prev_range);
-        newcal->set_full_range_fraction( nnewchann, newcoefs, oldcal->deviation_pairs() );
-      }//if( evenDivide ) / else
-      
-      break;
-    }//case FRF
-      
-    case SpecUtils::EnergyCalType::LowerChannelEdge:
-    {
-      vector<float> newbinning( nnewchann+1, 0.0f );
-      const shared_ptr<const vector<float>> &old_energies_ptr = oldcal->channel_energies();
-      assert( old_energies_ptr );
-      const auto &old_energies = *old_energies_ptr;
-      const size_t oldnenergies = old_energies.size();
-     
-      assert( oldnenergies >= nchannelorig );
-      if( oldnenergies < nchannelorig )
-      {
-        const string msg = "combine_gamma_channels: Unexpectedly found case where channel energies"
-                           " (size=" + std::to_string(oldnenergies) + ") wasnt as large as gamma"
-                           " channels (" + std::to_string(nchannelorig) + ")";
-#if( PERFORM_DEVELOPER_CHECKS )
-        log_developer_error( __func__, msg.c_str() );
-#endif
-        throw std::runtime_error( msg );
-      }//if( oldnenergies < nchannelorig )
-      
-      for( size_t i = 0; ((i/ncombine) < (nnewchann+1)) && (i < oldnenergies); i += ncombine )
-        newbinning[i/ncombine] = old_energies[i];
-      
-      newbinning[nnewchann] = old_energies.back();
-      
-      newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
-    }//break
-      
-    case SpecUtils::EnergyCalType::InvalidEquationType:
-      break;
-  }//switch( oldcal->type() )
   
   gamma_counts_ = newchanneldata;
   energy_calibration_ = newcal;

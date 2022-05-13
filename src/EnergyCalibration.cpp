@@ -625,6 +625,99 @@ void EnergyCalibration::equal_enough( const EnergyCalibration &lhs, const Energy
 }//equal_enough( lhs, rhs )
 #endif //PERFORM_DEVELOPER_CHECKS
 
+shared_ptr<EnergyCalibration> energy_cal_combine_channels( const EnergyCalibration &orig_cal,
+                                                               const size_t ncombine )
+{
+  if( !orig_cal.valid() )
+    return make_shared<EnergyCalibration>();
+  
+  if( ncombine == 0 )
+    throw runtime_error( "energy_cal_combine_channels: ncombine can not be equal to zero." );
+  
+  if( ncombine == 1 )
+    return make_shared<EnergyCalibration>(orig_cal);
+  
+  const size_t nchannelorig = orig_cal.num_channels();
+  
+  const bool evenDivide = !(nchannelorig % ncombine);
+  const size_t nnewchann = (nchannelorig / ncombine) + (evenDivide ? 0 : 1);
+  
+  auto newcal = make_shared<EnergyCalibration>();
+  
+  switch( orig_cal.type() )
+  {
+    case SpecUtils::EnergyCalType::Polynomial:
+    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+    {
+      auto newcalcoefs = orig_cal.coefficients();
+      for( size_t i = 1; i < newcalcoefs.size(); ++i )
+      {
+        const double newcoef = newcalcoefs[i] * std::pow( double(ncombine), double(i) );
+        newcalcoefs[i] = static_cast<float>( newcoef );
+      }
+      
+      newcal->set_polynomial( nnewchann, newcalcoefs, orig_cal.deviation_pairs() );
+      break;
+    }//case polynomial
+      
+    case SpecUtils::EnergyCalType::FullRangeFraction:
+    {
+      if( evenDivide )
+      {
+        newcal->set_full_range_fraction( nnewchann, orig_cal.coefficients(), orig_cal.deviation_pairs() );
+      }else
+      {
+        //We need to account for the effective extra bins we are adding into the original spectrum
+        // \TODO: unchecked as of 20200909
+        const auto nextraequiv = ncombine - (nchannelorig % ncombine);
+        const float equivupper = orig_cal.energy_for_channel( orig_cal.num_channels() + nextraequiv );
+        
+        const float new_range = equivupper - orig_cal.lower_energy();
+        const float prev_range = orig_cal.upper_energy() - orig_cal.lower_energy();
+        
+        vector<float> newcoefs = orig_cal.coefficients();
+        if( newcoefs.size() > 1 )//should always be true, but JIC
+          newcoefs[1] *= (new_range / prev_range);
+        newcal->set_full_range_fraction( nnewchann, newcoefs, orig_cal.deviation_pairs() );
+      }//if( evenDivide ) / else
+      
+      break;
+    }//case FRF
+      
+    case SpecUtils::EnergyCalType::LowerChannelEdge:
+    {
+      vector<float> newbinning( nnewchann+1, 0.0f );
+      const shared_ptr<const vector<float>> &old_energies_ptr = orig_cal.channel_energies();
+      assert( old_energies_ptr );
+      const auto &old_energies = *old_energies_ptr;
+      const size_t oldnenergies = old_energies.size();
+      
+      assert( oldnenergies >= nchannelorig );
+      if( oldnenergies < nchannelorig )
+      {
+        const string msg = "combine_gamma_channels: Unexpectedly found case where channel energies"
+        " (size=" + std::to_string(oldnenergies) + ") wasnt as large as gamma"
+        " channels (" + std::to_string(nchannelorig) + ")";
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, msg.c_str() );
+#endif
+        throw std::runtime_error( msg );
+      }//if( oldnenergies < nchannelorig )
+      
+      for( size_t i = 0; ((i/ncombine) < (nnewchann+1)) && (i < oldnenergies); i += ncombine )
+      newbinning[i/ncombine] = old_energies[i];
+      
+      newbinning[nnewchann] = old_energies.back();
+      
+      newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
+    }//break
+      
+    case SpecUtils::EnergyCalType::InvalidEquationType:
+      break;
+  }//switch( oldcal->type() )
+  
+  return newcal;
+}//energy_cal_combine_channels(...)
 
 
 std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<float> &coeffs,

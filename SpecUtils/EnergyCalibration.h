@@ -271,8 +271,24 @@ namespace SpecUtils
     std::shared_ptr<const std::vector<float>> m_channel_energies;
   };//struct EnergyCalibration
 
-
+  /** Returns an energy calibration with the specified number of channels combined.
+   
+   If the number of channels in the input energy calibration does not evenly divide by the number
+   of channels to combine, then the resulting energy calibration will round-up to have one more
+   channel than the integer division gives.
+   
+   @param orig_cal The original energy calibration.
+   @param num_channel_combine The number of channels to combine.  Ex, if 2, then returned energy
+          cal will have half as many channels as \p orig_cal.  Must not be zero.
+   @return The new energy calibration; will not be nullptr.  If input energy calibration is invalid
+           or zero channels, then returns an invalid energy calibration.
+          
+   Throws exception if channels to combine is 0.
+   */
+  std::shared_ptr<EnergyCalibration> energy_cal_combine_channels( const EnergyCalibration &orig_cal,
+                                                                 const size_t num_channel_combine );
   
+
   /** Returns each channels lower energy, based on the input polynomial
    calibration equation and deviation pairs.
    
