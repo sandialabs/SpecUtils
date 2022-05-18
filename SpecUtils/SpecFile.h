@@ -327,6 +327,9 @@ enum class DetectorType : int
   VerifinderNaI,
   VerifinderLaBr,
   
+  /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
+  KromekD3S,
+  
   Unknown
 };//enum DetectorType
 

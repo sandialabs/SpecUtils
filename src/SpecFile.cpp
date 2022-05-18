@@ -1257,7 +1257,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_RadSeekerLaBrStr             = "RadSeeker-CL";
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
-    
+  static const string sm_KromekD3S                    = "Kromek D3S";
+  
+  
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
 //  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger
@@ -1342,6 +1344,8 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderNaI;
     case DetectorType::VerifinderLaBr:
       return sm_VerifinderLaBr;
+    case DetectorType::KromekD3S:
+      return sm_KromekD3S;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -5708,6 +5712,20 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
   
   
+  if( icontains( manufacturer_,"Kromek" ) )
+  {
+    // I've seen manufacturer name be either "Kromek" or "Kromek Ltd"
+    
+    if( istarts_with(instrument_model_,"D3") || iequals_ascii(instrument_model_,"D3S") )
+    {
+      //Have seen model strings: "D3", "D3S", "D3S 2.02"
+      detector_type_ = DetectorType::KromekD3S;
+      return;
+    }
+    
+    //Other Kromek instrument models I've seem: "MultiSpect/KSpect"
+  }//if( icontains( manufacturer_,"Kromek" ) )
+  
   
   if( iequals_ascii(instrument_type_,"PVT Portal") && iequals_ascii(manufacturer_,"SAIC") )
   {
@@ -5968,6 +5986,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="labZY")
        && !icontains( manufacturer_, "SSC Pacific")
        && !icontains( instrument_model_, "ASP-")
+       && !(icontains( manufacturer_, "Kromek") && instrument_model_=="MultiSpect/KSpect")
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {

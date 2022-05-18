@@ -194,7 +194,7 @@ bool SpecFile::load_txt_or_csv_file( const std::string &filename )
     if( !success )
     {
       input->clear();
-      input->seekg( 0, ios_base::beg );
+      input->seekg( (is_utf8 ? 3 : 0), ios_base::beg );
       success = load_from_txt_or_csv( *input );
     }
     
@@ -710,6 +710,11 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
     if( detectors_analysis )
       detectors_analysis_ = detectors_analysis;
     
+    // The Kromek D3S is the only detector model I'm aware of that makes data of this format.
+    manufacturer_ = "Kromek";
+    instrument_model_ = "D3S";
+    detector_type_ = DetectorType::KromekD3S;
+    
     cleanup_after_load();
   }catch( std::exception &e )
   {
@@ -779,7 +784,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     
     //Dont allow a space delimiter until we have the columns mapped out to avoid things like
     //  "Energy (keV)" counting as two columns
-    const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");
+    const bool has_comma = (line.find(',') != string::npos);
+    const bool no_split_space = (column_map.empty() && !isdigit(line[0]) && !SpecUtils::istarts_with(line, "Channel Energy Counts") );
+    const char *delim = has_comma ? "," : (no_split_space ? "\t,;" : "\t, ;");
     
     SpecUtils::split( split_fields, line, delim );
      

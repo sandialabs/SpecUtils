@@ -394,6 +394,10 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       det_kind = "CZT";
       break;
       
+    case SpecUtils::DetectorType::KromekD3S:
+      det_kind = "CsI";
+      break;
+      
     case SpecUtils::DetectorType::Unknown:
     {
       const size_t nchannel = sf.num_gamma_channels();
@@ -7489,6 +7493,26 @@ namespace SpecUtils
           const string charac_str = N42DecodeHelper2012::concat_2012_N42_characteristic_node(character);
           if( charac_str.size() )
             descrip += string(descrip.size() ? ", " : "") + "{" + charac_str + "}";
+          
+          // Kromek D3 data exported from the Android app looks to have the phone manufacturer/model
+          //  as the "RadInstrumentManufacturerName" and "RadInstrumentModelName" values, with the
+          //  actual detectors values (that we want) buried down in these Characteristics.
+          //  The gamma and neutron detectors both have these values, and appear to be the same.
+          const rapidxml::xml_node<char> *name_node = XML_FIRST_NODE(character, "CharacteristicName");
+          const rapidxml::xml_node<char> *value_node = XML_FIRST_NODE(character, "CharacteristicValue");
+          if( xml_value_compare(name_node, "Sensor Make") )
+          {
+            if( value_node && value_node->value_size() )
+              manufacturer_ = xml_value_str(value_node);
+          }else if( xml_value_compare(name_node, "Sensor Model") )
+          {
+            if( value_node && value_node->value_size() )
+              instrument_model_ = xml_value_str(value_node);
+          }else if( xml_value_compare(name_node, "Sensor Serial") )
+          {
+            if( value_node && value_node->value_size() )
+              instrument_id_ = xml_value_str(value_node);
+          }
         }//loop over characteristics
         
         

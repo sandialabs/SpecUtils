@@ -1304,6 +1304,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::IdentiFinderR500LaBr:
     case DetectorType::VerifinderNaI:
     case DetectorType::VerifinderLaBr:
+    case DetectorType::KromekD3S:
     case DetectorType::Unknown:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
