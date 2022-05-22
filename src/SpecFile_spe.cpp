@@ -139,6 +139,8 @@ bool SpecFile::load_iaea_file( const std::string &filename )
     
     // Read file contents into wide-string, and then convert to UTF-8; we'll do it scoped to release
     //  memory as we can.
+    //  TODO: Use a stream-based UTF-16 to UTF-8 converter; there is an untested skeleton for doing
+    //        this in #SpecFile::load_txt_or_csv_file
     {//begin read wide and convert to utf-8
       std::wstring wide_contents( content_len_wchar, wchar_t('\0') );
       
@@ -224,6 +226,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     bool neutrons_were_cps = false;
     std::shared_ptr<DetectorAnalysis> anaresult;
     vector<float> cal_coeffs;
+    vector<pair<int,float> > bin_to_energy;
     vector<pair<float,float>> deviation_pairs;
     
     
@@ -250,11 +253,71 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             auto newcal = make_shared<EnergyCalibration>();
             newcal->set_polynomial( nchannel, cal_coeffs, deviation_pairs );
             meas->energy_calibration_ = newcal;
+            
+            if( bin_to_energy.empty() )
+              meas->parse_warnings_.push_back( "A lower channel energy calibration was also specified in file, but not used." );
           }catch( std::exception &e )
           {
             meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
           }//try / catch
         }//if( !cal_coeffs.empty() )
+        
+        
+        if( !bin_to_energy.empty()
+           && (!meas->energy_calibration_ || !meas->energy_calibration_->valid()) )
+        {
+          try
+          {
+            const size_t nlower = bin_to_energy.size();
+            if( (nchannel != nlower) && ((nchannel+1) != nlower) )
+              throw runtime_error( "Invalid number of lower channel energies ("
+                                  + std::to_string(nlower) + ") for "
+                                  + std::to_string(nchannel) + " gamma channels." );
+            
+            int prev_chan_num = bin_to_energy[0].first - 1;
+            vector<float> lower_energies( nlower );
+            for( size_t i = 0; i < nlower; ++i )
+            {
+              const int chan_num = bin_to_energy[i].first;
+              if( chan_num != (prev_chan_num + 1) )
+                throw runtime_error( "Channels not in increasing number ("
+                                     + std::to_string(chan_num) + " follows "
+                                     + std::to_string(prev_chan_num) + ")" );
+              
+              prev_chan_num = chan_num;
+              lower_energies[i] = bin_to_energy[i].second;
+            }//for( size_t i = 0; i < nlower; ++i )
+            
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_lower_channel_energy(nchannel, std::move(lower_energies));
+            meas->energy_calibration_ = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Invalid lower channel energies: " + string(e.what()) );
+            
+            const size_t num = bin_to_energy.size();
+            
+            if( num )
+            {
+              stringstream remarkstrm;
+              remarkstrm << "Calibration in file from:";
+              for( size_t i = 0; i < num && i < 5; ++i )
+                remarkstrm << (i?", ":" ") << "bin " << bin_to_energy[i].first
+                           << "->" << bin_to_energy[i].second << " keV";
+              
+              if( num > 5 )
+              {
+                remarkstrm << " ... ";
+              
+                for( size_t i = num - 5; i < num; ++i )
+                  remarkstrm << (i?", ":" ") << "bin " << bin_to_energy[i].first
+                    << "->" << bin_to_energy[i].second << " keV";
+              }//if( num > 5 )
+              
+              meas->remarks_.push_back( remarkstrm.str() );
+            }//if( num )
+          }//try / catch
+        }//if( we dont have energy cal yet, and we do have bin_to_energy )
       }//if( nchannel > 1 )
       
       cal_coeffs.clear();
@@ -687,12 +750,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             }//if( parts.size() > 7 )
           }
         }//while( SpecUtils::safe_get_line( istr, line ) )
-      }else if( starts_with(line,"$ENER_DATA:") || starts_with(line,"$MCA_CAL_DATA:") )
+      }else if( starts_with(line,"$ENER_DATA:")
+                || starts_with(line,"$MCA_CAL_DATA:")
+                || starts_with(line,"$ENER_TABLE:") )
       {
         if( SpecUtils::safe_get_line( istr, line ) )
         {
           const size_t num = static_cast<size_t>( atol( line.c_str() ) );
-          vector<pair<int,float> > bintoenergy;
           while( SpecUtils::safe_get_line( istr, line ) )
           {
             trim(line);
@@ -707,20 +771,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               vector<float> parts;
               SpecUtils::split_to_floats( line.c_str(), line.size(), parts );
               if( parts.size() == 2 )
-                bintoenergy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
+                bin_to_energy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
             }
           }//while( SpecUtils::safe_get_line( istr, line ) )
-          
-          if( num && bintoenergy.size()==num )
-          {
-            stringstream remarkstrm;
-            remarkstrm << "Calibration in file from:";
-            for( size_t i = 0; i < num; ++i )
-              remarkstrm << (i?", ":" ") << "bin " << bintoenergy[i].first
-              << "->" << bintoenergy[i].second << " keV";
-            meas->remarks_.push_back( remarkstrm.str() );
-          }
-        }//if( file says how manyy entries to expect )
+        }//if( file says how many entries to expect )
       }else if( starts_with(line,"$SHAPE_CAL:") )
       {
         //I think this is FWHM calibration parameters - skipping this for now
