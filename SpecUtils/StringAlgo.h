@@ -108,8 +108,8 @@ namespace  SpecUtils
   
   /** \brief Splits an input string according to specified delimiters.
    
-   Leading and trailing delimiters are ignored, and mutliple delimiters in a
-   row are treated as eqivalent to a single delimiter.
+   Leading and trailing delimiters are ignored, and multiple delimiters in a
+   row are treated as equivalent to a single delimiter.
    Note that this function is not equivalent to boost::split.
    
    \param results Where results of splitting are placed.  Will be cleared of

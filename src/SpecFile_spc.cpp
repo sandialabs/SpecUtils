@@ -484,8 +484,11 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
               result.remark_ = line.substr(info_pos); //just in case
             }else
             {
-              //Leaving below line in because I only tested above parsing on a handfull of files (20161010).
-              cerr << "Unknown radiation type in ana  result: '" << result.nuclide_type_ << "'" << endl;
+#if( PERFORM_DEVELOPER_CHECKS )
+              //Leaving below line in because I only tested above parsing on a handful of files (20161010).
+              if( !result.nuclide_type_.empty() )
+                log_developer_error( __func__, ("Unknown radiation type in ana  result: '" + result.nuclide_type_ + "'").c_str() );                
+#endif
               result.nuclide_ = line.substr(info_pos);
             }
           }else
