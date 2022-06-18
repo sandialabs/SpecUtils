@@ -138,7 +138,11 @@ namespace D3SpectrumExport
      */
     double display_scale_factor;
     
-    SpecUtils::SpectrumType spectrum_type;  // spectrum type
+    /** The spectrum type (foreground/background/secondary) for this spectrum,
+     
+     Note that peaks will only be displayed for foreground spectra currently.
+     */
+    SpecUtils::SpectrumType spectrum_type;
   };//struct D3SpectrumOptions
   
   
