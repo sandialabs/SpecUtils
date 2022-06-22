@@ -11014,6 +11014,11 @@ SpectrumChartD3.prototype.setBackgroundSubtract = function( subtract ) {
   self.redraw()();
 }
 
+SpectrumChartD3.prototype.setAllowDragRoiExtent = function( allow ){
+  this.options.allowDragRoiExtent = Boolean(allow);
+}
+
+
 SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   var self = this;
 

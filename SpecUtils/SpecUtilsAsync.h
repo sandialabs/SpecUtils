@@ -101,7 +101,13 @@ namespace SpecUtilsAsync
      */
   public:
     ThreadPool();
-    ~ThreadPool(); //calls join()
+    
+    /** Destructor.
+     
+     Clears any pending exceptions (printing to std::cerr their message), then calls join() - so
+     if there are any pending exceptions, they will not be re-thrown.
+     */
+    ~ThreadPool();
     
     //post: post a job to the thread pool.
     //  I'm not to happy about having the fcn limited to a

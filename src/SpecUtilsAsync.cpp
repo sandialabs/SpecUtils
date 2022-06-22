@@ -106,6 +106,37 @@ namespace SpecUtilsAsync
   
   ThreadPool::~ThreadPool()
   {
+    // Throwing an exception from a destructor is dangerous
+    {// begin lock on m_exception_mutex
+      std::lock_guard<std::mutex> lock( m_exception_mutex );
+      if( m_exception )
+      {
+        try
+        {
+          std::rethrow_exception(m_exception);
+        }catch( std::exception &e )
+        {
+          assert( 0 );
+          const string err_msg = "ThreadPool destructor called with a pending exception: \""
+                                  + std::string(e.what()) + "\"";
+          cerr << err_msg << endl;
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+          log_developer_error( __func__, err_msg.c_str() );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+        }catch( ... )
+        {
+          assert( 0 );
+          const string err_msg = "ThreadPool destructor called with a pending non std exception.";
+          cerr << err_msg << endl;
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+          log_developer_error( __func__, err_msg.c_str() );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+        }//try / catch /catch
+        
+        m_exception = nullptr;
+      }//if( m_exception )
+    }// end lock on m_exception_mutex
+    
     join();
 #if( defined(ThreadPool_USING_WT) )
     std::unique_lock<std::mutex> lock( sm_npool_mutex );
@@ -126,7 +157,11 @@ namespace SpecUtilsAsync
     
     std::lock_guard<std::mutex> lock( m_exception_mutex );
     if( m_exception )
-      std::rethrow_exception( m_exception );
+    {
+      std::exception_ptr the_exception = m_exception;
+      m_exception = nullptr;
+      std::rethrow_exception( the_exception );
+    }
 #elif( defined(ThreadPool_USING_WT) )
     {
       std::unique_lock<std::mutex> lock( m_mutex );
@@ -144,7 +179,11 @@ namespace SpecUtilsAsync
     
     std::lock_guard<std::mutex> lock( m_exception_mutex );
     if( m_exception )
-      std::rethrow_exception( m_exception );
+    {
+      std::exception_ptr the_exception = m_exception;
+      m_exception = nullptr;
+      std::rethrow_exception( the_exception );
+    }
 #elif( defined(ThreadPool_USING_THREADS) )
     if( m_nonPostedWorkers.size() )
     {
@@ -214,7 +253,8 @@ namespace SpecUtilsAsync
           }catch( std::exception &e )
           {
             std::lock_guard<std::mutex> lock( m_exception_mutex );
-            std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
+            //if( m_exception ) std::cerr << "ThreadPool::dowork async has caught multiple exceptions\n";
+            //std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
             m_exception = std::current_exception();
           }
         } );
@@ -252,7 +292,8 @@ namespace SpecUtilsAsync
     }catch( std::exception &e )
     {
       std::lock_guard<std::mutex> lock( m_exception_mutex );
-      std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
+      //if( m_exception ) std::cerr << "ThreadPool::dowork async has caught multiple exceptions\n";
+      //std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
       m_exception = std::current_exception();
     }
 #endif

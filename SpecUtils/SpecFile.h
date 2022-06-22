@@ -626,7 +626,7 @@ public:
   const std::shared_ptr< const std::vector<float> > &channel_energies() const;
   
   //gamma_counts(): the channel counts of the gamma data.
-  //  Returned pointer may be null if no gamma data present, or not thie
+  //  Returned pointer may be null if no gamma data present, or not this
   //  Measurement is not properly initialized.
   const std::shared_ptr< const std::vector<float> > &gamma_counts() const;
   
