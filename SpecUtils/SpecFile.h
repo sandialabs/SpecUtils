@@ -1450,7 +1450,9 @@ public:
    This function attempts to provide the best EnergyCalibration object, from the indicated set of
    samples and detectors to use to sum to.
    
-   Currently, this function chooses the Measurement with the largest number of gamma channels.
+   Currently, this function chooses the Measurement with the largest number of gamma channels, and
+   if there are multiple energy calibrations with same number of measurements, will pick the one
+   with the largest energy range.
    
    @param sample_numbers The sample numbers to consider; if empty, will return nullptr.
    @param detector_names The detectors to consider; if empty, will return nullptr.
@@ -1459,6 +1461,8 @@ public:
             calibration is found).
    
    Throws exception if any sample_number or detector_names entries is invalid.
+   
+   TODO: consider creating an all-new energy calibration to cover energy range of all desired samples/detector
    */
   std::shared_ptr<const EnergyCalibration> suggested_sum_energy_calibration(
                                             const std::set<int> &sample_numbers,
