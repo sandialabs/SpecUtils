@@ -280,7 +280,8 @@ namespace D3SpectrumExport
   :  peaks_json( "" ),
      line_color( "black" ),
      peak_color( "blue" ),
-     display_scale_factor( 1.0 )
+     display_scale_factor( 1.0 ),
+     spectrum_type( SpecUtils::SpectrumType::Foreground )
   {
   }
 
@@ -340,6 +341,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
   m_showComptonEdgeMarker( false ),
   m_showSumPeakMarker( false ),
   m_backgroundSubtract( false ),
+  m_allowDragRoiExtent( false ),
   m_xMin( 0.0 ), m_xMax( 0.0 )
 {
 }
@@ -483,6 +485,8 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     if (options.m_showPeakNuclideEnergyLabels) ostr << graph << ".setShowNuclideEnergies(true);" << endline; // Set up nuclide energy labels for peaks
     
     if (options.m_backgroundSubtract) ostr << graph << ".setBackgroundSubtract(true);" << endline;  // Set background subtract
+    
+    if (!options.m_allowDragRoiExtent) ostr << graph << ".setAllowDragRoiExtent(false);" << endline;  // Set allowing to drag ROI edges
     
     // Set up feature markers
     if (options.m_showEscapePeakMarker) ostr << graph << ".setEscapePeaks(true);" << endline;
