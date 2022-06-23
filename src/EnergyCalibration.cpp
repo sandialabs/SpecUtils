@@ -357,13 +357,12 @@ double EnergyCalibration::energy_for_channel( const double channel ) const
       if( channel < 0 )
         throw runtime_error( "EnergyCalibration::energy_for_channel: channel below zero" );
       
-      if( (channel + 1) > energies.size() )
+      const size_t chan = static_cast<size_t>( channel );
+      if( (chan >= energies.size()) || (((chan+1) == energies.size()) && (chan != channel)) )
         throw runtime_error( "EnergyCalibration::energy_for_channel: channel to large" );
       
-      const size_t chan = static_cast<size_t>( channel );
-      const double frac = channel - chan;
-      
-      return energies[chan] + frac*(energies[chan+1] - energies[chan]);
+      return (chan == channel) ? energies[chan]
+                               : (energies[chan] + (channel - chan)*(energies[chan+1] - energies[chan]));
     }//case EnergyCalType::LowerChannelEdge:
   }//switch( m_type )
   

@@ -6858,6 +6858,8 @@ namespace SpecUtils
   
   void SpecFile::set_2012_N42_instrument_info( const rapidxml::xml_node<char> *info_node )
   {
+    std::unique_lock<std::recursive_mutex> lock( mutex_ );
+    
     if( !info_node )
       return;
     

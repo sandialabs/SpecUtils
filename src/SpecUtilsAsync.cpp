@@ -26,6 +26,7 @@
 #include <string>
 #include <thread>
 #include <iostream>
+#include <assert.h>
 #include <algorithm>
 
 #ifdef _WIN32

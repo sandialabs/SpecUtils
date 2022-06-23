@@ -470,7 +470,9 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
                                && (counts - static_cast<float>(std::numeric_limits<uint32_t>::max()) > -1.0f) );
     intcounts[i] = can_convert ? static_cast<uint32_t>( counts ) : std::numeric_limits<uint32_t>::max();
   }
-  ostr.write( (const char *)&intcounts[0], numchannels*4 );
+  
+  if( numchannels )
+    ostr.write( (const char *)&intcounts[0], numchannels*4 );
   
   vector<float> calibcoef = summed->calibration_coeffs();
   

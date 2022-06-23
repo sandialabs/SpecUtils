@@ -519,28 +519,33 @@ std::vector< std::shared_ptr<const Measurement> > SpecFile::measurements() const
 
 std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return detectors_analysis_;
 }
 
 
 double SpecFile::mean_latitude() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return mean_latitude_;
 }
 
 double SpecFile::mean_longitude() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return mean_longitude_;
 }
 
 void SpecFile::set_filename( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   filename_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_remarks( const std::vector<std::string> &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   remarks_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
@@ -548,6 +553,7 @@ void SpecFile::set_remarks( const std::vector<std::string> &n )
 
 void SpecFile::set_parse_warnings( const std::vector<std::string> &warnings )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   parse_warnings_ = warnings;
   modified_ = modifiedSinceDecode_ = true;
 }
@@ -555,59 +561,66 @@ void SpecFile::set_parse_warnings( const std::vector<std::string> &warnings )
 
 void SpecFile::set_uuid( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   uuid_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_lane_number( const int num )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   lane_number_ = num;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_measurement_location_name( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   measurement_location_name_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_inspection( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   inspection_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_instrument_type( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   instrument_type_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_detector_type( const DetectorType type )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   detector_type_ = type;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_manufacturer( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   manufacturer_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_instrument_model( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   instrument_model_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_instrument_id( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   instrument_id_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
-
-
 
 
 //implementation of inline Measurement functions
@@ -1844,6 +1857,8 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
 
 std::shared_ptr<Measurement> SpecFile::measurement( std::shared_ptr<const Measurement> meas )
 {
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
   for( const auto &m : measurements_ )
   {
     if( m == meas )
@@ -6533,6 +6548,10 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
                            + name + "'" );
   }//for( check all detector names were valid )
   
+  auto energy_range = []( const std::shared_ptr<const EnergyCalibration> &cal ) -> float {
+    return !cal ? 0.0f : (cal->upper_energy() - cal->lower_energy());
+  };
+  
   size_t energy_cal_index = 0;
   std::shared_ptr<const EnergyCalibration> energy_cal;
   
@@ -6558,12 +6577,20 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
       if( has_common )
         return this_cal;
       
-      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      if( this_cal == energy_cal )
+        continue;
+      
+      const size_t this_nchannel = this_cal->num_channels();
+      const size_t prev_nchannel = energy_cal ? energy_cal->num_channels() : size_t(0);
+      const float prev_range = energy_range(energy_cal);
+      const float this_range = energy_range(this_cal);
+      
+      if( !energy_cal
+         || (prev_nchannel < this_nchannel)
+         || ((prev_nchannel == this_nchannel) && (prev_range < this_range)) )
       {
         energy_cal_index = i;
         energy_cal = this_cal;
-        if( same_nchannel )
-          return energy_cal;
       }//if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
   #else
       if( has_common && energy_cal && (energy_cal != this_cal) && ((*energy_cal) == (*this_cal)) )
@@ -6582,7 +6609,14 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
         log_developer_error( __func__, buffer );
       }//if( has_common, but energy calibration wasnt the same )
       
-      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      const size_t this_nchannel = this_cal->num_channels();
+      const size_t prev_nchannel = energy_cal ? energy_cal->num_channels() : size_t(0);
+      const float prev_range = energy_range(energy_cal);
+      const float this_range = energy_range(this_cal);
+      
+      if( !energy_cal
+         || (prev_nchannel < this_nchannel)
+         || ((prev_nchannel == this_nchannel) && (prev_range < this_range)) )
       {
         if( same_nchannel && energy_cal
             && (energy_cal->num_channels() != this_cal->num_channels()) )
