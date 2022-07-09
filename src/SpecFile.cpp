@@ -327,6 +327,7 @@ namespace SpecUtils
   //implementation of inlined functions
 bool SpecFile::modified() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return modified_;
 }
   
@@ -345,31 +346,37 @@ void SpecFile::reset_modified_since_decode()
 
 bool SpecFile::modified_since_decode() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return modifiedSinceDecode_;
 }
 
 float SpecFile::gamma_live_time() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return gamma_live_time_;
 }
 
 float SpecFile::gamma_real_time() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return gamma_real_time_;
 }
 
 double SpecFile::gamma_count_sum() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return gamma_count_sum_;
 }
 
 double SpecFile::neutron_counts_sum() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return neutron_counts_sum_;
 }
 
 const std::string &SpecFile::filename() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return filename_;
 }
 
@@ -395,6 +402,7 @@ const std::vector<std::string> &SpecFile::neutron_detector_names() const
 
 const std::string &SpecFile::uuid() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return uuid_;
 }
 
@@ -4506,8 +4514,9 @@ void SpecFile::ensure_unique_sample_numbers()
 
 std::set<std::string> SpecFile::find_detector_names() const
 {
-//  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   set<string> det_names;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
   for( const auto &meas : measurements_ )
     det_names.insert( meas->detector_name_ );
@@ -5606,6 +5615,7 @@ void SpecFile::set_detector_type_from_other_info()
   using SpecUtils::contains;
   using SpecUtils::icontains;
   
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   if( (detector_type_ != DetectorType::Unknown)
      && (detector_type_ != DetectorType::IdentiFinderUnknown) )
