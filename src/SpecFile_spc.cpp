@@ -150,39 +150,6 @@ bool SpecFile::load_spc_file( const std::string &filename )
 }//bool load_spc_file( const std::string &filename )
   
   
-
-bool SpecFile::load_iaea_file( const std::string &filename )
-{
-  reset();
-  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
-#ifdef _WIN32
-  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  if( !file.is_open() )
-    return false;
-  
-  uint8_t firstbyte;
-  file.read( (char *) (&firstbyte), 1 );
-  file.seekg( 0, ios::beg );
-  
-  if( firstbyte != '$' )
-  {
-    //    cerr << "IAEA file '" << filename << "'does not have expected first chacter"
-    //         << " of '$', firstbyte=" << int(firstbyte)
-    //         << " (" << char(firstbyte) << ")" << endl;
-    return false;
-  }//if( wrong first byte )
-  
-  const bool loaded = load_from_iaea( file );
-  
-  if( loaded )
-    filename_ = filename;
-  
-  return loaded;
-}//bool load_iaea_file(...)
   
   
 bool SpecFile::load_from_iaea_spc( std::istream &input )
@@ -517,8 +484,11 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
               result.remark_ = line.substr(info_pos); //just in case
             }else
             {
-              //Leaving below line in because I only tested above parsing on a handfull of files (20161010).
-              cerr << "Unknown radiation type in ana  result: '" << result.nuclide_type_ << "'" << endl;
+#if( PERFORM_DEVELOPER_CHECKS )
+              //Leaving below line in because I only tested above parsing on a handful of files (20161010).
+              if( !result.nuclide_type_.empty() )
+                log_developer_error( __func__, ("Unknown radiation type in ana  result: '" + result.nuclide_type_ + "'").c_str() );                
+#endif
               result.nuclide_ = line.substr(info_pos);
             }
           }else
@@ -960,7 +930,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     
     
     if( summed->contained_neutron_ )
-      output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
+      output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int64_t>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
     
     assert( summed->energy_calibration_ );
     
@@ -1337,6 +1307,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::IdentiFinderR500LaBr:
     case DetectorType::VerifinderNaI:
     case DetectorType::VerifinderLaBr:
+    case DetectorType::KromekD3S:
     case DetectorType::Unknown:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;
@@ -1718,12 +1689,15 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   const vector<float> &channel_data = *summed->gamma_counts();
   if( type == IntegerSpcType )
   {
+#define FLT_UINT_MAX_PLUS1 static_cast<float>((1 + (std::numeric_limits<uint32_t>::max()/2)) * 2.0f)
+    
     vector<uint32_t> int_channel_data( n_channel );
     for( uint16_t i = 0; i < n_channel; ++i )
     {
       float counts = std::max( 0.0f, std::round(channel_data[i]) );
-      counts = std::min( counts, static_cast<float>(std::numeric_limits<uint32_t>::max()) );
-      int_channel_data[i] = static_cast<uint32_t>( counts );
+      const bool can_convert = ( (counts < FLT_UINT_MAX_PLUS1)
+                                 && (counts - static_cast<float>(std::numeric_limits<uint32_t>::max()) > -1.0f) );
+      int_channel_data[i] = can_convert ? static_cast<uint32_t>( counts ) : std::numeric_limits<uint32_t>::max();
     }
     output.write( (const char *)&int_channel_data[0], 4*n_channel );
   }else

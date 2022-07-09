@@ -63,34 +63,98 @@ bool SpecFile::load_txt_or_csv_file( const std::string &filename )
     if( !input->is_open() )
       return false;
     
-    //lets make sure this is an ascii file
-    //Really we should make sure its a UTF-8 file, so we can export from Excell
-    while( input->good() )
+    //lets make sure this is an ascii file; we'll just check the first 255 bytes, and call this
+    //  good enough.
+    //Really we should make sure its a UTF-8 file, so we can export from Excel
+    
+    uint8_t first_bytes[256] = { 0 };
+    input->read( (char *) (&first_bytes), sizeof(first_bytes) - 1 );
+    first_bytes[sizeof(first_bytes) - 1] = '\0'; //jic
+    input->seekg( 0, ios::beg );
+    
+    // Even the formats that claim UTF-8, all seem to be ascii
+    const bool is_utf8 = ((first_bytes[0] == 0xEF)
+                          && (first_bytes[1] == 0xBB)
+                          && (first_bytes[2] == 0xBF) );
+    
+    /*
+     //TODO: check if this stream-based UTF-16 to UTF-8 conversion actually works; useful when
+     //      people save a txt file on windows to UTF-16.
+     #include <locale>
+     #include <codecvt>
+     
+     
+     const bool is_utf16_big_endian = ((first_bytes[0] == 0xFE)
+                                       && (first_bytes[1] == 0xFF));
+     
+     const bool is_utf16_little_endian = ((first_bytes[0] == 0xFF)
+                                         && (first_bytes[1] == 0xFE));
+    
+    if( is_utf16_big_endian || is_utf16_little_endian )
     {
-      const int c = input->get();
-      if( input->good() && c>127 )
+      input.reset();
+      
+      std::unique_ptr<wifstream> winput( new wifstream( filename, ios_base::binary | ios_base::in ) );
+      // std::consume_header | std::little_endian;
+      using convert_ut16_utf8 = std::wbuffer_convert< std::codecvt_utf8_utf16<char, 0x10ffff,std::consume_header> >;
+      convert_ut16_utf8 converter( winput->rdbuf() );
+      input.reset( new std::istream( &converter ) );
+      
+      // I *think* input should now be UTF-8???
+    }
+    */
+   
+    
+    for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
+    {
+      if( first_bytes[i] > 127 )
         return false;
-    }//while( input.good() )
+    }
+   
+    
+    //while( input->good() )
+    //{
+    //  const int c = input->get();
+    //  if( input->good() && c>127 )
+    //    return false;
+    //}//while( input.good() )
+    
     
     //we have an ascii file if we've made it here
     input->clear();
-    input->seekg( 0, ios_base::beg );
+    input->seekg( (is_utf8 ? 3 : 0), ios_base::beg );
     
     
     //Check to see if this is a GR135 text file
     string firstline;
-    SpecUtils::safe_get_line( *input, firstline );
+    // We'll limit string length read in; 4 kb is arbitrary, but should be way more than enough
+    const size_t max_line_len = 4*1024;
+    SpecUtils::safe_get_line( *input, firstline, max_line_len );
     
     bool success = false;
     
     const bool isGR135File = contains( firstline, "counts Live time (s)" )
-    && contains( firstline, "gieger" );
+                             && contains( firstline, "gieger" );
+    
+    
     
     if( isGR135File )
     {
       input->seekg( 0, ios_base::beg );
       success = load_from_Gr135_txt( *input );
     }
+    
+    
+    // We'll allow some
+    const bool isD3Raw = (!success
+                         && (firstline.size() > ((max_line_len - 128)))
+                         && (firstline.find( "Bin Number, 0, 1," ) < 10));
+    if( isD3Raw )
+    {
+      input->seekg( 0, ios_base::beg );
+      success = load_from_D3S_raw( *input );
+    }
+    
     
     const bool isSDF = ((!success && firstline.size() > 3 && firstline[2]==',')
                         && ( SpecUtils::starts_with( firstline, "GB" )
@@ -130,7 +194,7 @@ bool SpecFile::load_txt_or_csv_file( const std::string &filename )
     if( !success )
     {
       input->clear();
-      input->seekg( 0, ios_base::beg );
+      input->seekg( (is_utf8 ? 3 : 0), ios_base::beg );
       success = load_from_txt_or_csv( *input );
     }
     
@@ -237,6 +301,433 @@ bool SpecFile::load_from_txt_or_csv( std::istream &istr )
   return true;
 }//bool load_from_txt_or_csv( std::ostream& ostr )
 
+
+bool SpecFile::load_from_D3S_raw( std::istream &input )
+{
+  reset();
+  
+  if( !input.good() )
+    return false;
+  
+  const std::streampos startpos = input.tellg();
+  
+  try
+  {
+    
+    //Bin Number, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+    //Energy[keV] ,-11.132,-16.503691,-15.844797,-15.185859...
+    //10:37:42.261,5/12/2022,NODET,0,NA,NA,31.84942,-55.072339
+    //Time,Date,Detection_ID,...Livetime(ms)....Dose Unit, Output(0), Output(1),...Output(71),Bin(0),Bin(1),Bin(2)
+    //10:37:43.316,5/12/2022,NODET,0,NA,NA,31.84942,-55.072339,... [corresponding to headers of previous line]
+    //[entries like the previous line repeated until end of file]
+    
+    // We'll limit the line length 512 kB; the example file I have is 512 kb total, with the
+    //  longest line being 47 kb, so we'll be overly safe, since I think even 1 MB of memory
+    //  is not a concern
+    const size_t max_line_len = 512*1024;
+    
+    shared_ptr<EnergyCalibration> energy_cal;
+    shared_ptr<DetectorAnalysis> detectors_analysis;
+    
+    {// begin code to get energy cal info
+      string first_line;
+      if( !SpecUtils::safe_get_line( input, first_line, max_line_len ) )
+        throw runtime_error( "Failed to get first line." );
+      
+      size_t pos = first_line.find( ',' );
+      if( pos == string::npos )
+        throw runtime_error( "No comma in first line." );
+      
+      if( !icontains(first_line.substr(0,pos), "Bin Number" ) )
+        throw runtime_error( "No 'Bin Number' in first line before first comma." );
+      
+      
+      for( pos += 1; (pos < first_line.size()) && std::isspace(first_line[pos]); ++pos )
+      {
+      }
+      
+      if( pos >= first_line.size() )
+        throw runtime_error( "Nearly empty first line." );
+      
+      //cout << "First character of first line is: '" << first_line[pos] << "'" << endl;
+      first_line = first_line.substr(pos);
+      
+      vector<int> channel_numbers;
+      split_to_ints( first_line.c_str(), first_line.size(), channel_numbers );
+      //cout << "First line gives " << channel_numbers.size() << " channels." << endl;
+      // TODO: maybe check channel numbers are increasing by one
+      
+      string second_line;
+      if( !SpecUtils::safe_get_line( input, second_line, max_line_len ) )
+        throw runtime_error( "Failed to get second line." );
+      
+      pos = second_line.find( ',' );
+      if( pos == string::npos )
+        throw runtime_error( "No comma in second line." );
+      
+      if( !icontains(second_line.substr(0,pos), "Energy[keV]" ) )
+        throw runtime_error( "No 'Energy[keV]' in second line before first comma." );
+      
+      for( pos += 1; (pos < second_line.size()) && std::isspace(second_line[pos]); ++pos )
+      {
+      }
+      
+      if( pos >= second_line.size() )
+        throw runtime_error( "Nearly empty second line." );
+      
+      //cout << "First character of second line is: '" << second_line[pos] << "'" << endl;
+      second_line = second_line.substr(pos);
+      
+      std::vector<float> channel_energies;
+      split_to_floats( second_line, channel_energies );
+      
+      //cout << "There are channel_energies.size()=" << channel_energies.size() << endl;
+      
+      // THe D3S look to have 4096 channels
+      if( channel_energies.size() < 128 )
+        throw runtime_error( "Too few channel numbers." );
+      
+      // TODO: check that channel_numbers is same size as channel_energies; even though we dont use them
+      
+      try
+      {
+        energy_cal = make_shared<EnergyCalibration>();
+        
+        // This next call will check that energies are monotonically increasing, and if not throw
+        //  an exception.
+        energy_cal->set_lower_channel_energy( channel_energies.size(), move(channel_energies) );
+      }catch(std::exception &e)
+      {
+        energy_cal.reset();
+        
+        throw runtime_error( "Invalid channel energies: " + string(e.what()) );
+      }//try / cat to set the energy cal.
+      
+      //cout << "Have set Energy cal." << endl;
+    }// begin code to get energy cal info
+    
+    assert( energy_cal && energy_cal->valid() );
+    
+    // I am *guessing* this next line is background,
+    string background_line_str;
+    if( !SpecUtils::safe_get_line( input, background_line_str, max_line_len ) )
+      throw runtime_error( "Failed to get background line." );
+    
+    string header_line;
+    if( istarts_with( background_line_str, "Time," ) )
+    {
+      // I havent actually seen this; but seems reasonable it *might* happen (e.g., background
+      //   left out).
+      header_line.swap( background_line_str );
+    }else
+    {
+      if( !SpecUtils::safe_get_line( input, header_line, max_line_len ) )
+        throw runtime_error( "Failed to get header line." );
+    }
+    
+    
+    // In the example file I have, the headers are:
+    //"Time", "Date", "Detection_ID", "Confidence", "UNUSED", "UNUSED", "Latitude", "Longitude",
+    //"Processing Time(ms)", "Sensor Temp (degC)", "Battery (%)", "Livetime(ms)", "Neutron Count",
+    //"Dose", "Dose Unit", "Output(0)", "Output(1)", ..., "Output(71)","Bin(0)","Bin(1)"..."Bin(4095)"
+    int time_index = -1, date_index = -1, riid_id_index = -1, riid_conf_index = -1,
+        latitude_index = -1, longitude_index = -1, process_time_ms_index = -1,
+        sensor_temp_index = -1, battery_index = -1, live_time_index = -1, neutron_index = -1,
+        dose_index = -1, does_unit_index = -1, output_start_index = -1, bin_start_index = -1,
+        bin_last_index = -1;
+    
+    vector<string> headers;
+    split_no_delim_compress( headers, header_line, "," );
+    
+    
+    for( int index = 0; index < static_cast<int>(headers.size()); ++index )
+    {
+      string &hdr = headers[index];
+      trim( hdr );
+      
+      if( istarts_with(hdr, "Time") )
+        time_index = index;
+      else if( istarts_with(hdr, "Date") )
+        date_index = index;
+      else if( istarts_with(hdr, "Detection_ID") )
+        riid_id_index = index;
+      else if( istarts_with(hdr, "Confidence") )
+        riid_conf_index = index;
+      else if( istarts_with(hdr, "Latitude") )
+        latitude_index = index;
+      else if( istarts_with(hdr, "Longitude") )
+        longitude_index = index;
+      else if( istarts_with(hdr, "Processing Tim") )
+        process_time_ms_index = index;
+      else if( istarts_with(hdr, "Sensor Temp") )
+        sensor_temp_index = index;
+      else if( istarts_with(hdr, "Battery") )
+        battery_index = index;
+      else if( istarts_with(hdr, "Livetime") )
+        live_time_index = index;
+      else if( istarts_with(hdr, "Neutron Count") )
+        neutron_index = index;
+      else if( iequals_ascii(hdr, "Dose") )
+        dose_index = index;
+      else if( istarts_with(hdr, "Dose Unit") )
+        does_unit_index = index;
+      else if( istarts_with(hdr, "Output(") )
+      {
+        if( output_start_index < 0 )
+          output_start_index = index;
+      }else if( istarts_with(hdr, "Bin(") )
+      {
+        if( bin_start_index < 0 )
+          bin_start_index = index;
+        else
+          bin_last_index = index;
+      }else if( !iequals_ascii(hdr, "UNUSED") )
+      {
+        cerr << "Unrecognized header '" << hdr << "' in D3S file - ignoring." << endl;
+      }
+    }//for( int index = 0; index < static_cast<int>(headers.size()); ++index )
+    
+    if( (bin_start_index < 0) || (bin_last_index < 0) || (live_time_index < 0) )
+      throw runtime_error( "Failed to find necessary CSV headers" );
+    
+    
+    int sample_num = 1;
+    
+    
+    auto parse_spectrum_line = [&]( string &line ) -> shared_ptr<Measurement> {
+      vector<string> fields;
+      split_no_delim_compress( fields, line, "," );
+      
+      //cout << "Spectrum line had " << fields.size() << " fields." << endl;
+      
+      //if( fields.size() < max_index )
+      //{
+      //  cout << "Spectrum line didnt have enough fields..." << endl;
+      //  return nullptr;
+      //}
+      
+      auto get_field_str = [&]( const int index ) -> string {
+        if( (index >= 0) && (static_cast<size_t>(index) < fields.size()) )
+          return fields[index];
+        return "";
+      };
+    
+      
+      bool failed_any_parse = false;
+      double gamma_sum = 0.0;
+      const size_t nchannel = energy_cal->num_channels();
+      auto channel_counts = make_shared<vector<float>>( nchannel, 0.0f );
+      const size_t end_bin = std::min( static_cast<size_t>(bin_last_index),
+                                       std::min( bin_start_index + nchannel, fields.size() ) );
+      for( size_t i = bin_start_index; i < fields.size(); ++i )
+      {
+        const size_t channel_num = i - bin_start_index;
+        assert( channel_num < channel_counts->size() );
+        float &channel = (*channel_counts)[channel_num];
+        if( parse_float( fields[i].c_str(), fields[i].size(), channel ) )
+        {
+          gamma_sum += channel;
+        }else
+        {
+          failed_any_parse = true;
+        }
+      }//for( size_t i = bin_start_index; i < fields.size(); ++i )
+      
+      if( gamma_sum <= 0 )
+        return nullptr;
+      
+      shared_ptr<Measurement> m = make_shared<Measurement>();
+      
+      // Live time is in milli-seconds.
+      const string livetime_str = get_field_str(live_time_index);
+      if( parse_float( livetime_str.c_str(), livetime_str.size(), m->live_time_) )
+      {
+        m->live_time_ /= 1000.0f;
+        m->real_time_ = m->live_time_;
+      }else
+      {
+        m->live_time_ = 0.0f;
+      }
+      
+      m->gamma_counts_ = channel_counts;
+      m->gamma_count_sum_ = gamma_sum;
+      
+      m->energy_calibration_ = energy_cal;
+      
+      const string date_str = get_field_str( date_index ); //ex "5/12/2022"
+      const string time_str = get_field_str( time_index ); //ex "10:37:43.316"
+      const string date_time = date_str + " " + time_str;
+      m->start_time_ = time_from_string_strptime( date_time, DateParseEndianType::MiddleEndianFirst );
+      
+      const string neut_counts_str = get_field_str(neutron_index);
+      float neutron_counts = 0.0;
+      if( parse_float( neut_counts_str.c_str(), neut_counts_str.size(), neutron_counts) )
+      {
+        m->contained_neutron_ = true;
+        m->neutron_counts_sum_ = 0.0f;
+        m->neutron_counts_.push_back( neutron_counts );
+      }
+      
+      try
+      {
+        const string lat_str = get_field_str(latitude_index);
+        const string lon_str = get_field_str(longitude_index);
+        
+        const double lat = std::stod( lat_str );
+        const double lon = std::stod( lon_str );
+        if( valid_latitude(lat) && valid_longitude(lon) && (lat != lon) )
+        {
+          m->latitude_ = lat;
+          m->longitude_ = lon;
+        }
+      }catch(...)
+      {
+        m->parse_warnings_.push_back( "Could not interpret lat/lon" );
+      }
+      
+      
+      const string temp_str = get_field_str(sensor_temp_index);
+      if( temp_str.size() > 1 )
+        m->remarks_.push_back( "Sensor temperature: " + temp_str + " C" );
+      
+      const string battery_str = get_field_str(battery_index);
+      if( battery_str.size() > 1 )
+        m->remarks_.push_back( "Battery: " + battery_str + " %" );
+      
+      m->sample_number_ = sample_num++;
+      
+      /*
+      get_field_str(does_unit_index);
+      //get_field_str(output_start_index);
+       // I think "Processing Time(ms)" is maybe just the CPU processing time; so irrelevant to us.
+       //string process_time_str = get_field_str(process_time_ms_index);
+      */
+      
+      string riid_str = get_field_str(riid_id_index);
+      if( riid_str == "NODET" )
+        riid_str = "";
+      
+      string riid_conf_str = get_field_str(riid_conf_index);
+      string dose_str = get_field_str(dose_index);
+      string dose_unit_str = get_field_str(does_unit_index);
+      
+      // Fix up an encoding issue..
+      if( (dose_unit_str.size() == 5)
+         && (static_cast<uint8_t>(dose_unit_str[0]) == 181)
+         && (dose_unit_str[1] == 'S')
+         && (dose_unit_str[2] == 'v')
+         && (dose_unit_str[3] == '/')
+         && (dose_unit_str[4] == 'h')
+         )
+      {
+        dose_unit_str = "uSv/h";
+      }
+      
+      if( riid_str.size() || dose_str.size() )
+      {
+        DetectorAnalysisResult result;
+        result.nuclide_ = riid_str;
+        result.id_confidence_ = riid_conf_str;
+        result.remark_ = "For sample " + std::to_string( m->sample_number_ );
+        
+        string remark;
+        if( !riid_str.empty() )
+        {
+          remark = "RIID result: " + riid_str;
+          if( riid_conf_str.size() )
+            remark += ", confidence: " + riid_conf_str;
+        }//if( !riid_str.empty() )
+        
+        if( !dose_str.empty() )
+        {
+          if( remark.size() )
+            remark += ", ";
+          remark += "Dose: " + dose_str + " " + dose_unit_str;
+        }//if( !dose_str.empty() )
+        
+        if( remark.size() )
+          m->remarks_.push_back( remark );
+        
+        if( parse_float( dose_str.c_str(), dose_str.size(), result.dose_rate_) )
+        {
+          //convert to micro-sievert per hour ..
+          const uint8_t first_char = dose_unit_str.empty() ? uint8_t(0)
+                                                           : static_cast<uint8_t>(dose_unit_str[0]);
+          
+          if( (icontains(dose_unit_str, "sv") || icontains(dose_unit_str, "siev"))
+              && (icontains(dose_unit_str, "micro") || (dose_unit_str.size() && first_char==181) || istarts_with(dose_unit_str, "usv/h")) )
+          {
+            //The 3DS dose_unit_str will look like [181,83,118,47,104] --> [?Sv/h]
+            // We are
+          }else
+          {
+           if( !result.remark_.empty() )
+             result.remark_ += ", ";
+            result.remark_ += "Dose unit not known";
+            if( !dose_unit_str.empty() )
+              result.remark_ += ": " + dose_unit_str;
+          }
+        }//if( we can parse dose rate )
+        
+        
+        if( !detectors_analysis )
+          detectors_analysis = make_shared<DetectorAnalysis>();
+        detectors_analysis->results_.push_back( result );
+      }//if( riid_str.size() || dose_str.size() )
+      
+      if( failed_any_parse )
+        m->parse_warnings_.push_back( "Not all gamma channel data was successfully parsed." );
+      
+      return m;
+    };//parse_spectrum_line
+    
+    
+    auto background = parse_spectrum_line( background_line_str );
+    if( background && (background->gamma_count_sum() >= 1) )
+    {
+      background->source_type_ = SourceType::Background;
+      measurements_.push_back( background );
+    }
+    
+    
+    string line;
+    while( SpecUtils::safe_get_line( input, line, max_line_len ) )
+    {
+      auto m = parse_spectrum_line( line );
+      if( m && (m->gamma_count_sum() >= 1) )
+      {
+        m->source_type_ = SourceType::Foreground;
+        measurements_.push_back( m );
+      }
+    }//while( more spectra to get ... )
+    
+    if( measurements_.empty() )
+      throw runtime_error( "No measurements found" );
+    
+    parse_warnings_.push_back( "Real time was not provided in the file so has been set to the"
+                               " live-time - dead time is unknown." );
+    
+    if( detectors_analysis )
+      detectors_analysis_ = detectors_analysis;
+    
+    // The Kromek D3S is the only detector model I'm aware of that makes data of this format.
+    manufacturer_ = "Kromek";
+    instrument_model_ = "D3S";
+    detector_type_ = DetectorType::KromekD3S;
+    
+    cleanup_after_load();
+  }catch( std::exception &e )
+  {
+    input.clear();
+    input.seekg( startpos, ios::end );
+    reset();
+    
+    return false;
+  }//try / catch
+  
+  return true;
+}//bool load_from_D3S_raw( std::istream &input )
+
   
 void Measurement::set_info_from_txt_or_csv( std::istream& istr )
 {
@@ -293,7 +784,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     
     //Dont allow a space delimiter until we have the columns mapped out to avoid things like
     //  "Energy (keV)" counting as two columns
-    const char *delim = (line.find(',') != string::npos) ? "," : ((column_map.empty() && !isdigit(line[0])) ? "\t,;" : "\t, ;");
+    const bool has_comma = (line.find(',') != string::npos);
+    const bool no_split_space = (column_map.empty() && !isdigit(line[0]) && !SpecUtils::istarts_with(line, "Channel Energy Counts") );
+    const char *delim = has_comma ? "," : (no_split_space ? "\t,;" : "\t, ;");
     
     SpecUtils::split( split_fields, line, delim );
      
@@ -1222,6 +1715,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
   return true;
 }//bool load_from_srpm210_csv( std::istream &input );
   
+
   
 bool Measurement::write_txt( std::ostream& ostr ) const
 {

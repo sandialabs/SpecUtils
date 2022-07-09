@@ -26,6 +26,7 @@
 #include <string>
 #include <thread>
 #include <iostream>
+#include <assert.h>
 #include <algorithm>
 
 #ifdef _WIN32
@@ -106,8 +107,38 @@ namespace SpecUtilsAsync
   
   ThreadPool::~ThreadPool()
   {
-    join();
+    // Throwing an exception from a destructor is dangerous
+    {// begin lock on m_exception_mutex
+      std::lock_guard<std::mutex> lock( m_exception_mutex );
+      if( m_exception )
+      {
+        try
+        {
+          std::rethrow_exception(m_exception);
+        }catch( std::exception &e )
+        {
+          assert( 0 );
+          const string err_msg = "ThreadPool destructor called with a pending exception: \""
+                                  + std::string(e.what()) + "\"";
+          cerr << err_msg << endl;
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+          log_developer_error( __func__, err_msg.c_str() );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+        }catch( ... )
+        {
+          assert( 0 );
+          const string err_msg = "ThreadPool destructor called with a pending non std exception.";
+          cerr << err_msg << endl;
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+          log_developer_error( __func__, err_msg.c_str() );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+        }//try / catch /catch
+        
+        m_exception = nullptr;
+      }//if( m_exception )
+    }// end lock on m_exception_mutex
     
+    join();
 #if( defined(ThreadPool_USING_WT) )
     std::unique_lock<std::mutex> lock( sm_npool_mutex );
     sm_npools -= 1;
@@ -127,7 +158,11 @@ namespace SpecUtilsAsync
     
     std::lock_guard<std::mutex> lock( m_exception_mutex );
     if( m_exception )
-      std::rethrow_exception( m_exception );
+    {
+      std::exception_ptr the_exception = m_exception;
+      m_exception = nullptr;
+      std::rethrow_exception( the_exception );
+    }
 #elif( defined(ThreadPool_USING_WT) )
     {
       std::unique_lock<std::mutex> lock( m_mutex );
@@ -145,7 +180,11 @@ namespace SpecUtilsAsync
     
     std::lock_guard<std::mutex> lock( m_exception_mutex );
     if( m_exception )
-      std::rethrow_exception( m_exception );
+    {
+      std::exception_ptr the_exception = m_exception;
+      m_exception = nullptr;
+      std::rethrow_exception( the_exception );
+    }
 #elif( defined(ThreadPool_USING_THREADS) )
     if( m_nonPostedWorkers.size() )
     {
@@ -215,7 +254,8 @@ namespace SpecUtilsAsync
           }catch( std::exception &e )
           {
             std::lock_guard<std::mutex> lock( m_exception_mutex );
-            std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
+            //if( m_exception ) std::cerr << "ThreadPool::dowork async has caught multiple exceptions\n";
+            //std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
             m_exception = std::current_exception();
           }
         } );
@@ -231,7 +271,15 @@ namespace SpecUtilsAsync
         ++m_nJobsLeft;
       }
       
-      io.post( std::bind(&ThreadPool::dowork, this, worker) );
+      // Starting with Wt commit e3726036 (https://github.com/emweb/wt/commit/e372603613022094729f81374be98a4542446d87)
+      //  (Mar 30, 2016) `Wt::WIOService::post(...)` started posting to a strand, so only a single
+      //  posted function would execute at a time.  This means if we were to post to this strand
+      //  and create a ThreadPool from within another ThreadPools workers, things will deadlock.
+      //  So instead, because WIOService inherits from boost::asio::io_service we will use
+      //  `boost::asio::io_service::post` to post the work
+      io.boost::asio::io_service::post( [this,worker](){
+        this->dowork(worker);
+      } );
     }else
     {
       m_nonPostedWorkers.push_back( std::bind( &ThreadPool::doworkasync, this, worker ) );
@@ -245,7 +293,8 @@ namespace SpecUtilsAsync
     }catch( std::exception &e )
     {
       std::lock_guard<std::mutex> lock( m_exception_mutex );
-      std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
+      //if( m_exception ) std::cerr << "ThreadPool::dowork async has caught multiple exceptions\n";
+      //std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
       m_exception = std::current_exception();
     }
 #endif

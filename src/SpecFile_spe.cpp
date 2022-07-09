@@ -65,6 +65,121 @@ namespace
 namespace SpecUtils
 {
   
+bool SpecFile::load_iaea_file( const std::string &filename )
+{
+  reset();
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+#ifdef _WIN32
+  ifstream file( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
+#else
+  ifstream file( filename.c_str(), ios_base::binary|ios_base::in );
+#endif
+  if( !file.is_open() )
+    return false;
+  
+  uint8_t first_bytes[4] = { 0, 0, 0, 0 };
+  file.read( (char *) (&first_bytes), 4 );
+  file.seekg( 0, ios::beg );
+  
+  // Usually the '$' character is the first character in the file, however, there may be a
+  //  Byte Order Mark (BOM) indicating UTF-8, UTF-16 little-endian, or UTF-16 big-endian (We'll ignore
+  const bool is_ascii = (first_bytes[0] == '$');
+  
+  const bool is_utf8 = ((first_bytes[0] == 0xEF)
+                        && (first_bytes[1] == 0xBB)
+                        && (first_bytes[2] == 0xBF)
+                        && (first_bytes[3] == '$'));
+  
+  const bool is_utf16_big_endian = ((first_bytes[0] == 0xFE)
+                                    && (first_bytes[1] == 0xFF)
+                                    && (first_bytes[3] == '$'));
+  
+  const bool is_utf16_little_endian = ((first_bytes[0] == 0xFF)
+                                       && (first_bytes[1] == 0xFE)
+                                       && (first_bytes[2] == '$'));
+  
+  // TODO: accept UTF-32 (BE) = {0x00, 0x00, 0xFE, 0xFF }, UTF-32 (LE) = { 0xFF, 0xFE, 0x00, 0x00 }
+  
+  if( !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
+  {
+    //    cerr << "IAEA file '" << filename << "'does not have expected first character"
+    //         << " of '$', firstbyte=" << int(first_bytes[0])
+    //         << " (" << char(first_bytes[0]) << ")" << endl;
+    return false;
+  }//if( (first_bytes[0] != '$') && (first_bytes[2] != '$') )
+  
+  
+  bool loaded = false;
+  
+  if( is_ascii || is_utf8 )
+  {
+    if( is_utf8 )
+      file.seekg( 3, ios::beg );
+    
+    loaded = load_from_iaea( file );
+  }else if( is_utf16_big_endian || is_utf16_little_endian )
+  {
+    file.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = file.tellg();
+    file.seekg( 2, ios::beg );
+    const size_t filelen = static_cast<size_t>( 0 + eof_pos );
+    
+    // If larger than 1 MB, this probably isnt an ASCII SPE file
+    if( filelen > 1024*1024 || filelen <= 256 )
+      return false;
+    
+    const size_t content_len_bytes = (filelen - 2) + (filelen % 2);
+    const size_t content_len_wchar = content_len_bytes / 2;
+    
+    assert( (content_len_bytes % 2) == 0 );
+    assert( 2*content_len_wchar == content_len_bytes );
+    
+    stringstream file_contents_utf8;
+    
+    // Read file contents into wide-string, and then convert to UTF-8; we'll do it scoped to release
+    //  memory as we can.
+    //  TODO: Use a stream-based UTF-16 to UTF-8 converter; there is an untested skeleton for doing
+    //        this in #SpecFile::load_txt_or_csv_file
+    {//begin read wide and convert to utf-8
+      std::wstring wide_contents( content_len_wchar, wchar_t('\0') );
+      
+      std::vector<char> raw_data;
+      file.unsetf(ios::skipws);
+      raw_data.resize( content_len_bytes, '\0' );
+      
+      //
+      if( !file.read( &raw_data.front(), static_cast<streamsize>(filelen - 2) ) )
+      {
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+        log_developer_error( __func__, "Error reading UTF-16 file contents into memory" );
+#endif
+        return false;
+      }//if( !file.read( &raw_data.front(), static_cast<streamsize>(filelen - 2) ) )
+      
+      
+      for( size_t i = 0; (i + 1) < raw_data.size(); i += 2 )
+      {
+        wchar_t lower_byte = is_utf16_little_endian ? raw_data[i] : raw_data[i+1];
+        wchar_t upper_byte = is_utf16_little_endian ? raw_data[i+1] : raw_data[i];
+        wchar_t &val = wide_contents[i/2];
+        val = (lower_byte | (upper_byte << 1));
+      }
+      
+      file_contents_utf8 = stringstream( convert_from_utf16_to_utf8(wide_contents) );
+    }//end read wide and convert to utf-8
+
+    
+    loaded = load_from_iaea( file_contents_utf8 );
+  }//if( is_ascii ) / else
+  
+  if( loaded )
+    filename_ = filename;
+  
+  return loaded;
+}//bool load_iaea_file(...)
+
+
 bool SpecFile::load_from_iaea( std::istream& istr )
 {
   //channel data in $DATA:
@@ -111,6 +226,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     bool neutrons_were_cps = false;
     std::shared_ptr<DetectorAnalysis> anaresult;
     vector<float> cal_coeffs;
+    vector<pair<int,float> > bin_to_energy;
     vector<pair<float,float>> deviation_pairs;
     
     
@@ -137,11 +253,71 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             auto newcal = make_shared<EnergyCalibration>();
             newcal->set_polynomial( nchannel, cal_coeffs, deviation_pairs );
             meas->energy_calibration_ = newcal;
+            
+            if( bin_to_energy.empty() )
+              meas->parse_warnings_.push_back( "A lower channel energy calibration was also specified in file, but not used." );
           }catch( std::exception &e )
           {
             meas->parse_warnings_.push_back( "Energy cal provided invalid: " + string(e.what()) );
           }//try / catch
         }//if( !cal_coeffs.empty() )
+        
+        
+        if( !bin_to_energy.empty()
+           && (!meas->energy_calibration_ || !meas->energy_calibration_->valid()) )
+        {
+          try
+          {
+            const size_t nlower = bin_to_energy.size();
+            if( (nchannel != nlower) && ((nchannel+1) != nlower) )
+              throw runtime_error( "Invalid number of lower channel energies ("
+                                  + std::to_string(nlower) + ") for "
+                                  + std::to_string(nchannel) + " gamma channels." );
+            
+            int prev_chan_num = bin_to_energy[0].first - 1;
+            vector<float> lower_energies( nlower );
+            for( size_t i = 0; i < nlower; ++i )
+            {
+              const int chan_num = bin_to_energy[i].first;
+              if( chan_num != (prev_chan_num + 1) )
+                throw runtime_error( "Channels not in increasing number ("
+                                     + std::to_string(chan_num) + " follows "
+                                     + std::to_string(prev_chan_num) + ")" );
+              
+              prev_chan_num = chan_num;
+              lower_energies[i] = bin_to_energy[i].second;
+            }//for( size_t i = 0; i < nlower; ++i )
+            
+            auto newcal = make_shared<EnergyCalibration>();
+            newcal->set_lower_channel_energy(nchannel, std::move(lower_energies));
+            meas->energy_calibration_ = newcal;
+          }catch( std::exception &e )
+          {
+            meas->parse_warnings_.push_back( "Invalid lower channel energies: " + string(e.what()) );
+            
+            const size_t num = bin_to_energy.size();
+            
+            if( num )
+            {
+              stringstream remarkstrm;
+              remarkstrm << "Calibration in file from:";
+              for( size_t i = 0; i < num && i < 5; ++i )
+                remarkstrm << (i?", ":" ") << "bin " << bin_to_energy[i].first
+                           << "->" << bin_to_energy[i].second << " keV";
+              
+              if( num > 5 )
+              {
+                remarkstrm << " ... ";
+              
+                for( size_t i = num - 5; i < num; ++i )
+                  remarkstrm << (i?", ":" ") << "bin " << bin_to_energy[i].first
+                    << "->" << bin_to_energy[i].second << " keV";
+              }//if( num > 5 )
+              
+              meas->remarks_.push_back( remarkstrm.str() );
+            }//if( num )
+          }//try / catch
+        }//if( we dont have energy cal yet, and we do have bin_to_energy )
       }//if( nchannel > 1 )
       
       cal_coeffs.clear();
@@ -274,6 +450,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         {
           meas->live_time_ = static_cast<float>( atof( fields[0].c_str() ) );
           meas->real_time_ = static_cast<float>( atof( fields[1].c_str() ) );
+          if( meas->real_time_ <= std::numeric_limits<float>::epsilon() )
+            meas->real_time_ = meas->live_time_;
         }else
         {
           parse_warnings_.emplace_back( "Error reading MEAS_TIM section of IAEA file, "
@@ -572,12 +750,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             }//if( parts.size() > 7 )
           }
         }//while( SpecUtils::safe_get_line( istr, line ) )
-      }else if( starts_with(line,"$ENER_DATA:") || starts_with(line,"$MCA_CAL_DATA:") )
+      }else if( starts_with(line,"$ENER_DATA:")
+                || starts_with(line,"$MCA_CAL_DATA:")
+                || starts_with(line,"$ENER_TABLE:") )
       {
         if( SpecUtils::safe_get_line( istr, line ) )
         {
           const size_t num = static_cast<size_t>( atol( line.c_str() ) );
-          vector<pair<int,float> > bintoenergy;
           while( SpecUtils::safe_get_line( istr, line ) )
           {
             trim(line);
@@ -592,20 +771,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               vector<float> parts;
               SpecUtils::split_to_floats( line.c_str(), line.size(), parts );
               if( parts.size() == 2 )
-                bintoenergy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
+                bin_to_energy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
             }
           }//while( SpecUtils::safe_get_line( istr, line ) )
-          
-          if( num && bintoenergy.size()==num )
-          {
-            stringstream remarkstrm;
-            remarkstrm << "Calibration in file from:";
-            for( size_t i = 0; i < num; ++i )
-              remarkstrm << (i?", ":" ") << "bin " << bintoenergy[i].first
-              << "->" << bintoenergy[i].second << " keV";
-            meas->remarks_.push_back( remarkstrm.str() );
-          }
-        }//if( file says how manyy entries to expect )
+        }//if( file says how many entries to expect )
       }else if( starts_with(line,"$SHAPE_CAL:") )
       {
         //I think this is FWHM calibration parameters - skipping this for now

@@ -177,13 +177,13 @@ namespace
       const size_t aligendN = size - (size % 4);
       for( size_t i = 0; i < aligendN; i += 4 )
       {
-        _mm_storeu_ps(&result[i],
-                      _mm_add_ps(_mm_loadu_ps(&result[i]),
+        _mm_storeu_ps(&results[i],
+                      _mm_add_ps(_mm_loadu_ps(&results[i]),
                                  _mm_loadu_ps(&curraray[i])));
       }
       
       for( size_t i = aligendN; i < size; ++i )
-        result[i] += curraray[i];
+        results[i] += curraray[i];
 #else
       for( size_t i = 0; i < size; ++i )
         results[i] += curraray[i];
@@ -296,7 +296,7 @@ bool compare_by_derived_sample_det_time( const std::shared_ptr<const SpecUtils::
   return (lhs->source_type() < rhs->source_type());
 }//compare_by_derived_sample_det_time(...)
 
-}//anaomous namespace
+}//anonymous namespace
 
 
 
@@ -519,87 +519,108 @@ std::vector< std::shared_ptr<const Measurement> > SpecFile::measurements() const
 
 std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return detectors_analysis_;
 }
 
 
 double SpecFile::mean_latitude() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return mean_latitude_;
 }
 
 double SpecFile::mean_longitude() const
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return mean_longitude_;
 }
 
 void SpecFile::set_filename( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   filename_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_remarks( const std::vector<std::string> &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   remarks_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
+
+void SpecFile::set_parse_warnings( const std::vector<std::string> &warnings )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  parse_warnings_ = warnings;
+  modified_ = modifiedSinceDecode_ = true;
+}
+
+
 void SpecFile::set_uuid( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   uuid_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_lane_number( const int num )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   lane_number_ = num;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_measurement_location_name( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   measurement_location_name_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_inspection( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   inspection_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_instrument_type( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   instrument_type_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_detector_type( const DetectorType type )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   detector_type_ = type;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_manufacturer( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   manufacturer_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_instrument_model( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   instrument_model_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
 
 void SpecFile::set_instrument_id( const std::string &n )
 {
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   instrument_id_ = n;
   modified_ = modifiedSinceDecode_ = true;
 }
-
-
 
 
 //implementation of inline Measurement functions
@@ -1249,7 +1270,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_RadSeekerLaBrStr             = "RadSeeker-CL";
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
-    
+  static const string sm_KromekD3S                    = "Kromek D3S";
+  
+  
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
 //  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger
@@ -1334,6 +1357,8 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderNaI;
     case DetectorType::VerifinderLaBr:
       return sm_VerifinderLaBr;
+    case DetectorType::KromekD3S:
+      return sm_KromekD3S;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -1428,8 +1453,31 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   if( (nchannelorig < ncombine) || (ncombine < 2) )
     return;
 
+  assert( energy_calibration_ );
+  const auto oldcal = energy_calibration_;
+  shared_ptr<EnergyCalibration> newcal;
+  if( oldcal && oldcal->valid() && oldcal->num_channels() )
+    newcal = energy_cal_combine_channels( *oldcal, ncombine );
+  
+  if( !newcal )
+    newcal = make_shared<EnergyCalibration>();
+  
+  // We wont just take `nnewchann = newcal->num_channels()` as the calibration could be empty, but
+  // the gamma data is not empty.
   const bool evenDivide = !(nchannelorig % ncombine);
   const size_t nnewchann = (nchannelorig / ncombine) + (evenDivide ? 0 : 1);
+  
+  assert( !newcal->valid() || (newcal->num_channels() == nnewchann) );
+  
+  // We shouldnt ever encounter the number of channels not matching up; but we'll check, jic, since
+  //  its cheap.
+  if( newcal->valid() && (newcal->num_channels() != nnewchann) )
+  {
+#if( PERFORM_DEVELOPER_CHECKS )
+    log_developer_error( __func__, "Totally unexpected number of channels logic error" );
+#endif
+    throw logic_error( "Measurement::combine_gamma_channels: num channels logic error." );
+  }
   
 #if( PERFORM_DEVELOPER_CHECKS )
   const double pre_gammasum = accumulate( begin(*gamma_counts_), end(*gamma_counts_), double(0.0) );
@@ -1447,82 +1495,6 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
   //  jic
   //for( size_t i = nchannelorig; i < gamma_counts_->size(); ++i )
     //(*newchanneldata)[nnewchann-1] += (*gamma_counts_)[i];
-  
-  assert( energy_calibration_ );
-  const auto oldcal = energy_calibration_;
-  auto newcal = make_shared<EnergyCalibration>();
-      
-  switch( oldcal->type() )
-  {
-    case SpecUtils::EnergyCalType::Polynomial:
-    case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-    {
-      auto newcalcoefs = oldcal->coefficients();
-      for( size_t i = 1; i < newcalcoefs.size(); ++i )
-      {
-        const double newcoef = newcalcoefs[i] * std::pow( double(ncombine), double(i) );
-        newcalcoefs[i] = static_cast<float>( newcoef );
-      }
-      
-      newcal->set_polynomial( nnewchann, newcalcoefs, oldcal->deviation_pairs() );
-      break;
-    }//case polynomial
-      
-    case SpecUtils::EnergyCalType::FullRangeFraction:
-    {
-      if( evenDivide )
-      {
-        newcal->set_full_range_fraction( nnewchann, oldcal->coefficients(), oldcal->deviation_pairs() );
-      }else
-      {
-        //We need to account for the effective extra bins we are adding into the original spectrum
-        // \TODO: uncheced as of 20200909
-        const auto nextraequiv = ncombine - (nchannelorig % ncombine);
-        const float equivupper = oldcal->energy_for_channel( oldcal->num_channels() + nextraequiv );
-        
-        const float new_range = equivupper - oldcal->lower_energy();
-        const float prev_range = oldcal->upper_energy() - oldcal->lower_energy();
-        
-        vector<float> newcoefs = oldcal->coefficients();
-        if( newcoefs.size() > 1 )//should always be true, but JIC
-          newcoefs[1] *= (new_range / prev_range);
-        newcal->set_full_range_fraction( nnewchann, newcoefs, oldcal->deviation_pairs() );
-      }//if( evenDivide ) / else
-      
-      break;
-    }//case FRF
-      
-    case SpecUtils::EnergyCalType::LowerChannelEdge:
-    {
-      vector<float> newbinning( nnewchann+1, 0.0f );
-      const shared_ptr<const vector<float>> &old_energies_ptr = oldcal->channel_energies();
-      assert( old_energies_ptr );
-      const auto &old_energies = *old_energies_ptr;
-      const size_t oldnenergies = old_energies.size();
-     
-      assert( oldnenergies >= nchannelorig );
-      if( oldnenergies < nchannelorig )
-      {
-        const string msg = "combine_gamma_channels: Unexpectedly found case where channel energies"
-                           " (size=" + std::to_string(oldnenergies) + ") wasnt as large as gamma"
-                           " channels (" + std::to_string(nchannelorig) + ")";
-#if( PERFORM_DEVELOPER_CHECKS )
-        log_developer_error( __func__, msg.c_str() );
-#endif
-        throw std::runtime_error( msg );
-      }//if( oldnenergies < nchannelorig )
-      
-      for( size_t i = 0; ((i/ncombine) < (nnewchann+1)) && (i < oldnenergies); i += ncombine )
-        newbinning[i/ncombine] = old_energies[i];
-      
-      newbinning[nnewchann] = old_energies.back();
-      
-      newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
-    }//break
-      
-    case SpecUtils::EnergyCalType::InvalidEquationType:
-      break;
-  }//switch( oldcal->type() )
   
   gamma_counts_ = newchanneldata;
   energy_calibration_ = newcal;
@@ -1885,6 +1857,8 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
 
 std::shared_ptr<Measurement> SpecFile::measurement( std::shared_ptr<const Measurement> meas )
 {
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
   for( const auto &m : measurements_ )
   {
     if( m == meas )
@@ -3170,11 +3144,48 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     throw runtime_error( "Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
   
-  if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
+  uint32_t lhs_deriv_props = lhs.derived_data_properties_;
+  uint32_t rhs_deriv_props = rhs.derived_data_properties_;
+  if( lhs_deriv_props != rhs_deriv_props )
+  {
+    if( rhs.source_type_ == SourceType::Background )
+      rhs_deriv_props |= static_cast<uint32_t>(DerivedDataProperties::IsBackground);
+    
+    if( lhs.source_type_ == SourceType::Background )
+      lhs_deriv_props |= static_cast<uint32_t>(DerivedDataProperties::IsBackground);
+  }//if( lhs_deriv_props != rhs_deriv_props )
+  
+  if( lhs_deriv_props != rhs_deriv_props )
+  {
+    auto list_of_deriv_props = []( const uint32_t val ) -> string {
+      const vector<pair<DerivedDataProperties,string>> props{
+        {DerivedDataProperties::IsDerived,"IsDerived"},
+        {DerivedDataProperties::ItemOfInterestSum,"ItemOfInterestSum"},
+        {DerivedDataProperties::UsedForAnalysis,"UsedForAnalysis"},
+        {DerivedDataProperties::ProcessedFurther,"ProcessedFurther"},
+        {DerivedDataProperties::BackgroundSubtracted,"BackgroundSubtracted"},
+        {DerivedDataProperties::IsBackground,"IsBackground"}
+      };
+      
+      if( val == 0 )
+        return "{none}";
+      
+      string answer = "{";
+      for( const auto i : props )
+      {
+        if( val & static_cast<uint32_t>(i.first) )
+          answer += ((answer.size() > 3) ? ", " : "") + i.second;
+      }
+      answer += "}";
+      
+      return answer;
+    };//enum class DerivedDataProperties
+    
     throw runtime_error( "Derived data flags for LHS ('"
-                        + std::to_string(lhs.derived_data_properties_)
+                        + list_of_deriv_props(lhs.derived_data_properties_)
                         + "') doesnt match RHS ('"
-                        + std::to_string(rhs.derived_data_properties_) + "')" );
+                        + list_of_deriv_props(rhs.derived_data_properties_) + "')" );
+  }//if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
@@ -3230,10 +3241,16 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   
   if( lhs.detector_names_.size() != rhs.detector_names_.size() )
   {
-    snprintf( buffer, sizeof(buffer),
-             "SpecFile: Number of detector names of LHS (%i) doesnt match RHS (%i)",
-             int(lhs.detector_names_.size()), int(rhs.detector_names_.size()) );
-    throw runtime_error( buffer );
+    string message = "SpecFile: Number of detector names of LHS ("
+                     + to_string(lhs.detector_names_.size()) + ": ";
+    for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+      message += (i ? ", '" : "'") + lhs.detector_names_[i] + "'";
+    message += ") doesnt match RHS (" + to_string(rhs.detector_names_.size()) + ": ";
+    for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
+      message += (i ? ", '" : "'") + rhs.detector_names_[i] + "'";
+    message += ")";
+    
+    throw runtime_error( message );
   }
   
   const set<string> lhsnames( lhs.detector_names_.begin(),
@@ -3928,6 +3945,10 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_lzs_file( filename );
       break;
       
+    case ParserType::ScanDataXml:
+      success = load_xml_scan_data_file( filename );
+      break;
+      
     case ParserType::MicroRaider:
       success = load_micro_raider_file( filename );
     break;
@@ -3940,7 +3961,7 @@ bool SpecFile::load_file( const std::string &filename,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
-          triedLzs = false;
+      triedLzs = false, triedXmlScanData = false;;
       
       if( !orig_file_ending.empty() )
       {
@@ -4079,6 +4100,10 @@ bool SpecFile::load_file( const std::string &filename,
           triedMicroRaider = true;
           success = load_micro_raider_file( filename );
           if( success ) break;
+          
+          triedXmlScanData = true;
+          success = load_xml_scan_data_file( filename );
+          if( success ) break;
         }//if( orig_file_ending=="xml" )
       }//if( !orig_file_ending.empty() ) / else
 
@@ -4138,6 +4163,9 @@ bool SpecFile::load_file( const std::string &filename,
       
       if( !success && !triedOrtecLM )
         success = load_ortec_listmode_file( filename );
+      
+      if( !success && !triedXmlScanData )
+        success = load_xml_scan_data_file( filename );
       
        break;
     }//case Auto
@@ -4523,6 +4551,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     int numNeutronAndGamma = 0, numWithGammas = 0, numWithNeutrons = 0;
     bool neutronMeasDoNotHaveGamma = true, haveNeutrons = false, haveGammas = false;
     
+    SpecUtils::trim( instrument_id_ );
     
     for( size_t meas_index = 0; meas_index < measurements_.size(); ++meas_index )
     {
@@ -5686,7 +5715,8 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::DetectiveEx;
     else if( icontains(instrument_model_,"Detective") && contains(instrument_model_,"100") )
       detector_type_ = DetectorType::DetectiveEx100;
-    else if( icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro") )
+    else if( icontains(instrument_model_,"uDetective")
+            || (icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro")) )
       detector_type_ = DetectorType::MicroDetective;
     else if( iequals_ascii(instrument_model_,"Detective X") )
       detector_type_ = DetectorType::DetectiveX;
@@ -5696,6 +5726,20 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
   
+  
+  if( icontains( manufacturer_,"Kromek" ) )
+  {
+    // I've seen manufacturer name be either "Kromek" or "Kromek Ltd"
+    
+    if( istarts_with(instrument_model_,"D3") || iequals_ascii(instrument_model_,"D3S") )
+    {
+      //Have seen model strings: "D3", "D3S", "D3S 2.02"
+      detector_type_ = DetectorType::KromekD3S;
+      return;
+    }
+    
+    //Other Kromek instrument models I've seem: "MultiSpect/KSpect"
+  }//if( icontains( manufacturer_,"Kromek" ) )
   
   
   if( iequals_ascii(instrument_type_,"PVT Portal") && iequals_ascii(manufacturer_,"SAIC") )
@@ -5957,6 +6001,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="labZY")
        && !icontains( manufacturer_, "SSC Pacific")
        && !icontains( instrument_model_, "ASP-")
+       && !(icontains( manufacturer_, "Kromek") && instrument_model_=="MultiSpect/KSpect")
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {
@@ -6503,6 +6548,10 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
                            + name + "'" );
   }//for( check all detector names were valid )
   
+  auto energy_range = []( const std::shared_ptr<const EnergyCalibration> &cal ) -> float {
+    return !cal ? 0.0f : (cal->upper_energy() - cal->lower_energy());
+  };
+  
   size_t energy_cal_index = 0;
   std::shared_ptr<const EnergyCalibration> energy_cal;
   
@@ -6528,12 +6577,20 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
       if( has_common )
         return this_cal;
       
-      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      if( this_cal == energy_cal )
+        continue;
+      
+      const size_t this_nchannel = this_cal->num_channels();
+      const size_t prev_nchannel = energy_cal ? energy_cal->num_channels() : size_t(0);
+      const float prev_range = energy_range(energy_cal);
+      const float this_range = energy_range(this_cal);
+      
+      if( !energy_cal
+         || (prev_nchannel < this_nchannel)
+         || ((prev_nchannel == this_nchannel) && (prev_range < this_range)) )
       {
         energy_cal_index = i;
         energy_cal = this_cal;
-        if( same_nchannel )
-          return energy_cal;
       }//if( !binning_ptr || (binning_ptr->size() < thisbinning->size()) )
   #else
       if( has_common && energy_cal && (energy_cal != this_cal) && ((*energy_cal) == (*this_cal)) )
@@ -6552,7 +6609,14 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
         log_developer_error( __func__, buffer );
       }//if( has_common, but energy calibration wasnt the same )
       
-      if( !energy_cal || (energy_cal->num_channels() < this_cal->num_channels()) )
+      const size_t this_nchannel = this_cal->num_channels();
+      const size_t prev_nchannel = energy_cal ? energy_cal->num_channels() : size_t(0);
+      const float prev_range = energy_range(energy_cal);
+      const float this_range = energy_range(this_cal);
+      
+      if( !energy_cal
+         || (prev_nchannel < this_nchannel)
+         || ((prev_nchannel == this_nchannel) && (prev_range < this_range)) )
       {
         if( same_nchannel && energy_cal
             && (energy_cal->num_channels() != this_cal->num_channels()) )
@@ -6901,7 +6965,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     vector< unique_ptr<vector<float>> > results;
     vector< shared_ptr<const EnergyCalibration>> calibrations;
     
-    const size_t nominal_per_thread = total_num_gamma_spec / std::max( num_thread, size_t(1) );
+    const size_t nominal_per_thread = std::max( size_t(1), total_num_gamma_spec / std::max( num_thread, size_t(1) ) );
     
     SpecUtilsAsync::ThreadPool threadpool;
     

@@ -185,6 +185,10 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
   
   rapidxml::xml_document<char> *doc = RadInstrumentData->document();
   
+  assert( doc );
+  if( !doc )
+    throw runtime_error( "add_calibration_to_2012_N42_xml: failed to get xml document." );
+  
   const char *coefname = 0;
   xml_node<char> *EnergyCalibration = 0, *node = 0;
   
@@ -388,6 +392,10 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::MicroRaider:
     case SpecUtils::DetectorType::Interceptor:
       det_kind = "CZT";
+      break;
+      
+    case SpecUtils::DetectorType::KromekD3S:
+      det_kind = "CsI";
       break;
       
     case SpecUtils::DetectorType::Unknown:
@@ -762,13 +770,17 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       throw runtime_error( "measurements.size != calibids.size" );
     
     string radMeasID;
-    xml_document<char> *doc = 0;
+    xml_document<char> *doc = nullptr;
     
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
       doc = RadMeasurement->document();
       radMeasID = xml_value_str( XML_FIRST_ATTRIB(RadMeasurement, "id") );
     }
+    
+    assert( doc );
+    if( !doc )
+      throw runtime_error( "failed to get xml document." );
     
     const char *val = 0;
     char buffer[256];
@@ -2674,7 +2686,8 @@ struct N42DecodeHelper2006
     {
       m_meas->reset();
       m_meas->title_ = N42DecodeHelper2006_failed_decode_title;
-      if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" ) )
+      if( !SpecUtils::icontains( e.what(), "didnt find <ChannelData>" )
+         && !SpecUtils::icontains( e.what(), "Spectrum marked as missing, and all zeros" ) )
       {
         char buffer[256];
         snprintf( buffer, sizeof(buffer), "Caught: %s", e.what() );
@@ -3258,8 +3271,9 @@ public:
           bool is_neutron = ((det_type == NeutronDetection) || (det_type == GammaAndNeutronDetection));
           if( det_type == GammaAndNeutronDetection )
           {
-            const string att_val = xml_value_str( id_att );
-            is_gamma = !(icontains(att_val,"Neutron") || icontains(att_val,"Ntr"));
+            const string id_att_val = xml_value_str( id_att );
+            
+            is_gamma = !(icontains(id_att_val,"Neutron") || icontains(id_att_val,"Ntr"));
             
             //If no calibration info is given, then assume it is not a gamma measurement
             if( !calib_att || !calib_att->value_size() )
@@ -3648,7 +3662,7 @@ public:
           for( size_t i = 0; i < neutron_meas.size(); ++i )
             if( neutron_meas[i] )
               meas_to_add.push_back( neutron_meas[i] );
-        }//
+        }//if( spectrum_meas.size() == neutron_meas.size() ) / else
         
         //XXX - todo - should implement the below
         //    rapidxml::xml_node<char> *dose_rate_node = XML_FIRST_NODE(meas_node, "DoseRate" );
@@ -3681,14 +3695,22 @@ public:
             if( innermeas->detector_name_ == meas->detector_name_
                && innermeas->start_time_ == meas->start_time_
                && fabs(innermeas->real_time_ - meas->real_time_) < 0.01
-               && fabs(innermeas->live_time_ - meas->live_time_) < 0.01 )
+               && fabs(innermeas->live_time_ - meas->live_time_) < 0.01
+               && (meas_to_cal_id[i].second != meas_to_cal_id[j].second) )
             {
+              // Detector name, start, real, and live times are all the same, but energy
+              //  calibration is different, we will use the "_intercal_" detector renaming
+              //  convention.
               samenames.push_back( make_pair(innermeas, meas_to_cal_id[j].second ) );
-            }
+            }//if( detector name, real, live, and start times are all the same )
           }//for( size_t j = 0; j < i; ++j )
           
           if( samenames.size() )
           {
+            // Usually when we're here it means that the same spectrum was placed into the spectrum
+            //  file multiple times, but with different energy calibrations (maybe one with data up
+            //  to 3 MEV, and the other up to 9 MeV, or maybe one is linearized, while the other is
+            //  binned according to sqrt(energy), etc).
             meas->detector_name_ += "_intercal_" + meas_to_cal_id[i].second;
             for( size_t j = 0; j < samenames.size(); ++j )
               samenames[j].first->detector_name_ += "_intercal_" + samenames[j].second;
@@ -5810,7 +5832,11 @@ namespace SpecUtils
     
     ::rapidxml::xml_document<char> *doc = RadInstrumentData->document();
     
-    xml_node<char> *AnalysisResults = 0;
+    assert( doc );
+    if( !doc )
+      throw runtime_error( "add_analysis_results_to_2012_N42: failed to get xml document." );
+    
+    xml_node<char> *AnalysisResults = nullptr;
     
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -5997,7 +6023,7 @@ namespace SpecUtils
         
         xml_node<char> *NuclideExtension = 0;
         
-        if( result.real_time_ > 0.0f )
+        if( result.real_time_ >= 0.0f )
         {
           NuclideExtension = doc->allocate_node( node_element, "NuclideExtension" );
           nuclide_node->append_node( NuclideExtension );
@@ -6007,7 +6033,7 @@ namespace SpecUtils
           NuclideExtension->append_node( SampleRealTime );
         }//if( we should record some more info )
         
-        if( result.distance_ > 0.0f )
+        if( result.distance_ >= 0.0f )
         {
           xml_node<char> *SourcePosition = doc->allocate_node( node_element, "SourcePosition" );
           nuclide_node->append_node( SourcePosition );
@@ -6832,6 +6858,8 @@ namespace SpecUtils
   
   void SpecFile::set_2012_N42_instrument_info( const rapidxml::xml_node<char> *info_node )
   {
+    std::unique_lock<std::recursive_mutex> lock( mutex_ );
+    
     if( !info_node )
       return;
     
@@ -7467,6 +7495,26 @@ namespace SpecUtils
           const string charac_str = N42DecodeHelper2012::concat_2012_N42_characteristic_node(character);
           if( charac_str.size() )
             descrip += string(descrip.size() ? ", " : "") + "{" + charac_str + "}";
+          
+          // Kromek D3 data exported from the Android app looks to have the phone manufacturer/model
+          //  as the "RadInstrumentManufacturerName" and "RadInstrumentModelName" values, with the
+          //  actual detectors values (that we want) buried down in these Characteristics.
+          //  The gamma and neutron detectors both have these values, and appear to be the same.
+          const rapidxml::xml_node<char> *name_node = XML_FIRST_NODE(character, "CharacteristicName");
+          const rapidxml::xml_node<char> *value_node = XML_FIRST_NODE(character, "CharacteristicValue");
+          if( xml_value_compare(name_node, "Sensor Make") )
+          {
+            if( value_node && value_node->value_size() )
+              manufacturer_ = xml_value_str(value_node);
+          }else if( xml_value_compare(name_node, "Sensor Model") )
+          {
+            if( value_node && value_node->value_size() )
+              instrument_model_ = xml_value_str(value_node);
+          }else if( xml_value_compare(name_node, "Sensor Serial") )
+          {
+            if( value_node && value_node->value_size() )
+              instrument_id_ = xml_value_str(value_node);
+          }
         }//loop over characteristics
         
         

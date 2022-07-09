@@ -32,7 +32,9 @@
 #include <algorithm>
 #include <functional>
 
-#define BOOST_DATE_TIME_NO_LIB
+#ifndef BOOST_DATE_TIME_NO_LIB
+  #define BOOST_DATE_TIME_NO_LIB
+#endif
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 
@@ -153,6 +155,8 @@ enum class ParserType : int
   Phd,
   /** LabZY XML based files. */
   Lzs,
+  /** Scan Data XML */
+  ScanDataXml,
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -246,14 +250,27 @@ enum class DetectorType : int
   
   /** Used for the NG and NGH, and R400 models since same crystal size (NGH has neutron
       tube)
+      R400 {NGH, UCLS-NGH, ULK-NG, ULK-NGH, UW-NG, UW-NGH, UW-ULCS-NG, UW-ULCS-NG}: NaI 35 x 51,
+      with various He-3 or LED options.
   */
   IdentiFinderNG,
   
+  /** IdentiFinder-LG
+      R400 LG: LaBr, 30 x 30 mm, GM, LED
+   */
   IdentiFinderLaBr3,
   
+  /** R400 T1: NaI 23 x 21mm - Tungsten shielded, GM
+      R400 T2: NaI 23 x 21mm - Tungsten shielded, GM
+   */
   IdentiFinderTungsten,
   
+  /** R500 UL-LG: 38 x 38mm, LaBr, GM, LED
+      R500 UL-LGH: 38 x 38mm, LaBr, GM
+   */
   IdentiFinderR500NaI,
+  
+  /** R500 UL-LG: 38 x 38mm, LaBr, GM, LED */
   IdentiFinderR500LaBr,
   
   IdentiFinderUnknown,
@@ -309,6 +326,9 @@ enum class DetectorType : int
   /** Symetrica Verifinder. Only tested from N42-2012 spectrum files, that all seem report model number "SN20", or "SN23-N" */
   VerifinderNaI,
   VerifinderLaBr,
+  
+  /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
+  KromekD3S,
   
   Unknown
 };//enum DetectorType
@@ -606,7 +626,7 @@ public:
   const std::shared_ptr< const std::vector<float> > &channel_energies() const;
   
   //gamma_counts(): the channel counts of the gamma data.
-  //  Returned pointer may be null if no gamma data present, or not thie
+  //  Returned pointer may be null if no gamma data present, or not this
   //  Measurement is not properly initialized.
   const std::shared_ptr< const std::vector<float> > &gamma_counts() const;
   
@@ -959,10 +979,10 @@ protected:
   
 protected:
   
-  //live_time_: in units of seconds.  Typially 0.0f if not specified.
+  //live_time_: in units of seconds.  Typically 0.0f if not specified.
   float live_time_;
   
-  //real_time_: in units of seconds.  Typially 0.0f if not specified.
+  //real_time_: in units of seconds.  Typically 0.0f if not specified.
   float real_time_;
 
   //contained_neutron_: used to specify if there was a neutron detector, but
@@ -1261,6 +1281,7 @@ public:
   //simple setters (no thread locks are aquired)
   void set_filename( const std::string &n );
   void set_remarks( const std::vector<std::string> &n );
+  void set_parse_warnings( const std::vector<std::string> &warnings );
   void set_uuid( const std::string &n );
   void set_lane_number( const int num );
   void set_measurement_location_name( const std::string &n );
@@ -1270,7 +1291,6 @@ public:
   void set_manufacturer( const std::string &n );
   void set_instrument_model( const std::string &n );
   void set_instrument_id( const std::string &n );
-
 
   //A little more complex setters:
   //set_live_time(...) and set_real_time(...) update both the measurement
@@ -1430,7 +1450,9 @@ public:
    This function attempts to provide the best EnergyCalibration object, from the indicated set of
    samples and detectors to use to sum to.
    
-   Currently, this function chooses the Measurement with the largest number of gamma channels.
+   Currently, this function chooses the Measurement with the largest number of gamma channels, and
+   if there are multiple energy calibrations with same number of measurements, will pick the one
+   with the largest energy range.
    
    @param sample_numbers The sample numbers to consider; if empty, will return nullptr.
    @param detector_names The detectors to consider; if empty, will return nullptr.
@@ -1439,6 +1461,8 @@ public:
             calibration is found).
    
    Throws exception if any sample_number or detector_names entries is invalid.
+   
+   TODO: consider creating an all-new energy calibration to cover energy range of all desired samples/detector
    */
   std::shared_ptr<const EnergyCalibration> suggested_sum_energy_calibration(
                                             const std::set<int> &sample_numbers,
@@ -1584,6 +1608,7 @@ public:
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
+  bool load_xml_scan_data_file( const std::string &filename );
   
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1641,6 +1666,9 @@ public:
   /** Load the CSV format from SRPM210 files */
   bool load_from_srpm210_csv( std::istream &input );
   
+  /** Load the CSV based Kromek D3S raw data log file. */
+  bool load_from_D3S_raw( std::istream &input );
+  
   //setInfoFromAmetekMcaFiles(...): asncii file format used by Ametek MCA
   //  devices;
   bool load_from_amptek_mca( std::istream &input );
@@ -1669,6 +1697,11 @@ public:
    As of 20200131 only tested on a few files.
    */
   bool load_from_lzs( std::istream &input );
+  
+  /** Load from a one-off scan data xml format.
+   */
+  bool load_from_xml_scan_data( std::istream &input );
+  
   
   //bool load_from_iaea(...): an ASCII format standardized by the IAEA; not all
   //  portions of the standard have been implemented, since they are either

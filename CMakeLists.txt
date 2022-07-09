@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 3.1...3.13)
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of CMAKE_MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
+endif()
+
+cmake_minimum_required(VERSION 3.1...3.22)
 
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
@@ -22,33 +26,6 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 
 
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
-
-#I cant quite seem to get rpath stuff to work on macOS for regression_test and
-# python targets when using boost in a non-standard location, so instead just
-# statically link... sorry!
-option( TRY_TO_STATIC_LINK "Try to link to static libs whenever possible" OFF )
-if( TRY_TO_STATIC_LINK )
-  set( Boost_USE_STATIC_LIBS ON )
-  if( WIN32 )
-    #find static libraries first
-	set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-	
-	#Link to static runtime
-	set( CMAKE_CXX_FLAGS "/MT ${CMAKE_CXX_FLAGS}" )
-  	set(CompilerFlags
-        CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELEASE
-        CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO
-        )
-    foreach(CompilerFlag ${CompilerFlags})
-        string(REGEX REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
-    endforeach()
-  else( WIN32 )
-    set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-  endif( WIN32 )
-else( TRY_TO_STATIC_LINK )
-#  set( Boost_USE_STATIC_LIBS OFF )
-#  set( CMAKE_FIND_LIBRARY_SUFFIXES .so .dylib ${CMAKE_FIND_LIBRARY_SUFFIXES} )
-endif( TRY_TO_STATIC_LINK )
 
 
 if( SpecUtils_BUILD_UNIT_TESTS )
@@ -78,11 +55,13 @@ if( SpecUtils_JAVA_SWIG )
   SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
 endif( SpecUtils_JAVA_SWIG )
 
-find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
 
-if( NOT Boost_FOUND )
-  message(FATAL_ERROR "Couldnt Find Boost")
-endif( NOT Boost_FOUND )
+if( NOT DEFINED boost_SOURCE_DIR )
+  find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
+  if( NOT Boost_FOUND )
+    message(FATAL_ERROR "Couldnt Find Boost")
+  endif( NOT Boost_FOUND )
+endif( NOT DEFINED boost_SOURCE_DIR )
 
 
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
@@ -115,6 +94,7 @@ set( sources
      src/SpecFile_mps.cpp
      src/SpecFile_multiact.cpp
      src/SpecFile_uraider.cpp
+     src/SpecFile_xml_other.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp
@@ -239,8 +219,18 @@ set_target_properties( SpecUtils PROPERTIES
 
 
 if( SpecUtils_USE_WT_THREADPOOL )
-  include( ${CMAKE_SOURCE_DIR}/cmake/FindWt.cmake)
-  target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+  if( DEFINED wt_SOURCE_DIR )
+    target_include_directories( SpecUtils PUBLIC "${wt_SOURCE_DIR}/src" "${wt_BINARY_DIR}" )
+    
+    # We'll need to pick up all the includes Wt/WApplication will require
+    target_link_libraries( SpecUtils PUBLIC Boost::any Boost::asio Boost::signals2 )
+  else( DEFINED wt_SOURCE_DIR )
+    if( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+      message( FATAL "Wt not found; either find before adding SpecUtils, or set SpecUtils_USE_WT_THREADPOOL OFF" )
+    else( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+      target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
+    endif( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
+  endif( DEFINED wt_SOURCE_DIR )
 endif( SpecUtils_USE_WT_THREADPOOL )
 
 
@@ -248,6 +238,10 @@ if( SpecUtils_PYTHON_BINDINGS )
   #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
   target_link_libraries( SpecUtils PUBLIC ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
+
+if( DEFINED boost_SOURCE_DIR )
+  target_link_libraries( SpecUtils PUBLIC Boost::date_time Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )
+endif( DEFINED boost_SOURCE_DIR )
 
 
 if( SpecUtils_JAVA_SWIG )

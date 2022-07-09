@@ -1007,7 +1007,7 @@ void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &o
     case SpecUtils::SourceType::Unknown:           out << ", UnknownSourceType"; break;
   }//switch( meas.source_type() )
   
-  out << ", " << meas.start_time();
+  out << ", " << SpecUtils::to_extended_iso_string(meas.start_time());
   
   if( meas.has_gps_info() )
     out << ", GPS(" << meas.latitude() << "," << meas.longitude() << "," << meas.position_time() << ")";
