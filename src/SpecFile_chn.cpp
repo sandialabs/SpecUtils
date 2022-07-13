@@ -36,10 +36,10 @@
 #include <algorithm>
 #include <functional>
 
-
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
 
 using namespace std;
@@ -461,15 +461,8 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   //  Also, not certain about values in first channel or two...
   vector<uint32_t> intcounts( numchannels );
   
-#define FLT_UINT_MAX_PLUS1 static_cast<float>( (1 + (std::numeric_limits<uint32_t>::max()/2)) * 2.0f )
-  
   for( uint16_t i = 0; i < numchannels; ++i )
-  {
-    float counts = std::max( 0.0f, std::round( (*fgammacounts)[i] ) );
-    const bool can_convert = ( (counts < FLT_UINT_MAX_PLUS1)
-                               && (counts - static_cast<float>(std::numeric_limits<uint32_t>::max()) > -1.0f) );
-    intcounts[i] = can_convert ? static_cast<uint32_t>( counts ) : std::numeric_limits<uint32_t>::max();
-  }
+    intcounts[i] = SpecUtils::float_to_integral<uint32_t>( (*fgammacounts)[i] );
   
   if( numchannels )
     ostr.write( (const char *)&intcounts[0], numchannels*4 );

@@ -160,9 +160,24 @@ namespace  SpecUtils
    */
   template <class T>
   size_t write_binary_data( std::ostream &input, const T &val );
+
+
+  /** Converts from a float value, to the nearest representable integer value.
+   
+   Rounds the input val (as a float) and clamps the returned value to the representable integer
+   range.
+   
+   Performing this operation, without invoking undefined behavior, unexpected float<-->int issues,
+   and getting correct values near the integer limits turns out to be surprisingly tricky, but
+   hopefully this function does everything correctly.  It was tested for uint32_t, but *should*
+   work fine for other integer types.
+   */
+  template<class Integral>
+  Integral float_to_integral( float val );
 }//namespace  SpecUtils
 
-
+#include <cmath>
+#include <type_traits>
 
 //Implementation
 namespace SpecUtils
@@ -189,7 +204,61 @@ namespace SpecUtils
     input.write( (const char *)&val, sizeof(T) );
     return sizeof(T);
   }
-}
+
+template<class Integral>
+Integral float_to_integral( float d )
+{
+  /*
+    Some tests you can run for this function
+    assert( float_to_integral<uint32_t>(0.0f) == 0 );
+    assert( float_to_integral<uint32_t>(-0.1f) == 0 );
+    assert( float_to_integral<uint32_t>(-1.0f) == 0 );
+    assert( float_to_integral<uint32_t>(0.499f) == 0 );
+    assert( float_to_integral<uint32_t>(0.5f) == 1 );
+    assert( float_to_integral<uint32_t>(1.5f) == 2 );
+    assert( float_to_integral<uint32_t>(1.4999f) == 1 );
+    assert( float_to_integral<uint32_t>(1024.1f) == 1024 );
+    assert( float_to_integral<uint32_t>(1024.8f) == 1025 );
+    // 4294967295 is the largest uint32_t, but if you convert to a float, it will have value
+    //  4294967296.0f, which is larger.
+    assert( float_to_integral<uint32_t>(4294967296.0f) == 4294967295 );
+    // The next value representable by a float above 4294967296, is 4294967808
+    assert( float_to_integral<uint32_t>(4294967808.0f) == 4294967295 );
+    // The next value representable by a float below 4294967296, is 4294967040
+    assert( float_to_integral<uint32_t>(4294967040.0f) == 4294967040 );
+   
+    // Almost all my testing was for uint32_t, but it passes some sanity checks for signed ints
+    assert( float_to_integral<int32_t>(1.0f) == 1 );
+    assert( float_to_integral<int32_t>(-1.0f) == -1 );
+    assert( float_to_integral<int32_t>(-1024.0f) == -1024 );
+    assert( float_to_integral<int32_t>(-0.1) == 0 );
+    assert( float_to_integral<int32_t>(-0.4999) == 0 );
+    assert( float_to_integral<int32_t>(-0.5) == -1 );
+    assert( float_to_integral<int32_t>(-0.51) == -1 );
+   */
+  
+    const float orig = d;
+    static constexpr int max_exp = std::is_signed<Integral>() ? ((sizeof(float)*8)-1) : (sizeof(float)*8);
+  
+    if( std::isnan(d) || std::isinf(d) )
+      return 0;
+  
+    d = std::round(d);
+  
+    if( !std::is_signed<Integral>() && std::signbit(d) )
+      return 0;
+  
+    int exp;
+    std::frexp(d, &exp);
+  
+    if( exp <= max_exp )
+      return static_cast<Integral>( d );
+  
+    static constexpr Integral min_int_val = std::numeric_limits<Integral>::min();
+    static constexpr Integral max_int_val = std::numeric_limits<Integral>::max();
+    return std::signbit(d) ? min_int_val : max_int_val;
+  }//float_to_integral
+}//namespace SpecUtils
 
 #endif //SpecUtils_ParseUtils_h
 
