@@ -477,6 +477,12 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$SPEC_ID:") )
       {
         string remark;
+        
+        // There is some inconsistency with how this "$SPEC_ID:" field is used; if it is a
+        //  single line, we will interpret it as the "title" of the record, if we dont detect
+        //  some detector specific information.  If it is multiple lines, we will stuff it in
+        //  a (file-level) remark.
+        size_t num_unlabeled_spec_id_lines = 0;
         while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
@@ -542,11 +548,15 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             //{
           }else
           {
+            num_unlabeled_spec_id_lines += !line.empty();
             remark += (!remark.empty() ? " " : "") + line;
           }
         }//while( SpecUtils::safe_get_line( istr, line ) )
         
-        remarks_.push_back( remark );
+        if( num_unlabeled_spec_id_lines == 1 )
+          meas->title_ += remark;
+        else if( !remark.empty() )
+          remarks_.push_back( remark );
       }else if( starts_with(line,"$ENER_FIT:")
                || starts_with(line,"$GAIN_OFFSET_XIA:") )
       {
