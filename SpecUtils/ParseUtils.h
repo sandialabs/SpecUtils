@@ -25,6 +25,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <limits>
 #include <string>
 #include <vector>
 #include <istream>
@@ -240,7 +241,7 @@ Integral float_to_integral( float d )
     const float orig = d;
     static constexpr int max_exp = std::is_signed<Integral>() ? ((sizeof(float)*8)-1) : (sizeof(float)*8);
   
-    if( std::isnan(d) || std::isinf(d) )
+    if( IsNan(d) || IsInf(d) )
       return 0;
   
     d = std::round(d);
