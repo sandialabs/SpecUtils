@@ -524,6 +524,13 @@ std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
 }
 
 
+const vector<shared_ptr<const MultimediaData>> &SpecFile::multimedia_data() const
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  return multimedia_data_;
+}
+
+
 double SpecFile::mean_latitude() const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );

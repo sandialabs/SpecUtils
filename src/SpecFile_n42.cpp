@@ -159,6 +159,179 @@ namespace
     return default_xmlns;
   }//std::string get_n42_xmlns( const rapidxml::xml_node<char> *node )
 
+
+  void add_multimedia_data_to_2012_N42(
+                        const vector<shared_ptr<const SpecUtils::MultimediaData>> &multimedia_data,
+                        rapidxml::xml_node<char> * const RadInstrumentData )
+  {
+    using namespace rapidxml;
+    
+    assert( RadInstrumentData );
+    if( !RadInstrumentData )
+      return;
+    
+    xml_document<char> *doc = RadInstrumentData->document();
+    assert( doc );
+    if( !doc )
+      return;
+    
+    for( const shared_ptr<const SpecUtils::MultimediaData> &data_ptr : multimedia_data )
+    {
+      assert( data_ptr );
+      if( !data_ptr )
+        continue;
+      
+      const auto &data = *data_ptr;
+      
+      xml_node<char> *MultimediaData = doc->allocate_node( node_element, "MultimediaData" );
+      RadInstrumentData->append_node( MultimediaData );
+      
+      if( !data.remark_.empty() )
+      {
+        char *val = doc->allocate_string( data.remark_.c_str(), data.remark_.size() + 1 );
+        xml_node<char> *node = doc->allocate_node( node_element, "Remark", val );
+        MultimediaData->append_node( node );
+      }
+      
+      if( !data.descriptions_.empty() )
+      {
+        char *val = doc->allocate_string( data.descriptions_.c_str(), data.descriptions_.size() + 1 );
+        xml_node<char> *node = doc->allocate_node( node_element, "MultimediaDataDescription", val );
+        MultimediaData->append_node( node );
+      }
+      
+      if( !data.data_.empty() )
+      {
+        const char *node_name = nullptr;
+        switch( data.data_encoding_ )
+        {
+          case SpecUtils::MultimediaData::EncodingType::BinaryUTF8:
+            node_name = "BinaryUTF8Object";
+            break;
+          case SpecUtils::MultimediaData::EncodingType::BinaryHex:
+            node_name = "BinaryHexObject";
+            break;
+          case SpecUtils::MultimediaData::EncodingType::BinaryBase64:
+            node_name = "BinaryBase64Object";
+            break;
+        }//switch( data.data_encoding_ )
+        
+        assert( node_name );
+        if( node_name )
+        {
+          char *val = doc->allocate_string( &(data.data_[0]), data.data_.size() + 1 );
+          xml_node<char> *node = doc->allocate_node( node_element, node_name, val, 0, data.data_.size() );
+          MultimediaData->append_node( node );
+        }
+      }//if( !data.data_.empty() )
+      
+      
+      if( !data.capture_start_time_.is_special() )
+      {
+        const string dt = SpecUtils::to_extended_iso_string(data.capture_start_time_) + "Z";
+        char *val = doc->allocate_string( dt.c_str(), dt.size()+1 );
+        xml_node<char> *node = doc->allocate_node( node_element, "MultimediaCaptureStartDateTime", val );
+        MultimediaData->append_node( node );
+      }//if( !data.capture_start_time_.is_special() )
+      
+      //<MultimediaCaptureDuration>,
+      
+      if( !data.file_uri_.empty() )
+      {
+        char *val = doc->allocate_string( data.file_uri_.c_str(), data.file_uri_.size() + 1 );
+        xml_node<char> *node = doc->allocate_node( node_element, "MultimediaFileURI", val );
+        MultimediaData->append_node( node );
+      }
+      
+      //<MultimediaFileSizeValue>,
+      //<MultimediaDataMIMEKind>,
+      
+      if( !data.mime_type_.empty() )
+      {
+        char *val = doc->allocate_string( data.mime_type_.c_str(), data.mime_type_.size() + 1 );
+        xml_node<char> *node = doc->allocate_node( node_element, "MultimediaDataMIMEKind", val );
+        MultimediaData->append_node( node );
+      }
+      
+      //<MultimediaDeviceCategoryCode>,
+      //<MultimediaDeviceIdentifier>,
+      //<ImagePerspectiveCode>,
+      //<ImageWidthValue>,
+      //<ImageHeightValue>,
+      //<MultimediaDataExtension>
+    }//for( const SpecUtils::MultimediaData &data : multimedia_data )
+  }//add_multimedia_data_to_2012_N42(...)
+
+
+  bool set_multimedia_data( SpecUtils::MultimediaData &data,
+                            const rapidxml::xml_node<char> * const multimedia_node )
+  {
+    if( !multimedia_node )
+      return false;
+    
+    auto node = XML_FIRST_INODE(multimedia_node,"Remark");
+    if( node )
+      data.remark_ = SpecUtils::xml_value_str( node );
+    
+    node = XML_FIRST_INODE(multimedia_node,"MultimediaDataDescription");
+    if( node )
+      data.descriptions_ = SpecUtils::xml_value_str( node );
+    
+    data.data_.resize( 0 );
+    data.data_encoding_ = SpecUtils::MultimediaData::EncodingType::BinaryHex;
+    const char *data_begin = nullptr, *data_end = nullptr;
+    if( (node = XML_FIRST_INODE(multimedia_node,"BinaryUTF8Object")) )
+    {
+      data.data_encoding_ = SpecUtils::MultimediaData::EncodingType::BinaryUTF8;
+      data_begin = (const char *)node->value();
+      data_end = data_begin + node->value_size();
+    }else if( (node = XML_FIRST_INODE(multimedia_node,"BinaryHexObject")) )
+    {
+      data.data_encoding_ = SpecUtils::MultimediaData::EncodingType::BinaryHex;
+      data_begin = (const char *)node->value();
+      data_end = data_begin + node->value_size();
+    }else if( (node = XML_FIRST_INODE(multimedia_node,"BinaryBase64Object")) )
+    {
+      data.data_encoding_ = SpecUtils::MultimediaData::EncodingType::BinaryBase64;
+      data_begin = (const char *)node->value();
+      data_end = data_begin + node->value_size();
+    }
+    
+    if( data_begin && data_end )
+      data.data_.insert( end(data.data_), data_begin, data_end );
+      
+    node = XML_FIRST_INODE(multimedia_node,"MultimediaCaptureStartDateTime");
+    const string capture_time_str = SpecUtils::xml_value_str(node);
+    if( !capture_time_str.empty() )
+      data.capture_start_time_ = SpecUtils::time_from_string( capture_time_str.c_str() );
+    
+    //<MultimediaCaptureDuration>,
+      
+    node = XML_FIRST_INODE(multimedia_node,"MultimediaFileURI");
+    if( node )
+      data.file_uri_ = SpecUtils::xml_value_str( node );
+      
+    //<MultimediaFileSizeValue>,
+    //<MultimediaDataMIMEKind>,
+      
+    
+    node = XML_FIRST_INODE(multimedia_node,"MultimediaDataMIMEKind");
+    if( node )
+      data.mime_type_ = SpecUtils::xml_value_str( node );
+      
+    //<MultimediaDeviceCategoryCode>,
+    //<MultimediaDeviceIdentifier>,
+    //<ImagePerspectiveCode>,
+    //<ImageWidthValue>,
+    //<ImageHeightValue>,
+    //<MultimediaDataExtension>
+    
+    if( data.file_uri_.empty() && data.data_.empty() )
+      return false;
+    
+    return true;
+  }//set_multimedia_data(...)
+
 }//anonomous namespace for XML utilities
 
 
@@ -6832,6 +7005,8 @@ namespace SpecUtils
     
     workerpool.join();
     
+    if( !multimedia_data_.empty() )
+      add_multimedia_data_to_2012_N42( multimedia_data_, RadInstrumentData );
     
     return doc;
   }//rapidxml::xml_node<char> *create_2012_N42_xml() const
@@ -7530,6 +7705,14 @@ namespace SpecUtils
         //    if( analysis_info->results_.size() )
         detectors_analysis_ = analysis_info;
       }//if( analysis_node )
+      
+      
+      XML_FOREACH_DAUGHTER( multimedia_node, rad_data_node, "MultimediaData" )
+      {
+        auto data = make_shared<MultimediaData>();
+        if( set_multimedia_data( *data, multimedia_node ) )
+          multimedia_data_.push_back( data );
+      }
     }//for( loop over <RadInstrumentData> nodes - ya, I know we shouldnt have to )
     
     SpecUtilsAsync::ThreadPool workerpool;

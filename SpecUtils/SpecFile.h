@@ -396,6 +396,7 @@ enum class EnergyCalType : int;
 class SpecFile;
 class Measurement;
 
+struct MultimediaData;
 class DetectorAnalysis;
 struct EnergyCalibration;
 struct N42DecodeHelper2006;
@@ -1252,6 +1253,7 @@ public:
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
   std::shared_ptr<const Measurement> measurement( size_t num ) const;
   std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
+  const std::vector<std::shared_ptr<const MultimediaData>> &multimedia_data() const;
   bool has_gps_info() const; //mean longitude/latitude are valid gps coords
   double mean_latitude() const;
   double mean_longitude() const;
@@ -2356,6 +2358,13 @@ protected:
   // radMeasurementGroupReferences, or radMeasurementReferences
   std::shared_ptr<const DetectorAnalysis> detectors_analysis_;
 
+  /** Multimedia data (e.g. images) included within the spectrum file.
+   
+   Currently only implemented for N42.42-2011 (do any other file formats
+   include images?).
+   */
+  std::vector<std::shared_ptr<const MultimediaData>> multimedia_data_;
+  
   
   //properties_flags_: intenteded to indicate boolean things about the
   //  measurement style, origin, properties, or other values.
@@ -2556,6 +2565,77 @@ public:
                            const DetectorAnalysis &rhs );
 #endif
 };//struct DetectorAnalysisResults
+
+
+/** Corresponds to a N42.42-2011 <MultimediaData> element that is often used to
+ include images within the spectrum file.
+ 
+ Currently only the subset of fields relevant to InterSpec is implemented;
+ */
+struct MultimediaData
+{
+  /** Corresponds to the N42.42 <Remark> element. */
+  std::string remark_;
+  
+  /** Free-form text describing the contents or any other aspects of the multimedia data.
+   
+   <MultimediaDataDescription>
+   */
+  std::string descriptions_;
+    
+  /** The encoded multimedia data.
+   
+   Corresponds to either, <BinaryUTF8Object>, <BinaryHexObject>, or
+   <BinaryBase64Object> elements in N42.42-2011.
+   
+   Note that the data has not been decoded - you will need to do that if you
+   want to make use of it (encoding/decoding has not been implemented yet, but
+   for use in InterSpec we can call out to Wt::Utils, which we dont want to
+   introduce as a dependency into SpecUtils).
+   
+   \sa data_encoding_
+   */
+  std::vector<char> data_;
+  
+  /** Data may be encoded in one of the following three ways in the N42 file;
+   the data is not decoded by this library.
+   */
+  enum class EncodingType
+  {
+    BinaryUTF8,
+    BinaryHex,
+    BinaryBase64
+  };//enum class EncodingType
+  
+  /** The encoding of the \c data_ */
+  EncodingType data_encoding_;
+  
+  /** Date-time at which capture of the multimedia data was started.
+   Corresponds to <MultimediaCaptureStartDateTime>, and will be invalid if not specified.
+   */
+  boost::posix_time::ptime capture_start_time_;
+  
+  //<MultimediaCaptureDuration>,
+  
+  /** The location of the file containing the multimedia data; may be specified even
+   if #data_ not empty (as per N42.42-2011).
+   */
+  std::string file_uri_;
+  
+  //<MultimediaFileSizeValue>,
+  //<MultimediaDataMIMEKind>,
+  
+  /** Encoding MIME type of #data_ or file at #file_uri_.
+   */
+  std::string mime_type_;
+  
+  //<MultimediaDeviceCategoryCode>,
+  //<MultimediaDeviceIdentifier>,
+  //<ImagePerspectiveCode>,
+  //<ImageWidthValue>,
+  //<ImageHeightValue>,
+  //<MultimediaDataExtension>
+};//struct MultimediaData
 
 }//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h
