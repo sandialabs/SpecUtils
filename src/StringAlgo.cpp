@@ -676,6 +676,8 @@ namespace SpecUtils
       return;
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+    /*
+     // This dev test can fail sometimes if the replacement string contains the pattern string
     string strcopy = input, original = input;
     size_t reslen = strcopy.size() + 1;
     while( reslen != strcopy.size() )
@@ -683,6 +685,7 @@ namespace SpecUtils
       reslen = strcopy.size();
       boost::algorithm::ireplace_all( strcopy, pattern, replacement );
     }
+     */
 #endif
     
     const size_t paternlen = strlen(pattern);
@@ -714,6 +717,7 @@ namespace SpecUtils
     }//while( found )
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+    /*
     if( strcopy != input )
     {
       stringstream msg;
@@ -736,6 +740,7 @@ namespace SpecUtils
       
       log_developer_error( __func__, msg.str().c_str() );
     }
+     */
 #endif
   }//void ireplace_all(...)
   

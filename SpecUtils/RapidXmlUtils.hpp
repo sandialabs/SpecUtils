@@ -51,43 +51,43 @@ namespace SpecUtils
     return N - 1;
   }
   
-#define XML_VALUE_COMPARE( node, cstr ) (rapidxml::internal::compare((node)->value(), (node)->value_size(), cstr, SpecUtils::lengthof(cstr), true))
-#define XML_VALUE_ICOMPARE( node, cstr ) (rapidxml::internal::compare((node)->value(), (node)->value_size(), cstr, SpecUtils::lengthof(cstr), false))
-#define XML_NAME_COMPARE( node, cstr ) (rapidxml::internal::compare((node)->name(), (node)->name_size(), cstr, SpecUtils::lengthof(cstr), true))
-#define XML_NAME_ICOMPARE( node, cstr ) (rapidxml::internal::compare((node)->name(), (node)->name_size(), cstr, SpecUtils::lengthof(cstr), false))
+#define XML_VALUE_COMPARE( node, cstr ) (::rapidxml::internal::compare((node)->value(), (node)->value_size(), cstr, SpecUtils::lengthof(cstr), true))
+#define XML_VALUE_ICOMPARE( node, cstr ) (::rapidxml::internal::compare((node)->value(), (node)->value_size(), cstr, SpecUtils::lengthof(cstr), false))
+#define XML_NAME_COMPARE( node, cstr ) (::rapidxml::internal::compare((node)->name(), (node)->name_size(), cstr, SpecUtils::lengthof(cstr), true))
+#define XML_NAME_ICOMPARE( node, cstr ) (::rapidxml::internal::compare((node)->name(), (node)->name_size(), cstr, SpecUtils::lengthof(cstr), false))
   
 #define XML_FIRST_NODE(node,name)((node)->first_node(name,SpecUtils::lengthof(name),true))
 #define XML_FIRST_INODE(node,name)((node)->first_node(name,SpecUtils::lengthof(name),false))
 #define XML_FIRST_ATTRIB(node,name)((node)->first_attribute(name,SpecUtils::lengthof(name),true))
 #define XML_FIRST_IATTRIB(node,name)((node)->first_attribute(name,SpecUtils::lengthof(name),false))
   
-#define XML_FIRST_NODE_CHECKED(node,name)((node) ? (node)->first_node(name,SpecUtils::lengthof(name),true) : (rapidxml::xml_node<char> *)0)
-#define XML_FIRST_ATTRIB_CHECKED(node,name)((node) ? (node)->first_attribute(name,SpecUtils::lengthof(name),true) : (rapidxml::xml_node<char> *)0)
+#define XML_FIRST_NODE_CHECKED(node,name)((node) ? (node)->first_node(name,SpecUtils::lengthof(name),true) : (::rapidxml::xml_node<char> *)0)
+#define XML_FIRST_ATTRIB_CHECKED(node,name)((node) ? (node)->first_attribute(name,SpecUtils::lengthof(name),true) : (::rapidxml::xml_node<char> *)0)
   
 #define XML_NEXT_TWIN(node)((node)->next_sibling((node)->name(), (node)->name_size()))
-#define XML_NEXT_TWIN_CHECKED(node)((node) ? (node)->next_sibling((node)->name(), (node)->name_size()): (rapidxml::xml_node<char> *)0)
+#define XML_NEXT_TWIN_CHECKED(node)((node) ? (node)->next_sibling((node)->name(), (node)->name_size()): (::rapidxml::xml_node<char> *)0)
   
   //Usuage:
   //XML_FOREACH_DAUGHTER( child_node_variable, parent_node, "ChildElementName" ){
   //  assert( child_node_variable->name() == "ChildElementName" );
   // }
 #define XML_FOREACH_DAUGHTER( nodename, parentnode, daughternamestr ) \
-for( const rapidxml::xml_node<char> *nodename = XML_FIRST_NODE_CHECKED(parentnode,daughternamestr); \
+for( const ::rapidxml::xml_node<char> *nodename = XML_FIRST_NODE_CHECKED(parentnode,daughternamestr); \
 nodename; \
 nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughternamestr),true) )
   
   template<class Ch,size_t n>
-  bool xml_value_compare( const rapidxml::xml_base<Ch> *node, const char (&value)[n] )
+  bool xml_value_compare( const ::rapidxml::xml_base<Ch> *node, const char (&value)[n] )
   {
     if( !node )
       return false;
     if( n<=1 && !node->value_size() )  //They are both empty.
       return true;
-    return rapidxml::internal::compare((node)->value(), (node)->value_size(), value, n-1, true);
+    return ::rapidxml::internal::compare((node)->value(), (node)->value_size(), value, n-1, true);
   }
   
   template<class Ch>
-  std::string xml_value_str( const rapidxml::xml_base<Ch> *n )
+  std::string xml_value_str( const ::rapidxml::xml_base<Ch> *n )
   {
     //if( !n || !n->value_size() )
     //  return string();
@@ -96,7 +96,7 @@ nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughterna
   }
   
   template<class Ch>
-  std::string xml_name_str( const rapidxml::xml_base<Ch> *n )
+  std::string xml_name_str( const ::rapidxml::xml_base<Ch> *n )
   {
     //if( !node || !node->name_size() )
     //  return "";
@@ -105,28 +105,28 @@ nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughterna
   }
   
   template<size_t n>
-  const rapidxml::xml_node<char> *xml_first_node( const rapidxml::xml_node<char> *parent, const char (&name)[n] )
+  const ::rapidxml::xml_node<char> *xml_first_node( const ::rapidxml::xml_node<char> *parent, const char (&name)[n] )
   {
     static_assert( n > 1, "Element name to xml_first_node must not be empty." );
     return parent ? parent->first_node(name, n-1) : nullptr;
   }
   
   template<size_t n>
-  const rapidxml::xml_attribute<char> *xml_first_attribute( const rapidxml::xml_node<char> *parent, const char (&name)[n] )
+  const ::rapidxml::xml_attribute<char> *xml_first_attribute( const ::rapidxml::xml_node<char> *parent, const char (&name)[n] )
   {
     static_assert( n > 1, "Element name to xml_first_attribute must not be empty." );
     return parent ? parent->first_attribute(name, n-1) : nullptr;
   }
 
   template<size_t n>
-  const rapidxml::xml_attribute<char> *xml_first_iattribute( const rapidxml::xml_node<char> *parent, const char (&name)[n] )
+  const ::rapidxml::xml_attribute<char> *xml_first_iattribute( const ::rapidxml::xml_node<char> *parent, const char (&name)[n] )
   {
     static_assert( n > 1, "Element name to xml_first_iattribute must not be empty." );
     return parent ? parent->first_attribute(name, n-1,false) : nullptr;
   }
 
   template<size_t n, size_t m>
-  const rapidxml::xml_node<char> *xml_first_node_nso( const rapidxml::xml_node<char> *parent,
+  const ::rapidxml::xml_node<char> *xml_first_node_nso( const ::rapidxml::xml_node<char> *parent,
                                                      const char (&name)[n],
                                                      const char (&ns)[m],
                                                      const bool case_sensitive = true )
@@ -139,7 +139,7 @@ nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughterna
       return parent->first_node(name, n-1, case_sensitive);
     }else
     {
-      const rapidxml::xml_node<char> *answer = parent->first_node(name, n-1, case_sensitive);
+      const ::rapidxml::xml_node<char> *answer = parent->first_node(name, n-1, case_sensitive);
       if( m>1 && !answer )
       {
         char newname[n+m-1];
@@ -153,7 +153,7 @@ nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughterna
   }
   
   template<size_t n>
-  const rapidxml::xml_node<char> *xml_first_node_nso( const rapidxml::xml_node<char> *parent,
+  const ::rapidxml::xml_node<char> *xml_first_node_nso( const ::rapidxml::xml_node<char> *parent,
                                                      const char (&name)[n],
                                                      const std::string &ns,
                                                      const bool case_sensitive = true )
@@ -165,7 +165,7 @@ nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughterna
     {
       if( !parent )
         return 0;
-      const rapidxml::xml_node<char> *answer = parent->first_node(name, n-1, case_sensitive);
+      const ::rapidxml::xml_node<char> *answer = parent->first_node(name, n-1, case_sensitive);
       if( !answer && !ns.empty() )
       {
         const std::string newname = ns + name;
