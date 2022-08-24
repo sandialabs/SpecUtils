@@ -351,7 +351,12 @@ namespace SpecUtils
 					filteredSampleCount++;
 				}
 
-				numDataPoints = filteredSampleCount / nSamples;
+				if (nSamples == 0) {
+					cerr << "Number of samples is zero!" << endl;
+				}
+				else {
+					numDataPoints = filteredSampleCount / nSamples;
+				}
 			}
 
 			for (auto& element : dataToProcess) {
@@ -449,6 +454,14 @@ namespace SpecUtils
 			return sum;
 			});
 
+		env.add_callback("template_error", 1, [](Arguments& args) {
+			std::string message = args.at(0)->get<std::string>();
+
+			cerr << "Template Error: " << message << endl;
+
+			return message;
+			});
+
 		// STEP 1 - read template file
 		Template temp;
 		try
@@ -458,7 +471,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error reading input template " << e.what() << endl;
+			cerr << "Error reading input template " << e.what() << endl;
 			return false;
 		}
 
@@ -491,7 +504,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error building data structure " << e.what() << endl;
+			cerr << "Error building data structure " << e.what() << endl;
 			return false;
 		}
 
@@ -503,7 +516,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error rendering output file " << e.what() << endl;
+			cerr << "Error rendering output file " << e.what() << endl;
 			return false;
 		}
 
