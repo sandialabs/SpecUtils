@@ -1836,6 +1836,15 @@ public:
                            const bool rebin_other_detectors );
 */
   
+  /** Function to convert from detector names, into detector numbers.
+   
+   This is primarily a convenience function while the API mixes using detector
+   numbers and/or detector names for the various calls.
+   
+   Eventually detector numbers will be completely removed.
+   */
+  std::set<int> detector_names_to_numbers( const std::vector<std::string> &det_names ) const;
+  
   //Functions to export to various file formats
 
   //write_to_file(...): Writes the contents of this object to the specified
@@ -1877,7 +1886,7 @@ public:
                       const std::vector<int> det_nums,
                       const SaveSpectrumAsType format ) const;
   
-  /** Convience function for calling #write_to_file with detector names, instead
+  /** Convenience function for calling #write_to_file with detector names, instead
    of detector numbers.  If any names are invalid, will throw exception.
    */
   void write_to_file( const std::string &filename,
@@ -1885,7 +1894,7 @@ public:
                      const std::vector<std::string> &det_names,
                      const SaveSpectrumAsType format ) const;
   
-  //write(...): Wites the specified sample and detector numbers to the provided
+  //write(...): Writes the specified sample and detector numbers to the provided
   //  stream, in the format specified.  If the output format allows multiple
   //  records, each Measurement will be placed in its own record.  If the output
   //  format only allows a single records, the specified sample and detector
@@ -1896,6 +1905,14 @@ public:
               std::set<int> sample_nums,
               const std::set<int> det_nums,
               const SaveSpectrumAsType format ) const;
+  
+  /** Convenience function for calling #write with detector names, instead
+   of detector numbers.  If any names are invalid, will throw exception.
+   */
+  void write( std::ostream &strm,
+             std::set<int> sample_nums,
+             const std::vector<std::string> &det_names,
+             const SaveSpectrumAsType format ) const;
   
   //write_pcf(...): writes to GADRAS format, using the convention of what looks
   //  to be newer GADRAS files that include "DeviationPairsInFile" information.

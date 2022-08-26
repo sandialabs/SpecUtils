@@ -127,7 +127,7 @@ namespace SpecUtils
     size_t num_channels() const;
     
     
-    /** Default contructs to type EnergyCalType::InvalidEquationType. */
+    /** Default constructs to type EnergyCalType::InvalidEquationType. */
     EnergyCalibration();
     
     /** Sets the type to #EnergyCalType::Polynomial, and the coefficients and deviation pairs to

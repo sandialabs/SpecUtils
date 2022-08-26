@@ -7684,26 +7684,33 @@ void SpecFile::write_to_file( const std::string name,
 }//write_to_file(...)
 
 
-void SpecFile::write_to_file( const std::string &filename,
-                   const std::set<int> &sample_nums,
-                   const std::vector<std::string> &det_names,
-                   const SaveSpectrumAsType format ) const
+std::set<int> SpecFile::detector_names_to_numbers( const std::vector<std::string> &det_names ) const
 {
   set<int> det_nums_set;
   
   {//begin lock on mutex_
     std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
+    
     for( const std::string &name : det_names )
     {
       const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
       if( pos == end(detector_names_) )
-        throw runtime_error( "SpecFile::write_to_file(): invalid detector name in the input" );
-    
+        throw runtime_error( "Invalid detector name ('" + name + "') in the input" );
+      
       const size_t index = pos - detector_names_.begin();
       det_nums_set.insert( detector_numbers_[index] );
     }//for( const int num : det_nums )
   }//end lock on mutex_
+  
+  return det_nums_set;
+}//detector_names_to_numbers(...)
+
+void SpecFile::write_to_file( const std::string &filename,
+                   const std::set<int> &sample_nums,
+                   const std::vector<std::string> &det_names,
+                   const SaveSpectrumAsType format ) const
+{
+  const set<int> det_nums_set = detector_names_to_numbers( det_names );
   
   write_to_file( filename, sample_nums, det_nums_set, format);
 }//void write_to_file(...)
@@ -7850,6 +7857,17 @@ void SpecFile::write( std::ostream &strm,
   if( !success )
     throw runtime_error( "Failed to write to output" );
 }//write_to_file(...)
+
+
+void SpecFile::write( std::ostream &strm,
+           std::set<int> sample_nums,
+           const std::vector<std::string> &det_names,
+           const SaveSpectrumAsType format ) const
+{
+  const set<int> det_nums_set = detector_names_to_numbers( det_names );
+  
+  write( strm, sample_nums, det_nums_set, format );
+}//write(...)
 
 }//namespace SpecUtils
 
