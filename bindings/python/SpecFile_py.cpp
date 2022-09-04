@@ -17,6 +17,8 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+// For statically linking on Windows, we need this following define
+#define BOOST_PYTHON_STATIC_LIB
 
 #include "SpecUtils_config.h"
 
@@ -385,6 +387,13 @@ namespace
     return m;
   }
   
+
+  std::shared_ptr<SpecUtils::Measurement> makeMeasurement_wrapper()
+  {
+    return std::make_shared<SpecUtils::Measurement>();
+  }
+
+
   void setGammaCounts_wrapper( SpecUtils::Measurement *meas,
                               boost::python::list py_counts,
                               const float live_time,
@@ -1136,7 +1145,10 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
     .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
     .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
     //... setter functions here
-    .def( "makeCopy", &makeCopy_wrapper )
+    .def( "clone", &makeCopy_wrapper )
+    .def( "new", &makeMeasurement_wrapper, 
+      "Creates a new Measurement object, which you can add to a SpecUtils.SpecFile.\n"
+      "The created object is really a std::shared_ptr<SpecUtils::Measurement> object in C++ land." )
     .def( "setGammaCounts", &setGammaCounts_wrapper,
       args( "Counts", "LiveTime", "RealTime" ),
       "Sets the gamma counts array, as well as real and live times.\n"

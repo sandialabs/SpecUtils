@@ -96,10 +96,20 @@ summedmeas = info.sumMeasurements( [1,2], info.detectorNames() )
 print( "Summed measurement has liveTime=", summedmeas.liveTime() )
 
 
-# Now we'll copy a Measurement to test setting various values
-newMeas = meas.makeCopy()
-# Add the new Measurement to the `info` SpecFile
+# Now we'll create a new Measurement, and set its various member variables
+newMeas = SpecUtils.Measurement.new()
+
+# Instead of creating a new SpecUtils.Measurement object, we could have
+#   started with a copy of an existing Measurement. i.e.,
+# newMeas = meas.clone()
+
+# Add the new Measurement to the `info` SpecFile.
+#  We need to do this so the spectrum will be inside a spectrum file,
+#  and also the API for setting the various values of a Measurement 
+#  object is a little odd, in that they need to be set through the 
+#  SpecFile object that owns them.
 info.addMeasurement( newMeas )
+
 # And change a bunch of values, both for the SpecFile object, and the new Measurement object
 newLiveTime = 10
 newRealTime = 15

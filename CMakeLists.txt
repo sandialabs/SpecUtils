@@ -28,6 +28,24 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
 
+# If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
+if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+  get_directory_property(hasParent PARENT_DIRECTORY)
+  if(NOT hasParent)
+    option(${PROJECT_NAME}_USE_MSVC_MultiThreadDLL "Use dynamically-link runtime library." OFF)
+
+    if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL)
+      set(Boost_USE_STATIC_RUNTIME OFF)
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    else()
+      set(Boost_USE_STATIC_RUNTIME ON)
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    message(STATUS "Using CMAKE_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY}")
+  endif(NOT hasParent)
+endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+
+
 if( SpecUtils_BUILD_UNIT_TESTS )
   list( APPEND boost_libs_required unit_test_framework )
 endif( SpecUtils_BUILD_UNIT_TESTS )
@@ -236,7 +254,7 @@ endif( SpecUtils_USE_WT_THREADPOOL )
 
 if( SpecUtils_PYTHON_BINDINGS )
   #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
-  target_link_libraries( SpecUtils PUBLIC ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
+  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( DEFINED boost_SOURCE_DIR )
