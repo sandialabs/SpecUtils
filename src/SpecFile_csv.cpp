@@ -557,7 +557,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       const string date_str = get_field_str( date_index ); //ex "5/12/2022"
       const string time_str = get_field_str( time_index ); //ex "10:37:43.316"
       const string date_time = date_str + " " + time_str;
-      m->start_time_ = time_from_string_strptime( date_time, DateParseEndianType::MiddleEndianFirst );
+      m->start_time_ = time_from_string( date_time, DateParseEndianType::MiddleEndianFirst );
       
       const string neut_counts_str = get_field_str(neutron_index);
       float neutron_counts = 0.0;
@@ -1681,11 +1681,11 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
        SourceType     source_type_;
        shared_ptr<const EnergyCalibration> energy_calibration_
        std::vector<std::string>  remarks_;
-       boost::posix_time::ptime  start_time_;
+       time_point_t  start_time_;
        std::vector<float>        neutron_counts_;
        double latitude_;  //set to -999.9 if not specified
        double longitude_; //set to -999.9 if not specified
-       boost::posix_time::ptime position_time_;
+       time_point_t position_time_;
        std::string title_;  //Actually used for a number of file formats
        */
       measurements_.push_back( m );
@@ -1749,8 +1749,8 @@ bool Measurement::write_txt( std::ostream& ostr ) const
     ostr << "Remark: " << remark << endline;
   }//for( size_t i = 0; i < remarks_.size(); ++i )
   
-  if( !start_time_.is_special() )
-    ostr << "StartTime " << start_time_ << "" << endline;
+  if( !is_special(start_time_) )
+    ostr << "StartTime " << to_extended_iso_string(start_time_) << "" << endline;
   ostr << "LiveTime " << live_time_ << " seconds" << endline;
   ostr << "RealTime " << real_time_ << " seconds" << endline;
   ostr << "SampleNumber " << sample_number_ << endline;
@@ -1761,7 +1761,7 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   {
     ostr << "Latitude: " << latitude_ << endline;
     ostr << "Longitude: " << longitude_ << endline;
-    if( !position_time_.is_special() )
+    if( !is_special(position_time_) )
       ostr << "Position Time: "
       << SpecUtils::to_iso_string(position_time_) << endline;
   }

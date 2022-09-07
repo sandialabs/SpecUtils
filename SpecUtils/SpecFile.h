@@ -103,6 +103,9 @@ namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 
 namespace SpecUtils
 {
+  using time_point_t = std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
+
+
 /** Enum used to specify which spectrum parsing function to call when opening a
  spectrum file.
  
@@ -535,8 +538,8 @@ public:
   
   
   //position_time(): returns the (local, or detector) time of the GPS fix, if
-  //  known.  Returns boost::posix_time::not_a_date_time otherwise.
-  const boost::posix_time::ptime &position_time() const;
+  //  known.  Returns time_point_t{} otherwise.
+  const time_point_t &position_time() const;
   
   //detector_name(): returns the name of the detector within the device.
   //  May be empty string for single detector systems, or otherwise.
@@ -572,12 +575,12 @@ public:
   const std::vector<std::string> &parse_warnings() const;
   
   //start_time(): start time of the measurement.  Returns
-  //  boost::posix_time::not_a_date_time if could not be determined.
-  const boost::posix_time::ptime &start_time() const;
+  //  time_point_t{} if could not be determined.
+  const time_point_t &start_time() const;
 
   //start_time_copy(): start time of the measurement.  Returns
-  //  boost::posix_time::not_a_date_time if could not be determined.
-  const boost::posix_time::ptime start_time_copy() const;
+  //  SpecUtils::time_point_t{} if could not be determined.
+  const time_point_t start_time_copy() const;
   
   //energy_calibration_model(): returns calibration model used for energy
   //  binning.  If a value of 'InvalidEquationType' is returned, then
@@ -649,7 +652,7 @@ public:
   void set_title( const std::string &title );
   
   /** Set start time of this measurement. */
-  void set_start_time( const boost::posix_time::ptime &timestamp );
+  void set_start_time( const time_point_t &timestamp );
   
   /** Set the remarks of this measurement; any previous remarks are removed. */
   void set_remarks( const std::vector<std::string> &remar );
@@ -1026,12 +1029,9 @@ protected:
   SourceType     source_type_;
   
 
-  std::vector<std::string>  remarks_;
-  std::vector<std::string>  parse_warnings_;
-  boost::posix_time::ptime  start_time_;
-  
-  /// \ToDo: switch from ptime, to std::chrono::time_point
-  //std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::milliseconds> start_timepoint_;
+  std::vector<std::string> remarks_;
+  std::vector<std::string> parse_warnings_;
+  time_point_t start_time_;
   
   /** Pointer to EnergyCalibration.
    This is a shared pointer to allow many #Measurement objects to share the same energy calibration
@@ -1051,7 +1051,7 @@ protected:
   double longitude_; //set to -999.9 if not specified
 //  double elevation_;
   
-  boost::posix_time::ptime position_time_;
+  time_point_t position_time_;
   
   std::string title_;  //Actually used for a number of file formats
   
@@ -1080,7 +1080,7 @@ public:
 
   DoseType m_doseType;
   std::string m_remark;
-  boost::posix_time::ptime m_startTime;
+ time_point_t m_startTime;
   float m_realTime;
   float m_doseRate;
 };//class CountDose
@@ -1307,14 +1307,14 @@ public:
   //  directly from the Measurement class is because you should only be dealing
   //  with const pointers to these object for both the sake of the modified_
   //  flag, but also to ensure some amount of thread safety.
-  void set_start_time( const boost::posix_time::ptime &timestamp,
+  void set_start_time( const time_point_t &timestamp,
                        const std::shared_ptr<const Measurement> measurement  );
   void set_remarks( const std::vector<std::string> &remarks,
                     const std::shared_ptr<const Measurement> measurement  );
   void set_source_type( const SourceType type,
                          const std::shared_ptr<const Measurement> measurement );
   void set_position( double longitude, double latitude,
-                     boost::posix_time::ptime position_time,
+                    time_point_t position_time,
                      const std::shared_ptr<const Measurement> measurement );
   void set_title( const std::string &title,
                   const std::shared_ptr<const Measurement> measurement );
@@ -2499,7 +2499,7 @@ public:
   //20171220: removed start_time_, since there is no cooresponding equivalent
   //  in N42 2012.  Instead should link to which detectors this result is
   //  applicable to.
-  //boost::posix_time::ptime start_time_;  //start time of the cooresponding data (its a little unclear in some formats if this is the case...)
+  //time_point_t start_time_;  //start time of the cooresponding data (its a little unclear in some formats if this is the case...)
   
   std::string detector_;
   
@@ -2542,7 +2542,7 @@ public:
   std::string algorithm_description_;
   
   /** Time at which the analysis was started, if available; */
-  boost::posix_time::ptime analysis_start_time_;
+  time_point_t analysis_start_time_;
   
   /** The number of seconds taken to perform the analysis; will be 0.0f if not
    specified.
@@ -2630,7 +2630,7 @@ struct MultimediaData
   /** Date-time at which capture of the multimedia data was started.
    Corresponds to <MultimediaCaptureStartDateTime>, and will be invalid if not specified.
    */
-  boost::posix_time::ptime capture_start_time_;
+  time_point_t capture_start_time_;
   
   //<MultimediaCaptureDuration>,
   

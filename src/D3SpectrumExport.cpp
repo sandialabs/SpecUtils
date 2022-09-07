@@ -416,7 +416,11 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     ostr << endline << "var data_" << div_name << " = {" << endline;
     
-    ostr << "\"updateTime\": \"" << SpecUtils::to_iso_string(boost::posix_time::second_clock::local_time()) << "\"," << endline;
+    // TODO: std::localtime is not necessarily thread safe; there is a localtime_s, but its not clear how widely available it is; should make this thread-safe
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    
+    ostr << "\"updateTime\": \"" << std::put_time(std::localtime(&in_time_t), "%Y%m%dT%H%M%S") << "\"," << endline;
     
     ostr << "\"spectra\": [" << endline;
     

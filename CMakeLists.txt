@@ -46,11 +46,6 @@ if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
 endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
 
 
-if( SpecUtils_BUILD_UNIT_TESTS )
-  list( APPEND boost_libs_required unit_test_framework )
-endif( SpecUtils_BUILD_UNIT_TESTS )
-
-
 if( SpecUtils_PYTHON_BINDINGS )
   list( APPEND boost_libs_required python )
 endif( SpecUtils_PYTHON_BINDINGS )
@@ -284,9 +279,9 @@ if( SpecUtils_BUILD_REGRESSION_TEST )
 endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 
-IF( SpecUtils_BUILD_UNIT_TESTS )
+if( SpecUtils_BUILD_UNIT_TESTS )
   add_subdirectory( unit_tests )
-ENDIF( SpecUtils_BUILD_UNIT_TESTS )
+endif( SpecUtils_BUILD_UNIT_TESTS )
 
 
 if( SpecUtils_BUILD_FUZZING_TESTS )

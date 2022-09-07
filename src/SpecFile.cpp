@@ -23,34 +23,28 @@
 #include "D3SupportFiles.h"
 #endif //#if( USE_D3_EXPORTING )
 
-#include <ctime>
 #include <cmath>
-#include <vector>
+#include <ctime>
+#include <cctype>
+#include <chrono>
+#include <limits>
+#include <locale>
 #include <memory>
 #include <string>
-#include <cctype>
-#include <locale>
-#include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
-#include <cstdint>
+#include <fstream>
+#include <numeric>
 #include <iterator>
-#include <stdexcept>
+#include <iostream>
 #include <algorithm>
+#include <stdexcept>
 #include <functional>
-//#define __STDC_FORMAT_MACROS
-//#include <inttypes.h>
 #include <sys/stat.h>
 
 #include <boost/functional/hash.hpp>
-
-#if( BUILD_AS_UNIT_TEST_SUITE )
-#include <boost/test/unit_test.hpp>
-#endif
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
@@ -311,7 +305,7 @@ void log_developer_error( const char *location, const char *error )
   
   std::unique_lock<std::recursive_mutex> loc( s_dev_error_log_mutex );
   
-  boost::posix_time::ptime time = boost::posix_time::second_clock::local_time();
+  const SpecUtils::time_point_t time = std::chrono::system_clock::now();
   
   const string timestr = SpecUtils::to_iso_string(time);
 //  const string timestr = SpecUtils::to_iso_string( time );
@@ -434,7 +428,7 @@ double Measurement::longitude() const
 }
 
 
-const boost::posix_time::ptime &Measurement::position_time() const
+const time_point_t &Measurement::position_time() const
 {
   return position_time_;
 }
@@ -724,12 +718,12 @@ const std::vector<std::string> &Measurement::parse_warnings() const
   return parse_warnings_;
 }
 
-const boost::posix_time::ptime &Measurement::start_time() const
+const time_point_t &Measurement::start_time() const
 {
   return start_time_;
 }
 
-const boost::posix_time::ptime Measurement::start_time_copy() const
+const time_point_t Measurement::start_time_copy() const
 {
   return start_time_;
 }
@@ -767,7 +761,7 @@ const std::shared_ptr< const std::vector<float> > &Measurement::gamma_counts() c
 }
   
   
-void Measurement::set_start_time( const boost::posix_time::ptime &time )
+void Measurement::set_start_time( const time_point_t &time )
 {
   start_time_ = time;
 }
@@ -1185,6 +1179,7 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
+    case SaveSpectrumAsType::Template:           return "tmplt";
     case SaveSpectrumAsType::NumTypes:          break;
   }//switch( m_format )
   
@@ -1229,6 +1224,7 @@ const char *descriptionText( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif
+    case SaveSpectrumAsType::Template:           return "tmplt";
     case SaveSpectrumAsType::NumTypes:          return "";
   }
   return "";
@@ -1423,12 +1419,12 @@ void Measurement::reset()
   contained_neutron_ = false;
 
   latitude_ = longitude_ = -999.9;
-  position_time_ = boost::posix_time::not_a_date_time;
+  position_time_ = time_point_t{};
 
   remarks_.clear();
   parse_warnings_.clear();
   
-  start_time_ = boost::posix_time::not_a_date_time;
+  start_time_ = time_point_t{};
   
   energy_calibration_ = std::make_shared<EnergyCalibration>();
   gamma_counts_ = std::make_shared<vector<float> >();  // \TODO: I should test not bothering to place an empty vector in this pointer
@@ -2169,7 +2165,7 @@ void SpecFile::remove_measurement( std::shared_ptr<const Measurement> meas,
 }//void remove_measurement( std::shared_ptr<Measurement> meas, bool doCleanup );
 
 
-void SpecFile::set_start_time( const boost::posix_time::ptime &timestamp,
+void SpecFile::set_start_time( const time_point_t &timestamp,
                     const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -2210,8 +2206,8 @@ void SpecFile::set_source_type( const SourceType type,
 
 
 void SpecFile::set_position( double longitude, double latitude,
-                                    boost::posix_time::ptime position_time,
-                                    const std::shared_ptr<const Measurement> meas )
+                            time_point_t position_time,
+                            const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurement( meas );
@@ -3041,9 +3037,9 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 	//For some reason the fractional second differ for some timestamps (including CNF files)
 	// on Windows vs *NIX.  I guess let this slide for the moment.
 	auto tdiff = lhs.start_time_ - rhs.start_time_;
-	if( tdiff.is_negative() )
+	if( tdiff < time_point_t::duration::zero() )
 		tdiff = -tdiff;
-	if( tdiff >  boost::posix_time::seconds(1) )
+	if( tdiff >  std::chrono::seconds(1) )
       throw runtime_error( "Start time for LHS ("
                         + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
                         + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
@@ -4194,13 +4190,13 @@ bool comp_by_start_time_source( const std::shared_ptr<Measurement> &lhs,
   if( !lhs || !rhs)
     return (!rhs) < (!lhs);
   
-  const boost::posix_time::ptime &left = lhs->start_time();
-  const boost::posix_time::ptime &right = rhs->start_time();
+  const time_point_t &left = lhs->start_time();
+  const time_point_t &right = rhs->start_time();
   
   if( left == right )
     return (lhs->source_type() < rhs->source_type());
   
-  if( left.is_special() && !right.is_special() )
+  if( is_special(left) && !is_special(right) )
     return true;
   
   return (left < right);
@@ -4305,9 +4301,8 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
 
   }else
   {
-    using boost::posix_time::ptime;
     typedef std::map<int, vector<std::shared_ptr<Measurement> > > SampleToMeasMap;
-    typedef map<boost::posix_time::ptime, SampleToMeasMap > TimeToSamplesMeasMap;
+    typedef map<time_point_t, SampleToMeasMap > TimeToSamplesMeasMap;
     
     //If derived data, we'll put it after non-derived data
     //If the time is invalid, we'll put this measurement after all the others, but before derived
@@ -4326,25 +4321,26 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
         derived_data[detnum].push_back( m );
       else if( m->source_type() == SourceType::IntrinsicActivity )
         intrinsics[detnum].push_back( m );
-      else if( m->start_time_.is_special() )
+      else if( is_special(m->start_time_) )
         invalid_times[detnum].push_back( m );
       else
         time_meas_map[m->start_time_][detnum].push_back( m );
     }//for( auto &m : measurements_ )
     
     //Now for simpleness, lets toss intrinsics, derived_data, and invalid_times into time_meas_map
-    const ptime intrinsics_time = (time_meas_map.empty()
-                                     ? ptime(boost::gregorian::date(1970, 1, 1))
-                                     : time_meas_map.begin()->first)
-                                   - boost::gregorian::years(1);
-    const ptime invalids_time = (time_meas_map.empty()
-                                   ? ptime(boost::gregorian::date(1970, 1, 1))
-                                   : time_meas_map.rbegin()->first)
-                                 + boost::gregorian::years(1);
-    const ptime derived_time = (time_meas_map.empty()
-                                   ? ptime(boost::gregorian::date(1970, 1, 1))
-                                   : time_meas_map.rbegin()->first)
-                                 + boost::gregorian::years(2);
+    const auto year = std::chrono::seconds(365*24*60*60);
+    const time_point_t intrinsics_time = (time_meas_map.empty()
+                                          ? time_point_t{}
+                                          : time_meas_map.begin()->first)
+                                         - year;
+    const time_point_t invalids_time = (time_meas_map.empty()
+                                        ? time_point_t{}
+                                        : time_meas_map.rbegin()->first)
+                                         + year;
+    const time_point_t derived_time = (time_meas_map.empty()
+                                       ? time_point_t{}
+                                       : time_meas_map.rbegin()->first)
+                                       + 2*year;
     
     for( const auto &sample_meass : intrinsics )
       for( const auto &m : sample_meass.second )
@@ -4406,7 +4402,7 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
   //  number have the same time stamp.  If we pass both of thers conditions,
   //  then we'll return since there is no need re-assign sample numbers.
   std::map<int, vector<int> > sampleNumsToSamples;
-  std::map<int,std::set<boost::posix_time::ptime> > sampleToTimes;
+  std::map<int,std::set<time_point_t> > sampleToTimes;
   const size_t nmeas = measurements_.size();
   for( size_t i = 0; i < nmeas; ++i )
   {
@@ -4423,8 +4419,8 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
     
     meass.push_back( m->detector_number_ );
     
-    std::set<boost::posix_time::ptime> &timesSet = sampleToTimes[m->sample_number_];
-    if( !m->start_time_.is_special() )
+    std::set<time_point_t> &timesSet = sampleToTimes[m->sample_number_];
+    if( !is_special(m->start_time_) )
       timesSet.insert( m->start_time_ );
     if( timesSet.size() > 1 )
       return false;
@@ -4776,16 +4772,16 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
            && (fabs(meas->longitude_) < 1.0E-6) )
         {
           meas->latitude_ = meas->longitude_ = -999.9;
-          meas->position_time_ = boost::posix_time::not_a_date_time;
+          meas->position_time_ = time_point_t{};
         }else
         {
           ++nGpsCoords;
           mean_latitude_ += meas->latitude();
           mean_longitude_ += meas->longitude();
         }
-      }else if( !meas->position_time_.is_special() )
+      }else if( !is_special(meas->position_time_) )
       {
-        meas->position_time_ = boost::posix_time::not_a_date_time;
+        meas->position_time_ = time_point_t{};
       }
       
       meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
@@ -4814,8 +4810,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       for( size_t i = 1; i < measurements_.size(); ++i )
       {
-        if( measurements_[i-1]->start_time_.is_special()
-           || measurements_[i]->start_time_.is_special() )
+        if( is_special(measurements_[i-1]->start_time_)
+           || is_special(measurements_[i]->start_time_) )
           continue;
         
         if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
@@ -4831,8 +4827,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       /// @TODO: we can probably add this next bit of logic to another loop so it isnt so expensive.
       for( size_t i = 1; i < measurements_.size(); ++i )
       {
-        if( !measurements_[i-1]->start_time_.is_special()
-           && !measurements_[i]->start_time_.is_special()
+        if( !is_special(measurements_[i-1]->start_time_)
+           && !is_special(measurements_[i]->start_time_)
            && (measurements_[i-1]->start_time_ > measurements_[i]->start_time_) )
         {
           properties_flags_ |= kNotTimeSortedOrder;
@@ -4894,7 +4890,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     sample_numbers_.clear();
     sample_to_measurements_.clear();
     
-    typedef std::pair<boost::posix_time::ptime,float> StartAndRealTime;
+    typedef std::pair<time_point_t,float> StartAndRealTime;
     typedef map<int, StartAndRealTime > SampleToTimeInfoMap;
     SampleToTimeInfoMap samplenum_to_starttime; //used to determine if passthrough or not
     
@@ -4931,10 +4927,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         ++pt_num_items;
         pt_averageRealTime += meas->real_time_;
         
-        if( !meas->start_time().is_special() )
+        if( !is_special(meas->start_time()) )
         {
           const int samplenum = meas->sample_number();
-          const boost::posix_time::ptime &st = meas->start_time();
+          const time_point_t &st = meas->start_time();
           const float rt = meas->real_time();
           
           SampleToTimeInfoMap::iterator pos = samplenum_to_starttime.find( samplenum );
@@ -4973,14 +4969,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       SampleToTimeInfoMap::const_iterator next = samplenum_to_starttime.begin(), iter;
       for( iter = next++; next != samplenum_to_starttime.end(); ++iter, ++next )
       {
-        const boost::posix_time::ptime &st = iter->second.first;
-        const boost::posix_time::ptime &next_st = next->second.first;
+        const time_point_t &st = iter->second.first;
+        const time_point_t &next_st = next->second.first;
         
         const float rt = iter->second.second;
-        const boost::posix_time::time_duration duration = boost::posix_time::microseconds( static_cast<int64_t>(rt*1.0E6) );
+        const time_point_t::duration duration = chrono::microseconds( static_cast<int64_t>(rt*1.0E6) );
         
-        boost::posix_time::time_duration diff = ((st + duration) - next_st);
-        if( diff.is_negative() )
+        time_point_t::duration diff = ((st + duration) - next_st);
+        if( diff < time_point_t::duration::zero() )
           diff = -diff;
         
         if( diff < (duration/100) )
@@ -6194,7 +6190,7 @@ std::string SpecFile::generate_psuedo_uuid() const
   string uuid;
   
   if(!measurements_.empty() && measurements_[0]
-      && !measurements_[0]->start_time().is_special() )
+      && !is_special(measurements_[0]->start_time()) )
     uuid = SpecUtils::to_iso_string( measurements_[0]->start_time() );
   else
     uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59:000" ) );
@@ -6703,7 +6699,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   dataH->sample_number_ = -1;
   if( sample_numbers.size() == 1 )
     dataH->sample_number_ = *begin(sample_numbers);
-  dataH->start_time_ = boost::posix_time::pos_infin;
+  dataH->start_time_ = time_point_t{ time_point_t::duration::max() };
   
   const size_t ndet_to_use = det_names.size();
   if( ndet_to_use == 1 )
@@ -7180,8 +7176,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
 #endif // GROUP_BY_ENE_CAL_BEFORE_SUM
   }//if( allBinningIsSame ) / else
   
-  if( dataH->start_time_.is_infinity() )
-    dataH->start_time_ = boost::posix_time::not_a_date_time;
+  if( is_special(dataH->start_time_) )
+    dataH->start_time_ = time_point_t{};
   
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );
@@ -7586,7 +7582,7 @@ void DetectorAnalysisResult::reset()
   distance_ = -1.0f;
   dose_rate_ = -1.0f;
   real_time_ = -1.0f;           //in units of secons (eg: 1.0 = 1 s)
-  //start_time_ = boost::posix_time::ptime();
+  //start_time_ = time_point_t{};
   detector_.clear();
 }//void DetectorAnalysisResult::reset()
 
@@ -7610,7 +7606,7 @@ void DetectorAnalysis::reset()
   algorithm_component_versions_.clear();
   algorithm_creator_.clear();
   algorithm_description_.clear();
-  analysis_start_time_ = boost::posix_time::ptime();
+  analysis_start_time_ = time_point_t{};
   analysis_computation_duration_ = 0.0f;
   algorithm_result_description_.clear();
   
@@ -7625,7 +7621,7 @@ bool DetectorAnalysis::is_empty() const
    && algorithm_component_versions_.empty()
    && algorithm_creator_.empty()
    && algorithm_description_.empty()
-   //&& analysis_start_time_.is_special()
+   //&& is_special(analysis_start_time_)
    //&& analysis_computation_duration_ < FLT_EPSILON
    && algorithm_result_description_.empty()
    && results_.empty());

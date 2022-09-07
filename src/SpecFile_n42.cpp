@@ -226,13 +226,13 @@ namespace
       }//if( !data.data_.empty() )
       
       
-      if( !data.capture_start_time_.is_special() )
+      if( !SpecUtils::is_special(data.capture_start_time_) )
       {
         const string dt = SpecUtils::to_extended_iso_string(data.capture_start_time_) + "Z";
         char *val = doc->allocate_string( dt.c_str(), dt.size()+1 );
         xml_node<char> *node = doc->allocate_node( node_element, "MultimediaCaptureStartDateTime", val );
         MultimediaData->append_node( node );
-      }//if( !data.capture_start_time_.is_special() )
+      }//if( !is_special(data.capture_start_time_) )
       
       //<MultimediaCaptureDuration>,
       
@@ -984,7 +984,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
     // shouldnt have an effect in the vast majority (maybe all I know of) of
     // situations, but jic
     float speed = measurements[0]->speed();
-    boost::posix_time::ptime starttime = measurements[0]->start_time();
+    time_point_t starttime = measurements[0]->start_time();
     
     OccupancyStatus occupancy = measurements[0]->occupied();
     SourceType source_type = measurements[0]->source_type();
@@ -997,8 +997,8 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
     for( size_t i = 0; i < measurements.size(); ++i )
     {
       realtime_used = max( measurements[i]->real_time(), realtime_used );
-      const boost::posix_time::ptime tst = measurements[i]->start_time();
-      starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
+      const time_point_t tst = measurements[i]->start_time();
+      starttime = ((is_special(tst) || (starttime < tst)) ? starttime : tst);
       
       speed = max( measurements[i]->speed(), speed );
       
@@ -1014,7 +1014,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         has_gps = true;
         snprintf( latitude, sizeof(latitude), "%.12f", measurements[i]->latitude() );
         snprintf( longitude, sizeof(longitude), "%.12f", measurements[i]->longitude() );
-        if( !measurements[i]->position_time().is_special() )
+        if( !is_special(measurements[i]->position_time()) )
           positiontime = SpecUtils::to_extended_iso_string(measurements[i]->position_time()) + "Z";
       }//if( !has_gps )
       
@@ -1053,7 +1053,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       val = doc->allocate_string( classcode );
       RadMeasurement->append_node( doc->allocate_node( node_element, "MeasurementClassCode", val ) );
       
-      if( !measurements[0]->start_time().is_special() )
+      if( !is_special(measurements[0]->start_time()) )
       {
         val = doc->allocate_string( startstr.c_str(), startstr.size()+1 );
         RadMeasurement->append_node( doc->allocate_node( node_element, "StartDateTime", val, 13, startstr.size() ) );
@@ -2808,16 +2808,16 @@ struct N42DecodeHelper2006
             if( /*!realtime ||*/ !starttime )
               continue;
               
-            const boost::posix_time::ptime startptime = SpecUtils::time_from_string( xml_value_str(starttime).c_str() );
-            if( startptime.is_special() )
+            const time_point_t startptime = SpecUtils::time_from_string( xml_value_str(starttime).c_str() );
+            if( is_special(startptime) )
               continue;
               
-            boost::posix_time::time_duration thisdelta = startptime - m_meas->start_time_;
-            if( thisdelta < boost::posix_time::time_duration(0,0,0) )
+            time_point_t::duration thisdelta = startptime - m_meas->start_time_;
+            if( thisdelta < time_point_t::duration::zero() )
               thisdelta = -thisdelta;
             //const float realtime = time_duration_string_to_seconds(realtime->value(), realtime->value_size());
             
-            if( thisdelta < boost::posix_time::time_duration(0,0,10) )
+            if( thisdelta < std::chrono::seconds(10) )
               m_meas->set_n42_2006_count_dose_data_info( dose_data, m_analysis_info, m_mutex );
           }
         }//for( loop over CountDoseData nodes, dos )
@@ -2849,7 +2849,7 @@ struct N42DecodeHelper2006
         }//for( loop over spectrum spec_parent remarks )
             
         const rapidxml::xml_node<char> *start_time = xml_first_node_nso( spec_parent, "StartTime", xmlns );
-        if( start_time && start_time->value_size() && m_meas->start_time_.is_special()
+        if( start_time && start_time->value_size() && is_special(m_meas->start_time_)
             && m_meas->source_type_ != SourceType::IntrinsicActivity )
           m_meas->start_time_ = time_from_string( xml_value_str(start_time).c_str() );
       }//if( spec_parent )
@@ -2888,7 +2888,7 @@ struct N42DecodeHelper2006
     const rapidxml::xml_node<char> *sample_real_time_node = xml_first_node_nso( det_data_node, "SampleRealTime", xmlns );
     
     float real_time = 0.0, speed = 0.0;
-    boost::posix_time::ptime start_time;
+    time_point_t start_time{};
     OccupancyStatus occupied = OccupancyStatus::Unknown;
     
     if( sample_real_time_node && sample_real_time_node->value_size() )
@@ -2915,7 +2915,7 @@ struct N42DecodeHelper2006
       //  doesnt have the time in the file), based on the StartTime node under
       //  <DetectorData> (of which, this time disagrees with the actual spectrum
       //  StartTime, so I dont know what to do about this anyway)
-      if( meas->start_time_.is_special()
+      if( is_special(meas->start_time_)
          && (meas->source_type_ != SourceType::IntrinsicActivity) )
         meas->start_time_ = start_time;
       
@@ -3111,7 +3111,7 @@ public:
         //We will copy <remarks> and parse warnings from meas_node to each SpecUtils::Measurement that we will create from it
         vector<string> remarks, parse_warnings;
         float real_time = 0.0;
-        boost::posix_time::ptime start_time;
+        time_point_t start_time{};
         SourceType spectra_type = SourceType::Unknown;
         OccupancyStatus occupied = OccupancyStatus::Unknown;
         
@@ -3183,11 +3183,11 @@ public:
         const rapidxml::xml_node<char> *time_node = XML_FIRST_NODE( meas_node, "StartDateTime" );
         if( time_node && time_node->value_size() )
         {
-          //ToDo: figure which endian-ess is best.  I've seen at leats one N42 file
+          //ToDo: figure which endian-ess is best.  I've seen at least one N42 file
           //  that was little endian (ex "15-05-2017T18:51:50"), but by default
           //  #time_from_string tries middle-endian first.
           start_time = time_from_string( xml_value_str(time_node).c_str() );
-          //start_time = SpecUtils::time_from_string_strptime( xml_value_str(time_node).c_str(), SpecUtils::LittleEndianFirst );
+          //start_time = SpecUtils::time_from_string( xml_value_str(time_node).c_str(), SpecUtils::LittleEndianFirst );
         }
         
         const rapidxml::xml_node<char> *real_time_node = XML_FIRST_NODE( meas_node, "RealTimeDuration" );
@@ -4498,10 +4498,10 @@ namespace SpecUtils
         rapidxml::xml_node<char> *starttime_node = XML_FIRST_NODE(dose_data, "StartTime");
         if( starttime_node && starttime_node->value_size() )
         {
-          boost::posix_time::ptime starttime = time_from_string( xml_value_str(starttime_node).c_str() );
-          if( !starttime.is_special() && !m->start_time_.is_special() )
+          time_point_t starttime = time_from_string( xml_value_str(starttime_node).c_str() );
+          if( !is_special(starttime) && !is_special(m->start_time_) )
           {
-            if( (starttime-m->start_time_) > boost::posix_time::minutes(1) )
+            if( (starttime - m->start_time_) > chrono::minutes(1) )
             {
               string msg = "Warning: neutron start time doesnt match gamma start time!";
               if( std::find(begin(m->parse_warnings_), end(m->parse_warnings_),msg) == end(m->parse_warnings_) )
@@ -4691,7 +4691,7 @@ namespace SpecUtils
     //bool read_in_gps = false;
     double latitude = -999.9;
     double longitude = -999.9;
-    boost::posix_time::ptime position_time;
+    time_point_t position_time{};
     
     const rapidxml::xml_node<char> *meas_loc_name = NULL;
     const rapidxml::xml_node<char> *meas_loc = xml_first_node_nso( measured_item_info_node, "MeasurementLocation", xmlns );
@@ -4902,16 +4902,16 @@ namespace SpecUtils
           const rapidxml::xml_node<char> *starttime_node = xml_first_node_nso( dose, "StartTime", xmlns );
           if( starttime_node && starttime_node->value_size() )
           {
-            const boost::posix_time::ptime starttime = time_from_string( xml_value_str(starttime_node).c_str() );
-            if( !starttime.is_special() )
+            const time_point_t starttime = time_from_string( xml_value_str(starttime_node).c_str() );
+            if( !is_special(starttime) )
             {
               int nearestindex = -1;
-              boost::posix_time::time_duration smallestdelta = boost::posix_time::time_duration(10000,0,0);
+              time_point_t::duration smallestdelta = time_point_t::duration::max();
               for( size_t j = 0; j < measurements_.size(); j++ )
               {
-                const boost::posix_time::ptime &thisstartime = measurements_[j]->start_time_;
-                boost::posix_time::time_duration thisdelta = thisstartime - starttime;
-                if( thisdelta < boost::posix_time::time_duration(0,0,0) )
+                const time_point_t &thisstartime = measurements_[j]->start_time_;
+                time_point_t::duration thisdelta = thisstartime - starttime;
+                if( thisdelta < time_point_t::duration::zero() )
                   thisdelta = -thisdelta;
                 if( thisdelta < smallestdelta )
                 {
@@ -4924,7 +4924,7 @@ namespace SpecUtils
               //  is apparently a mode in detectives where the start time of
               //  neutrons can be well before the gamma, which causes confusion.
               if( nearestindex >= 0
-                 && smallestdelta < boost::posix_time::time_duration(0,1,0) )
+                 && smallestdelta < chrono::minutes(1) )
               {
                 if( !measurements_[nearestindex]->contained_neutron_ )
                 {
@@ -4957,7 +4957,7 @@ namespace SpecUtils
                   }//( if( the foregorund neutron info als ocontains background neutron rate )
                 }//if( there is a foreground and background spectrum for this measurement, and we're assigning the neutron info to foreground )
               }//if( found an appropriate measurement to put this neutron info in )
-            }//if( !starttime.is_special() )
+            }//if( !is_special(starttime) )
           }//if( starttime_node && starttime_node->value_size() )
         }//if( we only have one other measurement ) / else, find nearest one
         
@@ -5246,9 +5246,12 @@ namespace SpecUtils
               //if( neut->live_time_ > 0.0f && fabs(neut->live_time_ - gam->live_time_) > 0.0001 )
               //continue;
               
-              if( !neut->start_time_.is_special() && !gam->start_time_.is_special()
-                 && neut->start_time_ != gam->start_time_ )
+              if( !is_special(neut->start_time_)
+                 && !is_special(gam->start_time_)
+                 && (neut->start_time_ != gam->start_time_) )
+              {
                 continue;
+              }
               
               combined_gam_neut_spec = true;
               gam->neutron_counts_     = neut->neutron_counts_;
@@ -5812,17 +5815,17 @@ namespace SpecUtils
           }
           
           //
-          const boost::posix_time::ptime start_time = time_from_string( xml_value_str(starttime_node).c_str() );
-          if( start_time.is_special() )
+          const time_point_t start_time = time_from_string( xml_value_str(starttime_node).c_str() );
+          if( is_special(start_time) )
           {
             //Just because we failed to parse the start time doesnt mean we shouldnt
             //  parse the neutron information - however, we need to know which gamma
-            //  spectra to add the neutron info to.  So we'll comprimize and if
-            //  we can unabigously pair the information, despite not parsing dates
-            //  we'll do it - I really dont like the brittlness of all of this!
+            //  spectra to add the neutron info to.  So we'll compromise and if
+            //  we can unambiguously pair the information, despite not parsing dates
+            //  we'll do it - I really dont like the brittleness of all of this!
             size_t nspectra = 0;
             for( const auto &meas : added_measurements )
-              nspectra += (meas && (meas->source_type_ != SourceType::IntrinsicActivity) && meas->start_time_.is_special() );
+              nspectra += (meas && (meas->source_type_ != SourceType::IntrinsicActivity) && is_special(meas->start_time_) );
             if( nspectra != 1 )
               continue;
           }
@@ -6030,7 +6033,7 @@ namespace SpecUtils
     }//for( loop over remarks )
     
     
-    if( !ana.analysis_start_time_.is_special() )
+    if( !is_special(ana.analysis_start_time_) )
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
       const string dt = SpecUtils::to_extended_iso_string(ana.analysis_start_time_) + "Z";
@@ -6330,7 +6333,7 @@ namespace SpecUtils
     RadInstrumentData->append_attribute( attr );
     
     {
-      const boost::posix_time::ptime t = boost::posix_time::second_clock::universal_time();
+      const time_point_t t = std::chrono::system_clock::now(); //
       const string datetime = SpecUtils::to_extended_iso_string(t) + "Z";
       val = doc->allocate_string( datetime.c_str(), datetime.size()+1 );
       attr = doc->allocate_attribute( "n42DocDateTime", val );
@@ -6734,7 +6737,7 @@ namespace SpecUtils
         
         std::shared_ptr<const Measurement> first_meas = sample_meas.front();
         const float first_rt = first_meas->real_time();
-        const boost::posix_time::ptime first_time = first_meas->start_time();
+        const time_point_t first_time = first_meas->start_time();
         
         for( size_t i = 1; well_behaving_samples && (i < sample_meas.size()); ++i )
         {
@@ -6793,7 +6796,7 @@ namespace SpecUtils
         //  a single <RadMeasurement> tag, otherwise write under separate ones.
         //Note: this test is a bit brittle, and maybe not quite fair.  For example on
         //  my portal the neutron
-        boost::posix_time::ptime starttime = smeas[0]->start_time();
+        time_point_t starttime = smeas[0]->start_time();
         float min_rtime = smeas[0]->real_time(), max_rtime = smeas[0]->real_time();
         
         //Below allows up to (an arbitrarily chosen) 50 ms difference in start and
@@ -6807,8 +6810,8 @@ namespace SpecUtils
         //  time is added in these situations...
         for( size_t i = 1; i < smeas.size(); ++i )
         {
-          const boost::posix_time::ptime tst = smeas[i]->start_time();
-          starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
+          const time_point_t tst = smeas[i]->start_time();
+          starttime = ((is_special(tst) || (starttime < tst)) ? starttime : tst);
           min_rtime = min( min_rtime, smeas[i]->real_time() );
           max_rtime = max( max_rtime, smeas[i]->real_time() );
         }
@@ -6831,8 +6834,8 @@ namespace SpecUtils
             
             //if( starttime != m->start_time() )
             //{
-            //  const boost::posix_time::time_duration diff = starttime - m->start_time();
-            //  sample_same_times = (!diff.is_special() && (std::abs(diff.total_microseconds()) < 100));
+            //  const time_point_t::duration diff = starttime - m->start_time();
+            //  sample_same_times = (!is_special(diff) && (std::abs(diff.total_microseconds()) < 100));
             //}
           }//if( not background or not first sample )
           
@@ -7930,7 +7933,7 @@ namespace SpecUtils
           
           if( keepers.size() > 1 )
           {
-            typedef map< boost::posix_time::ptime, vector<std::shared_ptr<Measurement> > > time_to_meas_t;
+            typedef map<time_point_t, vector<std::shared_ptr<Measurement> > > time_to_meas_t;
             time_to_meas_t time_to_meas;
             
             for( size_t i = 0; i < keepers.size(); ++i )
@@ -8440,7 +8443,7 @@ namespace SpecUtils
      //    ostr << "        <MeasurementLocationName>" << measurement_location_name_
      //         << "</MeasurementLocationName>" << endline;
      ostr << "        <Coordinates";
-     if( position_time_.is_special() )
+     if( is_special(position_time_) )
      ostr << ">";
      else
      ostr << " Time=\"" << SpecUtils::to_extended_iso_string(position_time_) << "Z\">";
@@ -8546,7 +8549,7 @@ namespace SpecUtils
      */
     
     /*
-     if( !start_time_.is_special() )
+     if( !is_special(start_time_) )
      ostr << "      <StartTime>"
      << SpecUtils::to_extended_iso_string(start_time_)
      << "Z</StartTime>" << endline;
@@ -8743,15 +8746,15 @@ namespace SpecUtils
         continue;
       
       //Look for min start time
-      boost::posix_time::ptime starttime = meass[0]->start_time();
+      time_point_t starttime = meass[0]->start_time();
       float rtime = meass[0]->real_time_;
       float speed = meass[0]->speed_;
       OccupancyStatus occstatus = meass[0]->occupied_;
       
       for( size_t i = 1; i < meass.size(); ++i )
       {
-        const boost::posix_time::ptime tst = meass[i]->start_time();
-        starttime = ((tst.is_special() || (starttime < tst)) ? starttime : tst);
+        const time_point_t tst = meass[i]->start_time();
+        starttime = ((is_special(tst) || (starttime < tst)) ? starttime : tst);
         rtime = max( rtime, meass[i]->real_time_ );
         speed = max( speed, meass[i]->speed_ );
         if( occstatus == OccupancyStatus::Unknown )
@@ -8762,7 +8765,7 @@ namespace SpecUtils
       
       
       ostr << "  <DetectorData>" << endline;
-      if( !starttime.is_special() )
+      if( !is_special(starttime) )
         ostr << "    <StartTime>" << SpecUtils::to_extended_iso_string(starttime) << "Z</StartTime>" << endline;
       if( rtime > 0.0f )
         ostr << "    <SampleRealTime>PT" << rtime << "S</SampleRealTime>" << endline;

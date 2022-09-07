@@ -15,13 +15,8 @@ endif( NOT PERFORM_DEVELOPER_CHECKS )
 
 add_executable( regression_test regression_test.cpp )
 
+target_link_libraries( regression_test PUBLIC SpecUtils Boost::program_options Boost::date_time Boost::system Boost::filesystem )
 
-#Android Studio has an old version of cmake... gotta accomidate, see
-# https://cliutils.gitlab.io/modern-cmake/chapters/packages/Boost.html for an alternative
-#target_link_libraries( regression_test PUBLIC SpecUtils Boost::program_options Boost::date_time Boost::system Boost::filesystem )
-
-target_link_libraries( regression_test PRIVATE SpecUtils ${Boost_LIBRARIES} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} )
-
-set_target_properties( regression_test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+set_target_properties( regression_test PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 
 

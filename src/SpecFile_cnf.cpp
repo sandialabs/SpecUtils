@@ -20,25 +20,25 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <numeric>
 #include <iostream>
-#include <cstdint>
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
@@ -118,16 +118,20 @@ namespace
     }
 
     //boost ptime to CAM DateTime
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_datetime(const boost::posix_time::ptime& date_time)
+    std::array< byte, sizeof(int64_t) > convert_to_CAM_datetime(const SpecUtils::time_point_t& date_time)
     {
         //error checking
-        if (date_time.is_not_a_date_time())
+        if( SpecUtils::is_special(date_time) )
             throw std::range_error("The input date time is not a valid date time");
 
         std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
         //get the total seconds between the input time and the epoch
-        boost::posix_time::ptime epoch(boost::gregorian::date(1970, 1, 1));
-        boost::posix_time::time_duration::sec_type sec_from_epoch = (date_time - epoch).total_seconds();
+        const date::year_month_day epic( date::year(1970), date::month(1u), date::day(1u) );
+        const date::sys_days epic_days = epic;
+        assert( epic_days.time_since_epoch().count() == 0 ); //true if using unix epoch, lets see on the various systems
+      
+        const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epic_days);
+        const int64_t sec_from_epoch = time_from_epoch.count();
 
         //covert to modified julian in usec
         uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
@@ -135,19 +139,19 @@ namespace
         return bytes;
     }
 
-    boost::posix_time::ptime convert_from_CAM_datetime( uint64_t time_raw )
+    SpecUtils::time_point_t convert_from_CAM_datetime( uint64_t time_raw )
     {
-      boost::posix_time::ptime answer;
       if( !time_raw )
-        return answer;
-
-      answer = boost::posix_time::ptime( boost::gregorian::date(1970, 1, 1) );
+        return SpecUtils::time_point_t{};
+      
+      const date::sys_days epic_days = date::year_month_day( date::year(1970), date::month(1u), date::day(1u) );
+      SpecUtils::time_point_t answer{epic_days};
 
       const int64_t secs = time_raw / 10000000L;
       const int64_t sec_from_epoch = secs - 3506716800L;
       
-      answer += boost::posix_time::seconds(sec_from_epoch);
-      answer += boost::posix_time::microseconds( secs % 10000000L );
+      answer += std::chrono::seconds(sec_from_epoch);
+      answer += std::chrono::microseconds( secs % 10000000L );
       
       return answer;
     }//convert_from_CAM_datetime(...)
@@ -283,11 +287,11 @@ namespace
         }//end switch
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const boost::posix_time::ptime& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
+    void enter_CAM_value(const SpecUtils::time_point_t& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
     {
         if (type != cam_type::cam_datetime)
         {
-            throw std::invalid_argument("error - Invalid converstion from: boost::posix_time::ptime");
+            throw std::invalid_argument("error - Invalid conversion from time_point");
         }
 
         const auto bytes = convert_to_CAM_datetime(input);
@@ -700,8 +704,9 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     //Measurement start time.
     //The start time may not be valid (e.g., if input file didnt have times),
     // but if we're here we time is valid, just the unix epoch
-    const boost::posix_time::ptime& start_time = summed->start_time().is_special() ?
-            SpecUtils::time_from_string("1970-01-01 00:00:00"): summed->start_time();
+    const time_point_t start_time = SpecUtils::is_special(summed->start_time())
+                                    ? time_point_t{}
+                                    : summed->start_time();
 
     //Check if we have RIID analysis results we could write to the output file.
     /** \TODO: implement writing RIID analysis resukts to output file.
@@ -878,7 +883,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         }
 
         //times
-        if (!start_time.is_not_a_date_time()) {
+        if (!SpecUtils::is_special(start_time)) {
             enter_CAM_value(0x01, cnf_file, acqp_loc + acqp_header[16], cam_type::cam_byte);
             enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_type::cam_datetime);
         }
@@ -905,7 +910,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //sample quanity cannot be zero
         enter_CAM_value(1.0, cnf_file, samp_loc + 0x90, cam_type::cam_float);
         //set the sample time to the aqusition start time
-        if (!start_time.is_not_a_date_time()) {
+        if (!SpecUtils::is_special(start_time)) {
             enter_CAM_value(start_time, cnf_file, samp_loc + 0xB4, cam_type::cam_datetime);
         }
         if (summed->has_gps_info()) 
@@ -913,7 +918,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_type::cam_double);
             enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_type::cam_double);
             enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_type::cam_double);
-            if(!summed->position_time().is_not_a_date_time())
+            if(!SpecUtils::is_special(summed->position_time()))
                 enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_type::cam_datetime);
         }
         //enter the data header

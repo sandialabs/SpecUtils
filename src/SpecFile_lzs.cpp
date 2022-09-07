@@ -179,7 +179,7 @@ bool SpecFile::load_from_lzs( std::istream &input )
       string datestr = xml_value_str(date_node);
       SpecUtils::ireplace_all(datestr, "@", " ");
       SpecUtils::ireplace_all(datestr, "  ", " ");
-      meas->start_time_ = SpecUtils::time_from_string_strptime( datestr, SpecUtils::DateParseEndianType::LittleEndianFirst );
+      meas->start_time_ = SpecUtils::time_from_string( datestr, SpecUtils::DateParseEndianType::LittleEndianFirst );
     }
     
     const rapidxml::xml_node<char> *calibration_node = XML_FIRST_NODE(nano_mca_node,"calibration");

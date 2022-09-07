@@ -20,25 +20,25 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <cstdint>
-#include <stdexcept>
+#include <fstream>
+#include <numeric>
+#include <iostream>
 #include <algorithm>
+#include <stdexcept>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
@@ -89,15 +89,20 @@ namespace
     return label + ": ";
   }
   
-  string print_to_iaea_datetime( const boost::posix_time::ptime &t )
+  string print_to_iaea_datetime( const SpecUtils::time_point_t &t )
   {
     char buffer[256];
-    const int day = static_cast<int>( t.date().day() );
-    const int month = static_cast<int>( t.date().month() );
-    const int year = static_cast<int>( t.date().year() );
-    const int hour = static_cast<int>( t.time_of_day().hours() );
-    const int minutes = static_cast<int>( t.time_of_day().minutes() );
-    const int seconds = static_cast<int>( t.time_of_day().seconds() );
+    
+    const chrono::time_point<chrono::system_clock,date::days> t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<SpecUtils::time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+    const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    const int hour = static_cast<int>( time_of_day.hours().count() );
+    const int minutes = static_cast<int>( time_of_day.minutes().count() );
+    const int seconds = static_cast<int>( time_of_day.seconds().count() );
     
     snprintf( buffer, sizeof(buffer), "%02d.%02d.%04d %02d:%02d:%02d",
              day, month, year, hour, minutes, seconds );
@@ -910,7 +915,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     }//for( const pair<std::string,std::string> &cmpnt : component_versions_ )
     
     
-    if( !summed->start_time_.is_special() )
+    if( !is_special(summed->start_time_) )
     {
       output << pad_iaea_prefix( "Starttime" ) << print_to_iaea_datetime(summed->start_time_) << "\r\n";
       
@@ -920,13 +925,13 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
         float intsec, fracsec;
         fracsec = std::modf( summed->real_time_, &intsec );
         
-        boost::posix_time::ptime endtime = summed->start_time_
-        + boost::posix_time::seconds( static_cast<int>(intsec) )
-        + boost::posix_time::microseconds( static_cast<int>( floor((1.0e6f * fracsec) + 0.5f) ) );
+        const time_point_t endtime = summed->start_time_
+                                + chrono::seconds( static_cast<int>(intsec) )
+                                + chrono::microseconds( static_cast<int>( floor((1.0E6f * fracsec) + 0.5f) ) );
         
         output << pad_iaea_prefix( "StopTime" ) << print_to_iaea_datetime( endtime ) << "\r\n";
       }//
-    }//if( !summed->start_time_.is_special() )
+    }//if( !is_special(summed->start_time_) )
     
     
     if( summed->contained_neutron_ )
@@ -1157,15 +1162,27 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   float sACQTIM = 0.0; //10616.5 is 2014-Sep-19 12:14:57  // Date and time acquisition start in DECDAY format
   double dACQTI8 = 0.0; //10616.5 // Date and time as double precision DECDAY
   
-  if( !summed->start_time().is_special() )
+  if( !is_special(summed->start_time()) )
   {
-    const boost::posix_time::ptime &startime = summed->start_time();
-    const boost::gregorian::date epic_date( 1979, boost::gregorian::Jan, 1 );
-    const boost::gregorian::days daydiff = startime.date() - epic_date;
-    const double dayfrac = startime.time_of_day().total_microseconds() / (24.0*60.0*60.0*1.0E6);
-    dACQTI8 = daydiff.days() + dayfrac;
+    /*
+     original implementation (to be removed after 20220906):
+     const boost::posix_time::ptime &startime = summed->start_time();
+     const boost::gregorian::date epic_date( 1979, boost::gregorian::Jan, 1 );
+     const boost::gregorian::days daydiff = startime.date() - epic_date;
+     const double dayfrac = startime.time_of_day().total_microseconds() / (24.0*60.0*60.0*1.0E6);
+     dACQTI8 = daydiff.days() + dayfrac;
+     sACQTIM = static_cast<float>( dACQTI8 );
+     */
+    const time_point_t &startime = summed->start_time();
+    
+    const date::year_month_day spc_epic_date( date::year(1979), date::month(1u), date::day(1u) );
+    const date::sys_days spc_epic_day = spc_epic_date;
+    const date::days days_since_spc_epic = date::floor<date::days>( startime - spc_epic_day );
+    const time_point_t::duration time_of_day = startime.time_since_epoch() - days_since_spc_epic;
+    const double dayfrac = date::round<chrono::microseconds>(time_of_day).count() / (24.0*60.0*60.0*1.0E6);
+    dACQTI8 = days_since_spc_epic.count() + dayfrac;
     sACQTIM = static_cast<float>( dACQTI8 );
-  }//if( !summed->start_time().is_special() )
+  }//if( !is_special(summed->start_time()) )
   
   const int16_t wSkip4[4] = { 0, 0, 0, 0 };
   const int16_t wCHNSRT = 0; // Start channel number
@@ -1326,41 +1343,52 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   output.write( defaultname, 16 );
   
   string datestr;
-  if( summed->start_time().date().is_special() )
+  int hour = 0, mins = 0, secs = 0;
+  if( is_special(summed->start_time()) )
   {
     datestr = "01-Jan-001";
   }else
   {
-    const int daynum = summed->start_time().date().day();
+    const SpecUtils::time_point_t &t = summed->start_time();
+    const auto t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int daynum = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+    hour = static_cast<int>( time_of_day.hours().count() );
+    mins = static_cast<int>( time_of_day.minutes().count() );
+    secs = static_cast<int>( time_of_day.seconds().count() );
+    
     if( daynum < 10 )
       datestr += "0";
     datestr += std::to_string(daynum);
     datestr += "-";
-    switch( summed->start_time().date().month() )
+    
+    switch( month )
     {
-      case boost::gregorian::Jan: datestr += "Jan"; break;
-      case boost::gregorian::Feb: datestr += "Feb"; break;
-      case boost::gregorian::Mar: datestr += "Mar"; break;
-      case boost::gregorian::Apr: datestr += "Apr"; break;
-      case boost::gregorian::May: datestr += "May"; break;
-      case boost::gregorian::Jun: datestr += "Jun"; break;
-      case boost::gregorian::Jul: datestr += "Jul"; break;
-      case boost::gregorian::Aug: datestr += "Aug"; break;
-      case boost::gregorian::Sep: datestr += "Sep"; break;
-      case boost::gregorian::Oct: datestr += "Oct"; break;
-      case boost::gregorian::Nov: datestr += "Nov"; break;
-      case boost::gregorian::Dec: datestr += "Dec"; break;
-      case boost::gregorian::NotAMonth: case boost::gregorian::NumMonths:
-        datestr += "\0\0\0";
-        break;
+      case  1: datestr += "Jan"; break;
+      case  2: datestr += "Feb"; break;
+      case  3: datestr += "Mar"; break;
+      case  4: datestr += "Apr"; break;
+      case  5: datestr += "May"; break;
+      case  6: datestr += "Jun"; break;
+      case  7: datestr += "Jul"; break;
+      case  8: datestr += "Aug"; break;
+      case  9: datestr += "Sep"; break;
+      case 10: datestr += "Oct"; break;
+      case 11: datestr += "Nov"; break;
+      case 12: datestr += "Dec"; break;
+      default: datestr += "\0\0\0"; break;
     }//switch( summed->start_time().date().month() )
     
     datestr += "-";
-    const int yearnum = summed->start_time().date().year() % 100;
+    const int yearnum = year % 100;
     if( yearnum < 10 )
       datestr += "0";
     datestr += std::to_string(yearnum);
-    datestr += (summed->start_time().date().year() > 1999 ? "1" : "0");
+    datestr += (year > 1999 ? "1" : "0");
   }
   datestr.resize( 13, '\0' );
   
@@ -1368,17 +1396,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   output.write( &datestr[0], 12 );
   
   char timestr[12] = { '\0' };
-  if( summed->start_time().is_special() )
-  {
-    strcpy( timestr, "00:00:00" );
-  }else
-  {
-    const int hournum = static_cast<int>( summed->start_time().time_of_day().hours() );
-    const int minutenum = static_cast<int>( summed->start_time().time_of_day().minutes() );
-    const int secondnum = static_cast<int>( summed->start_time().time_of_day().seconds() );
-    snprintf( timestr, sizeof(timestr)-1, "%02d:%02d:%02d",
-             hournum, minutenum, secondnum );
-  }
+  snprintf( timestr, sizeof(timestr)-1, "%02d:%02d:%02d", hour, mins, secs );
   
   pos += 10;
   output.write( timestr, 10 );
@@ -2117,7 +2135,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
     
-    boost::posix_time::ptime meas_time;
+    SpecUtils::time_point_t meas_time;
     string manufacturer = "Ortec";
     string inst_model = "Detective";
     string type_instrument = "RadionuclideIdentifier";

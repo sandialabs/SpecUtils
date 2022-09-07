@@ -34,10 +34,12 @@
 
 #include <boost/algorithm/string.hpp>
 
-//#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE testsafeGetLine
-//#include <boost/test/unit_test.hpp>
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
+
+//#define BOOST_TEST_DYN_LINK
+// To use boost unit_test as header only (no link to boost unit test library):
+//#include <boost/test/included/unit_test.hpp>
 
 #include "SpecUtils/ParseUtils.h"
 

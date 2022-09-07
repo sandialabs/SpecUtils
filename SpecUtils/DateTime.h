@@ -25,68 +25,45 @@
 
 #include "SpecUtils_config.h"
 
-
-namespace boost
-{
-  namespace posix_time
-  {
-    class ptime;
-  }
-}
+#include <chrono>
 
 namespace  SpecUtils
 {
+  using time_point_t = std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
+
+  /** Returns true if the time_point_t is the smallest or largest representable time point,
+   or zero (e.g., uninitialized since digital radiation measurements from Jan 01, 1970 dont
+   exist anymore), or false for all other values.
+   
+   This is in analogy with boost::posix_time::ptime, that we upgraded the code from.
+   */
+  bool is_special( const time_point_t &t );
+
   //to_iso_string(...) and to_extended_iso_string(...) are implemented here
   //  to avoid having to link to the boost datetime library
   
   /** Converts the input time to an iso formatted string.
    Ex. "20140414T141201.621543"
    */
-  std::string to_iso_string( const boost::posix_time::ptime &t );
+  std::string to_iso_string( const time_point_t &t );
   
   /** Converts the input time to an extended iso formatted string.
    Ex. "2014-04-14T14:12:01.621543"
    */
-  std::string to_extended_iso_string( const boost::posix_time::ptime &t );
+  std::string to_extended_iso_string( const time_point_t &t );
   
   /** Converts the input to string in format d-mmm-YYYY HH:MM:SS AM,
    where mmm is 3 char month name; d is day number with no leading zeros.
    Returns "not-a-date-time" if input is not valid.
-   Ex. 24hr format: "2014-Sep-9 13:02:15", AMP/PM: "2014-Sep-9 03:02:15 PM"
+   Ex. 24hr format: "9-Sep-2014 15:02:15", AM/PM: "9-Sep-2014 03:02:15 PM"
    */
-  std::string to_common_string( const boost::posix_time::ptime &t, const bool twenty_four_hour );
+  std::string to_common_string( const time_point_t &t, const bool twenty_four_hour );
   
   /** Converts input to the 23 character VAX format "DD-MMM-YYYY HH:MM:SS.SS".
    Returns empty string if input is not valid.
-   Ex. "2014-Sep-19 14:12:01.62"
+   Ex. "19-Sep-2014 14:12:01.62"
    */
-  std::string to_vax_string( const boost::posix_time::ptime &t );
-  
-  /* Using Howard Hinnant's date library https://github.com/HowardHinnant/date
-   is nearly a drop-in, header only solution for cross platform date parsing
-   that appears to work well (all date/time unit tests pass on macOS at
-   least).  If we use, we could probably totally get rid a ton of the
-   "pre-processing" string wrangling complexity too!  ...next release...,
-   when we can also switch to using std::chrono::time_point instead of
-   boost::posix_time::ptime
-   
-   Note though it looks like HH Date lib doesnt work with GCC 4.8.4 at least, so we'll use the old
-   code for now until we drop gcc 4.8 support (e.g., Ubuntu 14)
-   */
-#if( defined(_MSC_VER) \
-     || (__cplusplus >= 201103L && (!defined(__GLIBCXX__) || (__cplusplus >= 201402L) || (defined(__GNUC__) && __GNUC__ > 4))))
-#define USE_HH_DATE_LIB 1
-#else
-#define USE_HH_DATE_LIB 0
-#warning "Using deprecated date-time parsing - support for this compiler will be removed soon"
-#endif
-
-
-  
-  //time_from_string(...):  Currently is a convience function for
-  //  time_from_string_strptime(str,MiddleEndianFirst)
-  boost::posix_time::ptime time_from_string( const char *str );
-  
+  std::string to_vax_string( const time_point_t &t );
   
   /** \brief Describes how to attempt to parse date/times when it is ambigous,
    and you might have some prior information based on the source.
@@ -108,21 +85,31 @@ namespace  SpecUtils
     LittleEndianOnly
   };//enum DateParseEndianType
   
-  /** Converts the input string to a ptime.
+  /** Converts the input string to a std::chrono::time_point.
    
-   Modifies 'time_string' to be in a compatible format with strptime, and then
-   tries a number of common date formats to parse the date.
-   Does not throw.
+   Tries a number of common date formats to parse the date.
+   
+   Since #SpecUtils::time_point_t has a precision of microseconds, any time
+   accuracy past microseconds, is truncated.
+   
+   Any time-zone information is discarded ("2015-05-16T05:50:06-04:00" will
+   parse as "2015-05-16T05:50:06").
+   
+   Date parsing is focused on spectrum file dates, so may not parse
+   dates in distant past or future, or non-ascii dates, or other uncommon
+   (for spectrum files) situations.
    
    Not tested on iOS, Android, Linux (I think just did on macOS and Windows).
    
    \param time_string Input string
-   \param endian How to parse abigous dates.
-   \returns If successful returns a valid ptime, if datetime couldnt be parsed
-   returns invalid datetime.
+   \param endian How to parse ambiguous dates.
+   \returns If successful returns a valid time_point, if `time_string`
+            couldn't be parsed returns time_point_t{} (i.e., 0).
+   
+   Does not throw.
    */
-  boost::posix_time::ptime time_from_string_strptime( std::string time_string,
-                                                     const DateParseEndianType endian );
+  time_point_t time_from_string( std::string time_string,
+                                 const DateParseEndianType endian = DateParseEndianType::MiddleEndianFirst );
   
   
   
@@ -146,12 +133,12 @@ namespace  SpecUtils
    */
   float time_duration_string_to_seconds( const std::string &duration );
   
-  /** Converts a string formated like "[-]h[h][:mm][:ss][.fff]", (ex. "02:15:01.332") to number of
+  /** Converts a string formatted like "[-]h[h][:mm][:ss][.fff]", (ex. "02:15:01.332") to number of
    seconds.
    
-   Durantion will be negative if first character is '-'.
+   Duration will be negative if first character is '-'.
    Unlike boost::posix_time::duration_from_string (which uses delimiters "-:,."), the only valid
-   delimeter is a colon (':').  Leading and trailing whitespaces are ignored.
+   delimiter is a colon (':').  Leading and trailing whitespaces are ignored.
    
    Some examples:
     - "1:13:1.2" is on hour, thirteen minutes, and 1.2 seconds
@@ -168,7 +155,7 @@ namespace  SpecUtils
   /** \brief Gives the CPU time in seconds.
    
    Useful for timing things when you dont want to use chrono.
-   Does not count CPU time of sub-proccesses.
+   Does not count CPU time of sub-processes.
    
    \returns The CPU time in seconds, or on error -DBL_MAX.
    */
@@ -181,7 +168,7 @@ namespace  SpecUtils
    
    \returns The wall time in seconds, or on error -DBL_MAX.
    
-   Note May have an occational jump of a few seconds on Windows due to a
+   Note May have an occasional jump of a few seconds on Windows due to a
    hardware issue (fixed on newer windows/hardware?)
    */
   double get_wall_time();

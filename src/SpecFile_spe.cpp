@@ -20,22 +20,22 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <numeric>
 #include <iostream>
-#include <cstdint>
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
@@ -1296,7 +1296,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$KROMEK_INFO:") )
       {
         //  "$DATE_MEA:" appears to be the *end* of the measurement, so we'll correct for that
-        if( meas->start_time_.is_special()
+        if( is_special(meas->start_time_)
            || (meas->real_time_ <= std::numeric_limits<float>::epsilon())
            || IsInf(meas->real_time_)
            || IsNan(meas->real_time_) )
@@ -1304,7 +1304,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           parse_warnings_.emplace_back( "Not correcting Kromek time to be start of measurement" );
         }else
         {
-          meas->start_time_ -= boost::posix_time::milliseconds( static_cast<int64_t>( std::round(1000.0*meas->real_time_) ) );
+          meas->start_time_ -= chrono::milliseconds( static_cast<int64_t>( std::round(1000.0*meas->real_time_) ) );
         }
         
         
@@ -1510,17 +1510,20 @@ bool SpecFile::write_iaea_spe( ostream &output,
       }
     }//if( remarks.size() )
     
-    if( !summed->start_time_.is_special() )
+    if( !is_special(summed->start_time_) )
     {
       // mm/dd/yyyy hh:mm:ss "02/29/2016 14:31:47"
-      const int year =  static_cast<int>( summed->start_time_.date().year() );
-      const int month = static_cast<int>( summed->start_time_.date().month() );
-      const int day =   static_cast<int>( summed->start_time_.date().day() );
-      const int hour =  static_cast<int>( summed->start_time_.time_of_day().hours() );
-      const int mins =  static_cast<int>( summed->start_time_.time_of_day().minutes() );
-      const int secs =  static_cast<int>( summed->start_time_.time_of_day().seconds() );
-      //double frac = summed->start_time_.time_of_day().fractional_seconds()
-      //             / double(boost::posix_time::time_duration::ticks_per_second());
+      
+      const chrono::time_point<chrono::system_clock,date::days> st_as_days = date::floor<date::days>(summed->start_time_);
+      const date::year_month_day st_ymd = date::year_month_day{st_as_days};
+      const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(summed->start_time_ - st_as_days);
+      
+      const int year = static_cast<int>( st_ymd.year() );
+      const int month = static_cast<int>( static_cast<unsigned>( st_ymd.month() ) );
+      const int day = static_cast<int>( static_cast<unsigned>( st_ymd.day() ) );
+      const int hour = static_cast<int>( time_of_day.hours().count() );
+      const int mins = static_cast<int>( time_of_day.minutes().count() );
+      const int secs = static_cast<int>( time_of_day.seconds().count() );
       
       //snprintf( buffer, sizeof(buffer), "%.2i/%.2i/%.4i %.2i:%.2i:%09.6f",
       //        month, day, year, hour, mins, (secs+frac) );

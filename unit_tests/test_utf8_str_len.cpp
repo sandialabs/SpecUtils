@@ -29,10 +29,13 @@
 #include <climits>
 #include <iostream>
 #include <boost/algorithm/string.hpp>
-//#define BOOST_TEST_DYN_LINK
+
 #define BOOST_TEST_MODULE test_utf8_str_len
-//#include <boost/test/unit_test.hpp>
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
+
+//#define BOOST_TEST_DYN_LINK
+// To use boost unit_test as header only (no link to boost unit test library):
+//#include <boost/test/included/unit_test.hpp>
 
 #include "SpecUtils/StringAlgo.h"
 

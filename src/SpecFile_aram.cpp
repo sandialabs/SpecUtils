@@ -173,7 +173,7 @@ bool SpecFile::load_from_aram( std::istream &input )
     fore_meas->set_gamma_counts( fore_channels, live_time/1000.0f, real_time/1000.0f );
     fore_meas->source_type_ = SourceType::Foreground;
     fore_meas->occupied_ = OccupancyStatus::Occupied;
-    if( !start_time.is_special() )
+    if( !is_special(start_time) )
       fore_meas->set_start_time( start_time );
     
     //See if neutrons are around
@@ -211,7 +211,7 @@ bool SpecFile::load_from_aram( std::istream &input )
         back_meas->set_title( "Background" );
         back_meas->source_type_ = SourceType::Background;
         back_meas->occupied_ = OccupancyStatus::NotOccupied;
-        if( !start_time.is_special() )
+        if( !is_special(start_time) )
           back_meas->set_start_time( start_time );
         measurements_.push_back( back_meas );
       }

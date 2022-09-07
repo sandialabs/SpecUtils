@@ -33,11 +33,15 @@
 #endif
 #include <cstdlib>
 
-//#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE testUtilityFilesystemFunctions
 #include <boost/test/unit_test.hpp>
-#include <boost/filesystem.hpp>
+
+//#define BOOST_TEST_DYN_LINK
+// To use boost unit_test as header only (no link to boost unit test library):
 //#include <boost/test/included/unit_test.hpp>
+
+#include <boost/filesystem.hpp>
+
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
 

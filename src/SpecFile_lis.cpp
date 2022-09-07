@@ -19,17 +19,19 @@
 
 #include "SpecUtils_config.h"
 
-#include <vector>
+#include <math.h>
 #include <string>
-#include <fstream>
+#include <vector>
 #include <cstring>
+#include <fstream>
 #include <numeric>
 #include <iostream>
 #include <stdexcept>
 
+#include "3rdparty/date/include/date/date.h"
 
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
 
@@ -37,44 +39,31 @@ using namespace std;
 
 namespace
 {
-  boost::posix_time::ptime datetime_ole_to_posix(double ole_dt)
+  SpecUtils::time_point_t datetime_ole_to_posix( const double ole_dt )
   {
-    static const boost::gregorian::date ole_zero(1899,12,30);
+    static const date::year_month_day ole_zero( date::year(1899), date::month(12u), date::day(30u) );
     
-    const double max_long = static_cast<double>( numeric_limits<long>::max() );
+    double intpart;
+    double fractpart = modf( ole_dt, &intpart );
     
-    const long days = (ole_dt > max_long) ? numeric_limits<long>::max()
-                                          : static_cast<long>( std::floor(ole_dt) );
+    const double max_long = static_cast<double>( numeric_limits<date::sys_days::rep>::max() );
     
-    boost::gregorian::days d( days );
-    boost::posix_time::ptime pt(ole_zero + d);
+    if( fabs(intpart) > max_long )
+      return (intpart > 0.0) ? SpecUtils::time_point_t::max() : SpecUtils::time_point_t::min();
     
-    ole_dt -= d.days();
-    ole_dt *= 24 * 60 * 60 * 1000;
+    const date::days::rep days = static_cast<date::days::rep>( intpart );
     
-    if( ole_dt > static_cast<double>( numeric_limits<int64_t>::max() ) )
-      return pt + boost::posix_time::milliseconds( numeric_limits<int64_t>::max() );
+    SpecUtils::time_point_t pt = static_cast<date::sys_days>( ole_zero );
+    pt += date::days(days);
     
-    return pt + boost::posix_time::milliseconds( std::abs( static_cast<int64_t>(ole_dt) ) );
+    const auto nmilli = date::round<chrono::milliseconds>( chrono::duration<double, std::milli>(24 * 60 * 60 * 1000 * fractpart) );
+    if( ole_dt >= 0.0 )
+      pt += nmilli;
+    else
+      pt -= nmilli;
     
-    /*
-     typedef typename time_type::date_type date_type;
-     typedef typename time_type::date_duration_type date_duration_type;
-     typedef typename time_type::time_duration_type time_duration_type;
-     using boost::math::modf;
-     static const date_type base_date(1899, Dec, 30);
-     static const time_type base_time(base_date, time_duration_type(0,0,0));
-     int dayOffset, hourOffset, minuteOffset, secondOffset;
-     double fraction = fabs(modf(oa_date, &dayOffset)) * 24; // fraction = hours
-     fraction = modf(fraction, &hourOffset) * 60; // fraction = minutes
-     fraction = modf(fraction, &minuteOffset) * 60; // fraction = seconds
-     modf(fraction, &secondOffset);
-     time_type t(base_time);
-     t += time_duration_type(hourOffset, minuteOffset, secondOffset);
-     t += date_duration_type(dayOffset);
-     return t;
-     */
-  }//boost::posix_time::ptime datetime_ole_to_posix(double ole_dt)
+    return pt;
+  }//SpecUtils::time_point_t datetime_ole_to_posix(double ole_dt)
 }//namespace
 
 

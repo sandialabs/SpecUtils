@@ -327,7 +327,7 @@ size_t SpecFile::write_lower_channel_energies_to_pcf( std::ostream &ostr,
   string datestr;
   for( const auto &m : measurements_ )
   {
-    if( !m->start_time().is_special() )
+    if( !is_special(m->start_time()) )
     {
       datestr = SpecUtils::to_common_string( m->start_time(), true );
       break;
@@ -879,7 +879,7 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
         }
       }//if( we can used fixed title/desc/source placement ) else ( use truncation )
       
-      if( !meas->start_time_.is_special() )
+      if( !is_special(meas->start_time_) )
         collection_time = SpecUtils::to_vax_string( meas->start_time() );
       else
         collection_time = "                       "; //"01-Jan-1900 00:00:00.00";  //23 characters

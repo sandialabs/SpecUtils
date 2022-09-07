@@ -24,6 +24,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <chrono>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -306,8 +307,7 @@ void check_parse_time( const string basedir )
   map<path,double> cpu_parse_times, wall_parse_times;
   const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
   
-  const boost::posix_time::ptime start_time
-                             = boost::posix_time::microsec_clock::local_time();
+  const SpecUtils::time_point_t start_time = chrono::system_clock::now();
   
   for( const path &fpath : with_truth )
   {
@@ -316,7 +316,7 @@ void check_parse_time( const string basedir )
     
     for( int i = 0; i < ntimes_parse; ++i )
     {
-       SpecUtils::SpecFile info;
+      SpecUtils::SpecFile info;
       
       const double orig_wall_time = SpecUtils::get_wall_time();
       const double orig_cpu_time = SpecUtils::get_cpu_time();

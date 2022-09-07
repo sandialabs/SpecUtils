@@ -20,22 +20,22 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdlib>
+#include <cstdint>
+#include <cstring>
 #include <numeric>
 #include <fstream>
-#include <cctype>
-#include <cstdlib>
-#include <cstring>
 #include <iostream>
-#include <cstdint>
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
@@ -116,7 +116,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       
       meas->start_time_ = time_from_string( timestampStr.c_str() );
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-      if( meas->start_time_.is_special() )
+      if( is_special(meas->start_time_) )
         log_developer_error( __func__, ("Failed to extract measurement start time from: '" + header  + "' timestampStr='" + timestampStr + "'").c_str() );
 #endif
       
@@ -438,9 +438,14 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       
       try
       {
-        const boost::gregorian::date the_date( 2000 + timeinfo[0], timeinfo[1], timeinfo[2]);
-        const boost::posix_time::time_duration the_time( timeinfo[3], timeinfo[4], timeinfo[5]);
-        meas->start_time_ = boost::posix_time::ptime( the_date, the_time );
+        const date::year_month_day the_date( date::year(2000 + timeinfo[0]),
+                                            date::month(timeinfo[1]),
+                                            date::day(timeinfo[2]) );
+        
+        meas->start_time_ = static_cast<date::sys_days>( the_date );
+        meas->start_time_ += chrono::hours(timeinfo[3])
+                             + chrono::minutes(timeinfo[4])
+                             + chrono::seconds(timeinfo[5]);
         
         //if( is130v0 ){
         //  float battery_voltage = (10*(((datepos[7]) & 0xF0) >> 4) + ((datepos[7]) & 0xF)) / 10.0f;
@@ -449,7 +454,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
       {
       }
       
-      if( meas->start_time_.is_special() )
+      if( SpecUtils::is_special(meas->start_time_) )
       {
         //We're desperate here - lets search the entire header area.
         for( size_t i = 0; i < 75; ++i )
@@ -459,15 +464,19 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
             timeinfo[i] = 10*(((datepos[i]) & 0xF0) >> 4) + ((datepos[i]) & 0xF);
           try
           {
-            const boost::gregorian::date the_date( 2000 + timeinfo[0], timeinfo[1], timeinfo[2]);
-            const boost::posix_time::time_duration the_time( timeinfo[3], timeinfo[4], timeinfo[5]);
-            meas->start_time_ = boost::posix_time::ptime( the_date, the_time );
+            const date::year_month_day the_date( date::year(2000 + timeinfo[0]),
+                                                date::month(timeinfo[1]),
+                                                date::day(timeinfo[2]) );
+            meas->start_time_ = static_cast<date::sys_days>( the_date );
+            meas->start_time_ += chrono::hours(timeinfo[3])
+                                 + chrono::minutes(timeinfo[4])
+                                 + chrono::seconds(timeinfo[5]);
             break;
           }catch(...)
           {
           }
         }//for( size_t i = 0; i < 75; ++i )
-      }//if( meas->start_time_.is_special() )
+      }//if( is_special(meas->start_time_) )
       
       //neutrn info
       meas->contained_neutron_ = is135v2;
@@ -817,18 +826,36 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
       memcpy( buffer + 4, &record_length, 2 );
       buffer[6] = 'A';
       
-      if( !meas.start_time_.is_special() && meas.start_time_.date().year() > 2000 )
+      if( !is_special(meas.start_time_) )
       {
-        buffer[7] = static_cast<uint8_t>(meas.start_time_.date().year() - 2000);
-        buffer[8] = static_cast<uint8_t>(meas.start_time_.date().month());
-        buffer[9] = static_cast<uint8_t>(meas.start_time_.date().day());
-        buffer[10] = static_cast<uint8_t>(meas.start_time_.time_of_day().hours());
-        buffer[11] = static_cast<uint8_t>(meas.start_time_.time_of_day().minutes());
-        buffer[12] = static_cast<uint8_t>(meas.start_time_.time_of_day().seconds());
+        const time_point_t &t = meas.start_time_;
+        const auto t_as_days = date::floor<date::days>(t);
+        const date::year_month_day t_ymd = date::year_month_day{t_as_days};
         
-        for( size_t i = 7; i < 13; ++i )
-          buffer[i] = (((buffer[i] / 10) << 4) | (buffer[i] % 10));
-      }//if( !meas.start_time_.is_special() )
+        
+        int year = static_cast<int>( t_ymd.year() );
+        if( (year > 2000) && (year < 2254) )
+        {
+          year -= 2000;
+        
+          const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+          const unsigned day = static_cast<unsigned>( t_ymd.day() );
+          const unsigned month = static_cast<unsigned>( t_ymd.month() );
+          const int hour = time_of_day.hours().count();
+          const int mins = time_of_day.minutes().count();
+          const int secs = time_of_day.seconds().count();
+        
+          buffer[7] = static_cast<uint8_t>(year);
+          buffer[8] = static_cast<uint8_t>(month);
+          buffer[9] = static_cast<uint8_t>(day);
+          buffer[10] = static_cast<uint8_t>(hour);
+          buffer[11] = static_cast<uint8_t>(mins);
+          buffer[12] = static_cast<uint8_t>(secs);
+          
+          for( size_t i = 7; i < 13; ++i )
+            buffer[i] = (((buffer[i] / 10) << 4) | (buffer[i] % 10));
+        }//if( (year > 2000) && (year < 2254) )
+      }//if( !is_special(meas.start_time_) )
       
       //battery volt*10 in BCD
       //buffer[13] = uint8_t(3.3*10);
@@ -963,22 +990,33 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       const uint32_t samplnum = meas.sample_number_;
       memcpy( buffer + 9, &samplnum, sizeof(samplnum) );
       
-      if( !meas.start_time_.is_special() && meas.start_time_.date().year() > 2000 )
+      if( !is_special(meas.start_time_) )
       {
-        if( meas.start_time_.date().year() > 100 )
-          buffer[13] = 0;
-        else
-          buffer[13] = static_cast<uint8_t>(meas.start_time_.date().year() - 2000);
+        const time_point_t &t = meas.start_time_;
+        const auto t_as_days = date::floor<date::days>(t);
+        const date::year_month_day t_ymd = date::year_month_day{t_as_days};
         
-        buffer[14] = static_cast<uint8_t>(meas.start_time_.date().month());
-        buffer[15] = static_cast<uint8_t>(meas.start_time_.date().day());
-        buffer[16] = static_cast<uint8_t>(meas.start_time_.time_of_day().hours());
-        buffer[17] = static_cast<uint8_t>(meas.start_time_.time_of_day().minutes());
-        buffer[18] = static_cast<uint8_t>(meas.start_time_.time_of_day().seconds());
-        
-        for( size_t i = 13; i < 19; ++i )
-          buffer[i] = (((buffer[i] / 10) << 4) | (buffer[i] % 10));
-      }//if( !meas.start_time_.is_special() )
+        const int year = static_cast<int>( t_ymd.year() );
+        if( (year > 2000) && (year < 2254) )
+        {
+          const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+          const unsigned day = static_cast<unsigned>( t_ymd.day() );
+          const unsigned month = static_cast<unsigned>( t_ymd.month() );
+          const int hour = time_of_day.hours().count();
+          const int mins = time_of_day.minutes().count();
+          const int secs = time_of_day.seconds().count();
+          
+          buffer[13] = static_cast<uint8_t>(year - 2000);
+          buffer[14] = static_cast<uint8_t>(month);
+          buffer[15] = static_cast<uint8_t>(day);
+          buffer[16] = static_cast<uint8_t>(hour);
+          buffer[17] = static_cast<uint8_t>(mins);
+          buffer[18] = static_cast<uint8_t>(secs);
+          
+          for( size_t i = 13; i < 19; ++i )
+            buffer[i] = (((buffer[i] / 10) << 4) | (buffer[i] % 10));
+        }//if( (year > 2000) && (year < 2254) )
+      }//if( !is_special(meas.start_time_) )
       
       memcpy( buffer + 19, &noutchannel, sizeof(noutchannel) );
       
