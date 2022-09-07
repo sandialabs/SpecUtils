@@ -22,6 +22,8 @@
 
 #include "SpecUtils_config.h"
 
+#include "3rdparty/date/include/date/date.h"
+
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
 
@@ -204,7 +206,7 @@ namespace
   };//class PythonOutputDevice
   
   
-  //wcjohns got the datetime convention code 20150515 from
+  //wcjohns adapted the datetime convention code 20150515 from
   //  http://en.sharejs.com/python/13125
   //There is also a time duration conversion code as wel, but removed it.
   /**
@@ -216,44 +218,34 @@ namespace
    * http://www.nabble.com/boost::posix_time::ptime-conversion-td16857866.html
    */
   
-  static long get_usecs(boost::posix_time::time_duration const& d)
-  {
-    static long resolution
-    = boost::posix_time::time_duration::ticks_per_second();
-    long fracsecs = d.fractional_seconds();
-    if (resolution > 1000000)
-      return fracsecs / (resolution / 1000000);
-    else
-      return fracsecs * (1000000 / resolution);
-  }
   
-  
-  /* Convert ptime to/from python */
-  struct ptime_to_python_datetime
+  /* Convert std::chrono::time_point to/from python */
+  struct chrono_time_point_to_python_datetime
   {
-    static PyObject* convert(boost::posix_time::ptime const& pt)
+    static PyObject* convert(SpecUtils::time_point_t const &t)
     {
-      boost::gregorian::date date = pt.date();
-      boost::posix_time::time_duration td = pt.time_of_day();
-      return PyDateTime_FromDateAndTime((int)date.year(),
-                                        (int)date.month(),
-                                        (int)date.day(),
-                                        td.hours(),
-                                        td.minutes(),
-                                        td.seconds(),
-                                        get_usecs(td));
+      const chrono::time_point<chrono::system_clock,date::days> t_as_days = date::floor<date::days>(t);
+      const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+      const date::hh_mm_ss<SpecUtils::time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+      const int year = static_cast<int>( t_ymd.year() );
+      const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+      const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+      const int hour = static_cast<int>( time_of_day.hours().count() );
+      const int mins = static_cast<int>( time_of_day.minutes().count() );
+      const int secs = static_cast<int>( time_of_day.seconds().count() );
+      const auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
+
+      return PyDateTime_FromDateAndTime( year, month, day, hour, mins, secs, microsecs.count() );
     }
-  };
+  };//struct chrono_time_point_to_python_datetime
   
   
-  struct ptime_from_python_datetime
+  struct chrono_time_point_from_python_datetime
   {
-    ptime_from_python_datetime()
+    chrono_time_point_from_python_datetime()
     {
-      boost::python::converter::registry::push_back(
-                                                    &convertible,
-                                                    &construct,
-                                                    boost::python::type_id<boost::posix_time::ptime > ());
+      boost::python::converter::registry::push_back( &convertible, &construct, boost::python::type_id<SpecUtils::time_point_t>() );
     }
     
     static void* convertible(PyObject * obj_ptr)
@@ -271,25 +263,27 @@ namespace
       = reinterpret_cast<PyDateTime_DateTime*>(obj_ptr);
       
       // Create date object
-      boost::gregorian::date _date(PyDateTime_GET_YEAR(pydate),
-                                   PyDateTime_GET_MONTH(pydate),
-                                   PyDateTime_GET_DAY(pydate));
+      const short year = PyDateTime_GET_YEAR(pydate);
+      const unsigned month = PyDateTime_GET_MONTH(pydate);
+      const unsigned day = PyDateTime_GET_DAY(pydate);
+
+      const int hour = PyDateTime_DATE_GET_HOUR(pydate);
+      const int minute = PyDateTime_DATE_GET_MINUTE(pydate);
+      const int second = PyDateTime_DATE_GET_SECOND(pydate);
+      const int64_t nmicro = PyDateTime_DATE_GET_MICROSECOND(pydate);
       
-      // Create time duration object
-      boost::posix_time::time_duration
-      _duration(PyDateTime_DATE_GET_HOUR(pydate),
-                PyDateTime_DATE_GET_MINUTE(pydate),
-                PyDateTime_DATE_GET_SECOND(pydate),
-                0);
-      // Set the usecs value
-      _duration += boost::posix_time::microseconds(PyDateTime_DATE_GET_MICROSECOND(pydate));
+      date::year_month_day ymd{ date::year(year), date::month(month), date::day(day) };
+      date::sys_days days = ymd;
+      SpecUtils::time_point_t tp = days;
+      tp += chrono::seconds(second + 60*minute + 3600*hour);
+      tp += chrono::microseconds(nmicro);
       
       // Create posix time object
       void* storage = (
-                       (boost::python::converter::rvalue_from_python_storage<boost::posix_time::ptime>*)
+                       (boost::python::converter::rvalue_from_python_storage<SpecUtils::time_point_t>*)
                        data)->storage.bytes;
       new (storage)
-      boost::posix_time::ptime(_date, _duration);
+      SpecUtils::time_point_t(tp);
       data->convertible = storage;
     }
   };
@@ -407,8 +401,20 @@ namespace
     meas->set_gamma_counts( counts, live_time, real_time );
   }
 
+  void setNeutronCounts_wrapper( SpecUtils::Measurement *meas,
+                              boost::python::list py_counts )
+  {
+    vector<float> counts;
+    boost::python::ssize_t n = boost::python::len( py_counts );
+    for( boost::python::ssize_t i = 0; i < n; ++i )
+      counts.push_back( boost::python::extract<float>( py_counts[i] ) );
 
-  boost::posix_time::ptime start_time_wrapper( const SpecUtils::Measurement *meas )
+    meas->set_neutron_counts( counts );
+  }
+
+
+
+  SpecUtils::time_point_t start_time_wrapper( const SpecUtils::Measurement *meas )
   {
     return meas->start_time();
   }
@@ -664,12 +670,8 @@ namespace
     info->add_measurement( m, true );
   }
 
-  void setMeasurementRemarks_wrapper( SpecUtils::SpecFile *info,
-                             boost::python::object py_remarks,
-                             boost::python::object py_meas )
+  std::vector<std::string> to_cpp_remarks( boost::python::object py_remarks )
   {
-    std::shared_ptr<const SpecUtils::Measurement> m = boost::python::extract<std::shared_ptr<const SpecUtils::Measurement>>(py_meas);
-
     std::vector<std::string> remarks;
     boost::python::extract<std::string> remark_as_str(py_remarks);
     if( remark_as_str.check() )
@@ -682,8 +684,26 @@ namespace
       for( boost::python::ssize_t i = 0; i < n; ++i )
         remarks.push_back( boost::python::extract<std::string>( remarks_list[i] ) );
     }
+
+    return remarks;
+  }
+
+  void setMeasurementRemarks_wrapper( SpecUtils::SpecFile *info,
+                             boost::python::object py_remarks,
+                             boost::python::object py_meas )
+  {
+    std::shared_ptr<const SpecUtils::Measurement> m = boost::python::extract<std::shared_ptr<const SpecUtils::Measurement>>(py_meas);
+    std::vector<std::string> remarks = to_cpp_remarks( py_remarks );
     
     info->set_remarks( remarks, m );
+  }
+
+  void setMeasRemarks_wrapper( SpecUtils::Measurement *meas,
+                             boost::python::object py_remarks )
+  {
+    std::vector<std::string> remarks = to_cpp_remarks( py_remarks );
+    
+    meas->set_remarks( remarks );
   }
 
   void setRemarks_wrapper( SpecUtils::SpecFile *info,
@@ -1144,16 +1164,55 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
     .def( "gammaChannelCounts", &gamma_counts_wrapper )
     .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
     .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
-    //... setter functions here
+    
+    // Functionst to create new Measurment objects
     .def( "clone", &makeCopy_wrapper )
     .def( "new", &makeMeasurement_wrapper, 
       "Creates a new Measurement object, which you can add to a SpecUtils.SpecFile.\n"
       "The created object is really a std::shared_ptr<SpecUtils::Measurement> object in C++ land." )
+
+    //... setter functions here 
+    .def( "setTitle", &SpecUtils::Measurement::set_title,
+      args("Title"),
+      "Sets the 'Title' of the record - primarily used in PCF files,\n"
+      "but will be saved in with N42 files as well." )
+    .def( "setStartTime", &SpecUtils::Measurement::set_start_time,
+      args("StartTime"),
+      "Set the time the measurment started" )
+    .def( "setRemarks", &setMeasRemarks_wrapper,
+      args("RemarkList"),
+      "Sets the remarks.\nTakes a single string, or a list of strings." )
+    .def( "setSourceType", &SpecUtils::Measurement::set_source_type,
+      args("SourceType"),
+      "Sets the source type (Foreground, Background, Calibration, etc)\n"
+      "for this Measurement; default is Unknown" )
+    .def( "setSampleNumber", &SpecUtils::Measurement::set_sample_number,
+      args("SampleNum"),
+      "Sets the the sample number of this Measurement; if you add this\n"
+      "Measurement to a SpecFile, this value may get overridden (see \n"
+      "SpecFile.setSampleNumber(sample,meas))" )  
+    .def( "setOccupancyStatus", &SpecUtils::Measurement::set_occupancy_status,
+      args("Status"),
+      "Sets the the Occupancy status.\n"
+      "Defaults to OccupancyStatus::Unknown" )
+    .def( "setDetectorName", &SpecUtils::Measurement::set_detector_name,
+      args("Name"),
+      "Sets the detectors name.")
+    .def( "setPosition", &SpecUtils::Measurement::set_position,
+      args("Longitude", "Latitude", "PositionTime"),
+      "Sets the GPS coordinates .")
     .def( "setGammaCounts", &setGammaCounts_wrapper,
       args( "Counts", "LiveTime", "RealTime" ),
       "Sets the gamma counts array, as well as real and live times.\n"
       "If number of channels is not compatible with previous number of channels\n"
       "then the energy calibration will be reset as well." )
+    .def( "setNeutronCounts", &setNeutronCounts_wrapper,
+      args("Counts"),
+      "Sets neutron counts for this measurement.\n"
+      "Takes in a list of floats cooresponding to the neutron detectors for\n"
+      "this gamma detector (i.e., if there are multiple He3 tubes).\n"
+      "For most systems the list has just a single entry.\n"
+      "If you pass in an empty list, the measurement will be set as not containing neutrons.")
     .def( "setEnergyCalibration", &SpecUtils::Measurement::set_energy_calibration,
       args( "Cal" ),
       "Sets the energy calibration of thie Measurement" )
@@ -1185,8 +1244,8 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
   
   
   PyDateTime_IMPORT;
-  ptime_from_python_datetime();
-  boost::python::to_python_converter<const boost::posix_time::ptime, ptime_to_python_datetime>();
+  chrono_time_point_from_python_datetime();
+  boost::python::to_python_converter<const SpecUtils::time_point_t, chrono_time_point_to_python_datetime>();
   
   //disambiguate a few functions that have overloads
   std::shared_ptr<const SpecUtils::Measurement> (SpecUtils::SpecFile::*meas_fcn_ptr)(size_t) const = &SpecUtils::SpecFile::measurement;
@@ -1429,7 +1488,8 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
         "Sets the SpecFile internal filename variable value." )
   .def( "setRemarks", &setRemarks_wrapper, 
         args("RemarkList" ),
-        "Sets the file-level remarks." )    
+        "Sets the file-level remarks.\n"
+        "Takes a single string, or a list of strings." )    
   .def( "setParseWarnings", &setParseWarnings_wrapper, 
         args("ParseWarningList" ),
         "Sets the parse warnings." )    
@@ -1485,7 +1545,8 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
         "Sets the start time of the specified measurement." )
   .def( "setMeasurementRemarks", &setMeasurementRemarks_wrapper, 
         args("RemarkList", "Measurement"),
-        "Sets the remarks the specified measurement." )
+        "Sets the remarks the specified measurement.\n"
+        "Takes a single string, or a list of strings." )
   .def( "setSourceType", &SpecUtils::SpecFile::set_source_type, 
         args("SourceType", "Measurement"),
         "Sets the SpecUtils.SourceType the specified measurement." )

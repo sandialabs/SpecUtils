@@ -661,6 +661,9 @@ public:
    */
   void set_source_type( const SourceType type );
 
+  /** Sets the GPS coordinates and time. */
+  void set_position( double longitude, double latitude, time_point_t pos_time );
+  
   /** Set the sample number of this measurement; default is 1. */
   void set_sample_number( const int samplenum );
   

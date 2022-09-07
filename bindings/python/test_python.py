@@ -103,20 +103,10 @@ newMeas = SpecUtils.Measurement.new()
 #   started with a copy of an existing Measurement. i.e.,
 # newMeas = meas.clone()
 
-# Add the new Measurement to the `info` SpecFile.
-#  We need to do this so the spectrum will be inside a spectrum file,
-#  and also the API for setting the various values of a Measurement 
-#  object is a little odd, in that they need to be set through the 
-#  SpecFile object that owns them.
-info.addMeasurement( newMeas )
-
 # And change a bunch of values, both for the SpecFile object, and the new Measurement object
 newLiveTime = 10
 newRealTime = 15
 
-# Test setting real/live time themselves
-info.setLiveTime( newLiveTime, newMeas )
-info.setRealTime( newRealTime, newMeas )
 
 # Test setting channel counts, which also requires setting live/real time at same time
 newGammaCounts = [0,1.1,2,3,4,5.9,6,7,8,9,8,7,6,5,4,3,2,1]
@@ -128,19 +118,39 @@ newEnergyCal = SpecUtils.EnergyCalibration.fromFullRangeFraction( numChannels, e
 newMeas.setGammaCounts( newGammaCounts, newLiveTime, newRealTime )
 newMeas.setEnergyCalibration( newEnergyCal )
 
+newMeas.setTitle( "The new measurements title" )
+newMeas.setStartTime( datetime.fromisoformat('2022-08-26T00:05:23') )
+newMeas.setRemarks( ['Remark 1', 'Remark 2'] )
+newMeas.setSourceType( SpecUtils.SourceType.Foreground )
+newMeas.setPosition( Latitude=37.6762183189832, Longitude=-121.70622613299014, PositionTime=datetime.fromisoformat('2022-08-26T00:05:23') )
+newMeas.setNeutronCounts( [120] )
+remarks = info.remarks()
+remarks.append( "Remark added from python to measurement" )
+newMeas.setRemarks( remarks )
+
+
+# Add the new Measurement to the `info` SpecFile.
+#  Once we do this, dont change `newMeas` directly, as SpecFile
+#  keeps track of sums and detector names; instead call the
+# `info.set...(..., newMeas)` family of functions.
+#
+# The SpecUtils.SpecFile.set...(..., const SpecUtils.Measurement)
+#  family of functions is also useful when the SpecFile "owns"
+#  the Measurement you want to modify (e.g., you read in from a 
+#  file).
+info.addMeasurement( newMeas )
+
 info.setDetectorType( SpecUtils.DetectorType.DetectiveEx100 )
 info.setInstrumentManufacturer( "MyCustomManufacturer" )
 info.setInstrumentModel( "SomeDetector" )
 info.setSerialNumber( "SomeSerialNumber102" )
+
+
+# Test setting real/live time themselves
+info.setLiveTime( newLiveTime, newMeas )
+info.setRealTime( newRealTime, newMeas )
 info.setTitle( "The new measurements title", newMeas )
-info.setStartTime( datetime.fromisoformat('2022-08-26T00:05:23'), newMeas )
-info.setMeasurementRemarks( ['Remark 1', 'Remark 2'], newMeas )
-info.setSourceType( SpecUtils.SourceType.Foreground, newMeas )
-info.setPosition( Latitude=37.6762183189832, Longitude=-121.70622613299014, PositionTime=datetime.fromisoformat('2022-08-26T00:05:23'), Measurement=newMeas )
-info.setNeutronCounts( True, 120, newMeas )
-remarks = info.remarks()
-remarks.append( "Remark added from python" )
-info.setRemarks( remarks )
+
 
 print( "Set live time to ", newMeas.liveTime(), " seconds, and real time to ", newMeas.realTime() )
 

@@ -777,6 +777,14 @@ void Measurement::set_source_type( const SourceType type )
 {
   source_type_ = type;
 }
+
+
+void Measurement::set_position( double longitude, double latitude, time_point_t pos_time )
+{
+  longitude_ = longitude;
+  latitude_ = latitude;
+  position_time_ = pos_time;
+}
   
 void Measurement::set_sample_number( const int samplenum )
 {
@@ -840,7 +848,7 @@ void Measurement::set_neutron_counts( const std::vector<float> &counts )
   const size_t size = counts.size();
   for( size_t i = 0; i < size; ++i )
     neutron_counts_sum_ += counts[i];
-}
+}//void set_neutron_counts( const std::vector<float> &counts )
 
   
 const std::vector<float> &Measurement::neutron_counts() const
@@ -1179,7 +1187,9 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
+#if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:           return "tmplt";
+#endif
     case SaveSpectrumAsType::NumTypes:          break;
   }//switch( m_format )
   
@@ -1224,7 +1234,9 @@ const char *descriptionText( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
 #endif
+#if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:           return "tmplt";
+#endif
     case SaveSpectrumAsType::NumTypes:          return "";
   }
   return "";
