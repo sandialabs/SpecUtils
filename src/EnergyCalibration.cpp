@@ -34,7 +34,6 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
-#include <boost/current_function.hpp>
 #endif
 
 #include "SpecUtils/CubicSpline.h"

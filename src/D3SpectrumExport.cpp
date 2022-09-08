@@ -19,6 +19,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <cmath>
 #include <stack>
 #include <limits>
 #include <sstream>

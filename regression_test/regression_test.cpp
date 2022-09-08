@@ -1010,8 +1010,8 @@ void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &o
   out << ", " << SpecUtils::to_extended_iso_string(meas.start_time());
   
   if( meas.has_gps_info() )
-    out << ", GPS(" << meas.latitude() << "," << meas.longitude() << "," << meas.position_time() << ")";
-  
+    out << ", GPS(" << meas.latitude() << "," << meas.longitude() << ","
+        << SpecUtils::to_iso_string(meas.position_time()) << ")";
 }//void print_one_line_summary( const SpecUtils::Measurement &info, std::ostream &out )
 
 

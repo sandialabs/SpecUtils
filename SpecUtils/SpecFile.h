@@ -25,6 +25,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <map>
 #include <set>
 #include <mutex>
 #include <string>
@@ -32,14 +33,8 @@
 #include <algorithm>
 #include <functional>
 
-#ifndef BOOST_DATE_TIME_NO_LIB
-  #define BOOST_DATE_TIME_NO_LIB
-#endif
-#include <boost/date_time/posix_time/posix_time.hpp>
-
-
 /*
-Shortcommings that wcjohns should be addressed
+Shortcommings that wcjohns should address:
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
  - Neutron measurements should have their own live and real time

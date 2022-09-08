@@ -20,19 +20,18 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
+#include <limits>
+#include <cctype>
 #include <memory>
 #include <string>
-#include <cctype>
-#include <limits>
-#include <float.h>
-#include <numeric>
-#include <fstream>
-#include <cctype>
-#include <float.h>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <cstdint>
+#include <float.h>
+#include <fstream>
+#include <numeric>
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>

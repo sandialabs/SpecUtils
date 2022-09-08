@@ -19,6 +19,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <array>
 #include <cmath>
 #include <cctype>
 #include <limits>
@@ -126,11 +127,11 @@ namespace
 
         std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
         //get the total seconds between the input time and the epoch
-        const date::year_month_day epic( date::year(1970), date::month(1u), date::day(1u) );
-        const date::sys_days epic_days = epic;
-        assert( epic_days.time_since_epoch().count() == 0 ); //true if using unix epoch, lets see on the various systems
+        const date::year_month_day epoch( date::year(1970), date::month(1u), date::day(1u) );
+        const date::sys_days epoch_days = epoch;
+        assert( epoch_days.time_since_epoch().count() == 0 ); //true if using unix epoch, lets see on the various systems
       
-        const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epic_days);
+        const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epoch_days);
         const int64_t sec_from_epoch = time_from_epoch.count();
 
         //covert to modified julian in usec
@@ -144,8 +145,8 @@ namespace
       if( !time_raw )
         return SpecUtils::time_point_t{};
       
-      const date::sys_days epic_days = date::year_month_day( date::year(1970), date::month(1u), date::day(1u) );
-      SpecUtils::time_point_t answer{epic_days};
+      const date::sys_days epoch_days = date::year_month_day( date::year(1970), date::month(1u), date::day(1u) );
+      SpecUtils::time_point_t answer{epoch_days};
 
       const int64_t secs = time_raw / 10000000L;
       const int64_t sec_from_epoch = secs - 3506716800L;

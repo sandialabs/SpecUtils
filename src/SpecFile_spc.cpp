@@ -1167,20 +1167,20 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     /*
      original implementation (to be removed after 20220906):
      const boost::posix_time::ptime &startime = summed->start_time();
-     const boost::gregorian::date epic_date( 1979, boost::gregorian::Jan, 1 );
-     const boost::gregorian::days daydiff = startime.date() - epic_date;
+     const boost::gregorian::date epoch_date( 1979, boost::gregorian::Jan, 1 );
+     const boost::gregorian::days daydiff = startime.date() - epoch_date;
      const double dayfrac = startime.time_of_day().total_microseconds() / (24.0*60.0*60.0*1.0E6);
      dACQTI8 = daydiff.days() + dayfrac;
      sACQTIM = static_cast<float>( dACQTI8 );
      */
     const time_point_t &startime = summed->start_time();
     
-    const date::year_month_day spc_epic_date( date::year(1979), date::month(1u), date::day(1u) );
-    const date::sys_days spc_epic_day = spc_epic_date;
-    const date::days days_since_spc_epic = date::floor<date::days>( startime - spc_epic_day );
-    const time_point_t::duration time_of_day = startime.time_since_epoch() - days_since_spc_epic;
+    const date::year_month_day spc_epoch_date( date::year(1979), date::month(1u), date::day(1u) );
+    const date::sys_days spc_epoch_day = spc_epoch_date;
+    const date::days days_since_spc_epoch = date::floor<date::days>( startime - spc_epoch_day );
+    const time_point_t::duration time_of_day = startime.time_since_epoch() - days_since_spc_epoch;
     const double dayfrac = date::round<chrono::microseconds>(time_of_day).count() / (24.0*60.0*60.0*1.0E6);
-    dACQTI8 = days_since_spc_epic.count() + dayfrac;
+    dACQTI8 = days_since_spc_epoch.count() + dayfrac;
     sACQTIM = static_cast<float>( dACQTI8 );
   }//if( !is_special(summed->start_time()) )
   
