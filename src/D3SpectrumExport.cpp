@@ -25,6 +25,7 @@
 #include <sstream>
 #include <fstream>
 #include <cstddef>
+#include <iomanip>
 #include <streambuf>
 
 #include "rapidxml/rapidxml.hpp"

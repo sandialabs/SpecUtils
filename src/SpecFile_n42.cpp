@@ -6333,7 +6333,7 @@ namespace SpecUtils
     RadInstrumentData->append_attribute( attr );
     
     {
-      const time_point_t t = std::chrono::system_clock::now(); //
+      const time_point_t t = chrono::time_point_cast<chrono::microseconds>( chrono::system_clock::now() );
       const string datetime = SpecUtils::to_extended_iso_string(t) + "Z";
       val = doc->allocate_string( datetime.c_str(), datetime.size()+1 );
       attr = doc->allocate_attribute( "n42DocDateTime", val );

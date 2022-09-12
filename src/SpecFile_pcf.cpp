@@ -31,6 +31,7 @@
 #include <float.h>
 #include <fstream>
 #include <sstream>
+#include <assert.h>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>

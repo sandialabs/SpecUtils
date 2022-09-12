@@ -36,7 +36,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <numeric>
+#include <sstream>
 #include <iterator>
 #include <iostream>
 #include <algorithm>

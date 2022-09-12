@@ -32,6 +32,7 @@
 #include <fstream>
 #include <numeric>
 #include <sstream>
+#include <assert.h>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>

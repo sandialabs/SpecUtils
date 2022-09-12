@@ -298,7 +298,10 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
         m->sample_number_ = static_cast<int>( sample + 1 );
         m->occupied_ = OccupancyStatus::Unknown;
         m->gamma_count_sum_ = 0.0;
-        m->neutron_counts_sum_ = neutroncount;
+        // Cast to neutron counts to float to match what we are putting in m->neutron_counts_, so
+        //  if we check answer in SpecFile::recalc_total_counts(), we are consistent (although now
+        //  less precise).
+        m->neutron_counts_sum_ = static_cast<float>(neutroncount);
         //        m->speed_ = ;
         m->detector_name_ = title;
         m->detector_number_ = static_cast<int>( i );
