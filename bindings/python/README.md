@@ -1,3 +1,7 @@
+Instructions to build and install a python wheel file.
+
+It could be more automated, or polished, or whatever, but this works.
+
 ```bash
 cd SpecUtils
 mkdir build_python
