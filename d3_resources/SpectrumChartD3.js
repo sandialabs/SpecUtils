@@ -1023,10 +1023,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     maxsfinput.value = self.options.maxScaleFactor;
   }
 
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
   /* Update the spectrum drop down for adjusting y-scale factors */
   if (currentsftitle = document.getElementById("current-sf-title")) {
     var titles = self.getSpectrumTitles();
@@ -1593,7 +1589,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       } else if (self.isDeletingPeaks) {   /* If deleting peaks */
         self.handleMouseMoveDeletePeak();
       } else if (self.isCountingGammas) {   /* If counting gammas */
-        self.handleMouseMoveCountGammas();
+        self.updateGammaSum();
       } else if (self.isRecalibrating) {      /* If recalibrating the chart */
         self.handleMouseMoveRecalibration();
       } else if (self.isZoomingInYAxis) {        /* If zooming in y-axis */
@@ -2990,7 +2986,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     } else if (self.controlDragSwipe) {
       self.handleTouchMovePeakFit();
     } else if (self.altShiftSwipe) {
-      self.handleTouchMoveCountGammas();
+      self.updateGammaSum();
     } else if( self.zoomInXPinch ){
       self.handleTouchMoveZoomInX();
     } else if (self.zoomInYPinch) {
@@ -6216,10 +6212,6 @@ SpectrumChartD3.prototype.setShowSpectrumScaleFactorWidget = function(d) {
 SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
   var self = this;
 
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
   /* Here is a modified, slightly more efficient version of redraw 
     specific to changing the scale factors for spectrums. 
   */
@@ -6294,7 +6286,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     var spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
     
     spectrum.sliderToggle.attr("cy", newTogglePos );
-    spectrum.sliderText.text( (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()));
+    spectrum.sliderText.text( (spectrumScaleFactor % 1 != 0) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed() );
     spectrum.yScaleFactor = spectrumScaleFactor;
     
     // If we are using background subtract, we have to redraw the entire chart if we update the scale factors
@@ -10141,83 +10133,139 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
   return sum;
 }
 
-/**
- \TODO: This function is really similar to SpectrumChartD3.prototype.handleTouchMoveCountGammas; they should be compined as much as possible.
- */
-SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
-  var self = this
 
-  d3.event.preventDefault();
-  d3.event.stopPropagation();
-
-  /* Cancel the zooming mode */
-  self.handleCancelMouseZoomInX();
-
-  /* Cancel the recalibration mode */
-  self.handleCancelMouseRecalibration();
-
-  /* Cancel the zooming in y mode */
-  self.handleCancelMouseZoomInY();
-
-  /* Cancel the delete peak mode */
-  self.handleCancelMouseDeletePeak();
-
-  if (!self.countGammasMouse || !self.lastMouseMovePos || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
-    return;
+SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
+  var self = this;
   
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
-  /* Adjust the mouse move position with respect to the bounds of the vis */
-  if (self.lastMouseMovePos[0] < 0)
-    self.lastMouseMovePos[0] = 0;
-  else if (self.lastMouseMovePos[0] > self.size.width)
-    self.lastMouseMovePos[0] = self.size.width;
-
-  let startx = self.countGammasMouse[0];
-  let nowx = self.lastMouseMovePos[0];
-    
-    
   var countGammasBox = d3.select("#countGammasBox"),
-      countGammasText = d3.select("#countGammasText"),
-      countGammaRangeText = d3.select("#countGammaRangeText"),
-      sigmaCount = d3.select("#sigmaCount");
-  var countGammasRange = [ 
-      Number(self.xScale.invert(Number(startx).toFixed(1))),
-      Number(self.xScale.invert(Number(nowx).toFixed(1)))
+  countGammasText = d3.select("#countGammasText");
+  
+  var countGammasRange;
+  
+  try {
+    countGammasRange = [
+    Math.min(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width")))),
+    Math.max(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width"))))
+    ];
+    
+    console.log("Emit COUNT GAMMAS SIGNAL FROM ", countGammasRange[0], "keV to ", countGammasRange[1], " keV" );
+    self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
+    
+  } catch (TypeError) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
+    return;
+  }
+  
+  self.handleCancelTouchCountGammas();
+}
+
+/** Updates sum numbers as the the mouse or fingers move, while highlighting a region of data to sum
+ (e.g. option+shift+drag, or two fingers vertical+drag)
+ */
+SpectrumChartD3.prototype.updateGammaSum = function() {
+  var self = this
+  
+  const pos = self.getMousePos();
+  if( !pos ){
+    console.log( "updateGammaSum: failed to get mouse/touch pos" );
+    return;
+  }
+  
+  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+  return;
+  
+  let isMouseEvent = true;
+  if( d3.event ){
+    d3.event.preventDefault();
+    d3.event.stopPropagation();
+    const t = d3.event.changedTouches;
+    const vt = t ? d3.touches(this.vis[0][0], t) : null;
+    if( vt )
+    isMouseEvent = false;
+  }else if( !self.lastMouseMovePos && this.lastTapEvent ){
+    isMouseEvent = false;
+  }
+  
+  let startx_px, nowx_px;
+  if( isMouseEvent ){
+    self.handleCancelMouseZoomInX();
+    self.handleCancelMouseRecalibration();
+    self.handleCancelMouseZoomInY();
+    self.handleCancelMouseDeletePeak();
+    
+    if (!self.countGammasMouse || !self.lastMouseMovePos )
+    return;
+    
+    startx_px = self.countGammasMouse[0];
+    nowx_px = self.lastMouseMovePos[0];
+    if( startx_px > nowx_px )
+    [startx_px, nowx_px] = [startx_px, nowx_px];
+  }else{
+    self.handleCancelTouchDeletePeak();
+    self.handleCancelTouchPeakFit();
+    self.handleTouchCancelZoomInY();
+    
+    const t = d3.touches(self.vis[0][0]);
+    const startT = self.countGammasStartTouches;
+    console.assert( !startT || (startT.length === 2) );
+    
+    if (t.length !== 2 || !startT ) {
+      self.handleCancelTouchCountGammas();
+      return;
+    }
+    
+    const x_px = [startT[0][0], startT[0][1], t[0][0], t[0][1]];
+    startx_px = Math.min.apply(Math, x_px);
+    nowx_px = Math.max.apply(Math, x_px);
+  }
+  
+  
+  /* Adjust the mouse move position with respect to the bounds of the vis */
+  if (startx_px < 0)
+    startx_px = 0;
+  if( nowx_px > self.size.width )
+    nowx_px = self.size.width;
+  
+  const sumEnergyRange = [
+    self.xScale.invert(startx_px),
+    Math.min(self.xScale.invert(nowx_px), self.xScale.domain()[1])
   ];
-
+  
+  var countGammasBox = d3.select("#countGammasBox"),
+  countGammasText = d3.select("#countGammasText"),
+  countGammaRangeText = d3.select("#countGammaRangeText"),
+  sigmaCount = d3.select("#sigmaCount");
+  
+  
   /* Create the yellow box and text associated with it */
-  if (countGammasBox.empty()) { 
+  if (countGammasBox.empty()) {
     countGammasBox = self.vis.append("rect")
-      .attr("id", "countGammasBox")
-      .attr("width", Math.abs( startx - nowx ))
-      .attr("height", self.size.height)
-      .attr("y", 0);
-
+    .attr("id", "countGammasBox")
+    .attr("width", Math.abs( startx_px - nowx_px ))
+    .attr("height", self.size.height)
+    .attr("y", 0);
+    
   } else {  /* Adjust the width of the erase peaks box */
-    countGammasBox.attr("width", Math.abs( startx - nowx ));
+    countGammasBox.attr("width", Math.abs( startx_px - nowx_px ));
   }
   if (countGammasText.empty()) {
     countGammasText = self.vis.append("text")
-      .attr("id", "countGammasText")
-      .attr("class", "countGammasText")
-      .attr("y", Number(countGammasBox.attr("height"))/2)
-      .text("Gamma Counts");
+    .attr("id", "countGammasText")
+    .attr("class", "countGammasText")
+    .attr("y", Number(countGammasBox.attr("height"))/2)
+    .text("Gamma Counts");
   }
   var ypos = Number(countGammasBox.attr("height"))/2 + 15;   /* signifies the y-position of the text displayed */
-
+  
   /* Mouse position to the left of initial starting point of count gammas box */
-  if (nowx <= startx) {
+  if (nowx_px <= startx_px) {
     d3.selectAll('.asterickText').remove();
     countGammasBox.attr("class", "deletePeaksBox")
-      .attr("x", nowx);
+    .attr("x", nowx_px);
     countGammasText.text("Will remove gamma count range");
-
+    
     /* Move the count gammas text in the middle of the count gammas box */
     countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
-
+    
     /* Remove the counts text (we will not be counting gammas) */
     self.rawData.spectra.forEach(function(spectrum) {
       d3.select('#Spectrum-' + spectrum.id + 'CountsText').remove();
@@ -10226,31 +10274,29 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
     });
     countGammaRangeText.remove();
     sigmaCount.remove();
-
+    
     return;
-
+    
   } else {
     countGammasBox.attr("class", "countGammasBoxForward")
-      .attr("x", nowx < startx ? nowx : startx);
+    .attr("x", nowx_px < startx_px ? nowx_px : startx_px);
     countGammasText.text("Gamma Counts");
-
+    
     if (countGammaRangeText.empty())
-      countGammaRangeText = self.vis.append("text")
-        .attr("id", "countGammaRangeText")
-        .attr("class", "countGammasText")
-        .attr("y", ypos);
-
-
-    countGammaRangeText.text((needsDecimal(countGammasRange[0]) ? countGammasRange[0].toFixed(1) : countGammasRange[0].toFixed()) + 
-                              " to " + 
-                              (needsDecimal(countGammasRange[1]) ? countGammasRange[1].toFixed(1) : countGammasRange[1].toFixed()) + " keV");
+    countGammaRangeText = self.vis.append("text")
+    .attr("id", "countGammaRangeText")
+    .attr("class", "countGammasText")
+    .attr("y", ypos);
+    
+    
+    countGammaRangeText.text( sumEnergyRange[0].toFixed(1) + " to " + sumEnergyRange[1].toFixed(1) + " keV");
     countGammaRangeText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammaRangeText[0][0].clientWidth)/2*/);
   }
   ypos += 15;
-
+  
   /* Move the count gammas text in the middle of the count gammas box */
   countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
-
+  
   /* Display the count gammas text for all the spectrum */
   var nforeground, nbackground, backSF;
   var nsigma = 0, isneg;
@@ -10259,51 +10305,50 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
   var specialScaleSpectras = [];
   self.rawData.spectra.forEach(function(spectrum, i) {   /* TODO: May need to change processing of */
     if (!spectrum)
-      return;
-
+    return;
+    
     /* Get information from the spectrum */
     var spectrumSelector = 'Spectrum-' + spectrum.id;
     var spectrumCountsText = d3.select("#" + spectrumSelector + "CountsText");
     var spectrumScaleFactor = spectrum.yScaleFactor;
-    var nspectrum = self.gammaIntegral(spectrum, countGammasRange[0], countGammasRange[1]);
+    var nspectrum = self.gammaIntegral(spectrum, sumEnergyRange[0], sumEnergyRange[1]);
     var spectrumGammaCount = Number((spectrumScaleFactor * nspectrum).toFixed(2));
     var countsText;
-
+    
     /* Save information for the foreground and background (for sigma comparison) */
     if (spectrum.type === self.spectrumTypes.FOREGROUND)
-      nforeground = nspectrum;
+    nforeground = nspectrum;
     else if (spectrum.type === self.spectrumTypes.BACKGROUND) {
       nbackground = nspectrum;
       backSF = spectrumScaleFactor;
     }
-
+    
     /* Get the text to be displayed from the spectrum information */
     if (spectrumScaleFactor != null && spectrumScaleFactor !== -1)
-      countsText = spectrum.title + ": " + (needsDecimal(spectrumGammaCount) ? spectrumGammaCount.toFixed(2) : spectrumGammaCount.toFixed());
+      countsText = spectrum.title + ": " + spectrumGammaCount.toFixed(2);
     if (spectrumScaleFactor != 1) {
       asterickText += "*";
       if (countsText)
-        countsText += asterickText;
-      specialScaleSpectras.push(asterickText + "scaled by " + 
-        (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()) + " from actual");
+      countsText += asterickText;
+      specialScaleSpectras.push( asterickText + "after scaling by " + spectrumScaleFactor.toFixed(3) );
     }
-
+    
     /* Output the count gammas information to the chart */
     if (countsText) {
       if (spectrumCountsText.empty())
-        spectrumCountsText = self.vis.append("text")
-          .attr("id", spectrumSelector + "CountsText")
-          .attr("class", "countGammasText")
-          .attr("y", ypos);
-      spectrumCountsText.text(countsText); 
+      spectrumCountsText = self.vis.append("text")
+      .attr("id", spectrumSelector + "CountsText")
+      .attr("class", "countGammasText")
+      .attr("y", ypos);
+      spectrumCountsText.text(countsText);
       spectrumCountsText.attr("x", Number(countGammasText.attr("x")) - rightPadding );
       ypos += 15;
-
+      
     } else {
       spectrumCountsText.remove();
     }
   });
-
+  
   /* Get proper information for foreground-background sigma comparison */
   if (nforeground && nbackground && backSF) {
     const backSigma = backSF * Math.sqrt(nbackground);
@@ -10311,46 +10356,45 @@ SpectrumChartD3.prototype.handleMouseMoveCountGammas = function() {
     nsigma = backSigma == 0 ? 0 : (Number((Math.abs(nforeground - backSF*nbackground) / sigma).toFixed(3)));
     isneg = ((backSF*nbackground) > nforeground);
   }
-
+  
   /* Output foreground-background sigma information if it is available */
   if (nsigma > 0) {
     if (sigmaCount.empty())
-      sigmaCount = self.vis.append("text")
-        .attr("id", "sigmaCount")
-        .attr("class", "countGammasText")
-        .attr("y", ypos);
-
+    sigmaCount = self.vis.append("text")
+    .attr("id", "sigmaCount")
+    .attr("class", "countGammasText")
+    .attr("y", ypos);
+    
     sigmaCount.attr("x", Number(countGammasText.attr("x")) - rightPadding + 10)
-      .text("Foreground is " + (needsDecimal(nsigma) ? nsigma.toFixed(2) : nsigma.toFixed() ) + " σ " + (isneg ? "below" : "above") + " background.");
+    .text("Foreground is " + nsigma.toFixed(2) + " σ " + (isneg ? "below" : "above") + " background.");
     ypos += 15;
-
+    
   } else if (!sigmaCount.empty()) {
-      sigmaCount.remove();
+    sigmaCount.remove();
   }
-
+  
   /* Output all the corresponding asterick text with each spectrum (if scale factor != 1) */
   specialScaleSpectras.forEach(function(string, i) {
     if (string == null || !string.length)
-      return;
+    return;
     var stringnode = d3.select("#asterickText" + i);
-
+    
     if (stringnode.empty())
-      stringnode = self.vis.append("text")
-        .attr("id", "asterickText"+i)
-        .attr("class", "countGammasText asterickText")
-        .text(string);
+    stringnode = self.vis.append("text")
+    .attr("id", "asterickText"+i)
+    .attr("class", "countGammasText asterickText")
+    .text(string);
     stringnode.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) + rightPadding/3)
-      .attr("y", ypos);
+    .attr("y", ypos);
     ypos += 15;
   });
-
+  
   /* Hide all the count gamma text when the mouse box is empty */
   if (Number(countGammasBox.attr("width")) == 0)
     d3.selectAll(".countGammasText").attr("fill-opacity", 0);
   else
     d3.selectAll(".countGammasText").attr("fill-opacity", 1);
 }
-
 
 SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
   var self = this;
@@ -10397,243 +10441,7 @@ SpectrumChartD3.prototype.handleCancelMouseCountGammas = function() {
   self.isCountingGammas = false;
 }
 
-SpectrumChartD3.prototype.handleTouchMoveCountGammas = function() {
-  var self = this;
 
-  /* Cancel delete peaks mode */
-  self.handleCancelTouchDeletePeak();
-
-  /* Cancel the create peaks mode */
-  self.handleCancelTouchPeakFit();
-
-  /* Cancel the zoom-in y mode */
-  self.handleTouchCancelZoomInY();
-
-
-  var t = d3.touches(self.vis[0][0]);
-
-  if (t.length !== 2 || !self.countGammasStartTouches || !self.rawData || !self.rawData.spectra ) {
-    self.handleCancelTouchCountGammas();
-    return;
-  }
-
- 
-  
-  function needsDecimal(num) {
-    return num % 1 != 0;
-  }
-
-  var leftStartTouch = self.countGammasStartTouches[0][0] < self.countGammasStartTouches[1][0] ? self.countGammasStartTouches[0] : self.countGammasStartTouches[1],
-      rightStartTouch = leftStartTouch === self.countGammasStartTouches[0] ? self.countGammasStartTouches[1] : self.countGammasStartTouches[0];
-
-  var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
-      rightTouch = leftTouch === t[0] ? t[1] : t[0];
-
-  var countGammasBox = d3.select("#countGammasBox"),
-      countGammasText = d3.select("#countGammasText"),
-      countGammaRangeText = d3.select("#countGammaRangeText"),
-      foregroundCountsText = d3.select("#foregroundCountsText"),
-      backgroundCountsText = d3.select("#backgroundCountsText"),
-      secondaryCountsText = d3.select("#secondaryCountsText")
-      foregroundAsterickText = d3.select("#foregroundAsterickText"),
-      backgroundAsterickText = d3.select("#backgroundAsterickText"),
-      secondaryAsterickText = d3.select("#secondaryAsterickText"),
-      sigmaCount = d3.select("#sigmaCount");
-
-  var countGammasRange = [ 
-      self.xScale.invert(leftStartTouch[0]), 
-      Math.min(self.xScale.invert(rightTouch[0]), self.xScale.domain()[1])
-  ];
-  
-  let startx = leftStartTouch[0];
-  let nowx = rightTouch[0];
-
-  /* Create the yellow box and text associated with it */
-  if (countGammasBox.empty()) { 
-    countGammasBox = self.vis.append("rect")
-      .attr("id", "countGammasBox")
-      .attr("width", Math.min( Math.abs( startx - nowx ) , Math.abs( self.xScale.range()[1] - startx ) ))
-      .attr("height", self.size.height)
-      .attr("y", 0);
-
-  } else {  /* Adjust the width of the erase peaks box */
-    countGammasBox.attr("width", Math.min( Math.abs( startx - nowx ) , Math.abs( self.xScale.range()[1] - startx ) ));
-  }
-  if (countGammasText.empty()) {
-    countGammasText = self.vis.append("text")
-      .attr("id", "countGammasText")
-      .attr("class", "countGammasText")
-      .attr("y", Number(countGammasBox.attr("height"))/2)
-      .text("Gamma Counts");
-  }
-  var ypos = Number(countGammasBox.attr("height"))/2 + 15;   /* signifies the y-position of the text displayed */
-
-  /* Mouse position to the left of initial starting point of count gammas box */
-  if (nowx  <= startx) {
-    countGammasBox.attr("class", "deletePeaksBox")
-      .attr("x", nowx);
-    countGammasText.text("Will remove gamma count range");
-
-    /* Move the count gammas text in the middle of the count gammas box */
-    countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
-
-    /* Remove the counts text (we will not be counting gammas) */
-    d3.selectAll('.asterickText').remove();
-    self.rawData.spectra.forEach(function(spectrum, i) {
-      d3.select('#Spectrum-' + spectrum.id + 'CountsText').remove();
-      d3.select('#Spectrum-' + spectrum.id + 'AsterickText').remove();
-      d3.select("#asterickText"+i).remove();
-    });
-    countGammaRangeText.remove();
-    sigmaCount.remove();
-
-    return;
-
-  } else {
-    countGammasBox.attr("class", "countGammasBoxForward")
-      .attr("x", nowx < startx ? nowx : startx);
-    countGammasText.text("Gamma Counts");
-
-    if (countGammaRangeText.empty())
-      countGammaRangeText = self.vis.append("text")
-        .attr("id", "countGammaRangeText")
-        .attr("class", "countGammasText")
-        .attr("y", ypos);
-
-
-    countGammaRangeText.text((needsDecimal(countGammasRange[0]) ? countGammasRange[0].toFixed(1) : countGammasRange[0].toFixed()) + 
-                              " to " + 
-                              (needsDecimal(countGammasRange[1]) ? countGammasRange[1].toFixed(1) : countGammasRange[1].toFixed()) + " keV");
-    countGammaRangeText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammaRangeText[0][0].clientWidth)/2*/);
-  }
-  ypos += 15;
-
-  /* Move the count gammas text in the middle of the count gammas box */
-  countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
-
-  /* Display the count gammas text for all the spectrum */
-  var nforeground, nbackground, backSF;
-  var nsigma = 0, isneg;
-  var asterickText = "";
-  var rightPadding = 50;
-  var specialScaleSpectras = [];
-  self.rawData.spectra.forEach(function(spectrum, i) {   /* TODO: May need to change processing of */
-    if (!spectrum)
-      return;
-
-    /* Get information from the spectrum */
-    var spectrumSelector = 'Spectrum-' + spectrum.id;
-    var spectrumCountsText = d3.select("#" + spectrumSelector + "CountsText");
-    var spectrumScaleFactor = spectrum.yScaleFactor;
-    var nspectrum = self.gammaIntegral(spectrum, countGammasRange[0], countGammasRange[1]);
-    var spectrumGammaCount = Number((spectrumScaleFactor * nspectrum).toFixed(2));
-    var countsText;
-
-    /* Save information for the foreground and background (for sigma comparison) */
-    if (spectrum.type === self.spectrumTypes.FOREGROUND)
-      nforeground = nspectrum;
-    else if (spectrum.type === self.spectrumTypes.BACKGROUND) {
-      nbackground = nspectrum;
-      backSF = spectrumScaleFactor;
-    }
-
-    /* Get the text to be displayed from the spectrum information */
-    if (spectrumScaleFactor != null && spectrumScaleFactor !== -1)
-      countsText = spectrum.title + ": " + (needsDecimal(spectrumGammaCount) ? spectrumGammaCount.toFixed(2) : spectrumGammaCount.toFixed());
-    if (spectrumScaleFactor != 1) {
-      asterickText += "*";
-      if (countsText)
-        countsText += asterickText;
-      specialScaleSpectras.push(asterickText + "scaled by " + 
-        (needsDecimal(spectrumScaleFactor) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed()) + " from actual");
-    }
-
-    /* Output the count gammas information to the chart */
-    if (countsText) {
-      if (spectrumCountsText.empty())
-        spectrumCountsText = self.vis.append("text")
-          .attr("id", spectrumSelector + "CountsText")
-          .attr("class", "countGammasText")
-          .attr("y", ypos);
-      spectrumCountsText.text(countsText); 
-      spectrumCountsText.attr("x", Number(countGammasText.attr("x")) - rightPadding );
-      ypos += 15;
-
-    } else {
-      spectrumCountsText.remove();
-    }
-  });
-
-  /* Get proper information for foreground-background sigma comparison */
-  if (nforeground && nbackground && backSF) {
-    const backSigma = backSF * Math.sqrt(nbackground);
-    const sigma = Math.sqrt(backSigma*backSigma + nforeground); //uncert_fore=sqrt(nforeground) since foregoround SF is always 1.0
-    nsigma = sigma == 0 ? 0 : (Number((Math.abs(nforeground - nbackground*backSF) / sigma).toFixed(3)));
-    isneg = ((nbackground*backSF) > nforeground);
-  }
-
-  /* Output foreground-background sigma information if it is available */
-  if (nsigma > 0) {
-    if (sigmaCount.empty())
-      sigmaCount = self.vis.append("text")
-        .attr("id", "sigmaCount")
-        .attr("class", "countGammasText")
-        .attr("y", ypos);
-
-    sigmaCount.attr("x", Number(countGammasText.attr("x")) - rightPadding + 10)
-      .text("Foreground is " + (needsDecimal(nsigma) ? nsigma.toFixed(2) : nsigma.toFixed() ) + " σ " + (isneg ? "below" : "above") + " background.");
-    ypos += 15;
-
-  } else if (!sigmaCount.empty()) {
-      sigmaCount.remove();
-  }
-
-  /* Output all the corresponding asterick text with each spectrum (if scale factor != 1) */
-  specialScaleSpectras.forEach(function(string, i) {
-    if (string == null || !string.length)
-      return;
-    var stringnode = d3.select("#asterickText" + i);
-
-    if (stringnode.empty())
-      stringnode = self.vis.append("text")
-        .attr("id", "asterickText"+i)
-        .attr("class", "countGammasText asterickText")
-        .text(string);
-    stringnode.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) + rightPadding/3)
-      .attr("y", ypos);
-    ypos += 15;
-  });
-
-  /* Hide all the count gamma text when the mouse box is empty */
-  if (Number(countGammasBox.attr("width")) == 0)
-    d3.selectAll(".countGammasText").attr("fill-opacity", 0);
-  else
-    d3.selectAll(".countGammasText").attr("fill-opacity", 1);
-}
-
-SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
-  var self = this;
-
-  var countGammasBox = d3.select("#countGammasBox"),
-      countGammasText = d3.select("#countGammasText");
-
-  var countGammasRange;
-
-  try {
-    countGammasRange = [ 
-      Math.min(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width")))), 
-      Math.max(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width")))) 
-      ];
-
-    console.log("Emit COUNT GAMMAS SIGNAL FROM ", countGammasRange[0], "keV to ", countGammasRange[1], " keV" );
-    self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
-
-  } catch (TypeError) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
-    return;
-  }
-
-  self.handleCancelTouchCountGammas();
-}
 
 SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
   var self = this;
@@ -10660,7 +10468,6 @@ SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
  * -------------- Peak Info and Display Functions --------------
  */
 SpectrumChartD3.prototype.handleMouseOverPeak = function( peakElem ) {
-  //console.log( 'handleMouseOverPeak' );
   this.highlightPeak(peakElem,true);
   // self.displayPeakInfo(info, d3.event.x);
 }
@@ -11086,32 +10893,12 @@ SpectrumChartD3.prototype.unHighlightLabel = function( unHighlightPeakTo ) {
 
 
 
-
-
 /**
  * -------------- Background Subtract Functions --------------
  */
 SpectrumChartD3.prototype.setBackgroundSubtract = function( subtract ) {
-  var self = this;
-
-/*
-  var checkbox = document.getElementById('background-subtract-option');
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) {
-    alert('No data specified!');
-    if (checkbox) checkbox.checked = false;
-    return;
-  }
-
-  if (self.rawData.spectra.filter(function(spectrum) { return spectrum.type == self.spectrumTypes.BACKGROUND }).length !== 1) {
-    alert('Need only one background spectrum for background subtract!');
-    if (checkbox) checkbox.checked = false;
-    return;
-  }
-*/
-  
-  self.options.backgroundSubtract = Boolean(subtract);
-  self.redraw()();
+  this.options.backgroundSubtract = Boolean(subtract);
+  this.redraw()();
 }
 
 SpectrumChartD3.prototype.setAllowDragRoiExtent = function( allow ){
