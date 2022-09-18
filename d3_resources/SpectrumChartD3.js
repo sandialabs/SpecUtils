@@ -278,7 +278,7 @@ SpectrumChartD3 = function(elem, options) {
 
   this.dragged = this.selected = null;
 
-
+  // this.vis will be a <g> element that almost everything else will be appended to
   this.vis = d3.select(this.chart).append("svg")
       .attr("width",  this.cx)
       .attr("height", this.cy)
@@ -303,15 +303,15 @@ SpectrumChartD3 = function(elem, options) {
   | _______________________________________ |
   ||  ___________________________________  ||
   || |                                   | ||
-  || |           VIS (SPECTRUM)          | ||
+  || |        VIS <g> (SPECTRUM)         | ||
   || |                                   | ||
   || |___________________________________| ||
   ||                                       ||
-  ||                  CHART                ||
+  ||                  CHART <div>          ||
   ||_______________________________________||
   |                                         |
   |                                         |
-  |                   BODY                  |
+  |                 <BODY>                  |
   |                                         |
   |                                         |
   |_________________________________________|
@@ -1334,11 +1334,13 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed - this.size.sliderChartHeight);
 
   this.xScale.range([0, this.size.width]);
-  this.vis.attr("width",  this.size.width)
-          .attr("height", this.size.height);
-  this.vis.attr("transform", "translate(" + this.padding.leftComputed + "," + this.padding.topComputed + ")");
-  this.plot.attr("width", this.size.width)
-           .attr("height", this.size.height);
+  this.vis
+      .attr("width",  this.size.width)
+      .attr("height", this.size.height)
+      .attr("transform", "translate(" + this.padding.leftComputed + "," + this.padding.topComputed + ")");
+  this.plot
+      .attr("width", this.size.width)
+      .attr("height", this.size.height);
 
   self.svg
       .attr("width", this.cx)
@@ -1530,9 +1532,9 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     const maxx = bounds[1];
      
     /* Set the mouse and chart parameters */
-    const m = d3.mouse(self.vis[0][0]);
+    const m = self.getMousePos();
     self.lastMouseMovePos = m;
-
+    
     let x = m[0], y = m[1];
 
     /* Adjust the last mouse move position in case user starts dragging from out of bounds */
@@ -1655,36 +1657,55 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 }
 
 
+/*
+ Returns array of pixel coordinates relative to this.vis (i.e. the actual chart area inside
+ the x and y axises) and coordinates relative to the svg.
+  That is, the returned value is: [x_vis, y_vis, x_svg, y_svg]
+ */
 SpectrumChartD3.prototype.getMousePos = function(){
   let pos = null;
+  
+  const pad_left = this.padding.leftComputed;
+  const pad_top = this.padding.topComputed;
   
   if( d3.event )
   {
     const m = d3.mouse(this.vis[0][0]);
     if( m )
-      return m;
-    
+      return [m[0], m[1], m[0] + pad_left, m[1] + pad_top];
+      
     const t = d3.event.changedTouches;
     if( t && t.length ){
       const vt = d3.touches(this.vis[0][0], t);
       if( vt && vt.length )
-        return vt[0];
+        return [vt[0][0], vt[0][1], vt[0][0] + pad_left, vt[0][1] + pad_top];
     }
   }//if( d3.event )
 
-  if( self.lastMouseMovePos && this.lastTapEvent )
+  if( this.lastMouseMovePos && this.lastTapEvent )
   {
     console.assert( this.lastTapEvent.changedTouches && this.lastTapEvent.changedTouches.length === 1,
                     "need to update how this.lastTapEvent is updated"  );
     
-    if( this.lastTapEvent.timeStamp > this.mousedowntime )
-      return self.lastTapEvent.visCoordinates;
-    return self.lastMouseMovePos;
+    if( this.lastTapEvent.timeStamp > this.mousedowntime ){
+      console.assert( this.lastTapEvent.visCoordinates.length == 4, "lastTapEvent.visCoordinates should have 4 elements" );
+      return this.lastTapEvent.visCoordinates;
+    }
+    return this.lastMouseMovePos;
   }
     
-  if( self.lastMouseMovePos )
-    return self.lastMouseMovePos;
-  return this.lastTapEvent;
+  if( this.lastMouseMovePos ){
+    console.log( 'getMousePos returning lastMouseMovePos (', lastMouseMovePos, ")" )
+    return this.lastMouseMovePos;
+  }
+  
+  console.assert( this.lastTapEvent, "Failed to find mouse position!" );
+  
+  if( this.lastTapEvent )
+    return this.lastTapEvent.visCoordinates;
+  
+  // I dont think we ever get here..., but I guess we'll just return _something_
+  return [0, 0, pad_left, pad_top];
 }//getMousePos(...)
 
 
@@ -1785,7 +1806,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
         d3.select(self.chart).on("mousemove.roidrag", null );
         d3.select(self.chart).on("touchmove.roidrag", null );
         
-        const m = self.getMousePos()
+        const m = self.getMousePos();
         self.lastMouseMovePos = m;
         self.handleMouseUpDraggingRoi( m );
         
@@ -2249,8 +2270,10 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 
     self.updateFeatureMarkers(null);
 
+    const m = self.getMousePos();
+    
     self.mousedowntime = new Date();
-    self.lastMouseMovePos = self.mousedownpos = d3.mouse(self.vis[0][0]);
+    self.lastMouseMovePos = self.mousedownpos = m;
 
     registerKeyboardHandler(self.keydown());
 
@@ -2263,8 +2286,6 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
     /* Cancel the default d3 event properties */
     d3.event.preventDefault();
     d3.event.stopPropagation(); 
-
-    var m = d3.mouse(self.vis[0][0]);
 
     if (d3.event.metaKey)
       self.zoomInYMouse = m;
@@ -3209,7 +3230,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
         /* Set last tap event to current one */
         if( t && (t.length === 1) && currentTapEvent.timeStamp ){
           self.lastTapEvent = currentTapEvent;
-          self.lastTapEvent.visCoordinates = t[0];
+          self.lastTapEvent.visCoordinates = [t[0][0], t[0][1], t[0][0] + self.padding.leftComputed, t[0][1] + self.padding.topComputed];
         }else{
           self.lastTapEvent = null;
         }
@@ -7215,41 +7236,35 @@ SpectrumChartD3.prototype.setShowNuclideEnergies = function(d) {
 SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
   var self = this;
 
-  /* Delete the leftmost start line */
-  d3.select("#createPeakMouseStartLine").remove();
-  
-  /* Delete the right most current mouse line */
-  d3.select("#createPeakMouseCurrentLine").remove(); 
-
   /* Delete the arrow definitions pointing to the mouse lines */
-  d3.select("#createPeakStartArrowDef").remove();
+  self.vis.selectAll("#createPeakStartArrowDef").remove();
 
   /* Delete the estimated continuum text */
-  d3.select("#contEstText").remove();
+  self.vis.selectAll("#contEstText").remove();
 
   /* Delete the arrows pointing to the mouse lines */
-  d3.selectAll(".createPeakArrow").forEach(function (arrows) {
+  self.vis.selectAll(".createPeakArrow").forEach(function (arrows) {
     arrows.forEach(function(arrow) {
       arrow.remove();
     })
   });
 
   /* Delete the arrow lines for the previous arrows */
-  d3.selectAll(".createPeakArrowLine").forEach(function (lines) {
+  self.vis.selectAll(".createPeakArrowLine").forEach(function (lines) {
     lines.forEach(function(line) {
       line.remove();
     })
   });
 
   /* Delete the all the lines for the estimated continuum */
-  d3.selectAll(".createPeakContEstLine").forEach(function (lines) {
+  self.vis.selectAll(".createPeakContEstLine").forEach(function (lines) {
     lines.forEach(function(line) {
       line.remove();
     })
   });
 
   /* Delete the reference text for the create peak */
-  d3.select("#createPeakMouseText").remove();
+  self.vis.select("#createPeakMouseText").remove();
 }
 
 
@@ -7414,15 +7429,15 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   /* To keep track of some of the line objects being drawn */
   var createPeakTouchCurrentLine,
       contEstLine, 
-      contEstText = d3.select("#contEstText"),
-      createPeakTouchText1 = d3.select("#createPeakTouchText1"),
-      createPeakTouchText2 = d3.select("#createPeakTouchText2"),
-      createPeakRightTouchPointTop = d3.select("#createPeakRightTouchPointTop"),
-      createPeakRightTouchPointBottom = d3.select("#createPeakRightTouchPointBottom"),
-      createPeakTouchLineTop = d3.select("#createPeakTouchLineTop"), 
-      createPeakTouchLineBottom = d3.select("#createPeakTouchLineBottom"),
-      createPeakTouchArrowLineTop = d3.select("#createPeakTouchArrowLineTop"),
-      createPeakTouchArrowLineBottom = d3.select("#createPeakTouchArrowLineBottom");
+      contEstText = self.vis.select("#contEstText"),
+      createPeakTouchText1 = self.vis.select("#createPeakTouchText1"),
+      createPeakTouchText2 = self.vis.select("#createPeakTouchText2"),
+      createPeakRightTouchPointTop = self.vis.select("#createPeakRightTouchPointTop"),
+      createPeakRightTouchPointBottom = self.vis.select("#createPeakRightTouchPointBottom"),
+      createPeakTouchLineTop = self.vis.select("#createPeakTouchLineTop"),
+      createPeakTouchLineBottom = self.vis.select("#createPeakTouchLineBottom"),
+      createPeakTouchArrowLineTop = self.vis.select("#createPeakTouchArrowLineTop"),
+      createPeakTouchArrowLineBottom = self.vis.select("#createPeakTouchArrowLineBottom");
 
   if (createPeakTouchArrowLineTop.empty()) {
     createPeakTouchArrowLineTop = self.vis.append("line")
@@ -7475,7 +7490,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
 
 
   /* Create the left topmost and bottommost touch point */
-  if (d3.select("#createPeakTouchPoint1").empty()) {
+  if (self.vis.select("#createPeakTouchPoint1").empty()) {
     self.vis.append("circle")
       .attr("id", "createPeakTouchPoint1")
       .attr("class", "createPeakLeftTouchPoint")
@@ -7483,7 +7498,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
       .attr("cy", leftStartTouch[1] - touchPointRadius)
       .attr("r", 3);
   }
-  if (d3.select("#createPeakTouchPoint2").empty()) {
+  if (self.vis.select("#createPeakTouchPoint2").empty()) {
     self.vis.append("circle")
       .attr("id", "createPeakTouchPoint2")
       .attr("class", "createPeakLeftTouchPoint")
@@ -7533,7 +7548,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   createPeakTouchLineBottom.attr("x2", rightTouch[0]);
 
   /* Create the leftmost starting point line  */
-  if (d3.select("#createPeakTouchStartLine").empty()) {
+  if (self.vis.select("#createPeakTouchStartLine").empty()) {
     self.vis.append("line")
       .attr("id", "createPeakTouchStartLine")
       .attr("class", "createPeakMouseLine")
@@ -7544,7 +7559,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   }
 
   /* Create/refer the rightmost current point line */
-  if (d3.select("#createPeakTouchCurrentLine").empty()) {
+  if (self.vis.select("#createPeakTouchCurrentLine").empty()) {
     createPeakTouchCurrentLine = self.vis.append("line")
       .attr("id", "createPeakTouchCurrentLine")
       .attr("class", "createPeakMouseLine")
@@ -7552,7 +7567,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
       .attr("y2", self.size.height);
 
   } else 
-    createPeakTouchCurrentLine = d3.select("#createPeakTouchCurrentLine");
+    createPeakTouchCurrentLine = self.vis.select("#createPeakTouchCurrentLine");
 
   createPeakTouchCurrentLine.attr("x1", rightTouch[0])
     .attr("x2", rightTouch[0]);
@@ -7601,14 +7616,14 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
 
 
   /* Create/refer to the reference text for creating a peak */
-  if (d3.select("#createPeakTouchText").empty())
+  if (self.vis.select("#createPeakTouchText").empty())
     createPeakTouchText = self.vis.append("text")
       .attr("id", "createPeakTouchText")
       .attr("class", "mouseLineText")
       .attr("y", self.size.height/5)
       .text("Will create peak Inside");
   else
-    createPeakTouchText = d3.select("#createPeakTouchText");
+    createPeakTouchText = self.vis.select("#createPeakTouchText");
 
   /* Move the create peaks text in the middle of the create peak mouse lines */
   createPeakTouchText.attr("x", x0 + (Math.abs(x0-x1)/2) - Number(createPeakTouchText[0][0].clientWidth)/2 );
@@ -7699,16 +7714,16 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
   var self = this;
 
   /* Delete the leftmost start line */
-  d3.select("#createPeakTouchStartLine").remove();
+  self.vis.selectAll("#createPeakTouchStartLine").remove();
   
   /* Delete the right most current mouse line */
-  d3.select("#createPeakTouchCurrentLine").remove(); 
+  self.vis.selectAll("#createPeakTouchCurrentLine").remove();
 
   /* Delete the arrow definitions pointing to the mouse lines */
-  d3.select("#createPeakStartArrowDef").remove();
+  self.vis.selectAll("#createPeakStartArrowDef").remove();
 
   /* Delete the estimated continuum text */
-  d3.select("#contEstText").remove();
+  self.vis.selectAll("#contEstText").remove();
 
   /* Delete the arrows pointing to the mouse lines */
   d3.selectAll(".createPeakArrow").forEach(function (arrows) {
@@ -7751,8 +7766,8 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
   });
 
   /* Delete the reference text for the create peak */
-  d3.select("#createPeakTouchText").remove();
-  d3.selectAll(".createPeakTouchText").forEach(function (texts) {
+  self.vis.selectAll("#createPeakTouchText").remove();
+  self.vis.selectAll(".createPeakTouchText").forEach(function (texts) {
     texts.forEach(function(text) {
       text.remove();
     })
@@ -8813,22 +8828,20 @@ SpectrumChartD3.prototype.handleCancelAnimationZoom = function() {
  */
 SpectrumChartD3.prototype.handleMouseMoveZoomInX = function () {
   var self = this;
-
-  var zoomInXBox = d3.select("#zoomInXBox"),
-      zoomInXText = d3.select("#zoomInXText");
+  
+  var zoomInXBox = self.vis.select("#zoomInXBox"),
+      zoomInXText = self.vis.select("#zoomInXText");
 
   /* Cancel erase peaks mode, we're zooming in */
   self.handleCancelMouseDeletePeak();
   /* Cancel recalibration mode, we're zooming in */
   self.handleCancelMouseRecalibration();
-
   /* Cancel the zooming in y mode */
   self.handleCancelMouseZoomInY();
-
   /* Cancel the count gammas mode */
   self.handleCancelMouseCountGammas();
-
-  if (!self.zoominmouse)  return;
+  if( !self.zoominmouse )
+    return;
 
   /* Adjust the mouse move position with respect to the bounds of the vis */
   if (self.lastMouseMovePos[0] < 0)
@@ -8839,44 +8852,31 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInX = function () {
   /* We are now zooming in */
   self.zooming_plot = true;
 
-  /* Restore the zoom-in box */
-  if (zoomInXBox.empty()) {
-    zoomInXBox = self.vis.append("rect")
-      .attr("id", "zoomInXBox")
-      .attr("class","leftbuttonzoombox")
-      .attr("width", 1 )
-      .attr("height", self.size.height)
-      .attr("x", self.lastMouseMovePos[0])
-      .attr("y", 0)
-      .attr("pointer-events", "none");
-  }
+  console.assert( self.lastMouseMovePos.length === 4, "self.lastMouseMovePos should have 4 elements: ", self.lastMouseMovePos );
+  console.assert( self.zoominmouse.length === 4, "self.lastMouseMovePos should have 4 elements: ", self.zoominmouse );
   
-  /* If click-and-drag reaches out of bounds from the plot */
-  if (self.lastMouseMovePos[0] < 0 || self.lastMouseMovePos[0] > self.size.width) {
-    /* Do something if click and drag reaches out of bounds from plot */
-  }
-
-
-  if( self.lastMouseMovePos[0] < self.zoominmouse[0] ) {      /* If the mouse position is less than the zoombox starting position (zoom-out) */
-
+  /* If the mouse position is less than the zoombox starting position (zoom-out)
+   Note that we we are using the coordinates relative to the this.svg element, and not this.vis
+   (i.e., using element 2, instead of 0 in the below arrays); this is because when the y-axis area
+   changes in the middle of zooming out, it can cause glitches, and nonsensical toggling between
+   zooming in and zooming out because self.lastMouseMovePos will swing with the changes in y-axis
+   area.
+   */
+  if( self.lastMouseMovePos[2] < self.zoominmouse[2] ) {
     /* If we were animating a zoom, cancel that animation */
     self.handleCancelAnimationZoom();
 
     /* Remove the zoom-in x-axis text, we are zooming out */
     zoomInXText.remove();
-
+    zoomInXBox.remove();
     self.zoominaltereddomain = true;
-    zoomInXBox.attr("x", self.lastMouseMovePos[0])
-      .attr("class","leftbuttonzoomoutbox")
-      .attr("height", self.size.height)
-      .attr("width", self.zoominmouse[0] - self.lastMouseMovePos[0] );
 
     /*Do some zooming out */
     var bounds = self.min_max_x_values();
     var xaxismin = bounds[0],
         xaxismax = bounds[1];
-
-    var frac = 4 * (self.zoominmouse[0] - self.lastMouseMovePos[0]) / self.zoominmouse[0];
+        
+    var frac = 4 * (self.zoominmouse[2] - self.lastMouseMovePos[2]) / self.zoominmouse[0];
 
     if( !isFinite(frac) || isNaN(frac) || frac < 0.0 )
       frac = 0;
@@ -8885,31 +8885,52 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInX = function () {
         maxdx = xaxismax - xaxismin,
         newdx = origdx + frac*(maxdx - origdx);
 
-    var deltadx = newdx - origdx,
-    newxmin = Math.max( self.origdomain[0] - 0.5*deltadx, xaxismin ),
-    newxmax = Math.min( self.origdomain[1] + 0.5*deltadx, xaxismax );
-
-    /* ToDo: periodically send the xrangechanged signal during zooming out.  Right
-       now only sent when mouse goes up.
-     */
+    const deltadx = newdx - origdx;
+    
+    //const newxmin = Math.max( self.origdomain[0] - 0.5*deltadx, xaxismin );
+    //const newxmax = Math.min( self.origdomain[1] + 0.5*deltadx, xaxismax );
+    let newxmin = self.origdomain[0] - 0.5*deltadx;
+    let newxmax = self.origdomain[1] + 0.5*deltadx;
+    
+    if( newxmin < xaxismin ){
+      newxmax += (xaxismin - newxmin);
+      newxmin = xaxismin;
+    }
+    if( newxmax > xaxismax ){
+      newxmin -= (newxmax - xaxismax);
+      newxmin = Math.max( newxmin, xaxismin );
+      newxmax = xaxismax;
+    }
+    
+    /* TODO: periodically send the xrangechanged signal during zooming out.  Right now only sent when mouse goes up. */
     self.setXAxisRange(newxmin,newxmax,false);
     self.redraw()();
-
-  } else {  
-    /* Set the zoombox (this gets called when current mouse position is greater than where the zoombox started)  */
+  } else {
+    /* Restore the zoom-in box */
+    if (zoomInXBox.empty()) {
+      zoomInXBox = self.vis.append("rect")
+      .attr("id", "zoomInXBox")
+      .attr("class","leftbuttonzoombox")
+      .attr("y", 0)
+      .attr("pointer-events", "none");
+    }
+    
     if( self.zoominaltereddomain ) {
+      // We get here when we were zooming out, but now we're zooming in; we'll set back to the original domain
       self.setXAxisRange( self.origdomain[0], self.origdomain[1], true );
       self.zoominaltereddomain = false;
-      zoomInXBox.attr("class","leftbuttonzoombox");
       self.redraw()();
     }
 
     /* Update the zoomin-box x-position and width */
-    zoomInXBox.attr("x", self.zoominmouse[0])
+    zoomInXBox
+      .attr("x", self.zoominmouse[0])
+      .attr("height", self.size.height)
       .attr("width", self.lastMouseMovePos[0] - self.zoominmouse[0] );
 
-    if (self.lastMouseMovePos[0] - self.zoominmouse[0] > 7) {   /* if zoom in box is at least 7px wide, update it */
-      if (zoomInXText.empty()) {
+    if (self.lastMouseMovePos[0] - self.zoominmouse[0] > 7) {
+      /* if zoom in box is at least 7px wide, update it */
+      if( zoomInXText.empty() ){
         zoomInXText = self.vis.append("text")
           .attr("id", "zoomInXText")
           .attr("class", "chartLineText")
@@ -8918,14 +8939,15 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInX = function () {
       }
 
       /* keep zoom in label centered on the box */
-      /* zoomInXText.attr("x", Number(zoomInXBox.attr("x")) + (Number(zoomInXBox.attr("width"))/2) - (zoomInXText[0][0].clientWidth/2) ); */
-      zoomInXText.attr("x", ((self.zoominmouse[0] + self.lastMouseMovePos[0])/2) - 30);
-
-    } else if (!zoomInXText.empty())       /* delete if zoom in box not wide enough (eg. will not zoom) */
+      const bb = zoomInXText.node().getBoundingClientRect();
+      zoomInXText.attr("x", (0.5*(self.zoominmouse[0] + self.lastMouseMovePos[0])) - 0.5*bb.width);
+    }else if( !zoomInXText.empty() ){
+      /* delete if zoom in box not wide enough (eg. will not zoom) */
       zoomInXText.remove();
+    }//if( draw "Zoom In" text ) / else
+  }//if( zoom out ) / else ( zoom in )
+}//SpectrumChartD3.prototype.handleMouseMoveZoomInX
 
-  }
-}
 
 SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
   var self = this;
@@ -8933,7 +8955,7 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
   if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || !self.zooming_plot)
     return;
 
-  if (self.zooming_plot && self.lastMouseMovePos) { /* Need to add condition if self.lastMouseMovePos exists, or else error is thrown */
+  if( self.zooming_plot && self.lastMouseMovePos ) {
     var foreground = self.rawData.spectra[0];
 
     var lowerchanval = d3.bisector(function(d){return d.x0;}).left(foreground.points,self.xScale.invert(self.zoominmouse[0]),1) - 1;
@@ -8943,12 +8965,17 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
     var yMaxAtZoomRange = self.yScale(d3.max(foreground.points.slice(lowerchanval, higherchanval) , function(p) { return p.y; }));
 
     /* Get the current mouse position */
-    var m = d3.mouse(self.vis[0][0]);
+    let m = self.getMousePos();
+    
+    console.assert( m.length === 4, "Expected getMousePos to return array with length 4.", m );
+    console.assert( self.zoominmouse.length === 4, "Expected zoominmouse to be array length 4,", self.zoominmouse );
 
-    if( m[0] < self.zoominmouse[0] ) {
-      /*we were zooming out, nothing to do here */
-
+    if( m[2] < self.zoominmouse[2] ) {
+      // we were zooming out, nothing to do here
     } else {
+      // If we are here, we assume the y-axis area width and domain to be the exact same as when we
+      //  started, which should be true, but it still makes me feel a bit uneasy.
+      
       m[0] = m[0] < 0 ? 0 : m[0];
 
       var oldXScale = self.xScale.domain();
@@ -8976,11 +9003,9 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
           corx0 += p;
           corx1 -= p;
           
-          console.log( 'changing x0=' + x0 + ' and x1=' + x1 + " will set domain to " + (x0+(x1-x0)) + " through " + (x1+(x1-x0)) + " m[0]=" + m[0] + " self.zoominmouse[0]=" + self.zoominmouse[0] );
           x0 = Math.max(corx0+(x1-x0), mindatax);
           x1 = Math.min(corx1+(x1-x0), maxdatax);
         }
-
         
         /* Draw zoom animations if option is checked */
         if( self.options.showAnimation ) {
@@ -8988,12 +9013,12 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
           /* Cancel any current zoom animations */
           self.handleCancelAnimationZoom();
 
-          /* Start new zoom animation */
+          /* Start new zoom animation; 'xrangechanged' will be emitted when animation is complete. */
           self.currentDomain = self.savedDomain = oldXScale;
           self.zoomAnimationID = requestAnimationFrame(self.redrawZoomXAnimation([x0,x1]));
           self.startAnimationZoomTime = Math.floor(Date.now());
         } else { 
-          /* Zoom animation unchecked; draw new x-axis range */
+          /* Zoom animation unchecked; draw new x-axis range; the true below causes the 'xrangechanged' signal to be emitted. */
           self.setXAxisRange(x0,x1,true);
           
           self.redraw()();
@@ -9017,8 +9042,8 @@ SpectrumChartD3.prototype.handleMouseUpZoomInX = function () {
 SpectrumChartD3.prototype.handleCancelMouseZoomInX = function() {
   var self = this;
 
-  var zoomInXBox = d3.select("#zoomInXBox"),
-      zoomInXText = d3.select("#zoomInXText");
+  var zoomInXBox = self.vis.select("#zoomInXBox"),
+      zoomInXText = self.vis.select("#zoomInXText");
 
   /* Delete zoom in box and text */
   zoomInXText.remove();
@@ -9084,8 +9109,8 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInY = function () {
   var self = this;
 
   /* Set the objects displayed for zooming in the y-axis */
-  var zoomInYBox = d3.select("#zoomInYBox"),
-      zoomInYText = d3.select("#zoomInYText");
+  var zoomInYBox = self.vis.select("#zoomInYBox"),
+      zoomInYText = self.vis.select("#zoomInYText");
 
   /* Get the mouse coordinates */
   var m = d3.mouse(self.vis[0][0]);
@@ -9143,12 +9168,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInY = function () {
       zoomInYText = self.vis.append("text")
         .attr("id", "zoomInYText")
         .attr("class", "chartLineText");
-      zoomInYText.attr("x", self.size.width/2 - (zoomInYText[0][0].clientWidth/2));
-
     }
-
-    /* keep zoom in label centered on the box */
-    zoomInYText.attr("y", Number(zoomInYBox.attr("y")) + (Number(zoomInYBox.attr("height"))/2) - (zoomInYBox[0][0].clientWidth/2) );
 
     if (height > 0) {
       zoomInYText.text("Zoom-In on Y-axis");
@@ -9167,7 +9187,12 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInY = function () {
       zoomInYBox.attr("class", "leftbuttonzoomoutboxy");
     }
 
-  } else if (!zoomInYText.empty()) {       /* delete if zoom in box not wide enough (eg. will not zoom) */
+    /* keep zoom in label centered on the box */
+    const textBB = zoomInYText.node().getBoundingClientRect();
+    zoomInYText.attr("y", Number(zoomInYBox.attr("y")) + (Number(zoomInYBox.attr("height"))/2) + 0.5*textBB.height );
+    zoomInYText.attr("x", 0.5*self.size.width - 0.5*textBB.width );
+  } else if (!zoomInYText.empty()) {
+    /* delete if zoom in box not wide enough (eg. will not zoom) */
     zoomInYText.remove();
   }
 }
@@ -9175,8 +9200,8 @@ SpectrumChartD3.prototype.handleMouseMoveZoomInY = function () {
 SpectrumChartD3.prototype.handleMouseUpZoomInY = function () {
   var self = this;
 
-  var zoomInYBox = d3.select("#zoomInYBox"),
-      zoomInYText = d3.select("#zoomInYText");
+  var zoomInYBox = self.vis.select("#zoomInYBox"),
+      zoomInYText = self.vis.select("#zoomInYText");
 
   if (zoomInYBox.empty()) {
     self.handleCancelMouseZoomInY();
@@ -9323,8 +9348,8 @@ SpectrumChartD3.prototype.handleCancelMouseZoomInY = function() {
   var self = this;
 
   /* Set the objects displayed for zooming in the y-axis */
-  var zoomInYBox = d3.select("#zoomInYBox"),
-      zoomInYText = d3.select("#zoomInYText");
+  var zoomInYBox = self.vis.select("#zoomInYBox"),
+      zoomInYText = self.vis.select("#zoomInYText");
 
   /* Not zooming in y anymore */
   self.zoomingYPlot = false;
@@ -9461,9 +9486,9 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInY = function() {
   if (t.length !== 2)
     return;
 
-  var zoomInYTopLine = d3.select("#zoomInYTopLine");
-  var zoomInYBottomLine = d3.select("#zoomInYBottomLine");
-  var zoomInYText = d3.select("#zoomInYText");
+  var zoomInYTopLine = self.vis.select("#zoomInYTopLine");
+  var zoomInYBottomLine = self.vis.select("#zoomInYBottomLine");
+  var zoomInYText = self.vis.select("#zoomInYText");
 
   var touch1 = self.touchesOnChart[keys[0]];
   var touch2 = self.touchesOnChart[keys[1]];
@@ -9527,9 +9552,9 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInY = function() {
 SpectrumChartD3.prototype.handleTouchEndZoomInY = function() {
   var self = this;
 
-  var zoomInYTopLine = d3.select("#zoomInYTopLine");
-  var zoomInYBottomLine = d3.select("#zoomInYBottomLine");
-  var zoomInYText = d3.select("#zoomInYText");
+  var zoomInYTopLine = self.vis.select("#zoomInYTopLine");
+  var zoomInYBottomLine = self.vis.select("#zoomInYBottomLine");
+  var zoomInYText = self.vis.select("#zoomInYText");
 
   if (zoomInYTopLine.empty() || zoomInYBottomLine.empty()) {
     self.handleTouchCancelZoomInY();
@@ -9591,9 +9616,9 @@ SpectrumChartD3.prototype.handleTouchEndZoomInY = function() {
 SpectrumChartD3.prototype.handleTouchCancelZoomInY = function() {
   var self = this;
 
-  var zoomInYTopLine = d3.select("#zoomInYTopLine");
-  var zoomInYBottomLine = d3.select("#zoomInYBottomLine");
-  var zoomInYText = d3.select("#zoomInYText");
+  var zoomInYTopLine = self.vis.select("#zoomInYTopLine");
+  var zoomInYBottomLine = self.vis.select("#zoomInYBottomLine");
+  var zoomInYText = self.vis.select("#zoomInYText");
 
   zoomInYTopLine.remove();
   zoomInYBottomLine.remove();
@@ -9633,12 +9658,12 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
     self.lastMouseMovePos[0] = self.size.width;
 
   /* Set the line objects to be referenced */
-  var recalibrationStartLine = d3.select("#recalibrationStartLine"),
-      recalibrationText = d3.select("#recalibrationText"),
-      recalibrationMousePosLines = d3.select("#recalibrationMousePosLines");
+  var recalibrationStartLine = self.vis.select("#recalibrationStartLine"),
+      recalibrationText = self.vis.select("#recalibrationText"),
+      recalibrationMousePosLines = self.vis.select("#recalibrationMousePosLines");
 
-  var recalibrationG = d3.select("#recalibrationG");
-  var recalibrationPeakVis = d3.select("#recalibrationPeakVis");
+  var recalibrationG = self.vis.select("#recalibrationG");
+  var recalibrationPeakVis = self.vis.select("#recalibrationPeakVis");
 
   /* Set the line that symbolizes where user initially began right-click-and-drag */
   //.mouseLine      { font-size: 0.8em; stroke-width: 2; }
@@ -9765,7 +9790,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   /* Add the foreground, background, and secondary lines for recalibration animation */
   for (var i = 0; i < ((self.rawData && self.rawData.spectra) ? self.rawData.spectra.length : 0); ++i) {
     var spectrum = self.rawData.spectra[i];
-    var recalibrationLine = d3.select("#recalibrationLine"+i);
+    var recalibrationLine = self.vis.select("#recalibrationLine"+i);
 
     if (recalibrationLine.empty() && self['line'+i]) {
       recalibrationLine = recalibrationG.append("path")
@@ -9798,7 +9823,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
 
   /* Move the foreground, background, and secondary lines for recalibration animation with relation to mouse position */
   for (var i = 0; i < ((self.rawData && self.rawData.spectra) ? self.rawData.spectra.length : 0); ++i) {
-    var recalibrationLine = d3.select("#recalibrationLine"+i);
+    var recalibrationLine = self.vis.select("#recalibrationLine"+i);
 
     if (!recalibrationLine.empty())
       recalibrationLine.attr("transform", "translate(" + (self.lastMouseMovePos[0] - self.recalibrationMousePos[0]) + ",0)");
@@ -9831,12 +9856,12 @@ SpectrumChartD3.prototype.handleMouseUpRecalibration = function() {
 SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
   var self = this;
 
-  var recalibrationStartLine = d3.select("#recalibrationStartLine"),
-      recalibrationText = d3.select("#recalibrationText"),
-      recalibrationMousePosLines = d3.select("#recalibrationMousePosLines");
+  var recalibrationStartLine = self.vis.select("#recalibrationStartLine"),
+      recalibrationText = self.vis.select("#recalibrationText"),
+      recalibrationMousePosLines = self.vis.select("#recalibrationMousePosLines");
 
-  var recalibrationG = d3.select("#recalibrationG");
-  var recalibrationPeakVis = d3.select("#recalibrationPeakVis");
+  var recalibrationG = self.vis.select("#recalibrationG");
+  var recalibrationPeakVis = self.vis.select("#recalibrationPeakVis");
 
   /* Remove the right-click-and-drag initial starting point line */
   recalibrationStartLine.remove();
@@ -9881,8 +9906,8 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
 SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   var self = this;
 
-  var deletePeaksBox = d3.select("#deletePeaksBox"),
-      deletePeaksText = d3.select("#deletePeaksText");
+  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
+      deletePeaksText = self.vis.select("#deletePeaksText");
 
   d3.event.preventDefault();
   d3.event.stopPropagation();
@@ -9944,8 +9969,8 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
 SpectrumChartD3.prototype.handleMouseUpDeletePeak = function() {
   var self = this;
 
-  var deletePeaksBox = d3.select("#deletePeaksBox"),
-      deletePeaksText = d3.select("#deletePeaksText");
+  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
+      deletePeaksText = self.vis.select("#deletePeaksText");
 
   var deletePeaksRange;
 
@@ -9968,8 +9993,8 @@ SpectrumChartD3.prototype.handleMouseUpDeletePeak = function() {
 SpectrumChartD3.prototype.handleCancelMouseDeletePeak = function() {
   var self = this;
 
-  var deletePeaksBox = d3.select("#deletePeaksBox"),
-      deletePeaksText = d3.select("#deletePeaksText");
+  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
+      deletePeaksText = self.vis.select("#deletePeaksText");
 
   /* Delete the erase peaks box since we are not erasing peaks anymore */
   deletePeaksBox.remove();
@@ -9998,8 +10023,8 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
   /* Cancel the zoom-in y mode */
   self.handleTouchCancelZoomInY();
 
-  var deletePeaksBox = d3.select("#deletePeaksBox"),
-      deletePeaksText = d3.select("#deletePeaksText");
+  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
+      deletePeaksText = self.vis.select("#deletePeaksText");
 
   var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
       rightTouch = leftTouch === t[0] ? t[1] : t[0];
@@ -10041,8 +10066,8 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
 SpectrumChartD3.prototype.handleTouchEndDeletePeak = function() {
   var self = this;
 
-  var deletePeaksBox = d3.select("#deletePeaksBox"),
-      deletePeaksText = d3.select("#deletePeaksText");
+  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
+      deletePeaksText = self.vis.select("#deletePeaksText");
 
   var deletePeaksRange;
 
@@ -10065,8 +10090,8 @@ SpectrumChartD3.prototype.handleTouchEndDeletePeak = function() {
 SpectrumChartD3.prototype.handleCancelTouchDeletePeak = function() {
   var self = this;
 
-  var deletePeaksBox = d3.select("#deletePeaksBox"),
-      deletePeaksText = d3.select("#deletePeaksText");
+  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
+      deletePeaksText = self.vis.select("#deletePeaksText");
 
   /* Delete the erase peaks box since we are not erasing peaks anymore */
   deletePeaksBox.remove();
@@ -10137,8 +10162,8 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
 SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
   var self = this;
   
-  var countGammasBox = d3.select("#countGammasBox"),
-  countGammasText = d3.select("#countGammasText");
+  var countGammasBox = self.vis.select("#countGammasBox"),
+  countGammasText = self.vis.select("#countGammasText");
   
   var countGammasRange;
   
@@ -10198,7 +10223,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     startx_px = self.countGammasMouse[0];
     nowx_px = self.lastMouseMovePos[0];
     if( startx_px > nowx_px )
-    [startx_px, nowx_px] = [startx_px, nowx_px];
+      [startx_px, nowx_px] = [startx_px, nowx_px];
   }else{
     self.handleCancelTouchDeletePeak();
     self.handleCancelTouchPeakFit();
@@ -10230,10 +10255,10 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     Math.min(self.xScale.invert(nowx_px), self.xScale.domain()[1])
   ];
   
-  var countGammasBox = d3.select("#countGammasBox"),
-  countGammasText = d3.select("#countGammasText"),
-  countGammaRangeText = d3.select("#countGammaRangeText"),
-  sigmaCount = d3.select("#sigmaCount");
+  var countGammasBox = self.vis.select("#countGammasBox"),
+  countGammasText = self.vis.select("#countGammasText"),
+  countGammaRangeText = self.vis.select("#countGammaRangeText"),
+  sigmaCount = self.vis.select("#sigmaCount");
   
   
   /* Create the yellow box and text associated with it */
@@ -10243,10 +10268,11 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     .attr("width", Math.abs( startx_px - nowx_px ))
     .attr("height", self.size.height)
     .attr("y", 0);
-    
-  } else {  /* Adjust the width of the erase peaks box */
+  } else {
+    /* Adjust the width of the erase peaks box */
     countGammasBox.attr("width", Math.abs( startx_px - nowx_px ));
   }
+  
   if (countGammasText.empty()) {
     countGammasText = self.vis.append("text")
     .attr("id", "countGammasText")
@@ -10254,48 +10280,26 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     .attr("y", Number(countGammasBox.attr("height"))/2)
     .text("Gamma Counts");
   }
+  
   var ypos = Number(countGammasBox.attr("height"))/2 + 15;   /* signifies the y-position of the text displayed */
   
-  /* Mouse position to the left of initial starting point of count gammas box */
-  if (nowx_px <= startx_px) {
-    d3.selectAll('.asterickText').remove();
-    countGammasBox.attr("class", "deletePeaksBox")
-    .attr("x", nowx_px);
-    countGammasText.text("Will remove gamma count range");
-    
-    /* Move the count gammas text in the middle of the count gammas box */
-    countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
-    
-    /* Remove the counts text (we will not be counting gammas) */
-    self.rawData.spectra.forEach(function(spectrum) {
-      d3.select('#Spectrum-' + spectrum.id + 'CountsText').remove();
-      d3.select('#Spectrum-' + spectrum.id + 'AsterickText').remove();
-      d3.select("#asterickText"+i).remove();
-    });
-    countGammaRangeText.remove();
-    sigmaCount.remove();
-    
-    return;
-    
-  } else {
-    countGammasBox.attr("class", "countGammasBoxForward")
+  countGammasBox.attr("class", "countGammasBoxForward")
     .attr("x", nowx_px < startx_px ? nowx_px : startx_px);
     countGammasText.text("Gamma Counts");
     
-    if (countGammaRangeText.empty())
+  if (countGammaRangeText.empty())
     countGammaRangeText = self.vis.append("text")
     .attr("id", "countGammaRangeText")
     .attr("class", "countGammasText")
     .attr("y", ypos);
     
-    
-    countGammaRangeText.text( sumEnergyRange[0].toFixed(1) + " to " + sumEnergyRange[1].toFixed(1) + " keV");
-    countGammaRangeText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammaRangeText[0][0].clientWidth)/2*/);
-  }
+  countGammaRangeText.text( sumEnergyRange[0].toFixed(1) + " to " + sumEnergyRange[1].toFixed(1) + " keV");
+  countGammaRangeText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 );
+  
   ypos += 15;
   
   /* Move the count gammas text in the middle of the count gammas box */
-  countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 /*Number(countGammasText[0][0].clientWidth)/2*/ );
+  countGammasText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 );
   
   /* Display the count gammas text for all the spectrum */
   var nforeground, nbackground, backSF;
@@ -10309,7 +10313,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     
     /* Get information from the spectrum */
     var spectrumSelector = 'Spectrum-' + spectrum.id;
-    var spectrumCountsText = d3.select("#" + spectrumSelector + "CountsText");
+    var spectrumCountsText = self.vis.select("#" + spectrumSelector + "CountsText");
     var spectrumScaleFactor = spectrum.yScaleFactor;
     var nspectrum = self.gammaIntegral(spectrum, sumEnergyRange[0], sumEnergyRange[1]);
     var spectrumGammaCount = Number((spectrumScaleFactor * nspectrum).toFixed(2));
@@ -10377,7 +10381,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
   specialScaleSpectras.forEach(function(string, i) {
     if (string == null || !string.length)
     return;
-    var stringnode = d3.select("#asterickText" + i);
+    var stringnode = self.vis.select("#asterickText" + i);
     
     if (stringnode.empty())
     stringnode = self.vis.append("text")
@@ -10399,8 +10403,8 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
 SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
   var self = this;
 
-  var countGammasBox = d3.select("#countGammasBox"),
-      countGammasText = d3.select("#countGammasText");
+  var countGammasBox = self.vis.select("#countGammasBox"),
+      countGammasText = self.vis.select("#countGammasText");
 
   var countGammasRange;
 
@@ -10428,8 +10432,8 @@ SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
 SpectrumChartD3.prototype.handleCancelMouseCountGammas = function() {
   var self = this;
 
-  var countGammasBox = d3.select("#countGammasBox"),
-      countGammasText = d3.select("#countGammasText");
+  var countGammasBox = self.vis.select("#countGammasBox"),
+      countGammasText = self.vis.select("#countGammasText");
 
   /* Delete the count gammas box since we are not counting gammas anymore */
   countGammasBox.remove();
@@ -10446,11 +10450,11 @@ SpectrumChartD3.prototype.handleCancelMouseCountGammas = function() {
 SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
   var self = this;
 
-  var countGammasBox = d3.select("#countGammasBox"),
-      countGammasText = d3.select("#countGammasText"),
-      foregroundCountsText = d3.select("#foregroundCountsText"),
-      backgroundCountsText = d3.select("#backgroundCountsText"),
-      secondaryCountsText = d3.select("#secondaryCountsText");
+  var countGammasBox = self.vis.select("#countGammasBox"),
+      countGammasText = self.vis.select("#countGammasText"),
+      foregroundCountsText = self.vis.select("#foregroundCountsText"),
+      backgroundCountsText = self.vis.select("#backgroundCountsText"),
+      secondaryCountsText = self.vis.select("#secondaryCountsText");
 
   /* Delete the count gammas box since we are not counting gammas anymore */
   countGammasBox.remove();
