@@ -128,7 +128,7 @@ SpectrumChartD3 = function(elem, options) {
      "titlePad" : 5,
      "right":   10,
      "bottom": 5,
-     "xTitlePad": 5,
+     "xTitlePad": 5, // vertical padding between y-axis numbers (non-compact) and the title, or for compact just the height down from axis; TODO: make this more consistent/better.
      "left":     5,
      "labelPad": 5,
      "title":    23,
@@ -461,13 +461,14 @@ SpectrumChartD3 = function(elem, options) {
 
   /* Add the x-axis label */
   if (this.options.xlabel) {
-    this.xaxistitle = this.svg.append("text")
+    this.xaxistitle = this.xAxisBody
+        .append("text")
         .attr("class", "xaxistitle")
         .text(this.options.xlabel)
-        .attr("x", this.size.width/2)
-        .attr("y", this.size.height )
+        .attr("x", 0.5*this.size.width)
+        .attr("y", 0)
         .attr("dy",29)
-        .style("text-anchor","middle");
+        .style("text-anchor", this.options.compactXAxis ? "start" : "middle");
   }
 
   /* Add the y-axis label. */
@@ -1258,13 +1259,12 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title) {
     return;
   
   self.options.xlabel = title;
-  self.xaxistitle = self.svg.append("text")
+  self.xaxistitle = this.xAxisBody
+    .append("text")
     .attr("class", "xaxistitle")
+    .attr("y", 0)
     .text(self.options.xlabel)
-    .attr("x", self.size.width/2)
-    .attr("y", self.size.height )
-    .attr("dy",29)
-    .style("text-anchor","middle");
+    .style("text-anchor", this.options.compactXAxis ? "start" : "middle");
 
   self.handleResize( false );
 }
@@ -1294,20 +1294,21 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.cx = this.chart.clientWidth;
   this.cy = this.chart.clientHeight;
   
+  
   var titleh = 0, xtitleh = 0, xlabelh = 7 + 22;
+  
+  // TODO: actually measure `xlabelh`; we could either easily do it in `drawXTicks` or do it with something like:
+  //   d3.selectAll(".xaxis g.tick")[0].forEach( function(a){ console.log( a.getBBox().height ); } );
+  
   if( this.options.title ) {
     this.svg.selectAll(".title").forEach( function(t){
       titleh = t[0].getBBox().height;  
    });
   }
   
-  if( this.xaxistitle )
-    xtitleh = this.xaxistitle.node().getBBox().height;
-  
-  /*Below isnt quite working, so stick with estimate of 22 above */
-  /*self.xAxisBody.selectAll('g.tick').forEach( function(t){ */
-      /*console.log( t[0].getBBox().height );  /*sometimes gives 22.21875, sometimes 4 */
-   /*}); */
+  const xaxistitleBB = this.xaxistitle ? this.xaxistitle.node().getBBox() : null;
+  if( xaxistitleBB )
+    xtitleh = xaxistitleBB.height;
   
   this.padding.topComputed = titleh + this.padding.top + (titleh > 0 ? this.padding.titlePad : 0);
   
@@ -1363,15 +1364,16 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
       .attr("x", this.cx/2);
 
   if( this.xaxistitle ){
-    if( !this.options.compactXAxis ){
-      this.xaxistitle.attr("x", this.cx/2);
-      this.xaxistitle.attr("dy",xlabelh+this.padding.xTitlePad + (this.options.title ? 33 : 6)); /* Christian: hard-coded 33 to account for padding between x-axis labels and slider chart */
-
+    // this.xaxistitle is appended to this.xAxisBody
+    //  Also, if this.options.compactXAxis, then "text-anchor" style is "start", else its "middle"
+    
+    if( this.options.compactXAxis ){
+      this.xaxistitle.attr("x", this.size.width - xaxistitleBB.width - 10);
+      this.xaxistitle.attr("dy", xtitleh + this.padding.xTitlePad );
     } else {
-      this.xaxistitle.attr("x", this.size.width - this.xaxistitle.node().getBBox().width + 30 );  /*Not certain why this 30 is needed (I'm probably leaving out some element) but necassary to have label line up right */
-      this.xaxistitle.attr("dy",xtitleh + this.padding.xTitlePad + (this.options.title ? 31 : 4));
+      this.xaxistitle.attr("x", 0.5*this.size.width);
+      this.xaxistitle.attr("dy", xlabelh + this.padding.xTitlePad );
     }
-    this.xaxistitle.attr("y", this.size.height);
   }
 
   this.xAxisBody.attr("width", this.size.width )
@@ -2789,12 +2791,12 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
     /* Represent where we initialized our touch start value */
     self.touchStart = t;
     self.touchStartEvent = d3.event;
-    self.touchPageStart = evTouches.length === 1 ? [evTouches[0].pageX, evTouches[0].pageY] : null; // Do we really need this?
+    self.touchPageStart = evTouches.length === 1 ? [evTouches[0].pageX, evTouches[0].pageY] : null; // Do we really need this?  OR maybe better yet should just use coordinates relative to <svg>
 
     if (t.length === 2) {
       self.zooming_plot = true;
       self.countGammasStartTouches = self.createPeaksStartTouches = self.touchStart;
-      self.touchZoomStartEnergies =  [self.xScale.invert(t[0][0]),self.xScale.invert(t[1][0])];  //should probably use self.origdomain
+      self.touchZoomStartEnergies = [self.xScale.invert(t[0][0]),self.xScale.invert(t[1][0])];
     }
     
     self.updateTouchesOnChart(d3.event);
@@ -3494,6 +3496,7 @@ SpectrumChartD3.prototype.keydown = function () {
   }
 }
 
+
 SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
   var self = this;
 
@@ -3506,16 +3509,13 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
     self.touchesOnChart = {};
 
   /* Add each touch start into map of touches on the chart */
-  var touch;
   for (let i = 0; i < touchEvent.touches.length; i++) {
-    /* Get the touch  */
-    touch = touchEvent.touches[i];
+    const touch = touchEvent.touches[i];
 
-    /* Here we add a new attribute to each touch: the start coordinates of the touch */
-    /*   If the touch already exists in our map, then just update the start coordinates of the new touch */
+    /* Add a new attribute to each touch: the start coordinates of the touch. We'll keep old value if touch already existed in our map */
     touch.startX = self.touchesOnChart[touch.identifier] ? self.touchesOnChart[touch.identifier].startX : touch.pageX;
     touch.startY = self.touchesOnChart[touch.identifier] ? self.touchesOnChart[touch.identifier].startY : touch.pageY;
-
+    
     /* Add/replace touch into dictionary */
     self.touchesOnChart[touch.identifier] = touch;
   }
@@ -3523,13 +3523,14 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
   /* Delete any touches that are not on the screen anymore (read from 'touchend' event) */
   if (touchEvent.type === "touchend") {
     for (i = 0; i < touchEvent.changedTouches.length; i++) {
-      touch = touchEvent.changedTouches[i];
+      const touch = touchEvent.changedTouches[i];
 
       if (self.touchesOnChart[touch.identifier])
         delete self.touchesOnChart[touch.identifier];
     }
   }
-}
+}//SpectrumChartD3.prototype.updateTouchesOnChart
+
 
 SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
   var self = this;
@@ -5077,19 +5078,12 @@ SpectrumChartD3.prototype.drawXAxisArrows = function(show_arrow) {
 }
 
 SpectrumChartD3.prototype.drawXTicks = function() {
-  var self = this;
-  var stroke = function(d) { return d ? "#ccc" : "#666"; };
+  const self = this;
+  const stroke = function(d) { return d ? "#ccc" : "#666"; };
   
-  var xticks = self.xticks();
-  var xtickvalues = xticks.map(function(d){return d.value;} );
+  const xticks = self.xticks();
+  const xtickvalues = xticks.map(function(d){return d.value;} );
   self.xAxis.tickValues( xtickvalues );
-     
-  /**
-   * Regenerate x-ticks
-   * Christian [032818]: Commented out for performance improvement, D3 will reuse current tick nodes when
-   *  using new axis tick values, so we don't need to remove the current ones
-   */
-  // self.xAxisBody.selectAll("g.tick").remove();
 
   self.xAxisBody.call(self.xAxis);
 
@@ -5118,30 +5112,41 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   //if (self.isTouchDevice()) {
   //  majorticksText.on("touchstart.drag", self.xaxisDrag());
   //}
-
-  if( this.options.compactXAxis && self.xaxistitle ){
-    /* We have to check every tick to see if it overlaps with the title */
-    var xtitlex = self.xaxistitle.attr("x" );
-    majorticks[0].forEach( function(tick){
-      var txt = d3.select(tick).select('text')[0][0]; 
-      if( (txt.getCTM().e + txt.getBBox().width) + 30 > xtitlex )  /*Not sure why we need this 30, but its in positioning of the x-axis title too */
-        d3.select(txt)
-        .text("");
-    });
-  } else {
-    /*We only need to check the last tick to see if it goes off the chart */
-    const majorticksText = majorticks.selectAll('text');
-    var lastmajor = majorticks[0].length ? majorticks[0][majorticks[0].length-1] : null; 
-    if( lastmajor ) {
-      lastmajor = d3.select(lastmajor).select('text')[0][0];
-      if( (lastmajor.getCTM().e + lastmajor.getBBox().width) > this.cx )
-        d3.select(lastmajor).text("");  
-    }
-  }
-  /*this.options.compactXAxis */
   
-  /*Can calculate the width needed for the y-axis, and could adjust the plot area.. */
-  /*console.log( self.yAxisBody.node().getBBox().width ); */
+  const labelUpperXPx = function(tick){
+    const bb = tick[0][0].getBBox();
+    const trans = d3.transform(tick.attr("transform")).translate;
+    return trans[0] + bb.width;
+  };
+  
+  
+  if( this.options.compactXAxis && self.xaxistitle ){
+    
+    // We'll check ticks to see if it overlaps with the title, starting from right-most tick
+    const xtitle_px = Number( self.xaxistitle.attr("x") );
+    for( let i = majorticks[0].length - 1; i >= 0; i -= 1 ){
+      const tick = d3.select( majorticks[0][i] );
+      const upper_x_px = labelUpperXPx( tick );
+      
+      // Stop this loop once the labels are no longer overlapping
+      if( upper_x_px < xtitle_px )
+        break;
+      
+      tick.select('text').text("");
+    }
+  } else {
+    /* We only need to check the last tick to see if it goes off the chart */
+    const lastmajor = majorticks[0].length ? majorticks[0][majorticks[0].length-1] : null;
+    if( lastmajor ) {
+      const tick = d3.select( lastmajor );
+      const upper_x_px = labelUpperXPx( tick );
+      
+      // There seems to be about ~10 px (or maybe 15px) too much spacing with this next test; maybe it comes from this.padding.right or this.padding.left ?  Just leaving for now, since this is good enough
+      if( (upper_x_px - 10) > this.size.width ){
+        tick.select('text').text("");
+      }
+    }
+  }//if( this.options.compactXAxis and have x-axis title )
 
   if( self.xGridBody ) {
     self.xGrid.tickValues( xtickvalues );
@@ -5156,7 +5161,8 @@ SpectrumChartD3.prototype.drawXTicks = function() {
       .filter(function(d,i){ return !xticks[i].major; } )
       .attr("class","minorgrid");
   }
-}
+}//SpectrumChartD3.prototype.drawXTicks
+
 
 SpectrumChartD3.prototype.setXAxisRange = function( minimum, maximum, doEmit ) {
   var self = this;
@@ -5195,6 +5201,9 @@ SpectrumChartD3.prototype.setXRangeArrows = function(d) {
 
 SpectrumChartD3.prototype.setCompactXAxis = function( compact ) {
   this.options.compactXAxis = Boolean(compact);
+  
+  if( this.xaxistitle )
+    this.xaxistitle.style("text-anchor", this.options.compactXAxis ? "start" : "middle");
   
   /*Might want to add ability to change xTitlePad here.  */
   /*this.padding.xTitlePad = 10; */
@@ -8743,8 +8752,6 @@ SpectrumChartD3.prototype.setYAxisRangeAnimated = function( yrange ){
   if( !yrange )
   yrange = this.getYAxisDomain();
   
-  console.log( 'setYAxisRangeAnimated; yrange:', yrange, ', domain:', this.yScale.domain() );
-  
   if( !this.options.showAnimation ){
     this.yScale.domain([y1, y2]);
     this.redrawYAxis()();
@@ -8754,7 +8761,7 @@ SpectrumChartD3.prototype.setYAxisRangeAnimated = function( yrange ){
   this.currentDomain = this.savedDomain = this.yScale.domain();
   
   if( this.zoomAnimationID != null )
-  cancelAnimationFrame(this.zoomAnimationID);
+    cancelAnimationFrame(this.zoomAnimationID);
   
   this.startAnimationZoomTime = Math.floor( Date.now() );
   this.zoomAnimationID = requestAnimationFrame( this.redrawZoomYAnimation(yrange) );
@@ -9045,6 +9052,7 @@ SpectrumChartD3.prototype.setYAxisMaximum = function( maximum ) {
   this.redrawYAxis()();
 }
 
+// See also setYAxisRangeAnimated([min,max])
 SpectrumChartD3.prototype.setYAxisRange = function( minimum, maximum ) {
   this.yScale.domain([maximum,minimum]);
   this.redrawYAxis()();
@@ -9247,20 +9255,21 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInX = function() {
 
   var cur_e1 = self.xScale.invert(x1);
   var cur_e2 = self.xScale.invert(x2);
-
+  
+  // We want to adjust the energy so our fingers are on the original energies
   // energy = a + b*x_pixel; solve for a and b
   // cur_e1 = a + b*x1
   // cur_e2 = a + b*x2
   // cur_e1 - b*x1 = cur_e2 - bx2
-  var b = (cur_e1 - cur_e2) / (x1 -x2);
-  var a = cur_e1 - x1*b;
-  var xdomain = self.xScale.domain();
-  var cur_xrange = Math.abs( xdomain[1] - xdomain[0] );
+  const b = (cur_e1 - cur_e2) / (x1 - x2);
+  const a = cur_e1 - x1*b;
+  const xdomain = self.xScale.domain();
+  const cur_xrange = Math.abs( xdomain[1] - xdomain[0] );
 
   var start_e1 = self.touchZoomStartEnergies[0], start_e2 = self.touchZoomStartEnergies[1];
   if( start_e1 > start_e2 )
     start_e2 = [start_e1, start_e1 = start_e2][0];
-
+    
   var xscale = (start_e2 - start_e1) / (cur_e2 - cur_e1);
   var new_b = xscale * b;
   var new_a = start_e1 - new_b*x1;

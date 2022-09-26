@@ -38,6 +38,8 @@
 
 .yaxis, .xaxis, .yaxislabel { font: sans-serif; font-size: 0.9em; }
 
+.SpectrumChartD3 .xaxistitle, .SpectrumChartD3 .yaxistitle{ font-size: 14px; }
+
 .xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke-width: 1px; }
 
 .xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
