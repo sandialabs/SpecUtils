@@ -2457,7 +2457,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
               string suspect_nucs_str = string( suspectpos+suspect_term.size(), linesiter );
               string::size_type endpos = suspect_nucs_str.find_first_of("\0");
               if( endpos != string::npos )
-                suspect_nucs_str.substr(0,endpos);
+                suspect_nucs_str = suspect_nucs_str.substr(0,endpos);
               
               split( suspect_nucs, suspect_nucs_str, "\t,\n\r\0" );
               for( string &nuc : suspect_nucs )

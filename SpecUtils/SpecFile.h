@@ -98,6 +98,21 @@ namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 
 namespace SpecUtils
 {
+/** For consistency between platforms, we will use microsecond counted time-points/durations.
+ 
+ This is what macOS/Linux use, but Windows uses a higher precision value, so you may have to
+ make some casts to make things work.
+ E.g.:
+ ```
+ const auto now_sys = std::chrono::system_clock::now();
+ const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );
+ meas->set_start_time( now )
+ ```
+ 
+ The only place this consistency matters is parsing/writing date-times, so its possible in the
+ future we'll just use `std::chrono::system_clock::time_point`, but just limit parsing/writing
+ of timestamps to the microsecond.
+ */
   using time_point_t = std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
 
 

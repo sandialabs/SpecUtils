@@ -22,13 +22,20 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  
-#Note: on macOS you may need to rename the libSpecUtils.dylib library 
-#      created when building the library, to SpecUtils.so
+
+"""This file demonstrates using the SpecUtils module to open spectrum
+files, read their information, create a new spectrum file, and also
+save the information to disk in various spectrum file formats.
+
+Note, to use SpecUtils, you must install it, e.g.:
+    pip install SpecUtils-0.0.1-cp310-cp310-win_amd64.whl
+"""
 
 import SpecUtils
 
 from datetime import datetime
 
+# First we will open an existing file from disk
 filename = "Cal.pcf"
 info = SpecUtils.SpecFile()
 
@@ -38,8 +45,9 @@ except RuntimeError as e:
     print( "Failed to decode file: {0}".format( e ) )
     exit( 1 )
 
+# Now we'll look at some of its information
 meass = info.measurements()
-nmeas = info.numMeasurements()
+nmeas = info.numMeasurements() # same as len(meass)
 
 if nmeas < 1:
     print( filename, "didnt contain any spectroscopic data" )
@@ -51,12 +59,16 @@ if len(meass) != nmeas :
 
 print( "There were", nmeas, "measurements (or records) in the file" )
 
-meas = meass[0]
-#meas = info.measurement(0)
+meas = meass[0] # same as instead calling `meas = info.measurement(0)`
 
+# Get the array of gamma channel counts
 counts = meas.gammaCounts()
+
+# Get the measurement start time
 startime = meas.startTime()
 
+
+# Now we'll printout the counts from a few channels in the middle of the spectrum, just as a demonstration
 numchannel = len(counts)
 print( "For measurement started at", startime, ":" )
 print( numchannel, "channels, with a few mid channels of the first measurement having counts:" )
@@ -67,24 +79,33 @@ for i in range(int(numchannel/2),min(int(numchannel/2)+10,numchannel)):
 print( "With live time:", meas.liveTime(), "seconds, and total counts:", meas.gammaCountSum() )
 
 
+# Now, we will find the channel that corresponds to a specific energy.
 nenergy = 511
 channel = meas.findGammaChannel(nenergy)
-content = meas.gammaChannelContent( channel )
+
+# Get the number of gamma counts in this channel
+content = meas.gammaChannelContent( channel )  # same as counts[channel]
+
+# And now get the energy range of this channel
 lenergy = meas.gammaChannelLower( channel )
 uenergy = meas.gammaChannelUpper( channel )
 print( nenergy, "keV corresponds to channel ", channel, "which has", content, "counts, and energy range (", lenergy, ",", uenergy, ")" )
 
 
+# Get the sum of gammas for an energy range.
 lenergy = 400
 uenergy = 800
 gammaint = meas.gammaIntegral(lenergy,uenergy)
 print( "Between", lenergy, "and", uenergy, "keV, the sum of gamma counts is", gammaint )
 
+
+# Get the sum of gammas for a channel range.
 lchannel = 20
 uchannel = 30
 gammasum = meas.gammaChannelsSum(lchannel,uchannel)
 print( "Channels", lchannel, "through", uchannel, "summed give", gammasum, "gamma sums" )
 
+# The spectrum file may have multiple detectors, and many time intervals
 sampleNums = info.sampleNumbers()
 detNames = info.detectorNames()
 
@@ -92,6 +113,10 @@ print( "DetectorNames:", detNames )
 print( "SampleNumbers:", sampleNums )
 
 
+# You can sum multiple Measurement's into a single one (e.g., get a single 
+# spectrum to analyze), by specifying which sample numbers (time intervals),
+# and which detectors you want summed.  Here we'll take samples 1 and 2, for 
+# all detectors in the spectrum file.
 summedmeas = info.sumMeasurements( [1,2], info.detectorNames() )
 print( "Summed measurement has liveTime=", summedmeas.liveTime() )
 
@@ -103,21 +128,25 @@ newMeas = SpecUtils.Measurement.new()
 #   started with a copy of an existing Measurement. i.e.,
 # newMeas = meas.clone()
 
-# And change a bunch of values, both for the SpecFile object, and the new Measurement object
+# We'll need to set bunch of values
+# We'll set channel counts, which also requires setting live/real time at same time
 newLiveTime = 10
 newRealTime = 15
-
-
-# Test setting channel counts, which also requires setting live/real time at same time
 newGammaCounts = [0,1.1,2,3,4,5.9,6,7,8,9,8,7,6,5,4,3,2,1]
-numChannels = len(newGammaCounts)
-energyCalCoefficients = [0,3000]
-newEnergyCal = SpecUtils.EnergyCalibration.fromFullRangeFraction( numChannels, energyCalCoefficients )
-deviationPairs = [(100,-10), (1460,15), (3000,0)]
-newEnergyCal = SpecUtils.EnergyCalibration.fromFullRangeFraction( numChannels, energyCalCoefficients, deviationPairs )
 newMeas.setGammaCounts( newGammaCounts, newLiveTime, newRealTime )
+
+
+# We also will want an energy calibration defined (if not defined, will default 
+# to polynomial from 0 to 3 MeV).  Here, we'll also throw in some deviation pairs.
+energyCalCoefficients = [0,3000]
+deviationPairs = [(100,-10), (1460,15), (3000,0)]
+numChannels = len(newGammaCounts)
+newEnergyCal = SpecUtils.EnergyCalibration.fromFullRangeFraction( numChannels, energyCalCoefficients, deviationPairs )
+
+# Finally, set the energy calibration to the Measurement
 newMeas.setEnergyCalibration( newEnergyCal )
 
+# We can set some meta-information for the Measurement
 newMeas.setTitle( "The new measurements title" )
 newMeas.setStartTime( datetime.fromisoformat('2022-08-26T00:05:23') )
 newMeas.setRemarks( ['Remark 1', 'Remark 2'] )
@@ -140,22 +169,26 @@ newMeas.setRemarks( remarks )
 #  file).
 info.addMeasurement( newMeas )
 
+# We can also set a number of meta-information quantities on the SpecFile
 info.setDetectorType( SpecUtils.DetectorType.DetectiveEx100 )
 info.setInstrumentManufacturer( "MyCustomManufacturer" )
 info.setInstrumentModel( "SomeDetector" )
 info.setSerialNumber( "SomeSerialNumber102" )
 
 
-# Test setting real/live time themselves
-info.setLiveTime( newLiveTime, newMeas )
-info.setRealTime( newRealTime, newMeas )
+# If you want to change a Measurement that "belongs" to a SpecFile
+# (e.g., after you've added it, or if you opened it from a file
+# on disk), you can use setters like the below:
+info.setLiveTime( 55, newMeas )
+info.setRealTime( 60, newMeas )
 info.setTitle( "The new measurements title", newMeas )
-
+# There are a number more of these.
 
 print( "Set live time to ", newMeas.liveTime(), " seconds, and real time to ", newMeas.realTime() )
 
 
-# First we'll write a CHN file using a direct call to make CHN files
+# You can save the spectrum file to disk in a number of ways.
+# First we'll create a CHN file using a direct call to make CHN files
 savetoname = "Cal_pyconverted.chn"
 f = open( savetoname, 'wb' )
 
@@ -219,12 +252,16 @@ f.close()
 print( "Wrote", savetoname )
 
 
-
+# One of the most useful formats to write to is N42-2012; if you write the
+# SpecFile out to this format, and later read it back in, no information 
+# will be lost
 savetoname = "Cal_pyconverted.n42"
 f = open( savetoname, 'wb' )
 
 try:
     info.write2012N42Xml( f )
+    # Or you could do the same thing with:
+    # info.writeToStream( f, info.sampleNumbers(), info.detectorNames(), SpecUtils.SaveSpectrumAsType.N42_2012 )
 except RuntimeError as e:
     print( "Error writing 2011 N42 file: {0}.".format( e ) )
     exit( 1 )
@@ -235,7 +272,7 @@ print( "Wrote", savetoname )
 #writeToFile
 #writeToStream
 
-#still having trouble reading from python source when seeking is done by the reader
+# And finally, we can read in spectrum files from a stream:
 f = open( "Cal_pyconverted.pcf", 'rb' )
 rereadinfo = SpecUtils.SpecFile()
 try:

@@ -364,14 +364,26 @@ namespace
   //I couldnt quite figure out how to get Python to play nicely with const
   //  references to smart pointers, so instead am using some thin wrapper
   //  functions to return a smart pointer by value.
-  std::shared_ptr< const std::vector<float> > channel_energies_wrapper( const SpecUtils::Measurement *meas )
+  boost::python::list channel_energies_wrapper( const SpecUtils::Measurement *meas )
   {
-    return meas->channel_energies();
+    boost::python::list l;
+    if( !meas->channel_energies() )
+     return l;
+    
+    for( auto p : *meas->channel_energies() )
+      l.append( p );
+    return l;
   }
   
-  std::shared_ptr< const std::vector<float> > gamma_counts_wrapper( const SpecUtils::Measurement *meas )
+  boost::python::list gamma_counts_wrapper( const SpecUtils::Measurement *meas )
   {
-    return meas->gamma_counts();
+    boost::python::list l;
+    if( !meas->gamma_counts() )
+     return l;
+      
+    for( auto p : *meas->gamma_counts() )
+      l.append( p );
+    return l;
   }
 
   std::shared_ptr<SpecUtils::Measurement> makeCopy_wrapper( const SpecUtils::Measurement *meas )
@@ -1080,6 +1092,7 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
   .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, return_internal_reference<>(),
     "Returns the list of energy calibration coeficients.\n"
     "Will only be empty for SpecUtils.EnergyCalType.InvalidEquationType." )
+  // TODO: I think we should put a wrapper around channel_energies, and return a proper python list
   .def( "channelEnergies", &SpecUtils::EnergyCalibration::channel_energies, return_internal_reference<>(),
     "Returns lower channel energies; will have one more entry than the number of channels." )
   .def( "deviationPairs", &SpecUtils::EnergyCalibration::deviation_pairs, return_internal_reference<>() )
@@ -1160,7 +1173,6 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
     .def( "gammaChannelWidth", &SpecUtils::Measurement::gamma_channel_width )
     .def( "gammaIntegral", &SpecUtils::Measurement::gamma_integral )
     .def( "gammaChannelsSum", &SpecUtils::Measurement::gamma_channels_sum )
-    .def( "channelChannelEnergies", &channel_energies_wrapper )
     .def( "gammaChannelCounts", &gamma_counts_wrapper )
     .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
     .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
