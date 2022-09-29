@@ -52,8 +52,6 @@ Shortcommings that wcjohns should address:
    - Should probably get rid of detector number, and just keep name
  - Should eliminate the <InterSpec:DetectorType> tag in written N42 2012 files.
  - Should consider adding explicit dead_time field
- - Should add elevation and uncertainties to GPS coordinates
- - Should add detector and item orientation/positions
  - Should consider removing measurement_operator and inspection and make location
    part of detector location object
  - Should implement tracking N42 MeasurementGroupReferences to link Analysis
@@ -546,6 +544,14 @@ public:
   //has_gps_info(): returns true only if both latitude and longitude are valid.
   bool has_gps_info() const;
   
+  /** Returns dose-rate, in micro-sieverts per hour, given along with the measurement data.
+   
+   Returns negative value if dose rate was not provided in the file.
+   
+   If dose rate is provided as part of analysis results in the file, it will not be returned
+   here, but instead see #DetectorAnalysisResult::dose_rate_.
+   */
+  float dose_rate() const;
   
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns time_point_t{} otherwise.
@@ -953,7 +959,7 @@ public:
   
   
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   //equal_enough(...): tests whether the passed in Measurement objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
@@ -983,9 +989,7 @@ protected:
   //  Called from set_info_from_txt_or_csv().
   void set_info_from_avid_mobile_txt( std::istream &istr );
   
-  void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data,
-                                std::shared_ptr<DetectorAnalysis> analysis_info,
-                                std::mutex *analysis_mutex );
+  void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data  );
   
   //set_gross_count_node_info(...): throws exception on error
   //  XXX - only implements nuetron gross gounts right now
@@ -1070,6 +1074,19 @@ protected:
   
   /** Bits set according to #DerivedDataProperties.  Will be zero if not derived data. */
   uint32_t derived_data_properties_;
+  
+  /** The measured ambient radiation dose equivalent rate value, in microsieverts per hour (μSv/h).
+   
+   Will have a value less than zero if not-valid.
+   */
+  float dose_rate_;
+  
+  /** The measured radiation exposure rate value, in milliroentgen per hour (mR/h).
+   
+   Will have a negative value if not-valid.
+   */
+  float exposure_rate_;
+
   
   friend class ::SpecMeas;
   friend class SpecFile;
@@ -2143,13 +2160,15 @@ public:
   virtual bool write_2012_N42( std::ostream& ostr ) const;
 
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   //equal_enough(...): tests whether the passed in SpecFile objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
   //Throws an std::exception with a brief explanaition when an issue is found.
   static void equal_enough( const SpecFile &lhs, const SpecFile &rhs );
+#endif
   
+#if( PERFORM_DEVELOPER_CHECKS )
   double deep_gamma_count_sum() const;
   double deep_neutron_count_sum() const;
 #endif
@@ -2504,22 +2523,34 @@ public:
   std::string id_confidence_;
   float distance_;            //in units of mm (eg: 1.0 == 1 mm )
   
-  float dose_rate_;           //in units of micro-sievert per hour
-                              //   (eg: 1.0 = 1 u-sv)
+  /** Dose rate, in units of micro-sievert per hour, i.e. 1.0 = 1 uSv/h.
+   
+   This value is only filled out if it is provided as part of the
+   detectors analysis result.  If dose rate is provided as part of
+   the spectral data (e.g., next to the spectrum), it will be provided
+   in #Measurement::dose_rate_, and not here
+   
+   This value will be negative if not provided.
+   */
+  float dose_rate_;
   
-  float real_time_;           //in units of seconds (eg: 1.0 = 1 s)
+  /** Real time provided in the analysis results, in units of seconds, i.e. 1.0 = 1 s.
+   
+   This value will be negative if not provided in the analysis results.
+   */
+  float real_time_;
   
-  //20171220: removed start_time_, since there is no cooresponding equivalent
+  //20171220: removed start_time_, since there is no corresponding equivalent
   //  in N42 2012.  Instead should link to which detectors this result is
   //  applicable to.
-  //time_point_t start_time_;  //start time of the cooresponding data (its a little unclear in some formats if this is the case...)
+  //time_point_t start_time_;  //start time of the corresponding data (its a little unclear in some formats if this is the case...)
   
   std::string detector_;
   
   DetectorAnalysisResult();
   void reset();
   bool isEmpty() const;
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   static void equal_enough( const DetectorAnalysisResult &lhs,
                            const DetectorAnalysisResult &rhs );
 #endif
@@ -2590,11 +2621,102 @@ public:
   void reset();
   bool is_empty() const;
   
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   static void equal_enough( const DetectorAnalysis &lhs,
                            const DetectorAnalysis &rhs );
 #endif
 };//struct DetectorAnalysisResults
+
+
+
+/** Represents the data of N42-2012:
+      RadInstrumentData->RadMeasurement->RadInstrumentState->StateVector->GeographicPoint
+ 
+ Geographical coordinates providing latitude, longitude, and elevation, and uncertainty
+ of the coordinates.
+ 
+ For reading from other formats
+ */
+struct GeographicPoint
+{
+  GeographicPoint();
+  
+  // <LatitudeValue>, <LongitudeValue>, <ElevationValue>, <ElevationOffsetValue>
+  // <GeoPointAccuracyValue>, <ElevationAccuracyValue>, <ElevationOffsetAccuracyValue>
+  double latitude_;  //set to -999.9 if not specified
+  double longitude_; //set to -999.9 if not specified
+  float elevation_;
+  
+  float elevation_offset_;
+  float coords_accuracy_;
+  float elevation_accuracy_;
+  float elevation_offset_accuracy_;
+  
+  time_point_t position_time_;
+  
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
+  static void equal_enough( const GeographicPoint &lhs, const GeographicPoint &rhs );
+#endif
+};//struct GeographicPoint
+
+
+struct RelativeLocation
+{
+  RelativeLocation();
+  
+  //RelativeLocationAzimuthValue, RelativeLocationInclinationValue, DistanceValue
+  float azimuth_;
+  float inclination_;
+  float distance_;
+  
+  float dx() const;
+  float dy() const;
+  float dz() const;
+  
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
+  static void equal_enough( const RelativeLocation &lhs, const RelativeLocation &rhs );
+#endif
+};//struct RelativeLocation
+
+
+/**
+ Description: The orientation of an object (e.g., radiation measurement instrument, radiation
+ detector, or measured item) in space in terms of an internal frame of reference attached to the object's body and an external frame of reference. The object's internal frame of reference consists of three perpendicular axes: front-back, left-right, and top-bottom. The external frame of reference consists of the horizontal plane and True North. The object's orientation is expressed in the terms of three angles: azimuth, inclination, and roll.
+
+ */
+struct Orientation
+{
+  //<AzimuthValue>, <InclinationValue>, <RollValue>
+  
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
+  static void equal_enough( const Orientation &lhs, const Orientation &rhs );
+#endif
+};//struct Orientation
+
+
+/**
+  Provides approximately one of {<RadDetectorState>, <RadInstrumentState>, <RadItemState>}.
+ 
+ Note: N42-2012, allows a state to provide Choice of {<GeographicPoint> <LocationDescription> <RelativeLocation>},
+ but we currently only implement <GeographicPoint>
+*/
+struct LocationState
+{
+  LocationState();
+  
+  enum class StateType{ Detector, Instrument, Item };
+  StateType type_;
+  
+  float speed_;
+  
+  std::shared_ptr<const GeographicPoint> geo_location_;
+  std::shared_ptr<const RelativeLocation> relative_location_;
+  std::shared_ptr<const Orientation> orientation_;
+  
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
+  static void equal_enough( const LocationState &lhs, const LocationState &rhs );
+#endif
+};//struct LocationState
 
 
 /** Corresponds to a N42.42-2011 <MultimediaData> element that is often used to

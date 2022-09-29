@@ -40,8 +40,8 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
 
-#if( !PERFORM_DEVELOPER_CHECKS )
-#error PERFORM_DEVELOPER_CHECKS must be enabled to compile regression_test
+#if( !SpecUtils_ENABLE_EQUALITY_CHECKS )
+#error SpecUtils_ENABLE_EQUALITY_CHECKS must be enabled to compile regression_test
 #endif
 
 using namespace std;
@@ -401,7 +401,8 @@ void check_parse_time( const string basedir )
       name = name.substr( 0, 27 ) + "...";
     cout << setw(31) << std::left << name << ": {cpu: "
          << setprecision(6) << std::fixed << cputime << ", wall: "
-         << setprecision(6) << walltime << "}\n";
+         << setprecision(6) << walltime << "}"
+         << ", size: " << (boost::filesystem::file_size(i->first) / 1024) << " kb\n";
     
     if( previous_cpu_parse_times.count(i->first) )
     {

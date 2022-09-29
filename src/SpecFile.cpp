@@ -1447,6 +1447,8 @@ void Measurement::reset()
   title_.clear();
   
   derived_data_properties_ = 0;
+  
+  dose_rate_ = exposure_rate_ = -1.0f;
 }//void reset()
 
   
@@ -1460,6 +1462,12 @@ bool SpecFile::has_gps_info() const
 {
   return (SpecUtils::valid_longitude(mean_longitude_)
             && SpecUtils::valid_latitude(mean_latitude_));
+}
+
+
+float Measurement::dose_rate() const
+{
+  return dose_rate_;
 }
 
   
@@ -2583,7 +2591,7 @@ void Measurement::rebin( const std::shared_ptr<const EnergyCalibration> &cal )
 }//rebin( )
 
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 namespace
 {
 #define compare_field(l,r,f) if( (l.f) != (r.f) ) return (l.f) < (r.f);
@@ -2606,28 +2614,29 @@ namespace
 void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
                                           const DetectorAnalysisResult &rhs )
 {
+  vector<string> issues;
   if( lhs.remark_ != rhs.remark_ )
-    throw runtime_error( "DetectorAnalysisResult remark for LHS ('"
+    issues.push_back( "DetectorAnalysisResult remark for LHS ('"
                          + lhs.remark_ + "') doesnt match RHS ('"
                          + rhs.remark_ + "')" );
   if( lhs.nuclide_ != rhs.nuclide_ )
-    throw runtime_error( "DetectorAnalysisResult nuclide for LHS ('"
+    issues.push_back( "DetectorAnalysisResult nuclide for LHS ('"
                          + lhs.nuclide_ + "') doesnt match RHS ('"
                          + rhs.nuclide_ + "')" );
   if( lhs.nuclide_type_ != rhs.nuclide_type_ )
-    throw runtime_error( "DetectorAnalysisResult nuclide type for LHS ('"
+    issues.push_back( "DetectorAnalysisResult nuclide type for LHS ('"
                          + lhs.nuclide_type_ + "') doesnt match RHS ('"
                          + rhs.nuclide_type_ + "')" );
   if( lhs.id_confidence_ != rhs.id_confidence_ )
-    throw runtime_error( "DetectorAnalysisResult ID confifence for LHS ('"
+    issues.push_back( "DetectorAnalysisResult ID confidence for LHS ('"
                          + lhs.id_confidence_ + "') doesnt match RHS ('"
                          + rhs.id_confidence_ + "')" );
   if( lhs.detector_ != rhs.detector_ )
-    throw runtime_error( "DetectorAnalysisResult detector for LHS ('"
+    issues.push_back( "DetectorAnalysisResult detector for LHS ('"
                          + lhs.detector_ + "') doesnt match RHS ('"
                          + rhs.detector_ + "')" );
   //if( lhs.start_time_ != rhs.start_time_ )
-  //  throw runtime_error( "DetectorAnalysisResult start time for LHS ("
+  //  issues.push_back( "DetectorAnalysisResult start time for LHS ("
   //                      + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
   //                    + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   
@@ -2637,7 +2646,7 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult activity of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.activity_, rhs.activity_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   const double dist_diff = fabs(lhs.distance_ - rhs.distance_);
@@ -2646,7 +2655,7 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult distance of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.distance_, rhs.distance_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.dose_rate_ - rhs.dose_rate_) > 0.001 )
@@ -2654,7 +2663,7 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult dose rate of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.dose_rate_, rhs.dose_rate_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.real_time_ - rhs.real_time_) > 0.001 )
@@ -2662,8 +2671,14 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult dose rate of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.real_time_, rhs.real_time_ );
-    throw runtime_error( buffer );
+    issues.push_back(  buffer );
   }
+  
+  string error_msg;
+  for( const string &msg : issues )
+    error_msg += (error_msg.empty() ? "" : "\n") + msg;
+  if( !error_msg.empty() )
+    throw runtime_error( error_msg );
 }//void DetectorAnalysisResult::equal_enough(...)
 
 
@@ -2672,6 +2687,7 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
 {
   char buffer[1024];
   
+  vector<string> issues;
   vector<string> lhsremarks, rhsremarks;
   
   for( string remark : lhs.remarks_ )
@@ -2701,17 +2717,20 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
     snprintf( buffer, sizeof(buffer),
              "Number of Analysis remarks for LHS (%i) doesnt match RHS %i",
              int(lhsremarks.size()), int(rhsremarks.size()) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   for( size_t i = 0; i < rhsremarks.size(); ++i )
   {
-    if( lhsremarks[i] != rhsremarks[i] )
+    const string lhsr = (i < lhsremarks.size()) ? lhsremarks[i] : string();
+    const string rhsr = (i < rhsremarks.size()) ? rhsremarks[i] : string();
+    
+    if( lhsr != rhsr )
     {
       snprintf( buffer, sizeof(buffer),
                "Analysis remark %i for LHS ('%s') doesnt match RHS ('%s')",
-               int(i), lhsremarks[i].c_str(), rhsremarks[i].c_str() );
-      throw runtime_error( buffer );
+               int(i), lhsr.c_str(), rhsr.c_str() );
+      issues.push_back( buffer );
     }
   }//for( size_t i = 0; i < rhsremarks.size(); ++i )
   
@@ -2720,43 +2739,46 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
   
   if( lhsap.size() != rhsap.size() )
   {
-    throw runtime_error( "Number of analysis algorithm versions for LHS ('"
+    issues.push_back( "Number of analysis algorithm versions for LHS ('"
                         + std::to_string(lhsap.size()) + "') doesnt match RHS ('"
                         + std::to_string(rhsap.size()) + "')" );
-  }
-  
-  std::sort( begin(lhsap), end(lhsap) );
-  std::sort( begin(rhsap), end(rhsap) );
-  for( size_t i = 0; i < lhsap.size(); ++i )
+  }else
   {
-    if( lhsap[i].first != rhsap[i].first )
-      throw runtime_error( "Analysis algorithm version compnent name for LHS ('"
-                        + lhsap[i].first + "') doesnt match RHS ('"
-                        + lhsap[i].first + "')" );
-    if( lhsap[i].second != rhsap[i].second )
-      throw runtime_error( "Analysis algorithm version compnent version for LHS ('"
-                          + lhsap[i].second + "') doesnt match RHS ('"
-                          + lhsap[i].second + "')" );
-  }//for( size_t i = 0; i < rhs.lhsap.size(); ++i )
-    
+    std::sort( begin(lhsap), end(lhsap) );
+    std::sort( begin(rhsap), end(rhsap) );
+    for( size_t i = 0; i < lhsap.size(); ++i )
+    {
+      const pair<string,string> &lhsr = lhsap[i];
+      const pair<string,string> &rhssr = rhsap[i];
+      
+      if( lhsr.first != rhssr.first )
+        issues.push_back( "Analysis algorithm version component name for LHS ('"
+                         + lhsr.first + "') doesnt match RHS ('"
+                         + rhssr.first + "')" );
+      if( lhsr.second != rhssr.second )
+        issues.push_back( "Analysis algorithm version component version for LHS ('"
+                         + lhsr.second + "') doesnt match RHS ('"
+                         + rhssr.second + "')" );
+    }//for( size_t i = 0; i < rhs.lhsap.size(); ++i )
+  }//if( lhsap.size() != rhsap.size() ) / else
   
   if( lhs.algorithm_name_ != rhs.algorithm_name_ )
-    throw runtime_error( "Analysis algorithm name for LHS ('"
+    issues.push_back( "Analysis algorithm name for LHS ('"
                         + lhs.algorithm_name_ + "') doesnt match RHS ('"
                         + rhs.algorithm_name_ + "')" );
   
   if( lhs.algorithm_creator_ != rhs.algorithm_creator_ )
-    throw runtime_error( "Analysis algorithm creator for LHS ('"
+    issues.push_back( "Analysis algorithm creator for LHS ('"
                         + lhs.algorithm_creator_ + "') doesnt match RHS ('"
                         + rhs.algorithm_creator_ + "')" );
   
   if( lhs.algorithm_description_ != rhs.algorithm_description_ )
-    throw runtime_error( "Analysis algorithm description for LHS ('"
+    issues.push_back( "Analysis algorithm description for LHS ('"
                         + lhs.algorithm_description_ + "') doesnt match RHS ('"
                         + rhs.algorithm_description_ + "')" );
 
   if( lhs.analysis_start_time_ != rhs.analysis_start_time_ )
-    throw runtime_error( "Analysis start time for LHS ('"
+    issues.push_back( "Analysis start time for LHS ('"
                       + SpecUtils::to_iso_string(lhs.analysis_start_time_)
                       + "') doesnt match RHS ('"
                       + SpecUtils::to_iso_string(rhs.analysis_start_time_)
@@ -2764,23 +2786,22 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
   
   
   if( fabs(lhs.analysis_computation_duration_ - rhs.analysis_computation_duration_) > std::numeric_limits<float>::epsilon() )
-    throw runtime_error( "Analysis duration time for LHS ('"
+    issues.push_back( "Analysis duration time for LHS ('"
       + std::to_string(lhs.analysis_computation_duration_)
       + "') doesnt match RHS ('"
       + std::to_string(rhs.analysis_computation_duration_)
       + "')" );
   
   if( lhs.algorithm_result_description_ != rhs.algorithm_result_description_ )
-    throw runtime_error( "Analysis algorithm result description for LHS ('"
+    issues.push_back( "Analysis algorithm result description for LHS ('"
                         + lhs.algorithm_result_description_ + "') doesnt match RHS ('"
                         + rhs.algorithm_result_description_ + "')" );
-  
   
   
   if( lhs.results_.size() != rhs.results_.size() )
   {
     stringstream msg;
-    msg << "Differnt number of analysis results for LHS ("
+    msg << "Different number of analysis results for LHS ("
     << lhs.results_.size() << ") vs RHS (" << rhs.results_.size() << "):"
     << endl;
     
@@ -2802,18 +2823,35 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
           << ", distance=" << l.distance_ << endl;
     }
     
-    throw runtime_error( msg.str() );
-  }//if( lhs.results_.size() != rhs.results_.size() )
-
-  //Ordering of the results is not garunteed in a round trip, since we use a
-  //  single analysis result type, but N42 2012 defines a few different ones.
-  vector<DetectorAnalysisResult> rhsres = rhs.results_;
-  vector<DetectorAnalysisResult> lhsres = lhs.results_;
-  std::sort( lhsres.begin(), lhsres.end(), &compare_DetectorAnalysisResult );
-  std::sort( rhsres.begin(), rhsres.end(), &compare_DetectorAnalysisResult );
+    issues.push_back( msg.str() );
+  }else
+  {
+    //Ordering of the results is not guaranteed in a round trip, since we use a
+    //  single analysis result type, but N42 2012 defines a few different ones.
+    vector<DetectorAnalysisResult> rhsres = rhs.results_;
+    vector<DetectorAnalysisResult> lhsres = lhs.results_;
+    std::sort( lhsres.begin(), lhsres.end(), &compare_DetectorAnalysisResult );
+    std::sort( rhsres.begin(), rhsres.end(), &compare_DetectorAnalysisResult );
+    
+    for( size_t i = 0; i < rhsres.size(); ++i )
+    {
+      try
+      {
+        DetectorAnalysisResult::equal_enough( lhsres[i], rhsres[i] );
+      }catch( std::exception &e )
+      {
+        issues.push_back( e.what() );
+      }
+    }//for( size_t i = 0; i < rhsres.size(); ++i )
+  }//if( lhs.results_.size() != rhs.results_.size() ) / else
   
-  for( size_t i = 0; i < rhsres.size(); ++i )
-    DetectorAnalysisResult::equal_enough( lhsres[i], rhsres[i] );
+  if( issues.size() )
+  {
+    string msg;
+    for( const string &err : issues )
+      msg += (msg.size() ? "\n" : "") + err;
+    throw runtime_error( msg );
+  }//if( issues.size() )
 }//void DetectorAnalysis::equal_enough(...)
 
 
@@ -2822,14 +2860,16 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 {
   char buffer[1024];
   
+  vector<string> issues;
+  
   //Make sure live time within something reasonable
   const double live_time_diff = fabs( double(lhs.live_time_) - double(rhs.live_time_));
   if( (live_time_diff > (std::max(lhs.live_time_,rhs.live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.live_time_, rhs.live_time_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   //Make sure real time within something reasonable
@@ -2837,73 +2877,73 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( (real_time_diff > (std::max(lhs.real_time_,rhs.real_time_)*1.0E-5)) && (real_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Real time of LHS (%1.8E) doesnt match RHS (%1.8E); diff=%f",
+             "Measurement: Real time of LHS (%1.8E) doesnt match RHS (%1.8E); diff=%f",
              lhs.real_time_, rhs.real_time_, real_time_diff );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.contained_neutron_ != rhs.contained_neutron_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "LHS %s contain neutrons while RHS %s",
+             "Measurement: LHS %s contain neutrons while RHS %s",
              (lhs.contained_neutron_?"did":"did not"),
              (rhs.contained_neutron_?"did":"did not") );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( lhs.sample_number_ != rhs.sample_number_ )
-    throw runtime_error( "LHS sample number some how didnt equal RHS sample number" );
+    issues.push_back( "Measurement: LHS sample number some how didnt equal RHS sample number" );
   
   if( lhs.occupied_ != rhs.occupied_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "Ocupied of LHS (%i) differend form RHS (%i)",
+             "Measurement: Occupied of LHS (%i) different form RHS (%i)",
              int(lhs.occupied_), int(rhs.occupied_) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.gamma_count_sum_ - rhs.gamma_count_sum_) > (0.00001*std::max(fabs(lhs.gamma_count_sum_),fabs(rhs.gamma_count_sum_))) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Gamma count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Gamma count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_count_sum_, rhs.gamma_count_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > (0.00001*std::max(fabs(lhs.neutron_counts_sum_),fabs(rhs.neutron_counts_sum_))) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Neutron count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Neutron count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.neutron_counts_sum_, rhs.neutron_counts_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( fabs(lhs.speed_ - rhs.speed_) > 0.01 )
   {
     snprintf( buffer, sizeof(buffer),
-             "Speed of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Speed of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.speed_, rhs.speed_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if (fabs(lhs.dx_ - rhs.dx_) > 0.01)
   {
-      snprintf(buffer, sizeof(buffer),
-          "dx of LHS (%1.8E) doesnt match RHS (%1.8E)",
-          lhs.dx_, rhs.dx_);
-      throw runtime_error(buffer);
+    snprintf( buffer, sizeof(buffer),
+              "Measurement: dx of LHS (%1.8E) doesnt match RHS (%1.8E)",
+              lhs.dx_, rhs.dx_);
+    issues.push_back( buffer);
   }
 
   if (fabs(lhs.dy_ - rhs.dy_) > 0.01)
   {
-      snprintf(buffer, sizeof(buffer),
-          "dy of LHS (%1.8E) doesnt match RHS (%1.8E)",
-          lhs.dy_, rhs.dy_);
-      throw runtime_error(buffer);
+    snprintf( buffer, sizeof(buffer),
+              "Measurement: dy of LHS (%1.8E) doesnt match RHS (%1.8E)",
+              lhs.dy_, rhs.dy_);
+    issues.push_back( buffer );
   }
 
   if( lhs.detector_name_ != rhs.detector_name_ )
-    throw runtime_error( "Detector name for LHS ('" + lhs.detector_name_
+    issues.push_back( "Measurement: Detector name for LHS ('" + lhs.detector_name_
                         + "') doesnt match RHS ('" + rhs.detector_name_ + "')" );
 
   /*
@@ -2912,7 +2952,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     snprintf( buffer, sizeof(buffer),
              "Detector number of LHS (%i) doesnt match RHS (%i)",
              lhs.detector_number_, rhs.detector_number_ );
-    throw runtime_error( buffer );
+   issues.push_back( buffer );
   }
    */
 
@@ -2926,27 +2966,27 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     //static std::atomic<int> ntimesprint(0);
     //if( ntimesprint++ < 10 )
     //{
-      const string msg = "Detector description for LHS ('" + lhs.detector_description_
+      const string msg = "Measurement: Detector description for LHS ('" + lhs.detector_description_
                       + "') doesnt match RHS ('" + rhs.detector_description_ + "')";
     //  cerr << "Warning check for detector description falure not being enforced: " << msg << endl;
     //}
-    throw runtime_error( msg );
+    issues.push_back( msg );
   }
 
   if( lhs.quality_status_ != rhs.quality_status_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "Quality status of LHS (%i) different from RHS (%i)",
+             "Measurement: Quality status of LHS (%i) different from RHS (%i)",
              int(lhs.quality_status_), int(rhs.quality_status_) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.source_type_ != rhs.source_type_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "Source type of LHS (%i) different from RHS (%i)",
+             "Measurement: Source type of LHS (%i) different from RHS (%i)",
              int(lhs.source_type_), int(rhs.source_type_) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   assert( lhs.energy_calibration_ );
@@ -2962,7 +3002,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( nlhsremarks.size() != nrhsremarks.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "Number of remarks in LHS (%i) doesnt match RHS (%i) for sample %i, det '%s'",
+             "Measurement: Number of remarks in LHS (%i) doesnt match RHS (%i) for sample %i, det '%s'",
              int(nlhsremarks.size()), int(nrhsremarks.size()),
              lhs.sample_number_, lhs.detector_name_.c_str() );
 
@@ -2975,12 +3015,40 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
       cerr << "\tRHS: '" << nrhsremarks[i] << "'" << endl;
     
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #else
     cerr << endl;
 #endif
   }//if( nlhsremarks.size() != nrhsremarks.size() )
+    
   
+  for( const string &rhsr : nrhsremarks )
+  {
+    if( find( begin(nlhsremarks), end(nlhsremarks), rhsr ) == end(nlhsremarks) )
+    {
+      const string msg = "Measurement: Remark in RHS, but not LHS: " + rhsr;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }//if( find( begin(nlhsremarks), end(nlhsremarks), rhsr ) == end(nlhsremarks) )
+  }//for( const string &rhsr : nrhsremarks )
+  
+  for( const string &lhsr : nlhsremarks )
+  {
+    if( find( begin(nrhsremarks), end(nrhsremarks), lhsr ) == end(nrhsremarks) )
+    {
+      const string msg = "Measurement: Remark in LHS, but not RHS: " + lhsr;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }
+  }//for( const string &lhsr : nlhsremarks )
+  
+  /*
   for( size_t i = 0; i < std::max(nlhsremarks.size(),nrhsremarks.size()); ++i )
   {
     const string lhsr = (i < nlhsremarks.size()) ? nlhsremarks[i] : string();
@@ -2992,13 +3060,13 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
                "Remark %i in LHS ('%s') doesnt match RHS ('%s')",
                int(i), lhsr.c_str(), rhsr.c_str() );
 #if( REQUIRE_REMARKS_COMPARE )
-      throw runtime_error( buffer );
+      issues.push_back( buffer );
 #else
       cerr << buffer << endl;
 #endif
-    }
+    }//if( lhsr != rhsr )
   }//for( size_t i = 0; i < nlhsremarks.size(); ++i )
-
+  */
   
   const set<string> lhsparsewarns( lhs.parse_warnings_.begin(), lhs.parse_warnings_.end() );
   const set<string> rhsparsewarns( rhs.parse_warnings_.begin(), rhs.parse_warnings_.end() );
@@ -3009,7 +3077,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( lhsparsewarn.size() != rhsparsewarn.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "Number of parse warnings in LHS (%i) doesnt match RHS (%i)",
+             "Measurement: Number of parse warnings in LHS (%i) doesnt match RHS (%i)",
              int(lhsparsewarn.size()), int(rhsparsewarn.size()) );
     
 #if( !REQUIRE_REMARKS_COMPARE )
@@ -3019,14 +3087,43 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
       cerr << "\tLHS: '" << lhsparsewarn[i] << "'" << endl;
     for( size_t i = 0; i < rhsparsewarn.size(); ++i )
       cerr << "\tRHS: '" << rhsparsewarn[i] << "'" << endl;
+    
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #else
     cerr << buffer << endl;
 #endif
   }//if( lhsparsewarn.size() != rhsparsewarn.size() )
   
   
+  for( const string &warn : lhsparsewarn )
+  {
+    if( !rhsparsewarns.count(warn) )
+    {
+      const string msg = "Measurement: Parse warning in LHS, but not RHS: " + warn;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }//if( !rhsparsewarns.count(warn) )
+  }//for( const string &warn : lhsparsewarn )
+  
+  
+  for( const string &warn : rhsparsewarn )
+  {
+    if( !lhsparsewarns.count(warn) )
+    {
+      const string msg = "Measurement: Parse warning in RHS, but not LHS: " + warn;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }//if( !lhsparsewarns.count(warn) )
+  }//for( const string &warn : rhsparsewarn )
+  
+  /*
   for( size_t i = 0; i < std::max(lhsparsewarn.size(),rhsparsewarn.size()); ++i )
   {
     const string lhsr = (i < lhsparsewarn.size()) ? lhsparsewarn[i] : string();
@@ -3044,6 +3141,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 #endif
     }
   }//for( size_t i = 0; i < nlhsremarks.size(); ++i )
+  */
   
   
   if( lhs.start_time_ != rhs.start_time_ )
@@ -3054,7 +3152,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 	if( tdiff < time_point_t::duration::zero() )
 		tdiff = -tdiff;
 	if( tdiff >  std::chrono::seconds(1) )
-      throw runtime_error( "Start time for LHS ("
+    issues.push_back( "Measurement: Start time for LHS ("
                         + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
                         + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   }
@@ -3062,11 +3160,11 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   
   if( (!lhs.gamma_counts_) != (!rhs.gamma_counts_) )
   {
-    snprintf( buffer, sizeof(buffer), "Gamma counts avaialblity for LHS (%s)"
+    snprintf( buffer, sizeof(buffer), "Measurement: Gamma counts availability for LHS (%s)"
              " doesnt match RHS (%s)",
              (!lhs.gamma_counts_?"missing":"available"),
              (!rhs.gamma_counts_?"missing":"available") );
-    throw runtime_error(buffer);
+    issues.push_back( buffer );
   }
   
   if( !!lhs.gamma_counts_ )
@@ -3074,91 +3172,102 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     if( lhs.gamma_counts_->size() != rhs.gamma_counts_->size() )
     {
       snprintf( buffer, sizeof(buffer),
-               "Number of gamma channels of LHS (%i) doesnt match RHS (%i)",
+               "Measurement: Number of gamma channels of LHS (%i) doesnt match RHS (%i)",
                int(lhs.gamma_counts_->size()),
                int(rhs.gamma_counts_->size()) );
-      throw runtime_error( buffer );
-    }
-    
-    for( size_t i = 0; i < lhs.gamma_counts_->size(); ++i )
+      issues.push_back( buffer );
+    }else
     {
-      const float a = lhs.gamma_counts_->at(i);
-      const float b = rhs.gamma_counts_->at(i);
-      if( fabs(a-b) > 1.0E-6*std::max( fabs(a), fabs(b) ) )
+      size_t num_channel_warnings = 0;
+      for( size_t i = 0; i < lhs.gamma_counts_->size(); ++i )
       {
-        cerr << "LHS:";
-        for( size_t j = (i>4) ? i-4: 0; j < lhs.gamma_counts_->size() && j < (i+5); ++j )
+        const float a = lhs.gamma_counts_->at(i);
+        const float b = rhs.gamma_counts_->at(i);
+        if( fabs(a-b) > 1.0E-6*std::max( fabs(a), fabs(b) ) )
         {
-          if( i==j ) cerr << "__";
-          cerr << lhs.gamma_counts_->at(j);
-          if( i==j ) cerr << "__, ";
-          else cerr << ", ";
-        }
-        cerr << endl;
-
-        cerr << "RHS:";
-        for( size_t j = (i>4) ? i-4: 0; j < rhs.gamma_counts_->size() && j < (i+5); ++j )
-        {
-          if( i==j ) cerr << "__";
-          cerr << rhs.gamma_counts_->at(j);
-          if( i==j ) cerr << "__, ";
-          else cerr << ", ";
-        }
-        cerr << endl;
-        
-        snprintf( buffer, sizeof(buffer),
-                 "Counts in gamma channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-                 int(i), lhs.gamma_counts_->at(i),
-                 rhs.gamma_counts_->at(i) );
-        throw runtime_error( buffer );
-      }
-    }
+          cerr << "LHS:";
+          for( size_t j = (i>4) ? i-4: 0; j < lhs.gamma_counts_->size() && j < (i+5); ++j )
+          {
+            if( i==j ) cerr << "__";
+            cerr << lhs.gamma_counts_->at(j);
+            if( i==j ) cerr << "__, ";
+            else cerr << ", ";
+          }
+          cerr << endl;
+          
+          cerr << "RHS:";
+          for( size_t j = (i>4) ? i-4: 0; j < rhs.gamma_counts_->size() && j < (i+5); ++j )
+          {
+            if( i==j ) cerr << "__";
+            cerr << rhs.gamma_counts_->at(j);
+            if( i==j ) cerr << "__, ";
+            else cerr << ", ";
+          }
+          cerr << endl;
+          
+          num_channel_warnings += 1;
+          if( num_channel_warnings == 5 )
+          {
+            issues.push_back( "Measurement: There are additional channel that doent match, but error messages will be suppressed." );
+            break;
+          }else if( num_channel_warnings < 5 )
+          {
+            snprintf( buffer, sizeof(buffer),
+                     "Measurement: Counts in gamma channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
+                     int(i), lhs.gamma_counts_->at(i),
+                     rhs.gamma_counts_->at(i) );
+            issues.push_back( buffer );
+          }
+        }//if( fabs(a-b) > 1.0E-6*std::max( fabs(a), fabs(b) ) )
+      }//for( size_t i = 0; i < lhs.gamma_counts_->size(); ++i )
+    }//if( lhs.gamma_counts_->size() != rhs.gamma_counts_->size() ) / else
   }//if( !!channel_energies_ )
   
   if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "Number of neutron channels of LHS (%i) doesnt match RHS (%i)",
+             "Measurement: Number of neutron channels of LHS (%i) doesnt match RHS (%i)",
              int(lhs.neutron_counts_.size()),
              int(rhs.neutron_counts_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
+    issues.push_back( buffer );
+  }else
   {
-    if( fabs(lhs.neutron_counts_[i] - rhs.neutron_counts_[i] ) > (0.0001*std::max(fabs(lhs.neutron_counts_[i]),fabs(rhs.neutron_counts_[i]))) )
+    for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
     {
-      snprintf( buffer, sizeof(buffer),
-               "Counts in neutron channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-               int(i), lhs.neutron_counts_[i],
-               rhs.neutron_counts_[i] );
-      throw runtime_error( buffer );
-    }
-  }
+      if( fabs(lhs.neutron_counts_[i] - rhs.neutron_counts_[i] ) > (0.0001*std::max(fabs(lhs.neutron_counts_[i]),fabs(rhs.neutron_counts_[i]))) )
+      {
+        snprintf( buffer, sizeof(buffer),
+                 "Measurement: Counts in neutron channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
+                 int(i), lhs.neutron_counts_[i],
+                 rhs.neutron_counts_[i] );
+        issues.push_back( buffer );
+      }
+    }//for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
+  }//if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() ) / else
   
   if( fabs(lhs.latitude_ - rhs.latitude_) > 0.00001 )
   {
     snprintf( buffer, sizeof(buffer),
-             "Latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.latitude_, rhs.latitude_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.longitude_ - rhs.longitude_) > 0.00001 )
   {
     snprintf( buffer, sizeof(buffer),
-             "Longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.longitude_, rhs.longitude_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( lhs.position_time_ != rhs.position_time_ )
-    throw runtime_error( "Position time for LHS ("
+    issues.push_back( "Measurement: Position time for LHS ("
                         + SpecUtils::to_iso_string(lhs.position_time_) + ") doesnt match RHS ("
                         + SpecUtils::to_iso_string(rhs.position_time_) + ")" );
 
   if( lhs.title_ != rhs.title_ )
-    throw runtime_error( "Title for LHS ('" + lhs.title_
+    issues.push_back( "Measurement: Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
   
   uint32_t lhs_deriv_props = lhs.derived_data_properties_;
@@ -3198,22 +3307,45 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
       return answer;
     };//enum class DerivedDataProperties
     
-    throw runtime_error( "Derived data flags for LHS ('"
+    issues.push_back( "Measurement: Derived data flags for LHS ('"
                         + list_of_deriv_props(lhs.derived_data_properties_)
                         + "') doesnt match RHS ('"
                         + list_of_deriv_props(rhs.derived_data_properties_) + "')" );
   }//if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
+  
+  const float max_dose_rate = std::max( lhs.dose_rate_, rhs.dose_rate_ );
+  if( ((lhs.dose_rate_ >= 0) != (rhs.dose_rate_ >= 0))
+     || ((lhs.dose_rate_ >= 0)
+        && (fabs(lhs.dose_rate_ - rhs.dose_rate_ ) > (0.000001*max_dose_rate)) ) )
+  {
+    issues.push_back( "Measurement: The dose rate of LHS is " + std::to_string(lhs.dose_rate_)
+                        + " while RHS is " + std::to_string(rhs.dose_rate_) );
+  }
+  
+  if( ((lhs.exposure_rate_ >= 0) != (rhs.exposure_rate_ >= 0))
+     || ((lhs.exposure_rate_ >= 0) && (fabs(lhs.exposure_rate_ - rhs.exposure_rate_) > 0.00001)))
+  {
+    issues.push_back( "Measurement: The exposure rate of LHS is " + std::to_string(lhs.exposure_rate_)
+                     + " while RHS is " + std::to_string(rhs.exposure_rate_) );
+  }
+  
+  string error_msg;
+  for( const string &m : issues )
+    error_msg += (error_msg.empty() ? "" : "\n") + m;
+  
+  if( !error_msg.empty() )
+    throw runtime_error( error_msg );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
-void SpecFile::equal_enough( const SpecFile &lhs,
-                                   const SpecFile &rhs )
+void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
 {
   std::lock( lhs.mutex_, rhs.mutex_ );
   std::unique_lock<std::recursive_mutex> lhs_lock( lhs.mutex_, std::adopt_lock_t() );
   std::unique_lock<std::recursive_mutex> rhs_lock( rhs.mutex_, std::adopt_lock_t() );
 
   char buffer[8*1024];
+  vector<string> issues;
   
   const double live_time_diff = fabs( double(lhs.gamma_live_time_) - double(rhs.gamma_live_time_));
   if( (live_time_diff > (std::max(lhs.gamma_live_time_,rhs.gamma_live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
@@ -3221,7 +3353,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
               "SpecFile: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_live_time_, rhs.gamma_live_time_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   
@@ -3231,7 +3363,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Real time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_real_time_, rhs.gamma_real_time_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   const double gamma_sum_diff = fabs(lhs.gamma_count_sum_ - rhs.gamma_count_sum_);
@@ -3241,7 +3373,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Gamma sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_count_sum_, rhs.gamma_count_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > 0.01 )
@@ -3249,11 +3381,11 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Neutron sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.neutron_counts_sum_, rhs.neutron_counts_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.filename_ != rhs.filename_ )
-    throw runtime_error( "SpecFile: Filename of LHS (" + lhs.filename_
+    issues.push_back( "SpecFile: Filename of LHS (" + lhs.filename_
                          + ") doenst match RHS (" + rhs.filename_ + ")" );
   
   if( lhs.detector_names_.size() != rhs.detector_names_.size() )
@@ -3267,29 +3399,32 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       message += (i ? ", '" : "'") + rhs.detector_names_[i] + "'";
     message += ")";
     
-    throw runtime_error( message );
-  }
-  
-  const set<string> lhsnames( lhs.detector_names_.begin(),
-                              lhs.detector_names_.end() );
-  const set<string> rhsnames( rhs.detector_names_.begin(),
-                              rhs.detector_names_.end() );
-  
-  if( lhsnames != rhsnames )
+    issues.push_back( message );
+  }else
   {
-    string lhsnamesstr, rhsnamesstr;
-    for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
-      lhsnamesstr += (i ? ", " : "") + lhs.detector_names_[i];
-    for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
-      rhsnamesstr += (i ? ", " : "") + rhs.detector_names_[i];
     
-    throw runtime_error( "SpecFile: Detector names do not match for LHS ({"
-                         + lhsnamesstr + "}) and RHS ({" + rhsnamesstr + "})" );
-  }
+    const set<string> lhsnames( lhs.detector_names_.begin(),
+                               lhs.detector_names_.end() );
+    const set<string> rhsnames( rhs.detector_names_.begin(),
+                               rhs.detector_names_.end() );
+    
+    if( lhsnames != rhsnames )
+    {
+      string lhsnamesstr, rhsnamesstr;
+      for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+        lhsnamesstr += (i ? ", " : "") + lhs.detector_names_[i];
+      for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
+        rhsnamesstr += (i ? ", " : "") + rhs.detector_names_[i];
+      
+      issues.push_back( "SpecFile: Detector names do not match for LHS ({"
+                          + lhsnamesstr + "}) and RHS ({" + rhsnamesstr + "})" );
+    }
+  }//if( lhs.detector_names_.size() != rhs.detector_names_.size() ) / else
  
+  
   if( lhs.detector_numbers_.size() != rhs.detector_numbers_.size()
       || lhs.detector_numbers_.size() != lhs.detector_names_.size() )
-    throw runtime_error( "SpecFile: Inproper number of detector numbers - wtf" );
+    issues.push_back( "SpecFile: Improper number of detector numbers - wtf" );
   
   //Ehh, I guess since detector numbers are an internal only thing (and we
   //  should get rid of them anyway), lets not test this anymore.
@@ -3323,14 +3458,16 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              "SpecFile: Number of gamma detector names of LHS (%i) doesnt match RHS (%i)",
              int(lhs.gamma_detector_names_.size()),
              int(rhs.gamma_detector_names_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  const set<string> glhsnames( begin(lhs.gamma_detector_names_), end(lhs.gamma_detector_names_) );
-  const set<string> grhsnames( begin(rhs.gamma_detector_names_), end(rhs.gamma_detector_names_) );
-  
-  if( glhsnames != grhsnames )
-    throw runtime_error( "SpecFile: Gamma detector names dont match for LHS and RHS" );
+    issues.push_back( buffer );
+  }else
+  {
+    
+    const set<string> glhsnames( begin(lhs.gamma_detector_names_), end(lhs.gamma_detector_names_) );
+    const set<string> grhsnames( begin(rhs.gamma_detector_names_), end(rhs.gamma_detector_names_) );
+    
+    if( glhsnames != grhsnames )
+      issues.push_back( "SpecFile: Gamma detector names dont match for LHS and RHS" );
+  }//if( lhs.gamma_detector_names_.size() != rhs.gamma_detector_names_.size() ) / else
   
   
   if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() )
@@ -3339,34 +3476,35 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              "SpecFile: Number of neutron detector names of LHS (%i) doesnt match RHS (%i)",
              int(lhs.neutron_detector_names_.size()),
              int(rhs.neutron_detector_names_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  const set<string> nlhsnames( begin(lhs.neutron_detector_names_),
-                               end(lhs.neutron_detector_names_) );
-  const set<string> nrhsnames( begin(rhs.neutron_detector_names_),
-                               end(rhs.neutron_detector_names_) );
-  
-  if( nlhsnames != nrhsnames )
-    throw runtime_error( "SpecFile: Neutron detector names dont match for LHS and RHS" );
-
+    issues.push_back( buffer );
+  }else
+  {
+    
+    const set<string> nlhsnames( begin(lhs.neutron_detector_names_),
+                                end(lhs.neutron_detector_names_) );
+    const set<string> nrhsnames( begin(rhs.neutron_detector_names_),
+                                end(rhs.neutron_detector_names_) );
+    
+    if( nlhsnames != nrhsnames )
+      issues.push_back( "SpecFile: Neutron detector names dont match for LHS and RHS" );
+  }//if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() ) / else
   
   if( lhs.lane_number_ != rhs.lane_number_ )
   {
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Lane number of LHS (%i) doesnt match RHS (%i)",
              lhs.lane_number_, rhs.lane_number_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.measurement_location_name_ != rhs.measurement_location_name_ )
-    throw runtime_error( "SpecFile: Measurement location name of LHS ('"
+    issues.push_back( "SpecFile: Measurement location name of LHS ('"
                          + lhs.measurement_location_name_
                          + "') doesnt match RHS ('"
                          + rhs.measurement_location_name_ + "')" );
   
   if( lhs.inspection_ != rhs.inspection_ )
-    throw runtime_error( "SpecFile: Inspection of LHS ('" + lhs.inspection_
+    issues.push_back( "SpecFile: Inspection of LHS ('" + lhs.inspection_
                         + "') doesnt match RHS ('" + rhs.inspection_ + "')" );
 
   string leftoperator = lhs.measurement_operator_;
@@ -3379,7 +3517,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   trim( rightoperator );
   
   if( leftoperator != rightoperator )
-    throw runtime_error( "SpecFile: Measurement operator of LHS ('"
+    issues.push_back( "SpecFile: Measurement operator of LHS ('"
                          + lhs.measurement_operator_ + "') doesnt match RHS ('"
                          + rhs.measurement_operator_ + ")" );
 
@@ -3419,19 +3557,20 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Number of sample numbers in LHS (%i) doesnt match RHS (%i)",
              int(lhs.sample_numbers_.size()), int(rhs.sample_numbers_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  if( lhs.sample_numbers_ != rhs.sample_numbers_ )
+    issues.push_back( buffer );
+  }else
   {
-    stringstream lhssamples, rhssamples;
-    for( auto sample : lhs.sample_numbers_ )
-      lhssamples << (sample==(*lhs.sample_numbers_.begin()) ? "":",") << sample;
-    for( auto sample : rhs.sample_numbers_ )
-      rhssamples << (sample== (*rhs.sample_numbers_.begin()) ? "":",") << sample;
-    throw runtime_error( "SpecFile: Sample numbers of RHS (" + rhssamples.str()
-                         + ") and LHS (" + lhssamples.str() + ") doent match" );
-  }
+    if( lhs.sample_numbers_ != rhs.sample_numbers_ )
+    {
+      stringstream lhssamples, rhssamples;
+      for( auto sample : lhs.sample_numbers_ )
+        lhssamples << (sample==(*lhs.sample_numbers_.begin()) ? "":",") << sample;
+      for( auto sample : rhs.sample_numbers_ )
+        rhssamples << (sample== (*rhs.sample_numbers_.begin()) ? "":",") << sample;
+      issues.push_back( "SpecFile: Sample numbers of RHS (" + rhssamples.str()
+                          + ") and LHS (" + lhssamples.str() + ") doesnt match" );
+    }
+  }//if( lhs.sample_numbers_.size() != rhs.sample_numbers_.size() )
   
   if( lhs.detector_type_ != rhs.detector_type_ )
   {
@@ -3439,27 +3578,27 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              "SpecFile: LHS detector type (%i - %s) doesnt match RHS (%i - %s)",
              int(lhs.detector_type_), detectorTypeToString(lhs.detector_type_).c_str(),
              int(rhs.detector_type_), detectorTypeToString(rhs.detector_type_).c_str() );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   string lhsinst = convert_n42_instrument_type_from_2006_to_2012( lhs.instrument_type_ );
   string rhsinst = convert_n42_instrument_type_from_2006_to_2012( rhs.instrument_type_ );
   if( lhsinst != rhsinst )
   {
-    throw runtime_error( "SpecFile: Instrument type of LHS ('" + lhs.instrument_type_
+    issues.push_back( "SpecFile: Instrument type of LHS ('" + lhs.instrument_type_
                     + "') doesnt match RHS ('" + rhs.instrument_type_ + "')" );
   }
   
   if( lhs.manufacturer_ != rhs.manufacturer_ )
-    throw runtime_error( "SpecFile: Manufacturer of LHS ('" + lhs.manufacturer_
+    issues.push_back( "SpecFile: Manufacturer of LHS ('" + lhs.manufacturer_
                         + "') doesnt match RHS ('" + rhs.manufacturer_ + "')" );
   
   if( lhs.instrument_model_ != rhs.instrument_model_ )
-    throw runtime_error( "SpecFile: Instrument model of LHS ('" + lhs.instrument_model_
+    issues.push_back( "SpecFile: Instrument model of LHS ('" + lhs.instrument_model_
                     + "') doesnt match RHS ('" + rhs.instrument_model_ + "')" );
   
   if( lhs.instrument_id_ != rhs.instrument_id_ )
-    throw runtime_error( "SpecFile: Instrument ID model of LHS ('" + lhs.instrument_id_
+    issues.push_back( "SpecFile: Instrument ID model of LHS ('" + lhs.instrument_id_
                        + "') doesnt match RHS ('" + rhs.instrument_id_ + "')" );
   
   
@@ -3468,7 +3607,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Mean latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.mean_latitude_, rhs.mean_latitude_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( fabs(lhs.mean_longitude_ - rhs.mean_longitude_) > 0.000001 )
@@ -3476,7 +3615,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Mean longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.mean_longitude_, rhs.mean_longitude_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( lhs.properties_flags_ != rhs.properties_flags_ )
@@ -3503,7 +3642,8 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              static_cast<unsigned int>(lhs.properties_flags_),
              static_cast<unsigned int>(rhs.properties_flags_),
              failingBits.c_str() );
-    throw runtime_error( buffer );
+    
+    issues.push_back( buffer );
   }
   
   for( const int sample : lhs.sample_numbers_ )
@@ -3515,14 +3655,14 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       
       if( (!lhsptr) != (!rhsptr) )
       {
-        snprintf( buffer, sizeof(buffer), "SpecFile: Measurement avaialblity for LHS (%s)"
+        snprintf( buffer, sizeof(buffer), "SpecFile: Measurement availability for LHS (%s)"
                  " doesnt match RHS (%s) for sample %i and detector name %s",
               (!lhsptr?"missing":"available"), (!rhsptr?"missing":"available"),
               sample, detname.c_str() );
-        throw runtime_error(buffer);
+        issues.push_back( buffer );
       }
       
-      if( !lhsptr )
+      if( !lhsptr || !rhsptr )
         continue;
       
       try
@@ -3530,9 +3670,11 @@ void SpecFile::equal_enough( const SpecFile &lhs,
         Measurement::equal_enough( *lhsptr, *rhsptr );
       }catch( std::exception &e )
       {
-        snprintf( buffer, sizeof(buffer), "SpecFile: Sample %i, Detector name %s: %s",
-                  sample, detname.c_str(), e.what() );
-        throw runtime_error( buffer );
+        vector<string> error_msgs;
+        split( error_msgs, e.what(), "\n" );
+        const string msg_prefix = "SpecFile: Sample " + to_string(sample) + ", Detector name " + detname + ": ";
+        for( const string &msg : error_msgs )
+          issues.push_back( msg_prefix + msg );
       }
     }//for( const int detnum : lhs.detector_numbers_ )
   }//for( const int sample : lhs.sample_numbers_ )
@@ -3543,7 +3685,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              " doesnt match RHS (%s)",
              (!lhs.detectors_analysis_?"missing":"available"),
              (!rhs.detectors_analysis_?"missing":"available") );
-    throw runtime_error(buffer);
+    issues.push_back( buffer );
   }
   
   vector<string> nlhsremarkss, nrhsremarkss;
@@ -3552,8 +3694,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     while( r.find("  ") != string::npos )
       ireplace_all( r, "  ", " " );
     
-    if( !starts_with(r,"N42 file created by")
-        && !starts_with(r,"N42 file created by") )
+    if( !starts_with(r,"N42 file created by") )
       nlhsremarkss.push_back( r );
   }
   
@@ -3566,9 +3707,33 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       nrhsremarkss.push_back( r );
   }
   
-  stable_sort( nlhsremarkss.begin(), nlhsremarkss.end() );
-  stable_sort( nrhsremarkss.begin(), nrhsremarkss.end() );
   
+  for( const string &rem : nrhsremarkss )
+  {
+    if( find(begin(nlhsremarkss), end(nlhsremarkss), rem) == end(nlhsremarkss) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: RHS contains remark LHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: RHS contains remark LHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nlhsremarkss )
+  }//for( const string &rem : nrhsremarkss )
+  
+  for( const string &rem : nlhsremarkss )
+  {
+    if( find(begin(nrhsremarkss), end(nrhsremarkss), rem) == end(nrhsremarkss) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: LHS contains remark RHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: LHS contains remark RHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nrhsremarkss )
+  }//for( const string &rem : nlhsremarkss )
+  
+  
+  /*
   if( nlhsremarkss.size() != nrhsremarkss.size() )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3581,29 +3746,36 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     cout << "\tRHS: " << a << endl;
   
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #endif
-  }
-  
-  for( size_t i = 0; i < std::max(nlhsremarkss.size(),nrhsremarkss.size()); ++i )
+  }else
   {
-    string lhsremark = i < nlhsremarkss.size() ? nlhsremarkss[i] : string();
-    string rhsremark = i < nrhsremarkss.size() ? nrhsremarkss[i] : string();
-    SpecUtils::trim( lhsremark );
-    SpecUtils::trim( rhsremark );
+    stable_sort( nlhsremarkss.begin(), nlhsremarkss.end() );
+    stable_sort( nrhsremarkss.begin(), nrhsremarkss.end() );
     
-    if( lhsremark != rhsremark )
+    const set<string> lhsrems( begin(nlhsremarkss), end(nlhsremarkss) );
+    const set<string> rhsrems( begin(nrhsremarkss), end(nrhsremarkss) );
+    
+    for( size_t i = 0; i < std::max(nlhsremarkss.size(),nrhsremarkss.size()); ++i )
     {
-      snprintf( buffer, sizeof(buffer),
-               "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
-               int(i), lhsremark.c_str(), rhsremark.c_str() );
+      string lhsremark = i < nlhsremarkss.size() ? nlhsremarkss[i] : string();
+      string rhsremark = i < nrhsremarkss.size() ? nrhsremarkss[i] : string();
+      SpecUtils::trim( lhsremark );
+      SpecUtils::trim( rhsremark );
+      
+      if( lhsremark != rhsremark )
+      {
+        snprintf( buffer, sizeof(buffer),
+                 "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
+                 int(i), lhsremark.c_str(), rhsremark.c_str() );
 #if( REQUIRE_REMARKS_COMPARE )
-      throw runtime_error( buffer );
+        throw runtime_error( buffer );
 #endif
+      }
     }
-  }
-
-  
+     
+  }//if( nlhsremarkss.size() != nrhsremarkss.size() )
+   */
   
   
   vector<string> nlhs_parse_warnings, nrhs_parse_warnings;
@@ -3621,6 +3793,32 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     nrhs_parse_warnings.push_back( r );
   }
   
+  for( const string &rem : nrhs_parse_warnings )
+  {
+    if( find(begin(nlhs_parse_warnings), end(nlhs_parse_warnings), rem) == end(nlhs_parse_warnings) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: RHS contains parse warning LHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: RHS contains parse warning LHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nlhs_parse_warnings )
+  }//for( const string &rem : nrhs_parse_warnings )
+  
+  for( const string &rem : nlhs_parse_warnings )
+  {
+    if( find(begin(nrhs_parse_warnings), end(nrhs_parse_warnings), rem) == end(nrhs_parse_warnings) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: LHS contains parse warning RHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: LHS contains parse warning RHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nrhs_parse_warnings )
+  }//for( const string &rem : nlhs_parse_warnings )
+  
+  
+  /*
   stable_sort( nlhs_parse_warnings.begin(), nlhs_parse_warnings.end() );
   stable_sort( nrhs_parse_warnings.begin(), nrhs_parse_warnings.end() );
   
@@ -3635,7 +3833,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     for( string a : nrhs_parse_warnings )
       cout << "\tRHS: " << a << endl;
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #endif
   }
   
@@ -3656,7 +3854,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
 #endif
     }
   }//for( size_t i = 0; i < std::max(nlhs_parse_warnings.size(),nrhs_parse_warnings.size()); ++i )
-  
+  */
   
   
   vector<pair<string,string> > lhscompvsn, rhscompvsn;
@@ -3665,20 +3863,41 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   for( size_t i = 0; i < lhs.component_versions_.size(); ++i )
   {
     const string &n = lhs.component_versions_[i].first;
+    const string &v = lhs.component_versions_[i].second;
     if( n != "InterSpec" && n!= "InterSpecN42Serialization" && n != "Software"
         && !SpecUtils::istarts_with(n, "Original Software") )
-      lhscompvsn.push_back( lhs.component_versions_[i] );
+      lhscompvsn.push_back( {trim_copy(n), trim_copy(v)} );
   }
   
   for( size_t i = 0; i < rhs.component_versions_.size(); ++i )
   {
     const string &n = rhs.component_versions_[i].first;
+    const string &v = rhs.component_versions_[i].second;
     if( n != "InterSpec" && n!= "InterSpecN42Serialization" && n != "Software"
         && !SpecUtils::istarts_with(n, "Original Software") )
-      rhscompvsn.push_back( rhs.component_versions_[i] );
+      rhscompvsn.push_back( {trim_copy(n), trim_copy(v)} );
   }
   
+  for( const pair<string,string> &rhs : rhscompvsn )
+  {
+    if( find(begin(lhscompvsn), end(lhscompvsn), rhs) == end(lhscompvsn) )
+    {
+      issues.push_back( "SpecFile: RHS contains component LHS doesnt: {'"
+                       + rhs.first + "', '" + rhs.second + "'}" );
+    }
+  }//for( const pair<string,string> &rhs : rhscompvsn )
   
+  
+  for( const pair<string,string> &lhs : lhscompvsn )
+  {
+    if( find(begin(rhscompvsn), end(rhscompvsn), lhs) == end(rhscompvsn) )
+    {
+      issues.push_back( "SpecFile: LHS contains component RHS doesnt: {'"
+                       + lhs.first + "', '" + lhs.second + "'}" );
+    }
+  }//for( const pair<string,string> &lhs : lhscompvsn )
+  
+  /*
   if( lhscompvsn.size() != rhscompvsn.size() )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3721,26 +3940,41 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       throw runtime_error( buffer );
     }
   }//for( size_t i = 0; i < lhscompvsn.size(); ++i )
-  
+  */
   
   //Make UUID last, since its sensitive to the other variables changing, and we
   //  want to report on those first to make fixing easier.
-  if( !!lhs.detectors_analysis_ )
-    DetectorAnalysis::equal_enough( *lhs.detectors_analysis_,
-                                  *rhs.detectors_analysis_ );
+  if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
+  {
+    try
+    {
+      DetectorAnalysis::equal_enough( *lhs.detectors_analysis_,
+                                     *rhs.detectors_analysis_ );
+    }catch( std::exception &e )
+    {
+      issues.push_back( e.what() );
+    }
+  }//if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
   
   /*
 #if( !defined(WIN32) )
   if( lhs.uuid_ != rhs.uuid_ )
-    throw runtime_error( "SpecFile: UUID of LHS (" + lhs.uuid_
+   issues.push_back( "SpecFile: UUID of LHS (" + lhs.uuid_
                         + ") doesnt match RHS (" + rhs.uuid_ + ")" );
 #endif
   */
   
 //  bool modified_;
 //  bool modifiedSinceDecode_;
+  
+  string error_msg;
+  for( const string &msg : issues )
+    error_msg += (error_msg.empty() ? "" : "\n") + msg;
+  
+  if( !error_msg.empty() )
+    throw runtime_error( error_msg );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
-#endif //#if( PERFORM_DEVELOPER_CHECKS )
+#endif //#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 
 
 SpecFile::SpecFile()
@@ -3872,6 +4106,9 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   title_ = rhs.title_;
 
   derived_data_properties_ = rhs.derived_data_properties_;
+  
+  dose_rate_ = rhs.dose_rate_;
+  exposure_rate_ = rhs.exposure_rate_;
   
   return *this;
 }//const Measurement &operator=( const Measurement &rhs )
@@ -6022,7 +6259,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {
-      string msg = "Unknown detector type: maufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
+      string msg = "Unknown detector type: manufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
       log_developer_error( __func__, msg.c_str() );
     }
 #endif
@@ -6612,6 +6849,7 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
   #else
       if( has_common && energy_cal && (energy_cal != this_cal) && ((*energy_cal) == (*this_cal)) )
       {
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
         string errmsg = "EnergyCalibration::equal_enough didnt find any differences";
         try
         {
@@ -6620,6 +6858,9 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
         {
           errmsg = e.what();
         }
+#else
+        string errmsg = "EnergyCalibration::equal_enough not called to check equality.";
+#endif
         char buffer[512];
         snprintf( buffer, sizeof(buffer), "Found case where expected common energy calibration"
                  " but didnt actually have all the same binning, issue found: %s", errmsg.c_str() );
@@ -6696,7 +6937,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     return nullptr;
   
   if( ene_cal->type() == EnergyCalType::InvalidEquationType )
-    throw runtime_error( "sum_measurements: callid with InvalidEquationType energy calibration" );
+    throw runtime_error( "sum_measurements: called with InvalidEquationType energy calibration" );
   
   dataH->energy_calibration_ = ene_cal;
   
@@ -6805,6 +7046,25 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         remarks.insert( remark );
         
       source_types.insert( meas->source_type() );
+      
+      // Sum dose rate, if valid
+      if( meas->dose_rate_ >= 0.0f )
+      {
+        if( dataH->dose_rate_ >= 0.0f )
+          dataH->dose_rate_ += meas->dose_rate_;
+        else
+          dataH->dose_rate_ += meas->dose_rate_;
+      }//if( meas->dose_rate_ >= 0.0f )
+      
+      // Sum exposure rate, if valid
+      if( meas->exposure_rate_ >= 0.0f )
+      {
+        if( dataH->exposure_rate_ >= 0.0f )
+          dataH->exposure_rate_ += meas->exposure_rate_;
+        else
+          dataH->exposure_rate_ += meas->exposure_rate_;
+      }//if( meas->dose_rate_ >= 0.0f )
+      
       
       if( spec_size > 3 && meas->energy_calibration() && meas->energy_calibration()->valid() )
       {

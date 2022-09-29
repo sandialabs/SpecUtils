@@ -648,25 +648,27 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         if( remark.size() )
           m->remarks_.push_back( remark );
         
-        if( parse_float( dose_str.c_str(), dose_str.size(), result.dose_rate_) )
+        float dose_rate = 0;
+        if( parse_float( dose_str.c_str(), dose_str.size(), dose_rate) )
         {
-          //convert to micro-sievert per hour ..
-          const uint8_t first_char = dose_unit_str.empty() ? uint8_t(0)
-                                                           : static_cast<uint8_t>(dose_unit_str[0]);
-          
-          if( (icontains(dose_unit_str, "sv") || icontains(dose_unit_str, "siev"))
-              && (icontains(dose_unit_str, "micro") || (dose_unit_str.size() && first_char==181) || istarts_with(dose_unit_str, "usv/h")) )
+          try
           {
-            //The 3DS dose_unit_str will look like [181,83,118,47,104] --> [?Sv/h]
-            // We are
-          }else
+            const float unit = dose_units_usvPerH( dose_unit_str.c_str(), dose_unit_str.size() );
+            
+            dose_rate *= unit;
+          }catch( std::exception & )
           {
-           if( !result.remark_.empty() )
-             result.remark_ += ", ";
+            m->parse_warnings_.push_back( "Dose rate units ('" + dose_str + "') couldnt be identified; assuming uSv/hr");
+            
+            if( !result.remark_.empty() )
+              result.remark_ += ", ";
             result.remark_ += "Dose unit not known";
             if( !dose_unit_str.empty() )
               result.remark_ += ": " + dose_unit_str;
-          }
+          }//try / catch to parse dose-rate
+          
+          result.dose_rate_ = dose_rate;
+          m->dose_rate_ = dose_rate;
         }//if( we can parse dose rate )
         
         

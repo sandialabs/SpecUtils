@@ -1132,7 +1132,7 @@ namespace SpecUtils
       if( begin != end && results.size() )
       {
         char errormsg[1024];
-        snprintf( errormsg, sizeof(errormsg), "Trailing unpased string '%s'",
+        snprintf( errormsg, sizeof(errormsg), "Trailing unparsed string '%s'",
                  string(begin,end).c_str() );
         log_developer_error( __func__, errormsg );
       }//if( begin != end )

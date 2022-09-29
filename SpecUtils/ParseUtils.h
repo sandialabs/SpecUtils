@@ -132,11 +132,13 @@ namespace  SpecUtils
   float dy_from_remark(std::string remark);
 
   
-  /** Returns the dose units indicated by the string, in units such that ia
+  /** Returns the dose units indicated by the string, in units such that 1.0
    micro-sievert per hour is equal to 1.0.
-    Currently only handles the label "uSv" and "uRem/h", e.g. fnctn not really
-    impleneted.
-    Returns 0.0 on error.
+    
+   Currently only handles the label "uSv" and "uRem/h",
+   E.g. function only barely implemented.
+    
+   Throws exception on error.
    */
   float dose_units_usvPerH( const char *str, const size_t str_length );
 

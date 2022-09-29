@@ -24,7 +24,7 @@ option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 
-
+option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
 
@@ -116,6 +116,7 @@ set( sources
      src/Filesystem.cpp
      src/DateTime.cpp
      src/ParseUtils.cpp
+     src/SpecFile_location.cpp
      README.md
 )
 
@@ -130,6 +131,7 @@ set( headers
      SpecUtils/Filesystem.h
      SpecUtils/DateTime.h
      SpecUtils/ParseUtils.h
+     SpecUtils/SpecFile_location.h
      SpecUtils/RapidXmlUtils.hpp
 )
 
@@ -275,6 +277,10 @@ target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
+  if( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
+    message(FATAL_ERROR "You must enable SpecUtils_ENABLE_EQUALITY_CHECKS to build regression test.")
+  endif( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
+  
   add_subdirectory( regression_test )
 endif( SpecUtils_BUILD_REGRESSION_TEST )
 

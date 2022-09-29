@@ -66,7 +66,7 @@ namespace
     "LastSourceStabFG", "LastCalibTime", "LastCalibSource", "LastCalibFG",
     "LastCalibFWHM", "LastCalibTemp", "StabilType", "StartupStatus",
     "TemperatureBoard", "TemperatureBoardRange", "BatteryVoltage", "Uptime",
-    "DoseRate", "DoseRateMax20min", "BackgroundSubtraction",
+    "DoseRateMax20min", "BackgroundSubtraction",
     "FWHMCCoeff", "ROI", "CalibPoint", "NeutronAlarm",
     "GammaDetector", "NeutronDetector", "SurveyId", "EventNumber",
     "Configuration"
@@ -240,6 +240,10 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             remark += " : " + line.substr(info_pos);
             trim( remark );
             remarks_.push_back( remark );
+            
+            // Lets re-read "AvgDoseRate" into Measurement::dose_rate_ later on, but also we'll leave in remarks since remarks might have min/max dose rate, and we'll leave average with them
+            if( iequals_ascii(label, "AvgDoseRate") )
+              is_remark = false;
           }
           break;
         }//if( istarts_with( line, label ) )
@@ -565,6 +569,34 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       {
         instrument_id_ = line.substr(info_pos);
         trim( instrument_id_ );
+      }else if( istarts_with( line, "DoseRate" )
+        || istarts_with( line, "AvgDoseRate" ) )
+      {
+        // May just be a number, with no units, or could be like "1.2 nSv/h".
+        if( info_pos != string::npos )
+        {
+          string val = SpecUtils::trim_copy( line.substr(info_pos) );
+          stringstream strm(val);
+          if( !(strm >> meas->dose_rate_) )
+          {
+            meas->parse_warnings_.push_back( "Failed to read dose '" + val + "'" );
+          }else
+          {
+            string units;
+            strm >> units;
+            if( units.size() )
+            {
+              try
+              {
+                meas->dose_rate_ *= dose_units_usvPerH( units.c_str(), units.size() );
+              }catch(...)
+              {
+                meas->parse_warnings_.push_back( "Failed to read dose units '" + units
+                                                + "', assuming uSv/h" );
+              }//try / catch
+            }//if( units.size() )
+          }//if( fail to read number ) / else
+        }//if( info_pos != string::npos )
       }else if( istarts_with( line, "Nuclide0" )
                || istarts_with( line, "Nuclide1" )
                || istarts_with( line, "Nuclide2" )

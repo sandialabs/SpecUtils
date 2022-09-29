@@ -1064,15 +1064,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         trim(line);
         skip_getline = starts_with(line,"$");
         
-        DetectorAnalysisResult result;
-        if( !toFloat(line, result.dose_rate_) )
+        float dose_rate = 0.0f;
+        if( !toFloat(line, dose_rate) )
         {
-          remarks_.push_back( "Error reading DOSE_RATE, line: " + line );
+          parse_warnings_.push_back( "Error reading DOSE_RATE, line: " + line );
         }else
         {
-          if( !anaresult )
-            anaresult = std::make_shared<DetectorAnalysis>();
-          anaresult->results_.push_back( result );
+          meas->dose_rate_ = dose_rate;
         }
       }else if( starts_with(line,"$RADIONUCLIDES:") )
       { //Have only seen one file with this , and it only had a single nuclide

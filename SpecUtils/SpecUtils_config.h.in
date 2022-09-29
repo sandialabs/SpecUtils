@@ -37,7 +37,7 @@
 #cmakedefine01 SpecUtils_JAVA_SWIG
 
 #cmakedefine01 SpecUtils_USE_SIMD
-
+#cmakedefine01 SpecUtils_ENABLE_EQUALITY_CHECKS
 
 #if( defined(_WIN32) && defined(_MSC_VER) )
 #include <stdio.h>

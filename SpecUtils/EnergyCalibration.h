@@ -246,13 +246,13 @@ namespace SpecUtils
     float upper_energy() const;
     
     
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
     /** Tests if the two calibrations passed in are equal for most intents and purposes.
      
      Allows some small numerical rounding to occur, and will allow polynomial and FRF to compare
      equal if they are equivalent.
     
-     Throws an std::exception with a brief explanaition when an issue is found.
+     Throws an std::exception with a brief explanation when an issue is found.
     */
     static void equal_enough( const EnergyCalibration &lhs, const EnergyCalibration &rhs );
 #endif

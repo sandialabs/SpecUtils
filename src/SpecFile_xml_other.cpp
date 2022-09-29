@@ -188,7 +188,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     };//get_energy_cal
     
     
-    XML_FOREACH_DAUGHTER( SegmentResults, scanData, "SegmentResults" )
+    XML_FOREACH_CHILD( SegmentResults, scanData, "SegmentResults" )
     {
       const rapidxml::xml_node<char> *RspId = XML_FIRST_NODE(SegmentResults,"RspId");
       const string RspId_str = SpecUtils::xml_value_str( RspId );
@@ -201,7 +201,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
       string time_str = xml_value_str( XML_FIRST_NODE(SegmentResults,"GammaLastBackgroundTime") );
       
       vector<float> gamma_counts, neutron_counts;
-      XML_FOREACH_DAUGHTER( GammaBackground, SegmentResults, "GammaBackground" )
+      XML_FOREACH_CHILD( GammaBackground, SegmentResults, "GammaBackground" )
       {
         float val;
         if( !parse_float( GammaBackground->value(), GammaBackground->value_size(), val ) )
@@ -284,18 +284,18 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     // The backgrounds have an explicit RspID number, but the <PanelDataList> do not; so we will
     //  assume the are given in order
     int panel_num = 0;
-    XML_FOREACH_DAUGHTER( PanelDataList, scanData, "PanelDataList" )
+    XML_FOREACH_CHILD( PanelDataList, scanData, "PanelDataList" )
     {
       panel_num += 1;
       
-      XML_FOREACH_DAUGHTER( item, PanelDataList, "item" )
+      XML_FOREACH_CHILD( item, PanelDataList, "item" )
       {
         const rapidxml::xml_node<char> *SampleDateTime = XML_FIRST_NODE(item,"SampleDateTime");
         const rapidxml::xml_node<char> *SampleId = XML_FIRST_NODE(item,"SampleId");
 
         bool did_contained_neutrons = false;
         vector<float> gamma_counts, neutron_counts;
-        XML_FOREACH_DAUGHTER( GammaData, item, "GammaData" )
+        XML_FOREACH_CHILD( GammaData, item, "GammaData" )
         {
           float val;
           if( !parse_float( GammaData->value(), GammaData->value_size(), val ) )
@@ -304,7 +304,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
           gamma_counts.push_back( val );
         }//for( loop over <GammaData> )
         
-        XML_FOREACH_DAUGHTER( NeutronData, item, "NeutronData" )
+        XML_FOREACH_CHILD( NeutronData, item, "NeutronData" )
         {
           float val;
           if( !parse_float( NeutronData->value(), NeutronData->value_size(), val ) )

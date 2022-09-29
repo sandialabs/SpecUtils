@@ -478,7 +478,7 @@ bool EnergyCalibration::operator<( const EnergyCalibration &rhs ) const
 }//bool operator<(...)
       
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 void EnergyCalibration::equal_enough( const EnergyCalibration &lhs, const EnergyCalibration &rhs )
 {
   char buffer[256] = { '\0' };
@@ -621,7 +621,7 @@ void EnergyCalibration::equal_enough( const EnergyCalibration &lhs, const Energy
   }//for( loop over channel energies )
   
 }//equal_enough( lhs, rhs )
-#endif //PERFORM_DEVELOPER_CHECKS
+#endif //SpecUtils_ENABLE_EQUALITY_CHECKS
 
 shared_ptr<EnergyCalibration> energy_cal_combine_channels( const EnergyCalibration &orig_cal,
                                                                const size_t ncombine )

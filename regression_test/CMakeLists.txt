@@ -9,9 +9,9 @@ if( NOT Boost_FOUND )
   message(FATAL_ERROR "Couldnt Find Boost")
 endif( NOT Boost_FOUND )
 
-if( NOT PERFORM_DEVELOPER_CHECKS )
-  message( FATAL_ERROR "PERFORM_DEVELOPER_CHECKS must be enabled when building regression_test executable" )
-endif( NOT PERFORM_DEVELOPER_CHECKS )
+if( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
+  message( FATAL_ERROR "SpecUtils_ENABLE_EQUALITY_CHECKS must be enabled when building regression_test executable" )
+endif( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
 
 add_executable( regression_test regression_test.cpp )
 

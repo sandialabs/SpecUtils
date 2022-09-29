@@ -519,18 +519,35 @@ float dy_from_remark(std::string remark)
 
 float dose_units_usvPerH( const char *str, const size_t str_length )
 {
-  if( !str )
-    return 0.0f;
+  if( !str || !str_length )
+    throw runtime_error( "no dose units specified." );
   
   if( icontains( str, str_length, "uSv", 3 )
      || icontains( str, str_length, "\xc2\xb5Sv", 4) )
     return 1.0f;
   
-  //One sievert equals 100 rem.
-  if( icontains( str, str_length, "&#xB5;Rem/h", 11 ) ) //micro
-    return 0.01f;
+  if( (icontains(str, str_length, "sv", 2) || icontains(str, str_length, "siev", 4))
+     && (icontains(str, str_length, "micro",5) || icontains( str, str_length, "\xc2\xb5", 2)
+         || (static_cast<uint8_t>(str[0]) == 194)) )
+    return 1.0f;
+    
+  if( icontains( str, str_length, "nSv", 3 ) )
+    return 0.001f;
   
-  return 0.0f;
+  //One sievert equals 100 rem.
+  if( icontains( str, str_length, "rem", 3 ) )
+  {
+    if( icontains( str, str_length, "&#xB5;", 6 )
+       || icontains( str, str_length, "uRem", 4 )
+       || icontains( str, str_length, "micro", 5 ) ) //micro
+      return 0.01f;
+    
+    if( icontains( str, str_length, "milli", 5 )
+       || icontains( str, str_length, "mRem", 4 ) ) //milli
+      return 10.0f;
+  }//if( str contains "rem" )
+  
+  throw runtime_error( "Unrecognized dose units '" + std::string(str,str+str_length) + "'" );
 }//float dose_units_usvPerH( const char *str )
 
   

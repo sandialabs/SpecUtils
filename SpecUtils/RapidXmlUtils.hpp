@@ -68,13 +68,13 @@ namespace SpecUtils
 #define XML_NEXT_TWIN_CHECKED(node)((node) ? (node)->next_sibling((node)->name(), (node)->name_size()): (::rapidxml::xml_node<char> *)0)
   
   //Usuage:
-  //XML_FOREACH_DAUGHTER( child_node_variable, parent_node, "ChildElementName" ){
+  //XML_FOREACH_CHILD( child_node_variable, parent_node, "ChildElementName" ){
   //  assert( child_node_variable->name() == "ChildElementName" );
   // }
-#define XML_FOREACH_DAUGHTER( nodename, parentnode, daughternamestr ) \
-for( const ::rapidxml::xml_node<char> *nodename = XML_FIRST_NODE_CHECKED(parentnode,daughternamestr); \
+#define XML_FOREACH_CHILD( nodename, parentnode, childnamestr ) \
+for( const ::rapidxml::xml_node<char> *nodename = XML_FIRST_NODE_CHECKED(parentnode,childnamestr); \
 nodename; \
-nodename = nodename->next_sibling(daughternamestr,SpecUtils::lengthof(daughternamestr),true) )
+nodename = nodename->next_sibling(childnamestr,SpecUtils::lengthof(childnamestr),true) )
   
   template<class Ch,size_t n>
   bool xml_value_compare( const ::rapidxml::xml_base<Ch> *node, const char (&value)[n] )

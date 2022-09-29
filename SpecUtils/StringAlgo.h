@@ -304,7 +304,7 @@ namespace  SpecUtils
    counts of gamma data by wcjohns).
    
    \TODO: Investigate performance of using:
-     - https://github.com/lemire/fast_double_parser
+     - https://github.com/fastfloat/fast_float
      - https://github.com/abseil/abseil-cpp/blob/master/absl/strings/charconv.h
      - https://github.com/simdjson/simdjson/blob/master/src/generic/stage2/numberparsing.h
    */
