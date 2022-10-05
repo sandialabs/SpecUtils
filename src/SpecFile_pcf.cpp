@@ -811,6 +811,52 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
           spectrum_title += " Foreground";
       }//if( not already labeled foreground or background )
       
+      if( meas->location_ && meas->location_->geo_location_ && meas->has_gps_info() )
+      {
+        const double lat = meas->location_->geo_location_->latitude_;
+        const double lon = meas->location_->geo_location_->longitude_;
+        
+        double elev = meas->location_->geo_location_->elevation_;
+        if( IsNan(elev) )
+          elev = 0.0;
+        
+        double heading = meas->location_->orientation_ ? meas->location_->orientation_->azimuth_ : 0.0f;
+        if( IsNan(heading) )
+          heading = 0.0;
+        
+        double dose = meas->exposure_rate_;  //Note: we also have have meas->dose_rate_
+        if( IsNan(dose) )
+          dose = 0.0;
+      
+        // Print numbers, with trailing zeros removed - although we could do better...
+        auto print_number = []( const double value, const char *fmt ) -> std::string {
+          if( (value == 0.0) || IsNan(value) )
+            return "0";
+          
+          char buffer[32];
+          snprintf( buffer, sizeof(buffer), fmt, value );
+          
+          string answer = buffer;
+          // Trim trailing zeros
+          // Note that `point` may not be '.'!!
+          //    const char point = std::use_facet< std::numpunct<char> >(std::cout.getloc()).decimal_point();
+          const char point = '.';
+          const size_t dec_pos = answer.find(point);
+          if( (dec_pos != 0) && (dec_pos != string::npos) )
+          {
+            while( (answer.size() > dec_pos) && ((answer.back() == '0') || (answer.back() == point)))
+              answer = answer.substr(0,answer.size() - 1);
+          }
+          
+          return answer;
+        };//print_number lamda
+        
+        spectrum_title += " Lat,Lon,E,H,D=";
+        spectrum_title += print_number(lat,"%.6f") + "," + print_number(lon,"%.6f");
+        spectrum_title += "," + print_number(elev,"%.2f");
+        spectrum_title += "," + print_number(heading,"%.3f");
+        spectrum_title += "," + print_number(dose,"%.4G");
+      }//if( meas->has_gps_info() )
       
       if( meas->location_
          && !IsNan(meas->location_->speed_)
