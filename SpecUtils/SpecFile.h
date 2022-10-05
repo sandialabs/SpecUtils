@@ -78,7 +78,7 @@ Shortcommings that wcjohns should address:
  - Should add in "Characteristics" a few places (for detectors, system,
 */
 
-//Forward declarations not within SpecUtils namespace
+//Forward declarations
 namespace rapidxml
 {
   template<class Ch> class xml_node;
@@ -87,6 +87,11 @@ namespace rapidxml
 }//namespace rapidxml
 
 class SpecMeas;
+
+namespace SpecUtils
+{
+  struct LocationState;
+}//namespace SpecUtils
 
 #if( SpecUtils_ENABLE_D3_CHART )
 namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
@@ -111,7 +116,7 @@ namespace SpecUtils
  future we'll just use `std::chrono::system_clock::time_point`, but just limit parsing/writing
  of timestamps to the microsecond.
  */
-  using time_point_t = std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
+using time_point_t = std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
 
 
 /** Enum used to specify which spectrum parsing function to call when opening a
@@ -238,10 +243,10 @@ enum class SaveSpectrumAsType : int
 
 
 
-/** Enum to indentify the detection system used to create data in a spectrum
+/** Enum to identify the detection system used to create data in a spectrum
  file.
  
- May be infered from spectrum file format or from comments or information within
+ May be inferred from spectrum file format or from comments or information within
  the spectrum file.
  
  It is currently known to not be comprehensive (e.g., some models not include in
@@ -553,9 +558,16 @@ public:
    */
   float dose_rate() const;
   
+  /** Returns exposure-rate, in milliroentgen per hour (mR/h), given along with the measurement
+   data.
+   
+   Returns negative value if exposure rate was not provided in the file.
+   */
+  float exposure_rate() const;
+  
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns time_point_t{} otherwise.
-  const time_point_t &position_time() const;
+  const time_point_t position_time() const;
   
   //detector_name(): returns the name of the detector within the device.
   //  May be empty string for single detector systems, or otherwise.
@@ -656,6 +668,8 @@ public:
   //  returned vector will have a size 1 if the file contained neutron counts.
   const std::vector<float> &neutron_counts() const;
 
+  /** Returns the LocationState information, or nullptr if not available. */
+  const std::shared_ptr<const SpecUtils::LocationState> &location_state() const;
   
   /** Sets the title property.
    
@@ -1029,9 +1043,7 @@ protected:
   
   double gamma_count_sum_;
   double neutron_counts_sum_;
-  float speed_;  //in m/s
-  float dx_;
-  float dy_;
+    
   std::string detector_name_;
   int detector_number_;
   std::string detector_description_;  //e.x. "HPGe 50%". Roughly the equivalent N42 2012 "RadDetectorDescription" node
@@ -1062,13 +1074,6 @@ protected:
   //neutron_counts_[neutron_tube].  I dont think this this is actually used
   //  many places (i.e., almost always have zero or one entry in array).
   std::vector<float>        neutron_counts_;
-
-  //could add Alt, Speed, and Dir here, as well as explicit valid flag
-  double latitude_;  //set to -999.9 if not specified
-  double longitude_; //set to -999.9 if not specified
-//  double elevation_;
-  
-  time_point_t position_time_;
   
   std::string title_;  //Actually used for a number of file formats
   
@@ -1087,6 +1092,27 @@ protected:
    */
   float exposure_rate_;
 
+  /** The #LocationState indicates the position, speed, and/or orientation of the instrument,
+   detector, or item being measured.  At the moment, only one of these quantities are recorded,
+   primarily to reduce complexity since the author hasnt encountered any files that actually
+   convey more than one of these quantities.
+   
+   The N42-2012 elements the #LocationState pointed to from here may represent are
+   - <RadInstrumentState>: In N42-2012 files there may be zero or one of these.
+   - <RadDetectorState>:   In N42-2012 files there may be from zero to many of these; presumable up
+                           to one for each detector.
+   - <RadItemState>:       In N42-2012 files there may be from zero to many of these; presumable
+                           more than one would be to describe multiple sources, but this isnt
+                           directly specified in the spec.
+   
+   In N42-2012 files, the <RadInstrumentState> is looked for, and used first; if it isnt found,
+   then <RadItemState>, then <RadDetectorState>.  The #LocationState::type_ variable will tell
+   you the type of information conveyed.
+   
+   Other file formats generally convey either GPS coordinates, or relative source position, at best,
+   so information is stored as best as reasonable.
+   */
+  std::shared_ptr<const SpecUtils::LocationState> location_;
   
   friend class ::SpecMeas;
   friend class SpecFile;
@@ -2628,95 +2654,6 @@ public:
 };//struct DetectorAnalysisResults
 
 
-
-/** Represents the data of N42-2012:
-      RadInstrumentData->RadMeasurement->RadInstrumentState->StateVector->GeographicPoint
- 
- Geographical coordinates providing latitude, longitude, and elevation, and uncertainty
- of the coordinates.
- 
- For reading from other formats
- */
-struct GeographicPoint
-{
-  GeographicPoint();
-  
-  // <LatitudeValue>, <LongitudeValue>, <ElevationValue>, <ElevationOffsetValue>
-  // <GeoPointAccuracyValue>, <ElevationAccuracyValue>, <ElevationOffsetAccuracyValue>
-  double latitude_;  //set to -999.9 if not specified
-  double longitude_; //set to -999.9 if not specified
-  float elevation_;
-  
-  float elevation_offset_;
-  float coords_accuracy_;
-  float elevation_accuracy_;
-  float elevation_offset_accuracy_;
-  
-  time_point_t position_time_;
-  
-#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
-  static void equal_enough( const GeographicPoint &lhs, const GeographicPoint &rhs );
-#endif
-};//struct GeographicPoint
-
-
-struct RelativeLocation
-{
-  RelativeLocation();
-  
-  //RelativeLocationAzimuthValue, RelativeLocationInclinationValue, DistanceValue
-  float azimuth_;
-  float inclination_;
-  float distance_;
-  
-  float dx() const;
-  float dy() const;
-  float dz() const;
-  
-#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
-  static void equal_enough( const RelativeLocation &lhs, const RelativeLocation &rhs );
-#endif
-};//struct RelativeLocation
-
-
-/**
- Description: The orientation of an object (e.g., radiation measurement instrument, radiation
- detector, or measured item) in space in terms of an internal frame of reference attached to the object's body and an external frame of reference. The object's internal frame of reference consists of three perpendicular axes: front-back, left-right, and top-bottom. The external frame of reference consists of the horizontal plane and True North. The object's orientation is expressed in the terms of three angles: azimuth, inclination, and roll.
-
- */
-struct Orientation
-{
-  //<AzimuthValue>, <InclinationValue>, <RollValue>
-  
-#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
-  static void equal_enough( const Orientation &lhs, const Orientation &rhs );
-#endif
-};//struct Orientation
-
-
-/**
-  Provides approximately one of {<RadDetectorState>, <RadInstrumentState>, <RadItemState>}.
- 
- Note: N42-2012, allows a state to provide Choice of {<GeographicPoint> <LocationDescription> <RelativeLocation>},
- but we currently only implement <GeographicPoint>
-*/
-struct LocationState
-{
-  LocationState();
-  
-  enum class StateType{ Detector, Instrument, Item };
-  StateType type_;
-  
-  float speed_;
-  
-  std::shared_ptr<const GeographicPoint> geo_location_;
-  std::shared_ptr<const RelativeLocation> relative_location_;
-  std::shared_ptr<const Orientation> orientation_;
-  
-#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
-  static void equal_enough( const LocationState &lhs, const LocationState &rhs );
-#endif
-};//struct LocationState
 
 
 /** Corresponds to a N42.42-2011 <MultimediaData> element that is often used to

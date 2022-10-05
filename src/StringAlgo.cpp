@@ -1186,6 +1186,20 @@ namespace SpecUtils
   }//bool split_to_floats(...)
   
   
+  bool parse_double( const char *input, const size_t length, double &result )
+  {
+    namespace qi = boost::spirit::qi;
+    
+    const char *begin = input;
+    const char *end = begin + length;
+    
+    result = 0.0;
+    const bool ok = qi::phrase_parse( begin, end, qi::double_, qi::space, result );
+    
+    return ok;
+  }
+
+
   bool parse_float( const char *input, const size_t length, float &result )
   {
     namespace qi = boost::spirit::qi;

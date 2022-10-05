@@ -42,6 +42,7 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -195,6 +196,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
   
   reset();
   std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
+  std::shared_ptr<LocationState> location;
+  
   
   //Each line should be terminated with "line feed" (0Dh)
   // and "carriage return" (0Ah), but for now I'm just using safe_get_line(...),
@@ -335,6 +338,9 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           meas->remarks_.push_back( "Neutron counts is in counts per second (real time was zero, so could not determine gross counts)" );
         }
       }//if( neutrons_were_cps )
+      
+      if( location )
+        meas->location_ = location;
       
       if( (measurements_.empty() || measurements_.back()!=meas) && nchannel > 0 )
         measurements_.push_back( meas );
@@ -627,6 +633,9 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }
       }else if( starts_with(line,"$GPS:") )
       {
+        float speed = numeric_limits<float>::quiet_NaN();
+        double longitude = numeric_limits<double>::quiet_NaN(), latitude = numeric_limits<double>::quiet_NaN();
+        
         while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
@@ -644,19 +653,34 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( starts_with( line, "Lon=") )
           {
-            if( sscanf( valuestr.c_str(), "%lf", &(meas->longitude_) ) != 1 )
-              meas->longitude_ = -999.9;
+            if( !parse_double(valuestr.c_str(), valuestr.size(), longitude) )
+              longitude = numeric_limits<double>::quiet_NaN();
           }else if( starts_with( line, "Lat=") )
           {
-            if( sscanf( valuestr.c_str(), "%lf", &(meas->latitude_) ) != 1 )
-              meas->latitude_ = -999.9;
+            if( !parse_double(valuestr.c_str(), valuestr.size(), latitude) )
+              latitude = numeric_limits<double>::quiet_NaN();
           }else if( starts_with( line, "Speed=") )
           {
-            if( sscanf( valuestr.c_str(), "%f", &(meas->speed_) ) != 1 )
-              meas->speed_ = 0.0;
+            if( !parse_float( valuestr.c_str(), valuestr.size(), speed) )
+              speed = numeric_limits<float>::quiet_NaN();
           }else if( !line.empty() )
             remarks_.push_back( line ); //also can be Alt=, Dir=, Valid=
         }//while( SpecUtils::safe_get_line( istr, line ) )
+        
+        if( !IsNan(speed) || (valid_longitude(longitude) && valid_latitude(latitude)) )
+        {
+          if( !location )
+            location = make_shared<LocationState>();
+          
+          location->speed_ = speed;
+          if( valid_longitude(longitude) && valid_latitude(latitude) )
+          {
+            auto geo = make_shared<GeographicPoint>();
+            geo->longitude_ = longitude;
+            geo->latitude_ = latitude;
+            location->geo_location_ = geo;
+          }//if( valid GPS coordinates )
+        }//if( we read in something that will go in LocationState )
       }else if( starts_with(line,"$GPS_COORDINATES:") )
       {
         if( SpecUtils::safe_get_line( istr, line ) )
@@ -1230,6 +1254,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         cleanup_current_meas();
         
         meas = make_shared<Measurement>();
+        location.reset();
       }else if( starts_with(line,"$RT:")
                || starts_with(line,"$DT:") )
       {

@@ -224,6 +224,9 @@ namespace  SpecUtils
    \returns True if was able to parse a number, false otherwise.
    */
   bool parse_float( const char *input, const size_t length, float &result );
+
+  /** Same as #parse_float, but for doubles. */
+  bool parse_double( const char *input, const size_t length, double &result );
   
 
   /** \brief Parses a string of ascii characters to their integer representation.

@@ -441,7 +441,6 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     meas->occupied_ = OccupancyStatus::Unknown;
     meas->gamma_count_sum_ = gammasum;
     meas->neutron_counts_sum_ = 0.0;
-    meas->speed_ = 0.0;  //in m/s
     meas->detector_name_ = ((lmstyle==1) ? "digiBASE" : "digiBASE-E");
     meas->detector_number_ = 0;
     meas->detector_description_ = meas->detector_name_ + " ListMode data";

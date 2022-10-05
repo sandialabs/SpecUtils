@@ -34,6 +34,7 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -1379,7 +1380,9 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         }//if( we can re-use calibration ) / else
       }//if( we have energy cal info )
       
-      meas->speed_              = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
+      auto loc = make_shared<SpecUtils::LocationState>();
+      loc->speed_ = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
+      meas->location_ = loc;
       meas->start_time_         = endrecord.lastStartTime;
       meas->remarks_.push_back( "ICD1 Filename: " + endrecord.icd1FileName );
       meas->remarks_.push_back( "Alarm Color: " + endrecord.alarmColor );

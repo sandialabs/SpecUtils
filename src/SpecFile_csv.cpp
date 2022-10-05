@@ -44,6 +44,7 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -577,8 +578,12 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         const double lon = std::stod( lon_str );
         if( valid_latitude(lat) && valid_longitude(lon) && (lat != lon) )
         {
-          m->latitude_ = lat;
-          m->longitude_ = lon;
+          auto loc = make_shared<LocationState>();
+          m->location_ = loc;
+          auto geo = make_shared<GeographicPoint>();
+          loc->geo_location_ = geo;
+          geo->latitude_ = lat;
+          geo->longitude_ = lon;
         }
       }catch(...)
       {
@@ -767,6 +772,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
   
   string line;
   size_t nlines_used = 0, nlines_total = 0;
+  shared_ptr<SpecUtils::LocationState> location;
   const size_t maxlen = 1024*1024; //should be long enough for even the largest spectra
   
   while( SpecUtils::safe_get_line(istr, line, maxlen) )
@@ -1153,14 +1159,23 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }
       }catch(...){}
       
-      try
+      if( !location || IsNan(location->speed_) )
       {
-        if( speed_ == 0.0 )
+        try
         {
-          speed_ = SpecUtils::speed_from_remark( line );
-          used |= (speed_ != 0.0);
+          const float speed = SpecUtils::speed_from_remark( line );
+          
+          if( !location )
+            location = make_shared<LocationState>();
+          location_ = location;
+          
+          location->speed_ = speed;
+          used = true;
+        }catch( std::exception &e )
+        {
+          //
         }
-      }catch(...){}
+      }//if( !location_ || IsNan(location_->speed_) )
       
       try
       {
@@ -1741,9 +1756,9 @@ bool Measurement::write_txt( std::ostream& ostr ) const
       if( found_name.empty() && !detector_name_.empty() )
         remark += " " + detector_name_ + " ";
       
-      if( (remark.find( "Speed" ) == string::npos) && (speed_>0.000000001) )
+      if( (remark.find( "Speed" ) == string::npos) && location_ && !IsNan(location_->speed_) )
       {
-        snprintf( buffer, sizeof(buffer), " Speed %f m/s", speed_ );
+        snprintf( buffer, sizeof(buffer), " Speed %f m/s", location_->speed_ );
         remark += buffer;
       }
     }//if( i == 0 )
@@ -1759,13 +1774,15 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   ostr << "DetectorName " << detector_name_ << endline;
   ostr << "DetectorType " << detector_description_ << endline;
   
-  if( has_gps_info() )
+  if( location_ && location_->geo_location_
+     && valid_latitude(location_->geo_location_->latitude_)
+     && valid_longitude(location_->geo_location_->longitude_) )
   {
-    ostr << "Latitude: " << latitude_ << endline;
-    ostr << "Longitude: " << longitude_ << endline;
-    if( !is_special(position_time_) )
+    ostr << "Latitude: " << location_->geo_location_->latitude_ << endline;
+    ostr << "Longitude: " << location_->geo_location_->longitude_ << endline;
+    if( !is_special(location_->geo_location_->position_time_) )
       ostr << "Position Time: "
-      << SpecUtils::to_iso_string(position_time_) << endline;
+           << SpecUtils::to_iso_string(location_->geo_location_->position_time_) << endline;
   }
   
   ostr << "EquationType ";

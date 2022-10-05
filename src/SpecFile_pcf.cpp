@@ -42,6 +42,7 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/Filesystem.h"
+#include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/EnergyCalibration.h"
 
 using namespace std;
@@ -810,10 +811,12 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
           spectrum_title += " Foreground";
       }//if( not already labeled foreground or background )
       
-      if( meas->speed_ > 0.0
+      
+      if( meas->location_
+         && !IsNan(meas->location_->speed_)
          && !SpecUtils::icontains( meas->title_, "speed" ) )
       {
-        snprintf( buffer, sizeof(buffer), " Speed %f m/s", meas->speed_ );
+        snprintf( buffer, sizeof(buffer), " Speed %f m/s", meas->location_->speed_ );
         spectrum_title += buffer;
       }
       
@@ -1164,7 +1167,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
     }//if( header.find("DeviationPairsInFile") != string::npos ) / else
     
     
-    double latitude = -999.9, longitude = -999.9;
+    shared_ptr<LocationState> gps_location;
     
     if( is_dhs_version )
     {
@@ -1194,6 +1197,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
         //Totally untested as of 20170811 - beacuase I have never seen a PCF file with coordinates...
         //parse_deg_min_sec_lat_lon(...)
         //ortecLatOrLongStrToFlt()
+        double latitude = -999.9, longitude = -999.9;
+        
         if( !toDouble( meas_coords_components[0], latitude )
            || !toDouble( meas_coords_components[0], longitude )
            || !SpecUtils::valid_latitude(latitude)
@@ -1212,6 +1217,13 @@ bool SpecFile::load_from_pcf( std::istream &input )
                    "PCF file had non empty coordinates string '%s', but didnt return valid coordinates", meas_coords.c_str() );
           log_developer_error( __func__, buffer );
 #endif
+        }else
+        {
+          gps_location = make_shared<LocationState>();
+          auto geo = make_shared<GeographicPoint>();
+          gps_location->geo_location_ = geo;
+          geo->latitude_ = latitude;
+          geo->longitude_ = longitude;
         }
       }//if( meas_coords_components.size() > 2 )
       
@@ -1447,8 +1459,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
       measurements_.push_back( meas );
       meas->live_time_ = live_time;
       meas->real_time_ = true_time;
-      meas->latitude_  = latitude;
-      meas->longitude_ = longitude;
+      
+      meas->location_ = gps_location;
       
       const bool has_neutrons = (neutron_counts > 0.00000001);
       meas->contained_neutron_ = has_neutrons;
@@ -1460,12 +1472,34 @@ bool SpecFile::load_from_pcf( std::istream &input )
       meas->neutron_counts_.resize( 1 );
       meas->neutron_counts_[0] = neutron_counts;
       meas->neutron_counts_sum_ = neutron_counts;
-      meas->speed_ = speed_from_remark( spectrum_title );
-      meas->dx_ = dx_from_remark(spectrum_title);
-      meas->dy_ = dy_from_remark(spectrum_title);
+      
+      float dx = std::numeric_limits<float>::quiet_NaN();
+      float dy = dx, dz = dx, speed = dx;
+      
+      try{ dx = dx_from_remark(spectrum_title); }catch( std::exception & ){ }
+      try{ dy = dy_from_remark(spectrum_title); }catch( std::exception & ){ }
+      try{ dz = dz_from_remark(spectrum_title); }catch( std::exception & ){ }
+      try{ speed = speed_from_remark(spectrum_title); }catch( std::exception & ){ }
+      const string distance = distance_from_pcf_title(spectrum_title);
+      
+      if( !IsNan(speed) || !IsNan(dx) || !IsNan(dy) || !IsNan(dz) || !distance.empty() )
+      {
+        auto location = make_shared<LocationState>();
+        
+        if( gps_location && gps_location->geo_location_ )
+          location->geo_location_ = gps_location->geo_location_;
+        
+        location->type_ = LocationState::StateType::Item;
+        location->speed_ = speed;
+        auto rel_loc = make_shared<RelativeLocation>();
+        location->relative_location_ = rel_loc;
+        rel_loc->from_cartesian( 10.0f*dx, 10.0f*dy, 10.0f*dz );
+        rel_loc->origin_description_ = distance;
+        
+        meas->location_ = location;
+      }//if( !IsNan(speed) || !IsNan(dx) || !IsNan(dy) || !IsNan(dz) )
+      
       meas->detector_name_ = detector_name_from_remark( spectrum_title );
-      
-      
       meas->sample_number_ = sample_num_from_remark( spectrum_title );
       
       if( meas->sample_number_ < 0 )

@@ -35,6 +35,7 @@
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/RapidXmlUtils.hpp"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -287,13 +288,15 @@ bool SpecFile::load_from_aram( std::istream &input )
       const string coord = lon_str + " / " + lat_str;
       if( parse_deg_min_sec_lat_lon( coord.c_str(), coord.size(), lat, lon ) )
       {
-        fore_meas->longitude_ = lon;
-        fore_meas->latitude_ = lat;
+        auto loc = make_shared<LocationState>();
+        auto geo = make_shared<GeographicPoint>();
+        loc->geo_location_ = geo;
+        geo->longitude_ = lon;
+        geo->latitude_ = lat;
+        
+        fore_meas->location_ = loc;
         if( back_meas )
-        {
-          back_meas->longitude_ = lon;
-          back_meas->latitude_ = lat;
-        }
+          back_meas->location_ = loc;
       }//if( can parse string )
     }//if( lat / lon str )
     

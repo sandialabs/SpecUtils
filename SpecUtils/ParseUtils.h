@@ -52,7 +52,7 @@ namespace  SpecUtils
 
 
   /** Expands the N42 counted zeros scheme, i.e., if an entry is zero, then the
-   entry after that says how many zeroes that elememnt should be expanded to.
+   entry after that says how many zeroes that element should be expanded to.
    
    Requires zeros to be identically 0.0f, in order be expanded by the next
    value.  The value following a zero is rounded to nearest integer (no integer
@@ -106,10 +106,11 @@ namespace  SpecUtils
    returns it in m/s.
    
    Ex., takes a line like "Speed = 5 mph" and returns the speed in m/s.
-   Returns 0.0 on failure.
    
    Note: not very generically implemented, just covers cases that have been ran
    into.
+   
+   Throws exception if not successful.
    */
   float speed_from_remark( std::string remark );
   
@@ -119,19 +120,43 @@ namespace  SpecUtils
    */
   std::string detector_name_from_remark( const std::string &remark );
   
-  /** Looks for x position information in remark
+  /** Looks for x position information in remark.
   
-  * ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+     ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+   
+     TODO: does not currently take into account units (e.g., cm)
   */
   float dx_from_remark( std::string remark );
 
   /** Looks for y position information in remark
-
-* ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
-*/
-  float dy_from_remark(std::string remark);
-
   
+    ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+   
+    TODO: does not currently take into account units (e.g., cm)
+  */
+  float dy_from_remark( std::string remark );
+
+  /** Looks for y position information in remark
+   
+    ex: "Title: FA-SG-LANL-0-0-8{dx=-155.65...} @235cm H=262.5cm ..." returns 235cm
+   
+    TODO: does not currently take into account units (e.g., cm)
+   */
+  float dz_from_remark( std::string remark );
+
+  /** Currently finds strings similar to "@250 cm" that is common in PCF title fields
+   for indicating distance of detector from source.
+   
+   Returned string wil be a number, followed by units, where the units are not checked to be
+   reasonable. - e.g., could return "250 av"
+   
+   Returns empty string on failure.
+   
+   TODO: Implement more general function like `float distance_from_remark( const std::string & )`
+   */
+  std::string distance_from_pcf_title( const std::string &remark );
+
+
   /** Returns the dose units indicated by the string, in units such that 1.0
    micro-sievert per hour is equal to 1.0.
     

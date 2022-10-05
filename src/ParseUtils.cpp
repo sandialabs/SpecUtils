@@ -225,13 +225,17 @@ double conventional_lat_or_long_str_to_flt( std::string input )
   
 bool valid_longitude( const double longitude )
 {
-  return (fabs(static_cast<double>(longitude))<=180.0 && !IsInf(longitude) );
+  return (!IsNan(longitude)
+          && (fabs(static_cast<double>(longitude)) <= 180.0)
+          && !IsInf(longitude));
 }
 
   
 bool valid_latitude( const double latitude )
 {
-  return (fabs(static_cast<double>(latitude))<=90.0 && !IsInf(latitude) );
+  return (!IsNan(latitude)
+          && (fabs(static_cast<double>(latitude)) <= 90.0)
+          && !IsInf(latitude));
 }
 
   
@@ -344,12 +348,12 @@ float speed_from_remark( std::string remark )
       {
           pos = remark.find_first_not_of(" \t", pos + 2);
           if (pos == string::npos)
-              return 0.0;
+            throw runtime_error("not found");
       }
       else 
       {
           // No speed information found in the remark
-          return 0.0;
+        throw runtime_error("not found");
       }
   }
   
@@ -362,7 +366,7 @@ float speed_from_remark( std::string remark )
     string msg = "speed_from_remark(...): couldn conver to number: '" + speedstr + "' to float";
     log_developer_error( __func__, msg.c_str() );
 #endif
-    return 0.0;
+    throw runtime_error("invalid speed value ('" + speedstr + "').");
   }//if( !(stringstream(speedstr) >> speed) )
   
   
@@ -393,7 +397,7 @@ float speed_from_remark( std::string remark )
     }//if( we found the start of the units )
   }//for( size_t i = 0; i < speedstr.size(); ++i )
   
-  return 0.0;
+  throw runtime_error("Failed to find speed units.");
 }//float speed_from_remark( const std::string &remark )
   
   
@@ -452,69 +456,90 @@ std::string detector_name_from_remark( const std::string &remark )
   return "";
 }//std::string detector_name_from_remark( const std::string &remark )
   
-float dx_from_remark(std::string remark)
+
+float pos_from_remark_helper( std::string &remark, const string &label )
 {
-    to_lower_ascii(remark);
-    size_t pos = remark.find("dx=");
-
-    if (pos != string::npos)
-    {
-        pos = remark.find_first_not_of(" \t", pos + 3);
-        if (pos == string::npos)
-            return 0.0;
-    }
-    else
-    {
-        // No dx information found in the remark
-        return 0.0;
-    }
-
-    const string dxstr = remark.substr(pos);
-
-    float dx = 0.0;
-    if (!toFloat(dxstr, dx))
-    {
+  to_lower_ascii(remark);
+  size_t pos = remark.find(label);
+  
+  if( pos == string::npos )
+    throw std::runtime_error( "Not found" );
+  
+  pos = remark.find_first_not_of(" \t", pos + label.size());
+  if( pos == string::npos )
+    throw runtime_error( "No characters after '" + label + "'" );
+  
+  const string dxstr = remark.substr(pos);
+  
+  float dx = 0.0;
+  if (!toFloat(dxstr, dx))
+  {
 #if( PERFORM_DEVELOPER_CHECKS )
-        string msg = "dx_from_remark(...): couldnt convert to number: '" + dxstr + "' to float";
-        log_developer_error(__func__, msg.c_str());
+    string msg = "dx_from_remark(...): couldnt convert to number: '" + dxstr + "' to float";
+    log_developer_error(__func__, msg.c_str());
 #endif
-        return 0.0;
-    }
+    throw std::runtime_error( "'" + dxstr + "' not numeric value."  );
+  }
+  
+  // TODO: check units!
+  
+  return dx;
+}//pos_from_remark_helper(...)
 
-    return dx;
+
+float dx_from_remark( std::string remark )
+{
+  return pos_from_remark_helper( remark, "dx=" );
 }//float dx_from_remark( const std::string &remark )  
 
-float dy_from_remark(std::string remark)
+
+float dy_from_remark( std::string remark )
 {
-    to_lower_ascii(remark);
-    size_t pos = remark.find("dy=");
-
-    if (pos != string::npos)
-    {
-        pos = remark.find_first_not_of(" \t", pos + 3);
-        if (pos == string::npos)
-            return 0.0;
-    }
-    else
-    {
-        // No dy information found in the remark
-        return 0.0;
-    }
-
-    const string dystr = remark.substr(pos);
-
-    float dy = 0.0;
-    if (!toFloat(dystr, dy))
-    {
-#if( PERFORM_DEVELOPER_CHECKS )
-        string msg = "dy_from_remark(...): couldnt convert to number: '" + dystr + "' to float";
-        log_developer_error(__func__, msg.c_str());
-#endif
-        return 0.0;
-    }
-
-    return dy;
+  return pos_from_remark_helper( remark, "dy=" );
 }//float dy_from_remark( const std::string &remark )  
+
+
+float dz_from_remark(std::string remark)
+{
+  return pos_from_remark_helper( remark, "dz=" );
+}//float dz_from_remark(std::string remark)
+
+
+/*
+float distance_from_remark( std::string remark )
+{
+  const char *labels[] = { "@", "d=", "dist=", "distance=", "dist:", "distance:" };
+  
+  to_lower_ascii(remark);
+  ireplace_all(remark, " ", "" );
+  
+  // TODO: implement this function
+}//float distance_from_remark( std::string remark )
+*/
+
+std::string distance_from_pcf_title( const std::string &remark )
+{
+  // This function is pretty sad, at the moment
+  
+  size_t pos = remark.find("@");
+  if( pos == string::npos )
+    return "";
+  
+  pos = remark.find_first_not_of(" \t", pos + 1); //I dont actually think this is necassary
+  if( pos == string::npos )
+    return "";
+  
+  stringstream strm( remark.substr(pos) );
+  
+  double dist;
+  if( !(strm >> dist) )
+    return "";
+  
+  string units;
+  strm >> units; //not checking!
+  
+  return std::to_string(dist) + " " + units;
+}//std::string distance_from_pcf_title( const std::string &remark )
 
 
 float dose_units_usvPerH( const char *str, const size_t str_length )

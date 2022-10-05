@@ -37,6 +37,7 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/RapidXmlUtils.hpp"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -164,8 +165,18 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
       rapidxml::xml_attribute<XmlChar> *att = GPS->first_attribute("Valid",5);
       
       if( !att || XML_VALUE_ICOMPARE(att,"True") )
-        parse_deg_min_sec_lat_lon(GPS->value(), GPS->value_size(),
-                                  meas->latitude_, meas->longitude_ );
+      {
+        double latitude, longitude;
+        if( parse_deg_min_sec_lat_lon(GPS->value(), GPS->value_size(), latitude, longitude) )
+        {
+          auto loc = make_shared<LocationState>();
+          meas->location_ = loc;
+          auto geo = make_shared<GeographicPoint>();
+          loc->geo_location_ = geo;
+          geo->latitude_ = latitude;
+          geo->longitude_ = longitude;
+        }//if( parse gps coords )
+      }//if( !att || XML_VALUE_ICOMPARE(att,"True") )
     }//if( GPS )
     
     if( RealTime && RealTime->value_size() )

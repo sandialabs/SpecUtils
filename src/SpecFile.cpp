@@ -58,6 +58,7 @@
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/SpecUtilsAsync.h"
 #include "SpecUtils/RapidXmlUtils.hpp"
+#include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
@@ -421,18 +422,25 @@ const std::string &SpecFile::inspection() const
 
 double Measurement::latitude() const
 {
-  return latitude_;
+  if( !location_ || !(location_->geo_location_) || IsNan(location_->geo_location_->latitude_) )
+    return -999.9;
+  return location_->geo_location_->latitude_;
 }
 
 double Measurement::longitude() const
 {
-  return longitude_;
+  if( !location_ || !(location_->geo_location_) || IsNan(location_->geo_location_->longitude_) )
+    return -999.9;
+  return location_->geo_location_->longitude_;
 }
 
 
-const time_point_t &Measurement::position_time() const
+const time_point_t Measurement::position_time() const
 {
-  return position_time_;
+  if( !location_ || !(location_->geo_location_) )
+    return time_point_t{};
+  
+  return location_->geo_location_->position_time_;
 }
 
 const std::string &SpecFile::measurement_operator() const
@@ -664,17 +672,17 @@ double Measurement::neutron_counts_sum() const
 
 float Measurement::speed() const
 {
-  return speed_;
+  return (!location_ || IsNan(location_->speed_)) ? 0.0f : location_->speed_;
 }
 
 float Measurement::dx() const
 {
-    return dx_;
+  return (!location_ || !location_->relative_location_ ) ? 0.0f : location_->relative_location_->dx();
 }
 
 float Measurement::dy() const
 {
-    return dy_;
+  return (!location_ || !location_->relative_location_ ) ? 0.0f : location_->relative_location_->dy();
 }
 
 const std::string &Measurement::detector_name() const
@@ -783,10 +791,43 @@ void Measurement::set_source_type( const SourceType type )
 
 void Measurement::set_position( double longitude, double latitude, time_point_t pos_time )
 {
-  longitude_ = longitude;
-  latitude_ = latitude;
-  position_time_ = pos_time;
-}
+  if( !valid_latitude(latitude) && !valid_longitude(longitude) )
+  {
+    if( !location_ || !(location_->geo_location_) )
+      return;
+    
+    auto loc = make_shared<LocationState>( *location_ );
+    loc->geo_location_.reset();
+    location_ = loc;
+    
+    // Actually just get rid of location_ if nothing left is valid
+    if( IsNan(loc->speed_) && !loc->geo_location_
+       && !loc->relative_location_ && !loc->orientation_ )
+      location_.reset();
+
+    return;
+  }
+  
+  shared_ptr<LocationState> loc;
+  if( location_ )
+    loc = make_shared<LocationState>( *location_ );
+  else
+    loc = make_shared<LocationState>();
+  location_ = loc;
+  
+  shared_ptr<GeographicPoint> geo;
+  if( loc->geo_location_ )
+    geo = make_shared<GeographicPoint>( *(loc->geo_location_) );
+  else
+    geo = make_shared<GeographicPoint>();
+  
+  loc->geo_location_ = geo;
+  
+  geo->latitude_ = latitude;
+  geo->longitude_ = longitude;
+  geo->position_time_ = pos_time;
+}//set_position(...)
+
   
 void Measurement::set_sample_number( const int samplenum )
 {
@@ -858,7 +899,13 @@ const std::vector<float> &Measurement::neutron_counts() const
   return neutron_counts_;
 }
   
-  
+
+const std::shared_ptr<const SpecUtils::LocationState> &Measurement::location_state() const
+{
+  return location_;
+}
+
+
 size_t Measurement::num_gamma_channels() const
 {
   if( !gamma_counts_ )
@@ -1420,9 +1467,7 @@ void Measurement::reset()
   occupied_ = OccupancyStatus::Unknown;
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
-  speed_ = 0.0f;
-  dx_ = 0.0f;
-  dy_ = 0.0f;
+  
   detector_name_.clear();
   detector_number_ = -1;
   detector_description_.clear();
@@ -1431,9 +1476,6 @@ void Measurement::reset()
   source_type_       = SourceType::Unknown;
 
   contained_neutron_ = false;
-
-  latitude_ = longitude_ = -999.9;
-  position_time_ = time_point_t{};
 
   remarks_.clear();
   parse_warnings_.clear();
@@ -1449,12 +1491,17 @@ void Measurement::reset()
   derived_data_properties_ = 0;
   
   dose_rate_ = exposure_rate_ = -1.0f;
+  
+  location_.reset();
 }//void reset()
 
   
 bool Measurement::has_gps_info() const
 {
-  return (SpecUtils::valid_longitude(longitude_) && SpecUtils::valid_latitude(latitude_));
+  return location_
+         && location_->geo_location_
+         && SpecUtils::valid_longitude(location_->geo_location_->longitude_)
+         && SpecUtils::valid_latitude(location_->geo_location_->latitude_);
 }
   
   
@@ -1468,6 +1515,12 @@ bool SpecFile::has_gps_info() const
 float Measurement::dose_rate() const
 {
   return dose_rate_;
+}
+
+
+float Measurement::exposure_rate() const
+{
+  return exposure_rate_;
 }
 
   
@@ -2237,10 +2290,7 @@ void SpecFile::set_position( double longitude, double latitude,
     throw runtime_error( "SpecFile::set_position(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
-  ptr->longitude_ = longitude;
-  ptr->latitude_ = latitude;
-  ptr->position_time_ = position_time;
-  
+  ptr->set_position( longitude, latitude, position_time );
   
   int nGpsCoords = 0;
   mean_latitude_ = mean_longitude_ = 0.0;
@@ -2918,29 +2968,6 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     issues.push_back( buffer );
   }
 
-  if( fabs(lhs.speed_ - rhs.speed_) > 0.01 )
-  {
-    snprintf( buffer, sizeof(buffer),
-             "Measurement: Speed of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.speed_, rhs.speed_ );
-    issues.push_back( buffer );
-  }
-
-  if (fabs(lhs.dx_ - rhs.dx_) > 0.01)
-  {
-    snprintf( buffer, sizeof(buffer),
-              "Measurement: dx of LHS (%1.8E) doesnt match RHS (%1.8E)",
-              lhs.dx_, rhs.dx_);
-    issues.push_back( buffer);
-  }
-
-  if (fabs(lhs.dy_ - rhs.dy_) > 0.01)
-  {
-    snprintf( buffer, sizeof(buffer),
-              "Measurement: dy of LHS (%1.8E) doesnt match RHS (%1.8E)",
-              lhs.dy_, rhs.dy_);
-    issues.push_back( buffer );
-  }
 
   if( lhs.detector_name_ != rhs.detector_name_ )
     issues.push_back( "Measurement: Detector name for LHS ('" + lhs.detector_name_
@@ -3245,26 +3272,6 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     }//for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
   }//if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() ) / else
   
-  if( fabs(lhs.latitude_ - rhs.latitude_) > 0.00001 )
-  {
-    snprintf( buffer, sizeof(buffer),
-             "Measurement: Latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.latitude_, rhs.latitude_ );
-    issues.push_back( buffer );
-  }
-  
-  if( fabs(lhs.longitude_ - rhs.longitude_) > 0.00001 )
-  {
-    snprintf( buffer, sizeof(buffer),
-             "Measurement: Longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.longitude_, rhs.longitude_ );
-    issues.push_back( buffer );
-  }
-
-  if( lhs.position_time_ != rhs.position_time_ )
-    issues.push_back( "Measurement: Position time for LHS ("
-                        + SpecUtils::to_iso_string(lhs.position_time_) + ") doesnt match RHS ("
-                        + SpecUtils::to_iso_string(rhs.position_time_) + ")" );
 
   if( lhs.title_ != rhs.title_ )
     issues.push_back( "Measurement: Title for LHS ('" + lhs.title_
@@ -3328,6 +3335,25 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     issues.push_back( "Measurement: The exposure rate of LHS is " + std::to_string(lhs.exposure_rate_)
                      + " while RHS is " + std::to_string(rhs.exposure_rate_) );
   }
+  
+  if( (!lhs.location_) != (!rhs.location_) )
+  {
+    issues.push_back( "Measurement: The "
+                     + string(lhs.location_ ? "LHS" : "RHS")
+                     + " LocationState info, but "
+                     + string(lhs.location_ ? "RHS" : "LHS")
+                     + " does not." );
+  }else if( lhs.location_ )
+  {
+    assert( rhs.location_ );
+    try
+    {
+      LocationState::equal_enough( *lhs.location_, *rhs.location_ );
+    }catch( std::exception &e )
+    {
+      issues.push_back( e.what() );
+    }
+  }//if( (!lhs.location_) != (!rhs.location_) ) / else
   
   string error_msg;
   for( const string &m : issues )
@@ -4076,9 +4102,7 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   occupied_ = rhs.occupied_;
   gamma_count_sum_ = rhs.gamma_count_sum_;
   neutron_counts_sum_ = rhs.neutron_counts_sum_;
-  speed_ = rhs.speed_;
-  dx_ = rhs.dx_;
-  dy_ = rhs.dy_;
+  
   detector_name_ = rhs.detector_name_;
   detector_number_ = rhs.detector_number_;
   detector_description_ = rhs.detector_description_;
@@ -4098,10 +4122,6 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
 //    gamma_counts_ = std::make_shared<vector<float>>();
 
   neutron_counts_ = rhs.neutron_counts_;
-  
-  latitude_       = rhs.latitude_;
-  longitude_      = rhs.longitude_;
-  position_time_  = rhs.position_time_;
 
   title_ = rhs.title_;
 
@@ -4109,6 +4129,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   
   dose_rate_ = rhs.dose_rate_;
   exposure_rate_ = rhs.exposure_rate_;
+  
+  location_ = rhs.location_;
   
   return *this;
 }//const Measurement &operator=( const Measurement &rhs )
@@ -5019,20 +5041,23 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       if( meas->has_gps_info() )
       {
         //  a lat long of (0 0) probably isnt a valid GPS coordinate
-        if( (fabs(meas->latitude_) < 1.0E-6)
-           && (fabs(meas->longitude_) < 1.0E-6) )
+        if( meas->location_
+           && meas->location_->geo_location_
+           && (IsNan(meas->location_->geo_location_->latitude_) || (fabs(meas->location_->geo_location_->latitude_) < 1.0E-6))
+           && (IsNan(meas->location_->geo_location_->longitude_) || (fabs(meas->location_->geo_location_->longitude_) < 1.0E-6))
+           )
         {
-          meas->latitude_ = meas->longitude_ = -999.9;
-          meas->position_time_ = time_point_t{};
+          auto loc = make_shared<LocationState>( *meas->location_ );
+          loc->geo_location_.reset();
+          if( IsNan(loc->speed_) && !loc->relative_location_ && !loc->orientation_ )
+            loc.reset();
+          meas->location_ = loc;
         }else
         {
           ++nGpsCoords;
           mean_latitude_ += meas->latitude();
           mean_longitude_ += meas->longitude();
         }
-      }else if( !is_special(meas->position_time_) )
-      {
-        meas->position_time_ = time_point_t{};
       }
       
       meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
@@ -6427,10 +6452,10 @@ std::string SpecFile::generate_psuedo_uuid() const
     boost::hash_combine( seed, meas->gamma_count_sum() );
     boost::hash_combine( seed, meas->neutron_counts_sum() );
     
-    if( SpecUtils::valid_latitude(meas->latitude_) )
-      boost::hash_combine( seed, meas->latitude_ );
-    if( SpecUtils::valid_longitude(meas->longitude_) )
-      boost::hash_combine( seed, meas->longitude_ );
+    if( SpecUtils::valid_latitude(meas->latitude()) )
+      boost::hash_combine( seed, meas->latitude() );
+    if( SpecUtils::valid_longitude(meas->longitude()) )
+      boost::hash_combine( seed, meas->longitude() );
     //  boost::hash_combine( seed, position_time_ );
   }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
 
@@ -7102,20 +7127,14 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   //  information
   if( total_num_gamma_spec == 1 )
   {
-    dataH->latitude_             = meas_per_thread[0][0]->latitude_;
-    dataH->longitude_            = meas_per_thread[0][0]->longitude_;
-    dataH->position_time_        = meas_per_thread[0][0]->position_time_;
     dataH->sample_number_        = meas_per_thread[0][0]->sample_number_;
     dataH->occupied_             = meas_per_thread[0][0]->occupied_;
-    dataH->speed_                = meas_per_thread[0][0]->speed_;
-    dataH->dx_                   = meas_per_thread[0][0]->dx_;
-    dataH->dy_                   = meas_per_thread[0][0]->dy_;
     dataH->detector_name_        = meas_per_thread[0][0]->detector_name_;
     dataH->detector_number_      = meas_per_thread[0][0]->detector_number_;
     dataH->detector_description_ = meas_per_thread[0][0]->detector_description_;
     dataH->quality_status_       = meas_per_thread[0][0]->quality_status_;
+    dataH->location_             = meas_per_thread[0][0]->location_;
   }//if( total_num_gamma_spec == 1 )
-  
   
   
   if( allBinningIsSame )
@@ -7366,8 +7385,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       for( size_t i = 0; i < spec_size; ++i )
         summed_counts[i] += out_counts[i];
 #endif
-      
-      
     }//for( const auto &iter : cal_to_meas )
   
     

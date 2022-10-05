@@ -32,7 +32,9 @@
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -334,9 +336,16 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
         if( m->contained_neutron_ )
           m->neutron_counts_.resize( 1, static_cast<float>(neutroncount) );
         
-        m->latitude_ = lat;
-        m->longitude_ = lon;
-        //        m->position_time_ = ;//
+        if( valid_longitude(lon) && valid_latitude(lat) )
+        {
+          auto loc = make_shared<LocationState>();
+          m->location_ = loc;
+          auto geo = make_shared<GeographicPoint>();
+          loc->geo_location_ = geo;
+          geo->latitude_ = lat;
+          geo->longitude_ = lon;
+        }
+        
         m->title_ = title;
         
         measurements_.push_back( m );

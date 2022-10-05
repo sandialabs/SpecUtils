@@ -42,6 +42,7 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
 using namespace std;
@@ -541,9 +542,12 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       {
         if( SpecUtils::icontains(line, "no") )
         {
-          meas->latitude_ = -999.9;
-          meas->longitude_= -999.9;
-        }
+          if( meas->location_ && meas->location_->geo_location_ )
+          {
+            auto loc = make_shared<LocationState>( *meas->location_ );
+            loc->geo_location_.reset();
+          }
+        }//
       }else if( istarts_with( line, "GPS" ) )
       {
         line = line.substr(info_pos);
@@ -554,13 +558,23 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             if( !isalnum(line[i]) )
               line[i] = ' ';
           
-          string latstr = line.substr(0,pos);
-          string lonstr = line.substr(pos+1);
-          trim( latstr );
-          trim( lonstr );
+          const string latstr = trim_copy( line.substr(0,pos) );
+          const string lonstr = trim_copy( line.substr(pos+1) );
           
-          meas->latitude_ = conventional_lat_or_long_str_to_flt( latstr );
-          meas->longitude_ = conventional_lat_or_long_str_to_flt( lonstr );
+          const double lat = conventional_lat_or_long_str_to_flt( latstr );
+          const double lon = conventional_lat_or_long_str_to_flt( lonstr );
+          
+          if( valid_latitude(lat) && valid_longitude(lon) )
+          {
+            auto loc = make_shared<LocationState>();
+            auto geo = make_shared<GeographicPoint>();
+            loc->geo_location_ = geo;
+            
+            geo->latitude_ = lat;
+            geo->longitude_ = lon;
+            
+            meas->location_ = loc;
+          }//
         }else
         {
           meas->parse_warnings_.push_back( "Couldnt parse lat/lon." );
@@ -1032,7 +1046,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     {
       output << pad_iaea_prefix( "GPSValid" ) << "yes\r\n";
       //Should probably put into degree, minute, second notation, but some other time...
-      output << pad_iaea_prefix( "GPS" ) << summed->latitude_ << "," << summed->longitude_ << "\r\n";
+      output << pad_iaea_prefix( "GPS" ) << summed->latitude() << "," << summed->longitude() << "\r\n";
     }//if( summed->has_gps_info() )
     
     
@@ -2778,8 +2792,24 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     if( longitudeStr.size() && latitudeStr.size() )
     {
-      meas->latitude_ = conventional_lat_or_long_str_to_flt(latitudeStr);
-      meas->longitude_ = conventional_lat_or_long_str_to_flt(longitudeStr);
+      const double lat = conventional_lat_or_long_str_to_flt(latitudeStr);
+      const double lon = conventional_lat_or_long_str_to_flt(longitudeStr);
+      
+      if( valid_latitude(lat) && valid_longitude(lon) )
+      {
+        shared_ptr<LocationState> location;
+        if( meas->location_ )
+          location = make_shared<LocationState>( *meas->location_ );
+        else
+          location = make_shared<LocationState>( *meas->location_ );
+        
+        auto geo = make_shared<GeographicPoint>();
+        geo->longitude_ = lon;
+        geo->latitude_ = lat;
+        location->geo_location_ = geo;
+        
+        meas->location_ = location;
+      }//if( valid_latitude(lat) && valid_longitude(lon) )
     }//if( longitudeStr.size() && latitudeStr.size() )
     
     measurements_.push_back( meas );
