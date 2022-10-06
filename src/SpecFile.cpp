@@ -798,6 +798,10 @@ void Measurement::set_position( double longitude, double latitude, time_point_t 
     
     auto loc = make_shared<LocationState>( *location_ );
     loc->geo_location_.reset();
+    
+    // We could maybe make the position state type default to be position of the instrument
+    //loc->type_ = LocationState::StateType::Instrument;
+    
     location_ = loc;
     
     // Actually just get rid of location_ if nothing left is valid
@@ -810,9 +814,15 @@ void Measurement::set_position( double longitude, double latitude, time_point_t 
   
   shared_ptr<LocationState> loc;
   if( location_ )
+  {
     loc = make_shared<LocationState>( *location_ );
-  else
+  }else
+  {
     loc = make_shared<LocationState>();
+    
+    // We will make the position state type default to be position of the instrument
+    loc->type_ = LocationState::StateType::Instrument;
+  }
   location_ = loc;
   
   shared_ptr<GeographicPoint> geo;

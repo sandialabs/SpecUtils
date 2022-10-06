@@ -1266,6 +1266,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
         }else
         {
           gps_location = make_shared<LocationState>();
+          // Best-guess is that the GPS units is for the instrument, but may not always be the case.
+          gps_location->type_ = LocationState::StateType::Instrument;
           auto geo = make_shared<GeographicPoint>();
           gps_location->geo_location_ = geo;
           geo->latitude_ = latitude;
@@ -1531,6 +1533,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
       if( !IsNan(speed) || !IsNan(dx) || !IsNan(dy) || !IsNan(dz) || !distance.empty() )
       {
         auto location = make_shared<LocationState>();
+        location->type_ = LocationState::StateType::Item;
         
         if( gps_location && gps_location->geo_location_ )
           location->geo_location_ = gps_location->geo_location_;

@@ -670,7 +670,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         if( !IsNan(speed) || (valid_longitude(longitude) && valid_latitude(latitude)) )
         {
           if( !location )
+          {
             location = make_shared<LocationState>();
+            location->type_ = LocationState::StateType::Instrument;
+          }
           
           location->speed_ = speed;
           if( valid_longitude(longitude) && valid_latitude(latitude) )

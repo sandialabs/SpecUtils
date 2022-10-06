@@ -289,6 +289,8 @@ bool SpecFile::load_from_aram( std::istream &input )
       if( parse_deg_min_sec_lat_lon( coord.c_str(), coord.size(), lat, lon ) )
       {
         auto loc = make_shared<LocationState>();
+        loc->type_ = LocationState::StateType::Instrument;
+        
         auto geo = make_shared<GeographicPoint>();
         loc->geo_location_ = geo;
         geo->longitude_ = lon;

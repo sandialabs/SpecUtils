@@ -20,6 +20,7 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
+#include <string>
 #include <numeric>
 
 #include "rapidxml/rapidxml.hpp"
@@ -346,6 +347,7 @@ void LocationState::from_n42_2012( const rapidxml::xml_node<char> * const state_
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     log_developer_error( __func__, ("Unknown parent node passed in: " + xml_name_str(state_parent_node)).c_str() );
 #endif
+    assert( 0 ); //We shouldnt get here, but lets test this
   }
   
   bool read_something_in = false;
@@ -446,10 +448,10 @@ void LocationState::from_n42_2012( const rapidxml::xml_node<char> * const state_
     {
       const rapidxml::xml_node<char> *desc_node = XML_FIRST_NODE(origin_node, "OriginDescription");
       loc->origin_description_ = xml_value_str(desc_node);
-    }
-    
-    const rapidxml::xml_node<char> *geo_point_node = XML_FIRST_NODE(origin_node, "GeographicPoint");
-    loc->origin_geo_point_ = parse_geo_point( geo_point_node );
+      
+      const rapidxml::xml_node<char> *geo_point_node = XML_FIRST_NODE(origin_node, "GeographicPoint");
+      loc->origin_geo_point_ = parse_geo_point( geo_point_node );
+    }//if( origin_node )
     
     if( !IsNan(loc->coordinates_[0]) || !IsNan(loc->coordinates_[1]) || !IsNan(loc->coordinates_[2])
        || loc->origin_geo_point_ )

@@ -579,6 +579,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         if( valid_latitude(lat) && valid_longitude(lon) && (lat != lon) )
         {
           auto loc = make_shared<LocationState>();
+          loc->type_ = LocationState::StateType::Instrument;
           m->location_ = loc;
           auto geo = make_shared<GeographicPoint>();
           loc->geo_location_ = geo;
@@ -889,7 +890,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                 {
                   ++nlines_used;
                   const size_t nchan = channels->size();
-                  if( nchan >= 128 )
+                  if( nchan >= 64 )
                   {
                     try
                     {
@@ -1166,7 +1167,10 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           const float speed = SpecUtils::speed_from_remark( line );
           
           if( !location )
+          {
             location = make_shared<LocationState>();
+            location->type_ = LocationState::StateType::Instrument;
+          }
           location_ = location;
           
           location->speed_ = speed;

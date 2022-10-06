@@ -339,6 +339,7 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
         if( valid_longitude(lon) && valid_latitude(lat) )
         {
           auto loc = make_shared<LocationState>();
+          loc->type_ = LocationState::StateType::Instrument;
           m->location_ = loc;
           auto geo = make_shared<GeographicPoint>();
           loc->geo_location_ = geo;

@@ -1380,7 +1380,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         }//if( we can re-use calibration ) / else
       }//if( we have energy cal info )
       
-      auto loc = make_shared<SpecUtils::LocationState>();
+      auto loc = make_shared<LocationState>();
+      loc->type_ = LocationState::StateType::Instrument;
       loc->speed_ = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
       meas->location_ = loc;
       meas->start_time_         = endrecord.lastStartTime;

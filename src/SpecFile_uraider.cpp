@@ -170,6 +170,7 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
         if( parse_deg_min_sec_lat_lon(GPS->value(), GPS->value_size(), latitude, longitude) )
         {
           auto loc = make_shared<LocationState>();
+          loc->type_ = LocationState::StateType::Instrument;
           meas->location_ = loc;
           auto geo = make_shared<GeographicPoint>();
           loc->geo_location_ = geo;

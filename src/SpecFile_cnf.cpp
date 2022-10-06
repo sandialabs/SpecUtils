@@ -247,6 +247,7 @@ namespace
         break;
         case cam_type::cam_longword:
         {
+          // TODO: use float_to_integral(...) for below
             T t_trunc = std::min( input, static_cast<T>(std::numeric_limits<int32_t>::max()) );
             t_trunc = std::max( t_trunc, static_cast<T>(std::numeric_limits<int32_t>::min()) );
             int32_t t_longword = static_cast<int32_t>(t_trunc);

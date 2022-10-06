@@ -5,9 +5,14 @@ The default Apple compiler doesnt seem to dome with the clang fuzzing library, s
 
 ```bash
 brew install llvm
+
 unset CMAKE_OSX_DEPLOYMENT_TARGET
+
+# Since Big Sur v11.1, we need to fix up the LIBRARY_PATH variable
+export LIBRARY_PATH="$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"  
+
 cmake -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" -DCMAKE_PREFIX_PATH="/usr/local/opt/llvm;/path/to/compiled/boost/" -DCMAKE_CXX_COMPILER="/usr/local/opt/llvm/bin/clang++" -DCMAKE_C_COMPILER="/usr/local/opt/llvm/bin/clang" -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/usr/local/opt/llvm/include/c++/v1" -DSpecUtils_BUILD_FUZZING_TESTS=ON ..
-make -j16
+cmake --build . --config RelWithDebInfo -j16
 ```
 
 You then need to create a `CORPUS_DIR` that contains a wide variety of sample spectrum files.  
@@ -17,6 +22,8 @@ Once you do this, you can run a fuzz job, use a command like:
 #  (using -workers=16 argument doesnt seem to cause significantly more cpu use than a single worker)
 ./fuzz_test/file_parse_fuzz CORPUS_DIR -max_len=2621440 -jobs=8 -print_final_stats=1 -rss_limit_mb=4096 -max_total_time=300
 ```
+
+Since files are written to your CORPUS_DIR, you probably want to make a copy of the directory, before running.
 
 
 ## Further information

@@ -2603,6 +2603,10 @@ struct N42DecodeHelper2006
           if( !location )
           {
             location = make_shared<LocationState>();
+            
+            // I think we are here primarily if we are a portal, so it makes sense to assign the
+            //  speed as `item`.
+            location->type_ = LocationState::StateType::Item;
             meas.location_ = location;
           }
           location->speed_ = thisspeed;
@@ -3034,7 +3038,13 @@ struct N42DecodeHelper2006
         }else
         {
           if( !speed_loc )
+          {
             speed_loc = make_shared<LocationState>();
+            
+            // I think we are here primarily if we are a portal, so it makes sense to assign the
+            //  speed as `item`.
+            speed_loc->type_ = LocationState::StateType::Item;
+          }
           speed_loc->speed_ = speed;
           meas->location_ = speed_loc;
         }
@@ -5108,6 +5118,8 @@ namespace SpecUtils
     if( SpecUtils::valid_latitude(latitude) && SpecUtils::valid_longitude(longitude) )
     {
       auto loc = make_shared<LocationState>();
+      loc->type_ = LocationState::StateType::Instrument;
+      
       auto geo_point = make_shared<GeographicPoint>();
       loc->speed_ = speed;
       loc->geo_location_ = geo_point;

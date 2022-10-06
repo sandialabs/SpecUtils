@@ -544,9 +544,18 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         {
           if( meas->location_ && meas->location_->geo_location_ )
           {
-            auto loc = make_shared<LocationState>( *meas->location_ );
-            loc->geo_location_.reset();
-          }
+            if( IsNan(meas->location_->speed_)
+               && !meas->location_->relative_location_
+               && !meas->location_->orientation_ )
+            {
+              meas->location_.reset();
+            }else
+            {
+              auto loc = make_shared<LocationState>( *meas->location_ );
+              loc->geo_location_.reset();
+              meas->location_ = loc;
+            }
+          }//if( meas->location_ && meas->location_->geo_location_ )
         }//
       }else if( istarts_with( line, "GPS" ) )
       {
@@ -567,6 +576,9 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           if( valid_latitude(lat) && valid_longitude(lon) )
           {
             auto loc = make_shared<LocationState>();
+            // Take our best guess that these GPS coordinates are for the instrument.
+            loc->type_ = LocationState::StateType::Instrument;
+            
             auto geo = make_shared<GeographicPoint>();
             loc->geo_location_ = geo;
             
@@ -970,10 +982,12 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
       {
         float intsec, fracsec;
         fracsec = std::modf( summed->real_time_, &intsec );
+        const int intsec_i = float_to_integral<int>( intsec );
+        const float nmicro = floor((1.0E6f * fracsec) + 0.5f);
+        const auto nmicro_i = float_to_integral<chrono::microseconds::rep>( nmicro );
         
         const time_point_t endtime = summed->start_time_
-                                + chrono::seconds( static_cast<int>(intsec) )
-                                + chrono::microseconds( static_cast<int>( floor((1.0E6f * fracsec) + 0.5f) ) );
+                                      + chrono::seconds(intsec_i) + chrono::microseconds(nmicro_i);
         
         output << pad_iaea_prefix( "StopTime" ) << print_to_iaea_datetime( endtime ) << "\r\n";
       }//
@@ -981,7 +995,14 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     
     
     if( summed->contained_neutron_ )
-      output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int64_t>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
+    {
+      // To avoid potential UB we'll use `float_to_integral`; but since I havent implemented
+      //  `double_to_integral` yet, we'll first convert to a float (if this causes any change of
+      //  valid data, the rounding/converting really wont matter).
+      const float neut_sum_f = static_cast<float>(std::round(summed->neutron_counts_sum_));
+      const auto neut_sum_i = float_to_integral<int64_t>( neut_sum_f );
+      output << pad_iaea_prefix( "NeutronCounts" ) << neut_sum_i << "\r\n";
+    }
     
     assert( summed->energy_calibration_ );
     
@@ -2799,9 +2820,13 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       {
         shared_ptr<LocationState> location;
         if( meas->location_ )
+        {
           location = make_shared<LocationState>( *meas->location_ );
-        else
-          location = make_shared<LocationState>( *meas->location_ );
+        }else
+        {
+          location = make_shared<LocationState>();
+          location->type_ = LocationState::StateType::Instrument; //best guess
+        }
         
         auto geo = make_shared<GeographicPoint>();
         geo->longitude_ = lon;

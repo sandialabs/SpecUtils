@@ -163,20 +163,20 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
         
         if( nchannel == 9 )
         {
-          const vector<float> edges{ 0.0f, 109.0f, 167.6f,
-            284.8f, 519.1f, 987.9f, 1163.7f, 1456.6f, 2862.9f, 3027.0f
+          vector<float> edges{ 0.0f, 109.0f, 167.6f, 284.8f, 519.1f, 987.9f,
+            1163.7f, 1456.6f, 2862.9f, 3027.0f
           };// edges
           
           assert( edges.size() == 10 );
           
-          cal->set_lower_channel_energy( 9, edges );
-        }else if( nchannel >= 2 )
+          cal->set_lower_channel_energy( 9, std::move(edges) );
+        }else if( nchannel >= EnergyCalibration::sm_min_channels )
         {
-          assert( nchannel < 65538 );
+          assert( nchannel < EnergyCalibration::sm_max_channels ); // set_default_polynomial will throw if this isnt the case anyway
           cal->set_default_polynomial( nchannel, {0.0f, 3000.0f/nchannel}, {} );
         }else
         {
-          assert( 0 );
+          // Leave the default energy calibration
         }//if( nchannel == 9 ) / else
         
         energy_cals[nchannel] = cal;

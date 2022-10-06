@@ -1081,6 +1081,50 @@ namespace SpecUtils
   
   bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
+    /*
+     // It would be nice to use <charconv> to do the conversion; but currently (20221005)
+     //  support isnt that great.  LLVM 14, MSVC >=2019, and gcc 12 seem to support floating
+     //  point from_char, but Apple LLVM 14 does not (and thus not macOS or iOS), and I'm
+     //  unsure about Android status.
+     //  The solution is probably to use https://github.com/fastfloat/fast_float (which is what
+     //  the compilers look to use anyway).
+     
+     // A toy implementation of using from_chars, that seems to work on simple/niave input is:
+     //  (hasnt been extensively tested, and definitely not benchmarked)
+     const char *start = input;
+     const char *end = input + length;
+     results.reserve( std::min( length/2, size_t(32768) ) );
+     
+     while( start < end )
+     {
+       float result;
+       const std::from_chars_result status = std::from_chars(start, end, result);
+       // auto [ptr, ec] = = std::from_chars(start, end, result);
+     
+       if( status.ec == std::errc() )
+       {
+         cout << "Result: " << result << ", (ptr-start) -> " << (status.ptr-start) << endl;
+         results.push_back( result );
+       }else
+       {
+         cout << "Error reading number isn't a number." << endl;
+         return false;
+       }
+     
+       start = status.ptr + 1;
+       while( start < end )
+       {
+         const char ch = *start;
+         if( (ch == '-') || (ch == '.') || (ch >= '0' && ch <= '9') )
+           break;
+     
+         ++start;
+       }//while( start < end )
+     }//while( start < end )
+     
+     return true;
+     */
+    
     results.clear();
     
     if( !input || !length )

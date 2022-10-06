@@ -44,6 +44,9 @@ using namespace std;
 
 namespace SpecUtils
 {
+const size_t EnergyCalibration::sm_min_channels = 1;
+const size_t EnergyCalibration::sm_max_channels = 65536 + 8;
+
 
 EnergyCalibration::EnergyCalibration()
   : m_type( EnergyCalType::InvalidEquationType )
@@ -105,15 +108,16 @@ size_t EnergyCalibration::num_channels() const
 }//num_channels()
 
 
+
 void EnergyCalibration::set_polynomial( const size_t num_channels,
                                         const std::vector<float> &coeffs,
                                         const std::vector<std::pair<float,float>> &dev_pairs )
 {
   /// \TODO: possibly loosen this up to not have a number of channel requirement... should be fine?
-  if( num_channels < 2 )
-    throw runtime_error( "EnergyCalibration::set_polynomial: requires >=2 channels" );
+  if( num_channels < sm_min_channels )
+    throw runtime_error( "EnergyCalibration::set_polynomial: requires >=1 channels" );
   
-  if( num_channels > (65536 + 8) )
+  if( num_channels > sm_max_channels )
     throw runtime_error( "EnergyCalibration::set_polynomial: must be called with <= 64k channels" );
   
   //Find the last non-zero coefficients (e.g., strip off trailing zeros)
@@ -164,10 +168,10 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
                                 const std::vector<float> &coeffs,
                                 const std::vector<std::pair<float,float>> &dev_pairs )
 {
-  if( num_channels < 2 )
-    throw runtime_error( "Full range fraction energy calibration requires >=2 channels" );
+  if( num_channels < sm_min_channels )
+    throw runtime_error( "Full range fraction energy calibration requires >=1 channels" );
   
-  if( num_channels > (65536 + 8) )
+  if( num_channels > sm_max_channels )
     throw runtime_error( "Full range fraction energy calibration must have <= 64k channels" );
   
   //Find the last non-zero coefficients (e.g., strip off trailing zeros)
@@ -176,7 +180,7 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
      --last_iter;
   
   if( last_iter < 2 )
-    throw runtime_error( "Full range fraction energy calibration requires >=2 coefficents" );
+    throw runtime_error( "Full range fraction energy calibration requires >=2 coefficients" );
   
   for( size_t i = 0; i < last_iter; ++i )
   {
@@ -197,9 +201,13 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
 void EnergyCalibration::check_lower_energies( const size_t num_channels,
                                               const std::vector<float> &channel_energies )
 {
-  if( num_channels < 2 )
-    throw runtime_error( "EnergyCalibration::set_lower_channel_energy: must be called with >=2"
+  if( num_channels < sm_min_channels )
+    throw runtime_error( "EnergyCalibration::set_lower_channel_energy: must be called with >=1"
                          " channels" );
+  
+  if( num_channels > sm_max_channels )
+    throw runtime_error( "EnergyCalibration::set_lower_channel_energy:"
+                         " called with too many channels" );
   
   if( num_channels > channel_energies.size() )
     throw runtime_error( "EnergyCalibration::set_lower_channel_energy: not enough channel energies"
@@ -218,6 +226,10 @@ void EnergyCalibration::check_lower_energies( const size_t num_channels,
 void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
                                                   const std::vector<float> &channel_energies )
 {
+  if( channel_energies.size() <= 1 )
+    throw runtime_error( "EnergyCalibration::set_lower_channel_energy: at least two channel"
+                        " energies must be passed in." );
+  
   check_lower_energies( num_channels, channel_energies );
   
   auto energies = std::make_shared<std::vector<float>>( num_channels + 1 );
@@ -228,6 +240,8 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
   {
     assert( num_channels == channel_energies.size() );
     assert( numsrc_channels == channel_energies.size() );
+    assert( channel_energies.size() >= 2 );
+    assert( num_channels >= 2 );
     (*energies)[num_channels] = 2.0f*channel_energies[num_channels-1] - channel_energies[num_channels-2];
   }
   
@@ -241,13 +255,21 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
 void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
                                                   std::vector<float> &&channel_energies )
 {
+  if( channel_energies.size() <= 1 )
+    throw runtime_error( "EnergyCalibration::set_lower_channel_energy: at least two channel"
+                        " energies must be passed in." );
+  
   check_lower_energies( num_channels, channel_energies );
   assert( channel_energies.size() >= num_channels );
   
   auto energies = std::make_shared<std::vector<float>>( std::move(channel_energies) );
   
   if( energies->size() < (num_channels+1) )
+  {
+    assert( num_channels >= 2 );
     energies->push_back( 2.0f*((*energies)[num_channels-1]) - ((*energies)[num_channels-2]) );
+  }
+  
   if( energies->size() > (num_channels+1) )
     energies->resize( num_channels+1 );
   

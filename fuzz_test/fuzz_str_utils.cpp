@@ -546,8 +546,8 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   
   // Date/Time functions we can test
   
-  auto test_to_str = []( const boost::posix_time::ptime dt ){
-    if( dt.is_special() )
+  auto test_to_str = []( const SpecUtils::time_point_t dt ){
+    if( SpecUtils::is_special(dt) )
       return;
     
     to_vax_string( dt );
@@ -575,25 +575,25 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   
     print_waypoint( 39 );
     
-    test_to_str( time_from_string_strptime( datastr_short, DateParseEndianType::LittleEndianFirst ) );
-    //test_to_str( time_from_string_strptime( datastr_short, DateParseEndianType::LittleEndianOnly ) );
-    test_to_str( time_from_string_strptime( datastr_short, DateParseEndianType::MiddleEndianFirst ) );
-    //test_to_str( time_from_string_strptime( datastr_short, DateParseEndianType::MiddleEndianOnly ) );
+    test_to_str( time_from_string( datastr_short, DateParseEndianType::LittleEndianFirst ) );
+    //test_to_str( time_from_string( datastr_short, DateParseEndianType::LittleEndianOnly ) );
+    test_to_str( time_from_string( datastr_short, DateParseEndianType::MiddleEndianFirst ) );
+    //test_to_str( time_from_string( datastr_short, DateParseEndianType::MiddleEndianOnly ) );
   
     
     print_waypoint( 40 );
     
-    test_to_str( time_from_string_strptime( str_1_short, DateParseEndianType::LittleEndianFirst ) );
-    //test_to_str( time_from_string_strptime( str_1_short, DateParseEndianType::LittleEndianOnly ) );
-    test_to_str( time_from_string_strptime( str_1_short, DateParseEndianType::MiddleEndianFirst ) );
-    //test_to_str( time_from_string_strptime( str_1_short, DateParseEndianType::MiddleEndianOnly ) );
+    test_to_str( time_from_string( str_1_short, DateParseEndianType::LittleEndianFirst ) );
+    //test_to_str( time_from_string( str_1_short, DateParseEndianType::LittleEndianOnly ) );
+    test_to_str( time_from_string( str_1_short, DateParseEndianType::MiddleEndianFirst ) );
+    //test_to_str( time_from_string( str_1_short, DateParseEndianType::MiddleEndianOnly ) );
     
     print_waypoint( 41 );
     
-    test_to_str( time_from_string_strptime( str_2_short, DateParseEndianType::LittleEndianFirst ) );
-    //test_to_str( time_from_string_strptime( str_2_short, DateParseEndianType::LittleEndianOnly ) );
-    test_to_str( time_from_string_strptime( str_2_short, DateParseEndianType::MiddleEndianFirst ) );
-    //test_to_str( time_from_string_strptime( str_2_short, DateParseEndianType::MiddleEndianOnly ) );
+    test_to_str( time_from_string( str_2_short, DateParseEndianType::LittleEndianFirst ) );
+    //test_to_str( time_from_string( str_2_short, DateParseEndianType::LittleEndianOnly ) );
+    test_to_str( time_from_string( str_2_short, DateParseEndianType::MiddleEndianFirst ) );
+    //test_to_str( time_from_string( str_2_short, DateParseEndianType::MiddleEndianOnly ) );
   }
   
   print_waypoint( 42 );

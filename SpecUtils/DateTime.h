@@ -26,6 +26,7 @@
 #include "SpecUtils_config.h"
 
 #include <chrono>
+#include <string>
 
 namespace  SpecUtils
 {
