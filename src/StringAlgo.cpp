@@ -53,6 +53,22 @@
 #undef max
 #endif
 
+#if( defined(_MSC_VER) && (_MSC_VER >= 1920) )
+#include <charconv>
+#define HAVE_FLOAT_FROM_CHARS 0
+#else
+// It would be nice to use <charconv> to do the conversion; but currently (20221005)
+//  support isnt that great.  LLVM 14, MSVC >=2019, and gcc 12 seem to support floating
+//  point from_char, but Apple LLVM 14 does not (and thus not macOS or iOS), and I'm
+//  unsure about Android status.
+//  The solution is probably to use https://github.com/fastfloat/fast_float (which is what
+//  the compilers look to use anyway).
+#define HAVE_FLOAT_FROM_CHARS 0
+#endif
+
+
+
+
 //#include <boost/config.hpp>
 //BOOST_NO_CXX11_HDR_CODECVT
 #ifndef _WIN32
@@ -1081,49 +1097,59 @@ namespace SpecUtils
   
   bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
-    /*
-     // It would be nice to use <charconv> to do the conversion; but currently (20221005)
-     //  support isnt that great.  LLVM 14, MSVC >=2019, and gcc 12 seem to support floating
-     //  point from_char, but Apple LLVM 14 does not (and thus not macOS or iOS), and I'm
-     //  unsure about Android status.
-     //  The solution is probably to use https://github.com/fastfloat/fast_float (which is what
-     //  the compilers look to use anyway).
-     
-     // A toy implementation of using from_chars, that seems to work on simple/niave input is:
-     //  (hasnt been extensively tested, and definitely not benchmarked)
+#if( HAVE_FLOAT_FROM_CHARS )
+    TODO: write to a file each input so we can use this to benchmark and test against.
+       TODO: test this implementation against old implementation for the regression test
+     // An implementation that HAS NOT been extensively tested, and not benchmarked:
      const char *start = input;
      const char *end = input + length;
+     results.resize(0);
      results.reserve( std::min( length/2, size_t(32768) ) );
      
      while( start < end )
      {
        float result;
-       const std::from_chars_result status = std::from_chars(start, end, result);
-       // auto [ptr, ec] = = std::from_chars(start, end, result);
+       //const std::from_chars_result status = std::from_chars(start, end, result);
+       const auto [ptr, ec] = std::from_chars(start, end, result);
      
-       if( status.ec == std::errc() )
+       if(ec == std::errc() )
        {
-         cout << "Result: " << result << ", (ptr-start) -> " << (status.ptr-start) << endl;
+         //cout << "Result: " << result << ", (ptr-start) -> " << (status.ptr-start) << endl;
          results.push_back( result );
        }else
        {
-         cout << "Error reading number isn't a number." << endl;
+         //cout << "Error reading '" << string(start,end) << "' isn't a number." << endl;
          return false;
        }
      
-       start = status.ptr + 1;
-       while( start < end )
+       start = ptr + 1;
+       if (start >= end)
+         return true;
+
+       // For most of input `start` will be the character of the next number, so we could avoid the while loop, with this next test, but I havent actually benchmarked.
+       //if (!((((*start) < '0') || ((*start) > '9')) && ((*start) != '-') && ((*start) != '.')))
+       //  continue;
+
+       // We will allow the delimiters " \t\n\r,"; I'm sure there is a much better way of testing for these
+       while( (start < end)
+         && ( ((*start) == ' ')
+           || ((*start) == '\t')
+           || ((*start) == '\n')
+           || ((*start) == '\r')
+           || ((*start) == ',')
+           // We want to allow numbers to start with a '+', which from_chars prohibits, 
+           // but we also want require the next character to be a number or a decimal, 
+           // and also for the '+' to not be the last character 
+           || (((*start) == '+') && ((start+1) < end) && ( (((*(start + 1)) >= '0') && ((*(start + 1)) <= '9')) || ((*(start + 1)) == '.') ) )
+           ) 
+         )
        {
-         const char ch = *start;
-         if( (ch == '-') || (ch == '.') || (ch >= '0' && ch <= '9') )
-           break;
-     
          ++start;
-       }//while( start < end )
+       }
      }//while( start < end )
      
      return true;
-     */
+#else
     
     results.clear();
     
@@ -1227,6 +1253,7 @@ namespace SpecUtils
     }//if( ok && begin != end )
     
     return ok;
+#endif //HAVE_FLOAT_FROM_CHARS / else
   }//bool split_to_floats(...)
   
   

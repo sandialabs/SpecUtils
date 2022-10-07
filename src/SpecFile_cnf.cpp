@@ -49,14 +49,14 @@ using namespace std;
 namespace
 {
 
-    typedef unsigned char byte;
+    typedef unsigned char byte_type;
 
-    template< typename T > std::array< byte, sizeof(T) >  to_bytes(const T& object)
+    template< typename T > std::array< byte_type, sizeof(T) >  to_bytes(const T& object)
     {
-        std::array< byte, sizeof(T) > bytes;
+        std::array< byte_type, sizeof(T) > bytes;
 
-        const byte* begin = reinterpret_cast<const byte*>(std::addressof(object));
-        const byte* end = begin + sizeof(T);
+        const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(object));
+        const byte_type* end = begin + sizeof(T);
         std::copy(begin, end, std::begin(bytes));
 
         return bytes;
@@ -80,14 +80,14 @@ namespace
 
     template <class T>
     //IEEE-754 variables to CAM float (PDP-11)
-    std::array< byte, sizeof(int32_t) > convert_to_CAM_float(const T& input)
+    std::array< byte_type, sizeof(int32_t) > convert_to_CAM_float(const T& input)
     {
 
         //pdp-11 is a wordswaped float/4
         float temp_f = static_cast<float>(input * 4);
         const auto temp = to_bytes(temp_f);
         const size_t word_size = 2;
-        std::array< byte, sizeof(int32_t) > output = { 0x00 };
+        std::array< byte_type, sizeof(int32_t) > output = { 0x00 };
         //perform a word swap
         for (size_t i = 0; i < word_size; i++)
         {
@@ -99,14 +99,14 @@ namespace
 
     template <class T>
     //IEEE variables to CAM double (PDP-11)
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_double(const T& input)
+    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_double(const T& input)
     {
 
         //pdp-11 is a word swaped Double/4
         double temp_d = static_cast<double>(input * 4.0) ;
         const auto temp = to_bytes(temp_d);
         const size_t word_size = 2;
-        std::array< byte, sizeof(int64_t) > output = { 0x00 };
+        std::array< byte_type, sizeof(int64_t) > output = { 0x00 };
         //perform a word swap
         for (size_t i = 0; i < word_size; i++)
         {
@@ -119,13 +119,13 @@ namespace
     }
 
     //boost ptime to CAM DateTime
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_datetime(const SpecUtils::time_point_t& date_time)
+    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_datetime(const SpecUtils::time_point_t& date_time)
     {
         //error checking
         if( SpecUtils::is_special(date_time) )
             throw std::range_error("The input date time is not a valid date time");
 
-        std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
+        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
         //get the total seconds between the input time and the epoch
         const date::year_month_day epoch( date::year(1970), date::month(1u), date::day(1u) );
         const date::sys_days epoch_days = epoch;
@@ -159,9 +159,9 @@ namespace
 
 
     //float sec to CAM duration
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
+    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
     {
-        std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
+        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
         //duration in usec is larger than a int64: covert to years
         if ( (static_cast<double>(duration) * 10000000.0) > static_cast<double>(INT64_MAX) )
         {
@@ -201,7 +201,7 @@ namespace
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
     template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
-    void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type& type) 
+    void enter_CAM_value(const T& input, vector<byte_type>& destination, const size_t& location, const cam_type& type)
     {
         switch (type) {
         case cam_type::cam_float:
@@ -272,10 +272,10 @@ namespace
         break;
         case cam_type::cam_byte:
         {
-            byte t_byte = static_cast<byte>(input);
+          byte_type t_byte = static_cast<byte_type>(input);
             destination.at(location) = t_byte;
-            //const byte* begin = reinterpret_cast<const byte*>(std::addressof(t_byte));
-            //const byte* end = begin + sizeof(byte);
+            //const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(t_byte));
+            //const byte_type* end = begin + sizeof(byte_type);
             //std::copy(begin, end, destination.begin() + location);
         break;
         }
@@ -289,7 +289,7 @@ namespace
         }//end switch
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const SpecUtils::time_point_t& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
+    void enter_CAM_value(const SpecUtils::time_point_t& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
     {
         if (type != cam_type::cam_datetime)
         {
@@ -304,7 +304,7 @@ namespace
       std::copy(begin(bytes), end(bytes) , destination.begin() + location);
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const string& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
+    void enter_CAM_value(const string& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
     {
         if (type != cam_type::cam_string)
         {
@@ -810,7 +810,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
 
         const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + data_header[1];
         //create a vector to store all the bytes
-        std::vector<byte> cnf_file(file_length, 0x00);
+        std::vector<byte_type> cnf_file(file_length, 0x00);
 
 
         //enter the file header

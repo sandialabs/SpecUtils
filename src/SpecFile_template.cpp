@@ -112,8 +112,8 @@ namespace SpecUtils
 		j["latitude"] = p->latitude();
 		j["longitude"] = p->longitude();
 		j["speed"] = p->speed();
-		j["dx"] = p->dx();
-		j["dy"] = p->dy();
+		j["dx"] = 0.1*p->dx();
+		j["dy"] = 0.1*p->dy();
 	}
 
 	void to_json(json& j, SpecUtils::DetectorAnalysisResult p)

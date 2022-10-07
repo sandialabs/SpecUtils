@@ -1464,6 +1464,9 @@ size_t Measurement::memmorysize() const
       
   size += energy_calibration_->memmorysize();
   
+  if( location_ )
+    size += location_->memmorysize();
+  
   return size;
 }//size_t Measurement::memmorysize() const
 
@@ -6783,6 +6786,8 @@ size_t SpecFile::memmorysize() const
 
   //keep from double counting energy calibrations shared between Measurement objects.
   set<const EnergyCalibration *> calibrations_seen;
+  set<const SpecUtils::LocationState *> locations_seen;
+  
   for( const auto &m : measurements_ )
   {
     size += m->memmorysize();
@@ -6790,6 +6795,13 @@ size_t SpecFile::memmorysize() const
     if( calibrations_seen.count( m->energy_calibration_.get() ) )
       size -= m->energy_calibration_->memmorysize();
     calibrations_seen.insert( m->energy_calibration_.get() );
+    
+    if( m->location_ )
+    {
+      if( locations_seen.count( m->location_.get() ) )
+        size -= m->location_->memmorysize();
+      locations_seen.insert( m->location_.get() );
+    }//if( m->location_ )
   }//for( const auto &m, measurements_ )
 
   return size;

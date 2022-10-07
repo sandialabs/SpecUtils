@@ -136,7 +136,7 @@ float RelativeLocation::dx() const
   switch( type_ )
   {
     case CoordinateType::Undefined:
-      return 0.0f;
+      return std::numeric_limits<float>::quiet_NaN();
       
     case CoordinateType::Cartesian:
       return coordinates_[0];
@@ -146,7 +146,7 @@ float RelativeLocation::dx() const
   }//switch( type_ )
   
   if( IsNan(coordinates_[2]) )
-    return 0.0f;
+    return std::numeric_limits<float>::quiet_NaN();
   
   const double pi = 3.14159265358979323846;
   const double deg_to_rad = pi / 180.0;
@@ -163,7 +163,7 @@ float RelativeLocation::dy() const
   switch( type_ )
   {
     case CoordinateType::Undefined:
-      return 0.0f;
+      return std::numeric_limits<float>::quiet_NaN();
       
     case CoordinateType::Cartesian:
       return coordinates_[1];
@@ -173,7 +173,7 @@ float RelativeLocation::dy() const
   }//switch( type_ )
   
   if( IsNan(coordinates_[2]) )
-    return 0.0f;
+    return std::numeric_limits<float>::quiet_NaN();
   
   const double pi = 3.14159265358979323846;
   const double deg_to_rad = pi / 180.0;
@@ -190,7 +190,7 @@ float RelativeLocation::dz() const
   switch( type_ )
   {
     case CoordinateType::Undefined:
-      return 0.0f;
+      return std::numeric_limits<float>::quiet_NaN();
       
     case CoordinateType::Cartesian:
       return coordinates_[2];
@@ -200,7 +200,7 @@ float RelativeLocation::dz() const
   }//switch( type_ )
   
   if( IsNan(coordinates_[2]) )
-    return 0.0f;
+    return std::numeric_limits<float>::quiet_NaN();
   
   const double pi = 3.14159265358979323846;
   const double deg_to_rad = pi / 180.0;
@@ -220,14 +220,14 @@ float RelativeLocation::azimuth() const
       return 0.0f;
       
     case CoordinateType::Polar:
-      return IsNan(coordinates_[0]) ? 0.0f : coordinates_[0];
+      return coordinates_[0];
       
     case CoordinateType::Cartesian:
       break;
   }//switch( type_ )
   
   if( IsNan(coordinates_[0]) || IsNan(coordinates_[2]) )
-    return 0.0f;
+    return numeric_limits<float>::quiet_NaN();
   
   
   const double rad_to_deg = 180.0 / 3.14159265358979323846;
@@ -263,11 +263,14 @@ float RelativeLocation::inclination() const
       return 0.0f;
       
     case CoordinateType::Polar:
-      return IsNan(coordinates_[1]) ? 0.0f : coordinates_[1];
+      return coordinates_[1];
       
     case CoordinateType::Cartesian:
       break;
   }//switch( type_ )
+  
+  if( IsNan(coordinates_[1]) )
+    return numeric_limits<float>::quiet_NaN();
   
   const double rad_to_deg = 180.0 / 3.14159265358979323846;
   
@@ -298,6 +301,9 @@ float RelativeLocation::distance() const
     case CoordinateType::Cartesian:
       break;
   }//switch( type_ )
+  
+  if( IsNan(coordinates_[0]) && IsNan(coordinates_[1]) && IsNan(coordinates_[2]) )
+    return numeric_limits<float>::quiet_NaN();
   
   // Note y and z swapped below
   const double x = IsNan(coordinates_[0]) ? 0.0f : coordinates_[0];
@@ -355,7 +361,8 @@ void LocationState::from_n42_2012( const rapidxml::xml_node<char> * const state_
   
   // We could look for units attribute of "SpeedValue", but its always supposed to be "m/s", so
   //  we wont do this until its needed for a non-compliant detection system
-  parse_child_float( state_vector, "SpeedValue", speed_ );
+  if( parse_child_float( state_vector, "SpeedValue", speed_ ) )
+    read_something_in = true;
   
   const rapidxml::xml_node<char> *orientation_node = XML_FIRST_NODE(state_vector, "Orientation");
   if( orientation_node )
@@ -378,46 +385,52 @@ void LocationState::from_n42_2012( const rapidxml::xml_node<char> * const state_
     if( !geo_node )
       return nullptr;
     
-      auto geo = make_shared<GeographicPoint>();
+    auto geo = make_shared<GeographicPoint>();
       
-      // we could check XML_FIRST_ATTRIB(geo_node, "units"), but N42-2012 specifies must be "m", so we wont
+    // we could check XML_FIRST_ATTRIB(geo_node, "units"), but N42-2012 specifies must be "m", so we wont
       
-      parse_child_double(geo_node, "LatitudeValue", geo->latitude_ );
-      parse_child_double(geo_node, "LongitudeValue", geo->longitude_ );
-      parse_child_float(geo_node, "ElevationValue", geo->elevation_ );
-      parse_child_float(geo_node, "ElevationOffsetValue", geo->elevation_offset_ );
-      parse_child_float(geo_node, "GeoPointAccuracyValue", geo->coords_accuracy_ );
-      parse_child_float(geo_node, "ElevationAccuracyValue", geo->elevation_accuracy_ );
-      parse_child_float(geo_node, "ElevationOffsetAccuracyValue", geo->elevation_offset_accuracy_ );
+    // At least one detector uses <Latitude>, <Longitude>, and <Elevation>
+    if( !parse_child_double(geo_node, "LatitudeValue", geo->latitude_ ) )
+      parse_child_double(geo_node, "Latitude", geo->latitude_ );
+    if( !parse_child_double(geo_node, "LongitudeValue", geo->longitude_ ) )
+      parse_child_double(geo_node, "Longitude", geo->longitude_ );
+    if( !parse_child_float(geo_node, "ElevationValue", geo->elevation_ ) )
+      parse_child_float(geo_node, "Elevation", geo->elevation_ );
+    if( !parse_child_float(geo_node, "ElevationOffsetValue", geo->elevation_offset_ ) )
+      parse_child_float(geo_node, "ElevationOffset", geo->elevation_offset_ );
+    
+    parse_child_float(geo_node, "GeoPointAccuracyValue", geo->coords_accuracy_ );
+    parse_child_float(geo_node, "ElevationAccuracyValue", geo->elevation_accuracy_ );
+    parse_child_float(geo_node, "ElevationOffsetAccuracyValue", geo->elevation_offset_accuracy_ );
       
       // The N42-2012 spec doesnt include an accounting for reading date time, so we'll try a few
       //   reasonable ways to put it in.
-      const rapidxml::xml_base<char> *time = XML_FIRST_NODE(geo_node, "PositionTime" );  //This is how InterSpec does it.
-      if( !time )
-        time = XML_FIRST_IATTRIB(geo_node, "valueDateTime");
-      if( !time )
-        time = XML_FIRST_IATTRIB(geo_node, "DateTime");
-      if( !time )
-        time = XML_FIRST_INODE(geo_node, "DateTime");
-      if( !time )
-        time = XML_FIRST_INODE(geo_node, "ValueDateTime");
+    const rapidxml::xml_base<char> *time = XML_FIRST_NODE(geo_node, "PositionTime" );  //This is how InterSpec does it.
+    if( !time )
+      time = XML_FIRST_IATTRIB(geo_node, "valueDateTime");
+    if( !time )
+      time = XML_FIRST_IATTRIB(geo_node, "DateTime");
+    if( !time )
+      time = XML_FIRST_INODE(geo_node, "DateTime");
+    if( !time )
+      time = XML_FIRST_INODE(geo_node, "ValueDateTime");
       
-      if( time && time->value_size() )
-      {
-        const string timestr = xml_value_str( time );
-        if( timestr.size() )
-          geo->position_time_ = time_from_string( timestr.c_str() );
-      }
+    if( time && time->value_size() )
+    {
+      const string timestr = xml_value_str( time );
+      if( timestr.size() )
+        geo->position_time_ = time_from_string( timestr.c_str() );
+    }
       
-      if( (SpecUtils::valid_longitude(geo->longitude_)
-           && SpecUtils::valid_latitude(geo->latitude_))
-         || !IsNan(geo->elevation_) )
-      {
-        return geo;
-      }
+    if( (SpecUtils::valid_longitude(geo->longitude_)
+          && SpecUtils::valid_latitude(geo->latitude_))
+        || !IsNan(geo->elevation_) )
+    {
+      return geo;
+    }
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-      log_developer_error( __func__, "Failed to parse anything useful from 'GeographicPoint' node." );
+    log_developer_error( __func__, "Failed to parse anything useful from 'GeographicPoint' node." );
 #endif
     
     return nullptr;
@@ -453,8 +466,11 @@ void LocationState::from_n42_2012( const rapidxml::xml_node<char> * const state_
       loc->origin_geo_point_ = parse_geo_point( geo_point_node );
     }//if( origin_node )
     
-    if( !IsNan(loc->coordinates_[0]) || !IsNan(loc->coordinates_[1]) || !IsNan(loc->coordinates_[2])
-       || loc->origin_geo_point_ )
+    if( !IsNan(loc->coordinates_[0])
+       || !IsNan(loc->coordinates_[1])
+       || !IsNan(loc->coordinates_[2])
+       || loc->origin_geo_point_
+       || !loc->origin_description_.empty() )
     {
       relative_location_ = loc;
       read_something_in = true;
@@ -466,11 +482,14 @@ void LocationState::from_n42_2012( const rapidxml::xml_node<char> * const state_
 }//void from_n42_2012( const rapidxml::xml_node<char> *state_vector_node )
 
 
-void LocationState::add_to_n42_2012( ::rapidxml::xml_node<char> *node ) const
+void LocationState::add_to_n42_2012( ::rapidxml::xml_node<char> *node,
+                                     rapidxml::xml_document<char> *doc ) const
 {
   using namespace rapidxml;
   
-  xml_document<char> * const doc = node ? node->document() : nullptr;
+  if( !node )
+    throw runtime_error( "NULL LocationState node." );
+  
   if( !doc )
     throw runtime_error( "No XML document available." );
   
@@ -507,6 +526,15 @@ void LocationState::add_to_n42_2012( ::rapidxml::xml_node<char> *node ) const
     make_float_el( GeographicPoint, "ElevationAccuracyValue", geo->elevation_accuracy_, false );
     make_float_el( GeographicPoint, "ElevationOffsetAccuracyValue", geo->elevation_offset_accuracy_, false );
     
+    if( !SpecUtils::is_special( geo->position_time_ ) )
+    {
+      const string valstr = SpecUtils::to_extended_iso_string(geo->position_time_) + "Z";
+      char *val = doc->allocate_string( valstr.c_str(), valstr.size() + 1 );
+      xml_node<char> *child = doc->allocate_node( node_element, "PositionTime", val, 12, valstr.size() );
+      GeographicPoint->append_node( child );
+    }
+    
+    
     return GeographicPoint;
   };//make_geo_point_node
   
@@ -525,17 +553,25 @@ void LocationState::add_to_n42_2012( ::rapidxml::xml_node<char> *node ) const
     make_float_el( RelativeLocation, "RelativeLocationInclinationValue", relative_location_->inclination(), false );
     make_float_el( RelativeLocation, "DistanceValue", relative_location_->distance(), false );
     
-    xml_node<char> *Origin = doc->allocate_node( node_element, "Origin" );
-    RelativeLocation->append_node( Origin );
+    xml_node<char> *Origin = nullptr;
     
     if( relative_location_->origin_geo_point_ )
     {
+      Origin = doc->allocate_node( node_element, "Origin" );
+      RelativeLocation->append_node( Origin );
+      
       xml_node<char> *geo_node = make_geo_point_node( relative_location_->origin_geo_point_ );
       Origin->append_node(geo_node);
     }
     
     if( !relative_location_->origin_description_.empty() )
     {
+      if( !Origin )
+      {
+        Origin = doc->allocate_node( node_element, "Origin" );
+        RelativeLocation->append_node( Origin );
+      }
+      
       const string &desc = relative_location_->origin_description_;
       char *val = doc->allocate_string( desc.c_str(), desc.size() + 1 );
       xml_node<char> *OriginDescription = doc->allocate_node( node_element, "OriginDescription", val, 17, desc.size() );
@@ -556,8 +592,34 @@ void LocationState::add_to_n42_2012( ::rapidxml::xml_node<char> *node ) const
   
   make_float_el( StateVector, "SpeedValue", speed_, false );
   
-}//void add_to_n42_2012( ::rapidxml::xml_node<char> *node ) const
+}//void add_to_n42_2012( ::rapidxml::xml_node<char> *node, doc ) const
 
+
+size_t LocationState::memmorysize() const
+{
+  size_t nbytes = sizeof(this);
+  
+  // shared_ptr<>'s probably have another component taking up memory we arent accounting for
+  
+  if( geo_location_ )
+    nbytes += sizeof(*geo_location_);
+  
+  if( relative_location_ )
+  {
+    nbytes += sizeof(*relative_location_);
+    
+    // The std::string::capacity() is probably not accurate for short string, or something
+    nbytes += relative_location_->origin_description_.capacity();
+    
+    if( relative_location_->origin_geo_point_ )
+      nbytes += sizeof( *relative_location_->origin_geo_point_ );
+  }
+  
+  if( orientation_ )
+    nbytes += sizeof( *orientation_ );
+
+  return nbytes;
+}//size_t memmorysize() const;
 
 #if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 
@@ -638,7 +700,7 @@ void RelativeLocation::equal_enough( const RelativeLocation &lhs, const Relative
     if( (lhs.type_ == CoordinateType::Undefined) || (rhs.type_ == CoordinateType::Undefined) )
     {
       error_msg = "RelativeLocation LHS type (" + to_str(lhs.type_) + ") doesnt match RHS type ("
-      + to_str(rhs.type_) + ").";
+                  + to_str(rhs.type_) + ").";
       throw runtime_error( error_msg );
     }//if( either side is undefined )
     

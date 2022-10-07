@@ -279,7 +279,10 @@ struct LocationState
   /** Adds in LocationState information to an existing tag of the type <RadDetectorState>,
    <RadInstrumentState>, or <RadItemState> (based value of #type_).
    */
-  void add_to_n42_2012( rapidxml::xml_node<char> *node ) const;
+  void add_to_n42_2012( rapidxml::xml_node<char> *node, rapidxml::xml_document<char> *doc ) const;
+  
+  /** Returns approximate memory this object takes up. */
+  size_t memmorysize() const;
 };//struct LocationState
 
 }//namespace SpecUtils

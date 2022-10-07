@@ -562,10 +562,13 @@ void check_files_with_truth_n42( const string basedir )
       ++failed_tests;
       
       const string description = e.what();
+      vector<string> errors;
+      SpecUtils::split(errors, e.what(), "\n\r");
       
-      cerr << "\n" << fpath << "\nfailed comparison with previous parsing: "
-           << description
-           << "\n\t(Current parse is LHS, previous parse is RHS)\n"
+      cerr << "\n" << fpath << "\nfailed comparison with previous parsing:\n";
+      for( const string &err : errors )
+        cerr << "\t" << err << endl;
+      cerr << "\n\t\t(Current parse is LHS, previous parse is RHS)\n"
            << "\n\tWhat would like to do?"
            << "\n";
       

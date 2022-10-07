@@ -1524,9 +1524,9 @@ bool SpecFile::load_from_pcf( std::istream &input )
       float dx = std::numeric_limits<float>::quiet_NaN();
       float dy = dx, dz = dx, speed = dx;
       
-      try{ dx = dx_from_remark(spectrum_title); }catch( std::exception & ){ }
-      try{ dy = dy_from_remark(spectrum_title); }catch( std::exception & ){ }
-      try{ dz = dz_from_remark(spectrum_title); }catch( std::exception & ){ }
+      try{ dx = 10.0f * dx_from_remark(spectrum_title); }catch( std::exception & ){ }
+      try{ dy = 10.0f * dy_from_remark(spectrum_title); }catch( std::exception & ){ }
+      try{ dz = 10.0f * dz_from_remark(spectrum_title); }catch( std::exception & ){ }
       try{ speed = speed_from_remark(spectrum_title); }catch( std::exception & ){ }
       const string distance = distance_from_pcf_title(spectrum_title);
       
@@ -1542,7 +1542,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         location->speed_ = speed;
         auto rel_loc = make_shared<RelativeLocation>();
         location->relative_location_ = rel_loc;
-        rel_loc->from_cartesian( 10.0f*dx, 10.0f*dy, 10.0f*dz );
+        rel_loc->from_cartesian( dx, dy, dz );
         rel_loc->origin_description_ = distance;
         
         meas->location_ = location;

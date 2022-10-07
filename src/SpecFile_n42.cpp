@@ -1467,7 +1467,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         xml_node<char> *RadInstrumentState = doc->allocate_node( node_element, "RadInstrumentState" );
         RadMeasurement->append_node( RadInstrumentState );
         
-        instrument_state->add_to_n42_2012( RadInstrumentState );
+        instrument_state->add_to_n42_2012( RadInstrumentState, doc );
       }//if( instrument_state )
       
       // For <RadDetectorState> we have info stored in `det_states` and `rad_det_states`
@@ -1482,7 +1482,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         if( pos != end(rad_det_states) )
         {
           const shared_ptr<const LocationState> &loc = pos->second;
-          loc->add_to_n42_2012( node );
+          loc->add_to_n42_2012( node, doc );
           rad_det_states.erase( pos );
         }//
       }//for( auto &name_det : det_states )
@@ -1494,7 +1494,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         
         assert( det_states.count(name) == 0 );
         xml_node<char> *RadDetectorState = doc->allocate_node( node_element, "RadDetectorState" );
-        loc->add_to_n42_2012( RadDetectorState );
+        loc->add_to_n42_2012( RadDetectorState, doc );
         det_states[name] = RadDetectorState;
       }//for( auto &name_loc : rad_det_states )
       
@@ -1519,7 +1519,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       {
         assert( loc );
         xml_node<char> *RadItemState = doc->allocate_node( node_element, "RadItemState" );
-        loc->add_to_n42_2012( RadItemState );
+        loc->add_to_n42_2012( RadItemState, doc );
         RadMeasurement->append_node( RadItemState );
       }//for( const shared_ptr<const LocationState> &loc : item_states )
       
@@ -1535,8 +1535,9 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
     string msg = "Measurement::add_spectra_to_measurement_node_in_2012_N42_xml(...): something horrible happened!: " + string(e.what());
     log_developer_error( __func__, msg.c_str() );
 #endif
+    assert( 0 );
   }//try catch
-}//void Measurement::add_to_2012_N42_xml(...)
+}//void add_spectra_to_measurement_node_in_2012_N42_xml(...)
 }//namespace
 
 
@@ -2681,7 +2682,7 @@ struct N42DecodeHelper2006
     if( det_type_node && det_type_node->value_size() )
       meas.detector_description_ = xml_value_str( det_type_node );
       
-    meas.quality_status_ = QualityStatus::Missing;
+    meas.quality_status_ = QualityStatus::Good; //Default to good, unless specified
     const rapidxml::xml_attribute<char> *quality_attrib = spec_node->first_attribute( "Quality", 7 );
     if( quality_attrib && quality_attrib->value_size() )
     {
@@ -3370,13 +3371,12 @@ public:
           char buffer[512];
           snprintf( buffer, sizeof(buffer), "Failed to parse <StateVector>: '%s'.", e.what() );
           log_developer_error( __func__, buffer );
+          assert( !node || XML_FIRST_INODE(node, "Remark") ); // The remark will say something like "InterSpec could not determine detector state"
 #endif
         }
       
         return nullptr;
       };//parse_state_node
-      
-      
       
       
       XML_FOREACH_CHILD( inst_state_node, meas_node, "RadInstrumentState" )
