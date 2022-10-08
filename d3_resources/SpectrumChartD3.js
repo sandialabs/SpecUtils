@@ -4372,7 +4372,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
     if( typeof neutsum === "number" ){
       // \TODO: spectrum.neutronRealTime is currently never set by SpecUtils/InterSpec, but will be once parsing
       //        sepearte neutron real times is implemented.
-      const nrt = (typeof spectrum.neutronRealTime === "number") ? spectrum.neutronRealTime : rt;
+      const nrt = (typeof spectrum.neutronRealTime === "number") ? spectrum.neutronRealTime : (rt > 1.0E-6 ? rt : lt);
       const isCps = (typeof nrt === "number");
       const neut = isCps ? neutsum/nrt : neutsum*sf;
       
@@ -4417,7 +4417,8 @@ SpectrumChartD3.prototype.updateLegend = function() {
               && (typeof spec.neutrons === "number") )
           {
             forNeut = spec.neutrons;
-            forNeutLT = (typeof spec.neutronRealTime === "number") ? spec.neutronRealTime : spec.realTime;
+            forNeutLT = (typeof spec.neutronRealTime === "number") ? spec.neutronRealTime
+                                                                   : (spec.realTime > 1.0E-6 ? spec.realTime : spec.liveTime);
             break;
           }
         }//for( loop over spectrum )
