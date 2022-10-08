@@ -22,7 +22,9 @@
  */
 
 #include <string>
+#include <chrono>
 #include <ostream>
+#include <fstream>
 #include <vector>
 #include <cmath>
 #include <climits>
@@ -38,6 +40,7 @@
 
 
 #include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/ParseUtils.h"
 
 using namespace std;
 using namespace boost::unit_test;
@@ -45,6 +48,41 @@ using namespace boost::unit_test;
 
 BOOST_AUTO_TEST_SUITE( split_to_floats_and_ints_suite )
 
+BOOST_AUTO_TEST_CASE( time_float_parse  )
+{
+  ifstream file( "float_benchmark.csv" );
+	
+  assert( file.is_open() );
+  
+  vector<string> lines;
+  size_t nchars = 0;
+  string line;
+  while( SpecUtils::safe_get_line(file, line) )
+  {
+    nchars += line.size();
+    lines.push_back( line );
+  }
+  
+  cout << "Read in " << lines.size() << " lines, and " << nchars << " bytes." << endl;
+  
+  const size_t ntimes = 100;
+  
+  std::chrono::high_resolution_clock::duration total_dur{};
+  for( const string &val : lines )
+  {
+    const auto start = std::chrono::high_resolution_clock::now();
+    for( size_t i = 0; i < ntimes; ++i )
+    {
+			vector<float> float_vals;
+      SpecUtils::split_to_floats( val.c_str(), val.size(), float_vals );
+    }
+    const auto end = std::chrono::high_resolution_clock::now();
+    
+    total_dur += end - start;
+  }//for( const string &val : lines )
+  
+  cout << "Took: " << std::chrono::duration_cast<std::chrono::milliseconds>(total_dur).count() << " ms to parse all the input." << endl;
+}//BOOST_AUTO_TEST_CASE( time_float_parse  )
 
 BOOST_AUTO_TEST_CASE( split_to_floats  )
 {

@@ -55,7 +55,19 @@
 
 #if( defined(_MSC_VER) && (_MSC_VER >= 1920) )
 #include <charconv>
-#define HAVE_FLOAT_FROM_CHARS 0
+// With MSVC 2019, from_chars is about 50% slower than boost; fast_float is just a hair slower than boost.
+//  I dont know if this is inherent, because of me doing something stupid (likely), or just that boost 
+//  is really hard to beat.
+//  The test was over 259924 lines, and a total of 48776423 bytes; repeated 100 times, with two runs each way.
+// Windows MSVC 2019:
+//   Boost: 43175 ms, 43800 ms  (i.e., ~105 MB/s)
+//   from_chars : 67889 ms, 66024 ms (i.e., ~70 MB/s)
+//   fast_float (3.5.1): 47113 ms, 47724 ms
+//  Now where near the ~1 GB/s fast_float gives (and much closer to the strod speeds fast_float benchmark gets)
+#define HAVE_FLOAT_FROM_CHARS 1
+
+//#include "3rdparty/fast_float.h"
+
 #else
 // It would be nice to use <charconv> to do the conversion; but currently (20221005)
 //  support isnt that great.  LLVM 14, MSVC >=2019, and gcc 12 seem to support floating
@@ -1098,20 +1110,24 @@ namespace SpecUtils
   bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
 #if( HAVE_FLOAT_FROM_CHARS )
-    TODO: write to a file each input so we can use this to benchmark and test against.
-       TODO: test this implementation against old implementation for the regression test
+     //  TODO: test this implementation against old implementation for the regression test
      // An implementation that HAS NOT been extensively tested, and not benchmarked:
      const char *start = input;
      const char *end = input + length;
-     results.resize(0);
-     results.reserve( std::min( length/2, size_t(32768) ) );
-     
+     results.clear();
+
+     // This initual guess almost always overpredicts (when checked on a representative dataset)
+     //  but not by too much, and it reduces total time by about 20%
+     const size_t num_float_guess = std::max( size_t(1), std::min(length / 2, size_t(32768)) );
+     results.reserve(num_float_guess);
+
      while( start < end )
      {
        float result;
        //const std::from_chars_result status = std::from_chars(start, end, result);
        const auto [ptr, ec] = std::from_chars(start, end, result);
-     
+       //const auto [ptr, ec] = fast_float::from_chars(start, end, result);
+
        if(ec == std::errc() )
        {
          //cout << "Result: " << result << ", (ptr-start) -> " << (status.ptr-start) << endl;
@@ -1126,26 +1142,26 @@ namespace SpecUtils
        if (start >= end)
          return true;
 
-       // For most of input `start` will be the character of the next number, so we could avoid the while loop, with this next test, but I havent actually benchmarked.
-       //if (!((((*start) < '0') || ((*start) > '9')) && ((*start) != '-') && ((*start) != '.')))
-       //  continue;
-
-       // We will allow the delimiters " \t\n\r,"; I'm sure there is a much better way of testing for these
-       while( (start < end)
-         && ( ((*start) == ' ')
-           || ((*start) == '\t')
-           || ((*start) == '\n')
-           || ((*start) == '\r')
-           || ((*start) == ',')
-           // We want to allow numbers to start with a '+', which from_chars prohibits, 
-           // but we also want require the next character to be a number or a decimal, 
-           // and also for the '+' to not be the last character 
-           || (((*start) == '+') && ((start+1) < end) && ( (((*(start + 1)) >= '0') && ((*(start + 1)) <= '9')) || ((*(start + 1)) == '.') ) )
-           ) 
-         )
+       // For most of input `start` will be the character of the next number, but we need to test for this
+       if (((*start) < '0') || ((*start) > '9'))
        {
-         ++start;
-       }
+         // We will allow the delimiters " \t\n\r,"; I'm sure there is a much better way of testing for these
+         while ((start < end)
+           && (((*start) == ' ')
+             || ((*start) == '\t')
+             || ((*start) == '\n')
+             || ((*start) == '\r')
+             || ((*start) == ',')
+             // We want to allow numbers to start with a '+', which from_chars prohibits, 
+             // but we also want require the next character to be a number or a decimal, 
+             // and also for the '+' to not be the last character 
+             || (((*start) == '+') && ((start + 1) < end) && ((((*(start + 1)) >= '0') && ((*(start + 1)) <= '9')) || ((*(start + 1)) == '.')))
+             )
+           )
+         {
+           ++start;
+         }
+       }//if (((*start) < '0') || ((*start) > '9'))
      }//while( start < end )
      
      return true;
