@@ -483,8 +483,6 @@ bool SpecFile::load_from_cnf( std::istream &input )
     if( !input.seekg( num_channel_offset, std::ios::beg ) )
       throw std::runtime_error( "Failed seek for num channels" );
     
-    cout << "num_channel_offset=" << num_channel_offset << endl;
-    
     uint32_t num_channels;
     read_binary_data( input, num_channels );
     
@@ -614,9 +612,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
     measurements_.push_back( meas );
     
     cleanup_after_load();
-  }catch ( std::exception &e )
+  }catch ( std::exception & )
   {
-    cerr << "CNF exception: " << e.what() << endl;
     input.clear();
     input.seekg( orig_pos, ios::beg );
     

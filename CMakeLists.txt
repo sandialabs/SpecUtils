@@ -226,7 +226,7 @@ set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils"
 #target_compile_features(SpecUtils PUBLIC cxx_std_11)
 #set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
-if( MSVC AND (MSVC_VERSION GREATER_EQUAL 1920) )
+if( MSVC AND (MSVC_VERSION GREATER_EQUAL 1930) )
   # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
   message( "Setting C++ std to 17 for use of charconv" )
   set_target_properties( SpecUtils PROPERTIES

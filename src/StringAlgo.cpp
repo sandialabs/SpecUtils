@@ -53,7 +53,7 @@
 #undef max
 #endif
 
-#if( defined(_MSC_VER) && (_MSC_VER >= 1920) )
+#if( defined(_MSC_VER) && (_MSC_VER >= 1930) )
 #include <charconv>
 // With MSVC 2019, from_chars is about 50% slower than boost; fast_float is just a hair slower than boost.
 //  I dont know if this is inherent, because of me doing something stupid (likely), or just that boost 
