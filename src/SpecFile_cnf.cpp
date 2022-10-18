@@ -62,15 +62,16 @@ namespace
         return bytes;
     }
 
-    enum class cam_type //name and size of bytes
+/** Datatypes for the CAM format.
+ */
+    enum class cam_type
     {
-  
         cam_float,     //any float
         cam_double,    //any double
         cam_byte,      //a byte
         cam_word,      //int16
         cam_longword,  //int
-        cam_quadword,  //int64     
+        cam_quadword,  //int64
         cam_datetime ,   //date time
         cam_duration,   //time duration 
         cam_string,
@@ -247,10 +248,9 @@ namespace
         break;
         case cam_type::cam_longword:
         {
-          // TODO: use float_to_integral(...) for below
-            T t_trunc = std::min( input, static_cast<T>(std::numeric_limits<int32_t>::max()) );
-            t_trunc = std::max( t_trunc, static_cast<T>(std::numeric_limits<int32_t>::min()) );
-            int32_t t_longword = static_cast<int32_t>(t_trunc);
+          // TODO: it appears we actually want to use a uint32_t here, and not a int32_t, but because of the static_cast here, things work out, but if we are to "clamp" values, then we need to switch to using unsigned integers
+          int32_t t_longword = static_cast<int32_t>(input);
+          
             const auto bytes = to_bytes(t_longword);
           
           if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
@@ -480,10 +480,12 @@ bool SpecFile::load_from_cnf( std::istream &input )
     J = 0xFFFFFFFF - J;
     meas->live_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
     
-    uint32_t num_channels;
     if( !input.seekg( num_channel_offset, std::ios::beg ) )
       throw std::runtime_error( "Failed seek for num channels" );
     
+    cout << "num_channel_offset=" << num_channel_offset << endl;
+    
+    uint32_t num_channels;
     read_binary_data( input, num_channels );
     
     const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
@@ -612,8 +614,9 @@ bool SpecFile::load_from_cnf( std::istream &input )
     measurements_.push_back( meas );
     
     cleanup_after_load();
-  }catch ( std::exception & )
+  }catch ( std::exception &e )
   {
+    cerr << "CNF exception: " << e.what() << endl;
     input.clear();
     input.seekg( orig_pos, ios::beg );
     
@@ -938,11 +941,13 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //put the data in
         for (size_t i = 0; i < gamma_channel_counts.size(); i++)
         {
-            enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
+          //enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
+          
+          const uint32_t counts = float_to_integral<uint32_t>( gamma_channel_counts[i] );
+          enter_CAM_value(counts, cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
         }
         //write the file
         output.write((char* )cnf_file.data(), cnf_file.size());
-    
     }catch( std::exception &e )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
