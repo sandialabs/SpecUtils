@@ -811,22 +811,20 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
           spectrum_title += " Foreground";
       }//if( not already labeled foreground or background )
       
+      // If we have GPS info, we will add something like "Lat,Lon,E,H,D=12.1,13.5,2,24.1,0.01"
+      //  to the title.
       if( meas->location_ && meas->location_->geo_location_ && meas->has_gps_info() )
       {
         const double lat = meas->location_->geo_location_->latitude_;
         const double lon = meas->location_->geo_location_->longitude_;
         
-        double elev = meas->location_->geo_location_->elevation_;
-        if( IsNan(elev) )
-          elev = 0.0;
+        const double elev = meas->location_->geo_location_->elevation_;
         
-        double heading = meas->location_->orientation_ ? meas->location_->orientation_->azimuth_ : 0.0f;
-        if( IsNan(heading) )
-          heading = 0.0;
+        const double heading = meas->location_->orientation_
+                                    ? meas->location_->orientation_->azimuth_
+                                    : numeric_limits<float>::quiet_NaN();
         
-        double dose = meas->exposure_rate_;  //Note: we also have have meas->dose_rate_
-        if( IsNan(dose) )
-          dose = 0.0;
+        const double dose = meas->exposure_rate_;  //Note: we also have have meas->dose_rate_
       
         // Print numbers, with trailing zeros removed - although we could do better...
         auto print_number = []( const double value, const char *fmt ) -> std::string {
@@ -851,11 +849,31 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
           return answer;
         };//print_number lamda
         
-        spectrum_title += " Lat,Lon,E,H,D=";
-        spectrum_title += print_number(lat,"%.6f") + "," + print_number(lon,"%.6f");
-        spectrum_title += "," + print_number(elev,"%.2f");
-        spectrum_title += "," + print_number(heading,"%.3f");
-        spectrum_title += "," + print_number(dose,"%.4G");
+        string prefix_str = " Lat,Lon";
+        string postfix_str = print_number(lat,"%.6f") + "," + print_number(lon,"%.6f");
+        
+        // Elevation in meters, if we have it
+        if( !IsNan(elev) )
+        {
+          prefix_str += ",E";
+          postfix_str += "," + print_number(elev,"%.2f");
+        }
+        
+        // Heading, in degrees
+        if( !IsNan(heading) )
+        {
+          prefix_str += ",H";
+          postfix_str += "," + print_number(heading,"%.3f");
+        }
+        
+        // The measured radiation exposure rate value, in milliroentgen per hour (mR/h).
+        if( !IsNan(dose) && (dose >= 0.0) )
+        {
+          prefix_str += ",D";
+          postfix_str += "," + print_number(dose,"%.4G");
+        }
+        
+        spectrum_title += prefix_str + "=" + postfix_str;
       }//if( meas->has_gps_info() )
       
       if( meas->location_
