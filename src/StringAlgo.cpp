@@ -53,8 +53,11 @@
 #undef max
 #endif
 
-#if( defined(_MSC_VER) && (_MSC_VER >= 1930) )
+
+#if( SpecUtils_USE_FROM_CHARS )
 #include <charconv>
+// LLVM 14, MSVC >= 2019, and gcc 12 seem to support floating point from_char, but Apple LLVM 14 does 
+// not (and thus not macOS or iOS), and I'm unsure about Android status.
 // With MSVC 2019, from_chars is about 50% slower than boost; fast_float is just a hair slower than boost.
 //  I dont know if this is inherent, because of me doing something stupid (likely), or just that boost 
 //  is really hard to beat.
@@ -63,17 +66,18 @@
 //   Boost: 43175 ms, 43800 ms  (i.e., ~105 MB/s)
 //   from_chars : 67889 ms, 66024 ms (i.e., ~70 MB/s)
 //   fast_float (3.5.1): 47113 ms, 47724 ms
-//  Now where near the ~1 GB/s fast_float gives (and much closer to the strod speeds fast_float benchmark gets)
-#define HAVE_FLOAT_FROM_CHARS 1
+// Windows MSVC 2022 was also tested with similar-ish results as 2019.
+// 
+//  This is not near the ~1 GB/s fast_float bencharks list (and much closer to the strod speeds fast_float benchmark gets),
+//  so perhaps I'm doing something really wrong.
 
+// https://github.com/fastfloat/fast_float is nearly a drop-in replacement for std::from_chars, and and just about as fast as boost::spirit
 //#include "3rdparty/fast_float.h"
 
 #else
 // It would be nice to use <charconv> to do the conversion; but currently (20221005)
-//  support isnt that great.  LLVM 14, MSVC >=2019, and gcc 12 seem to support floating
-//  point from_char, but Apple LLVM 14 does not (and thus not macOS or iOS), and I'm
-//  unsure about Android status.
-//  The solution is probably to use https://github.com/fastfloat/fast_float (which is what
+//  support isnt that great. 
+//  The solution is probably to use  (which is what
 //  the compilers look to use anyway).
 #define HAVE_FLOAT_FROM_CHARS 0
 #endif
@@ -1109,9 +1113,8 @@ namespace SpecUtils
   
   bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
-#if( HAVE_FLOAT_FROM_CHARS )
+#if( SpecUtils_USE_FROM_CHARS )
      //  TODO: test this implementation against old implementation for the regression test
-     // An implementation that HAS NOT been extensively tested, and not benchmarked:
      const char *start = input;
      const char *end = input + length;
      results.clear();
@@ -1269,7 +1272,7 @@ namespace SpecUtils
     }//if( ok && begin != end )
     
     return ok;
-#endif //HAVE_FLOAT_FROM_CHARS / else
+#endif //SpecUtils_USE_FROM_CHARS / else
   }//bool split_to_floats(...)
   
   

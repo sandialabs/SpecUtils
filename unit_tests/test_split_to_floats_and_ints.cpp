@@ -48,6 +48,10 @@ using namespace boost::unit_test;
 
 BOOST_AUTO_TEST_SUITE( split_to_floats_and_ints_suite )
 
+
+// TODO: add test case for parse_float, parse_int, parse_double, functions
+
+/*
 BOOST_AUTO_TEST_CASE( time_float_parse  )
 {
   ifstream file( "float_benchmark.csv" );
@@ -83,6 +87,8 @@ BOOST_AUTO_TEST_CASE( time_float_parse  )
   
   cout << "Took: " << std::chrono::duration_cast<std::chrono::milliseconds>(total_dur).count() << " ms to parse all the input." << endl;
 }//BOOST_AUTO_TEST_CASE( time_float_parse  )
+*/
+
 
 BOOST_AUTO_TEST_CASE( split_to_floats  )
 {

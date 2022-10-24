@@ -23,6 +23,7 @@ option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF 
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
+option( SpecUtils_USE_FROM_CHARS "Use c++17 std::from_chars for parsing floats/ints, instead of boost::spirit - about 50% slower." OFF )
 
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
@@ -226,21 +227,24 @@ set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils"
 #target_compile_features(SpecUtils PUBLIC cxx_std_11)
 #set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
-if( MSVC AND (MSVC_VERSION GREATER_EQUAL 1930) )
-  # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
-  message( "Setting C++ std to 17 for use of charconv" )
+if( SpecUtils_USE_FROM_CHARS )
+  if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
+    # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
+    message("Please dopuble check your compiler does actually support std::from_chars for parsing floats")
+  endif()
+
   set_target_properties( SpecUtils PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
   )
-else()
+else(SpecUtils_USE_FROM_CHARS)
   set_target_properties( SpecUtils PROPERTIES
     CXX_STANDARD 11
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
   )
-endif()
+endif(SpecUtils_USE_FROM_CHARS)
 
 
 if( SpecUtils_USE_WT_THREADPOOL )
