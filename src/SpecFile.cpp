@@ -308,7 +308,7 @@ void log_developer_error( const char *location, const char *error )
   
   std::unique_lock<std::recursive_mutex> loc( s_dev_error_log_mutex );
   
-  const SpecUtils::time_point_t time = std::chrono::system_clock::now();
+  const SpecUtils::time_point_t time = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
   
   const string timestr = SpecUtils::to_iso_string(time);
 //  const string timestr = SpecUtils::to_iso_string( time );

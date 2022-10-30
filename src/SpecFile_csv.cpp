@@ -48,6 +48,19 @@
 
 using namespace std;
 
+namespace
+{
+  bool simple_isdigit(const char d)
+  {
+    // Debug versions of std::isdigit on MSVC will abort on negative 
+    //  character values, so well just use this function all the time
+    //  (which is probably better anyway since it avoids locale, which
+    //  is what we should probably do)
+    return ((d >= '0') && (d <= '9'));
+  }//simple_isdigit
+}//namespace
+
+
 
 namespace SpecUtils
 {
@@ -794,7 +807,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     //Dont allow a space delimiter until we have the columns mapped out to avoid things like
     //  "Energy (keV)" counting as two columns
     const bool has_comma = (line.find(',') != string::npos);
-    const bool no_split_space = (column_map.empty() && !isdigit(line[0]) && !SpecUtils::istarts_with(line, "Channel Energy Counts") );
+    const bool no_split_space = (column_map.empty() && !simple_isdigit(line[0]) && !SpecUtils::istarts_with(line, "Channel Energy Counts") );
     const char *delim = has_comma ? "," : (no_split_space ? "\t,;" : "\t, ;");
     
     SpecUtils::split( split_fields, line, delim );
@@ -812,7 +825,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if( isdigit(fields[0][0]) )
+    if(simple_isdigit(fields[0][0]) )
     {
       //Check if we have a valid column map defined yet, either because it is empty, or it has one
       //  entry that is not counts.  This can happen if there was a header that was only partially
@@ -827,11 +840,11 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( nfields==1 )
         {
           column_map[0] = kCounts;
-        }if( nfields==2 && isdigit(fields[1][0]) )
+        }if( nfields==2 && simple_isdigit(fields[1][0]) )
         {
           column_map[0] = kEnergy;
           column_map[1] = kCounts;
-        }else if( (nfields > 2) && (nfields < 9) && isdigit(fields[1][0]) && isdigit(fields[2][0]) )
+        }else if( (nfields > 2) && (nfields < 9) && simple_isdigit(fields[1][0]) && simple_isdigit(fields[2][0]) )
         {
           if( fields[0].find('.') != string::npos )
           {
@@ -1000,7 +1013,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( fields.empty() )
           continue;
         
-        if( !isdigit( fields.at(0).at(0) ) )
+        if( !simple_isdigit( fields.at(0).at(0) ) )
         {
           istr.seekg( position, ios::beg );
           break;
@@ -1555,7 +1568,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
       
       //Transform "RSP 1" to "RSP 01", so this way when names get sorted
       //  "RSP 11" wont come before "RSP 2"
-      if( isdigit( field[field.size()-1] ) && !isdigit( field[field.size()-2] ) )
+      if(simple_isdigit( field[field.size()-1] ) && !simple_isdigit( field[field.size()-2] ) )
         field = field.substr(0,field.size()-1) + '0' + field.substr(field.size()-1);
       
 #if(PERFORM_DEVELOPER_CHECKS)
