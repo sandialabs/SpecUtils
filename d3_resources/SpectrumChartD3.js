@@ -2254,7 +2254,7 @@ SpectrumChartD3.prototype.setMouseDownRoi = function( coordinates ){
 
   this.mouseDownRoi = this.getDrawnRoiForCoordinate( coordinates, true );
   if( this.mouseDownRoi && this.mouseDownRoi.roi )
-    console.log( 'roi: ', this.mouseDownRoi.roi );
+    console.log( 'setMouseDownRoi roi: ', this.mouseDownRoi.roi );
   
   return;
 }
@@ -2367,8 +2367,12 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
         }
 
         self.updateFeatureMarkers(-1);
-      
-        self.zooming_plot = true;
+
+        // Add in a little debounce; i.e., check to make sure we arent in the middle of a zoom-in animation, or equiv time frame if animation turned off
+        self.zooming_plot = (!self.startAnimationZoomTime && ((self.mousedowntime - self.mouseUpTime) > 500) );
+
+        if( !self.zooming_plot ) // 20221029: temporary debug message to make sure this is working right
+          console.log( "dbg: mouse down, Preventing zooming; dt:", (self.mousedowntime - self.mouseUpTime) );
       }
       return false;
 
@@ -2520,8 +2524,11 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* Handle recalibration (if needed) */
     self.handleMouseUpRecalibration();
 
-    /* Handle zooming in y-axis (if needed) */
-    self.handleMouseUpZoomY();
+    /* Handle zooming in x-axis (if needed); We'll require the mouse having been down for at least 75 ms - if its less than this its probably unintented. */
+    if( (nowtime - self.mousedowntime) > 75 )
+      self.handleMouseUpZoomX();
+    else if( self.zooming_plot ) // 20221029: temporary message to make sure working okay
+      console.log( 'dbg: Prevented zoom-in with dt:', (nowtime - self.mousedowntime) ); 
 
     /* HAndle counting gammas (if needed) */
     self.handleMouseUpCountGammas();
