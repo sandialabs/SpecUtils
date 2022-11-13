@@ -173,6 +173,8 @@ enum class ParserType : int
   Lzs,
   /** Scan Data XML */
   ScanDataXml,
+  /** Bridgeport MCA-3000 JSON files */
+  Json,
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -1667,7 +1669,8 @@ public:
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
   bool load_xml_scan_data_file( const std::string &filename );
-  
+  bool load_json_file( const std::string &filename );
+
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
   virtual bool load_from_N42( std::istream &istr );
@@ -1785,7 +1788,9 @@ public:
   bool load_from_tracs_mps( std::istream &input );
   
   bool load_from_aram( std::istream &input );
-  
+
+  /** Loads Bridgeport MCA-3000 JSON files. */
+  bool load_from_json( std::istream &input );
   
   //cleanup_after_load():  Fixes up inconsistent calibrations, binnings and such,
   //  May throw exception on error.

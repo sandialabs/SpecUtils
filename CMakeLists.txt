@@ -109,6 +109,7 @@ set( sources
      src/SpecFile_multiact.cpp
      src/SpecFile_uraider.cpp
      src/SpecFile_xml_other.cpp
+     src/SpecFile_json.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp

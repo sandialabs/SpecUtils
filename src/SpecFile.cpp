@@ -4238,8 +4238,12 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_xml_scan_data_file( filename );
       break;
       
+    case ParserType::Json:
+      success = load_xml_scan_data_file(filename);
+      break;
+
     case ParserType::MicroRaider:
-      success = load_micro_raider_file( filename );
+      success = load_json_file( filename );
     break;
       
     case ParserType::Auto:
@@ -4250,7 +4254,7 @@ bool SpecFile::load_file( const std::string &filename,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
-      triedLzs = false, triedXmlScanData = false;;
+      triedLzs = false, triedXmlScanData = false, triedJson = false;
       
       if( !orig_file_ending.empty() )
       {
@@ -4394,6 +4398,14 @@ bool SpecFile::load_file( const std::string &filename,
           success = load_xml_scan_data_file( filename );
           if( success ) break;
         }//if( orig_file_ending=="xml" )
+
+
+        if (orig_file_ending == "json")
+        {
+          triedJson = true;
+          success = load_json_file(filename);
+          if (success) break;
+        }//if( orig_file_ending=="xml" )
       }//if( !orig_file_ending.empty() ) / else
 
       if( !success && !triedSpc )
@@ -4456,6 +4468,9 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedXmlScanData )
         success = load_xml_scan_data_file( filename );
       
+      if (!success && !triedJson)
+        success = load_json_file(filename);
+
        break;
     }//case Auto
   };//switch( parser_type )
