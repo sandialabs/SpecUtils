@@ -173,8 +173,11 @@ enum class ParserType : int
   Lzs,
   /** Scan Data XML */
   ScanDataXml,
-  /** Bridgeport MCA-3000 JSON files */
+  /** Bridgeport MCA-3000 JSON files. */
   Json,
+  /** CAEN Hexagon MCA gxml format. */
+  CaenHexagonGXml,
+
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -1670,6 +1673,7 @@ public:
   bool load_lzs_file( const std::string &filename );
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
+  bool load_caen_gxml_file(const std::string& filename);
 
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1792,6 +1796,9 @@ public:
   /** Loads Bridgeport MCA-3000 JSON files. */
   bool load_from_json( std::istream &input );
   
+  /** Load from a CAEN Hexagon gxml file. */
+  bool load_from_caen_gxml(std::istream& input);
+
   //cleanup_after_load():  Fixes up inconsistent calibrations, binnings and such,
   //  May throw exception on error.
   enum CleanupAfterLoadFlags

@@ -4242,6 +4242,10 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_xml_scan_data_file(filename);
       break;
 
+    case ParserType::CaenHexagonGXml:
+      success = load_caen_gxml_file(filename);
+      break;
+
     case ParserType::MicroRaider:
       success = load_json_file( filename );
     break;
@@ -4254,7 +4258,8 @@ bool SpecFile::load_file( const std::string &filename,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
-      triedLzs = false, triedXmlScanData = false, triedJson = false;
+          triedLzs = false, triedXmlScanData = false, triedJson = false,
+          tried_gxml = false;
       
       if( !orig_file_ending.empty() )
       {
@@ -4406,6 +4411,15 @@ bool SpecFile::load_file( const std::string &filename,
           success = load_json_file(filename);
           if (success) break;
         }//if( orig_file_ending=="xml" )
+
+
+        if (orig_file_ending == "gxml")
+        {
+          tried_gxml = true;
+          success = load_caen_gxml_file(filename);
+          if (success) break;
+        }//if( orig_file_ending=="gxml" )
+
       }//if( !orig_file_ending.empty() ) / else
 
       if( !success && !triedSpc )
@@ -4471,6 +4485,9 @@ bool SpecFile::load_file( const std::string &filename,
       if (!success && !triedJson)
         success = load_json_file(filename);
 
+      if (!success && !tried_gxml)
+        success = load_caen_gxml_file(filename);
+       
        break;
     }//case Auto
   };//switch( parser_type )
