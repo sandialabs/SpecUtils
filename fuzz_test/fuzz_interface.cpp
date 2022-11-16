@@ -275,6 +275,20 @@ int run_file_parse_fuzz( const uint8_t *data, size_t size )
       test_write_output( spec );
   }
 
+  {
+    SpecUtils::SpecFile spec;
+    stringstream strm( datastr, ios_base::in );
+    if( spec.load_from_json( strm ) )
+      test_write_output( spec );
+  }
+
+  {
+    SpecUtils::SpecFile spec;
+    stringstream strm( datastr, ios_base::in );
+    if( spec.load_from_caen_gxml( strm ) )
+      test_write_output( spec );
+  }
+
 
   return 0;
 }

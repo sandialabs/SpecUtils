@@ -231,7 +231,7 @@ set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils"
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
     # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
-    message("Please dopuble check your compiler does actually support std::from_chars for parsing floats")
+    message("Please double check your compiler does actually support std::from_chars for parsing floats")
   endif()
 
   set_target_properties( SpecUtils PROPERTIES

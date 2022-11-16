@@ -306,7 +306,7 @@ bool SpecFile::load_from_json( std::istream &input )
       meas->parse_warnings_.insert(end(meas->parse_warnings_), begin(warnings), end(warnings));
 
     measurements_.push_back(meas);
-    instrument_type_ = "Gamma Handheld";
+    instrument_type_ = "";
     manufacturer_ = "Bridgeport Instruments";
     instrument_model_ = "eMorpho";
     instrument_id_ = serial_number;
@@ -324,7 +324,7 @@ bool SpecFile::load_from_json( std::istream &input )
   }//try / catch
   
   return false;
-}//bool load_from_aram( std::istream &input )
+}//bool load_from_json( std::istream &input )
 }//namespace SpecUtils
 
 

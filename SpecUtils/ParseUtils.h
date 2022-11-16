@@ -125,6 +125,8 @@ namespace  SpecUtils
      ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
    
      TODO: does not currently take into account units (e.g., cm)
+   
+   Throws exception if not successful.
   */
   float dx_from_remark( std::string remark );
 
@@ -133,6 +135,8 @@ namespace  SpecUtils
     ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
    
     TODO: does not currently take into account units (e.g., cm)
+   
+   Throws exception if not successful.
   */
   float dy_from_remark( std::string remark );
 

@@ -626,7 +626,7 @@ bool SpecFile::load_from_caen_gxml(std::istream& input)
     remarks_ = remarks;
     manufacturer_ = "CAEN";
     instrument_model_ = "Hexagon";
-    instrument_type_ = "Other";
+    instrument_type_ = "";
     detector_type_ = DetectorType::Unknown;
 
     cleanup_after_load();

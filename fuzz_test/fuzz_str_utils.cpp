@@ -649,9 +649,9 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   
   print_waypoint( 48 );
   
-  speed_from_remark( datastr );
-  speed_from_remark( str_1 );
-  speed_from_remark( str_2 );
+  try{ speed_from_remark( datastr ); }catch(std::exception &){}
+  try{ speed_from_remark( str_1 ); }catch(std::exception &){}
+  try{ speed_from_remark( str_2 ); }catch(std::exception &){}
   
   print_waypoint( 49 );
   
@@ -661,19 +661,19 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   
   print_waypoint( 50 );
   
-  dx_from_remark( datastr );
-  dx_from_remark( str_1 );
-  dx_from_remark( str_2 );
+  try{ dx_from_remark( datastr ); }catch(std::exception &){}
+  try{ dx_from_remark( str_1 ); }catch(std::exception &){}
+  try{ dx_from_remark( str_2 ); }catch(std::exception &){}
   
   print_waypoint( 51 );
   
-  dy_from_remark( datastr );
-  dy_from_remark( str_1 );
-  dy_from_remark( str_2 );
+  try{ dy_from_remark( datastr ); }catch(std::exception &){}
+  try{ dy_from_remark( str_1 ); }catch(std::exception &){}
+  try{ dy_from_remark( str_2 ); }catch(std::exception &){}
   
   print_waypoint( 52 );
   
-  dose_units_usvPerH( (const char *)data, size );
+  try{ dose_units_usvPerH( (const char *)data, size ); }catch(std::exception &){}
   //dose_units_usvPerH( datastr.c_str(), datastr.size() );
   //dose_units_usvPerH( str_1.c_str(), str_1.size() );
   //dose_units_usvPerH( str_2.c_str(), str_2.size() );
