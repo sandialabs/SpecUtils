@@ -690,7 +690,10 @@ public:
   void set_start_time( const time_point_t &timestamp );
   
   /** Set the remarks of this measurement; any previous remarks are removed. */
-  void set_remarks( const std::vector<std::string> &remar );
+  void set_remarks( const std::vector<std::string> &remarks );
+
+  /** Set the parse warnings of this measurement; any previous warnings are removed. */
+  void set_parse_warnings(const std::vector<std::string> &warnings );
   
   /** Set the source type of this measurement; default is #SourceType::Unknown.
    */

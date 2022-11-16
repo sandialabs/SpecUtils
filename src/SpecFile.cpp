@@ -782,7 +782,13 @@ void Measurement::set_remarks( const std::vector<std::string> &remar )
   remarks_ = remar;
 }
   
+
+void Measurement::set_parse_warnings(const std::vector<std::string>& warnings)
+{
+  parse_warnings_ = warnings;
+}
   
+
 void Measurement::set_source_type( const SourceType type )
 {
   source_type_ = type;
