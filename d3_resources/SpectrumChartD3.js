@@ -282,7 +282,7 @@ SpectrumChartD3 = function(elem, options) {
   this.vis = d3.select(this.chart).append("svg")
       .attr("width",  this.cx)
       .attr("height", this.cy)
-      .attr("class", "SpectrumChartD3" )
+      .attr("class", "SpectrumChartD3 InterSpecD3Chart" )
       .append("g")
       .attr("transform", "translate(" + this.padding.leftComputed + "," + this.padding.topComputed + ")");
 
@@ -390,9 +390,19 @@ SpectrumChartD3 = function(elem, options) {
    .ticks(0);
 
   this.yAxisBody = this.vis.append("g")
-    .attr("class", "yaxis" )
+    .attr("class", "yaxis axis" )
     .attr("transform", "translate(0,0)")
-    .call(this.yAxis);
+    .call(this.yAxis)
+    .style("cursor", "ns-resize")
+    .on("mousedown.drag",  self.yaxisDrag())
+    .on("touchstart.drag", self.yaxisDrag())
+    .on("mouseover", function() { 
+      if( d3.select(d3.event.target).node().nodeName === "text" )
+        d3.select(d3.event.target).style("font-weight", "bold"); 
+     })
+    .on("mouseout",  function() { 
+      d3.select(this).selectAll('text').style("font-weight", null);
+     });
 
   this.xAxis = d3.svg.axis().scale(this.xScale)
    .orient("bottom")
@@ -401,11 +411,16 @@ SpectrumChartD3 = function(elem, options) {
    .ticks(20, "f");
 
   this.xAxisBody = this.vis.append("g")
-    .attr("class", "xaxis" )
+    .attr("class", "xaxis axis" )
     .attr("transform", "translate(0," + this.size.height + ")")
     .style("cursor", "ew-resize")
-    //.on("mouseover", function(d, i) { /*d3.select(this).style("font-weight", "bold");*/})
-    //.on("mouseout",  function(d) { /*d3.select(this).style("font-weight", null);*/ })
+    .on("mouseover", function() { 
+      if( d3.select(d3.event.target).node().nodeName === "text" )
+        d3.select(d3.event.target).style("font-weight", "bold"); 
+     })
+    .on("mouseout",  function() { 
+      d3.select(this).selectAll('text').style("font-weight", null);
+     })
     .on("mousedown.drag",  self.xaxisDrag())
     .on("touchstart.drag", self.xaxisDrag())
     .call(this.xAxis)
@@ -1144,34 +1159,6 @@ SpectrumChartD3.prototype.redraw = function() {
     self.rebinForBackgroundSubtract();  // Get the points for background subtract
     self.setYAxisDomain();
 
-    var tx = function(d) { return "translate(" + self.xScale(d) + ",0)"; };
-    var stroke = function(d) { return d ? "#ccc" : "#666"; };
-
-    self.yAxis.scale(self.yScale);
-    self.yAxisBody.call(self.yAxis);
-
-    /**
-     * Christian [032818]: Another perforance optimization. Assign style and event listeners 
-     * for only major y-label ticks. This lessens the load and we can see a lot of improvement
-     * in application to InterSpec and other high performing apps.
-     */
-    self.svg.selectAll('.yaxislabel')
-      .each(function(d, i) {
-        const label = d3.select(this);
-        if (label.text().trim()) {  // If this y-label tick is a major tick
-          label.style("cursor", "ns-resize")
-            .on("mouseover", function(d) { d3.select(this).style("font-weight", "bold");})
-            .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
-            .on("mousedown.drag",  self.yaxisDrag());
-
-          if (self.isTouchDevice())
-            label.on("touchstart.drag", self.yaxisDrag());
-        }
-      });
-
-    if (self.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
-    else                                   { self.cancelXAxisSliderChart(); }
-
     self.drawYTicks();
     
     self.calcLeftPadding( true );
@@ -1179,6 +1166,9 @@ SpectrumChartD3.prototype.redraw = function() {
     self.drawXTicks();
 
     self.drawXAxisArrows();
+
+    if (self.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
+    else                                   { self.cancelXAxisSliderChart(); }
 
     /*The oringal code had the follwoing in, but I dont think is needed */
     /*self.plot.call(d3.behavior.zoom().x(self.xScale).y(self.yScale).on("zoom", self.redraw()));     */
@@ -1203,7 +1193,7 @@ SpectrumChartD3.prototype.calcLeftPadding = function( updategeom ){
     return;
   }
   
-  var labels = this.vis.selectAll("g.y").selectAll("text");
+  var labels = this.yAxisBody.selectAll("g.tick").selectAll("text");
   
   var labelw = 4;
   labels.forEach( function(label){
@@ -1384,8 +1374,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   if (this.cx !== prevCx && this.cy !== prevCy)
     this.xAxisBody.call(this.xAxis);
 
-  this.yAxisBody.attr("height", this.size.height )
-                .call(this.yAxis);
+  this.yAxisBody.attr("height", this.size.height );
   
   this.refLineInfo.select("circle").attr("cy", this.size.height);
   this.mouseInfo.attr("transform","translate(" + this.size.width + "," + this.size.height + ")");
@@ -3769,8 +3758,8 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   var stroke = function(d) { return d.parent.color; };
 
   var dashfunc = function(d){
-    var particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture"];
-    var dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6") ];
+    var particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum"];
+    var dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6") ];
     var index = particles.indexOf(d.particle);
     if( index < 0 ) { console.log( 'Invalid particle: ' + d.particle ); return null; }
     return (index > -1) ? dash[index] : null;
@@ -4133,7 +4122,7 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   textdescrip = (nearestLineParent ? (nearestLineParent + ', ') : "") +  e + ' keV, rel. amp. ' + sf;
 
   if( linedata.decay ) {
-    if( linedata.particle === 'gamma' ) {
+    if( (linedata.particle === 'gamma') || (linedata.particle === 'cascade-sum') ) {
       txt = linedata.decay;
       if( linedata.decay.indexOf('Capture') < 0 )
         txt += ' decay';
@@ -4548,8 +4537,9 @@ SpectrumChartD3.prototype.yticks = function() {
     /*     to satisfy the spacing of labels we want with the given range. */
     var msd = range / nlabel / n;
 
+    console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
+
     if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
-      console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
       return ticks;
     }
       var subdashes = 0;
@@ -4591,7 +4581,7 @@ SpectrumChartD3.prototype.yticks = function() {
         var t = "";
         if( i>=0 && ((i % subdashes) == 0) )
           t += formatYNumber(v);
-
+        
         var len = ((i % subdashes) == 0) ? true : false;
 
         ticks.push( {value: v, major: len, text: t } );
@@ -4647,6 +4637,9 @@ SpectrumChartD3.prototype.yticks = function() {
         nticksperdecade = 1;
       }/*if( (heightpx / minpxdecade) < numdecades ) */
 
+
+      labeldelta = Math.round(labeldelta);
+
       var t = null;
       var nticks = 0;
       var nmajorticks = 0;
@@ -4665,7 +4658,6 @@ SpectrumChartD3.prototype.yticks = function() {
           ticks.push( {value: startcounts, major: true, text: t } );
         }/*if( startcounts >= renderymin && startcounts <= renderymax ) */
 
-
         for( var i = 1; i < (nticksperdecade-1); ++i )
         {
           var y = startcounts + i*deltacounts;
@@ -4682,7 +4674,7 @@ SpectrumChartD3.prototype.yticks = function() {
       if( (nticks > 8 || (heightpx/nticks) < 25 || nmajorticks > 1) && nmajorticks > 0 ) {
         for( var i = 0; i < ticks.length; ++i )
           if( !ticks[i].major )
-            ticks[i].label = "";
+            ticks[i].text = "";
       }
       
       if( nmajorticks < 1 && ticks.length ) {
@@ -4722,76 +4714,58 @@ SpectrumChartD3.prototype.yaxisDrag = function(d) {
 }
 
 SpectrumChartD3.prototype.drawYTicks = function() {
-  var self = this;
-  var stroke = function(d) { return d ? "#ccc" : "#666"; };
+  const self = this;
+
+  this.yAxis.scale(this.yScale);
   
+  //If self.yScale(d) will return a NaN, then exit this function anyway
+  if( this.yScale.domain()[0] === this.yScale.domain()[1] ){
+    this.yAxisBody.selectAll("g.tick").remove();
+    return;
+  }
+    
   /* Regenerate y-ticks */
-    var ytick = self.yticks();
-    var ytickvalues = ytick.map(function(d){return d.value;} );
-    self.yScale.ticks(ytickvalues);
+  const ytick = this.yticks();
+  const ytickvalues = ytick.map(function(d){return d.value;} );
+  
+  // Set out desired tick mark values to D3
+  this.yAxis.tickValues(ytickvalues);
 
-    self.yAxisBody.selectAll('text').remove();
+  // Have D3 create our tick marks
+  this.yAxisBody.call(this.yAxis)
+    
+  // Customize the minor ticks, and labels text
+  this.yAxisBody.selectAll('g.tick')
+    .each(function(d,i){
+      const v = ytick[i];
+      const g = d3.select(this);
+      
+      g.select('line')
+       .attr('x1', v.major ? '-7' : '-4')
+       .attr('x2', '0');
+      g.select('text')
+       .text(v.major ? v.text : '');
+    } );
 
-    if( self.yGridBody ) {
-      self.yGrid.tickValues( ytickvalues );
+    
+    if( this.yGridBody ) {
+      this.yGrid.tickValues( ytickvalues );
 
       /*Since the number of grid lines might change (but call(self.yGrid) expects the same number) */
       /*  we will remove, and re-add back in the grid... kinda a hack. */
       /*  Could probably go back to manually drawing the grid lined and get rid */
       /*  of yGrid and yGridBody... */
-      self.yGridBody.remove();
-      self.yGridBody = self.vis.insert("g", ".refLineInfo")
-        .attr("width", self.size.width )
-        .attr("height", self.size.height )
+      this.yGridBody.remove();
+      this.yGridBody = this.vis.insert("g", ".refLineInfo")
+        .attr("width", this.size.width )
+        .attr("height", this.size.height )
         .attr("class", "ygrid" )
         .attr("transform", "translate(0,0)")
-        .call( self.yGrid );
-      self.yGridBody.selectAll('g.tick')
+        .call( this.yGrid );
+      this.yGridBody.selectAll('g.tick')
         .filter(function(d,i){return !ytick[i].major;} )
         .attr("class","minorgrid");
     }
-
-    //If self.yScale(d) will return a NaN, then exit this function anyway
-    if( self.yScale.domain()[0]===self.yScale.domain()[1] ){
-      self.vis.selectAll("g.y").remove();
-      return;
-    }
-
-    var ty = function(d) { return "translate(0," + self.yScale(d) + ")"; };
-    var gy;
-
-    gy = self.vis.selectAll("g.y")
-      .data(ytickvalues, String)
-      .attr("transform", ty);
-
-
-    var fy = function(d,i){ return ytick[i].text; }; /*self.yScale.tickFormat(10); */
-    gy.select("text").text( fy );
-
-    var gye = gy.enter().insert("g", "a")
-        .attr("class", "y")
-        .attr("transform", ty)
-        .attr("background-fill", "#FFEEB6");
-
-    gye.append("line")
-       .attr("stroke", stroke)
-       .attr("class", "yaxistick")
-       .attr("x1", function(d,i){ return ytick[i].major ? -7 : -4; } )
-       .attr("x2", 0 );
-
-    gye.append("text")
-        .attr("class", "yaxislabel")
-        .attr("x", -8.5)
-        .attr("dy", ".35em")
-        .attr("text-anchor", "end")
-        .text(fy);
-        /* .style("cursor", "ns-resize") */
-        /* .on("mouseover", function(d) { d3.select(this).style("font-weight", "bold");}) */
-        /* .on("mouseout",  function(d) { d3.select(this).style("font-weight", "normal");}); */
-        /* .on("mousedown.drag",  self.yaxisDrag()) */
-        /* .on("touchstart.drag", self.yaxisDrag()); */
-
-    gy.exit().remove();
 }
 
 SpectrumChartD3.prototype.setAdjustYAxisPadding = function( adjust, pad ) {
@@ -4826,10 +4800,13 @@ SpectrumChartD3.prototype.setLogY = function(){
       .range([1, this.size.height])
       .nice();
 
+  this.yAxis.scale(this.yScale);
+
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
 
-  this.redraw(this.options.showAnimation)();
+  this.redraw()();
+  this.redraw()(); //Necassary to get y-axis all lined up correctly
 }
 
 SpectrumChartD3.prototype.setLinearY = function(){
@@ -4843,10 +4820,13 @@ SpectrumChartD3.prototype.setLinearY = function(){
       .range([0, this.size.height])
       .nice();
 
+  this.yAxis.scale(this.yScale);
+
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
 
-  this.redraw(this.options.showAnimation)();
+  this.redraw()();
+  this.redraw()(); //Necassary to get y-axis all lined up correctly 
 }
 
 SpectrumChartD3.prototype.setSqrtY = function(){
@@ -4857,11 +4837,14 @@ SpectrumChartD3.prototype.setSqrtY = function(){
   this.yScale = d3.scale.pow().exponent(0.5)
       .domain([0, 100])
       .range([0, this.size.height]);
+      
+  this.yAxis.scale(this.yScale);
 
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
 
-  this.redraw(this.options.showAnimation)();
+  this.redraw()();
+  this.redraw()(); //Necassary to get y-axis all lined up correctly
 }
 
 
@@ -5103,23 +5086,6 @@ SpectrumChartD3.prototype.drawXTicks = function() {
 
   minorticks.select('line').attr('y2', '4');
   minorticks.select('text').text("");
-
-  /**
-   * Christian [032818]: Made a slight performance optimization by moving the D3 select assignment code
-   * for styles and event listeners to major ticks. This still achieves the same result, but prevents wasted operations
-   * by assigning the styles and event listeners to ticks that are actually displayed. Noticable improvements seen
-   * when using w/InterSpec.
-   */
-  //const majorticksText = majorticks.selectAll('text')
-  //  .style("cursor", "ew-resize")
-  //  .on("mouseover", function(d, i) { d3.select(this).style("font-weight", "bold");})
-  //  .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
-  //  .on("mousedown.drag",  self.xaxisDrag());
-
-  // Add touch event listeners for touch devices
-  //if (self.isTouchDevice()) {
-  //  majorticksText.on("touchstart.drag", self.xaxisDrag());
-  //}
   
   const labelUpperXPx = function(tick){
     const bb = tick[0][0].getBBox();
@@ -9022,15 +8988,6 @@ SpectrumChartD3.prototype.redrawYAxis = function() {
 
   return function() {
     self.do_rebin();
-    var tx = function(d) { return "translate(" + self.xScale(d) + ",0)"; };
-    var stroke = function(d) { return d ? "#ccc" : "#666"; };
-
-    self.yAxisBody.call(self.yAxis);
-    self.yAxisBody.selectAll("text").style("cursor", "ns-resize")
-        .on("mouseover", function(d) { d3.select(this).style("font-weight", "bold");})
-        .on("mouseout",  function(d) { d3.select(this).style("font-weight", null);})
-        .on("mousedown.drag",  self.yaxisDrag())
-        .on("touchstart.drag", self.yaxisDrag());
 
     self.drawYTicks();
     self.calcLeftPadding( true );
