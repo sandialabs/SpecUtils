@@ -202,11 +202,11 @@ namespace SpecUtils
     char buffer[256];
     if( extended ) //"2014-04-14T14:12:01.621543"
       snprintf( buffer, sizeof(buffer),
-               "%i-%.2i-%.2iT%.2i:%.2i:%09.6f",
+               "%.4i-%.2i-%.2iT%.2i:%.2i:%09.6f",
                year, month, day, hour, mins, (secs+frac) );
     else           //"20140414T141201.621543"
       snprintf( buffer, sizeof(buffer),
-               "%i%.2i%.2iT%.2i%.2i%09.6f",
+               "%.4i%.2i%.2iT%.2i%.2i%09.6f",
                year, month, day, hour, mins, (secs+frac) );
     
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -233,6 +233,8 @@ namespace SpecUtils
     
     
     // For development, check if we can get the same answer using the date library
+    //  It looks like we reliably can!
+    //  TODO: decide on one implementation or the other
     const char *fmt_flgs = extended ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
     string answer = date::format(fmt_flgs, t);
     // Trim trailing zeros
@@ -243,6 +245,7 @@ namespace SpecUtils
       while( (answer.size() > dec_pos) && ((answer.back() == '0') || (answer.back() == point)))
         answer = answer.substr(0,answer.size() - 1);
     }
+     
     assert( answer == buffer );
     
     return buffer;
