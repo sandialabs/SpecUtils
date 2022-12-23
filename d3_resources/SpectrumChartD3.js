@@ -3761,7 +3761,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     var particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum"];
     var dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6") ];
     var index = particles.indexOf(d.particle);
-    if( index < 0 ) { console.log( 'Invalid particle: ' + d.particle ); return null; }
+    if( index < 0 ) { console.log( 'Invalid particle: ' + d.particle ); return null; } //We can get here when lines that shared an energy were combined, so d.particle might for example be "gamma, xray"
     return (index > -1) ? dash[index] : null;
   };
 
@@ -3856,7 +3856,7 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
            /*{e:30.27,h:6.22e-05,particle:'xray',decay:'xray',el:'barium'} */
            /*particle in ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture"]; */
            if( (typeof d.e !== "number") || (typeof d.h !== "number") || (typeof d.particle !== "string") )
-             throw "Refernce line is invalid (" + JSON.stringify(d) + ")";
+             throw "Reference line is invalid (" + JSON.stringify(d) + ")";
          });
        });
 
@@ -4104,9 +4104,9 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
 
   var linedata = nearestline.__data__;
   linedata.mousedover = true;
-  var e = linedata.e;
-  var sf = linedata.h;
-  var linepx = self.xScale(e);
+  const e = linedata.e;
+  const sf = linedata.h;
+  const linepx = self.xScale(e);
 
   var txt, textdescrip, attTxt;
   var detector = linedata.parent.detector
@@ -4114,28 +4114,21 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   var shieldingThickness = linedata.parent.shieldingThickness;
   var nearestLineParent = linedata.parent.parent;
 
-
-  /*20160308: self.refLines[0] should now contain member variable particleSf */
-  /*  that gives a map from the particle name to the scale factor applied to */
-  /*  get sf. ex: var abs_br = self.refLines[0].particleSf[linedata.particle] * sf. */
-
-  textdescrip = (nearestLineParent ? (nearestLineParent + ', ') : "") +  e + ' keV, rel. amp. ' + sf;
-
-  if( linedata.decay ) {
-    if( (linedata.particle === 'gamma') || (linedata.particle === 'cascade-sum') ) {
-      txt = linedata.decay;
-      if( linedata.decay.indexOf('Capture') < 0 )
-        txt += ' decay';
-    }else if( linedata.particle === 'xray' ) {
-      textdescrip = linedata.el + ' x-ray, ' +  e + ' keV, I=' + sf;
-    }else if( (typeof linedata.particle === 'string') && linedata.particle.length ){
-      textdescrip = linedata.particle + ' from ' + nearestLineParent + ", " +  e + ' keV, I=' + sf;
-    }
-  }
+  textdescrip = (nearestLineParent ? (nearestLineParent + ', ') : "")
+                +  e + ' keV'
+                + (linedata.particle ? ' ' + linedata.particle : "")
+                + ', rel. amp. ' + sf;
+  
+  if( (typeof linedata.desc_ind === "number") && (linedata.desc_ind >= 0) && (linedata.desc_ind < linedata.parent.desc_strs.length) )
+    txt = linedata.parent.desc_strs[linedata.desc_ind];
 
   if( linedata.particle === 'gamma' || linedata.particle === 'xray' ) {
-    if( shielding && shieldingThickness )
-      attTxt = shieldingThickness + ' of ' + shielding;
+    if( shielding )
+    {
+      if( shieldingThickness )
+        attTxt = shieldingThickness + ' of ';
+      attTxt += shielding;
+    }
     if( detector )
       attTxt = (attTxt ? (attTxt + ' with a ' + detector) : 'Assuming a ' + detector);
   }
