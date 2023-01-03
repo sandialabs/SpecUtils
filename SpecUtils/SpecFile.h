@@ -1869,7 +1869,7 @@ public:
    Throws excpetion if energy calibration channel counts are incompatible, or passed in #Measurment
    is not owned by the SpecFile.
    */
-  void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
+  virtual void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
                         const std::shared_ptr<const Measurement> &measurement );
   
   /** Sets the energy calibration for the specified sample numbers and detector names.

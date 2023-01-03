@@ -733,7 +733,7 @@ namespace SpecUtils
         {   
           for( const char *ch = str_start; ch != str_end; ++ch )
           {
-            if( !isdigit(*ch) )
+            if( !isdigit(*ch) && ((*ch) != '-') && ((*ch) != '+') )
               throw runtime_error( string("Invalid character ('") + (*ch) + string("')") );
           }
 #if( __cplusplus >= 201703L )
