@@ -66,12 +66,7 @@ namespace
 
 
 #if( USE_NLOHMANN_JSON_IMP )
-    // This implementation hasnt had handling files with multiple spectra implemented
-
-    using json = nlohmann::json;
-    input.seekg(start_pos);
-    json data = json::parse(filedata);
-    input.exceptions(origexceptions);
+    const nlohmann::json data = nlohmann::json::parse(filedata);
 
     vector<string> warnings; //currently unused
     string comment, serial_number;
@@ -82,7 +77,7 @@ namespace
     const auto& bank_0 = data["rates"]["user"]["bank_0"];
     float run_time = bank_0["run_time"];
     float dead_time = bank_0["dead_time"];
-    float digital_gain = data["fpga_ctrl"]["user"]["digital_gain"]; //Untested!
+    float digital_gain = data["fpga_ctrl"]["user"]["digital_gain"];
     auto counts = make_shared<vector<float>>();
     *counts = data["histo"]["registers"].get<std::vector<float>>();
 #else

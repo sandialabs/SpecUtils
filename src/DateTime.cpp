@@ -699,9 +699,14 @@ namespace SpecUtils
       ++field_start;
     
     const bool is_neg = (field_start < str_len) && (input[field_start] == '-');
-    if( is_neg )
+    const bool has_plus = (field_start < str_len) && (input[field_start] == '+');
+    if( is_neg || has_plus )
+    {
       ++field_start;
-    
+      while( field_start < input.size() && isspace( input[field_start] ) )
+        ++field_start;
+    }
+
     if( field_start >= str_len )
       throw runtime_error( "empty input" );
     
