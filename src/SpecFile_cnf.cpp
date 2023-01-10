@@ -510,7 +510,40 @@ bool SpecFile::load_from_cnf( std::istream &input )
       for( const float v : cal_coefs )
         allZeros = allZeros && (v == 0.0f);
       
+      // Alpha spectra will have offsets of like 2500 keV, which will cause the exception from
+      //  #EnergyCalibration::set_polynomial.  So we'll check if this is maybe an alpha spectrum,
+      //  and if so, use #EnergyCalibration::set_polynomial_no_offset_check
+      bool is_alpha_spec = false;
       if( !allZeros )
+      {
+        //From only a single file, Alpha spec files have: "Alpha Efcor", "Alpha Encal".  Segment 11, has just "Alpha"
+        const uint8_t headers_with_alpha[] = { 2, 6, 11, 13, 19 };
+        string buffer( 513, '\0' );
+        for( uint8_t i : headers_with_alpha )
+        {
+          size_t segment_position = 0;
+          if( findCnfSegment(i, 0, segment_position, input, size) )
+          {
+            input.seekg( segment_position, std::ios::beg );
+            if( input.read( &(buffer[0]), 512 ) && (buffer.find("Alpha") != string::npos) )
+            {
+              try
+              {
+                auto newcal = make_shared<EnergyCalibration>();
+                newcal->set_polynomial_no_offset_check( num_channels, cal_coefs, {} );
+                meas->energy_calibration_ = newcal;
+                is_alpha_spec = true;
+              }catch( std::exception &e )
+              {
+              }
+              
+              break;
+            }//if( we found the segment, and it had "Alpha" in it )
+          }//if( find segment )
+        }//for( loop over potential segments that might have "Alpha" in them )
+      }//if( !allZeros )
+      
+      if( !allZeros && !is_alpha_spec )
         throw runtime_error( "Calibration parameters were invalid" );
     }//try /catch set calibration
     

@@ -48,20 +48,19 @@
 #include <float.h>
 #define isnan(x) _isnan(x)
 #define isinf(x) (!_finite(x))
-#define fpu_error(x) (isinf(x) || isnan(x))
 #if( _MSC_VER <= 1700 )
 #define snprintf _snprintf_s
 #endif
 #endif
 
-#if( __cplusplus > 199711L || defined(ANDROID) || defined(__APPLE__) )
+
+#ifndef IsInf
 #define IsInf(x) (std::isinf)(x)
-#define IsNan(x) (std::isnan)(x)
-#else
-#define IsInf(x) isinf(x)
-#define IsNan(x) isnan(x)
 #endif
 
+#ifndef IsNan
+#define IsNan(x) (std::isnan)(x)
+#endif
 
 #if(PERFORM_DEVELOPER_CHECKS)
 //log_developer_error(...) is implemented in SpectrumDataStructs.cpp, but

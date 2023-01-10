@@ -108,8 +108,23 @@ size_t EnergyCalibration::num_channels() const
 }//num_channels()
 
 
-
 void EnergyCalibration::set_polynomial( const size_t num_channels,
+                                       const std::vector<float> &coeffs,
+                                       const std::vector<std::pair<float,float>> &dev_pairs )
+{
+  set_polynomial( EnergyCalCheckType::Normal, num_channels, coeffs, dev_pairs );
+}
+
+
+void EnergyCalibration::set_polynomial_no_offset_check( const size_t num_channels,
+                                    const std::vector<float> &coeffs,
+                                    const std::vector<std::pair<float,float>> &dev_pairs )
+{
+  set_polynomial( EnergyCalCheckType::LooseOffset, num_channels, coeffs, dev_pairs );
+}
+
+void EnergyCalibration::set_polynomial( const EnergyCalCheckType check_type,
+                                        const size_t num_channels,
                                         const std::vector<float> &coeffs,
                                         const std::vector<std::pair<float,float>> &dev_pairs )
 {
@@ -136,7 +151,8 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
   
   // Do a sanity check on calibration coefficients that they are reasonable; #polynomial_binning
   //  will check if the are strictly increasing.
-  if( (fabs(coeffs[0]) > 500.0)  //500 is arbitrary, but I have seen -450 in data!
+  if( (coeffs[0] < 500.0)  //500 is arbitrary, but I have seen -450 in data!
+     || (coeffs[0] > ((check_type==EnergyCalCheckType::LooseOffset) ? 5000.0 : 500.0))
       || (fabs(coeffs[1]) > 450.0)  //450 is arbitrary, lets 7 channels span 3000 keV
       || (last_iter==2 && coeffs[1]<=std::numeric_limits<float>::epsilon() )  //epsilon = 1.19209290E-07F (picked as arbitrary constant, no meaning behind epsilon)
       || (last_iter>=3 && coeffs[1]<=std::numeric_limits<float>::epsilon()

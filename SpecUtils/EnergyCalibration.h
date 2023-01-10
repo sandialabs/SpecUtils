@@ -141,6 +141,17 @@ namespace SpecUtils
                          const std::vector<float> &coeffs,
                          const std::vector<std::pair<float,float>> &dev_pairs );
     
+    /** Similar to #set_polynomial, but significantly loosens the offset (i.e., zeroth calibration
+     coefficient) check, to have a value between -500 and 5000.
+     
+     This is primarily to facilitate alpha-spectroscopy energy calibrations, which may have like a
+     2500 keV offset.
+     */
+    void set_polynomial_no_offset_check( const size_t num_channels,
+                                     const std::vector<float> &coeffs,
+                                     const std::vector<std::pair<float,float>> &dev_pairs );
+    
+    
     /** Functionally the same as #set_polynomial, but will set type to
      #EnergyCalType::UnspecifiedUsingDefaultPolynomial.
      
@@ -285,6 +296,23 @@ namespace SpecUtils
      Throws exception if error is found.
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
+    
+    /** Normally we expect energy offset (i.e., zeroth polynomial coefficient) to be not to large,
+     but for like alpha spectroscopy, it may be like 2500 keV, we
+     */
+    enum class EnergyCalCheckType
+    {
+      /** Absolute value of energy offset must less than 500 keV. */
+      Normal,
+      
+      /** Absolute value of energy offset must less than 5000 keV. */
+      LooseOffset
+    };//enum class EnergyCalCheckType
+    
+    void set_polynomial( const EnergyCalCheckType check_type,
+                        const size_t num_channels,
+                        const std::vector<float> &coeffs,
+                        const std::vector<std::pair<float,float>> &dev_pairs );
     
     EnergyCalType m_type;
     std::vector<float> m_coefficients;
