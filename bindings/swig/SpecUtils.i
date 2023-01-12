@@ -1,4 +1,4 @@
-%module SpectrumDataStructsSwig
+%module SpecUtilsSwig
 
 
 %rename(operatorEqual) operator=;
@@ -16,7 +16,7 @@ namespace std {
 
 
 %include "std_shared_ptr.i"
-%shared_ptr(Measurement)
+%shared_ptr(SpecUtils::Measurement)
 %shared_ptr(std::vector<float>)
 
 namespace std {
@@ -27,7 +27,7 @@ namespace std {
 
 
 %include "cpointer.i"
-%include "swig/boost_ptime.i"
+%include "boost_ptime.i"
 
 
 
@@ -39,6 +39,7 @@ namespace std {
 #include <iostream> 
 #include <sstream> 
 #include <fstream>
+#include <memory>
 using namespace std; 
 %} 
 %inline %{ 
@@ -66,9 +67,9 @@ void closeFile(std::ostream *stream) {
 
 %{
 #include <string>
-#include "SpecUtils/SpectrumDataStructs.h"
+#include "SpecUtils/SpecFile.h"
 %}
 
 
 
-%include "SpecUtils/SpectrumDataStructs.h"
+%include "SpecUtils/SpecFile.h"

@@ -1,7 +1,7 @@
 
 To compile with support for Java use the following commands:
 ```bash
-cd InterSpec/external_libs/SpecUtils
+cd SpecUtils
 mkdir build
 cd build
 cmake -DSpecUtils_JAVA_SWIG=ON ..

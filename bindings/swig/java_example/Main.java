@@ -23,17 +23,11 @@
 
 /* File created by Edward Walsh. */
 
-import java.util.Vector;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Graphics;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
-
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -41,33 +35,36 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.border.Border;
 
+import gov.sandia.specutils.FloatVector;
+import gov.sandia.specutils.IntVector;
+import gov.sandia.specutils.Measurement;
+import gov.sandia.specutils.ParserType;
+import gov.sandia.specutils.SWIGTYPE_p_std__ostream;
+import gov.sandia.specutils.SaveSpectrumAsType;
+import gov.sandia.specutils.SpecFile;
+import gov.sandia.specutils.SpecUtilsSwig;
+import gov.sandia.specutils.StringVector;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.chart.plot.XYPlot;
 import org.jfree.data.category.CategoryDataset;
 import org.jfree.data.general.DatasetUtilities;
-import org.jfree.data.time.TimeSeries;
-import org.jfree.data.xy.XYSeries;
-import org.jfree.data.xy.XYSeriesCollection;
 
 import org.joda.time.DateTimeZone;
 
 /*************************************************************************
  * 
- * cd InterSpec/external_libs/SpecUtils
+ * cd SpecUtils
  * mkdir build
  * cd build
  * cmake -DSpecUtils_JAVA_SWIG=ON ..
  * make -j4
  *
  * #To then run the example Java executable, do:
- * cp ../swig/java_example/* .
- * javac -classpath .:jcommon-1.0.21.jar:jfreechart-1.0.17.jar:joda-time-2.9.jar *.java
- * java -Djava.library.path="./lib" -classpath .:jcommon-1.0.21.jar:jfreechart-1.0.17.jar:joda-time-2.9.jar Main
+ * cp ../bindings/swig/java_example/* .
+ * javac -classpath .:jcommon-1.0.21.jar:jfreechart-1.0.17.jar:joda-time-2.9.jar *.java gov/sandia/specutils/*.java
+ * java -Djava.library.path="." -classpath .:jcommon-1.0.21.jar:jfreechart-1.0.17.jar:joda-time-2.9.jar Main
  *
  * Notes:
  *  To find swig .i files, look here:
@@ -93,8 +90,8 @@ public class Main extends JFrame implements ActionListener{
      JFreeChart chart = null;
 
 
-     /* create an an instance of the MeasurementInfo class */
-     public MeasurementInfo info = new MeasurementInfo();
+     /* create an an instance of the SpecFile class */
+     public SpecFile specFile = new SpecFile();
      public JTextField textFilename = new JTextField();
      public JScrollPane scrollPaneInfo = new JScrollPane();
      public JTextArea textInfo = new JTextArea();
@@ -256,7 +253,7 @@ public void plotMeasurement() {
 
 	/* which measurement did the user select */
 	int indexMeasurement = Integer.valueOf(this.textIndexMeasurement.getText());
-    Measurement measurement = info.measurement(indexMeasurement);
+    Measurement measurement = specFile.measurement(indexMeasurement);
 
 	/* get the gammaCounts in this measurement */
     FloatVector gammaCounts = measurement.gamma_counts();
@@ -312,10 +309,9 @@ public void parseMeasurementInfo() {
 
 	/* which measurement did the user select */
 	int indexMeasurement = Integer.valueOf(this.textIndexMeasurement.getText());
-    Measurement measurement = info.measurement(indexMeasurement);
+    Measurement measurement = specFile.measurement(indexMeasurement);
 
-    //this.textMeasurementInfo.append("start time: " + measurement.start_time().toString() + "\n");
-    this.textMeasurementInfo.append("start time: " + measurement.start_time_copy().withZone(DateTimeZone.UTC).toString() + "\n");
+    //this.textMeasurementInfo.append("start time: " + measurement.start_time_copy().withZone(DateTimeZone.UTC).toString() + "\n");
     this.textMeasurementInfo.append("detector type: " + measurement.detector_type() + "\n");
     this.textMeasurementInfo.append("sample #: " + measurement.sample_number() + "\n");
     this.textMeasurementInfo.append("real time: " + measurement.real_time() + "\n");
@@ -352,47 +348,47 @@ public void readFile() {
 	String filename = this.textFilename.getText();
 
     /* Load the file */
-    if (info.load_file( filename, ParserType.kAutoParser, "" )==false) {
+    if (specFile.load_file( filename, ParserType.Auto, "" )==false) {
         this.textInfo.append("ERROR:  Can't read " + filename + "\n");
         return;
      }//if
 
 
     /* get remarks */
-    for (int i=0; i<info.remarks().size(); i++) {
-    	this.textInfo.append(info.remarks().get(i) + "\n");
+    for (int i=0; i<specFile.remarks().size(); i++) {
+    	this.textInfo.append(specFile.remarks().get(i) + "\n");
     }
 
 
 
     /* get the UUID */
-    this.textInfo.append("UUID=" + info.uuid() + "\n");
+    this.textInfo.append("UUID=" + specFile.uuid() + "\n");
 
 
     /* get instrument information */
     String s
       = "instrument: \n"
-      + "    type="+info.instrument_type() + "\n"
-      + "    manufacturer="+info.manufacturer()+"\n"
-      + "    model="+info.instrument_model() + "\n"
-      + "    id="+info.instrument_id()+"\n"
+      + "    type="+specFile.instrument_type() + "\n"
+      + "    manufacturer="+specFile.manufacturer()+"\n"
+      + "    model="+specFile.instrument_model() + "\n"
+      + "    id="+specFile.instrument_id()+"\n"
       ;
      this.textInfo.append(s + "\n");
 
 
      /* get the location */
      s = "location: "
-        + "    " + info.measurement_location_name() + "\n"
-    	+ "    latitude = " + info.mean_latitude() + "\n"
-    	+ "    longitude = " + info.mean_longitude() + "\n"
+        + "    " + specFile.measurement_location_name() + "\n"
+    	+ "    latitude = " + specFile.mean_latitude() + "\n"
+    	+ "    longitude = " + specFile.mean_longitude() + "\n"
     	;
      this.textInfo.append(s + "\n");
 
 
     /* get detector names and numbers */
     this.textInfo.append("detectors:" + "\n");
-    StringVector detectorNames = info.detector_names();
-    IntVector detectorNumbers = info.detector_numbers();
+    StringVector detectorNames = specFile.detector_names();
+    IntVector detectorNumbers = specFile.detector_numbers();
     s = "";
     for (int i=0; i<detectorNames.size(); i++) {
         String detectorName = detectorNames.get(i);
@@ -407,29 +403,29 @@ public void readFile() {
 
 
     /* get number of measurements */
-    long numberOfMeasurements = info.num_measurements();
+    long numberOfMeasurements = specFile.num_measurements();
     this.textInfo.append("number of measurements = " + numberOfMeasurements + "\n");
 
     this.textIndexMeasurementPrompt.setText("select measurement (0-" + (numberOfMeasurements-1) + ")");
 
     /* write a PCF file */
-    SWIGTYPE_p_std__ostream file = SpectrumDataStructsSwig.openFile("data_generatedFile.pcf");
-    info.write_pcf(file);
-    SpectrumDataStructsSwig.closeFile(file);
+    SWIGTYPE_p_std__ostream file = SpecUtilsSwig.openFile("data_generatedFile.pcf");
+    specFile.write_pcf(file);
+    SpecUtilsSwig.closeFile(file);
     this.textInfo.append("wrote data_generatedFile.pcf\n");
     
     /* Write another PCF file */
-    SaveSpectrumAsType format = SaveSpectrumAsType.kPcfSpectrumFile;
-    info.write_to_file("data_generatedFile2.pcf", format);
+    SaveSpectrumAsType format = SaveSpectrumAsType.Pcf;
+    specFile.write_to_file("data_generatedFile2.pcf", format);
     this.textInfo.append("wrote data_generatedFile2.pcf\n");
     
     /* Write a N42 file */
-    format = SaveSpectrumAsType.k2011N42SpectrumFile;
+    format = SaveSpectrumAsType.N42_2012;
     IntVector sample_nums = new IntVector();
     sample_nums.add(1);
     IntVector det_nums = new IntVector();
     det_nums.add(0);
-    info.write_to_file("data_generatedFile.n42", sample_nums, det_nums, format);
+    specFile.write_to_file("data_generatedFile.n42", sample_nums, det_nums, format);
     this.textInfo.append("wrote data_generatedFile.n42\n");
 
 
