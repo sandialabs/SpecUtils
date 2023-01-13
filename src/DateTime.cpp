@@ -21,6 +21,7 @@
 
 #include <string>
 #include <cctype>
+#include <cstring>
 #include <iostream>
 
 #if( __cplusplus >= 201703L )

@@ -2,7 +2,7 @@ Java wrapper for MeasurementInfo C++ code
  
 SWIG is used to generate Java wrappers for the MeasurementInfo C++ code.  This will allow Java code to invoke public methods in the C++ code.
  
-To use SWIG, a SWIG interface file has to be created.  A sample interface file can be found here:  InterSpec/external_libs/SpecUtils/swig/SpecUtils.i.  This sample file brings in public declarations that are in SpecUtils/SpectrumDataStructs.h.  SWIG will generate a large number of .java wrapper files.
+To use SWIG, a SWIG interface file has to be created.  A sample interface file can be found here:  bindings/swig/SpecUtils.i.  This sample file brings in public declarations that are in SpecUtils/SpecUtils.h.  SWIG will generate a large number of .java wrapper files.
  
 Public C++ methods, which have primitive parameters and primitive return values such as int, float, double, char*, or std::string, are the easiest the wrap.  In almost all cases, Java primitive arguments can be passed to the C++ code and the result are Java primitive data types.
 Example:
@@ -18,11 +18,11 @@ Helper method:  bool write_csv(std::string filename) const
 For methods whose parameters or return value can’t be converted to primitive data types, helper methods can be written inside the SWIG interface file.  The example interface file shows two helper methods to manipulate an ostream object.  The first method creates an ostream object.  The second method uses the ostream object to flush the stream.  Here is how these two methods can be used in
 Example Java code:
 /* call an interface helper method to create an ostream object */
-SWIGTYPE_p_std__ostream file = SpectrumDataStructsSwig.openFile("data_generatedFile.pcf");
+SWIGTYPE_p_std__ostream file = SpecUtilsSwig.openFile("data_generatedFile.pcf");
 /* use the ostream object by calling a method inside the C++ code */
 info.write_csv(file);
 /* call an interface helper method to flush the stream */
-SpectrumDataStructsSwig.closeFile(file);
+SpecUtilsSwig.closeFile(file);
  
 C++ operators, such as  operator=, must be assigned to a Java method.   This happens inside the SWIG interface file.  The example interface file wraps operator= to a method named operatorEqual.
  

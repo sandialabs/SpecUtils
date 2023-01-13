@@ -41,10 +41,11 @@
 
 #cmakedefine01 SpecUtils_USE_FROM_CHARS
 
+#include <cmath>
+
 #if( defined(_WIN32) && defined(_MSC_VER) )
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <float.h>
 #define isnan(x) _isnan(x)
 #define isinf(x) (!_finite(x))
@@ -63,7 +64,7 @@
 #endif
 
 #if(PERFORM_DEVELOPER_CHECKS)
-//log_developer_error(...) is implemented in SpectrumDataStructs.cpp, but
+//log_developer_error(...) is implemented in SpecFile.cpp, but
 //  declared here so can be used everywhere.
 //Error messages go to developer_errors.log in the cwd
 void log_developer_error( const char *location, const char *error );

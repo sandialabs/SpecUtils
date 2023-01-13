@@ -32,6 +32,7 @@
 #include <vector>
 #include <algorithm>
 #include <functional>
+#include <memory>
 
 /*
 Shortcommings that wcjohns should address:
@@ -422,7 +423,7 @@ class DetectorAnalysis;
 struct EnergyCalibration;
 struct N42DecodeHelper2006;
 struct N42DecodeHelper2012;
-struct MeasurementCalibInfo; //defined in SpectrumDataStructs.cpp (used for parsing N42 2006/2012 files and rebinning)
+struct MeasurementCalibInfo; //defined in SpecFile.cpp (used for parsing N42 2006/2012 files and rebinning)
 struct GrossCountNodeDecodeWorker;
   
 /** Checks the first 512 bytes of data for a few magic strings that *should* be
