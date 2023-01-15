@@ -112,7 +112,7 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
                                        const std::vector<float> &coeffs,
                                        const std::vector<std::pair<float,float>> &dev_pairs )
 {
-  set_polynomial( EnergyCalCheckType::Normal, num_channels, coeffs, dev_pairs );
+  set_polynomial_internal( EnergyCalCheckType::Normal, num_channels, coeffs, dev_pairs );
 }
 
 
@@ -120,10 +120,10 @@ void EnergyCalibration::set_polynomial_no_offset_check( const size_t num_channel
                                     const std::vector<float> &coeffs,
                                     const std::vector<std::pair<float,float>> &dev_pairs )
 {
-  set_polynomial( EnergyCalCheckType::LooseOffset, num_channels, coeffs, dev_pairs );
+  set_polynomial_internal( EnergyCalCheckType::LooseOffset, num_channels, coeffs, dev_pairs );
 }
 
-void EnergyCalibration::set_polynomial( const EnergyCalCheckType check_type,
+void EnergyCalibration::set_polynomial_internal( const EnergyCalCheckType check_type,
                                         const size_t num_channels,
                                         const std::vector<float> &coeffs,
                                         const std::vector<std::pair<float,float>> &dev_pairs )

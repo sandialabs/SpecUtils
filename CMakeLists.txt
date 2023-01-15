@@ -82,7 +82,7 @@ endif( NOT DEFINED boost_SOURCE_DIR )
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
-  FIND_PACKAGE(PythonLibs 2.7)
+  FIND_PACKAGE(PythonLibs)
   IF(NOT PYTHONLIBS_FOUND)
     MESSAGE(FATAL_ERROR "Unable to find PythonLibs.")
   ENDIF()

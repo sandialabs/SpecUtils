@@ -353,6 +353,8 @@ namespace
         case SpecUtils::ParserType::Lzs: type = "LZS"; break;
         case SpecUtils::ParserType::Phd: type = "PHD"; break;
         case SpecUtils::ParserType::ScanDataXml: type = "ScanData"; break;
+        case SpecUtils::ParserType::Json: type = "JSON"; break;
+        case SpecUtils::ParserType::CaenHexagonGXml: type = "GXml"; break;
         case SpecUtils::ParserType::Auto: type = ""; break;
       }//switch( parser_type )
       
@@ -975,6 +977,8 @@ BOOST_PYTHON_MODULE(SpecUtils)
   .value( "Lzs", SpecUtils::ParserType::Lzs )
   .value( "Aram", SpecUtils::ParserType::Aram )
   .value( "ScanDataXml", SpecUtils::ParserType::ScanDataXml )
+  .value( "Json", SpecUtils::ParserType::Json )
+  .value( "CaenHexagonGXml", SpecUtils::ParserType::CaenHexagonGXml )
   .value( "Auto", SpecUtils::ParserType::Auto );
 
 

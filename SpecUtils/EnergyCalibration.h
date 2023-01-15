@@ -309,7 +309,7 @@ namespace SpecUtils
       LooseOffset
     };//enum class EnergyCalCheckType
     
-    void set_polynomial( const EnergyCalCheckType check_type,
+    void set_polynomial_internal( const EnergyCalCheckType check_type,
                         const size_t num_channels,
                         const std::vector<float> &coeffs,
                         const std::vector<std::pair<float,float>> &dev_pairs );
