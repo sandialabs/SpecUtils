@@ -1467,6 +1467,9 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         xml_node<char> *RadInstrumentState = doc->allocate_node( node_element, "RadInstrumentState" );
         RadMeasurement->append_node( RadInstrumentState );
         
+        xml_attribute<char> *att = doc->allocate_attribute( "radInstrumentInformationReference", "InstInfo1", 33, 9 );
+        RadInstrumentState->append_attribute( att );
+        
         instrument_state->add_to_n42_2012( RadInstrumentState, doc );
       }//if( instrument_state )
       
@@ -3371,7 +3374,7 @@ public:
           char buffer[512];
           snprintf( buffer, sizeof(buffer), "Failed to parse <StateVector>: '%s'.", e.what() );
           log_developer_error( __func__, buffer );
-          assert( !node || XML_FIRST_INODE(node, "Remark") ); // The remark will say something like "InterSpec could not determine detector state"
+          // assert( !node || XML_FIRST_INODE(node, "Remark") ); // The remark will say something like "InterSpec could not determine detector state"
 #endif
         }
       
