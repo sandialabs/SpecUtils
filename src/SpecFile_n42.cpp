@@ -6698,6 +6698,9 @@ namespace SpecUtils
     attr = doc->allocate_attribute( "xmlns", "http://physics.nist.gov/N42/2011/N42" );
     RadInstrumentData->append_attribute( attr );
     
+    attr = doc->allocate_attribute( "xmlns:ns", "InterSpec" );
+    RadInstrumentData->append_attribute( attr );
+    
     {
       const time_point_t t = chrono::time_point_cast<chrono::microseconds>( chrono::system_clock::now() );
       const string datetime = SpecUtils::to_extended_iso_string(t) + "Z";
