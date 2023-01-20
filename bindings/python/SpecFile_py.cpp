@@ -504,7 +504,14 @@ namespace
     return l;
   }
   
-  
+  boost::python::list gamma_detector_names_wrapper( const SpecUtils::SpecFile *info )
+  {
+    boost::python::list l;
+    for( const string &p : info->gamma_detector_names() )
+      l.append( p );
+    return l;
+  }
+
   boost::python::list detector_names_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
@@ -574,23 +581,25 @@ namespace
   void writeIntegerChn_wrapper( const SpecUtils::SpecFile *info,
                                boost::python::object pystream,
                                boost::python::object py_sample_nums,
-                               boost::python::object py_det_nums )
+                               boost::python::object py_det_names )
   {
-    std::set<int> sample_nums, det_nums;
+    std::vector<std::string> det_names;
+    std::set<int> sample_nums;
     
     boost::python::list sn_list = boost::python::extract<boost::python::list>(py_sample_nums);
-    boost::python::list dn_list = boost::python::extract<boost::python::list>(py_det_nums);
+    boost::python::list dn_list = boost::python::extract<boost::python::list>(py_det_names);
     
     boost::python::ssize_t n = boost::python::len( sn_list );
     for( boost::python::ssize_t i = 0; i < n; ++i )
+    
       sample_nums.insert( boost::python::extract<int>( sn_list[i] ) );
     
     n = boost::python::len( dn_list );
     for( boost::python::ssize_t i = 0; i < n; ++i )
-      det_nums.insert( boost::python::extract<int>( dn_list[i] ) );
+      det_names.push_back( boost::python::extract<std::string>( dn_list[i] ) );
     
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    if( !info->write_integer_chn( output, sample_nums, det_nums ) )
+    if( !info->write_integer_chn( output, sample_nums, det_names ) )
       throw std::runtime_error( "Failed to write Integer CHN file." );
   }
   
@@ -1302,13 +1311,16 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
   .def( "detectorNames", &detector_names_wrapper,
         "Returns a list of names for all detectors found within the parsed file.\n"
         "The list will be in the same order as (and correspond one-to-one with)\n"
-        "the list SpecFile.detectorNumbers() returns." )
+        "the list SpecFile.detectorNumbers() returns.\n"
+        "Will include gamma and neutron detectors." )
   .def( "detectorNumbers", &detector_numbers_wrapper,
         "Returns a list of assigned detector numbers for all detectors found within\n"
         "the parsed file.  The list will be in the same order as (and correspond\n"
         "one-to-one with) the list SpecFile.detectorNames() returns." )
   .def( "neutronDetectorNames", &neutron_detector_names_wrapper,
         "Returns list of names of detectors that contained neutron information." )
+  .def( "gammaDetectorNames", &gamma_detector_names_wrapper,
+        "Returns list of names of detectors that contained gamma spectra." )
   .def( "uuid", &SpecUtils::SpecFile::uuid, return_value_policy<copy_const_reference>(),
         "Returns the unique ID string for this parsed spectrum file.  The UUID\n"
         "may have been specified in the input file itself, or if not, it is\n"

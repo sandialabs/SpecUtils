@@ -35,8 +35,10 @@ import SpecUtils
 
 from datetime import datetime
 
-# First we will open an existing file from disk
-filename = "Cal.pcf"
+# First we will open an existing file from disk 
+#   Here we will use a file that comes with InterSpec,
+#     https://github.com/sandialabs/InterSpec/blob/master/example_spectra/passthrough.n42
+filename = "passthrough.n42"
 info = SpecUtils.SpecFile()
 
 try:
@@ -107,7 +109,8 @@ print( "Channels", lchannel, "through", uchannel, "summed give", gammasum, "gamm
 
 # The spectrum file may have multiple detectors, and many time intervals
 sampleNums = info.sampleNumbers()
-detNames = info.detectorNames()
+detNames = info.detectorNames()  #includes gamma detectors, neutron detectors, and detectors with both
+gammaDetNames = info.gammaDetectorNames()  #includes gamma detectors, and detectors with both gamma and neutron
 
 print( "DetectorNames:", detNames )
 print( "SampleNumbers:", sampleNums )
@@ -189,14 +192,16 @@ print( "Set live time to ", newMeas.liveTime(), " seconds, and real time to ", n
 
 # You can save the spectrum file to disk in a number of ways.
 # First we'll create a CHN file using a direct call to make CHN files
-savetoname = "Cal_pyconverted.chn"
+savetoname = "Ex_pyconverted.chn"
 f = open( savetoname, 'wb' )
 
 
 try:
-    # For illistration purposes, we'll choose to write data from only a single detector
-    detNumbesToUse = [0] #info.detectorNumbers()
-    info.writeIntegerChn( f, sampleNums, detNumbesToUse )
+    # For illustration purposes, we'll choose to write data from only a single detector
+    #  We didnt set a detector name for `newMeas`, so first entry in `info.gammaDetectorNames()`
+    #  will be the blank string
+    detNamesToUse = [ gammaDetNames[0] ]
+    info.writeIntegerChn( f, sampleNums, detNamesToUse )
 except RuntimeError as e:
     print( "Error writing Integer CHN file: {0}.".format( e ) )
     exit( 1 )
@@ -208,7 +213,7 @@ print( "Wrote", savetoname )
 #  interface between all formats, you just specify the format using
 #  the SaveSpectrumAsType enum.
 #  First we'll just name a filesystem path to write to
-savetoname = "Cal_pyconverted_writeToFile.chn"
+savetoname = "Ex_pyconverted_writeToFile.chn"
 try:
     info.writeToFile( savetoname, sampleNums, info.detectorNames(), SpecUtils.SaveSpectrumAsType.Chn )
     print( "Wrote", savetoname )
@@ -223,7 +228,7 @@ except RuntimeError as e:
 
 
 # Now instead of writing to a filesystem path, we'll write to a stream
-savetoname = "Cal_pyconverted_writeToStream.chn"
+savetoname = "Ex_pyconverted_writeToStream.chn"
 f = open( savetoname, 'wb' )
 
 try:
@@ -237,7 +242,7 @@ print( "Wrote", savetoname )
 
 
 
-savetoname = "Cal_pyconverted.pcf"
+savetoname = "Ex_pyconverted.pcf"
 f = open( savetoname, 'wb' );
 
 try:
@@ -255,7 +260,7 @@ print( "Wrote", savetoname )
 # One of the most useful formats to write to is N42-2012; if you write the
 # SpecFile out to this format, and later read it back in, no information 
 # will be lost
-savetoname = "Cal_pyconverted.n42"
+savetoname = "Ex_pyconverted.n42"
 f = open( savetoname, 'wb' )
 
 try:
@@ -273,7 +278,7 @@ print( "Wrote", savetoname )
 #writeToStream
 
 # And finally, we can read in spectrum files from a stream:
-f = open( "Cal_pyconverted.pcf", 'rb' )
+f = open( "Ex_pyconverted.pcf", 'rb' )
 rereadinfo = SpecUtils.SpecFile()
 try:
     rereadinfo.setInfoFromPcfFile( f )

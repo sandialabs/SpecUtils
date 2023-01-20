@@ -331,6 +331,12 @@ bool SpecFile::load_from_chn( std::istream &input )
   return true;
 }//bool load_from_chn( std::istream &input )
 
+bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
+                                  const vector<std::string> &det_names ) const
+{
+  const set<int> det_nums_set = detector_names_to_numbers( det_names );
+  return write_integer_chn( ostr, sample_nums, det_nums_set );
+}
   
 bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
                                    const set<int> &det_nums ) const

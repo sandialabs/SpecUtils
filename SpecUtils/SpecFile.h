@@ -2055,6 +2055,13 @@ public:
   bool write_integer_chn( std::ostream &ostr, std::set<int> sample_nums,
                           const std::set<int> &det_nums ) const;
   
+  /** Same as other #write_integer_chn function call, but takes in detector names instead
+   of numbers.
+   */
+  bool write_integer_chn( std::ostream &ostr, std::set<int> sample_nums,
+                         const std::vector<std::string> &det_names ) const;
+  
+  
   /** Enum to specify the type of binary SPC file to write. */
   enum SpcBinaryType{ IntegerSpcType, FloatSpcType };
   
