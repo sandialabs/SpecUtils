@@ -17,8 +17,12 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+// For statically linking on Windows, we need this following define
+#define BOOST_PYTHON_STATIC_LIB
 
 #include "SpecUtils_config.h"
+
+#include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
@@ -161,7 +165,22 @@ namespace
       {
         const auto buff_start = buffer + nwritten;
         const auto nbytes_to_write = buffer_size - nwritten;
-        boost::python::str data(buff_start, nbytes_to_write);
+
+        //Fine for Python 2 - just use a string
+        //boost::python::str data(buff_start, nbytes_to_write); 
+
+        // Python 3
+        Py_buffer buffer;
+        int res = PyBuffer_FillInfo(&buffer, 0, (void *)buff_start, nbytes_to_write, true, PyBUF_CONTIG_RO);
+        if (res == -1) {
+          PyErr_Print();
+          throw std::runtime_error( "Python stream error writing to buffer" );
+        }
+        boost::python::object data( boost::python::handle<>(PyMemoryView_FromBuffer(&buffer)) );
+
+        // Python >3.2, avoids a copy of data, but requires casting away a const
+        //boost::python::object data(boost::python::handle<>(PyMemoryView_FromMemory((char *)buff_start, nbytes_to_write, PyBUF_READ)));
+
         boost::python::object pynwrote = pywrite( data );
         const boost::python::extract<std::streamsize> bytes_written( pynwrote );
         
@@ -187,7 +206,7 @@ namespace
   };//class PythonOutputDevice
   
   
-  //wcjohns got the datetime convention code 20150515 from
+  //wcjohns adapted the datetime convention code 20150515 from
   //  http://en.sharejs.com/python/13125
   //There is also a time duration conversion code as wel, but removed it.
   /**
@@ -199,44 +218,34 @@ namespace
    * http://www.nabble.com/boost::posix_time::ptime-conversion-td16857866.html
    */
   
-  static long get_usecs(boost::posix_time::time_duration const& d)
-  {
-    static long resolution
-    = boost::posix_time::time_duration::ticks_per_second();
-    long fracsecs = d.fractional_seconds();
-    if (resolution > 1000000)
-      return fracsecs / (resolution / 1000000);
-    else
-      return fracsecs * (1000000 / resolution);
-  }
   
-  
-  /* Convert ptime to/from python */
-  struct ptime_to_python_datetime
+  /* Convert std::chrono::time_point to/from python */
+  struct chrono_time_point_to_python_datetime
   {
-    static PyObject* convert(boost::posix_time::ptime const& pt)
+    static PyObject* convert(SpecUtils::time_point_t const &t)
     {
-      boost::gregorian::date date = pt.date();
-      boost::posix_time::time_duration td = pt.time_of_day();
-      return PyDateTime_FromDateAndTime((int)date.year(),
-                                        (int)date.month(),
-                                        (int)date.day(),
-                                        td.hours(),
-                                        td.minutes(),
-                                        td.seconds(),
-                                        get_usecs(td));
+      const chrono::time_point<chrono::system_clock,date::days> t_as_days = date::floor<date::days>(t);
+      const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+      const date::hh_mm_ss<SpecUtils::time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+      const int year = static_cast<int>( t_ymd.year() );
+      const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+      const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+      const int hour = static_cast<int>( time_of_day.hours().count() );
+      const int mins = static_cast<int>( time_of_day.minutes().count() );
+      const int secs = static_cast<int>( time_of_day.seconds().count() );
+      const auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
+
+      return PyDateTime_FromDateAndTime( year, month, day, hour, mins, secs, microsecs.count() );
     }
-  };
+  };//struct chrono_time_point_to_python_datetime
   
   
-  struct ptime_from_python_datetime
+  struct chrono_time_point_from_python_datetime
   {
-    ptime_from_python_datetime()
+    chrono_time_point_from_python_datetime()
     {
-      boost::python::converter::registry::push_back(
-                                                    &convertible,
-                                                    &construct,
-                                                    boost::python::type_id<boost::posix_time::ptime > ());
+      boost::python::converter::registry::push_back( &convertible, &construct, boost::python::type_id<SpecUtils::time_point_t>() );
     }
     
     static void* convertible(PyObject * obj_ptr)
@@ -254,30 +263,58 @@ namespace
       = reinterpret_cast<PyDateTime_DateTime*>(obj_ptr);
       
       // Create date object
-      boost::gregorian::date _date(PyDateTime_GET_YEAR(pydate),
-                                   PyDateTime_GET_MONTH(pydate),
-                                   PyDateTime_GET_DAY(pydate));
+      const short year = PyDateTime_GET_YEAR(pydate);
+      const unsigned month = PyDateTime_GET_MONTH(pydate);
+      const unsigned day = PyDateTime_GET_DAY(pydate);
+
+      const int hour = PyDateTime_DATE_GET_HOUR(pydate);
+      const int minute = PyDateTime_DATE_GET_MINUTE(pydate);
+      const int second = PyDateTime_DATE_GET_SECOND(pydate);
+      const int64_t nmicro = PyDateTime_DATE_GET_MICROSECOND(pydate);
       
-      // Create time duration object
-      boost::posix_time::time_duration
-      _duration(PyDateTime_DATE_GET_HOUR(pydate),
-                PyDateTime_DATE_GET_MINUTE(pydate),
-                PyDateTime_DATE_GET_SECOND(pydate),
-                0);
-      // Set the usecs value
-      _duration += boost::posix_time::microseconds(PyDateTime_DATE_GET_MICROSECOND(pydate));
+      date::year_month_day ymd{ date::year(year), date::month(month), date::day(day) };
+      date::sys_days days = ymd;
+      SpecUtils::time_point_t tp = days;
+      tp += chrono::seconds(second + 60*minute + 3600*hour);
+      tp += chrono::microseconds(nmicro);
       
       // Create posix time object
       void* storage = (
-                       (boost::python::converter::rvalue_from_python_storage<boost::posix_time::ptime>*)
+                       (boost::python::converter::rvalue_from_python_storage<SpecUtils::time_point_t>*)
                        data)->storage.bytes;
       new (storage)
-      boost::posix_time::ptime(_date, _duration);
+      SpecUtils::time_point_t(tp);
       data->convertible = storage;
     }
   };
   
   
+  void pyListToSampleNumsOrNames( const boost::python::list &dn_list, 
+                                std::vector<std::string> &det_names,
+                                std::set<int> &det_nums )
+  {
+    det_names.clear();
+    det_nums.clear();
+
+    boost::python::ssize_t n = boost::python::len( dn_list );
+    for( boost::python::ssize_t i = 0; i < n; ++i )
+    {
+      boost::python::extract<int> as_int( dn_list[i] );
+      if( as_int.check() )
+      {
+        det_nums.insert( as_int );
+      }else
+      {
+        boost::python::extract<std::string> as_str( dn_list[i] );
+        if( !as_str.check() )
+          throw std::runtime_error( "'DetectorNamesOrNumbers' must be a list of either detector numbers, or detector names." );
+        det_names.push_back( as_str );
+      }
+    }
+
+    if( det_names.size() && det_nums.size() )
+      throw std::runtime_error( "'DetectorNamesOrNumbers' list can not mix detector numbers and detector names." );
+  }//pyListToSampleNumsOrNames
   
   
   //Begin wrapper functions
@@ -315,6 +352,9 @@ namespace
         case SpecUtils::ParserType::MultiAct: type = "MultiAct"; break;
         case SpecUtils::ParserType::Lzs: type = "LZS"; break;
         case SpecUtils::ParserType::Phd: type = "PHD"; break;
+        case SpecUtils::ParserType::ScanDataXml: type = "ScanData"; break;
+        case SpecUtils::ParserType::Json: type = "JSON"; break;
+        case SpecUtils::ParserType::CaenHexagonGXml: type = "GXml"; break;
         case SpecUtils::ParserType::Auto: type = ""; break;
       }//switch( parser_type )
       
@@ -326,22 +366,74 @@ namespace
   //I couldnt quite figure out how to get Python to play nicely with const
   //  references to smart pointers, so instead am using some thin wrapper
   //  functions to return a smart pointer by value.
-  std::shared_ptr< const std::vector<float> > channel_energies_wrapper( SpecUtils::Measurement *meas )
+  boost::python::list channel_energies_wrapper( const SpecUtils::Measurement *meas )
   {
-    return meas->channel_energies();
+    boost::python::list l;
+    if( !meas->channel_energies() )
+     return l;
+    
+    for( auto p : *meas->channel_energies() )
+      l.append( p );
+    return l;
   }
   
-  std::shared_ptr< const std::vector<float> > gamma_counts_wrapper( SpecUtils::Measurement *meas )
+  boost::python::list gamma_counts_wrapper( const SpecUtils::Measurement *meas )
   {
-    return meas->gamma_counts();
+    boost::python::list l;
+    if( !meas->gamma_counts() )
+     return l;
+      
+    for( auto p : *meas->gamma_counts() )
+      l.append( p );
+    return l;
+  }
+
+  std::shared_ptr<SpecUtils::Measurement> makeCopy_wrapper( const SpecUtils::Measurement *meas )
+  {
+    auto m = std::make_shared<SpecUtils::Measurement>();
+    *m = *meas;
+    return m;
   }
   
-  boost::posix_time::ptime start_time_wrapper( SpecUtils::Measurement *meas )
+
+  std::shared_ptr<SpecUtils::Measurement> makeMeasurement_wrapper()
+  {
+    return std::make_shared<SpecUtils::Measurement>();
+  }
+
+
+  void setGammaCounts_wrapper( SpecUtils::Measurement *meas,
+                              boost::python::list py_counts,
+                              const float live_time,
+                              const float real_time )
+  {
+    auto counts = std::make_shared<vector<float>>();
+    boost::python::ssize_t n = boost::python::len( py_counts );
+    for( boost::python::ssize_t i = 0; i < n; ++i )
+      counts->push_back( boost::python::extract<float>( py_counts[i] ) );
+
+    meas->set_gamma_counts( counts, live_time, real_time );
+  }
+
+  void setNeutronCounts_wrapper( SpecUtils::Measurement *meas,
+                              boost::python::list py_counts )
+  {
+    vector<float> counts;
+    boost::python::ssize_t n = boost::python::len( py_counts );
+    for( boost::python::ssize_t i = 0; i < n; ++i )
+      counts.push_back( boost::python::extract<float>( py_counts[i] ) );
+
+    meas->set_neutron_counts( counts );
+  }
+
+
+
+  SpecUtils::time_point_t start_time_wrapper( const SpecUtils::Measurement *meas )
   {
     return meas->start_time();
   }
   
-  boost::python::list get_measurements_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list get_measurements_wrapper( const SpecUtils::SpecFile *info )
   {
     //This function overcomes an issue where returning a vector of
     //  std::shared_ptr<const measurement> objects to python, and then in python
@@ -353,7 +445,7 @@ namespace
     return l;
   }
   
-  boost::python::list measurement_remarks_wrapper( SpecUtils::Measurement *info )
+  boost::python::list measurement_remarks_wrapper( const SpecUtils::Measurement *info )
   {
     boost::python::list l;
     for( const string &p : info->remarks() )
@@ -362,15 +454,25 @@ namespace
   }
   
   
-  boost::python::list SpecFile_remarks_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list SpecFile_remarks_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->remarks() )
     l.append( p );
     return l;
   }
+
   
-  boost::python::list gamma_channel_counts_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list SpecFile_parseWarnings_wrapper( const SpecUtils::SpecFile *info )
+  {
+    boost::python::list l;
+    for( const string &p : info->parse_warnings() )
+    l.append( p );
+    return l;
+  }
+
+
+  boost::python::list gamma_channel_counts_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( size_t p : info->gamma_channel_counts() )
@@ -378,7 +480,7 @@ namespace
     return l;
   }
   
-  boost::python::list sample_numbers_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list sample_numbers_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( size_t p : info->sample_numbers() )
@@ -386,7 +488,7 @@ namespace
     return l;
   }
   
-  boost::python::list detector_numbers_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list detector_numbers_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( size_t p : info->detector_numbers() )
@@ -394,7 +496,7 @@ namespace
     return l;
   }
   
-  boost::python::list neutron_detector_names_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list neutron_detector_names_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->neutron_detector_names() )
@@ -402,8 +504,15 @@ namespace
     return l;
   }
   
-  
-  boost::python::list detector_names_wrapper( SpecUtils::SpecFile *info )
+  boost::python::list gamma_detector_names_wrapper( const SpecUtils::SpecFile *info )
+  {
+    boost::python::list l;
+    for( const string &p : info->gamma_detector_names() )
+      l.append( p );
+    return l;
+  }
+
+  boost::python::list detector_names_wrapper( const SpecUtils::SpecFile *info )
   {
     boost::python::list l;
     for( const string &p : info->detector_names() )
@@ -412,7 +521,7 @@ namespace
   }
   
   
-  std::shared_ptr<SpecUtils::Measurement> sum_measurements_wrapper( SpecUtils::SpecFile *info,
+  std::shared_ptr<SpecUtils::Measurement> sum_measurements_wrapper( const SpecUtils::SpecFile *info,
                                                           boost::python::list py_samplenums,
                                                           boost::python::list py_detnames )
   {
@@ -434,61 +543,63 @@ namespace
   
   
   
-  void writePcf_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
+  void writePcf_wrapper( const SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_pcf( output ) )
       throw std::runtime_error( "Failed to write PCF file." );
   }
   
-  void write2006N42_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
+  void write2006N42_wrapper( const SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_2006_N42( output ) )
       throw std::runtime_error( "Failed to write 2006 N42 file." );
   }
   
-  void write2012N42Xml_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
+  void write2012N42Xml_wrapper( const SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_2012_N42( output ) )
       throw std::runtime_error( "Failed to write 2012 N42 file." );
   }
   
-  void writeCsv_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
+  void writeCsv_wrapper( const SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_csv( output ) )
       throw std::runtime_error( "Failed to write CSV file." );
   }
   
-  void writeTxt_wrapper( SpecUtils::SpecFile *info, boost::python::object pystream )
+  void writeTxt_wrapper( const SpecUtils::SpecFile *info, boost::python::object pystream )
   {
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
     if( !info->write_txt( output ) )
       throw std::runtime_error( "Failed to TXT file." );
   }
   
-  void writeIntegerChn_wrapper( SpecUtils::SpecFile *info,
+  void writeIntegerChn_wrapper( const SpecUtils::SpecFile *info,
                                boost::python::object pystream,
                                boost::python::object py_sample_nums,
-                               boost::python::object py_det_nums )
+                               boost::python::object py_det_names )
   {
-    std::set<int> sample_nums, det_nums;
+    std::vector<std::string> det_names;
+    std::set<int> sample_nums;
     
     boost::python::list sn_list = boost::python::extract<boost::python::list>(py_sample_nums);
-    boost::python::list dn_list = boost::python::extract<boost::python::list>(py_det_nums);
+    boost::python::list dn_list = boost::python::extract<boost::python::list>(py_det_names);
     
     boost::python::ssize_t n = boost::python::len( sn_list );
     for( boost::python::ssize_t i = 0; i < n; ++i )
+    
       sample_nums.insert( boost::python::extract<int>( sn_list[i] ) );
     
     n = boost::python::len( dn_list );
     for( boost::python::ssize_t i = 0; i < n; ++i )
-      det_nums.insert( boost::python::extract<int>( dn_list[i] ) );
+      det_names.push_back( boost::python::extract<std::string>( dn_list[i] ) );
     
     boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    if( !info->write_integer_chn( output, sample_nums, det_nums ) )
+    if( !info->write_integer_chn( output, sample_nums, det_names ) )
       throw std::runtime_error( "Failed to write Integer CHN file." );
   }
   
@@ -510,6 +621,232 @@ namespace
       throw std::runtime_error( "Failed to decode input as a valid PCF file." );
   }//setInfoFromPcfFile_wrapper(...)
   
+
+  void writeAllToFile_wrapper( const SpecUtils::SpecFile *info,
+                             const std::string &filename,
+                             const SpecUtils::SaveSpectrumAsType type )
+  {
+    info->write_to_file( filename, type );
+  }//setInfoFromPcfFile_wrapper(...)
+
+
+  void writeToFile_wrapper( const SpecUtils::SpecFile *info,
+                             const std::string &filename,
+                             boost::python::object py_sample_nums,
+                             boost::python::object py_det_nums,
+                             const SpecUtils::SaveSpectrumAsType type )
+  {
+    std::vector<std::string> det_names;
+    std::set<int> sample_nums, det_nums;
+
+    boost::python::list sn_list = boost::python::extract<boost::python::list>(py_sample_nums);
+    boost::python::list dn_list = boost::python::extract<boost::python::list>(py_det_nums);
+    
+    boost::python::ssize_t n = boost::python::len( sn_list );
+    for( boost::python::ssize_t i = 0; i < n; ++i )
+      sample_nums.insert( boost::python::extract<int>( sn_list[i] ) );
+    
+    pyListToSampleNumsOrNames( dn_list, det_names, det_nums );
+
+    if( det_names.size() )
+      info->write_to_file( filename, sample_nums, det_names, type );
+    else
+      info->write_to_file( filename, sample_nums, det_nums, type );
+  }//writeToFile_wrapper(...)
+
+  void writeToStream_wrapper( const SpecUtils::SpecFile *info,
+                             boost::python::object pystream,
+                             boost::python::object py_sample_nums,
+                             boost::python::object py_det_nums,
+                             const SpecUtils::SaveSpectrumAsType type )
+  {
+    std::vector<std::string> det_names;
+    std::set<int> sample_nums, det_nums;
+
+    boost::python::list sn_list = boost::python::extract<boost::python::list>(py_sample_nums);
+    boost::python::list dn_list = boost::python::extract<boost::python::list>(py_det_nums);
+    
+    boost::python::ssize_t n = boost::python::len( sn_list );
+    for( boost::python::ssize_t i = 0; i < n; ++i )
+      sample_nums.insert( boost::python::extract<int>( sn_list[i] ) );
+    
+    pyListToSampleNumsOrNames( dn_list, det_names, det_nums );
+
+    boost::iostreams::stream<PythonOutputDevice> output( pystream );
+    if( det_names.size() )
+      info->write( output, sample_nums, det_names, type );
+    else
+      info->write( output, sample_nums, det_nums, type );
+  }
+
+  void removeMeasurement_wrapper( SpecUtils::SpecFile *info,
+                             boost::python::object py_meas )
+  {
+    std::shared_ptr<const SpecUtils::Measurement> m = boost::python::extract<std::shared_ptr<const SpecUtils::Measurement>>(py_meas);
+    info->remove_measurement( m, true );
+  }
+
+  void addMeasurement_wrapper( SpecUtils::SpecFile *info,
+                             boost::python::object py_meas )
+  {
+    std::shared_ptr<SpecUtils::Measurement> m = boost::python::extract<std::shared_ptr<SpecUtils::Measurement>>(py_meas);
+    info->add_measurement( m, true );
+  }
+
+  std::vector<std::string> to_cpp_remarks( boost::python::object py_remarks )
+  {
+    std::vector<std::string> remarks;
+    boost::python::extract<std::string> remark_as_str(py_remarks);
+    if( remark_as_str.check() )
+    {
+      remarks.push_back( remark_as_str );
+    }else
+    {
+      boost::python::list remarks_list = boost::python::extract<boost::python::list>(py_remarks);
+      boost::python::ssize_t n = boost::python::len( remarks_list );
+      for( boost::python::ssize_t i = 0; i < n; ++i )
+        remarks.push_back( boost::python::extract<std::string>( remarks_list[i] ) );
+    }
+
+    return remarks;
+  }
+
+  void setMeasurementRemarks_wrapper( SpecUtils::SpecFile *info,
+                             boost::python::object py_remarks,
+                             boost::python::object py_meas )
+  {
+    std::shared_ptr<const SpecUtils::Measurement> m = boost::python::extract<std::shared_ptr<const SpecUtils::Measurement>>(py_meas);
+    std::vector<std::string> remarks = to_cpp_remarks( py_remarks );
+    
+    info->set_remarks( remarks, m );
+  }
+
+  void setMeasRemarks_wrapper( SpecUtils::Measurement *meas,
+                             boost::python::object py_remarks )
+  {
+    std::vector<std::string> remarks = to_cpp_remarks( py_remarks );
+    
+    meas->set_remarks( remarks );
+  }
+
+  void setRemarks_wrapper( SpecUtils::SpecFile *info,
+                          boost::python::object py_remarks )
+  {
+    std::vector<std::string> remarks;
+    boost::python::extract<std::string> remark_as_str(py_remarks);
+    if( remark_as_str.check() )
+    {
+      remarks.push_back( remark_as_str );
+    }else
+    {
+      boost::python::list remarks_list = boost::python::extract<boost::python::list>(py_remarks);
+      boost::python::ssize_t n = boost::python::len( remarks_list );
+      for( boost::python::ssize_t i = 0; i < n; ++i )
+        remarks.push_back( boost::python::extract<std::string>( remarks_list[i] ) );
+    }
+    
+    info->set_remarks( remarks );
+  }
+
+  void setParseWarnings_wrapper( SpecUtils::SpecFile *info,
+                          boost::python::object py_warnings )
+  {
+    std::vector<std::string> remarks;
+    boost::python::extract<std::string> warning_as_str(py_warnings);
+    if( warning_as_str.check() )
+    {
+      remarks.push_back( warning_as_str );
+    }else
+    {
+      boost::python::list remarks_list = boost::python::extract<boost::python::list>(py_warnings);
+      boost::python::ssize_t n = boost::python::len( remarks_list );
+      for( boost::python::ssize_t i = 0; i < n; ++i )
+        remarks.push_back( boost::python::extract<std::string>( remarks_list[i] ) );
+    }
+    
+    info->set_parse_warnings( remarks );
+  }
+
+std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromPolynomial_wrapper( const size_t num_channels,
+                         boost::python::list py_coefs )
+{
+  vector<float> coefs;
+  boost::python::ssize_t n = boost::python::len( py_coefs );
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+    coefs.push_back( boost::python::extract<float>( py_coefs[i] ) );
+
+  auto cal = std::make_shared<SpecUtils::EnergyCalibration>();
+  cal->set_polynomial( num_channels, coefs, {} );
+  return cal;
+}
+
+
+std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromPolynomial_2_wrapper( const size_t num_channels,
+                         boost::python::list py_coefs,
+                         boost::python::list py_dev_pairs )
+{
+  vector<float> coefs;
+  boost::python::ssize_t n = boost::python::len( py_coefs );
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+    coefs.push_back( boost::python::extract<float>( py_coefs[i] ) );
+
+
+  std::vector<std::pair<float,float>> dev_pairs;
+  n = boost::python::len( py_dev_pairs );
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+  {
+    auto devpair = boost::python::extract<boost::python::tuple>( py_dev_pairs[i] )();
+    dev_pairs.push_back( {boost::python::extract<float>(devpair[0]), boost::python::extract<float>(devpair[1]) } );
+  }
+
+  auto cal = std::make_shared<SpecUtils::EnergyCalibration>();
+  cal->set_polynomial( num_channels, coefs, dev_pairs );
+  return cal;
+}
+
+std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromFullRangeFraction_wrapper( const size_t num_channels,
+                         boost::python::list py_coefs )
+{
+  vector<float> coefs;
+  boost::python::ssize_t n = boost::python::len( py_coefs );
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+    coefs.push_back( boost::python::extract<float>( py_coefs[i] ) );
+
+  auto cal = std::make_shared<SpecUtils::EnergyCalibration>();
+  cal->set_full_range_fraction( num_channels, coefs, {} );
+  return cal;
+}
+
+std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromFullRangeFraction_2_wrapper( const size_t num_channels,
+                         boost::python::list py_coefs,
+                         boost::python::list py_dev_pairs )
+{
+  vector<float> coefs;
+  boost::python::ssize_t n = boost::python::len( py_coefs );
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+    coefs.push_back( boost::python::extract<float>( py_coefs[i] ) );
+
+  std::vector<std::pair<float,float>> dev_pairs;
+  n = boost::python::len( py_dev_pairs );
+  for( boost::python::ssize_t i = 0; i < n; ++i )
+  {
+    auto devpair = boost::python::extract<boost::python::tuple>( py_dev_pairs[i] )();
+    dev_pairs.push_back( {boost::python::extract<float>(devpair[0]), boost::python::extract<float>(devpair[1]) } );
+  }
+
+  auto cal = std::make_shared<SpecUtils::EnergyCalibration>();
+  cal->set_full_range_fraction( num_channels, coefs, dev_pairs );
+  return cal;
+}
+
+std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromLowerChannelEnergies_wrapper( const size_t num_channels,
+                         const std::vector<float> energies )
+{
+  auto cal = std::make_shared<SpecUtils::EnergyCalibration>();
+  cal->set_lower_channel_energy( num_channels, energies );
+  return cal;
+}
+    
 
 #if( SpecUtils_ENABLE_D3_CHART )
 bool write_spectrum_data_js_wrapper( boost::python::object pystream,
@@ -647,14 +984,23 @@ BOOST_PYTHON_MODULE(SpecUtils)
   .value( "MultiAct", SpecUtils::ParserType::MultiAct )
   .value( "Phd", SpecUtils::ParserType::Phd )
   .value( "Lzs", SpecUtils::ParserType::Lzs )
+  .value( "Aram", SpecUtils::ParserType::Aram )
+  .value( "ScanDataXml", SpecUtils::ParserType::ScanDataXml )
+  .value( "Json", SpecUtils::ParserType::Json )
+  .value( "CaenHexagonGXml", SpecUtils::ParserType::CaenHexagonGXml )
   .value( "Auto", SpecUtils::ParserType::Auto );
-  
+
+
 
 enum_<SpecUtils::DetectorType>( "DetectorType" )
   .value( "Exploranium", SpecUtils::DetectorType::Exploranium )
   .value( "IdentiFinder", SpecUtils::DetectorType::IdentiFinder )
   .value( "IdentiFinderNG", SpecUtils::DetectorType::IdentiFinderNG )
   .value( "IdentiFinderLaBr3", SpecUtils::DetectorType::IdentiFinderLaBr3 )
+  .value( "IdentiFinderTungsten", SpecUtils::DetectorType::IdentiFinderTungsten )
+  .value( "IdentiFinderR500NaI", SpecUtils::DetectorType::IdentiFinderR500NaI )
+  .value( "IdentiFinderR500LaBr", SpecUtils::DetectorType::IdentiFinderR500LaBr )
+  .value( "IdentiFinderUnknown", SpecUtils::DetectorType::IdentiFinderUnknown )
   .value( "DetectiveUnknown", SpecUtils::DetectorType::DetectiveUnknown )
   .value( "DetectiveEx", SpecUtils::DetectorType::DetectiveEx )
   .value( "DetectiveEx100", SpecUtils::DetectorType::DetectiveEx100 )
@@ -664,6 +1010,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .value( "Falcon5000", SpecUtils::DetectorType::Falcon5000 )
   .value( "MicroDetective", SpecUtils::DetectorType::MicroDetective )
   .value( "MicroRaider", SpecUtils::DetectorType::MicroRaider )
+  .value( "Interceptor", SpecUtils::DetectorType::Interceptor )
   .value( "RadHunterNaI", SpecUtils::DetectorType::RadHunterNaI )
   .value( "RadHunterLaBr3", SpecUtils::DetectorType::RadHunterLaBr3 )
   .value( "Rsi701", SpecUtils::DetectorType::Rsi701 )
@@ -677,15 +1024,129 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .value( "Sam940", SpecUtils::DetectorType::Sam940 )
   .value( "Sam945", SpecUtils::DetectorType::Sam945 )
   .value( "Srpm210", SpecUtils::DetectorType::Srpm210 )
+  .value( "RIIDEyeNaI", SpecUtils::DetectorType::RIIDEyeNaI )
+  .value( "RIIDEyeLaBr", SpecUtils::DetectorType::RIIDEyeLaBr )
+  .value( "RadSeekerNaI", SpecUtils::DetectorType::RadSeekerNaI )
+  .value( "RadSeekerLaBr", SpecUtils::DetectorType::RadSeekerLaBr )
+  .value( "VerifinderNaI", SpecUtils::DetectorType::VerifinderNaI )
+  .value( "VerifinderLaBr", SpecUtils::DetectorType::VerifinderLaBr )
+  .value( "KromekD3S", SpecUtils::DetectorType::KromekD3S )
   .value( "Unknown", SpecUtils::DetectorType::Unknown );
 
-  
+
+
   enum_<SpecUtils::SpectrumType>( "SpectrumType" )
     .value( "Foreground", SpecUtils::SpectrumType::Foreground )
     .value( "SecondForeground", SpecUtils::SpectrumType::SecondForeground )
     .value( "Background", SpecUtils::SpectrumType::Background );
 
+
+enum_<SpecUtils::SaveSpectrumAsType>( "SaveSpectrumAsType" )
+    .value( "Txt", SpecUtils::SaveSpectrumAsType::Txt )
+    .value( "Csv", SpecUtils::SaveSpectrumAsType::Csv )
+    .value( "Pcf", SpecUtils::SaveSpectrumAsType::Pcf )
+    .value( "N42_2006", SpecUtils::SaveSpectrumAsType::N42_2006 )
+    .value( "N42_2012", SpecUtils::SaveSpectrumAsType::N42_2012 )
+    .value( "Chn", SpecUtils::SaveSpectrumAsType::Chn )
+    .value( "SpcBinaryInt", SpecUtils::SaveSpectrumAsType::SpcBinaryInt )
+    .value( "SpcBinaryFloat", SpecUtils::SaveSpectrumAsType::SpcBinaryFloat )
+    .value( "SpcAscii", SpecUtils::SaveSpectrumAsType::SpcAscii )
+    .value( "ExploraniumGr130v0", SpecUtils::SaveSpectrumAsType::ExploraniumGr130v0 )
+    .value( "ExploraniumGr135v2", SpecUtils::SaveSpectrumAsType::ExploraniumGr135v2 )
+    .value( "SpeIaea", SpecUtils::SaveSpectrumAsType::SpeIaea )
+    .value( "Cnf", SpecUtils::SaveSpectrumAsType::Cnf )
+    .value( "Tka", SpecUtils::SaveSpectrumAsType::Tka )
+#if( SpecUtils_ENABLE_D3_CHART )
+    .value( "HtmlD3", SpecUtils::SaveSpectrumAsType::HtmlD3 )
+#endif
+#if( SpecUtils_INJA_TEMPLATES )
+    .value( "Template", SpecUtils::SaveSpectrumAsType::Template )
+#endif
+    .value( "NumTypes", SpecUtils::SaveSpectrumAsType::NumTypes );
+
+enum_<SpecUtils::SourceType>( "SourceType" )
+    .value( "Background", SpecUtils::SourceType::Background )
+    .value( "Calibration", SpecUtils::SourceType::Calibration )
+    .value( "Foreground", SpecUtils::SourceType::Foreground )
+    .value( "IntrinsicActivity", SpecUtils::SourceType::IntrinsicActivity )
+    .value( "UnknownSourceType", SpecUtils::SourceType::Unknown )
+    .export_values();
+    
+enum_<SpecUtils::QualityStatus>( "QualityStatus" )
+    .value( "Good", SpecUtils::QualityStatus::Good )
+    .value( "Suspect", SpecUtils::QualityStatus::Suspect )
+    .value( "Bad", SpecUtils::QualityStatus::Bad )
+    .value( "Missing", SpecUtils::QualityStatus::Missing )
+    .export_values();
+    
+enum_<SpecUtils::OccupancyStatus>( "OccupancyStatus" )
+    .value( "NotOccupied", SpecUtils::OccupancyStatus::NotOccupied )
+    .value( "Occupied", SpecUtils::OccupancyStatus::Occupied )
+    .value( "UnknownOccupancyStatus", SpecUtils::OccupancyStatus::Unknown )
+    .export_values();
+
+enum_<SpecUtils::EnergyCalType>( "EnergyCalType" )
+    .value( "Polynomial", SpecUtils::EnergyCalType::Polynomial )
+    .value( "FullRangeFraction", SpecUtils::EnergyCalType::FullRangeFraction )
+    .value( "LowerChannelEdge", SpecUtils::EnergyCalType::LowerChannelEdge )
+    .value( "InvalidEquationType", SpecUtils::EnergyCalType::InvalidEquationType )
+    .value( "UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+    .export_values();
+    
+//disambiguate the set_lower_channel_energy function, from its overload
+void (SpecUtils::EnergyCalibration::*set_lower_channel_energy_fcn_ptr)( const size_t, const std::vector<float> & ) = &SpecUtils::EnergyCalibration::set_lower_channel_energy;
+
+
+class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
+  .def( "type", &SpecUtils::EnergyCalibration::type, 
+    "Returns the energy calibration type" )
+  .def( "valid", &SpecUtils::EnergyCalibration::valid,
+    "Returns if the energy calibration is valid." )
+  .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, return_internal_reference<>(),
+    "Returns the list of energy calibration coeficients.\n"
+    "Will only be empty for SpecUtils.EnergyCalType.InvalidEquationType." )
+  // TODO: I think we should put a wrapper around channel_energies, and return a proper python list
+  .def( "channelEnergies", &SpecUtils::EnergyCalibration::channel_energies, return_internal_reference<>(),
+    "Returns lower channel energies; will have one more entry than the number of channels." )
+  .def( "deviationPairs", &SpecUtils::EnergyCalibration::deviation_pairs, return_internal_reference<>() )
+  .def( "numChannels", &SpecUtils::EnergyCalibration::num_channels,
+    "Returns the number of channels this energy calibration is for." )
+  .def( "channelForEnergy", &SpecUtils::EnergyCalibration::channel_for_energy,
+    "Returns channel number (as a double) for the specified energy." )
+  .def( "energyForChannel", &SpecUtils::EnergyCalibration::energy_for_channel,
+    "Returns energy for the specified (as double) channel number." )
+  .def( "lowerEnergy", &SpecUtils::EnergyCalibration::lower_energy,
+    "Returns lowest energy of this energy calibration." )
+  .def( "upperEnergy", &SpecUtils::EnergyCalibration::upper_energy,
+    "Returns highest energy of this energy calibration." )
+  .def( "setPolynomial", &SpecUtils::EnergyCalibration::set_polynomial,
+     args( "NumChannels", "Coeffiecients", "DeviationPairs" ),
+    "Sets the energy calibration information from Polynomial defined coefficents." )
+  .def( "setFullRangeFraction", &SpecUtils::EnergyCalibration::set_full_range_fraction,
+     args( "NumChannels", "Coeffiecients", "DeviationPairs" ),
+    "Sets the energy calibration information from Full Range Fraction (e.g., what PCF files use) defined coefficents." )
+  .def( "setLowerChannelEnergy", set_lower_channel_energy_fcn_ptr,
+     args( "NumChannels", "Energies" ),
+    "Sets the energy calibration information from lower channel energies." )
+  .def( "fromPolynomial", &energyCalFromPolynomial_wrapper,
+    args( "NumChannels", "Coeffiecients" ), 
+    "Creates a new energy calibration object from a polynomial definition." )
+  .def( "fromPolynomial", &energyCalFromPolynomial_2_wrapper,
+    args( "NumChannels", "Coeffiecients", "DeviationPairs" ), 
+    "Creates a new energy calibration object from a polynomial definition, with some nonlinear-deviation pairs." )
+  .def( "fromFullRangeFraction", &energyCalFromFullRangeFraction_wrapper,
+    args( "NumChannels", "Coeffiecients" ), 
+    "Creates a new energy calibration object from a Full Range Fraction definition." )
+  .def( "fromFullRangeFraction", &energyCalFromFullRangeFraction_2_wrapper,
+    args( "NumChannels", "Coeffiecients", "DeviationPairs" ), 
+    "Creates a new energy calibration object from a Full Range Fraction definition, with some nonlinear-deviation pairs." )
+  .def( "fromLowerChannelEnergies", &energyCalFromLowerChannelEnergies_wrapper,
+    args( "NumChannels", "Energies" ), 
+    "Creates a new energy calibration object from a lower channel energies." )
+;
   
+
+
   {//begin Measurement class scope
     boost::python::scope Measurement_scope = class_<SpecUtils::Measurement, boost::noncopyable>( "Measurement" )
     .def( "liveTime", &SpecUtils::Measurement::live_time, "The live time help" )
@@ -725,51 +1186,75 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
     .def( "gammaChannelWidth", &SpecUtils::Measurement::gamma_channel_width )
     .def( "gammaIntegral", &SpecUtils::Measurement::gamma_integral )
     .def( "gammaChannelsSum", &SpecUtils::Measurement::gamma_channels_sum )
-    .def( "channelChannelEnergies", &channel_energies_wrapper )
     .def( "gammaChannelCounts", &gamma_counts_wrapper )
     .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
     .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
-    //... setter functions here
+    
+    // Functionst to create new Measurment objects
+    .def( "clone", &makeCopy_wrapper )
+    .def( "new", &makeMeasurement_wrapper, 
+      "Creates a new Measurement object, which you can add to a SpecUtils.SpecFile.\n"
+      "The created object is really a std::shared_ptr<SpecUtils::Measurement> object in C++ land." )
+
+    //... setter functions here 
+    .def( "setTitle", &SpecUtils::Measurement::set_title,
+      args("Title"),
+      "Sets the 'Title' of the record - primarily used in PCF files,\n"
+      "but will be saved in with N42 files as well." )
+    .def( "setStartTime", &SpecUtils::Measurement::set_start_time,
+      args("StartTime"),
+      "Set the time the measurment started" )
+    .def( "setRemarks", &setMeasRemarks_wrapper,
+      args("RemarkList"),
+      "Sets the remarks.\nTakes a single string, or a list of strings." )
+    .def( "setSourceType", &SpecUtils::Measurement::set_source_type,
+      args("SourceType"),
+      "Sets the source type (Foreground, Background, Calibration, etc)\n"
+      "for this Measurement; default is Unknown" )
+    .def( "setSampleNumber", &SpecUtils::Measurement::set_sample_number,
+      args("SampleNum"),
+      "Sets the the sample number of this Measurement; if you add this\n"
+      "Measurement to a SpecFile, this value may get overridden (see \n"
+      "SpecFile.setSampleNumber(sample,meas))" )  
+    .def( "setOccupancyStatus", &SpecUtils::Measurement::set_occupancy_status,
+      args("Status"),
+      "Sets the the Occupancy status.\n"
+      "Defaults to OccupancyStatus::Unknown" )
+    .def( "setDetectorName", &SpecUtils::Measurement::set_detector_name,
+      args("Name"),
+      "Sets the detectors name.")
+    .def( "setPosition", &SpecUtils::Measurement::set_position,
+      args("Longitude", "Latitude", "PositionTime"),
+      "Sets the GPS coordinates .")
+    .def( "setGammaCounts", &setGammaCounts_wrapper,
+      args( "Counts", "LiveTime", "RealTime" ),
+      "Sets the gamma counts array, as well as real and live times.\n"
+      "If number of channels is not compatible with previous number of channels\n"
+      "then the energy calibration will be reset as well." )
+    .def( "setNeutronCounts", &setNeutronCounts_wrapper,
+      args("Counts"),
+      "Sets neutron counts for this measurement.\n"
+      "Takes in a list of floats cooresponding to the neutron detectors for\n"
+      "this gamma detector (i.e., if there are multiple He3 tubes).\n"
+      "For most systems the list has just a single entry.\n"
+      "If you pass in an empty list, the measurement will be set as not containing neutrons.")
+    .def( "setEnergyCalibration", &SpecUtils::Measurement::set_energy_calibration,
+      args( "Cal" ),
+      "Sets the energy calibration of thie Measurement" )
     ;
-    
-    
-    enum_<SpecUtils::SourceType>( "SourceType" )
-    .value( "Background", SpecUtils::SourceType::Background )
-    .value( "Calibration", SpecUtils::SourceType::Calibration )
-    .value( "Foreground", SpecUtils::SourceType::Foreground )
-    .value( "IntrinsicActivity", SpecUtils::SourceType::IntrinsicActivity )
-    .value( "UnknownSourceType", SpecUtils::SourceType::Unknown )
-    .export_values();
-    
-    enum_<SpecUtils::EnergyCalType>( "EnergyCalType" )
-    .value( "Polynomial", SpecUtils::EnergyCalType::Polynomial )
-    .value( "FullRangeFraction", SpecUtils::EnergyCalType::FullRangeFraction )
-    .value( "LowerChannelEdge", SpecUtils::EnergyCalType::LowerChannelEdge )
-    .value( "InvalidEquationType", SpecUtils::EnergyCalType::InvalidEquationType )
-    .value( "UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
-    .export_values();
-    
-    enum_<SpecUtils::QualityStatus>( "QualityStatus" )
-    .value( "Good", SpecUtils::QualityStatus::Good )
-    .value( "Suspect", SpecUtils::QualityStatus::Suspect )
-    .value( "Bad", SpecUtils::QualityStatus::Bad )
-    .value( "Missing", SpecUtils::QualityStatus::Missing )
-    .export_values();
-    
-    enum_<SpecUtils::OccupancyStatus>( "OccupancyStatus" )
-    .value( "NotOccupied", SpecUtils::OccupancyStatus::NotOccupied )
-    .value( "Occupied", SpecUtils::OccupancyStatus::Occupied )
-    .value( "UnknownOccupancyStatus", SpecUtils::OccupancyStatus::Unknown )
-    .export_values();
   }//end Measurement class scope
   
   
   //Register smart pointers we will use with python.
-  register_ptr_to_python< std::shared_ptr<SpecUtils::Measurement> >();
-  register_ptr_to_python< std::shared_ptr<const SpecUtils::Measurement> >();
-  register_ptr_to_python< std::shared_ptr< const std::vector<float> > >();
-  
-  implicitly_convertible< std::shared_ptr<SpecUtils::Measurement>, std::shared_ptr<const SpecUtils::Measurement> >();
+  register_ptr_to_python<std::shared_ptr<SpecUtils::EnergyCalibration>>();
+  register_ptr_to_python<std::shared_ptr<const SpecUtils::EnergyCalibration>>();
+  implicitly_convertible<std::shared_ptr<SpecUtils::EnergyCalibration>, std::shared_ptr<const SpecUtils::EnergyCalibration> >();
+
+  register_ptr_to_python<std::shared_ptr<SpecUtils::Measurement>>();
+  register_ptr_to_python<std::shared_ptr<const SpecUtils::Measurement>>();
+  register_ptr_to_python<std::shared_ptr<const std::vector<float>>>();
+
+  implicitly_convertible<std::shared_ptr<SpecUtils::Measurement>, std::shared_ptr<const SpecUtils::Measurement> >();
   
   
   //Register vectors of C++ types we use to python
@@ -784,8 +1269,8 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   
   
   PyDateTime_IMPORT;
-  ptime_from_python_datetime();
-  boost::python::to_python_converter<const boost::posix_time::ptime, ptime_to_python_datetime>();
+  chrono_time_point_from_python_datetime();
+  boost::python::to_python_converter<const SpecUtils::time_point_t, chrono_time_point_to_python_datetime>();
   
   //disambiguate a few functions that have overloads
   std::shared_ptr<const SpecUtils::Measurement> (SpecUtils::SpecFile::*meas_fcn_ptr)(size_t) const = &SpecUtils::SpecFile::measurement;
@@ -826,21 +1311,25 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .def( "detectorNames", &detector_names_wrapper,
         "Returns a list of names for all detectors found within the parsed file.\n"
         "The list will be in the same order as (and correspond one-to-one with)\n"
-        "the list SpecFile.detectorNumbers() returns." )
+        "the list SpecFile.detectorNumbers() returns.\n"
+        "Will include gamma and neutron detectors." )
   .def( "detectorNumbers", &detector_numbers_wrapper,
         "Returns a list of assigned detector numbers for all detectors found within\n"
         "the parsed file.  The list will be in the same order as (and correspond\n"
         "one-to-one with) the list SpecFile.detectorNames() returns." )
   .def( "neutronDetectorNames", &neutron_detector_names_wrapper,
         "Returns list of names of detectors that contained neutron information." )
+  .def( "gammaDetectorNames", &gamma_detector_names_wrapper,
+        "Returns list of names of detectors that contained gamma spectra." )
   .def( "uuid", &SpecUtils::SpecFile::uuid, return_value_policy<copy_const_reference>(),
         "Returns the unique ID string for this parsed spectrum file.  The UUID\n"
         "may have been specified in the input file itself, or if not, it is\n"
         "generated using the file contents.  This value will always be the same\n"
         "every time the file is parsed." )
   .def( "remarks", &SpecFile_remarks_wrapper,
-        "Returns a list of remarks or comments found while parsing the spectrum file.\n"
-        "May include parser generated warnings or notes." )
+        "Returns a list of remarks or comments found while parsing the spectrum file." )
+  .def( "parseWarnings", &SpecFile_parseWarnings_wrapper,
+        "Returns a list of warnings generated while parsing the input file.\n")
   .def( "laneNumber", &SpecUtils::SpecFile::lane_number,
         "Returns the lane number of the RPM if specified in the spectrum file, otherwise\n"
         "will have a value of -1." )
@@ -887,8 +1376,14 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .def( "meanLongitude", &SpecUtils::SpecFile::mean_longitude,
         "Returns the mean longitude of all measurements with valid GPS data.  If no\n"
         "GPS data was availble, will return something close to -999.9." )
+  .def( "passthrough", &SpecUtils::SpecFile::passthrough,
+        "Returns if the file likely represents data from a RPM or search system." )
+  .def( "portalOrSearch", &SpecUtils::SpecFile::passthrough,
+        "Returns if the file likely represents data from a RPM or search system." )
   .def( "memmorysize", &SpecUtils::SpecFile::memmorysize,
         "Returns the approximate (lower bound) of bytes this object takes up in memory." )
+  .def( "containsDerivedData", &SpecUtils::SpecFile::contains_derived_data,
+        "Returns if the spectrum file contained derived data (only relevant to N42-2012 files)." )
   .def( "gammaChannelCounts", &gamma_channel_counts_wrapper,
         "Returns the set of number of channels the gamma data has. If all measurements\n"
         "in the file contained the same number of channels, then the resulting list\n"
@@ -989,8 +1484,109 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
         "Parses the InputStream as a GADRAS PCF file."
         "InputStream must support random access seeking.\n"
         "Throws RuntimeError on parsing or data reading failure." )
-  
+  .def( "writeAllToFile", &writeAllToFile_wrapper, 
+        args("OutputFileName", "FileFormat" ),
+        "Writes the entire SpecFile data to a file at the specified path, and with the\n"
+        "specified format.\n"
+        "Note that for output formats that do not support multiple records, all samples\n"
+        "and detectors will be summed and written as a single spectrum." )
+  .def( "writeToFile", &writeToFile_wrapper, 
+        args("OutputFileName", "SampleNumbers", "DetectorNamesOrNumbers", "FileFormat" ),
+        "Writes the records of the specified sample numbers and detector numbers to a\n"
+        "file at the specified filesystem location.\n"
+        "Note that for output formats that do not support multiple records, all samples\n"
+        "and detectors will be summed and written as a single spectrum." )
+  .def( "writeToStream", &writeToStream_wrapper, 
+        args("OutputStream", "SampleNumbers", "DetectorNamesOrNumbers", "FileFormat" ),
+        "Writes the records of the specified sample numbers and detector numbers to\n"
+        "the stream.\n"
+        "Note that for output formats that do not support multiple records, all samples\n"
+        "and detectors will be summed and written as a single spectrum." )
   //... lots more functions here
+  .def( "removeMeasurement", &removeMeasurement_wrapper, 
+        args("Measurement"),
+        "Removes the record from the spectrum file." )
+  .def( "addMeasurement", &addMeasurement_wrapper, 
+        args("Measurement"),
+        "Add the record to the spectrum file." )
+
+  // Begin setters
+  .def( "setFileName", &SpecUtils::SpecFile::set_filename, 
+        args("Name"),
+        "Sets the SpecFile internal filename variable value." )
+  .def( "setRemarks", &setRemarks_wrapper, 
+        args("RemarkList" ),
+        "Sets the file-level remarks.\n"
+        "Takes a single string, or a list of strings." )    
+  .def( "setParseWarnings", &setParseWarnings_wrapper, 
+        args("ParseWarningList" ),
+        "Sets the parse warnings." )    
+  .def( "setUuid", &SpecUtils::SpecFile::set_uuid, 
+        args("uuid"),
+        "Sets the UUID of the spcetrum file." )
+  .def( "setLaneNumber", &SpecUtils::SpecFile::set_lane_number, 
+        args("LaneNumber"),
+        "Sets the lane number of the measurement." )
+  .def( "setMeasurementLocationName", &SpecUtils::SpecFile::set_measurement_location_name, 
+        args("Name"),
+        "Sets the measurement location name (applicable only when saving to N42)." )
+  .def( "setInspectionType", &SpecUtils::SpecFile::set_inspection, 
+        args("InspectrionTypeString"),
+        "Sets the inspection type that will go into an N42 file." )
+  .def( "setInstrumentType", &SpecUtils::SpecFile::set_instrument_type, 
+        args("InstrumentType"),
+        "Sets the instrument type that will go into an N42 file." )
+  .def( "setDetectorType", &SpecUtils::SpecFile::set_detector_type, 
+        args("Type"),
+        "Sets the detector type." )
+  .def( "setInstrumentManufacturer", &SpecUtils::SpecFile::set_manufacturer, 
+        args("Manufacturer"),
+        "Sets the instrument manufacturer name." )
+  .def( "setInstrumentModel", &SpecUtils::SpecFile::set_instrument_model, 
+        args("Model"),
+        "Sets the instrument model name." )
+  .def( "setInstrumentId", &SpecUtils::SpecFile::set_instrument_id, 
+        args("SerialNumber"),
+        "Sets the serial number of the instrument." )
+  .def( "setSerialNumber", &SpecUtils::SpecFile::set_instrument_id, 
+        args("SerialNumber"),
+        "Sets the serial number of the instrument." )
+
+//  Begin modifeir 
+  .def( "changeDetectorName", &SpecUtils::SpecFile::change_detector_name, 
+        args("OriginalName", "NewName"),
+        "Changes the name of a given detector.\n"
+        "Throws exception if 'OriginalName' did not exist." )
+
+//size_t combine_gamma_channels( const size_t ncombine, const size_t nchannels );
+//size_t truncate_gamma_channels( ...)
+
+  // Begin functions that set Measurement quantities, through thier SpecFile owner
+  .def( "setLiveTime", &SpecUtils::SpecFile::set_live_time, 
+        args("LiveTime", "Measurement"),
+        "Sets the live time of the specified Measurement." )
+  .def( "setRealTime", &SpecUtils::SpecFile::set_real_time, 
+        args("RealTime", "Measurement"),
+        "Sets the real time of the specified Measurement." )
+  .def( "setStartTime", &SpecUtils::SpecFile::set_start_time, 
+        args("StartTime", "Measurement"),
+        "Sets the start time of the specified measurement." )
+  .def( "setMeasurementRemarks", &setMeasurementRemarks_wrapper, 
+        args("RemarkList", "Measurement"),
+        "Sets the remarks the specified measurement.\n"
+        "Takes a single string, or a list of strings." )
+  .def( "setSourceType", &SpecUtils::SpecFile::set_source_type, 
+        args("SourceType", "Measurement"),
+        "Sets the SpecUtils.SourceType the specified measurement." )
+  .def( "setPosition", &SpecUtils::SpecFile::set_position, 
+        args("Longitude", "Latitude", "PositionTime", "Measurement"),
+        "Sets the gps coordinates for a measurement" )
+  .def( "setTitle", &SpecUtils::SpecFile::set_title, 
+        args("Title", "Measurement"),
+        "Sets the title of the specified Measurement." )
+  .def( "setNeutronCounts", &SpecUtils::SpecFile::set_contained_neutrons, 
+        args("ContainedNeutrons", "Counts", "Measurement"),
+        "Sets the title of the specified Measurement." )
   ;
   
   

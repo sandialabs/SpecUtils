@@ -23,14 +23,28 @@ option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF 
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
+option( SpecUtils_USE_FROM_CHARS "Use c++17 std::from_chars for parsing floats/ints, instead of boost::spirit - about 50% slower." OFF )
 
-
+option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
 
-if( SpecUtils_BUILD_UNIT_TESTS )
-  list( APPEND boost_libs_required unit_test_framework )
-endif( SpecUtils_BUILD_UNIT_TESTS )
+# If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
+if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+  get_directory_property(hasParent PARENT_DIRECTORY)
+  if(NOT hasParent)
+    option(${PROJECT_NAME}_USE_MSVC_MultiThreadDLL "Use dynamically-link runtime library." OFF)
+
+    if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL)
+      set(Boost_USE_STATIC_RUNTIME OFF)
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    else()
+      set(Boost_USE_STATIC_RUNTIME ON)
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    message(STATUS "Using CMAKE_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY}")
+  endif(NOT hasParent)
+endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
 
 
 if( SpecUtils_PYTHON_BINDINGS )
@@ -48,7 +62,8 @@ if( SpecUtils_JAVA_SWIG )
   INCLUDE_DIRECTORIES( ${JAVA_INCLUDE_PATH} )
   INCLUDE_DIRECTORIES( ${JAVA_INCLUDE_PATH}/linux )
   INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR}/bindings/swig )
-  SET( CMAKE_SWIG_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR} -DSpecUtils_JAVA_SWIG=1 )
+  SET( CMAKE_SWIG_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR} -DSpecUtils_JAVA_SWIG=1 -package gov.sandia.specutils )
+  SET( CMAKE_SWIG_OUTDIR gov/sandia/specutils )
   SET_SOURCE_FILES_PROPERTIES(bindings/swig/SpecUtils.i PROPERTIES CPLUSPLUS ON)
   SET_SOURCE_FILES_PROPERTIES(bindings/swig/SpecUtils.i PROPERTIES SWIG_FLAGS "")
   SWIG_ADD_MODULE( SpecUtilsJni java bindings/swig/SpecUtils.i )
@@ -67,7 +82,7 @@ endif( NOT DEFINED boost_SOURCE_DIR )
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
-  FIND_PACKAGE(PythonLibs 2.7)
+  FIND_PACKAGE(PythonLibs)
   IF(NOT PYTHONLIBS_FOUND)
     MESSAGE(FATAL_ERROR "Unable to find PythonLibs.")
   ENDIF()
@@ -95,6 +110,7 @@ set( sources
      src/SpecFile_multiact.cpp
      src/SpecFile_uraider.cpp
      src/SpecFile_xml_other.cpp
+     src/SpecFile_json.cpp
      src/SpecUtilsAsync.cpp
      src/SerialToDetectorModel.cpp
      src/EnergyCalibration.cpp
@@ -103,6 +119,7 @@ set( sources
      src/Filesystem.cpp
      src/DateTime.cpp
      src/ParseUtils.cpp
+     src/SpecFile_location.cpp
      README.md
 )
 
@@ -117,6 +134,7 @@ set( headers
      SpecUtils/Filesystem.h
      SpecUtils/DateTime.h
      SpecUtils/ParseUtils.h
+     SpecUtils/SpecFile_location.h
      SpecUtils/RapidXmlUtils.hpp
 )
 
@@ -211,11 +229,24 @@ set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils"
 #target_compile_features(SpecUtils PUBLIC cxx_std_11)
 #set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
-set_target_properties( SpecUtils PROPERTIES
-  CXX_STANDARD 11
-  CXX_STANDARD_REQUIRED YES
-  CXX_EXTENSIONS NO
-)
+if( SpecUtils_USE_FROM_CHARS )
+  if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
+    # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
+    message("Please double check your compiler does actually support std::from_chars for parsing floats")
+  endif()
+
+  set_target_properties( SpecUtils PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO
+  )
+else(SpecUtils_USE_FROM_CHARS)
+  set_target_properties( SpecUtils PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO
+  )
+endif(SpecUtils_USE_FROM_CHARS)
 
 
 if( SpecUtils_USE_WT_THREADPOOL )
@@ -236,7 +267,7 @@ endif( SpecUtils_USE_WT_THREADPOOL )
 
 if( SpecUtils_PYTHON_BINDINGS )
   #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
-  target_link_libraries( SpecUtils PUBLIC ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
+  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( DEFINED boost_SOURCE_DIR )
@@ -262,13 +293,17 @@ target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
+  if( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
+    message(FATAL_ERROR "You must enable SpecUtils_ENABLE_EQUALITY_CHECKS to build regression test.")
+  endif( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
+  
   add_subdirectory( regression_test )
 endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 
-IF( SpecUtils_BUILD_UNIT_TESTS )
+if( SpecUtils_BUILD_UNIT_TESTS )
   add_subdirectory( unit_tests )
-ENDIF( SpecUtils_BUILD_UNIT_TESTS )
+endif( SpecUtils_BUILD_UNIT_TESTS )
 
 
 if( SpecUtils_BUILD_FUZZING_TESTS )

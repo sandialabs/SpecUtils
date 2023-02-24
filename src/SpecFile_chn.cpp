@@ -20,25 +20,26 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <numeric>
 #include <iostream>
-#include <cstdint>
-#include <stdexcept>
 #include <algorithm>
+#include <stdexcept>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
 
@@ -330,6 +331,12 @@ bool SpecFile::load_from_chn( std::istream &input )
   return true;
 }//bool load_from_chn( std::istream &input )
 
+bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
+                                  const vector<std::string> &det_names ) const
+{
+  const set<int> det_nums_set = detector_names_to_numbers( det_names );
+  return write_integer_chn( ostr, sample_nums, det_nums_set );
+}
   
 bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
                                    const set<int> &det_nums ) const
@@ -377,13 +384,28 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   ostr.write( (const char *)&val16, sizeof(int16_t) );
   //index=6
   
-  char buffer[256];
+  char buffer[256] = { '\0' };
   
-  const boost::posix_time::ptime &starttime = summed->start_time_;
-  if( starttime.is_special() )
-    buffer[0] = buffer[1] = '0';
-  else
-    snprintf( buffer, sizeof(buffer), "%02d", int(starttime.time_of_day().seconds()) );
+
+  int year = 0, day = 0, month = 0, hour = 0, mins = 0, secs = 0;
+  const time_point_t &starttime = summed->start_time_;
+  
+  if( !is_special(starttime) )
+  {
+    const auto as_days = date::floor<date::days>(starttime);
+    const date::year_month_day ymd = date::year_month_day{as_days};
+    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(starttime - as_days);
+    
+    year = static_cast<int>( ymd.year() );
+    day = static_cast<int>( static_cast<unsigned>( ymd.day() ) );
+    month = static_cast<int>( static_cast<unsigned>( ymd.month() ) );
+    hour = static_cast<int>( time_of_day.hours().count() );
+    mins = static_cast<int>( time_of_day.minutes().count() );
+    secs = static_cast<int>( time_of_day.seconds().count() );
+  }//if( !is_special(starttime) )
+  
+
+  snprintf( buffer, sizeof(buffer), "%02d", secs );
   ostr.write( buffer, 2 );
   //index=8
   
@@ -399,50 +421,44 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   ostr.write( (const char *)&liveTimeTimesFifty, 4 );
   //index=16
   
-  if( starttime.is_special() )
+  if( is_special(starttime) )
   {
     strcpy( buffer, "00   0000000" );
   }else
   {
     const char *monthstr = "   ";
-    try
+    switch( month )
     {
-      //boost::gregorian::as_short_string(starttime.date().month().as_enum()) would give same answer
-      //  but require linking to boost date/time, which we are trying to avoid
-      switch( starttime.date().month().as_enum() )
-      {
-        case boost::gregorian::Jan: monthstr = "Jan"; break;
-        case boost::gregorian::Feb: monthstr = "Feb"; break;
-        case boost::gregorian::Mar: monthstr = "Mar"; break;
-        case boost::gregorian::Apr: monthstr = "Apr"; break;
-        case boost::gregorian::May: monthstr = "May"; break;
-        case boost::gregorian::Jun: monthstr = "Jun"; break;
-        case boost::gregorian::Jul: monthstr = "Jul"; break;
-        case boost::gregorian::Aug: monthstr = "Aug"; break;
-        case boost::gregorian::Sep: monthstr = "Sep"; break;
-        case boost::gregorian::Oct: monthstr = "Oct"; break;
-        case boost::gregorian::Nov: monthstr = "Nov"; break;
-        case boost::gregorian::Dec: monthstr = "Dec"; break;
-        case boost::gregorian::NotAMonth:
-        case boost::gregorian::NumMonths:
-          break;
-      }//switch( starttime.date().month().as_enum() )
-    }catch(...)
-    {
-      //Here when month is invalid, which I guess shouldn't ever happen
-    }
+      case  0: break;
+      case  1: monthstr = "Jan"; break;
+      case  2: monthstr = "Feb"; break;
+      case  3: monthstr = "Mar"; break;
+      case  4: monthstr = "Apr"; break;
+      case  5: monthstr = "May"; break;
+      case  6: monthstr = "Jun"; break;
+      case  7: monthstr = "Jul"; break;
+      case  8: monthstr = "Aug"; break;
+      case  9: monthstr = "Sep"; break;
+      case 10: monthstr = "Oct"; break;
+      case 11: monthstr = "Nov"; break;
+      case 12: monthstr = "Dec"; break;
+      default:
+        assert( 0 );
+        break;
+    }//switch( starttime.date().month().as_enum() )
+    
     
     // Most of the modulus's below are probably not necessary, but JIC since we want a string of
     //  exactly 12 characters
     snprintf( buffer, sizeof(buffer), "%02d%s%02d%s%02d%02d",
-              static_cast<int>( starttime.date().day() % 100 ),
+              static_cast<int>( day % 100 ),
               monthstr,
-              static_cast<int>( starttime.date().year() % 100 ), //This mod is required
-              ((starttime.date().year() >= 2000) ? "1" : "0"),
-              static_cast<int>( starttime.time_of_day().hours() % 100 ),
-              static_cast<int>( starttime.time_of_day().minutes() % 100 )
+              static_cast<int>( year % 100 ), //This mod is required
+              ((year >= 2000) ? "1" : "0"),
+              static_cast<int>( hour % 100 ),
+              static_cast<int>( mins % 100 )
              );
-  }//if( starttime.is_special() ) / else
+  }//if( is_special(starttime) ) / else
   
   assert( strlen(buffer) == 12 );
   ostr.write( buffer, 12 );
@@ -461,15 +477,8 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   //  Also, not certain about values in first channel or two...
   vector<uint32_t> intcounts( numchannels );
   
-#define FLT_UINT_MAX_PLUS1 static_cast<float>( (1 + (std::numeric_limits<uint32_t>::max()/2)) * 2.0f )
-  
   for( uint16_t i = 0; i < numchannels; ++i )
-  {
-    float counts = std::max( 0.0f, std::round( (*fgammacounts)[i] ) );
-    const bool can_convert = ( (counts < FLT_UINT_MAX_PLUS1)
-                               && (counts - static_cast<float>(std::numeric_limits<uint32_t>::max()) > -1.0f) );
-    intcounts[i] = can_convert ? static_cast<uint32_t>( counts ) : std::numeric_limits<uint32_t>::max();
-  }
+    intcounts[i] = SpecUtils::float_to_integral<uint32_t>( (*fgammacounts)[i] );
   
   if( numchannels )
     ostr.write( (const char *)&intcounts[0], numchannels*4 );

@@ -19,11 +19,13 @@
 
 #include "SpecUtils_config.h"
 
+#include <cmath>
 #include <stack>
 #include <limits>
 #include <sstream>
 #include <fstream>
 #include <cstddef>
+#include <iomanip>
 #include <streambuf>
 
 #include "rapidxml/rapidxml.hpp"
@@ -416,7 +418,11 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     ostr << endline << "var data_" << div_name << " = {" << endline;
     
-    ostr << "\"updateTime\": \"" << SpecUtils::to_iso_string(boost::posix_time::second_clock::local_time()) << "\"," << endline;
+    // TODO: std::localtime is not necessarily thread safe; there is a localtime_s, but its not clear how widely available it is; should make this thread-safe
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    
+    ostr << "\"updateTime\": \"" << std::put_time(std::localtime(&in_time_t), "%Y%m%dT%H%M%S") << "\"," << endline;
     
     ostr << "\"spectra\": [" << endline;
     
@@ -647,13 +653,27 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     write_and_set_data_for_chart( ostr, div_id, measurements );
     
-    ostr << "window.addEventListener('resize',function(){spec_chart_" << div_id << ".handleResize();});" << endline;
+    ostr << R"delim(
+    const resizeChart = function(){
+      let height = window.innerHeight;
+      let width = window.innerWidth;
+      let el = spec_chart_chart1.chart;
+      el.style.width = (width - 40) + "px";
+      el.style.height = Math.max(250, Math.min(0.4*width,height-175)) + "px";
+      el.style.marginLeft = "20px";
+      el.style.marginRight = "20px";
+      
+      spec_chart_chart1.handleResize();
+    };
+    
+    window.addEventListener('resize', resizeChart);
+    )delim" << endline;
     
     write_set_options_for_chart( ostr, div_id, options );
     //todo, get rid of this next couple lines
     ostr << "spec_chart_" << div_id << ".setShowPeaks(1,false);" << endline;
     ostr << "spec_chart_" << div_id << ".setShowPeaks(2,false);" << endline;
-    
+    ostr << "resizeChart();" << endline;
     ostr << "</script>" << endline;
     
     

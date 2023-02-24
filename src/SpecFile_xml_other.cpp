@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <string>
+#include <cstring>
 #include <fstream>
 #include <numeric>
 #include <iostream>
@@ -88,6 +89,28 @@ string rsp_name( const string &name )
   return name;
 }//string rsp_name(...)
 
+
+bool is_candidate_gxml(std::istream& input)
+{
+  if (!input)
+    return false;
+
+  char buffer[257] = { '\0' };
+  const istream::pos_type start_pos = input.tellg();
+  const bool successful_read = !!input.read(buffer, 256);
+
+  input.clear();
+  input.seekg(start_pos, ios::beg);
+
+  if (!successful_read)
+    return false;
+
+  if (strstr(buffer, "<BGAMMA>") || strstr(buffer, "<bgamma>"))
+    return true;
+
+  return false;
+}//bool is_candidate_gxml(...)
+
 }//namespace
 
 
@@ -134,14 +157,14 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     
     rapidxml::file<char> input_file( input );
     
-    rapidxml::xml_document<char> doc;
+    std::unique_ptr<rapidxml::xml_document<char>> doc( new rapidxml::xml_document<char>() );
     
     char *data = input_file.data();
     char *data_end = data + input_file.size();
     
-    doc.parse<rapidxml::parse_trim_whitespace | rapidxml::allow_sloppy_parse>( data, data_end );
+    doc->parse<rapidxml::parse_trim_whitespace | rapidxml::allow_sloppy_parse>( data, data_end );
     
-    const rapidxml::xml_node<char> *scanData = XML_FIRST_NODE((&doc),"scanData");
+    const rapidxml::xml_node<char> *scanData = XML_FIRST_NODE(doc.get(), "scanData");
     if( !scanData )
       throw runtime_error( "No scanData element" );
     
@@ -163,20 +186,20 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
         
         if( nchannel == 9 )
         {
-          const vector<float> edges{ 0.0f, 109.0f, 167.6f,
-            284.8f, 519.1f, 987.9f, 1163.7f, 1456.6f, 2862.9f, 3027.0f
+          vector<float> edges{ 0.0f, 109.0f, 167.6f, 284.8f, 519.1f, 987.9f,
+            1163.7f, 1456.6f, 2862.9f, 3027.0f
           };// edges
           
           assert( edges.size() == 10 );
           
-          cal->set_lower_channel_energy( 9, edges );
-        }else if( nchannel >= 2 )
+          cal->set_lower_channel_energy( 9, std::move(edges) );
+        }else if( nchannel >= EnergyCalibration::sm_min_channels )
         {
-          assert( nchannel < 65538 );
+          assert( nchannel < EnergyCalibration::sm_max_channels ); // set_default_polynomial will throw if this isnt the case anyway
           cal->set_default_polynomial( nchannel, {0.0f, 3000.0f/nchannel}, {} );
         }else
         {
-          assert( 0 );
+          // Leave the default energy calibration
         }//if( nchannel == 9 ) / else
         
         energy_cals[nchannel] = cal;
@@ -188,7 +211,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     };//get_energy_cal
     
     
-    XML_FOREACH_DAUGHTER( SegmentResults, scanData, "SegmentResults" )
+    XML_FOREACH_CHILD( SegmentResults, scanData, "SegmentResults" )
     {
       const rapidxml::xml_node<char> *RspId = XML_FIRST_NODE(SegmentResults,"RspId");
       const string RspId_str = SpecUtils::xml_value_str( RspId );
@@ -201,7 +224,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
       string time_str = xml_value_str( XML_FIRST_NODE(SegmentResults,"GammaLastBackgroundTime") );
       
       vector<float> gamma_counts, neutron_counts;
-      XML_FOREACH_DAUGHTER( GammaBackground, SegmentResults, "GammaBackground" )
+      XML_FOREACH_CHILD( GammaBackground, SegmentResults, "GammaBackground" )
       {
         float val;
         if( !parse_float( GammaBackground->value(), GammaBackground->value_size(), val ) )
@@ -284,18 +307,18 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     // The backgrounds have an explicit RspID number, but the <PanelDataList> do not; so we will
     //  assume the are given in order
     int panel_num = 0;
-    XML_FOREACH_DAUGHTER( PanelDataList, scanData, "PanelDataList" )
+    XML_FOREACH_CHILD( PanelDataList, scanData, "PanelDataList" )
     {
       panel_num += 1;
       
-      XML_FOREACH_DAUGHTER( item, PanelDataList, "item" )
+      XML_FOREACH_CHILD( item, PanelDataList, "item" )
       {
         const rapidxml::xml_node<char> *SampleDateTime = XML_FIRST_NODE(item,"SampleDateTime");
         const rapidxml::xml_node<char> *SampleId = XML_FIRST_NODE(item,"SampleId");
 
         bool did_contained_neutrons = false;
         vector<float> gamma_counts, neutron_counts;
-        XML_FOREACH_DAUGHTER( GammaData, item, "GammaData" )
+        XML_FOREACH_CHILD( GammaData, item, "GammaData" )
         {
           float val;
           if( !parse_float( GammaData->value(), GammaData->value_size(), val ) )
@@ -304,7 +327,7 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
           gamma_counts.push_back( val );
         }//for( loop over <GammaData> )
         
-        XML_FOREACH_DAUGHTER( NeutronData, item, "NeutronData" )
+        XML_FOREACH_CHILD( NeutronData, item, "NeutronData" )
         {
           float val;
           if( !parse_float( NeutronData->value(), NeutronData->value_size(), val ) )
@@ -463,5 +486,163 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
   
   return true;
 }//bool SpecFile::load_from_xml_scan_data(...)
+
+
+
+bool SpecFile::load_caen_gxml_file(const std::string& filename)
+{
+#ifdef _WIN32
+  ifstream input(convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary | ios_base::in);
+#else
+  ifstream input(filename.c_str(), ios_base::binary | ios_base::in);
+#endif
+
+  if (!input.is_open())
+    return false;
+
+  const bool success = load_from_caen_gxml(input);
+
+  if (success)
+    filename_ = filename;
+
+  return success;
+}//bool load_caen_gxml_file(const std::string& filename)
+
+
+bool SpecFile::load_from_caen_gxml(std::istream& input)
+{
+  reset();
+
+  if (!input.good())
+    return false;
+
+  std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+
+  const istream::pos_type start_pos = input.tellg();
+
+  try
+  {
+    input.unsetf(ios::skipws);
+
+    if (!is_candidate_gxml(input))
+      throw runtime_error("Not GXML file candidate.");
+
+    rapidxml::file<char> input_file(input);
+
+    std::unique_ptr<rapidxml::xml_document<char>> doc( new rapidxml::xml_document<char>() );
+
+    char* data = input_file.data();
+    char* data_end = data + input_file.size();
+
+    doc->parse<rapidxml::parse_trim_whitespace | rapidxml::allow_sloppy_parse>(data, data_end);
+
+    const rapidxml::xml_node<char>* const bgamma_node = XML_FIRST_INODE(doc.get(), "BGAMMA");
+    if (!bgamma_node)
+      throw runtime_error("No BGAMMA element");
+
+    const rapidxml::xml_node<char>* const spectrum_node = XML_FIRST_INODE(bgamma_node, "SPECTRUM");
+    if (!spectrum_node)
+      throw runtime_error("No SPECTRUM element");
+
+    const rapidxml::xml_node<char>* const data_node = XML_FIRST_INODE(spectrum_node, "DATA");
+    if (!data_node || (data_node->value_size() < 16))
+      throw runtime_error("No spectrum DATA element");
+
+    vector<string> warnings, remarks;
+    auto counts = make_shared<vector<float>>();
+    if (!SpecUtils::split_to_floats(data_node->value(), data_node->value_size(), *counts))
+      warnings.push_back("May not have read in all channel counts.");
+
+    if (counts->size() < 16)
+      throw runtime_error("No channel counts");
+
+    float live_time = 0.0f, real_time = 0.0f;
+    const rapidxml::xml_node<char>* const lt_node = XML_FIRST_INODE(spectrum_node, "ELT");
+    if (!lt_node 
+      || !lt_node->value_size() 
+      || !SpecUtils::parse_float(lt_node->value(), lt_node->value_size(), live_time) )
+    {
+      warnings.push_back("Unable to parse live time.");
+    }
+
+    const rapidxml::xml_node<char>* const rt_node = XML_FIRST_INODE(spectrum_node, "ERT");
+    if (!rt_node
+      || !rt_node->value_size()
+      || !SpecUtils::parse_float(rt_node->value(), rt_node->value_size(), real_time))
+    {
+      warnings.push_back("Unable to parse real time.");
+    }
+
+    // From the one example I have, the <DATETIME> node is before START/STOP time, so we'll ignore for now
+    //const rapidxml::xml_node<char>* const datetime_node = XML_FIRST_INODE(bgamma_node, "DATETIME");
+    
+    const rapidxml::xml_node<char>* const meas_node = XML_FIRST_INODE(bgamma_node, "MEASUREMENT");
+    
+    SpecUtils::time_point_t start_time{};
+    if (meas_node)
+    {
+      const rapidxml::xml_node<char>* const operator_node = XML_FIRST_INODE(meas_node, "OPERATOR");
+      const rapidxml::xml_node<char>* const start_node = XML_FIRST_INODE(meas_node, "START");
+      const rapidxml::xml_node<char>* const stop_node = XML_FIRST_INODE(meas_node, "STOP");
+      const rapidxml::xml_node<char>* const comments_node = XML_FIRST_INODE(meas_node, "COMMENTS");
+      const rapidxml::xml_node<char>* const tags_node = XML_FIRST_INODE(meas_node, "TAGS");
+      if (start_node && start_node->value_size())
+        start_time = SpecUtils::time_from_string(xml_value_str(start_node));
+      if (comments_node && comments_node->value_size())
+        remarks.push_back(xml_value_str(comments_node));  
+      if (tags_node && tags_node->value_size())
+        remarks.push_back("TAGS: " + xml_value_str(tags_node));
+      if (operator_node && operator_node->value_size())
+        remarks.push_back("Operator: " + xml_value_str(operator_node));
+    }//if (meas_node)
+    
+
+    const rapidxml::xml_node<char>* const ch_start_node = XML_FIRST_INODE(spectrum_node, "CHNNLSTART");
+    if (ch_start_node && ch_start_node->value() && !xml_value_compare(ch_start_node, "0"))
+      warnings.push_back("File defined a channel start of '" 
+                         + xml_value_str(ch_start_node) + "' - which is not handled." );
+
+    const rapidxml::xml_node<char>* const ch_end_node = XML_FIRST_INODE(spectrum_node, "CHNNLEND");
+    if (ch_end_node && ch_end_node->value())
+    {
+      int val = 0;
+      parse_int(ch_end_node->value(), ch_end_node->value_size(), val);
+      if( val != static_cast<int>(counts->size() - 1) )
+        warnings.push_back("File defined a channel end of '"
+          + xml_value_str(ch_end_node) + "' - which is not handled.");
+    }//if (ch_end_node && ch_end_node->value())
+
+
+    auto meas = make_shared<Measurement>();
+    meas->gamma_counts_ = counts;
+    meas->start_time_ = start_time;
+    meas->real_time_ = real_time;
+    meas->live_time_ = live_time;
+    meas->gamma_count_sum_ = 0.0;
+    for (const float& v : *counts)
+      meas->gamma_count_sum_ += v;
+    
+    measurements_.push_back(meas);
+    parse_warnings_ = warnings;
+    remarks_ = remarks;
+    manufacturer_ = "CAEN";
+    instrument_model_ = "Hexagon";
+    instrument_type_ = "";
+    detector_type_ = DetectorType::Unknown;
+
+    cleanup_after_load();
+
+    return true;
+  }catch (std::exception& e)
+  {
+    input.clear();
+    input.seekg(start_pos, ios::beg);
+    reset();
+    return false;
+  }//try/catch
+  
+  return true;
+}//bool load_from_caen_gxml(std::istream& input)
+
 
 }//namespace SpecUtils

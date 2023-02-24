@@ -2,6 +2,11 @@
 /* In order to dynamically set color values from within Wt, we cant specify colors
    in the CSS file; so this fiel is the same as SpectrumChartD3.js, just without
    color values for things we will want to maybe dynamically change.
+
+   SpectrumChartD3 and InterSpecD3Chart style classes are applied to the base
+   <svg> element.  InterSpecD3Chart is also applied to the time-chart in InterSpec
+   and possible other places in InterSpec, so this class is used for things that
+   should be consistent between the charts
 */
 
 /*******************/
@@ -36,12 +41,35 @@
   
 }
 
-.yaxis, .xaxis, .yaxislabel { font: sans-serif; font-size: 0.9em; }
 
-.xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke-width: 1px; }
+.InterSpecD3Chart .axis > .tick > line { stroke-width: 1px; }
 
+
+.InterSpecD3Chart .axis text.xaxistitle, 
+.InterSpecD3Chart text.xaxistitle, 
+.InterSpecD3Chart text.yaxistitle { 
+  font-size: 14px; 
+}
+
+.InterSpecD3Chart .axis > path, 
+.axis line { 
+  fill: none; 
+}
+
+.InterSpecD3Chart .axis text { 
+  font-family: sans-serif; 
+  font-size: 0.9em; 
+}
+
+
+.InterSpecD3Chart .grid path {
+    fill: none;
+}
+
+/* 
 .xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
 .minorgrid { stroke-opacity: 50%; }
+*/
 
 /* The box that holds the peak label text */
 .peaklabel, .peakLabelBold {
@@ -142,9 +170,7 @@
   fill: #666;
   fill-opacity: 0.25;
 }
-.leftbuttonzoomoutbox {
-  fill: none;
-}
+
 .leftbuttonzoomoutboxy {
   fill: #666;
   fill-opacity: 0.1;

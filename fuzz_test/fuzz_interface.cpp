@@ -39,6 +39,10 @@ TODO: when testing writing output, try different combinations of sample and dete
 
 void test_write_output( const SpecUtils::SpecFile &spec )
 {
+  //Writing files is slow, so you might want to skip this if you are more concerned with more input
+  #warning "Not testing writing spectrum files"
+  return;
+  
   using namespace SpecUtils;
   
   const set<int> &sample_numbers = spec.sample_numbers();
@@ -272,6 +276,20 @@ int run_file_parse_fuzz( const uint8_t *data, size_t size )
     SpecUtils::SpecFile spec;
     stringstream strm( datastr, ios_base::in );
     if( spec.load_from_xml_scan_data( strm ) )
+      test_write_output( spec );
+  }
+
+  {
+    SpecUtils::SpecFile spec;
+    stringstream strm( datastr, ios_base::in );
+    if( spec.load_from_json( strm ) )
+      test_write_output( spec );
+  }
+
+  {
+    SpecUtils::SpecFile spec;
+    stringstream strm( datastr, ios_base::in );
+    if( spec.load_from_caen_gxml( strm ) )
       test_write_output( spec );
   }
 

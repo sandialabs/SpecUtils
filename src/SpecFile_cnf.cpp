@@ -19,26 +19,27 @@
 
 #include "SpecUtils_config.h"
 
+#include <array>
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <numeric>
 #include <iostream>
-#include <cstdint>
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
@@ -48,28 +49,29 @@ using namespace std;
 namespace
 {
 
-    typedef unsigned char byte;
+    typedef unsigned char byte_type;
 
-    template< typename T > std::array< byte, sizeof(T) >  to_bytes(const T& object)
+    template< typename T > std::array< byte_type, sizeof(T) >  to_bytes(const T& object)
     {
-        std::array< byte, sizeof(T) > bytes;
+        std::array< byte_type, sizeof(T) > bytes;
 
-        const byte* begin = reinterpret_cast<const byte*>(std::addressof(object));
-        const byte* end = begin + sizeof(T);
+        const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(object));
+        const byte_type* end = begin + sizeof(T);
         std::copy(begin, end, std::begin(bytes));
 
         return bytes;
     }
 
-    enum class cam_type //name and size of bytes
+/** Datatypes for the CAM format.
+ */
+    enum class cam_type
     {
-  
         cam_float,     //any float
         cam_double,    //any double
         cam_byte,      //a byte
         cam_word,      //int16
         cam_longword,  //int
-        cam_quadword,  //int64     
+        cam_quadword,  //int64
         cam_datetime ,   //date time
         cam_duration,   //time duration 
         cam_string,
@@ -79,14 +81,14 @@ namespace
 
     template <class T>
     //IEEE-754 variables to CAM float (PDP-11)
-    std::array< byte, sizeof(int32_t) > convert_to_CAM_float(const T& input)
+    std::array< byte_type, sizeof(int32_t) > convert_to_CAM_float(const T& input)
     {
 
         //pdp-11 is a wordswaped float/4
         float temp_f = static_cast<float>(input * 4);
         const auto temp = to_bytes(temp_f);
         const size_t word_size = 2;
-        std::array< byte, sizeof(int32_t) > output = { 0x00 };
+        std::array< byte_type, sizeof(int32_t) > output = { 0x00 };
         //perform a word swap
         for (size_t i = 0; i < word_size; i++)
         {
@@ -98,14 +100,14 @@ namespace
 
     template <class T>
     //IEEE variables to CAM double (PDP-11)
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_double(const T& input)
+    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_double(const T& input)
     {
 
         //pdp-11 is a word swaped Double/4
         double temp_d = static_cast<double>(input * 4.0) ;
         const auto temp = to_bytes(temp_d);
         const size_t word_size = 2;
-        std::array< byte, sizeof(int64_t) > output = { 0x00 };
+        std::array< byte_type, sizeof(int64_t) > output = { 0x00 };
         //perform a word swap
         for (size_t i = 0; i < word_size; i++)
         {
@@ -118,16 +120,20 @@ namespace
     }
 
     //boost ptime to CAM DateTime
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_datetime(const boost::posix_time::ptime& date_time)
+    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_datetime(const SpecUtils::time_point_t& date_time)
     {
         //error checking
-        if (date_time.is_not_a_date_time())
+        if( SpecUtils::is_special(date_time) )
             throw std::range_error("The input date time is not a valid date time");
 
-        std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
+        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
         //get the total seconds between the input time and the epoch
-        boost::posix_time::ptime epoch(boost::gregorian::date(1970, 1, 1));
-        boost::posix_time::time_duration::sec_type sec_from_epoch = (date_time - epoch).total_seconds();
+        const date::year_month_day epoch( date::year(1970), date::month(1u), date::day(1u) );
+        const date::sys_days epoch_days = epoch;
+        assert( epoch_days.time_since_epoch().count() == 0 ); //true if using unix epoch, lets see on the various systems
+      
+        const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epoch_days);
+        const int64_t sec_from_epoch = time_from_epoch.count();
 
         //covert to modified julian in usec
         uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
@@ -135,28 +141,28 @@ namespace
         return bytes;
     }
 
-    boost::posix_time::ptime convert_from_CAM_datetime( uint64_t time_raw )
+    SpecUtils::time_point_t convert_from_CAM_datetime( uint64_t time_raw )
     {
-      boost::posix_time::ptime answer;
       if( !time_raw )
-        return answer;
-
-      answer = boost::posix_time::ptime( boost::gregorian::date(1970, 1, 1) );
+        return SpecUtils::time_point_t{};
+      
+      const date::sys_days epoch_days = date::year_month_day( date::year(1970), date::month(1u), date::day(1u) );
+      SpecUtils::time_point_t answer{epoch_days};
 
       const int64_t secs = time_raw / 10000000L;
       const int64_t sec_from_epoch = secs - 3506716800L;
       
-      answer += boost::posix_time::seconds(sec_from_epoch);
-      answer += boost::posix_time::microseconds( secs % 10000000L );
+      answer += std::chrono::seconds(sec_from_epoch);
+      answer += std::chrono::microseconds( secs % 10000000L );
       
       return answer;
     }//convert_from_CAM_datetime(...)
 
 
     //float sec to CAM duration
-    std::array< byte, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
+    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
     {
-        std::array< byte, sizeof(int64_t) > bytes = { 0x00 };
+        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
         //duration in usec is larger than a int64: covert to years
         if ( (static_cast<double>(duration) * 10000000.0) > static_cast<double>(INT64_MAX) )
         {
@@ -196,7 +202,7 @@ namespace
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
     template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
-    void enter_CAM_value(const T& input, vector<byte>& destination, const size_t& location, const cam_type& type) 
+    void enter_CAM_value(const T& input, vector<byte_type>& destination, const size_t& location, const cam_type& type)
     {
         switch (type) {
         case cam_type::cam_float:
@@ -242,9 +248,9 @@ namespace
         break;
         case cam_type::cam_longword:
         {
-            T t_trunc = std::min( input, static_cast<T>(std::numeric_limits<int32_t>::max()) );
-            t_trunc = std::max( t_trunc, static_cast<T>(std::numeric_limits<int32_t>::min()) );
-            int32_t t_longword = static_cast<int32_t>(t_trunc);
+          // TODO: it appears we actually want to use a uint32_t here, and not a int32_t, but because of the static_cast here, things work out, but if we are to "clamp" values, then we need to switch to using unsigned integers
+          int32_t t_longword = static_cast<int32_t>(input);
+          
             const auto bytes = to_bytes(t_longword);
           
           if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
@@ -266,10 +272,10 @@ namespace
         break;
         case cam_type::cam_byte:
         {
-            byte t_byte = static_cast<byte>(input);
+          byte_type t_byte = static_cast<byte_type>(input);
             destination.at(location) = t_byte;
-            //const byte* begin = reinterpret_cast<const byte*>(std::addressof(t_byte));
-            //const byte* end = begin + sizeof(byte);
+            //const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(t_byte));
+            //const byte_type* end = begin + sizeof(byte_type);
             //std::copy(begin, end, destination.begin() + location);
         break;
         }
@@ -283,11 +289,11 @@ namespace
         }//end switch
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const boost::posix_time::ptime& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
+    void enter_CAM_value(const SpecUtils::time_point_t& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
     {
         if (type != cam_type::cam_datetime)
         {
-            throw std::invalid_argument("error - Invalid converstion from: boost::posix_time::ptime");
+            throw std::invalid_argument("error - Invalid conversion from time_point");
         }
 
         const auto bytes = convert_to_CAM_datetime(input);
@@ -298,7 +304,7 @@ namespace
       std::copy(begin(bytes), end(bytes) , destination.begin() + location);
     }
     //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const string& input, vector<byte>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
+    void enter_CAM_value(const string& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
     {
         if (type != cam_type::cam_string)
         {
@@ -474,10 +480,10 @@ bool SpecFile::load_from_cnf( std::istream &input )
     J = 0xFFFFFFFF - J;
     meas->live_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
     
-    uint32_t num_channels;
     if( !input.seekg( num_channel_offset, std::ios::beg ) )
       throw std::runtime_error( "Failed seek for num channels" );
     
+    uint32_t num_channels;
     read_binary_data( input, num_channels );
     
     const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
@@ -504,7 +510,40 @@ bool SpecFile::load_from_cnf( std::istream &input )
       for( const float v : cal_coefs )
         allZeros = allZeros && (v == 0.0f);
       
+      // Alpha spectra will have offsets of like 2500 keV, which will cause the exception from
+      //  #EnergyCalibration::set_polynomial.  So we'll check if this is maybe an alpha spectrum,
+      //  and if so, use #EnergyCalibration::set_polynomial_no_offset_check
+      bool is_alpha_spec = false;
       if( !allZeros )
+      {
+        //From only a single file, Alpha spec files have: "Alpha Efcor", "Alpha Encal".  Segment 11, has just "Alpha"
+        const uint8_t headers_with_alpha[] = { 2, 6, 11, 13, 19 };
+        string buffer( 513, '\0' );
+        for( uint8_t i : headers_with_alpha )
+        {
+          size_t segment_position = 0;
+          if( findCnfSegment(i, 0, segment_position, input, size) )
+          {
+            input.seekg( segment_position, std::ios::beg );
+            if( input.read( &(buffer[0]), 512 ) && (buffer.find("Alpha") != string::npos) )
+            {
+              try
+              {
+                auto newcal = make_shared<EnergyCalibration>();
+                newcal->set_polynomial_no_offset_check( num_channels, cal_coefs, {} );
+                meas->energy_calibration_ = newcal;
+                is_alpha_spec = true;
+              }catch( std::exception &e )
+              {
+              }
+              
+              break;
+            }//if( we found the segment, and it had "Alpha" in it )
+          }//if( find segment )
+        }//for( loop over potential segments that might have "Alpha" in them )
+      }//if( !allZeros )
+      
+      if( !allZeros && !is_alpha_spec )
         throw runtime_error( "Calibration parameters were invalid" );
     }//try /catch set calibration
     
@@ -700,8 +739,9 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     //Measurement start time.
     //The start time may not be valid (e.g., if input file didnt have times),
     // but if we're here we time is valid, just the unix epoch
-    const boost::posix_time::ptime& start_time = summed->start_time().is_special() ?
-            SpecUtils::time_from_string("1970-01-01 00:00:00"): summed->start_time();
+    const time_point_t start_time = SpecUtils::is_special(summed->start_time())
+                                    ? time_point_t{}
+                                    : summed->start_time();
 
     //Check if we have RIID analysis results we could write to the output file.
     /** \TODO: implement writing RIID analysis resukts to output file.
@@ -803,7 +843,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
 
         const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + data_header[1];
         //create a vector to store all the bytes
-        std::vector<byte> cnf_file(file_length, 0x00);
+        std::vector<byte_type> cnf_file(file_length, 0x00);
 
 
         //enter the file header
@@ -878,7 +918,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         }
 
         //times
-        if (!start_time.is_not_a_date_time()) {
+        if (!SpecUtils::is_special(start_time)) {
             enter_CAM_value(0x01, cnf_file, acqp_loc + acqp_header[16], cam_type::cam_byte);
             enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_type::cam_datetime);
         }
@@ -905,7 +945,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //sample quanity cannot be zero
         enter_CAM_value(1.0, cnf_file, samp_loc + 0x90, cam_type::cam_float);
         //set the sample time to the aqusition start time
-        if (!start_time.is_not_a_date_time()) {
+        if (!SpecUtils::is_special(start_time)) {
             enter_CAM_value(start_time, cnf_file, samp_loc + 0xB4, cam_type::cam_datetime);
         }
         if (summed->has_gps_info()) 
@@ -913,7 +953,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_type::cam_double);
             enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_type::cam_double);
             enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_type::cam_double);
-            if(!summed->position_time().is_not_a_date_time())
+            if(!SpecUtils::is_special(summed->position_time()))
                 enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_type::cam_datetime);
         }
         //enter the data header
@@ -931,11 +971,13 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //put the data in
         for (size_t i = 0; i < gamma_channel_counts.size(); i++)
         {
-            enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
+          //enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
+          
+          const uint32_t counts = float_to_integral<uint32_t>( gamma_channel_counts[i] );
+          enter_CAM_value(counts, cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
         }
         //write the file
         output.write((char* )cnf_file.data(), cnf_file.size());
-    
     }catch( std::exception &e )
     {
 #if( PERFORM_DEVELOPER_CHECKS )

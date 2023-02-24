@@ -543,6 +543,13 @@ std::string parent_path( const std::string &path )
   while( strcmp(bname,"..") == 0 )
   {
     char *parname = dirname( &(pathvec[0]) );
+    if( !parname )
+    {
+      // I think we can get here for like invalid utf-8 characters or something, or maybe
+      //  just really long input, or maybe invalid paths; not sure, only hit this during fuzzing
+      break;
+    }
+    
     size_t newlen = strlen(parname);
     pathvec.resize( newlen + 1 );
     pathvec[newlen] = '\0';

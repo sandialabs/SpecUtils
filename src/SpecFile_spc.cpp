@@ -20,28 +20,29 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <cstdint>
-#include <stdexcept>
+#include <fstream>
+#include <numeric>
+#include <iostream>
 #include <algorithm>
+#include <stdexcept>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
 using namespace std;
@@ -66,7 +67,7 @@ namespace
     "LastSourceStabFG", "LastCalibTime", "LastCalibSource", "LastCalibFG",
     "LastCalibFWHM", "LastCalibTemp", "StabilType", "StartupStatus",
     "TemperatureBoard", "TemperatureBoardRange", "BatteryVoltage", "Uptime",
-    "DoseRate", "DoseRateMax20min", "BackgroundSubtraction",
+    "DoseRateMax20min", "BackgroundSubtraction",
     "FWHMCCoeff", "ROI", "CalibPoint", "NeutronAlarm",
     "GammaDetector", "NeutronDetector", "SurveyId", "EventNumber",
     "Configuration"
@@ -89,15 +90,20 @@ namespace
     return label + ": ";
   }
   
-  string print_to_iaea_datetime( const boost::posix_time::ptime &t )
+  string print_to_iaea_datetime( const SpecUtils::time_point_t &t )
   {
     char buffer[256];
-    const int day = static_cast<int>( t.date().day() );
-    const int month = static_cast<int>( t.date().month() );
-    const int year = static_cast<int>( t.date().year() );
-    const int hour = static_cast<int>( t.time_of_day().hours() );
-    const int minutes = static_cast<int>( t.time_of_day().minutes() );
-    const int seconds = static_cast<int>( t.time_of_day().seconds() );
+    
+    const chrono::time_point<chrono::system_clock,date::days> t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<SpecUtils::time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+    const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    const int hour = static_cast<int>( time_of_day.hours().count() );
+    const int minutes = static_cast<int>( time_of_day.minutes().count() );
+    const int seconds = static_cast<int>( time_of_day.seconds().count() );
     
     snprintf( buffer, sizeof(buffer), "%02d.%02d.%04d %02d:%02d:%02d",
              day, month, year, hour, minutes, seconds );
@@ -235,6 +241,10 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             remark += " : " + line.substr(info_pos);
             trim( remark );
             remarks_.push_back( remark );
+            
+            // Lets re-read "AvgDoseRate" into Measurement::dose_rate_ later on, but also we'll leave in remarks since remarks might have min/max dose rate, and we'll leave average with them
+            if( iequals_ascii(label, "AvgDoseRate") )
+              is_remark = false;
           }
           break;
         }//if( istarts_with( line, label ) )
@@ -532,9 +542,21 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       {
         if( SpecUtils::icontains(line, "no") )
         {
-          meas->latitude_ = -999.9;
-          meas->longitude_= -999.9;
-        }
+          if( meas->location_ && meas->location_->geo_location_ )
+          {
+            if( IsNan(meas->location_->speed_)
+               && !meas->location_->relative_location_
+               && !meas->location_->orientation_ )
+            {
+              meas->location_.reset();
+            }else
+            {
+              auto loc = make_shared<LocationState>( *meas->location_ );
+              loc->geo_location_.reset();
+              meas->location_ = loc;
+            }
+          }//if( meas->location_ && meas->location_->geo_location_ )
+        }//
       }else if( istarts_with( line, "GPS" ) )
       {
         line = line.substr(info_pos);
@@ -545,13 +567,26 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             if( !isalnum(line[i]) )
               line[i] = ' ';
           
-          string latstr = line.substr(0,pos);
-          string lonstr = line.substr(pos+1);
-          trim( latstr );
-          trim( lonstr );
+          const string latstr = trim_copy( line.substr(0,pos) );
+          const string lonstr = trim_copy( line.substr(pos+1) );
           
-          meas->latitude_ = conventional_lat_or_long_str_to_flt( latstr );
-          meas->longitude_ = conventional_lat_or_long_str_to_flt( lonstr );
+          const double lat = conventional_lat_or_long_str_to_flt( latstr );
+          const double lon = conventional_lat_or_long_str_to_flt( lonstr );
+          
+          if( valid_latitude(lat) && valid_longitude(lon) )
+          {
+            auto loc = make_shared<LocationState>();
+            // Take our best guess that these GPS coordinates are for the instrument.
+            loc->type_ = LocationState::StateType::Instrument;
+            
+            auto geo = make_shared<GeographicPoint>();
+            loc->geo_location_ = geo;
+            
+            geo->latitude_ = lat;
+            geo->longitude_ = lon;
+            
+            meas->location_ = loc;
+          }//
         }else
         {
           meas->parse_warnings_.push_back( "Couldnt parse lat/lon." );
@@ -560,6 +595,34 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       {
         instrument_id_ = line.substr(info_pos);
         trim( instrument_id_ );
+      }else if( istarts_with( line, "DoseRate" )
+        || istarts_with( line, "AvgDoseRate" ) )
+      {
+        // May just be a number, with no units, or could be like "1.2 nSv/h".
+        if( info_pos != string::npos )
+        {
+          string val = SpecUtils::trim_copy( line.substr(info_pos) );
+          stringstream strm(val);
+          if( !(strm >> meas->dose_rate_) )
+          {
+            meas->parse_warnings_.push_back( "Failed to read dose '" + val + "'" );
+          }else
+          {
+            string units;
+            strm >> units;
+            if( units.size() )
+            {
+              try
+              {
+                meas->dose_rate_ *= dose_units_usvPerH( units.c_str(), units.size() );
+              }catch(...)
+              {
+                meas->parse_warnings_.push_back( "Failed to read dose units '" + units
+                                                + "', assuming uSv/h" );
+              }//try / catch
+            }//if( units.size() )
+          }//if( fail to read number ) / else
+        }//if( info_pos != string::npos )
       }else if( istarts_with( line, "Nuclide0" )
                || istarts_with( line, "Nuclide1" )
                || istarts_with( line, "Nuclide2" )
@@ -910,7 +973,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     }//for( const pair<std::string,std::string> &cmpnt : component_versions_ )
     
     
-    if( !summed->start_time_.is_special() )
+    if( !is_special(summed->start_time_) )
     {
       output << pad_iaea_prefix( "Starttime" ) << print_to_iaea_datetime(summed->start_time_) << "\r\n";
       
@@ -919,18 +982,27 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
       {
         float intsec, fracsec;
         fracsec = std::modf( summed->real_time_, &intsec );
+        const int intsec_i = float_to_integral<int>( intsec );
+        const float nmicro = floor((1.0E6f * fracsec) + 0.5f);
+        const auto nmicro_i = float_to_integral<chrono::microseconds::rep>( nmicro );
         
-        boost::posix_time::ptime endtime = summed->start_time_
-        + boost::posix_time::seconds( static_cast<int>(intsec) )
-        + boost::posix_time::microseconds( static_cast<int>( floor((1.0e6f * fracsec) + 0.5f) ) );
+        const time_point_t endtime = summed->start_time_
+                                      + chrono::seconds(intsec_i) + chrono::microseconds(nmicro_i);
         
         output << pad_iaea_prefix( "StopTime" ) << print_to_iaea_datetime( endtime ) << "\r\n";
       }//
-    }//if( !summed->start_time_.is_special() )
+    }//if( !is_special(summed->start_time_) )
     
     
     if( summed->contained_neutron_ )
-      output << pad_iaea_prefix( "NeutronCounts" ) << static_cast<int64_t>(floor(summed->neutron_counts_sum_ + 0.5)) << "\r\n";
+    {
+      // To avoid potential UB we'll use `float_to_integral`; but since I havent implemented
+      //  `double_to_integral` yet, we'll first convert to a float (if this causes any change of
+      //  valid data, the rounding/converting really wont matter).
+      const float neut_sum_f = static_cast<float>(std::round(summed->neutron_counts_sum_));
+      const auto neut_sum_i = float_to_integral<int64_t>( neut_sum_f );
+      output << pad_iaea_prefix( "NeutronCounts" ) << neut_sum_i << "\r\n";
+    }
     
     assert( summed->energy_calibration_ );
     
@@ -995,7 +1067,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     {
       output << pad_iaea_prefix( "GPSValid" ) << "yes\r\n";
       //Should probably put into degree, minute, second notation, but some other time...
-      output << pad_iaea_prefix( "GPS" ) << summed->latitude_ << "," << summed->longitude_ << "\r\n";
+      output << pad_iaea_prefix( "GPS" ) << summed->latitude() << "," << summed->longitude() << "\r\n";
     }//if( summed->has_gps_info() )
     
     
@@ -1157,15 +1229,27 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   float sACQTIM = 0.0; //10616.5 is 2014-Sep-19 12:14:57  // Date and time acquisition start in DECDAY format
   double dACQTI8 = 0.0; //10616.5 // Date and time as double precision DECDAY
   
-  if( !summed->start_time().is_special() )
+  if( !is_special(summed->start_time()) )
   {
-    const boost::posix_time::ptime &startime = summed->start_time();
-    const boost::gregorian::date epic_date( 1979, boost::gregorian::Jan, 1 );
-    const boost::gregorian::days daydiff = startime.date() - epic_date;
-    const double dayfrac = startime.time_of_day().total_microseconds() / (24.0*60.0*60.0*1.0E6);
-    dACQTI8 = daydiff.days() + dayfrac;
+    /*
+     original implementation (to be removed after 20220906):
+     const boost::posix_time::ptime &startime = summed->start_time();
+     const boost::gregorian::date epoch_date( 1979, boost::gregorian::Jan, 1 );
+     const boost::gregorian::days daydiff = startime.date() - epoch_date;
+     const double dayfrac = startime.time_of_day().total_microseconds() / (24.0*60.0*60.0*1.0E6);
+     dACQTI8 = daydiff.days() + dayfrac;
+     sACQTIM = static_cast<float>( dACQTI8 );
+     */
+    const time_point_t &startime = summed->start_time();
+    
+    const date::year_month_day spc_epoch_date( date::year(1979), date::month(1u), date::day(1u) );
+    const date::sys_days spc_epoch_day = spc_epoch_date;
+    const date::days days_since_spc_epoch = date::floor<date::days>( startime - spc_epoch_day );
+    const time_point_t::duration time_of_day = startime.time_since_epoch() - days_since_spc_epoch;
+    const double dayfrac = date::round<chrono::microseconds>(time_of_day).count() / (24.0*60.0*60.0*1.0E6);
+    dACQTI8 = days_since_spc_epoch.count() + dayfrac;
     sACQTIM = static_cast<float>( dACQTI8 );
-  }//if( !summed->start_time().is_special() )
+  }//if( !is_special(summed->start_time()) )
   
   const int16_t wSkip4[4] = { 0, 0, 0, 0 };
   const int16_t wCHNSRT = 0; // Start channel number
@@ -1326,41 +1410,52 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   output.write( defaultname, 16 );
   
   string datestr;
-  if( summed->start_time().date().is_special() )
+  int hour = 0, mins = 0, secs = 0;
+  if( is_special(summed->start_time()) )
   {
     datestr = "01-Jan-001";
   }else
   {
-    const int daynum = summed->start_time().date().day();
+    const SpecUtils::time_point_t &t = summed->start_time();
+    const auto t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int daynum = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+    hour = static_cast<int>( time_of_day.hours().count() );
+    mins = static_cast<int>( time_of_day.minutes().count() );
+    secs = static_cast<int>( time_of_day.seconds().count() );
+    
     if( daynum < 10 )
       datestr += "0";
     datestr += std::to_string(daynum);
     datestr += "-";
-    switch( summed->start_time().date().month() )
+    
+    switch( month )
     {
-      case boost::gregorian::Jan: datestr += "Jan"; break;
-      case boost::gregorian::Feb: datestr += "Feb"; break;
-      case boost::gregorian::Mar: datestr += "Mar"; break;
-      case boost::gregorian::Apr: datestr += "Apr"; break;
-      case boost::gregorian::May: datestr += "May"; break;
-      case boost::gregorian::Jun: datestr += "Jun"; break;
-      case boost::gregorian::Jul: datestr += "Jul"; break;
-      case boost::gregorian::Aug: datestr += "Aug"; break;
-      case boost::gregorian::Sep: datestr += "Sep"; break;
-      case boost::gregorian::Oct: datestr += "Oct"; break;
-      case boost::gregorian::Nov: datestr += "Nov"; break;
-      case boost::gregorian::Dec: datestr += "Dec"; break;
-      case boost::gregorian::NotAMonth: case boost::gregorian::NumMonths:
-        datestr += "\0\0\0";
-        break;
+      case  1: datestr += "Jan"; break;
+      case  2: datestr += "Feb"; break;
+      case  3: datestr += "Mar"; break;
+      case  4: datestr += "Apr"; break;
+      case  5: datestr += "May"; break;
+      case  6: datestr += "Jun"; break;
+      case  7: datestr += "Jul"; break;
+      case  8: datestr += "Aug"; break;
+      case  9: datestr += "Sep"; break;
+      case 10: datestr += "Oct"; break;
+      case 11: datestr += "Nov"; break;
+      case 12: datestr += "Dec"; break;
+      default: datestr += "\0\0\0"; break;
     }//switch( summed->start_time().date().month() )
     
     datestr += "-";
-    const int yearnum = summed->start_time().date().year() % 100;
+    const int yearnum = year % 100;
     if( yearnum < 10 )
       datestr += "0";
     datestr += std::to_string(yearnum);
-    datestr += (summed->start_time().date().year() > 1999 ? "1" : "0");
+    datestr += (year > 1999 ? "1" : "0");
   }
   datestr.resize( 13, '\0' );
   
@@ -1368,17 +1463,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   output.write( &datestr[0], 12 );
   
   char timestr[12] = { '\0' };
-  if( summed->start_time().is_special() )
-  {
-    strcpy( timestr, "00:00:00" );
-  }else
-  {
-    const int hournum = static_cast<int>( summed->start_time().time_of_day().hours() );
-    const int minutenum = static_cast<int>( summed->start_time().time_of_day().minutes() );
-    const int secondnum = static_cast<int>( summed->start_time().time_of_day().seconds() );
-    snprintf( timestr, sizeof(timestr)-1, "%02d:%02d:%02d",
-             hournum, minutenum, secondnum );
-  }
+  snprintf( timestr, sizeof(timestr)-1, "%02d:%02d:%02d", hour, mins, secs );
   
   pos += 10;
   output.write( timestr, 10 );
@@ -1688,17 +1773,11 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   pos += 4*n_channel;
   const vector<float> &channel_data = *summed->gamma_counts();
   if( type == IntegerSpcType )
-  {
-#define FLT_UINT_MAX_PLUS1 static_cast<float>((1 + (std::numeric_limits<uint32_t>::max()/2)) * 2.0f)
-    
+  { 
     vector<uint32_t> int_channel_data( n_channel );
     for( uint16_t i = 0; i < n_channel; ++i )
-    {
-      float counts = std::max( 0.0f, std::round(channel_data[i]) );
-      const bool can_convert = ( (counts < FLT_UINT_MAX_PLUS1)
-                                 && (counts - static_cast<float>(std::numeric_limits<uint32_t>::max()) > -1.0f) );
-      int_channel_data[i] = can_convert ? static_cast<uint32_t>( counts ) : std::numeric_limits<uint32_t>::max();
-    }
+      int_channel_data[i] = SpecUtils::float_to_integral<uint32_t>(channel_data[i]);
+    
     output.write( (const char *)&int_channel_data[0], 4*n_channel );
   }else
   {
@@ -2123,7 +2202,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     auto channel_data = make_shared<vector<float>>( n_channel, 0.0f );
     
     
-    boost::posix_time::ptime meas_time;
+    SpecUtils::time_point_t meas_time;
     string manufacturer = "Ortec";
     string inst_model = "Detective";
     string type_instrument = "RadionuclideIdentifier";
@@ -2445,7 +2524,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
               string suspect_nucs_str = string( suspectpos+suspect_term.size(), linesiter );
               string::size_type endpos = suspect_nucs_str.find_first_of("\0");
               if( endpos != string::npos )
-                suspect_nucs_str.substr(0,endpos);
+                suspect_nucs_str = suspect_nucs_str.substr(0,endpos);
               
               split( suspect_nucs, suspect_nucs_str, "\t,\n\r\0" );
               for( string &nuc : suspect_nucs )
@@ -2734,8 +2813,28 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     if( longitudeStr.size() && latitudeStr.size() )
     {
-      meas->latitude_ = conventional_lat_or_long_str_to_flt(latitudeStr);
-      meas->longitude_ = conventional_lat_or_long_str_to_flt(longitudeStr);
+      const double lat = conventional_lat_or_long_str_to_flt(latitudeStr);
+      const double lon = conventional_lat_or_long_str_to_flt(longitudeStr);
+      
+      if( valid_latitude(lat) && valid_longitude(lon) )
+      {
+        shared_ptr<LocationState> location;
+        if( meas->location_ )
+        {
+          location = make_shared<LocationState>( *meas->location_ );
+        }else
+        {
+          location = make_shared<LocationState>();
+          location->type_ = LocationState::StateType::Instrument; //best guess
+        }
+        
+        auto geo = make_shared<GeographicPoint>();
+        geo->longitude_ = lon;
+        geo->latitude_ = lat;
+        location->geo_location_ = geo;
+        
+        meas->location_ = location;
+      }//if( valid_latitude(lat) && valid_longitude(lon) )
     }//if( longitudeStr.size() && latitudeStr.size() )
     
     measurements_.push_back( meas );

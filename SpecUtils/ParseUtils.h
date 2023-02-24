@@ -25,6 +25,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <limits>
 #include <string>
 #include <vector>
 #include <istream>
@@ -51,7 +52,7 @@ namespace  SpecUtils
 
 
   /** Expands the N42 counted zeros scheme, i.e., if an entry is zero, then the
-   entry after that says how many zeroes that elememnt should be expanded to.
+   entry after that says how many zeroes that element should be expanded to.
    
    Requires zeros to be identically 0.0f, in order be expanded by the next
    value.  The value following a zero is rounded to nearest integer (no integer
@@ -105,10 +106,11 @@ namespace  SpecUtils
    returns it in m/s.
    
    Ex., takes a line like "Speed = 5 mph" and returns the speed in m/s.
-   Returns 0.0 on failure.
    
    Note: not very generically implemented, just covers cases that have been ran
    into.
+   
+   Throws exception if not successful.
    */
   float speed_from_remark( std::string remark );
   
@@ -118,24 +120,54 @@ namespace  SpecUtils
    */
   std::string detector_name_from_remark( const std::string &remark );
   
-  /** Looks for x position information in remark
+  /** Looks for x position information in remark.
   
-  * ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+     ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+   
+     TODO: does not currently take into account units (e.g., cm)
+   
+   Throws exception if not successful.
   */
   float dx_from_remark( std::string remark );
 
   /** Looks for y position information in remark
-
-* ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
-*/
-  float dy_from_remark(std::string remark);
-
   
-  /** Returns the dose units indicated by the string, in units such that ia
+    ex: "Title: FA-SG-LANL-0-0-8{dx=-155.6579,dy=-262.5} @235cm H=262.5cm V=221.1404cm/s : Det=Ba2"
+   
+    TODO: does not currently take into account units (e.g., cm)
+   
+   Throws exception if not successful.
+  */
+  float dy_from_remark( std::string remark );
+
+  /** Looks for y position information in remark
+   
+    ex: "Title: FA-SG-LANL-0-0-8{dx=-155.65...} @235cm H=262.5cm ..." returns 235cm
+   
+    TODO: does not currently take into account units (e.g., cm)
+   */
+  float dz_from_remark( std::string remark );
+
+  /** Currently finds strings similar to "@250 cm" that is common in PCF title fields
+   for indicating distance of detector from source.
+   
+   Returned string wil be a number, followed by units, where the units are not checked to be
+   reasonable. - e.g., could return "250 av"
+   
+   Returns empty string on failure.
+   
+   TODO: Implement more general function like `float distance_from_remark( const std::string & )`
+   */
+  std::string distance_from_pcf_title( const std::string &remark );
+
+
+  /** Returns the dose units indicated by the string, in units such that 1.0
    micro-sievert per hour is equal to 1.0.
-    Currently only handles the label "uSv" and "uRem/h", e.g. fnctn not really
-    impleneted.
-    Returns 0.0 on error.
+    
+   Currently only handles the label "uSv" and "uRem/h",
+   E.g. function only barely implemented.
+    
+   Throws exception on error.
    */
   float dose_units_usvPerH( const char *str, const size_t str_length );
 
@@ -160,9 +192,24 @@ namespace  SpecUtils
    */
   template <class T>
   size_t write_binary_data( std::ostream &input, const T &val );
+
+
+  /** Converts from a float value, to the nearest representable integer value.
+   
+   Rounds the input val (as a float) and clamps the returned value to the representable integer
+   range.
+   
+   Performing this operation, without invoking undefined behavior, unexpected float<-->int issues,
+   and getting correct values near the integer limits turns out to be surprisingly tricky, but
+   hopefully this function does everything correctly.  It was tested for uint32_t, but *should*
+   work fine for other integer types.
+   */
+  template<class Integral>
+  Integral float_to_integral( float val );
 }//namespace  SpecUtils
 
-
+#include <cmath>
+#include <type_traits>
 
 //Implementation
 namespace SpecUtils
@@ -189,7 +236,61 @@ namespace SpecUtils
     input.write( (const char *)&val, sizeof(T) );
     return sizeof(T);
   }
-}
+
+template<class Integral>
+Integral float_to_integral( float d )
+{
+  /*
+    Some tests you can run for this function
+    assert( float_to_integral<uint32_t>(0.0f) == 0 );
+    assert( float_to_integral<uint32_t>(-0.1f) == 0 );
+    assert( float_to_integral<uint32_t>(-1.0f) == 0 );
+    assert( float_to_integral<uint32_t>(0.499f) == 0 );
+    assert( float_to_integral<uint32_t>(0.5f) == 1 );
+    assert( float_to_integral<uint32_t>(1.5f) == 2 );
+    assert( float_to_integral<uint32_t>(1.4999f) == 1 );
+    assert( float_to_integral<uint32_t>(1024.1f) == 1024 );
+    assert( float_to_integral<uint32_t>(1024.8f) == 1025 );
+    // 4294967295 is the largest uint32_t, but if you convert to a float, it will have value
+    //  4294967296.0f, which is larger.
+    assert( float_to_integral<uint32_t>(4294967296.0f) == 4294967295 );
+    // The next value representable by a float above 4294967296, is 4294967808
+    assert( float_to_integral<uint32_t>(4294967808.0f) == 4294967295 );
+    // The next value representable by a float below 4294967296, is 4294967040
+    assert( float_to_integral<uint32_t>(4294967040.0f) == 4294967040 );
+   
+    // Almost all my testing was for uint32_t, but it passes some sanity checks for signed ints
+    assert( float_to_integral<int32_t>(1.0f) == 1 );
+    assert( float_to_integral<int32_t>(-1.0f) == -1 );
+    assert( float_to_integral<int32_t>(-1024.0f) == -1024 );
+    assert( float_to_integral<int32_t>(-0.1) == 0 );
+    assert( float_to_integral<int32_t>(-0.4999) == 0 );
+    assert( float_to_integral<int32_t>(-0.5) == -1 );
+    assert( float_to_integral<int32_t>(-0.51) == -1 );
+   */
+  
+    const float orig = d;
+    static constexpr int max_exp = std::is_signed<Integral>() ? ((sizeof(float)*8)-1) : (sizeof(float)*8);
+  
+    if( IsNan(d) || IsInf(d) )
+      return 0;
+  
+    d = std::round(d);
+  
+    if( !std::is_signed<Integral>() && std::signbit(d) )
+      return 0;
+  
+    int exp;
+    std::frexp(d, &exp);
+  
+    if( exp <= max_exp )
+      return static_cast<Integral>( d );
+  
+    static constexpr Integral min_int_val = std::numeric_limits<Integral>::min();
+    static constexpr Integral max_int_val = std::numeric_limits<Integral>::max();
+    return std::signbit(d) ? min_int_val : max_int_val;
+  }//float_to_integral
+}//namespace SpecUtils
 
 #endif //SpecUtils_ParseUtils_h
 

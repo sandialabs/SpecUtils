@@ -19,11 +19,12 @@
 
 #include "SpecUtils_config.h"
 
-#include <vector>
 #include <string>
+#include <vector>
+#include <cstring>
 #include <fstream>
 #include <numeric>
-#include <cstring>
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -36,6 +37,7 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/RapidXmlUtils.hpp"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -154,7 +156,7 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
     if( UserMode )
       remarks_.push_back( "CrystalType: " + xml_value_str( UserMode ) );
     
-    //Unecasary allocation to get time.
+    //Unnecessary allocation to get time.
     const string start_time = xml_value_str(StartTime);
     meas->start_time_ = SpecUtils::time_from_string( start_time.c_str() );
     
@@ -163,8 +165,19 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
       rapidxml::xml_attribute<XmlChar> *att = GPS->first_attribute("Valid",5);
       
       if( !att || XML_VALUE_ICOMPARE(att,"True") )
-        parse_deg_min_sec_lat_lon(GPS->value(), GPS->value_size(),
-                                  meas->latitude_, meas->longitude_ );
+      {
+        double latitude, longitude;
+        if( parse_deg_min_sec_lat_lon(GPS->value(), GPS->value_size(), latitude, longitude) )
+        {
+          auto loc = make_shared<LocationState>();
+          loc->type_ = LocationState::StateType::Instrument;
+          meas->location_ = loc;
+          auto geo = make_shared<GeographicPoint>();
+          loc->geo_location_ = geo;
+          geo->latitude_ = latitude;
+          geo->longitude_ = longitude;
+        }//if( parse gps coords )
+      }//if( !att || XML_VALUE_ICOMPARE(att,"True") )
     }//if( GPS )
     
     if( RealTime && RealTime->value_size() )
@@ -177,23 +190,19 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
     
     if( DoseRate && DoseRate->value_size() )
     {
-      DetectorAnalysisResult detanares;
-      const float doseunit = dose_units_usvPerH( DoseRate->value(),
-                                                DoseRate->value_size() );
-      
-      //Avoidable allocation here below
-      float dose;
-      if( (stringstream(xml_value_str(DoseRate)) >> dose) )
-        detanares.dose_rate_ = dose * doseunit;
-      else
-        cerr << "Failed to turn '" << xml_value_str(DoseRate) << "' into a dose" << endl;
-      
-      //detanares.start_time_ = meas->start_time_;
-      detanares.real_time_ = meas->real_time_;
-      
-      if( !detana )
-        detana = std::make_shared<DetectorAnalysis>();
-      detana->results_.push_back( detanares );
+      try
+      {
+        const float doseunit = dose_units_usvPerH( DoseRate->value(), DoseRate->value_size() );
+        
+        float dose_rate;
+        if( !parse_float(DoseRate->value(), DoseRate->value_size(), dose_rate) )
+          throw runtime_error( "Dose value of '" + xml_value_str(DoseRate) + "' not a valid number.");
+        
+        meas->dose_rate_ = dose_rate * doseunit;
+      }catch( std::exception &e )
+      {
+        parse_warnings_.push_back( "Error decoding dose: " + string(e.what()) );
+      }//try / catch parse dose
     }//if( DoseRate && DoseRate->value_size() )
     
     if( NeutronCountRate && NeutronCountRate->value_size() )

@@ -20,19 +20,19 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
+#include <limits>
+#include <cctype>
 #include <memory>
 #include <string>
-#include <cctype>
-#include <limits>
-#include <float.h>
-#include <numeric>
-#include <fstream>
-#include <cctype>
-#include <float.h>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <cstdint>
+#include <float.h>
+#include <fstream>
+#include <numeric>
+#include <sstream>
+#include <assert.h>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -44,8 +44,22 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
+
+namespace
+{
+  bool simple_isdigit(const char d)
+  {
+    // Debug versions of std::isdigit on MSVC will abort on negative 
+    //  character values, so well just use this function all the time
+    //  (which is probably better anyway since it avoids locale, which
+    //  is what we should probably do)
+    return ((d >= '0') && (d <= '9'));
+  }//simple_isdigit
+}//namespace
+
 
 
 namespace SpecUtils
@@ -557,7 +571,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       const string date_str = get_field_str( date_index ); //ex "5/12/2022"
       const string time_str = get_field_str( time_index ); //ex "10:37:43.316"
       const string date_time = date_str + " " + time_str;
-      m->start_time_ = time_from_string_strptime( date_time, DateParseEndianType::MiddleEndianFirst );
+      m->start_time_ = time_from_string( date_time, DateParseEndianType::MiddleEndianFirst );
       
       const string neut_counts_str = get_field_str(neutron_index);
       float neutron_counts = 0.0;
@@ -577,8 +591,13 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         const double lon = std::stod( lon_str );
         if( valid_latitude(lat) && valid_longitude(lon) && (lat != lon) )
         {
-          m->latitude_ = lat;
-          m->longitude_ = lon;
+          auto loc = make_shared<LocationState>();
+          loc->type_ = LocationState::StateType::Instrument;
+          m->location_ = loc;
+          auto geo = make_shared<GeographicPoint>();
+          loc->geo_location_ = geo;
+          geo->latitude_ = lat;
+          geo->longitude_ = lon;
         }
       }catch(...)
       {
@@ -648,25 +667,27 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         if( remark.size() )
           m->remarks_.push_back( remark );
         
-        if( parse_float( dose_str.c_str(), dose_str.size(), result.dose_rate_) )
+        float dose_rate = 0;
+        if( parse_float( dose_str.c_str(), dose_str.size(), dose_rate) )
         {
-          //convert to micro-sievert per hour ..
-          const uint8_t first_char = dose_unit_str.empty() ? uint8_t(0)
-                                                           : static_cast<uint8_t>(dose_unit_str[0]);
-          
-          if( (icontains(dose_unit_str, "sv") || icontains(dose_unit_str, "siev"))
-              && (icontains(dose_unit_str, "micro") || (dose_unit_str.size() && first_char==181) || istarts_with(dose_unit_str, "usv/h")) )
+          try
           {
-            //The 3DS dose_unit_str will look like [181,83,118,47,104] --> [?Sv/h]
-            // We are
-          }else
+            const float unit = dose_units_usvPerH( dose_unit_str.c_str(), dose_unit_str.size() );
+            
+            dose_rate *= unit;
+          }catch( std::exception & )
           {
-           if( !result.remark_.empty() )
-             result.remark_ += ", ";
+            m->parse_warnings_.push_back( "Dose rate units ('" + dose_str + "') couldnt be identified; assuming uSv/hr");
+            
+            if( !result.remark_.empty() )
+              result.remark_ += ", ";
             result.remark_ += "Dose unit not known";
             if( !dose_unit_str.empty() )
               result.remark_ += ": " + dose_unit_str;
-          }
+          }//try / catch to parse dose-rate
+          
+          result.dose_rate_ = dose_rate;
+          m->dose_rate_ = dose_rate;
         }//if( we can parse dose rate )
         
         
@@ -765,6 +786,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
   
   string line;
   size_t nlines_used = 0, nlines_total = 0;
+  shared_ptr<SpecUtils::LocationState> location;
   const size_t maxlen = 1024*1024; //should be long enough for even the largest spectra
   
   while( SpecUtils::safe_get_line(istr, line, maxlen) )
@@ -785,7 +807,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     //Dont allow a space delimiter until we have the columns mapped out to avoid things like
     //  "Energy (keV)" counting as two columns
     const bool has_comma = (line.find(',') != string::npos);
-    const bool no_split_space = (column_map.empty() && !isdigit(line[0]) && !SpecUtils::istarts_with(line, "Channel Energy Counts") );
+    const bool no_split_space = (column_map.empty() && !simple_isdigit(line[0]) && !SpecUtils::istarts_with(line, "Channel Energy Counts") );
     const char *delim = has_comma ? "," : (no_split_space ? "\t,;" : "\t, ;");
     
     SpecUtils::split( split_fields, line, delim );
@@ -803,7 +825,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if( isdigit(fields[0][0]) )
+    if(simple_isdigit(fields[0][0]) )
     {
       //Check if we have a valid column map defined yet, either because it is empty, or it has one
       //  entry that is not counts.  This can happen if there was a header that was only partially
@@ -818,11 +840,11 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( nfields==1 )
         {
           column_map[0] = kCounts;
-        }if( nfields==2 && isdigit(fields[1][0]) )
+        }if( nfields==2 && simple_isdigit(fields[1][0]) )
         {
           column_map[0] = kEnergy;
           column_map[1] = kCounts;
-        }else if( (nfields > 2) && (nfields < 9) && isdigit(fields[1][0]) && isdigit(fields[2][0]) )
+        }else if( (nfields > 2) && (nfields < 9) && simple_isdigit(fields[1][0]) && simple_isdigit(fields[2][0]) )
         {
           if( fields[0].find('.') != string::npos )
           {
@@ -881,7 +903,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                 {
                   ++nlines_used;
                   const size_t nchan = channels->size();
-                  if( nchan >= 128 )
+                  if( nchan >= 64 )
                   {
                     try
                     {
@@ -991,7 +1013,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( fields.empty() )
           continue;
         
-        if( !isdigit( fields.at(0).at(0) ) )
+        if( !simple_isdigit( fields.at(0).at(0) ) )
         {
           istr.seekg( position, ios::beg );
           break;
@@ -1151,14 +1173,26 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }
       }catch(...){}
       
-      try
+      if( !location || IsNan(location->speed_) )
       {
-        if( speed_ == 0.0 )
+        try
         {
-          speed_ = SpecUtils::speed_from_remark( line );
-          used |= (speed_ != 0.0);
+          const float speed = SpecUtils::speed_from_remark( line );
+          
+          if( !location )
+          {
+            location = make_shared<LocationState>();
+            location->type_ = LocationState::StateType::Instrument;
+          }
+          location_ = location;
+          
+          location->speed_ = speed;
+          used = true;
+        }catch( std::exception &e )
+        {
+          //
         }
-      }catch(...){}
+      }//if( !location_ || IsNan(location_->speed_) )
       
       try
       {
@@ -1534,7 +1568,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
       
       //Transform "RSP 1" to "RSP 01", so this way when names get sorted
       //  "RSP 11" wont come before "RSP 2"
-      if( isdigit( field[field.size()-1] ) && !isdigit( field[field.size()-2] ) )
+      if(simple_isdigit( field[field.size()-1] ) && !simple_isdigit( field[field.size()-2] ) )
         field = field.substr(0,field.size()-1) + '0' + field.substr(field.size()-1);
       
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -1681,11 +1715,11 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
        SourceType     source_type_;
        shared_ptr<const EnergyCalibration> energy_calibration_
        std::vector<std::string>  remarks_;
-       boost::posix_time::ptime  start_time_;
+       time_point_t  start_time_;
        std::vector<float>        neutron_counts_;
        double latitude_;  //set to -999.9 if not specified
        double longitude_; //set to -999.9 if not specified
-       boost::posix_time::ptime position_time_;
+       time_point_t position_time_;
        std::string title_;  //Actually used for a number of file formats
        */
       measurements_.push_back( m );
@@ -1739,9 +1773,9 @@ bool Measurement::write_txt( std::ostream& ostr ) const
       if( found_name.empty() && !detector_name_.empty() )
         remark += " " + detector_name_ + " ";
       
-      if( (remark.find( "Speed" ) == string::npos) && (speed_>0.000000001) )
+      if( (remark.find( "Speed" ) == string::npos) && location_ && !IsNan(location_->speed_) )
       {
-        snprintf( buffer, sizeof(buffer), " Speed %f m/s", speed_ );
+        snprintf( buffer, sizeof(buffer), " Speed %f m/s", location_->speed_ );
         remark += buffer;
       }
     }//if( i == 0 )
@@ -1749,21 +1783,23 @@ bool Measurement::write_txt( std::ostream& ostr ) const
     ostr << "Remark: " << remark << endline;
   }//for( size_t i = 0; i < remarks_.size(); ++i )
   
-  if( !start_time_.is_special() )
-    ostr << "StartTime " << start_time_ << "" << endline;
+  if( !is_special(start_time_) )
+    ostr << "StartTime " << to_extended_iso_string(start_time_) << "" << endline;
   ostr << "LiveTime " << live_time_ << " seconds" << endline;
   ostr << "RealTime " << real_time_ << " seconds" << endline;
   ostr << "SampleNumber " << sample_number_ << endline;
   ostr << "DetectorName " << detector_name_ << endline;
   ostr << "DetectorType " << detector_description_ << endline;
   
-  if( has_gps_info() )
+  if( location_ && location_->geo_location_
+     && valid_latitude(location_->geo_location_->latitude_)
+     && valid_longitude(location_->geo_location_->longitude_) )
   {
-    ostr << "Latitude: " << latitude_ << endline;
-    ostr << "Longitude: " << longitude_ << endline;
-    if( !position_time_.is_special() )
+    ostr << "Latitude: " << location_->geo_location_->latitude_ << endline;
+    ostr << "Longitude: " << location_->geo_location_->longitude_ << endline;
+    if( !is_special(location_->geo_location_->position_time_) )
       ostr << "Position Time: "
-      << SpecUtils::to_iso_string(position_time_) << endline;
+           << SpecUtils::to_iso_string(location_->geo_location_->position_time_) << endline;
   }
   
   ostr << "EquationType ";

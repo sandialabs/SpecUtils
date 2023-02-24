@@ -35,6 +35,7 @@
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/RapidXmlUtils.hpp"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -173,7 +174,7 @@ bool SpecFile::load_from_aram( std::istream &input )
     fore_meas->set_gamma_counts( fore_channels, live_time/1000.0f, real_time/1000.0f );
     fore_meas->source_type_ = SourceType::Foreground;
     fore_meas->occupied_ = OccupancyStatus::Occupied;
-    if( !start_time.is_special() )
+    if( !is_special(start_time) )
       fore_meas->set_start_time( start_time );
     
     //See if neutrons are around
@@ -211,7 +212,7 @@ bool SpecFile::load_from_aram( std::istream &input )
         back_meas->set_title( "Background" );
         back_meas->source_type_ = SourceType::Background;
         back_meas->occupied_ = OccupancyStatus::NotOccupied;
-        if( !start_time.is_special() )
+        if( !is_special(start_time) )
           back_meas->set_start_time( start_time );
         measurements_.push_back( back_meas );
       }
@@ -287,13 +288,17 @@ bool SpecFile::load_from_aram( std::istream &input )
       const string coord = lon_str + " / " + lat_str;
       if( parse_deg_min_sec_lat_lon( coord.c_str(), coord.size(), lat, lon ) )
       {
-        fore_meas->longitude_ = lon;
-        fore_meas->latitude_ = lat;
+        auto loc = make_shared<LocationState>();
+        loc->type_ = LocationState::StateType::Instrument;
+        
+        auto geo = make_shared<GeographicPoint>();
+        loc->geo_location_ = geo;
+        geo->longitude_ = lon;
+        geo->latitude_ = lat;
+        
+        fore_meas->location_ = loc;
         if( back_meas )
-        {
-          back_meas->longitude_ = lon;
-          back_meas->latitude_ = lat;
-        }
+          back_meas->location_ = loc;
       }//if( can parse string )
     }//if( lat / lon str )
     

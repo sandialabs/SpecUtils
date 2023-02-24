@@ -21,46 +21,26 @@
 
 #include <string>
 #include <cctype>
+#include <cstring>
+#include <iostream>
 
 #if( __cplusplus >= 201703L )
 #include <charconv>
 #endif
 
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 
-
-#if( USE_HH_DATE_LIB )
-#include "3rdparty/date/include/date/date.h"
-#else
-
-//#if( defined(_MSC_VER) && _MSC_VER < 1800 )
-//#if( defined(_MSC_VER) )  //Doesnt look like MSVS 2017 has strptime.
-#if( defined(_WIN32) )
-#define HAS_NATIVE_STRPTIME 0
-#else
-#define HAS_NATIVE_STRPTIME 1
-#endif
-
-#if( HAS_NATIVE_STRPTIME )
-#include <time.h>
-#endif
-
-#endif
-
+/*
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #define NOMINMAX
 #include <windows.h>
 #undef NOMINMAX
 #endif
-
-/** Checking ISO time string against boost requires linking to boost, so for now
- we'll just rely on the unit-tests to make sure we're getting things okay.
 */
-#define CHECK_TIME_STR_AGAINST_BOOST 0
 
 using namespace std;
 
@@ -97,17 +77,33 @@ namespace
 
 namespace SpecUtils
 {
-  
-  std::string to_common_string( const boost::posix_time::ptime &t, const bool twenty_four_hour )
+  // If smallest or largest representable time point, or zero (uninitialized - digital radiation
+  //  measurements from Jan 01, 1970 dont exist anymore), then assume "special", in analogy with
+  //  boost::posix_time::ptime, that we upgraded the code from.
+  bool is_special( const SpecUtils::time_point_t &t )
   {
-    if( t.is_special() )
+    const SpecUtils::time_point_t::duration dur = t.time_since_epoch();
+    return ((dur == SpecUtils::time_point_t::duration::min())
+            || (dur == SpecUtils::time_point_t::duration::max())
+            || (dur == SpecUtils::time_point_t::duration::zero())
+            );
+  }//is_special(...)
+
+
+  std::string to_common_string( const SpecUtils::time_point_t &t, const bool twenty_four_hour )
+  {
+    if( is_special(t) )
       return "not-a-date-time";
     
-    const int year = static_cast<int>( t.date().year() );
-    const int day = static_cast<int>( t.date().day() );
-    int hour = static_cast<int>( t.time_of_day().hours() );
-    const int mins = static_cast<int>( t.time_of_day().minutes() );
-    const int secs = static_cast<int>( t.time_of_day().seconds() );
+    const chrono::time_point<chrono::system_clock,date::days> t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    int hour = static_cast<int>( time_of_day.hours().count() );
+    const int mins = static_cast<int>( time_of_day.minutes().count() );
+    const int secs = static_cast<int>( time_of_day.seconds().count() );
     
     bool is_pm = (hour >= 12);
     
@@ -119,33 +115,56 @@ namespace SpecUtils
         hour = 12;
     }
     
-    const char * const month = month_number_to_Str( t.date().month() );
+    
+    const char * const month = month_number_to_Str( static_cast<unsigned>(t_ymd.month()) );
     
     char buffer[64];
     snprintf( buffer, sizeof(buffer), "%i-%s-%04i %02i:%02i:%02i%s",
              day, month, year, hour, mins, secs, (twenty_four_hour ? "" : (is_pm ? " PM" : " AM")) );
     
+    // For development, check if we can get the same answer using the date library
+    const char *fmt_flgs = twenty_four_hour ? "%d-%b-%Y %H:%M:%S" : "%d-%b-%Y %I:%M:%S %p";
+    string answer = date::format(fmt_flgs, date::floor<chrono::seconds>(t));
+    if( answer.size() && (answer.front() == '0') )
+      answer = answer.substr(1);
+    
+    assert( answer == buffer );
+    
     return buffer;
   }//to_common_string
   
   
-  std::string to_vax_string( const boost::posix_time::ptime &t )
+  std::string to_vax_string( const SpecUtils::time_point_t &t )
   {
-    //Ex. "2014-Sep-19 14:12:01.62"
-    if( t.is_special() )
+    //Ex. "19-Sep-2014 14:12:01.62"
+    if( is_special(t) )
       return "";
     
-    const int year = static_cast<int>( t.date().year() );
-    const char * const month = month_number_to_Str( t.date().month() );
-    const int day = static_cast<int>( t.date().day() );
-    const int hour = static_cast<int>( t.time_of_day().hours() );
-    const int mins = static_cast<int>( t.time_of_day().minutes() );
-    const int secs = static_cast<int>( t.time_of_day().seconds() );
-    const int hundreth = static_cast<int>( 0.5 + ((t.time_of_day().total_milliseconds() % 1000) / 10.0) ); //round to neares hundreth of a second
+    const auto t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    int hour = static_cast<int>( time_of_day.hours().count() );
+    const int mins = static_cast<int>( time_of_day.minutes().count() );
+    const int secs = static_cast<int>( time_of_day.seconds().count() );
+    const char * const month = month_number_to_Str( static_cast<unsigned>(t_ymd.month()) );
+    const auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
+    // We'll round to nearest hundredth; not really sure if rounding, or truncating is the proper thing to do.
+    const int hundreth = static_cast<int>( std::round( microsecs.count() / 10000.0 ) ); //round to nearest hundredth of a second
     
     char buffer[32];
     snprintf( buffer, sizeof(buffer), "%02i-%s-%04i %02i:%02i:%02i.%02i",
              day, month, year, hour, mins, secs, hundreth );
+    
+    
+    // For development, check if we can get the same answer using the date library
+    string answer = date::format("%d-%b-%Y %H:%M:%S", date::floor<chrono::seconds>(t));
+    char fractional[32];
+    snprintf(fractional, sizeof(fractional), ".%02i", hundreth);
+    answer += fractional;
+    assert( answer == buffer );
     
 #if(PERFORM_DEVELOPER_CHECKS)
     if( strlen(buffer) != 23 )
@@ -159,33 +178,36 @@ namespace SpecUtils
 #endif
     
     return buffer;
-  }//std::string to_vax_string( const boost::posix_time::ptime &t );
+  }//std::string to_vax_string( const SpecUtils::time_point_t &t );
   
   
-  std::string print_to_iso_str( const boost::posix_time::ptime &t,
+  std::string print_to_iso_str( const SpecUtils::time_point_t &t,
                                const bool extended )
   {
-    if( t.is_special() )
+    if( is_special(t) )
       return "not-a-date-time";
-    //should try +-inf as well
     
-    const int year = static_cast<int>( t.date().year() );
-    const int month = static_cast<int>( t.date().month() );
-    const int day = static_cast<int>( t.date().day() );
-    const int hour = static_cast<int>( t.time_of_day().hours() );
-    const int mins = static_cast<int>( t.time_of_day().minutes() );
-    const int secs = static_cast<int>( t.time_of_day().seconds() );
-    double frac = t.time_of_day().fractional_seconds()
-    / double(boost::posix_time::time_duration::ticks_per_second());
+    const auto t_as_days = date::floor<date::days>(t);
+    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    const int year = static_cast<int>( t_ymd.year() );
+    const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
+    const int month = static_cast<int>( static_cast<unsigned>( t_ymd.month() ) );
+    const int hour = static_cast<int>( time_of_day.hours().count() );
+    const int mins = static_cast<int>( time_of_day.minutes().count() );
+    const int secs = static_cast<int>( time_of_day.seconds().count() );
+    const auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
+    const double frac = 1.0E-6*microsecs.count();
     
     char buffer[256];
     if( extended ) //"2014-04-14T14:12:01.621543"
       snprintf( buffer, sizeof(buffer),
-               "%i-%.2i-%.2iT%.2i:%.2i:%09.6f",
+               "%.4i-%.2i-%.2iT%.2i:%.2i:%09.6f",
                year, month, day, hour, mins, (secs+frac) );
     else           //"20140414T141201.621543"
       snprintf( buffer, sizeof(buffer),
-               "%i%.2i%.2iT%.2i%.2i%09.6f",
+               "%.4i%.2i%.2iT%.2i%.2i%09.6f",
                year, month, day, hour, mins, (secs+frac) );
     
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -210,146 +232,49 @@ namespace SpecUtils
     if( result_len > 1 && buffer[result_len]==point )
       buffer[result_len--] = '\0';
     
-#if(PERFORM_DEVELOPER_CHECKS && CHECK_TIME_STR_AGAINST_BOOST )
-    string correctAnswer = extended
-    ? boost::posix_time::to_iso_extended_string( t )
-    : boost::posix_time::to_iso_string( t );
     
-    if( correctAnswer.find(".") != string::npos )
+    // For development, check if we can get the same answer using the date library
+    //  It looks like we reliably can!
+    //  TODO: decide on one implementation or the other
+    const char *fmt_flgs = extended ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
+    string answer = date::format(fmt_flgs, t);
+    // Trim trailing zeros
+    // Note that `point` may not be '.'!!
+    const size_t dec_pos = answer.find(point);
+    if( (dec_pos != 0) && (dec_pos != string::npos) )
     {
-      result_len = correctAnswer.size() - 1;
-      while( result_len > 1 && correctAnswer[result_len]=='0' )
-        correctAnswer = correctAnswer.substr( 0, result_len-- );
-      
-      if( result_len > 1 && buffer[result_len]==point )
-        correctAnswer = correctAnswer.substr( 0, result_len-- );
-    }//if( correctAnswer.find(".") != string::npos )
-    
-    if( correctAnswer != buffer )
-    {
-      char errormsg[1024];
-      snprintf( errormsg, sizeof(errormsg),
-               "Failed to format date correctly for %sextended iso format. Expected: '%s', got: '%s'",
-               (extended ? "" : "non-"),
-               correctAnswer.c_str(), buffer );
-      log_developer_error( __func__, errormsg );
+      while( (answer.size() > dec_pos) && ((answer.back() == '0') || (answer.back() == point)))
+        answer = answer.substr(0,answer.size() - 1);
     }
-#endif
-    
+     
+    assert( answer == buffer );
     
     return buffer;
-  }//std::string to_extended_iso_string( const boost::posix_time::ptime &t )
+  }//std::string to_extended_iso_string( const SpecUtils::time_point_t &t )
   
-  std::string to_extended_iso_string( const boost::posix_time::ptime &t )
+  std::string to_extended_iso_string( const SpecUtils::time_point_t &t )
   {
     return print_to_iso_str( t, true );
   }
   
-  std::string to_iso_string( const boost::posix_time::ptime &t )
+  std::string to_iso_string( const SpecUtils::time_point_t &t )
   {
     return print_to_iso_str( t, false );
-  }//std::string to_iso_string( const boost::posix_time::ptime &t )
+  }//std::string to_iso_string( const SpecUtils::time_point_t &t )
   
   
-  boost::posix_time::ptime time_from_string( const char *time_string )
-  {
-#define CREATE_datetimes_TEST_FILE 0
-    
-#if( CREATE_datetimes_TEST_FILE )
-    static std::mutex datetimes_file_mutex;
-    static int ntimes_called = 0;
-    string inputstr = time_string;
-    SpecUtils::ireplace_all(inputstr, ",", "");
-    if( inputstr.size() && inputstr[0]=='#' )
-      inputstr = inputstr.substr(1);
-    
-    //#ifndef _WIN32
-    auto result = time_from_string_strptime( time_string, MiddleEndianFirst );
-    //#else
-    //    auto result = time_from_string_boost( time_string );
-    //#endif
-    
-    if( inputstr.empty() )
-      return result;
-    
-    std::lock_guard<std::mutex> lock( datetimes_file_mutex );
-    ++ntimes_called;
-    if( (ntimes_called % 1000) == 0 )
-      cerr << "Warning, time_from_string() is creating datetimes.txt test file" << endl;
-    
-    ofstream output( "datetimes.txt", ios::out | ios::app );
-    
-    if( output )
-      output << inputstr << "," << SpecUtils::to_extended_iso_string(result) << "\r\n";
-    else
-      cerr << "Failed to open datetimes.txt for appending" << endl;
-    
-    return result;
-#else  //CREATE_datetimes_TEST_FILE
-    
-    return time_from_string_strptime( time_string, MiddleEndianFirst );
-#endif
-  }//boost::posix_time::ptime time_from_string( const char *time_string )
-  
-  
-  
-#if( !USE_HH_DATE_LIB )
-#  if( defined(_WIN32) )
-#    define timegm _mkgmtime
-#  endif
-  
-  bool strptime_wrapper( const char *s, const char *f, struct tm *t )
-  {
-    //For the testTimeFromString unit test on my mac, the native take strptime
-    //  takes 302188us to run, vs the c++11 version taking 4113835us.
-    //  ~10 times slower, so preffer native strptime where available.
-    
-#if( HAS_NATIVE_STRPTIME )
-    return (strptime(s,f,t) != nullptr);
-#else
-    //*t = std::tm();  //should already be done
-    //memset( t, 0, sizeof(*t) );  //Without this some tm fields dont make sense for some formats...
-    
-    
-#if(defined(_WIN32))
-    //see https://developercommunity.visualstudio.com/content/problem/18311/stdget-time-asserts-with-istreambuf-iterator-is-no.html
-    //if( strlen( f ) < strlen( s ) )
-    //  return false;
-#endif
-    
-    //Arg! Windows VS2017 get_time(...) doesnt say it fails when it should!
-    
-    std::istringstream input( s );
-    input.imbue( std::locale( setlocale( LC_ALL, nullptr ) ) );
-    input >> std::get_time( t, f );
-    if( input.fail() )
-      return false;
-    
-    //cout << "Format '" << f << "' parsed '" << s << "' to " << std::put_time(t, "%c") << endl;
-    /*
-     cout
-     << "seconds after the minute [0-60]: " << t.tm_sec << endl
-     << "minutes after the hour [0-59]: " << t.tm_min << endl
-     << "hours since midnight [0-23]: " << t.tm_hour << endl
-     << "day of the month [1-31]: " << t.tm_mday << endl
-     << "months since January [0-11]: " << t.tm_mon << endl
-     << "years since 1900: " << t.tm_year << endl
-     << "days since Sunday [0-6]: " << t.tm_wday << endl
-     << "days since January 1 [0-365]: " << t.tm_yday << endl
-     << "Daylight Savings Time flag: " << t.tm_isdst << endl
-     << "offset from UTC in seconds: " << t.tm_gmtoff << endl
-     //<< "timezone abbreviation: " << (t.tm_zone ? (const char *)t.tm_zone : "null")
-     << endl;
-     */
-    
-    return true;
-#endif
-  }//char *strptime_wrapper(...)
-#endif //USE_HH_DATE_LIB
-  
-  boost::posix_time::ptime time_from_string_strptime( std::string time_string,
+  SpecUtils::time_point_t time_from_string( std::string time_string,
                                                      const DateParseEndianType endian )
   {
+    // A note on the current implementation (20220904):
+    //  This function has evolved from ancient compilers (i.e., pre c++11) on all different
+    //  platforms, including ones that didnt support strptime, to using boost, to the current
+    //  implementation that assumes C++14, and uses HH's date library.   Along the way there
+    //  was a lot of platform specific workarounds, for all the wacky spectrum file date
+    //  formats, but its possible that a lot of them may no longer be necessary - wcjohns needs
+    //  to go through and cleanup the implementation, as this a function that can take up
+    //  notable time
+     
 #if(PERFORM_DEVELOPER_CHECKS)
     const string develop_orig_str = time_string;
 #endif
@@ -358,13 +283,6 @@ namespace SpecUtils
     SpecUtils::ireplace_all( time_string, "  ", " " );
     SpecUtils::ireplace_all( time_string, "_T", "T" );  //Smiths NaI HPRDS: 2009-11-10_T14:47:12Z
     SpecUtils::trim( time_string );
-    
-#ifdef _WIN32
-    // On MinGW
-    //  - it seems we need "Apr" and not "APR".
-    //  - AM/PM doesnt seem to work
-    //  - lots of other errors
-#endif
     
     
     //Replace 'T' with a space to almost cut the number of formats to try in
@@ -409,14 +327,14 @@ namespace SpecUtils
         //  cerr << "Failed to convert '" << offset << "' to time duration, from string '" << time_string << "'" << endl;
         //}
         
-        
         //Should also make sure gmtoffset is a reasonalbe value.
         
         //      cout << "offset for '" << time_string << "' is '" << offset << "' with normal time '" <<  normal<< "'" << endl;
         time_string = normal;
       }//if( signpos != string::npos )
     }//if( offsetcolon != string::npos )
-    
+  
+    /*
 #if( defined(_WIN32) && defined(_MSC_VER) )
     //Right now everything is uppercase; for at least MSVC 2012, abreviated months, such as
     //  "Jan", "Feb", etc must start with a capital, and be followed by lowercase
@@ -431,16 +349,14 @@ namespace SpecUtils
       }
     }
 #endif
+     */
     
-    //strptime(....) cant handle fractions of second (because tm doesnt either)
-    //  so we will manually convert fractions of seconds.
-    boost::posix_time::time_duration fraction(0,0,0);
-    //int fraction_nano_sec = 0;
-    
+    // SpecUtils::time_point_t only keeps to microsecond precision, so strings like
+    //  "22-Mar-99 05.06.07.000000888 AM" wont parse; so we'll truncate, for the moment
     size_t fraccolon = time_string.find_last_of( ':' );
     
     //The time may not have ":" characters in it, like ISO times, so find the space
-    //  that seperates the date and the time.
+    //  that separates the date and the time.
     if( fraccolon == string::npos )
     {
       //Be careful of dates like "01.Nov.2010 214335" or "May. 21 2013 070642"
@@ -449,10 +365,9 @@ namespace SpecUtils
       const size_t seppos = time_string.find_first_of( ' ' );
       fraccolon = ((seppos > 6) ? seppos : fraccolon);
     }
-      
+    
     if( fraccolon != string::npos )
     {
-      /// \TODO: This munging around messes up on strings like "22/03/99 5.06", or "22-mar-1999 5.06.07"
       const size_t period = time_string.rfind( '.' );  //For string strings like "22-MAR-99 05.06.07.888 AM", we will search from the back
       
       //Check period is greater than three places to the right of a space
@@ -466,220 +381,183 @@ namespace SpecUtils
         }
       }
       
-      //const size_t period = time_string.find( '.', fraccolon+1 );
       //Check that we found the period, and each side
       if( period > (fraccolon+1)
           && aftertime
           && period != string::npos && period > 0 && (period+1) < time_string.size()
           && isdigit(time_string[period-1]) && isdigit(time_string[period+1]) )
       {
+        // Check if we need to truncate the precision down to microseconds
         const size_t last = time_string.find_first_not_of( "0123456789", period+1 );
-        string fracstr = ((last!=string::npos)
-                          ? time_string.substr(period+1,last-period-1)
-                          : time_string.substr(period+1));
-        
-        //Assume microsecond resolution at the best (note
-        //  boost::posix_time::nanosecond isnt available on my OS X install)
-        const size_t ndigits = 9;
-        //        const uint64_t invfrac = static_cast<uint64_t>(1E9);
-        const auto nticks = boost::posix_time::time_duration::ticks_per_second();
-        
-        if( fracstr.size() < ndigits )
-          fracstr.resize( ndigits, '0' );
-        else if( fracstr.size() > ndigits )
-          fracstr.insert( ndigits, "." );
-        
-        
-        double numres = 0.0;
-        if( (stringstream(fracstr) >> numres) && !IsNan(numres) && !IsInf(numres) )
+        if( last == string::npos )
         {
-          const double frac = std::round( numres * nticks * 1.0E-9 );
-          const auto fractions = static_cast<boost::posix_time::time_duration::fractional_seconds_type>( frac );
-          fraction = boost::posix_time::time_duration(0,0,0,fractions);
-        }else
+          // Numbers go to end of string, eg "22-Mar-99 5.6.7.0000008888"
+          if( (time_string.size() - period - 1) > 6 )
+            time_string.erase(begin(time_string) + period + 7, end(time_string));
+        }else if( (last - period) > 6 ) //
         {
-#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-          log_developer_error( __func__, ("Failed to convert fraction '" + fracstr + "' to double").c_str() );
-#endif
+          // Numbers do not go to end of string, eg "22-Mar-99 5.6.7.0000008888 AM"
+          time_string.erase( begin(time_string) + period + 7,  begin(time_string) + last );
         }
-        
-        //int64_t numres = 0;  //using int will get rounding wrong
-        //if( (stringstream(fracstr) >> numres) )
-        //        {
-        //          //fraction_nano_sec = numres;
-        //          boost::posix_time::time_duration::fractional_seconds_type fractions = numres*nticks/invfrac;
-        //          fraction = boost::posix_time::time_duration(0,0,0,fractions);
-        //        }else
-        //          cerr << "Failed to convert fraction '" << fracstr << "' to double" << endl;
-        
-        string normal = time_string.substr(0,period);
-        if( last != string::npos )
-          normal += time_string.substr(last);
-
-        time_string = normal;
       }//if( period != string::npos )
     }//if( fraccolon != string::npos )
     
-    //With years like 2070, 2096, and such, strptime seems to fail badly, so we
-    //  will fix them up a bit.
-    //Assumes the first time you'll get four numbers in a row, it will be the year
-    bool add100Years = false;
-    if( time_string.size() > 5 )
-    {
-      for( size_t i = 0; i < time_string.size()-4; ++i )
-      {
-        if( isdigit(time_string[i]) && isdigit(time_string[i+1])
-           && isdigit(time_string[i+2]) && isdigit(time_string[i+3]) )
-        {
-          int value;
-          if( stringstream(time_string.substr(i,4)) >> value )
-          {
-            //TODO: I havent yet determined what year this issue starts at
-            if( value > 2030 && value < 2100 )
-            {
-              char buffer[8];
-              snprintf( buffer, sizeof(buffer), "%i", value - 100 );
-              time_string[i] = buffer[0];
-              time_string[i+1] = buffer[1];
-              time_string[i+2] = buffer[2];
-              time_string[i+3] = buffer[3];
-              add100Years = true;
-            }
-          }//if( stringstream(time_string.substr(i,4)) >> value )
-          
-          break;
-        }//if( four numbers in a row )
-      }//for( size_t i = 0; i < time_string.size(); ++i )
-    }//if( time_string.size() > 5 )
+    // I dont think we should get a false-positive for checking for AM PM (e.g., from a month
+    //  spelled out or something)
+    const bool has_am_pm = (SpecUtils::icontains(time_string, "AM")
+                            || SpecUtils::icontains(time_string, "PM"));
     
     //middle: whether to try a middle endian (date start with month number)
-    //  date decoding first, or alternetavely little endian (date start with day
+    //  date decoding first, or alternatively little endian (date start with day
     //  number).  Both endians will be tried, this just selects which one first.
     const bool middle = (endian == MiddleEndianFirst);
     const bool only = (endian == MiddleEndianOnly || endian == LittleEndianOnly);
     
-    const char * const formats[] =
+    // The `bool` in the std::pair indicates whether the format flag reads in AM/PM or not.
+    //  Above, we checked for the "AM" and "PM" strings, so to save a little time, and avoid
+    //  missing a PM (a non-AM/PM aware format flag will just ignore the PM, and be
+    //  successful), we'll only use format flags that match `has_am_pm`.  I'm not crazy
+    //  about this, but seems to work, for now
+    static const std::pair<bool, const char *> formats[] =
     {
-      "%Y-%m-%d%n%I:%M:%S%n%p", //2010-01-15 06:21:15 PM
-      "%Y-%m-%d%n%H:%M:%SZ", //2010-01-15T23:21:15Z  //I think this is the most common format in N42-2012 files, so try it first.
-      "%Y-%m-%d%n%H:%M:%S", //2010-01-15 23:21:15    //  Sometimes the N42 files dont have the Z though, or have some offset (we'll ignore)
-      "%Y%m%d%n%H%M%S",  //20100115T232115           //ISO format
-      "%d-%b-%Y%n%r",       //1-Oct-2004 12:34:42 AM  //"%r" ~ "%I:%M:%S %p"
-      "%d-%b-%y%n%r", //'15-MAY-14 08:30:44 PM'  (disambiguous: May 15 2014)
-      "%Y%m%d%n%H:%M:%S",  //20100115T23:21:15
-      (middle ? "%m/%d/%Y%n%I:%M%n%p" : "%d/%m/%Y%n%I:%M%n%p"), //1/18/2008 2:54 PM
-      (only ? "" : (middle ? "%d/%m/%Y%n%I:%M%n%p" : "%m/%d/%Y%n%I:%M%n%p")),
-      (middle ? "%m/%d/%Y%n%r" : "%d/%m/%Y%n%r"), //1/18/2008 2:54:44 PM
-      (only ? "" : (middle ? "%d/%m/%Y%n%r" : "%m/%d/%Y%n%r")),
-      (middle ? "%m/%d/%Y%n%H:%M:%S" : "%d/%m/%Y%n%H:%M:%S"), //08/05/2014 14:51:09
-      (only ? "" : (middle ? "%d/%m/%Y%n%H:%M:%S" : "%m/%d/%Y%n%H:%M:%S")),
-      (middle ? "%m/%d/%Y%n%H:%M" : "%d/%m/%Y%n%H:%M"), //08/05/2014 14:51
-      (only ? "" : (middle ? "%d/%m/%Y%n%H:%M" : "%m/%d/%Y%n%H:%M")),
-      (middle ? "%m-%d-%Y%n%I:%M%n%p" : "%d-%m-%Y%n%I:%M%n%p"), //14-10-2014 6:15 PM
-      (only ? "" : (middle ? "%d-%m-%Y%n%I:%M%n%p" : "%m-%d-%Y%n%I:%M%n%p" )),
-      (middle ? "%m-%d-%Y%n%I:%M:%S%n%p" : "%d-%m-%Y%n%I:%M:%S%n%p"), //14-10-2014 06:15:52 PM
-      (only ? "" : (middle ? "%d-%m-%Y%n%I:%M:%S%n%p" : "%m-%d-%Y%n%I:%M:%S%n%p" )),
-      (middle ? "%m-%d-%Y%n%H:%M:%S" : "%d-%m-%Y%n%H:%M:%S"), //14-10-2014 16:15:52
-      (only ? "" : (middle ? "%d-%m-%Y%n%H:%M:%S" : "%m-%d-%Y%n%H:%M:%S" )),
-      (middle ? "%m-%d-%Y%n%H:%M" : "%d-%m-%Y%n%H:%M"), //14-10-2014 16:15
-      (only ? "" : (middle ? "%d-%m-%Y%n%H:%M" : "%m-%d-%Y%n%H:%M" )),
-#if( defined(_WIN32) && defined(_MSC_VER) )
-      (middle ? "%m %d %Y %H:%M:%S" : "%d %m %Y %H:%M:%S"), //14 10 2014 16:15:52
-      (only ? "" : (middle ? "%d %m %Y %H:%M:%S" : "%m %d %Y %H:%M:%S")),
-#else
-      (middle ? "%m%n%d%n%Y%n%H:%M:%S" : "%d%n%m%n%Y%n%H:%M:%S"), //14 10 2014 16:15:52
-      (only ? "" : (middle ? "%d%n%m%n%Y%n%H:%M:%S" : "%m%n%d%n%Y%n%H:%M:%S" )),
-#endif
-      "%d-%b-%y%n%H:%M:%S", //16-MAR-06 13:31:02, or "12-SEP-12 11:23:30"
-      "%d-%b-%Y%n%I:%M:%S%n%p", //31-Aug-2005 6:38:04 PM,
-      "%d %b %Y%n%I:%M:%S%n%p", //31 Aug 2005 6:38:04 PM
-      "%b %d %Y%n%I:%M:%S%n%p", //Mar 22, 1999 5:06:07 AM
-      "%d-%b-%Y%n%H:%M:%S", //31-Aug-2005 12:38:04,
-      "%d %b %Y%n%H:%M:%S", //31 Aug 2005 12:38:04
-      "%d-%b-%Y%n%H:%M:%S%nZ",//9-Sep-2014T20:29:21 Z
-      (middle ? "%m-%m-%Y%n%H:%M:%S" : "%d-%m-%Y%n%H:%M:%S" ), //"10-21-2015 17:20:04" or "21-10-2015 17:20:04"
-      (only ? "" : (middle ? "%d-%m-%Y%n%H:%M:%S" : "%m-%m-%Y%n%H:%M:%S" )),
-      "%d.%m.%y%n%H:%M:%S",  //28.02.13 13:42:47      //We need to check '%y' before '%Y'
-      "%d.%m.%Y%n%H:%M:%S",  //28.02.2013 13:42:47
+      {true, "%Y-%m-%d%n%I:%M:%S%n%p"},  // 2010-01-15 06:21:15 PM
+      {false, "%Y-%m-%d%n%H:%M:%SZ"},    // 2010-01-15T23:21:15Z    //I think this is the most common format in N42-2012 files, so try it early on.
+      {false, "%Y-%m-%d%n%H:%M:%S"},     // 2010-01-15 23:21:15     //  Sometimes the N42 files don't have the Z though, or have some offset (we'll ignore)
+      {false, "%Y%m%d%n%H%M%S"},         // 20100115T232115         //ISO format
+      {true, "%d-%b-%Y%n%r"},            // 1-Oct-2004 12:34:42 AM  //"%r" ~ "%I:%M:%S %p"
+      {true, "%d-%b-%y%n%r"},            // '15-MAY-14 08:30:44 PM'  (disambiguate: May 15 2014)
+      {false, "%Y%m%d%n%H:%M:%S"},       // 20100115T23:21:15
+      {true, (middle ? "%m/%d/%Y%n%I:%M%n%p" : "%d/%m/%Y%n%I:%M%n%p")},  //1/18/2008 2:54 PM
+      {true, (only ? "" : (middle ? "%d/%m/%Y%n%I:%M%n%p" : "%m/%d/%Y%n%I:%M%n%p"))},
+      {true, (middle ? "%m/%d/%Y%n%r" : "%d/%m/%Y%n%r")},                //1/18/2008 2:54:44 PM
+      {true, (only ? "" : (middle ? "%d/%m/%Y%n%r" : "%m/%d/%Y%n%r"))},
+      {false, (middle ? "%m/%d/%Y%n%H:%M:%S" : "%d/%m/%Y%n%H:%M:%S")},   //08/05/2014 14:51:09
+      {false, (only ? "" : (middle ? "%d/%m/%Y%n%H:%M:%S" : "%m/%d/%Y%n%H:%M:%S"))},
+      {false, (middle ? "%m/%d/%Y%n%H:%M" : "%d/%m/%Y%n%H:%M")},         //08/05/2014 14:51
+      {false, (only ? "" : (middle ? "%d/%m/%Y%n%H:%M" : "%m/%d/%Y%n%H:%M"))},
+      {true, (middle ? "%m-%d-%Y%n%I:%M%n%p" : "%d-%m-%Y%n%I:%M%n%p")},  //14-10-2014 6:15 PM
+      {true, (only ? "" : (middle ? "%d-%m-%Y%n%I:%M%n%p" : "%m-%d-%Y%n%I:%M%n%p" ))},
+      {true, (middle ? "%m-%d-%Y%n%I:%M:%S%n%p" : "%d-%m-%Y%n%I:%M:%S%n%p")}, //14-10-2014 06:15:52 PM
+      {true, (only ? "" : (middle ? "%d-%m-%Y%n%I:%M:%S%n%p" : "%m-%d-%Y%n%I:%M:%S%n%p" ))},
+      {false, (middle ? "%m-%d-%Y%n%H:%M:%S" : "%d-%m-%Y%n%H:%M:%S")}, //14-10-2014 16:15:52
+      {false, (only ? "" : (middle ? "%d-%m-%Y%n%H:%M:%S" : "%m-%d-%Y%n%H:%M:%S" ))},
+      {false, (middle ? "%m-%d-%Y%n%H:%M" : "%d-%m-%Y%n%H:%M")}, //14-10-2014 16:15
+      {false, (only ? "" : (middle ? "%d-%m-%Y%n%H:%M" : "%m-%d-%Y%n%H:%M" ))},
+//#if( defined(_WIN32) && defined(_MSC_VER) )
+//      (middle ? "%m %d %Y %H:%M:%S" : "%d %m %Y %H:%M:%S"), //14 10 2014 16:15:52
+//      (only ? "" : (middle ? "%d %m %Y %H:%M:%S" : "%m %d %Y %H:%M:%S")),
+//#else
+      {false, (middle ? "%m%n%d%n%Y%n%H:%M:%S" : "%d%n%m%n%Y%n%H:%M:%S")}, //14 10 2014 16:15:52
+      {false, (only ? "" : (middle ? "%d%n%m%n%Y%n%H:%M:%S" : "%m%n%d%n%Y%n%H:%M:%S" ))},
+//#endif
+      {false, "%d-%b-%y%n%H:%M:%S"}, //16-MAR-06 13:31:02, or "12-SEP-12 11:23:30"
+      {true, "%d-%b-%Y%n%I:%M:%S%n%p"}, //31-Aug-2005 6:38:04 PM,
+      {true, "%d %b %Y%n%I:%M:%S%n%p"}, //31 Aug 2005 6:38:04 PM
+      {true, "%b %d %Y%n%I:%M:%S%n%p"}, //Mar 22, 1999 5:06:07 AM
+      {false, "%d-%b-%Y%n%H:%M:%S"}, //31-Aug-2005 12:38:04,
+      {false, "%d %b %Y%n%H:%M:%S"}, //31 Aug 2005 12:38:04
+      {false, "%d-%b-%Y%n%H:%M:%S%nZ"},//9-Sep-2014T20:29:21 Z
+      {false, (middle ? "%m-%m-%Y%n%H:%M:%S" : "%d-%m-%Y%n%H:%M:%S" )}, //"10-21-2015 17:20:04" or "21-10-2015 17:20:04"
+      {false, (only ? "" : (middle ? "%d-%m-%Y%n%H:%M:%S" : "%m-%m-%Y%n%H:%M:%S" ))},
+      {false, "%d.%m.%y%n%H:%M:%S"},  //28.02.13 13:42:47      //We need to check '%y' before '%Y'
+      {false, "%d.%m.%Y%n%H:%M:%S"},  //28.02.2013 13:42:47
       //      (middle ? "%m.%d.%Y%n%H:%M:%S" : "%d.%m.%Y%n%H:%M:%S"), //26.05.2010 02:53:49
       //      (only ? "" : (middle ? "%d.%m.%Y%n%H:%M:%S" : "%m.%d.%Y%n%H:%M:%S")),
-      "%b. %d %Y%n%H:%M:%S",//May. 21 2013  07:06:42
+      {false, "%b. %d %Y%n%H:%M:%S"},//May. 21 2013  07:06:42
       //      (middle ? "%m.%d.%y%n%H:%M:%S" : "%d.%m.%y%n%H:%M:%S"),  //'28.02.13 13:42:47'
-      (middle ? "%m.%d.%y%n%H:%M:%S" : "%d.%m.%y%n%H:%M:%S"), //'3.14.06 10:19:36' or '28.02.13 13:42:47'
-      (only ? "" : (middle ? "%d.%m.%y%n%H:%M:%S" : "%m.%d.%y%n%H:%M:%S" )),
-      (middle ? "%m.%d.%Y%n%H:%M:%S" : "%d.%m.%Y%n%H:%M:%S"), //'3.14.2006 10:19:36' or '28.02.2013 13:42:47'
-      (only ? "" : (middle ? "%d.%m.%Y%n%H:%M:%S" : "%m.%d.%Y%n%H:%M:%S" )),
-      "%d.%m.%y%n%H:%M:%S",
+      {false, (middle ? "%m.%d.%y%n%H:%M:%S" : "%d.%m.%y%n%H:%M:%S")}, //'3.14.06 10:19:36' or '28.02.13 13:42:47'
+      {false, (only ? "" : (middle ? "%d.%m.%y%n%H:%M:%S" : "%m.%d.%y%n%H:%M:%S" ))},
+      {false, (middle ? "%m.%d.%Y%n%H:%M:%S" : "%d.%m.%Y%n%H:%M:%S")}, //'3.14.2006 10:19:36' or '28.02.2013 13:42:47'
+      {false, (only ? "" : (middle ? "%d.%m.%Y%n%H:%M:%S" : "%m.%d.%Y%n%H:%M:%S" ))},
+      {false, "%d.%m.%y%n%H:%M:%S"},
       //      (only ? "" : (middle ? "%d.%m.%y%n%H:%M:%S" : "%m.%d.%y%n%H:%M:%S")),
-      "%Y.%m.%d%n%H:%M:%S", //2012.07.28 16:48:02
-      "%d.%b.%Y%n%H:%M:%S",//01.Nov.2010 21:43:35
-      "%Y%m%d%n%H:%M:%S",  //20100115 23:21:15
-      "%Y-%b-%d%n%H:%M:%S", //2017-Jul-07 09:16:37
-      "%Y/%m/%d%n%H:%M:%S", //"2020/02/12 14:57:39"
-      "%Y/%m/%d%n%H:%M", //"2020/02/12 14:57"
-      "%Y-%m-%d%n%H-%M-%S", //2018-10-09T19-34-31_27 (not sure what the "_27" exactly means)
-      "%Y%m%d%n%H%M",  //20100115T2321
-      (middle ? "%m/%d/%y%n%r" : "%d/%m/%y%n%r"), //'6/15/09 11:12:30 PM' or '15/6/09 11:12:30 PM'
-      (only ? "" : (middle ? "%d/%m/%y%n%r" : "%m/%d/%y%n%r" )),
-      (middle ? "%m/%d/%y%n%H:%M:%S" : "%d/%m/%y%n%H:%M:%S"), //'6/15/09 13:12:30' or '15/6/09 13:12:30'
-      (only ? "" : (middle ? "%d/%m/%y%n%H:%M:%S" : "%m/%d/%y%n%H:%M:%S" )),
-      (middle ? "%m-%d-%y%n%I:%M%n%p" : "%d-%m-%y%n%I:%M%n%p"), //'03-22-99 5:06 AM' or '22-03-99 5:06 AM'
-      (only ? "" : (middle ? "%d-%m-%y%n%I:%M%n%p" : "%m-%d-%y%n%I:%M%n%p" )),
+      {false, "%Y.%m.%d%n%H:%M:%S"}, //2012.07.28 16:48:02
+      {false, "%d.%b.%Y%n%H:%M:%S"},//01.Nov.2010 21:43:35
+      {false, "%Y%m%d%n%H:%M:%S"},  //20100115 23:21:15
+      {false, "%Y-%b-%d%n%H:%M:%S"}, //2017-Jul-07 09:16:37
+      {false, "%Y/%m/%d%n%H:%M:%S"}, //"2020/02/12 14:57:39"
+      {false, "%Y/%m/%d%n%H:%M"}, //"2020/02/12 14:57"
+      {false, "%Y-%m-%d%n%H-%M-%S"}, //2018-10-09T19-34-31_27 (not sure what the "_27" exactly means)
+      {false, "%Y%m%d%n%H%M"},  //20100115T2321
+      {true, (middle ? "%m/%d/%y%n%r" : "%d/%m/%y%n%r")}, //'6/15/09 11:12:30 PM' or '15/6/09 11:12:30 PM'
+      {true, (only ? "" : (middle ? "%d/%m/%y%n%r" : "%m/%d/%y%n%r" ))},
+      {false, (middle ? "%m/%d/%y%n%H:%M:%S" : "%d/%m/%y%n%H:%M:%S")}, //'6/15/09 13:12:30' or '15/6/09 13:12:30'
+      {false, (only ? "" : (middle ? "%d/%m/%y%n%H:%M:%S" : "%m/%d/%y%n%H:%M:%S" ))},
+      {true, (middle ? "%m-%d-%y%n%I:%M%n%p" : "%d-%m-%y%n%I:%M%n%p")}, //'03-22-99 5:06 AM' or '22-03-99 5:06 AM'
+      {true, (only ? "" : (middle ? "%d-%m-%y%n%I:%M%n%p" : "%m-%d-%y%n%I:%M%n%p" ))},
       
-      (middle ? "%m/%d/%y%n%I:%M%n%p" : "%d/%m/%y%n%I:%M%n%p"), //'6/15/09 05:12 PM' or '15/6/09 05:12 PM'
-      (only ? "" : (middle ? "%d/%m/%y%n%I:%M%n%p" : "%m/%d/%y%n%I:%M%n%p" )),
+      {true, (middle ? "%m/%d/%y%n%I:%M%n%p" : "%d/%m/%y%n%I:%M%n%p")}, //'6/15/09 05:12 PM' or '15/6/09 05:12 PM'
+      {true, (only ? "" : (middle ? "%d/%m/%y%n%I:%M%n%p" : "%m/%d/%y%n%I:%M%n%p" ))},
       
-      (middle ? "%m/%d/%y%n%H:%M" : "%d/%m/%y%n%H:%M"), //'6/15/09 13:12' or '15/6/09 13:12'
-      (only ? "" : (middle ? "%d/%m/%y%n%H:%M" : "%m/%d/%y%n%H:%M" )),
-      "%b %d %Y%n%I:%M%n%p", //Mar 22, 1999 5:06 AM
-      "%b %d %Y%n%H:%M:%S", //Mar 22, 1999 5:06:07
-      "%b %d %Y%n%H:%M", //Mar 22, 1999 5:06:07
-      "%d-%b-%y%n%I.%M.%S%n%p", //'22-MAR-99 05.06.07.888 AM
-      "%d-%b-%Y%n%H.%M.%S", //'22-MAR-1999 05.06'
-      (middle ? "%m-%d-%y%n%I:%M:%S%n%p" : "%d-%m-%y%n%I:%M:%S%n%p"), //'03-22-99 5:06:07 AM' or '22-03-99 5:06:07 AM'
-      (only ? "" : (middle ? "%d-%m-%y%n%I:%M:%S%n%p" : "%m-%d-%y%n%I:%M:%S%n%p" )),
-      "%Y-%m-%d%n%I:%M%n%p", //'1999-03-22 5:06 AM'
-      "%Y-%m-%d%n%H:%M", //'1999-03-22 5:06'
-      "%d/%b/%Y%n%I:%M:%S%n%p", //'22/Mar/1999 5:06:07 PM'
-      "%d/%b/%Y%n%I:%M%n%p", //'22/Mar/1999 5:06 PM'
-      "%d/%b/%Y%n%H:%M:%S", //'22/Mar/1999 5:06:07'
-      "%d/%b/%y%n%I:%M%n%p", //'22/Mar/99 5:06 PM'
-      "%d/%b/%y%n%H:%M:%S", //'22/Mar/99 5:06:07'
-      
-      "%d.%m.%y%n%H:%ML%s", //'22.3.99 5:06:01'
-      "%d.%m.%y%n%H:%M", //'22.3.99 5:06'
-      "%m-%d-%y%n%H:%M:%S", //'03-22-99 05:06:01'
-      "%m-%d-%y%n%H:%M", //'03-22-99 05:06'
-      "%y-%m-%d%n%H:%M", //'99-03-22 05:06'
-      "%d/%b/%y%n%H.%M.%S", //'22/Mar/99 5.06.07'
-      "%d/%m/%y%n%H.%M", //'22/03/99 5.06'
+      {false, (middle ? "%m/%d/%y%n%H:%M" : "%d/%m/%y%n%H:%M")}, //'6/15/09 13:12' or '15/6/09 13:12'
+      {false, (only ? "" : (middle ? "%d/%m/%y%n%H:%M" : "%m/%d/%y%n%H:%M" ))},
+      {true, "%b %d %Y%n%I:%M%n%p"}, //Mar 22, 1999 5:06 AM
+      {false, "%b %d %Y%n%H:%M:%S"}, //Mar 22, 1999 5:06:07
+      {false, "%b %d %Y%n%H:%M"}, //Mar 22, 1999 5:06:07
+      {true, "%d-%b-%Y%n%I.%M.%S%n%p"}, //'22-MAR-2010 05.06.07.888 AM
+      {true, "%d-%b-%y%n%I.%M.%S%n%p"}, //'22-MAR-99 05.06.07.888 AM
+      {false, "%d-%b-%Y%n%H.%M.%S"}, //'22-MAR-1999 05.06'
+      {true, (middle ? "%m-%d-%y%n%I:%M:%S%n%p" : "%d-%m-%y%n%I:%M:%S%n%p")}, //'03-22-99 5:06:07 AM' or '22-03-99 5:06:07 AM'
+      {true, (only ? "" : (middle ? "%d-%m-%y%n%I:%M:%S%n%p" : "%m-%d-%y%n%I:%M:%S%n%p" ))},
+      {true, "%Y-%m-%d%n%I:%M%n%p"}, //'1999-03-22 5:06 AM'
+      {false, "%Y-%m-%d%n%H:%M"}, //'1999-03-22 5:06'
+      {true, "%d/%b/%Y%n%I:%M:%S%n%p"}, //'22/Mar/1999 5:06:07 PM'
+      {true, "%d/%b/%Y%n%I:%M%n%p"}, //'22/Mar/1999 5:06 PM'
+      {false, "%d/%b/%Y%n%H:%M:%S"}, //'22/Mar/1999 5:06:07'
+      {true, "%d/%b/%y%n%I:%M%n%p"}, //'22/Mar/99 5:06 PM'
+      {false, "%d/%b/%y%n%H:%M:%S"}, //'22/Mar/99 5:06:07'
+      {false, "%d.%b.%Y%n%H%M%S"},    // '01.Nov.2010 214335'
+      {false, "%b.%n%d%n%Y%n%H%M%S"}, //'May. 21 2013 070642'
+      {false, "%d.%m.%y%n%H:%ML%s"}, //'22.3.99 5:06:01'
+      {false, "%d.%m.%y%n%H:%M"}, //'22.3.99 5:06'
+      {false, "%m-%d-%y%n%H:%M:%S"}, //'03-22-99 05:06:01'
+      {false, "%m-%d-%y%n%H:%M"}, //'03-22-99 05:06'
+      {false, "%y-%m-%d%n%H:%M"}, //'99-03-22 05:06'
+      {false, "%d/%b/%y%n%H.%M.%S"}, //'22/Mar/99 5.06.07'
+      {false, "%d/%m/%y%n%H.%M"}, //'22/03/99 5.06'
       
       //Below here are dates only, with no times
-      (middle ? "%m/%d/%Y" : "%d/%m/%Y"), //'6/15/2009' or '15/6/2009'
-      (only ? "" : (middle ? "%d/%m/%Y" : "%m/%d/%Y" )),
-      "%d-%b-%Y",           //"00-Jan-2000 "
-      "%Y/%m/%d", //"2010/01/18"
-      "%Y-%m-%d", //"2010-01-18"
-      "%Y%m%d", //"20100118"
-      "%b%n%d%n%Y", //March 22, 1999
-      "%b%n%d%n%y", //March 22, 99
-      "%b.%d.%Y", //March.22.1999
-      "%b.%d.%y", //March.22.99
-      "%d/%m/%y", //'22/03/99'
+      {false, (middle ? "%m/%d/%Y" : "%d/%m/%Y")}, //'6/15/2009' or '15/6/2009'
+      {false, (only ? "" : (middle ? "%d/%m/%Y" : "%m/%d/%Y" ))},
+      {false, "%d-%b-%Y"},           //"00-Jan-2000 "
+      {false, "%Y/%m/%d"}, //"2010/01/18"
+      {false, "%Y-%m-%d"}, //"2010-01-18"
+      {false, "%Y%m%d"}, //"20100118"
+      {false, "%b%n%d%n%Y"}, //March 22, 1999
+      {false, "%b%n%d%n%y"}, //March 22, 99
+      {false, "%b.%d.%Y"}, //March.22.1999
+      {false, "%b.%d.%y"}, //March.22.99
+      {false, "%d/%m/%y"}, //'22/03/99'
     };
     
     
     const size_t nformats = sizeof(formats) / sizeof(formats[0]);
     const char *timestr = time_string.c_str();
     
+#if( PERFORM_DEVELOPER_CHECKS )
     for( size_t i = 0; i < nformats; ++i )
     {
-#if( USE_HH_DATE_LIB )
-      if( !formats[i][0] )
+      const bool fmt_is_am_pm = formats[i].first;
+      const string fmt = formats[i].second;
+      size_t pos = fmt.find("%r");
+      if( pos == string::npos )
+        pos = fmt.find("%p");
+      assert( fmt_is_am_pm == (pos != string::npos) );
+    }
+#endif //#if( PERFORM_DEVELOPER_CHECKS )
+    
+    for( size_t i = 0; i < nformats; ++i )
+    {
+      const bool fmt_is_am_pm = formats[i].first;
+      if( has_am_pm != fmt_is_am_pm )
         continue;
       
-      using ClockType = std::chrono::system_clock;
-      std::chrono::time_point<ClockType> tp{};
+      const char * const fmt = formats[i].second;
+      
+      if( !fmt[0] )
+        continue;
+      
+      std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds> tp{};
       std::istringstream input(timestr);
 
       try
@@ -691,60 +569,54 @@ namespace SpecUtils
         //  function.
         //  (note: this was found using the version of the Date library downloaded 20200502 with
         //         git hash e12095f, so can be re-evaluated when the library is updated.)
-        if( (input >> date::parse(formats[i], tp)) )
+        if( (input >> date::parse(fmt, tp)) )
         {
-          //time_t tt = ClockType::to_time_t( tp );
-          //return boost::posix_time::from_time_t( tt ) + fraction + boost::gregorian::years( add100Years ? 100 : 0 );
-          
-          date::sys_days dp = date::floor<date::days>(tp);
-          auto ymd = date::year_month_day{dp};
-          
-          if( add100Years  )
-            ymd += date::years(100);
-          
-          auto time = date::make_time( std::chrono::duration_cast<std::chrono::microseconds>(tp-dp) );
-          if( static_cast<int>(ymd.year()) < 1400 || static_cast<int>(ymd.year()) >= 10000 )  //protect against boost throwing an exception
+          // Dates such as '6/15/09 13:12:30' will parse as '15-Jun-0009 13:12:30' for cases where
+          // "%Y" was tried before "%y".  We could change the ordering of format strings, or do some
+          // string manipulation, but for the moment we'll just check to see if the year is a
+          // reasonable value.
+          const chrono::time_point<chrono::system_clock,date::days> tp_as_days = date::floor<date::days>(tp);
+          const date::year_month_day ymd = date::year_month_day{tp_as_days};
+          const int year = static_cast<int>( ymd.year() );
+          if( year < 1000 )
             continue;
-          
-          const boost::gregorian::date bdate( static_cast<int>(ymd.year()),
-                                             static_cast<unsigned int>(ymd.month()),
-                                             static_cast<unsigned int>(ymd.day()));
-          const boost::posix_time::time_duration btime( time.hours().count(), time.minutes().count(), time.seconds().count() );
-          
-          return boost::posix_time::ptime(bdate, btime) + fraction;
-        }
+            
+          return tp;
+        }//if( we parsed the string )
       }catch( std::exception & )
       {
       }
-#else
-      struct tm t = std::tm();
-      
-      if( formats[i][0] && strptime_wrapper( timestr, formats[i], &t ) )
-      {
-        
-        if( t.tm_year <= -500 || t.tm_year > 8000 ) //protect against boost throwing an exception
-          continue;
-        
-        //cout << "Format='" << formats[i] << "' worked to give: "
-        //  << print_to_iso_str( boost::posix_time::from_time_t(timegm( &t )) + fraction + boost::gregorian::years( add100Years ? 100 : 0 ), false )
-        //  << " time_t=" << timegm(&t)
-        //  << endl;
-        
-        
-        //if( add100Years )
-        //t.tm_year += 100;
-        //std::chrono::time_point tp = system_clock::from_time_t( std::mktime(&t) ) + std::chrono::nanoseconds(fraction_nano_sec);
-        
-        return boost::posix_time::from_time_t( timegm(&t) )
-               + fraction
-               + boost::gregorian::years( add100Years ? 100 : 0 )
-        /*+ gmtoffset*/;  //ignore offset since we want time in local persons zone
-      }
-      //      return boost::posix_time::from_time_t( mktime(&tm) - timezone + 3600*daylight ) + fraction + gmtoffset;
-#endif //USE_HH_DATE_LIB
     }//for( size_t i = 0; i < nformats; ++i )
     
-    //cout << "Couldnt parse" << endl;
+    
+#define CREATE_datetimes_TEST_FILE 0
+    
+#if( CREATE_datetimes_TEST_FILE )
+    static std::mutex datetimes_file_mutex;
+    static int ntimes_called = 0;
+    string inputstr = time_string;
+    SpecUtils::ireplace_all(inputstr, ",", "");
+    if( inputstr.size() && inputstr[0]=='#' )
+      inputstr = inputstr.substr(1);
+    
+    auto result = time_from_string( time_string, MiddleEndianFirst );
+    
+    if( inputstr.empty() )
+      return result;
+    
+    std::lock_guard<std::mutex> lock( datetimes_file_mutex );
+    ++ntimes_called;
+    if( (ntimes_called % 1000) == 0 )
+      cerr << "Warning, time_from_string() is creating datetimes.txt test file" << endl;
+    
+    ofstream output( "datetimes.txt", ios::out | ios::app );
+    
+    if( output )
+      output << inputstr << "," << SpecUtils::to_extended_iso_string(result) << "\r\n";
+    else
+      cerr << "Failed to open datetimes.txt for appending" << endl;
+#endif
+    
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( develop_orig_str.size() > 5 //5 is arbitrary
@@ -752,8 +624,9 @@ namespace SpecUtils
        && std::count( begin(develop_orig_str), end(develop_orig_str), '0') < 8 )
       log_developer_error( __func__, ("Failed to parse date/time from: '" + develop_orig_str  + "' which was massaged into '" + time_string + "'").c_str() );
 #endif
-    return boost::posix_time::ptime();
-  }//boost::posix_time::ptime time_from_string_strptime( std::string time_string )
+    
+    return SpecUtils::time_point_t{};
+  }//SpecUtils::time_point_t time_from_string( std::string time_string )
   //#endif  //#ifndef _WIN32
   
   float time_duration_string_to_seconds( const std::string &duration )
@@ -827,9 +700,14 @@ namespace SpecUtils
       ++field_start;
     
     const bool is_neg = (field_start < str_len) && (input[field_start] == '-');
-    if( is_neg )
+    const bool has_plus = (field_start < str_len) && (input[field_start] == '+');
+    if( is_neg || has_plus )
+    {
       ++field_start;
-    
+      while( field_start < input.size() && isspace( input[field_start] ) )
+        ++field_start;
+    }
+
     if( field_start >= str_len )
       throw runtime_error( "empty input" );
     
@@ -856,7 +734,7 @@ namespace SpecUtils
         {   
           for( const char *ch = str_start; ch != str_end; ++ch )
           {
-            if( !isdigit(*ch) )
+            if( !isdigit(*ch) && ((*ch) != '-') && ((*ch) != '+') )
               throw runtime_error( string("Invalid character ('") + (*ch) + string("')") );
           }
 #if( __cplusplus >= 201703L )
@@ -921,6 +799,7 @@ namespace SpecUtils
   }//double delimited_duration_string_to_seconds( std::string duration )
 
 
+/*
   //  Windows
 #ifdef _WIN32
   double get_wall_time()
@@ -935,21 +814,22 @@ namespace SpecUtils
     return static_cast<double>(time.QuadPart) / freq.QuadPart;
   }//double get_wall_time()
 #else //  Posix/Linux
+*/
   double get_wall_time()
   {
-    //\todo Test std::chrono implementation and then get rid of Windows specialization
-    //return std::chrono::time_point_cast<std::chrono::microseconds>( std::chrono::system_clock::now() ).time_since_epoch().count() / 1.0E6;
-    struct timeval time;
-    if( gettimeofday(&time,NULL) )
-      return -std::numeric_limits<double>::max();
-    return static_cast<double>(time.tv_sec) + (0.000001 * time.tv_usec);
+    //struct timeval time;
+    //if( gettimeofday(&time,NULL) )
+    //  return -std::numeric_limits<double>::max();
+    //return static_cast<double>(time.tv_sec) + (0.000001 * time.tv_usec);
+    
+    const auto now = chrono::steady_clock::now();
+    return 1.0E-6 * chrono::time_point_cast<chrono::microseconds>( now ).time_since_epoch().count();
   }
-#endif
+//#endif
   
   double get_cpu_time()
   {
     return static_cast<double>(std::clock()) / CLOCKS_PER_SEC;
   }
-  
 }
 

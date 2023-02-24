@@ -127,18 +127,30 @@ namespace SpecUtils
     size_t num_channels() const;
     
     
-    /** Default contructs to type EnergyCalType::InvalidEquationType. */
+    /** Default constructs to type EnergyCalType::InvalidEquationType. */
     EnergyCalibration();
     
     /** Sets the type to #EnergyCalType::Polynomial, and the coefficients and deviation pairs to
      values passed in.  The channel energies will be created and have #num_channels entries.
      
-     Will throw exception if an invalid calibration is passed in (<2 channels, or non increasing
-     channel energies), and no member variables will be changed.
+     Will throw exception if an invalid calibration is passed in (less than sm_min_channels
+     channels, more than sm_max_channels, or non-increasing channel energies), and no member
+     variables will be changed.
      */
     void set_polynomial( const size_t num_channels,
                          const std::vector<float> &coeffs,
                          const std::vector<std::pair<float,float>> &dev_pairs );
+    
+    /** Similar to #set_polynomial, but significantly loosens the offset (i.e., zeroth calibration
+     coefficient) check, to have a value between -500 and 5000.
+     
+     This is primarily to facilitate alpha-spectroscopy energy calibrations, which may have like a
+     2500 keV offset.
+     */
+    void set_polynomial_no_offset_check( const size_t num_channels,
+                                     const std::vector<float> &coeffs,
+                                     const std::vector<std::pair<float,float>> &dev_pairs );
+    
     
     /** Functionally the same as #set_polynomial, but will set type to
      #EnergyCalType::UnspecifiedUsingDefaultPolynomial.
@@ -153,8 +165,9 @@ namespace SpecUtils
     /** Sets the type to #EnergyCalType::FullRangeFraction, and the coefficients and deviation pairs
     to values passed in.  The channel energies will be created and have #num_channels entries.
     
-    Will throw exception if an invalid calibration is passed in (<2 channels, or non increasing
-    channel energies), and no member variables will be changed.
+    Will throw exception if an invalid calibration is passed in (less than sm_min_channels
+    channels, more than sm_max_channels, or non-increasing channel energies), and no member
+    variables will be changed.
     */
     void set_full_range_fraction( const size_t num_channels,
                                   const std::vector<float> &coeffs,
@@ -168,11 +181,13 @@ namespace SpecUtils
             At most the first num_channels+1 entries will be copied internally.  If this vector has
             exactly num_channels entries, then one more will be added to the end to represent the
             upper energy of the last channel.  If it has less entries than num_channels, than an
-            exception will be thrown.
+            exception will be thrown.  For the case of a single channel, this vector must have
+            two entries.
      
     Will throw exception (without changing any member variables) if an invalid calibration is passed
-    in (<2 channels, or non monotonically increasing channel energies), or if channel energies does
-    not have at least num_channels entries.
+    in (less than sm_min_channels channels, more than sm_max_channels, or non-monotonically
+    increasing channel energies, or a single channel without two energies passed in), or if channel
+    energies does not have at least num_channels entries.
      
     \TODO: overload this function call take a rvalue reference to the vector
     */
@@ -180,7 +195,9 @@ namespace SpecUtils
                                    const std::vector<float> &channel_energies );
     
     /** Overload to use of std::move semantics (rvalues).
-     Idealy you want channel_energies to have one more entry than num_channels.
+     
+     Ideally you want channel_energies to have one more entry than num_channels, otherwise the
+     upper energy of the last channel will be guessed.
      */
     void set_lower_channel_energy( const size_t num_channels,
                                    std::vector<float> &&channel_energies );
@@ -246,16 +263,31 @@ namespace SpecUtils
     float upper_energy() const;
     
     
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
     /** Tests if the two calibrations passed in are equal for most intents and purposes.
      
      Allows some small numerical rounding to occur, and will allow polynomial and FRF to compare
      equal if they are equivalent.
     
-     Throws an std::exception with a brief explanaition when an issue is found.
+     Throws an std::exception with a brief explanation when an issue is found.
     */
     static void equal_enough( const EnergyCalibration &lhs, const EnergyCalibration &rhs );
 #endif
+    
+    /** Define a minimum number of channels to be 1; we could probably make it zero, but this
+     doesnt make much sense.
+     
+     A value of zero will cause an exception to be thrown when setting the calibration.
+     */
+    static const size_t sm_min_channels; // = 1
+    
+    /** Define a maximum number of channels to be 8 more channels than 64k (i.e., 65544);
+     this is entirely as a sanity check so some errant code doesnt try to have us allocate
+     gigabytes of ram.
+     
+     Values larger than this will cause an exception to be thrown when setting the calibration.
+     */
+    static const size_t sm_max_channels; // = 65536 + 8
     
   protected:
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
@@ -264,6 +296,23 @@ namespace SpecUtils
      Throws exception if error is found.
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
+    
+    /** Normally we expect energy offset (i.e., zeroth polynomial coefficient) to be not to large,
+     but for like alpha spectroscopy, it may be like 2500 keV, we
+     */
+    enum class EnergyCalCheckType
+    {
+      /** Absolute value of energy offset must less than 500 keV. */
+      Normal,
+      
+      /** Absolute value of energy offset must less than 5000 keV. */
+      LooseOffset
+    };//enum class EnergyCalCheckType
+    
+    void set_polynomial_internal( const EnergyCalCheckType check_type,
+                        const size_t num_channels,
+                        const std::vector<float> &coeffs,
+                        const std::vector<std::pair<float,float>> &dev_pairs );
     
     EnergyCalType m_type;
     std::vector<float> m_coefficients;

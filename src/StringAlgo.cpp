@@ -53,6 +53,38 @@
 #undef max
 #endif
 
+
+#if( SpecUtils_USE_FROM_CHARS )
+#include <charconv>
+// LLVM 14, MSVC >= 2019, and gcc 12 seem to support floating point from_char, but Apple LLVM 14 does 
+// not (and thus not macOS or iOS), and I'm unsure about Android status.
+// With MSVC 2019, from_chars is about 50% slower than boost; fast_float is just a hair slower than boost.
+//  I dont know if this is inherent, because of me doing something stupid (likely), or just that boost 
+//  is really hard to beat.
+//  The test was over 259924 lines, and a total of 48776423 bytes; repeated 100 times, with two runs each way.
+// Windows MSVC 2019:
+//   Boost: 43175 ms, 43800 ms  (i.e., ~105 MB/s)
+//   from_chars : 67889 ms, 66024 ms (i.e., ~70 MB/s)
+//   fast_float (3.5.1): 47113 ms, 47724 ms
+// Windows MSVC 2022 was also tested with similar-ish results as 2019.
+// 
+//  This is not near the ~1 GB/s fast_float bencharks list (and much closer to the strod speeds fast_float benchmark gets),
+//  so perhaps I'm doing something really wrong.
+
+// https://github.com/fastfloat/fast_float is nearly a drop-in replacement for std::from_chars, and and just about as fast as boost::spirit
+//#include "3rdparty/fast_float.h"
+
+#else
+// It would be nice to use <charconv> to do the conversion; but currently (20221005)
+//  support isnt that great. 
+//  The solution is probably to use  (which is what
+//  the compilers look to use anyway).
+#define HAVE_FLOAT_FROM_CHARS 0
+#endif
+
+
+
+
 //#include <boost/config.hpp>
 //BOOST_NO_CXX11_HDR_CODECVT
 #ifndef _WIN32
@@ -676,6 +708,8 @@ namespace SpecUtils
       return;
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+    /*
+     // This dev test can fail sometimes if the replacement string contains the pattern string
     string strcopy = input, original = input;
     size_t reslen = strcopy.size() + 1;
     while( reslen != strcopy.size() )
@@ -683,6 +717,7 @@ namespace SpecUtils
       reslen = strcopy.size();
       boost::algorithm::ireplace_all( strcopy, pattern, replacement );
     }
+     */
 #endif
     
     const size_t paternlen = strlen(pattern);
@@ -714,6 +749,7 @@ namespace SpecUtils
     }//while( found )
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+    /*
     if( strcopy != input )
     {
       stringstream msg;
@@ -736,6 +772,7 @@ namespace SpecUtils
       
       log_developer_error( __func__, msg.str().c_str() );
     }
+     */
 #endif
   }//void ireplace_all(...)
   
@@ -1077,6 +1114,63 @@ namespace SpecUtils
   
   bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
+#if( SpecUtils_USE_FROM_CHARS )
+     //  TODO: test this implementation against old implementation for the regression test
+     const char *start = input;
+     const char *end = input + length;
+     results.clear();
+
+     // This initual guess almost always overpredicts (when checked on a representative dataset)
+     //  but not by too much, and it reduces total time by about 20%
+     const size_t num_float_guess = std::max( size_t(1), std::min(length / 2, size_t(32768)) );
+     results.reserve(num_float_guess);
+
+     while( start < end )
+     {
+       float result;
+       //const std::from_chars_result status = std::from_chars(start, end, result);
+       const auto [ptr, ec] = std::from_chars(start, end, result);
+       //const auto [ptr, ec] = fast_float::from_chars(start, end, result);
+
+       if(ec == std::errc() )
+       {
+         //cout << "Result: " << result << ", (ptr-start) -> " << (status.ptr-start) << endl;
+         results.push_back( result );
+       }else
+       {
+         //cout << "Error reading '" << string(start,end) << "' isn't a number." << endl;
+         return false;
+       }
+     
+       start = ptr + 1;
+       if (start >= end)
+         return true;
+
+       // For most of input `start` will be the character of the next number, but we need to test for this
+       if (((*start) < '0') || ((*start) > '9'))
+       {
+         // We will allow the delimiters " \t\n\r,"; I'm sure there is a much better way of testing for these
+         while ((start < end)
+           && (((*start) == ' ')
+             || ((*start) == '\t')
+             || ((*start) == '\n')
+             || ((*start) == '\r')
+             || ((*start) == ',')
+             // We want to allow numbers to start with a '+', which from_chars prohibits, 
+             // but we also want require the next character to be a number or a decimal, 
+             // and also for the '+' to not be the last character 
+             || (((*start) == '+') && ((start + 1) < end) && ((((*(start + 1)) >= '0') && ((*(start + 1)) <= '9')) || ((*(start + 1)) == '.')))
+             )
+           )
+         {
+           ++start;
+         }
+       }//if (((*start) < '0') || ((*start) > '9'))
+     }//while( start < end )
+     
+     return true;
+#else
+    
     results.clear();
     
     if( !input || !length )
@@ -1128,7 +1222,7 @@ namespace SpecUtils
       if( begin != end && results.size() )
       {
         char errormsg[1024];
-        snprintf( errormsg, sizeof(errormsg), "Trailing unpased string '%s'",
+        snprintf( errormsg, sizeof(errormsg), "Trailing unparsed string '%s'",
                  string(begin,end).c_str() );
         log_developer_error( __func__, errormsg );
       }//if( begin != end )
@@ -1179,9 +1273,24 @@ namespace SpecUtils
     }//if( ok && begin != end )
     
     return ok;
+#endif //SpecUtils_USE_FROM_CHARS / else
   }//bool split_to_floats(...)
   
   
+  bool parse_double( const char *input, const size_t length, double &result )
+  {
+    namespace qi = boost::spirit::qi;
+    
+    const char *begin = input;
+    const char *end = begin + length;
+    
+    result = 0.0;
+    const bool ok = qi::phrase_parse( begin, end, qi::double_, qi::space, result );
+    
+    return ok;
+  }
+
+
   bool parse_float( const char *input, const size_t length, float &result )
   {
     namespace qi = boost::spirit::qi;

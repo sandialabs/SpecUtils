@@ -224,6 +224,9 @@ namespace  SpecUtils
    \returns True if was able to parse a number, false otherwise.
    */
   bool parse_float( const char *input, const size_t length, float &result );
+
+  /** Same as #parse_float, but for doubles. */
+  bool parse_double( const char *input, const size_t length, double &result );
   
 
   /** \brief Parses a string of ascii characters to their integer representation.
@@ -304,7 +307,7 @@ namespace  SpecUtils
    counts of gamma data by wcjohns).
    
    \TODO: Investigate performance of using:
-     - https://github.com/lemire/fast_double_parser
+     - https://github.com/fastfloat/fast_float
      - https://github.com/abseil/abseil-cpp/blob/master/absl/strings/charconv.h
      - https://github.com/simdjson/simdjson/blob/master/src/generic/stage2/numberparsing.h
    */

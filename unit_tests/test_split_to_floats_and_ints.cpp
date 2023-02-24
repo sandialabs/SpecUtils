@@ -22,24 +22,72 @@
  */
 
 #include <string>
+#include <chrono>
 #include <ostream>
+#include <fstream>
 #include <vector>
 #include <cmath>
 #include <climits>
 #include <float.h>
 #include <boost/algorithm/string.hpp>
-//#define BOOST_TEST_DYN_LINK
+
 #define BOOST_TEST_MODULE split_to_floats_and_ints_suite
-//#include <boost/test/unit_test.hpp>
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
+
+//#define BOOST_TEST_DYN_LINK
+// To use boost unit_test as header only (no link to boost unit test library):
+//#include <boost/test/included/unit_test.hpp>
+
 
 #include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/ParseUtils.h"
 
 using namespace std;
 using namespace boost::unit_test;
 
 
 BOOST_AUTO_TEST_SUITE( split_to_floats_and_ints_suite )
+
+
+// TODO: add test case for parse_float, parse_int, parse_double, functions
+
+/*
+BOOST_AUTO_TEST_CASE( time_float_parse  )
+{
+  ifstream file( "float_benchmark.csv" );
+	
+  assert( file.is_open() );
+  
+  vector<string> lines;
+  size_t nchars = 0;
+  string line;
+  while( SpecUtils::safe_get_line(file, line) )
+  {
+    nchars += line.size();
+    lines.push_back( line );
+  }
+  
+  cout << "Read in " << lines.size() << " lines, and " << nchars << " bytes." << endl;
+  
+  const size_t ntimes = 100;
+  
+  std::chrono::high_resolution_clock::duration total_dur{};
+  for( const string &val : lines )
+  {
+    const auto start = std::chrono::high_resolution_clock::now();
+    for( size_t i = 0; i < ntimes; ++i )
+    {
+			vector<float> float_vals;
+      SpecUtils::split_to_floats( val.c_str(), val.size(), float_vals );
+    }
+    const auto end = std::chrono::high_resolution_clock::now();
+    
+    total_dur += end - start;
+  }//for( const string &val : lines )
+  
+  cout << "Took: " << std::chrono::duration_cast<std::chrono::milliseconds>(total_dur).count() << " ms to parse all the input." << endl;
+}//BOOST_AUTO_TEST_CASE( time_float_parse  )
+*/
 
 
 BOOST_AUTO_TEST_CASE( split_to_floats  )
@@ -150,46 +198,74 @@ BOOST_AUTO_TEST_CASE( check_trailing_characters  )
 
   input = "9.9, 88.3, 0, 10, 0.0, 9, -1 0 0.0 0,  1 , \t\n";
   inputlen = strlen( input );
+  
+  vector<float> good_input_vals{ 9.9, 88.3, 0, 10, 0.0, 9, -1, 0, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
   BOOST_CHECK( ok );
-  BOOST_CHECK_EQUAL( results.size(), 11 );
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+  
 
   ok = SpecUtils::split_to_floats( input, results, " ,\t\n", false );
   BOOST_CHECK( ok );
-  BOOST_CHECK_EQUAL( results.size(), 11 );
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
 
   input = "9.9 0.0 0 1 abs";
   inputlen = strlen( input );
+  good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
   BOOST_CHECK( !ok );
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   ok = SpecUtils::split_to_floats( input, results, " ", false );
   BOOST_CHECK( !ok );
-
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+  
+  
   input = "9.9 0.0 0 1 -";
   inputlen = strlen( input );
+  good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
   BOOST_CHECK( !ok );
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   ok = SpecUtils::split_to_floats( input, results, " ", false );
   BOOST_CHECK( !ok );
 
   input = "9.9 0.0 0 1 +";
   inputlen = strlen( input );
+  good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
   BOOST_CHECK( !ok );
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   ok = SpecUtils::split_to_floats( input, results, " ", false );
   BOOST_CHECK( !ok );
-
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   input = "9.9 0.0 0 1 ";
   inputlen = strlen( input );
+  good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
 
   BOOST_CHECK( ok );
-  BOOST_CHECK_EQUAL( results.size(), 4 );
+  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  for( size_t i = 0; i < good_input_vals.size(); ++i )
+    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 }
 
 

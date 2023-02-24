@@ -20,28 +20,27 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
+#include <ctime>
+#include <cctype>
+#include <chrono>
+#include <limits>
 #include <memory>
 #include <string>
-#include <cctype>
-#include <limits>
-#include <numeric>
+#include <vector>
 #include <fstream>
-#include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <numeric>
 #include <iostream>
-#include <cstdint>
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
-#include <ctime>
 
-
-#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
-#include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
+#include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
 
 #include "inja/inja.hpp"
@@ -61,10 +60,9 @@ namespace SpecUtils
 
 		j["start_time_iso"] = to_extended_iso_string(p->start_time());
 
-		if (!p->start_time().is_not_a_date_time()) 
+		if (!SpecUtils::is_special(p->start_time()))
 		{
-			std::tm time_tm = to_tm(p->start_time());
-			j["start_time_raw"] = mktime(&time_tm);
+      j["start_time_raw"] = std::chrono::system_clock::to_time_t( p->start_time() );
 		}
 
 		j["gamma_counts"] = (*(p->gamma_counts()));
@@ -114,8 +112,8 @@ namespace SpecUtils
 		j["latitude"] = p->latitude();
 		j["longitude"] = p->longitude();
 		j["speed"] = p->speed();
-		j["dx"] = p->dx();
-		j["dy"] = p->dy();
+		j["dx"] = 0.1*p->dx();
+		j["dy"] = 0.1*p->dy();
 	}
 
 	void to_json(json& j, SpecUtils::DetectorAnalysisResult p)
@@ -351,7 +349,12 @@ namespace SpecUtils
 					filteredSampleCount++;
 				}
 
-				numDataPoints = filteredSampleCount / nSamples;
+				if (nSamples == 0) {
+					cerr << "Number of samples is zero!" << endl;
+				}
+				else {
+					numDataPoints = filteredSampleCount / nSamples;
+				}
 			}
 
 			for (auto& element : dataToProcess) {
@@ -442,11 +445,19 @@ namespace SpecUtils
 		env.add_callback("sum_queue", 1, [](Arguments& args) {
 			json arr = args.at(0)->get<json>();
 
-			float sum = 0;
+			double sum = 0;
 			for (auto& element : arr) {
-				sum += element;
+				sum += element.get<double>();
 			}
-			return sum;
+			return static_cast<float>(sum);
+			});
+
+		env.add_callback("template_error", 1, [](Arguments& args) {
+			std::string message = args.at(0)->get<std::string>();
+
+			cerr << "Template Error: " << message << endl;
+
+			return message;
 			});
 
 		// STEP 1 - read template file
@@ -458,7 +469,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error reading input template " << e.what() << endl;
+			cerr << "Error reading input template " << e.what() << endl;
 			return false;
 		}
 
@@ -491,7 +502,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error building data structure " << e.what() << endl;
+			cerr << "Error building data structure " << e.what() << endl;
 			return false;
 		}
 
@@ -503,7 +514,7 @@ namespace SpecUtils
 		}
 		catch (std::exception& e)
 		{
-			cout << "Error rendering output file " << e.what() << endl;
+			cerr << "Error rendering output file " << e.what() << endl;
 			return false;
 		}
 

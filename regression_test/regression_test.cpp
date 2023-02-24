@@ -24,6 +24,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <chrono>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -39,8 +40,8 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
 
-#if( !PERFORM_DEVELOPER_CHECKS )
-#error PERFORM_DEVELOPER_CHECKS must be enabled to compile regression_test
+#if( !SpecUtils_ENABLE_EQUALITY_CHECKS )
+#error SpecUtils_ENABLE_EQUALITY_CHECKS must be enabled to compile regression_test
 #endif
 
 using namespace std;
@@ -306,8 +307,7 @@ void check_parse_time( const string basedir )
   map<path,double> cpu_parse_times, wall_parse_times;
   const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
   
-  const boost::posix_time::ptime start_time
-                             = boost::posix_time::microsec_clock::local_time();
+  const SpecUtils::time_point_t start_time = chrono::system_clock::now();
   
   for( const path &fpath : with_truth )
   {
@@ -316,7 +316,7 @@ void check_parse_time( const string basedir )
     
     for( int i = 0; i < ntimes_parse; ++i )
     {
-       SpecUtils::SpecFile info;
+      SpecUtils::SpecFile info;
       
       const double orig_wall_time = SpecUtils::get_wall_time();
       const double orig_cpu_time = SpecUtils::get_cpu_time();
@@ -401,7 +401,8 @@ void check_parse_time( const string basedir )
       name = name.substr( 0, 27 ) + "...";
     cout << setw(31) << std::left << name << ": {cpu: "
          << setprecision(6) << std::fixed << cputime << ", wall: "
-         << setprecision(6) << walltime << "}\n";
+         << setprecision(6) << walltime << "}"
+         << ", size: " << (boost::filesystem::file_size(i->first) / 1024) << " kb\n";
     
     if( previous_cpu_parse_times.count(i->first) )
     {
@@ -561,10 +562,13 @@ void check_files_with_truth_n42( const string basedir )
       ++failed_tests;
       
       const string description = e.what();
+      vector<string> errors;
+      SpecUtils::split(errors, e.what(), "\n\r");
       
-      cerr << "\n" << fpath << "\nfailed comparison with previous parsing: "
-           << description
-           << "\n\t(Current parse is LHS, previous parse is RHS)\n"
+      cerr << "\n" << fpath << "\nfailed comparison with previous parsing:\n";
+      for( const string &err : errors )
+        cerr << "\t" << err << endl;
+      cerr << "\n\t\t(Current parse is LHS, previous parse is RHS)\n"
            << "\n\tWhat would like to do?"
            << "\n";
       
@@ -1010,8 +1014,8 @@ void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &o
   out << ", " << SpecUtils::to_extended_iso_string(meas.start_time());
   
   if( meas.has_gps_info() )
-    out << ", GPS(" << meas.latitude() << "," << meas.longitude() << "," << meas.position_time() << ")";
-  
+    out << ", GPS(" << meas.latitude() << "," << meas.longitude() << ","
+        << SpecUtils::to_iso_string(meas.position_time()) << ")";
 }//void print_one_line_summary( const SpecUtils::Measurement &info, std::ostream &out )
 
 

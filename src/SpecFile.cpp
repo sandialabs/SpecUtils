@@ -23,34 +23,30 @@
 #include "D3SupportFiles.h"
 #endif //#if( USE_D3_EXPORTING )
 
-#include <ctime>
 #include <cmath>
-#include <vector>
+#include <ctime>
+#include <cctype>
+#include <chrono>
+#include <limits>
+#include <locale>
 #include <memory>
 #include <string>
-#include <cctype>
-#include <locale>
-#include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
-#include <cstdint>
+#include <fstream>
+#include <iomanip>
+#include <numeric>
+#include <sstream>
 #include <iterator>
-#include <stdexcept>
+#include <iostream>
 #include <algorithm>
+#include <stdexcept>
 #include <functional>
-//#define __STDC_FORMAT_MACROS
-//#include <inttypes.h>
 #include <sys/stat.h>
 
 #include <boost/functional/hash.hpp>
-
-#if( BUILD_AS_UNIT_TEST_SUITE )
-#include <boost/test/unit_test.hpp>
-#endif
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
@@ -62,6 +58,7 @@
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/SpecUtilsAsync.h"
 #include "SpecUtils/RapidXmlUtils.hpp"
+#include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/SerialToDetectorModel.h"
 
@@ -311,7 +308,7 @@ void log_developer_error( const char *location, const char *error )
   
   std::unique_lock<std::recursive_mutex> loc( s_dev_error_log_mutex );
   
-  boost::posix_time::ptime time = boost::posix_time::second_clock::local_time();
+  const SpecUtils::time_point_t time = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
   
   const string timestr = SpecUtils::to_iso_string(time);
 //  const string timestr = SpecUtils::to_iso_string( time );
@@ -433,18 +430,25 @@ const std::string &SpecFile::inspection() const
 
 double Measurement::latitude() const
 {
-  return latitude_;
+  if( !location_ || !(location_->geo_location_) || IsNan(location_->geo_location_->latitude_) )
+    return -999.9;
+  return location_->geo_location_->latitude_;
 }
 
 double Measurement::longitude() const
 {
-  return longitude_;
+  if( !location_ || !(location_->geo_location_) || IsNan(location_->geo_location_->longitude_) )
+    return -999.9;
+  return location_->geo_location_->longitude_;
 }
 
 
-const boost::posix_time::ptime &Measurement::position_time() const
+const time_point_t Measurement::position_time() const
 {
-  return position_time_;
+  if( !location_ || !(location_->geo_location_) )
+    return time_point_t{};
+  
+  return location_->geo_location_->position_time_;
 }
 
 const std::string &SpecFile::measurement_operator() const
@@ -529,6 +533,13 @@ std::shared_ptr<const DetectorAnalysis> SpecFile::detectors_analysis() const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
   return detectors_analysis_;
+}
+
+
+const vector<shared_ptr<const MultimediaData>> &SpecFile::multimedia_data() const
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  return multimedia_data_;
 }
 
 
@@ -669,17 +680,17 @@ double Measurement::neutron_counts_sum() const
 
 float Measurement::speed() const
 {
-  return speed_;
+  return (!location_ || IsNan(location_->speed_)) ? 0.0f : location_->speed_;
 }
 
 float Measurement::dx() const
 {
-    return dx_;
+  return (!location_ || !location_->relative_location_ ) ? 0.0f : location_->relative_location_->dx();
 }
 
 float Measurement::dy() const
 {
-    return dy_;
+  return (!location_ || !location_->relative_location_ ) ? 0.0f : location_->relative_location_->dy();
 }
 
 const std::string &Measurement::detector_name() const
@@ -725,12 +736,12 @@ const std::vector<std::string> &Measurement::parse_warnings() const
   return parse_warnings_;
 }
 
-const boost::posix_time::ptime &Measurement::start_time() const
+const time_point_t &Measurement::start_time() const
 {
   return start_time_;
 }
 
-const boost::posix_time::ptime Measurement::start_time_copy() const
+const time_point_t Measurement::start_time_copy() const
 {
   return start_time_;
 }
@@ -768,7 +779,7 @@ const std::shared_ptr< const std::vector<float> > &Measurement::gamma_counts() c
 }
   
   
-void Measurement::set_start_time( const boost::posix_time::ptime &time )
+void Measurement::set_start_time( const time_point_t &time )
 {
   start_time_ = time;
 }
@@ -779,11 +790,68 @@ void Measurement::set_remarks( const std::vector<std::string> &remar )
   remarks_ = remar;
 }
   
+
+void Measurement::set_parse_warnings(const std::vector<std::string>& warnings)
+{
+  parse_warnings_ = warnings;
+}
   
+
 void Measurement::set_source_type( const SourceType type )
 {
   source_type_ = type;
 }
+
+
+void Measurement::set_position( double longitude, double latitude, time_point_t pos_time )
+{
+  if( !valid_latitude(latitude) && !valid_longitude(longitude) )
+  {
+    if( !location_ || !(location_->geo_location_) )
+      return;
+    
+    auto loc = make_shared<LocationState>( *location_ );
+    loc->geo_location_.reset();
+    
+    // We could maybe make the position state type default to be position of the instrument
+    //loc->type_ = LocationState::StateType::Instrument;
+    
+    location_ = loc;
+    
+    // Actually just get rid of location_ if nothing left is valid
+    if( IsNan(loc->speed_) && !loc->geo_location_
+       && !loc->relative_location_ && !loc->orientation_ )
+      location_.reset();
+
+    return;
+  }
+  
+  shared_ptr<LocationState> loc;
+  if( location_ )
+  {
+    loc = make_shared<LocationState>( *location_ );
+  }else
+  {
+    loc = make_shared<LocationState>();
+    
+    // We will make the position state type default to be position of the instrument
+    loc->type_ = LocationState::StateType::Instrument;
+  }
+  location_ = loc;
+  
+  shared_ptr<GeographicPoint> geo;
+  if( loc->geo_location_ )
+    geo = make_shared<GeographicPoint>( *(loc->geo_location_) );
+  else
+    geo = make_shared<GeographicPoint>();
+  
+  loc->geo_location_ = geo;
+  
+  geo->latitude_ = latitude;
+  geo->longitude_ = longitude;
+  geo->position_time_ = pos_time;
+}//set_position(...)
+
   
 void Measurement::set_sample_number( const int samplenum )
 {
@@ -847,7 +915,7 @@ void Measurement::set_neutron_counts( const std::vector<float> &counts )
   const size_t size = counts.size();
   for( size_t i = 0; i < size; ++i )
     neutron_counts_sum_ += counts[i];
-}
+}//void set_neutron_counts( const std::vector<float> &counts )
 
   
 const std::vector<float> &Measurement::neutron_counts() const
@@ -855,7 +923,13 @@ const std::vector<float> &Measurement::neutron_counts() const
   return neutron_counts_;
 }
   
-  
+
+const std::shared_ptr<const SpecUtils::LocationState> &Measurement::location_state() const
+{
+  return location_;
+}
+
+
 size_t Measurement::num_gamma_channels() const
 {
   if( !gamma_counts_ )
@@ -1186,6 +1260,9 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "html";
 #endif
+#if( SpecUtils_INJA_TEMPLATES )
+    case SaveSpectrumAsType::Template:           return "tmplt";
+#endif
     case SaveSpectrumAsType::NumTypes:          break;
   }//switch( m_format )
   
@@ -1229,6 +1306,9 @@ const char *descriptionText( const SaveSpectrumAsType type )
     case SaveSpectrumAsType::Tka:                return "TKA";
 #if( SpecUtils_ENABLE_D3_CHART )
     case SaveSpectrumAsType::HtmlD3:             return "HTML";
+#endif
+#if( SpecUtils_INJA_TEMPLATES )
+    case SaveSpectrumAsType::Template:           return "tmplt";
 #endif
     case SaveSpectrumAsType::NumTypes:          return "";
   }
@@ -1398,6 +1478,9 @@ size_t Measurement::memmorysize() const
       
   size += energy_calibration_->memmorysize();
   
+  if( location_ )
+    size += location_->memmorysize();
+  
   return size;
 }//size_t Measurement::memmorysize() const
 
@@ -1411,9 +1494,7 @@ void Measurement::reset()
   occupied_ = OccupancyStatus::Unknown;
   gamma_count_sum_ = 0.0;
   neutron_counts_sum_ = 0.0;
-  speed_ = 0.0f;
-  dx_ = 0.0f;
-  dy_ = 0.0f;
+  
   detector_name_.clear();
   detector_number_ = -1;
   detector_description_.clear();
@@ -1423,13 +1504,10 @@ void Measurement::reset()
 
   contained_neutron_ = false;
 
-  latitude_ = longitude_ = -999.9;
-  position_time_ = boost::posix_time::not_a_date_time;
-
   remarks_.clear();
   parse_warnings_.clear();
   
-  start_time_ = boost::posix_time::not_a_date_time;
+  start_time_ = time_point_t{};
   
   energy_calibration_ = std::make_shared<EnergyCalibration>();
   gamma_counts_ = std::make_shared<vector<float> >();  // \TODO: I should test not bothering to place an empty vector in this pointer
@@ -1438,12 +1516,19 @@ void Measurement::reset()
   title_.clear();
   
   derived_data_properties_ = 0;
+  
+  dose_rate_ = exposure_rate_ = -1.0f;
+  
+  location_.reset();
 }//void reset()
 
   
 bool Measurement::has_gps_info() const
 {
-  return (SpecUtils::valid_longitude(longitude_) && SpecUtils::valid_latitude(latitude_));
+  return location_
+         && location_->geo_location_
+         && SpecUtils::valid_longitude(location_->geo_location_->longitude_)
+         && SpecUtils::valid_latitude(location_->geo_location_->latitude_);
 }
   
   
@@ -1451,6 +1536,18 @@ bool SpecFile::has_gps_info() const
 {
   return (SpecUtils::valid_longitude(mean_longitude_)
             && SpecUtils::valid_latitude(mean_latitude_));
+}
+
+
+float Measurement::dose_rate() const
+{
+  return dose_rate_;
+}
+
+
+float Measurement::exposure_rate() const
+{
+  return exposure_rate_;
 }
 
   
@@ -2170,7 +2267,7 @@ void SpecFile::remove_measurement( std::shared_ptr<const Measurement> meas,
 }//void remove_measurement( std::shared_ptr<Measurement> meas, bool doCleanup );
 
 
-void SpecFile::set_start_time( const boost::posix_time::ptime &timestamp,
+void SpecFile::set_start_time( const time_point_t &timestamp,
                     const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -2211,8 +2308,8 @@ void SpecFile::set_source_type( const SourceType type,
 
 
 void SpecFile::set_position( double longitude, double latitude,
-                                    boost::posix_time::ptime position_time,
-                                    const std::shared_ptr<const Measurement> meas )
+                            time_point_t position_time,
+                            const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurement( meas );
@@ -2220,10 +2317,7 @@ void SpecFile::set_position( double longitude, double latitude,
     throw runtime_error( "SpecFile::set_position(...): measurement"
                         " passed in didnt belong to this SpecFile" );
   
-  ptr->longitude_ = longitude;
-  ptr->latitude_ = latitude;
-  ptr->position_time_ = position_time;
-  
+  ptr->set_position( longitude, latitude, position_time );
   
   int nGpsCoords = 0;
   mean_latitude_ = mean_longitude_ = 0.0;
@@ -2574,7 +2668,7 @@ void Measurement::rebin( const std::shared_ptr<const EnergyCalibration> &cal )
 }//rebin( )
 
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 namespace
 {
 #define compare_field(l,r,f) if( (l.f) != (r.f) ) return (l.f) < (r.f);
@@ -2597,28 +2691,29 @@ namespace
 void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
                                           const DetectorAnalysisResult &rhs )
 {
+  vector<string> issues;
   if( lhs.remark_ != rhs.remark_ )
-    throw runtime_error( "DetectorAnalysisResult remark for LHS ('"
+    issues.push_back( "DetectorAnalysisResult remark for LHS ('"
                          + lhs.remark_ + "') doesnt match RHS ('"
                          + rhs.remark_ + "')" );
   if( lhs.nuclide_ != rhs.nuclide_ )
-    throw runtime_error( "DetectorAnalysisResult nuclide for LHS ('"
+    issues.push_back( "DetectorAnalysisResult nuclide for LHS ('"
                          + lhs.nuclide_ + "') doesnt match RHS ('"
                          + rhs.nuclide_ + "')" );
   if( lhs.nuclide_type_ != rhs.nuclide_type_ )
-    throw runtime_error( "DetectorAnalysisResult nuclide type for LHS ('"
+    issues.push_back( "DetectorAnalysisResult nuclide type for LHS ('"
                          + lhs.nuclide_type_ + "') doesnt match RHS ('"
                          + rhs.nuclide_type_ + "')" );
   if( lhs.id_confidence_ != rhs.id_confidence_ )
-    throw runtime_error( "DetectorAnalysisResult ID confifence for LHS ('"
+    issues.push_back( "DetectorAnalysisResult ID confidence for LHS ('"
                          + lhs.id_confidence_ + "') doesnt match RHS ('"
                          + rhs.id_confidence_ + "')" );
   if( lhs.detector_ != rhs.detector_ )
-    throw runtime_error( "DetectorAnalysisResult detector for LHS ('"
+    issues.push_back( "DetectorAnalysisResult detector for LHS ('"
                          + lhs.detector_ + "') doesnt match RHS ('"
                          + rhs.detector_ + "')" );
   //if( lhs.start_time_ != rhs.start_time_ )
-  //  throw runtime_error( "DetectorAnalysisResult start time for LHS ("
+  //  issues.push_back( "DetectorAnalysisResult start time for LHS ("
   //                      + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
   //                    + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   
@@ -2628,7 +2723,7 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult activity of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.activity_, rhs.activity_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   const double dist_diff = fabs(lhs.distance_ - rhs.distance_);
@@ -2637,7 +2732,7 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult distance of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.distance_, rhs.distance_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.dose_rate_ - rhs.dose_rate_) > 0.001 )
@@ -2645,7 +2740,7 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult dose rate of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.dose_rate_, rhs.dose_rate_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.real_time_ - rhs.real_time_) > 0.001 )
@@ -2653,8 +2748,14 @@ void DetectorAnalysisResult::equal_enough( const DetectorAnalysisResult &lhs,
     snprintf( buffer, sizeof(buffer),
              "DetectorAnalysisResult dose rate of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.real_time_, rhs.real_time_ );
-    throw runtime_error( buffer );
+    issues.push_back(  buffer );
   }
+  
+  string error_msg;
+  for( const string &msg : issues )
+    error_msg += (error_msg.empty() ? "" : "\n") + msg;
+  if( !error_msg.empty() )
+    throw runtime_error( error_msg );
 }//void DetectorAnalysisResult::equal_enough(...)
 
 
@@ -2663,6 +2764,7 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
 {
   char buffer[1024];
   
+  vector<string> issues;
   vector<string> lhsremarks, rhsremarks;
   
   for( string remark : lhs.remarks_ )
@@ -2692,17 +2794,20 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
     snprintf( buffer, sizeof(buffer),
              "Number of Analysis remarks for LHS (%i) doesnt match RHS %i",
              int(lhsremarks.size()), int(rhsremarks.size()) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   for( size_t i = 0; i < rhsremarks.size(); ++i )
   {
-    if( lhsremarks[i] != rhsremarks[i] )
+    const string lhsr = (i < lhsremarks.size()) ? lhsremarks[i] : string();
+    const string rhsr = (i < rhsremarks.size()) ? rhsremarks[i] : string();
+    
+    if( lhsr != rhsr )
     {
       snprintf( buffer, sizeof(buffer),
                "Analysis remark %i for LHS ('%s') doesnt match RHS ('%s')",
-               int(i), lhsremarks[i].c_str(), rhsremarks[i].c_str() );
-      throw runtime_error( buffer );
+               int(i), lhsr.c_str(), rhsr.c_str() );
+      issues.push_back( buffer );
     }
   }//for( size_t i = 0; i < rhsremarks.size(); ++i )
   
@@ -2711,43 +2816,46 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
   
   if( lhsap.size() != rhsap.size() )
   {
-    throw runtime_error( "Number of analysis algorithm versions for LHS ('"
+    issues.push_back( "Number of analysis algorithm versions for LHS ('"
                         + std::to_string(lhsap.size()) + "') doesnt match RHS ('"
                         + std::to_string(rhsap.size()) + "')" );
-  }
-  
-  std::sort( begin(lhsap), end(lhsap) );
-  std::sort( begin(rhsap), end(rhsap) );
-  for( size_t i = 0; i < lhsap.size(); ++i )
+  }else
   {
-    if( lhsap[i].first != rhsap[i].first )
-      throw runtime_error( "Analysis algorithm version compnent name for LHS ('"
-                        + lhsap[i].first + "') doesnt match RHS ('"
-                        + lhsap[i].first + "')" );
-    if( lhsap[i].second != rhsap[i].second )
-      throw runtime_error( "Analysis algorithm version compnent version for LHS ('"
-                          + lhsap[i].second + "') doesnt match RHS ('"
-                          + lhsap[i].second + "')" );
-  }//for( size_t i = 0; i < rhs.lhsap.size(); ++i )
-    
+    std::sort( begin(lhsap), end(lhsap) );
+    std::sort( begin(rhsap), end(rhsap) );
+    for( size_t i = 0; i < lhsap.size(); ++i )
+    {
+      const pair<string,string> &lhsr = lhsap[i];
+      const pair<string,string> &rhssr = rhsap[i];
+      
+      if( lhsr.first != rhssr.first )
+        issues.push_back( "Analysis algorithm version component name for LHS ('"
+                         + lhsr.first + "') doesnt match RHS ('"
+                         + rhssr.first + "')" );
+      if( lhsr.second != rhssr.second )
+        issues.push_back( "Analysis algorithm version component version for LHS ('"
+                         + lhsr.second + "') doesnt match RHS ('"
+                         + rhssr.second + "')" );
+    }//for( size_t i = 0; i < rhs.lhsap.size(); ++i )
+  }//if( lhsap.size() != rhsap.size() ) / else
   
   if( lhs.algorithm_name_ != rhs.algorithm_name_ )
-    throw runtime_error( "Analysis algorithm name for LHS ('"
+    issues.push_back( "Analysis algorithm name for LHS ('"
                         + lhs.algorithm_name_ + "') doesnt match RHS ('"
                         + rhs.algorithm_name_ + "')" );
   
   if( lhs.algorithm_creator_ != rhs.algorithm_creator_ )
-    throw runtime_error( "Analysis algorithm creator for LHS ('"
+    issues.push_back( "Analysis algorithm creator for LHS ('"
                         + lhs.algorithm_creator_ + "') doesnt match RHS ('"
                         + rhs.algorithm_creator_ + "')" );
   
   if( lhs.algorithm_description_ != rhs.algorithm_description_ )
-    throw runtime_error( "Analysis algorithm description for LHS ('"
+    issues.push_back( "Analysis algorithm description for LHS ('"
                         + lhs.algorithm_description_ + "') doesnt match RHS ('"
                         + rhs.algorithm_description_ + "')" );
 
   if( lhs.analysis_start_time_ != rhs.analysis_start_time_ )
-    throw runtime_error( "Analysis start time for LHS ('"
+    issues.push_back( "Analysis start time for LHS ('"
                       + SpecUtils::to_iso_string(lhs.analysis_start_time_)
                       + "') doesnt match RHS ('"
                       + SpecUtils::to_iso_string(rhs.analysis_start_time_)
@@ -2755,23 +2863,22 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
   
   
   if( fabs(lhs.analysis_computation_duration_ - rhs.analysis_computation_duration_) > std::numeric_limits<float>::epsilon() )
-    throw runtime_error( "Analysis duration time for LHS ('"
+    issues.push_back( "Analysis duration time for LHS ('"
       + std::to_string(lhs.analysis_computation_duration_)
       + "') doesnt match RHS ('"
       + std::to_string(rhs.analysis_computation_duration_)
       + "')" );
   
   if( lhs.algorithm_result_description_ != rhs.algorithm_result_description_ )
-    throw runtime_error( "Analysis algorithm result description for LHS ('"
+    issues.push_back( "Analysis algorithm result description for LHS ('"
                         + lhs.algorithm_result_description_ + "') doesnt match RHS ('"
                         + rhs.algorithm_result_description_ + "')" );
-  
   
   
   if( lhs.results_.size() != rhs.results_.size() )
   {
     stringstream msg;
-    msg << "Differnt number of analysis results for LHS ("
+    msg << "Different number of analysis results for LHS ("
     << lhs.results_.size() << ") vs RHS (" << rhs.results_.size() << "):"
     << endl;
     
@@ -2793,18 +2900,35 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
           << ", distance=" << l.distance_ << endl;
     }
     
-    throw runtime_error( msg.str() );
-  }//if( lhs.results_.size() != rhs.results_.size() )
-
-  //Ordering of the results is not garunteed in a round trip, since we use a
-  //  single analysis result type, but N42 2012 defines a few different ones.
-  vector<DetectorAnalysisResult> rhsres = rhs.results_;
-  vector<DetectorAnalysisResult> lhsres = lhs.results_;
-  std::sort( lhsres.begin(), lhsres.end(), &compare_DetectorAnalysisResult );
-  std::sort( rhsres.begin(), rhsres.end(), &compare_DetectorAnalysisResult );
+    issues.push_back( msg.str() );
+  }else
+  {
+    //Ordering of the results is not guaranteed in a round trip, since we use a
+    //  single analysis result type, but N42 2012 defines a few different ones.
+    vector<DetectorAnalysisResult> rhsres = rhs.results_;
+    vector<DetectorAnalysisResult> lhsres = lhs.results_;
+    std::sort( lhsres.begin(), lhsres.end(), &compare_DetectorAnalysisResult );
+    std::sort( rhsres.begin(), rhsres.end(), &compare_DetectorAnalysisResult );
+    
+    for( size_t i = 0; i < rhsres.size(); ++i )
+    {
+      try
+      {
+        DetectorAnalysisResult::equal_enough( lhsres[i], rhsres[i] );
+      }catch( std::exception &e )
+      {
+        issues.push_back( e.what() );
+      }
+    }//for( size_t i = 0; i < rhsres.size(); ++i )
+  }//if( lhs.results_.size() != rhs.results_.size() ) / else
   
-  for( size_t i = 0; i < rhsres.size(); ++i )
-    DetectorAnalysisResult::equal_enough( lhsres[i], rhsres[i] );
+  if( issues.size() )
+  {
+    string msg;
+    for( const string &err : issues )
+      msg += (msg.size() ? "\n" : "") + err;
+    throw runtime_error( msg );
+  }//if( issues.size() )
 }//void DetectorAnalysis::equal_enough(...)
 
 
@@ -2813,14 +2937,16 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 {
   char buffer[1024];
   
+  vector<string> issues;
+  
   //Make sure live time within something reasonable
   const double live_time_diff = fabs( double(lhs.live_time_) - double(rhs.live_time_));
   if( (live_time_diff > (std::max(lhs.live_time_,rhs.live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.live_time_, rhs.live_time_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   //Make sure real time within something reasonable
@@ -2828,73 +2954,50 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( (real_time_diff > (std::max(lhs.real_time_,rhs.real_time_)*1.0E-5)) && (real_time_diff > 1.0E-3) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Real time of LHS (%1.8E) doesnt match RHS (%1.8E); diff=%f",
+             "Measurement: Real time of LHS (%1.8E) doesnt match RHS (%1.8E); diff=%f",
              lhs.real_time_, rhs.real_time_, real_time_diff );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.contained_neutron_ != rhs.contained_neutron_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "LHS %s contain neutrons while RHS %s",
+             "Measurement: LHS %s contain neutrons while RHS %s",
              (lhs.contained_neutron_?"did":"did not"),
              (rhs.contained_neutron_?"did":"did not") );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( lhs.sample_number_ != rhs.sample_number_ )
-    throw runtime_error( "LHS sample number some how didnt equal RHS sample number" );
+    issues.push_back( "Measurement: LHS sample number some how didnt equal RHS sample number" );
   
   if( lhs.occupied_ != rhs.occupied_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "Ocupied of LHS (%i) differend form RHS (%i)",
+             "Measurement: Occupied of LHS (%i) different form RHS (%i)",
              int(lhs.occupied_), int(rhs.occupied_) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.gamma_count_sum_ - rhs.gamma_count_sum_) > (0.00001*std::max(fabs(lhs.gamma_count_sum_),fabs(rhs.gamma_count_sum_))) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Gamma count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Gamma count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_count_sum_, rhs.gamma_count_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > (0.00001*std::max(fabs(lhs.neutron_counts_sum_),fabs(rhs.neutron_counts_sum_))) )
   {
     snprintf( buffer, sizeof(buffer),
-             "Neutron count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             "Measurement: Neutron count sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.neutron_counts_sum_, rhs.neutron_counts_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
-  if( fabs(lhs.speed_ - rhs.speed_) > 0.01 )
-  {
-    snprintf( buffer, sizeof(buffer),
-             "Speed of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.speed_, rhs.speed_ );
-    throw runtime_error( buffer );
-  }
-
-  if (fabs(lhs.dx_ - rhs.dx_) > 0.01)
-  {
-      snprintf(buffer, sizeof(buffer),
-          "dx of LHS (%1.8E) doesnt match RHS (%1.8E)",
-          lhs.dx_, rhs.dx_);
-      throw runtime_error(buffer);
-  }
-
-  if (fabs(lhs.dy_ - rhs.dy_) > 0.01)
-  {
-      snprintf(buffer, sizeof(buffer),
-          "dy of LHS (%1.8E) doesnt match RHS (%1.8E)",
-          lhs.dy_, rhs.dy_);
-      throw runtime_error(buffer);
-  }
 
   if( lhs.detector_name_ != rhs.detector_name_ )
-    throw runtime_error( "Detector name for LHS ('" + lhs.detector_name_
+    issues.push_back( "Measurement: Detector name for LHS ('" + lhs.detector_name_
                         + "') doesnt match RHS ('" + rhs.detector_name_ + "')" );
 
   /*
@@ -2903,7 +3006,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     snprintf( buffer, sizeof(buffer),
              "Detector number of LHS (%i) doesnt match RHS (%i)",
              lhs.detector_number_, rhs.detector_number_ );
-    throw runtime_error( buffer );
+   issues.push_back( buffer );
   }
    */
 
@@ -2917,27 +3020,27 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     //static std::atomic<int> ntimesprint(0);
     //if( ntimesprint++ < 10 )
     //{
-      const string msg = "Detector description for LHS ('" + lhs.detector_description_
+      const string msg = "Measurement: Detector description for LHS ('" + lhs.detector_description_
                       + "') doesnt match RHS ('" + rhs.detector_description_ + "')";
     //  cerr << "Warning check for detector description falure not being enforced: " << msg << endl;
     //}
-    throw runtime_error( msg );
+    issues.push_back( msg );
   }
 
   if( lhs.quality_status_ != rhs.quality_status_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "Quality status of LHS (%i) different from RHS (%i)",
+             "Measurement: Quality status of LHS (%i) different from RHS (%i)",
              int(lhs.quality_status_), int(rhs.quality_status_) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.source_type_ != rhs.source_type_ )
   {
     snprintf( buffer, sizeof(buffer),
-             "Source type of LHS (%i) different from RHS (%i)",
+             "Measurement: Source type of LHS (%i) different from RHS (%i)",
              int(lhs.source_type_), int(rhs.source_type_) );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   assert( lhs.energy_calibration_ );
@@ -2953,7 +3056,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( nlhsremarks.size() != nrhsremarks.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "Number of remarks in LHS (%i) doesnt match RHS (%i) for sample %i, det '%s'",
+             "Measurement: Number of remarks in LHS (%i) doesnt match RHS (%i) for sample %i, det '%s'",
              int(nlhsremarks.size()), int(nrhsremarks.size()),
              lhs.sample_number_, lhs.detector_name_.c_str() );
 
@@ -2966,12 +3069,40 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
       cerr << "\tRHS: '" << nrhsremarks[i] << "'" << endl;
     
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #else
     cerr << endl;
 #endif
   }//if( nlhsremarks.size() != nrhsremarks.size() )
+    
   
+  for( const string &rhsr : nrhsremarks )
+  {
+    if( find( begin(nlhsremarks), end(nlhsremarks), rhsr ) == end(nlhsremarks) )
+    {
+      const string msg = "Measurement: Remark in RHS, but not LHS: " + rhsr;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }//if( find( begin(nlhsremarks), end(nlhsremarks), rhsr ) == end(nlhsremarks) )
+  }//for( const string &rhsr : nrhsremarks )
+  
+  for( const string &lhsr : nlhsremarks )
+  {
+    if( find( begin(nrhsremarks), end(nrhsremarks), lhsr ) == end(nrhsremarks) )
+    {
+      const string msg = "Measurement: Remark in LHS, but not RHS: " + lhsr;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }
+  }//for( const string &lhsr : nlhsremarks )
+  
+  /*
   for( size_t i = 0; i < std::max(nlhsremarks.size(),nrhsremarks.size()); ++i )
   {
     const string lhsr = (i < nlhsremarks.size()) ? nlhsremarks[i] : string();
@@ -2983,13 +3114,13 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
                "Remark %i in LHS ('%s') doesnt match RHS ('%s')",
                int(i), lhsr.c_str(), rhsr.c_str() );
 #if( REQUIRE_REMARKS_COMPARE )
-      throw runtime_error( buffer );
+      issues.push_back( buffer );
 #else
       cerr << buffer << endl;
 #endif
-    }
+    }//if( lhsr != rhsr )
   }//for( size_t i = 0; i < nlhsremarks.size(); ++i )
-
+  */
   
   const set<string> lhsparsewarns( lhs.parse_warnings_.begin(), lhs.parse_warnings_.end() );
   const set<string> rhsparsewarns( rhs.parse_warnings_.begin(), rhs.parse_warnings_.end() );
@@ -3000,7 +3131,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   if( lhsparsewarn.size() != rhsparsewarn.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "Number of parse warnings in LHS (%i) doesnt match RHS (%i)",
+             "Measurement: Number of parse warnings in LHS (%i) doesnt match RHS (%i)",
              int(lhsparsewarn.size()), int(rhsparsewarn.size()) );
     
 #if( !REQUIRE_REMARKS_COMPARE )
@@ -3010,14 +3141,43 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
       cerr << "\tLHS: '" << lhsparsewarn[i] << "'" << endl;
     for( size_t i = 0; i < rhsparsewarn.size(); ++i )
       cerr << "\tRHS: '" << rhsparsewarn[i] << "'" << endl;
+    
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #else
     cerr << buffer << endl;
 #endif
   }//if( lhsparsewarn.size() != rhsparsewarn.size() )
   
   
+  for( const string &warn : lhsparsewarn )
+  {
+    if( !rhsparsewarns.count(warn) )
+    {
+      const string msg = "Measurement: Parse warning in LHS, but not RHS: " + warn;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }//if( !rhsparsewarns.count(warn) )
+  }//for( const string &warn : lhsparsewarn )
+  
+  
+  for( const string &warn : rhsparsewarn )
+  {
+    if( !lhsparsewarns.count(warn) )
+    {
+      const string msg = "Measurement: Parse warning in RHS, but not LHS: " + warn;
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( msg );
+#else
+      cerr << msg << endl;
+#endif
+    }//if( !lhsparsewarns.count(warn) )
+  }//for( const string &warn : rhsparsewarn )
+  
+  /*
   for( size_t i = 0; i < std::max(lhsparsewarn.size(),rhsparsewarn.size()); ++i )
   {
     const string lhsr = (i < lhsparsewarn.size()) ? lhsparsewarn[i] : string();
@@ -3035,6 +3195,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 #endif
     }
   }//for( size_t i = 0; i < nlhsremarks.size(); ++i )
+  */
   
   
   if( lhs.start_time_ != rhs.start_time_ )
@@ -3042,10 +3203,10 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 	//For some reason the fractional second differ for some timestamps (including CNF files)
 	// on Windows vs *NIX.  I guess let this slide for the moment.
 	auto tdiff = lhs.start_time_ - rhs.start_time_;
-	if( tdiff.is_negative() )
+	if( tdiff < time_point_t::duration::zero() )
 		tdiff = -tdiff;
-	if( tdiff >  boost::posix_time::seconds(1) )
-      throw runtime_error( "Start time for LHS ("
+	if( tdiff >  std::chrono::seconds(1) )
+    issues.push_back( "Measurement: Start time for LHS ("
                         + SpecUtils::to_iso_string(lhs.start_time_) + ") doesnt match RHS ("
                         + SpecUtils::to_iso_string(rhs.start_time_) + ")" );
   }
@@ -3053,11 +3214,11 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   
   if( (!lhs.gamma_counts_) != (!rhs.gamma_counts_) )
   {
-    snprintf( buffer, sizeof(buffer), "Gamma counts avaialblity for LHS (%s)"
+    snprintf( buffer, sizeof(buffer), "Measurement: Gamma counts availability for LHS (%s)"
              " doesnt match RHS (%s)",
              (!lhs.gamma_counts_?"missing":"available"),
              (!rhs.gamma_counts_?"missing":"available") );
-    throw runtime_error(buffer);
+    issues.push_back( buffer );
   }
   
   if( !!lhs.gamma_counts_ )
@@ -3065,91 +3226,82 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     if( lhs.gamma_counts_->size() != rhs.gamma_counts_->size() )
     {
       snprintf( buffer, sizeof(buffer),
-               "Number of gamma channels of LHS (%i) doesnt match RHS (%i)",
+               "Measurement: Number of gamma channels of LHS (%i) doesnt match RHS (%i)",
                int(lhs.gamma_counts_->size()),
                int(rhs.gamma_counts_->size()) );
-      throw runtime_error( buffer );
-    }
-    
-    for( size_t i = 0; i < lhs.gamma_counts_->size(); ++i )
+      issues.push_back( buffer );
+    }else
     {
-      const float a = lhs.gamma_counts_->at(i);
-      const float b = rhs.gamma_counts_->at(i);
-      if( fabs(a-b) > 1.0E-6*std::max( fabs(a), fabs(b) ) )
+      size_t num_channel_warnings = 0;
+      for( size_t i = 0; i < lhs.gamma_counts_->size(); ++i )
       {
-        cerr << "LHS:";
-        for( size_t j = (i>4) ? i-4: 0; j < lhs.gamma_counts_->size() && j < (i+5); ++j )
+        const float a = lhs.gamma_counts_->at(i);
+        const float b = rhs.gamma_counts_->at(i);
+        if( fabs(a-b) > 1.0E-6*std::max( fabs(a), fabs(b) ) )
         {
-          if( i==j ) cerr << "__";
-          cerr << lhs.gamma_counts_->at(j);
-          if( i==j ) cerr << "__, ";
-          else cerr << ", ";
-        }
-        cerr << endl;
-
-        cerr << "RHS:";
-        for( size_t j = (i>4) ? i-4: 0; j < rhs.gamma_counts_->size() && j < (i+5); ++j )
-        {
-          if( i==j ) cerr << "__";
-          cerr << rhs.gamma_counts_->at(j);
-          if( i==j ) cerr << "__, ";
-          else cerr << ", ";
-        }
-        cerr << endl;
-        
-        snprintf( buffer, sizeof(buffer),
-                 "Counts in gamma channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-                 int(i), lhs.gamma_counts_->at(i),
-                 rhs.gamma_counts_->at(i) );
-        throw runtime_error( buffer );
-      }
-    }
+          cerr << "LHS:";
+          for( size_t j = (i>4) ? i-4: 0; j < lhs.gamma_counts_->size() && j < (i+5); ++j )
+          {
+            if( i==j ) cerr << "__";
+            cerr << lhs.gamma_counts_->at(j);
+            if( i==j ) cerr << "__, ";
+            else cerr << ", ";
+          }
+          cerr << endl;
+          
+          cerr << "RHS:";
+          for( size_t j = (i>4) ? i-4: 0; j < rhs.gamma_counts_->size() && j < (i+5); ++j )
+          {
+            if( i==j ) cerr << "__";
+            cerr << rhs.gamma_counts_->at(j);
+            if( i==j ) cerr << "__, ";
+            else cerr << ", ";
+          }
+          cerr << endl;
+          
+          num_channel_warnings += 1;
+          if( num_channel_warnings == 5 )
+          {
+            issues.push_back( "Measurement: There are additional channel that doent match, but error messages will be suppressed." );
+            break;
+          }else if( num_channel_warnings < 5 )
+          {
+            snprintf( buffer, sizeof(buffer),
+                     "Measurement: Counts in gamma channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
+                     int(i), lhs.gamma_counts_->at(i),
+                     rhs.gamma_counts_->at(i) );
+            issues.push_back( buffer );
+          }
+        }//if( fabs(a-b) > 1.0E-6*std::max( fabs(a), fabs(b) ) )
+      }//for( size_t i = 0; i < lhs.gamma_counts_->size(); ++i )
+    }//if( lhs.gamma_counts_->size() != rhs.gamma_counts_->size() ) / else
   }//if( !!channel_energies_ )
   
   if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() )
   {
     snprintf( buffer, sizeof(buffer),
-             "Number of neutron channels of LHS (%i) doesnt match RHS (%i)",
+             "Measurement: Number of neutron channels of LHS (%i) doesnt match RHS (%i)",
              int(lhs.neutron_counts_.size()),
              int(rhs.neutron_counts_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
+    issues.push_back( buffer );
+  }else
   {
-    if( fabs(lhs.neutron_counts_[i] - rhs.neutron_counts_[i] ) > (0.0001*std::max(fabs(lhs.neutron_counts_[i]),fabs(rhs.neutron_counts_[i]))) )
+    for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
     {
-      snprintf( buffer, sizeof(buffer),
-               "Counts in neutron channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
-               int(i), lhs.neutron_counts_[i],
-               rhs.neutron_counts_[i] );
-      throw runtime_error( buffer );
-    }
-  }
+      if( fabs(lhs.neutron_counts_[i] - rhs.neutron_counts_[i] ) > (0.0001*std::max(fabs(lhs.neutron_counts_[i]),fabs(rhs.neutron_counts_[i]))) )
+      {
+        snprintf( buffer, sizeof(buffer),
+                 "Measurement: Counts in neutron channel %i of LHS (%1.8E) doesnt match RHS (%1.8E)",
+                 int(i), lhs.neutron_counts_[i],
+                 rhs.neutron_counts_[i] );
+        issues.push_back( buffer );
+      }
+    }//for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
+  }//if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() ) / else
   
-  if( fabs(lhs.latitude_ - rhs.latitude_) > 0.00001 )
-  {
-    snprintf( buffer, sizeof(buffer),
-             "Latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.latitude_, rhs.latitude_ );
-    throw runtime_error( buffer );
-  }
-  
-  if( fabs(lhs.longitude_ - rhs.longitude_) > 0.00001 )
-  {
-    snprintf( buffer, sizeof(buffer),
-             "Longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
-             lhs.longitude_, rhs.longitude_ );
-    throw runtime_error( buffer );
-  }
-
-  if( lhs.position_time_ != rhs.position_time_ )
-    throw runtime_error( "Position time for LHS ("
-                        + SpecUtils::to_iso_string(lhs.position_time_) + ") doesnt match RHS ("
-                        + SpecUtils::to_iso_string(rhs.position_time_) + ")" );
 
   if( lhs.title_ != rhs.title_ )
-    throw runtime_error( "Title for LHS ('" + lhs.title_
+    issues.push_back( "Measurement: Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
   
   uint32_t lhs_deriv_props = lhs.derived_data_properties_;
@@ -3189,22 +3341,64 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
       return answer;
     };//enum class DerivedDataProperties
     
-    throw runtime_error( "Derived data flags for LHS ('"
+    issues.push_back( "Measurement: Derived data flags for LHS ('"
                         + list_of_deriv_props(lhs.derived_data_properties_)
                         + "') doesnt match RHS ('"
                         + list_of_deriv_props(rhs.derived_data_properties_) + "')" );
   }//if( lhs.derived_data_properties_ != rhs.derived_data_properties_ )
+  
+  const float max_dose_rate = std::max( lhs.dose_rate_, rhs.dose_rate_ );
+  if( ((lhs.dose_rate_ >= 0) != (rhs.dose_rate_ >= 0))
+     || ((lhs.dose_rate_ >= 0)
+        && (fabs(lhs.dose_rate_ - rhs.dose_rate_ ) > (0.000001*max_dose_rate)) ) )
+  {
+    issues.push_back( "Measurement: The dose rate of LHS is " + std::to_string(lhs.dose_rate_)
+                        + " while RHS is " + std::to_string(rhs.dose_rate_) );
+  }
+  
+  if( ((lhs.exposure_rate_ >= 0) != (rhs.exposure_rate_ >= 0))
+     || ((lhs.exposure_rate_ >= 0) && (fabs(lhs.exposure_rate_ - rhs.exposure_rate_) > 0.00001)))
+  {
+    issues.push_back( "Measurement: The exposure rate of LHS is " + std::to_string(lhs.exposure_rate_)
+                     + " while RHS is " + std::to_string(rhs.exposure_rate_) );
+  }
+  
+  if( (!lhs.location_) != (!rhs.location_) )
+  {
+    issues.push_back( "Measurement: The "
+                     + string(lhs.location_ ? "LHS" : "RHS")
+                     + " LocationState info, but "
+                     + string(lhs.location_ ? "RHS" : "LHS")
+                     + " does not." );
+  }else if( lhs.location_ )
+  {
+    assert( rhs.location_ );
+    try
+    {
+      LocationState::equal_enough( *lhs.location_, *rhs.location_ );
+    }catch( std::exception &e )
+    {
+      issues.push_back( e.what() );
+    }
+  }//if( (!lhs.location_) != (!rhs.location_) ) / else
+  
+  string error_msg;
+  for( const string &m : issues )
+    error_msg += (error_msg.empty() ? "" : "\n") + m;
+  
+  if( !error_msg.empty() )
+    throw runtime_error( error_msg );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
 
 
-void SpecFile::equal_enough( const SpecFile &lhs,
-                                   const SpecFile &rhs )
+void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
 {
   std::lock( lhs.mutex_, rhs.mutex_ );
   std::unique_lock<std::recursive_mutex> lhs_lock( lhs.mutex_, std::adopt_lock_t() );
   std::unique_lock<std::recursive_mutex> rhs_lock( rhs.mutex_, std::adopt_lock_t() );
 
   char buffer[8*1024];
+  vector<string> issues;
   
   const double live_time_diff = fabs( double(lhs.gamma_live_time_) - double(rhs.gamma_live_time_));
   if( (live_time_diff > (std::max(lhs.gamma_live_time_,rhs.gamma_live_time_)*1.0E-5)) && (live_time_diff > 1.0E-3) )
@@ -3212,7 +3406,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
               "SpecFile: Live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_live_time_, rhs.gamma_live_time_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   
@@ -3222,7 +3416,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Real time of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_real_time_, rhs.gamma_real_time_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   const double gamma_sum_diff = fabs(lhs.gamma_count_sum_ - rhs.gamma_count_sum_);
@@ -3232,7 +3426,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Gamma sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.gamma_count_sum_, rhs.gamma_count_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > 0.01 )
@@ -3240,11 +3434,11 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Neutron sum of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.neutron_counts_sum_, rhs.neutron_counts_sum_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.filename_ != rhs.filename_ )
-    throw runtime_error( "SpecFile: Filename of LHS (" + lhs.filename_
+    issues.push_back( "SpecFile: Filename of LHS (" + lhs.filename_
                          + ") doenst match RHS (" + rhs.filename_ + ")" );
   
   if( lhs.detector_names_.size() != rhs.detector_names_.size() )
@@ -3258,29 +3452,32 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       message += (i ? ", '" : "'") + rhs.detector_names_[i] + "'";
     message += ")";
     
-    throw runtime_error( message );
-  }
-  
-  const set<string> lhsnames( lhs.detector_names_.begin(),
-                              lhs.detector_names_.end() );
-  const set<string> rhsnames( rhs.detector_names_.begin(),
-                              rhs.detector_names_.end() );
-  
-  if( lhsnames != rhsnames )
+    issues.push_back( message );
+  }else
   {
-    string lhsnamesstr, rhsnamesstr;
-    for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
-      lhsnamesstr += (i ? ", " : "") + lhs.detector_names_[i];
-    for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
-      rhsnamesstr += (i ? ", " : "") + rhs.detector_names_[i];
     
-    throw runtime_error( "SpecFile: Detector names do not match for LHS ({"
-                         + lhsnamesstr + "}) and RHS ({" + rhsnamesstr + "})" );
-  }
+    const set<string> lhsnames( lhs.detector_names_.begin(),
+                               lhs.detector_names_.end() );
+    const set<string> rhsnames( rhs.detector_names_.begin(),
+                               rhs.detector_names_.end() );
+    
+    if( lhsnames != rhsnames )
+    {
+      string lhsnamesstr, rhsnamesstr;
+      for( size_t i = 0; i < lhs.detector_names_.size(); ++i )
+        lhsnamesstr += (i ? ", " : "") + lhs.detector_names_[i];
+      for( size_t i = 0; i < rhs.detector_names_.size(); ++i )
+        rhsnamesstr += (i ? ", " : "") + rhs.detector_names_[i];
+      
+      issues.push_back( "SpecFile: Detector names do not match for LHS ({"
+                          + lhsnamesstr + "}) and RHS ({" + rhsnamesstr + "})" );
+    }
+  }//if( lhs.detector_names_.size() != rhs.detector_names_.size() ) / else
  
+  
   if( lhs.detector_numbers_.size() != rhs.detector_numbers_.size()
       || lhs.detector_numbers_.size() != lhs.detector_names_.size() )
-    throw runtime_error( "SpecFile: Inproper number of detector numbers - wtf" );
+    issues.push_back( "SpecFile: Improper number of detector numbers - wtf" );
   
   //Ehh, I guess since detector numbers are an internal only thing (and we
   //  should get rid of them anyway), lets not test this anymore.
@@ -3314,14 +3511,16 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              "SpecFile: Number of gamma detector names of LHS (%i) doesnt match RHS (%i)",
              int(lhs.gamma_detector_names_.size()),
              int(rhs.gamma_detector_names_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  const set<string> glhsnames( begin(lhs.gamma_detector_names_), end(lhs.gamma_detector_names_) );
-  const set<string> grhsnames( begin(rhs.gamma_detector_names_), end(rhs.gamma_detector_names_) );
-  
-  if( glhsnames != grhsnames )
-    throw runtime_error( "SpecFile: Gamma detector names dont match for LHS and RHS" );
+    issues.push_back( buffer );
+  }else
+  {
+    
+    const set<string> glhsnames( begin(lhs.gamma_detector_names_), end(lhs.gamma_detector_names_) );
+    const set<string> grhsnames( begin(rhs.gamma_detector_names_), end(rhs.gamma_detector_names_) );
+    
+    if( glhsnames != grhsnames )
+      issues.push_back( "SpecFile: Gamma detector names dont match for LHS and RHS" );
+  }//if( lhs.gamma_detector_names_.size() != rhs.gamma_detector_names_.size() ) / else
   
   
   if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() )
@@ -3330,34 +3529,35 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              "SpecFile: Number of neutron detector names of LHS (%i) doesnt match RHS (%i)",
              int(lhs.neutron_detector_names_.size()),
              int(rhs.neutron_detector_names_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  const set<string> nlhsnames( begin(lhs.neutron_detector_names_),
-                               end(lhs.neutron_detector_names_) );
-  const set<string> nrhsnames( begin(rhs.neutron_detector_names_),
-                               end(rhs.neutron_detector_names_) );
-  
-  if( nlhsnames != nrhsnames )
-    throw runtime_error( "SpecFile: Neutron detector names dont match for LHS and RHS" );
-
+    issues.push_back( buffer );
+  }else
+  {
+    
+    const set<string> nlhsnames( begin(lhs.neutron_detector_names_),
+                                end(lhs.neutron_detector_names_) );
+    const set<string> nrhsnames( begin(rhs.neutron_detector_names_),
+                                end(rhs.neutron_detector_names_) );
+    
+    if( nlhsnames != nrhsnames )
+      issues.push_back( "SpecFile: Neutron detector names dont match for LHS and RHS" );
+  }//if( lhs.neutron_detector_names_.size() != rhs.neutron_detector_names_.size() ) / else
   
   if( lhs.lane_number_ != rhs.lane_number_ )
   {
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Lane number of LHS (%i) doesnt match RHS (%i)",
              lhs.lane_number_, rhs.lane_number_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   if( lhs.measurement_location_name_ != rhs.measurement_location_name_ )
-    throw runtime_error( "SpecFile: Measurement location name of LHS ('"
+    issues.push_back( "SpecFile: Measurement location name of LHS ('"
                          + lhs.measurement_location_name_
                          + "') doesnt match RHS ('"
                          + rhs.measurement_location_name_ + "')" );
   
   if( lhs.inspection_ != rhs.inspection_ )
-    throw runtime_error( "SpecFile: Inspection of LHS ('" + lhs.inspection_
+    issues.push_back( "SpecFile: Inspection of LHS ('" + lhs.inspection_
                         + "') doesnt match RHS ('" + rhs.inspection_ + "')" );
 
   string leftoperator = lhs.measurement_operator_;
@@ -3370,7 +3570,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   trim( rightoperator );
   
   if( leftoperator != rightoperator )
-    throw runtime_error( "SpecFile: Measurement operator of LHS ('"
+    issues.push_back( "SpecFile: Measurement operator of LHS ('"
                          + lhs.measurement_operator_ + "') doesnt match RHS ('"
                          + rhs.measurement_operator_ + ")" );
 
@@ -3410,19 +3610,20 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Number of sample numbers in LHS (%i) doesnt match RHS (%i)",
              int(lhs.sample_numbers_.size()), int(rhs.sample_numbers_.size()) );
-    throw runtime_error( buffer );
-  }
-  
-  if( lhs.sample_numbers_ != rhs.sample_numbers_ )
+    issues.push_back( buffer );
+  }else
   {
-    stringstream lhssamples, rhssamples;
-    for( auto sample : lhs.sample_numbers_ )
-      lhssamples << (sample==(*lhs.sample_numbers_.begin()) ? "":",") << sample;
-    for( auto sample : rhs.sample_numbers_ )
-      rhssamples << (sample== (*rhs.sample_numbers_.begin()) ? "":",") << sample;
-    throw runtime_error( "SpecFile: Sample numbers of RHS (" + rhssamples.str()
-                         + ") and LHS (" + lhssamples.str() + ") doent match" );
-  }
+    if( lhs.sample_numbers_ != rhs.sample_numbers_ )
+    {
+      stringstream lhssamples, rhssamples;
+      for( auto sample : lhs.sample_numbers_ )
+        lhssamples << (sample==(*lhs.sample_numbers_.begin()) ? "":",") << sample;
+      for( auto sample : rhs.sample_numbers_ )
+        rhssamples << (sample== (*rhs.sample_numbers_.begin()) ? "":",") << sample;
+      issues.push_back( "SpecFile: Sample numbers of RHS (" + rhssamples.str()
+                          + ") and LHS (" + lhssamples.str() + ") doesnt match" );
+    }
+  }//if( lhs.sample_numbers_.size() != rhs.sample_numbers_.size() )
   
   if( lhs.detector_type_ != rhs.detector_type_ )
   {
@@ -3430,27 +3631,27 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              "SpecFile: LHS detector type (%i - %s) doesnt match RHS (%i - %s)",
              int(lhs.detector_type_), detectorTypeToString(lhs.detector_type_).c_str(),
              int(rhs.detector_type_), detectorTypeToString(rhs.detector_type_).c_str() );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
   
   string lhsinst = convert_n42_instrument_type_from_2006_to_2012( lhs.instrument_type_ );
   string rhsinst = convert_n42_instrument_type_from_2006_to_2012( rhs.instrument_type_ );
   if( lhsinst != rhsinst )
   {
-    throw runtime_error( "SpecFile: Instrument type of LHS ('" + lhs.instrument_type_
+    issues.push_back( "SpecFile: Instrument type of LHS ('" + lhs.instrument_type_
                     + "') doesnt match RHS ('" + rhs.instrument_type_ + "')" );
   }
   
   if( lhs.manufacturer_ != rhs.manufacturer_ )
-    throw runtime_error( "SpecFile: Manufacturer of LHS ('" + lhs.manufacturer_
+    issues.push_back( "SpecFile: Manufacturer of LHS ('" + lhs.manufacturer_
                         + "') doesnt match RHS ('" + rhs.manufacturer_ + "')" );
   
   if( lhs.instrument_model_ != rhs.instrument_model_ )
-    throw runtime_error( "SpecFile: Instrument model of LHS ('" + lhs.instrument_model_
+    issues.push_back( "SpecFile: Instrument model of LHS ('" + lhs.instrument_model_
                     + "') doesnt match RHS ('" + rhs.instrument_model_ + "')" );
   
   if( lhs.instrument_id_ != rhs.instrument_id_ )
-    throw runtime_error( "SpecFile: Instrument ID model of LHS ('" + lhs.instrument_id_
+    issues.push_back( "SpecFile: Instrument ID model of LHS ('" + lhs.instrument_id_
                        + "') doesnt match RHS ('" + rhs.instrument_id_ + "')" );
   
   
@@ -3459,7 +3660,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Mean latitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.mean_latitude_, rhs.mean_latitude_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( fabs(lhs.mean_longitude_ - rhs.mean_longitude_) > 0.000001 )
@@ -3467,7 +3668,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     snprintf( buffer, sizeof(buffer),
              "SpecFile: Mean longitude of LHS (%1.8E) doesnt match RHS (%1.8E)",
              lhs.mean_longitude_, rhs.mean_longitude_ );
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
   }
 
   if( lhs.properties_flags_ != rhs.properties_flags_ )
@@ -3494,7 +3695,8 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              static_cast<unsigned int>(lhs.properties_flags_),
              static_cast<unsigned int>(rhs.properties_flags_),
              failingBits.c_str() );
-    throw runtime_error( buffer );
+    
+    issues.push_back( buffer );
   }
   
   for( const int sample : lhs.sample_numbers_ )
@@ -3506,14 +3708,14 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       
       if( (!lhsptr) != (!rhsptr) )
       {
-        snprintf( buffer, sizeof(buffer), "SpecFile: Measurement avaialblity for LHS (%s)"
+        snprintf( buffer, sizeof(buffer), "SpecFile: Measurement availability for LHS (%s)"
                  " doesnt match RHS (%s) for sample %i and detector name %s",
               (!lhsptr?"missing":"available"), (!rhsptr?"missing":"available"),
               sample, detname.c_str() );
-        throw runtime_error(buffer);
+        issues.push_back( buffer );
       }
       
-      if( !lhsptr )
+      if( !lhsptr || !rhsptr )
         continue;
       
       try
@@ -3521,9 +3723,11 @@ void SpecFile::equal_enough( const SpecFile &lhs,
         Measurement::equal_enough( *lhsptr, *rhsptr );
       }catch( std::exception &e )
       {
-        snprintf( buffer, sizeof(buffer), "SpecFile: Sample %i, Detector name %s: %s",
-                  sample, detname.c_str(), e.what() );
-        throw runtime_error( buffer );
+        vector<string> error_msgs;
+        split( error_msgs, e.what(), "\n" );
+        const string msg_prefix = "SpecFile: Sample " + to_string(sample) + ", Detector name " + detname + ": ";
+        for( const string &msg : error_msgs )
+          issues.push_back( msg_prefix + msg );
       }
     }//for( const int detnum : lhs.detector_numbers_ )
   }//for( const int sample : lhs.sample_numbers_ )
@@ -3534,7 +3738,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
              " doesnt match RHS (%s)",
              (!lhs.detectors_analysis_?"missing":"available"),
              (!rhs.detectors_analysis_?"missing":"available") );
-    throw runtime_error(buffer);
+    issues.push_back( buffer );
   }
   
   vector<string> nlhsremarkss, nrhsremarkss;
@@ -3543,8 +3747,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     while( r.find("  ") != string::npos )
       ireplace_all( r, "  ", " " );
     
-    if( !starts_with(r,"N42 file created by")
-        && !starts_with(r,"N42 file created by") )
+    if( !starts_with(r,"N42 file created by") )
       nlhsremarkss.push_back( r );
   }
   
@@ -3557,9 +3760,33 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       nrhsremarkss.push_back( r );
   }
   
-  stable_sort( nlhsremarkss.begin(), nlhsremarkss.end() );
-  stable_sort( nrhsremarkss.begin(), nrhsremarkss.end() );
   
+  for( const string &rem : nrhsremarkss )
+  {
+    if( find(begin(nlhsremarkss), end(nlhsremarkss), rem) == end(nlhsremarkss) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: RHS contains remark LHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: RHS contains remark LHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nlhsremarkss )
+  }//for( const string &rem : nrhsremarkss )
+  
+  for( const string &rem : nlhsremarkss )
+  {
+    if( find(begin(nrhsremarkss), end(nrhsremarkss), rem) == end(nrhsremarkss) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: LHS contains remark RHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: LHS contains remark RHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nrhsremarkss )
+  }//for( const string &rem : nlhsremarkss )
+  
+  
+  /*
   if( nlhsremarkss.size() != nrhsremarkss.size() )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3572,29 +3799,36 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     cout << "\tRHS: " << a << endl;
   
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #endif
-  }
-  
-  for( size_t i = 0; i < std::max(nlhsremarkss.size(),nrhsremarkss.size()); ++i )
+  }else
   {
-    string lhsremark = i < nlhsremarkss.size() ? nlhsremarkss[i] : string();
-    string rhsremark = i < nrhsremarkss.size() ? nrhsremarkss[i] : string();
-    SpecUtils::trim( lhsremark );
-    SpecUtils::trim( rhsremark );
+    stable_sort( nlhsremarkss.begin(), nlhsremarkss.end() );
+    stable_sort( nrhsremarkss.begin(), nrhsremarkss.end() );
     
-    if( lhsremark != rhsremark )
+    const set<string> lhsrems( begin(nlhsremarkss), end(nlhsremarkss) );
+    const set<string> rhsrems( begin(nrhsremarkss), end(nrhsremarkss) );
+    
+    for( size_t i = 0; i < std::max(nlhsremarkss.size(),nrhsremarkss.size()); ++i )
     {
-      snprintf( buffer, sizeof(buffer),
-               "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
-               int(i), lhsremark.c_str(), rhsremark.c_str() );
+      string lhsremark = i < nlhsremarkss.size() ? nlhsremarkss[i] : string();
+      string rhsremark = i < nrhsremarkss.size() ? nrhsremarkss[i] : string();
+      SpecUtils::trim( lhsremark );
+      SpecUtils::trim( rhsremark );
+      
+      if( lhsremark != rhsremark )
+      {
+        snprintf( buffer, sizeof(buffer),
+                 "SpecFile: Remark %i in LHS ('%s') doesnt match RHS ('%s')",
+                 int(i), lhsremark.c_str(), rhsremark.c_str() );
 #if( REQUIRE_REMARKS_COMPARE )
-      throw runtime_error( buffer );
+        throw runtime_error( buffer );
 #endif
+      }
     }
-  }
-
-  
+     
+  }//if( nlhsremarkss.size() != nrhsremarkss.size() )
+   */
   
   
   vector<string> nlhs_parse_warnings, nrhs_parse_warnings;
@@ -3612,6 +3846,32 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     nrhs_parse_warnings.push_back( r );
   }
   
+  for( const string &rem : nrhs_parse_warnings )
+  {
+    if( find(begin(nlhs_parse_warnings), end(nlhs_parse_warnings), rem) == end(nlhs_parse_warnings) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: RHS contains parse warning LHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: RHS contains parse warning LHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nlhs_parse_warnings )
+  }//for( const string &rem : nrhs_parse_warnings )
+  
+  for( const string &rem : nlhs_parse_warnings )
+  {
+    if( find(begin(nrhs_parse_warnings), end(nrhs_parse_warnings), rem) == end(nrhs_parse_warnings) )
+    {
+#if( REQUIRE_REMARKS_COMPARE )
+      issues.push_back( "SpecFile: LHS contains parse warning RHS doesnt: " + rem );
+#else
+      cerr << "SpecFile: LHS contains parse warning RHS doesnt: " + rem << endl;
+#endif
+    }//if( rem not in nrhs_parse_warnings )
+  }//for( const string &rem : nlhs_parse_warnings )
+  
+  
+  /*
   stable_sort( nlhs_parse_warnings.begin(), nlhs_parse_warnings.end() );
   stable_sort( nrhs_parse_warnings.begin(), nrhs_parse_warnings.end() );
   
@@ -3626,7 +3886,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
     for( string a : nrhs_parse_warnings )
       cout << "\tRHS: " << a << endl;
 #if( REQUIRE_REMARKS_COMPARE )
-    throw runtime_error( buffer );
+    issues.push_back( buffer );
 #endif
   }
   
@@ -3647,7 +3907,7 @@ void SpecFile::equal_enough( const SpecFile &lhs,
 #endif
     }
   }//for( size_t i = 0; i < std::max(nlhs_parse_warnings.size(),nrhs_parse_warnings.size()); ++i )
-  
+  */
   
   
   vector<pair<string,string> > lhscompvsn, rhscompvsn;
@@ -3656,20 +3916,41 @@ void SpecFile::equal_enough( const SpecFile &lhs,
   for( size_t i = 0; i < lhs.component_versions_.size(); ++i )
   {
     const string &n = lhs.component_versions_[i].first;
+    const string &v = lhs.component_versions_[i].second;
     if( n != "InterSpec" && n!= "InterSpecN42Serialization" && n != "Software"
         && !SpecUtils::istarts_with(n, "Original Software") )
-      lhscompvsn.push_back( lhs.component_versions_[i] );
+      lhscompvsn.push_back( {trim_copy(n), trim_copy(v)} );
   }
   
   for( size_t i = 0; i < rhs.component_versions_.size(); ++i )
   {
     const string &n = rhs.component_versions_[i].first;
+    const string &v = rhs.component_versions_[i].second;
     if( n != "InterSpec" && n!= "InterSpecN42Serialization" && n != "Software"
         && !SpecUtils::istarts_with(n, "Original Software") )
-      rhscompvsn.push_back( rhs.component_versions_[i] );
+      rhscompvsn.push_back( {trim_copy(n), trim_copy(v)} );
   }
   
+  for( const pair<string,string> &rhs : rhscompvsn )
+  {
+    if( find(begin(lhscompvsn), end(lhscompvsn), rhs) == end(lhscompvsn) )
+    {
+      issues.push_back( "SpecFile: RHS contains component LHS doesnt: {'"
+                       + rhs.first + "', '" + rhs.second + "'}" );
+    }
+  }//for( const pair<string,string> &rhs : rhscompvsn )
   
+  
+  for( const pair<string,string> &lhs : lhscompvsn )
+  {
+    if( find(begin(rhscompvsn), end(rhscompvsn), lhs) == end(rhscompvsn) )
+    {
+      issues.push_back( "SpecFile: LHS contains component RHS doesnt: {'"
+                       + lhs.first + "', '" + lhs.second + "'}" );
+    }
+  }//for( const pair<string,string> &lhs : lhscompvsn )
+  
+  /*
   if( lhscompvsn.size() != rhscompvsn.size() )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3712,26 +3993,41 @@ void SpecFile::equal_enough( const SpecFile &lhs,
       throw runtime_error( buffer );
     }
   }//for( size_t i = 0; i < lhscompvsn.size(); ++i )
-  
+  */
   
   //Make UUID last, since its sensitive to the other variables changing, and we
   //  want to report on those first to make fixing easier.
-  if( !!lhs.detectors_analysis_ )
-    DetectorAnalysis::equal_enough( *lhs.detectors_analysis_,
-                                  *rhs.detectors_analysis_ );
+  if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
+  {
+    try
+    {
+      DetectorAnalysis::equal_enough( *lhs.detectors_analysis_,
+                                     *rhs.detectors_analysis_ );
+    }catch( std::exception &e )
+    {
+      issues.push_back( e.what() );
+    }
+  }//if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
   
   /*
 #if( !defined(WIN32) )
   if( lhs.uuid_ != rhs.uuid_ )
-    throw runtime_error( "SpecFile: UUID of LHS (" + lhs.uuid_
+   issues.push_back( "SpecFile: UUID of LHS (" + lhs.uuid_
                         + ") doesnt match RHS (" + rhs.uuid_ + ")" );
 #endif
   */
   
 //  bool modified_;
 //  bool modifiedSinceDecode_;
+  
+  string error_msg;
+  for( const string &msg : issues )
+    error_msg += (error_msg.empty() ? "" : "\n") + msg;
+  
+  if( !error_msg.empty() )
+    throw runtime_error( error_msg );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
-#endif //#if( PERFORM_DEVELOPER_CHECKS )
+#endif //#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 
 
 SpecFile::SpecFile()
@@ -3833,9 +4129,7 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   occupied_ = rhs.occupied_;
   gamma_count_sum_ = rhs.gamma_count_sum_;
   neutron_counts_sum_ = rhs.neutron_counts_sum_;
-  speed_ = rhs.speed_;
-  dx_ = rhs.dx_;
-  dy_ = rhs.dy_;
+  
   detector_name_ = rhs.detector_name_;
   detector_number_ = rhs.detector_number_;
   detector_description_ = rhs.detector_description_;
@@ -3855,14 +4149,15 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
 //    gamma_counts_ = std::make_shared<vector<float>>();
 
   neutron_counts_ = rhs.neutron_counts_;
-  
-  latitude_       = rhs.latitude_;
-  longitude_      = rhs.longitude_;
-  position_time_  = rhs.position_time_;
 
   title_ = rhs.title_;
 
   derived_data_properties_ = rhs.derived_data_properties_;
+  
+  dose_rate_ = rhs.dose_rate_;
+  exposure_rate_ = rhs.exposure_rate_;
+  
+  location_ = rhs.location_;
   
   return *this;
 }//const Measurement &operator=( const Measurement &rhs )
@@ -3957,8 +4252,16 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_xml_scan_data_file( filename );
       break;
       
+    case ParserType::Json:
+      success = load_xml_scan_data_file(filename);
+      break;
+
+    case ParserType::CaenHexagonGXml:
+      success = load_caen_gxml_file(filename);
+      break;
+
     case ParserType::MicroRaider:
-      success = load_micro_raider_file( filename );
+      success = load_json_file( filename );
     break;
       
     case ParserType::Auto:
@@ -3969,7 +4272,8 @@ bool SpecFile::load_file( const std::string &filename,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
-      triedLzs = false, triedXmlScanData = false;;
+          triedLzs = false, triedXmlScanData = false, triedJson = false,
+          tried_gxml = false;
       
       if( !orig_file_ending.empty() )
       {
@@ -4113,6 +4417,23 @@ bool SpecFile::load_file( const std::string &filename,
           success = load_xml_scan_data_file( filename );
           if( success ) break;
         }//if( orig_file_ending=="xml" )
+
+
+        if (orig_file_ending == "json")
+        {
+          triedJson = true;
+          success = load_json_file(filename);
+          if (success) break;
+        }//if( orig_file_ending=="xml" )
+
+
+        if (orig_file_ending == "gxml")
+        {
+          tried_gxml = true;
+          success = load_caen_gxml_file(filename);
+          if (success) break;
+        }//if( orig_file_ending=="gxml" )
+
       }//if( !orig_file_ending.empty() ) / else
 
       if( !success && !triedSpc )
@@ -4175,6 +4496,12 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedXmlScanData )
         success = load_xml_scan_data_file( filename );
       
+      if (!success && !triedJson)
+        success = load_json_file(filename);
+
+      if (!success && !tried_gxml)
+        success = load_caen_gxml_file(filename);
+       
        break;
     }//case Auto
   };//switch( parser_type )
@@ -4195,13 +4522,13 @@ bool comp_by_start_time_source( const std::shared_ptr<Measurement> &lhs,
   if( !lhs || !rhs)
     return (!rhs) < (!lhs);
   
-  const boost::posix_time::ptime &left = lhs->start_time();
-  const boost::posix_time::ptime &right = rhs->start_time();
+  const time_point_t &left = lhs->start_time();
+  const time_point_t &right = rhs->start_time();
   
   if( left == right )
     return (lhs->source_type() < rhs->source_type());
   
-  if( left.is_special() && !right.is_special() )
+  if( is_special(left) && !is_special(right) )
     return true;
   
   return (left < right);
@@ -4306,9 +4633,8 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
 
   }else
   {
-    using boost::posix_time::ptime;
     typedef std::map<int, vector<std::shared_ptr<Measurement> > > SampleToMeasMap;
-    typedef map<boost::posix_time::ptime, SampleToMeasMap > TimeToSamplesMeasMap;
+    typedef map<time_point_t, SampleToMeasMap > TimeToSamplesMeasMap;
     
     //If derived data, we'll put it after non-derived data
     //If the time is invalid, we'll put this measurement after all the others, but before derived
@@ -4327,25 +4653,26 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
         derived_data[detnum].push_back( m );
       else if( m->source_type() == SourceType::IntrinsicActivity )
         intrinsics[detnum].push_back( m );
-      else if( m->start_time_.is_special() )
+      else if( is_special(m->start_time_) )
         invalid_times[detnum].push_back( m );
       else
         time_meas_map[m->start_time_][detnum].push_back( m );
     }//for( auto &m : measurements_ )
     
     //Now for simpleness, lets toss intrinsics, derived_data, and invalid_times into time_meas_map
-    const ptime intrinsics_time = (time_meas_map.empty()
-                                     ? ptime(boost::gregorian::date(1970, 1, 1))
-                                     : time_meas_map.begin()->first)
-                                   - boost::gregorian::years(1);
-    const ptime invalids_time = (time_meas_map.empty()
-                                   ? ptime(boost::gregorian::date(1970, 1, 1))
-                                   : time_meas_map.rbegin()->first)
-                                 + boost::gregorian::years(1);
-    const ptime derived_time = (time_meas_map.empty()
-                                   ? ptime(boost::gregorian::date(1970, 1, 1))
-                                   : time_meas_map.rbegin()->first)
-                                 + boost::gregorian::years(2);
+    const auto year = std::chrono::seconds(365*24*60*60);
+    const time_point_t intrinsics_time = (time_meas_map.empty()
+                                          ? time_point_t{}
+                                          : time_meas_map.begin()->first)
+                                         - year;
+    const time_point_t invalids_time = (time_meas_map.empty()
+                                        ? time_point_t{}
+                                        : time_meas_map.rbegin()->first)
+                                         + year;
+    const time_point_t derived_time = (time_meas_map.empty()
+                                       ? time_point_t{}
+                                       : time_meas_map.rbegin()->first)
+                                       + 2*year;
     
     for( const auto &sample_meass : intrinsics )
       for( const auto &m : sample_meass.second )
@@ -4407,7 +4734,7 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
   //  number have the same time stamp.  If we pass both of thers conditions,
   //  then we'll return since there is no need re-assign sample numbers.
   std::map<int, vector<int> > sampleNumsToSamples;
-  std::map<int,std::set<boost::posix_time::ptime> > sampleToTimes;
+  std::map<int,std::set<time_point_t> > sampleToTimes;
   const size_t nmeas = measurements_.size();
   for( size_t i = 0; i < nmeas; ++i )
   {
@@ -4424,8 +4751,8 @@ bool SpecFile::has_unique_sample_and_detector_numbers() const
     
     meass.push_back( m->detector_number_ );
     
-    std::set<boost::posix_time::ptime> &timesSet = sampleToTimes[m->sample_number_];
-    if( !m->start_time_.is_special() )
+    std::set<time_point_t> &timesSet = sampleToTimes[m->sample_number_];
+    if( !is_special(m->start_time_) )
       timesSet.insert( m->start_time_ );
     if( timesSet.size() > 1 )
       return false;
@@ -4774,20 +5101,23 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       if( meas->has_gps_info() )
       {
         //  a lat long of (0 0) probably isnt a valid GPS coordinate
-        if( (fabs(meas->latitude_) < 1.0E-6)
-           && (fabs(meas->longitude_) < 1.0E-6) )
+        if( meas->location_
+           && meas->location_->geo_location_
+           && (IsNan(meas->location_->geo_location_->latitude_) || (fabs(meas->location_->geo_location_->latitude_) < 1.0E-6))
+           && (IsNan(meas->location_->geo_location_->longitude_) || (fabs(meas->location_->geo_location_->longitude_) < 1.0E-6))
+           )
         {
-          meas->latitude_ = meas->longitude_ = -999.9;
-          meas->position_time_ = boost::posix_time::not_a_date_time;
+          auto loc = make_shared<LocationState>( *meas->location_ );
+          loc->geo_location_.reset();
+          if( IsNan(loc->speed_) && !loc->relative_location_ && !loc->orientation_ )
+            loc.reset();
+          meas->location_ = loc;
         }else
         {
           ++nGpsCoords;
           mean_latitude_ += meas->latitude();
           mean_longitude_ += meas->longitude();
         }
-      }else if( !meas->position_time_.is_special() )
-      {
-        meas->position_time_ = boost::posix_time::not_a_date_time;
       }
       
       meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
@@ -4816,8 +5146,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       for( size_t i = 1; i < measurements_.size(); ++i )
       {
-        if( measurements_[i-1]->start_time_.is_special()
-           || measurements_[i]->start_time_.is_special() )
+        if( is_special(measurements_[i-1]->start_time_)
+           || is_special(measurements_[i]->start_time_) )
           continue;
         
         if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
@@ -4833,8 +5163,8 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       /// @TODO: we can probably add this next bit of logic to another loop so it isnt so expensive.
       for( size_t i = 1; i < measurements_.size(); ++i )
       {
-        if( !measurements_[i-1]->start_time_.is_special()
-           && !measurements_[i]->start_time_.is_special()
+        if( !is_special(measurements_[i-1]->start_time_)
+           && !is_special(measurements_[i]->start_time_)
            && (measurements_[i-1]->start_time_ > measurements_[i]->start_time_) )
         {
           properties_flags_ |= kNotTimeSortedOrder;
@@ -4896,7 +5226,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     sample_numbers_.clear();
     sample_to_measurements_.clear();
     
-    typedef std::pair<boost::posix_time::ptime,float> StartAndRealTime;
+    typedef std::pair<time_point_t,float> StartAndRealTime;
     typedef map<int, StartAndRealTime > SampleToTimeInfoMap;
     SampleToTimeInfoMap samplenum_to_starttime; //used to determine if passthrough or not
     
@@ -4933,10 +5263,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         ++pt_num_items;
         pt_averageRealTime += meas->real_time_;
         
-        if( !meas->start_time().is_special() )
+        if( !is_special(meas->start_time()) )
         {
           const int samplenum = meas->sample_number();
-          const boost::posix_time::ptime &st = meas->start_time();
+          const time_point_t &st = meas->start_time();
           const float rt = meas->real_time();
           
           SampleToTimeInfoMap::iterator pos = samplenum_to_starttime.find( samplenum );
@@ -4975,14 +5305,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       SampleToTimeInfoMap::const_iterator next = samplenum_to_starttime.begin(), iter;
       for( iter = next++; next != samplenum_to_starttime.end(); ++iter, ++next )
       {
-        const boost::posix_time::ptime &st = iter->second.first;
-        const boost::posix_time::ptime &next_st = next->second.first;
+        const time_point_t &st = iter->second.first;
+        const time_point_t &next_st = next->second.first;
         
         const float rt = iter->second.second;
-        const boost::posix_time::time_duration duration = boost::posix_time::microseconds( static_cast<int64_t>(rt*1.0E6) );
+        const time_point_t::duration duration = chrono::microseconds( static_cast<int64_t>(rt*1.0E6) );
         
-        boost::posix_time::time_duration diff = ((st + duration) - next_st);
-        if( diff.is_negative() )
+        time_point_t::duration diff = ((st + duration) - next_st);
+        if( diff < time_point_t::duration::zero() )
           diff = -diff;
         
         if( diff < (duration/100) )
@@ -6015,7 +6345,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {
-      string msg = "Unknown detector type: maufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
+      string msg = "Unknown detector type: manufacturer=" + manufacturer_ + ", ins_model=" + instrument_model_;
       log_developer_error( __func__, msg.c_str() );
     }
 #endif
@@ -6183,10 +6513,10 @@ std::string SpecFile::generate_psuedo_uuid() const
     boost::hash_combine( seed, meas->gamma_count_sum() );
     boost::hash_combine( seed, meas->neutron_counts_sum() );
     
-    if( SpecUtils::valid_latitude(meas->latitude_) )
-      boost::hash_combine( seed, meas->latitude_ );
-    if( SpecUtils::valid_longitude(meas->longitude_) )
-      boost::hash_combine( seed, meas->longitude_ );
+    if( SpecUtils::valid_latitude(meas->latitude()) )
+      boost::hash_combine( seed, meas->latitude() );
+    if( SpecUtils::valid_longitude(meas->longitude()) )
+      boost::hash_combine( seed, meas->longitude() );
     //  boost::hash_combine( seed, position_time_ );
   }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
 
@@ -6197,7 +6527,7 @@ std::string SpecFile::generate_psuedo_uuid() const
   string uuid;
   
   if(!measurements_.empty() && measurements_[0]
-      && !measurements_[0]->start_time().is_special() )
+      && !is_special(measurements_[0]->start_time()) )
     uuid = SpecUtils::to_iso_string( measurements_[0]->start_time() );
   else
     uuid = SpecUtils::to_iso_string( time_from_string( "1982-07-28 23:59:59:000" ) );
@@ -6504,6 +6834,8 @@ size_t SpecFile::memmorysize() const
 
   //keep from double counting energy calibrations shared between Measurement objects.
   set<const EnergyCalibration *> calibrations_seen;
+  set<const SpecUtils::LocationState *> locations_seen;
+  
   for( const auto &m : measurements_ )
   {
     size += m->memmorysize();
@@ -6511,6 +6843,13 @@ size_t SpecFile::memmorysize() const
     if( calibrations_seen.count( m->energy_calibration_.get() ) )
       size -= m->energy_calibration_->memmorysize();
     calibrations_seen.insert( m->energy_calibration_.get() );
+    
+    if( m->location_ )
+    {
+      if( locations_seen.count( m->location_.get() ) )
+        size -= m->location_->memmorysize();
+      locations_seen.insert( m->location_.get() );
+    }//if( m->location_ )
   }//for( const auto &m, measurements_ )
 
   return size;
@@ -6605,6 +6944,7 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
   #else
       if( has_common && energy_cal && (energy_cal != this_cal) && ((*energy_cal) == (*this_cal)) )
       {
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
         string errmsg = "EnergyCalibration::equal_enough didnt find any differences";
         try
         {
@@ -6613,6 +6953,9 @@ std::shared_ptr<const EnergyCalibration> SpecFile::suggested_sum_energy_calibrat
         {
           errmsg = e.what();
         }
+#else
+        string errmsg = "EnergyCalibration::equal_enough not called to check equality.";
+#endif
         char buffer[512];
         snprintf( buffer, sizeof(buffer), "Found case where expected common energy calibration"
                  " but didnt actually have all the same binning, issue found: %s", errmsg.c_str() );
@@ -6689,7 +7032,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     return nullptr;
   
   if( ene_cal->type() == EnergyCalType::InvalidEquationType )
-    throw runtime_error( "sum_measurements: callid with InvalidEquationType energy calibration" );
+    throw runtime_error( "sum_measurements: called with InvalidEquationType energy calibration" );
   
   dataH->energy_calibration_ = ene_cal;
   
@@ -6706,7 +7049,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   dataH->sample_number_ = -1;
   if( sample_numbers.size() == 1 )
     dataH->sample_number_ = *begin(sample_numbers);
-  dataH->start_time_ = boost::posix_time::pos_infin;
+  dataH->start_time_ = time_point_t{ time_point_t::duration::max() };
   
   const size_t ndet_to_use = det_names.size();
   if( ndet_to_use == 1 )
@@ -6799,6 +7142,25 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         
       source_types.insert( meas->source_type() );
       
+      // Sum dose rate, if valid
+      if( meas->dose_rate_ >= 0.0f )
+      {
+        if( dataH->dose_rate_ >= 0.0f )
+          dataH->dose_rate_ += meas->dose_rate_;
+        else
+          dataH->dose_rate_ += meas->dose_rate_;
+      }//if( meas->dose_rate_ >= 0.0f )
+      
+      // Sum exposure rate, if valid
+      if( meas->exposure_rate_ >= 0.0f )
+      {
+        if( dataH->exposure_rate_ >= 0.0f )
+          dataH->exposure_rate_ += meas->exposure_rate_;
+        else
+          dataH->exposure_rate_ += meas->exposure_rate_;
+      }//if( meas->dose_rate_ >= 0.0f )
+      
+      
       if( spec_size > 3 && meas->energy_calibration() && meas->energy_calibration()->valid() )
       {
         dataH->live_time_ += meas->live_time();
@@ -6835,20 +7197,14 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   //  information
   if( total_num_gamma_spec == 1 )
   {
-    dataH->latitude_             = meas_per_thread[0][0]->latitude_;
-    dataH->longitude_            = meas_per_thread[0][0]->longitude_;
-    dataH->position_time_        = meas_per_thread[0][0]->position_time_;
     dataH->sample_number_        = meas_per_thread[0][0]->sample_number_;
     dataH->occupied_             = meas_per_thread[0][0]->occupied_;
-    dataH->speed_                = meas_per_thread[0][0]->speed_;
-    dataH->dx_                   = meas_per_thread[0][0]->dx_;
-    dataH->dy_                   = meas_per_thread[0][0]->dy_;
     dataH->detector_name_        = meas_per_thread[0][0]->detector_name_;
     dataH->detector_number_      = meas_per_thread[0][0]->detector_number_;
     dataH->detector_description_ = meas_per_thread[0][0]->detector_description_;
     dataH->quality_status_       = meas_per_thread[0][0]->quality_status_;
+    dataH->location_             = meas_per_thread[0][0]->location_;
   }//if( total_num_gamma_spec == 1 )
-  
   
   
   if( allBinningIsSame )
@@ -7099,8 +7455,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       for( size_t i = 0; i < spec_size; ++i )
         summed_counts[i] += out_counts[i];
 #endif
-      
-      
     }//for( const auto &iter : cal_to_meas )
   
     
@@ -7183,8 +7537,8 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
 #endif // GROUP_BY_ENE_CAL_BEFORE_SUM
   }//if( allBinningIsSame ) / else
   
-  if( dataH->start_time_.is_infinity() )
-    dataH->start_time_ = boost::posix_time::not_a_date_time;
+  if( is_special(dataH->start_time_) )
+    dataH->start_time_ = time_point_t{};
   
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );
@@ -7589,7 +7943,7 @@ void DetectorAnalysisResult::reset()
   distance_ = -1.0f;
   dose_rate_ = -1.0f;
   real_time_ = -1.0f;           //in units of secons (eg: 1.0 = 1 s)
-  //start_time_ = boost::posix_time::ptime();
+  //start_time_ = time_point_t{};
   detector_.clear();
 }//void DetectorAnalysisResult::reset()
 
@@ -7613,7 +7967,7 @@ void DetectorAnalysis::reset()
   algorithm_component_versions_.clear();
   algorithm_creator_.clear();
   algorithm_description_.clear();
-  analysis_start_time_ = boost::posix_time::ptime();
+  analysis_start_time_ = time_point_t{};
   analysis_computation_duration_ = 0.0f;
   algorithm_result_description_.clear();
   
@@ -7628,7 +7982,7 @@ bool DetectorAnalysis::is_empty() const
    && algorithm_component_versions_.empty()
    && algorithm_creator_.empty()
    && algorithm_description_.empty()
-   //&& analysis_start_time_.is_special()
+   //&& is_special(analysis_start_time_)
    //&& analysis_computation_duration_ < FLT_EPSILON
    && algorithm_result_description_.empty()
    && results_.empty());
@@ -7687,26 +8041,33 @@ void SpecFile::write_to_file( const std::string name,
 }//write_to_file(...)
 
 
-void SpecFile::write_to_file( const std::string &filename,
-                   const std::set<int> &sample_nums,
-                   const std::vector<std::string> &det_names,
-                   const SaveSpectrumAsType format ) const
+std::set<int> SpecFile::detector_names_to_numbers( const std::vector<std::string> &det_names ) const
 {
   set<int> det_nums_set;
   
   {//begin lock on mutex_
     std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
+    
     for( const std::string &name : det_names )
     {
       const auto pos = std::find( begin(detector_names_), end(detector_names_), name );
       if( pos == end(detector_names_) )
-        throw runtime_error( "SpecFile::write_to_file(): invalid detector name in the input" );
-    
+        throw runtime_error( "Invalid detector name ('" + name + "') in the input" );
+      
       const size_t index = pos - detector_names_.begin();
       det_nums_set.insert( detector_numbers_[index] );
     }//for( const int num : det_nums )
   }//end lock on mutex_
+  
+  return det_nums_set;
+}//detector_names_to_numbers(...)
+
+void SpecFile::write_to_file( const std::string &filename,
+                   const std::set<int> &sample_nums,
+                   const std::vector<std::string> &det_names,
+                   const SaveSpectrumAsType format ) const
+{
+  const set<int> det_nums_set = detector_names_to_numbers( det_names );
   
   write_to_file( filename, sample_nums, det_nums_set, format);
 }//void write_to_file(...)
@@ -7853,6 +8214,17 @@ void SpecFile::write( std::ostream &strm,
   if( !success )
     throw runtime_error( "Failed to write to output" );
 }//write_to_file(...)
+
+
+void SpecFile::write( std::ostream &strm,
+           std::set<int> sample_nums,
+           const std::vector<std::string> &det_names,
+           const SaveSpectrumAsType format ) const
+{
+  const set<int> det_nums_set = detector_names_to_numbers( det_names );
+  
+  write( strm, sample_nums, det_nums_set, format );
+}//write(...)
 
 }//namespace SpecUtils
 

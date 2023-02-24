@@ -25,21 +25,17 @@
 
 #include "SpecUtils_config.h"
 
+#include <map>
 #include <set>
 #include <mutex>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <functional>
-
-#ifndef BOOST_DATE_TIME_NO_LIB
-  #define BOOST_DATE_TIME_NO_LIB
-#endif
-#include <boost/date_time/posix_time/posix_time.hpp>
-
+#include <memory>
 
 /*
-Shortcommings that wcjohns should be addressed
+Shortcommings that wcjohns should address:
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
  - Neutron measurements should have their own live and real time
@@ -57,8 +53,6 @@ Shortcommings that wcjohns should be addressed
    - Should probably get rid of detector number, and just keep name
  - Should eliminate the <InterSpec:DetectorType> tag in written N42 2012 files.
  - Should consider adding explicit dead_time field
- - Should add elevation and uncertainties to GPS coordinates
- - Should add detector and item orientation/positions
  - Should consider removing measurement_operator and inspection and make location
    part of detector location object
  - Should implement tracking N42 MeasurementGroupReferences to link Analysis
@@ -85,7 +79,7 @@ Shortcommings that wcjohns should be addressed
  - Should add in "Characteristics" a few places (for detectors, system,
 */
 
-//Forward declarations not within SpecUtils namespace
+//Forward declarations
 namespace rapidxml
 {
   template<class Ch> class xml_node;
@@ -95,6 +89,11 @@ namespace rapidxml
 
 class SpecMeas;
 
+namespace SpecUtils
+{
+  struct LocationState;
+}//namespace SpecUtils
+
 #if( SpecUtils_ENABLE_D3_CHART )
 namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 #endif
@@ -103,6 +102,24 @@ namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 
 namespace SpecUtils
 {
+/** For consistency between platforms, we will use microsecond counted time-points/durations.
+ 
+ This is what macOS/Linux use, but Windows uses a higher precision value, so you may have to
+ make some casts to make things work.
+ E.g.:
+ ```
+ const auto now_sys = std::chrono::system_clock::now();
+ const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );
+ meas->set_start_time( now )
+ ```
+ 
+ The only place this consistency matters is parsing/writing date-times, so its possible in the
+ future we'll just use `std::chrono::system_clock::time_point`, but just limit parsing/writing
+ of timestamps to the microsecond.
+ */
+using time_point_t = std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
+
+
 /** Enum used to specify which spectrum parsing function to call when opening a
  spectrum file.
  
@@ -157,6 +174,11 @@ enum class ParserType : int
   Lzs,
   /** Scan Data XML */
   ScanDataXml,
+  /** Bridgeport MCA-3000 JSON files. */
+  Json,
+  /** CAEN Hexagon MCA gxml format. */
+  CaenHexagonGXml,
+
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -227,10 +249,10 @@ enum class SaveSpectrumAsType : int
 
 
 
-/** Enum to indentify the detection system used to create data in a spectrum
+/** Enum to identify the detection system used to create data in a spectrum
  file.
  
- May be infered from spectrum file format or from comments or information within
+ May be inferred from spectrum file format or from comments or information within
  the spectrum file.
  
  It is currently known to not be comprehensive (e.g., some models not include in
@@ -396,11 +418,12 @@ enum class EnergyCalType : int;
 class SpecFile;
 class Measurement;
 
+struct MultimediaData;
 class DetectorAnalysis;
 struct EnergyCalibration;
 struct N42DecodeHelper2006;
 struct N42DecodeHelper2012;
-struct MeasurementCalibInfo; //defined in SpectrumDataStructs.cpp (used for parsing N42 2006/2012 files and rebinning)
+struct MeasurementCalibInfo; //defined in SpecFile.cpp (used for parsing N42 2006/2012 files and rebinning)
 struct GrossCountNodeDecodeWorker;
   
 /** Checks the first 512 bytes of data for a few magic strings that *should* be
@@ -532,10 +555,25 @@ public:
   //has_gps_info(): returns true only if both latitude and longitude are valid.
   bool has_gps_info() const;
   
+  /** Returns dose-rate, in micro-sieverts per hour, given along with the measurement data.
+   
+   Returns negative value if dose rate was not provided in the file.
+   
+   If dose rate is provided as part of analysis results in the file, it will not be returned
+   here, but instead see #DetectorAnalysisResult::dose_rate_.
+   */
+  float dose_rate() const;
+  
+  /** Returns exposure-rate, in milliroentgen per hour (mR/h), given along with the measurement
+   data.
+   
+   Returns negative value if exposure rate was not provided in the file.
+   */
+  float exposure_rate() const;
   
   //position_time(): returns the (local, or detector) time of the GPS fix, if
-  //  known.  Returns boost::posix_time::not_a_date_time otherwise.
-  const boost::posix_time::ptime &position_time() const;
+  //  known.  Returns time_point_t{} otherwise.
+  const time_point_t position_time() const;
   
   //detector_name(): returns the name of the detector within the device.
   //  May be empty string for single detector systems, or otherwise.
@@ -571,12 +609,12 @@ public:
   const std::vector<std::string> &parse_warnings() const;
   
   //start_time(): start time of the measurement.  Returns
-  //  boost::posix_time::not_a_date_time if could not be determined.
-  const boost::posix_time::ptime &start_time() const;
+  //  time_point_t{} if could not be determined.
+  const time_point_t &start_time() const;
 
   //start_time_copy(): start time of the measurement.  Returns
-  //  boost::posix_time::not_a_date_time if could not be determined.
-  const boost::posix_time::ptime start_time_copy() const;
+  //  SpecUtils::time_point_t{} if could not be determined.
+  const time_point_t start_time_copy() const;
   
   //energy_calibration_model(): returns calibration model used for energy
   //  binning.  If a value of 'InvalidEquationType' is returned, then
@@ -636,6 +674,8 @@ public:
   //  returned vector will have a size 1 if the file contained neutron counts.
   const std::vector<float> &neutron_counts() const;
 
+  /** Returns the LocationState information, or nullptr if not available. */
+  const std::shared_ptr<const SpecUtils::LocationState> &location_state() const;
   
   /** Sets the title property.
    
@@ -648,15 +688,21 @@ public:
   void set_title( const std::string &title );
   
   /** Set start time of this measurement. */
-  void set_start_time( const boost::posix_time::ptime &timestamp );
+  void set_start_time( const time_point_t &timestamp );
   
   /** Set the remarks of this measurement; any previous remarks are removed. */
-  void set_remarks( const std::vector<std::string> &remar );
+  void set_remarks( const std::vector<std::string> &remarks );
+
+  /** Set the parse warnings of this measurement; any previous warnings are removed. */
+  void set_parse_warnings(const std::vector<std::string> &warnings );
   
   /** Set the source type of this measurement; default is #SourceType::Unknown.
    */
   void set_source_type( const SourceType type );
 
+  /** Sets the GPS coordinates and time. */
+  void set_position( double longitude, double latitude, time_point_t pos_time );
+  
   /** Set the sample number of this measurement; default is 1. */
   void set_sample_number( const int samplenum );
   
@@ -936,7 +982,7 @@ public:
   
   
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   //equal_enough(...): tests whether the passed in Measurement objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
@@ -966,9 +1012,7 @@ protected:
   //  Called from set_info_from_txt_or_csv().
   void set_info_from_avid_mobile_txt( std::istream &istr );
   
-  void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data,
-                                std::shared_ptr<DetectorAnalysis> analysis_info,
-                                std::mutex *analysis_mutex );
+  void set_n42_2006_count_dose_data_info( const rapidxml::xml_node<char> *dose_data  );
   
   //set_gross_count_node_info(...): throws exception on error
   //  XXX - only implements nuetron gross gounts right now
@@ -1008,9 +1052,7 @@ protected:
   
   double gamma_count_sum_;
   double neutron_counts_sum_;
-  float speed_;  //in m/s
-  float dx_;
-  float dy_;
+    
   std::string detector_name_;
   int detector_number_;
   std::string detector_description_;  //e.x. "HPGe 50%". Roughly the equivalent N42 2012 "RadDetectorDescription" node
@@ -1025,12 +1067,9 @@ protected:
   SourceType     source_type_;
   
 
-  std::vector<std::string>  remarks_;
-  std::vector<std::string>  parse_warnings_;
-  boost::posix_time::ptime  start_time_;
-  
-  /// \ToDo: switch from ptime, to std::chrono::time_point
-  //std::chrono::time_point<std::chrono::high_resolution_clock,std::chrono::milliseconds> start_timepoint_;
+  std::vector<std::string> remarks_;
+  std::vector<std::string> parse_warnings_;
+  time_point_t start_time_;
   
   /** Pointer to EnergyCalibration.
    This is a shared pointer to allow many #Measurement objects to share the same energy calibration
@@ -1044,18 +1083,45 @@ protected:
   //neutron_counts_[neutron_tube].  I dont think this this is actually used
   //  many places (i.e., almost always have zero or one entry in array).
   std::vector<float>        neutron_counts_;
-
-  //could add Alt, Speed, and Dir here, as well as explicit valid flag
-  double latitude_;  //set to -999.9 if not specified
-  double longitude_; //set to -999.9 if not specified
-//  double elevation_;
-  
-  boost::posix_time::ptime position_time_;
   
   std::string title_;  //Actually used for a number of file formats
   
   /** Bits set according to #DerivedDataProperties.  Will be zero if not derived data. */
   uint32_t derived_data_properties_;
+  
+  /** The measured ambient radiation dose equivalent rate value, in microsieverts per hour (μSv/h).
+   
+   Will have a value less than zero if not-valid.
+   */
+  float dose_rate_;
+  
+  /** The measured radiation exposure rate value, in milliroentgen per hour (mR/h).
+   
+   Will have a negative value if not-valid.
+   */
+  float exposure_rate_;
+
+  /** The #LocationState indicates the position, speed, and/or orientation of the instrument,
+   detector, or item being measured.  At the moment, only one of these quantities are recorded,
+   primarily to reduce complexity since the author hasnt encountered any files that actually
+   convey more than one of these quantities.
+   
+   The N42-2012 elements the #LocationState pointed to from here may represent are
+   - <RadInstrumentState>: In N42-2012 files there may be zero or one of these.
+   - <RadDetectorState>:   In N42-2012 files there may be from zero to many of these; presumable up
+                           to one for each detector.
+   - <RadItemState>:       In N42-2012 files there may be from zero to many of these; presumable
+                           more than one would be to describe multiple sources, but this isnt
+                           directly specified in the spec.
+   
+   In N42-2012 files, the <RadInstrumentState> is looked for, and used first; if it isnt found,
+   then <RadItemState>, then <RadDetectorState>.  The #LocationState::type_ variable will tell
+   you the type of information conveyed.
+   
+   Other file formats generally convey either GPS coordinates, or relative source position, at best,
+   so information is stored as best as reasonable.
+   */
+  std::shared_ptr<const SpecUtils::LocationState> location_;
   
   friend class ::SpecMeas;
   friend class SpecFile;
@@ -1079,7 +1145,7 @@ public:
 
   DoseType m_doseType;
   std::string m_remark;
-  boost::posix_time::ptime m_startTime;
+ time_point_t m_startTime;
   float m_realTime;
   float m_doseRate;
 };//class CountDose
@@ -1252,6 +1318,7 @@ public:
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
   std::shared_ptr<const Measurement> measurement( size_t num ) const;
   std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
+  const std::vector<std::shared_ptr<const MultimediaData>> &multimedia_data() const;
   bool has_gps_info() const; //mean longitude/latitude are valid gps coords
   double mean_latitude() const;
   double mean_longitude() const;
@@ -1305,14 +1372,14 @@ public:
   //  directly from the Measurement class is because you should only be dealing
   //  with const pointers to these object for both the sake of the modified_
   //  flag, but also to ensure some amount of thread safety.
-  void set_start_time( const boost::posix_time::ptime &timestamp,
+  void set_start_time( const time_point_t &timestamp,
                        const std::shared_ptr<const Measurement> measurement  );
   void set_remarks( const std::vector<std::string> &remarks,
                     const std::shared_ptr<const Measurement> measurement  );
   void set_source_type( const SourceType type,
                          const std::shared_ptr<const Measurement> measurement );
   void set_position( double longitude, double latitude,
-                     boost::posix_time::ptime position_time,
+                    time_point_t position_time,
                      const std::shared_ptr<const Measurement> measurement );
   void set_title( const std::string &title,
                   const std::shared_ptr<const Measurement> measurement );
@@ -1609,7 +1676,9 @@ public:
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
   bool load_xml_scan_data_file( const std::string &filename );
-  
+  bool load_json_file( const std::string &filename );
+  bool load_caen_gxml_file(const std::string& filename);
+
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
   virtual bool load_from_N42( std::istream &istr );
@@ -1727,8 +1796,13 @@ public:
   bool load_from_tracs_mps( std::istream &input );
   
   bool load_from_aram( std::istream &input );
+
+  /** Loads Bridgeport MCA-3000 JSON files. */
+  bool load_from_json( std::istream &input );
   
-  
+  /** Load from a CAEN Hexagon gxml file. */
+  bool load_from_caen_gxml(std::istream& input);
+
   //cleanup_after_load():  Fixes up inconsistent calibrations, binnings and such,
   //  May throw exception on error.
   enum CleanupAfterLoadFlags
@@ -1796,7 +1870,7 @@ public:
    Throws excpetion if energy calibration channel counts are incompatible, or passed in #Measurment
    is not owned by the SpecFile.
    */
-  void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
+  virtual void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
                         const std::shared_ptr<const Measurement> &measurement );
   
   /** Sets the energy calibration for the specified sample numbers and detector names.
@@ -1833,6 +1907,15 @@ public:
                            const std::vector<std::string> &detectors,
                            const bool rebin_other_detectors );
 */
+  
+  /** Function to convert from detector names, into detector numbers.
+   
+   This is primarily a convenience function while the API mixes using detector
+   numbers and/or detector names for the various calls.
+   
+   Eventually detector numbers will be completely removed.
+   */
+  std::set<int> detector_names_to_numbers( const std::vector<std::string> &det_names ) const;
   
   //Functions to export to various file formats
 
@@ -1875,7 +1958,7 @@ public:
                       const std::vector<int> det_nums,
                       const SaveSpectrumAsType format ) const;
   
-  /** Convience function for calling #write_to_file with detector names, instead
+  /** Convenience function for calling #write_to_file with detector names, instead
    of detector numbers.  If any names are invalid, will throw exception.
    */
   void write_to_file( const std::string &filename,
@@ -1883,7 +1966,7 @@ public:
                      const std::vector<std::string> &det_names,
                      const SaveSpectrumAsType format ) const;
   
-  //write(...): Wites the specified sample and detector numbers to the provided
+  //write(...): Writes the specified sample and detector numbers to the provided
   //  stream, in the format specified.  If the output format allows multiple
   //  records, each Measurement will be placed in its own record.  If the output
   //  format only allows a single records, the specified sample and detector
@@ -1894,6 +1977,14 @@ public:
               std::set<int> sample_nums,
               const std::set<int> det_nums,
               const SaveSpectrumAsType format ) const;
+  
+  /** Convenience function for calling #write with detector names, instead
+   of detector numbers.  If any names are invalid, will throw exception.
+   */
+  void write( std::ostream &strm,
+             std::set<int> sample_nums,
+             const std::vector<std::string> &det_names,
+             const SaveSpectrumAsType format ) const;
   
   //write_pcf(...): writes to GADRAS format, using the convention of what looks
   //  to be newer GADRAS files that include "DeviationPairsInFile" information.
@@ -1963,6 +2054,13 @@ public:
   //  function may not be writing all the information it could to the file.
   bool write_integer_chn( std::ostream &ostr, std::set<int> sample_nums,
                           const std::set<int> &det_nums ) const;
+  
+  /** Same as other #write_integer_chn function call, but takes in detector names instead
+   of numbers.
+   */
+  bool write_integer_chn( std::ostream &ostr, std::set<int> sample_nums,
+                         const std::vector<std::string> &det_names ) const;
+  
   
   /** Enum to specify the type of binary SPC file to write. */
   enum SpcBinaryType{ IntegerSpcType, FloatSpcType };
@@ -2111,13 +2209,15 @@ public:
   virtual bool write_2012_N42( std::ostream& ostr ) const;
 
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   //equal_enough(...): tests whether the passed in SpecFile objects are
   //  equal, for most intents and purposes.  Allows some small numerical
   //  rounding to occur.
   //Throws an std::exception with a brief explanaition when an issue is found.
   static void equal_enough( const SpecFile &lhs, const SpecFile &rhs );
+#endif
   
+#if( PERFORM_DEVELOPER_CHECKS )
   double deep_gamma_count_sum() const;
   double deep_neutron_count_sum() const;
 #endif
@@ -2354,6 +2454,13 @@ protected:
   // radMeasurementGroupReferences, or radMeasurementReferences
   std::shared_ptr<const DetectorAnalysis> detectors_analysis_;
 
+  /** Multimedia data (e.g. images) included within the spectrum file.
+   
+   Currently only implemented for N42.42-2011 (do any other file formats
+   include images?).
+   */
+  std::vector<std::shared_ptr<const MultimediaData>> multimedia_data_;
+  
   
   //properties_flags_: intenteded to indicate boolean things about the
   //  measurement style, origin, properties, or other values.
@@ -2466,22 +2573,34 @@ public:
   std::string id_confidence_;
   float distance_;            //in units of mm (eg: 1.0 == 1 mm )
   
-  float dose_rate_;           //in units of micro-sievert per hour
-                              //   (eg: 1.0 = 1 u-sv)
+  /** Dose rate, in units of micro-sievert per hour, i.e. 1.0 = 1 uSv/h.
+   
+   This value is only filled out if it is provided as part of the
+   detectors analysis result.  If dose rate is provided as part of
+   the spectral data (e.g., next to the spectrum), it will be provided
+   in #Measurement::dose_rate_, and not here
+   
+   This value will be negative if not provided.
+   */
+  float dose_rate_;
   
-  float real_time_;           //in units of seconds (eg: 1.0 = 1 s)
+  /** Real time provided in the analysis results, in units of seconds, i.e. 1.0 = 1 s.
+   
+   This value will be negative if not provided in the analysis results.
+   */
+  float real_time_;
   
-  //20171220: removed start_time_, since there is no cooresponding equivalent
+  //20171220: removed start_time_, since there is no corresponding equivalent
   //  in N42 2012.  Instead should link to which detectors this result is
   //  applicable to.
-  //boost::posix_time::ptime start_time_;  //start time of the cooresponding data (its a little unclear in some formats if this is the case...)
+  //time_point_t start_time_;  //start time of the corresponding data (its a little unclear in some formats if this is the case...)
   
   std::string detector_;
   
   DetectorAnalysisResult();
   void reset();
   bool isEmpty() const;
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   static void equal_enough( const DetectorAnalysisResult &lhs,
                            const DetectorAnalysisResult &rhs );
 #endif
@@ -2517,7 +2636,7 @@ public:
   std::string algorithm_description_;
   
   /** Time at which the analysis was started, if available; */
-  boost::posix_time::ptime analysis_start_time_;
+  time_point_t analysis_start_time_;
   
   /** The number of seconds taken to perform the analysis; will be 0.0f if not
    specified.
@@ -2552,11 +2671,84 @@ public:
   void reset();
   bool is_empty() const;
   
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
   static void equal_enough( const DetectorAnalysis &lhs,
                            const DetectorAnalysis &rhs );
 #endif
 };//struct DetectorAnalysisResults
+
+
+
+
+/** Corresponds to a N42.42-2011 <MultimediaData> element that is often used to
+ include images within the spectrum file.
+ 
+ Currently only the subset of fields relevant to InterSpec is implemented;
+ */
+struct MultimediaData
+{
+  /** Corresponds to the N42.42 <Remark> element. */
+  std::string remark_;
+  
+  /** Free-form text describing the contents or any other aspects of the multimedia data.
+   
+   <MultimediaDataDescription>
+   */
+  std::string descriptions_;
+    
+  /** The encoded multimedia data.
+   
+   Corresponds to either, <BinaryUTF8Object>, <BinaryHexObject>, or
+   <BinaryBase64Object> elements in N42.42-2011.
+   
+   Note that the data has not been decoded - you will need to do that if you
+   want to make use of it (encoding/decoding has not been implemented yet, but
+   for use in InterSpec we can call out to Wt::Utils, which we dont want to
+   introduce as a dependency into SpecUtils).
+   
+   \sa data_encoding_
+   */
+  std::vector<char> data_;
+  
+  /** Data may be encoded in one of the following three ways in the N42 file;
+   the data is not decoded by this library.
+   */
+  enum class EncodingType
+  {
+    BinaryUTF8,
+    BinaryHex,
+    BinaryBase64
+  };//enum class EncodingType
+  
+  /** The encoding of the \c data_ */
+  EncodingType data_encoding_;
+  
+  /** Date-time at which capture of the multimedia data was started.
+   Corresponds to <MultimediaCaptureStartDateTime>, and will be invalid if not specified.
+   */
+  time_point_t capture_start_time_;
+  
+  //<MultimediaCaptureDuration>,
+  
+  /** The location of the file containing the multimedia data; may be specified even
+   if #data_ not empty (as per N42.42-2011).
+   */
+  std::string file_uri_;
+  
+  //<MultimediaFileSizeValue>,
+  //<MultimediaDataMIMEKind>,
+  
+  /** Encoding MIME type of #data_ or file at #file_uri_.
+   */
+  std::string mime_type_;
+  
+  //<MultimediaDeviceCategoryCode>,
+  //<MultimediaDeviceIdentifier>,
+  //<ImagePerspectiveCode>,
+  //<ImageWidthValue>,
+  //<ImageHeightValue>,
+  //<MultimediaDataExtension>
+};//struct MultimediaData
 
 }//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h

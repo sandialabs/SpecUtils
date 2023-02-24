@@ -20,28 +20,29 @@
 #include "SpecUtils_config.h"
 
 #include <cmath>
-#include <vector>
-#include <memory>
-#include <string>
 #include <cctype>
 #include <limits>
-#include <numeric>
-#include <fstream>
-#include <cctype>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <numeric>
 #include <iostream>
-#include <cstdint>
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
 
+#include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -195,6 +196,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
   
   reset();
   std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
+  std::shared_ptr<LocationState> location;
+  
   
   //Each line should be terminated with "line feed" (0Dh)
   // and "carriage return" (0Ah), but for now I'm just using safe_get_line(...),
@@ -335,6 +338,9 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           meas->remarks_.push_back( "Neutron counts is in counts per second (real time was zero, so could not determine gross counts)" );
         }
       }//if( neutrons_were_cps )
+      
+      if( location )
+        meas->location_ = location;
       
       if( (measurements_.empty() || measurements_.back()!=meas) && nchannel > 0 )
         measurements_.push_back( meas );
@@ -477,6 +483,12 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$SPEC_ID:") )
       {
         string remark;
+        
+        // There is some inconsistency with how this "$SPEC_ID:" field is used; if it is a
+        //  single line, we will interpret it as the "title" of the record, if we dont detect
+        //  some detector specific information.  If it is multiple lines, we will stuff it in
+        //  a (file-level) remark.
+        size_t num_unlabeled_spec_id_lines = 0;
         while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
@@ -542,11 +554,15 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             //{
           }else
           {
+            num_unlabeled_spec_id_lines += !line.empty();
             remark += (!remark.empty() ? " " : "") + line;
           }
         }//while( SpecUtils::safe_get_line( istr, line ) )
         
-        remarks_.push_back( remark );
+        if( num_unlabeled_spec_id_lines == 1 )
+          meas->title_ += remark;
+        else if( !remark.empty() )
+          remarks_.push_back( remark );
       }else if( starts_with(line,"$ENER_FIT:")
                || starts_with(line,"$GAIN_OFFSET_XIA:") )
       {
@@ -617,6 +633,9 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }
       }else if( starts_with(line,"$GPS:") )
       {
+        float speed = numeric_limits<float>::quiet_NaN();
+        double longitude = numeric_limits<double>::quiet_NaN(), latitude = numeric_limits<double>::quiet_NaN();
+        
         while( SpecUtils::safe_get_line( istr, line ) )
         {
           trim(line);
@@ -634,19 +653,37 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( starts_with( line, "Lon=") )
           {
-            if( sscanf( valuestr.c_str(), "%lf", &(meas->longitude_) ) != 1 )
-              meas->longitude_ = -999.9;
+            if( !parse_double(valuestr.c_str(), valuestr.size(), longitude) )
+              longitude = numeric_limits<double>::quiet_NaN();
           }else if( starts_with( line, "Lat=") )
           {
-            if( sscanf( valuestr.c_str(), "%lf", &(meas->latitude_) ) != 1 )
-              meas->latitude_ = -999.9;
+            if( !parse_double(valuestr.c_str(), valuestr.size(), latitude) )
+              latitude = numeric_limits<double>::quiet_NaN();
           }else if( starts_with( line, "Speed=") )
           {
-            if( sscanf( valuestr.c_str(), "%f", &(meas->speed_) ) != 1 )
-              meas->speed_ = 0.0;
+            if( !parse_float( valuestr.c_str(), valuestr.size(), speed) )
+              speed = numeric_limits<float>::quiet_NaN();
           }else if( !line.empty() )
             remarks_.push_back( line ); //also can be Alt=, Dir=, Valid=
         }//while( SpecUtils::safe_get_line( istr, line ) )
+        
+        if( !IsNan(speed) || (valid_longitude(longitude) && valid_latitude(latitude)) )
+        {
+          if( !location )
+          {
+            location = make_shared<LocationState>();
+            location->type_ = LocationState::StateType::Instrument;
+          }
+          
+          location->speed_ = speed;
+          if( valid_longitude(longitude) && valid_latitude(latitude) )
+          {
+            auto geo = make_shared<GeographicPoint>();
+            geo->longitude_ = longitude;
+            geo->latitude_ = latitude;
+            location->geo_location_ = geo;
+          }//if( valid GPS coordinates )
+        }//if( we read in something that will go in LocationState )
       }else if( starts_with(line,"$GPS_COORDINATES:") )
       {
         if( SpecUtils::safe_get_line( istr, line ) )
@@ -1054,15 +1091,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         trim(line);
         skip_getline = starts_with(line,"$");
         
-        DetectorAnalysisResult result;
-        if( !toFloat(line, result.dose_rate_) )
+        float dose_rate = 0.0f;
+        if( !toFloat(line, dose_rate) )
         {
-          remarks_.push_back( "Error reading DOSE_RATE, line: " + line );
+          parse_warnings_.push_back( "Error reading DOSE_RATE, line: " + line );
         }else
         {
-          if( !anaresult )
-            anaresult = std::make_shared<DetectorAnalysis>();
-          anaresult->results_.push_back( result );
+          meas->dose_rate_ = dose_rate;
         }
       }else if( starts_with(line,"$RADIONUCLIDES:") )
       { //Have only seen one file with this , and it only had a single nuclide
@@ -1222,6 +1257,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         cleanup_current_meas();
         
         meas = make_shared<Measurement>();
+        location.reset();
       }else if( starts_with(line,"$RT:")
                || starts_with(line,"$DT:") )
       {
@@ -1286,7 +1322,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$KROMEK_INFO:") )
       {
         //  "$DATE_MEA:" appears to be the *end* of the measurement, so we'll correct for that
-        if( meas->start_time_.is_special()
+        if( is_special(meas->start_time_)
            || (meas->real_time_ <= std::numeric_limits<float>::epsilon())
            || IsInf(meas->real_time_)
            || IsNan(meas->real_time_) )
@@ -1294,7 +1330,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           parse_warnings_.emplace_back( "Not correcting Kromek time to be start of measurement" );
         }else
         {
-          meas->start_time_ -= boost::posix_time::milliseconds( static_cast<int64_t>( std::round(1000.0*meas->real_time_) ) );
+          meas->start_time_ -= chrono::milliseconds( static_cast<int64_t>( std::round(1000.0*meas->real_time_) ) );
         }
         
         
@@ -1500,17 +1536,20 @@ bool SpecFile::write_iaea_spe( ostream &output,
       }
     }//if( remarks.size() )
     
-    if( !summed->start_time_.is_special() )
+    if( !is_special(summed->start_time_) )
     {
       // mm/dd/yyyy hh:mm:ss "02/29/2016 14:31:47"
-      const int year =  static_cast<int>( summed->start_time_.date().year() );
-      const int month = static_cast<int>( summed->start_time_.date().month() );
-      const int day =   static_cast<int>( summed->start_time_.date().day() );
-      const int hour =  static_cast<int>( summed->start_time_.time_of_day().hours() );
-      const int mins =  static_cast<int>( summed->start_time_.time_of_day().minutes() );
-      const int secs =  static_cast<int>( summed->start_time_.time_of_day().seconds() );
-      //double frac = summed->start_time_.time_of_day().fractional_seconds()
-      //             / double(boost::posix_time::time_duration::ticks_per_second());
+      
+      const chrono::time_point<chrono::system_clock,date::days> st_as_days = date::floor<date::days>(summed->start_time_);
+      const date::year_month_day st_ymd = date::year_month_day{st_as_days};
+      const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(summed->start_time_ - st_as_days);
+      
+      const int year = static_cast<int>( st_ymd.year() );
+      const int month = static_cast<int>( static_cast<unsigned>( st_ymd.month() ) );
+      const int day = static_cast<int>( static_cast<unsigned>( st_ymd.day() ) );
+      const int hour = static_cast<int>( time_of_day.hours().count() );
+      const int mins = static_cast<int>( time_of_day.minutes().count() );
+      const int secs = static_cast<int>( time_of_day.seconds().count() );
       
       //snprintf( buffer, sizeof(buffer), "%.2i/%.2i/%.4i %.2i:%.2i:%09.6f",
       //        month, day, year, hour, mins, (secs+frac) );

@@ -19,12 +19,12 @@
 
 #include "SpecUtils_config.h"
 
-#include <vector>
 #include <string>
-#include <float.h>
+#include <vector>
 #include <cstring>
-#include <fstream>
 #include <float.h>
+#include <fstream>
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 

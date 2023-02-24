@@ -27,17 +27,18 @@
 #include <iostream>
 #include <fstream>
 
+#define BOOST_TEST_MODULE TestTimeFromString
+#include <boost/test/unit_test.hpp>
+
+//#define BOOST_TEST_DYN_LINK
+// To use boost unit_test as header only (no link to boost unit test library):
+//#include <boost/test/included/unit_test.hpp>
+
 
 #include <boost/date_time/date.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-
-
-//#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE testTimeFromString
-//#include <boost/test/unit_test.hpp>
-#include <boost/test/included/unit_test.hpp>
 
 
 #include "SpecUtils/DateTime.h"
@@ -50,11 +51,6 @@ using namespace std;
 using namespace boost::unit_test;
 using namespace boost::posix_time;
 using namespace boost::gregorian;
-
-
-//time_from_string_strptime (doesn't work on Windows)
-//time_from_string_boost ?
-
 
 
 void compare_delim_duration_from_str( const string test, const double truth )
@@ -128,13 +124,13 @@ BOOST_AUTO_TEST_CASE(durationFromString)
 
 void compare_from_str( const string test, const string truth )
 {
-  const ptime testptime = SpecUtils::time_from_string( test.c_str() );
-  const ptime truthptime = SpecUtils::time_from_string( truth.c_str() );
+  const SpecUtils::time_point_t testptime = SpecUtils::time_from_string( test.c_str() );
+  const SpecUtils::time_point_t truthptime = SpecUtils::time_from_string( truth.c_str() );
       
-  const string test_fmt_str = SpecUtils::to_common_string(testptime,true);
-  const string truth_fmt_str = SpecUtils::to_common_string(truthptime,true);
+  const string test_fmt_str = SpecUtils::to_iso_string(testptime);
+  const string truth_fmt_str = SpecUtils::to_iso_string(truthptime);
   
-  BOOST_REQUIRE_MESSAGE( !truthptime.is_special(), "Truth datetime ('" << truth << "') is invalid" );
+  BOOST_REQUIRE_MESSAGE( !SpecUtils::is_special(truthptime), "Truth datetime ('" << truth << "') is invalid" );
   
   BOOST_CHECK_MESSAGE( test_fmt_str==truth_fmt_str,
                        "Date formatted '" << test << "' gave datetime '" << test_fmt_str
@@ -191,7 +187,13 @@ void minimalTestFormats()
   compare_from_str( "01-Jan-2000",            "20000101T000000" );
   compare_from_str( "2010/01/18",             "20100118T000000" );
   compare_from_str( "2010-01-18",             "20100118T000000" );
-  compare_from_str( "2015-05-16T05:50:06.7199222-04:00", "20150516T055006.7199222" );
+  compare_from_str( "2015-05-16T05:50:06.7199222-04:00", "20150516T055006.7199222" ); // Time zone will be discarded
+  compare_from_str( "2015-05-16T05:50:06.7199228-04:00", "20150516T055006.7199222" ); // Time zone will be discarded, accuracy truncated to microseconds
+  
+  compare_from_str( "01.Nov.2010 214335", "20101101T214335" );
+  compare_from_str( "May. 21 2013 070642", "20130521T070642" );
+  compare_from_str( "3.14.2006 10:19:36", "20060314T101936" );
+  
   //"Fri, 16 May 2015 05:50:06 GMT"
   compare_from_str( "1997-07-16T19:20:30+01:00", "19970716T192030" );
   compare_from_str( "2070-07-16T19:20:30+01:00", "20700716T192030" );
@@ -243,8 +245,23 @@ void minimalTestFormats()
   compare_from_str( "22 March 1999 05:06:07 CET", "19990322T050607" );
   //Monday, 22 March 1999 05:06:07 o'clock CET
   compare_from_str( "22-Mar-1999 05:06:07", "19990322T050607" );
-  compare_from_str( "22-Mar-99 05.06.07.000000888 AM", "19990322T050607.000000888" );
-  compare_from_str( "22-Mar-99 05.06.07.000000888 PM", "19990322T170607.000000888" );
+  compare_from_str( "22-Mar-99 05.06.07.000000888 AM", "19990322T050607" );
+  compare_from_str( "22-Mar-99 05.06.07.000000888 PM", "19990322T170607" );
+  compare_from_str( "22-Mar-99 05.06.07.00000888 AM", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-99 05.06.07.00000888 PM", "19990322T170607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.00000888 AM", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-2010 05.06.07.00000888 PM", "20100322T170607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.000008 AM", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-2010 05.06.07.000008 PM", "20100322T170607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.0000080 AM", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-2010 05.06.07.0000080 PM", "20100322T170607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.0000088 AM", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-2010 05.06.07.0000088 PM", "20100322T170607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.0000008", "19990322T050607" );
+  compare_from_str( "22-Mar-1999 05.06.07.000008", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.0000088", "19990322T050607.000008" );
+  compare_from_str( "22-Mar-1999 05.06.07.00000888 PM", "19990322T170607.000008" );
+  
   //Locale en_US : English, United States
   compare_from_str( "March 22, 1999", "19990322T000000" );
   //Monday, March 22, 1999
@@ -411,7 +428,6 @@ void minimalTestFormats()
 BOOST_AUTO_TEST_CASE(timeFromString) 
 {
   minimalTestFormats();
-  return;
   
   string indir, input_filename = "";
 
@@ -422,7 +438,17 @@ BOOST_AUTO_TEST_CASE(timeFromString)
       indir = framework::master_test_suite().argv[i+1];
   }
   
-  const string potential_input_paths[] = { ".", indir, "../../testing/", "../../../testing/", "" };
+  // We will look for "datetimes.txt", in a not-so-elegant way
+  const string potential_input_paths[] = {
+    indir,
+    "",
+    ".",
+    "../../testing/",
+    "../../../testing/",
+    "../../../../testing/",
+    "../../../../../testing/"
+  };
+  
   for( const string dir : potential_input_paths )
   {
     const string potential = SpecUtils::append_path( dir, "datetimes.txt" );
@@ -430,7 +456,8 @@ BOOST_AUTO_TEST_CASE(timeFromString)
       input_filename = potential;
   }
   
-  BOOST_REQUIRE_MESSAGE( !input_filename.empty(), "Failed to find input text test file datetimes.txt - you may need to specify the '--indir' command line argument" );
+  BOOST_REQUIRE_MESSAGE( !input_filename.empty(),
+                        "Failed to find input text test file datetimes.txt - you may need to specify the '--indir' command line argument" );
 
   vector<string> original_string, iso_string;
   ifstream file( input_filename.c_str() );
@@ -466,8 +493,8 @@ BOOST_AUTO_TEST_CASE(timeFromString)
   {
     const string orig_fmt_str = original_string[i];
     const string iso_frmt_str = iso_string[i];
-    const ptime orig_fmt_answ = SpecUtils::time_from_string( orig_fmt_str.c_str() );
-    const ptime iso_fmt_answ = SpecUtils::time_from_string( iso_frmt_str.c_str() );
+    const SpecUtils::time_point_t orig_fmt_answ = SpecUtils::time_from_string( orig_fmt_str.c_str() );
+    const SpecUtils::time_point_t iso_fmt_answ = SpecUtils::time_from_string( iso_frmt_str.c_str() );
         
     const string orig_fmt_answ_str = SpecUtils::to_common_string(orig_fmt_answ,true);
     const string iso_fmt_answ_str = SpecUtils::to_common_string(iso_fmt_answ,true);

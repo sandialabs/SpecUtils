@@ -24,6 +24,7 @@
 #include <string>
 #include <fstream>
 #include <cstring>
+#include <assert.h>
 #include <iostream>
 #include <stdexcept>
 
@@ -33,6 +34,7 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 
 using namespace std;
 
@@ -64,7 +66,7 @@ namespace
     bool success;
     std::string alarmColor; //Red, Yellow, Gree
     int occupancyNumber;
-    boost::posix_time::ptime lastStartTime;
+    SpecUtils::time_point_t lastStartTime;
     std::string icd1FileName;
     float entrySpeed, exitSpeed;
   };//struct DailyFileEndRecord
@@ -617,7 +619,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
   map<int,int> occupancy_num_to_s1_num, occupancy_num_to_s2_num;
   map<int,vector<std::shared_ptr<DailyFileGammaBackground> > > gamma_backgrounds;
   map<int,std::shared_ptr<DailyFileNeutronBackground> > neutron_backgrounds;  //*should* only have one per background number
-  map<int, boost::posix_time::ptime > end_background;
+  map<int, SpecUtils::time_point_t > end_background;
   
   map<int,vector<std::shared_ptr<DailyFileGammaSignal> > > gamma_signal;
   map<int,vector<std::shared_ptr<DailyFileNeutronSignal> > > neutron_signal;
@@ -1263,8 +1265,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
        
        const float realTime = neut ? 0.1f*neut->numTimeSlicesAgregated : 1.0f;
        const float timecor = realTime * (totalChunks - 0.5);
-       const boost::posix_time::seconds wholesec( static_cast<int>(floor(timecor)) );
-       const boost::posix_time::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
+       const chrono::seconds wholesec( static_cast<int>(floor(timecor)) );
+       const chrono::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
        meas->start_time_ -= wholesec;
        meas->start_time_ -= fracsec;
        
@@ -1378,7 +1380,10 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         }//if( we can re-use calibration ) / else
       }//if( we have energy cal info )
       
-      meas->speed_              = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
+      auto loc = make_shared<LocationState>();
+      loc->type_ = LocationState::StateType::Instrument;
+      loc->speed_ = 0.5f*(endrecord.entrySpeed + endrecord.exitSpeed);
+      meas->location_ = loc;
       meas->start_time_         = endrecord.lastStartTime;
       meas->remarks_.push_back( "ICD1 Filename: " + endrecord.icd1FileName );
       meas->remarks_.push_back( "Alarm Color: " + endrecord.alarmColor );
@@ -1416,8 +1421,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       const float timecor = dtMeasStart * float(totalChunks-gamma.timeChunkNumber)/float(totalChunks);
       if( !IsNan(timecor) && !IsInf(timecor) ) //protect against UB
       {
-        const boost::posix_time::seconds wholesec( static_cast<int>(floor(timecor)) );
-        const boost::posix_time::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
+        const chrono::seconds wholesec( static_cast<int>(floor(timecor)) );
+        const chrono::microseconds fracsec( static_cast<int>(1.0E6 * (timecor-floor(timecor))) );
         meas->start_time_ -= wholesec;
         meas->start_time_ -= fracsec;
       }//if( !IsNan(timecor) && !IsInf(timecor) )
@@ -1471,7 +1476,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     }
     
     const vector<std::shared_ptr<DailyFileGammaBackground> > &backgrounds = gammaback->second;
-    const boost::posix_time::ptime &timestamp = backtimestamp->second;
+    const SpecUtils::time_point_t &timestamp = backtimestamp->second;
     
     for( size_t i = 0; i < backgrounds.size(); ++i )
     {
