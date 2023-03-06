@@ -169,6 +169,7 @@ std::string temp_dir()
     //(val = _wgetenv(L"temp" )) ||
     //(val = _wgetenv(L"TEMP"));
 
+#if defined(_MSC_VER)
     wchar_t *val = 0;
     errno_t status = _wdupenv_s( &val, nullptr, L"temp" );
     if( !val )
@@ -180,6 +181,17 @@ std::string temp_dir()
       free( val ); // It's OK to call free with NULL
       return answer;
     }
+#else
+    wchar_t *val = _wgetenv( L"temp" );
+    if( !val )
+      val = _wgetenv( L"TEMP" );
+    
+    if( val )
+    {
+      auto answer = convert_from_utf16_to_utf8( val );
+      return answer;
+    }
+#endif
 
 #if(PERFORM_DEVELOPER_CHECKS)
     log_developer_error( __func__, "Couldnt find temp path on Windows" );
