@@ -558,27 +558,22 @@ SpectrumChartD3.prototype.getElementLineColor = function( selstr ){
 
 SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
-    //console.log( 'In SpectrumChartD3::getStaticSvg: svgchart' );
-    
     let w = this.svg.attr("width");
     let h = this.svg.attr("height");
         
-    //We will need to propagate all the styles we can dynamically set in the SVG
-    //  to the <defs> section of the new SVG.  We could define these in the C++ and pass them to the
-    //  JS, or we can dynamically grab them in JS, which is what we're doing here, but was maybe a
-    //  mistake; its a real pain and probably not complete.
+    //We will need to propagate all the styles we can dynamically set in the SVG (see
+    //  D3SpectrumDisplayDiv::m_cssRules) to the <defs> section of the new SVG.
     
     // The c++ sets the following rules:
-    // ".xgrid > .tick, .ygrid > .tick", "stroke: #b3b3b3" );
-    // ".minorgrid", "stroke: #e6e6e6" );
-    // ".xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis", "stroke: " + c );
-    // ".xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick, .yaxistick", "stroke: " + m_axisColor.cssText() );
-    // ".peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine", "stroke: " + m_axisColor.cssText() );
-    // "#" + id() + " > svg", "background: " + color.cssText() );
-    // "#chartarea" + id(), "fill: " + c );
+    //  ".xgrid > .tick, .ygrid > .tick", "stroke: #b3b3b3"
+    //  ".minorgrid", "stroke: #e6e6e6"
+    //  ".xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text", "fill: black"
+    //  ".xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick", "stroke: black"
+    //  ".peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine", "stroke: black"
+    //  "#" + id() + " > svg", "background: " + color.cssText()
+    //  "#chartarea" + id(), "fill: " + c
     
     let getStyle = function( sel ){
-      
       let el = document.querySelector(sel);
       if( !el ) return null;
       return window.getComputedStyle( el );
@@ -645,9 +640,9 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + '.legendBack{ ' + (legBackFill ? 'fill:' + legBackFill + ';' : "")
     + (legBackStroke ? 'stroke: ' + legBackStroke + ';' : "")
     + ' }\n'
-    + (axisFill ? '.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis{ fill: ' + axisFill + '; }\n' : "")
-    + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
-    + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick{ stroke: ' + gridTickStroke + ';}\n' : "" )
+    + (axisFill ? '.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text { fill: ' + axisFill + '; }\n' : "")
+    + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
+    + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
     //+ '.peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine { stroke: black; }\n'
     + '</style></defs>';
