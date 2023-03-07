@@ -2273,11 +2273,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
     d3.event.preventDefault();
     d3.event.stopPropagation(); 
 
-    if (d3.event.metaKey)
-      self.zoomInYMouse = m;
-    else
-      self.zoomInYMouse = null;
-
+    self.zoomInYMouse = d3.event.metaKey ? m : null;
     self.leftMouseDown = null;
     self.zoominmouse = self.deletePeaksMouse = self.countGammasMouse = self.recalibrationMousePos = null; 
     self.touchHoldEmitted = false;
@@ -2354,9 +2350,6 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 
         // Add in a little debounce; i.e., check to make sure we arent in the middle of a zoom-in animation, or equiv time frame if animation turned off
         self.zooming_plot = (!self.startAnimationZoomTime && ((self.mousedowntime - self.mouseUpTime) > 500) );
-
-        if( !self.zooming_plot ) // 20221029: temporary debug message to make sure this is working right
-          console.log( "dbg: mouse down, Preventing zooming; dt:", (self.mousedowntime - self.mouseUpTime) );
       }
       return false;
 
@@ -2451,6 +2444,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
       }
       
       self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY);
+      self.handleCancelAllMouseEvents()();
+      
       return;
     }
     
@@ -2507,6 +2502,9 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     
     /* Handle recalibration (if needed) */
     self.handleMouseUpRecalibration();
+    
+    if( self.zoomingYPlot || self.zoomInYMouse )
+      self.handleMouseUpZoomY();
 
     /* Handle zooming in x-axis (if needed); We'll require the mouse having been down for at least 75 ms - if its less than this its probably unintented. */
     if( (nowtime - self.mousedowntime) > 75 )
@@ -2543,8 +2541,6 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
 
     /* Set the recalibration mode off */
     self.recalibrationMousePos = null;
-
-    self.handleCancelMouseZoomY();
 
     /* Set the right click drag and mouse down off */
     self.rightClickDown = null;
@@ -2824,6 +2820,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         if ( dx <= 15 || dy <= 15 ) {
           console.log( "Emit TAP HOLD (RIGHT TAP) signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", origTouch.pageX, ", y = ", origTouch.pageY );
           self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, origTouch.pageX, origTouch.pageY);
+          self.handleCancelAllMouseEvents()();
           self.unhighlightPeak(null);
           self.touchHoldEmitted = true;
         }
@@ -9079,8 +9076,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomY = function () {
     if (height > 0) {
       zoomInYText.text("Zoom-In on Y-axis");
       zoomInYBox.attr("class", "leftbuttonzoombox");
-    }
-    else {
+    } else {
       var zoomOutText = "Zoom-out on Y-axis";
       if (-height < 0.05*self.size.height)
         zoomOutText += " x2";
@@ -9105,8 +9101,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomY = function () {
 
 
 SpectrumChartD3.prototype.handleMouseUpZoomY = function () {
-  var self = this;
-
+  let self = this;
   const zoomInYBox = self.vis.select("#zoomInYBox");
   const zoomInYText = self.vis.select("#zoomInYText");
 
@@ -9122,6 +9117,7 @@ SpectrumChartD3.prototype.handleMouseUpZoomY = function () {
   const end_counts = self.yScale.invert( end_px );
   
   console.assert( Math.abs(end_px - start_px) > 10, "handleMouseMoveZoomY() should have zoomInYText for dy_px < 10, end_px:", end_px, ", start_px:", start_px );
+
   if( Math.abs(end_px - start_px) <= 10 ){ //check again, jic
     self.handleCancelMouseZoomY();
     return;
