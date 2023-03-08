@@ -281,7 +281,7 @@ endif( SpecUtils_JAVA_SWIG )
 
 
 if( MINGW )
-  target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a )
+  target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )
 elseif( WIN32 )
   #Pathcch.lib is for PathCchCanonicalizeEx, and is available only on Windows 8 and newer, Desktop and UWP
   #Shlwapi.lib is desktop Windows only, XP and newer
