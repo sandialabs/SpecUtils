@@ -6253,11 +6253,8 @@ void SpecFile::set_detector_type_from_other_info()
   {
     // The <RadInstrumentModelName> tag seems to be "SN20", "SN23-N", etc, but sample size is small.
     // \TODO: verify general form Verifinders will have in this element
-    const bool isVerifinder = ( (model.length() >= 4)
-                                && (model[0] == 'S' || model[0] == 's')
-                                && (model[1] == 'N' || model[1] == 'n')
-                                && (model[2] == '2')
-                                && std::isdigit(model[3]) );
+    const bool isVerifinder = (SpecUtils::icontains(model, "SN2")
+                               || SpecUtils::icontains(model, "VeriFinder"));
     
     //Could also look that has Verifinder has an N42 entry like (I havent seen a LaBr system):
     //  <RadDetectorInformation id="DetectorInfoGamma">
