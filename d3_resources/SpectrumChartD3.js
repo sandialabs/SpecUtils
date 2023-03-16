@@ -1281,10 +1281,18 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   const prevCx = this.cx;
   const prevCy = this.cy;
   
-  this.cx = this.chart.clientWidth;
-  this.cy = this.chart.clientHeight;
-  
-  
+  //Using this.chart.clientWidth / .clientHeight can cause height to grow indefinetly 
+  //  when inside of a scrolling div somewhere. chart.offsetWidth/.offsetHeight dont have this issue
+  const parentRect = this.chart.getBoundingClientRect();
+  if( !parentRect.width || !parentRect.height )
+  {
+    console.log( 'SpectrumChartD3::handleResize: parent didnt have size; not doing anything.' );
+    return;
+  }
+
+  this.cx = parentRect.width;
+  this.cy = parentRect.height;
+
   var titleh = 0, xtitleh = 0, xlabelh = 7 + 22;
   
   // TODO: actually measure `xlabelh`; we could either easily do it in `drawXTicks` or do it with something like:
