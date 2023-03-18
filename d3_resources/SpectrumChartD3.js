@@ -1276,10 +1276,18 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   const prevCx = this.cx;
   const prevCy = this.cy;
   
-  this.cx = this.chart.clientWidth;
-  this.cy = this.chart.clientHeight;
-  
-  
+  //Using this.chart.clientWidth / .clientHeight can cause height to grow indefinetly 
+  //  when inside of a scrolling div somewhere. chart.offsetWidth/.offsetHeight dont have this issue
+  const parentRect = this.chart.getBoundingClientRect();
+  if( !parentRect.width || !parentRect.height )
+  {
+    console.log( 'SpectrumChartD3::handleResize: parent didnt have size; not doing anything.' );
+    return;
+  }
+
+  this.cx = parentRect.width;
+  this.cy = parentRect.height;
+
   var titleh = 0, xtitleh = 0, xlabelh = 7 + 22;
   
   // TODO: actually measure `xlabelh`; we could either easily do it in `drawXTicks` or do it with something like:
@@ -2227,7 +2235,6 @@ SpectrumChartD3.prototype.getDrawnRoiForCoordinate = function( coordinates, allo
   }//for( loop over self.peakPaths )
     
   return paths;
-  
 }//SpectrumChartD3.prototype.getDrawnRoiForCoordinate( [x,y] )
 
 
@@ -2380,15 +2387,15 @@ SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, 
     
     // Don't emit the tap/click signal if there was a tap-hold
     if( self.touchHoldEmitted )
-    return;
+      return;
     
-    // Highlight peaks where tap position falls
-    if( self.mouseDownRoi ){
-      self.highlightPeak( self.mouseDownRoi.path, true );
-    }
+    // Highlight peaks where tap/click position falls
+    const roi = self.mouseDownRoi;
+    if( roi && roi.peak && Array.isArray(roi.peak.Centroid) )
+      self.highlightPeakAtEnergy( roi.peak.Centroid[0] );
     
     // Emit the tap signal, unhighlight any peaks that are highlighted
-    console.log( "Emit TAP/click signal!", "\ncoords:", coords );
+    console.log( "Emit TAP/click signal! - coords:", coords );
     self.WtEmit(self.chart.id, {name: 'leftclicked'}, coords[4], coords[5], coords[2], coords[3]);
     
     if( self.options.allowDragRoiExtent && self.mouseDownRoi && !modKeyDown ){
@@ -10529,9 +10536,13 @@ SpectrumChartD3.prototype.highlightPeak = function( peakElem, highlightLabelTo )
   if( !this.options.showUserLabels && !this.options.showPeakLabels && !this.options.showNuclideNames )
     return;
   
-  self.peakVis.select('text[data-peak-energy="' + peakElem.dataset.energy + '"].peaklabel').each( function(){
-    self.highlightLabel(this,true);
-  });
+  if( peakElem.dataset && peakElem.dataset.energy ){
+    self.peakVis.select('text[data-peak-energy="' + peakElem.dataset.energy + '"].peaklabel').each( function(){
+      self.highlightLabel(this,true);
+    });
+  }else{
+    console.error( 'SpectrumChartD3::highlightPeak: peakElem does have expected attributes:', peakElem );
+  }
 }//SpectrumChartD3.prototype.highlightPeak = ...
 
 

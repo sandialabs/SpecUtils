@@ -55,6 +55,7 @@
 #include <dirent.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <limits.h>
 #endif
 
 #ifndef _WIN32
@@ -300,7 +301,12 @@ bool is_directory( const std::string &name )
   return S_ISDIR(statbuf.st_mode);
 #else
   struct stat statbuf;
-  stat( name.c_str(), &statbuf);
+  if( stat( name.c_str(), &statbuf) < 0 ) {
+    if(errno == ENOENT) {
+      return false;
+    }
+    throw runtime_error( "error getting status of directory" );
+  }
   return S_ISDIR(statbuf.st_mode);
 #endif
 }//bool is_directory( const std::string &name )
