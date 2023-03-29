@@ -1645,7 +1645,6 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       }//if( self.roiDragBoxes && self.showDragLineWhileInRoi ) / else
     }//if / else {what to do}
       
-
     self.updateFeatureMarkers(-1);
   }
 }
@@ -2480,7 +2479,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
         } else {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
-            self.updateFeatureMarkers(self.xScale.invert(m[0]));
+            self.updateFeatureMarkers( energy );
           
           self.mousewait = window.setTimeout(
             self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],modKeyPressed),
@@ -3177,10 +3176,8 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
             count = self.yScale.invert(y);
 
       /* Set the double tap setting parameters */
-      var tapRadius = 35;                   /* Radius area for where a double-tap is valid (anything outside this considered a single tap) */
+      const tapRadius = 35;                   /* Radius area for where a double-tap is valid (anything outside this considered a single tap) */
 
-      /* Update the feature marker positions (argument added for sum peaks) */
-      self.updateFeatureMarkers( energy );
       
       /* Update the touch line position */
       if( wasRoiBeingDragged ){
@@ -3210,7 +3207,13 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
         /* Set last tap event to current one */
         if( t && (t.length === 1) && currentTapEvent.timeStamp ){
+          
+          /* Update the feature marker positions (argument added for sum peaks) */
+          self.updateFeatureMarkers( self.lastTapEvent ? self.lastTapEvent.energy : energy, energy );
+          
           self.lastTapEvent = currentTapEvent;
+          self.lastTapEvent.energy = energy;
+          self.lastTapEvent.count = count;
           self.lastTapEvent.visCoordinates = [t[0][0], t[0][1], t[0][0] + self.padding.leftComputed, t[0][1] + self.padding.topComputed];
         }else{
           self.lastTapEvent = null;
@@ -3220,9 +3223,10 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
       }// if (self.touchPageStart && self.dist(self.touchPageStart, [pageX, pageY]) < tapRadius ) / else
     }else{
       self.lastTapEvent = null;
+      
+      self.updateFeatureMarkers(-1);
     }//if (t.length === 1 && self.touchStart) /else
           
-    self.updateFeatureMarkers(-1);
     self.updateTouchesOnChart(d3.event);
     self.updateMouseCoordText();
     self.updatePeakInfo();
@@ -3231,7 +3235,6 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     self.handleTouchEndDeletePeak();
     self.handleTouchEndPeakFit();
     self.handleTouchEndZoomY();
-      
 
     self.touchPan = false;
     self.touchZoom = false;
@@ -3272,7 +3275,6 @@ SpectrumChartD3.prototype.mousemove = function () {
 
     var energy = self.xScale.invert(p[0]),
         mousey = self.yScale.invert(p[1]);
-
 
     self.updateFeatureMarkers(-1);
     self.updateMouseCoordText();
@@ -3716,10 +3718,9 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
  */
 SpectrumChartD3.prototype.drawRefGammaLines = function() {
   /*Drawing of the refrenece lines is super duper un-optimized!!! */
-  var self = this;
+  const self = this;
 
   if( !self.refLines || !self.refLines.length || !self.refLines[0].lines  || !self.refLines[0].lines.length ) {
-    /*console.log( "no reference lines, " + self.refLines.length ); */
     self.vis.selectAll("g.ref").remove();
     return;
   }
@@ -3753,7 +3754,6 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("class", "ref")
     .attr("transform", tx);
 
-  /*color:'#0000FF',parent:'Ba133',age:'0.00 us',lines:[{e:30.27,h:6.22e-05,pa */
   var stroke = function(d) { return d.parent.color; };
 
   var dashfunc = function(d){
@@ -3765,21 +3765,16 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   };
 
   var h = self.size.height;
-  var m = Math.min(h,self.options.refLineTopPad); /*leave 20px margin at top of chart */
+  var m = Math.min(h,self.options.refLineTopPad); /* leave 20px margin at top of chart */
 
 
   gye.append("line")
     .style("stroke-dasharray", dashfunc )
     .attr("stroke", stroke )
-    /* .attr("class", function(d,i){ return "refline " + i;} ) */
     .attr("y1", h )
     .attr("dx", "-0.5" )
-    /* .attr("y2", function(d){ console.log("y2="); return h - (h-m)*d.h/maxVisibleAmp; } ) */
-    /*.on("mouseover", function(d) { d3.select(this).style("stroke-width", "3");}) */
-    /*.on("mouseout",  function(d) { d3.select(this).style("stroke-width", "1");}) */
      ;
 
-  /* EXIT */
   /* Remove old elements as needed. */
   gy.exit().remove();
   
@@ -4001,8 +3996,6 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     lowerchanval = bisector.left(background.points,energy,1) - 1;
     backgroundSubtractCounts = Math.max(0, counts - (background.points[lowerchanval] ? background.points[lowerchanval].y : 0));
   }
-
-  /*console.log( "updateMouseCoordText: {" + energy + "," + y + "} and also fix self.refLines[0] usage"); */
 
   /*Currently two majorish issues with the mouse text */
   /*  1) The counts for the foreground are all that is given. Should give for background/second */
@@ -7771,45 +7764,193 @@ SpectrumChartD3.prototype.handleCancelMousePeakFit = function() {
 }
 
 
-/**
- * -------------- Peak Marker Functions --------------
+/** Updates Escape/Sum/Compton feature markers.
+ 
+ If this function is called with no arguments, then feature lines will be updated with current
+ mouse/touch position - unless there are none of those on the chart, in which case all lines/txt
+ will be removed.
+ 
+ @arg mouseDownEnergy Only used for "Sum Peak"; gives the original energy the user clicked (if mouse, or previous tap energy if touch)
+ @arg overridePositionPx a two element array of mouse/touch px position; if provided, will be used to overide current mouse/touch position - currently only used for touches, if the user tapeed the screen, and they had previously tapped the screen.
  */
-SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
-  var self = this;
+SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, overridePositionPx ) {
+  const self = this;
   
   /* Positional variables (for mouse and touch) */
-  var m, t;
-  try {
-    m = d3.mouse(self.vis[0][0])
-  } catch (e) {
-  }
+  let m;
+  try{ m = d3.mouse(self.vis[0][0]) }catch(e){}
 
   try{
-    t = d3.touches(self.vis[0][0]);
+    const t = d3.touches(self.vis[0][0]);
+    if( t && t.length > 0 )
+      m = t[0];
   }catch (e) {
   }
 
-  if( !m && (!t || !t.length) ){
-    //console.log( "updateFeatureMarkers: no mouse or touches, returning" );
-    return;
+  if( Array.isArray(overridePositionPx) )
+    m = overridePositionPx;
+  
+  /** We'll first define a bunch of functions to remove all lines/txt we may put onto chart; this is
+   to allow cleanup when this function is called with no arguments, and mouse/touches on chart. */
+  function removeMouseEdgeFromChart(){
+    if ( self.mouseEdge ) {
+      self.mouseEdge.remove();
+      self.mouseEdge = null;
+    }
+    if ( self.mouseEdgeText ) {
+      self.mouseEdgeText.remove();
+      self.mouseEdgeText = null;
+    }
+  };
+  
+  /* Deletes the marker for a single escape peak */
+  function deleteSingleEscape() {
+    if( self.singleEscape ) {
+      self.singleEscape.remove();
+      self.singleEscape = null;
+    }
+    if ( self.singleEscapeText ) {
+        self.singleEscapeText.remove();
+        self.singleEscapeText = null;
+    }
+    if ( self.singleEscapeMeas ) {
+        self.singleEscapeMeas.remove();
+        self.singleEscapeMeas = null;
+    }
+  };
+  
+  /* Deletes the marker for a double escape peak */
+  function deleteDoubleEscape() {
+    if ( self.doubleEscape ) {
+      self.doubleEscape.remove();
+      self.doubleEscape = null;
+    }
+    if ( self.doubleEscapeText ) {
+      self.doubleEscapeText.remove();
+      self.doubleEscapeText = null;
+    }
+    if ( self.doubleEscapeMeas ) {
+      self.doubleEscapeMeas.remove();
+      self.doubleEscapeMeas = null;
+    }
   }
   
-  /* Adjust the mouse position accordingly to touch (because some of these functions use mouse position in touch devices) */
-  if (t.length > 0)
-    m = t[0];
+  /* Deletes the marker for a single forward escape peak */
+  function deleteSingleEscapeForward() {
+    if ( self.singleEscapeForward ) {
+      self.singleEscapeForward.remove();
+      self.singleEscapeForward = null;
+    }
+    if ( self.singleEscapeForwardText ) {
+        self.singleEscapeForwardText.remove();
+        self.singleEscapeForwardText = null;
+    }
+    if ( self.singleEscapeForwardMeas ) {
+        self.singleEscapeForwardMeas.remove();
+        self.singleEscapeForwardMeas = null;
+    }
+  }
 
+  /* Deletes the marker for a double forward escape peak */
+  function deleteDoubleEscapeForward() {
+    if ( self.doubleEscapeForward ) {
+      self.doubleEscapeForward.remove();
+      self.doubleEscapeForward = null;
+    }
+    if ( self.doubleEscapeForwardText ) {
+        self.doubleEscapeForwardText.remove();
+        self.doubleEscapeForwardText = null;
+    }
+    if ( self.doubleEscapeForwardMeas ) {
+        self.doubleEscapeForwardMeas.remove();
+        self.doubleEscapeForwardMeas = null;
+    }
+  };
+  
+  function deleteComptonPeakLine(){
+    if( self.comptonPeak ) {
+      self.comptonPeak.remove();
+      self.comptonPeak = null;
+    }
+    if ( self.comptonPeakText ) {
+      self.comptonPeakText.remove();
+      self.comptonPeakText = null;
+    }
+    if ( self.comptonPeakMeas ) {
+      self.comptonPeakMeas.remove();
+      self.comptonPeakMeas = null;
+    }
+  };//function deleteComptonPeakLine()
+  
+  function deleteClickedSumPeakMarker() {
+    if( self.clickedSumPeak ) {
+      self.clickedSumPeak.remove();
+      self.clickedSumPeak = null;
+    }
+    if ( self.clickedSumPeakMeas ) {
+      self.clickedSumPeakMeas.remove();
+      self.clickedSumPeakMeas = null;
+    }
+  }
+
+  function deleteSumPeakMarker() {
+    if ( self.sumPeak ) {
+      self.sumPeak.remove();
+      self.sumPeak = null;
+    }
+    if ( self.sumPeakMeas ) {
+      self.sumPeakMeas.remove();
+      self.sumPeakMeas = null;
+    }
+    if ( self.sumPeakText ) {
+        self.sumPeakText.remove();
+        self.sumPeakText = null;
+    }
+  }
+
+  function deleteLeftSumPeakMarker() {
+    if ( self.leftSumPeak ) {
+      self.leftSumPeak.remove();
+      self.leftSumPeak = null;
+    }
+    if ( self.leftSumPeakMeas ) {
+      self.leftSumPeakMeas.remove();
+      self.leftSumPeakMeas = null;
+    }
+    if ( self.leftSumPeakText ) {
+      self.leftSumPeakText.remove();
+      self.leftSumPeakText = null;
+    }
+  }
+  
+  if( !m )
+  {
+    // No arguments to this function, and
+    removeMouseEdgeFromChart();
+    deleteSingleEscape();
+    deleteDoubleEscape()
+    deleteSingleEscapeForward();
+    deleteDoubleEscapeForward();
+    deleteComptonPeakLine();
+    deleteClickedSumPeakMarker();
+    deleteSumPeakMarker();
+    deleteLeftSumPeakMarker();
+    
+    return;
+  }//if( !m )
+  
+  /* Adjust the mouse position accordingly to touch (because some of these functions use mouse position in touch devices) */
+  
   /* Chart coordinate values */
-  var energy = self.xScale.invert(m[0]),
+  const energy = self.xScale.invert(m[0]),
       xmax = self.size.width,
       ymax = self.size.height;
-
+      
   /* Do not update feature markers if legend being dragged or energy value is undefined */
-  if ((t && self.legdown) || isNaN(energy))
-    return;
-  if (self.currentlyAdjustingSpectrumScale)
+  if( self.legdown || isNaN(energy) || self.currentlyAdjustingSpectrumScale )
     return;
 
-  var cursorIsOutOfBounds = (t && t.length > 0) ? (t[0][0] < 0 || t[0][0] > xmax) : (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
+  const cursorIsOutOfBounds = (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
 
   const axiscolor = self.getElementLineColor('.tick');
   const txtcolor = self.getElementLineColor('.xaxistitle');
@@ -7833,20 +7974,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
   function deleteMouseEdge( shouldDelete ) {
     if ( shouldDelete || shouldDeleteMouseEdge() )
     {
-      if ( self.mouseEdge ) {
-        self.mouseEdge.remove(); 
-        self.mouseEdge = null;
-      }
-      if ( self.mouseEdgeText ) {
-        self.mouseEdgeText.remove(); 
-        self.mouseEdgeText = null;
-      }
+      removeMouseEdgeFromChart();
       return true;
     }
     return false;
   }
+  
   function updateMouseEdge() {
-
     /* If mouse edge could has been deleted, do not update the mouse edge */
     if (deleteMouseEdge())
       return;
@@ -7888,7 +8022,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
   function updateEscapePeaks() {
     /* Calculations for the escape peak markers */
-    var singleEscapeEnergy = energy - 510.99891,
+    const singleEscapeEnergy = energy - 510.99891,
         singleEscapePix = self.xScale(singleEscapeEnergy),
 
         singleEscapeForwardEnergy = energy + 510.99891,
@@ -7899,69 +8033,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
         doubleEscapeForwardEnergy = energy + 1021.99782,
         doubleEscapeForwardPix = self.xScale(doubleEscapeForwardEnergy);
-
-    /* Deletes the marker for a single escape peak */
-    function deleteSingleEscape() {
-      if( self.singleEscape ) {
-        self.singleEscape.remove();
-        self.singleEscape = null;
-      }
-      if ( self.singleEscapeText ) {
-          self.singleEscapeText.remove();
-          self.singleEscapeText = null;
-      }
-      if ( self.singleEscapeMeas ) {
-          self.singleEscapeMeas.remove();
-          self.singleEscapeMeas = null;
-      }
-    }
-
-    /* Deletes the marker for a double escape peak */
-    function deleteDoubleEscape() {
-      if ( self.doubleEscape ) {
-        self.doubleEscape.remove();
-        self.doubleEscape = null;
-      }
-      if ( self.doubleEscapeText ) {
-        self.doubleEscapeText.remove();
-        self.doubleEscapeText = null;
-      }
-      if ( self.doubleEscapeMeas ) {
-        self.doubleEscapeMeas.remove();
-        self.doubleEscapeMeas = null;
-      }
-    }
-    /* Deletes the marker for a single forward escape peak */
-    function deleteSingleEscapeForward() {
-      if ( self.singleEscapeForward ) {
-        self.singleEscapeForward.remove();
-        self.singleEscapeForward = null;
-      }
-      if ( self.singleEscapeForwardText ) {
-          self.singleEscapeForwardText.remove();
-          self.singleEscapeForwardText = null;
-      }
-      if ( self.singleEscapeForwardMeas ) {
-          self.singleEscapeForwardMeas.remove();
-          self.singleEscapeForwardMeas = null;
-      }
-    }
-
-    /* Deletes the marker for a double forward escape peak */
-    function deleteDoubleEscapeForward() {
-      if ( self.doubleEscapeForward ) {
-        self.doubleEscapeForward.remove();
-        self.doubleEscapeForward = null;
-      }
-      if ( self.doubleEscapeForwardText ) {
-          self.doubleEscapeForwardText.remove();
-          self.doubleEscapeForwardText = null;
-      }
-      if ( self.doubleEscapeForwardMeas ) {
-          self.doubleEscapeForwardMeas.remove();
-          self.doubleEscapeForwardMeas = null;
-      }
-    }
+        
 
     if (shouldDeleteMouseEdge())
       deleteMouseEdge(true);
@@ -8200,21 +8272,8 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
     /* delete if compton peak option is turned off or cursor is out of the graph */
     if( !self.options.showComptonPeaks || cursorIsOutOfBounds || comptonPeakOutOfBounds || self.dragging_plot ) {
-      if( self.comptonPeak ) {
-        self.comptonPeak.remove(); self.comptonPeak = null;
-        /* console.log( 'Should emit compton peak closed' ); */
-      }
-      if ( self.comptonPeakText ) {
-        self.comptonPeakText.remove(); self.comptonPeakText = null;
-      }
-      if ( self.comptonPeakMeas ) {
-        self.comptonPeakMeas.remove(); self.comptonPeakMeas = null;
-      }
-
-      if (t.length == 0) {        /* if mouse movement (aka not touch movement), then update the mouse edge */
-        updateMouseEdge();
-      }
-
+      deleteComptonPeakLine();
+      updateMouseEdge();
       return;
     }
 
@@ -8312,49 +8371,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
   }
 
   function updateSumPeaks( clickedEnergy ) {
-
-    function deleteClickedPeakMarker() {
-      if( self.clickedPeak ) {
-        self.clickedPeak.remove(); 
-        self.clickedPeak = null;
-      }
-      if ( self.clickedPeakMeas ) {
-        self.clickedPeakMeas.remove(); 
-        self.clickedPeakMeas = null;
-      }
-    }
-
-    function deleteSumPeakMarker() {
-      if ( self.sumPeak ) {
-        self.sumPeak.remove(); 
-        self.sumPeak = null;
-      }
-      if ( self.sumPeakMeas ) {
-        self.sumPeakMeas.remove(); 
-        self.sumPeakMeas = null;
-      }
-      if ( self.sumPeakText ) {
-          self.sumPeakText.remove(); 
-          self.sumPeakText = null;
-      }
-    }
-
-    function deleteLeftSumPeakMarker() {
-      if ( self.leftSumPeak ) {
-        self.leftSumPeak.remove(); 
-        self.leftSumPeak = null;
-      }
-      if ( self.leftSumPeakMeas ) {
-        self.leftSumPeakMeas.remove(); 
-        self.leftSumPeakMeas = null;
-      }
-      if ( self.leftSumPeakText ) {
-        self.leftSumPeakText.remove(); 
-        self.leftSumPeakText = null;
-      }
-    }
-    
-    if ( shouldDeleteMouseEdge() ) 
+    if( shouldDeleteMouseEdge() )
       deleteMouseEdge(true);
 
     /* delete if sum peak option is already turned off or cursor is out of the graph */
@@ -8366,13 +8383,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       }
 
       if ( cursorIsOutOfBounds || self.dragging_plot ) {
-        if ( self.clickedPeak ) {
-          self.savedClickEnergy = self.xScale.invert( self.clickedPeak.attr("x1") );
+        if ( self.clickedSumPeak ) {
+          self.savedClickEnergy = self.xScale.invert( self.clickedSumPeak.attr("x1") );
         }
       } else if ( !self.options.showSumPeaks )
         self.savedClickEnergy = null;
 
-      deleteClickedPeakMarker();
+      deleteClickedSumPeakMarker();
     }
     
 
@@ -8387,27 +8404,27 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
     updateMouseEdge();
 
-    var shouldUpdateClickedPeak = true,
+    var shouldUpdateClickedSumPeak = true,
         shouldUpdateSumPeak = true,
         shouldUpdateLeftSumPeak = true;
 
     if ( self.savedClickEnergy == null && clickedEnergy == null ) {
-      shouldUpdateSumPeaks = shouldUpdateLeftSumPeak = shouldUpdateClickedPeak = false;
+      shouldUpdateSumPeaks = shouldUpdateLeftSumPeak = shouldUpdateClickedSumPeak = false;
     }
     else if ( self.savedClickEnergy != null && (clickedEnergy == null || clickedEnergy < 0) )
       clickedEnergy = self.savedClickEnergy;
     else if ( clickedEnergy < 0 ) {
-      if ( self.clickedPeak ) {
-        self.savedClickEnergy = clickedEnergy = Number(self.clickedPeak.attr("energy")) ;
+      if ( self.clickedSumPeak ) {
+        self.savedClickEnergy = clickedEnergy = Number(self.clickedSumPeak.attr("energy")) ;
       }
-      else shouldUpdateClickedPeak = false;
+      else shouldUpdateClickedSumPeak = false;
     }
 
-    if ( !shouldUpdateClickedPeak && !shouldUpdateSumPeak && !shouldUpdateLeftSumPeak )
+    if ( !shouldUpdateClickedSumPeak && !shouldUpdateSumPeak && !shouldUpdateLeftSumPeak )
       return;
 
     var clickedEdgeOutOfBounds = false;
-    if ( shouldUpdateClickedPeak ) {
+    if ( shouldUpdateClickedSumPeak ) {
       self.savedClickEnergy = null;
 
       var clickedEdgePix = self.xScale( clickedEnergy  );
@@ -8415,26 +8432,26 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
 
       if (clickedEdgeOutOfBounds) {
         self.savedClickEnergy = clickedEnergy;
-        deleteClickedPeakMarker();
+        deleteClickedSumPeakMarker();
       } else {
-        if( !self.clickedPeak ){
+        if( !self.clickedSumPeak ){
           /* draw compton edge line here */
-          self.clickedPeak = self.vis.append("line")
+          self.clickedSumPeak = self.vis.append("line")
               .attr("class", "peakLine")
               .attr("stroke-width", 2);
-          self.clickedPeakMeas = self.vis.append("text")
+          self.clickedSumPeakMeas = self.vis.append("text")
               .attr("class", "peakText");
         }
         
 
-        self.clickedPeak
+        self.clickedSumPeak
             .attr("stroke", axiscolor)
             .attr("x1", clickedEdgePix)
             .attr("x2", clickedEdgePix)
             .attr("y1", 0)
             .attr("y2", self.size.height)
             .attr("energy", clickedEnergy);
-        self.clickedPeakMeas
+        self.clickedSumPeakMeas
             .attr( "fill", txtcolor )
             .attr( "x", clickedEdgePix + xmax/125 )
             .attr( "y", self.size.height/4)
@@ -8442,7 +8459,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
       }
     }  
 
-    if ( !self.clickedPeak && !self.savedClickEnergy ) { 
+    if ( !self.clickedSumPeak && !self.savedClickEnergy ) {
       shouldUpdateSumPeak = false;
 
       if ( !self.sumPeakHelpText ) {
@@ -8553,45 +8570,33 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function(sumPeaksArgument) {
   updateEscapePeaks();
   updateComptonPeaks();
   updateComptonEdge();
-  updateSumPeaks(sumPeaksArgument);
+  updateSumPeaks( mouseDownEnergy, );
 }
 
 SpectrumChartD3.prototype.setComptonEdge = function(d) {
   this.options.showComptonEdge = d;
-  if ( d ) {
-    this.updateFeatureMarkers();
-  }
+  this.updateFeatureMarkers();
 }
 
 SpectrumChartD3.prototype.setComptonPeakAngle = function(d) {
   var value = Number(d);
-  if (!isNaN(value) && 0 <= value && value <= 180 ) 
-    this.options.comptonPeakAngle = value;
-  else {
-    this.options.comptonPeakAngle = 180;  /* default angle is set to 180 degrees */
-  }
+  this.options.comptonPeakAngle = (!isNaN(value) && 0 <= value && value <= 180 ) ? value : 180;
   this.updateFeatureMarkers();
 }
 
 SpectrumChartD3.prototype.setComptonPeaks = function(d) {
   this.options.showComptonPeaks = d;
-  if ( d ) {
-    this.updateFeatureMarkers();
-  }
+  this.updateFeatureMarkers();
 }
 
 SpectrumChartD3.prototype.setEscapePeaks = function(d) {
   this.options.showEscapePeaks = d;
-  if ( d ) {
-    this.updateFeatureMarkers();
-  }
+  this.updateFeatureMarkers();
 }
 
 SpectrumChartD3.prototype.setSumPeaks = function(d) {
   this.options.showSumPeaks = d;
-  if ( d ) {
-    this.updateFeatureMarkers();
-  }
+  this.updateFeatureMarkers();
 }
 
 
@@ -8653,7 +8658,6 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
       self.setXAxisRange( targetDomain[0], targetDomain[1], true );  //do emit range change
       self.handleCancelAnimationZoom();
       self.redraw()();
-      /* Update the peak markers */
       self.updateFeatureMarkers(-1);
       return;
     }
@@ -9449,11 +9453,8 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   var recalibrationG = self.vis.select("#recalibrationG");
   var recalibrationPeakVis = self.vis.select("#recalibrationPeakVis");
 
-  /* Set the line that symbolizes where user initially began right-click-and-drag */
-  //.mouseLine      { font-size: 0.8em; stroke-width: 2; }
-  //.secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
+  /* Set the line that symbolizes where user initially began ctrl-option-drag */
   
-  //ToDo: get exiscolor
   let axiscolor = 'black'
   if (recalibrationStartLine.empty()) {
     axiscolor = self.getElementLineColor('.tick');
@@ -9468,86 +9469,21 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       .attr("stroke",axiscolor);
   }
 
-  if (recalibrationText.empty()) {                       /* Right-click-and-drag text to say where recalibration ranges are */
-    //ToDo: make sure this text same color as chart text.  Also, put on translucent background
+  const start = recalibrationText.empty() ? self.lastMouseMovePos[0] : recalibrationStartLine.attr("x1");
+  const now = self.lastMouseMovePos[0];
+  const txt = "Recalibrate data from " + self.xScale.invert(start).toFixed(2) + " to " + self.xScale.invert(now).toFixed(2) + " keV";
+  
+  if (recalibrationText.empty()) {                       /* ctrl-option-drag text to say where recalibration ranges are */
+    const txtcolor = self.getElementLineColor('.xaxistitle');
     recalibrationText = self.vis.append("text")
       .attr("id", "recalibrationText")
       .attr("class", "mouseLineText")
       .attr("x", self.recalibrationMousePos[0] + 5 /* As padding from the starting line */ )
-      .attr("y", self.size.height/2)
-      .text("Recalibrate data from " + self.xScale.invert(self.lastMouseMovePos[0]).toFixed(2) + " to " + self.xScale.invert(self.lastMouseMovePos[0]).toFixed(2) + " keV");
-
-  } else   /* Right-click-and-drag text already visible in vis, so just update it */
-    recalibrationText.text( "Recalibrate data from " + self.xScale.invert(recalibrationStartLine.attr("x1")).toFixed(2) + " to " + self.xScale.invert(self.lastMouseMovePos[0]).toFixed(2) + " keV" )
-  
-
-  // Draw the distance lines from the right-click-and-drag line to mouse position
-/*
-  if (!self.recalibrationDistanceLines) {
-    var distanceLine;
-    self.recalibrationDistanceLines = [];
-
-    var lineSpacing = self.size.height / 5;
-
-    //Create 4 lines that draw from the right-click-and-drag initial starting point to where the mouse is
-    for (i = 0; i < 4; i++) {
-      distanceLine = self.vis.append("line")
-                            .attr("class", "secondaryMouseLine")
-                            .attr("x1", recalibrationStartLine.attr("x1"))
-                            .attr("x2", self.lastMouseMovePos[0])
-                            .attr("y1", lineSpacing)
-                            .attr("y2", lineSpacing);
-       //This is to add the the arrowhead end to the distance lines
-      var arrow = self.vis.append('svg:defs')
-        .attr("id", "recalibrationArrowDef")
-        .append("svg:marker")
-          .attr("id", "rightClickDragArrow")
-          .attr('class', 'xaxisarrow')
-          .attr("refX", 0)
-          .attr("refY", 7)
-          .attr("markerWidth", 25)
-          .attr("markerHeight", 25)
-          .attr("orient", 0)
-          .append("path")
-            .attr("d", "M2,2 L2,13 L8,7 L2,2")
-            .style("stroke", "black");
-
-      distanceLine.attr("marker-end", "url(#rightClickDragArrow)");
-
-      self.recalibrationDistanceLines.push(distanceLine);
-      lineSpacing += self.size.height / 5;
-    }
-
-  } else {    // Distance lines have already been drawn
-    for (i = 0; i < self.recalibrationDistanceLines.length; i++) {
-      var x2 = self.lastMouseMovePos[0];
-
-      // If mouse position is to the left of the right-click-and-drag line
-      if (self.lastMouseMovePos[0] < recalibrationStartLine.attr("x1")) {
-        self.recalibrationDistanceLines[i].attr("x2", x2);     //Adjust the x-position of the line
-
-        d3.selectAll("#rightClickDragArrow > path").each(function(){            //Flip the arrowhead to face towards the negative x-axis
-          d3.select(this).attr("transform", "translate(8,14) rotate(180)");
-        });
-      }
-      else {
-        //To adjust for the length of the line with respect to its arrowhead
-        if (self.recalibrationDistanceLines[i].attr("x2") > 0)
-          x2 -= 8;  //Minus 8 to account for the arrow width connected to the line
-        else
-          x2 = 0;
-
-        // Adjust the x-position of the line
-        self.recalibrationDistanceLines[i].attr("x2", x2);
-
-        // Un-flip the arrowhead (if it was flipped) back to pointing towards the positive x-axis
-        d3.selectAll("#rightClickDragArrow > path").each(function(){
-          d3.select(this).attr("transform", null);
-        });
-      }
-    }
+      .attr("y", 15 ) //self.size.height/2
+      .attr("fill", txtcolor);
   }
- */
+  
+  recalibrationText.text( txt )
 
   /* Draw the line to represent the mouse position for recalibration */
   if (recalibrationMousePosLines.empty())
@@ -9558,7 +9494,6 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       .attr("stroke",axiscolor)
       .style("opacity", 0.75)
       .attr("stroke-width",0.5);
-      ;
    
   /* Update the mouse position line for recalibration */
   recalibrationMousePosLines.attr("x1", self.lastMouseMovePos[0])
@@ -9660,16 +9595,6 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
   d3.selectAll("#recalibrationArrowDef").each(function(){
     this.remove();
   });
-
-  /* Remove the right-click-and-drag end-point line */
-  /*
-  if (self.recalibrationDistanceLines) {
-    for (i = 0; i < self.recalibrationDistanceLines.length; i++) {
-      self.recalibrationDistanceLines[i].remove();
-    }
-    self.recalibrationDistanceLines = null;
-  }
-   */
 
   /* Remove the right-click-and-drag mouse line */
   recalibrationMousePosLines.remove();

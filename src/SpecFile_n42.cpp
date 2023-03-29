@@ -2127,7 +2127,11 @@ bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<c
       
     // \TODO: we could probably do some more sanity checks here
     if( type != SpecUtils::EnergyCalType::InvalidEquationType )
+    {
+      // TODO: Note, RadSeeker files contain a <ArrayXY> sibling (to <Equation>) element that contains ~6 <PointXY> elements that give channel-to-energy mappings, which could/should be interpreted as non-linear deviation pairs.
+      
       return true;
+    }
   }//if( equation_node )
       
   const auto array_node = SpecUtils::xml_first_node_nso( calibration_node, "ArrayXY", xmlns );
@@ -2157,6 +2161,8 @@ bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<c
   //          <PointXY><X>5 0</X><Y>7.44489 0</Y></PointXY>
   //          <PointXY><X>6 0</X><Y>10.3545 0</Y></PointXY>
   //          ...
+  // There is also the RadSeeker case  (see note above) that uses this to give non-linear
+  //  deviation info
                   
   vector<pair<float,float>> points;
                     
