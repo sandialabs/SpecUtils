@@ -2847,7 +2847,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
 
 SpectrumChartD3.prototype.handleVisTouchMove = function() {
   var self = this;
-
+  
   /* Touch interaction helpers */
   function isDeletePeakSwipe() {
 
@@ -2938,7 +2938,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     if (!self.touchesOnChart)
       return false;
 
-    var keys = Object.keys(self.touchesOnChart);
+    const keys = Object.keys(self.touchesOnChart);
 
     if (keys.length !== 2)
       return false;
@@ -2973,7 +2973,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
   }
 
   return function() {
-
+    
     /* Prevent default event actions from occurring (eg. zooming into page when trying to zoom into graph) */
     d3.event.preventDefault();
     d3.event.stopPropagation();
@@ -2984,6 +2984,8 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     // Get the touches on the chart
     const t = d3.touches(self.vis[0][0]);
 
+    console.log( "handleVisTouchMove, t:", t );
+    
     // Panning = one finger drag
     self.touchPan = ((t.length === 1) && !self.roiIsBeingDragged);
     self.deletePeakSwipe = isDeletePeakSwipe() && !self.currentlyAdjustingSpectrumScale;
@@ -2993,26 +2995,34 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     self.zoomInYPinch = isZoomInPinch(true) && !self.currentlyAdjustingSpectrumScale;
 
 
-    //console.log( 'handleVisTouchMove: touchPan=' + self.touchPan + ', deletePeakSwipe=' + self.deletePeakSwipe
-    //            + ", controlDragSwipe=" + self.controlDragSwipe + ", altShiftSwipe=" + self.altShiftSwipe
-    //            + ", zoomInXPinch=" + self.zoomInXPinch
-    //            + ", zoomInYPinch=" + self.zoomInYPinch );
+    console.log( 'handleVisTouchMove: touchPan=' + self.touchPan + ', deletePeakSwipe=' + self.deletePeakSwipe
+              + ", controlDragSwipe=" + self.controlDragSwipe + ", altShiftSwipe=" + self.altShiftSwipe
+                + ", zoomInXPinch=" + self.zoomInXPinch
+                + ", zoomInYPinch=" + self.zoomInYPinch );
 
     if (self.deletePeakSwipe) {
+      console.log( "handleVisTouchMove handleTouchMoveDeletePeak" );
       self.handleTouchMoveDeletePeak(t);
     } else if (self.controlDragSwipe) {
+      console.log( "handleVisTouchMove handleTouchMovePeakFit" );
       self.handleTouchMovePeakFit();
     } else if (self.altShiftSwipe) {
+      console.log( "handleVisTouchMove updateGammaSum" );
       self.updateGammaSum();
     } else if( self.zoomInXPinch ){
+      console.log( "handleVisTouchMove handleTouchMoveZoomInX" );
       self.handleTouchMoveZoomInX();
     } else if (self.zoomInYPinch) {
+      console.log( "handleVisTouchMove handleTouchMoveZoomY" );
       self.handleTouchMoveZoomY();
     } else if (self.currentlyAdjustingSpectrumScale) {
+      console.log( "handleVisTouchMove handleMouseMoveScaleFactorSlider" );
       self.handleMouseMoveScaleFactorSlider()();
     } else if( self.roiIsBeingDragged ) {
+      console.log( "handleVisTouchMove handleRoiDrag" );
       self.handleRoiDrag( t[0] );
     } else {
+      console.log( "handleVisTouchMove NONE" );
       self.handleCancelTouchCountGammas();
       self.handleCancelTouchDeletePeak();
       self.handleCancelTouchPeakFit();
@@ -3495,7 +3505,7 @@ SpectrumChartD3.prototype.keydown = function () {
 
 
 SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
-  var self = this;
+  const self = this;
 
   /* Don't do anything if touch event not recognized */
   if (!touchEvent || !touchEvent.type.startsWith("touch"))
@@ -3526,6 +3536,10 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
         delete self.touchesOnChart[touch.identifier];
     }
   }
+  
+  
+   // bloah blah blah  For some reason the touch.identifier are changing when using... Need to figure out why, perhaps go back thorugh git history to identify change set of when this started.
+  console.log( 'touchEvent.touches.length:', touchEvent.touches.length, ', self.touchesOnChart.len:', Object.keys(self.touchesOnChart).length, self.touchesOnChart );
 }//SpectrumChartD3.prototype.updateTouchesOnChart
 
 
@@ -7188,12 +7202,6 @@ SpectrumChartD3.prototype.setShowNuclideEnergies = function(d) {
 SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
   var self = this;
 
-  /* Delete the arrow definitions pointing to the mouse lines */
-  self.vis.selectAll("#createPeakStartArrowDef").remove();
-
-  /* Delete the estimated continuum text */
-  self.vis.selectAll("#contEstText").remove();
-
   /* Delete the arrows pointing to the mouse lines */
   self.vis.selectAll(".createPeakArrow").forEach(function (arrows) {
     arrows.forEach(function(arrow) {
@@ -7203,13 +7211,6 @@ SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
 
   /* Delete the arrow lines for the previous arrows */
   self.vis.selectAll(".createPeakArrowLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
-  /* Delete the all the lines for the estimated continuum */
-  self.vis.selectAll(".createPeakContEstLine").forEach(function (lines) {
     lines.forEach(function(line) {
       line.remove();
     })
@@ -7248,8 +7249,12 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   
   let leftpospx, rightpospx;
   if( self.peakFitTouchMove.length > 0 ) {
-    leftpospx = self.peakFitTouchMove[0][0] < self.peakFitTouchMove[1][0] ? self.peakFitTouchMove[0][0] : self.peakFitTouchMove[1][0];
-    rightpospx = leftTouch === self.peakFitTouchMove[0] ? self.peakFitTouchMove[1][0] : self.peakFitTouchMove[0][0];
+    let startTouchs = self.createPeaksStartTouches;
+    if( !startTouchs )
+      startTouchs = self.peakFitTouchMove
+    const nowTouchs = self.peakFitTouchMove;
+    leftpospx = (startTouchs[0][0] < startTouchs[1][0]) ? startTouchs[0][0] : startTouchs[1][0];
+    rightpospx = (nowTouchs[0][0] > nowTouchs[1][0]) ? nowTouchs[0][0] : nowTouchs[1][0];
   } else {
     if( !self.leftMouseDown || !self.peakFitMouseMove ) {
       console.log( 'Hit condition I didnt think would happen fitting roi as dragging.' );
@@ -7279,11 +7284,6 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   
   let pageX = d3.event.pageX; //((d3.event && d3.event.pageX) ? d3.event.pageX : window.pageXOffset + leftpospx + ;
   let pageY = d3.event.pageY;
-  //if( ){
-  //  var bodyRect = document.body.getBoundingClientRect(),
-  //  elemRect = element.getBoundingClientRect(),
-  //  offset   = elemRect.top - bodyRect.top;
-  //}
   
   //Emit current position, no more often than every 2.5 seconds, or if there
   //  are no requests pending.
@@ -7293,10 +7293,6 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
     self.roiDragRequestTimeout = null;
     self.roiDragRequestTimeoutFcn = null;
     
-    //(window.pageXOffset + matrix.e + 15) + "px")
-    //(window.pageYOffset + matrix.f - 30)
-    
-    console.log( 'd3.event.pageX=' + pageX + ', d3.event.pageY=' + pageY );
     self.WtEmit(self.chart.id, {name: 'fitRoiDrag'},
                 lowerEnergy, upperEnergy, -1 /*self.forcedFitRoiNumPeaks*/, false, pageX, pageY );
   };
@@ -7323,6 +7319,8 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   if (!self.rawData || !self.rawData.spectra)
     return;
 
+    console.log( 'handleTouchMovePeakFit' );
+    
   /* Clear the delete peaks mode */
   self.handleCancelTouchDeletePeak();
 
@@ -7369,7 +7367,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   }
 
   /* Uncomment if you want to have peak fitting animation within touch */
-  /* self.handleMouseMovePeakFit(); */
+  self.handleMouseMovePeakFit();
 
   /* Set the length of the arrows */
   var arrowLength = 25,
@@ -7380,8 +7378,6 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
 
   /* To keep track of some of the line objects being drawn */
   var createPeakTouchCurrentLine,
-      contEstLine, 
-      contEstText = self.vis.select("#contEstText"),
       createPeakTouchText1 = self.vis.select("#createPeakTouchText1"),
       createPeakTouchText2 = self.vis.select("#createPeakTouchText2"),
       createPeakRightTouchPointTop = self.vis.select("#createPeakRightTouchPointTop"),
@@ -7517,7 +7513,6 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
       .attr("class", "createPeakMouseLine")
       .attr("y1", 0)
       .attr("y2", self.size.height);
-
   } else 
     createPeakTouchCurrentLine = self.vis.select("#createPeakTouchCurrentLine");
 
@@ -7540,124 +7535,16 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
       .attr("y", leftStartTouch[1] + 8)
       .text("level");
   createPeakTouchText2.attr("x", leftStartTouch[0] - createPeakTouchText2[0][0].clientWidth - 25);
-
-  /* Create/refer to the text for the approx continuum */
-  if (contEstText.empty()) {
-    contEstText = self.vis.append("text")
-      .attr("id", "contEstText")
-      .attr("class", "contEstLineText")
-      .text("approx continuum to use");
-  }
-
-  /* Get pixelated coordinates of mouse/starting positions of lines and coordinates */
-  var coordsX0 = self.xScale.invert(leftStartTouch[0]),
-      coordsY0 = self.getCountsForEnergy(self.rawData.spectra[0], coordsX0),
-      coordsX1 = self.xScale.invert(rightTouch[0]),
-      coordsY1 = self.getCountsForEnergy(self.rawData.spectra[0], coordsX1),
-      x0 = leftStartTouch[0],
-      x1 = rightTouch[0],
-      y0 = self.yScale( coordsY0 ),
-      y1 = self.yScale( coordsY1 ),
-      dy = coordsY1 - coordsY0,
-      lineAngle = (180/Math.PI) * Math.atan( (y1-y0)/(x1-x0) );
-
-  /* Update the position and rotation of the continuum text using the pixelated coordinates */
-  contEstText.attr("x", x0 + (Math.abs(x0-x1)/2) - Number(contEstText[0][0].clientWidth)/2 )
-    .attr("y", y0-15)
-    .attr("transform", "rotate(" + (!isNaN(lineAngle) ? lineAngle : 0) + ", " + (x0 + ((x1-x0)/2)) + ", " + y0 + ")");
-
-
-  /* Create/refer to the reference text for creating a peak */
-  if (self.vis.select("#createPeakTouchText").empty())
-    createPeakTouchText = self.vis.append("text")
-      .attr("id", "createPeakTouchText")
-      .attr("class", "mouseLineText")
-      .attr("y", self.size.height/5)
-      .text("Will create peak Inside");
-  else
-    createPeakTouchText = self.vis.select("#createPeakTouchText");
-
-  /* Move the create peaks text in the middle of the create peak mouse lines */
-  createPeakTouchText.attr("x", x0 + (Math.abs(x0-x1)/2) - Number(createPeakTouchText[0][0].clientWidth)/2 );
-
-
-  /* Remove the continuum estimation line (lines in this case, we create the effect using a numver of shorter 5px lines) */
-  d3.selectAll(".createPeakContEstLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
-  /* Get the end coordinates of the first (5px) line in the estimated continuum */
-  var xpix = x0+5,
-      ypix = self.yScale( coordsY0+dy*(xpix-x0)/(x1-x0) );
-
-  /* Stop updating if the y-coordinate could not be found for the line */
-  if (isNaN(ypix))
-    return;
-
-  /* Create the first 5px line for the estimated continuum */
-  if (x1 > x0)
-    contEstLine = self.vis.append("line")
-      .attr("id", "contEstLine")
-      .attr("class", "createPeakContEstLine")
-      .attr("x1", x0)
-      .attr("y1", y0)
-      .attr("x2", xpix)
-      .attr("y2", ypix);
-
-  /* Create and update the next 5px lines until you reach the end for the estimated continuum */
-  while (xpix < x1) {
-    x0 = xpix;
-    y0 = ypix;
-    xpix += 5;
-    ypix = self.yScale( coordsY0+dy*(xpix-leftStartTouch[0])/(x1-leftStartTouch[0]) );
-
-    contEstLine = self.vis.append("line")
-      .attr("id", "contEstLine")
-      .attr("class", "createPeakContEstLine")
-      .attr("x1", x0)
-      .attr("y1", y0)
-      .attr("x2", xpix)
-      .attr("y2", ypix);
-  }
-
-  /* Create the last 5px line for the estimated continuum line */
-  contEstLine = self.vis.append("line")
-    .attr("id", "contEstLine")
-    .attr("class", "createPeakContEstLine")
-    .attr("x1", x0)
-    .attr("y1", y0)
-    .attr("x2", x1-2)
-    .attr("y2", y1);
 }
 
 SpectrumChartD3.prototype.handleTouchEndPeakFit = function() {
   var self = this;
 
-  var t = self.lastTouches;
-
-  /* Cancel the function if no two-finger swipes detected */
-  if (!t || t.length !== 2 || !self.createPeaksStartTouches) {
-    self.handleCancelTouchPeakFit();
-    return;
-  }
-
-  /* Set the touch variables */
-  var leftStartTouch = self.createPeaksStartTouches[0][0] < self.createPeaksStartTouches[1][0] ? self.createPeaksStartTouches[0] : self.createPeaksStartTouches[1],
-      rightStartTouch = leftStartTouch === self.createPeaksStartTouches[0] ? self.createPeaksStartTouches[1] : self.createPeaksStartTouches[0];
-
-  var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
-      rightTouch = leftTouch === t[0] ? t[1] : t[0];
-
-  /* Emit the create peak signal */
-  if (self.controlDragSwipe && self.createPeaksStartTouches && self.lastTouches) {
-    console.log("Emit CREATE PEAK signal from x0 = ", leftStartTouch[0], "(", self.xScale.invert(leftStartTouch[0]), 
-      " kEV) to x1 = ", rightTouch[0], "(", self.xScale.invert(rightTouch[0]), 
-      " kEV)");
-    self.WtEmit(self.chart.id, {name: 'controlkeydragged'}, self.xScale.invert(leftStartTouch[0]), self.xScale.invert(rightTouch[0]), d3.event.pageX, d3.event.pageY);
-  }
-
+  console.log( "handleTouchEndPeakFit" );
+  
+  if( self.createPeaksStartTouches )
+    self.handleMouseUpPeakFit();
+  
   /* Delete all the create peak elements */
   self.handleCancelTouchPeakFit();
 }
@@ -7673,9 +7560,6 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
 
   /* Delete the arrow definitions pointing to the mouse lines */
   self.vis.selectAll("#createPeakStartArrowDef").remove();
-
-  /* Delete the estimated continuum text */
-  self.vis.selectAll("#contEstText").remove();
 
   /* Delete the arrows pointing to the mouse lines */
   d3.selectAll(".createPeakArrow").forEach(function (arrows) {
@@ -7705,13 +7589,6 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
 
   /* Delete the touch lines */
   d3.selectAll(".createPeakTouchLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
-  /* Delete the all the lines for the estimated continuum */
-  d3.selectAll(".createPeakContEstLine").forEach(function (lines) {
     lines.forEach(function(line) {
       line.remove();
     })
@@ -7752,7 +7629,12 @@ SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
     //self.WtEmit(self.chart.id, {name: 'fitRoiDrag'}, x0, x1, -1, true );
     //Instead of updating with any movements the mouse may have made, leaving the final fit result
     //  different than whats currently showing; should re-evaluate after using for a while
-    console.log( 'd3.event.pageX=' + pageX + ", d3.event.pageY=" + pageY );
+    self.WtEmit( self.chart.id, {name: 'fitRoiDrag'},
+                 roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
+  }else if( self.peakFitTouchMove ) {
+    const pageX = self.peakFitTouchMove[0][0];
+    const pageY = self.peakFitTouchMove[0][1];
+    
     self.WtEmit( self.chart.id, {name: 'fitRoiDrag'},
                  roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
   }
@@ -9869,10 +9751,13 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
 
 
 SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
-  var self = this;
+  const self = this;
   
-  var countGammasBox = self.vis.select("#countGammasBox"),
-  countGammasText = self.vis.select("#countGammasText");
+  const countGammasBox = self.vis.select("#countGammasBox"),
+        countGammasText = self.vis.select("#countGammasText");
+  
+  if( !countGammasBox )
+    return;
   
   var countGammasRange;
   
