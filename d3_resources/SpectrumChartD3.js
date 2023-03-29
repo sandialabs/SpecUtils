@@ -172,6 +172,14 @@ SpectrumChartD3 = function(elem, options) {
       .domain(this.options.xScaleDomain ? this.options.xScaleDomain : [0, 3000])
       .range([0, this.size.width]);
 
+  /* //To Debug how the x-domain is being set
+  const oldDomaneFcn = self.xScale.domain;
+  self.xScale.domain = function(a){
+    if( a ){ console.log( 'Setting self.xScale domain' ); console.trace(); return oldDomaneFcn(a); }
+    return oldDomaneFcn();
+  }
+  */
+      
   /* drag x-axis logic */
   this.xaxisdown = null;
 
@@ -317,11 +325,7 @@ SpectrumChartD3 = function(elem, options) {
   |_________________________________________|
   */
 
-  /* 
-  NOTE: Restoring the zoom behavior only for touch events
-        This does NOT affect the behavior for other mouse events.
-        Restoring the zoom behavior allows pinch zooming/panning with touch interactions.
-  */
+
   this.zoom = d3.behavior.zoom()
     .x(self.xScale)
     .y(self.yScale)
@@ -339,9 +343,11 @@ SpectrumChartD3 = function(elem, options) {
     .on("wheel", self.handleVisWheel())
     .on("touchstart", self.handleVisTouchStart())
     .on("touchmove", self.handleVisTouchMove())
-    .on("touchend", self.handleVisTouchEnd());
+    .on("touchend", self.handleVisTouchEnd())
+    .on("touchcancel", self.handleVisTouchCancel() )
+    ;
 
-  /* Cancel the zooms for mouse events, we'll use our own implementation for these (however, keeping the touch zooming) */
+  /* Cancel the zooms for mouse events, we'll use our own implementation for these */
   this.vis
     .on("mousedown.zoom", null)
     .on("mousemove.zoom", null)
@@ -354,7 +360,9 @@ SpectrumChartD3 = function(elem, options) {
     .on("touchstart.zoom", null)
     .on("touchmove.zoom", null)
     .on("touchend.zoom", null)
-    .on("*.zoom", null);
+    .on("*.zoom", null)
+    .on(".zoom",  null )
+    ;
     
 
   /// @TODO triggering the cancel events on document.body and window is probably a bit agressive; could probably do this for just this.vis + on leave events
@@ -378,7 +386,8 @@ SpectrumChartD3 = function(elem, options) {
     .on("mouseup", self.handleChartMouseUp())
     .on("wheel", self.handleChartWheel())
     .on("touchstart", self.handleChartTouchStart())
-    .on("touchend", self.handleChartTouchEnd());
+    .on("touchend", self.handleChartTouchEnd())
+    ;
 
   /*
   To allow markers to be updated while mouse is outside of the chart, but still inside the visual.
@@ -957,10 +966,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     this.setXAxisRange(minx, maxx, true);
   }
 
-  /*reset the zoom, so first userzoom action wont behave wierdly */
-  /* this.zoom.x(this.xScale); */
-  /* this.zoom.y(this.yScale); */
-
   /* Hack: To properly choose the right set of points for the y-axis points */
   function y(line) {
     return function(d) {
@@ -1164,9 +1169,6 @@ SpectrumChartD3.prototype.redraw = function() {
 
     if (self.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
     else                                   { self.cancelXAxisSliderChart(); }
-
-    /*The oringal code had the follwoing in, but I dont think is needed */
-    /*self.plot.call(d3.behavior.zoom().x(self.xScale).y(self.yScale).on("zoom", self.redraw()));     */
     
     self.drawPeaks();
     self.drawSearchRanges();
@@ -1422,9 +1424,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.yScale.range([0, this.size.height]);
 
   this.drawScalerBackgroundSecondary();
-  
-  /* this.zoom.x(this.xScale); */
-  /* this.zoom.y(this.yScale); */
 
   if( !dontRedraw ) {
     this.setData( this.rawData, false );
@@ -1447,7 +1446,7 @@ SpectrumChartD3.prototype.handlePanChart = function () {
   }
 
   /* We are now right click dragging  */
-  self.rightClickDrag = true;
+  self.is_panning = true;
 
   /* For some reason, using the mouse position for self.vis makes panning slightly buggy, so I'm using the document body coordinates instead */
   var docMouse = d3.mouse(document.body);
@@ -1980,7 +1979,6 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(mouse_pos_px){
 
 
 SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
-  //console.trace();
   let self = this;
   if( !self.roiDragBoxes && !self.fittingPeak )
     return;
@@ -2243,8 +2241,8 @@ SpectrumChartD3.prototype.setMouseDownRoi = function( coordinates ){
   /* Note: for mouse events leading to here, `self.mousedownpos` should be equal to `coordinates`, need to check for touch events */
 
   this.mouseDownRoi = this.getDrawnRoiForCoordinate( coordinates, true );
-  if( this.mouseDownRoi && this.mouseDownRoi.roi )
-    console.log( 'setMouseDownRoi roi: ', this.mouseDownRoi.roi );
+  //if( this.mouseDownRoi && this.mouseDownRoi.roi )
+  //  console.log( 'setMouseDownRoi roi: ', this.mouseDownRoi.roi );
   
   return;
 }
@@ -2364,7 +2362,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       //console.log(d3.event);
       self.rightClickDown = d3.mouse(document.body);
       //console.log( 'handleVisMouseDown, setting rightClickDown = d3.mouse(document.body)');
-      self.rightClickDrag = false;
+      self.is_panning = false;
       self.origdomain = self.xScale.domain();
 
       /* Since this is the right-mouse button, we are not zooming in */
@@ -2444,7 +2442,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     }
 
     /* Figure out right clicks */
-    if (d3.event.button === 2 && !self.rightClickDrag && !d3.event.ctrlKey) {
+    if (d3.event.button === 2 && !self.is_panning && !d3.event.ctrlKey) {
       if( self.highlightedPeak ){
         console.log("Should alter context menu for the highlighted peak" );  
       }
@@ -2551,7 +2549,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* Set the right click drag and mouse down off */
     self.rightClickDown = null;
     //console.log( 'handleVisMouseUp, setting rightClickDown = null)');
-    self.rightClickDrag = false;
+    self.is_panning = false;
 
     /* Cancel default d3 event properties */
     //d3.event.preventDefault();
@@ -2766,6 +2764,39 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
   }
 }
 
+
+SpectrumChartD3.prototype.handleVisTouchCancel = function(){
+  const self = this;
+  
+  return function(){
+    //console.log( "handleVisTouchCancel:", d3.event );
+    d3.event.stopPropagation();
+    const touches = d3.event.changedTouches;
+    
+    const now = new Date();
+    if( !self.canceledTouches || ((now - self.canceledTouches.time) > 500) ){
+      self.canceledTouches = {};
+      self.canceledTouches.touches = [];
+    }
+    
+    for( let i = 0; i < touches.length; ++i )
+      self.canceledTouches.touches.push( touches[i] );
+    
+    self.canceledTouches.time = new Date();
+    
+    if( self.touchesOnChart ){
+      for( let i = 0; i < touches.length; ++i ) {
+        const touch = self.touchesOnChart[touches[i].identifier];
+        if( touch ){
+          touch.wasCancelled = true;
+          touch.origdomain = self.origdomain;
+        }
+      }
+    }//if( self.touchesOnChart )
+  }//function()
+}//SpectrumChartD3.prototype.handleVisTouchCancel
+
+
 SpectrumChartD3.prototype.handleVisTouchStart = function() {
   var self = this;
 
@@ -2790,6 +2821,15 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
       self.zooming_plot = true;
       self.countGammasStartTouches = self.createPeaksStartTouches = self.touchStart;
       self.touchZoomStartEnergies = [self.xScale.invert(t[0][0]),self.xScale.invert(t[1][0])];
+    }
+    
+    // If the touching is just begining, record the x domain:
+    //  - if we start fitting for a peak (two horizantal fingers sliding to right), we will restore to these extents
+    //  - we could have been panning, and now transitioned into zoom
+    if( (!self.touchesOnChart || (Object.keys(self.touchesOnChart).length !== t.length))
+        && ((t.length == 1) || (t.length === 2)) ){
+      //self.origdomain will be set to null at the end of self.handleVisTouchEnd when there are no touches left
+      self.origdomain = self.xScale.domain();
     }
     
     self.updateTouchesOnChart(d3.event);
@@ -2818,6 +2858,11 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         if( keys.length !== 1 )
           return;
 
+        if( self.mousewait ) {
+          window.clearTimeout(self.mousewait);
+          self.mousewait = null;
+        }
+          
         var touch = self.touchesOnChart[keys[0]];
         var dx = Math.abs(origTouch.pageX - touch.pageX);
         var dy = Math.abs(origTouch.pageY - touch.pageY);
@@ -2887,6 +2932,9 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     if (!self.touchesOnChart)
       return false;
 
+    if( self.fittingPeak )
+      return true;
+      
     var keys = Object.keys(self.touchesOnChart);
 
     if (keys.length !== 2)
@@ -2973,7 +3021,6 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
   }
 
   return function() {
-    
     /* Prevent default event actions from occurring (eg. zooming into page when trying to zoom into graph) */
     d3.event.preventDefault();
     d3.event.stopPropagation();
@@ -2984,45 +3031,38 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     // Get the touches on the chart
     const t = d3.touches(self.vis[0][0]);
 
-    console.log( "handleVisTouchMove, t:", t );
-    
-    // Panning = one finger drag
-    self.touchPan = ((t.length === 1) && !self.roiIsBeingDragged);
-    self.deletePeakSwipe = isDeletePeakSwipe() && !self.currentlyAdjustingSpectrumScale;
-    self.controlDragSwipe = isControlDragSwipe() && !self.currentlyAdjustingSpectrumScale;
-    self.altShiftSwipe = isAltShiftSwipe() && !self.currentlyAdjustingSpectrumScale;
-    self.zoomInXPinch = isZoomInPinch(false) && !self.currentlyAdjustingSpectrumScale;
-    self.zoomInYPinch = isZoomInPinch(true) && !self.currentlyAdjustingSpectrumScale;
+    const touchPan = ((t.length === 1) && !self.roiIsBeingDragged); // Panning = one finger drag
+    const deletePeakSwipe = isDeletePeakSwipe() && !self.currentlyAdjustingSpectrumScale; //two horizantal fingers swiping up
+    const controlDragSwipe = isControlDragSwipe() && !self.currentlyAdjustingSpectrumScale; // Fit peak(s) by specyinf ROI (two horizantal finers moving from right to left)
+    const altShiftSwipe = isAltShiftSwipe() && !self.currentlyAdjustingSpectrumScale; //Define region to sum gammas
+    const zoomInXPinch = isZoomInPinch(false) && !self.currentlyAdjustingSpectrumScale; // Two horizantal fingers pinching in
+    const zoomInYPinch = isZoomInPinch(true) && !self.currentlyAdjustingSpectrumScale; // Two horizantal fingers spreading out
 
+    //console.log( 'handleVisTouchMove: touchPan=' + touchPan + ', deletePeakSwipe=' + deletePeakSwipe
+    //          + ", controlDragSwipe=" + controlDragSwipe + ", altShiftSwipe=" + altShiftSwipe
+    //            + ", zoomInXPinch=" + zoomInXPinch
+    //            + ", zoomInYPinch=" + zoomInYPinch );
 
-    console.log( 'handleVisTouchMove: touchPan=' + self.touchPan + ', deletePeakSwipe=' + self.deletePeakSwipe
-              + ", controlDragSwipe=" + self.controlDragSwipe + ", altShiftSwipe=" + self.altShiftSwipe
-                + ", zoomInXPinch=" + self.zoomInXPinch
-                + ", zoomInYPinch=" + self.zoomInYPinch );
-
-    if (self.deletePeakSwipe) {
-      console.log( "handleVisTouchMove handleTouchMoveDeletePeak" );
-      self.handleTouchMoveDeletePeak(t);
-    } else if (self.controlDragSwipe) {
-      console.log( "handleVisTouchMove handleTouchMovePeakFit" );
+    if( controlDragSwipe ){
+      // We check for fitting a peak by specifying a ROI first, because once we start this
+      //  we dont want to switch to doing something else, since we have to complete the
+      //  operation, so the user can decide to cancel the peak fit, or add the peak as a keeper,
+      //  or else there could be a phantom peak displayed on the chart, that isnt tracked by the c++
+      //console.log( "handleVisTouchMove: handleTouchMovePeakFit" );
       self.handleTouchMovePeakFit();
-    } else if (self.altShiftSwipe) {
-      console.log( "handleVisTouchMove updateGammaSum" );
+    }else if( deletePeakSwipe ){
+      self.handleTouchMoveDeletePeak(t);
+    }else if( altShiftSwipe ){
       self.updateGammaSum();
-    } else if( self.zoomInXPinch ){
-      console.log( "handleVisTouchMove handleTouchMoveZoomInX" );
+    }else if( zoomInXPinch ){
       self.handleTouchMoveZoomInX();
-    } else if (self.zoomInYPinch) {
-      console.log( "handleVisTouchMove handleTouchMoveZoomY" );
+    }else if( zoomInYPinch ){
       self.handleTouchMoveZoomY();
-    } else if (self.currentlyAdjustingSpectrumScale) {
-      console.log( "handleVisTouchMove handleMouseMoveScaleFactorSlider" );
+    }else if( self.currentlyAdjustingSpectrumScale ){
       self.handleMouseMoveScaleFactorSlider()();
-    } else if( self.roiIsBeingDragged ) {
-      console.log( "handleVisTouchMove handleRoiDrag" );
+    }else if( self.roiIsBeingDragged ){
       self.handleRoiDrag( t[0] );
-    } else {
-      console.log( "handleVisTouchMove NONE" );
+    }else{
       self.handleCancelTouchCountGammas();
       self.handleCancelTouchDeletePeak();
       self.handleCancelTouchPeakFit();
@@ -3035,7 +3075,6 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
          - We moved our touches by > 5 pixels
     */
     let changedTouches = d3.event.changedTouches;
-    //console.log( 'changedTouches:', changedTouches, ', self.touchPageStart:', self.touchPageStart );
     if (self.touchHold) {
       if( t.length > 1 || !self.touchPageStart || (changedTouches.length !== 1)
           || self.dist([changedTouches[0].pageX, changedTouches[0].pageY], self.touchPageStart) > 5 ) {
@@ -3050,11 +3089,11 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
 
 
     // Update mouse coordinates, feature markers on a touch pan action
-    if( self.touchPan ) {
+    //  TODO: should we put this into the if/else above?
+    if( touchPan ) {
       if( !self.rightClickDown ){
         self.rightClickDown = d3.mouse(document.body);
-        //console.log( 'handleVisTouchMove, setting rightClickDown = d3.mouse(document.body))');
-        self.rightClickDrag = false;  /* Come back to figuring out what rightClickDrag is used for */
+        self.is_panning = false;
         self.origdomain = self.xScale.domain();
         self.zooming_plot = false;
       }
@@ -3067,7 +3106,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
 
       self.updateMouseCoordText();
       self.updateFeatureMarkers(-1);
-    }//if( self.touchPan )
+    }//if( touchPan )
 
     // Hide the peak info */
     self.hidePeakInfo();
@@ -3133,8 +3172,6 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
   }//function deleteTouchLine()
 
   return function() {
-    self.touchPan = false;
-    
     /* Prevent default event actions from occurring (eg. zooming into page when trying to zoom into graph) */
     d3.event.preventDefault();
     d3.event.stopPropagation();
@@ -3151,8 +3188,13 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     if( self.zooming_plot && self.touchZoomStartEnergies && (visTouches.length !== 0)){
       self.zooming_plot = false;
       self.touchZoomStartEnergies = null;
-      let d = self.xScale.domain();
+      const d = self.xScale.domain();
       self.setXAxisRange(d[0], d[1], true);
+      self.origdomain = d;
+      
+      // Reset pan starting positions and such; without this, if you pan with one finger, then add another finger to zoom, then remove the first finger, the chart will jump by calculating the delta from first finger start to current second finger pos.
+      if( visTouches.length === 1 )
+        self.rightClickDown = null;
     }
 
     /* Clear the single-tap wait if it exists */
@@ -3175,7 +3217,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     }
     
     /* Detect tap/double tap signals */
-    if (t.length === 1 && touchesT.length === 1 && self.touchStart ) {
+    if (t.length === 1 && touchesT.length === 1 && self.touchStart && !self.touchHoldEmitted ) {
       /* Get page, chart coordinates of event */
       const x = touchesT[0][0],
             y = touchesT[0][1],
@@ -3243,19 +3285,12 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
     self.handleTouchEndCountGammas();
     self.handleTouchEndDeletePeak();
-    self.handleTouchEndPeakFit();
+    self.handleCancelTouchPeakFit();
     self.handleTouchEndZoomY();
 
-    self.touchPan = false;
     self.touchZoom = false;
     self.touchStart = null;
     self.touchHoldEmitted = false;
-
-    self.deletePeakSwipe = false;
-    self.controlDragSwipe = false;
-    self.altShiftSwipe = false;
-    self.zoomInXPinch = false;
-    self.zoomInYPinch = false;
 
     self.countGammasStartTouches = null;
 
@@ -3267,6 +3302,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
     if (visTouches.length === 0) {
       self.handleCancelAllMouseEvents()();
+      self.origdomain = null;
     }//if (visTouches.length === 0)
   };//return function()
 }//SpectrumChartD3.prototype.handleVisTouchEnd = function()...
@@ -3514,7 +3550,7 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
   /* Create dictionary of touches on the chart */
   if (!self.touchesOnChart)
     self.touchesOnChart = {};
-
+    
   /* Add each touch start into map of touches on the chart */
   for (let i = 0; i < touchEvent.touches.length; i++) {
     const touch = touchEvent.touches[i];
@@ -3529,17 +3565,61 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
 
   /* Delete any touches that are not on the screen anymore (read from 'touchend' event) */
   if (touchEvent.type === "touchend") {
-    for (i = 0; i < touchEvent.changedTouches.length; i++) {
+    for( let i = 0; i < touchEvent.changedTouches.length; ++i ) {
       const touch = touchEvent.changedTouches[i];
 
       if (self.touchesOnChart[touch.identifier])
         delete self.touchesOnChart[touch.identifier];
     }
   }
-  
-  
-   // bloah blah blah  For some reason the touch.identifier are changing when using... Need to figure out why, perhaps go back thorugh git history to identify change set of when this started.
-  console.log( 'touchEvent.touches.length:', touchEvent.touches.length, ', self.touchesOnChart.len:', Object.keys(self.touchesOnChart).length, self.touchesOnChart );
+
+  //Check to make sure self.touchesOnChart has same number of entries as touchEvent.touches - if not, fix up
+  const keys = Object.keys(self.touchesOnChart);
+  if( keys.length && Object.keys(self.touchesOnChart).length !== touchEvent.touches.length ){
+    // We get here when touchs were cancelled - we'll try to pick up where we left off if
+    //  its been less than a second since the last cancelled touchs.
+                    
+    const now = new Date();
+    if( self.canceledTouches && ((now - self.canceledTouches.time) < 1000) ){
+      const oldTouches = self.canceledTouches.touches;
+      
+      keys.forEach( function(key, index){
+        const oldTouch = self.touchesOnChart[key];
+        if( oldTouch.wasCancelled ){
+          //find the closest touch on chart that hasnt already been used
+          //  TODO: improve matching of old and new touches - and also should limit to only use new touches in touchEvent.touches
+          let minDist = 99999, nearestTouch = null;
+          for (let i = 0; i < touchEvent.touches.length; i++) {
+            const touch = touchEvent.touches[i];
+            const dist = Math.sqrt( Math.pow(touch.pageX - oldTouch.pageX,2) + Math.pow(touch.pageY - oldTouch.pageY,2) );
+            if( (dist < minDist) && !touch.alreadyMatchedToCancelled ){
+              minDist = dist;
+              nearestTouch = touch;
+            }
+          }
+          if( minDist < 200 ){ //200px distance is arbitrary
+            //console.log( "Matched cancelled touch up to new touch. minDist:", minDist, " will update origdomain from", self.origdomain, " to ", oldTouch.origdomain  );
+            nearestTouch.alreadyMatchedToCancelled = true;
+            self.touchesOnChart[nearestTouch.identifier].startX = oldTouch.startX;
+            self.touchesOnChart[nearestTouch.identifier].startY = oldTouch.startY;
+            self.origdomain = oldTouch.origdomain;
+          }else{
+            console.error( "Couldnt match cancelled touch up to new touch; oldTouch:", oldTouch, ", touchEvent.touches:", touchEvent.touches );
+          }
+        }
+      } );
+    }else{
+      console.error( "Couldnt recover cancelled touches. touchesOnChart:",
+                      self.touchesOnChart, ", touchEvent.touches", touchEvent.touches );
+    }
+    
+    const trimmed = {};
+    for (let i = 0; i < touchEvent.changedTouches.length; ++i ) {
+      const ident = touchEvent.changedTouches[i].identifier;
+      trimmed[ident] = self.touchesOnChart[ident];
+    }
+    self.touchesOnChart = trimmed;
+  }//if( we have become out of sync on how many touches are on chart )
 }//SpectrumChartD3.prototype.updateTouchesOnChart
 
 
@@ -3566,9 +3646,6 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
 
     /* Cancel counting gammas */
     self.handleCancelMouseCountGammas();
-
-    /* Cancel peak fitting */
-    self.erasePeakFitReferenceLines();
 
     /* Cancel dragging of ROI. */
     self.handleCancelRoiDrag();
@@ -5837,9 +5914,6 @@ SpectrumChartD3.prototype.handleTouchMoveSliderChart = function() {
       self.redraw()();
 
       self.sliderChartTouch = t;
-
-      /* IMPORTANT: To translate the current x-scale into the current zoom object */
-      self.zoom.x(self.xScale);
     }
   }
 }
@@ -5899,9 +5973,6 @@ SpectrumChartD3.prototype.handleTouchMoveLeftSliderDrag = function(redraw) {
     self.setXAxisRange(origdomain[0], origdomain[1], true);
     self.xScale.range(origdomainrange);
     self.redraw()();
-
-    /* IMPORTANT: To translate the current x-scale into the current zoom object */
-    self.zoom.x(self.xScale);
   }
 }
 
@@ -5961,9 +6032,6 @@ SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
     self.setXAxisRange(origdomain[0], origdomain[1], true);
     self.xScale.range(origdomainrange);
     self.redraw()();
-
-    /* IMPORTANT: To translate the current x-scale into the current zoom object */
-    self.zoom.x(self.xScale);
   }
 }
 
@@ -7195,32 +7263,6 @@ SpectrumChartD3.prototype.setShowNuclideEnergies = function(d) {
 }
 
 
-/**
- * -------------- Peak Fit Functions --------------
- */
-
-SpectrumChartD3.prototype.erasePeakFitReferenceLines = function() {
-  var self = this;
-
-  /* Delete the arrows pointing to the mouse lines */
-  self.vis.selectAll(".createPeakArrow").forEach(function (arrows) {
-    arrows.forEach(function(arrow) {
-      arrow.remove();
-    })
-  });
-
-  /* Delete the arrow lines for the previous arrows */
-  self.vis.selectAll(".createPeakArrowLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
-  /* Delete the reference text for the create peak */
-  self.vis.select("#createPeakMouseText").remove();
-}
-
-
 SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
 /* ToDo:
      - implement if you hit the 1,2,3,4,... key while doing this, then it will force that many peaks to be fit for.
@@ -7229,7 +7271,7 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
      - cleanup naming of the temporary ROI and such to be consistent with handleRoiDrag and updateRoiBeingDragged
      - could maybe generalize the debounce mechanism
      - get this code working with touches (and in fact get touch code to just call this function)
-     - remove/cleanup a number of functions like: erasePeakFitReferenceLines, handleTouchMovePeakFit, handleCancelTouchPeakFit
+     - remove/cleanup a number of functions like: handleTouchMovePeakFit, handleCancelTouchPeakFit
  */
 
   var self = this;
@@ -7319,7 +7361,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   if (!self.rawData || !self.rawData.spectra)
     return;
 
-    console.log( 'handleTouchMovePeakFit' );
+  //console.log( 'handleTouchMovePeakFit' );
     
   /* Clear the delete peaks mode */
   self.handleCancelTouchDeletePeak();
@@ -7343,30 +7385,22 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   var leftStartTouch = self.createPeaksStartTouches[0][0] < self.createPeaksStartTouches[1][0] ? self.createPeaksStartTouches[0] : self.createPeaksStartTouches[1],
       rightStartTouch = leftStartTouch === self.createPeaksStartTouches[0] ? self.createPeaksStartTouches[1] : self.createPeaksStartTouches[0];
 
-  var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
+  let leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
       rightTouch = leftTouch === t[0] ? t[1] : t[0];
-
-  /* Cancel the action if the left touch is to the left touch is to the left of the original starting left touch */
-  /* or if the left touch goes out of bounds */
-  if (leftTouch[0] < leftStartTouch[0] || leftTouch[0] > self.xScale.invert(self.xScale.domain()[1])) {
-    self.handleCancelTouchPeakFit();
-    return;
-  }
 
   rightTouch[0] = Math.min(rightTouch[0], self.xScale.range()[1]);
 
-  //if( !self.fittingPeak )
-  //  self.forcedFitRoiNumPeaks = -1;
-  
   self.fittingPeak = true;
   
-
-  self.setYAxisDomain();
-  if (!self.yAxisZoomedOutFully) {
-    self.redraw()();
+  // Incase there was some jitter and a little zooming happened before we got into fit peak mode, restore to original x-domain
+  if( self.origdomain ){
+    const currX = self.xScale.domain(), prevX = self.origdomain;
+    if( (currX[0] != prevX[0]) || (currX[1] != prevX[1]) ){
+      self.xScale.domain( prevX );
+      self.redraw()();
+    }
   }
 
-  /* Uncomment if you want to have peak fitting animation within touch */
   self.handleMouseMovePeakFit();
 
   /* Set the length of the arrows */
@@ -7377,123 +7411,8 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   var touchPointRadius = 20; 
 
   /* To keep track of some of the line objects being drawn */
-  var createPeakTouchCurrentLine,
-      createPeakTouchText1 = self.vis.select("#createPeakTouchText1"),
-      createPeakTouchText2 = self.vis.select("#createPeakTouchText2"),
-      createPeakRightTouchPointTop = self.vis.select("#createPeakRightTouchPointTop"),
-      createPeakRightTouchPointBottom = self.vis.select("#createPeakRightTouchPointBottom"),
-      createPeakTouchLineTop = self.vis.select("#createPeakTouchLineTop"),
-      createPeakTouchLineBottom = self.vis.select("#createPeakTouchLineBottom"),
-      createPeakTouchArrowLineTop = self.vis.select("#createPeakTouchArrowLineTop"),
-      createPeakTouchArrowLineBottom = self.vis.select("#createPeakTouchArrowLineBottom");
-
-  if (createPeakTouchArrowLineTop.empty()) {
-    createPeakTouchArrowLineTop = self.vis.append("line")
-      .attr("id", "createPeakTouchArrowLineTop")
-      .attr("class", "createPeakArrowLine")
-      .attr("x1", leftStartTouch[0] - 12)
-      .attr("x2", leftStartTouch[0] - 12)
-      .attr("y1", leftStartTouch[1] - touchPointRadius - 20)
-      .attr("y2", leftStartTouch[1] - touchPointRadius - 10);
-
-    var createPeakTouchTopArrow = self.vis.append('svg:defs').attr("id", "createPeakStartArrowDef")
-                          .append("svg:marker")
-                          .attr("id", "createPeakTouchTopArrow")
-                          .attr('class', 'createPeakArrow')
-                          .attr("refX", 2)
-                          .attr("refY", 8)
-                          .attr("markerWidth", 25)
-                          .attr("markerHeight", 25)
-                          .attr("orient", 90)
-                          .append("path")
-                            .attr("d", "M2,2 L2,13 L8,7 L2,2")
-                            .style("stroke", "black");
-
-    createPeakTouchArrowLineTop.attr("marker-end", "url(#createPeakTouchTopArrow)");
-  }
-  if (createPeakTouchArrowLineBottom.empty()) {
-    createPeakTouchArrowLineBottom = self.vis.append("line")
-      .attr("id", "createPeakTouchArrowLineBottom")
-      .attr("class", "createPeakArrowLine")
-      .attr("x1", leftStartTouch[0] - 12)
-      .attr("x2", leftStartTouch[0] - 12)
-      .attr("y1", leftStartTouch[1] + touchPointRadius + 10)
-      .attr("y2", leftStartTouch[1] + touchPointRadius + 20);
-
-    var createPeakTouchBottomArrow = self.vis.append('svg:defs').attr("id", "createPeakStartArrowDef")
-                          .append("svg:marker")
-                          .attr("id", "createPeakTouchBottomArrow")
-                          .attr('class', 'createPeakArrow')
-                          .attr("refX", 2)
-                          .attr("refY", 8)
-                          .attr("markerWidth", 25)
-                          .attr("markerHeight", 25)
-                          .attr("orient", 270)
-                          .append("path")
-                            .attr("d", "M2,2 L2,13 L8,7 L2,2")
-                            .style("stroke", "black");
-
-    createPeakTouchArrowLineBottom.attr("marker-start", "url(#createPeakTouchBottomArrow)");
-  }
-
-
-  /* Create the left topmost and bottommost touch point */
-  if (self.vis.select("#createPeakTouchPoint1").empty()) {
-    self.vis.append("circle")
-      .attr("id", "createPeakTouchPoint1")
-      .attr("class", "createPeakLeftTouchPoint")
-      .attr("cx", leftStartTouch[0])
-      .attr("cy", leftStartTouch[1] - touchPointRadius)
-      .attr("r", 3);
-  }
-  if (self.vis.select("#createPeakTouchPoint2").empty()) {
-    self.vis.append("circle")
-      .attr("id", "createPeakTouchPoint2")
-      .attr("class", "createPeakLeftTouchPoint")
-      .attr("cx", leftStartTouch[0])
-      .attr("cy", leftStartTouch[1] + touchPointRadius)
-      .attr("r", 3);
-  }
-
-  /* Create/update the right topmost and bottommost touch point */
-  if (createPeakRightTouchPointTop.empty()) {
-    createPeakRightTouchPointTop = self.vis.append("circle")
-      .attr("id", "createPeakRightTouchPointTop")
-      .attr("class", "createPeakRightTouchPoint")
-      .attr("cy", leftStartTouch[1] - touchPointRadius)
-      .attr("r", 3);
-  }
-  createPeakRightTouchPointTop.attr("cx", rightTouch[0]);
-
-  if (createPeakRightTouchPointBottom.empty()) {
-    createPeakRightTouchPointBottom = self.vis.append("circle")
-      .attr("id", "createPeakRightTouchPointBottom")
-      .attr("class", "createPeakRightTouchPoint")
-      .attr("cy", leftStartTouch[1] + touchPointRadius)
-      .attr("r", 3);
-  }
-  createPeakRightTouchPointBottom.attr("cx", rightTouch[0]);
-
-  /* Create/update the touch lines */
-  if (createPeakTouchLineTop.empty()) {
-    createPeakTouchLineTop = self.vis.append("line")
-      .attr("id", "createPeakTouchLineTop")
-      .attr("class", "createPeakTouchLine")
-      .attr("x1", leftStartTouch[0])
-      .attr("y1", leftStartTouch[1] - touchPointRadius)
-      .attr("y2", leftStartTouch[1] - touchPointRadius);
-  }
-  createPeakTouchLineTop.attr("x2", rightTouch[0]);
-
-  if (createPeakTouchLineBottom.empty()) {
-    createPeakTouchLineBottom = self.vis.append("line")
-      .attr("id", "createPeakTouchLineBottom")
-      .attr("class", "createPeakTouchLine")
-      .attr("x1", leftStartTouch[0])
-      .attr("y1", leftStartTouch[1] + touchPointRadius)
-      .attr("y2", leftStartTouch[1] + touchPointRadius);
-  }
-  createPeakTouchLineBottom.attr("x2", rightTouch[0]);
+  let createPeakTouchCurrentLine = self.vis.select("#createPeakTouchCurrentLine"),
+      createPeakTouchText = self.vis.select("#createPeakTouchText");
 
   /* Create the leftmost starting point line  */
   if (self.vis.select("#createPeakTouchStartLine").empty()) {
@@ -7507,59 +7426,45 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
   }
 
   /* Create/refer the rightmost current point line */
-  if (self.vis.select("#createPeakTouchCurrentLine").empty()) {
+  if (createPeakTouchCurrentLine.empty()) {
     createPeakTouchCurrentLine = self.vis.append("line")
       .attr("id", "createPeakTouchCurrentLine")
       .attr("class", "createPeakMouseLine")
       .attr("y1", 0)
       .attr("y2", self.size.height);
-  } else 
-    createPeakTouchCurrentLine = self.vis.select("#createPeakTouchCurrentLine");
+  }
 
-  createPeakTouchCurrentLine.attr("x1", rightTouch[0])
+  createPeakTouchCurrentLine
+    .attr("x1", rightTouch[0])
     .attr("x2", rightTouch[0]);
 
   /* Create the text for the touch level */
-  if (createPeakTouchText1.empty())
-    createPeakTouchText1 = self.vis.append("text")
-      .attr("id", "createPeakTouchText1")
+  if (createPeakTouchText.empty())
+    createPeakTouchText = self.vis.append("text")
+      .attr("id", "createPeakTouchText")
       .attr("class", "createPeakTouchText")
-      .attr("y", leftStartTouch[1] - 2)
-      .text("Keep fingers");
-  createPeakTouchText1.attr("x", leftStartTouch[0] - createPeakTouchText1[0][0].clientWidth - 5);
-
-  if (createPeakTouchText2.empty())
-    createPeakTouchText2 = self.vis.append("text")
-      .attr("id", "createPeakTouchText2")
-      .attr("class", "createPeakTouchText")
-      .attr("y", leftStartTouch[1] + 8)
-      .text("level");
-  createPeakTouchText2.attr("x", leftStartTouch[0] - createPeakTouchText2[0][0].clientWidth - 25);
+      .attr("y", 10)
+      .text("Move 2 fingers to right to define ROI");
+  createPeakTouchText
+      .attr("x", 0.5*(leftStartTouch[0] + rightTouch[0] - createPeakTouchText.node().getBoundingClientRect().width ) );
 }
 
-SpectrumChartD3.prototype.handleTouchEndPeakFit = function() {
-  var self = this;
-
-  console.log( "handleTouchEndPeakFit" );
-  
-  if( self.createPeaksStartTouches )
-    self.handleMouseUpPeakFit();
-  
-  /* Delete all the create peak elements */
-  self.handleCancelTouchPeakFit();
-}
 
 SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
-  var self = this;
+  const self = this;
+  
+  const touchStartLines = self.vis.selectAll("#createPeakTouchStartLine");
+  if( !self.fittingPeak && (touchStartLines.length === 0) )
+    return;
+  
+  self.handleMouseUpPeakFit();
 
   /* Delete the leftmost start line */
-  self.vis.selectAll("#createPeakTouchStartLine").remove();
+  touchStartLines.remove();
   
   /* Delete the right most current mouse line */
   self.vis.selectAll("#createPeakTouchCurrentLine").remove();
 
-  /* Delete the arrow definitions pointing to the mouse lines */
-  self.vis.selectAll("#createPeakStartArrowDef").remove();
 
   /* Delete the arrows pointing to the mouse lines */
   d3.selectAll(".createPeakArrow").forEach(function (arrows) {
@@ -7568,41 +7473,13 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
     })
   });
 
-  /* Delete the arrow lines for the previous arrows */
-  d3.selectAll(".createPeakArrowLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
-  /* Delete the touch points */
-  d3.selectAll(".createPeakLeftTouchPoint").forEach(function (points) {
-    points.forEach(function(point) {
-      point.remove();
-    })
-  });
-  d3.selectAll(".createPeakRightTouchPoint").forEach(function (points) {
-    points.forEach(function(point) {
-      point.remove();
-    })
-  });
-
-  /* Delete the touch lines */
-  d3.selectAll(".createPeakTouchLine").forEach(function (lines) {
-    lines.forEach(function(line) {
-      line.remove();
-    })
-  });
-
   /* Delete the reference text for the create peak */
-  self.vis.selectAll("#createPeakTouchText").remove();
   self.vis.selectAll(".createPeakTouchText").forEach(function (texts) {
     texts.forEach(function(text) {
       text.remove();
     })
   });
 
-  self.controlDragSwipe = false;
   self.fittingPeak = null;
 }
 
@@ -7613,8 +7490,6 @@ SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
   const roi = self.roiBeingDrugUpdate;
   if( !self.fittingPeak || !self.rawData || !self.rawData.spectra || !roi )
     return;
-
-  console.log( 'Mouse up during peak fit' );
 
   self.fittingPeak = null;
   
@@ -9076,7 +8951,7 @@ SpectrumChartD3.prototype.handleCancelMouseZoomY = function() {
 
 
 SpectrumChartD3.prototype.handleTouchMoveZoomInX = function() {
-  var self = this;
+  const self = this;
 
   if (!self.touchesOnChart)
     return;
@@ -9293,8 +9168,6 @@ SpectrumChartD3.prototype.handleTouchCancelZoomY = function() {
   this.vis.select("#zoomInYTopLine").remove();
   this.vis.select("#zoomInYBottomLine").remove();
   this.vis.select("#zoomInYText").remove();
-  
-  this.zoomInYPinch = null;
 }
 
 
@@ -9516,8 +9389,6 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   self.handleCancelMouseCountGammas();
 
   self.handleCancelRoiDrag();
-
-  self.erasePeakFitReferenceLines();
   
 
   if (!self.deletePeaksMouse)
@@ -9620,14 +9491,11 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
   var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
       rightTouch = leftTouch === t[0] ? t[1] : t[0];
 
-  var leftTouchX = Math.min(leftTouch[0], self.xScale.range()[1]);
-  var rightTouchX = Math.min(rightTouch[0], self.xScale.range()[1]);
-  var width = Math.abs( rightTouchX - leftTouchX );
+  const leftTouchX = Math.min(leftTouch[0], self.xScale.range()[1]);
+  const rightTouchX = Math.min(rightTouch[0], self.xScale.range()[1]);
+  const width = Math.abs( rightTouchX - leftTouchX );
 
-  if (leftTouchX > self.xScale.invert(self.xScale.domain()[1])) {
-    self.handleCancelTouchDeletePeak();
-    return;
-  }
+  // Note: we are not testing if touches are in our tagret - I think we can assume we are, if we are here.
 
   /* Create the erase-peaks range box and text  */
   if (deletePeaksBox.empty()) {
