@@ -55,6 +55,7 @@
 #include <dirent.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <limits.h>
 #endif
 
 #ifndef _WIN32
