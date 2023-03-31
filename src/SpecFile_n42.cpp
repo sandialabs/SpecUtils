@@ -8078,14 +8078,49 @@ namespace SpecUtils
           id_to_dettype[name] = pair<DetectionType,string>(type,descrip);
       }//for( loop over "RadDetectorInformation" nodes )
       
-      rapidxml::xml_node<char> *analysis_node = XML_FIRST_NODE(rad_data_node, "AnalysisResults");
-      if( analysis_node )
+      
+      // There may be multiple <AnalysisResults> elements, for different algorithms, or whatever.
+      //  Right now we'll just kinda append things
+      XML_FOREACH_CHILD( analysis_node, rad_data_node, "AnalysisResults" )
       {
         std::shared_ptr<DetectorAnalysis> analysis_info = std::make_shared<DetectorAnalysis>();
         set_analysis_info_from_n42( analysis_node, *analysis_info );
-        //    if( analysis_info->results_.size() )
+        
+        if( detectors_analysis_ )
+        {
+          const auto append_ana_str = []( const string &prev, string &current ){
+            if( (prev == current) || prev.empty() || current.empty() )
+              return;
+            current = prev + "\n" + current;
+          };//const auto append_str =
+          
+          append_ana_str( detectors_analysis_->algorithm_name_, analysis_info->algorithm_name_ );
+          append_ana_str( detectors_analysis_->algorithm_creator_, analysis_info->algorithm_creator_ );
+          append_ana_str( detectors_analysis_->algorithm_description_, analysis_info->algorithm_description_ );
+          append_ana_str( detectors_analysis_->algorithm_result_description_, analysis_info->algorithm_result_description_ );
+          
+          analysis_info->remarks_.insert( begin(analysis_info->remarks_),
+                                         begin(detectors_analysis_->remarks_),
+                                         end(detectors_analysis_->remarks_) );
+          
+          analysis_info->algorithm_component_versions_.insert( begin(analysis_info->algorithm_component_versions_),
+                                         begin(detectors_analysis_->algorithm_component_versions_),
+                                         end(detectors_analysis_->algorithm_component_versions_) );
+          
+          if( analysis_info->analysis_start_time_ == time_point_t{} )
+            analysis_info->analysis_start_time_ = detectors_analysis_->analysis_start_time_;
+          else
+            analysis_info->analysis_start_time_ = std::min( analysis_info->analysis_start_time_,
+                                                      detectors_analysis_->analysis_start_time_ );
+          analysis_info->analysis_computation_duration_ += detectors_analysis_->analysis_computation_duration_;
+          
+          analysis_info->results_.insert( begin(analysis_info->results_),
+                                         begin(detectors_analysis_->results_),
+                                         end(detectors_analysis_->results_) );
+        }//if( detectors_analysis_ )
+        
         detectors_analysis_ = analysis_info;
-      }//if( analysis_node )
+      }//XML_FOREACH_CHILD( analysis_node, rad_data_node, "AnalysisResults" )
       
       
       XML_FOREACH_CHILD( multimedia_node, rad_data_node, "MultimediaData" )
@@ -8433,6 +8468,7 @@ namespace SpecUtils
     const rapidxml::xml_node<char> *nuc_ana_node = XML_FIRST_NODE( analysis_node, "NuclideAnalysis" );
     if( !nuc_ana_node )
       nuc_ana_node = XML_FIRST_NODE(analysis_node, "NuclideAnalysisResults");
+    
     if( !nuc_ana_node )
     {
       //Special case for RadSeeker
