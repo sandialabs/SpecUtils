@@ -6241,24 +6241,26 @@ void SpecFile::set_detector_type_from_other_info()
   
   if( icontains(manufacturer_, "Symetrica") )
   {
+    // The potential models are:
+    //  - SN20:   Handheld RIID, NaI
+    //  - SN20-N: Handheld RIID, NaI, non-He3
+    //  - SN23-N: Handheld RIID, NaI, non-He3; GPS, Wi-Fi, cellular & Bluetooth
+    //  - SL23-N: Handheld RIID, LaBr, non-He3; GPS, Wi-Fi, cellular & Bluetooth
+    
     // The <RadInstrumentModelName> tag seems to be "SN20", "SN23-N", etc, but sample size is small.
     // \TODO: verify general form Verifinders will have in this element
     const bool isVerifinder = (SpecUtils::icontains(model, "SN2")
-                               || SpecUtils::icontains(model, "VeriFinder"));
-    
-    //Could also look that has Verifinder has an N42 entry like (I havent seen a LaBr system):
-    //  <RadDetectorInformation id="DetectorInfoGamma">
-    //    <RadDetectorCategoryCode>Gamma</RadDetectorCategoryCode>
-    //    <RadDetectorKindCode>NaI</RadDetectorKindCode>
-    //    <RadDetectorLengthValue>3.8</RadDetectorLengthValue>
-    //    <RadDetectorDiameterValue>3.8</RadDetectorDiameterValue>
-    //  ...
+                               || SpecUtils::icontains(model, "VeriFinder")
+                               || SpecUtils::icontains(model, "SL2") );
     
     if( isVerifinder )
     {
-      bool isLaBr = false;
+      // Checking the model name to start with "SL2" should catch LaBr, but just to be sure
+      //  (in case there is a future SL3x model or something), we'll see
+      //  if any of the <RadDetectorInformation> -> <RadDetectorKindCode> elements had LaBr in them.
+      bool isLaBr = SpecUtils::icontains(model, "SL2");
       
-      for( size_t i = 0; (i < 12) && i < measurements_.size(); ++i )
+      for( size_t i = 0; !isLaBr && (i < 12) && i < measurements_.size(); ++i )
       {
         std::shared_ptr<Measurement> &meas = measurements_[i];
         const auto &desc = meas->detector_description_;
@@ -6290,7 +6292,6 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = isLaBr ? DetectorType::VerifinderLaBr : DetectorType::VerifinderNaI;
       return;
     }//if( isVerifinder )
-
   }//if( icontains(manufacturer_, "Symetrica") )
     
   
