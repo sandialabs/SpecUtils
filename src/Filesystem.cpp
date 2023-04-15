@@ -269,7 +269,25 @@ bool is_file( const std::string &name )
   //return (_waccess(wname.c_str(), 0x04) == 0) && !S_ISDIR(statbuf.st_mode);  //0x04 checks for read
 #else
   struct stat statbuf;
-  stat( name.c_str(), &statbuf);
+
+  if( stat( name.c_str(), &statbuf) < 0 )
+  {
+#if(PERFORM_DEVELOPER_CHECKS)
+    //  Errors we expect include ENOENT, ENOTDIR, and EACCES, which happen when:
+    //    A component of `name` doesnt exist, or dangling symbolic link, or `name` was empty,
+    //    or a component of `name` is not a directory, or search permission not allowed for one of
+    //    the path components
+    // We'll log other errors we dont normally expect, and which can include: to many symbolic
+    //    links, `name` to long, out of memory, file is to large or something
+    if( (errno != ENOENT) && (errno != ENOTDIR) && (errno != EACCES) )
+    {
+      log_developer_error( __func__, "error getting status of directory" );
+    }
+#endif
+    
+    return false;
+  }//if( stat( name.c_str(), &statbuf) < 0 )
+  
   // @TODO Make sure the ISREG and ISLNK is what we want, and also make sure Windows uses a consistent definition of what a file is...
   return (S_ISREG(statbuf.st_mode) || S_ISLNK(statbuf.st_mode)) && (access(name.c_str(), F_OK) == 0);
 #endif
@@ -301,12 +319,25 @@ bool is_directory( const std::string &name )
   return S_ISDIR(statbuf.st_mode);
 #else
   struct stat statbuf;
-  if( stat( name.c_str(), &statbuf) < 0 ) {
-    if(errno == ENOENT) {
-      return false;
+  
+  if( stat( name.c_str(), &statbuf) < 0 )
+  {
+#if(PERFORM_DEVELOPER_CHECKS)
+    //  Errors we expect include ENOENT, ENOTDIR, and EACCES, which happen when:
+    //    A component of `name` doesnt exist, or dangling symbolic link, or `name` was empty,
+    //    or a component of `name` is not a directory, or search permission not allowed for one of
+    //    the path components
+    // We'll log other errors we dont normally expect, and which can include: to many symbolic
+    //    links, `name` to long, out of memory, file is to large or something
+    if( (errno != ENOENT) && (errno != ENOTDIR) && (errno != EACCES) )
+    {
+      log_developer_error( __func__, "error getting status of directory" );
     }
-    throw runtime_error( "error getting status of directory" );
-  }
+#endif
+    
+    return false;
+  }//if( stat( name.c_str(), &statbuf) < 0 )
+  
   return S_ISDIR(statbuf.st_mode);
 #endif
 }//bool is_directory( const std::string &name )

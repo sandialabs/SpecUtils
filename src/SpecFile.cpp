@@ -7450,6 +7450,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     const double finish_new_time = get_wall_time();
     const double finish_new_cpu = get_cpu_time();
     
+    double finish_old_time, finish_old_cpu;
     // With limited testing, it doesnt look like we need this...
     {// begin check of other implementation
       vector< vector<float> > check_results( num_thread );
@@ -7475,6 +7476,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
           check_result_vec[bin] += spec_array[bin];
       }//for( size_t i = 0; i < num_thread; ++i )
       
+      finish_old_time = get_wall_time();
+      finish_old_cpu = get_cpu_time();
+      
       assert( summed_counts.size() == check_result_vec.size() );
       for( size_t i = 0; i < check_result_vec.size(); ++i )
       {
@@ -7488,9 +7492,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         }
       }//
     }// begin check of other implementation
-    
-    const double finish_old_time = get_wall_time();
-    const double finish_old_cpu = get_cpu_time();
     
     cerr << "New way: wall=" << (finish_new_time - start_new_time) << " s, cpu=" << (finish_new_cpu - start_new_cpu) << endl;
     cerr << "Old way: wall=" << (finish_old_time - finish_new_time) << " s, cpu=" << (finish_old_cpu - finish_new_cpu) << endl;
