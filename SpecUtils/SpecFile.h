@@ -2452,6 +2452,8 @@ protected:
   //This should actually be a map<> or something so there can be multiple
   // DetectorAnalysis objects for a file, each indexed by
   // radMeasurementGroupReferences, or radMeasurementReferences
+  // There can even be multiple analysis results for a single spectrum
+  //  (e.g., by different algorithms)
   std::shared_ptr<const DetectorAnalysis> detectors_analysis_;
 
   /** Multimedia data (e.g. images) included within the spectrum file.
