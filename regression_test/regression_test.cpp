@@ -105,6 +105,9 @@ void check_files_with_truth_n42( const string basedir );
 //  N42, and then read back in and ensured its equal_enough() to the original.
 void check_serialization_to_n42( const string basedir );
 
+/** Checks the oeprator= to make sure copies are complete. */
+void check_equality_operator( const string basedir );
+
 //add_truth_n42(): adds a truth n42 file for the  SpecUtils::SpecFile and path
 //  passed in.  Will fail if a truth n42 file already exists, unless force is
 //  specified to be true.  Checks the created n42 file to be sure it can be read
@@ -170,8 +173,8 @@ int main( int argc, char **argv )
   ( "action,a",
    po::value< vector<string> >(),
    "Action to perform. Either 'n42test', 'regression' (or equivalently 'test'),"
-   " 'addfiles', or 'timing'.  If blank defaults to 'test' if in automated mode"
-   ", or 'n42test', 'addfiles', 'test', and 'timing' otherwise." )
+   " 'addfiles', 'timing', or 'equality'.  If blank defaults to 'test' if in automated mode"
+   ", or 'n42test', 'addfiles', 'test', 'timing', 'equality' otherwise." )
   ;
   
   po::variables_map vm;
@@ -238,6 +241,7 @@ int main( int argc, char **argv )
       actions.push_back( "test" );
       actions.push_back( "timing" );
       actions.push_back( "n42test" );
+      actions.push_back( "equality" );
     }
   }//if( vm.count("action") ) / else
   
@@ -251,6 +255,8 @@ int main( int argc, char **argv )
       handle_no_truth_files( test_base_directory );
     else if( action == "timing" )
       check_parse_time( test_base_directory );
+    else if( action == "equality" )
+      check_equality_operator( test_base_directory );
     else
     {
       cerr << "Invalid action type '" << action << "', valid options are "
@@ -792,9 +798,6 @@ void check_serialization_to_n42( const string basedir )
   if( !g_automated_mode && (nFailToSerialize || nSerializedFileFailParse || nfailed) )
   {
     char dummy;
-    
-    
-    
     cout << "There was an error, enter 'x' to exit the app, or any other key"
          << " to continue.\n";
     cin >> dummy;
@@ -805,6 +808,83 @@ void check_serialization_to_n42( const string basedir )
   
 }//void check_serialization_to_n42( const string basedir )
 
+
+void check_equality_operator( const string basedir )
+{
+  size_t ninitial = 0, nOrigFileFailParse = 0,
+         npassed = 0, nfailed = 0;
+  
+  vector<path> failedcompare;
+  
+  // We'll only test on files with a truth-level N42 file to make sure we only
+  //  check files known to be good spectrum files.
+  const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
+  
+  for( const path &fpath : with_truth )
+  {
+    ++ninitial;
+    
+    const string filename = fpath.filename().string<string>();
+    const string originalpath = fpath.string<string>();
+    const string originalext = fpath.extension().string<string>();
+    
+    SpecUtils::SpecFile info;
+    
+    bool status = info.load_file( originalpath, SpecUtils::ParserType::Auto, originalext );
+
+    if( !status )
+    {
+      ++nOrigFileFailParse;
+      cerr << "Equality Operator Test: Failed to parse input file " << fpath
+           << "\n\n";
+      continue;
+    }//if( !status )
+    
+    SpecUtils::SpecFile info_copy;
+    info_copy = info;
+    
+    try
+    {
+       SpecUtils::SpecFile::equal_enough( info, info_copy );
+      ++npassed;
+    }catch( std::exception &e )
+    {
+      const string error_msg = e.what();
+      ++nfailed;
+      failedcompare.push_back( fpath );
+      cerr << "Equality Operator Test: comparison test for " << fpath
+           << " failed with error:\n\t" << error_msg << "\n"
+           << "\t(LHS is original parse, RHS is assigned copy)\n\n";
+    }//try / catch
+  }//for( const path &fpath : with_truth )
+  
+  
+  cout << "Equality Operator Test Results:\n"
+       << "\tNumber of input files: " << ninitial << "\n"
+       << "\tNumber of input files that failed to parse: " << nOrigFileFailParse
+       << "\n\tNumber of files that failed comparison: " << nfailed
+       << "\n\tNumber of files that passed comparison: " << npassed
+       << "\n\n";
+  
+  if( failedcompare.size() )
+  {
+    cout << "Files failing operator= comparison:\n";
+    for( const path &p : failedcompare )
+      cout << "\t" << p << endl;
+    cout << endl << endl;
+  }
+  
+  if( !g_automated_mode && nfailed )
+  {
+    char dummy;
+    cout << "There was an error, enter 'x' to exit the app, or any other key"
+         << " to continue.\n";
+    cin >> dummy;
+    
+    if( dummy == 'x' )
+      exit( EXIT_FAILURE );
+  }//if( !g_automated_mode )
+}//void check_equality_operator( const string basedir )
 
 
 bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
