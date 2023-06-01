@@ -4091,6 +4091,7 @@ const SpecFile &SpecFile::operator=( const SpecFile &rhs )
   mean_latitude_          = rhs.mean_latitude_;
   mean_longitude_         = rhs.mean_longitude_;
   detectors_analysis_     = rhs.detectors_analysis_;
+  multimedia_data_        = rhs.multimedia_data_;
   properties_flags_       = rhs.properties_flags_;
   
   modified_               = rhs.modified_;
