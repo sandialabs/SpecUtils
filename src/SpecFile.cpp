@@ -4090,6 +4090,7 @@ const SpecFile &SpecFile::operator=( const SpecFile &rhs )
   component_versions_     = rhs.component_versions_;
   mean_latitude_          = rhs.mean_latitude_;
   mean_longitude_         = rhs.mean_longitude_;
+  detectors_analysis_     = rhs.detectors_analysis_;
   properties_flags_       = rhs.properties_flags_;
   
   modified_               = rhs.modified_;
