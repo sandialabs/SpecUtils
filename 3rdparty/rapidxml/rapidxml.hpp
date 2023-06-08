@@ -20,6 +20,7 @@
 //      Then need to go through and make sure all the code expects and respects this.
 #define RAPIDXML_USE_SIZED_INPUT_WCJOHNS 1
 //#include <stdio.h>
+//#include <string.h>
 
 
 // If standard library is disabled, user must provide implementations of required functions and typedefs
@@ -1468,7 +1469,7 @@ namespace rapidxml
             if( (text+1) >= text_end )
               break;
             
-            if (xml_node<Ch> *node = parse_node<Flags>(text,text_end))
+            if (xml_node<Ch> *node = parse_node<Flags>(text,text_end,this))
               this->append_node(node);
           }
           else
@@ -2818,7 +2819,7 @@ namespace rapidxml
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
       template<int Flags>
-      xml_node<Ch> *parse_element(Ch *&text, Ch * const text_end )
+      xml_node<Ch> *parse_element(Ch *&text, Ch * const text_end, xml_node<Ch> *parent )
       {
         //assert( text[-1]=='<' );
         // Extract element name
@@ -2897,7 +2898,7 @@ namespace rapidxml
           }
           
           assert( text < text_end );
-          parse_node_contents<Flags>(text, element, text_end);
+          parse_node_contents<Flags>(text, element, text_end, parent);
         }
         else if (*text == Ch('/'))
         {
@@ -2946,7 +2947,7 @@ namespace rapidxml
               //  (should have been: <Spectrum>...<ChannelData><Data>3 1 0 2 1 0 3 1 1 ...</Data></ChannelData></Spectrum> )
               //Lets live dangerously and try to parse it anyway....
               assert( text < text_end );
-              parse_node_contents<Flags>(text, element, text_end);
+              parse_node_contents<Flags>(text, element, text_end, parent);
             }
           }else  //no sloppy parse
           {
@@ -3062,7 +3063,7 @@ namespace rapidxml
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
       template<int Flags>
-      xml_node<Ch> *parse_node(Ch *&text, Ch * const text_end )
+      xml_node<Ch> *parse_node(Ch *&text, Ch * const text_end, xml_node<Ch> *parent )
       {
         //assert( text[-1] == '<' );
         assert( text < text_end );
@@ -3076,7 +3077,7 @@ namespace rapidxml
             // <...
           default:
             // Parse and append element node
-            return parse_element<Flags>(text,text_end);
+            return parse_element<Flags>(text,text_end,parent);
             
           case Ch('/'):
           {
@@ -3281,7 +3282,7 @@ namespace rapidxml
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
       template<int Flags>
-      void parse_node_contents(Ch *&text, xml_node<Ch> *node, Ch * const text_end )
+      void parse_node_contents(Ch *&text, xml_node<Ch> *node, Ch * const text_end, const xml_node<Ch> * const parent )
       {
         assert( text < text_end );
         
@@ -3327,30 +3328,97 @@ namespace rapidxml
           {
             // Node closing or child node
             case Ch('<'):
-              if ( ((text_end - text) > 2) && (text[1] == Ch('/')))
+              if( (((text_end - text) > 2) && (text[1] == Ch('/')))
+                 || ( (Flags & allow_sloppy_parse)
+                      && ((text_end - text) > 3)
+                      && whitespace_pred::test(text[1])
+                      && (text[2] == Ch('/')) )
+                 )
               {
                 //If sloppy parse is allowed, and closing tag name doesnt match
                 //  opening name, keep position at begging of tag, and return
                 //  - this assumes a closing tag was left out.  This happens in
                 //  html for example with <li>, <tr>, and <td>.
                 //
-                // Note that right here we dont have the context to know who
-                //  the node's parent is, so we cant walk up the chain to do a
-                //  sanity check
+                //  Note: not currently allowing for more than one whitespace
+                //        between the '<' and '/' characters.
                 if( (Flags & allow_sloppy_parse) )
                 {
                   Ch * name_start = text+2;
-                  while( ((name_start + 1) != text_end) && ((*name_start)==Ch('<')) )
+                  
+                  while( ((name_start + 1) != text_end)
+                        && (((*name_start)==Ch('<'))
+                             || whitespace_pred::test(*name_start)
+                             || ((*name_start)==Ch('/'))) )
+                  {
                     ++name_start;
+                  }
                   assert( name_start < text_end );
-                  skip<whitespace_pred, Flags>(name_start, text_end);
+                  //skip<whitespace_pred, Flags>(name_start, text_end);
                   Ch *name_end = name_start;
                   assert( name_end < text_end );
                   skip<node_name_pred, Flags>(name_end, text_end);
-                  if( !internal::compare(node->name(), node->name_size(), name_start, name_end - name_start, true) )
+                  
+                  const char * const closing_name = name_start;
+                  const size_t closing_name_len = name_end - name_start;
+                  
+                  if( !internal::compare(node->name(), node->name_size(), closing_name, closing_name_len, false) )
                   {
+                    // Check if the closing tag name matches one of the parent tags
+                    bool found_in_parent = false;
+                    for( const xml_node<Ch> *ancestor = parent; ancestor; ancestor = ancestor->parent() )
+                    {
+                      // Not require case sensitivity
+                      if( internal::compare(closing_name, closing_name_len, ancestor->name(), ancestor->name_size(), false) )
+                      {
+                        found_in_parent = true;
+                        break;
+                      }
+                    }//if( closing tag name doesnt match openining tag )
+                    
+                    if( !found_in_parent )
+                    {
+                      // This is likely a closing tag inserted without an opening tag; skip to the
+                      //  next opening tag, end of document, or next closing tag (where we will
+                      //  go back up to `after_data_node`, and repeat).
+                      
+                      // Go until '>'
+                      while( ((text+1) != text_end) && ((*text) != Ch('>')) )
+                        ++text;
+                      
+                      // Allow multiple '>', e.x., '>>>'.
+                      while( ((text+1) != text_end) && ((*text) == Ch('>')) )
+                        ++text;
+                      
+                      // Go until '<'
+                      while( ((text+1) != text_end) && ((*text) != Ch('<')) )
+                        ++text;
+                      
+                      // If we're at the end of the file, just return
+                      if( (text+2) >= text_end )
+                        return;
+                      
+                      // If we happened upon a closing tag, we'll got back up to 'after_data_node'
+                      //   which will keep going until it finds a closing tag that matches the
+                      //   current tag, or one of its parents.
+                      if( ((*(text+1)) == Ch('/'))
+                         || ( ((text+3) < text_end) && whitespace_pred::test(*(text+1)) && ((*(text+2)) == Ch('/')) ) )
+                        goto after_data_node;
+                      
+                      // This is an opening tag, so we will return (up a few funtion levels to
+                      //  `parse`, which will then continue trying to parse `node`'s siblings,
+                      //  or if no more are left, close-out its parent.
+                    }//if( !found_in_parent )
+                    
+                    // If we are here, we will assume one of two things happened:
+                    //   1) A closing tag was left out, since the closing tag name matches a
+                    //      parent; we'll leave the position at begining of this poorly placed
+                    //      closing tag, and return, so the eventual parent can be properly
+                    //      closed out.
+                    //   2) We skipped along until the next opening tag, that we will asume is
+                    //      a sibling to `node`.
                     return;
-                  }
+                  }//if( closing tag name doesnt match opening tag name )
                 }//if( sloppy )
                 
                 // Node closing
@@ -3358,7 +3426,7 @@ namespace rapidxml
                 
                 assert( text < text_end );
                 
-                if (Flags & parse_validate_closing_tags)
+                if( (Flags & parse_validate_closing_tags) && !(Flags & allow_sloppy_parse) )
                 {
                   Ch *closing_name = text;
                   skip<node_name_pred, Flags>(text, text_end);
@@ -3368,7 +3436,7 @@ namespace rapidxml
                 }
                 else
                 {
-                  // No validation, just skip name
+                  // No validation (or we are doing a sloppy parse), just skip name
                   skip<node_name_pred, Flags>(text, text_end);
                 }
                 
@@ -3421,12 +3489,18 @@ namespace rapidxml
               }else
               {
                 // Child node
-                if( (text != text_end) && ((text+1) != text_end) )
+                if( (Flags & allow_sloppy_parse) )
+                {
+                  while( (text != text_end) && ((text+1) != text_end) && ((*text)==Ch('<')) )
+                    ++text;     // Skip possibly multiple '<'
+                }else if( (text != text_end) && ((text+1) != text_end) )
+                {
                   ++text;     // Skip '<'
+                }
                 
                 assert( text < text_end );
                 
-                if (xml_node<Ch> *child = parse_node<Flags>(text, text_end))
+                if (xml_node<Ch> *child = parse_node<Flags>(text, text_end, node))
                   node->append_node(child);
                 
                 assert( text < text_end );
