@@ -216,7 +216,7 @@ namespace
     const size_t counts_end = find_after("]", counts_start, filedata.size());
 
     const char* const begin_counts = &(filedata[counts_start + 1]);
-    const char* const end_counts = &(filedata[counts_end]);
+    //const char* const end_counts = &(filedata[counts_end]);
 
     auto counts = make_shared<vector<float>>();
     const bool read_all_counts = split_to_floats(begin_counts, counts_end - counts_start - 1, *counts);
@@ -266,7 +266,8 @@ namespace
 
     auto meas = make_shared<Measurement>();
     meas->set_gamma_counts(counts, run_time - dead_time, run_time);
-    meas->set_remarks({ comment });
+    if( !comment.empty() )
+      meas->set_remarks({ comment });
     meas->set_parse_warnings(warnings);
     if (energy_cal && energy_cal->valid())
       meas->set_energy_calibration(energy_cal);

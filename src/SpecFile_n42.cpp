@@ -86,6 +86,13 @@ namespace
   
   static const std::string s_frf_to_poly_remark = "Energy calibration was originally specified as full-range-fraction.";
 
+  /** Alpha spectra may have huge offset (like 2.5 MeV), which is usually garbage for gamma spectra; we only get alpha spectra
+   from CNF files, as far as I'm aware, so when we write the N42 file, we will add a special comment to the energy calibration
+   node, so this way when we read it back in, we will test the coefficients to the looser standards, rather than our normal gamma
+   standards
+   */
+  static const char * const s_is_high_offset_energy_cal = "High offset energy.";
+  
   //Take absolute difference between unsigned integers.
   template<typename T>
   T abs_diff(T a, T b) {
@@ -220,7 +227,11 @@ namespace
         assert( node_name );
         if( node_name )
         {
-          char *val = doc->allocate_string( &(data.data_[0]), data.data_.size() + 1 );
+          const size_t data_size = data.data_.size();
+          char *val = doc->allocate_string( nullptr, data_size + 1 );
+          memcpy( val, data.data_.data(), data_size );
+          val[data_size] = '\0';
+          
           xml_node<char> *node = doc->allocate_node( node_element, node_name, val, 0, data.data_.size() );
           MultimediaData->append_node( node );
         }
@@ -370,6 +381,10 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
   stringstream valuestrm;
   vector<float> coefs;
   
+  // If energy offset of polynomial energy calibrations is large, we will put in a special remark so
+  //  when we read things back in, we will apply a looser energy calibration validation.
+  bool is_large_poly_offset = false;
+  
   
   switch( energy_cal.type() )
   {
@@ -406,6 +421,9 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
         valuestrm << buffer;
       }
       
+      is_large_poly_offset = ((coefs.size() > 0)
+                      && (coefs[0] >= SpecUtils::EnergyCalibration::sm_polynomial_offset_limit));
+        
       break;
     }//case SpecUtils::EnergyCalType::Polynomial:
       
@@ -445,6 +463,13 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
       node = doc->allocate_node( node_element, "Remark", val );
       EnergyCalibration->append_node( node );
     }//if( !remark.empty() )
+    
+    if( is_large_poly_offset )
+    {
+      val = doc->allocate_string( s_is_high_offset_energy_cal );
+      node = doc->allocate_node( node_element, "Remark", val );
+      EnergyCalibration->append_node( node );
+    }//if( is_large_poly_offset )
     
     val = doc->allocate_string( valuestrm.str().c_str() );
     node = doc->allocate_node( node_element, coefname, val );
@@ -1561,6 +1586,12 @@ struct MeasurementCalibInfo
   
   std::string calib_id; //optional
   
+  /** Only true when reading in N42 files written out by this library, and there is a special remark in the EnergyCalibration
+   node that says we should expect a large energy offset.  I'm a little mixed if maybe we should skip this hack, and just
+   allow like 2.5 MeV offsets always.
+   */
+  bool allow_high_offset = false;
+  
   MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measurement> meas );
   MeasurementCalibInfo();
   
@@ -1615,7 +1646,10 @@ void MeasurementCalibInfo::fill_binning( const size_t nbin )
     switch( equation_type )
     {
       case SpecUtils::EnergyCalType::Polynomial:
-        cal->set_polynomial( nbin, coefficients, deviation_pairs_ );
+        if( allow_high_offset )
+          cal->set_polynomial_no_offset_check( nbin, coefficients, deviation_pairs_ );
+        else
+          cal->set_polynomial( nbin, coefficients, deviation_pairs_ );
         break;
         
       case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
@@ -6764,7 +6798,7 @@ namespace SpecUtils
         SpecUtils::ireplace_all( original_creator, "  ", "" );
         original_creator = "InterSpec. Original file by " + original_creator;
         
-        val = doc->allocate_string( original_creator.c_str() );
+        val = doc->allocate_string( original_creator.c_str(), original_creator.size()+1 );
         xml_node<char> *RadInstrumentDataCreatorName = doc->allocate_node( node_element, "RadInstrumentDataCreatorName", val );
         RadInstrumentData->append_node( RadInstrumentDataCreatorName );
       }//if( original_creator.empty() ) / else
@@ -7034,7 +7068,7 @@ namespace SpecUtils
       ///        Note that  when we parse from n42-2012, we will put the detector kind into detector_description_ if there are no
       ///        dimensions associated, which make the round trip to and from the N42 then relies on this - brittle, I know.
       const string det_kind = determine_gamma_detector_kind_code( *this );
-      val = doc->allocate_string( det_kind.c_str() );
+      val = doc->allocate_string( det_kind.c_str(), det_kind.size()+1 );
       xml_node<char> *RadDetectorKindCode = doc->allocate_node( node_element, "RadDetectorKindCode", val );
       RadDetectorInformation->append_node( RadDetectorKindCode );
       
@@ -7678,20 +7712,29 @@ namespace SpecUtils
       if( !coef_val_node )
         coef_val_node = XML_FIRST_NODE(cal_node, "Coefficients");
       
-      if( remark_node && remark_node->value_size() )
+      MeasurementCalibInfo info;
+      
+      XML_FOREACH_CHILD( remark_node, cal_node, "Remark" )
       {
         const string remark_value = xml_value_str(remark_node);
-        if( !SpecUtils::icontains( remark_value, s_enrgy_cal_not_availabel_remark)
+        
+        // Check if we wrote this N42 file out, and we explicitly said that we expect the energy
+        //  offset to be large
+        const bool is_alpha_energy_cal = SpecUtils::icontains( remark_value, s_is_high_offset_energy_cal );
+        
+        info.allow_high_offset |= is_alpha_energy_cal;
+        
+        if( !is_alpha_energy_cal
+           && !SpecUtils::icontains( remark_value, s_enrgy_cal_not_availabel_remark)
            && !SpecUtils::icontains( remark_value, s_frf_to_poly_remark) )
         {
           remarks.push_back( "Calibration for " + id + " remark: " + remark_value );
         }
-      }
+      }//for( loop over remark nodes )
       
       if( date_node && date_node->value_size() )
         remarks.push_back( id + " calibrated " + xml_value_str(date_node) );
       
-      MeasurementCalibInfo info;
       if( coef_val_node && coef_val_node->value_size() )
       {
         info.equation_type = SpecUtils::EnergyCalType::Polynomial;
@@ -8781,7 +8824,7 @@ namespace SpecUtils
         {
           const rapidxml::xml_node<char> *dist_node = XML_FIRST_NODE(location_node, "DistanceValue");
           
-          //Could check 'units' attribute, but only val;id value is "m"
+          //Could check 'units' attribute, but only valid value is "m"
           if( xml_value_to_flt( dist_node, result.distance_ ) )
             result.distance_ *= 1000.0;
         }//if( position_node )
@@ -8789,7 +8832,10 @@ namespace SpecUtils
       
       
       if( !result.isEmpty() )
+      {
+        // TODO: DetectorAnalysisResult should be split into NuclideAnalysisResults and DoseAnalysisResults; right now cleanup_after_load will split things up, but very poorly.
         analysis.results_.push_back( result );
+      }
     }//for( loop over DoseAnalysisResults nodes )
   }//void set_analysis_info_from_n42(...)
   

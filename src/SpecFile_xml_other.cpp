@@ -583,7 +583,7 @@ bool SpecFile::load_from_caen_gxml(std::istream& input)
     {
       const rapidxml::xml_node<char>* const operator_node = XML_FIRST_INODE(meas_node, "OPERATOR");
       const rapidxml::xml_node<char>* const start_node = XML_FIRST_INODE(meas_node, "START");
-      const rapidxml::xml_node<char>* const stop_node = XML_FIRST_INODE(meas_node, "STOP");
+      //const rapidxml::xml_node<char>* const stop_node = XML_FIRST_INODE(meas_node, "STOP");
       const rapidxml::xml_node<char>* const comments_node = XML_FIRST_INODE(meas_node, "COMMENTS");
       const rapidxml::xml_node<char>* const tags_node = XML_FIRST_INODE(meas_node, "TAGS");
       if (start_node && start_node->value_size())

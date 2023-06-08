@@ -47,7 +47,10 @@ namespace SpecUtils
 const size_t EnergyCalibration::sm_min_channels = 1;
 const size_t EnergyCalibration::sm_max_channels = 65536 + 8;
 
-
+const float EnergyCalibration::sm_polynomial_offset_limit = 500.0f;
+const float EnergyCalibration::sm_polynomial_extended_offset_limit = 5000.f;
+  
+  
 EnergyCalibration::EnergyCalibration()
   : m_type( EnergyCalType::InvalidEquationType )
 {
@@ -152,7 +155,7 @@ void EnergyCalibration::set_polynomial_internal( const EnergyCalCheckType check_
   // Do a sanity check on calibration coefficients that they are reasonable; #polynomial_binning
   //  will check if the are strictly increasing.
   if( (coeffs[0] < -500.0)  //500 is arbitrary, but I have seen -450 in data!
-     || (coeffs[0] > ((check_type==EnergyCalCheckType::LooseOffset) ? 5000.0 : 500.0))
+     || (coeffs[0] > ((check_type==EnergyCalCheckType::LooseOffset) ? sm_polynomial_extended_offset_limit : sm_polynomial_offset_limit))
       || (fabs(coeffs[1]) > 450.0)  //450 is arbitrary, lets 7 channels span 3000 keV
       || (last_iter==2 && coeffs[1]<=std::numeric_limits<float>::epsilon() )  //epsilon = 1.19209290E-07F (picked as arbitrary constant, no meaning behind epsilon)
       || (last_iter>=3 && coeffs[1]<=std::numeric_limits<float>::epsilon()
