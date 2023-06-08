@@ -1076,6 +1076,7 @@ namespace SpecUtils
     }else
     {
       assert(0);
+      ok = false;
     }
     
     

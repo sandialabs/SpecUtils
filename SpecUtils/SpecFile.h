@@ -1289,7 +1289,7 @@ public:
   //  adjustments following openeing of an object
   void reset_modified_since_decode();
 
-  //simple accessors (no thread locks are aquired)
+  // simple accessors
   float gamma_live_time() const;
   float gamma_real_time() const;
   double gamma_count_sum() const;
@@ -1345,7 +1345,7 @@ public:
    */
   bool contains_non_derived_data() const;
   
-  //simple setters (no thread locks are aquired)
+  // simple setters
   void set_filename( const std::string &n );
   void set_remarks( const std::vector<std::string> &n );
   void set_parse_warnings( const std::vector<std::string> &warnings );
@@ -2227,12 +2227,10 @@ protected:
   //measurement(...): converts a const Measurement ptr to a non-const Measurement
   // ptr, as well as checking that the Measurement actually belong to this
   //  SpecFile object. Returns empty pointer on error.
-  //  Does not obtain a thread lock.
   std::shared_ptr<Measurement> measurement( std::shared_ptr<const Measurement> meas );
   
   //find_detector_names(): looks through measurements_ to find all detector
   //  names.
-  //  Does not obtain a thread lock.
   std::set<std::string> find_detector_names() const;
   
   //set_detector_type_from_other_info(): sets detector_type_ using
@@ -2536,7 +2534,10 @@ protected:
   bool modifiedSinceDecode_;
  
 protected:
+  /** This mutex protects all member variables. ... keep documenting locking model the retest with fb infer add mutext to Measurement, and a CMake option to turn-off thread safety (and also defaults to off) ... will need to convert return by refernces to return by value for thread safe functions. */
   mutable std::recursive_mutex mutex_;
+  
+  
 public:
   std::recursive_mutex &mutex() const { return mutex_; };
   
