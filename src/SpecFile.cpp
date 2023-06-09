@@ -4018,6 +4018,37 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     }
   }//if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
   
+  
+  if( lhs.multimedia_data_.size() != rhs.multimedia_data_.size() )
+  {
+    issues.push_back( "LHS has " + std::to_string(lhs.multimedia_data_.size()) +
+                     " multimedia entries, but RHS has "
+                     + std::to_string(rhs.multimedia_data_.size()) );
+  }else
+  {
+    for( size_t i = 0; i < lhs.multimedia_data_.size(); ++i )
+    {
+      assert( lhs[i] && rhs[i] );
+      if( !lhs.multimedia_data_[i] || !rhs.multimedia_data_[i] )
+      {
+        issues.push_back( "Unexpected nullptr in multimedia_data_" );
+        continue;
+      }
+
+      try
+      {
+        MultimediaData::equal_enough( *lhs.multimedia_data_[i],
+                                     *rhs.multimedia_data_[i] );
+      }catch( std::exception &e )
+      {
+        issues.push_back( "Mulimedia entry " + std::to_string(i)
+                         + " does not match between LHS and RHS: "
+                         + string(e.what()) );
+      }// try / catch
+    }//for( loop over multimedias )
+  }//if( not same num images ) / else
+  
+  
   /*
 #if( !defined(WIN32) )
   if( lhs.uuid_ != rhs.uuid_ )
@@ -4036,6 +4067,35 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
   if( !error_msg.empty() )
     throw runtime_error( error_msg );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
+  
+  
+void MultimediaData::equal_enough( const MultimediaData &lhs, const MultimediaData &rhs )
+{
+  if( lhs.remark_ != rhs.remark_ )
+    throw runtime_error( "MultimediaData: LHS remark doesnt match RHS" );
+  
+  if( lhs.descriptions_ != rhs.descriptions_ )
+    throw runtime_error( "MultimediaData: LHS description doesnt match RHS" );
+  
+  if( lhs.data_ != rhs.data_ )
+    throw runtime_error( "MultimediaData: LHS data doesnt match RHS" );
+  
+  if( lhs.data_encoding_ != rhs.data_encoding_ )
+    throw runtime_error( "MultimediaData: LHS EncodingType doesnt match RHS" );
+  
+  if( lhs.capture_start_time_ != rhs.capture_start_time_ )
+    throw runtime_error( "MultimediaData: LHS Capture Start Time doesnt match RHS" );
+  
+  if( lhs.file_uri_ != rhs.file_uri_ )
+    throw runtime_error( "MultimediaData: LHS File URI doesnt match RHS" );
+
+  if( lhs.mime_type_ != rhs.mime_type_ )
+    throw runtime_error( "MultimediaData: LHS Myme Type doesnt match RHS" );
+  
+  //<MultimediaFileSizeValue>,
+  //<MultimediaDataMIMEKind>,
+}//void MultimediaData::equal_enough(...)
+
 #endif //#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 
 

@@ -2750,6 +2750,11 @@ struct MultimediaData
   //<ImageWidthValue>,
   //<ImageHeightValue>,
   //<MultimediaDataExtension>
+  
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
+  static void equal_enough( const MultimediaData &lhs,
+                           const MultimediaData &rhs );
+#endif
 };//struct MultimediaData
 
 }//namespace SpecUtils
