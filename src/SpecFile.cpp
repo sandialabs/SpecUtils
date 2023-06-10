@@ -1638,6 +1638,13 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
 }//void combine_gamma_channels( const size_t nchann )
 
 
+void SpecFile::add_multimedia_data( const MultimediaData &data )
+{
+  shared_ptr<const MultimediaData> new_data = make_shared<MultimediaData>( data );
+  multimedia_data_.push_back( new_data );
+}//void add_multimedia_data( const MultimediaData &data )
+
+
 size_t SpecFile::do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform )
 {
@@ -4028,7 +4035,7 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
   {
     for( size_t i = 0; i < lhs.multimedia_data_.size(); ++i )
     {
-      assert( lhs[i] && rhs[i] );
+      assert( lhs.multimedia_data_[i] && rhs.multimedia_data_[i] );
       if( !lhs.multimedia_data_[i] || !rhs.multimedia_data_[i] )
       {
         issues.push_back( "Unexpected nullptr in multimedia_data_" );
