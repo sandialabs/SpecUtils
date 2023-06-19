@@ -963,7 +963,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     var bounds = self.min_max_x_values();
     var minx = bounds[0], maxx = bounds[1];
     
-    this.setXAxisRange(minx, maxx, true);
+    this.setXAxisRange(minx, maxx, true, false);
   }
 
   /* Hack: To properly choose the right set of points for the y-axis points */
@@ -1494,7 +1494,7 @@ SpectrumChartD3.prototype.handlePanChart = function () {
       newXMax = newXDomain()[1];
 
   /* Pan the chart */
-  self.setXAxisRange(newXMin, newXMax, false);
+  self.setXAxisRange(newXMin, newXMax, false, true);
   self.redraw()();
 
   /* New mouse position set to current moue position */
@@ -2524,7 +2524,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     let domain = self.xScale.domain();
     if( !self.origdomain || !domain || self.origdomain[0]!==domain[0] || self.origdomain[1]!==domain[1] ){
       //console.log( 'Mouseup xrangechanged' );
-      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height );
+      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height, false );
     }
 
     /* Delete any other mouse actions going on */
@@ -2640,7 +2640,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
          what, so I think its okay.
       */
       let domain = self.xScale.domain();
-      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height);
+      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height, true);
     };
 
     //
@@ -2757,7 +2757,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
 
     /*Finally set the new x domain, and redraw the chart (which will take care */
     /*  of setting the y-domain). */
-    self.setXAxisRange(new_x_min, new_x_max, false);
+    self.setXAxisRange(new_x_min, new_x_max, false, true);
     self.redraw()();
 
     self.updateFeatureMarkers(-1);
@@ -3189,7 +3189,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
       self.zooming_plot = false;
       self.touchZoomStartEnergies = null;
       const d = self.xScale.domain();
-      self.setXAxisRange(d[0], d[1], true);
+      self.setXAxisRange(d[0], d[1], true, true);
       self.origdomain = d;
       
       // Reset pan starting positions and such; without this, if you pan with one finger, then add another finger to zoom, then remove the first finger, the chart will jump by calculating the delta from first finger start to current second finger pos.
@@ -3385,7 +3385,7 @@ SpectrumChartD3.prototype.mousemove = function () {
         }
        
         //we'll emit on mouse up - ToDo: set a timer to periodically emit 'xrangechanged' while dragging.
-        self.setXAxisRange(newX0, newX1, false);
+        self.setXAxisRange(newX0, newX1, false, true);
         self.redraw()();
       }
 
@@ -5214,7 +5214,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
 }//SpectrumChartD3.prototype.drawXTicks
 
 
-SpectrumChartD3.prototype.setXAxisRange = function( minimum, maximum, doEmit ) {
+SpectrumChartD3.prototype.setXAxisRange = function( minimum, maximum, doEmit, userAction ) {
   var self = this;
 
   //console.log( "setXAxisRange(" + minimum + ", " + maximum + ")" );
@@ -5222,7 +5222,7 @@ SpectrumChartD3.prototype.setXAxisRange = function( minimum, maximum, doEmit ) {
   self.xScale.domain([minimum, maximum]);
 
   if( doEmit )
-    self.WtEmit(self.chart.id, {name: 'xrangechanged'}, minimum, maximum, self.size.width, self.size.height);
+    self.WtEmit(self.chart.id, {name: 'xrangechanged'}, minimum, maximum, self.size.width, self.size.height, userAction);
 }
 
 SpectrumChartD3.prototype.setXAxisMinimum = function( minimum ) {
@@ -5644,7 +5644,7 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
       self.sliderDragRight.attr("x", x + sliderBoxWidth - sliderDragRegionWidth);
 
       origdomain = [ self.xScale.invert(x), self.xScale.invert(x + sliderBoxWidth) ];
-      self.setXAxisRange(origdomain[0], origdomain[1],true);
+      self.setXAxisRange(origdomain[0], origdomain[1], true, true);
       self.xScale.range(origdomainrange);
       self.redraw()();
 
@@ -5710,7 +5710,7 @@ SpectrumChartD3.prototype.handleMouseMoveLeftSliderDrag = function(redraw) {
     self.sliderDragLeft.attr("x", x);
     origdomain[0] = self.xScale.invert(x);
 
-    self.setXAxisRange(origdomain[0], origdomain[1],true);
+    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
     self.xScale.range(origdomainrange);
     self.redraw()();
   }
@@ -5784,7 +5784,7 @@ SpectrumChartD3.prototype.handleMouseMoveRightSliderDrag = function(redraw) {
     self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
     origdomain[1] = self.xScale.invert(x);
 
-    self.setXAxisRange(origdomain[0], origdomain[1], true);
+    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
     self.xScale.range(origdomainrange);
     self.redraw()();
   }
@@ -5909,7 +5909,7 @@ SpectrumChartD3.prototype.handleTouchMoveSliderChart = function() {
       self.sliderDragRight.attr("x", x + sliderBoxWidth - sliderDragRegionWidth);
 
       origdomain = [ self.xScale.invert(x), self.xScale.invert(x + sliderBoxWidth) ];
-      self.setXAxisRange(origdomain[0], origdomain[1], true);
+      self.setXAxisRange(origdomain[0], origdomain[1], true, true);
       self.xScale.range(origdomainrange);
       self.redraw()();
 
@@ -5970,7 +5970,7 @@ SpectrumChartD3.prototype.handleTouchMoveLeftSliderDrag = function(redraw) {
     self.sliderDragLeft.attr("x", x);
     origdomain[0] = self.xScale.invert(x);
 
-    self.setXAxisRange(origdomain[0], origdomain[1], true);
+    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
     self.xScale.range(origdomainrange);
     self.redraw()();
   }
@@ -6029,7 +6029,7 @@ SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
     self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
     origdomain[1] = self.xScale.invert(x);
 
-    self.setXAxisRange(origdomain[0], origdomain[1], true);
+    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
     self.xScale.range(origdomainrange);
     self.redraw()();
   }
@@ -8412,7 +8412,7 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
     var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
 
     if( animationFractionTimeElapsed >= 0.999 ){
-      self.setXAxisRange( targetDomain[0], targetDomain[1], true );  //do emit range change
+      self.setXAxisRange( targetDomain[0], targetDomain[1], true, true );  //do emit range change
       self.handleCancelAnimationZoom();
       self.redraw()();
       self.updateFeatureMarkers(-1);
@@ -8423,7 +8423,8 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
     self.setXAxisRange(
       Math.min( self.savedDomain[0] + (animationFractionTimeElapsed * (targetDomain[0] - self.savedDomain[0])), targetDomain[0] ),
       Math.max( self.savedDomain[1] - (animationFractionTimeElapsed * (self.savedDomain[1] - targetDomain[1])), targetDomain[1] ),
-      false /* dont emit x-range change. */
+      false /* dont emit x-range change. */,
+      true
     );
     self.currentDomain = self.xScale.domain();
 
@@ -8599,7 +8600,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
     }
     
     /* TODO: periodically send the xrangechanged signal during zooming out.  Right now only sent when mouse goes up. */
-    self.setXAxisRange(newxmin,newxmax,false);
+    self.setXAxisRange(newxmin,newxmax,false,true);
     self.redraw()();
   } else {
     /* Restore the zoom-in box */
@@ -8613,7 +8614,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
     
     if( self.zoominaltereddomain ) {
       // We get here when we were zooming out, but now we're zooming in; we'll set back to the original domain
-      self.setXAxisRange( self.origdomain[0], self.origdomain[1], true );
+      self.setXAxisRange( self.origdomain[0], self.origdomain[1], true, true );
       self.zoominaltereddomain = false;
       self.redraw()();
     }
@@ -8712,7 +8713,7 @@ SpectrumChartD3.prototype.handleMouseUpZoomX = function () {
           self.startAnimationZoomTime = Math.floor(Date.now());
         } else {
           /* Zoom animation unchecked; draw new x-axis range; the true below causes the 'xrangechanged' signal to be emitted. */
-          self.setXAxisRange(x0,x1,true);
+          self.setXAxisRange(x0, x1, true, true);
           self.redraw()();
           self.updateFeatureMarkers(-1);
         }   
