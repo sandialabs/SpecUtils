@@ -1474,8 +1474,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
         if( speclen > bytes_per_record )
         {
           const string msg = "SpecFile::load_from_pcf(...):\n\tUnexpected record length, expected "
-                             + std::to_string(256*NRPS) + " but got length "
-                             + std::to_string(speclen) + ", - am forcing correct position in file";
+          + std::to_string(256*NRPS) + " but got length "
+          + std::to_string(speclen) + ", - am forcing correct position in file";
           meas->parse_warnings_.push_back( msg );
         }//
         
@@ -1510,7 +1510,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
           {
             lower_channel_energy_cal = make_shared<EnergyCalibration>();
             lower_channel_energy_cal->set_lower_channel_energy( channel_data->size() - 1,
-                                                                std::move(*channel_data) );
+                                                               std::move(*channel_data) );
           }catch( std::exception & )
           {
             //shouldnt ever get here
@@ -1608,6 +1608,62 @@ bool SpecFile::load_from_pcf( std::istream &input )
       {
         meas->occupied_ = OccupancyStatus::Unknown;
       }
+      
+      // We will look for "OCC=True" or "OCC=False" in the spectrum title, and if found, override
+      //  what we found from the "tag" character.
+      {// Begin search for "OCC="
+        // Not using regex at the moment, because I havent checked it works everywhere the
+        //   code is used (e.g., older Android).
+        //std::smatch matches;
+        //std::regex occ_expression( "OCC\\s*=\\s*(True|False|0|1|yes|no)", std::regex::ECMAScript | std::regex::icase );
+        //if( std::regex_match( spectrum_title, matches, occ_expression ) )
+        //{
+        //  string status = string( matches[1].first, matches[1].second );
+        //  if( iequals_ascii(status, "true") || iequals_ascii(status, "1") || iequals_ascii(status, "yes") )
+        //    meas->occupied_ = OccupancyStatus::Occupied;
+        //  else
+        //    meas->occupied_ =  OccupancyStatus::NotOccupied;
+        //}
+        
+        const char * const title_start = spectrum_title.c_str();
+        const char * const title_end = title_start + spectrum_title.size();
+        
+        const std::locale &loc = std::locale();
+        const auto char_iequal = [&loc](char ch1, char ch2) -> bool {
+          return std::toupper(ch1, loc) == std::toupper(ch2, loc);
+        };
+        
+        const char *occ_str = "OCC=";
+        size_t occ_str_len = 4;
+        const char *occ_pos = std::search( title_start, title_end, occ_str, occ_str + occ_str_len,
+                                          char_iequal );
+        if( occ_pos == title_end ) // We'll allow a space between OCC and =
+        {
+          occ_str = "OCC =";
+          occ_str_len = 5;
+          occ_pos = std::search( title_start, title_end, occ_str, occ_str + occ_str_len,
+                                char_iequal );
+        }
+        
+        if( occ_pos != title_end )
+        {
+          occ_pos += occ_str_len;
+          
+          // Skip any whitespace
+          while( (occ_pos != title_end) && std::isspace(*occ_pos, loc) )
+            ++occ_pos;
+          
+          // To avoid allocating a string, and not making an override of istarts_with (like I
+          //  should, or just allocate a string), we'll just look at the first non-whitespace
+          //  character following the equal sign, and assume 'T' for "True", and 'Y' for "Yes"
+          const char first_char = (occ_pos != title_end) ? *occ_pos : 'F';
+          if( char_iequal(first_char, 'T') || char_iequal(first_char, '1') || char_iequal(first_char, 'Y') )
+            meas->occupied_ = OccupancyStatus::Occupied;
+          else
+            meas->occupied_ =  OccupancyStatus::NotOccupied;
+        }//if( occ_pos != title_end )
+      }// End search for "OCC="
+      
       
       while( energy_cal_terms.size() && (energy_cal_terms.back()==0.0f) )
         energy_cal_terms.erase( energy_cal_terms.begin() + energy_cal_terms.size() - 1 );
