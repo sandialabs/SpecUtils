@@ -4009,6 +4009,22 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     }
   }//if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
   
+  const size_t num_mmd_lhs = lhs.multimedia_data_.size();
+  const size_t num_mmd_rhs = rhs.multimedia_data_.size();
+  if( num_mmd_lhs != num_mmd_rhs )
+  {
+    issues.push_back( "SpecFile: RHS contains " + to_string(num_mmd_rhs)
+                     + "multimedia data entries, while LHS has "
+                     + to_string(num_mmd_lhs) );
+  }else
+  {
+    for( size_t i = 0; i < num_mmd_lhs; ++i )
+    {
+      if( lhs.multimedia_data_[i] != rhs.multimedia_data_[i] )
+        issues.push_back( "SpecFile: multimedia data entrie " + to_string(i) + " doesnt match" );
+    }
+  }//if( num_mmd_lhs != num_mmd_rhs ) / else
+  
   /*
 #if( !defined(WIN32) )
   if( lhs.uuid_ != rhs.uuid_ )
