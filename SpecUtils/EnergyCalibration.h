@@ -289,6 +289,22 @@ namespace SpecUtils
      */
     static const size_t sm_max_channels; // = 65536 + 8
     
+    /** The largest absolute value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
+     i.e., if a gamma spectrum has a larger value than this, then the calibration coeffiecients will be considered garbage and not used.
+     
+     Current value is 500 keV.
+     
+     \sa set_polynomial, EnergyCalCheckType::Normal
+     */
+    static const float sm_polynomial_offset_limit;
+    
+    /** Alpha particle spectra may have energy offsets of like 2500 keV, so this value gives the max absolute value of the
+     offset term for polynomial energy calibration, for those situations.
+     
+     \sa set_polynomial_no_offset_check, EnergyCalCheckType::LooseOffset
+     */
+    static const float sm_polynomial_extended_offset_limit;
+    
   protected:
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
      increasnig values).
@@ -302,10 +318,10 @@ namespace SpecUtils
      */
     enum class EnergyCalCheckType
     {
-      /** Absolute value of energy offset must less than 500 keV. */
+      /** Absolute value of energy offset must less than 500 keV, as specified by #sm_polynomial_offset_limit. */
       Normal,
       
-      /** Absolute value of energy offset must less than 5000 keV. */
+      /** Absolute value of energy offset must less than 5000 keV, as specified by #sm_polynomial_extended_offset_limit. */
       LooseOffset
     };//enum class EnergyCalCheckType
     

@@ -1638,6 +1638,13 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
 }//void combine_gamma_channels( const size_t nchann )
 
 
+void SpecFile::add_multimedia_data( const MultimediaData &data )
+{
+  shared_ptr<const MultimediaData> new_data = make_shared<MultimediaData>( data );
+  multimedia_data_.push_back( new_data );
+}//void add_multimedia_data( const MultimediaData &data )
+
+
 size_t SpecFile::do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform )
 {
@@ -1832,7 +1839,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
     case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
       const auto new_coefs = polynomial_cal_remove_first_channels( n_remove_front, old_coefs );
-      newcal->set_polynomial( nnewchannel, new_coefs, old_dev );
+      newcal->set_polynomial_no_offset_check( nnewchannel, new_coefs, old_dev );
       break;
     }//case Polynomial:
       
@@ -1964,13 +1971,18 @@ std::shared_ptr<Measurement> SpecFile::measurement( std::shared_ptr<const Measur
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
+  if( !meas )
+    return nullptr;
+  
+  // TODO: use something like `measurement( meas->sample_number_, meas->detector_number_ )` to speed this lookup up
+  
   for( const auto &m : measurements_ )
   {
     if( m == meas )
       return m;
   }//for( const auto &m : measurements_ )
   
-  return std::shared_ptr<Measurement>();
+  return nullptr;
 }//measurement(...)
 
 //set_live_time(...) and set_real_time(...) update both the measurement
@@ -2884,20 +2896,24 @@ void DetectorAnalysis::equal_enough( const DetectorAnalysis &lhs,
     
     for( DetectorAnalysisResult l : lhs.results_ )
     {
-      msg << "\tLHS: remark='" << l.remark_ << "', nuclide='"
-           << l.nuclide_ << "', doserate="
-           << l.dose_rate_ << ", activity=" << l.activity_
-           << ", id confidence='" << l.id_confidence_ << "'"
-           << ", distance=" << l.distance_ << endl;
+      msg << "\tLHS Ana Res: rem='" << l.remark_ << "', nuc='"
+           << l.nuclide_ << "', dos="
+           << l.dose_rate_ << ", act=" << l.activity_
+           << ", conf='" << l.id_confidence_ << "'"
+           << ", dist=" << l.distance_
+           << ", det='" << l.detector_ << "'"
+           << endl;
     }
     
     for( DetectorAnalysisResult l : rhs.results_ )
     {
-      msg << "\t RHS: remark='" << l.remark_ << "', nuclide='"
-          << l.nuclide_ << "', doserate="
-          << l.dose_rate_ << ", activity=" << l.activity_
-          << ", id confidence='" << l.id_confidence_ << "'"
-          << ", distance=" << l.distance_ << endl;
+      msg << "\tRHS Ana Res: rem='" << l.remark_ << "', nuc='"
+           << l.nuclide_ << "', dos="
+           << l.dose_rate_ << ", act=" << l.activity_
+           << ", conf='" << l.id_confidence_ << "'"
+           << ", dist=" << l.distance_
+           << ", det='" << l.detector_ << "'"
+           << endl;
     }
     
     issues.push_back( msg.str() );
@@ -3093,7 +3109,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   {
     if( find( begin(nrhsremarks), end(nrhsremarks), lhsr ) == end(nrhsremarks) )
     {
-      const string msg = "Measurement: Remark in LHS, but not RHS: " + lhsr;
+      const string msg = "Measurement: Remark in LHS, but not RHS: remark='" + lhsr + "'";
 #if( REQUIRE_REMARKS_COMPARE )
       issues.push_back( msg );
 #else
@@ -4009,21 +4025,36 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     }
   }//if( lhs.detectors_analysis_ && rhs.detectors_analysis_ )
   
-  const size_t num_mmd_lhs = lhs.multimedia_data_.size();
-  const size_t num_mmd_rhs = rhs.multimedia_data_.size();
-  if( num_mmd_lhs != num_mmd_rhs )
+  
+  if( lhs.multimedia_data_.size() != rhs.multimedia_data_.size() )
   {
-    issues.push_back( "SpecFile: RHS contains " + to_string(num_mmd_rhs)
-                     + "multimedia data entries, while LHS has "
-                     + to_string(num_mmd_lhs) );
+    issues.push_back( "LHS has " + std::to_string(lhs.multimedia_data_.size()) +
+                     " multimedia entries, but RHS has "
+                     + std::to_string(rhs.multimedia_data_.size()) );
   }else
   {
-    for( size_t i = 0; i < num_mmd_lhs; ++i )
+    for( size_t i = 0; i < lhs.multimedia_data_.size(); ++i )
     {
-      if( lhs.multimedia_data_[i] != rhs.multimedia_data_[i] )
-        issues.push_back( "SpecFile: multimedia data entrie " + to_string(i) + " doesnt match" );
-    }
-  }//if( num_mmd_lhs != num_mmd_rhs ) / else
+      assert( lhs.multimedia_data_[i] && rhs.multimedia_data_[i] );
+      if( !lhs.multimedia_data_[i] || !rhs.multimedia_data_[i] )
+      {
+        issues.push_back( "Unexpected nullptr in multimedia_data_" );
+        continue;
+      }
+
+      try
+      {
+        MultimediaData::equal_enough( *lhs.multimedia_data_[i],
+                                     *rhs.multimedia_data_[i] );
+      }catch( std::exception &e )
+      {
+        issues.push_back( "Mulimedia entry " + std::to_string(i)
+                         + " does not match between LHS and RHS: "
+                         + string(e.what()) );
+      }// try / catch
+    }//for( loop over multimedias )
+  }//if( not same num images ) / else
+  
   
   /*
 #if( !defined(WIN32) )
@@ -4043,6 +4074,35 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
   if( !error_msg.empty() )
     throw runtime_error( error_msg );
 }//void equal_enough( const Measurement &lhs, const Measurement &rhs )
+  
+  
+void MultimediaData::equal_enough( const MultimediaData &lhs, const MultimediaData &rhs )
+{
+  if( lhs.remark_ != rhs.remark_ )
+    throw runtime_error( "MultimediaData: LHS remark doesnt match RHS" );
+  
+  if( lhs.descriptions_ != rhs.descriptions_ )
+    throw runtime_error( "MultimediaData: LHS description doesnt match RHS" );
+  
+  if( lhs.data_ != rhs.data_ )
+    throw runtime_error( "MultimediaData: LHS data doesnt match RHS" );
+  
+  if( lhs.data_encoding_ != rhs.data_encoding_ )
+    throw runtime_error( "MultimediaData: LHS EncodingType doesnt match RHS" );
+  
+  if( lhs.capture_start_time_ != rhs.capture_start_time_ )
+    throw runtime_error( "MultimediaData: LHS Capture Start Time doesnt match RHS" );
+  
+  if( lhs.file_uri_ != rhs.file_uri_ )
+    throw runtime_error( "MultimediaData: LHS File URI doesnt match RHS" );
+
+  if( lhs.mime_type_ != rhs.mime_type_ )
+    throw runtime_error( "MultimediaData: LHS Myme Type doesnt match RHS" );
+  
+  //<MultimediaFileSizeValue>,
+  //<MultimediaDataMIMEKind>,
+}//void MultimediaData::equal_enough(...)
+
 #endif //#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
 
 
@@ -4115,10 +4175,7 @@ const SpecFile &SpecFile::operator=( const SpecFile &rhs )
   
   measurements_.clear();
   for( size_t i = 0; i < rhs.measurements_.size(); ++i )
-  {
-    std::shared_ptr<Measurement> ptr( new Measurement( *rhs.measurements_[i] ) );
-    measurements_.push_back( ptr );
-  }
+    measurements_.push_back( make_shared<Measurement>( *rhs.measurements_[i] ) );
 
 /*
   //As long as we've done everything right above, we shouldnt need to call
@@ -5038,8 +5095,9 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
                 switch( othercal->type() )
                 {
                   case EnergyCalType::Polynomial:
-                    newcal->set_polynomial( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
+                    newcal->set_polynomial_no_offset_check( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
                     break;
+                    
                   case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
                     newcal->set_default_polynomial( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
                     break;
@@ -5377,7 +5435,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
           const size_t nbinShift = nbin - 1;
           const float channel_width = (max_energy - min_energy) / nbinShift;
           auto new_cal = make_shared<EnergyCalibration>();
-          new_cal->set_polynomial( nbin, {min_energy,channel_width}, {} );
+          new_cal->set_polynomial_no_offset_check( nbin, {min_energy,channel_width}, {} );
           
           for( const auto &meas : measurements_ )
           {
@@ -5426,6 +5484,79 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       component_versions_nondup.push_back( component_versions_[i] );
     }
     component_versions_.swap( component_versions_nondup );
+    
+    
+    // TODO: DetectorAnalysisResult should be split into NuclideAnalysisResults and DoseAnalysisResults, but for here we will split them into seperate DetectorAnalysis objects
+    //  This is done so we can write out to N42-2012, and read back in consistently.
+    if( detectors_analysis_ )
+    {
+      std::shared_ptr<DetectorAnalysis> new_det_ana = make_shared<DetectorAnalysis>( *detectors_analysis_ );
+      new_det_ana->results_.clear();
+      vector<DetectorAnalysisResult> &new_results = new_det_ana->results_;
+      
+      for( DetectorAnalysisResult a : detectors_analysis_->results_ )
+      {
+        bool duplicate_nuc = false, duplicate_dose = false;
+        for( size_t i = 0; (!duplicate_nuc || !duplicate_dose) && (i < new_results.size()); ++i )
+        {
+          const auto &already_added = new_results[i];
+          duplicate_nuc |= ( (a.nuclide_ == already_added.nuclide_)
+                            && (a.detector_ == already_added.detector_)
+                            && (a.id_confidence_ == already_added.id_confidence_)
+                            && (a.activity_ == already_added.activity_) );
+          
+          duplicate_dose |= ( (a.dose_rate_ == already_added.dose_rate_)
+                             && (a.detector_ == already_added.detector_) );
+        }//for( size_t i = 0; (add_nuc || add_dose) && (i < new_results.size()); ++i )
+        
+        
+        if( ((a.dose_rate_ >= 0.0) && !a.nuclide_.empty()) )
+        {
+          if( !duplicate_nuc )
+          {
+            DetectorAnalysisResult a_nuc = a;
+            a_nuc.dose_rate_ = -1.0f;
+            new_results.push_back( std::move(a_nuc) );
+          }
+          
+          if( !duplicate_dose )
+          {
+            a.activity_ = -1.0f;
+            a.nuclide_.clear();
+            a.nuclide_type_.clear();
+            a.id_confidence_.clear();
+            a.real_time_ = -1.0f;
+            
+            new_results.push_back( std::move(a) );
+          }
+        }else
+        {
+          if( ((a.dose_rate_ >= 0.0) && !duplicate_dose)
+             || (!a.nuclide_.empty() && !duplicate_nuc) )
+          {
+            // Arbitrarily clean up some fields
+            if( a.nuclide_.empty() )
+            {
+              a.activity_ = -1.0f;
+              a.id_confidence_.clear();
+              a.real_time_ = -1.0f;
+            }//if( no nuclide results )
+            
+            new_results.push_back( std::move(a) );
+          }//if( we have nuclide or dose informaition; i.e., actually worth adding )
+        }//if( we have both nuclide and dose info ) / else( we have just one type of info )
+      }//for( loop over original analysis results )
+      
+      // Remove duplicate algorithm_component_versions_
+      vector<pair<string,string>> &components = new_det_ana->algorithm_component_versions_;
+      auto comp_en = end(components);
+      for( auto it = begin(components); it != comp_en; ++it )
+        comp_en = std::remove(it + 1, comp_en, *it);
+      components.erase( comp_en, end(components) );
+      
+      detectors_analysis_ = new_det_ana;
+    }//if( detectors_analysis_ )
+    
     
     recalc_total_counts();
     

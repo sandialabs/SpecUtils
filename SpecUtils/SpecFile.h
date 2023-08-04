@@ -1439,6 +1439,9 @@ public:
   //  (e.g. no measurements have been added or removed without 'cleaningup').
   void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
+  /** Adds the give #MultimediaData object to this file. */
+  void add_multimedia_data( const MultimediaData &data );
+  
   /** Combines the specified number of gamma channels together for all measurements with the given
    number of channels.
    
@@ -2750,6 +2753,11 @@ struct MultimediaData
   //<ImageWidthValue>,
   //<ImageHeightValue>,
   //<MultimediaDataExtension>
+  
+#if( SpecUtils_ENABLE_EQUALITY_CHECKS )
+  static void equal_enough( const MultimediaData &lhs,
+                           const MultimediaData &rhs );
+#endif
 };//struct MultimediaData
 
 }//namespace SpecUtils
