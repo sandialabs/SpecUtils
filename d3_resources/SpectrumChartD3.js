@@ -960,10 +960,8 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   /*Make it so the x-axis shows all the data */
   if( resetdomain ) {
-    var bounds = self.min_max_x_values();
-    var minx = bounds[0], maxx = bounds[1];
-    
-    this.setXAxisRange(minx, maxx, true, false);
+    const bounds = self.min_max_x_values();
+    this.setXAxisRange(bounds[0], bounds[1], true, false);
   }
 
   /* Hack: To properly choose the right set of points for the y-axis points */

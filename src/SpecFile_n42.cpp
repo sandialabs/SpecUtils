@@ -599,13 +599,9 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       
     case SpecUtils::DetectorType::Unknown:
     {
-      const size_t nchannel = sf.num_gamma_channels();
       const string &manufacturer = sf.manufacturer();
       const string &model = sf.instrument_model();
       
-      //if( nchannel > 4100 )
-      //  det_kind = "HPGe";
-      //else
       if( manufacturer=="Raytheon" && SpecUtils::icontains(model,"Variant") )
         det_kind = "NaI";
       else if( manufacturer=="Mirion Technologies" && SpecUtils::icontains(model,"Pedestrian") )
