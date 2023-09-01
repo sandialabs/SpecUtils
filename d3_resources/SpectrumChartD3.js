@@ -900,13 +900,12 @@ SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spec
 
 SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   // ToDo: need to make some consistency checks on data here
-  /*  - Has all necassary variables */
+  /*  - Has all necessary variables */
   /*  - Energy is monotonically increasing */
   /*  - All y's are the same length, and consistent with x. */
   /*  - No infs or nans. */
 
-  var self = this;
-
+  const self = this;
   
   //Remove all the lines for the current drawn histograms
   this.vis.selectAll(".speclinepath").remove();
@@ -935,6 +934,14 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     return;
   }
 
+  // Sort data so foreground is first, then secondary, then background (this is mostly so order of legend is reasonable)
+  data.spectra.sort( function(lhs,rhs){
+    const order = [self.spectrumTypes.FOREGROUND, self.spectrumTypes.SECONDARY, self.spectrumTypes.BACKGROUND];
+    const lhs_pos = order.indexOf(lhs.type);
+    const rhs_pos = order.indexOf(rhs.type);
+    return ((lhs_pos >= 0) ? lhs_pos : 4) - ((rhs_pos >= 0) ? rhs_pos : 4);
+  });
+  
   this.rawData = data;
 
   this.rawData.spectra.forEach( function(spectrum,i){
