@@ -241,7 +241,7 @@ bool SpecFile::load_from_txt_or_csv( std::istream &istr )
   if( !istr.read(&(firstdata[0]), 19) )
     return false;
   
-  //Non- exaustive list of formats that we might be able to extract a spectrum
+  //Non-exhaustive list of formats that we might be able to extract a spectrum
   //  from, but we really shouldnt, because its N42
   const char *not_allowed_txt[] = { "<?xml", "<Event", "<N42InstrumentData" };
   for( const char *txt : not_allowed_txt )
@@ -1237,12 +1237,26 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       }//if( timestr.empty() )
       
       start_time_ = time_from_string( timestr.c_str() );
-    }else if( starts_with( fields[0], "livetime" ) )
+    }else if( istarts_with( fields[0], "LiveTime" )
+             || istarts_with( fields[0], "live time" ) )
     {
       ++nlines_used;
       
       if( nfields > 1 )
+      {
         live_time_ = time_duration_string_to_seconds( fields[1] );
+      }else
+      {
+        assert( fields[0].size() >= 8 );
+        string restofline = fields[0].substr( std::min( fields[0].size()-1, size_t(8) ) );
+        const auto semipos = restofline.find_first_of(" :\t");
+        if( semipos != string::npos && (semipos+2) < fields[0].size() )
+        {
+          restofline = restofline.substr( semipos+1 );
+          SpecUtils::trim(restofline);
+          live_time_ = time_duration_string_to_seconds( restofline );
+        }
+      }
     }else if( istarts_with( fields[0], "realtime" )
              || istarts_with( fields[0], "Real time" )
              || istarts_with( fields[0], "Total time") )
@@ -1784,12 +1798,22 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   }//for( size_t i = 0; i < remarks_.size(); ++i )
   
   if( !is_special(start_time_) )
-    ostr << "StartTime " << to_extended_iso_string(start_time_) << "" << endline;
-  ostr << "LiveTime " << live_time_ << " seconds" << endline;
-  ostr << "RealTime " << real_time_ << " seconds" << endline;
-  ostr << "SampleNumber " << sample_number_ << endline;
-  ostr << "DetectorName " << detector_name_ << endline;
-  ostr << "DetectorType " << detector_description_ << endline;
+    ostr << "StartTime: " << to_extended_iso_string(start_time_) << "" << endline;
+  ostr << "LiveTime: " << live_time_ << " seconds" << endline;
+  ostr << "RealTime: " << real_time_ << " seconds" << endline;
+  ostr << "SampleNumber: " << sample_number_ << endline;
+  if( !detector_name_.empty() )
+    ostr << "DetectorName: " << detector_name_ << endline;
+  if( !detector_description_.empty() )
+    ostr << "DetectorType: " << detector_description_ << endline;
+  
+  if( !title_.empty() )
+  {
+    string txt = title_;
+    SpecUtils::ireplace_all( txt, "\n", " " );
+    SpecUtils::ireplace_all( txt, "\r", " " );
+    ostr << "Title: " << txt << endline;
+  }
   
   if( location_ && location_->geo_location_
      && valid_latitude(location_->geo_location_->latitude_)
@@ -1802,7 +1826,7 @@ bool Measurement::write_txt( std::ostream& ostr ) const
            << SpecUtils::to_iso_string(location_->geo_location_->position_time_) << endline;
   }
   
-  ostr << "EquationType ";
+  ostr << "EquationType: ";
   switch( energy_calibration_->type() )
   {
     case SpecUtils::EnergyCalType::Polynomial:
@@ -1815,14 +1839,14 @@ bool Measurement::write_txt( std::ostream& ostr ) const
   }//switch( energy_calibration_->type() )
   
   
-  ostr << endline << "Coefficients ";
+  ostr << endline << "Coefficients: ";
   const vector<float> &cal_coeffs = energy_calibration_->coefficients();
   for( size_t i = 0; i < cal_coeffs.size(); ++i )
     ostr << (i ? " " : "") << cal_coeffs[i];
   ostr << endline;
   
   if( contained_neutron_ )
-    ostr << "NeutronCount " << neutron_counts_sum_ << endline;
+    ostr << "NeutronCount: " << neutron_counts_sum_ << endline;
   
   //  ostr "Channel" << " "
   //       << setw(12) << ios::left << "Energy" << " "
@@ -1867,6 +1891,25 @@ bool SpecFile::write_txt( std::ostream& ostr ) const
   
   for( const string &remark : remarks_ )
     ostr << "Remark: " << remark << endline;
+  
+  if( !manufacturer_.empty() )
+  {
+    string txt = manufacturer_;
+    SpecUtils::ireplace_all( txt, "\n", " " );
+    SpecUtils::ireplace_all( txt, "\r", " " );
+    ostr << "Manufacturer: " << txt << endline;
+  }
+  
+  if( !instrument_model_.empty() )
+  {
+    string txt = instrument_model_;
+    SpecUtils::ireplace_all( txt, "\n", " " );
+    SpecUtils::ireplace_all( txt, "\r", " " );
+    ostr << "Model: " << txt << endline;
+  }
+  
+  if( detector_type_ != DetectorType::Unknown )
+    ostr << "DetectorType: " << detectorTypeToString(detector_type_) << endline;
   
   for( const std::shared_ptr<const Measurement> m : measurements_ )
     m->write_txt( ostr );
