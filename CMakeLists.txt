@@ -109,6 +109,7 @@ set( sources
      src/SpecFile_mps.cpp
      src/SpecFile_multiact.cpp
      src/SpecFile_uraider.cpp
+     src/SpecFile_radiacode.cpp
      src/SpecFile_xml_other.cpp
      src/SpecFile_json.cpp
      src/SpecUtilsAsync.cpp
