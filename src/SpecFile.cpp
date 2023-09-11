@@ -4589,12 +4589,15 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedXmlScanData )
         success = load_xml_scan_data_file( filename );
       
-      if (!success && !triedJson)
-        success = load_json_file(filename);
+      if( !success && !triedJson )
+        success = load_json_file( filename );
 
-      if (!success && !tried_gxml)
-        success = load_caen_gxml_file(filename);
-       
+      if( !success && !tried_gxml )
+        success = load_caen_gxml_file( filename );
+      
+      if( !success && !triedRadiaCode )
+        success = load_radiacode_file( filename );
+      
        break;
     }//case Auto
   };//switch( parser_type )

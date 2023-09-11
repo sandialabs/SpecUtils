@@ -88,9 +88,10 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   // spectrum plot which might be another 6-7KB, but I have not seen any real
   // world files including a thumbnail.
   //
-  // Taken together, 80KB should be sufficient to load a RadiaCode file.
+  // Taken together, 80KB should be sufficient to load a RadiaCode file,
+  //  but we'll be a little loose with things, jic
 
-  if (file_size < 7 * 1024 || file_size > 80 * 1024)
+  if( (file_size < (5*1024)) || (file_size > (160*1024)) )
     return false;
 
   string filedata;
@@ -118,18 +119,11 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   if (device_model_pos < dcr_pos)
     return false;
 
-#if PERFORM_DEVELOPER_CHECKS
-  cout << "RadiaCode format detected" << endl;
-#endif  // PERFORM_DEVELOPER_CHECKS
-  try {
-    std::shared_ptr<Measurement> fg_meas, bg_meas;
-
+  try
+  {
     rapidxml::xml_document<char> doc;
-    doc.parse<0>(&(filedata[0]));
+    doc.parse<rapidxml::parse_trim_whitespace|rapidxml::allow_sloppy_parse>( &(filedata[0]) );
 
-#if PERFORM_DEVELOPER_CHECKS
-    cout << "RadiaCode XML parsed" << endl;
-#endif  // PERFORM_DEVELOPER_CHECKS
 
     /*
      The RadiaCode XML format has no published specification. In the example
@@ -193,157 +187,172 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
      </ResultDataFile>
 
      */
-
-    string bg_spec_file, spec_name;
-    string start_time;
-    vector<float> cal_coefs;
-
-    // Drill down to the <ResultData> node
-    const rapidxml::xml_node<char>* n_root = doc.first_node("ResultDataFile")
-                                                 ->first_node("ResultDataList")
-                                                 ->first_node("ResultData");
-    if (!n_root)
-      throw runtime_error("unable to find ResultData");
-
-#if PERFORM_DEVELOPER_CHECKS
-    cout << "RadiaCode ResultData exists" << endl;
-#endif  // PERFORM_DEVELOPER_CHECKS
-    for (rapidxml::xml_node<char>* n_cur = n_root->first_node(); n_cur;
-         n_cur = n_cur->next_sibling()) {
-      string cur_node_name = n_cur->name();
-
-      if (cur_node_name == "DeviceConfigReference") {
-        instrument_model_ = n_cur->first_node("Name")->value();
-        instrument_type_ = "Spectroscopic Personal Radiation Detector";
-        manufacturer_ = "Scan-Electronics";
-        detector_type_ = SpecUtils::DetectorType::RadiaCode;
-
-#if PERFORM_DEVELOPER_CHECKS
-        cout << "got device type " << instrument_model_ << endl;
-#endif  // PERFORM_DEVELOPER_CHECKS
-      }
-
-      else if (cur_node_name == "BackgroundSpectrumFile") {
-        bg_spec_file = n_cur->value();
-      }
-
+    
+    // We will first define a lambda to parse the <EnergySpectrum> and <BackgroundEnergySpectrum>
+    //  elements, as they share a lot of the same stuff (we have to use a lambda since we fill out
+    //  protected members of Measurement, so we cant use an anonymous function).
+    const auto parse_meas = []( const rapidxml::xml_node<char> * const spectrum_node ) -> shared_ptr<Measurement> {
+      shared_ptr<Measurement> meas = make_shared<Measurement>();
+      
+      const rapidxml::xml_node<char> * const real_time_node = XML_FIRST_INODE( spectrum_node, "MeasurementTime" );
+      
+      if( !real_time_node || !parse_float(real_time_node->value(), real_time_node->value_size(), meas->real_time_) )
+        meas->parse_warnings_.push_back( "Could not parse measurement duration." );
+      meas->live_time_ = meas->real_time_; // Only clock-time is given in the file.
+      
+      
       // Start/End time are sibling nodes of EnergySpectrum when they should
       // be children of that node... the same as MeasurementTime. At least
       // they come before their associated EnergySpectrum.
-      else if (cur_node_name == "StartTime") {
-        start_time = n_cur->value();
-      }
+      const rapidxml::xml_node<char> * const start_time_node = spectrum_node->previous_sibling( "StartTime" );
+      const string time_str = xml_value_str(start_time_node);
+      if( time_str.size() )
+        meas->start_time_ = SpecUtils::time_from_string( time_str, SpecUtils::DateParseEndianType::LittleEndianFirst );
+      
+      const rapidxml::xml_node<char> * const title_node = XML_FIRST_INODE( spectrum_node, "SpectrumName" );
+      meas->title_ = xml_value_str( title_node );
+      
+      const rapidxml::xml_node<char> * const channel_count_node = XML_FIRST_INODE( spectrum_node, "Spectrum" );
+      if( !channel_count_node )
+        throw runtime_error( "No Spectrum node under the EnergySpectrum node" );
+      
+      bool error_with_cc = false; //track if we have any errors parsing channel counts numbers
+      auto channel_counts = std::make_shared<vector<float>>();
+      channel_counts->reserve( 1024 ); // There is a <NumberOfChannels> with a value we could use instead
+      
+      XML_FOREACH_CHILD( x, channel_count_node, "DataPoint" )
+      {
+        int value = 0;
+        error_with_cc |= !parse_int( x->value(), x->value_size(), value );
+        channel_counts->push_back( value );
+      }//foreach( <DataPoint> ) node)
+      
+      if( error_with_cc )
+        meas->parse_warnings_.push_back( "Some channel counts were not correctly parsed." );
+      
+      const size_t num_channels = channel_counts->size();
+      if( num_channels < 16 ) //16 is arbitrary
+        throw runtime_error( "Insufficient foreground spectrum channels." );
+      
+      meas->gamma_counts_ = channel_counts;
+      
+      const rapidxml::xml_node<char> * const energy_cal_node = XML_FIRST_INODE( spectrum_node, "EnergyCalibration" );
+      const rapidxml::xml_node<char> * const coeffs_node = xml_first_inode( energy_cal_node, "Coefficients");
+      if( coeffs_node )
+      {
+        vector<float> cal_coefs;
+        XML_FOREACH_CHILD( coef_node, coeffs_node, "Coefficient" )
+        {
+          float coef_val = 0.0;
+          if( parse_float(coef_node->value(), coef_node->value_size(), coef_val ) )
+            cal_coefs.push_back( coef_val );
+          else
+            meas->parse_warnings_.push_back( "Error parsing energy calibration coefficient to float." );
+        }//XML_FOREACH_CHILD( coef, energy_cal_node, "Coefficients" )
+        
+        try
+        {
+          auto newcal = make_shared<EnergyCalibration>();
+          newcal->set_polynomial( num_channels, cal_coefs, {} );
+          meas->energy_calibration_ = newcal;
+        }catch( std::exception &e )
+        {
+          meas->parse_warnings_.push_back( "Error interpreting energy calibration: " + string(e.what()) );
+        }
+      }//if( energy_cal_node )
+      
+      meas->gamma_count_sum_ = std::accumulate(begin(*channel_counts), end(*channel_counts), 0.0);
+      
+      meas->detector_name_ = "gamma";
+      meas->contained_neutron_ = false;
+      
+      return meas;
+    };// const auto parse_meas lambda
+    
 
-      else if (cur_node_name == "EnergySpectrum") {
-        if (fg_meas)
-          throw runtime_error("File contains more than one EnergySpectrum");
-        fg_meas = make_shared<Measurement>();
-        fg_meas->source_type_ = SourceType::Foreground;
-        fg_meas->real_time_ =
-            atof(n_cur->first_node("MeasurementTime")->value());
-        fg_meas->start_time_ = SpecUtils::time_from_string(
-            start_time, SpecUtils::DateParseEndianType::LittleEndianFirst);
-        fg_meas->detector_name_ = n_cur->first_node("SerialNumber")->value();
-        instrument_id_ = fg_meas->detector_name_;
-        fg_meas->title_ = n_cur->first_node("SpectrumName")->value();
+    // Drill down to the <ResultData> node
+    const rapidxml::xml_node<char> * const base_node = XML_FIRST_INODE( &doc, "ResultDataFile" );
+    if( !base_node )
+      throw runtime_error( "Missing ResultDataFile node." );
+    
+    const rapidxml::xml_node<char> * const data_list_node = XML_FIRST_INODE( base_node, "ResultDataList" );
+    if( !data_list_node )
+      throw runtime_error( "Missing ResultDataList node." );
+    
+    const rapidxml::xml_node<char>* n_root = XML_FIRST_INODE( data_list_node, "ResultData" );
+    if (!n_root)
+      throw runtime_error("unable to find ResultData");
 
-        auto _ec = n_cur->first_node("EnergyCalibration");
-        int _po = atoi(_ec->first_node("PolynomialOrder")->value());
-        int _nc = atoi(n_cur->first_node("NumberOfChannels")->value());
-        auto _sp = n_cur->first_node("Spectrum");
-
-        cal_coefs.clear();
-        for (rapidxml::xml_node<char>* x =
-                 _ec->first_node("Coefficients")->first_node();
-             x; x = x->next_sibling())
-          cal_coefs.push_back(atof(x->value()));
-
-        if (2 != _po || 3 != cal_coefs.size())
-          throw runtime_error("Invalid FG calibration coefficients");
-
-        auto newcal = make_shared<EnergyCalibration>();
-        newcal->set_polynomial(_nc, cal_coefs, {});
-        fg_meas->energy_calibration_ = newcal;
-
-        auto fg_counts = std::make_shared<vector<float>>();
-        for (rapidxml::xml_node<char>* x = _sp->first_node(); x;
-             x = x->next_sibling())
-          fg_counts->push_back(atoi(x->value()));
-
-        if (fg_counts->size() != _nc)
-          throw runtime_error("FG Spectrum length != channel count");
-
-        fg_meas->gamma_counts_ = fg_counts;
-        fg_meas->gamma_count_sum_ =
-            std::accumulate(begin(*fg_counts), end(*fg_counts), 0.0);
-        measurements_.push_back(fg_meas);
-#if PERFORM_DEVELOPER_CHECKS
-        cout << "RadiaCode foreground spectrum OK" << endl;
-#endif  // PERFORM_DEVELOPER_CHECKS
-      }
-
-      else if (cur_node_name == "BackgroundEnergySpectrum") {
-        if (bg_meas)
-          throw runtime_error(
-              "File contains more than one BackgroundEnergySpectrum");
-        bg_meas = make_shared<Measurement>();
-
+    const rapidxml::xml_node<char> * const config_node = XML_FIRST_INODE( n_root, "DeviceConfigReference" );
+    if( config_node )
+    {
+      const rapidxml::xml_node<char> * const name_node = XML_FIRST_INODE( config_node, "Name" );
+      instrument_model_ = xml_value_str( name_node );
+    }//if( config_node )
+    
+    const rapidxml::xml_node<char> * const foreground_node = XML_FIRST_INODE( n_root, "EnergySpectrum" );
+    if( !foreground_node )
+      throw runtime_error( "No EnergySpectrum node." );
+    
+    if( XML_NEXT_TWIN(foreground_node) )
+      throw runtime_error("File contains more than one EnergySpectrum");
+    
+    const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
+    instrument_id_ = xml_value_str( serial_num_node );
+    
+    //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
+    //if( version_node && (xml_value_str(version_node) != "120920") )
+    //  parse_warnings_.push_back( "This version of radiacode XML file not tested." );
+    
+    // Now actually parse the foreground <EnergySpectrum> node.
+    shared_ptr<Measurement> fg_meas = parse_meas( foreground_node );
+    assert( fg_meas && (fg_meas->num_gamma_channels() >= 16) );
+    
+    fg_meas->source_type_ = SourceType::Foreground;
+     
+    measurements_.push_back( fg_meas );
+    
+    // Check for and try to parse background spectrum.
+    const rapidxml::xml_node<char> * const background_node = XML_FIRST_INODE( n_root, "BackgroundEnergySpectrum" );
+    if( background_node )
+    {
+      try
+      {
+        shared_ptr<Measurement> bg_meas = parse_meas( background_node );
+        assert( bg_meas && (bg_meas->num_gamma_channels() >= 16) );
+        
         bg_meas->source_type_ = SourceType::Background;
-        bg_meas->real_time_ =
-            atof(n_cur->first_node("MeasurementTime")->value());
-        bg_meas->start_time_ = SpecUtils::time_from_string(
-            start_time, SpecUtils::DateParseEndianType::LittleEndianFirst);
-        spec_name = n_cur->first_node("SpectrumName")->value();
-        bg_meas->detector_name_ = n_cur->first_node("SerialNumber")->value();
-
-        if (spec_name != bg_spec_file)
-          throw runtime_error("Inconsistent background spectrum description");
-        bg_meas->title_ = spec_name;
-
-        int _nc = atoi(n_cur->first_node("NumberOfChannels")->value());
-        auto _ec = n_cur->first_node("EnergyCalibration");
-        int _po = atoi(_ec->first_node("PolynomialOrder")->value());
-        auto _sp = n_cur->first_node("Spectrum");
-
-        cal_coefs.clear();
-        for (rapidxml::xml_node<char>* x =
-                 _ec->first_node("Coefficients")->first_node();
-             x; x = x->next_sibling())
-          cal_coefs.push_back(atof(x->value()));
-
-        if (2 != _po || 3 != cal_coefs.size())
-          throw runtime_error("Invalid BG calibration coefficients");
-
-        auto newcal = make_shared<EnergyCalibration>();
-        newcal->set_polynomial(_nc, cal_coefs, {});
-        bg_meas->energy_calibration_ = newcal;
-
-        auto bg_counts = std::make_shared<vector<float>>();
-        for (rapidxml::xml_node<char>* x = _sp->first_node(); x;
-             x = x->next_sibling())
-          bg_counts->push_back(atoi(x->value()));
-
-        if (bg_counts->size() != _nc)
-          throw runtime_error("BG Spectrum length != channel count");
-        bg_meas->gamma_counts_ = bg_counts;
-        bg_meas->gamma_count_sum_ =
-            std::accumulate(begin(*bg_counts), end(*bg_counts), 0.0);
-        measurements_.push_back(bg_meas);
-#if PERFORM_DEVELOPER_CHECKS
-        cout << "RadiaCode background spectrum OK" << endl;
-#endif  // PERFORM_DEVELOPER_CHECKS
+        if( !bg_meas->energy_calibration_ || !bg_meas->energy_calibration_->valid() )
+        {
+          if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
+            bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
+        }
+        
+        const rapidxml::xml_node<char> * const background_file_node = XML_FIRST_INODE( n_root, "BackgroundSpectrumFile" );
+        if( bg_meas->title_ != xml_value_str(background_file_node) )
+          parse_warnings_.push_back( "Background spectrum name not consistent with expected background." );
+        
+        measurements_.push_back( bg_meas );
+      }catch( std::exception &e )
+      {
+        parse_warnings_.push_back( "Failed to parse background spectrum in file: " + string(e.what()) );
       }
-    }
-
+    }//if( background_node )
+    
+    instrument_type_ = "Spectroscopic Personal Radiation Detector";
+    manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    
     cleanup_after_load();
-  } catch (std::exception&) {
+  }catch( std::exception & )
+  {
     reset();
     input.clear();
     input.seekg(start_pos, ios::beg);
     return false;
-  }  // try / catch
+  }// try / catch
 
   return true;
-}  // bool load_from_radiacode( std::istream &input )
+}//bool load_from_radiacode( std::istream &input )
 
-}  // namespace SpecUtils
+}// namespace SpecUtils

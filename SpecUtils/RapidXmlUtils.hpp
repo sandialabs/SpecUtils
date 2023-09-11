@@ -112,6 +112,13 @@ nodename = nodename->next_sibling(childnamestr,SpecUtils::lengthof(childnamestr)
   }
   
   template<size_t n>
+  const ::rapidxml::xml_node<char> *xml_first_inode( const ::rapidxml::xml_node<char> *parent, const char (&name)[n] )
+  {
+    static_assert( n > 1, "Element name to xml_first_node must not be empty." );
+    return parent ? parent->first_node(name, n-1,false) : nullptr;
+  }
+  
+  template<size_t n>
   const ::rapidxml::xml_attribute<char> *xml_first_attribute( const ::rapidxml::xml_node<char> *parent, const char (&name)[n] )
   {
     static_assert( n > 1, "Element name to xml_first_attribute must not be empty." );
