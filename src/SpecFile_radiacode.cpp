@@ -222,7 +222,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       {
         int value = 0;
         if( parse_int( nchannel_node->value(), nchannel_node->value_size(), value ) )
-          num_exp_channels = static_cast<size_t>( std::max( value, 0 ) );
+          num_exp_channels = static_cast<size_t>( std::min(std::max(value, 0), 4096) );
       }
       
       bool error_with_cc = false; //track if we have any errors parsing channel counts numbers
