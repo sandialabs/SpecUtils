@@ -216,9 +216,20 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       if( !channel_count_node )
         throw runtime_error( "No Spectrum node under the EnergySpectrum node" );
       
+      const rapidxml::xml_node<char> * const nchannel_node = XML_FIRST_INODE( spectrum_node, "NumberOfChannels" );
+      size_t num_exp_channels = 0;
+      if( nchannel_node )
+      {
+        int value = 0;
+        if( parse_int( nchannel_node->value(), nchannel_node->value_size(), value ) )
+          num_exp_channels = static_cast<size_t>( std::max( value, 0 ) );
+      }
+      
       bool error_with_cc = false; //track if we have any errors parsing channel counts numbers
       auto channel_counts = std::make_shared<vector<float>>();
-      channel_counts->reserve( 1024 ); // There is a <NumberOfChannels> with a value we could use instead
+      
+      // Reserve number of channels, to avoid some probably unnecessary allocation and copies
+      channel_counts->reserve( (num_exp_channels > 16) ? num_exp_channels : size_t(1024) );
       
       XML_FOREACH_CHILD( x, channel_count_node, "DataPoint" )
       {
@@ -229,6 +240,12 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       
       if( error_with_cc )
         meas->parse_warnings_.push_back( "Some channel counts were not correctly parsed." );
+      
+      if( (num_exp_channels > 16) && (num_exp_channels != channel_counts->size()) )
+        meas->parse_warnings_.push_back( "The number of parsed energy channels ("
+                                        + std::to_string(channel_counts->size()) + ") didn't match"
+                                        " number of expected (" + std::to_string(num_exp_channels)
+                                        + ")." );
       
       const size_t num_channels = channel_counts->size();
       if( num_channels < 16 ) //16 is arbitrary
