@@ -6894,7 +6894,7 @@ namespace SpecUtils
       
       std::lock_guard<std::mutex> lock( xmldocmutex );
       
-      xml_node<char> *version_node = version_node = doc->allocate_node( node_element, "RadInstrumentVersion" );
+      xml_node<char> *version_node = doc->allocate_node( node_element, "RadInstrumentVersion" );
       RadInstrumentInformation->append_node( version_node );
       
       if( SpecUtils::iequals_ascii( name, "Software" ) )
@@ -7701,7 +7701,6 @@ namespace SpecUtils
       if( id_att && id_att->value_size() )
         id = xml_value_str(id_att);  //if attribute is _required_, so well rely on this
       
-      rapidxml::xml_node<char> *remark_node = XML_FIRST_NODE(cal_node, "Remark");
       rapidxml::xml_node<char> *coef_val_node = XML_FIRST_NODE(cal_node, "CoefficientValues");
       rapidxml::xml_node<char> *energy_boundry_node = XML_FIRST_NODE(cal_node, "EnergyBoundaryValues");
       rapidxml::xml_node<char> *date_node = XML_FIRST_NODE(cal_node, "CalibrationDateTime");

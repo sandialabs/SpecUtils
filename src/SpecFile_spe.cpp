@@ -474,7 +474,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         {
           //Nominally formated like: "mm/dd/yyyy hh:mm:ss" (ex "02/29/2016 14:31:47")
           //  which time_from_string should get right...
-          meas->start_time_ = time_from_string( line.c_str() );
+          meas->start_time_ = time_from_string( line, DateParseEndianType::MiddleEndianFirst );
         }catch(...)
         {
           parse_warnings_.emplace_back( "Unable to convert date/time '" + line +
