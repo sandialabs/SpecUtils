@@ -17,7 +17,7 @@ export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"  #maybe not necassary
 cd /path/to/SpecUtils
 mkdir build_fuzz
 
-cmake -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm;/path/to/compiled/boost/" -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/opt/homebrew/opt/llvm/include/c++/v1" -DSpecUtils_BUILD_FUZZING_TESTS=ON ..
+cmake -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm;/path/to/compiled/boost/" -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/opt/homebrew/opt/llvm/include/c++/v1" -DSpecUtils_BUILD_FUZZING_TESTS=ON ..
 
 cmake --build . --config RelWithDebInfo -j8
 ```
