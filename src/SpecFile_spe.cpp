@@ -808,7 +808,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               vector<float> parts;
               SpecUtils::split_to_floats( line.c_str(), line.size(), parts );
               if( parts.size() == 2 )
-                bin_to_energy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
+              {
+                // Only add this point if the channel and energy are reasonable.
+                const int bin = float_to_integral<int>(parts[0]);
+                const float energy = parts[1];
+                if( (bin >= 0) && (bin < 131072) && (energy >= 0.0f) && (energy < 3000000.0f) )
+                  bin_to_energy.emplace_back( bin, parts[1] );
+              }
             }
           }//while( SpecUtils::safe_get_line( istr, line ) )
         }//if( file says how many entries to expect )
@@ -1058,10 +1064,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           continue;
         
         int numresults = 0;
-        if( !toInt(analines[0], numresults) || numresults <= 0 )
+        if( !toInt(analines[0], numresults) || (numresults <= 0) )
           continue;
         
-        if( (analines.size()-1) != numresults*4 )
+        if( (analines.size()-1) != (4*static_cast<size_t>(numresults)) )
         {
           string remark;
           for( size_t i = 0; i < analines.size(); ++i )

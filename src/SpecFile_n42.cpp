@@ -940,12 +940,12 @@ namespace
   //add_spectra_to_measurement_node_in_2012_N42_xml(...): Adds the given
     //  spectra to the specified RadMeasurementNode.  All measurements should
     //  have the sample sample number, and the entries in calibid should
-    //  coorespond one to one to the entries in measurements.
+    //  correspond one to one to the entries in measurements.
     //  If something drastically goes wrong, and an exception is thrown somewhere
     //  this function will not throw, it will print an error to stderror and not
     //  insert itself into the DOM; this is so this function is safe to call in
     //  its own thread with no error handling.  I expect this to never happen, so
-    //  I'm not bothing with any better error handling.
+    //  I'm not bothering with any better error handling.
 
 void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char> *RadMeasurement,
                   const std::vector< std::shared_ptr<const SpecUtils::Measurement> > measurements,
@@ -1089,8 +1089,11 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
     
     for( size_t i = 0; i < measurements.size(); ++i )
     {
+      assert( i < calibids.size() );
+      
       const size_t calibid = calibids[i];
-      const std::shared_ptr<const Measurement> m = measurements[i];
+      const shared_ptr<const Measurement> m = measurements[i];
+      assert( m );
       
       char livetime[32], calibstr[32], spec_id_cstr[48];
       
@@ -1114,8 +1117,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         //Probably shouldnt ever make it here.
         snprintf( spec_id_cstr, sizeof(spec_id_cstr), "Sample%iDet%iSpectrum", m->sample_number(), m->detector_number() );
       }
-      
-      spec_id_cstr[sizeof(spec_id_cstr) - 1] = '0'; //jic
+      spec_id_cstr[sizeof(spec_id_cstr) - 1] = '\0'; //jic
       string spec_idstr = spec_id_cstr;
       
       // If this is a derived data Measurement, we will append derived data properties to the "id"

@@ -1083,7 +1083,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
         //  other file formats to SPC, but such is life
         if(!res.nuclide_.empty() && !res.nuclide_type_.empty())
         {
-          const string postfix = string("") + char('0' + i);
+          const string postfix = std::to_string(i);
           output << pad_iaea_prefix( "Nuclide" + postfix ) << res.nuclide_ << "\r\n";
           if( SpecUtils::istarts_with(res.remark_, "Strength ") )
             output << pad_iaea_prefix( "Strength" + postfix ) << res.nuclide_ << "\r\n";
@@ -1093,7 +1093,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
           output << pad_iaea_prefix( "Confidence" + postfix ) << res.id_confidence_ << "\r\n";
         }else if(!res.nuclide_.empty())
         {
-          const string postfix = string("") + char('1' + i);
+          const string postfix = std::to_string(i + 1);
           output << pad_iaea_prefix( "NuclideID" + postfix ) << res.nuclide_ << "\r\n";
         }
       }//
@@ -1392,6 +1392,7 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::VerifinderNaI:
     case DetectorType::VerifinderLaBr:
     case DetectorType::KromekD3S:
+    case DetectorType::RadiaCode:
     case DetectorType::Unknown:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;

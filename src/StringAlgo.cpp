@@ -1621,6 +1621,9 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
 
   std::string sequencesToBriefString( const std::set<int> &sample_numbers )
   {
+    if( sample_numbers.empty() )
+      return "";
+      
     stringstream editVal;
     
     int added = 0;

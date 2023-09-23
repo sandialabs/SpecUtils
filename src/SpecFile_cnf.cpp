@@ -170,7 +170,7 @@ namespace
             //duration in years is larger than an int32, divide by a million years
             if ( (duration / 31557600.0) > static_cast<double>(INT32_MAX) )
             {
-                int32_t y_duration = static_cast<int32_t>(t_duration / 1e6);
+                int32_t y_duration = SpecUtils::float_to_integral<int32_t>(t_duration / 1e6);
                 const auto y_bytes = to_bytes(y_duration);
                 std::copy(begin(y_bytes), end(y_bytes), begin(bytes));
                 //set the flags
@@ -884,7 +884,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         }
         
  //TODO: implement converted shape calibration information into CNF files 
-        //shape calibration, just use the defualt values for NaI detectors if the type cotains any NaI, if not use Ge defaults
+        //shape calibration, just use the default values for NaI detectors if the type cotains any NaI, if not use Ge defaults
         const string& detector_type = summed->detector_type();
         enter_CAM_value("SQRT", cnf_file, acqp_loc + 0x464, cam_type::cam_string);
         if(detector_type.find("NaI") == 0 || detector_type.find("nai") == 0 || detector_type.find("NAI") == 0)
