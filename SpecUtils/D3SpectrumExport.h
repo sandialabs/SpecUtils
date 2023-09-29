@@ -24,13 +24,17 @@
 #ifndef D3SpectrumExport_h
 #define D3SpectrumExport_h
 
+#include "SpecUtils_config.h"
+
 #include <map>
 #include <vector>
 #include <string>
 #include <utility>
 #include <ostream>
 
-#include "SpecUtils_config.h"
+#if( SpecUtils_BUILD_FUZZING_TESTS )
+#include <sstream>
+#endif
 
 
 namespace SpecUtils
@@ -48,7 +52,7 @@ namespace D3SpectrumExport
   struct D3SpectrumChartOptions;
   
   //Writes the spectrum component of the js that SpectrumChartD3 expects.
-  // An anotatated example of what would be written is:
+  // An annotated example of what would be written is:
   // { "title": "Line Title", "peaks":"[...]", "liveTime": 300, "realTime": 320, "neutrons": 0,
   //   "lineColor": "black", "x": [0, 2.93, 5.86, ..., 3000], "y": [0,1,10,...0], "yScaleFactor": 1.0 }
   bool write_spectrum_data_js( std::ostream &ostr,
@@ -188,5 +192,11 @@ namespace D3SpectrumExport
     
     std::map<std::string,std::string> m_reference_lines_json;  //map from nuclide to their JSON
   };//struct D3SpectrumChartOptions
+  
+#if( SpecUtils_BUILD_FUZZING_TESTS )
+  std::string escape_text_test( const std::string &input );
+  void copy_check_utf8_test( const char * &src, char * &dest );
+  void sanitize_unicode_test( std::stringstream &sout, const std::string& text );
+#endif
 }//namespace D3SpectrumExport
 #endif //D3SpectrumExport

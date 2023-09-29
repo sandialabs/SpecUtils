@@ -364,15 +364,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         vector<string> channelstrs;
         split( channelstrs, line, " \t," );
         
-        unsigned int firstchannel = 0, lastchannel = 0;
+        int firstchannel = 0, lastchannel = 0;
         if( channelstrs.size() == 2 )
         {
-          try
+          if( !parse_int(channelstrs[0].c_str(), channelstrs[0].size(), firstchannel)
+              || !parse_int(channelstrs[1].c_str(), channelstrs[1].size(), lastchannel) )
           {
-            firstchannel = atol( channelstrs[0].c_str() );
-            lastchannel = atol( channelstrs[1].c_str() );
-          }catch(...)
-          {
+            firstchannel = lastchannel = 0;
           }
         }else
         {
@@ -382,11 +380,14 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         
         double sum = 0.0;
         std::shared_ptr< vector<float> > channel_data( new vector<float>() );
-        if( firstchannel < lastchannel )
-          channel_data->reserve( lastchannel - firstchannel + 1 );
+        if( (firstchannel < lastchannel)
+           && (firstchannel >= 0)
+           && ((lastchannel - firstchannel) < (65536 + 2)) )
+        {
+          channel_data->reserve( static_cast<size_t>(lastchannel - firstchannel) + 1 );
+        }
         
-        //XXX - for some reason I think this next test condition is a little
-        //      fragile...
+        //TODO: for some reason I think this next test condition is a little fragile...
         int num_cd_error = 0, num_cd_error_current = 0;
         while( SpecUtils::safe_get_line( istr, line ) )
         {

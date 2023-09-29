@@ -1020,7 +1020,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       memcpy( buffer + 19, &noutchannel, sizeof(noutchannel) );
       
-      double rt_f = std::round( 1000 * meas.real_time_ );
+      double rt_f = std::round( 1000 * std::max(meas.real_time_, 0.0f) );
       rt_f = std::min( rt_f, static_cast<double>(std::numeric_limits<uint32_t>::max()) );
       
       const uint32_t real_time_thousanths = static_cast<uint32_t>( rt_f );

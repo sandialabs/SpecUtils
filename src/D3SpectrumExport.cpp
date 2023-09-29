@@ -19,6 +19,8 @@
 
 #include "SpecUtils_config.h"
 
+#include <iostream>
+
 #include <cmath>
 #include <stack>
 #include <limits>
@@ -45,8 +47,8 @@ using namespace std;
 
 namespace
 {
-  //anaonomous namespace for functions to help parse D3.js HTML files, that wont be
-  //  usefull outside of this file
+  //anonymous namespace for functions to help parse D3.js HTML files, that wont be
+  //  useful outside of this file
 #if( SpecUtils_D3_SUPPORT_FILE_STATIC )
   const unsigned char * const ns_libJsFiles[] = {
     D3_MIN_JS // D3.js library
@@ -82,19 +84,31 @@ namespace
   
   //Taken from the rapidxml.hpp that Wt uses
   template <class Ch>
-  void copy_check_utf8(const Ch *& src, Ch *& dest)
+  void copy_check_utf8( const Ch *& src, Ch *& dest )
   {
     // skip entire UTF-8 encoded characters at once,
     // checking their validity based on
     // http://www.dwheeler.com/secure-programs/Secure-Programs-HOWTO/character-encoding.html (5.9.4 column 3)
     
+    assert( src );
+    size_t src_len;
+    for( src_len = 0; src[src_len] && src_len < 4; ++src_len )
+    {
+    }
+    assert( src_len );
+    if( !src_len )
+      return;
+    
+    
     unsigned length = 1;
     bool legal = false;
-    if ((unsigned char)src[0] <= 0x7F) {
+    if ((unsigned char)src[0] <= 0x7F)
+    {
       unsigned char c = src[0];
       if (c == 0x09 || c == 0x0A || c == 0x0D || c >= 0x20)
         legal = true;
-    } else if ((unsigned char)src[0] >= 0xF0) {
+    }else if( ((unsigned char)src[0] >= 0xF0) && (src_len >= 4) )
+    {
       length = 4;
       
       if ((
@@ -120,7 +134,8 @@ namespace
            ))
         legal = true;
       
-    } else if ((unsigned char)src[0] >= 0xE0) {
+    }else if( ((unsigned char)src[0] >= 0xE0) && (src_len >= 3) )
+    {
       length = 3;
       
       if ((
@@ -142,7 +157,8 @@ namespace
            ))
         legal = true;
       
-    } else if ((unsigned char)src[0] >= 0xC0) {
+    }else if( ((unsigned char)src[0] >= 0xC0) && (src_len >= 2) )
+    {
       length = 2;
       
       if (
@@ -155,9 +171,12 @@ namespace
         legal = true;
     }
     
-    if (legal) {
-      if (dest) {
-        if (length == 3) {
+    if( legal )
+    {
+      if( dest )
+      {
+        if( length == 3 )
+        {
           /*
            U+2028 and U+2029 may cause problems, they are line
            separators that mess up JavaScript string literals.
@@ -172,44 +191,56 @@ namespace
               } else
                 for (unsigned i = 0; i < length; ++i)
                   *dest++ = *src++;
-        } else
-          for (unsigned i = 0; i < length; ++i)
+        }else
+        {
+          for( unsigned i = 0; i < length; ++i )
             *dest++ = *src++;
-      } else
+        }
+      }else
+      {
         src += length;
-    } else {
-      if (dest)
-        if (length >= 3) {
+      }
+    }else  //if( legal )
+    {
+      if( dest )
+      {
+        if( length >= 3 )
+        { 
           /* insert U+FFFD, the replacement character */
           *dest++ = (Ch)0xef;
           *dest++ = (Ch)0xbf;
           *dest++ = (Ch)0xbd;
           src += length;
-        } else
-          for (unsigned i = 0; i < length; ++i) {
+        }else
+        {
+          for (unsigned i = 0; i < length; ++i)
+          {
             *dest++ = '?';
             src++;
           }
-        else {
-          //const Ch *problem_src = src;
-          src += length;
-          throw runtime_error( "Invalid UTF-8 sequence" /* + const_cast<Ch *>(problem_src)*/ );
         }
-    }
-  }
-  
-
+      }else
+      {
+        //const Ch *problem_src = src;
+        src += length;
+        throw runtime_error( "Invalid UTF-8 sequence" /* + const_cast<Ch *>(problem_src)*/ );
+      }//if( dest )
+    }//if( legal ) / else
+  }//void copy_check_utf8
   
   void sanitize_unicode( stringstream &sout, const std::string& text )
   {
     char buf[4];
     
     for (const char *c = text.c_str(); *c;) {
+      assert( c <= (text.c_str() + text.size()) );
       char *b = buf;
       // but copy_check_utf8() does not declare the following ranges illegal:
       //  U+D800-U+DFFF
       //  U+FFFE-U+FFFF
       copy_check_utf8<char>(c, b);
+      assert( c <= (text.c_str() + text.size()) );
+      assert( (b - buf) <= 4 );
       for (char *i = buf; i < b; ++i)
         sout << *i;
     }
@@ -264,7 +295,24 @@ namespace
 
 namespace D3SpectrumExport
 {
-
+#if( SpecUtils_BUILD_FUZZING_TESTS )
+  std::string escape_text_test( const std::string &input )
+  {
+    return escape_text( input );
+  }
+  
+  void copy_check_utf8_test( const char *& src, char *& dest )
+  {
+    copy_check_utf8( src, dest );
+  }
+  
+  void sanitize_unicode_test( std::stringstream &sout, const std::string& text )
+  {
+    sanitize_unicode( sout, text );
+  }
+#endif
+  
+  
 #if( SpecUtils_D3_SUPPORT_FILE_STATIC )
   const unsigned char *d3_js(){ return D3_MIN_JS; }
   const unsigned char *spectrum_chart_d3_js(){ return SPECTRUM_CHART_D3_JS; }

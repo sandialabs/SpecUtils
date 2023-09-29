@@ -409,7 +409,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         
         // This next call will check that energies are monotonically increasing, and if not throw
         //  an exception.
-        energy_cal->set_lower_channel_energy( channel_energies.size(), move(channel_energies) );
+        energy_cal->set_lower_channel_energy( channel_energies.size(), std::move(channel_energies) );
       }catch(std::exception &e)
       {
         energy_cal.reset();

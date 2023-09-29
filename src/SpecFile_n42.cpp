@@ -1163,7 +1163,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       
       string channeldata;
       if( !zerocompressed )
-        channeldata.reserve( 3*m->gamma_counts()->size() ); //3 has not been verified to be reasonalbe
+        channeldata.reserve( 3*m->gamma_counts()->size() ); //3 has not been verified to be reasonable
       
       const size_t nchannel = data.size();
       
