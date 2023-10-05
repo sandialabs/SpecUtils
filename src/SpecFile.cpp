@@ -3029,11 +3029,11 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   }
    */
 
-  if( lhs.detector_description_ != rhs.detector_description_
+  if( trim_copy(lhs.detector_description_) != trim_copy(rhs.detector_description_)
      && rhs.detector_description_!="Gamma and Neutron"
-     && ("NaI, " + lhs.detector_description_) != rhs.detector_description_
-     && ("LaBr3, " + lhs.detector_description_) != rhs.detector_description_
-     && ("unknown, " + lhs.detector_description_) != rhs.detector_description_
+     && ("NaI, " + trim_copy(lhs.detector_description_)) != trim_copy(rhs.detector_description_)
+     && ("LaBr3, " + trim_copy(lhs.detector_description_)) != trim_copy(rhs.detector_description_)
+     && ("unknown, " + trim_copy(lhs.detector_description_)) != trim_copy(rhs.detector_description_)
      )
   {
     //static std::atomic<int> ntimesprint(0);
@@ -3318,8 +3318,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     }//for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
   }//if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() ) / else
   
-
-  if( lhs.title_ != rhs.title_ )
+  if( trim_copy(lhs.title_) != trim_copy(rhs.title_) )
     issues.push_back( "Measurement: Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
   

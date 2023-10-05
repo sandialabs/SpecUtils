@@ -3206,7 +3206,7 @@ public:
   }//std::string concat_2012_N42_characteristic_node( const rapidxml::xml_node<char> *node )
       
   
-  static void set_deriv_data( shared_ptr<Measurement> &meas, const string &dd_id, const string &spec_id )
+  static void set_deriv_data( const shared_ptr<Measurement> &meas, const string &dd_id, const string &spec_id )
   {
     typedef Measurement::DerivedDataProperties DerivedProps;
     
@@ -7927,7 +7927,7 @@ namespace SpecUtils
   
       get_2012_N42_energy_calibrations( calibrations, rad_data_node, remarks_, parse_warnings_ );
       
-      //XXX - implement using RadItemInformation
+      //TODO: implement using RadItemInformation
       //  for( const rapidxml::xml_node<char> *rad_item_node = XML_FIRST_NODE(rad_data_node, "RadItemInformation");
       //      rad_item_node;
       //      rad_item_node = XML_NEXT_TWIN(rad_item_node) )
@@ -8182,24 +8182,51 @@ namespace SpecUtils
     size_t numRadMeasNodes = 0;
     std::mutex meas_mutex, calib_mutex;
     
+    // Symetrica detectors _may_ have a <RadMeasurement> node with id="ForegroundMeasureSum",
+    //  "BackgroundMeasure...5" (for gamma), "BackgroundMeasure...6" (for neutron),
+    //  "CalMeasurementGamma-...", "StabMeasurement...", and then they have a bunch
+    //  of ("TickMeasurement..."|"ForegroundMeasure...") that are 0.2 seconds long.
+    //  We probably want the "ForegroundMeasureSum" + "BackgroundMeasure..." (neut+gamma
+    //  combined) - so we will separate all these from the "Tick" measurements, by
+    //  marking them as derived (which I guess they kinda are).
+    //  Its not great, but maybe better than nothing.
+    //  A particular example where this was giving trouble can be seen in ref3Z3LPD6CY6
+    const bool is_symetrica = SpecUtils::istarts_with( manufacturer_, "symetrica" );
+    vector<shared_ptr<vector<shared_ptr<Measurement>>>> symetrica_special_meas;
+    vector<pair<string,string>> symetrica_special_attribs;
+    
+    
+    
     // See note above about system that has multiple N42 documents in a single file.
     for( const rapidxml::xml_node<char> *rad_data_node = data_node; rad_data_node;
         rad_data_node = rad_data_node->next_sibling("RadInstrumentData") )
     {
       XML_FOREACH_CHILD( meas_node, rad_data_node, "RadMeasurement" )
       {
-        //see ref3Z3LPD6CY6
-        if( numRadMeasNodes > 32 && xml_value_compare(meas_node->first_attribute("id"), "ForegroundMeasureSum") )
-        {
-          continue;
-        }
-        
         std::shared_ptr<std::mutex> mutexptr = std::make_shared<std::mutex>();
         auto these_meas = std::make_shared< vector<std::shared_ptr<Measurement> > >();
         
         ++numRadMeasNodes;
         meas_mutexs.push_back( mutexptr );
         measurements_each_meas.push_back( these_meas );
+        
+        if( is_symetrica )
+        {
+          const rapidxml::xml_attribute<char> *id_attrib = meas_node->first_attribute("id");
+          const string id_val_str = xml_value_str( id_attrib );
+          
+          if( SpecUtils::istarts_with(id_val_str, "ForegroundMeasureSum")
+             || SpecUtils::istarts_with(id_val_str, "BackgroundMeasure")
+             || SpecUtils::istarts_with(id_val_str, "StabMeasurement")
+             || SpecUtils::istarts_with(id_val_str, "CalMeasurementGamma")
+             )
+          {
+            symetrica_special_meas.push_back( these_meas );
+            
+            const string spec_id = xml_value_str( XML_FIRST_NODE(meas_node, "Spectrum") );
+            symetrica_special_attribs.push_back( std::make_pair(id_val_str, spec_id) );
+          }//
+        }//if( is_symetrica )
         
         workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
           N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
@@ -8222,6 +8249,100 @@ namespace SpecUtils
     }//for( loop over "RadInstrumentData" nodes - I know )
     
     workerpool.join();
+    
+    
+    // Now go back up and mark Symetrica special measurements as derived, so this way the
+    //  "raw" and "derived" datas will kinda be sensical.
+    assert( symetrica_special_meas.size() == symetrica_special_attribs.size() );
+    if( !symetrica_special_meas.empty() )
+    {
+      // We will look for a background neutron-only record, and a background gamma-only
+      //  record, and combine them, if found (and then remove from `measurements_each_meas`)
+      //  TODO: For multi-detector systems (portals) we should actually try to match the neutrons
+      //        to gammas for each detector, but we arent doing that yet
+      bool single_gamma_neutron_back = true;
+      shared_ptr<Measurement> neut_only_back, gamma_only_back;
+      
+      for( size_t sym_index = 0;
+          single_gamma_neutron_back && (sym_index < symetrica_special_meas.size()); ++sym_index )
+      {
+        if( !symetrica_special_meas[sym_index] || (sym_index >= symetrica_special_attribs.size()) )
+          continue;
+        
+        const shared_ptr<vector<shared_ptr<Measurement>>> &measv = symetrica_special_meas[sym_index];
+        const pair<string,string> &attribs = symetrica_special_attribs[sym_index];
+        
+        for( const shared_ptr<Measurement> &m : *measv )
+        {
+          N42DecodeHelper2012::set_deriv_data( m, attribs.first, attribs.second );
+          if( m->source_type() == SourceType::Background )
+          {
+            if( (m->num_gamma_channels() > 6) && !m->contained_neutron() )
+            {
+              single_gamma_neutron_back = (single_gamma_neutron_back && !gamma_only_back);
+              gamma_only_back = m;
+            }else if( !m->num_gamma_channels() && m->contained_neutron() )
+            {
+              single_gamma_neutron_back = (single_gamma_neutron_back && !neut_only_back);
+              neut_only_back = m;
+            }
+            if( !single_gamma_neutron_back )
+              break;
+          }//if( m->source_type() == SourceType::Background )
+        }//for( const shared_ptr<Measurement> &m : *measv )
+      }//for( const auto &meass : symetrica_special_meas )
+      
+      if( single_gamma_neutron_back && gamma_only_back && neut_only_back )
+      {
+        // Below is commented out 20231004 - only leaving in for a short while to look at different variants
+        //cout << "Symetrica\n\tNeutron:"
+        //"\n\t\tstart_time=" << to_iso_string( neut_only_back->start_time() )
+        //<< "\n\t\tRealTime=" << neut_only_back->real_time()
+        //<< "\n\t\tLiveTime=" << neut_only_back->live_time()
+        //<< "\n\tGamma:"
+        //<< "\n\t\tstart_time=" << to_iso_string( gamma_only_back->start_time() )
+        //<< "\n\t\tRealTime=" << gamma_only_back->real_time()
+        //<< "\n\t\tLiveTime=" << gamma_only_back->live_time()
+        //<< "\nDiffs:"
+        //<< "\n\t\tStartTime: " << chrono::duration_cast<chrono::microseconds>(neut_only_back->start_time() - gamma_only_back->start_time()).count() << " us"
+        //<< "\n\t\tRealTime: " << (neut_only_back->real_time() - gamma_only_back->real_time())
+        //<< "\n\t\tLiveTime: " << (neut_only_back->live_time() - gamma_only_back->live_time())
+        //<< endl;
+        
+        // The neutron background isnt always at the same time, or same duration, so dont combine
+        //  in these cases
+        const float gamma_rt = gamma_only_back->real_time();
+        if( ((neut_only_back->start_time() - gamma_only_back->start_time()) < chrono::seconds(15))   //Arbitrary 15 seconds
+           && fabs((neut_only_back->real_time() - gamma_rt) < 0.01*gamma_rt) )  //Arbitrary 1% match
+        {
+          gamma_only_back->contained_neutron_ = true;
+          gamma_only_back->remarks_.push_back( "Neutron and gamma backgrounds have been combined into a single record." );
+          gamma_only_back->remarks_.push_back( "Neutron Real Time: PT" + to_string(neut_only_back->real_time()) + "S" );
+          gamma_only_back->remarks_.push_back( "Neutron Live Time: PT" + to_string(neut_only_back->live_time()) + "S" );
+          
+          gamma_only_back->neutron_counts_ = neut_only_back->neutron_counts_;
+          gamma_only_back->neutron_counts_sum_ = neut_only_back->neutron_counts_sum_;
+
+          if( (gamma_only_back->dose_rate_ >= 0.0) && (neut_only_back->dose_rate_ >= 0.0) )
+            gamma_only_back->dose_rate_ += neut_only_back->dose_rate_;
+          if( (gamma_only_back->exposure_rate_ >= 0.0) && (neut_only_back->exposure_rate_ >= 0.0) )
+            gamma_only_back->exposure_rate_ += neut_only_back->exposure_rate_;
+          
+          for( auto miter = begin(measurements_each_meas); miter != end(measurements_each_meas); ++miter )
+          {
+            auto &measv = **miter;
+            auto pos = std::find( begin(measv), end(measv), neut_only_back );
+            if( pos != end(measv) )
+            {
+              measv.erase( pos );
+              break;
+            }//if( pos != end(measv) )
+          }
+        }//if( gamma/neutron start and real times are reasonably close )
+      }//if( gamma_only_back && neut_only_back )
+    }//if( !symetrica_special_meas.empty() )
+    
+    
     
     for( size_t i = 0; i < measurements_each_meas.size(); ++i )
       for( size_t j = 0; j < measurements_each_meas[i]->size(); ++j )
