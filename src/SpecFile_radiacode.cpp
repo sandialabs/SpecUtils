@@ -20,21 +20,24 @@
 
 #include "SpecUtils_config.h"
 
-#include <cstring>
-#include <fstream>
-#include <iostream>
-#include <numeric>
-#include <stdexcept>
 #include <string>
 #include <vector>
+#include <cstring>
+#include <fstream>
+#include <numeric>
+#include <sstream>
+#include <iostream>
+#include <stdexcept>
 
 #include "rapidxml/rapidxml.hpp"
 
 #include "SpecUtils/DateTime.h"
-#include "SpecUtils/EnergyCalibration.h"
-#include "SpecUtils/RapidXmlUtils.hpp"
 #include "SpecUtils/SpecFile.h"
+#include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
+#include "SpecUtils/RapidXmlUtils.hpp"
+#include "SpecUtils/EnergyCalibration.h"
+
 
 using namespace std;
 
@@ -51,18 +54,25 @@ bool SpecFile::load_radiacode_file(const std::string& filename) {
   if (!input.is_open())
     return false;
 
-  const bool success = load_from_radiacode(input);
+  bool success = load_from_radiacode(input);
 
+  if( !success )
+  {
+    input.seekg(0);
+    success = load_from_radiacode_spectrogram( input );
+  }
+  
   if (success)
     filename_ = filename;
 
   return success;
-}  // bool load_radiacode_file( const std::string &filename );
+}// bool load_radiacode_file( const std::string &filename );
+
 
 bool SpecFile::load_from_radiacode(std::istream& input) {
   reset();
 
-  if (!input.good())
+  if( !input.good() )
     return false;
 
   std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
@@ -72,10 +82,10 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
 
   // Determine stream size
   input.seekg(0, ios::end);
-  const size_t file_size = static_cast<size_t>(input.tellg() - start_pos);
+  size_t file_size = static_cast<size_t>(input.tellg() - start_pos);
   input.seekg(start_pos);
 
-  // The smallest valid 256 channel RadiaCode file I've been able to construct
+  // The smallest valid 256 channel RadiaCode XML file I've been able to construct
   // is about 7KB. Typical 1024-channel foreground RC files are about 27KB going
   // up to 31KB for files with many counts per channel. My largest real file
   // with both foreground and background spectra is 59KB. My largest synthetic
@@ -102,21 +112,20 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
 
   // Look for some distinctive strings early in the file
   // If they exist, this is probably a RadiaCode file.
-  int signature_max_offset = 512;
-  const auto fmtver_pos = filedata.find("<FormatVersion>");
-  if (fmtver_pos == string::npos || fmtver_pos > signature_max_offset)
+  const size_t signature_max_offset = 512;
+  const string::size_type fmtver_pos = filedata.find("<FormatVersion>");
+  if( (fmtver_pos == string::npos) || (fmtver_pos > signature_max_offset) )
     return false;
 
-  const auto dcr_pos = filedata.find("<DeviceConfigReference>");
-  if (dcr_pos == string::npos || dcr_pos > signature_max_offset)
+  const string::size_type dcr_pos = filedata.find("<DeviceConfigReference>");
+  if( (dcr_pos == string::npos) || (dcr_pos > signature_max_offset) )
     return false;
 
-  const auto device_model_pos = filedata.find("RadiaCode-");
-  if (device_model_pos == string::npos ||
-      device_model_pos > signature_max_offset)
+  const string::size_type device_model_pos = filedata.find("RadiaCode-");
+  if( (device_model_pos == string::npos) || (device_model_pos > signature_max_offset) )
     return false;
 
-  if (device_model_pos < dcr_pos)
+  if( device_model_pos < dcr_pos )
     return false;
 
   try
@@ -372,4 +381,245 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   return true;
 }//bool load_from_radiacode( std::istream &input )
 
+
+bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
+{
+  reset();
+
+  if( !input.good() )
+    return false;
+
+  std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
+
+  const istream::pos_type start_pos = input.tellg();
+  input.unsetf(ios::skipws);
+
+  // Determine stream size
+  input.seekg(0, ios::end);
+  size_t file_size = static_cast<size_t>(input.tellg() - start_pos);
+  input.seekg(start_pos);
+
+  // If under a kb, definitely not a valid file
+  if( file_size < (1*1024) )
+    return false;
+
+  const size_t max_header_len = 512;
+  assert( max_header_len < file_size );
+  
+  // First we'll check the beginning of the file to make sure it looks like
+  //  its probably a spectrogram file
+  string headerdata;
+  headerdata.resize(max_header_len + 1);
+
+  input.read(&(headerdata[0]), static_cast<streamsize>(max_header_len));
+  headerdata[max_header_len] = 0;  // jic.
+  input.clear();
+  input.seekg(start_pos, ios::beg);
+  
+  // Look for some distinctive strings early in the file - for the moment we'll be
+  //  pretty restrictive in what we require to be there.
+  if( (headerdata.find("Spectrogram:") == string::npos)
+     || (headerdata.find("Accumulation time:") == string::npos)
+     || (headerdata.find("Timestamp:") == string::npos)
+     || (headerdata.find("Time:") == string::npos)
+     || (headerdata.find("Channels:") == string::npos) )
+  {
+    return false;
+  }
+
+  try
+  {
+    // We'll start back over at the beginning
+    //  The fields of the header are tab-seperated - we will rely on this
+    string header;
+    while( safe_get_line(input, header, 10*1024) && header.empty() )
+    {
+    }
+    
+    auto get_header_field_str = [&headerdata]( const string &field, const bool required ) -> string {
+      const size_t pos = headerdata.find( field + ":" );
+      if( (pos == string::npos) && required )
+        throw logic_error( "radiacode expected header field, '" + field + "', not found" );
+      if( pos == string::npos )
+        return "";
+      
+      string value = headerdata.substr(pos + field.size() + 1);
+      const size_t tab_pos = value.find('\t');
+      if( tab_pos != string::npos )
+        value = value.substr(0,tab_pos);
+      trim(value);
+      return value;
+    };//get_header_field_str lambda
+    
+    const string name = get_header_field_str("Spectrogram", true);
+    const string time_str = get_header_field_str("Time", true);
+    const string timestamp_str = get_header_field_str("Timestamp", true);
+    //const string acc_time_str = get_header_field_str("Accumulation time", true);
+    const string channels_str = get_header_field_str("Channels", true);
+    const string serial_num = get_header_field_str("Device serial", false);
+    const string flags = get_header_field_str("Flags", false);
+    const string comment = get_header_field_str("Comment", false);
+    
+    const time_point_t start_time = time_from_string( time_str );
+    
+    uint64_t timestamp = 0;
+    if( !(stringstream(timestamp_str) >> timestamp) )
+      throw runtime_error( "Unexpected timestamp format" );
+    
+    size_t num_channels = 0;
+    if( !(stringstream(channels_str) >> num_channels) || (num_channels < 16) || (num_channels > 4096) )
+      throw runtime_error( "Invalid 'Channels' field" );
+    
+    vector<shared_ptr<Measurement>> meass;
+    // We dont actually have energy calibration info...
+    auto energy_cal = make_shared<EnergyCalibration>();
+    
+    int sample_num = 0;
+    uint64_t last_timestamp = timestamp;
+    size_t skipped_lines = 0, total_lines = 0;
+    string line;
+    while( safe_get_line(input, line, 64*1024) )
+    {
+      total_lines += 1;
+      
+      // We'll be pretty generous about allowing invalid lines
+      if( (skipped_lines > 5) && (total_lines > 10) && (skipped_lines > (total_lines/10)) )
+        throw runtime_error( "To many invalid lines" );
+      
+      trim( line );
+      if( line.empty() )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      // The second line in the file starts with "Spectrum:", and looks like its probably an icon
+      //  of the spectrum, and an example one I looked at was 12 kb, we'll skip it
+      
+      if( !isdigit( (int)line.front() ) )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      const size_t end_timestamp_pos = line.find('\t');
+      if( end_timestamp_pos == string::npos )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      const string this_timestamp_str = line.substr(0,end_timestamp_pos);
+      uint64_t this_timestamp = 0;
+      
+      if( !(stringstream(this_timestamp_str) >> this_timestamp) )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      const size_t end_nsecond = line.find('\t', end_timestamp_pos + 1);
+      if( (end_nsecond == string::npos) || ((end_nsecond + 4) > line.size()) )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      const string num_seconds_str = line.substr(end_timestamp_pos + 1, end_nsecond - end_timestamp_pos);
+      float num_seconds = 0.0f;
+      if( !(stringstream(num_seconds_str) >> num_seconds) )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      const char * const counts_start = line.c_str() + end_nsecond + 1;
+      const size_t counts_str_len = (line.c_str() + line.size()) - counts_start;
+      
+      auto channel_counts = make_shared<vector<float>>();
+      if( !split_to_floats( counts_start, counts_str_len, *channel_counts ) )
+      {
+        cerr << "Failed to split_to_floats" << endl;
+      }
+      
+      if( channel_counts->size() < 2 )
+      {
+        skipped_lines += 1;
+        continue;
+      }
+      
+      if( channel_counts->size() > num_channels )
+        throw runtime_error( "More channel counts than expected" );
+      
+      
+      vector<string> warnings;
+      channel_counts->resize( num_channels, 0.0f );
+      
+      float real_time = 0.0f;
+      if( last_timestamp <= this_timestamp )
+      {
+        real_time = num_seconds;
+      }else
+      {
+        real_time = 1.0E-8 * (this_timestamp - last_timestamp);
+        if( fabs(real_time - num_seconds) > 1.5 )
+        {
+          warnings.push_back( "Indeterminant real-time: timestamp implied " + to_string(real_time) + " seconds" );
+          real_time = num_seconds;
+        }
+      }
+      if( (real_time < 0.0f) || IsInf(real_time) || IsNan(real_time) )
+      {
+        warnings.push_back( "Real-time was negative, setting to zero." );
+        real_time = 0.0f;
+      }
+      
+      last_timestamp = this_timestamp;
+      const double gamma_sum = std::accumulate( begin(*channel_counts), end(*channel_counts), 0.0 );
+        
+      auto meas = make_shared<Measurement>();
+      meas->real_time_ = real_time;
+      meas->live_time_ = real_time;
+      meas->gamma_counts_ = channel_counts;
+      meas->gamma_count_sum_ = gamma_sum;
+      meas->parse_warnings_ = warnings;
+      meas->energy_calibration_ = energy_cal;
+      meas->sample_number_ = sample_num;
+      meas->detector_name_ = "gamma";
+      
+      if( !is_special(start_time) && (this_timestamp > timestamp) )
+      {
+        const uint64_t nticks = (this_timestamp - timestamp);
+        meas->start_time_ = start_time + chrono::milliseconds(nticks/10000);
+      }//if( !is_special(start_time) )
+      
+      
+      meass.push_back( meas );
+      
+      sample_num += 1;
+    }//while( safe_get_line(input, line, 64*1024) )
+    
+    if( meass.empty() )
+      throw runtime_error( "No measurements" );
+    
+    measurements_ = meass;
+    
+    instrument_type_ = "Spectroscopic Personal Radiation Detector";
+    manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    
+    cleanup_after_load();
+  }catch( std::exception & )
+  {
+    reset();
+    input.clear();
+    input.seekg(start_pos, ios::beg);
+    
+    return false;
+  }// try / catch
+
+  return true;
+}//bool parse_radiacode_spectrogram( std::istream& input )
+    
+  
 }// namespace SpecUtils

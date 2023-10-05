@@ -1775,10 +1775,13 @@ public:
    */
   bool load_from_lzs( std::istream &input );
   
-  /** Load from radiacode file format.
+  /** Load from radiacode XML file format.
    As of 20230905, only tested with 1024 channel RC-102, android app 1.40.00 - 1.42.00
    */
   bool load_from_radiacode( std::istream &input );
+  
+  /** Loads from radiacode "spectrogram"  file format. */
+  bool load_from_radiacode_spectrogram( std::istream& input );
 
   /** Load from a one-off scan data xml format.
    */
