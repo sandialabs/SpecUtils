@@ -533,14 +533,15 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
         continue;
       }
       
+      
+      vector<string> warnings;
+      
       const char * const counts_start = line.c_str() + end_nsecond + 1;
       const size_t counts_str_len = (line.c_str() + line.size()) - counts_start;
       
       auto channel_counts = make_shared<vector<float>>();
       if( !split_to_floats( counts_start, counts_str_len, *channel_counts ) )
-      {
-        cerr << "Failed to split_to_floats" << endl;
-      }
+        warnings.push_back( "All channel counts may not have been read." );
       
       if( channel_counts->size() < 2 )
       {
@@ -551,8 +552,6 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       if( channel_counts->size() > num_channels )
         throw runtime_error( "More channel counts than expected" );
       
-      
-      vector<string> warnings;
       channel_counts->resize( num_channels, 0.0f );
       
       float real_time = 0.0f;
@@ -603,6 +602,12 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       throw runtime_error( "No measurements" );
     
     measurements_ = meass;
+    instrument_id_ = serial_num;
+    
+    if( !name.empty() )
+      remarks_.push_back( "Name: " + name );
+    if( !comment.empty() )
+      remarks_.push_back( "Comment: " + comment );
     
     instrument_type_ = "Spectroscopic Personal Radiation Detector";
     manufacturer_ = "Scan-Electronics";

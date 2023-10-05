@@ -5354,7 +5354,9 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
          && meas->live_time() > 0.00000001
          && meas->real_time() > 0.00000001
          && !meas->derived_data_properties()  //make sure not derived data
-         && meas->real_time() < 15.0 )  //20181108: some search systems will take one spectra every like ~10 seconds
+         && ((meas->real_time() < 15.0)   //20181108: some search systems will take one spectra every like ~10 seconds
+             || ((detector_type_ == SpecUtils::DetectorType::RadiaCode) // Radiacode detectors can take like 30 second spectra
+                 && (meas->real_time() < 125.0)) ) )
       {
         ++pt_num_items;
         pt_averageRealTime += meas->real_time_;
