@@ -4202,7 +4202,9 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   var shieldingThickness = linedata.parent.shieldingThickness;
   var nearestLineParent = linedata.parent.parent;
 
-  textdescrip = (nearestLineParent ? (nearestLineParent + ', ') : "")
+  //linedata.src_label is only defined for ReferenceLineInfo::SourceType::NuclideMixture; it gives you the parent nuclide(s) within the mixture
+  
+  textdescrip = (linedata.src_label ? (linedata.src_label + ', ') : (nearestLineParent ? (nearestLineParent + ', ') : "") )
                 +  e + ' keV'
                 + (linedata.particle ? ' ' + linedata.particle : "")
                 + ', rel. amp. ' + sf;
