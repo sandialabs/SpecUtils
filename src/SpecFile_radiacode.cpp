@@ -41,6 +41,25 @@
 
 using namespace std;
 
+namespace
+{
+  // The data file doesn't contain live or dead time, so we'll assume a 54 us per-pulse
+  //  dead time (niavely, and only preliminarily estimated using two source test - see Knoll
+  //  pg 122).
+  float estimate_radiacode102_live_time( const float real_time, const double total_counts )
+  {
+    if( (real_time <= 0.0) || (total_counts <= 0.0) )
+      return real_time;
+    
+    const double detected_cps = total_counts / real_time;
+    if( (detected_cps > 18600) || IsNan(detected_cps) || IsInf(detected_cps) )
+      return real_time;
+    
+    const double estimated_true_cps = (18691.6)/(18691.6/detected_cps - 1);
+    return static_cast<float>( real_time * (detected_cps / estimated_true_cps) );
+  };//float estimate_radiacode102_live_time( const float real_time, const double total_counts )
+}//namespace
+
 namespace SpecUtils {
 
 bool SpecFile::load_radiacode_file(const std::string& filename) {
@@ -209,7 +228,6 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
         meas->parse_warnings_.push_back( "Could not parse measurement duration." );
       meas->live_time_ = meas->real_time_; // Only clock-time is given in the file.
       
-      
       // Start/End time are sibling nodes of EnergySpectrum when they should
       // be children of that node... the same as MeasurementTime. At least
       // they come before their associated EnergySpectrum.
@@ -292,6 +310,14 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       meas->detector_name_ = "gamma";
       meas->contained_neutron_ = false;
       
+      // Make up for estimated dead-time
+      meas->live_time_ = estimate_radiacode102_live_time( meas->real_time_, meas->gamma_count_sum_ );
+      // If this correction makes a difference, warn users that it may not be super great,
+      //  since I didnt extensively check how applicable the estimate is.
+      if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
+        meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
+                                            " to correct spectrum live-time." );
+      
       return meas;
     };// const auto parse_meas lambda
     
@@ -353,10 +379,6 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
           if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
             bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
         }
-        
-        const rapidxml::xml_node<char> * const background_file_node = XML_FIRST_INODE( n_root, "BackgroundSpectrumFile" );
-        if( bg_meas->title_ != xml_value_str(background_file_node) )
-          parse_warnings_.push_back( "Background spectrum name not consistent with expected background." );
         
         measurements_.push_back( bg_meas );
       }catch( std::exception &e )
@@ -430,7 +452,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
   try
   {
     // We'll start back over at the beginning
-    //  The fields of the header are tab-seperated - we will rely on this
+    //  The fields of the header are tab-separated - we will rely on this
     string header;
     while( safe_get_line(input, header, 10*1024) && header.empty() )
     {
@@ -578,7 +600,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
         
       auto meas = make_shared<Measurement>();
       meas->real_time_ = real_time;
-      meas->live_time_ = real_time;
+      meas->live_time_ = estimate_radiacode102_live_time( real_time, gamma_sum );
       meas->gamma_counts_ = channel_counts;
       meas->gamma_count_sum_ = gamma_sum;
       meas->parse_warnings_ = warnings;
