@@ -392,11 +392,75 @@ bool SpecFile::load_from_cnf( std::istream &input )
     input.seekg( 0, ios::beg );
     
     const size_t size = static_cast<size_t>( 0 + eof_pos - orig_pos );
+    if( size < 512*4 )
+      throw runtime_error( "Too small to be CNF" );
     
     input.seekg( 0, ios::beg );
     
     // A buffer we will use to read textual information from the file into.
     char buff[65];
+    
+    // Currently (20231025) we locate information by looking for section IDs; however
+    //  we could use the listed offsets in the file header.  For development purposes,
+    //  we'll grab these listed offsets, and use some asserts to check they match what
+    //  we would otherwise get; we may upgrade things in the future.
+    uint32_t pars_offset = 0, sample_info_offset = 0;
+    uint32_t eff_offset = 0, channel_data_offset = 0, nuc_id_offset = 0;
+    
+    // Instead of starting at 0 + 112, we could look for section ID 0x00, but this looks
+    //  to always be the start of the file
+    for( size_t listing_pos = 112; listing_pos < 512; listing_pos += 48 )
+    {
+      if( !input.seekg( listing_pos, std::ios::beg ) )
+        throw runtime_error( "Error seeking" );
+      
+      uint32_t header_val;
+      read_binary_data( input, header_val );
+      
+      input.read( buff, 6 );// Advance 6 bytes
+      
+      uint32_t offset_val;
+      read_binary_data( input, offset_val );
+      
+      if( header_val == 0x0 )
+        break;
+      
+      switch( header_val )
+      {
+        case 0x00012000:  // Times, energy cal, number of channels
+          pars_offset = offset_val;
+          break;
+          
+        case 0x12001:     // Title and sample ID
+          sample_info_offset = offset_val;
+          break;
+          
+        case 0x00012002:  // Efficiencies
+          eff_offset = offset_val;
+          break;
+          
+        case 0x00012005: // Channel data
+          channel_data_offset = offset_val;
+          break;
+        
+        case 0x00012013: // Energy cal
+        case 0x0001200D:
+          // Havent explored at all yet
+          break;
+          
+        case 0x0001202C: //Nuclide ID
+          nuc_id_offset = offset_val;
+          break;
+          
+        case 0x12010:
+        case 0x12003:
+        case 0x12004:
+        default:
+          //cout << "Found unidentified header type "
+          //     << hex << header_val << " at offset " << hex << offset_val << endl;
+          break;
+      }//switch( header_val )
+    }//switch( header_val )
     
     // We will use "segment_search_start" to mark _where_ to start searching for a particular
     //  segment from.  We will pass this value to the lambda findCnfSegment(...) defined above to
@@ -412,6 +476,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
     {
+      assert( !sample_info_offset || (sample_info_offset == segment_position) );
+      
       input.seekg( segment_position + 32 + 16, std::ios::beg );
       input.read( buff, 64 );
       string title( buff, buff+64 );
@@ -430,6 +496,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
       throw runtime_error( "Couldnt find record data" );
     
     // segment_position will be a multiple of 512, ex 2048
+    assert( !pars_offset || (pars_offset == segment_position) );
     
     uint16_t w34, w36;
     if( !input.seekg( segment_position+34, std::ios::beg ) )
@@ -440,17 +507,20 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     const size_t num_channel_offset       = segment_position + 48 + 137;
     const size_t record_offset            = segment_position + w36 + 48 + 1;
+    const size_t energy_type_offset       = segment_position + 48 + 251;
     const size_t energy_calib_offset      = segment_position + w34 + 48 + 68;
-    const size_t mca_offset               = segment_position + w34 + 48 + 156;
+    const size_t fwhm_calib_offset        = segment_position + w34 + 48 + 220;
+    const size_t mca_type_offset          = segment_position + w34 + 48 + 156;
     const size_t instrument_offset        = segment_position + w34 + 48 + 1;
     const size_t generic_detector_offset  = segment_position + w34 + 48 + 732;
     const size_t specific_detector_offset = segment_position + w34 + 48 + 26;
     const size_t serial_num_offset        = segment_position + w34 + 48 + 940;
     
+    
     if( (record_offset+24) > size
        || (energy_calib_offset+12) > size
        || (num_channel_offset+4) > size
-       || (mca_offset+8) > size
+       || (mca_type_offset+8) > size
        || (instrument_offset+31) > size
        || (generic_detector_offset+8) > size
        || (specific_detector_offset+16) > size
@@ -494,10 +564,26 @@ bool SpecFile::load_from_cnf( std::istream &input )
     if( !input.seekg( energy_calib_offset, std::ios::beg ) )
       throw std::runtime_error( "Failed seek for energy calibration" );
     
-    vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f };
+    vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f, 0.0f };
     cal_coefs[0] = readCnfFloat( input );
     cal_coefs[1] = readCnfFloat( input );
     cal_coefs[2] = readCnfFloat( input );
+    cal_coefs[3] = readCnfFloat( input );
+    
+    
+    input.read( buff, 8 );// Advance 8 bytes
+    input.read( buff, 3 );
+    string energy_cal_units( buff, buff+3 );
+    trim( energy_cal_units );
+    assert( energy_cal_units.empty() || (energy_cal_units == "keV") || (energy_cal_units == "MeV") ); // but doesnt appear to matter?
+    
+    if( input.seekg(energy_type_offset, std::ios::beg) )
+    {
+      input.read( buff, 8 );
+      string cal_type( buff, buff+8 );
+      trim( cal_type );
+      assert( cal_type.empty() || (cal_type == "POLY") );
+    }//if( input.seekg( energy_type_offset, std::ios::beg ) )
     
     try
     {
@@ -547,7 +633,68 @@ bool SpecFile::load_from_cnf( std::istream &input )
         throw runtime_error( "Calibration parameters were invalid" );
     }//try /catch set calibration
     
-    input.seekg( mca_offset, std::ios::beg );
+    /*
+    // It seems like we can read FWHM and Eff info okay-ish, but since we dont
+    //  store anywhere, so we wont read in, atm.
+     
+    if( fwhm_calib_offset && input.seekg(fwhm_calib_offset, std::ios::beg) )
+    {
+      vector<float> fwhf_coefs( 4 );  //last two look to always be zero
+      for( size_t i = 0; i < 4; ++i )
+        fwhf_coefs[i] = readCnfFloat( input );
+      // FWHM = fwhf_coefs[0] + fwhf_coefs[1]*sqrt(energy)
+      // TODO: add to file somehow...
+    }//if( input.seekg(fwhm_calib_offset, std::ios::beg) )
+    
+    if( eff_offset && input.seekg(eff_offset, std::ios::beg) )
+    {
+      input.seekg( eff_offset + 0x30 + 0x2A, std::ios::beg );
+      input.read( buff, 16 );
+      string geom_id( buff, buff + 16 ); //'temp'
+      trim( geom_id );
+      
+      input.seekg( eff_offset + 0x30 + 0xCE, std::ios::beg );
+      input.read( buff, 32 );
+      string eff_type( buff, buff + 32 );// 'DUAL', 'INTERPOL'
+      trim( eff_type );
+      
+      input.seekg( eff_offset + 0x30 + 0x19F, std::ios::beg );
+      input.read( buff, 16 );
+      string name( buff, buff + 16 ); //'Gamma Efcal v2.1'
+      trim( name );
+      
+      size_t eff_par_offset = eff_offset + 48 + 250;
+      input.seekg( eff_par_offset, std::ios::beg );
+      
+      vector<float> eff_coefs( 6, 0.0f );
+      for( size_t i = 0; i < eff_coefs.size(); ++i )
+        eff_coefs[i] = readCnfFloat( input );
+     
+      if( eff_type == "DUAL" )
+      {
+        cout << "ln(Eff) = ";
+        for( size_t i = 0; i < eff_coefs.size(); ++i )
+          cout << (i ? " + " : "") << eff_coefs[i] << "*ln(E)^" << i;
+        cout << endl;
+      }else if( eff_type == "INTERPOL" )
+      {
+        // I dont know how to interpret these - but I think we should look for peaks and use those values...
+        cout << "INTERPOL Eff pars: ";
+        for( size_t i = 0; i < eff_coefs.size(); ++i )
+          cout << (i ? ", " : "") << eff_coefs[i];
+        cout << endl;
+      }else
+      {
+        //Empirical and Linear will probably get here, but I havent checked
+        cout << "Eff pars (type '" << eff_type << "'): ";
+        for( size_t i = 0; i < eff_coefs.size(); ++i )
+          cout << (i ? ", " : "") << eff_coefs[i];
+        cout << endl;
+      }
+    }//if( eff_offset )
+    */
+    
+    input.seekg( mca_type_offset, std::ios::beg );
     input.read( buff, 8 );
     
     string mca_type( buff, buff+8 );
@@ -584,7 +731,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //    trim( specific_detector );
     //    cerr << "specific_detector=" << specific_detector << endl;
     
-    //Serial number appeares to be all zeros
+    //Serial number appears to be all zeros
     //    input.seekg( serial_num_offset, std::ios::beg );
     //    input.read( buff, 12 );
     //    string serial_num( buff, buff+12 );
@@ -597,6 +744,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
     segment_search_start = 0;
     if( !findCnfSegment(0x5, segment_search_start, segment_position, input, size) )
       throw runtime_error( "Couldnt locate channel data portion of file" );
+    
+    assert( !channel_data_offset || (channel_data_offset == segment_position) );
     
     segment_position += 512;
     // NOTE: Previous to 20210315 I looked for a second 0x5 segment, and if found, used it.
