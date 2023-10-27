@@ -3655,12 +3655,28 @@ public:
           if( !use_remark_real_time )
             meas->real_time_ = real_time;
           
+          
+          // Symetrica detectors sometimes have a <sym:RealTimeDuration>, node under the <Spectrum>
+          //  node; it almost always agrees with the parent <RealTimeDuration> node, but notably
+          //  for derived data, it _may_ be either a little, or a lot different from the parent
+          //  <RealTimeDuration> node, and it looks like we should use <sym:RealTimeDuration> in
+          //  this case.
+          const rapidxml::xml_node<char> *sym_rt_node = XML_FIRST_NODE(spectrum_node, "sym:RealTimeDuration");
+          if( sym_rt_node )
+          {
+            const float sym_rt = time_duration_string_to_seconds( sym_rt_node->value(),
+                                                                    sym_rt_node->value_size() );
+            if( sym_rt > 0.0f )
+              meas->real_time_ = sym_rt;
+          }//if( symetrica real time node is under the spectrum node )
+          
           //RealTime shouldnt be under Spectrum node (should be under RadMeasurement)
           //  but some files mess this up, so check for real time under the spectrum
           //  node if we dont have the real time yet
-          if(  meas->real_time_ <= 0.0f )
+          if(  (meas->real_time_ <= 0.0f) || (meas->real_time_ > meas->live_time_) )
           {
             const rapidxml::xml_node<char> *real_time_node = XML_FIRST_NODE(spectrum_node, "RealTimeDuration");
+            
             if( !real_time_node )
               real_time_node = XML_FIRST_NODE(spectrum_node, "RealTime");
             if( real_time_node )
