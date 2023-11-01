@@ -117,10 +117,10 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   // spectrum plot which might be another 6-7KB, but I have not seen any real
   // world files including a thumbnail.
   //
-  // Taken together, 80KB should be sufficient to load a RadiaCode file,
-  //  but we'll be a little loose with things, jic
+  // We'll require the file to be at least 5 kb, but smaller than 10 MB, although
+  //  a couple MB would probably be plenty.
 
-  if( (file_size < (5*1024)) || (file_size > (160*1024)) )
+  if( (file_size < (5*1024)) || (file_size > (10*1024*1024)) )
     return false;
 
   string filedata;
@@ -130,7 +130,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   filedata[file_size] = 0;  // jic.
 
   // Look for some distinctive strings early in the file
-  // If they exist, this is probably a RadiaCode file.
+  // If they exist, this is probably a RadiaCode or BecqMoni file.
   const size_t signature_max_offset = 512;
   const string::size_type fmtver_pos = filedata.find("<FormatVersion>");
   if( (fmtver_pos == string::npos) || (fmtver_pos > signature_max_offset) )
@@ -140,11 +140,11 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   if( (dcr_pos == string::npos) || (dcr_pos > signature_max_offset) )
     return false;
 
-  const string::size_type device_model_pos = filedata.find("RadiaCode-");
-  if( (device_model_pos == string::npos) || (device_model_pos > signature_max_offset) )
+  const string::size_type energy_spectrum_pos = filedata.find("<EnergySpectrum");
+  if( energy_spectrum_pos == string::npos )
     return false;
 
-  if( device_model_pos < dcr_pos )
+  if( energy_spectrum_pos < dcr_pos )
     return false;
 
   try
@@ -154,7 +154,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
 
 
     /*
-     The RadiaCode XML format has no published specification. In the example
+     The BecqMoni/RadiaCode XML format has no published specification. In the example
      below, fixed values such as "120920" or "2" which do not appear to change
      between data files are included verbatim; actual varying quantities are
      indicated by their type, such as (float), (integer), or (string).
@@ -387,9 +387,16 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       }
     }//if( background_node )
     
-    instrument_type_ = "Spectroscopic Personal Radiation Detector";
-    manufacturer_ = "Scan-Electronics";
-    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    
+    if( icontains( instrument_model_, "RadiaCode-" ) )
+    {
+      instrument_type_ = "Spectroscopic Personal Radiation Detector";
+      manufacturer_ = "Scan-Electronics";
+      detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    }else
+    {
+      // File probably made with BecqMoni
+    }
     
     cleanup_after_load();
   }catch( std::exception & )
