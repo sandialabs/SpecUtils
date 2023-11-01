@@ -364,15 +364,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         vector<string> channelstrs;
         split( channelstrs, line, " \t," );
         
-        unsigned int firstchannel = 0, lastchannel = 0;
+        int firstchannel = 0, lastchannel = 0;
         if( channelstrs.size() == 2 )
         {
-          try
+          if( !parse_int(channelstrs[0].c_str(), channelstrs[0].size(), firstchannel)
+              || !parse_int(channelstrs[1].c_str(), channelstrs[1].size(), lastchannel) )
           {
-            firstchannel = atol( channelstrs[0].c_str() );
-            lastchannel = atol( channelstrs[1].c_str() );
-          }catch(...)
-          {
+            firstchannel = lastchannel = 0;
           }
         }else
         {
@@ -382,11 +380,14 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         
         double sum = 0.0;
         std::shared_ptr< vector<float> > channel_data( new vector<float>() );
-        if( firstchannel < lastchannel )
-          channel_data->reserve( lastchannel - firstchannel + 1 );
+        if( (firstchannel < lastchannel)
+           && (firstchannel >= 0)
+           && ((lastchannel - firstchannel) < (65536 + 2)) )
+        {
+          channel_data->reserve( static_cast<size_t>(lastchannel - firstchannel) + 1 );
+        }
         
-        //XXX - for some reason I think this next test condition is a little
-        //      fragile...
+        //TODO: for some reason I think this next test condition is a little fragile...
         int num_cd_error = 0, num_cd_error_current = 0;
         while( SpecUtils::safe_get_line( istr, line ) )
         {
@@ -474,7 +475,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         {
           //Nominally formated like: "mm/dd/yyyy hh:mm:ss" (ex "02/29/2016 14:31:47")
           //  which time_from_string should get right...
-          meas->start_time_ = time_from_string( line.c_str() );
+          meas->start_time_ = time_from_string( line, DateParseEndianType::MiddleEndianFirst );
         }catch(...)
         {
           parse_warnings_.emplace_back( "Unable to convert date/time '" + line +
@@ -808,7 +809,13 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               vector<float> parts;
               SpecUtils::split_to_floats( line.c_str(), line.size(), parts );
               if( parts.size() == 2 )
-                bin_to_energy.push_back( make_pair(static_cast<int>(parts[0]),parts[1]) );
+              {
+                // Only add this point if the channel and energy are reasonable.
+                const int bin = float_to_integral<int>(parts[0]);
+                const float energy = parts[1];
+                if( (bin >= 0) && (bin < 131072) && (energy >= 0.0f) && (energy < 3000000.0f) )
+                  bin_to_energy.emplace_back( bin, parts[1] );
+              }
             }
           }//while( SpecUtils::safe_get_line( istr, line ) )
         }//if( file says how many entries to expect )
@@ -1058,10 +1065,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           continue;
         
         int numresults = 0;
-        if( !toInt(analines[0], numresults) || numresults <= 0 )
+        if( !toInt(analines[0], numresults) || (numresults <= 0) )
           continue;
         
-        if( (analines.size()-1) != numresults*4 )
+        if( (analines.size()-1) != (4*static_cast<size_t>(numresults)) )
         {
           string remark;
           for( size_t i = 0; i < analines.size(); ++i )

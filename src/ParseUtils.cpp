@@ -147,6 +147,9 @@ void expand_counted_zeros( const vector<float> &data, vector<float> &return_answ
       if( (*iter) <= 0.5f )
         throw runtime_error( "Invalid counted zeros: less than one number of zeros" );
       
+      if( (*iter) > 65537.0f )
+        throw runtime_error( "Invalid counted zeros: too large number of zeros" );
+      
       const size_t nZeroes = ((iter==data.end()) ? 0u : static_cast<size_t>(floor(*iter + 0.5f)) );
       
       if( (answer.size() + nZeroes) > 131072 )

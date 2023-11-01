@@ -1338,6 +1338,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_UnknownDetectorStr           = "Unknown";
   static const string sm_MicroDetectiveDetectorStr    = "MicroDetective";
   static const string sm_MicroRaiderDetectorStr       = "MicroRaider";
+  static const string sm_RadiaCodeDetectorStr         = "RadiaCode-102";
   static const string sm_InterceptorStr               = "Interceptor";
   static const string sm_Sam940DetectorStr            = "SAM940";
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
@@ -1363,7 +1364,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
-//  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger
+//  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger, RadiaCode-102
 //  MicroDetective, FieldSpec, IdentiFINDER-NG, SAM-935, NaI 3x3, SAM-Eagle-LaBr3
 
   switch( type )
@@ -1405,6 +1406,8 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_MicroDetectiveDetectorStr;
     case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
+    case DetectorType::RadiaCode:
+      return sm_RadiaCodeDetectorStr;
     case DetectorType::Interceptor:
       return sm_InterceptorStr;
     case DetectorType::Sam940:
@@ -3026,11 +3029,11 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   }
    */
 
-  if( lhs.detector_description_ != rhs.detector_description_
+  if( trim_copy(lhs.detector_description_) != trim_copy(rhs.detector_description_)
      && rhs.detector_description_!="Gamma and Neutron"
-     && ("NaI, " + lhs.detector_description_) != rhs.detector_description_
-     && ("LaBr3, " + lhs.detector_description_) != rhs.detector_description_
-     && ("unknown, " + lhs.detector_description_) != rhs.detector_description_
+     && ("NaI, " + trim_copy(lhs.detector_description_)) != trim_copy(rhs.detector_description_)
+     && ("LaBr3, " + trim_copy(lhs.detector_description_)) != trim_copy(rhs.detector_description_)
+     && ("unknown, " + trim_copy(lhs.detector_description_)) != trim_copy(rhs.detector_description_)
      )
   {
     //static std::atomic<int> ntimesprint(0);
@@ -3315,8 +3318,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     }//for( size_t i = 0; i < lhs.neutron_counts_.size(); ++i )
   }//if( lhs.neutron_counts_.size() != rhs.neutron_counts_.size() ) / else
   
-
-  if( lhs.title_ != rhs.title_ )
+  if( trim_copy(lhs.title_) != trim_copy(rhs.title_) )
     issues.push_back( "Measurement: Title for LHS ('" + lhs.title_
                         + "') doesnt match RHS ('" + rhs.title_ + "')" );
   
@@ -4339,6 +4341,10 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_json_file( filename );
     break;
       
+    case ParserType::RadiaCode:
+      success = load_radiacode_file( filename );
+    break;
+
     case ParserType::Auto:
     {
       bool triedPcf = false, triedSpc = false,
@@ -4348,8 +4354,11 @@ bool SpecFile::load_file( const std::string &filename,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
           triedLzs = false, triedXmlScanData = false, triedJson = false,
-          tried_gxml = false;
+          tried_gxml = false, triedRadiaCode = false;
       
+      if( orig_file_ending.empty() )
+	    orig_file_ending = filename;
+
       if( !orig_file_ending.empty() )
       {
         const size_t period_pos = orig_file_ending.find_last_of( '.' );
@@ -4494,6 +4503,14 @@ bool SpecFile::load_file( const std::string &filename,
         }//if( orig_file_ending=="xml" )
 
 
+        if( orig_file_ending=="xml" || orig_file_ending=="rco")
+        {
+          triedRadiaCode = true;
+          success = load_radiacode_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending=="xml" || orig_file_ending=="rco")
+
+
         if (orig_file_ending == "json")
         {
           triedJson = true;
@@ -4571,12 +4588,15 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedXmlScanData )
         success = load_xml_scan_data_file( filename );
       
-      if (!success && !triedJson)
-        success = load_json_file(filename);
+      if( !success && !triedJson )
+        success = load_json_file( filename );
 
-      if (!success && !tried_gxml)
-        success = load_caen_gxml_file(filename);
-       
+      if( !success && !tried_gxml )
+        success = load_caen_gxml_file( filename );
+      
+      if( !success && !triedRadiaCode )
+        success = load_radiacode_file( filename );
+      
        break;
     }//case Auto
   };//switch( parser_type )
@@ -5334,7 +5354,9 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
          && meas->live_time() > 0.00000001
          && meas->real_time() > 0.00000001
          && !meas->derived_data_properties()  //make sure not derived data
-         && meas->real_time() < 15.0 )  //20181108: some search systems will take one spectra every like ~10 seconds
+         && ((meas->real_time() < 15.0)   //20181108: some search systems will take one spectra every like ~10 seconds
+             || ((detector_type_ == SpecUtils::DetectorType::RadiaCode) // Radiacode detectors can take like 30 second spectra
+                 && (meas->real_time() < 125.0)) ) )
       {
         ++pt_num_items;
         pt_averageRealTime += meas->real_time_;
@@ -6478,6 +6500,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
        && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
        && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
+       && !(manufacturer_=="Scan-Electronics" && instrument_model_=="RadiaCode-102")
        && !(manufacturer_=="Unknown" && instrument_model_=="Unknown")
        && !icontains( manufacturer_, "RIDs R Us")
        && !icontains( manufacturer_, "SRPMs R Us")

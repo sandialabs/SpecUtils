@@ -262,7 +262,10 @@ namespace SerialToDetectorModel
       uint32_t val = 0;
       try
       {
-        val = stoul( strval, nullptr, 10 );
+        unsigned long tmp_val = stoul( strval, nullptr, 10 );
+        //I guess we'll truncate, although we shouldnt actually get this, given the known
+        //  length of these serial numbers
+        val = static_cast<uint32_t>( tmp_val );
         if( strval.size() >= 2 && val < 100 )
           continue;
       }catch(...)

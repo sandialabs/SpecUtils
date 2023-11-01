@@ -345,6 +345,7 @@ namespace
         case SpecUtils::ParserType::SPMDailyFile: type = "SpectroscopicPortalMonitor"; break;
         case SpecUtils::ParserType::AmptekMca: type = "Amptek MCA"; break;
         case SpecUtils::ParserType::MicroRaider: type = "Micro Raider"; break;
+        case SpecUtils::ParserType::RadiaCode: type = "RadiaCode"; break;
         case SpecUtils::ParserType::Aram: type = "Aram"; break;
         case SpecUtils::ParserType::OrtecListMode: type = "Ortec Listmode"; break;
         case SpecUtils::ParserType::LsrmSpe: type = "LSRM"; break;
@@ -978,6 +979,7 @@ BOOST_PYTHON_MODULE(SpecUtils)
   .value( "SPMDailyFile", SpecUtils::ParserType::SPMDailyFile )
   .value( "AmptekMca", SpecUtils::ParserType::AmptekMca )
   .value( "MicroRaider", SpecUtils::ParserType::MicroRaider )
+  .value( "RadiaCode", SpecUtils::ParserType::RadiaCode )
   .value( "OrtecListMode", SpecUtils::ParserType::OrtecListMode )
   .value( "LsrmSpe", SpecUtils::ParserType::LsrmSpe )
   .value( "Tka", SpecUtils::ParserType::Tka )
@@ -1010,6 +1012,7 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .value( "Falcon5000", SpecUtils::DetectorType::Falcon5000 )
   .value( "MicroDetective", SpecUtils::DetectorType::MicroDetective )
   .value( "MicroRaider", SpecUtils::DetectorType::MicroRaider )
+  .value( "RadiaCode", SpecUtils::DetectorType::RadiaCode )
   .value( "Interceptor", SpecUtils::DetectorType::Interceptor )
   .value( "RadHunterNaI", SpecUtils::DetectorType::RadHunterNaI )
   .value( "RadHunterLaBr3", SpecUtils::DetectorType::RadHunterLaBr3 )

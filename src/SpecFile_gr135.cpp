@@ -817,7 +817,7 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
       
       //Lets write to a buffer before writing to the stream to make things a
       //  little easier in terms of keeping track of position.
-      char buffer[561];
+      uint8_t buffer[561];
       memset( buffer, 0, sizeof(buffer) );
       
       memcpy( buffer + 0, "ZZZZ", 4 );
@@ -841,9 +841,9 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
           const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
           const unsigned day = static_cast<unsigned>( t_ymd.day() );
           const unsigned month = static_cast<unsigned>( t_ymd.month() );
-          const int hour = time_of_day.hours().count();
-          const int mins = time_of_day.minutes().count();
-          const int secs = time_of_day.seconds().count();
+          const int hour = static_cast<int>( time_of_day.hours().count() );
+          const int mins = static_cast<int>( time_of_day.minutes().count() );
+          const int secs = static_cast<int>( time_of_day.seconds().count() );
         
           buffer[7] = static_cast<uint8_t>(year);
           buffer[8] = static_cast<uint8_t>(month);
@@ -914,7 +914,7 @@ bool SpecFile::write_binary_exploranium_gr130v0( std::ostream &output ) const
       
       buffer[559] = 0; //CHSUM    check sum
       
-      output.write( buffer, 560 );
+      output.write( (const char *)buffer, 560 );
       
       ++nwrote;
     }//for( size_t measn = 0; measn < nmeas; ++measn )
@@ -975,7 +975,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       //Lets write to a buffer before writing to the stream to make things a
       //  little easier in terms of keeping track of position.
-      char buffer[76+2*noutchannel] = { '\0' };
+      uint8_t buffer[76+2*noutchannel] = { '\0' };
       memset( buffer, 0, sizeof(buffer) );
       
       memcpy( buffer + 0, "ZZZZ", 4 );
@@ -1002,9 +1002,9 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
           const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
           const unsigned day = static_cast<unsigned>( t_ymd.day() );
           const unsigned month = static_cast<unsigned>( t_ymd.month() );
-          const int hour = time_of_day.hours().count();
-          const int mins = time_of_day.minutes().count();
-          const int secs = time_of_day.seconds().count();
+          const int hour = static_cast<int>( time_of_day.hours().count() );
+          const int mins = static_cast<int>( time_of_day.minutes().count() );
+          const int secs = static_cast<int>( time_of_day.seconds().count() );
           
           buffer[13] = static_cast<uint8_t>(year - 2000);
           buffer[14] = static_cast<uint8_t>(month);
@@ -1020,7 +1020,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       memcpy( buffer + 19, &noutchannel, sizeof(noutchannel) );
       
-      double rt_f = std::round( 1000 * meas.real_time_ );
+      double rt_f = std::round( 1000 * std::max(meas.real_time_, 0.0f) );
       rt_f = std::min( rt_f, static_cast<double>(std::numeric_limits<uint32_t>::max()) );
       
       const uint32_t real_time_thousanths = static_cast<uint32_t>( rt_f );
@@ -1104,7 +1104,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       //2*nch+76  unsigned char    CHSUM    check sum
       
-      output.write( buffer, 76+2*noutchannel );
+      output.write( (const char *)buffer, 76+2*noutchannel );
       
       ++nwrote;
     }//for( size_t measn = 0; measn < nmeas; ++measn )

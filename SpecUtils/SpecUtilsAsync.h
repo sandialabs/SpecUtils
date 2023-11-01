@@ -33,17 +33,16 @@
 #include <functional>
 #include <condition_variable>
 
-
-#if( __APPLE__ && __clang__ )
+#if( SpecUtils_USING_NO_THREADING )
+  #define ThreadPool_USING_SERIAL 1
+#elif( SpecUtils_USE_WT_THREADPOOL )
+  #define ThreadPool_USING_WT 1
+#elif( __APPLE__ && __clang__ )
   //On apple systems, when we use Apples compilers, we can use Grand Central
   //  Dispatch (GCD) to power the queue.
   //  ToDo: Would !defined(__GNUC__) be better than __clang__ ?
   #include <dispatch/dispatch.h>
   #define ThreadPool_USING_GCD 1
-#elif( SpecUtils_USE_WT_THREADPOOL )
-  #define ThreadPool_USING_WT 1
-#elif( SpecUtils_USING_NO_THREADING )
-  #define ThreadPool_USING_SERIAL 1
 #else
   #define ThreadPool_USING_THREADS 1
   #if( __APPLE__ )

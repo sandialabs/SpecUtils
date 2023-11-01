@@ -314,7 +314,7 @@ namespace  SpecUtils
   bool split_to_floats( const char *input, const size_t length,
                        std::vector<float> &results );
   
-  /* \brief A convienience function. */
+  /* \brief A convenience function. */
   bool split_to_floats( const std::string &input, std::vector<float> &results );
   
   

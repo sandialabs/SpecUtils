@@ -1628,9 +1628,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
         const char * const title_start = spectrum_title.c_str();
         const char * const title_end = title_start + spectrum_title.size();
         
-        const std::locale &loc = std::locale();
-        const auto char_iequal = [&loc](char ch1, char ch2) -> bool {
-          return std::toupper(ch1, loc) == std::toupper(ch2, loc);
+        const auto char_iequal = [](char ch1, char ch2) -> bool {
+          return std::toupper( (int)ch1 ) == std::toupper( (int)ch2 );
         };
         
         const char *occ_str = "OCC=";
@@ -1650,7 +1649,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
           occ_pos += occ_str_len;
           
           // Skip any whitespace
-          while( (occ_pos != title_end) && std::isspace(*occ_pos, loc) )
+          while( (occ_pos != title_end) && std::isspace( (int) *occ_pos ) )
             ++occ_pos;
           
           // To avoid allocating a string, and not making an override of istarts_with (like I

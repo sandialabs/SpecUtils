@@ -160,6 +160,8 @@ enum class ParserType : int
   AmptekMca,
   /** Microraider XML based format. */
   MicroRaider,
+  /**  RadiaCode XML format. */
+  RadiaCode,
   /** ORTEC list mode (.lis) from at least digiBASE(-E) detectors. */
   OrtecListMode,
   /** LSRM text based format. */
@@ -320,6 +322,8 @@ enum class DetectorType : int
   Falcon5000,
   MicroDetective,
   MicroRaider,
+  /** Scan-Electronics RadiaCode-10x detector with CsI(Tl) scintillator */
+  RadiaCode,
   Interceptor,
   RadHunterNaI,
   RadHunterLaBr3,
@@ -1678,6 +1682,7 @@ public:
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
+  bool load_radiacode_file( const std::string &filename );
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
   bool load_caen_gxml_file(const std::string& filename);
@@ -1770,6 +1775,14 @@ public:
    */
   bool load_from_lzs( std::istream &input );
   
+  /** Load from radiacode XML file format.
+   As of 20230905, only tested with 1024 channel RC-102, android app 1.40.00 - 1.42.00
+   */
+  bool load_from_radiacode( std::istream &input );
+  
+  /** Loads from radiacode "spectrogram"  file format. */
+  bool load_from_radiacode_spectrogram( std::istream& input );
+
   /** Load from a one-off scan data xml format.
    */
   bool load_from_xml_scan_data( std::istream &input );

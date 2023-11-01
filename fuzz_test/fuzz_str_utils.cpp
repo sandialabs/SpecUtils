@@ -27,13 +27,15 @@
 
 #include <random>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
-
+#include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/Filesystem.h"
-#include "SpecUtils/DateTime.h"
-
+#if( SpecUtils_ENABLE_D3_CHART )
+#include "SpecUtils/D3SpectrumExport.h"
+#else
+static_assert( 0, "You should enable SpecUtils_ENABLE_D3_CHART" );
+#endif
 
 using namespace std;
 
@@ -694,6 +696,21 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   //std::istream &read_binary_data( std::istream &input, T &val );
   //size_t write_binary_data( std::ostream &input, const T &val );
   
+  #if( SpecUtils_ENABLE_D3_CHART )
+  {
+    D3SpectrumExport::escape_text_test( datastr );
+
+    char buf[4];
+    for( const char *c = datastr.c_str(); *c; ) 
+    {
+      char *b = buf;
+      D3SpectrumExport::copy_check_utf8_test(c, b);
+    }
+
+    std::stringstream outstrm;
+    D3SpectrumExport::sanitize_unicode_test( outstrm, datastr );
+  }
+  #endif
   
   return 0;
 }//LLVMFuzzerTestOneInput

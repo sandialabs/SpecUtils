@@ -3405,19 +3405,34 @@ namespace rapidxml
                          || ( ((text+3) < text_end) && whitespace_pred::test(*(text+1)) && ((*(text+2)) == Ch('/')) ) )
                         goto after_data_node;
                       
-                      // This is an opening tag, so we will return (up a few funtion levels to
+                      // This is an opening tag, so we will return (up a few function levels to
                       //  `parse`, which will then continue trying to parse `node`'s siblings,
                       //  or if no more are left, close-out its parent.
                     }//if( !found_in_parent )
                     
-                    // If we are here, we will assume one of two things happened:
-                    //   1) A closing tag was left out, since the closing tag name matches a
-                    //      parent; we'll leave the position at begining of this poorly placed
+                    // If we are here, a few things could have happened:
+                    //   1) A closing tag was left out, if the closing tag name matches a
+                    //      parent; we'll leave the position at beginning of this poorly placed
                     //      closing tag, and return, so the eventual parent can be properly
                     //      closed out.
-                    //   2) We skipped along until the next opening tag, that we will asume is
-                    //      a sibling to `node`.
-                    return;
+                    //   2) A closing tag with no name was used; we'll assume it closes our
+                    //      current tag.
+                    //   3) A totally erroneous closing tag was inserted; its unclear how to
+                    //      proceed; should we close current tag and assume next one is a sibling,
+                    //      or should we assume next one is a descendant - we'll do the later.
+                    
+                    // If closing a parent tag, return so we close everything out
+                    if( found_in_parent || ((text+2) >= text_end) )
+                      return;
+                    
+                    // If an erroneous tag name, we'll ignore it, and keep trying to parse things
+                    if( closing_name_len )
+                    {
+                      next_char = *text;
+                      goto after_data_node;
+                    }
+                    
+                    // If no tag name, we will continue and parse and close this tag
                   }//if( closing tag name doesnt match opening tag name )
                 }//if( sloppy )
                 

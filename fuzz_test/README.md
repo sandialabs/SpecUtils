@@ -11,9 +11,15 @@ unset CMAKE_OSX_DEPLOYMENT_TARGET
 # Since Big Sur v11.1, we need to fix up the LIBRARY_PATH variable
 export LIBRARY_PATH="$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"  
 
-cmake -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" -DCMAKE_PREFIX_PATH="/usr/local/opt/llvm;/path/to/compiled/boost/" -DCMAKE_CXX_COMPILER="/usr/local/opt/llvm/bin/clang++" -DCMAKE_C_COMPILER="/usr/local/opt/llvm/bin/clang" -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/usr/local/opt/llvm/include/c++/v1" -DSpecUtils_BUILD_FUZZING_TESTS=ON ..
+export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"       #maybe not necassary
+export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"  #maybe not necassary
 
-cmake --build . --config RelWithDebInfo -j16
+cd /path/to/SpecUtils
+mkdir build_fuzz
+
+cmake -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm;/path/to/compiled/boost/" -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/opt/homebrew/opt/llvm/include/c++/v1" -DSpecUtils_BUILD_FUZZING_TESTS=ON ..
+
+cmake --build . --config RelWithDebInfo -j8
 ```
 
 You then need to create a `CORPUS_DIR` that contains a wide variety of sample spectrum files.  
