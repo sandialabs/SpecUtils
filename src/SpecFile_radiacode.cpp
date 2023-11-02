@@ -219,7 +219,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
     // We will first define a lambda to parse the <EnergySpectrum> and <BackgroundEnergySpectrum>
     //  elements, as they share a lot of the same stuff (we have to use a lambda since we fill out
     //  protected members of Measurement, so we cant use an anonymous function).
-    const auto parse_meas = []( const rapidxml::xml_node<char> * const spectrum_node ) -> shared_ptr<Measurement> {
+    const auto parse_meas = []( const rapidxml::xml_node<char> * const spectrum_node, const bool is_radiacode ) -> shared_ptr<Measurement> {
       shared_ptr<Measurement> meas = make_shared<Measurement>();
       
       const rapidxml::xml_node<char> * const real_time_node = XML_FIRST_INODE( spectrum_node, "MeasurementTime" );
@@ -311,17 +311,22 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       meas->contained_neutron_ = false;
       
       // Make up for estimated dead-time
-      meas->live_time_ = estimate_radiacode102_live_time( meas->real_time_, meas->gamma_count_sum_ );
-      // If this correction makes a difference, warn users that it may not be super great,
-      //  since I didnt extensively check how applicable the estimate is.
-      if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
-        meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
-                                            " to correct spectrum live-time." );
+      if( is_radiacode )
+      {
+        meas->live_time_ = estimate_radiacode102_live_time( meas->real_time_, meas->gamma_count_sum_ );
+        // If this correction makes a difference, warn users that it may not be super great,
+        //  since I didnt extensively check how applicable the estimate is.
+        if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
+          meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
+                                          " to correct spectrum live-time." );
+      }//if( icontains( instrument_model_, "RadiaCode-" ) )
       
       return meas;
     };// const auto parse_meas lambda
     
 
+    bool is_radiacode = false;
+    
     // Drill down to the <ResultData> node
     const rapidxml::xml_node<char> * const base_node = XML_FIRST_INODE( &doc, "ResultDataFile" );
     if( !base_node )
@@ -331,62 +336,64 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
     if( !data_list_node )
       throw runtime_error( "Missing ResultDataList node." );
     
-    const rapidxml::xml_node<char>* n_root = XML_FIRST_INODE( data_list_node, "ResultData" );
-    if (!n_root)
-      throw runtime_error("unable to find ResultData");
-
-    const rapidxml::xml_node<char> * const config_node = XML_FIRST_INODE( n_root, "DeviceConfigReference" );
-    if( config_node )
+    XML_FOREACH_CHILD( n_root, data_list_node, "ResultData" )
     {
-      const rapidxml::xml_node<char> * const name_node = XML_FIRST_INODE( config_node, "Name" );
-      instrument_model_ = xml_value_str( name_node );
-    }//if( config_node )
-    
-    const rapidxml::xml_node<char> * const foreground_node = XML_FIRST_INODE( n_root, "EnergySpectrum" );
-    if( !foreground_node )
-      throw runtime_error( "No EnergySpectrum node." );
-    
-    if( XML_NEXT_TWIN(foreground_node) )
-      throw runtime_error("File contains more than one EnergySpectrum");
-    
-    const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
-    instrument_id_ = xml_value_str( serial_num_node );
-    
-    //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
-    //if( version_node && (xml_value_str(version_node) != "120920") )
-    //  parse_warnings_.push_back( "This version of radiacode XML file not tested." );
-    
-    // Now actually parse the foreground <EnergySpectrum> node.
-    shared_ptr<Measurement> fg_meas = parse_meas( foreground_node );
-    assert( fg_meas && (fg_meas->num_gamma_channels() >= 16) );
-    
-    fg_meas->source_type_ = SourceType::Foreground;
-     
-    measurements_.push_back( fg_meas );
-    
-    // Check for and try to parse background spectrum.
-    const rapidxml::xml_node<char> * const background_node = XML_FIRST_INODE( n_root, "BackgroundEnergySpectrum" );
-    if( background_node )
-    {
-      try
+      const rapidxml::xml_node<char> * const config_node = XML_FIRST_INODE( n_root, "DeviceConfigReference" );
+      if( config_node )
       {
-        shared_ptr<Measurement> bg_meas = parse_meas( background_node );
-        assert( bg_meas && (bg_meas->num_gamma_channels() >= 16) );
-        
-        bg_meas->source_type_ = SourceType::Background;
-        if( !bg_meas->energy_calibration_ || !bg_meas->energy_calibration_->valid() )
+        const rapidxml::xml_node<char> * const name_node = XML_FIRST_INODE( config_node, "Name" );
+        if( name_node && name_node->value_size() )
+          instrument_model_ = xml_value_str( name_node );
+      }//if( config_node )
+      
+      const rapidxml::xml_node<char> * const foreground_node = XML_FIRST_INODE( n_root, "EnergySpectrum" );
+      if( !foreground_node )
+        throw runtime_error( "No EnergySpectrum node." );
+      
+      if( XML_NEXT_TWIN(foreground_node) )
+        throw runtime_error("File contains more than one EnergySpectrum");
+      
+      const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
+      if( serial_num_node && serial_num_node->value_size() )
+        instrument_id_ = xml_value_str( serial_num_node );
+      
+      //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
+      //if( version_node && (xml_value_str(version_node) != "120920") )
+      //  parse_warnings_.push_back( "This version of radiacode XML file not tested." );
+      
+      is_radiacode = (is_radiacode || icontains(instrument_model_, "RadiaCode-") );
+      
+      // Now actually parse the foreground <EnergySpectrum> node.
+      shared_ptr<Measurement> fg_meas = parse_meas( foreground_node, is_radiacode );
+      assert( fg_meas && (fg_meas->num_gamma_channels() >= 16) );
+      
+      fg_meas->source_type_ = SourceType::Foreground;
+      
+      measurements_.push_back( fg_meas );
+      
+      // Check for and try to parse background spectrum.
+      const rapidxml::xml_node<char> * const background_node = XML_FIRST_INODE( n_root, "BackgroundEnergySpectrum" );
+      if( background_node )
+      {
+        try
         {
-          if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
-            bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
+          shared_ptr<Measurement> bg_meas = parse_meas( background_node, is_radiacode );
+          assert( bg_meas && (bg_meas->num_gamma_channels() >= 16) );
+          
+          bg_meas->source_type_ = SourceType::Background;
+          if( !bg_meas->energy_calibration_ || !bg_meas->energy_calibration_->valid() )
+          {
+            if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
+              bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
+          }
+          
+          measurements_.push_back( bg_meas );
+        }catch( std::exception &e )
+        {
+          parse_warnings_.push_back( "Failed to parse background spectrum in file: " + string(e.what()) );
         }
-        
-        measurements_.push_back( bg_meas );
-      }catch( std::exception &e )
-      {
-        parse_warnings_.push_back( "Failed to parse background spectrum in file: " + string(e.what()) );
-      }
-    }//if( background_node )
-    
+      }//if( background_node )
+    }//XML_FOREACH_CHILD( n_root, data_list_node, "ResultData" )
     
     if( icontains( instrument_model_, "RadiaCode-" ) )
     {
