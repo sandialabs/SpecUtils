@@ -137,7 +137,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
     return false;
 
   const string::size_type dcr_pos = filedata.find("<DeviceConfigReference>");
-  if( (dcr_pos == string::npos) || (dcr_pos > signature_max_offset) )
+  if( dcr_pos == string::npos )
     return false;
 
   const string::size_type energy_spectrum_pos = filedata.find("<EnergySpectrum");
