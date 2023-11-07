@@ -160,7 +160,7 @@ enum class ParserType : int
   AmptekMca,
   /** Microraider XML based format. */
   MicroRaider,
-  /**  RadiaCode XML format. */
+  /**  RadiaCode/BecqMoni XML format. */
   RadiaCode,
   /** ORTEC list mode (.lis) from at least digiBASE(-E) detectors. */
   OrtecListMode,
@@ -1775,7 +1775,7 @@ public:
    */
   bool load_from_lzs( std::istream &input );
   
-  /** Load from radiacode XML file format.
+  /** Load from BecqMoni/Radiacode XML file format.
    As of 20230905, only tested with 1024 channel RC-102, android app 1.40.00 - 1.42.00
    */
   bool load_from_radiacode( std::istream &input );

@@ -117,10 +117,10 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   // spectrum plot which might be another 6-7KB, but I have not seen any real
   // world files including a thumbnail.
   //
-  // Taken together, 80KB should be sufficient to load a RadiaCode file,
-  //  but we'll be a little loose with things, jic
+  // We'll require the file to be at least 5 kb, but smaller than 10 MB, although
+  //  a couple MB would probably be plenty.
 
-  if( (file_size < (5*1024)) || (file_size > (160*1024)) )
+  if( (file_size < (5*1024)) || (file_size > (10*1024*1024)) )
     return false;
 
   string filedata;
@@ -130,21 +130,21 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
   filedata[file_size] = 0;  // jic.
 
   // Look for some distinctive strings early in the file
-  // If they exist, this is probably a RadiaCode file.
+  // If they exist, this is probably a RadiaCode or BecqMoni file.
   const size_t signature_max_offset = 512;
   const string::size_type fmtver_pos = filedata.find("<FormatVersion>");
   if( (fmtver_pos == string::npos) || (fmtver_pos > signature_max_offset) )
     return false;
 
   const string::size_type dcr_pos = filedata.find("<DeviceConfigReference>");
-  if( (dcr_pos == string::npos) || (dcr_pos > signature_max_offset) )
+  if( dcr_pos == string::npos )
     return false;
 
-  const string::size_type device_model_pos = filedata.find("RadiaCode-");
-  if( (device_model_pos == string::npos) || (device_model_pos > signature_max_offset) )
+  const string::size_type energy_spectrum_pos = filedata.find("<EnergySpectrum");
+  if( energy_spectrum_pos == string::npos )
     return false;
 
-  if( device_model_pos < dcr_pos )
+  if( energy_spectrum_pos < dcr_pos )
     return false;
 
   try
@@ -154,7 +154,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
 
 
     /*
-     The RadiaCode XML format has no published specification. In the example
+     The BecqMoni/RadiaCode XML format has no published specification. In the example
      below, fixed values such as "120920" or "2" which do not appear to change
      between data files are included verbatim; actual varying quantities are
      indicated by their type, such as (float), (integer), or (string).
@@ -219,7 +219,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
     // We will first define a lambda to parse the <EnergySpectrum> and <BackgroundEnergySpectrum>
     //  elements, as they share a lot of the same stuff (we have to use a lambda since we fill out
     //  protected members of Measurement, so we cant use an anonymous function).
-    const auto parse_meas = []( const rapidxml::xml_node<char> * const spectrum_node ) -> shared_ptr<Measurement> {
+    const auto parse_meas = []( const rapidxml::xml_node<char> * const spectrum_node, const bool is_radiacode ) -> shared_ptr<Measurement> {
       shared_ptr<Measurement> meas = make_shared<Measurement>();
       
       const rapidxml::xml_node<char> * const real_time_node = XML_FIRST_INODE( spectrum_node, "MeasurementTime" );
@@ -311,17 +311,22 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       meas->contained_neutron_ = false;
       
       // Make up for estimated dead-time
-      meas->live_time_ = estimate_radiacode102_live_time( meas->real_time_, meas->gamma_count_sum_ );
-      // If this correction makes a difference, warn users that it may not be super great,
-      //  since I didnt extensively check how applicable the estimate is.
-      if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
-        meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
-                                            " to correct spectrum live-time." );
+      if( is_radiacode )
+      {
+        meas->live_time_ = estimate_radiacode102_live_time( meas->real_time_, meas->gamma_count_sum_ );
+        // If this correction makes a difference, warn users that it may not be super great,
+        //  since I didnt extensively check how applicable the estimate is.
+        if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
+          meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
+                                          " to correct spectrum live-time." );
+      }//if( icontains( instrument_model_, "RadiaCode-" ) )
       
       return meas;
     };// const auto parse_meas lambda
     
 
+    bool is_radiacode = false;
+    
     // Drill down to the <ResultData> node
     const rapidxml::xml_node<char> * const base_node = XML_FIRST_INODE( &doc, "ResultDataFile" );
     if( !base_node )
@@ -331,65 +336,74 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
     if( !data_list_node )
       throw runtime_error( "Missing ResultDataList node." );
     
-    const rapidxml::xml_node<char>* n_root = XML_FIRST_INODE( data_list_node, "ResultData" );
-    if (!n_root)
-      throw runtime_error("unable to find ResultData");
-
-    const rapidxml::xml_node<char> * const config_node = XML_FIRST_INODE( n_root, "DeviceConfigReference" );
-    if( config_node )
+    XML_FOREACH_CHILD( n_root, data_list_node, "ResultData" )
     {
-      const rapidxml::xml_node<char> * const name_node = XML_FIRST_INODE( config_node, "Name" );
-      instrument_model_ = xml_value_str( name_node );
-    }//if( config_node )
-    
-    const rapidxml::xml_node<char> * const foreground_node = XML_FIRST_INODE( n_root, "EnergySpectrum" );
-    if( !foreground_node )
-      throw runtime_error( "No EnergySpectrum node." );
-    
-    if( XML_NEXT_TWIN(foreground_node) )
-      throw runtime_error("File contains more than one EnergySpectrum");
-    
-    const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
-    instrument_id_ = xml_value_str( serial_num_node );
-    
-    //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
-    //if( version_node && (xml_value_str(version_node) != "120920") )
-    //  parse_warnings_.push_back( "This version of radiacode XML file not tested." );
-    
-    // Now actually parse the foreground <EnergySpectrum> node.
-    shared_ptr<Measurement> fg_meas = parse_meas( foreground_node );
-    assert( fg_meas && (fg_meas->num_gamma_channels() >= 16) );
-    
-    fg_meas->source_type_ = SourceType::Foreground;
-     
-    measurements_.push_back( fg_meas );
-    
-    // Check for and try to parse background spectrum.
-    const rapidxml::xml_node<char> * const background_node = XML_FIRST_INODE( n_root, "BackgroundEnergySpectrum" );
-    if( background_node )
-    {
-      try
+      const rapidxml::xml_node<char> * const config_node = XML_FIRST_INODE( n_root, "DeviceConfigReference" );
+      if( config_node )
       {
-        shared_ptr<Measurement> bg_meas = parse_meas( background_node );
-        assert( bg_meas && (bg_meas->num_gamma_channels() >= 16) );
-        
-        bg_meas->source_type_ = SourceType::Background;
-        if( !bg_meas->energy_calibration_ || !bg_meas->energy_calibration_->valid() )
+        const rapidxml::xml_node<char> * const name_node = XML_FIRST_INODE( config_node, "Name" );
+        if( name_node && name_node->value_size() )
+          instrument_model_ = xml_value_str( name_node );
+      }//if( config_node )
+      
+      const rapidxml::xml_node<char> * const foreground_node = XML_FIRST_INODE( n_root, "EnergySpectrum" );
+      if( !foreground_node )
+        throw runtime_error( "No EnergySpectrum node." );
+      
+      if( XML_NEXT_TWIN(foreground_node) )
+        throw runtime_error("File contains more than one EnergySpectrum");
+      
+      const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
+      if( serial_num_node && serial_num_node->value_size() )
+        instrument_id_ = xml_value_str( serial_num_node );
+      
+      //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
+      //if( version_node && (xml_value_str(version_node) != "120920") )
+      //  parse_warnings_.push_back( "This version of radiacode XML file not tested." );
+      
+      is_radiacode = (is_radiacode || icontains(instrument_model_, "RadiaCode-") );
+      
+      // Now actually parse the foreground <EnergySpectrum> node.
+      shared_ptr<Measurement> fg_meas = parse_meas( foreground_node, is_radiacode );
+      assert( fg_meas && (fg_meas->num_gamma_channels() >= 16) );
+      
+      fg_meas->source_type_ = SourceType::Foreground;
+      
+      measurements_.push_back( fg_meas );
+      
+      // Check for and try to parse background spectrum.
+      const rapidxml::xml_node<char> * const background_node = XML_FIRST_INODE( n_root, "BackgroundEnergySpectrum" );
+      if( background_node )
+      {
+        try
         {
-          if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
-            bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
+          shared_ptr<Measurement> bg_meas = parse_meas( background_node, is_radiacode );
+          assert( bg_meas && (bg_meas->num_gamma_channels() >= 16) );
+          
+          bg_meas->source_type_ = SourceType::Background;
+          if( !bg_meas->energy_calibration_ || !bg_meas->energy_calibration_->valid() )
+          {
+            if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
+              bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
+          }
+          
+          measurements_.push_back( bg_meas );
+        }catch( std::exception &e )
+        {
+          parse_warnings_.push_back( "Failed to parse background spectrum in file: " + string(e.what()) );
         }
-        
-        measurements_.push_back( bg_meas );
-      }catch( std::exception &e )
-      {
-        parse_warnings_.push_back( "Failed to parse background spectrum in file: " + string(e.what()) );
-      }
-    }//if( background_node )
+      }//if( background_node )
+    }//XML_FOREACH_CHILD( n_root, data_list_node, "ResultData" )
     
-    instrument_type_ = "Spectroscopic Personal Radiation Detector";
-    manufacturer_ = "Scan-Electronics";
-    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    if( icontains( instrument_model_, "RadiaCode-" ) )
+    {
+      instrument_type_ = "Spectroscopic Personal Radiation Detector";
+      manufacturer_ = "Scan-Electronics";
+      detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    }else
+    {
+      // File probably made with BecqMoni
+    }
     
     cleanup_after_load();
   }catch( std::exception & )
