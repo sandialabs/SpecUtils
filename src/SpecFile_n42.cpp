@@ -4008,9 +4008,25 @@ public:
             continue;
           }
           
-          SpecUtils::split_to_floats( count_data_node->value(),
-                                     count_data_node->value_size(),
-                                     meas->neutron_counts_ );
+          if( icontains( count_data_node->value(), count_data_node->value_size(), "cps", 3 ) )
+          {
+            // SAM950 contain a value like "1.5 cps"
+            float countrate = 0.0;
+            if( !xml_value_to_flt(count_data_node, countrate) )
+            {
+              meas->parse_warnings_.push_back( "Could not interpret neutron counts: "
+                                              + xml_value_str(count_data_node) );
+            }else
+            {
+              meas->neutron_counts_.push_back( countrate * meas->real_time_ );
+            }
+          }else
+          {
+            SpecUtils::split_to_floats( count_data_node->value(),
+                                       count_data_node->value_size(),
+                                       meas->neutron_counts_ );
+          }//if( data is in cps ) / else
+          
           for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
             meas->neutron_counts_sum_ += meas->neutron_counts_[i];
           
