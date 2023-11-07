@@ -6588,13 +6588,69 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       return sign * y; /* erf(-x) = -erf(x); */
     }
 
-    function gaus_integral( peak, x0, x1 ) {
-      var peak_mean = peak.Centroid[0], peak_sigma = peak.Width[0], peak_amplitude = peak.Amplitude[0];
-         /*peak.LandauAmplitude, peak.LandauMode, peak.LandauSigma, */
-      var sqrt2 = 1.414213562373095;
-      var erflowarg = (x0-peak_mean)/(sqrt2*peak_sigma);
-      var erfhigharg = (x1-peak_mean)/(sqrt2*peak_sigma);
-      return peak_amplitude * 0.5 * (erf(erfhigharg) - erf(erflowarg));
+    function photopeak_integral( peak, x0, x1 ) {
+      const mean = peak.Centroid[0], sigma = peak.Width[0], amp = peak.Amplitude[0];
+      const sqrt2 = 1.414213562373095;
+      
+      // For the skew distributions, using PDF, rather than CDF (like we do for pure Gaussian), to
+      //  save computation time (if using skew, bins are narrow enough that we'll never notice)
+      if( !peak.skewType || (peak.skewType === '') || (peak.skewType === 'NoSkew') )
+      {
+        const t0 = (x0-mean)/(sqrt2*sigma);
+        const t1 = (x1-mean)/(sqrt2*sigma);
+        return amp * 0.5 * (erf(t1) - erf(t0));
+      }
+      
+      const x = 0.5*(x1+x0);
+      const t = (x-mean)/sigma;
+      const norm = (x1-x0) * amp * (peak.DistNorm ? peak.DistNorm : 1);
+      const skew = peak.Skew0[0];
+      
+      if( (peak.skewType === 'Bortel') || (peak.skewType === 'ExGauss') ) //https://doi.org/10.1016/0883-2889(87)90180-8
+      {
+        const exp_arg = ((x - mean)/skew) + (sigma*sigma/(2*skew*skew));
+        const erfc_arg = 0.7071067812*(t + (sigma/skew));
+        
+        if( (skew <= 0) || (exp_arg > 87.0) || (erfc_arg > 10.0) )
+          return norm*(1/(sigma*2.5066282746)) * Math.exp(-0.5*t*t);
+        
+        return norm*(0.5/skew)*Math.exp(exp_arg) * (1-erf(erfc_arg));
+      }else if( peak.skewType === 'CB' )  //https://en.wikipedia.org/wiki/Crystal_Ball_function
+      {
+        const n = peak.Skew1[0];
+        if( t <= -skew )
+        {
+          const A = Math.pow(n/skew, n) * Math.exp(-0.5*skew*skew);
+          const B = (n/skew) - skew;
+          return norm*A*Math.pow( B - t, -n );
+        }
+            
+        return norm*Math.exp(-0.5*t*t)
+      }else if( peak.skewType === 'DSCB' ) //http://nrs.harvard.edu/urn-3:HUL.InstRepos:29362185, chapter 6
+      {
+        // From chapter 6 of https://arxiv.org/pdf/1606.03833.pdf
+        if( (t >= -skew) && (t <= peak.Skew2[0]) ) // Return gaussian value
+          return norm * Math.exp(-0.5*t*t);
+          
+        const n = (t > 0) ? peak.Skew3[0] : peak.Skew1[0];
+        const alpha = (t > 0) ? peak.Skew2[0] : peak.Skew0[0];
+        const a = (t > 0) ? -t : t;
+        return norm * Math.exp(-0.5*alpha*alpha) * Math.pow( (alpha/n)*((n/alpha) - alpha - a), -n );
+      }else if( peak.skewType === 'GaussExp' ) //https://arxiv.org/abs/1603.08591
+      {
+        return norm * Math.exp( (t >= -skew) ? (-0.5*t*t) : (0.5*skew*skew + skew*t) );
+      }else if( peak.skewType === 'ExpGaussExp' ) //https://arxiv.org/abs/1603.08591
+      {
+        const skew_right = peak.Skew1[0];
+        if( t > skew_right )
+          return norm*Math.exp( 0.5*skew_right*skew_right - skew_right*t );
+        if( t > -skew )
+          return norm*Math.exp( -0.5*t*t );
+        return norm*Math.exp( 0.5*skew*skew + skew*t );
+      }else
+      {
+        console.log( 'Need to implement peak skew type ' + peak.skewType );
+      }
     };
 
     var bisector = d3.bisector(function(d){return d.x;});
@@ -6626,11 +6682,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         const ispeakcenter = (labels && labels[peakn] && labels[peakn].xindex===xindex);
         
         if( peak.type === 'GaussianDefined' ){
-          let area = gaus_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
+          let area = photopeak_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
           peak_area += area;
-
-          if( peak.skewType !== 'NoSkew' )
-            console.log( 'Need to implement peak skew type ' + peak.skewType );
 
           m = peak.Centroid[0];
           s = peak.Width[0];
