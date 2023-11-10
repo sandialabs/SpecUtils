@@ -6625,10 +6625,13 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           return norm*A*Math.pow( B - t, -n );
         }
             
-        return norm*Math.exp(-0.5*t*t)
+        return norm*Math.exp(-0.5*t*t);
       }else if( peak.skewType === 'DSCB' ) //http://nrs.harvard.edu/urn-3:HUL.InstRepos:29362185, chapter 6
       {
-        // From chapter 6 of https://arxiv.org/pdf/1606.03833.pdf
+        // 20231109: Niave implementation gives the wrong sum when using two tails... totally not
+        //           sure why, but using indefinite integrals to compute areas, for the moment
+        //           (at least consistent with the c++, although the error could be in there...)
+        /*
         if( (t >= -skew) && (t <= peak.Skew2[0]) ) // Return gaussian value
           return norm * Math.exp(-0.5*t*t);
           
@@ -6636,6 +6639,36 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         const alpha = (t > 0) ? peak.Skew2[0] : peak.Skew0[0];
         const a = (t > 0) ? -t : t;
         return norm * Math.exp(-0.5*alpha*alpha) * Math.pow( (alpha/n)*((n/alpha) - alpha - a), -n );
+        */
+        
+        const a_l = peak.Skew0[0];
+        const n_l = peak.Skew1[0];
+        const a_r = peak.Skew2[0];
+        const n_r = peak.Skew3[0];
+        
+        function left_tail_indefinite(t) {
+          const t_1 = 1.0 - (a_l / (n_l / (a_l + t)));
+          return -Math.exp(-0.5*a_l*a_l)*(t_1 / Math.pow(t_1, n_l)) / ((a_l / n_l) - a_l);
+        };
+        
+        function right_tail_indefinite(t){
+          return Math.exp(-a_r*a_r/2)*(1 / ((a_r / n_r) - a_r)) * Math.pow((1 + ((a_r * (t - a_r)) / n_r)), (1 - n_r));
+        };
+        
+        function gauss_indefinite( t ){
+          return 1.2533141 * erf( 0.707106781186 * t );
+        };
+        
+        const t0 = (x0 - mean) / sigma, t1 = (x1 - mean) / sigma;
+        let answer = 0;
+        if( t0 < -a_l )
+          answer += left_tail_indefinite( Math.min(-a_l,t1) ) - left_tail_indefinite( t0 );
+        if( t1 > a_r )
+          answer += right_tail_indefinite( t1 ) - right_tail_indefinite( Math.max(a_r,t0) );
+        if( (t0 < a_r) && (t1 > -a_l) )
+          answer += gauss_indefinite( Math.min(a_r,t1) ) - gauss_indefinite( Math.max(-a_l,t0) );
+        
+        return amp * peak.DistNorm * answer;
       }else if( peak.skewType === 'GaussExp' ) //https://arxiv.org/abs/1603.08591
       {
         return norm * Math.exp( (t >= -skew) ? (-0.5*t*t) : (0.5*skew*skew + skew*t) );
