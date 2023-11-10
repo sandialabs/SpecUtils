@@ -14,7 +14,6 @@ option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON 
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
 option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (only for use within InterSpec)" OFF )
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
-option( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING "Rebins all spectra in spectrum file to the same energy calibration" OFF )
 option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
 option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interactive regression test" OFF )

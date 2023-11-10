@@ -1627,12 +1627,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
     }//for( const DailyFileS1Info::params &p : sinfo.parameters )
   }//for( size_t i = 0; i < s1infos.size(); ++i )
   
-  
-#if( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING )
-  cleanup_after_load( StandardCleanup | DontChangeOrReorderSamples );
-#else
   cleanup_after_load();
-#endif
   }catch( std::exception & )
   {
     reset();

@@ -1834,17 +1834,7 @@ public:
     //  measurements_.
     DontChangeOrReorderSamples = 0x2,
     
-    //Before 20141110 the rebin option was not available (always done), but for
-    //  a few non-InterSpec applications, this isnt always desirable, so as a
-    //  hack, we will define StandardCleanup, that you can change depending on
-    //  the application; currently in the code cleanup_after_load() is always
-    //  called without an argument, meaning it will default to StandardCleanup.
-    //This is a bit of a hack, but time is limited...
-#if( SpecUtils_REBIN_FILES_TO_SINGLE_BINNING )
-    StandardCleanup = RebinToCommonBinning
-#else
     StandardCleanup = 0x0
-#endif
   };//enum CleanupFlags
   
   virtual void cleanup_after_load( const unsigned int flags = StandardCleanup );
