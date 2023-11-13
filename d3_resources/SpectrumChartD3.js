@@ -6500,15 +6500,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       
     if( xendind >= (points.length-2) )
       xendind = points.length - 2;
-
-    //console.log( 'roi.lowerEnergy=', roi.lowerEnergy, ', xstartind=', points[xstartind] );
-    //console.log( 'roi.upperEnergy=', roi.upperEnergy, ', xendind=', points[xendind] );
-      
+   
     /*The continuum values used for the first and last bin of the ROI are fudged */
     /*  for now...  To be fixed */
-
-    /*XXX - Need to check continuum type!!! */
-
     var thisy = null, thisx = null, m, s, peak_area, cont_area;
     
     //Need to go thorugh and get min/max, in px of each ROI, and save it somehome
@@ -6547,6 +6541,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       for( let j = 0; j < roi.peaks.length; ++j ) {
         m = roi.peaks[j].Centroid[0];
         s = roi.peaks[j].Width[0];
+        const vr = roi.peaks[j].visRange ? roi.peaks[j].visRange : [(m - 5*s),(m + 5*s)];
         
         if( labels && m>=points[i].x && m<points[i+1].x ) {
           //This misses any peaks with means not on the chart
@@ -6563,7 +6558,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           labels[j].userLabel = roi.peaks[j].userLabel;
         }//if( the centroid of this peak is in this bin )
         
-        if( roi.peaks.length===1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
+        if( roi.peaks.length===1 || ((thisx >= vr[0]) && (thisx < vr[1])) ){
           if( !paths[j+1].length ){
             paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
           }else{
@@ -6695,7 +6690,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     var minypx = self.size.height, maxypx = 0;
     
     //Go from right to left drawing the peak lines that sit on the continuum.
-    //  we will also 
     for( let xindex = xendind - 1; xindex >= xstartind; --xindex ) {
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
@@ -6720,8 +6714,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
           m = peak.Centroid[0];
           s = peak.Width[0];
+          const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
           
-          if( roi.peaks.length==1 || (thisx > (m - 5*s) && thisx < (m+5*s)) ){
+          if( (roi.peaks.length == 1) || ((thisx > vr[0]) && (thisx < vr[1])) ){
             peakamplitudes[xindex][peakn+2] = area;
             let yvalpx = self.yScale(cont_area + area);
             minypx = Math.min(minypx,yvalpx);
@@ -6768,11 +6763,13 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       peakamps.forEach( function( peakamp, peakindex ){
         if( peakindex < 2 )
           return;
-        var peaknum = (peakindex - 2);
-        var peak = roi.peaks[peaknum];
-        var m = peak.Centroid[0];
-        var s = peak.Width[0];
-        if( roi.peaks.length>1 && (thisx < (m - 5*s) || thisx > (m+5*s)) )
+        const peaknum = (peakindex - 2);
+        const peak = roi.peaks[peaknum];
+        const m = peak.Centroid[0];
+        const s = peak.Width[0];
+        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
+        
+        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
           return;
         
         var thisy = cont;
@@ -6804,11 +6801,13 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         if( peakindex < 2 )
           return;
 
-        var peaknum = (peakindex - 2);
-        var peak = roi.peaks[peaknum];
-        var m = peak.Centroid[0];
-        var s = peak.Width[0];
-        if( roi.peaks.length>1 && (thisx < (m - 5*s) || thisx > (m+5*s)) )
+          const peaknum = (peakindex - 2);
+        const peak = roi.peaks[peaknum];
+        const m = peak.Centroid[0];
+        const s = peak.Width[0];
+        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
+        
+        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
           return;
         
         var thisy = cont;
