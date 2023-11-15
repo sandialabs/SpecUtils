@@ -819,6 +819,7 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
         const double lon = meas->location_->geo_location_->longitude_;
         
         const double elev = meas->location_->geo_location_->elevation_;
+        const float above_ground_level = meas->location_->geo_location_->elevation_offset_;
         
         const double heading = meas->location_->orientation_
                                     ? meas->location_->orientation_->azimuth_
@@ -857,6 +858,12 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
         {
           prefix_str += ",E";
           postfix_str += "," + print_number(elev,"%.2f");
+        }
+        
+        if( !IsNan(above_ground_level) )
+        {
+          prefix_str += ",AGL";
+          postfix_str += "," + print_number(above_ground_level,"%.2f");
         }
         
         // Heading, in degrees
@@ -1539,8 +1546,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
       meas->neutron_counts_[0] = neutron_counts;
       meas->neutron_counts_sum_ = neutron_counts;
       
-      float dx = std::numeric_limits<float>::quiet_NaN();
-      float dy = dx, dz = dx, speed = dx;
+      const float qnan = std::numeric_limits<float>::quiet_NaN();
+      float dx = qnan, dy = qnan, dz = qnan, speed = qnan;
       
       try{ dx = 10.0f * dx_from_remark(spectrum_title); }catch( std::exception & ){ }
       try{ dy = 10.0f * dy_from_remark(spectrum_title); }catch( std::exception & ){ }
@@ -1548,7 +1555,69 @@ bool SpecFile::load_from_pcf( std::istream &input )
       try{ speed = speed_from_remark(spectrum_title); }catch( std::exception & ){ }
       const string distance = distance_from_pcf_title(spectrum_title);
       
-      if( !IsNan(speed) || !IsNan(dx) || !IsNan(dy) || !IsNan(dz) || !distance.empty() )
+      /* Leaving all the below commented out since it is pretty untested, and I dont want to
+         introduce the regex dependency
+      // Try to parse the following information from the PCF title:
+      //"Lat,Lon,E,AGL,H,D=30.81,-110.2,302,202,112,0.026"
+      // "Lat" --> meas->location_->geo_location_->latitude_;
+      // "Lon" --> meas->location_->geo_location_->longitude_;
+      // "E"   -->  meas->location_->geo_location_->elevation_;
+      // "AGL" --> meas->location_->geo_location_->elevation_offset_;
+      // "H"   --> meas->location_->orientation_->azimuth_
+      // "D"   --> meas->exposure_rate_
+      
+      float lat = qnan, lon = qnan, e = qnan, agl = qnan, h = qnan, d = qnan;
+      // TODO: get rid of this regex, and instead convert to a normal string search
+      const char *regex = R"lit(.*?([(Lat|Lon|E|AGL|H|D),]*\s*[Lat|Lon|E|AGL|H|D])\s*=\s*(([\+\-]?\s*((\d+(\.\d*)?)|(\.\d*))\s*(?:[Ee][+\-]?\d+)?,)*([\+\-]?\s*((\d+(\.\d*)?)|(\.\d*))\s*(?:[Ee][+\-]?\d+)?)).*?)lit";
+      std::smatch matches;
+      std::regex expression( regex, std::regex::ECMAScript | std::regex::icase );
+      if( std::regex_match( spectrum_title, matches, expression ) )
+      {
+        string leftside = string( matches[1].first, matches[1].second );
+        string rightside = string( matches[2].first, matches[2].second );
+        vector<string> leftvals, rightvals;
+        split( leftvals, leftside, ", " );
+        split( rightvals, rightside, ", " );
+        vector<float> rightfvals;
+        for( const string &v : rightvals )
+        {
+          float val;
+          if( !parse_float(v.c_str(), v.size(), val) )
+          {
+            rightfvals.clear();
+            rightvals.clear();
+            leftvals.clear();
+            meas->parse_warnings_.push_back( "GPS and heading field value '" + v
+                                        + "' is not floating point; not reading in any values." );
+            break;
+          }
+          rightfvals.push_back( val );
+        }//for( const string &v : rightvals )
+        
+        if( rightvals.size() != leftvals.size() )
+        {
+          meas->parse_warnings_.push_back( "GPS and heading field specified "
+                                  + std::to_string(leftvals.size()) + " fields, but only had "
+                                  + std::to_string(rightvals.size()) + " values" );
+        }else
+        {
+          for( size_t i = 0; i < leftvals.size(); ++i )
+          {
+            if( iequals_ascii(leftvals[i], "Lat") ) lat = rightfvals[i];
+            else if( iequals_ascii(leftvals[i], "Lon") ) lon = rightfvals[i];
+            else if( iequals_ascii(leftvals[i], "E") ) e = rightfvals[i];
+            else if( iequals_ascii(leftvals[i], "AGL") ) agl = rightfvals[i];
+            else if( iequals_ascii(leftvals[i], "H") ) h = rightfvals[i];
+            else if( iequals_ascii(leftvals[i], "D") ) d = rightfvals[i];
+          }//for( size_t i = 0; i < leftvals.size(); ++i )
+        }//if( rightvals.size() == leftvals.size() )
+      }//if( std::regex_match( spectrum_title, matches, expression ) )
+      */
+      
+      if( !IsNan(speed) || !IsNan(dx) || !IsNan(dy) || !IsNan(dz)
+         || !distance.empty()
+         // || (!IsNan(lat) && !IsNan(lon))
+         )
       {
         auto location = make_shared<LocationState>();
         location->type_ = LocationState::StateType::Item;
@@ -1562,6 +1631,38 @@ bool SpecFile::load_from_pcf( std::istream &input )
         location->relative_location_ = rel_loc;
         rel_loc->from_cartesian( dx, dy, dz );
         rel_loc->origin_description_ = distance;
+        
+        /*
+        // We will require having Lat/Lon fields, to use any of the other fields
+        if( !IsNan(lat) && !IsNan(lon) )
+        {
+          std::shared_ptr<GeographicPoint> geo_loc;
+          if( location->geo_location_ )
+            geo_loc = make_shared<GeographicPoint>( *location->geo_location_ );
+          else
+            geo_loc = make_shared<GeographicPoint>();
+          location->geo_location_ = geo_loc;
+          
+          geo_loc->latitude_ = lat;
+          geo_loc->longitude_ = lon;
+          if( !IsNan(e) )
+            geo_loc->elevation_ = e;
+          if( !IsNan(agl) )
+            geo_loc->elevation_offset_ = agl;
+          if( !IsNan(h) )
+          {
+            shared_ptr<Orientation> orient;
+            if( location->orientation_ )
+              orient = make_shared<Orientation>( *location->orientation_ );
+            else
+              orient = make_shared<Orientation>();
+            location->orientation_ = orient;
+            orient->azimuth_ = h;
+          }
+          if( !IsNan(d) )
+            meas->exposure_rate_ = d;
+        }//if( !IsNan(lat) && !IsNan(lon) )
+        */
         
         meas->location_ = location;
       }//if( !IsNan(speed) || !IsNan(dx) || !IsNan(dy) || !IsNan(dz) )

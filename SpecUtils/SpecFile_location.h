@@ -54,6 +54,14 @@ struct GeographicPoint
   double longitude_; //set to std::numeric_limits<double>::quiet_NaN() if not specified
   float elevation_;  // per N42-2012, in units of meters
   
+  /** The difference between the Elevation at the point of coordinate measurement and the
+   earth's surface in meters.
+   
+   Positive values indicate the point of coordinate measurement is above the earth surface, and
+   negative values are below.
+   
+   In units of meters.
+   */
   float elevation_offset_; // per N42-2012, in units of meters
   float coords_accuracy_; // per N42-2012, in units of meters
   float elevation_accuracy_; // per N42-2012, in units of meters
