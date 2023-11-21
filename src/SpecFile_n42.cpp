@@ -3891,16 +3891,25 @@ public:
           auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
           if( det_iter == end(*id_to_dettype_ptr) )
           {
-            //cerr << "No detector information for '" << meas->detector_name_
-            //     << "' so skipping" << endl;
-            continue;
+            if( icontains( meas->detector_name_, "neut" ) )
+            {
+              // BNC detectors may not include a RadDetectorInformation element for the neutron detector
+              det_type = DetectionType::NeutronDetection;
+            }else
+            {
+              //cerr << "No detector information for '" << meas->detector_name_
+              //     << "' so skipping" << endl;
+              continue;
+            }
+          }else
+          {
+          
+            det_type = det_iter->second.first;
+            meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
           }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
           
           
-          det_type = det_iter->second.first;
-          meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
-          
-          if( icontains( det_info_ref, "Neutrons" ) )
+          if( icontains( det_info_ref, "Neutron" ) )
             det_type = NeutronDetection;
           
           if( (det_type != NeutronDetection) && (det_type != GammaAndNeutronDetection) )
