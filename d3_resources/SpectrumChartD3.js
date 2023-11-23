@@ -15,7 +15,7 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
    License along with this library; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-   As of 20221117 this file is 10949 lines long!  It is not allowed to grow, and even with fixes
+   As of 20221123 this file is 10773 lines long!  It is not allowed to grow, and even with fixes
    or feature additions, we must refactor and improve code to keep LOC this size or smaller
    (e.g., things are out of hand, lets keep it from getting worse).
  
@@ -6570,19 +6570,71 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
     
     function erf(x) {
-      /* http://stackoverflow.com/questions/14846767/std-normal-cdf-normal-cdf-or-error-function
-         Error is less than 1.5 * 10-7 for all inputs
-         (from Handbook of Mathematical Functions)
-       */
+      // Error is less than 1.5 * 10-7 for all inputs (from Handbook of Mathematical Functions)
       const sign = (x >= 0) ? 1 : -1; /* save the sign of x */
       x = Math.abs(x);
-      const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027,
-          a5 = 1.061405429, p  = 0.3275911;
-      const t = 1.0/(1.0 + p*x);
-      const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+      const t = 1.0/(1.0 + 0.3275911*x);
+      const y = 1.0 - (((((1.061405429 * t + -1.453152027) * t) + 1.421413741) * t + -0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
       return sign * y; /* erf(-x) = -erf(x); */
-    }
+    };
+    
+    function erfc( z ){
+      // Adapted from boost erf implementation - same as used in InterSpecs C++, see Boost Software License - Version 1.0
+      // The Bortel distribution requires a higher precision erfc, than just 1-erf, or even simpler approximations of erfc
+      if( z < 0 )
+        return (z < -0.5) ? (2 - erfc( -z )) : (1 + erf( -z ));
 
+      if( z < 0.5 )
+        return 1 - erf( z );
+      
+      if( z >= 28 )
+        return 0;
+      
+      if(z < 1.5 )
+      {
+        const P = [ -0.098090592216281240205, 0.178114665841120341155, 0.191003695796775433986, 0.0888900368967884466578, 0.0195049001251218801359, 0.00180424538297014223957];
+        const Q = [ 1.0, 1.84759070983002217845, 1.42628004845511324508, 0.578052804889902404909, 0.12385097467900864233, 0.0113385233577001411017, 0.337511472483094676155e-5
+        ];
+        
+        const zarg = z - 0.5;
+        const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+        const Q_eval = (((((Q[6]*zarg + Q[5])*zarg + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+        return (0.405935764312744140625 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+      }//if(z < 1.5f)
+      
+      if( z < 2.5 )
+      {
+        const P = [ -0.0243500476207698441272, 0.0386540375035707201728, 0.04394818964209516296, 0.0175679436311802092299, 0.00323962406290842133584, 0.000235839115596880717416 ];
+        const Q = [ 1.0, 1.53991494948552447182, 0.982403709157920235114, 0.325732924782444448493, 0.0563921837420478160373, 0.00410369723978904575884 ];
+        
+        const zarg = z - 1.5;
+        const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+        const Q_eval = ((((zarg*Q[5] + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+        return (0.50672817230224609375 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+      }//if( z < 2.5f
+      
+      if( z < 4.5 )
+      {
+        const P = [ 0.00295276716530971662634, 0.0137384425896355332126, 0.00840807615555585383007, 0.00212825620914618649141, 0.000250269961544794627958, 0.113212406648847561139e-4 ];
+        const Q = [ 1.0, 1.04217814166938418171, 0.442597659481563127003, 0.0958492726301061423444, 0.0105982906484876531489, 0.000479411269521714493907 ];
+        
+        const zarg = z - 3.5;
+        const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+        const Q_eval = ((((zarg*Q[5] + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+        return (0.5405750274658203125 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+      }//if( z < 4.5f )
+      
+      const P = [ 0.00628057170626964891937, 0.0175389834052493308818, -0.212652252872804219852, -0.687717681153649930619, -2.5518551727311523996, -3.22729451764143718517, -2.8175401114513378771 ];
+      const Q = [ 1.0, 2.79257750980575282228, 11.0567237927800161565, 15.930646027911794143, 22.9367376522880577224, 13.5064170191802889145, 5.48409182238641741584 ];
+      
+      const zarg = 1.0 / z;
+      const P_eval = (((((P[6]*zarg + P[5])*zarg + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+      const Q_eval = (((((Q[6]*zarg + Q[5])*zarg + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+      return (0.5579090118408203125 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+    };//erfc
+
+    
+    
     function photopeak_integral( peak, x0, x1 ) {
       const mean = peak.Centroid[0], sigma = peak.Width[0], amp = peak.Amplitude[0];
       const sqrt2 = 1.414213562373095;
@@ -6609,7 +6661,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         if( (skew <= 0) || (exp_arg > 87.0) || (erfc_arg > 10.0) )
           return norm*(1/(sigma*2.5066282746)) * Math.exp(-0.5*t*t);
         
-        return norm*(0.5/skew)*Math.exp(exp_arg) * (1-erf(erfc_arg));
+        return norm*(0.5/skew)*Math.exp(exp_arg) * erfc(erfc_arg);
       }else if( peak.skewType === 'CB' )  //https://en.wikipedia.org/wiki/Crystal_Ball_function
       {
         const n = peak.Skew1[0];
@@ -6688,6 +6740,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     var leftMostLineValue = [];
 
     var minypx = self.size.height, maxypx = 0;
+    
     
     //Go from right to left drawing the peak lines that sit on the continuum.
     for( let xindex = xendind - 1; xindex >= xstartind; --xindex ) {
