@@ -3999,7 +3999,25 @@ public:
           meas->occupied_ = occupied;
           
           if( live_time_node && live_time_node->value_size() )
+          {
             meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
+            
+            // For a neutron-only record, if neutron live time clearly differs from real time by
+            //  more than 5% (chosen arbitrarily), then it is likely the neutron measurement time
+            //  is not actually the same interval as the gammas, but the detector is reporting it
+            //  like that anyway (at least a few systems do), so we will set the neutron
+            //  live time equal to its real-time - since the "LiveTimeDuration" element is specific
+            //  to the actual neutron measurement
+            // TODO: This should be revisited once SpecFile::merge_neutron_meas_into_gamma_meas()
+            if( (det_type == NeutronDetection)
+               && !use_remark_real_time
+               && (meas->real_time_ > 0.1f)
+               && (meas->live_time_ > 0.1f)
+               && (fabs(meas->live_time_ - meas->real_time_) > 0.05f*std::max(meas->live_time_, meas->real_time_)) )
+            {
+              meas->real_time_ = meas->live_time_;
+            }
+          }//if( live_time_node && live_time_node->value_size() )
           
           if( inst_or_item_location )
             meas->location_ = inst_or_item_location;

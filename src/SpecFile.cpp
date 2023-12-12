@@ -5679,26 +5679,52 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
   //  assigned yet) before doing the correction - all the files I've seen
   //  that need this correction already have sample numbers properly
   //  assigned
-  bool bogusSampleNumbers = false;
   std::map<int, std::vector<std::shared_ptr<Measurement>> > sample_to_meass;
   for( const auto &m : measurements_ )
   {
     std::vector<std::shared_ptr<Measurement>> &mv = sample_to_meass[m->sample_number_];
+    
+    // Check to make sure that gamma and neutron have the same measurement time
+    for( auto &prev : mv )
+    {
+      if( ((m->contained_neutron() == prev->contained_neutron())
+         && ((!m->num_gamma_channels()) == (!m->num_gamma_channels())))
+         || (m->contained_neutron() && m->num_gamma_channels()) )
+      {
+        continue;
+      }
+      
+      const auto &neut_meas = m->contained_neutron() ? m : prev;
+      const auto &gamma_meas = m->contained_neutron() ? prev : m;
+      
+      // Some detectors will report a neutron live time that is much less than the sample
+      //  numbers real time
+      float nuet_time = std::min( neut_meas->live_time(), neut_meas->real_time() );
+      if( nuet_time <= 0.1f )
+        nuet_time = std::max( neut_meas->live_time(), neut_meas->real_time() );
+      const float gamma_time = std::max( gamma_meas->live_time(), gamma_meas->real_time() );
+      const float diff = fabs( gamma_time - nuet_time );
+      
+      // If neutron measurement time is off from gamma by over 1%, then dont combine.
+      //  This is arbitrary, and a hack, until we totally remove this function.
+      if( diff > 0.01f*std::max(gamma_time, nuet_time) )
+      {
+        return;
+      }
+    }//for( size_t i = 0; i < mv.size(); ++i )
+    
     mv.push_back( m );
     if( mv.size() > detector_names_.size() )
     {
-      bogusSampleNumbers = true;
 #if( PERFORM_DEVELOPER_CHECKS )
       log_developer_error( __func__, "Found a file where neutron"
-                          " and gammas are sperate measurements, but sample numbers not assigned." );
+                          " and gammas are seperate measurements, but sample numbers not assigned." );
 #endif //#if( PERFORM_DEVELOPER_CHECKS )
-      break;
+      
+      //If sample numbers arent already properly assigned, bail
+      return;
     }
   }//for( const auto &m : measurements_ )
-  
-  //If smaple numbers arent already properly assigned, bail
-  if( bogusSampleNumbers )
-    return;
   
   
   vector<string> gamma_only_dets = gamma_detector_names_;
@@ -7284,6 +7310,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   size_t total_num_gamma_spec = 0;
   set<SourceType> source_types;
   set<string> remarks;
+  float neutron_meas_time = 0.0f;
   for( const int sample_number : sample_numbers )
   {
     for( const string &det : det_names )
@@ -7307,6 +7334,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       for( size_t i = 0; i < nneutchannel; ++i )
         dataH->neutron_counts_[i] += meas->neutron_counts_[i];
         
+      if( meas->contained_neutron() )
+        neutron_meas_time += meas->real_time();
+      
       for( const std::string &remark : meas->remarks_ )
         remarks.insert( remark );
         
@@ -7710,6 +7740,14 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   
   if( is_special(dataH->start_time_) )
     dataH->start_time_ = time_point_t{};
+  
+  // TODO: This is a hack, putting neutron real time into a string comment
+  if( neutron_meas_time > 0.0f )
+  {
+    char buffer[128];
+    snprintf( buffer, sizeof(buffer), "Neutron Real Time: %.5f s", neutron_meas_time );
+    dataH->remarks_.push_back( buffer );
+  }
   
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );
