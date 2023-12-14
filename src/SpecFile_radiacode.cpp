@@ -536,7 +536,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       // 16 .. : counts per channel (uint32[1024])
 
       string pfx = "Spectrum: ";  // the space is intentional
-      if ((string::npos != line.find(pfx)) && (1 == total_lines)) {
+      if ((string::npos != line.find(pfx)) && (1 == total_lines) && (line.length() >= 57)) {
         try {
           uint8_t raw_bytes[16];
           vector<float> cal_coefs;
