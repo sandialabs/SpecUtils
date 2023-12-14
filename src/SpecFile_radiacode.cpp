@@ -505,11 +505,11 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     size_t num_channels = 0;
     if( !(stringstream(channels_str) >> num_channels) || (num_channels < 16) || (num_channels > 4096) )
       throw runtime_error( "Invalid 'Channels' field" );
-    
+
+    vector<string> warnings;
     vector<shared_ptr<Measurement>> meass;
-    // We dont actually have energy calibration info...
     auto energy_cal = make_shared<EnergyCalibration>();
-    
+
     int sample_num = 0;
     uint64_t last_timestamp = timestamp;
     size_t skipped_lines = 0, total_lines = 0;
@@ -520,18 +520,49 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       
       // We'll be pretty generous about allowing invalid lines
       if( (skipped_lines > 5) && (total_lines > 10) && (skipped_lines > (total_lines/10)) )
-        throw runtime_error( "To many invalid lines" );
-      
+        throw runtime_error("Too many invalid lines");
+
       trim( line );
       if( line.empty() )
       {
         skipped_lines += 1;
         continue;
       }
-      
-      // The second line in the file starts with "Spectrum:", and looks like its probably an icon
-      //  of the spectrum, and an example one I looked at was 12 kb, we'll skip it
-      
+
+      // The second line in the file - "Spectrum:" - is a hex-encoded
+      // representation of the total recorded dose since the last device reset.
+      // 0-3: spectrum accumulation time in seconds (uint32)
+      // 4-15: calibration factors a0, a1, a2 (float[3])
+      // 16 .. : counts per channel (uint32[1024])
+
+      string pfx = "Spectrum: ";  // the space is intentional
+      if ((string::npos != line.find(pfx)) && (1 == total_lines)) {
+        try {
+          uint8_t raw_bytes[16];
+          vector<float> cal_coefs;
+          int ds = pfx.length();
+
+          // "unhexlify"
+          for (int i = 0; i < sizeof(raw_bytes); i++) {
+            string tmp = line.substr(ds + i * 3, 2);
+            raw_bytes[i] = strtoul(tmp.c_str(), NULL, 16);
+          }
+
+          // convert relevant bytes to a float and stash in calibration vector
+          for (int i = 0; i < 3; i++) {
+            float tmp;
+            memcpy(&tmp, &raw_bytes[4 * i + 4], sizeof(tmp));
+            cal_coefs.push_back(tmp);
+          }
+
+          energy_cal->set_polynomial(num_channels, cal_coefs, {});
+        } catch (std::exception& e) {
+          warnings.push_back("Error interpreting energy calibration: " +
+                             string(e.what()));
+        }
+        continue;
+      }
+
       if( !isdigit( (int)line.front() ) )
       {
         skipped_lines += 1;
@@ -568,10 +599,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
         skipped_lines += 1;
         continue;
       }
-      
-      
-      vector<string> warnings;
-      
+
       const char * const counts_start = line.c_str() + end_nsecond + 1;
       const size_t counts_str_len = (line.c_str() + line.size()) - counts_start;
       
@@ -587,7 +615,11 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       
       if( channel_counts->size() > num_channels )
         throw runtime_error( "More channel counts than expected" );
-      
+
+      // For the benefit of future developers looking at this file to understand
+      // this format: each spectrum line is truncated when all subsequent values
+      // are 0. A single event int channel 0 would be recorded as "0 0 1".
+      // Expand that out to the full <num_channels> members.
       channel_counts->resize( num_channels, 0.0f );
       
       float real_time = 0.0f;
@@ -632,8 +664,8 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       meass.push_back( meas );
       
       sample_num += 1;
-    }//while( safe_get_line(input, line, 64*1024) )
-    
+    }  // while( safe_get_line(input, line, 64*1024) )
+
     if( meass.empty() )
       throw runtime_error( "No measurements" );
     
