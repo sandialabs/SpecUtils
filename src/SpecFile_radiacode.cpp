@@ -514,13 +514,16 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     uint64_t last_timestamp = timestamp;
     size_t skipped_lines = 0, total_lines = 0;
     string line;
+	bool line_warning = true;
     while( safe_get_line(input, line, 64*1024) )
     {
       total_lines += 1;
       
       // We'll be pretty generous about allowing invalid lines
-      if( (skipped_lines > 5) && (total_lines > 10) && (skipped_lines > (total_lines/10)) )
-        throw runtime_error("Too many invalid lines");
+      if( line_warning && (skipped_lines > 5) && (total_lines > 10) && (skipped_lines > (total_lines/10)) ) {
+        warnings.push_back("Many invalid lines detected");
+        line_warning = false;
+      }
 
       trim( line );
       if( line.empty() )
