@@ -105,7 +105,7 @@ bool SpecFile::load_from_tka( std::istream &input )
       if( line.empty() )
         return 0;
       
-      if( line.find_first_not_of("+-.0123456789") != string::npos )
+      if( line.find_first_not_of("+-.0123456789Ee") != string::npos )
         throw runtime_error( "Invalid char" );
       
       if( !(stringstream(line) >> val) )
