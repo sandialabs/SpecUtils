@@ -319,7 +319,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
         if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
           meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
                                           " to correct spectrum live-time." );
-      }//if( icontains( instrument_model_, "RadiaCode-" ) )
+      }//if( is_radiacode )
       
       return meas;
     };// const auto parse_meas lambda
@@ -355,7 +355,23 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       
       const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
       if( serial_num_node && serial_num_node->value_size() )
+      {
         instrument_id_ = xml_value_str( serial_num_node );
+        // Under some circumstances, the radiacode app will mis-identify the source device.
+        // I have several data files produced by RC-102-XXXXXX and RC-103-YYYYYY where the
+        // DeviceConfigReference/Name node is "RadiaCode-101".
+        // Test for this discrepancy and patch the instrument model field if necessary.
+        string model_num = instrument_id_.substr(2,4); // "RC-10X-NNNNNN" -> "-10X"
+        if ( instrument_id_.length() && (model_num.length() == 4) )
+        {
+          string model_from_sn = "RadiaCode" + model_num;
+          if ( instrument_id_.find( model_from_sn ) == string::npos)
+          {
+            parse_warnings_.push_back( "DeviceConfigModel is not consistent with SerialNumber");
+            instrument_model_ = model_from_sn;
+          }
+        }
+      }
       
       //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
       //if( version_node && (xml_value_str(version_node) != "120920") )
