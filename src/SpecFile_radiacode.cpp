@@ -28,6 +28,7 @@
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
+#include <regex>
 
 #include "rapidxml/rapidxml.hpp"
 
@@ -355,7 +356,34 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       
       const rapidxml::xml_node<char> * const serial_num_node = XML_FIRST_INODE( foreground_node, "SerialNumber" );
       if( serial_num_node && serial_num_node->value_size() )
+      {
         instrument_id_ = xml_value_str( serial_num_node );
+        std::regex rc_sn_regex("^RC-(\\d{3})-\\d{6}$");
+		std::smatch match_result;
+
+		if ( std::regex_search(instrument_id_, match_result, rc_sn_regex) )
+        {
+          // Under some circumstances, the radiacode app will mis-identify the source device.
+          // I have several data files produced by RC-102-XXXXXX and RC-103-YYYYYY where the
+          // DeviceConfigReference/Name node is "RadiaCode-101".
+          // Test for this discrepancy and patch the instrument model field if necessary.
+          string model_from_sn = "RadiaCode-" + static_cast<string>(match_result[1]);
+          if ( instrument_model_.find( model_from_sn ) == string::npos)
+          {
+#if(PERFORM_DEVELOPER_CHECKS)
+            parse_warnings_.push_back(
+              "DeviceConfigModel " + instrument_model_ +
+              " is not consistent with SerialNumber " + instrument_id_ +
+              ". Patching to " + model_from_sn );
+#endif
+            instrument_model_ = model_from_sn;
+          }
+#if(PERFORM_DEVELOPER_CHECKS)
+        } else {
+          parse_warnings_.push_back( "SerialNumber " + instrument_id_ + " does not match expected format" );
+#endif
+        }
+      }
       
       //const rapidxml::xml_node<char> * const version_node = XML_FIRST_INODE( base_node, "FormatVersion" );
       //if( version_node && (xml_value_str(version_node) != "120920") )
