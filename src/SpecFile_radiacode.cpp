@@ -320,7 +320,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
         if( fabs(meas->live_time_ - meas->real_time_) > (0.001*meas->real_time_) )
           meas->parse_warnings_.push_back( "An estimated dead-time correction has been used"
                                           " to correct spectrum live-time." );
-      }//if( icontains( instrument_model_, "RadiaCode-" ) )
+      }//if( is_radiacode )
       
       return meas;
     };// const auto parse_meas lambda
@@ -368,7 +368,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
           // DeviceConfigReference/Name node is "RadiaCode-101".
           // Test for this discrepancy and patch the instrument model field if necessary.
           string model_from_sn = "RadiaCode-" + static_cast<string>(match_result[1]);
-          if ( instrument_model_.find( model_from_sn ) == string::npos)
+          if ( instrument_id_.find( model_from_sn ) == string::npos)
           {
 #if(PERFORM_DEVELOPER_CHECKS)
             parse_warnings_.push_back(
