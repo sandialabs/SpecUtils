@@ -368,7 +368,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
           // DeviceConfigReference/Name node is "RadiaCode-101".
           // Test for this discrepancy and patch the instrument model field if necessary.
           string model_from_sn = "RadiaCode-" + static_cast<string>(match_result[1]);
-          if ( instrument_id_.find( model_from_sn ) == string::npos)
+          if ( instrument_model_.find( model_from_sn ) == string::npos)
           {
 #if(PERFORM_DEVELOPER_CHECKS)
             parse_warnings_.push_back(
