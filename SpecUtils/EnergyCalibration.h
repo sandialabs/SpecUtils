@@ -141,17 +141,6 @@ namespace SpecUtils
                          const std::vector<float> &coeffs,
                          const std::vector<std::pair<float,float>> &dev_pairs );
     
-    /** Similar to #set_polynomial, but significantly loosens the offset (i.e., zeroth calibration
-     coefficient) check, to have a value between -500 and 5000.
-     
-     This is primarily to facilitate alpha-spectroscopy energy calibrations, which may have like a
-     2500 keV offset.
-     */
-    void set_polynomial_no_offset_check( const size_t num_channels,
-                                     const std::vector<float> &coeffs,
-                                     const std::vector<std::pair<float,float>> &dev_pairs );
-    
-    
     /** Functionally the same as #set_polynomial, but will set type to
      #EnergyCalType::UnspecifiedUsingDefaultPolynomial.
      
@@ -289,46 +278,24 @@ namespace SpecUtils
      */
     static const size_t sm_max_channels; // = 65536 + 8
     
-    /** The largest absolute value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
-     i.e., if a gamma spectrum has a larger value than this, then the calibration coeffiecients will be considered garbage and not used.
+    /** The largest positive value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
+     i.e., if a gamma spectrum has a larger value than this, then the calibration coefficients will be considered garbage and not used.
      
-     Current value is 500 keV.
+     Current value is 5000 keV (alpha particle spectra sometimes have a value of at least 1500 keV, so we'll be generous).
+     
+     A lower bound of -500 keV is currently hard-coded.
      
      \sa set_polynomial, EnergyCalCheckType::Normal
      */
     static const float sm_polynomial_offset_limit;
     
-    /** Alpha particle spectra may have energy offsets of like 2500 keV, so this value gives the max absolute value of the
-     offset term for polynomial energy calibration, for those situations.
-     
-     \sa set_polynomial_no_offset_check, EnergyCalCheckType::LooseOffset
-     */
-    static const float sm_polynomial_extended_offset_limit;
-    
   protected:
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
-     increasnig values).
+     increasing values).
      
      Throws exception if error is found.
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
-    
-    /** Normally we expect energy offset (i.e., zeroth polynomial coefficient) to be not to large,
-     but for like alpha spectroscopy, it may be like 2500 keV, we
-     */
-    enum class EnergyCalCheckType
-    {
-      /** Absolute value of energy offset must less than 500 keV, as specified by #sm_polynomial_offset_limit. */
-      Normal,
-      
-      /** Absolute value of energy offset must less than 5000 keV, as specified by #sm_polynomial_extended_offset_limit. */
-      LooseOffset
-    };//enum class EnergyCalCheckType
-    
-    void set_polynomial_internal( const EnergyCalCheckType check_type,
-                        const size_t num_channels,
-                        const std::vector<float> &coeffs,
-                        const std::vector<std::pair<float,float>> &dev_pairs );
     
     EnergyCalType m_type;
     std::vector<float> m_coefficients;

@@ -82,16 +82,10 @@ namespace
   //  everywhere, and account for it when reading it back in.
   const std::string s_unnamed_det_placeholder = "unamed";
   
-  static const char * const s_enrgy_cal_not_availabel_remark = "Energy calibration not available.";
+  static const char * const s_energy_cal_not_available_remark = "Energy calibration not available.";
   
   static const std::string s_frf_to_poly_remark = "Energy calibration was originally specified as full-range-fraction.";
 
-  /** Alpha spectra may have huge offset (like 2.5 MeV), which is usually garbage for gamma spectra; we only get alpha spectra
-   from CNF files, as far as I'm aware, so when we write the N42 file, we will add a special comment to the energy calibration
-   node, so this way when we read it back in, we will test the coefficients to the looser standards, rather than our normal gamma
-   standards
-   */
-  static const char * const s_is_high_offset_energy_cal = "High offset energy.";
   
   //Take absolute difference between unsigned integers.
   template<typename T>
@@ -381,10 +375,6 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
   stringstream valuestrm;
   vector<float> coefs;
   
-  // If energy offset of polynomial energy calibrations is large, we will put in a special remark so
-  //  when we read things back in, we will apply a looser energy calibration validation.
-  bool is_large_poly_offset = false;
-  
   
   switch( energy_cal.type() )
   {
@@ -392,7 +382,7 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
       coefs = { 0.0f, 0.0f, 0.0f };
       coefname = "CoefficientValues";
       valuestrm << "0 0 0";
-      remark = s_enrgy_cal_not_availabel_remark;
+      remark = s_energy_cal_not_available_remark;
       break;
 
     case SpecUtils::EnergyCalType::FullRangeFraction:
@@ -420,9 +410,6 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
         snprintf( buffer, sizeof(buffer), "%s%.9g", (j?" ":""), (j<coefs.size() ? coefs[j] : 0.0f) );
         valuestrm << buffer;
       }
-      
-      is_large_poly_offset = ((coefs.size() > 0)
-                      && (coefs[0] >= SpecUtils::EnergyCalibration::sm_polynomial_offset_limit));
         
       break;
     }//case SpecUtils::EnergyCalType::Polynomial:
@@ -463,13 +450,6 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
       node = doc->allocate_node( node_element, "Remark", val );
       EnergyCalibration->append_node( node );
     }//if( !remark.empty() )
-    
-    if( is_large_poly_offset )
-    {
-      val = doc->allocate_string( s_is_high_offset_energy_cal );
-      node = doc->allocate_node( node_element, "Remark", val );
-      EnergyCalibration->append_node( node );
-    }//if( is_large_poly_offset )
     
     val = doc->allocate_string( valuestrm.str().c_str() );
     node = doc->allocate_node( node_element, coefname, val );
@@ -1585,12 +1565,6 @@ struct MeasurementCalibInfo
   
   std::string calib_id; //optional
   
-  /** Only true when reading in N42 files written out by this library, and there is a special remark in the EnergyCalibration
-   node that says we should expect a large energy offset.  I'm a little mixed if maybe we should skip this hack, and just
-   allow like 2.5 MeV offsets always.
-   */
-  bool allow_high_offset = false;
-  
   MeasurementCalibInfo( std::shared_ptr<SpecUtils::Measurement> meas );
   MeasurementCalibInfo();
   
@@ -1645,10 +1619,7 @@ void MeasurementCalibInfo::fill_binning( const size_t nbin )
     switch( equation_type )
     {
       case SpecUtils::EnergyCalType::Polynomial:
-        if( allow_high_offset )
-          cal->set_polynomial_no_offset_check( nbin, coefficients, deviation_pairs_ );
-        else
-          cal->set_polynomial( nbin, coefficients, deviation_pairs_ );
+        cal->set_polynomial( nbin, coefficients, deviation_pairs_ );
         break;
         
       case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
@@ -7775,14 +7746,7 @@ namespace SpecUtils
       {
         const string remark_value = xml_value_str(remark_node);
         
-        // Check if we wrote this N42 file out, and we explicitly said that we expect the energy
-        //  offset to be large
-        const bool is_alpha_energy_cal = SpecUtils::icontains( remark_value, s_is_high_offset_energy_cal );
-        
-        info.allow_high_offset |= is_alpha_energy_cal;
-        
-        if( !is_alpha_energy_cal
-           && !SpecUtils::icontains( remark_value, s_enrgy_cal_not_availabel_remark)
+        if( !SpecUtils::icontains( remark_value, s_energy_cal_not_available_remark)
            && !SpecUtils::icontains( remark_value, s_frf_to_poly_remark) )
         {
           remarks.push_back( "Calibration for " + id + " remark: " + remark_value );
