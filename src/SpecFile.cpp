@@ -1842,7 +1842,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
     case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
       const auto new_coefs = polynomial_cal_remove_first_channels( n_remove_front, old_coefs );
-      newcal->set_polynomial_no_offset_check( nnewchannel, new_coefs, old_dev );
+      newcal->set_polynomial( nnewchannel, new_coefs, old_dev );
       break;
     }//case Polynomial:
       
@@ -5115,7 +5115,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
                 switch( othercal->type() )
                 {
                   case EnergyCalType::Polynomial:
-                    newcal->set_polynomial_no_offset_check( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
+                    newcal->set_polynomial( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
                     break;
                     
                   case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
@@ -5457,7 +5457,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
           const size_t nbinShift = nbin - 1;
           const float channel_width = (max_energy - min_energy) / nbinShift;
           auto new_cal = make_shared<EnergyCalibration>();
-          new_cal->set_polynomial_no_offset_check( nbin, {min_energy,channel_width}, {} );
+          new_cal->set_polynomial( nbin, {min_energy,channel_width}, {} );
           
           for( const auto &meas : measurements_ )
           {
