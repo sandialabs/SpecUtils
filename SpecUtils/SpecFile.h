@@ -1801,7 +1801,7 @@ public:
   //  for specifications of IAEA file standards.
   //This function is computationally slower than it could be, to allow for
   //  a little more diverse set of intput.
-  bool load_from_iaea( std::istream &istr );
+  virtual bool load_from_iaea( std::istream &istr );
 
   //bool load_from_chn(...): Load information from ORTECs binary CHN file.
   bool load_from_chn( std::istream &input );
