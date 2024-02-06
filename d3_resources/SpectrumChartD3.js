@@ -5598,7 +5598,7 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
 
   return function() {
     
-    if (self.leftDragRegionDown || self.rightDragRegionDown || self.leftDragRegionDown) {
+    if (self.leftDragRegionDown || self.rightDragRegionDown || self.sliderBoxDown) {
       d3.event.preventDefault();
       d3.event.stopPropagation();
     }
@@ -5683,11 +5683,11 @@ SpectrumChartD3.prototype.handleMouseMoveLeftSliderDrag = function(redraw) {
     d3.event.stopPropagation();
 
     if (self.sliderBoxDown) {
-      return self.handleMouseMoveSliderChart()();
+      return; /*self.handleMouseMoveSliderChart()(); */
     }
 
     d3.select(document.body).style("cursor", "ew-resize");
-
+    
     if (!self.leftDragRegionDown || !redraw) {
       return;
     }
