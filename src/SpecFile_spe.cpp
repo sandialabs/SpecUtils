@@ -1577,8 +1577,21 @@ bool SpecFile::write_iaea_spe( ostream &output,
     if( counts.size() )
     {
       output << "$DATA:\r\n0 " << (counts.size()-1) << "\r\n";
+      
       for( size_t i = 0; i < counts.size(); ++i )
-        output << counts[i] << "\r\n";
+      {
+        const float count = counts[i] + 1.0E6;
+        if( std::floorf(count) == count )
+        {
+          // If we print as a float, then by default above 1.0E6 will print in scientific
+          //  notation, which some other applications do not read in
+          output << static_cast<int64_t>(count) << "\r\n";
+        }else
+        {
+          // If its a float, I guess we should print as a float?
+          output << count << "\r\n";
+        }
+      }//for( size_t i = 0; i < counts.size(); ++i )
       
       assert( summed->energy_calibration_ );
       coefs = summed->energy_calibration_->coefficients();
