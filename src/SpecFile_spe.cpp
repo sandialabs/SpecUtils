@@ -85,7 +85,7 @@ bool SpecFile::load_iaea_file( const std::string &filename )
   
   // Usually the '$' character is the first character in the file, however, there may be a
   //  Byte Order Mark (BOM) indicating UTF-8, UTF-16 little-endian, or UTF-16 big-endian (We'll ignore
-  const bool is_ascii = (first_bytes[0] == '$');
+  bool is_ascii = (first_bytes[0] == '$');
   
   const bool is_utf8 = ((first_bytes[0] == 0xEF)
                         && (first_bytes[1] == 0xBB)
@@ -104,11 +104,30 @@ bool SpecFile::load_iaea_file( const std::string &filename )
   
   if( !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
   {
-    //    cerr << "IAEA file '" << filename << "'does not have expected first character"
-    //         << " of '$', firstbyte=" << int(first_bytes[0])
-    //         << " (" << char(first_bytes[0]) << ")" << endl;
-    return false;
-  }//if( (first_bytes[0] != '$') && (first_bytes[2] != '$') )
+    // Sometimes SPE files cram some header data at the start of the file, so they dont
+    //  start with a '$' field, like they should, so we'll give it another chance, unless
+    //  any of the first few characters are non-alphanumeric.
+    if( !std::isalnum(first_bytes[0]) || !std::isalnum(first_bytes[1])
+       || !std::isalnum(first_bytes[2]) || !std::isalnum(first_bytes[3]) )
+      return false;
+    
+    file.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = file.tellg();
+    file.seekg( 0, ios::beg );
+    
+    const size_t filesize = static_cast<size_t>( 0 + eof_pos );
+    
+    string headerdata;
+    headerdata.resize( std::min( size_t(1025), filesize + 1 ) );
+    file.read( &(headerdata[0]), headerdata.size() - 1 );
+    file.seekg( 0, ios::beg );
+    headerdata.back() = '\0'; //JIC
+    
+    is_ascii = ((headerdata.find("$DATA:") != string::npos)
+                && (headerdata.find("$MEAS_TIM:") != string::npos));
+    if( !is_ascii )
+      return false;
+  }//if( !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
   
   
   bool loaded = false;
@@ -224,7 +243,36 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     //https://en.wikipedia.org/wiki/Byte_order_mark
     
     if( line.empty() || line[0]!='$' )
-      throw runtime_error( "IAEA file first line must start with a '$'" );
+    {
+      // Some files stuff some system-specific txt data at the beginning of the file; we'll be
+      //  gracious and check if maybe this is the case.
+      
+      istr.seekg( 0, ios::end );
+      const istream::pos_type eof_pos = istr.tellg();
+      istr.seekg( orig_pos, ios::beg );
+      
+      const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
+      
+      string headerdata;
+      headerdata.resize( std::min( size_t(1025), filesize + 1 ) );
+      istr.read( &(headerdata[0]), headerdata.size() - 1 );
+      istr.seekg( 0, ios::beg );
+      headerdata.back() = '\0'; //JIC
+      
+      // Require this suspect file to have both "$DATE_MEA:" and "$DATA:" fields
+      if( (headerdata.find("$DATE_MEA:") == string::npos)
+         || (headerdata.find("$DATA:") == string::npos) )
+      {
+        throw runtime_error( "IAEA file first line must start with a '$'" );
+      }
+      
+      // We could advance stream to the first "$", but I *think* we should be fine
+      //  just starting from the beginning, and the below should skip past invalid
+      //  or not-understood stuff
+      //const auto pos = headerdata.find("$");
+      //assert( pos != string::npos );
+      //istr.seekg( 0 + orig_pos + pos, ios::beg );
+    }//if( line.empty() || line[0]!='$' )
     
     bool neutrons_were_cps = false;
     std::shared_ptr<DetectorAnalysis> anaresult;
@@ -257,7 +305,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             newcal->set_polynomial( nchannel, cal_coeffs, deviation_pairs );
             meas->energy_calibration_ = newcal;
             
-            if( bin_to_energy.empty() )
+            if( !bin_to_energy.empty() )
               meas->parse_warnings_.push_back( "A lower channel energy calibration was also specified in file, but not used." );
           }catch( std::exception &e )
           {
@@ -724,7 +772,18 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         {
           parse_warnings_.emplace_back( "Error parsing neutron cps from line: " + line );
         }
-      }else if( starts_with(line,"$SPEC_REM:") )
+      }else if( starts_with(line,"COMMENT:") )
+      {
+        // NOTE: line not starting with '$'
+        const auto pos = line.find(":");
+        if( (pos != string::npos) && ((pos+1) != line.size()) )
+        {
+          line = line.substr(pos + 1);
+          trim(line);
+          if( !line.empty() )
+            meas->remarks_.push_back( line );
+        }
+      }else if( starts_with(line,"$SPEC_REM:") || starts_with(line,"$COMMENT:")  )
       {
         while( SpecUtils::safe_get_line( istr, line ) )
         {

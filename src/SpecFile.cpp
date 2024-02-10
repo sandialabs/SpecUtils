@@ -974,9 +974,14 @@ float Measurement::gamma_channel_lower( const size_t channel ) const
   assert( energy_calibration_ );
   const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
   
-  if( !energies || channel >= energies->size() )
+  if( !energies )
     throw std::runtime_error( "gamma_channel_lower: channel energies not defined" );
     
+  if( channel >= energies->size() )
+    throw std::runtime_error( "gamma_channel_lower: requesting larger channel ("
+                             + std::to_string(channel) + ") than available ("
+                             + std::to_string(energies->size()) + ")" );
+  
   return energies->operator[]( channel );
 }//float gamma_channel_lower( const size_t channel ) const
   
@@ -994,6 +999,11 @@ float Measurement::gamma_channel_upper( const size_t channel ) const
   
   if( !energies || (energies->size() < 2) || ((channel+1) >= energies->size()) )
     throw std::runtime_error( "gamma_channel_upper: channel energies not defined" );
+  
+  if( (channel+1) >= energies->size() )
+    throw std::runtime_error( "gamma_channel_upper: requesting larger channel ("
+                             + std::to_string(channel) + ") than available ("
+                             + std::to_string(energies->size()) + ")" );
   
   return (*energies)[channel+1];
 }//float gamma_channel_upper( const size_t channel ) const

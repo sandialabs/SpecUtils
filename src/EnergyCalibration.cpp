@@ -47,7 +47,7 @@ namespace SpecUtils
 const size_t EnergyCalibration::sm_min_channels = 1;
 const size_t EnergyCalibration::sm_max_channels = 65536 + 8;
 
-const float EnergyCalibration::sm_polynomial_offset_limit = 5000.0f;
+const float EnergyCalibration::sm_polynomial_offset_limit = 5500.0f;
   
   
 EnergyCalibration::EnergyCalibration()

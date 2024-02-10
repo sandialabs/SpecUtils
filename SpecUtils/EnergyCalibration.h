@@ -281,7 +281,7 @@ namespace SpecUtils
     /** The largest positive value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
      i.e., if a gamma spectrum has a larger value than this, then the calibration coefficients will be considered garbage and not used.
      
-     Current value is 5000 keV (alpha particle spectra sometimes have a value of at least 1500 keV, so we'll be generous).
+     Current value is 5500 keV (only alpha particle spectra seem to have values more than a few hundred keV).
      
      A lower bound of -500 keV is currently hard-coded.
      
