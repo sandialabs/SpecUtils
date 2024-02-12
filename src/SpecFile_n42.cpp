@@ -525,6 +525,8 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::Falcon5000:
     case SpecUtils::DetectorType::MicroDetective:
     case SpecUtils::DetectorType::DetectiveX:
+    case SpecUtils::DetectorType::Fulcrum40h:
+    case SpecUtils::DetectorType::Fulcrum:
       det_kind = "HPGe";
       break;
       
@@ -544,10 +546,13 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::RIIDEyeNaI:
     case SpecUtils::DetectorType::RadSeekerNaI:
     case SpecUtils::DetectorType::VerifinderNaI:
+    case SpecUtils::DetectorType::IdentiFinderR425NaI:
+    case SpecUtils::DetectorType::Sam950:
       det_kind = "NaI";
       break;
       
     case SpecUtils::DetectorType::IdentiFinderLaBr3:
+    case SpecUtils::DetectorType::IdentiFinderR425LaBr:
     case SpecUtils::DetectorType::IdentiFinderR500LaBr:
     case SpecUtils::DetectorType::RadHunterLaBr3:
     case SpecUtils::DetectorType::Sam940LaBr3:

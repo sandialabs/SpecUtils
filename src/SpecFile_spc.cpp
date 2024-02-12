@@ -1363,6 +1363,8 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::Exploranium:
     case DetectorType::IdentiFinder:
     case DetectorType::IdentiFinderNG:
+    case DetectorType::IdentiFinderR425NaI:
+    case DetectorType::IdentiFinderR425LaBr:
     case DetectorType::IdentiFinderLaBr3:
     case DetectorType::IdentiFinderTungsten:
     case DetectorType::IdentiFinderUnknown:
@@ -1393,6 +1395,9 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::VerifinderLaBr:
     case DetectorType::KromekD3S:
     case DetectorType::RadiaCode:
+    case DetectorType::Fulcrum:
+    case DetectorType::Fulcrum40h:
+    case DetectorType::Sam950:
     case DetectorType::Unknown:
       defaultname = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
       break;

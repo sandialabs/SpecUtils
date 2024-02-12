@@ -289,6 +289,16 @@ enum class DetectorType : int
    */
   IdentiFinderTungsten,
   
+  /** G & NG Models models
+   NaI: 1.77 x 1.77 x 1.77 in (45 x 45 x 45 mm) cubic detector with silicon photomultiplier (SiPM)
+   */
+  IdentiFinderR425NaI,
+  
+  /** LG & LNG Models
+   LaBr3: 1.4 x 1.4 x 1.4 in (35 x 35 x 35 mm) cubic detector with silicon photomultiplier (SiPM)
+   */
+  IdentiFinderR425LaBr,
+  
   /** R500 UL-LG: 38 x 38mm, LaBr, GM, LED
       R500 UL-LGH: 38 x 38mm, LaBr, GM
    */
@@ -337,6 +347,7 @@ enum class DetectorType : int
   OrtecRadEagleLaBr,
   /** The LaBr3 may not always be detector, and then it will be assigned Sam940 */
   Sam940LaBr3,
+  
   Sam940,
   Sam945,
   Srpm210,
@@ -355,6 +366,19 @@ enum class DetectorType : int
   
   /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
   KromekD3S,
+  
+  /** PHDS Fulcrum; HPGe 12% efficient (rel. to 3x3 NaI)  handheld detector. */
+  Fulcrum,
+  
+  /** PHDS Fulcrum-40h; HPGe 40% efficient (rel. to 3x3 NaI) handheld detector. */
+  Fulcrum40h,
+  
+  /** BNC SAM-950 detector.  There are 1.5x1.5, 2x2, 3x3 NaI variants, as well as LaBr3 2x2, and CeBr3 2x2, but
+   these are not currently differentiated because I havent seen example files of them.
+   
+   Also not: The BNC SAMpack may erroneously claim to be a SAM-950 detector, so will get this DetectorType ID applied.
+   */
+  Sam950,
   
   Unknown
 };//enum DetectorType

@@ -1335,6 +1335,8 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_IdentiFinderNGDetectorStr    = "IdentiFINDER-NG";
   static const string sm_IdentiFinderLaBr3DetectorStr = "IdentiFINDER-LaBr3";
   static const string sm_IdentiFinderTungstenStr      = "IdentiFINDER-T";
+  static const string sm_IdentiFinderR425NaI          = "IdentiFinder-R425-NaI";
+  static const string sm_IdentiFinderR425LaBr         = "IdentiFinder-R425-LaBr";
   static const string sm_IdentiFinderR500NaIStr       = "IdentiFINDER-R500-NaI";
   static const string sm_IdentiFinderR500LaBrStr      = "IdentiFINDER-R500-LaBr3";
   static const string sm_IdentiFinderUnknownStr       = "IdentiFINDER-Unknown";
@@ -1370,6 +1372,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
   static const string sm_KromekD3S                    = "Kromek D3S";
+  static const string sm_Fulcrum                      = "Fulcrum";
+  static const string sm_Fulcrum40h                   = "Fulcrum-40h";
+  static const string sm_Sam950                       = "Sam-950";
   
   
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
@@ -1392,6 +1397,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_IdentiFinderTungstenStr;
     case DetectorType::IdentiFinderR500NaI:
       return sm_IdentiFinderR500NaIStr;
+    case DetectorType::IdentiFinderR425NaI:
+      return sm_IdentiFinderR425NaI;
+    case DetectorType::IdentiFinderR425LaBr:
+      return sm_IdentiFinderR425LaBr;
     case DetectorType::IdentiFinderR500LaBr:
       return sm_IdentiFinderR500LaBrStr;
     case DetectorType::IdentiFinderUnknown:
@@ -1460,6 +1469,12 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderLaBr;
     case DetectorType::KromekD3S:
       return sm_KromekD3S;
+    case DetectorType::Fulcrum:
+      return sm_Fulcrum;
+    case DetectorType::Fulcrum40h:
+      return sm_Fulcrum40h;
+    case DetectorType::Sam950:
+      return sm_Sam950;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -6161,7 +6176,8 @@ void SpecFile::set_detector_type_from_other_info()
   const string &model = instrument_model_;
 //  const string &id = instrument_id_;
   
-  if( icontains(model,"SAM") && (contains(model,"940") || icontains(model,"Eagle+")) )
+  if( icontains(model,"SAM") && (contains(model,"940") || icontains(model,"Eagle+"))
+     && !icontains(manufacturer_,"Princeton") )
   {
     if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
@@ -6173,7 +6189,8 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }
   
-  if( icontains(model,"SAM") && contains(model,"945") )
+  if( icontains(model,"SAM") && contains(model,"945") 
+     && !icontains(manufacturer_,"Princeton") )
   {
     //if( icontains(model,"LaBr") )
       //detector_type_ = Sam945LaBr3;
@@ -6337,6 +6354,15 @@ void SpecFile::set_detector_type_from_other_info()
       return;
     }//if( icontains(model,"R500") )
     
+    if( icontains(model,"R425") )
+    {
+      if( icontains(model,"LG") || icontains(model,"LNG") || icontains(model,"LaBr")  )
+        detector_type_ = DetectorType::IdentiFinderR425LaBr;
+      else
+        detector_type_ = DetectorType::IdentiFinderR425NaI;
+      return;
+    }//if( icontains(model,"R425") )
+    
     if( icontains(model,"NG") || (icontains(model,"2") && !icontains(model,"LG")) )
     {
       detector_type_ = DetectorType::IdentiFinderNG;
@@ -6409,7 +6435,8 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( icontains(model,"RIIDEye") )
   
   
-  if( icontains(model,"SAM940") || icontains(model,"SAM 940") || icontains(model,"SAM Eagle") )
+  if( (icontains(model,"SAM940") || icontains(model,"SAM 940") || icontains(model,"SAM Eagle"))
+     && !icontains(manufacturer_,"Princeton") )
   {
     if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
@@ -6426,6 +6453,12 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }
   
+  
+  if( icontains(model,"SAM") && icontains(model,"950") )
+  {
+    detector_type_ = DetectorType::Sam950;
+    return;
+  }
   
   if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
            && icontains(model,"Raider") )
@@ -6517,6 +6550,15 @@ void SpecFile::set_detector_type_from_other_info()
     //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
     //  exist and if its made up of other detectors, get rid of those spectra
   }//
+  
+  if( icontains(instrument_model_, "Fulcrum") )
+  {
+    if( icontains(instrument_model_, "40") )
+      detector_type_ = DetectorType::Fulcrum40h;
+    else
+      detector_type_ = DetectorType::Fulcrum;
+    return;
+  }//if( icontains(instrument_model_, "Fulcrum") )
   
   
   if( manufacturer_.size() || instrument_model_.size() )
