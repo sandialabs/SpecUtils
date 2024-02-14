@@ -1640,7 +1640,7 @@ bool SpecFile::write_iaea_spe( ostream &output,
       for( size_t i = 0; i < counts.size(); ++i )
       {
         const float count = counts[i];
-        if( std::floorf(count) == count )
+        if( floorf(count) == count )
         {
           // If we print as a float, then by default above 1.0E6 will print in scientific
           //  notation, which some other applications do not read in
