@@ -2039,6 +2039,7 @@ std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_inf
   specfile->set_instrument_model( spec_infos[0].m_model );
   
   shared_ptr<SpecUtils::EnergyCalibration> first_cal;
+  vector< shared_ptr<SpecUtils::Measurement> > measurements;
   for( size_t spec_index = 0; spec_index < spec_infos.size(); ++spec_index )
   {
     const UrlSpectrum &spec = spec_infos[spec_index];
@@ -2064,6 +2065,7 @@ std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_inf
     {
       // Check to see if we can re-use energy cal from previous measurement
       if( spec_index
+         && first_cal
          && (spec.m_energy_cal_coeffs == first_cal->coefficients())
          && (spec.m_dev_pairs == first_cal->deviation_pairs())
          && (spec.m_channel_data.size() == first_cal->num_channels()) )
@@ -2082,10 +2084,22 @@ std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_inf
         }
         
         m->set_energy_calibration( first_cal );
+        
+        // Check previous measurements to make sure they have energy calibrations, and if not
+        //  set it to current one.
+        for( auto &meas : measurements )
+        {
+          if( meas 
+             && (!meas->energy_calibration() || !meas->energy_calibration()->valid())
+             && (meas->num_gamma_channels() == m->num_gamma_channels()) )
+          {
+            meas->set_energy_calibration( first_cal );
+          }
+        }//for( auto &meas : measurements )
       }//if( we can re-use energy cal ) / else
     }//if( !spec.m_energy_cal_coeffs.empty() )
     
-    
+    measurements.push_back( m );
     specfile->add_measurement( m, false );
   }//for( const UrlSpectrum &spec : spec_infos )
   

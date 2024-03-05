@@ -107,6 +107,15 @@ bool SpecFile::load_from_uri( std::istream &input )
     
     vector<string> uris;
     size_t next_pos = 0;
+    
+    // Incase someone saved a mailto: URI to file
+    if( SpecUtils::istarts_with( rawdata, "mailto:") )
+    {
+      next_pos = rawdata.find( "raddata://G0/" );
+      if( next_pos == string::npos )
+        throw runtime_error( "No URI starting with raddata://G0/ present." );
+    }//if( SpecUtils::istarts_with( rawdata, "mailto:") )
+    
     do
     {
       const size_t current_pos = next_pos;
@@ -141,9 +150,18 @@ bool SpecFile::load_from_uri( std::istream &input )
         url_spectra = decode_spectrum_urls( uris );
       }catch( std::exception & )
       {
-        // No go - give up.
-        const string reason = e.what();
-        throw runtime_error( "Failed to decode URL to spectra: " + reason );
+        try
+        {
+          // Try URL decoding the URIs - ONE more time (e.g., if you originally encoded to go
+          //  into email, but then didnt URL decode it)
+          for( string &uri : uris )
+            uri = url_decode( uri );
+        }catch( std::exception & )
+        {
+          // Really no go - give up.
+          const string reason = e.what();
+          throw runtime_error( "Failed to decode URL to spectra: " + reason );
+        }
       }
     }//try / catch
     
