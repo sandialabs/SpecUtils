@@ -711,6 +711,10 @@ namespace SpecUtils
     if( field_start >= str_len )
       throw runtime_error( "empty input" );
     
+    
+    if( (input[field_start] == '-') || (input[field_start] == '+') )
+      throw runtime_error( "Multiple leading + or - signs." );
+    
     const std::string delims = ":";  //"-:,."
     //for( auto c : delims ){ assert( !isspace(c) ); }
     

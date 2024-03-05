@@ -847,7 +847,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "],";
     }//
     
-    ostr << std::setprecision(oldprecision);
+    ostr << std::setprecision(static_cast<int>(oldprecision));
     
     
     // foreground y-point values

@@ -12,6 +12,7 @@ project( SpecUtils )
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
+option( SpecUtils_ENABLE_URI_SPECTRA "Enables encoding/decoding spectra to URIs (for, ex, QR-codes) - requires linking to zlib" ON )
 option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (only for use within InterSpec)" OFF )
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
@@ -23,7 +24,6 @@ option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_USE_FROM_CHARS "Use c++17 std::from_chars for parsing floats/ints, instead of boost::spirit - about 50% slower." OFF )
-
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
@@ -209,6 +209,13 @@ if( SpecUtils_ENABLE_D3_CHART )
   )
 endif( SpecUtils_ENABLE_D3_CHART )
 
+if( SpecUtils_ENABLE_URI_SPECTRA )
+  list( APPEND headers SpecUtils/UriSpectrum.h )
+  list( APPEND sources src/UriSpectrum.cpp src/SpecFile_uri.cpp )
+  #set( ZLIB_USE_STATIC_LIBS "ON" )
+  find_package( ZLIB REQUIRED )
+endif( SpecUtils_ENABLE_URI_SPECTRA )
+
 #default to building a static lib
 set( SpecUtils_LIB_TYPE STATIC )
 
@@ -265,10 +272,16 @@ if( SpecUtils_USE_WT_THREADPOOL )
 endif( SpecUtils_USE_WT_THREADPOOL )
 
 
+if( SpecUtils_ENABLE_URI_SPECTRA )
+  target_link_libraries( SpecUtils PUBLIC ZLIB::ZLIB )
+endif( SpecUtils_ENABLE_URI_SPECTRA )
+
+
 if( SpecUtils_PYTHON_BINDINGS )
   #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
   target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
+
 
 if( DEFINED boost_SOURCE_DIR )
   target_link_libraries( SpecUtils PUBLIC Boost::date_time Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )

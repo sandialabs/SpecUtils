@@ -4359,9 +4359,15 @@ bool SpecFile::load_file( const std::string &filename,
       break;
 
     case ParserType::CaenHexagonGXml:
-      success = load_caen_gxml_file(filename);
+      success = load_caen_gxml_file( filename );
       break;
-
+      
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case ParserType::Uri:
+      success = load_uri_file( filename );
+      break;
+#endif
+      
     case ParserType::MicroRaider:
       success = load_json_file( filename );
     break;
@@ -4379,10 +4385,10 @@ bool SpecFile::load_file( const std::string &filename,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
           triedLzs = false, triedXmlScanData = false, triedJson = false,
-          tried_gxml = false, triedRadiaCode = false;
+          tried_gxml = false, triedRadiaCode = false, tried_uri = false;
       
       if( orig_file_ending.empty() )
-	    orig_file_ending = filename;
+        orig_file_ending = filename;
 
       if( !orig_file_ending.empty() )
       {
@@ -4536,21 +4542,30 @@ bool SpecFile::load_file( const std::string &filename,
         }//if( orig_file_ending=="xml" || orig_file_ending=="rco")
 
 
-        if (orig_file_ending == "json")
+        if( orig_file_ending == "json" )
         {
           triedJson = true;
           success = load_json_file(filename);
-          if (success) break;
+          if( success ) break;
         }//if( orig_file_ending=="xml" )
 
 
-        if (orig_file_ending == "gxml")
+        if( orig_file_ending == "gxml" )
         {
           tried_gxml = true;
           success = load_caen_gxml_file(filename);
-          if (success) break;
+          if( success ) break;
         }//if( orig_file_ending=="gxml" )
 
+        
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+        if( istarts_with(filename, "raddata://") || (orig_file_ending == "uri") )
+        {
+          tried_uri = true;
+          success = load_uri_file(filename);
+          if( success ) break;
+        }//if( orig_file_ending=="gxml" )
+#endif
       }//if( !orig_file_ending.empty() ) / else
 
       if( !success && !triedSpc )
@@ -4618,6 +4633,11 @@ bool SpecFile::load_file( const std::string &filename,
 
       if( !success && !tried_gxml )
         success = load_caen_gxml_file( filename );
+      
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+      if( !success && !tried_uri )
+        success = load_uri_file( filename );
+#endif
       
       if( !success && !triedRadiaCode )
         success = load_radiacode_file( filename );
@@ -8458,6 +8478,7 @@ void SpecFile::write( std::ostream &strm,
       break;
     }
 #endif
+      
 #if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:  
     {
@@ -8467,6 +8488,16 @@ void SpecFile::write( std::ostream &strm,
       break;
     }
 #endif
+      
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case SaveSpectrumAsType::Uri:
+    {
+      const size_t num_uri = 1;
+      success = info.write_uri( strm, num_uri );
+      break;
+    }
+#endif
+      
     case SaveSpectrumAsType::NumTypes:
       throw runtime_error( "Invalid output format specified" );
       break;

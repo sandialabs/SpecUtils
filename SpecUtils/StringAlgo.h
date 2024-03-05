@@ -359,6 +359,21 @@ namespace  SpecUtils
   std::wstring convert_from_utf8_to_utf16( const std::string &str );
  
 
+  /** \brief Prints the floating point value into its most compact form, for the specified
+   number of significant figures.
+   
+   Prints the most compact string representation of the value, with at least the specified
+   number of significant figures; if more significant figures can be included without increasing
+   result length, they will be included.
+   
+   Uses the "round to nearest and ties to even" convention.
+   
+   Note: this function is hand-rolled, and extremely slow, and likely missing some edge cases or
+         something.  There is likely a much more elegant and correct implementation for this.
+   */
+  std::string printCompact( const double value, const size_t sig_figs );
+  
+  
   /** \brief Turns a set of numbers with possible many sub-sequences with values
    that are adjacent into a convenient human-readable string.
    

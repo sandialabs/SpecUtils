@@ -8452,6 +8452,15 @@ namespace SpecUtils
       
       if( hprds )
       {
+        // Note that for ORTEC HPRDS detectors:
+        //  - We could ignore spectra shorter than 2 seconds, in which case we will be left with
+        //    a few longer spectra (IOI, background, ??); not totally clear/consistent which ones
+        //    are IOI.  It looks like usually the "long count" spectrum is the IOI, and the long
+        //    "time slice" can be a background.
+        //  - We could ignore longer spectra to get time history - but this time history
+        //    doesnt exactly correspond to the dwell measurements.  It looks like the
+        //    "total count" is the sum (or very very nearly) the sum of all these short 
+        //    measurements.
         const rapidxml::xml_node<char> *node = nullptr;
         //node = XML_FIRST_NODE(document_node, "OnsetDateTime");
         node = XML_FIRST_NODE(document_node, "EventCategory");

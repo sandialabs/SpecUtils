@@ -27,18 +27,18 @@
 #include <iostream>
 #include <fstream>
 
+#include <boost/date_time/date.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+
 #define BOOST_TEST_MODULE TestTimeFromString
 #include <boost/test/unit_test.hpp>
 
 //#define BOOST_TEST_DYN_LINK
 // To use boost unit_test as header only (no link to boost unit test library):
 //#include <boost/test/included/unit_test.hpp>
-
-
-#include <boost/date_time/date.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/date_time/gregorian/gregorian.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 
 
 #include "SpecUtils/DateTime.h"

@@ -68,7 +68,7 @@ add_test( TestSafeGetLine ${EXECUTABLE_OUTPUT_PATH}/test_safe_get_line.exe --log
 
 add_executable( test_time_from_string.exe test_time_from_string.cpp )
 target_link_libraries( test_time_from_string.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_time_from_string.exe PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+set_target_properties( test_time_from_string.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( TestTimeFromString ${EXECUTABLE_OUTPUT_PATH}/test_time_from_string.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes "-- --indir=${testdir}" )
 
 
@@ -103,10 +103,16 @@ add_test( TestCubicSpline ${EXECUTABLE_OUTPUT_PATH}/test_cubic_spline.exe --log_
 
 add_executable( test_filesystem_functions.exe test_filesystem_functions.cpp )
 target_link_libraries( test_filesystem_functions.exe PRIVATE SpecUtils Boost::unit_test_framework Boost::filesystem )
-set_target_properties( test_filesystem_functions.exe PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+set_target_properties( test_filesystem_functions.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( testUtilityFilesystemFunctions ${EXECUTABLE_OUTPUT_PATH}/test_filesystem_functions.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes )
 
 add_executable( test_rebin_by_lower_energy.exe test_rebin_by_lower_energy.cpp )
 target_link_libraries( test_rebin_by_lower_energy.exe PRIVATE SpecUtils Boost::unit_test_framework )
 set_target_properties( test_rebin_by_lower_energy.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( TestRebinByLowerEnergy ${EXECUTABLE_OUTPUT_PATH}/test_rebin_by_lower_energy.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes )
+
+
+add_executable( test_uri_spectrum.exe test_uri_spectrum.cpp )
+target_link_libraries( test_uri_spectrum.exe PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_uri_spectrum.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test( TestRebinByLowerEnergy ${EXECUTABLE_OUTPUT_PATH}/test_uri_spectrum.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes )

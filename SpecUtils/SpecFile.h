@@ -180,7 +180,11 @@ enum class ParserType : int
   Json,
   /** CAEN Hexagon MCA gxml format. */
   CaenHexagonGXml,
-
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** The URI defined format; e.g., from a QR-code */
+  Uri,
+#endif
+  
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -244,6 +248,11 @@ enum class SaveSpectrumAsType : int
 #if( SpecUtils_INJA_TEMPLATES )
   /** See #SpecFile::write_template for details. */
   Template,
+#endif
+  
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** See #SpecFile::write_uri for details. */
+  Uri,
 #endif
 
   NumTypes
@@ -1710,6 +1719,13 @@ public:
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
   bool load_caen_gxml_file(const std::string& filename);
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** The URI defined format; e.g., from a QR-code.
+   The string can either be the URI(s) itself, or point to a file with the URI(s) in them.
+   If a multipart URI, source should have all URIs, with each URI starting with "RADDATA://".
+   */
+  bool load_uri_file( const std::string &uri_or_filename );
+#endif
 
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1843,6 +1859,13 @@ public:
   /** Load from a CAEN Hexagon gxml file. */
   bool load_from_caen_gxml(std::istream& input);
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** The URI defined format; e.g., from a QR-code .
+   If a multipart URI, source should have all URIs, with each URI starting with "RADDATA://".
+   */
+  bool load_from_uri( std::istream& input );
+#endif
+  
   //cleanup_after_load():  Fixes up inconsistent calibrations, binnings and such,
   //  May throw exception on error.
   enum CleanupAfterLoadFlags
@@ -2219,6 +2242,26 @@ public:
   
   bool write_template( std::ostream &output, const std::string template_file, bool strip_blocks ) const;
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** Writes the file to URI(s), for, e.g., creating QR-codes.
+   
+   @param output stream URI(s) will be written to.
+   @param num_uris The number of URIs to write.  If 1, then all spectra in the `SpecFile` will
+          be written into a single URI.  If greater than one, then all spectra will be summed to
+          a single spectrum, and it written to multiple URIs, separated by line breaks.
+          Must be a value in range [1,9].
+   @returns if successfully wrote things.
+   
+   Will throw on input error.
+   
+   Currently encodes URI using zip compression and base64url encoding.
+   
+   If you would like more flexibility, see `to_url_spectra(...)` and `url_encode_spectrum(...)`
+   and/or `url_encode_spectra(...)` (you probably do want more flexibility in a lot of cases).
+   */
+  bool write_uri( std::ostream &output, const size_t num_uris ) const;
+#endif
+  
   //Incase InterSpec specific changes are made, please change this number
   //  Version 4: Made it so portal data that starts with a long background as
   //             its first sample will have the 'id' attribute of the
