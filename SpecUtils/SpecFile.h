@@ -2250,16 +2250,16 @@ public:
           be written into a single URI.  If greater than one, then all spectra will be summed to
           a single spectrum, and it written to multiple URIs, separated by line breaks.
           Must be a value in range [1,9].
+   @param encode_options A bitwise or of #Specutils::EncodeOptions.
    @returns if successfully wrote things.
    
    Will throw on input error.
    
-   Currently encodes URI using zip compression and base64url encoding.
-   
    If you would like more flexibility, see `to_url_spectra(...)` and `url_encode_spectrum(...)`
    and/or `url_encode_spectra(...)` (you probably do want more flexibility in a lot of cases).
    */
-  bool write_uri( std::ostream &output, const size_t num_uris ) const;
+  bool write_uri( std::ostream &output, const size_t num_uris,
+                 const uint8_t encode_options ) const;
 #endif
   
   //Incase InterSpec specific changes are made, please change this number

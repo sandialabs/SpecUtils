@@ -571,10 +571,10 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
         try {
           uint8_t raw_bytes[16];
           vector<float> cal_coefs;
-          int ds = pfx.length();
+          const size_t ds = pfx.length();
 
           // "unhexlify"
-          for (int i = 0; i < sizeof(raw_bytes); i++) {
+          for (size_t i = 0; i < sizeof(raw_bytes); i++) {
             string tmp = line.substr(ds + i * 3, 2);
             raw_bytes[i] = strtoul(tmp.c_str(), NULL, 16);
           }

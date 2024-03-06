@@ -171,7 +171,7 @@ namespace SerialToDetectorModel
       
       try
       {
-        info.serial = stoul( fields[0], nullptr, 10 );
+        info.serial = static_cast<uint32_t>( stoul( fields[0], nullptr, 10 ) );
       }catch(...)
       {
         //If the string contained a UTF-8, non-ascii character, then we will

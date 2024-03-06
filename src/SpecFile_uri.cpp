@@ -172,7 +172,8 @@ bool SpecFile::load_from_uri( std::istream &input )
 }//bool load_from_uri( std::istream &input )
   
   
-bool SpecFile::write_uri( std::ostream &output, const size_t num_uris ) const
+bool SpecFile::write_uri( std::ostream &output, const size_t num_uris, 
+                         const uint8_t encode_options ) const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -210,7 +211,6 @@ bool SpecFile::write_uri( std::ostream &output, const size_t num_uris ) const
   
   vector<UrlSpectrum> spectra  = to_url_spectra( specs, detector_model );
   
-  const uint8_t encode_options = EncodeOptions::UseUrlSafeBase64;
   vector<string> uris = url_encode_spectra( spectra, encode_options, num_uris );
   
   for( size_t i = 0; i < uris.size(); ++i )
