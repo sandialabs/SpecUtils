@@ -24,6 +24,7 @@
 #include "SpecUtils_config.h"
 
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <numeric>
