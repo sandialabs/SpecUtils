@@ -66,6 +66,10 @@
 #include "SpecUtils/D3SpectrumExport.h"
 #endif
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+#include "SpecUtils/UriSpectrum.h"
+#endif
+
 
 #if( SpecUtils_USE_SIMD )
 // Should move to using a library for SIMD operations; some potential candidate libraries include:
@@ -1273,6 +1277,9 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 #if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:           return "tmplt";
 #endif
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case SaveSpectrumAsType::Uri:                return "uri";
+#endif
     case SaveSpectrumAsType::NumTypes:          break;
   }//switch( m_format )
   
@@ -1320,6 +1327,10 @@ const char *descriptionText( const SaveSpectrumAsType type )
 #if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:           return "tmplt";
 #endif
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case SaveSpectrumAsType::Uri:                return "URI";
+#endif
+      
     case SaveSpectrumAsType::NumTypes:          return "";
   }
   return "";
@@ -8493,7 +8504,7 @@ void SpecFile::write( std::ostream &strm,
     case SaveSpectrumAsType::Uri:
     {
       const size_t num_uri = 1;
-      success = info.write_uri( strm, num_uri );
+      success = info.write_uri( strm, num_uri, SpecUtils::EncodeOptions::UseUrlSafeBase64 );
       break;
     }
 #endif
