@@ -202,9 +202,9 @@ bool SpecFile::load_from_uri( std::istream &input )
     *this = *specfile;
     
     return true;
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
-    cerr << "Failed to parse URI spectrum: " << e.what() << endl;
+    //cerr << "Failed to parse URI spectrum: " << e.what() << endl;
     reset();
     input.seekg( start_pos );
     input.clear();
