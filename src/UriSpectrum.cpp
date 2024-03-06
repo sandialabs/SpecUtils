@@ -2024,7 +2024,7 @@ vector<UrlSpectrum> to_url_spectra( vector<shared_ptr<const SpecUtils::Measureme
     const vector<float> &counts = *spec->gamma_counts();
     urlspec.m_channel_data.resize( counts.size() );
     for( size_t i = 0; i < counts.size(); ++i )
-      urlspec.m_channel_data[i] = static_cast<uint32_t>( counts[i] );
+      urlspec.m_channel_data[i] = SpecUtils::float_to_integral<uint32_t>( counts[i] );
     
     answer.push_back( urlspec );
   }//for( size_t i = 0; i < specs.size(); ++i )
@@ -2035,6 +2035,9 @@ vector<UrlSpectrum> to_url_spectra( vector<shared_ptr<const SpecUtils::Measureme
 
 std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_infos )
 {
+  if( spec_infos.empty() )
+    throw runtime_error( "to_spec_file: no input UrlSpectrum." );
+  
   auto specfile = make_shared<SpecFile>();
   specfile->set_instrument_model( spec_infos[0].m_model );
   
