@@ -27,6 +27,10 @@
 #include <iostream>
 #include <stdexcept>
 
+#if( PERFORM_DEVELOPER_CHECKS )
+#include <assert.h>
+#endif
+
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
@@ -101,21 +105,40 @@ bool SpecFile::load_from_uri( std::istream &input )
     if (!input.read(&(rawdata[0]), file_size))
       throw runtime_error("Failed to read first file contents.");
 
-    // File may contain multiple URIs (think multi-url spectra), so we'll split the URIs up
-    //  But first make the "RADDATA://G0/" part always lowercase.
+    //  First lets make the "RADDATA://G0/" part always lowercase.
     ireplace_all( rawdata, "RADDATA://G0/", "raddata://G0/" );
     
+    // Incase someone saved a mailto: URI to file, we will remove all the email front-matter,
+    //  leaving just "raddata://G0/" and after (for all URIs in rawdata).
+    ireplace_all( rawdata, "mailto:", "mailto:" );
+    for( size_t mailto_pos = rawdata.find( "mailto:" ); 
+        mailto_pos != string::npos;
+        mailto_pos = rawdata.find( "mailto:" ) )
+    {
+      //  (TODO: I guess we could get a false-positive here, if someone saved 'mailto:' in the
+      //   spectrum description... I guess we should account for this...)
+      const size_t raddata_pos = rawdata.find( "raddata://G0/", mailto_pos );
+      if( raddata_pos == string::npos )
+      {
+        // Only poorly formed input will make it here
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, "SpecFile::load_from_uri: encountered a 'mailto:'"
+                                        " without a trailing 'raddata://G0/' uri" );
+        assert( raddata_pos != string::npos );
+#endif
+
+        rawdata.erase( begin(rawdata) + mailto_pos, end(rawdata) );
+      }else
+      {
+        rawdata.erase( begin(rawdata) + mailto_pos, begin(rawdata) + raddata_pos );
+      }
+    }//for( while we need to remove 'mailto:' front matter )
+    
+    
+    // File may contain multiple URIs (think multi-url spectra), so we'll split the URIs up
+    // Break up `rawdata` input multiple URIs, splitting at raddata://
     vector<string> uris;
     size_t next_pos = 0;
-    
-    // Incase someone saved a mailto: URI to file
-    if( SpecUtils::istarts_with( rawdata, "mailto:") )
-    {
-      next_pos = rawdata.find( "raddata://G0/" );
-      if( next_pos == string::npos )
-        throw runtime_error( "No URI starting with raddata://G0/ present." );
-    }//if( SpecUtils::istarts_with( rawdata, "mailto:") )
-    
     do
     {
       const size_t current_pos = next_pos;
@@ -126,7 +149,9 @@ bool SpecFile::load_from_uri( std::istream &input )
       const size_t len = next_pos - current_pos;  // So we should be safe if next_pos==string::npos
       string uri = rawdata.substr(current_pos, next_pos - current_pos);
       trim( uri ); //TODO: just copy next_pos, then decrement the result to clear any whitespace.
-      uris.push_back( std::move(uri) );
+      
+      if( !uri.empty() )
+        uris.push_back( std::move(uri) );
     }while( next_pos != string::npos );
     
     if( uris.empty() )
@@ -152,15 +177,15 @@ bool SpecFile::load_from_uri( std::istream &input )
       {
         try
         {
-          // Try URL decoding the URIs - ONE more time (e.g., if you originally encoded to go
+          // Try URL decoding the URIs ONE more time (e.g., if you originally encoded to go
           //  into email, but then didnt URL decode it)
           for( string &uri : uris )
             uri = url_decode( uri );
+          url_spectra = decode_spectrum_urls( uris );
         }catch( std::exception & )
         {
           // Really no go - give up.
-          const string reason = e.what();
-          throw runtime_error( "Failed to decode URL to spectra: " + reason );
+          throw runtime_error( "Failed to decode URL to spectra: " + string(e.what()) );
         }
       }
     }//try / catch

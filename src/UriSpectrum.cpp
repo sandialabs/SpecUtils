@@ -1769,7 +1769,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
     if( end_pos != string::npos )
     {
       next_spec_info = counts_str.substr( end_pos + 4 );
-      counts_str = counts_str.substr( end_pos );
+      counts_str = counts_str.substr( 0, end_pos );
     }
     
     SpecUtils::ireplace_all( counts_str, "$", "," );
