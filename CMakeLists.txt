@@ -12,7 +12,7 @@ project( SpecUtils )
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
-option( SpecUtils_ENABLE_URI_SPECTRA "Enables encoding/decoding spectra to URIs (for, ex, QR-codes) - requires linking to zlib" ON )
+option( SpecUtils_ENABLE_URI_SPECTRA "Enables encoding/decoding spectra to URIs (for, ex, QR-codes) - requires linking to zlib" OFF )
 option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (only for use within InterSpec)" OFF )
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
