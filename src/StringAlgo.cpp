@@ -21,6 +21,7 @@
 
 #include <string>
 #include <locale>
+#include <sstream>
 
 #include <boost/version.hpp>
 
