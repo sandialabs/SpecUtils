@@ -56,7 +56,7 @@ ENDFOREACH()
 
 
 add_executable( test_iso_time_string.exe test_iso_time_string.cpp )
-target_link_libraries( test_iso_time_string.exe PRIVATE SpecUtils Boost::unit_test_framework )
+target_link_libraries( test_iso_time_string.exe PRIVATE SpecUtils Boost::unit_test_framework Boost::date_time)
 set_target_properties( test_iso_time_string.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( TestIsoTimeString ${EXECUTABLE_OUTPUT_PATH}/test_iso_time_string.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes "-- --indir=${testdir}" )
 
@@ -111,8 +111,9 @@ target_link_libraries( test_rebin_by_lower_energy.exe PRIVATE SpecUtils Boost::u
 set_target_properties( test_rebin_by_lower_energy.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( TestRebinByLowerEnergy ${EXECUTABLE_OUTPUT_PATH}/test_rebin_by_lower_energy.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes )
 
-
+if( SpecUtils_ENABLE_URI_SPECTRA )
 add_executable( test_uri_spectrum.exe test_uri_spectrum.cpp )
 target_link_libraries( test_uri_spectrum.exe PRIVATE SpecUtils Boost::unit_test_framework )
 set_target_properties( test_uri_spectrum.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( TestRebinByLowerEnergy ${EXECUTABLE_OUTPUT_PATH}/test_uri_spectrum.exe --log_level=test_suite --report_level=detailed --catch_system_error=yes )
+endif()
