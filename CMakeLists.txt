@@ -284,7 +284,7 @@ endif( SpecUtils_PYTHON_BINDINGS )
 
 
 if( DEFINED boost_SOURCE_DIR )
-  target_link_libraries( SpecUtils PUBLIC Boost::date_time Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )
+  target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )
 endif( DEFINED boost_SOURCE_DIR )
 
 

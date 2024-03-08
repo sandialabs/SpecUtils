@@ -60,6 +60,8 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
       indir = framework::master_test_suite().argv[i+1];
   }
   
+  indir = "/Users/wcjohns/rad_ana/InterSpec_master/external_libs/SpecUtils/unit_tests/";
+  
   string test_in_file, test_out_file;
   const string potential_input_paths[] = { ".", indir, "../testing/", "../../testing/", "../../../testing/" };
   for( const string dir : potential_input_paths )
@@ -527,7 +529,107 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     index2++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "9" );
   
+  
+  //istarts_with
+  //iends_with
+  //starts_with
+  //erase_any_character
+
+  
+  
 }
+
+BOOST_AUTO_TEST_CASE( checkIFind )
+{
+  string corpus = "Hello Dude";
+  const char *substr = "dude";
+  size_t correct_substr_pos = 6;
+  size_t substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "Dude";
+  substr = "Dude";
+  correct_substr_pos = 0;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  
+  corpus = "Dude what";
+  substr = "Dude";
+  correct_substr_pos = 0;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "Dude  what";
+  substr = "  ";
+  correct_substr_pos = 4;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  
+  corpus = "Dude what";
+  substr = "--";
+  correct_substr_pos = std::string::npos;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  
+  corpus = "--";
+  substr = "---";
+  correct_substr_pos = std::string::npos;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+
+  corpus = "-a--";
+  substr = "---";
+  correct_substr_pos = std::string::npos;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+
+  corpus = "-a--";
+  substr = "-";
+  correct_substr_pos = 0;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "-a--";
+  substr = "--";
+  correct_substr_pos = 2;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  
+  corpus = "A";
+  substr = "a";
+  correct_substr_pos = 0;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "Aa";
+  substr = "a";
+  correct_substr_pos = 0;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "A - BEACh";
+  substr = "bEACH";
+  correct_substr_pos = 4;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "shor";
+  substr = "LongerString";
+  correct_substr_pos = string::npos;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  
+  corpus = "12345";
+  substr = "23";
+  correct_substr_pos = 1;
+  substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
+  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+}//BOOST_AUTO_TEST_CASE( checkIFind )
+
 
 
 BOOST_AUTO_TEST_CASE( testPrintCompact )

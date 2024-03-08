@@ -110,6 +110,9 @@ bool SpecFile::load_from_uri( std::istream &input )
     
     // Incase someone saved a mailto: URI to file, we will remove all the email front-matter,
     //  leaving just "raddata://G0/" and after (for all URIs in rawdata).
+    //
+    //  TODO:  "mailto:"
+    //
     ireplace_all( rawdata, "mailto:", "mailto:" );
     for( size_t mailto_pos = rawdata.find( "mailto:" ); 
         mailto_pos != string::npos;
@@ -173,7 +176,7 @@ bool SpecFile::load_from_uri( std::istream &input )
       try
       {
         url_spectra = decode_spectrum_urls( uris );
-      }catch( std::exception & )
+      }catch( std::exception &f )
       {
         try
         {
@@ -182,10 +185,12 @@ bool SpecFile::load_from_uri( std::istream &input )
           for( string &uri : uris )
             uri = url_decode( uri );
           url_spectra = decode_spectrum_urls( uris );
-        }catch( std::exception & )
+        }catch( std::exception &g )
         {
           // Really no go - give up.
-          throw runtime_error( "Failed to decode URL to spectra: " + string(e.what()) );
+          throw runtime_error( "Failed to decode URL to spectra: '" + string(e.what())
+                              + "', or '" + string(f.what()) + "' (after trying url-decode), or '"
+                              + string(g.what()) + "' (after trying url-decode another time)." );
         }
       }
     }//try / catch
@@ -202,13 +207,15 @@ bool SpecFile::load_from_uri( std::istream &input )
     *this = *specfile;
     
     return true;
-  }catch( std::exception & )
+  }catch( std::exception &e )
   {
     //cerr << "Failed to parse URI spectrum: " << e.what() << endl;
     reset();
     input.seekg( start_pos );
     input.clear();
     input.exceptions(origexceptions);
+    
+    //throw;
   }//try / catch
   
   return false;
@@ -249,10 +256,23 @@ bool SpecFile::write_uri( std::ostream &output, const size_t num_uris,
   {
     // If greater than one, then all spectra will be summed to a single spectrum, and it
     //  written to multiple URIs, separated by line breaks.
-    specs.push_back( sum_measurements( sample_numbers_, detector_names_, nullptr ) );
-  }
+    try
+    {
+      auto sum = sum_measurements( sample_numbers_, detector_names_, nullptr );
+      if( !sum )
+        throw runtime_error( "Got nullptr back from summing." );
+      
+      specs.push_back( sum );
+    }catch( std::exception &e )
+    {
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, ("SpecFile::write_uri: failed to sum meas: " + string(e.what())).c_str() );
+#endif
+      return false;
+    }//try / catch
+  }//if( num_uris == 1 || (measurements_.size() == 1) ) / else
   
-  vector<UrlSpectrum> spectra  = to_url_spectra( specs, detector_model );
+  vector<UrlSpectrum> spectra = to_url_spectra( specs, detector_model );
   
   vector<string> uris = url_encode_spectra( spectra, encode_options, num_uris );
   

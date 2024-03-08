@@ -260,6 +260,30 @@ namespace SpecUtils
     return answer;
   }//bool iends_with( const std::string &line, const std::string &label )
   
+  
+  size_t ifind_substr_ascii( const std::string &line, const char * const label )
+  {
+    const size_t len1 = line.size();
+    const size_t len2 = strlen(label);
+    
+    if( len1 < len2 )
+      return string::npos;
+    
+    const auto case_insens_comp = []( const char &lhs, const char &rhs ) -> bool {
+      return (::rapidxml::internal::lookup_tables<0>::lookup_upcase[static_cast<unsigned char>(lhs)]
+          == ::rapidxml::internal::lookup_tables<0>::lookup_upcase[static_cast<unsigned char>(rhs)]);
+    };
+    
+    const char * const in_begin = line.c_str();
+    const char * const in_end = in_begin + len1;
+    const char * const pos = std::search( in_begin, in_end, label, label + len2, case_insens_comp );
+    
+    if( pos == in_end )
+      return string::npos;
+    return pos - in_begin;
+  }//size_t ifind_substr_ascii( const std::string &input, const char * const substr );
+  
+  
   void erase_any_character( std::string &line, const char *chars_to_remove )
   {
     if( !chars_to_remove )
@@ -1207,6 +1231,9 @@ namespace SpecUtils
     return ok;
 #else
     const bool ok = qi::phrase_parse( begin, end, (*qi::float_) % qi::eol, qi::lit(",")|qi::space, results );
+    
+    // Note that strings like "661.7,-0.1.7,9.3", will parse into 4 numbers {661.6,-0.1,0.7,9.3}
+    
 #endif
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( !ok )
@@ -1244,7 +1271,7 @@ namespace SpecUtils
           {
             char errormsg[1024];
             snprintf( errormsg, sizeof(errormsg),
-                     "Out of tolerance diffence for floats %.9g using "
+                     "Out of tolerance difference for floats %.9g using "
                      "boost::spirit vs %.9g using alternative split_to_float on float %i",
                      a, b, int(i) );
             log_developer_error( __func__, errormsg );
@@ -1410,6 +1437,8 @@ namespace SpecUtils
 #elif( PARSE_CONVERT_METHOD == 2 )
     
     const char *pos = input;
+    // TODO: 20240307: strings like "661.7,-0.1.7,9.3" are parsing and returning true - we could/should fix this
+    //bool all_fields_okay = true;
     
     while( *pos )
     {
@@ -1443,7 +1472,7 @@ namespace SpecUtils
         if( pos != end )
         {
           char errormsg[1024];
-          snprintf( errormsg, sizeof(errormsg), "Trailing unpased string '%s'",
+          snprintf( errormsg, sizeof(errormsg), "Trailing unparsed string '%s'",
                    string(pos,end).c_str() );
           log_developer_error( __func__, errormsg );
         }//if( begin != end )
@@ -1465,7 +1494,9 @@ namespace SpecUtils
       if( !ok )
         return false;
       
-      //If the next char is a delimeter, then we dont wantto apply the fix, otherwise apply the fix
+      //all_fields_okay &= (pos == end);
+      
+      //If the next char is a delimiter, then we dont want to apply the fix, otherwise apply the fix
       if( cambio_zero_compress_fix && (value == 0.0)
          && !is_in( *(start_pos+1), delims ) )
       {
@@ -1474,6 +1505,8 @@ namespace SpecUtils
       
       contents.push_back( static_cast<float>(value) );
     }//while( *pos )
+    
+    //return all_fields_okay;
     
 #elif( PARSE_CONVERT_METHOD == 3 )
     errno = 0;

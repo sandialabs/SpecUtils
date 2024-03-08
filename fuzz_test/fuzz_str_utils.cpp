@@ -192,6 +192,17 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   }
  
   print_waypoint( 11 );
+  
+  {
+    ifind_substr_ascii( datastr, str_1.c_str() );
+    ifind_substr_ascii( datastr, str_2.c_str() );
+    ifind_substr_ascii( str_1, str_2.c_str() );
+    ifind_substr_ascii( str_1, datastr.c_str() );
+    ifind_substr_ascii( str_2, datastr.c_str() );
+    ifind_substr_ascii( str_2, str_1.c_str() );
+  }
+  
+  print_waypoint( 12 );
 
   {
     const size_t max_delims = 10;
@@ -213,7 +224,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     erase_any_character( s, str_1_short.c_str() );
   }
 
-  print_waypoint( 12 );
+  print_waypoint( 13 );
   
   {
     string c1 = datastr, c2 = str_1, c3 = str_2;
@@ -230,7 +241,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     //ireplace_all( c3, c2.c_str(), c1.c_str() );
   }
 
-  print_waypoint( 13 );
+  print_waypoint( 14 );
   
   {
     std::vector<std::string> results;
@@ -250,7 +261,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     split( results, str_2, "" );
   }
   
-  print_waypoint( 14 );
+  print_waypoint( 15 );
 
   {
     std::vector<std::string> results;
@@ -278,20 +289,20 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     //split_no_delim_compress( results, str_2, "" );
   }
   
-  print_waypoint( 15 );
+  print_waypoint( 16 );
   
   utf8_str_len( (const char *)data, size );
   utf8_str_len( datastr.c_str(), datastr.size() );
   utf8_str_len( str_1.c_str(), str_1.size() );
   utf8_str_len( str_2.c_str(), str_2.size() );
   
-  print_waypoint( 16 );
+  print_waypoint( 17 );
   
   utf8_str_len( datastr.c_str() );
   utf8_str_len( str_1.c_str() );
   utf8_str_len( str_2.c_str() );
   
-  print_waypoint( 17 );
+  print_waypoint( 18 );
   
   {
     string s = datastr;
@@ -308,7 +319,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     utf8_limit_str_size( s, size );
   }
 
-  print_waypoint( 18 );
+  print_waypoint( 19 );
   
   if( size >= sizeof(float) )
   {
@@ -319,7 +330,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     parse_float( str_2.c_str(), str_2.size(), fdummy );
   }
 
-  print_waypoint( 19 );
+  print_waypoint( 20 );
   
   if( size >= sizeof(int) )
   {
@@ -330,7 +341,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     parse_int( str_2.c_str(), str_2.size(), idummy );
   }
 
-  print_waypoint( 20 );
+  print_waypoint( 21 );
   
   {
     const size_t max_delims = 16;
@@ -347,28 +358,28 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     split_to_floats( datastr.c_str(), fvdummy, " ,\r\n\t", false );
   }
   
-  print_waypoint( 21 );
+  print_waypoint( 22 );
     
   std::vector<float> fvdummy;
   split_to_floats( (const char *)data, size, fvdummy );
   split_to_floats( str_1.c_str(), str_1.size(), fvdummy );
   split_to_floats( str_2.c_str(), str_2.size(), fvdummy );
   
-  print_waypoint( 22 );
+  print_waypoint( 23 );
   
   split_to_floats( datastr, fvdummy );
   split_to_floats( str_1, fvdummy );
   split_to_floats( str_2, fvdummy );
   
   
-  print_waypoint( 23 );
+  print_waypoint( 24 );
   
   std::vector<int> fidummy;
   split_to_ints( (const char *)data, size, fidummy );
   split_to_ints( str_1.c_str(), str_1.size(), fidummy );
   split_to_ints( str_2.c_str(), str_2.size(), fidummy );
   
-  print_waypoint( 24 );
+  print_waypoint( 25 );
   
   std::vector<long long> flldummy;
   split_to_long_longs( (const char *)data, size, flldummy );
@@ -376,13 +387,13 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   split_to_long_longs( str_2.c_str(), str_2.size(), flldummy );
   
   
-  print_waypoint( 25 );
+  print_waypoint( 26 );
   
   convert_from_utf8_to_utf16( datastr );
   convert_from_utf8_to_utf16( str_1 );
   convert_from_utf8_to_utf16( str_2 );
   
-  print_waypoint( 26 );
+  print_waypoint( 27 );
   
   {
     const size_t wlen = sizeof(uint8_t) / sizeof(wchar_t);
@@ -392,7 +403,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     convert_from_utf16_to_utf8( wdata );
   }
   
-  print_waypoint( 27 );
+  print_waypoint( 28 );
   
   {
     const size_t ilen = sizeof(uint8_t) / sizeof(int);
@@ -402,7 +413,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     sequencesToBriefString( sdata );
   }
 
-  print_waypoint( 28 );
+  print_waypoint( 29 );
   
   const size_t max_lev_str = 64;
   levenshtein_distance( datastr, datastr, max_lev_str );
@@ -421,7 +432,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   levenshtein_distance( str_2, "", max_lev_str );
   levenshtein_distance( "", str_2, max_lev_str );
   
-  print_waypoint( 29 );
+  print_waypoint( 30 );
   
   // Filesystem functions we can test
   lexically_normalize_path( datastr );
@@ -430,13 +441,13 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   lexically_normalize_path( datastr + "../" );
   lexically_normalize_path( "/" + datastr + "../" ); //we could go wild doing various combination of path delimeiters
   
-  print_waypoint( 30 );
+  print_waypoint( 31 );
   
   likely_not_spec_file( datastr );
   likely_not_spec_file( str_1 );
   likely_not_spec_file( str_2 );
   
-  print_waypoint( 31 );
+  print_waypoint( 32 );
   
   append_path( datastr, datastr );
   append_path( datastr, str_1 );
@@ -452,13 +463,13 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   append_path( datastr, "" );
   append_path( "", datastr );
   
-  print_waypoint( 32 );
+  print_waypoint( 33 );
   
   try{ file_extension( datastr ); }catch( std::exception & ){ }
   try{ file_extension( str_1 ); }catch( std::exception & ){ }
   try{ file_extension( str_2 ); }catch( std::exception & ){ }
   
-  print_waypoint( 33 );
+  print_waypoint( 34 );
   
   temp_file_name( datastr, datastr );
   temp_file_name( datastr, str_1 );
@@ -470,7 +481,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   temp_file_name( str_2, str_1 );
   temp_file_name( str_2, str_2 );
   
-  print_waypoint( 34 );
+  print_waypoint( 35 );
   
   {
     // Having a large sizes can cause things to go pretty slowly, so we'll
@@ -503,19 +514,19 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     //fs_relative( "", str_2_short );
   }
 
-  print_waypoint( 35 );
+  print_waypoint( 36 );
   
   try{ filename( datastr ); }catch(const std::exception&){}
   try{ filename( str_1 ); }catch(const std::exception&){}
   try{ filename( str_2 ); }catch(const std::exception&){}
 
-  print_waypoint( 36 );
+  print_waypoint( 37 );
   
   try{ parent_path( datastr ); } catch(const std::exception&){}
   try{ parent_path( str_1 ); } catch(const std::exception&){}
   try{ parent_path( str_2 ); } catch(const std::exception&){}
   
-  print_waypoint( 37 );
+  print_waypoint( 38 );
   
   // Filesystem functions we cant really test here
   // bool remove_file( const std::string &name );
@@ -560,7 +571,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
   };//test_to_str(...)
   
 
-  print_waypoint( 38 );
+  print_waypoint( 39 );
   
   {
     const size_t max_time_strlen = 96;
@@ -575,7 +586,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     dt = time_from_string( str_2_short.c_str() );
     test_to_str( dt );
   
-    print_waypoint( 39 );
+    print_waypoint( 40 );
     
     test_to_str( time_from_string( datastr_short, DateParseEndianType::LittleEndianFirst ) );
     //test_to_str( time_from_string( datastr_short, DateParseEndianType::LittleEndianOnly ) );
@@ -583,14 +594,14 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     //test_to_str( time_from_string( datastr_short, DateParseEndianType::MiddleEndianOnly ) );
   
     
-    print_waypoint( 40 );
+    print_waypoint( 41 );
     
     test_to_str( time_from_string( str_1_short, DateParseEndianType::LittleEndianFirst ) );
     //test_to_str( time_from_string( str_1_short, DateParseEndianType::LittleEndianOnly ) );
     test_to_str( time_from_string( str_1_short, DateParseEndianType::MiddleEndianFirst ) );
     //test_to_str( time_from_string( str_1_short, DateParseEndianType::MiddleEndianOnly ) );
     
-    print_waypoint( 41 );
+    print_waypoint( 42 );
     
     test_to_str( time_from_string( str_2_short, DateParseEndianType::LittleEndianFirst ) );
     //test_to_str( time_from_string( str_2_short, DateParseEndianType::LittleEndianOnly ) );
@@ -598,19 +609,19 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     //test_to_str( time_from_string( str_2_short, DateParseEndianType::MiddleEndianOnly ) );
   }
   
-  print_waypoint( 42 );
+  print_waypoint( 43 );
   
   time_duration_string_to_seconds( datastr );
   time_duration_string_to_seconds( str_1 );
   time_duration_string_to_seconds( str_2 );
   
-  print_waypoint( 43 );
+  print_waypoint( 44 );
   
   try{ delimited_duration_string_to_seconds( datastr ); }catch(std::exception &){ }
   try{ delimited_duration_string_to_seconds( str_1 ); }catch(std::exception &){ }
   try{ delimited_duration_string_to_seconds( str_2 ); }catch(std::exception &){ }
   
-  print_waypoint( 44 );
+  print_waypoint( 45 );
   
   // Test for Parse Utils
   {
@@ -622,7 +633,7 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     while( safe_get_line( strm_2, dummy, max_len) ){}
   }
   
-  print_waypoint( 45 );
+  print_waypoint( 46 );
   
   {
     double lat, lon;
@@ -637,56 +648,56 @@ extern "C" int LLVMFuzzerTestOneInput( const uint8_t *data, size_t size )
     parse_deg_min_sec_lat_lon( str_2_short.c_str(), str_2_short.size(), lat, lon );
   }
   
-  print_waypoint( 46 );
+  print_waypoint( 47 );
   
   conventional_lat_or_long_str_to_flt( datastr );
   conventional_lat_or_long_str_to_flt( str_1 );
   conventional_lat_or_long_str_to_flt( str_2 );
   
-  print_waypoint( 47 );
+  print_waypoint( 48 );
   
   sample_num_from_remark( datastr );
   sample_num_from_remark( str_1 );
   sample_num_from_remark( str_2 );
   
-  print_waypoint( 48 );
+  print_waypoint( 49 );
   
   try{ speed_from_remark( datastr ); }catch(std::exception &){}
   try{ speed_from_remark( str_1 ); }catch(std::exception &){}
   try{ speed_from_remark( str_2 ); }catch(std::exception &){}
   
-  print_waypoint( 49 );
+  print_waypoint( 50 );
   
   detector_name_from_remark( datastr );
   detector_name_from_remark( str_1 );
   detector_name_from_remark( str_2 );
   
-  print_waypoint( 50 );
+  print_waypoint( 51 );
   
   try{ dx_from_remark( datastr ); }catch(std::exception &){}
   try{ dx_from_remark( str_1 ); }catch(std::exception &){}
   try{ dx_from_remark( str_2 ); }catch(std::exception &){}
   
-  print_waypoint( 51 );
+  print_waypoint( 52 );
   
   try{ dy_from_remark( datastr ); }catch(std::exception &){}
   try{ dy_from_remark( str_1 ); }catch(std::exception &){}
   try{ dy_from_remark( str_2 ); }catch(std::exception &){}
   
-  print_waypoint( 52 );
+  print_waypoint( 53 );
   
   try{ dose_units_usvPerH( (const char *)data, size ); }catch(std::exception &){}
   //dose_units_usvPerH( datastr.c_str(), datastr.size() );
   //dose_units_usvPerH( str_1.c_str(), str_1.size() );
   //dose_units_usvPerH( str_2.c_str(), str_2.size() );
   
-  print_waypoint( 53 );
+  print_waypoint( 54 );
   
   convert_n42_instrument_type_from_2006_to_2012( datastr );
   convert_n42_instrument_type_from_2006_to_2012( str_1 );
   convert_n42_instrument_type_from_2006_to_2012( str_1 );
   
-  print_waypoint( 54 );
+  print_waypoint( 55 );
   
   // ParseUtils functions it may not make total sense to test.
   //void expand_counted_zeros( const std::vector<float> &data, std::vector<float> &results );
