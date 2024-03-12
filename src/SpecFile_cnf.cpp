@@ -1035,7 +1035,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         else //use the Ge defualts
         {
             enter_CAM_value(1.0, cnf_file, acqp_loc + 0x3C6, cam_type::cam_float);
-            enter_CAM_value(0.3, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
+            enter_CAM_value(0.03, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
         }
 
         //energy calibration
