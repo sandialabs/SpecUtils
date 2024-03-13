@@ -137,6 +137,11 @@ bool SpecFile::load_from_uri( std::istream &input )
       }
     }//for( while we need to remove 'mailto:' front matter )
     
+    // Incase the URI has some front-matter - lets remove it
+    const size_t initial_pos = rawdata.find( "raddata://G0/" );
+    if( initial_pos && (initial_pos != string::npos) )
+      rawdata = rawdata.substr(initial_pos);
+    
     
     // File may contain multiple URIs (think multi-url spectra), so we'll split the URIs up
     // Break up `rawdata` input multiple URIs, splitting at raddata://
