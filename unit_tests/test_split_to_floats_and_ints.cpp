@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE( parse_float )
     -11.0f, 0.0f, 0.0f, 0.2f, 0.2f,
     -222.22f, 13.2f, 3.22f, 3.2f
   };
-	const string bad_input_strs[] = {"", "aa", "a2.3", "?+1.2", "somestr 3.4", "-\03.2", "- 99" };	
+	const string bad_input_strs[] = {"", "aa", "a2.3", "?+1.2", "somestr 3.4", "-\03.2", "- 99" };
 	
 	const size_t num_good_input_strs = sizeof(good_input_strs) / sizeof(good_input_strs[0]);
 	const size_t num_good_inputs_vals = sizeof(good_input_vals) / sizeof(good_input_vals[0]);
@@ -188,6 +188,28 @@ BOOST_AUTO_TEST_CASE( parse_float )
 	}
 	
 }
+
+/*
+BOOST_AUTO_TEST_CASE( check_multi_dots  )
+{
+  // As of 20240307, these checks wont pass.
+  bool ok;
+  vector<float> results;
+  const char *input;
+  size_t inputlen;
+
+  input = "661.7,-0.1.7,9.3";
+  inputlen = strlen( input );
+  ok = SpecUtils::split_to_floats( input, inputlen, results );
+  BOOST_CHECK( !ok );
+  BOOST_CHECK_EQUAL( results.size(), 2 );
+
+  ok = SpecUtils::split_to_floats( input, results, ", ", false );
+  BOOST_CHECK( !ok );
+  BOOST_CHECK_EQUAL( results.size(), 2 );
+}
+*/
+
 
 BOOST_AUTO_TEST_CASE( check_trailing_characters  )
 {

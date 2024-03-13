@@ -1678,7 +1678,11 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
   {
     SpecUtils::ireplace_all( cal_str, "$", "," );
     
-    if( !SpecUtils::split_to_floats( cal_str, spec.m_energy_cal_coeffs ) )
+    // We will use the null-terminated string version of `split_to_floats`, because it
+    //  properly rejects strings like "661.7,-0.1.7,9.3", and we want to be a little
+    //  discriminating here.
+    //if( !SpecUtils::split_to_floats( cal_str, spec.m_energy_cal_coeffs ) )
+    if( !SpecUtils::split_to_floats( cal_str.c_str(), spec.m_energy_cal_coeffs, ", ", false ) )
       throw runtime_error( "Invalid CSV for energy calibration coefficients." );
     
     if( spec.m_energy_cal_coeffs.size() < 2 )
@@ -1691,7 +1695,9 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
     SpecUtils::ireplace_all( dev_pair_str, "$", "," );
     
     vector<float> dev_pairs;
-    if( !SpecUtils::split_to_floats( dev_pair_str, dev_pairs ) )
+    
+    //if( !SpecUtils::split_to_floats( dev_pair_str, dev_pairs ) )
+    if( !split_to_floats( dev_pair_str.c_str(), dev_pairs, ", ", false ) )
       throw runtime_error( "Invalid CSV for deviation pairs." );
     
     if( (dev_pairs.size() % 2) != 0 )
@@ -1699,6 +1705,11 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
     
     for( size_t i = 0; (i + 1) < dev_pairs.size(); i += 2 )
       spec.m_dev_pairs.push_back( {dev_pairs[i], dev_pairs[i+1]} );
+    
+    std::sort( begin(spec.m_dev_pairs), end(spec.m_dev_pairs),
+               []( const pair<float,float> &lhs, const pair<float,float> &rhs ) -> bool {
+      return lhs.first < rhs.first;
+    } );
   }//if( pos != string::npos )
   
   
@@ -1727,7 +1738,8 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
   SpecUtils::ireplace_all( lt_rt_str, "$", "," );
   
   vector<float> rt_lt;
-  if( !SpecUtils::split_to_floats( lt_rt_str, rt_lt ) )
+  //if( !SpecUtils::split_to_floats( lt_rt_str, rt_lt ) )
+  if( !split_to_floats( lt_rt_str.c_str(), rt_lt, ", ", false ) )
     throw runtime_error( "Could not parse real and live times." );
   
   if( rt_lt.size() != 2 )
@@ -1778,7 +1790,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
     vector<long long> counts;
     if( !SpecUtils::split_to_long_longs( counts_str.c_str(), counts_str.size(), counts )
        || counts.empty() )
-      throw runtime_error( "Failed to parse CSV channel counts." );
+      throw runtime_error( "Failed to parse CSV channel counts ('" + counts_str + "')." );
     
     spec.m_channel_data.resize( counts.size() );
     for( size_t i = 0; i < counts.size(); ++i )
@@ -1961,8 +1973,11 @@ vector<UrlSpectrum> to_url_spectra( vector<shared_ptr<const SpecUtils::Measureme
   {
     shared_ptr<const SpecUtils::Measurement> spec = specs[i];
     assert( spec );
-    if( !spec || (spec->num_gamma_channels() < 1) )
-      throw runtime_error( "to_url_spectra: invalid Measurement" );
+    if( !spec )
+      throw runtime_error( "to_url_spectra: invalid Measurement - nullptr" );
+    
+    if( spec->num_gamma_channels() < 1 )
+      throw runtime_error( "to_url_spectra: invalid Measurement - no gamma spectrum" );
     
     UrlSpectrum urlspec;
     urlspec.m_source_type = spec->source_type();
@@ -1994,13 +2009,27 @@ vector<UrlSpectrum> to_url_spectra( vector<shared_ptr<const SpecUtils::Measureme
       urlspec.m_dev_pairs = cal->deviation_pairs();
     }//if( poly or FWF )
       
+    // from spec, in regards to detector model and operator notes: This string can not include a
+    //  space, followed by an upper-case letter, followed by a colon.
+    auto sanitize_text_field = []( std::string &field ){
+      SpecUtils::ireplace_all( field, ":", " " );
+      
+      //for( size_t i = field.find(" "); (i+2) < field.size(); i = field.find(" ",i+1) )
+      //{
+      //  // For the moment, we'll just replace the ':' character with a space.
+      //  //  Although we could probably do something better.
+      //  if( (field[i+2] == ':') && (field[i+1] >= 'A') && (field[i+1] <= 'Z') )
+      //    field[i+2] = ' ';
+      //}//for( size_t i = field.find(" "); i != string::npos; i = field.find(" ",i+1) )
+    };
+    sanitize_text_field( det_model );
     
     urlspec.m_model = det_model;
     
     string operator_notes = spec->title();
-    SpecUtils::ireplace_all( operator_notes, ":", " " );
+    sanitize_text_field( operator_notes );
     if( operator_notes.size() > 60 )
-      operator_notes = operator_notes.substr(0, 60);
+      utf8_limit_str_size(operator_notes, 60);
     
     // TODO: look for this info in the "Remarks" - I think Ortec Detectives and some other models will end up getting user input to there maybe?
     urlspec.m_title = operator_notes;
