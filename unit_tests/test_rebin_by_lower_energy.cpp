@@ -120,7 +120,7 @@ void test_rebin()
 int main( int argc, char **argv )
 {
   test_rebin();
-  return 1;
+  return 0; // ctest will say this test fails if you return a non-zero exit code
 }
 
 
