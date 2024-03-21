@@ -156,7 +156,7 @@ boost::posix_time::ptime random_ptime()
 
 BOOST_AUTO_TEST_CASE( isoString )
 {
-  srand( time(NULL) );
+  srand( (unsigned) time(NULL) );
   
   //compare to original to_iso_extended_string and to_iso_string function
   //which gives the same thing except with trailing 0's

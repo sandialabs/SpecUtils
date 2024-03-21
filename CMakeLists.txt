@@ -269,7 +269,11 @@ if( SpecUtils_USE_WT_THREADPOOL )
       target_include_directories( SpecUtils PUBLIC ${Wt_INCLUDE_DIR} )
     endif( NOT Wt_INCLUDE_DIR OR NOT Wt_FOUND )
   endif( DEFINED wt_SOURCE_DIR )
+elseif( NOT SpecUtils_USING_NO_THREADING )
+  find_package(Threads REQUIRED)
+  target_link_libraries( SpecUtils PUBLIC Threads::Threads )
 endif( SpecUtils_USE_WT_THREADPOOL )
+
 
 
 if( SpecUtils_ENABLE_URI_SPECTRA )
