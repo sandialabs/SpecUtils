@@ -30,93 +30,137 @@ endif( NOT Boost_FOUND )
 
 #set( BOOST_LINK_LIBS ${Boost_LIBRARIES} ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} )
 
-add_executable( test_energy_calibration.exe test_energy_calibration.cpp )
-target_link_libraries( test_energy_calibration.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_energy_calibration.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+# Set some command line arguments that all/most of the tests will use
+set( COMMON_TEST_ARGS --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
+set( DATA_DIR_ARGS --indir=\\"${CMAKE_CURRENT_SOURCE_DIR}/test_data\\" )
+
+add_executable( test_energy_calibration test_energy_calibration.cpp )
+target_link_libraries( test_energy_calibration PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_energy_calibration PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test( NAME TestEnergyCalibration
-          COMMAND test_energy_calibration.exe
-                 --log_level=test_suite --report_level=detailed --catch_system_errors=yes  )
+          COMMAND $<TARGET_FILE:test_energy_calibration> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+)
 
 
-add_executable( test_spec_file_open.exe test_spec_file_open.cpp )
-target_link_libraries( test_spec_file_open.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_spec_file_open.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_executable( test_spec_file_open test_spec_file_open.cpp )
+target_link_libraries( test_spec_file_open PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_spec_file_open PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 FILE(GLOB children RELATIVE ${ADD_TEST_SPEC_DIR} ${ADD_TEST_SPEC_DIR}/*)
 FOREACH(child ${children})
   SET( filetestdir ${curdir}/${child} )
   IF(IS_DIRECTORY ${filetestdir})
     #uhg, if we dont get rid of spaces in the file name, it gets interprested as a
-    #  seperate command line argument - even if we escape it with quotes
+    #  separate command line argument - even if we escape it with quotes
 
     # HB - this isn't running for me. 
     string(REPLACE " " "%20" filetestdir ${filetestdir} )
     message( ${filetestdir} )
     add_test( NAME "\"Test open ${child}\""
-              COMMAND test_spec_file_open.exe 
-                 --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
+              COMMAND $<TARGET_FILE:test_spec_file_open> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS} )
   ENDIF()
 ENDFOREACH()
 
 
-add_executable( test_iso_time_string.exe test_iso_time_string.cpp )
-target_link_libraries( test_iso_time_string.exe PRIVATE SpecUtils Boost::unit_test_framework Boost::date_time)
-set_target_properties( test_iso_time_string.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestIsoTimeString COMMAND test_iso_time_string.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes  WORKING_DIRECTORY ${test_data_dir} )
+add_executable( test_iso_time_string test_iso_time_string.cpp )
+target_link_libraries( test_iso_time_string PRIVATE SpecUtils Boost::unit_test_framework Boost::date_time)
+set_target_properties( test_iso_time_string PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestIsoTimeString
+  COMMAND $<TARGET_FILE:test_iso_time_string> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
-add_executable( test_safe_get_line.exe test_safe_get_line.cpp )
-target_link_libraries( test_safe_get_line.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_safe_get_line.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestSafeGetLine COMMAND test_safe_get_line.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes WORKING_DIRECTORY ${test_data_dir} )
-
-
-add_executable( test_time_from_string.exe test_time_from_string.cpp )
-target_link_libraries( test_time_from_string.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_time_from_string.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestTimeFromString COMMAND test_time_from_string.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes WORKING_DIRECTORY ${test_data_dir})
-
-
-add_executable( test_string_functions.exe test_string_functions.cpp )
-target_link_libraries( test_string_functions.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_string_functions.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestUtilityStringFunctions COMMAND test_string_functions.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes WORKING_DIRECTORY ${test_data_dir})
+add_executable( test_safe_get_line test_safe_get_line.cpp )
+target_link_libraries( test_safe_get_line PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_safe_get_line PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestSafeGetLine
+  COMMAND $<TARGET_FILE:test_safe_get_line> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
 
-add_executable( test_split_to_floats_and_ints.exe test_split_to_floats_and_ints.cpp )
-target_link_libraries( test_split_to_floats_and_ints.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_split_to_floats_and_ints.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestSplitToFloats COMMAND test_split_to_floats_and_ints.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes WORKING_DIRECTORY ${test_data_dir})
+add_executable( test_time_from_string test_time_from_string.cpp )
+target_link_libraries( test_time_from_string PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_time_from_string PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestTimeFromString
+  COMMAND $<TARGET_FILE:test_time_from_string> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
 
-add_executable( test_utf8_limit_str_size.exe test_utf8_limit_str_size.cpp )
-target_link_libraries( test_utf8_limit_str_size.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_utf8_limit_str_size.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestUtf8LimitStrSize COMMAND test_utf8_limit_str_size.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes WORKING_DIRECTORY ${test_data_dir})
+add_executable( test_string_functions test_string_functions.cpp )
+target_link_libraries( test_string_functions PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_string_functions PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestUtilityStringFunctions
+  COMMAND $<TARGET_FILE:test_string_functions> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
 
-add_executable( test_utf8_str_len.exe test_utf8_str_len.cpp )
-target_link_libraries( test_utf8_str_len.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_utf8_str_len.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestUtf8StrLen COMMAND test_utf8_str_len.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes WORKING_DIRECTORY ${test_data_dir} )
+add_executable( test_split_to_floats_and_ints test_split_to_floats_and_ints.cpp )
+target_link_libraries( test_split_to_floats_and_ints PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_split_to_floats_and_ints PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestSplitToFloats
+  COMMAND $<TARGET_FILE:test_split_to_floats_and_ints> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
-add_executable( test_cubic_spline.exe test_cubic_spline.cpp )
-target_link_libraries( test_cubic_spline.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_cubic_spline.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestCubicSpline COMMAND test_cubic_spline.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes  WORKING_DIRECTORY ${test_data_dir} )
+
+add_executable( test_utf8_limit_str_size test_utf8_limit_str_size.cpp )
+target_link_libraries( test_utf8_limit_str_size PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_utf8_limit_str_size PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestUtf8LimitStrSize
+  COMMAND $<TARGET_FILE:test_utf8_limit_str_size> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
 
-add_executable( test_filesystem_functions.exe test_filesystem_functions.cpp )
-target_link_libraries( test_filesystem_functions.exe PRIVATE SpecUtils Boost::unit_test_framework Boost::filesystem )
-set_target_properties( test_filesystem_functions.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME testUtilityFilesystemFunctions COMMAND test_filesystem_functions.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
+add_executable( test_utf8_str_len test_utf8_str_len.cpp )
+target_link_libraries( test_utf8_str_len PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_utf8_str_len PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestUtf8StrLen
+  COMMAND $<TARGET_FILE:test_utf8_str_len> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
 
-add_executable( test_rebin_by_lower_energy.exe test_rebin_by_lower_energy.cpp )
-target_link_libraries( test_rebin_by_lower_energy.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_rebin_by_lower_energy.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test( NAME TestRebinByLowerEnergy COMMAND test_rebin_by_lower_energy.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
+add_executable( test_cubic_spline test_cubic_spline.cpp )
+target_link_libraries( test_cubic_spline PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_cubic_spline PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestCubicSpline
+  COMMAND $<TARGET_FILE:test_cubic_spline> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
+
+
+add_executable( test_filesystem_functions test_filesystem_functions.cpp )
+target_link_libraries( test_filesystem_functions PRIVATE SpecUtils Boost::unit_test_framework Boost::filesystem )
+set_target_properties( test_filesystem_functions PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME testUtilityFilesystemFunctions
+  COMMAND $<TARGET_FILE:test_filesystem_functions> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+)
+
+add_executable( test_rebin_by_lower_energy test_rebin_by_lower_energy.cpp )
+target_link_libraries( test_rebin_by_lower_energy PRIVATE SpecUtils Boost::unit_test_framework )
+set_target_properties( test_rebin_by_lower_energy PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestRebinByLowerEnergy
+  COMMAND $<TARGET_FILE:test_rebin_by_lower_energy> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+)
 
 if( SpecUtils_ENABLE_URI_SPECTRA )
-add_executable( test_uri_spectrum.exe test_uri_spectrum.cpp )
-target_link_libraries( test_uri_spectrum.exe PRIVATE SpecUtils Boost::unit_test_framework )
-set_target_properties( test_uri_spectrum.exe PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-add_test(NAME test_uri_spectrum COMMAND test_uri_spectrum.exe --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
+  add_executable( test_uri_spectrum test_uri_spectrum.cpp )
+  target_link_libraries( test_uri_spectrum PRIVATE SpecUtils Boost::unit_test_framework )
+  set_target_properties( test_uri_spectrum PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+  add_test(
+    NAME test_uri_spectrum
+    COMMAND $<TARGET_FILE:test_uri_spectrum> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  )
 endif()
