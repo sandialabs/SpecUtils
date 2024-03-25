@@ -28,6 +28,12 @@
 #include <charconv>
 #endif
 
+// The date library will default to trying to use current locale
+//  However, this fails in places like Docker or WSL2, and we dont
+//  want parsing spectrum files to be dependent on the user locale,
+//  So we'll instruct date to not use the locale (it instead uses
+//  statically defined month and day names, as well as AM/PM.
+#define ONLY_C_LOCALE 1
 #include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/DateTime.h"
@@ -297,7 +303,6 @@ namespace SpecUtils
         time_string[tpos] = ' ';
       tpos = time_string.find( 'T', tpos + 1 );
     }
-    
     
     //strptime(....) cant handle GMT offset (ex '2014-10-24T08:05:43-04:00')
     //  so we will do this manually.

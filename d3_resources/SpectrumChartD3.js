@@ -4429,12 +4429,16 @@ SpectrumChartD3.prototype.updateLegend = function() {
         .attr("class", "legentry")
         .attr( "x", 15 )
         .text(title);
-        
+    
+    let ltnode, lttxt, dttxt;
     if( typeof lt === "number" )
-      thistxt.append('svg:tspan')
+    {
+      lttxt = "Live Time: " + (sf*lt).toPrecision(4) + " s";
+      ltnode = thistxt.append('svg:tspan')
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
-        .text( "Live Time: " + (sf*lt).toPrecision(4) + " s" );
+        .text( lttxt );
+    }
       
     if( typeof rt === "number" )
       thistxt.append('svg:tspan')
@@ -4447,6 +4451,15 @@ SpectrumChartD3.prototype.updateLegend = function() {
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
         .text( "Scaled by " + sf.toPrecision(4) );
+      
+    if( (typeof lt === "number") && (typeof rt === "number") && (rt > 0) && ltnode )
+    {
+      dttxt = "Dead Time: " + (100*(rt - lt) / rt).toPrecision(3) + "%";
+      // Hookup event handlers for mouse-over, jic we dont have neutron data
+      thistxt
+        .on("mouseover", function(){ ltnode.text(dttxt); } )
+        .on("mouseout", function(){ ltnode.text(lttxt); });
+    }
           
     if( typeof neutsum === "number" ){
       // \TODO: spectrum.neutronRealTime is currently never set by SpecUtils/InterSpec, but will be once parsing
@@ -4528,14 +4541,16 @@ SpectrumChartD3.prototype.updateLegend = function() {
           .attr('style', 'display: none')
           .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof rt === "number" ? (" in " + rt.toPrecision(4) + " s") : "") );
       
-        neutspan
+        thistxt  //This calls to .on("mouseover")/.on("mouseout") will overwrite eirlier hooked up calls
           .on("mouseover", function(){
             thisentry.neutinfo.attr('style', 'font-size: 75%' )
             self.legendBox.attr('height', self.legBody.node().getBBox().height + 10 );
+            if( ltnode && dttxt ) ltnode.text(dttxt); //
           } )
           .on("mouseout", function(){
             thisentry.neutinfo.attr('style', 'display: none;')
             self.legendBox.attr('height', self.legBody.node().getBBox().height + 10 );
+            if( ltnode && lttxt ) ltnode.text(lttxt);
           });
        }// if( is CPS instead of sum neutrons )
       

@@ -63,7 +63,15 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   indir = "/Users/wcjohns/rad_ana/InterSpec_master/external_libs/SpecUtils/unit_tests/";
   
   string test_in_file, test_out_file;
-  const string potential_input_paths[] = { ".", indir, "../testing/", "../../testing/", "../../../testing/" };
+  const string potential_input_paths[] = { ".", indir,
+    "..",
+    "../..",
+    "../unit_tests",
+    "../../unit_tests"
+    "../testing/",
+    "../../testing/",
+    "../../../testing/"
+  };
   for( const string dir : potential_input_paths )
   {
     const string potential = SpecUtils::append_path( dir, "test_data/txt/test_string_functions_input.txt" );

@@ -359,12 +359,22 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
 #else
   boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
   boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
+
+#ifndef  __linux__
+  // TODO: For some reason, running in Docker (so as root), the removing of permissions doesnt necessarily work
   boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
   BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+#endif
+  
   boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
   BOOST_CHECK( SpecUtils::can_rw_in_directory(testname2) );
+  
+#ifndef  __linux__
+  // Similar Linux issue
   boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
   BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+#endif
+  
   boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read );
 #endif
 
