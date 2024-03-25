@@ -6520,7 +6520,9 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( icontains(model,"RadSeeker") )
   
   
-  if( icontains(manufacturer_, "Symetrica") || SpecUtils::icontains(model, "VeriFinder") )
+  if( icontains(manufacturer_, "Symetrica") 
+     || SpecUtils::icontains(model, "VeriFinder")
+     || SpecUtils::icontains(model, "Symetrica") )
   {
     // The potential models are:
     //  - SN20:   Handheld RIID, NaI
