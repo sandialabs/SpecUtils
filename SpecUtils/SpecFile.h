@@ -984,25 +984,6 @@ public:
   void rebin( const std::shared_ptr<const EnergyCalibration> &cal );
   
   
-  //recalibrate_by_eqn(...) passing in a valid binning
-  //  std::shared_ptr<const std::vector<float>> object will save recomputing this quantity, however no
-  //  checks are performed to make sure 'eqn' actually cooresponds to 'binning'
-  //  For type==LowerChannelEdge, eqn should coorespond to the energies of the
-  //  lower edges of the bin.
-  //Throws exception if 'type' is InvalidEquationType, or potentially (but not
-  //  necassirily) if input is ill-specified, or if the passed in binning doesnt
-  //  have the proper number of channels.
-/*
-  void recalibrate_by_eqn( const std::vector<float> &eqn,
-                          const std::vector<std::pair<float,float>> &dev_pairs,
-                          SpecUtils::EnergyCalType type,
-                          std::shared_ptr<const std::vector<float>> binning
-#if( !SpecUtils_JAVA_SWIG )
-                          = std::shared_ptr<const std::vector<float>>()  //todo: fix this more better
-#endif
-                          );
-  */
-  
   /** Sets the energy calibration to the passed in value.
    
    This operation does not change #gamma_counts_, but instead changes the energie bounds for the
@@ -1881,6 +1862,9 @@ public:
     //  measurements_.
     DontChangeOrReorderSamples = 0x2,
     
+    /** Forces measurements to be sorted by time, and have unique sample-number and detector names. */
+    ReorderSamplesByTime = 0x4,
+    
     StandardCleanup = 0x0
   };//enum CleanupFlags
   
@@ -1918,9 +1902,9 @@ public:
   /** Sets the energy calibration for the specified #Measurement.
    
    This does not change the channel counts (i.e., #gamma_counts_), but does shift the energy of
-   spectral features (e.g., peaks, compton edges).
+   spectral features (e.g., peaks, Compton edges).
    
-   Throws excpetion if energy calibration channel counts are incompatible, or passed in #Measurment
+   Throws exception if energy calibration channel counts are incompatible, or passed in #Measurement
    is not owned by the SpecFile.
    */
   virtual void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
@@ -1944,22 +1928,28 @@ public:
                                std::set<int> sample_numbers,
                                std::vector<std::string> detector_names );
   
-  
-  //If only certain detectors are specified, then those detectors will be
-  //  recalibrated (channel contents not changed).  If rebin_other_detectors
-  //  is true, then the other detectors will be rebinned (channel contents
-  //  changed) so that they have the same calibration as the rest of the
-  //  detectors.
-  //Will throw exception if an empty set of detectors is passed in, or if none
-  //  of the passed in names match any of the available names, since these are
-  //  both likely a mistakes
-  /*
-  void recalibrate_by_eqn( const std::vector<float> &eqn,
-                           const std::vector<std::pair<float,float>> &dev_pairs,
-                           SpecUtils::EnergyCalType type,
-                           const std::vector<std::string> &detectors,
-                           const bool rebin_other_detectors );
-*/
+  /** Sets the energy calibration from a "CALp" file.
+   
+   CALp files are simple text files that contain the energy calibration coefficients, and possible non-linear deviation pairs.
+   InterSpec and PeakEasy can both produces these files, as well as the function
+   `SpecUtils::energy_cal_from_CALp_file(...)`.  The CALp files from InterSpec/SpecUtils may contain
+   calibrations for multiple different detectors.
+   
+   If the CALp file has a single energy calibration, it will be applied to all gamma spectra in this SpecFile.
+   If the CALp has (multiple) named detectors, then it will only be applied if the detector names in this SpecFile
+   are contained with the CALp file.
+   
+   This procedure only considers Measurements with at least 4 gamma channels (arbitrarily chosen)
+   
+   Throws exception on failure, in which case this SpecFile object will not have been changed, and the input
+   stream will be reset back to its original position.  Will fail if input energy calibration is invalid or incompatible (e.g.,
+   not enough lower channel energies specified), or if energy calibrations for all Measurements with at least 4 gamma
+   channels can not be identified.
+   
+   \sa SpecUtils::write_CALp_file
+   \sa SpecUtils::energy_cal_from_CALp_file
+   */
+  void set_energy_calibration_from_CALp_file( std::istream &input );
   
   /** Function to convert from detector names, into detector numbers.
    
@@ -2335,18 +2325,27 @@ protected:
    */
   void ensure_unique_sample_numbers();
   
-  //has_unique_sample_and_detector_numbers(): checks to make sure 
+  /** Checks if the combination of sample number and detector-name uniquely specifies a measurement.
+   
+   \sa MeasurementProperties::kNotUniqueSampleDetectorNumbers
+   */
   bool has_unique_sample_and_detector_numbers() const;
   
-  //setSampleNumbersByTimeStamp():
-  //For files with < 500 samples, doesn't guarantee unique detctor-name
-  //  sample-number combinations, but does try to preserve initial sample-number
-  //  assignments.
-  //For files with >= 500 samples, it does garuntee unique detector-name
-  //  sample-number combinations, but it does not preserve initial sample-number
-  //  assignments.
-  //Called from cleanup_after_load()
-  void set_sample_numbers_by_time_stamp();
+  /** For files with &lt; 500 samples or `force_unique` true, doesn't guarantee unique detector-name
+      sample-number combinations, but does try to preserve initial sample-number
+      assignments.
+   For files with &ge; 500 samples, and `force_unique` false, it does guarantee unique detector-name
+   sample-number combinations, but it does not preserve initial sample-number assignments.
+  
+   @param sort_meas_types_separately If true, the measurements will first be sorted by measurement SourceType, and then
+          sorted by time.
+   @param force_unique If true, then will make sure sample-number and detector-name combinations are unique.  If false, and
+          less than 500 samples, than this isnt guaranteed.
+   
+   Called from `cleanup_after_load()`
+   */
+  void set_sample_numbers_by_time_stamp( const bool sort_meas_types_separately,
+                                        const bool force_unique  );
   
   
   //load20XXN42File(...): loads the specialized type on N42 file.

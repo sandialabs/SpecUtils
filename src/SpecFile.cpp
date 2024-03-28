@@ -4685,7 +4685,8 @@ bool comp_by_start_time_source( const std::shared_ptr<Measurement> &lhs,
   return (left < right);
 }
 
-void  SpecFile::set_sample_numbers_by_time_stamp()
+void SpecFile::set_sample_numbers_by_time_stamp( const bool sort_meas_types_separately,
+                                                const bool force_unique )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -4701,7 +4702,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
   //  more than 500 measurements - this is because the faster method does not
   //  preserve existing sample numbers
 
-  if( measurements_.size() > 500 )
+  if( (measurements_.size() > 500) || force_unique )
   {
     vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background, sorted_derived;
 
@@ -4711,6 +4712,12 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       if( !m )
         continue;
+      
+      if( !sort_meas_types_separately )
+      {
+        sorted_foreground.push_back( m );
+        continue;
+      }
       
       if( m->derived_data_properties() )
       {
@@ -4800,14 +4807,25 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
       
       const int detnum = m->detector_number_;
       
-      if( m->derived_data_properties() )
+      if( !sort_meas_types_separately )
+      {
+        if( is_special(m->start_time_) )
+          invalid_times[detnum].push_back( m );
+        else
+          time_meas_map[m->start_time_][detnum].push_back( m );
+      }else if( m->derived_data_properties() )
+      {
         derived_data[detnum].push_back( m );
-      else if( m->source_type() == SourceType::IntrinsicActivity )
+      }else if( m->source_type() == SourceType::IntrinsicActivity )
+      {
         intrinsics[detnum].push_back( m );
-      else if( is_special(m->start_time_) )
+      }else if( is_special(m->start_time_) )
+      {
         invalid_times[detnum].push_back( m );
-      else
+      }else
+      {
         time_meas_map[m->start_time_][detnum].push_back( m );
+      }
     }//for( auto &m : measurements_ )
     
     //Now for simpleness, lets toss intrinsics, derived_data, and invalid_times into time_meas_map
@@ -4922,7 +4940,7 @@ void SpecFile::ensure_unique_sample_numbers()
     stable_sort( measurements_.begin(), measurements_.end(), &compare_by_derived_sample_det_time );
   }else
   {
-    set_sample_numbers_by_time_stamp();
+    set_sample_numbers_by_time_stamp( true, false );
   }
   
   //XXX - TODO should validate this a little further and check performance
@@ -5009,6 +5027,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
   
   const bool rebinToCommonBinning = (flags & RebinToCommonBinning);
   
+  
+  const bool dont_reorder = (flags & DontChangeOrReorderSamples);
+  const bool reorder_by_time = (flags & ReorderSamplesByTime);
+  
+  assert( (dont_reorder + reorder_by_time) <= 1 );
+  if( (dont_reorder + reorder_by_time) > 1 )
+    throw std::logic_error( "SpecFile::cleanup_after_load: you may only specify one ordering; "
+                           "options received=" + std::to_string(flags) );
   
   //When loading the example passthrough N42 file, this function
   //  take about 60% of the parse time - due almost entirely to
@@ -5291,7 +5317,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
        || !SpecUtils::valid_latitude(mean_latitude_) )
       mean_latitude_ = mean_longitude_ = -999.9;
     
-    if( flags & DontChangeOrReorderSamples )
+    if( reorder_by_time )
+    {
+      set_sample_numbers_by_time_stamp( false, true );
+    }else if( dont_reorder )
     {
       if( !has_unique_sample_and_detector_numbers() )
         properties_flags_ |= kNotUniqueSampleDetectorNumbers;
@@ -7078,6 +7107,153 @@ size_t SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalib
   return matching_meas.size();
 }//set_energy_calibration(...)
 
+  
+void SpecFile::set_energy_calibration_from_CALp_file( std::istream &infile )
+{
+  const std::streampos start_pos = infile.tellg();
+ 
+  try
+  {
+    // TODO: currently if we have detectors/measurements with different number of channels, then we
+    //       may run into an error if the CALp file gives lower channel energies, but
+    //       `num_gamma_channels()` returned a different number of channels than is required for any
+    //       of the detectors
+    size_t fewest_num_channel = 65537, max_num_channels = 0;
+    
+    // Make a mapping of {detector name, number channels} to energy calibrations we
+    //  will read from the CALp file
+    map<pair<string,size_t>,shared_ptr<EnergyCalibration>> det_to_cal;
+    
+    for( const shared_ptr<Measurement> &m : measurements_ )
+    {
+      const size_t nchan = m->num_gamma_channels();
+      if( nchan > 3 )
+      {
+        fewest_num_channel = std::min( fewest_num_channel, nchan );
+        max_num_channels = std::max( max_num_channels, nchan );
+        det_to_cal[make_pair(m->detector_name_,nchan)] = nullptr;
+      }
+    }//for( const auto &m : measurements_ )
+    
+    if( max_num_channels < 3 )
+      throw runtime_error( "No gamma spectra to apply CALp to." );
+    
+    assert( !det_to_cal.emty() );
+    
+    while( infile.good() )
+    {
+      const std::streampos calp_pos = infile.tellg();
+      
+      string name;
+      shared_ptr<EnergyCalibration> cal = energy_cal_from_CALp_file( infile, fewest_num_channel, name );
+      
+      if( !cal )
+        throw runtime_error( "CALp file was invalid, or incompatible" );
+      
+      assert( cal->valid() );
+      assert( cal->type() != SpecUtils::EnergyCalType::InvalidEquationType );
+      
+      // The calibration may not be for the correct number of channels, for files that have detectors
+      //  with different num channels; we'll check for this here and fix the calibration up for this
+      //  case.
+      for( auto &name_nchan_cal : det_to_cal )
+      {
+        const string &meas_det_name = name_nchan_cal.first.first;
+        const size_t nchan = name_nchan_cal.first.second;
+        
+        if( !name.empty() && (meas_det_name != name) )
+          continue;
+        
+        // If we already have the right number of channels, we dont need to do anything
+        //  and can set the energy calibration here
+        if( nchan != fewest_num_channel )
+        {
+          try
+          {
+            switch( cal->type() )
+            {
+              case SpecUtils::EnergyCalType::Polynomial:
+              case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+                cal->set_polynomial( nchan, cal->coefficients(), cal->deviation_pairs() );
+                break;
+                
+              case SpecUtils::EnergyCalType::FullRangeFraction:
+                cal->set_full_range_fraction( nchan, cal->coefficients(), cal->deviation_pairs() );
+                break;
+                
+              case SpecUtils::EnergyCalType::LowerChannelEdge:
+              {
+                // We will need to re-read the calibration, with the updated number of channels.
+                if( !infile.seekg( calp_pos, ios::beg ) )
+                  throw runtime_error( "Failed to seek the input CALp file stream." );
+                
+                cal = SpecUtils::energy_cal_from_CALp_file( infile, nchan, name );
+                if( !cal )
+                  throw runtime_error( "CALp file is incompatible with detector '" + name + "'"
+                                      " having " + std::to_string(nchan) + " channels." );
+                break;
+              }//case SpecUtils::EnergyCalType::LowerChannelEdge:
+                
+              case SpecUtils::EnergyCalType::InvalidEquationType:
+                throw std::logic_error( "Invalid calibration type???" );
+                break;
+            }//switch( cal->type() )
+          }catch( std::exception &e )
+          {
+            throw runtime_error( "Failed to adjust the number of channels in the CALp file"
+                                " to what detector '" + name + "' required: " + string(e.what()) );
+          }//try / catch
+        }//if( nchan != fewest_num_channel )
+        
+        assert( cal && cal->valid() && (cal->num_channels() == nchan) );
+        
+        name_nchan_cal.second = cal;
+      }//for( const auto &name_nchan_cal : det_to_cal )
+    }//while( true )
+    
+    
+    // Now lets make sure we have energy calibrations for all measurements
+    for( auto &name_nchan_cal : det_to_cal )
+    {
+      const string &det_name = name_nchan_cal.first.first;
+      const size_t nchan = name_nchan_cal.first.second;
+      const shared_ptr<EnergyCalibration> &cal = name_nchan_cal.second;
+      
+      assert( !cal || cal->valid() );
+      
+      if( !cal || !cal->valid() )
+        throw runtime_error( "Failed to get an energy calibration for detector '" + det_name + "'"
+                            " with " + std::to_string(nchan) + " channels, from the CALp file.");
+    }//for( auto &name_nchan_cal : det_to_cal )
+    
+    // If we are here, we should be good to go
+    for( const auto &m : measurements_ )
+    {
+      const size_t nchan = m->num_gamma_channels();
+      if( nchan <= 3 )
+        continue;
+      
+      const auto pos = det_to_cal.find( make_pair(m->detector_name_, nchan) );
+      assert( pos != end(det_to_cal) );
+      if( pos == end(det_to_cal) )
+        throw std::logic_error( "Logic error retrieving energy calibration - this shouldnt have happened." );
+      
+      const shared_ptr<EnergyCalibration> cal = pos->second;
+      assert( cal && cal->valid() && (cal->num_channels() == nchan) );
+      if( !cal || !cal->valid() || (cal->num_channels() != nchan) )
+        throw std::logic_error( "Logic error with CALp energy calibration - this shouldnt have happened." );
+      
+      m->set_energy_calibration( cal );
+    }//for( const auto &m : measurements_ )
+  }catch( std::exception &e )
+  {
+    // Set the input file back to the original position
+    infile.seekg( start_pos, ios::beg );
+    
+    throw; //re-throw the exception
+  }//try / catch
+}//void set_energy_calibration_from_CALp_file( std::istream &input )
+  
 
 size_t SpecFile::memmorysize() const
 {
