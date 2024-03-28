@@ -1992,13 +1992,33 @@ shared_ptr<EnergyCalibration> energy_cal_from_CALp_file( std::istream &input,
     
     det_name = name;
     
+    // Advance the file until the next non-empty line, or EOF
+    if( input.good() )
+    {
+      string line;
+      
+      for( std::streampos pos = input.tellg();
+          SpecUtils::safe_get_line( input, line, 2*1024 );
+          pos = input.tellg() )
+      {
+        SpecUtils::trim( line );
+        if( !line.empty() )
+        {
+          input.seekg( pos, ios::beg );
+          break;
+        }
+      }//for( find next non-empt line, or EOF )
+    }//if( input.good() )
+    
     return cal;
   }catch( std::exception &e )
   {
-    cerr << "Failed to parse CALp file: " << e.what() << endl;
     input.seekg( start_pos, ios::beg );
+    
+    throw runtime_error( "Failed to parse CALp file: " + string(e.what()) );
   }//try / catch to parse file
   
+  assert( 0 );
   return nullptr;
 }//energy_cal_from_CALp_file(...)
     

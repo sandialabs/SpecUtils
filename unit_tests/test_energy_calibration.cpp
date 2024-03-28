@@ -393,8 +393,8 @@ Gain (keV / Chan)      :  -3.00000e+00
   // Test an empty CALp file
   calp_contents = R(")";
   input.str( calp_contents );
-  BOOST_CHECK_NO_THROW( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ) );
-  BOOST_CHECK( !cal );
+  BOOST_CHECK_THROW( SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ) );
+  
 
   // TODO: add tests a multiple named detector demo, and then tests for `SpecFile::set_energy_calibration_from_CALp_file(...)`
   //       could/should also add tests for other calibration types

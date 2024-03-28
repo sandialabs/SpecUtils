@@ -651,7 +651,9 @@ namespace SpecUtils
           channels than nullptr will be returned.  If energy in CALp is invalid, then nullptr will be returned.
    @param det_name [out] The detector name as given in the CALp file, or empty if not give.  Note that detector name is an InterSpec
           specific extension to CALp files.
-   @returns nullptr on error, otherwise a valid energy calibration.
+   @returns a valid energy calibration.
+   
+   Throws exception on error.
    
    Example CALp file:
    \verbatim

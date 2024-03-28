@@ -7138,19 +7138,27 @@ void SpecFile::set_energy_calibration_from_CALp_file( std::istream &infile )
     if( max_num_channels < 3 )
       throw runtime_error( "No gamma spectra to apply CALp to." );
     
-    assert( !det_to_cal.emty() );
+    assert( !det_to_cal.empty() );
     
     while( infile.good() )
     {
       const std::streampos calp_pos = infile.tellg();
       
       string name;
-      shared_ptr<EnergyCalibration> cal = energy_cal_from_CALp_file( infile, fewest_num_channel, name );
+      shared_ptr<EnergyCalibration> cal;
       
-      if( !cal )
-        throw runtime_error( "CALp file was invalid, or incompatible" );
+      try
+      {
+        cal = energy_cal_from_CALp_file( infile, fewest_num_channel, name );
+      }catch( exception &e )
+      {
+        if( det_to_cal.empty() )
+          throw runtime_error( "CALp file was invalid, or incompatible" );
+        
+        break; //We just reached the end of the file probably, no biggy
+      }//try / catch
       
-      assert( cal->valid() );
+      assert( cal && cal->valid() );
       assert( cal->type() != SpecUtils::EnergyCalType::InvalidEquationType );
       
       // The calibration may not be for the correct number of channels, for files that have detectors
@@ -7209,7 +7217,7 @@ void SpecFile::set_energy_calibration_from_CALp_file( std::istream &infile )
         
         name_nchan_cal.second = cal;
       }//for( const auto &name_nchan_cal : det_to_cal )
-    }//while( true )
+    }//while( infile.good() )
     
     
     // Now lets make sure we have energy calibrations for all measurements
