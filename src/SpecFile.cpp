@@ -3802,7 +3802,7 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
       ireplace_all( r, "  ", " " );
     
     if( !starts_with(r,"N42 file created by") )
-      nlhsremarkss.push_back( r );
+      nlhsremarkss.push_back( SpecUtils::trim_copy( r ) );
   }
   
   for( string r : rhs.remarks_ )
@@ -3811,7 +3811,7 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
       ireplace_all( r, "  ", " " );
     
     if( !starts_with(r,"N42 file created by") )
-      nrhsremarkss.push_back( r );
+      nrhsremarkss.push_back( SpecUtils::trim_copy( r ) );
   }
   
   
@@ -3820,9 +3820,9 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     if( find(begin(nlhsremarkss), end(nlhsremarkss), rem) == end(nlhsremarkss) )
     {
 #if( REQUIRE_REMARKS_COMPARE )
-      issues.push_back( "SpecFile: RHS contains remark LHS doesnt: " + rem );
+      issues.push_back( "SpecFile: RHS contains remark LHS doesnt: '" + rem + "'" );
 #else
-      cerr << "SpecFile: RHS contains remark LHS doesnt: " + rem << endl;
+      cerr << "SpecFile: RHS contains remark LHS doesnt: '" + rem + "'" << endl;
 #endif
     }//if( rem not in nlhsremarkss )
   }//for( const string &rem : nrhsremarkss )
@@ -3832,9 +3832,9 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     if( find(begin(nrhsremarkss), end(nrhsremarkss), rem) == end(nrhsremarkss) )
     {
 #if( REQUIRE_REMARKS_COMPARE )
-      issues.push_back( "SpecFile: LHS contains remark RHS doesnt: " + rem );
+      issues.push_back( "SpecFile: LHS contains remark RHS doesnt: '" + rem + "'" );
 #else
-      cerr << "SpecFile: LHS contains remark RHS doesnt: " + rem << endl;
+      cerr << "SpecFile: LHS contains remark RHS doesnt: '" + rem + "'" << endl;
 #endif
     }//if( rem not in nrhsremarkss )
   }//for( const string &rem : nlhsremarkss )
@@ -4948,10 +4948,10 @@ void SpecFile::ensure_unique_sample_numbers()
   //      expensive "fix" below.
   //
   //Here we will check the first two sample number, and if they are '1' and '2'
-  //  repectively, we will not do anything.  If first sample is not 1, but
+  //  respectively, we will not do anything.  If first sample is not 1, but
   //  second sample is 2, we will change first sample to 1.  Otherwise if
   //  first two sample numbers isnt {1,2}, we will change all sample numbers to
-  //  start at 1 and increase continuosly by 1.
+  //  start at 1 and increase continuously by 1.
   //  (note: this mess of logic is "inspired" by heuristics, and that actually
   //   looping through all measurements of a large file is expensive)
   set<int> sample_numbers;
@@ -8354,7 +8354,35 @@ size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep
   return (keepers.size() - measurements_.size());
 }//size_t SpecFile::keep_derived_data_variant( const DerivedVariantToKeep tokeep )
 
+  
+size_t SpecFile::remove_detectors_data( const set<string> &dets_to_remove )
+{
+  if( dets_to_remove.empty() )
+    return 0;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+ 
+  for( const string &det : dets_to_remove )
+  {
+    if( std::find(begin(detector_names_), end(detector_names_), det) == end(detector_names_) )
+      throw runtime_error( "SpecFile::remove_detectors_data: invalid detector name '" + det + "'" );
+  }//for( const string &det : detectors )
+  
+  const size_t norig = measurements_.size();
+  
+  measurements_.erase( std::remove_if( begin(measurements_), end(measurements_),
+    [&dets_to_remove]( const shared_ptr<Measurement> &m ) -> bool {
+      return (dets_to_remove.count(m->detector_name_) > 0);
+    } ), end(measurements_) );
+  
+  cleanup_after_load();
+  
+  modified_ = modifiedSinceDecode_ = true;
+  
+  return (norig - measurements_.size());
+}//size_t remove_detectors_data( const std::set<std::string> detectors )
 
+  
 int SpecFile::background_sample_number() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
