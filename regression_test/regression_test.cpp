@@ -152,7 +152,7 @@ int main( int argc, char **argv )
   
   //test_base_directory: the directory where the test file structure is based.
 #if( !defined(WIN32) )
-  string test_base_directory = "/Users/wcjohns/rad_ana/InterSpec/testing/SpectrumFileFormats/file_format_test_spectra";
+  string test_base_directory = "/Users/wcjohns/rad_ana/SpectrumFileFormats/file_format_test_spectra";
 #else
   string test_base_directory = "Z:\\wcjohns\\rad_ana\\InterSpec\\testing\\SpectrumFileFormats\\file_format_test_spectra";
 #endif
@@ -488,8 +488,10 @@ void check_files_with_truth_n42( const string basedir )
   
   map<path,double> parse_times;
   
-  for( const path &fpath : with_truth )
+  for( size_t file_index = 0; file_index < with_truth.size(); ++file_index )
   {
+    const path &fpath = with_truth[file_index];
+    
     ++initial;
     
     const string filename = fpath.filename().string<string>();
@@ -566,6 +568,8 @@ void check_files_with_truth_n42( const string basedir )
     }catch( std::exception &e )
     {
       ++failed_tests;
+      
+      cerr << "(on file " << file_index+1 << " of " << with_truth.size() << " )" << endl;
       
       const string description = e.what();
       vector<string> errors;

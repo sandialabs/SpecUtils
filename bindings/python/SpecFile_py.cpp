@@ -1034,6 +1034,9 @@ enum_<SpecUtils::DetectorType>( "DetectorType" )
   .value( "VerifinderNaI", SpecUtils::DetectorType::VerifinderNaI )
   .value( "VerifinderLaBr", SpecUtils::DetectorType::VerifinderLaBr )
   .value( "KromekD3S", SpecUtils::DetectorType::KromekD3S )
+  .value( "Fulcrum", SpecUtils::DetectorType::Fulcrum )
+  .value( "Fulcrum40h", SpecUtils::DetectorType::Fulcrum40h )
+  .value( "Sam950", SpecUtils::DetectorType::Sam950 )
   .value( "Unknown", SpecUtils::DetectorType::Unknown );
 
 
@@ -1064,6 +1067,9 @@ enum_<SpecUtils::SaveSpectrumAsType>( "SaveSpectrumAsType" )
 #endif
 #if( SpecUtils_INJA_TEMPLATES )
     .value( "Template", SpecUtils::SaveSpectrumAsType::Template )
+#endif
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    .value( "Uri", SpecUtils::SaveSpectrumAsType::Uri )
 #endif
     .value( "NumTypes", SpecUtils::SaveSpectrumAsType::NumTypes );
 

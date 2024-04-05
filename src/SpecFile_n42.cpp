@@ -3240,7 +3240,12 @@ public:
        && !contains(meas->title_, "MeasureSum")
        && !icontains(meas->title_, "Analysis")
        && !icontains(meas->title_, "Processed")
-       && !icontains(meas->title_, "BGSub") )
+       && !icontains(meas->title_, "BGSub")
+       && !icontains(meas->title_, "BackgroundMeasure")
+       && !icontains(meas->title_, "Gamma StabMeasurement")
+       && !icontains(meas->title_, "Gamma Foreground Sum")
+       && !icontains(meas->title_, "Gamma Cal")
+       )
     {
       meas->title_ += (meas->title_.empty() ? "" : " ") + string("Derived Spectrum: ") + dd_id + " " + spec_id;
     }
@@ -3255,6 +3260,7 @@ public:
   static void decode_2012_N42_rad_measurement_node(
                                     std::vector< std::shared_ptr<Measurement> > &measurements,
                                     const rapidxml::xml_node<char> *meas_node,
+                                    const size_t rad_measurement_index,
                                     const IdToDetectorType *id_to_dettype_ptr,
                                     DetectorToCalibInfo *calibrations_ptr,
                                     std::mutex &meas_mutex,
@@ -3307,7 +3313,11 @@ public:
         {
         }else if( sscanf( meas_id_att_str.c_str(), "Survey%i", &(sample_num_from_meas_node)) == 1 )
         {
-        }//else ... another format I dont recall seeing.
+        //}else if( sscanf( meas_id_att_str.c_str(), "Foreground%i", &(sample_num_from_meas_node)) == 1 )
+        //{
+        }
+        
+        //else ... another format I dont recall seeing.
       }//if( samp_det_str.size() )
       
       XML_FOREACH_CHILD( remark_node, meas_node, "Remark" )
@@ -3607,13 +3617,21 @@ public:
             {
             }else if( sscanf( samp_det_str.c_str(), "Survey%i", &(meas->sample_number_)) == 1 )
             {
+            //}else if( sscanf( samp_det_str.c_str(), "Foreground%i", &(meas->sample_number_)) == 1 )
+            //{
             }else if( sample_num_from_meas_node != -999 )
             {
               meas->sample_number_ = sample_num_from_meas_node;
+            }else
+            {
+              meas->sample_number_ = static_cast<int>( rad_measurement_index );
             }
           }else if( sample_num_from_meas_node != -999 )
           {
             meas->sample_number_ = sample_num_from_meas_node;
+          }else
+          {
+            meas->sample_number_ = static_cast<int>( rad_measurement_index );
           }//if( samp_det_str.size() )
           
   #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
@@ -3926,22 +3944,25 @@ public:
             {
             }else if( sscanf( sample_det_att.c_str(), "Survey_%i", &(meas->sample_number_) ) == 1 )
             {
+            //}else if( sscanf( sample_det_att.c_str(), "Foreground%i", &(meas->sample_number_) ) == 1 )
+            //{
             }else if( sample_num_from_meas_node != -999 )
-            {
-              meas->sample_number_ = 0;
-            }else
             {
               //We'll end up here with taks like: 'M-13 Aa1N', 'M113N', 'Foreground-20100127130220-Aa1N',
               //  '4045bb4c-9c68-48fa-8121-48c5806f84d8-count', 'NeutronForeground58-CL1',
               //  'ForegroundMeasure6afc5c3010001NeutronCounts', etc
-  //#if(PERFORM_DEVELOPER_CHECKS)
-  //            char buffer[256];
-  //            snprintf( buffer, sizeof(buffer),
-  //                     "Unrecognized 'id' attribute of Spectrum node: '%s'", sample_det_att.c_str() );
-  //            log_developer_error( __func__, buffer );
-  //#endif
-            }
-          }//if( sample_det_att.size() )
+              meas->sample_number_ = sample_num_from_meas_node;
+            }else
+            {
+              meas->sample_number_ = static_cast<int>( rad_measurement_index );
+            }//if( samp_det_str.size() )
+          }else if( sample_num_from_meas_node != -999 )
+          {
+            meas->sample_number_ = sample_num_from_meas_node;
+          }else
+          {
+            meas->sample_number_ = static_cast<int>( rad_measurement_index );
+          }//if( sample_det_att.size() ) / else
           
           bool use_remark_real_time = false;
           
@@ -8224,6 +8245,8 @@ namespace SpecUtils
     vector<pair<string,string>> symetrica_special_attribs;
     
     
+    // Lets keep track of "RadMeasurement" and "DerivedData" nodes, to help fill in sample numbers
+    size_t rad_meas_index = 1;  //we'll start at 1
     
     // See note above about system that has multiple N42 documents in a single file.
     for( const rapidxml::xml_node<char> *rad_data_node = data_node; rad_data_node;
@@ -8256,9 +8279,13 @@ namespace SpecUtils
           }//
         }//if( is_symetrica )
         
-        workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-          N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+        workerpool.post( [these_meas, meas_node, rad_meas_index, &id_to_dettype,
+                          &calibrations, mutexptr, &calib_mutex](){
+          N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node,
+                            rad_meas_index, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
         } );
+        
+        rad_meas_index += 1;
       }//for( loop over "RadMeasurement" nodes )
       
       
@@ -8270,11 +8297,15 @@ namespace SpecUtils
         meas_mutexs.push_back( mutexptr );
         measurements_each_derived.push_back( these_meas );
         
-        workerpool.post( [these_meas,meas_node,&id_to_dettype,&calibrations,mutexptr,&calib_mutex](){
-          N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+        workerpool.post( [these_meas, meas_node, rad_meas_index,
+                         &id_to_dettype, &calibrations, mutexptr, &calib_mutex](){
+          N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node,
+                            rad_meas_index, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
         } );
+        
+        rad_meas_index += 1;
       }//for( loop over "DerivedData" nodes )
-    }//for( loop over "RadInstrumentData" nodes - I know )
+    }//for( loop over "RadInstrumentData" nodes - we shouldnt have to, but we do )
     
     workerpool.join();
     

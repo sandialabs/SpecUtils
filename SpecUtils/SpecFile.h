@@ -1643,8 +1643,13 @@ public:
    */
   size_t keep_derived_data_variant( const DerivedVariantToKeep tokeep );
   
+  /** Remove all data from the named detectors.
+   
+   Will throw exception if a specified detector is not a valid name.
+   */
+  size_t remove_detectors_data( const std::set<std::string> &dets_to_remove );
   
-  //rremove_neutron_measurements() only removes neutron measurements that do not
+  //remove_neutron_measurements() only removes neutron measurements that do not
   //  have a gamma binning defined
   size_t remove_neutron_measurements();
 
