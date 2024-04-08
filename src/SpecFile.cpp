@@ -8256,30 +8256,27 @@ set<string> SpecFile::energy_cal_variants() const
 }//set<string> energy_cal_variants() const
 
 
-size_t SpecFile::keep_energy_cal_variant( const std::string variant )
+size_t SpecFile::keep_energy_cal_variants( const std::set<std::string> &variants )
 {
-  const string ending = "_intercal_" + variant;
   std::vector< std::shared_ptr<Measurement> > keepers;
-  
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
   const set<string> origvaraints = energy_cal_variants();
   
-  if( !origvaraints.count(variant) )
+  for( const string &variant : variants )
   {
-    string msg = "SpecFile::keep_energy_cal_variant():"
-    " measurement did not contain an energy variant named '"
-    + variant + "', only contained:";
-    for( auto iter = begin(origvaraints); iter != end(origvaraints); ++iter )
-      msg += " '" + (*iter) + "',";
-    if( origvaraints.empty() )
-      msg += " none";
-    
-    throw runtime_error( msg );
-  }//if( !origvaraints.count(variant) )
-  
-  if( origvaraints.size() == 1 )
-    return 0;
+    if( !origvaraints.count(variant) )
+    {
+      string msg = "SpecFile::keep_energy_cal_variants():"
+      " measurement did not contain an energy variant named '"
+      + variant + "', only contained:";
+      for( auto iter = begin(origvaraints); iter != end(origvaraints); ++iter )
+        msg += " '" + (*iter) + "',";
+      if( origvaraints.empty() )
+        msg += " none";
+      
+      throw runtime_error( msg );
+    }//if( !origvaraints.count(variant) )
+  }//for( const string &variant : variants )
   
   keepers.reserve( measurements_.size() );
   
@@ -8290,14 +8287,21 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
     if( pos == string::npos )
     {
       keepers.push_back( ptr );
-    }else if( ((pos + ending.size()) == detname.size())
-               && (strcmp(detname.c_str()+pos+10,variant.c_str())==0) )
+    }else
     {
-      ptr->detector_name_ = detname.substr( 0, pos );
-      keepers.push_back( ptr );
-    }
-    //else
-      //cout << "Getting rid of: " << detname << endl;
+      for( const string &variant : variants )
+      {
+        const size_t ending_size = variant.size() + 10; // 10 == ("_intercal_" + variant).size()
+        assert( ending_size == ("_intercal_" + variant).size() );
+        
+        if( ((pos + ending_size) == detname.size())
+           && (strcmp(detname.c_str()+pos+10,variant.c_str())==0) )
+        {
+          ptr->detector_name_ = detname.substr( 0, pos );
+          keepers.push_back( ptr );
+        }
+      }//for( const string &variant : variants )
+    }//if( not an energy cal variant ) / else
   }//for( auto &ptr : measurements_ )
   
   measurements_.swap( keepers );
@@ -8306,7 +8310,7 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   modified_ = modifiedSinceDecode_ = true;
   
   return (keepers.size() - measurements_.size());
-}//void keep_energy_cal_variant( const std::string variant )
+}//void keep_energy_cal_variants( const std::string variant )
 
 
 size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep tokeep )
@@ -8347,6 +8351,7 @@ size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep
   }//for( auto &ptr : measurements_ )
   
   measurements_.swap( keepers );
+  uuid_.clear();
   cleanup_after_load();
   
   modified_ = modifiedSinceDecode_ = true;

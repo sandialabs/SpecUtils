@@ -4307,7 +4307,7 @@ public:
         
         //Check for duplicate spectrum in spectrum_meas for the same detector, but
         //  with different calibrations.
-        //  See comments for #energy_cal_variants and #keep_energy_cal_variant.
+        //  See comments for #energy_cal_variants and #keep_energy_cal_variants.
         //Note: as of 20160531, this duplicate spectrum stuff is untested.
         const vector<std::shared_ptr<Measurement>>::const_iterator beginmeas = meas_to_add.begin();
         const vector<std::shared_ptr<Measurement>>::const_iterator endmeas = meas_to_add.end();
@@ -5541,7 +5541,7 @@ namespace SpecUtils
           //  calibration, for the same data, lets keep track of the <Spectrum>
           //  node each Measurement cooresponds to, so we can append the detector
           //  name with the calibration name (kinda a hack, see
-          //  #energy_cal_variants and #keep_energy_cal_variant.
+          //  #energy_cal_variants and #keep_energy_cal_variants.
           vector< pair<std::shared_ptr<Measurement>, const rapidxml::xml_node<char> *> > meas_to_spec_node;
           
           //Raytheon portals do this wierd thing of putting two calibrations into
@@ -5984,7 +5984,7 @@ namespace SpecUtils
           
           //Look for multiple spectra representing the same data, but that actually
           // have different calibrations.
-          // See comments for #energy_cal_variants and #keep_energy_cal_variant.
+          // See comments for #energy_cal_variants and #keep_energy_cal_variants.
           const vector< std::shared_ptr<Measurement> >::const_iterator datastart = measurements_this_node.begin();
           const vector< std::shared_ptr<Measurement> >::const_iterator dataend = measurements_this_node.end();
           

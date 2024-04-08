@@ -1617,13 +1617,13 @@ public:
   std::set<std::string> energy_cal_variants() const;
   
   
-  //keep_energy_cal_variant(): When #energy_cal_variants() returns multiple
+  //keep_energy_cal_variants(): When #energy_cal_variants() returns multiple
   //  variants, you can use this function to remove all energy calibration
   //  variants, besides the one you specify, from the measurement.  If a spectrum
   //  is not part of a variant, it is kept.
   //Returns return number of removed spectra.
   //Throws exception if you pass in an invalid variant.
-  size_t keep_energy_cal_variant( const std::string variant );
+  size_t keep_energy_cal_variants( const std::set<std::string> &variants );
   
   
   /** Enum to indicate "derived data" variant to keep. */
