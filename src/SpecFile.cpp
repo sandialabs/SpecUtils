@@ -676,6 +676,20 @@ double Measurement::gamma_count_sum() const
 {
   return gamma_count_sum_;
 }
+  
+float Measurement::neutron_live_time() const
+{
+  if( !contained_neutron_ )
+    return 0.0f;
+  
+  if( (neutron_live_time_ > 0.0f) && !IsNan(neutron_live_time_) && !IsInf(neutron_live_time_) )
+    return neutron_live_time_;
+  
+  if( (real_time_ <= 0.0f) && (live_time_ > 0.0f) )
+    return live_time_;
+  
+  return real_time_;
+}
 
 double Measurement::neutron_counts_sum() const
 {
@@ -911,11 +925,17 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
 }//set_gamma_counts
   
   
-void Measurement::set_neutron_counts( const std::vector<float> &counts )
+void Measurement::set_neutron_counts( const std::vector<float> &counts, const float live_time )
 {
   neutron_counts_ = counts;
   neutron_counts_sum_ = 0.0;
   contained_neutron_ = !counts.empty();
+  
+  if( counts.empty() || (live_time < 0.0f) || IsInf(live_time) || IsNan(live_time) )
+    neutron_live_time_ = 0.0f;
+  else
+    neutron_live_time_ = live_time;
+  
   const size_t size = counts.size();
   for( size_t i = 0; i < size; ++i )
     neutron_counts_sum_ += counts[i];
@@ -1532,6 +1552,7 @@ void Measurement::reset()
   sample_number_ = 1;
   occupied_ = OccupancyStatus::Unknown;
   gamma_count_sum_ = 0.0;
+  neutron_live_time_ = 0.0f;
   neutron_counts_sum_ = 0.0;
   
   detector_name_.clear();
@@ -2412,8 +2433,9 @@ void SpecFile::set_title( const std::string &title,
 
 
 void SpecFile::set_contained_neutrons( const bool contained,
-                                             const float counts,
-                                             const std::shared_ptr<const Measurement> meas )
+                                      const float counts,
+                                      const std::shared_ptr<const Measurement> meas,
+                                      const float neutron_live_time )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurement( meas );
@@ -2428,10 +2450,15 @@ void SpecFile::set_contained_neutrons( const bool contained,
     ptr->neutron_counts_.resize( 1 );
     ptr->neutron_counts_[0] = counts;
     ptr->neutron_counts_sum_ = counts;
+    if( (neutron_live_time > 0.0f) && !IsInf(neutron_live_time) && !IsNan(neutron_live_time) )
+      ptr->neutron_live_time_ = neutron_live_time;
+    else
+      ptr->neutron_live_time_ = 0.0f;
   }else
   {
     ptr->neutron_counts_.resize( 0 );
     ptr->neutron_counts_sum_ = 0.0;
+    ptr->neutron_live_time_ = 0.0f;
   }
   
   modified_ = modifiedSinceDecode_ = true;
@@ -3042,6 +3069,16 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     issues.push_back( buffer );
   }
   
+  const float lhs_neut_lt = lhs.neutron_live_time();
+  const float rhs_neut_lt = rhs.neutron_live_time();
+  if( fabs(lhs_neut_lt - rhs_neut_lt) > (0.001f*std::max(fabs(lhs_neut_lt),fabs(rhs_neut_lt))) )
+  {
+    snprintf( buffer, sizeof(buffer),
+             "Measurement: Neutron live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             lhs_neut_lt, rhs_neut_lt );
+    issues.push_back( buffer );
+  }
+  
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > (0.00001*std::max(fabs(lhs.neutron_counts_sum_),fabs(rhs.neutron_counts_sum_))) )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3118,10 +3155,10 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 #if( !REQUIRE_REMARKS_COMPARE )
     cerr << buffer << endl;
 #endif
-    for( size_t i = 0; i < nlhsremarks.size(); ++i )
-      cerr << "\tLHS: '" << nlhsremarks[i] << "'" << endl;
-    for( size_t i = 0; i < nrhsremarks.size(); ++i )
-      cerr << "\tRHS: '" << nrhsremarks[i] << "'" << endl;
+    //for( size_t i = 0; i < nlhsremarks.size(); ++i )
+    //  cerr << "\tLHS: '" << nlhsremarks[i] << "'" << endl;
+    //for( size_t i = 0; i < nrhsremarks.size(); ++i )
+    //  cerr << "\tRHS: '" << nrhsremarks[i] << "'" << endl;
     
 #if( REQUIRE_REMARKS_COMPARE )
     issues.push_back( buffer );
@@ -3317,7 +3354,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
           num_channel_warnings += 1;
           if( num_channel_warnings == 5 )
           {
-            issues.push_back( "Measurement: There are additional channel that doent match, but error messages will be suppressed." );
+            issues.push_back( "Measurement: There are additional channel that doesnt match, but error messages will be suppressed." );
             break;
           }else if( num_channel_warnings < 5 )
           {
@@ -4241,6 +4278,7 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   sample_number_ = rhs.sample_number_;
   occupied_ = rhs.occupied_;
   gamma_count_sum_ = rhs.gamma_count_sum_;
+  neutron_live_time_ = rhs.neutron_live_time_;
   neutron_counts_sum_ = rhs.neutron_counts_sum_;
   
   detector_name_ = rhs.detector_name_;
@@ -5300,6 +5338,15 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
                                      || !meas->neutron_counts_.empty() );
+      
+      assert( meas->contained_neutron_ || (meas->neutron_live_time_ == 0.0f) );
+      if( !meas->contained_neutron_ && (meas->neutron_live_time_ > 0.0f) )
+      {
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, "Found a case where neutron live time was specified, but no neutrons parsed" );
+#endif
+        meas->neutron_live_time_ = 0.0f;
+      }//
     }//for( auto &meas : measurements_ )
     
     
@@ -6128,13 +6175,23 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
       
       
       //TODO: should check and handle real time being different, as well
-      //      as start time.  Should also look into propogating detecor
+      //      as start time.  Should also look into propagating detector
       //      information and other quantities over.
+      
+      assert( gamma_meas->contained_neutron_ || gamma_meas->neutron_live_time_ == 0.0f );
+      if( !gamma_meas->contained_neutron_ || (gamma_meas->neutron_live_time_ < 0.0f) )
+        gamma_meas->neutron_live_time_ = 0.0f;
       
       gamma_meas->contained_neutron_ = true;
       gamma_meas->neutron_counts_.insert( end(gamma_meas->neutron_counts_),
                                          begin(meas->neutron_counts_), end(meas->neutron_counts_) );
       gamma_meas->neutron_counts_sum_ += meas->neutron_counts_sum_;
+      
+      if( meas->neutron_live_time_ > 0.0f )
+        gamma_meas->neutron_live_time_ += meas->neutron_live_time_;
+      else
+        gamma_meas->neutron_live_time_ += meas->real_time_;
+      
       gamma_meas->remarks_.insert( end(gamma_meas->remarks_),
                                   begin(meas->remarks_), end(meas->remarks_) );
       
@@ -7511,6 +7568,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   dataH->live_time_ = 0.0f;
   dataH->gamma_count_sum_ = 0.0;
   dataH->neutron_counts_sum_ = 0.0;
+  dataH->neutron_live_time_ = 0.0f;
   dataH->sample_number_ = -1;
   if( sample_numbers.size() == 1 )
     dataH->sample_number_ = *begin(sample_numbers);
@@ -7579,7 +7637,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   size_t total_num_gamma_spec = 0;
   set<SourceType> source_types;
   set<string> remarks;
-  float neutron_meas_time = 0.0f;
   for( const int sample_number : sample_numbers )
   {
     for( const string &det : det_names )
@@ -7604,7 +7661,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         dataH->neutron_counts_[i] += meas->neutron_counts_[i];
         
       if( meas->contained_neutron() )
-        neutron_meas_time += meas->real_time();
+        dataH->neutron_live_time_ += meas->neutron_live_time();
       
       for( const std::string &remark : meas->remarks_ )
         remarks.insert( remark );
@@ -8009,14 +8066,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   
   if( is_special(dataH->start_time_) )
     dataH->start_time_ = time_point_t{};
-  
-  // TODO: This is a hack, putting neutron real time into a string comment
-  if( neutron_meas_time > 0.0f )
-  {
-    char buffer[128];
-    snprintf( buffer, sizeof(buffer), "Neutron Real Time: %.5f s", neutron_meas_time );
-    dataH->remarks_.push_back( buffer );
-  }
   
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );

@@ -2084,7 +2084,7 @@ std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_inf
     m->set_title( spec.m_title );
     
     if( spec.m_neut_sum >= 0 )
-      m->set_neutron_counts( { static_cast<float>(spec.m_neut_sum) } );
+      m->set_neutron_counts( { static_cast<float>(spec.m_neut_sum) }, 0.0f );  //put 0s neutron real time so we'll use gamma live time
     
     const size_t num_channels = spec.m_channel_data.size();
     auto counts = make_shared<vector<float>>( num_channels );

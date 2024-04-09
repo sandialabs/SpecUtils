@@ -1082,7 +1082,7 @@ void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &o
       << meas.detector_name() << "', LT=" << meas.live_time()
       << ", RT=" << meas.real_time() << ", GammaSum=" << meas.gamma_count_sum();
   if( meas.contained_neutron() )
-    out << ", NeutronSum=" << meas.neutron_counts_sum();
+    out << ", NeutronSum=" << meas.neutron_counts_sum() << ", NeutLT=" << meas.neutron_live_time();
   else
     out << ", No neutron detector";
   

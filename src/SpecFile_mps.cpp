@@ -304,6 +304,7 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
         //  if we check answer in SpecFile::recalc_total_counts(), we are consistent (although now
         //  less precise).
         m->neutron_counts_sum_ = static_cast<float>(neutroncount);
+        //m->neutron_live_time_ is same as gamma live time, so we wont fill out
         //        m->speed_ = ;
         m->detector_name_ = title;
         m->detector_number_ = static_cast<int>( i );

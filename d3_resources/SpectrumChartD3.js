@@ -4462,9 +4462,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
     }
           
     if( typeof neutsum === "number" ){
-      // \TODO: spectrum.neutronRealTime is currently never set by SpecUtils/InterSpec, but will be once parsing
-      //        sepearte neutron real times is implemented.
-      const nrt = (typeof spectrum.neutronRealTime === "number") ? spectrum.neutronRealTime : (rt > 1.0E-6 ? rt : lt);
+      const nrt = (typeof spectrum.neutronLiveTime === "number") ? spectrum.neutronLiveTime : (rt > 1.0E-6 ? rt : lt);
       const isCps = (typeof nrt === "number");
       const neut = isCps ? neutsum/nrt : neutsum*sf;
       
@@ -4505,11 +4503,11 @@ SpectrumChartD3.prototype.updateLegend = function() {
           const spec = spectra[j];
           if( spec && (j !== i)
               && (spec.type === self.spectrumTypes.BACKGROUND)
-              && ((typeof spec.neutronRealTime === "number") || (typeof spec.realTime === "number"))
+              && ((typeof spec.neutronLiveTime === "number") || (typeof spec.realTime === "number"))
               && (typeof spec.neutrons === "number") )
           {
             forNeut = spec.neutrons;
-            forNeutLT = (typeof spec.neutronRealTime === "number") ? spec.neutronRealTime
+            forNeutLT = (typeof spec.neutronLiveTime === "number") ? spec.neutronLiveTime
                                                                    : (spec.realTime > 1.0E-6 ? spec.realTime : spec.liveTime);
             break;
           }
@@ -4539,7 +4537,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
           .attr('x', "40")
           .attr('y', thisentry.node().getBBox().height - 5)
           .attr('style', 'display: none')
-          .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof rt === "number" ? (" in " + rt.toPrecision(4) + " s") : "") );
+          .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
       
         thistxt  //This calls to .on("mouseover")/.on("mouseout") will overwrite eirlier hooked up calls
           .on("mouseover", function(){

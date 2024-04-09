@@ -80,7 +80,7 @@ namespace
   //  2012 XML files in various places, so we'll use s_unnamed_det_placeholder
   //  to do this.  A side effect to this is we have to be careful to use it
   //  everywhere, and account for it when reading it back in.
-  const std::string s_unnamed_det_placeholder = "unamed";
+  const std::string s_unnamed_det_placeholder = "unamed";  //TODO: fix this spelling to "unnamed"
   
   static const char * const s_energy_cal_not_available_remark = "Energy calibration not available.";
   
@@ -1354,7 +1354,10 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         val = doc->allocate_string( detnam.c_str(), detnam.size()+1 );
         GrossCounts->append_attribute( doc->allocate_attribute( "radDetectorInformationReference", val, 31, detnam.size() ) );
         
-        val = doc->allocate_string( livetime );
+        
+        char neut_livetime[32];
+        snprintf( neut_livetime, sizeof(neut_livetime), "PT%fS", m->neutron_live_time() );
+        val = doc->allocate_string( neut_livetime );
         xml_node<char> *LiveTimeDuration = doc->allocate_node( node_element, "LiveTimeDuration", val );
         GrossCounts->append_node( LiveTimeDuration );
         
@@ -2879,6 +2882,16 @@ struct N42DecodeHelper2006
     }else  //if( is_gamma )
     {
       meas.contained_neutron_ = true;
+      
+      //It looks like a lot of the detectors that make it here will have the same live
+      //  time for neutrons, as for gammas.  We could check for this, or do something
+      //  a little better, but for the moment, we'll just assume neutron live time is
+      //  the same as real time.
+      //if( meas.live_time_ > 0.0f )
+      //  meas.neutron_live_time_ = meas.live_time_;
+      if( real_time_node && (meas.real_time_ > 0.0f) )
+        meas.live_time_ = meas.real_time_;
+      
       if( meas.neutron_counts_.size() < contents->size() )
         meas.neutron_counts_.resize( contents->size(), 0.0 );
         
@@ -2905,7 +2918,7 @@ struct N42DecodeHelper2006
       if( m_dose_data_parent )
       {
         //If m_spec_node has any immediate siblings, then we need to be careful in setting
-        //  The count dose informiaton, so lets count them
+        //  The count dose information, so lets count them
         int nspectra = 0;
         if( spec_parent )
         {
@@ -3264,7 +3277,11 @@ public:
                                     const IdToDetectorType *id_to_dettype_ptr,
                                     DetectorToCalibInfo *calibrations_ptr,
                                     std::mutex &meas_mutex,
-                                    std::mutex &calib_mutex )
+                                    std::mutex &calib_mutex,
+                                    const string &manufacturer,
+                                    const string &instrument_model,
+                                    const int specutils_vrsn
+                                                   )
   {
     assert( meas_node );
     assert( id_to_dettype_ptr );
@@ -3854,6 +3871,9 @@ public:
         XML_FOREACH_CHILD( gross_counts_node, meas_node, "GrossCounts" )
         {
           const rapidxml::xml_node<char> *live_time_node = XML_FIRST_NODE(gross_counts_node, "LiveTimeDuration" );
+          if( !live_time_node )
+            live_time_node = XML_FIRST_NODE(gross_counts_node, "RealTimeDuration" );
+          
           const rapidxml::xml_node<char> *count_data_node = XML_FIRST_NODE(gross_counts_node, "CountData" );
           const rapidxml::xml_attribute<char> *det_info_att = XML_FIRST_IATTRIB(gross_counts_node, "radDetectorInformationReference" );
           
@@ -3897,7 +3917,6 @@ public:
             }
           }else
           {
-          
             det_type = det_iter->second.first;
             meas->detector_description_ = det_iter->second.second; //e.x. "HPGe 50%"
           }//if( !id_to_dettype_ptr->count( meas->detector_name_ ) )
@@ -3995,9 +4014,40 @@ public:
           meas->source_type_ = spectra_type;
           meas->occupied_ = occupied;
           
-          if( live_time_node && live_time_node->value_size() )
+          
+          // Before 20240408 SpecUtils would write a <LiveTimeDuration> node under <GrossCounts>,
+          //  but it would be the gamma live time - which was incorrect to do.
+          if( live_time_node && (specutils_vrsn >= 1) && (specutils_vrsn <= 4) )
+            live_time_node = nullptr;
+          
+          
+          if( live_time_node
+             && live_time_node->value_size()
+             && ((specutils_vrsn < 1) || (specutils_vrsn > 4) || (det_type != NeutronDetection)) )
           {
             meas->live_time_ = time_duration_string_to_seconds( live_time_node->value(), live_time_node->value_size() );
+            
+            // If we dont fill-in neutron live time, then it will default to the interval
+            //  real-time, which may not be accurate, for a number of systems, so we'll just
+            //  always fill in this information, if we have it avaiable.
+            if( (det_type == NeutronDetection) || (det_type == GammaAndNeutronDetection) )
+              meas->neutron_live_time_ = meas->live_time_;
+            
+            // It looks like "Detective X" files have a neutron <GrossCount> live time equal to
+            //  the gamma live time - which isnt correct, so we'll use the real time.
+            //  I'm pretty sure there are a few other model detectors that need this same
+            //  workaround.
+            // Note BTI FlexSpec have the same neutron live time as the gamma, but in that case
+            //  they scale the neutron counts to actually match that live time, so we can use
+            //  the neutron LT
+            if( (icontains(manufacturer, "ORTEC")
+               && (icontains(instrument_model,"Detective X")
+                   || icontains(instrument_model,"Detective-X")
+                   || icontains(instrument_model,"DetectiveX"))) )
+            {
+              meas->neutron_live_time_ = 0;
+              meas->live_time_ = meas->real_time_;
+            }
             
             // For a neutron-only record, if neutron live time clearly differs from real time by
             //  more than 5% (chosen arbitrarily), then it is likely the neutron measurement time
@@ -4012,9 +4062,15 @@ public:
                && (meas->live_time_ > 0.1f)
                && (fabs(meas->live_time_ - meas->real_time_) > 0.05f*std::max(meas->live_time_, meas->real_time_)) )
             {
+              //cout << "Using workaround for neutron livetime: lt=" << meas->live_time_
+              //     << ", rt=" << meas->real_time_ << ", man='" << manufacturer
+              //     << "'. model='" << instrument_model << "'" << endl;
               meas->real_time_ = meas->live_time_;
             }
-          }//if( live_time_node && live_time_node->value_size() )
+          }else if( specutils_vrsn <= 4 )
+          {
+            meas->live_time_ = meas->real_time_;
+          }//if( live_time_node && live_time_node->value_size() ) / else
           
           if( inst_or_item_location )
             meas->location_ = inst_or_item_location;
@@ -4042,7 +4098,10 @@ public:
                                               + xml_value_str(count_data_node) );
             }else
             {
-              meas->neutron_counts_.push_back( countrate * meas->real_time_ );
+              if( meas->neutron_live_time_ > 0.0f )
+                meas->neutron_counts_.push_back( countrate * meas->neutron_live_time_ );
+              else
+                meas->neutron_counts_.push_back( countrate * meas->real_time_ );
             }
           }else
           {
@@ -4201,12 +4260,20 @@ public:
         {
           for( size_t i = 0; i < spectrum_meas.size(); ++i )
           {
-            std::shared_ptr<Measurement> &gamma = spectrum_meas[i];
-            std::shared_ptr<Measurement> &neutron = neutron_meas[i];
+            shared_ptr<Measurement> &gamma = spectrum_meas[i];
+            shared_ptr<Measurement> &neutron = neutron_meas[i];
             
             gamma->neutron_counts_ = neutron->neutron_counts_;
             gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
+            
+            assert( gamma->contained_neutron_ || (gamma->neutron_live_time_ == 0.0f) );
+            if( !gamma->contained_neutron_ )
+              gamma->neutron_live_time_ = 0.0f; //jic
+            
             gamma->contained_neutron_ = neutron->contained_neutron_;
+            if( neutron->contained_neutron_ )
+              gamma->neutron_live_time_ += neutron->neutron_live_time();
+            
             for( const string &s : neutron->remarks_ )
             {
               if( std::find(gamma->remarks_.begin(), gamma->remarks_.end(), s)
@@ -4265,6 +4332,7 @@ public:
             gamma->neutron_counts_ = neutron->neutron_counts_;
             gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
             gamma->contained_neutron_ = neutron->contained_neutron_;
+            gamma->neutron_live_time_ = neutron->neutron_live_time();
             for( const string &s : neutron->remarks_ )
             {
               if( std::find(gamma->remarks_.begin(), gamma->remarks_.end(), s)
@@ -4708,7 +4776,7 @@ namespace SpecUtils
           instrument_model_ += "," + field.substr(4);
           continue;
         }
-      
+        
         //identiFINDER 2 NGH make it here
         //  "Gamma Detector: NaI 35x51 Neutron Detector: ³He tube 3He3/608/15NS"
         //  or "Gamma Detector: NaI 35 mm x 51 mm, Neutron Detector: ³He tube 8000 mBar/14.0 mm x 29.0 mm"
@@ -4716,7 +4784,7 @@ namespace SpecUtils
         //  "Gamma Detector: NaI 3x1 GM Tube: 6x25 Type 716 Neutron: He3"
         
         string lowered = SpecUtils::to_lower_ascii_copy( field );
-      
+        
         if( lowered.size() != field.size() )
         {
           lowered.resize( field.size(), ' ' ); //things will get messed up, but at least not crash
@@ -4860,7 +4928,7 @@ namespace SpecUtils
         {
           //string val = "Gamma Detector: " + xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
           //remarks_.push_back( val );
-              
+          
           string val = xml_value_str(Material) + " " + xml_value_str(Size) + " " + xml_value_str(Name);
           SpecUtils::trim( val );
           SpecUtils::ireplace_all( val, "  ", " " );
@@ -4954,14 +5022,14 @@ namespace SpecUtils
         if( !xml_value_to_flt(count_node, countrate) )
           throw runtime_error( "Neutron count rate is non-numeric" );
         
+        m->neutron_live_time_ = realtime;
         m->neutron_counts_sum_ = countrate * realtime;
         m->neutron_counts_.resize(1);
         m->neutron_counts_[0] = countrate * realtime;
         m->contained_neutron_ = true;
-        m->remarks_.push_back( "Neutron Real Time: " + xml_value_str(realtime_node) );
         
         if( (m->real_time_ > FLT_EPSILON)
-           && fabs(m->live_time_ - realtime) > 0.1f*m->live_time_ )
+           && fabs(m->real_time_ - realtime) > 0.1f*m->live_time_ )
         {
           string msg = "Warning: The neutron live time may not correspond to the gamma live time.";
           if( std::find(begin(m->parse_warnings_),end(m->parse_warnings_),msg) == end(m->parse_warnings_) )
@@ -4996,12 +5064,19 @@ namespace SpecUtils
     
     if( !det_type_node )
       return;
-  
+    
     if( XML_VALUE_ICOMPARE(det_type_node, "Neutron") )
     {
       const rapidxml::xml_node<char> *counts = xml_first_node_nso( dose_data, "Counts", xmlns );
       if( counts && counts->value_size() )
       {
+        if( (m->neutron_live_time_ < 0.0f) || IsInf(m->neutron_live_time_)
+           || IsNan(m->neutron_live_time_) || m->neutron_counts_.empty()
+           || !m->contained_neutron_ )
+        {
+          m->neutron_live_time_ = 0.0f;
+        }
+        
         float neut_counts = 0.0;
         if( xml_value_to_flt(counts,neut_counts) )
         {
@@ -5017,9 +5092,32 @@ namespace SpecUtils
 #endif
           }
           
+          string neut_time_str;
+          const rapidxml::xml_node<char> *live_time_node = xml_first_node_nso( dose_data, "SampleLiveTime", xmlns );
           const rapidxml::xml_node<char> *real_time_node = xml_first_node_nso( dose_data, "SampleRealTime", xmlns );
-          if( real_time_node && real_time_node->value_size() )
-            m->remarks_.push_back( "Neutron Real Time: " + xml_value_str(real_time_node) );
+          if( live_time_node && live_time_node->value_size() )
+            neut_time_str = xml_value_str(live_time_node);
+          else if( real_time_node && real_time_node->value_size() )
+            neut_time_str = xml_value_str(real_time_node);
+          
+          if( !neut_time_str.empty() )
+          {
+            // If instead of specifying like "PT5M0.0S", the file just gave number of seconds,
+            //  I think this should be fine.
+            float neut_lt = time_duration_string_to_seconds( neut_time_str );
+            
+            if( neut_lt > 0.0f )
+            {
+              m->neutron_live_time_ += neut_lt;
+            }else
+            {
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+              log_developer_error( __func__,  ("Unable to parse Neutron Live Time: " + neut_time_str).c_str() );
+              assert( 0 );
+#endif
+              m->parse_warnings_.push_back( "Unable to parse Neutron Live Time: " + neut_time_str );
+            }
+          }//if( !neut_time_str.empty() )
           
           // TODO:
           //  We get this dose rate info from historical-Cambio wether or not there was
@@ -5088,11 +5186,13 @@ namespace SpecUtils
     m->contained_neutron_ = true;
     m->neutron_counts_.resize( 1 );
     m->neutron_counts_[0] = 0.0;
+    m->neutron_live_time_ = 0.0f;
     
     const rapidxml::xml_node<char> *node = xml_first_node_nso( gross_count_meas, "GrossCounts", xmlns );
     
     if( node )
     {
+      // These nodes dont seem to give neutron live/real time for these nodes, so we'll rely on "SampleRealTime"
       if( SpecUtils::split_to_floats( node->value(), node->value_size(), m->neutron_counts_ ) )
         m->neutron_counts_sum_ = std::accumulate( m->neutron_counts_.begin(), m->neutron_counts_.end(), 0.0f, std::plus<float>() );
       else
@@ -5100,7 +5200,7 @@ namespace SpecUtils
     }//if( node )
     
     
-    //attempt to set detctor name
+    //attempt to set detector name
     if( m->detector_name_.empty() )
     {
       const rapidxml::xml_attribute<char> *det_atrrib = NULL;
@@ -5116,8 +5216,8 @@ namespace SpecUtils
   
   
   void SpecFile::set_n42_2006_measurement_location_information(
-                                                              const rapidxml::xml_node<char> *measured_item_info_node,
-                                                              std::vector<std::shared_ptr<Measurement>> added_measurements )
+                                                               const rapidxml::xml_node<char> *measured_item_info_node,
+                                                               std::vector<std::shared_ptr<Measurement>> added_measurements )
   {
     if( !measured_item_info_node )
       return;
@@ -5236,7 +5336,7 @@ namespace SpecUtils
     const rapidxml::xml_node<char> *operator_node = xml_first_node_nso( measured_item_info_node, "MeasurementOperator", xmlns );
     measurement_operator_ = xml_value_str( operator_node );
   }//void set_n42_2006_measurement_location_information()
-      
+  
   
   void SpecFile::load_2006_N42_from_doc( const rapidxml::xml_node<char> *document_node )
   {
@@ -5270,7 +5370,7 @@ namespace SpecUtils
     if( !actual_doc_node )
       actual_doc_node = document_node;
     N42CalibrationCache2006 energy_cal( actual_doc_node );
-      
+    
     SpecUtilsAsync::ThreadPool workerpool;
     
     const string xmlns = get_n42_xmlns(document_node);
@@ -5291,8 +5391,8 @@ namespace SpecUtils
           std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
           measurements_.push_back( meas );
           workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
-                                                    meas, analysis_info,
-                                                    measurement, document_node, energy_cal ) );
+                                               meas, analysis_info,
+                                               measurement, document_node, energy_cal ) );
         }
         
         for( const rapidxml::xml_node<char> *dose = xml_first_node_nso( measurement, "CountDoseData", xmlns );
@@ -5511,8 +5611,8 @@ namespace SpecUtils
               std::shared_ptr<Measurement> meas = std::make_shared<Measurement>();
               measurements_this_node.push_back( meas );
               workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
-                                                        meas, analysis_info, NULL,
-                                                        document_node, energy_cal ) );
+                                                   meas, analysis_info, NULL,
+                                                   document_node, energy_cal ) );
             }//for( rapidxml::xml_node<char> *spectrum = ... )
           }//for( const rapidxml::xml_node<char> *spec_meas_node = ... )
           
@@ -5563,8 +5663,8 @@ namespace SpecUtils
             measurements_this_node.push_back( meas );
             
             workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
-                                                      meas, analysis_info, dose_data_parent,
-                                                      document_node, energy_cal ) );
+                                                 meas, analysis_info, dose_data_parent,
+                                                 document_node, energy_cal ) );
             
             if( spectrum->first_attribute( "CalibrationIDs", 14 ) )
               meas_to_spec_node.push_back( make_pair( meas, spectrum ) );
@@ -5591,7 +5691,7 @@ namespace SpecUtils
                 measurements_this_node.push_back( meas );
                 
                 workerpool.post( N42DecodeHelper2006( spectrum, &queue_mutex,
-                                                          meas, analysis_info, det_meas_node, document_node, energy_cal ) );
+                                                     meas, analysis_info, det_meas_node, document_node, energy_cal ) );
                 
                 if( XML_FIRST_ATTRIB(spectrum, "CalibrationIDs") )
                   meas_to_spec_node.push_back( make_pair( meas, spectrum ) );
@@ -5611,9 +5711,9 @@ namespace SpecUtils
                   const rapidxml::xml_node<char> *secondcoef = XML_NEXT_TWIN_CHECKED(firstcoef);
                   if( secondcoef && secondcoef->value_size() )
                     multiple_cals.push_back( std::make_pair(meas,
-                      vector<const rapidxml::xml_node<char> *>{firstcal,ray_specsize}) );
+                                                            vector<const rapidxml::xml_node<char> *>{firstcal,ray_specsize}) );
                 }//if( Raytheon <ray:SpectrumSize> node )
-      
+                
               }//for( rapidxml::xml_node<char> *spectrum = ... )
             }//for( const rapidxml::xml_node<char> *spec_meas_node ... )
             
@@ -5649,12 +5749,12 @@ namespace SpecUtils
             {
               std::shared_ptr<Measurement> &lhs = measurements_this_node[i];
               std::shared_ptr<Measurement> &rhs = gross_counts_this_node[i];
-              if( rhs->detector_name_.empty()
-                 || lhs->detector_name_ == rhs->detector_name_ )
+              if( rhs->detector_name_.empty() || (lhs->detector_name_ == rhs->detector_name_) )
               {
                 lhs->neutron_counts_     = rhs->neutron_counts_;
                 lhs->contained_neutron_  = rhs->contained_neutron_;
                 lhs->neutron_counts_sum_ = rhs->neutron_counts_sum_;
+                lhs->neutron_live_time_  = rhs->neutron_live_time();
                 rhs.reset();
               }
             }//for( size_t i = 0; i < measurements_this_node.size(); ++i )
@@ -5718,19 +5818,14 @@ namespace SpecUtils
               gam->neutron_counts_     = neut->neutron_counts_;
               gam->contained_neutron_  = neut->contained_neutron_;
               gam->neutron_counts_sum_ = neut->neutron_counts_sum_;
+              gam->neutron_live_time_  = neut->neutron_live_time();
               
-              //We should have a proper neutron real/live time fields, but until I add that, lets hack it.
-              if( neut->real_time_ > 0.0f )
+              //We should probably have a neutron real time field, but until then, lets hack it.
+              const float max_rt = std::max( fabs(neut->real_time_), fabs(gam->real_time_) );
+              if( fabs(neut->real_time_ - gam->real_time_) > 0.01*max_rt )
               {
                 char buffer[128];
                 snprintf( buffer, sizeof(buffer), "Neutron Real Time: %.5f s", neut->real_time_ );
-                gam->remarks_.push_back( buffer );
-              }//
-              
-              if( neut->live_time_ > 0.0f )
-              {
-                char buffer[128];
-                snprintf( buffer, sizeof(buffer), "Neutron Live Time: %.5f s", neut->live_time_ );
                 gam->remarks_.push_back( buffer );
               }//
               
@@ -5803,6 +5898,7 @@ namespace SpecUtils
                 spec->neutron_counts_     = gross->neutron_counts_;
                 spec->contained_neutron_  = gross->contained_neutron_;
                 spec->neutron_counts_sum_ = gross->neutron_counts_sum_;
+                spec->neutron_live_time_  = gross->neutron_live_time();
                 gross_used = true;
                 
                 //Gamma data may be represented by multiple spectra, so we have to
@@ -5830,12 +5926,12 @@ namespace SpecUtils
             assert( nodes.size() == 2 );
             const rapidxml::xml_node<char> * const cal_node = nodes[0];
             const rapidxml::xml_node<char> * const ray_size = nodes[1];
-      
+            
             if( !cal_node )  //This shouldnt happen, but check anyway
               continue;
-      
+            
             if( find( measurements_this_node.begin(), measurements_this_node.end(), meas )
-                == measurements_this_node.end() )
+               == measurements_this_node.end() )
             {
 #if( PERFORM_DEVELOPER_CHECKS  && !SpecUtils_BUILD_FUZZING_TESTS )
               log_developer_error( __func__,  "Got Measurement not in measurements_this_node" );
@@ -5848,9 +5944,9 @@ namespace SpecUtils
             {
               int value = 0;
               if( toInt(xml_value_str(ray_size), value) && value>0 )
-              num_lower_bins = static_cast<size_t>(value);
+                num_lower_bins = static_cast<size_t>(value);
             }
-      
+            
             //Sanity check to make sure doing this matches the example data I have
             //  where this bizare fix is needed - this should probably be loosend up to
             //  work whenever <ray:SpectrumSize> is seen with a value that divides the spectrum size
@@ -5861,13 +5957,13 @@ namespace SpecUtils
             {
 #if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
               const string msg = "Found multiple calibrations, but size ("
-                                 + to_string(num_lower_bins) + ") wasnt 1/2 of channel size ("
-                                 + to_string(norig_channel) + ")";
+              + to_string(num_lower_bins) + ") wasnt 1/2 of channel size ("
+              + to_string(norig_channel) + ")";
               log_developer_error( __func__,  msg.c_str() );
 #endif
               continue;
             }//if( number of channels dont match up )
-      
+            
             if( (num_lower_bins + 1) >= norig_channel )
             {
 #if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
@@ -5894,15 +5990,15 @@ namespace SpecUtils
             newmeas->gamma_count_sum_ = 0.0;
             for( const float a : *upperbins )
               newmeas->gamma_count_sum_ += a;
-          
+            
             string lower_cal_err, upper_cal_err;
             shared_ptr<const EnergyCalibration> lower_cal, upper_cal;
-      
+            
             energy_cal.get_calibration_energy_cal( cal_node, num_lower_bins,
-                                                   meas->detector_name_, 0, lower_cal, lower_cal_err );
+                                                  meas->detector_name_, 0, lower_cal, lower_cal_err );
             energy_cal.get_calibration_energy_cal( cal_node, upperbins->size(),
-                                                   meas->detector_name_, 1, upper_cal, upper_cal_err );
-    
+                                                  meas->detector_name_, 1, upper_cal, upper_cal_err );
+            
             if( lower_cal )
             {
               meas->energy_calibration_ = lower_cal;
@@ -5912,7 +6008,7 @@ namespace SpecUtils
               if( !lower_cal_err.empty() )
                 meas->parse_warnings_.push_back( lower_cal_err );
             }//if( lower_cal ) / else
-      
+            
             if( upper_cal )
             {
               newmeas->energy_calibration_ = upper_cal;
@@ -5922,7 +6018,7 @@ namespace SpecUtils
               if( !upper_cal_err.empty() )
                 newmeas->parse_warnings_.push_back( upper_cal_err );
             }//if( upper_cal ) / else
-      
+            
             //We will re-name the detectors based on the energy range... not a universal solution
             //  but works with the files I've seen that do this
             string lower_name = multical_name_append[0], upper_name = multical_name_append[1];
@@ -5939,15 +6035,15 @@ namespace SpecUtils
                 newname = std::to_string( std::round(energy/1000) );
               else
                 newname = std::to_string( std::round(energy/500) / 2 );
-      
+              
               while( !newname.empty() && (newname.back()=='0' || newname.back()=='.') )
                 newname = newname.substr(0,newname.size()-1);
               if( !newname.empty() )
                 name = newname + "MeV";
             };//make_MeV_name lamnda
-        
+            
             if( multical_name_append[0].empty() )
-             make_MeV_name( meas->energy_calibration_, multical_name_append[0] );
+              make_MeV_name( meas->energy_calibration_, multical_name_append[0] );
             if( multical_name_append[1].empty() )
               make_MeV_name( newmeas->energy_calibration_, multical_name_append[1] );
             
@@ -5956,10 +6052,10 @@ namespace SpecUtils
               multical_name_append[0] = "a";
               multical_name_append[1] = "b";
             }
-      
+            
             meas->detector_name_ += "_intercal_" + multical_name_append[0];
             newmeas->detector_name_ += "_intercal_" + multical_name_append[1];
-              
+            
             measurements_this_node.push_back( newmeas );
           }//for( multiple_cals )
           
@@ -6293,13 +6389,13 @@ namespace SpecUtils
           
           const float realtimesec = time_duration_string_to_seconds( realtime_node->value(), realtime_node->value_size() );
           
-          if( !has_counts_node && realtimesec > 0.0 )
+          if( !has_counts_node && (realtimesec > 0.0f) )
             counts *= realtimesec;
           
           for( auto &meas : added_measurements )
           {
             if( !meas || meas->contained_neutron_
-               || meas->start_time_ != start_time )
+               || (meas->start_time_ != start_time) )
               continue;
             
             if( fabs(realtimesec - meas->real_time_) >= 1.0 )
@@ -6310,6 +6406,8 @@ namespace SpecUtils
             meas->neutron_counts_.resize( 1 );
             meas->neutron_counts_[0] = counts;
             meas->neutron_counts_sum_ = counts;
+            if( realtimesec > 0.0f )
+              meas->neutron_live_time_ = realtimesec;
             break;
           }
         }//for( loop over <CountDoseData> nodes )
@@ -6359,8 +6457,8 @@ namespace SpecUtils
     
     // Do a instrument specific have to fix CPS --> counts
     if( icontains(instrument_type_,"SpecPortal")
-             && icontains(manufacturer_,"SSC Pacific")
-             && icontains(instrument_model_,"MPS Pod") )
+       && icontains(manufacturer_,"SSC Pacific")
+       && icontains(instrument_model_,"MPS Pod") )
     {
       //Gamma spectrum is in CPS, so multiply each spectrum by live time.
       //  Note that there is no indication of this in the file, other than
@@ -6399,11 +6497,11 @@ namespace SpecUtils
     
     cleanup_after_load();
   }//bool load_2006_N42_from_doc( rapidxml::xml_node<char> *document_node )
-
   
   
   
-
+  
+  
   
   
   
@@ -6481,7 +6579,7 @@ namespace SpecUtils
       RadInstrumentData->append_node( AnalysisResults );
     }
     
-  
+    
     for( const string &remark : ana.remarks_ )
     {
       if( remark.size() )
@@ -6535,7 +6633,7 @@ namespace SpecUtils
       xml_node<char> *desc = doc->allocate_node( node_element, "AnalysisAlgorithmDescription", val );
       AnalysisResults->append_node( desc );
     }
-        
+    
     for( const auto &component : ana.algorithm_component_versions_ )
     {
       std::lock_guard<std::mutex> lock( xmldocmutex );
@@ -6599,18 +6697,18 @@ namespace SpecUtils
           nuclide_node->append_node( Remark );
         }
         
-          //<xsd:element ref="n42:NuclideIdentifiedIndicator" minOccurs="1" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideName" minOccurs="1" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideActivityValue" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideActivityUncertaintyValue" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideMinimumDetectableActivityValue" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideIdentificationConfidence" minOccurs="1" maxOccurs="3"/>
-          //<xsd:element ref="n42:NuclideCategoryDescription" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideSourceGeometryCode" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:SourcePosition" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideShieldingAtomicNumber" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideShieldingArealDensityValue" minOccurs="0" maxOccurs="1"/>
-          //<xsd:element ref="n42:NuclideExtension" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideIdentifiedIndicator" minOccurs="1" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideName" minOccurs="1" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideActivityValue" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideActivityUncertaintyValue" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideMinimumDetectableActivityValue" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideIdentificationConfidence" minOccurs="1" maxOccurs="3"/>
+        //<xsd:element ref="n42:NuclideCategoryDescription" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideSourceGeometryCode" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:SourcePosition" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideShieldingAtomicNumber" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideShieldingArealDensityValue" minOccurs="0" maxOccurs="1"/>
+        //<xsd:element ref="n42:NuclideExtension" minOccurs="0" maxOccurs="1"/>
         
         xml_node<char> *NuclideIdentifiedIndicator = doc->allocate_node( node_element, "NuclideIdentifiedIndicator", "true" );
         nuclide_node->append_node( NuclideIdentifiedIndicator );
@@ -6759,7 +6857,7 @@ namespace SpecUtils
       //<NuclideExtension>
     }//for( const DetectorAnalysisResult &result : ana.results_ )
   }//void add_analysis_results_to_2012_N42(...)
-
+  
   
   
   std::shared_ptr< ::rapidxml::xml_document<char> > SpecFile::create_2012_N42_xml() const
@@ -7153,7 +7251,7 @@ namespace SpecUtils
     
     
     insert_N42_calibration_nodes( measurements_ , RadInstrumentData, xmldocmutex, calToSpecMap );
-      
+    
     SpecUtilsAsync::ThreadPool workerpool;
     
     //For the case of portal data, where the first sample is a long background and
@@ -7185,9 +7283,9 @@ namespace SpecUtils
     const bool notTimeSorted = (properties_flags_ & kNotTimeSortedOrder);
     
     if( (detector_names().size() > 1)
-        && (sample_numbers_.size() > 7) //arbitrarily chosen
-        && is_passthrough
-        && (notUniqueSamples || notSampleSorted || notTimeSorted) )
+       && (sample_numbers_.size() > 7) //arbitrarily chosen
+       && is_passthrough
+       && (notUniqueSamples || notSampleSorted || notTimeSorted) )
     {
       //cout << "Checking well_behaving_samples for " << filename() << endl;
       for( size_t i = 0; well_behaving_samples && (i < sample_nums_vec.size()); ++i )
@@ -7196,7 +7294,7 @@ namespace SpecUtils
         vector<shared_ptr<const Measurement>> sample_meas = sample_measurements( sample );
         
         sample_meas.erase( std::remove_if( begin(sample_meas), end(sample_meas),
-                                         [](shared_ptr<const Measurement> m) -> bool {
+                                          [](shared_ptr<const Measurement> m) -> bool {
           return m->derived_data_properties_; } ), end(sample_meas) );
         
         if( sample_meas.empty() )
@@ -7230,9 +7328,9 @@ namespace SpecUtils
       //  code to define both (we have to keep derived data Measurement's under <DerivedData> and
       //  non-derived data elements under <RadMeasurement>).
       auto add_sample_specs_lambda = [this, sample_num,&calToSpecMap,&first_sample_was_back,
-                               &sample_nums_vec,&xmldocmutex,&doc,&workerpool,
-                               &RadInstrumentData, well_behaving_samples](
-                const vector< std::shared_ptr<const Measurement> > &smeas, const bool is_derived )
+                                      &sample_nums_vec,&xmldocmutex,&doc,&workerpool,
+                                      &RadInstrumentData, well_behaving_samples](
+                                                                                 const vector< std::shared_ptr<const Measurement> > &smeas, const bool is_derived )
       {
         vector<size_t> calid;
         for( size_t i = 0; i < smeas.size(); ++i )
@@ -7789,15 +7887,15 @@ namespace SpecUtils
         const size_t len = coef_val_node->value_size();
         if( !SpecUtils::split_to_floats( data, len, info.coefficients ) )
           throw runtime_error( "Invalid calibration value: " + xml_value_str(coef_val_node) );
-      
+        
         //Technically there must be exactly 3 polynomial coefficients, but we wont enforce this
         // (this has to be an oversight of the spec, right?_
         const size_t nread_coeffs = info.coefficients.size();
-      
+        
         while( !info.coefficients.empty() && info.coefficients.back()==0.0f )
           info.coefficients.erase( info.coefficients.end()-1 );
-      
-      
+        
+        
         if( info.coefficients.size() < 2 )
         {
           if( info.coefficients.empty() && nread_coeffs >= 2 )
@@ -7810,8 +7908,8 @@ namespace SpecUtils
           }else
           {
             parse_warnings.push_back( "An invalid EnergyCalibration CoefficientValues was"
-                                      " encountered with value '" + string(data,data+len)
-                                      + "', and wont be used" );
+                                     " encountered with value '" + string(data,data+len)
+                                     + "', and wont be used" );
             continue;
           }
         }//if( info.coefficients.size() < 2 )
@@ -7889,7 +7987,7 @@ namespace SpecUtils
         if( !(oldcal == info) )
         {
           const string msg = "Energy calibration with ID='" + id
-                          + "' was re-defined with different definition, which a file shouldnt do.";
+          + "' was re-defined with different definition, which a file shouldnt do.";
 #if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
           log_developer_error( __func__, msg.c_str() );
 #endif
@@ -7902,7 +8000,7 @@ namespace SpecUtils
     }//for( loop over "Characteristic" nodes )
     
   }//get_2012_N42_energy_calibrations(...)
-
+  
   
   void SpecFile::load_2012_N42_from_doc( const rapidxml::xml_node<char> *data_node )
   {
@@ -7941,6 +8039,30 @@ namespace SpecUtils
     rapidxml::xml_node<char> *creator_node = XML_FIRST_NODE(data_node, "RadInstrumentDataCreatorName");
     if( creator_node && creator_node->value_size() )
       remarks_.push_back( "N42 file created by: " + xml_value_str(creator_node) );
+    
+    
+    // Get the `SpecFile_2012N42_VERSION` version this file was written with, if it was written
+    //  using SpecUtils.
+    int specutils_vrsn = -1;
+    {//begin look for SpecUtils version
+      const rapidxml::xml_node<char> *inst_info_node = XML_FIRST_NODE(data_node, "RadInstrumentInformation");
+      if( inst_info_node )
+      {
+        XML_FOREACH_CHILD( vsrn_node, inst_info_node, "RadInstrumentVersion" )
+        {
+          const rapidxml::xml_node<char> *name_node = XML_FIRST_NODE(vsrn_node, "RadInstrumentComponentName");
+          const rapidxml::xml_node<char> *vrsn_node = XML_FIRST_NODE(vsrn_node, "RadInstrumentComponentVersion");
+          if( name_node && vrsn_node
+             && xml_value_compare(name_node, "InterSpecN42Serialization")
+             && (vrsn_node->value_size() > 0) )
+          {
+            if( stringstream( xml_value_str(vrsn_node)) >> specutils_vrsn )
+              break;
+          }
+        }//for( loop over <RadInstrumentVersion> nodes
+      }//if( inst_info_node )
+    }//end look for SpecUtils version
+    
     
     for( rapidxml::xml_node<char> *remark_node = XML_FIRST_NODE(data_node, "Remark");
         remark_node;
@@ -7989,6 +8111,7 @@ namespace SpecUtils
       //    rapidxml::xml_node<char> *characteristics_node = XML_FIRST_NODE(rad_item_node, "RadItemCharacteristics");
       //    rapidxml::xml_node<char> *extension_node = XML_FIRST_NODE(rad_item_node, "RadItemInformationExtension");
       //  }//for( loop over "RadItemInformation" nodes )
+      
       
       
       XML_FOREACH_CHILD( info_node, rad_data_node, "RadDetectorInformation" )
@@ -8279,10 +8402,12 @@ namespace SpecUtils
           }//
         }//if( is_symetrica )
         
-        workerpool.post( [these_meas, meas_node, rad_meas_index, &id_to_dettype,
-                          &calibrations, mutexptr, &calib_mutex](){
+        workerpool.post( [these_meas, meas_node, rad_meas_index, specutils_vrsn, &id_to_dettype,
+                          &calibrations, mutexptr, &calib_mutex, this](){
           N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node,
-                            rad_meas_index, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+                            rad_meas_index, &id_to_dettype, &calibrations, *mutexptr, calib_mutex,
+                                              this->manufacturer_, this->instrument_model_,
+                                                                    specutils_vrsn );
         } );
         
         rad_meas_index += 1;
@@ -8297,10 +8422,11 @@ namespace SpecUtils
         meas_mutexs.push_back( mutexptr );
         measurements_each_derived.push_back( these_meas );
         
-        workerpool.post( [these_meas, meas_node, rad_meas_index,
-                         &id_to_dettype, &calibrations, mutexptr, &calib_mutex](){
+        workerpool.post( [these_meas, meas_node, rad_meas_index, specutils_vrsn,
+                         &id_to_dettype, &calibrations, mutexptr, &calib_mutex, this](){
           N42DecodeHelper2012::decode_2012_N42_rad_measurement_node( *these_meas, meas_node,
-                            rad_meas_index, &id_to_dettype, &calibrations, *mutexptr, calib_mutex );
+                            rad_meas_index, &id_to_dettype, &calibrations, *mutexptr, calib_mutex,
+                            this->manufacturer_, this->instrument_model_, specutils_vrsn );
         } );
         
         rad_meas_index += 1;
@@ -8379,8 +8505,9 @@ namespace SpecUtils
           gamma_only_back->remarks_.push_back( "Neutron Real Time: PT" + to_string(neut_only_back->real_time()) + "S" );
           gamma_only_back->remarks_.push_back( "Neutron Live Time: PT" + to_string(neut_only_back->live_time()) + "S" );
           
-          gamma_only_back->neutron_counts_ = neut_only_back->neutron_counts_;
+          gamma_only_back->neutron_counts_     = neut_only_back->neutron_counts_;
           gamma_only_back->neutron_counts_sum_ = neut_only_back->neutron_counts_sum_;
+          gamma_only_back->neutron_live_time_  = neut_only_back->neutron_live_time_;
 
           if( (gamma_only_back->dose_rate_ >= 0.0) && (neut_only_back->dose_rate_ >= 0.0) )
             gamma_only_back->dose_rate_ += neut_only_back->dose_rate_;
@@ -8528,6 +8655,7 @@ namespace SpecUtils
           {
             gamma->neutron_counts_     = neutron->neutron_counts_;
             gamma->neutron_counts_sum_ = neutron->neutron_counts_sum_;
+            gamma->neutron_live_time_  = neutron->neutron_live_time_;
             gamma->contained_neutron_  = neutron->contained_neutron_;
             
             measurements_.erase( find(measurements_.begin(),measurements_.end(),neutron) );
@@ -8622,6 +8750,7 @@ namespace SpecUtils
               {
                 gamma_meas->neutron_counts_     = neut_meas->neutron_counts_;
                 gamma_meas->neutron_counts_sum_ = neut_meas->neutron_counts_sum_;
+                gamma_meas->neutron_live_time_  = neut_meas->neutron_live_time_;
                 gamma_meas->contained_neutron_  = neut_meas->contained_neutron_;
                 
                 //cleanup_after_load() wont refresh neutron_detector_names_ unless
@@ -9042,8 +9171,11 @@ namespace SpecUtils
     
     if( contained_neutron_ )
     {
-      ostr << "    <CountDoseData DetectorType=\"Neutron\">" << endline
-           << "      <Counts>" << neutron_counts_sum_ << "</Counts>" << endline;
+      ostr << "    <CountDoseData DetectorType=\"Neutron\">" << endline;
+      ostr << "      <SampleRealTime>PT" << neutron_live_time_ << "S</SampleRealTime>" << endline;
+      if( neutron_live_time_ > 0.0f )
+        ostr << "      <SampleLiveTime>PT" << neutron_live_time_ << "S</SampleLiveTime>" << endline;
+      ostr << "      <Counts>" << neutron_counts_sum_ << "</Counts>" << endline;
       if( (dose_rate_ >= 0) && (!gamma_counts_ || gamma_counts_->empty()) )
         ostr << "      <DoseRate Units=\"mrem\">" << 0.1*dose_rate_ << "</DoseRate>" << endline;  //0.1 mrem = 1 uSv
       ostr << "    </CountDoseData>" << endline;

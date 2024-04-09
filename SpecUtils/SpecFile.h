@@ -566,6 +566,13 @@ public:
   //gamma_count_sum(): returns the sum of channel data counts for gamma data.
   double gamma_count_sum() const;
   
+  /** Returns the neutron live time.
+   
+   If `neutron_live_time_` is greater than zero, will return it.
+   Otherwise if `contained_neutron_` is true, then will return `real_time_`.
+   */
+  float neutron_live_time() const;
+  
   //neutron_counts_sum(): returns the sum of neutron counts.
   double neutron_counts_sum() const;
   
@@ -799,8 +806,10 @@ public:
    gamma detector, the passed in vector will have one element for each of the
    He3 tubes.  Most handheld detection systems have a single neutron detector
    that is read out, so the passed in counts would have a size of one.
+   
+   If `neutron_live_time` is less than or equal to zero, the gamma real time will be used.
    */
-  void set_neutron_counts( const std::vector<float> &counts );
+  void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time );
   
   //To set real and live times, see SpecFile::set_live_time(...)
   
@@ -1047,6 +1056,12 @@ protected:
   //real_time_: in units of seconds.  Typically 0.0f if not specified.
   float real_time_;
 
+  /** The neutron detector live time, in units of seconds - if it is specifically specified in the spectrum file.
+   Will be equal to 0 if neutron live time is not specifically specified (in which case use `live_time_`), or
+   will be zero if `contained_neutron_` is false.
+   */
+  float neutron_live_time_;
+  
   //contained_neutron_: used to specify if there was a neutron detector, but
   //  0 counts were actually detected.
   bool contained_neutron_;
@@ -1405,9 +1420,11 @@ public:
   //set_contained_neutrons(...): sets the specified measurement as either having
   //  contained neutron counts, or not.  If specified to be false, then counts
   //  is ignored.  If true, then the neutron sum counts is set to be as
-  //  specified.
+  //  specified.  If `neutron_live_time` is less than or equal to zero, then gamma
+  //  real time will be used.
   void set_contained_neutrons( const bool contained, const float counts,
-                               const std::shared_ptr<const Measurement> measurement );
+                               const std::shared_ptr<const Measurement> measurement,
+                              const float neutron_live_time );
 
   /** Sets the detectors analysis.
    
@@ -2264,7 +2281,11 @@ public:
   //             ids similar to "Survey 1", "Survey 2", etc.  The id attrib
   //             of <spectrum> tags also start with these same strings.
   //             (Hack to be compatible with GADRAS)
-  #define SpecFile_2012N42_VERSION 4
+  //  Version 5: Added `Measurement::neutron_live_time_`, and now write out to
+  //             the <GrossCount> node correctly; previous to this, the gamma
+  //             live time would potentially be written out to the <LiveTimeDuration>
+  //             under the <GrossCount> node.  Changed 20240408.
+  #define SpecFile_2012N42_VERSION 5
   
   //The goal of create_2012_N42_xml(...) is that when read back into
   //  load_2012_N42_from_doc(...), the results should be identical (i.e. can

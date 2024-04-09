@@ -1280,6 +1280,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         meas->neutron_counts_sum_ = 0.0;
         for( const float f : meas->neutron_counts_ )
           meas->neutron_counts_sum_ += f;
+        meas->neutron_live_time_ = neutback->realTime;
         meas->contained_neutron_ = true;
       }//if( neutback )
       

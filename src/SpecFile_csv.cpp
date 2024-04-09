@@ -1291,6 +1291,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( !(stringstream(fields[1]) >> neutron_counts_sum_) )
           throw runtime_error( "Invalid neutroncount: " + fields[1] );
         contained_neutron_ = true;
+        //neutron_live_time_ is same as gamma live time, so we wont fill out
       }
     }else if( starts_with( fields[0], "samplenumber" ) )
     {

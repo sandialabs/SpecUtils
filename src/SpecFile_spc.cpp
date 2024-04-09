@@ -1724,11 +1724,9 @@ bool SpecFile::write_binary_spc( std::ostream &output,
       snprintf( buffer, sizeof(buffer)-1, "Total neutron counts = %.0f\n", nneut );
       information += buffer;
       
-      for( const string &s : remarks_ )
-      {
-        if( s.find("Total neutron count time = ") != string::npos )
-          information += s + "\n";
-      }
+      if( summed->neutron_live_time_ > 0.0f )
+        information += "Total neutron count time = " + std::to_string(summed->neutron_live_time_)
+                      + " seconds\n";
     }//if( summed->contained_neutron() )
     
     //Should consider adding: "Total neutron count time = ..."
@@ -2809,12 +2807,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       meas->neutron_counts_.push_back( static_cast<float>(total_neutrons) );
     
     if( total_neutron_count_time > 0.0 )
-    {
-      char buffer[128];
-      snprintf( buffer, sizeof(buffer),
-               "Total neutron count time = %f seconds", total_neutron_count_time );
-      meas->remarks_.push_back( buffer );
-    }
+      meas->neutron_live_time_ = total_neutron_count_time;
     
     
     if( longitudeStr.size() && latitudeStr.size() )
