@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE( testDeflate ) {
   random_device rnd_device;
   mt19937 mersenne_engine{ rnd_device() };
   uniform_int_distribution<size_t> length_dist{1, 1024*5};
-  uniform_int_distribution<uint8_t> value_dist{0, 255};
+  uniform_int_distribution<unsigned int> value_dist{0, 255};
 
   for( size_t i = 0; i < 512; ++i )
   {
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE( testDeflate ) {
     string original_data( len, '\0' );
     for( char &c : original_data )
     {
-      uint8_t v = value_dist(mersenne_engine);
+      uint8_t v = static_cast<uint8_t>( value_dist(mersenne_engine) );
       c = reinterpret_cast<const char &>( v );
     }
     
@@ -509,8 +509,8 @@ BOOST_AUTO_TEST_CASE( TestFromUri )
   BOOST_REQUIRE( !!spec_file );
   BOOST_REQUIRE_EQUAL( spec_file->num_measurements(), 2 );
 
-  shared_ptr<const Measurement> fore_file = spec_file->measurement( size_t(0) );
-  shared_ptr<const Measurement> back_file = spec_file->measurement( size_t(1) );
+  shared_ptr<const Measurement> fore_file = spec_file->measurements()[0];
+  shared_ptr<const Measurement> back_file = spec_file->measurements()[1];
   BOOST_REQUIRE( !!fore_file );
   BOOST_REQUIRE( !!back_file );
   
@@ -565,7 +565,7 @@ BOOST_AUTO_TEST_CASE( testCalcCrc16Arc )
   random_device rnd_device;
   mt19937 mersenne_engine{ rnd_device() };
   uniform_int_distribution<size_t> length_dist{1, 1024*128};
-  uniform_int_distribution<uint8_t> value_dist{0, 255};
+  uniform_int_distribution<unsigned int> value_dist{0, 255};
 
   for( size_t i = 0; i < 512; ++i )
   {
@@ -573,7 +573,7 @@ BOOST_AUTO_TEST_CASE( testCalcCrc16Arc )
     string input( len, '\0' );
     for( char &c : input )
     {
-      const uint8_t rval = value_dist(mersenne_engine);
+      const uint8_t rval = static_cast<uint8_t>( value_dist(mersenne_engine) );
       c = reinterpret_cast<const char &>( rval );
     }
     

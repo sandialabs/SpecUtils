@@ -27,6 +27,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <iomanip>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -313,7 +314,7 @@ void check_parse_time( const string basedir )
   map<path,double> cpu_parse_times, wall_parse_times;
   const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
   
-  const SpecUtils::time_point_t start_time = chrono::system_clock::now();
+  const SpecUtils::time_point_t start_time = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
   
   for( const path &fpath : with_truth )
   {
@@ -405,7 +406,7 @@ void check_parse_time( const string basedir )
     string name = i->first.filename().string<string>();
     if( name.size() > 30 )
       name = name.substr( 0, 27 ) + "...";
-    cout << setw(31) << std::left << name << ": {cpu: "
+    cout << std::setw(31) << std::left << name << ": {cpu: "
          << setprecision(6) << std::fixed << cputime << ", wall: "
          << setprecision(6) << walltime << "}"
          << ", size: " << (boost::filesystem::file_size(i->first) / 1024) << " kb\n";

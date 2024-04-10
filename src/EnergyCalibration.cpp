@@ -1838,7 +1838,7 @@ shared_ptr<EnergyCalibration> energy_cal_from_CALp_file( std::istream &input,
       // get rid of blank leading lines
     }
     
-    if( !SpecUtils::icontains(line, "CALp File") )
+    if( !SpecUtils::icontains(line, "CALp File") || !input )
       throw runtime_error( "First line doesnt contain CALp" );
     
     string name;
