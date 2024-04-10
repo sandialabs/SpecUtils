@@ -2410,12 +2410,17 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
         string idid = haveids.first;
         idid = idid.size()>1 ? idid.substr(0,2) : idid;
       
+        bool matched = false;
         for( string calid : cal_ids )
         {
           calid = calid.size()>1 ? calid.substr(0,2) : calid;
-          if( calid == idid )
-            cal_ids.push_back( haveids.first );
+          matched = (calid == idid);
+          if( matched )
+            break;
         }
+        
+        if( matched )
+          cal_ids.push_back( haveids.first );
       }//for( const auto &haveids : m_id_cal_raw )
     }//if( !is_match )
   }//end lock on m_mutex
