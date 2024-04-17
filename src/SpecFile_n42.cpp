@@ -3910,7 +3910,8 @@ public:
           auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
           if( det_iter == end(*id_to_dettype_ptr) )
           {
-            if( icontains( meas->detector_name_, "neut" ) )
+            if( icontains( meas->detector_name_, "neut" )
+               || icontains( meas->detector_name_, "DetN" ) )  // ex: "DetectorInfoDetN1"
             {
               // BNC detectors may not include a RadDetectorInformation element for the neutron detector
               det_type = DetectionType::NeutronDetection;
@@ -8192,7 +8193,9 @@ namespace SpecUtils
             const string idval = xml_value_str(id_att);
             if( SpecUtils::icontains(idval, "gamma") )
               type = GammaDetection;
-            else if( SpecUtils::icontains(idval, "neutron") )
+            else if( SpecUtils::icontains(idval, "neut") )
+              type = NeutronDetection;
+            else if( SpecUtils::icontains(idval, "DetN") ) //Ex. "DetectorInfoDetN1" - Symetrica SN3 has RadDetectorCategoryCode value of other
               type = NeutronDetection;
           }//if( type == OtherDetection )
         }//if( category_node && category_node->value_size() )

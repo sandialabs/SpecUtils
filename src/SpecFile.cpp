@@ -6622,6 +6622,10 @@ void SpecFile::set_detector_type_from_other_info()
                                || SpecUtils::icontains(model, "VeriFinder")
                                || SpecUtils::icontains(model, "SL2") );
     
+    
+    // model of "SN11" is the "Compact VeriFinder"
+    // model of "SN33" is also possible - looks to be 3x3x3 NaI, so probably the backpack system
+    
     if( isVerifinder )
     {
       // Checking the model name to start with "SL2" should catch LaBr, but just to be sure
