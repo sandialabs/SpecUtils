@@ -417,14 +417,15 @@ namespace
   }
 
   void setNeutronCounts_wrapper( SpecUtils::Measurement *meas,
-                              boost::python::list py_counts )
+                              boost::python::list py_counts,
+                                const float live_time )
   {
     vector<float> counts;
     boost::python::ssize_t n = boost::python::len( py_counts );
     for( boost::python::ssize_t i = 0; i < n; ++i )
       counts.push_back( boost::python::extract<float>( py_counts[i] ) );
 
-    meas->set_neutron_counts( counts );
+    meas->set_neutron_counts( counts, live_time );
   }
 
 
@@ -1241,15 +1242,17 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
       "If number of channels is not compatible with previous number of channels\n"
       "then the energy calibration will be reset as well." )
     .def( "setNeutronCounts", &setNeutronCounts_wrapper,
-      args("Counts"),
+      args( "Counts", "LiveTime" ),
       "Sets neutron counts for this measurement.\n"
-      "Takes in a list of floats cooresponding to the neutron detectors for\n"
+      "Takes in a list of floats corresponding to the neutron detectors for\n"
       "this gamma detector (i.e., if there are multiple He3 tubes).\n"
       "For most systems the list has just a single entry.\n"
-      "If you pass in an empty list, the measurement will be set as not containing neutrons.")
+      "If you pass in an empty list, the measurement will be set as not containing neutrons."
+      " Live time (in seconds) for the neutron measurement must also be provided; if a value"
+      " of zero, or negative is provided, the gamma real-time will be used instead.")
     .def( "setEnergyCalibration", &SpecUtils::Measurement::set_energy_calibration,
       args( "Cal" ),
-      "Sets the energy calibration of thie Measurement" )
+      "Sets the energy calibration of this Measurement" )
     ;
   }//end Measurement class scope
   
