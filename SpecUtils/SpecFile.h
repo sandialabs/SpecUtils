@@ -1474,6 +1474,9 @@ public:
   //  (e.g. no measurements have been added or removed without 'cleaningup').
   void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
+  /** Removes all multimedia entries. */
+  void clear_multimedia_data();
+  
   /** Adds the give #MultimediaData object to this file. */
   void add_multimedia_data( const MultimediaData &data );
   

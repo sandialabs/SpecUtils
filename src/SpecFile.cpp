@@ -1697,10 +1697,18 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 }//void combine_gamma_channels( const size_t nchann )
 
+  
+void SpecFile::clear_multimedia_data()
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  multimedia_data_.clear();
+}//void clear_multimedia_data()
 
+  
 void SpecFile::add_multimedia_data( const MultimediaData &data )
 {
   shared_ptr<const MultimediaData> new_data = make_shared<MultimediaData>( data );
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   multimedia_data_.push_back( new_data );
 }//void add_multimedia_data( const MultimediaData &data )
 
