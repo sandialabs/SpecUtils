@@ -1381,6 +1381,7 @@ public:
   // simple setters
   void set_filename( const std::string &n );
   void set_remarks( const std::vector<std::string> &n );
+  void add_remark( const std::string &remark );
   void set_parse_warnings( const std::vector<std::string> &warnings );
   void set_uuid( const std::string &n );
   void set_lane_number( const int num );
@@ -1479,6 +1480,13 @@ public:
   
   /** Adds the give #MultimediaData object to this file. */
   void add_multimedia_data( const MultimediaData &data );
+  
+  /** Sets the multimedia data (e.g.,  pictures).
+    
+   The passed in multimedia data replaces the current multimedia data.  Copies of the `MultimediaData`
+   are not made.
+  */
+  void set_multimedia_data( std::vector<std::shared_ptr<const MultimediaData>> &data );
   
   /** Combines the specified number of gamma channels together for all measurements with the given
    number of channels.

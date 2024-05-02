@@ -269,7 +269,7 @@ namespace
   }//add_multimedia_data_to_2012_N42(...)
 
 
-  bool set_multimedia_data( SpecUtils::MultimediaData &data,
+  bool set_multimedia_data_from_xml( SpecUtils::MultimediaData &data,
                             const rapidxml::xml_node<char> * const multimedia_node )
   {
     if( !multimedia_node )
@@ -336,9 +336,9 @@ namespace
       return false;
     
     return true;
-  }//set_multimedia_data(...)
+  }//set_multimedia_data_from_xml(...)
 
-}//anonomous namespace for XML utilities
+}//anonymous namespace for XML utilities
 
 
 //getCalibrationToSpectrumMap(...): builds map from the binning shared vector to
@@ -8347,7 +8347,7 @@ namespace SpecUtils
       XML_FOREACH_CHILD( multimedia_node, rad_data_node, "MultimediaData" )
       {
         auto data = make_shared<MultimediaData>();
-        if( set_multimedia_data( *data, multimedia_node ) )
+        if( set_multimedia_data_from_xml( *data, multimedia_node ) )
           multimedia_data_.push_back( data );
       }
     }//for( loop over <RadInstrumentData> nodes - ya, I know we shouldnt have to )

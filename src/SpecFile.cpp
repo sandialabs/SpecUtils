@@ -809,6 +809,14 @@ void Measurement::set_remarks( const std::vector<std::string> &remar )
 }
   
 
+void SpecFile::add_remark( const std::string &remark )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  remarks_.push_back( remark );
+  modified_ = modifiedSinceDecode_ = true;
+}
+  
+
 void Measurement::set_parse_warnings(const std::vector<std::string>& warnings)
 {
   parse_warnings_ = warnings;
@@ -1713,6 +1721,14 @@ void SpecFile::add_multimedia_data( const MultimediaData &data )
 }//void add_multimedia_data( const MultimediaData &data )
 
 
+void SpecFile::set_multimedia_data( vector<shared_ptr<const MultimediaData>> &data )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  multimedia_data_ = data;
+  modified_ = modifiedSinceDecode_ = true;
+}//void set_multimedia_data( vector<shared_ptr<const MultimediaData>> &data )
+  
+  
 size_t SpecFile::do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform )
 {
