@@ -60,6 +60,15 @@ namespace
     const int nconvert = sscanf( str.c_str(), "%i", &f );
     return (nconvert == 1);
   }
+  
+  string remove_label( const string &line )
+  {
+    const string::size_type pos = line.find( ":" );
+    if( (pos == string::npos) || ((pos+1) >= line.size()) )
+      return line;
+    
+    return SpecUtils::trim_copy( line.substr(pos + 1) );
+  }
 }//namespace
 
 
@@ -79,13 +88,21 @@ bool SpecFile::load_iaea_file( const std::string &filename )
   if( !file.is_open() )
     return false;
   
-  uint8_t first_bytes[4] = { 0, 0, 0, 0 };
-  file.read( (char *) (&first_bytes), 4 );
+  uint8_t first_bytes[7] = { 0, 0, 0, 0 };
+  file.read( (char *) (&first_bytes), 7 );
   file.seekg( 0, ios::beg );
+  
+  const bool is_ncf = ((first_bytes[0] == 'E')
+                       && (first_bytes[1] == 'X')
+                       && (first_bytes[2] == 'P')
+                       && (first_bytes[3] == 'T')
+                       && (first_bytes[4] == 'I')
+                       && (first_bytes[5] == 'D')
+                       && (first_bytes[6] == ':'));
   
   // Usually the '$' character is the first character in the file, however, there may be a
   //  Byte Order Mark (BOM) indicating UTF-8, UTF-16 little-endian, or UTF-16 big-endian (We'll ignore
-  const bool is_ascii = (first_bytes[0] == '$');
+  bool is_ascii = (first_bytes[0] == '$');
   
   const bool is_utf8 = ((first_bytes[0] == 0xEF)
                         && (first_bytes[1] == 0xBB)
@@ -102,18 +119,37 @@ bool SpecFile::load_iaea_file( const std::string &filename )
   
   // TODO: accept UTF-32 (BE) = {0x00, 0x00, 0xFE, 0xFF }, UTF-32 (LE) = { 0xFF, 0xFE, 0x00, 0x00 }
   
-  if( !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
+  if( !is_ncf && !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
   {
-    //    cerr << "IAEA file '" << filename << "'does not have expected first character"
-    //         << " of '$', firstbyte=" << int(first_bytes[0])
-    //         << " (" << char(first_bytes[0]) << ")" << endl;
-    return false;
-  }//if( (first_bytes[0] != '$') && (first_bytes[2] != '$') )
+    // Sometimes SPE files cram some header data at the start of the file, so they dont
+    //  start with a '$' field, like they should, so we'll give it another chance, unless
+    //  any of the first few characters are non-alphanumeric.
+    if( !std::isalnum(first_bytes[0]) || !std::isalnum(first_bytes[1])
+       || !std::isalnum(first_bytes[2]) || !std::isalnum(first_bytes[3]) )
+      return false;
+    
+    file.seekg( 0, ios::end );
+    const istream::pos_type eof_pos = file.tellg();
+    file.seekg( 0, ios::beg );
+    
+    const size_t filesize = static_cast<size_t>( 0 + eof_pos );
+    
+    string headerdata;
+    headerdata.resize( std::min( size_t(1025), filesize + 1 ) );
+    file.read( &(headerdata[0]), headerdata.size() - 1 );
+    file.seekg( 0, ios::beg );
+    headerdata.back() = '\0'; //JIC
+    
+    is_ascii = ((headerdata.find("$DATA:") != string::npos)
+                && (headerdata.find("$MEAS_TIM:") != string::npos));
+    if( !is_ascii )
+      return false;
+  }//if( !is_ascii && !is_utf8 && !is_utf16_big_endian && !is_utf16_little_endian )
   
   
   bool loaded = false;
   
-  if( is_ascii || is_utf8 )
+  if( is_ascii || is_utf8 || is_ncf )
   {
     if( is_utf8 )
       file.seekg( 3, ios::beg );
@@ -214,6 +250,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         break;
     }//while( SpecUtils::safe_get_line( istr, line ) )
     
+    // ".ncf" files are a format used in a counting facility, that is pretty close
+    //  to ".spe" files, so we'll just kludge things a little here to allow reading
+    //  them.
+    bool is_ncf = false;
     
     //If someone opened the file up in a Windows text editor, the file may have
     //  gotten converted to UTF16, in which case the first two bytes will be
@@ -223,8 +263,42 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     //  istr.imbue(std::locale(istr.getloc(), new std::codecvt_utf16<wchar_t, 0x10ffff, std::consume_header>));
     //https://en.wikipedia.org/wiki/Byte_order_mark
     
-    if( line.empty() || line[0]!='$' )
-      throw runtime_error( "IAEA file first line must start with a '$'" );
+    if( line.empty() || (line[0] != '$') )
+    {
+      // Some files stuff some system-specific txt data at the beginning of the file; we'll be
+      //  gracious and check if maybe this is the case.
+      
+      istr.seekg( 0, ios::end );
+      const istream::pos_type eof_pos = istr.tellg();
+      istr.seekg( orig_pos, ios::beg );
+      
+      const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
+      
+      string headerdata;
+      headerdata.resize( std::min( size_t(2048), filesize + 1 ) );
+      istr.read( &(headerdata[0]), headerdata.size() - 1 );
+      istr.seekg( 0, ios::beg );
+      headerdata.back() = '\0'; //JIC
+      
+      is_ncf = ((headerdata.find("EXPTID:") != string::npos)
+                && (headerdata.find("SAMPID:") != string::npos)
+                && (headerdata.find("DATA:") != string::npos));
+      
+      // Require this suspect file to have both "$DATE_MEA:" and "$DATA:" fields
+      if( ((headerdata.find("$DATE_MEA:") == string::npos)
+         || (headerdata.find("$DATA:") == string::npos))
+         && !is_ncf )
+      {
+        throw runtime_error( "IAEA file first line must start with a '$'" );
+      }
+      
+      // We could advance stream to the first "$", but I *think* we should be fine
+      //  just starting from the beginning, and the below should skip past invalid
+      //  or not-understood stuff
+      //const auto pos = headerdata.find("$");
+      //assert( pos != string::npos );
+      //istr.seekg( 0 + orig_pos + pos, ios::beg );
+    }//if( line.empty() || line[0]!='$' )
     
     bool neutrons_were_cps = false;
     std::shared_ptr<DetectorAnalysis> anaresult;
@@ -257,7 +331,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             newcal->set_polynomial( nchannel, cal_coeffs, deviation_pairs );
             meas->energy_calibration_ = newcal;
             
-            if( bin_to_energy.empty() )
+            if( !bin_to_energy.empty() )
               meas->parse_warnings_.push_back( "A lower channel energy calibration was also specified in file, but not used." );
           }catch( std::exception &e )
           {
@@ -353,39 +427,46 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       to_upper_ascii(line);
       skip_getline = false;
       
+      if( is_ncf && !line.empty() && (line.front() != '$') )
+        line = "$" + line;
+      
       if( starts_with(line,"$DATA:") )
       {
         //RadEagle files contains a seemingly duplicate section of DATA: $TRANSFORMED_DATA:
         
-        if( !SpecUtils::safe_get_line( istr, line ) )
-          throw runtime_error( "Error reading DATA section of IAEA file" );
-        
-        trim(line);
-        vector<string> channelstrs;
-        split( channelstrs, line, " \t," );
-        
-        int firstchannel = 0, lastchannel = 0;
-        if( channelstrs.size() == 2 )
-        {
-          if( !parse_int(channelstrs[0].c_str(), channelstrs[0].size(), firstchannel)
-              || !parse_int(channelstrs[1].c_str(), channelstrs[1].size(), lastchannel) )
-          {
-            firstchannel = lastchannel = 0;
-          }
-        }else
-        {
-          parse_warnings_.emplace_back( "Error reading DATA section of IAEA file, "
-                                       "unexpected number of fields in first line." );
-        }//if( firstlineparts.size() == 2 )
-        
         double sum = 0.0;
-        std::shared_ptr< vector<float> > channel_data( new vector<float>() );
-        if( (firstchannel < lastchannel)
-           && (firstchannel >= 0)
-           && ((lastchannel - firstchannel) < (65536 + 2)) )
+        shared_ptr<vector<float>> channel_data = make_shared<vector<float>>();
+        
+        if( !is_ncf )
         {
-          channel_data->reserve( static_cast<size_t>(lastchannel - firstchannel) + 1 );
-        }
+          if( !SpecUtils::safe_get_line( istr, line ) )
+            throw runtime_error( "Error reading DATA section of IAEA file" );
+          
+          trim(line);
+          vector<string> channelstrs;
+          split( channelstrs, line, " \t," );
+          
+          int firstchannel = 0, lastchannel = 0;
+          if( channelstrs.size() == 2 )
+          {
+            if( !parse_int(channelstrs[0].c_str(), channelstrs[0].size(), firstchannel)
+               || !parse_int(channelstrs[1].c_str(), channelstrs[1].size(), lastchannel) )
+            {
+              firstchannel = lastchannel = 0;
+            }
+          }else
+          {
+            parse_warnings_.emplace_back( "Error reading DATA section of IAEA file, "
+                                         "unexpected number of fields in first line." );
+          }//if( firstlineparts.size() == 2 )
+          
+          if( (firstchannel < lastchannel)
+             && (firstchannel >= 0)
+             && ((lastchannel - firstchannel) < (65536 + 2)) )
+          {
+            channel_data->reserve( static_cast<size_t>(lastchannel - firstchannel) + 1 );
+          }
+        }//if( !is_ncf )
         
         //TODO: for some reason I think this next test condition is a little fragile...
         int num_cd_error = 0, num_cd_error_current = 0;
@@ -632,6 +713,65 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           log_developer_error( __func__, msg.c_str() );
 #endif
         }
+      }else if( is_ncf && starts_with(line,"$GAIN:") )
+      {
+        if( cal_coeffs.size() < 2 )
+          cal_coeffs.resize( 2, 0.0f );
+       
+        const string valuestr = remove_label( line );
+        if( !parse_float( valuestr.c_str(), valuestr.size(), cal_coeffs[1] ) )
+          throw runtime_error( "NCF: Failed to parse gain." );
+      }else if( is_ncf && starts_with(line,"$ZERO:") )
+      {
+        if( cal_coeffs.size() < 1 )
+          cal_coeffs.resize( 1, 0.0f );
+        
+        const string valuestr = remove_label( line );
+        if( !parse_float( valuestr.c_str(), valuestr.size(), cal_coeffs[0] ) )
+          throw runtime_error( "NCF: Failed to parse gain." );
+      }else if( is_ncf && starts_with(line,"$OPTQUAD:") )
+      {
+        if( cal_coeffs.size() < 3 )
+          cal_coeffs.resize( 3, 0.0f );
+        
+        const string valuestr = remove_label( line );
+        if( !parse_float( valuestr.c_str(), valuestr.size(), cal_coeffs[2] ) )
+          throw runtime_error( "NCF: Failed to parse quadratic." );
+      }else if( is_ncf && starts_with(line,"$RLTIME:") )
+      {
+        const string valuestr = remove_label( line );
+        if( !parse_float( valuestr.c_str(), valuestr.size(), meas->real_time_ ) )
+          throw runtime_error( "NCF: Failed to parse real time." );
+      }else if( is_ncf && starts_with(line,"$LIVTIM:") )
+      {
+        const string valuestr = remove_label( line );
+        if( !parse_float( valuestr.c_str(), valuestr.size(), meas->live_time_ ) )
+          throw runtime_error( "NCF: Failed to parse live time." );
+      }else if( is_ncf && starts_with(line,"$STARTDATE:") )
+      {
+        const string valuestr = remove_label( line ); //ex "2024-03-08 09:31:41")
+        try
+        {
+          meas->start_time_ = time_from_string( valuestr, DateParseEndianType::MiddleEndianFirst );
+        }catch(...)
+        {
+          parse_warnings_.emplace_back( "Unable to convert '" + line + "' to a valid date/time" );
+        }
+      }else if( is_ncf && starts_with(line,"$EXPTID:") )
+      {
+        remarks_.push_back( "EXPTID: " + remove_label(line) );
+      }else if( is_ncf && starts_with(line,"$GEOM:") )
+      {
+        remarks_.push_back( "GEOM: " + remove_label(line) );
+      }else if( is_ncf && starts_with(line,"$SAMPID:") )
+      {
+        meas->title_ = remove_label( line );
+      }else if( is_ncf && starts_with(line,"$FILENAME:") )
+      {
+        remarks_.push_back( "FILENAME: " + remove_label(line) );
+      }else if( is_ncf && starts_with(line,"$MCA:") )
+      {
+        instrument_id_ = remove_label( line );
       }else if( starts_with(line,"$GPS:") )
       {
         float speed = numeric_limits<float>::quiet_NaN();
@@ -724,7 +864,18 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         {
           parse_warnings_.emplace_back( "Error parsing neutron cps from line: " + line );
         }
-      }else if( starts_with(line,"$SPEC_REM:") )
+      }else if( starts_with(line,"COMMENT:") )
+      {
+        // NOTE: line not starting with '$'
+        const auto pos = line.find(":");
+        if( (pos != string::npos) && ((pos+1) != line.size()) )
+        {
+          line = line.substr(pos + 1);
+          trim(line);
+          if( !line.empty() )
+            meas->remarks_.push_back( line );
+        }
+      }else if( starts_with(line,"$SPEC_REM:") || starts_with(line,"$COMMENT:")  )
       {
         while( SpecUtils::safe_get_line( istr, line ) )
         {
@@ -1577,8 +1728,21 @@ bool SpecFile::write_iaea_spe( ostream &output,
     if( counts.size() )
     {
       output << "$DATA:\r\n0 " << (counts.size()-1) << "\r\n";
+      
       for( size_t i = 0; i < counts.size(); ++i )
-        output << counts[i] << "\r\n";
+      {
+        const float count = counts[i];
+        if( floorf(count) == count )
+        {
+          // If we print as a float, then by default above 1.0E6 will print in scientific
+          //  notation, which some other applications do not read in
+          output << static_cast<int64_t>(count) << "\r\n";
+        }else
+        {
+          // If its a float, I guess we should print as a float?
+          output << count << "\r\n";
+        }
+      }//for( size_t i = 0; i < counts.size(); ++i )
       
       assert( summed->energy_calibration_ );
       coefs = summed->energy_calibration_->coefficients();

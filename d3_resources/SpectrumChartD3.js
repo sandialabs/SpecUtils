@@ -4429,12 +4429,16 @@ SpectrumChartD3.prototype.updateLegend = function() {
         .attr("class", "legentry")
         .attr( "x", 15 )
         .text(title);
-        
+    
+    let ltnode, lttxt, dttxt;
     if( typeof lt === "number" )
-      thistxt.append('svg:tspan')
+    {
+      lttxt = "Live Time: " + (sf*lt).toPrecision(4) + " s";
+      ltnode = thistxt.append('svg:tspan')
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
-        .text( "Live Time: " + (sf*lt).toPrecision(4) + " s" );
+        .text( lttxt );
+    }
       
     if( typeof rt === "number" )
       thistxt.append('svg:tspan')
@@ -4447,11 +4451,18 @@ SpectrumChartD3.prototype.updateLegend = function() {
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
         .text( "Scaled by " + sf.toPrecision(4) );
+      
+    if( (typeof lt === "number") && (typeof rt === "number") && (rt > 0) && ltnode )
+    {
+      dttxt = "Dead Time: " + (100*(rt - lt) / rt).toPrecision(3) + "%";
+      // Hookup event handlers for mouse-over, jic we dont have neutron data
+      thistxt
+        .on("mouseover", function(){ ltnode.text(dttxt); } )
+        .on("mouseout", function(){ ltnode.text(lttxt); });
+    }
           
     if( typeof neutsum === "number" ){
-      // \TODO: spectrum.neutronRealTime is currently never set by SpecUtils/InterSpec, but will be once parsing
-      //        sepearte neutron real times is implemented.
-      const nrt = (typeof spectrum.neutronRealTime === "number") ? spectrum.neutronRealTime : (rt > 1.0E-6 ? rt : lt);
+      const nrt = (typeof spectrum.neutronLiveTime === "number") ? spectrum.neutronLiveTime : (rt > 1.0E-6 ? rt : lt);
       const isCps = (typeof nrt === "number");
       const neut = isCps ? neutsum/nrt : neutsum*sf;
       
@@ -4492,11 +4503,11 @@ SpectrumChartD3.prototype.updateLegend = function() {
           const spec = spectra[j];
           if( spec && (j !== i)
               && (spec.type === self.spectrumTypes.BACKGROUND)
-              && ((typeof spec.neutronRealTime === "number") || (typeof spec.realTime === "number"))
+              && ((typeof spec.neutronLiveTime === "number") || (typeof spec.realTime === "number"))
               && (typeof spec.neutrons === "number") )
           {
             forNeut = spec.neutrons;
-            forNeutLT = (typeof spec.neutronRealTime === "number") ? spec.neutronRealTime
+            forNeutLT = (typeof spec.neutronLiveTime === "number") ? spec.neutronLiveTime
                                                                    : (spec.realTime > 1.0E-6 ? spec.realTime : spec.liveTime);
             break;
           }
@@ -4526,16 +4537,18 @@ SpectrumChartD3.prototype.updateLegend = function() {
           .attr('x', "40")
           .attr('y', thisentry.node().getBBox().height - 5)
           .attr('style', 'display: none')
-          .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof rt === "number" ? (" in " + rt.toPrecision(4) + " s") : "") );
+          .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
       
-        neutspan
+        thistxt  //This calls to .on("mouseover")/.on("mouseout") will overwrite eirlier hooked up calls
           .on("mouseover", function(){
             thisentry.neutinfo.attr('style', 'font-size: 75%' )
             self.legendBox.attr('height', self.legBody.node().getBBox().height + 10 );
+            if( ltnode && dttxt ) ltnode.text(dttxt); //
           } )
           .on("mouseout", function(){
             thisentry.neutinfo.attr('style', 'display: none;')
             self.legendBox.attr('height', self.legBody.node().getBBox().height + 10 );
+            if( ltnode && lttxt ) ltnode.text(lttxt);
           });
        }// if( is CPS instead of sum neutrons )
       
@@ -5598,7 +5611,7 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
 
   return function() {
     
-    if (self.leftDragRegionDown || self.rightDragRegionDown || self.leftDragRegionDown) {
+    if (self.leftDragRegionDown || self.rightDragRegionDown || self.sliderBoxDown) {
       d3.event.preventDefault();
       d3.event.stopPropagation();
     }
@@ -5683,11 +5696,11 @@ SpectrumChartD3.prototype.handleMouseMoveLeftSliderDrag = function(redraw) {
     d3.event.stopPropagation();
 
     if (self.sliderBoxDown) {
-      return self.handleMouseMoveSliderChart()();
+      return; /*self.handleMouseMoveSliderChart()(); */
     }
 
     d3.select(document.body).style("cursor", "ew-resize");
-
+    
     if (!self.leftDragRegionDown || !redraw) {
       return;
     }

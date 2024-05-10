@@ -27,6 +27,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <iomanip>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -313,7 +314,7 @@ void check_parse_time( const string basedir )
   map<path,double> cpu_parse_times, wall_parse_times;
   const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
   
-  const SpecUtils::time_point_t start_time = chrono::system_clock::now();
+  const SpecUtils::time_point_t start_time = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
   
   for( const path &fpath : with_truth )
   {
@@ -405,7 +406,7 @@ void check_parse_time( const string basedir )
     string name = i->first.filename().string<string>();
     if( name.size() > 30 )
       name = name.substr( 0, 27 ) + "...";
-    cout << setw(31) << std::left << name << ": {cpu: "
+    cout << std::setw(31) << std::left << name << ": {cpu: "
          << setprecision(6) << std::fixed << cputime << ", wall: "
          << setprecision(6) << walltime << "}"
          << ", size: " << (boost::filesystem::file_size(i->first) / 1024) << " kb\n";
@@ -488,8 +489,10 @@ void check_files_with_truth_n42( const string basedir )
   
   map<path,double> parse_times;
   
-  for( const path &fpath : with_truth )
+  for( size_t file_index = 0; file_index < with_truth.size(); ++file_index )
   {
+    const path &fpath = with_truth[file_index];
+    
     ++initial;
     
     const string filename = fpath.filename().string<string>();
@@ -566,6 +569,8 @@ void check_files_with_truth_n42( const string basedir )
     }catch( std::exception &e )
     {
       ++failed_tests;
+      
+      cerr << "(on file " << file_index+1 << " of " << with_truth.size() << " )" << endl;
       
       const string description = e.what();
       vector<string> errors;
@@ -1078,7 +1083,7 @@ void print_one_line_summary( const SpecUtils::Measurement &meas, std::ostream &o
       << meas.detector_name() << "', LT=" << meas.live_time()
       << ", RT=" << meas.real_time() << ", GammaSum=" << meas.gamma_count_sum();
   if( meas.contained_neutron() )
-    out << ", NeutronSum=" << meas.neutron_counts_sum();
+    out << ", NeutronSum=" << meas.neutron_counts_sum() << ", NeutLT=" << meas.neutron_live_time();
   else
     out << ", No neutron detector";
   

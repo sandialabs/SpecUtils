@@ -26,6 +26,7 @@
 
 #cmakedefine01 PERFORM_DEVELOPER_CHECKS
 #cmakedefine01 SpecUtils_ENABLE_D3_CHART
+#cmakedefine01 SpecUtils_ENABLE_URI_SPECTRA
 #cmakedefine01 SpecUtils_USE_WT_THREADPOOL
 #cmakedefine01 SpecUtils_USING_NO_THREADING
 #cmakedefine01 SpecUtils_D3_SUPPORT_FILE_STATIC

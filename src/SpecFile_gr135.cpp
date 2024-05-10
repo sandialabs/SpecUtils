@@ -152,6 +152,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
           meas->neutron_counts_.resize( 1, val );
           meas->neutron_counts_sum_ = val;
           meas->contained_neutron_ = true;
+          //meas->neutron_live_time_ is same as gamma live time, so we wont fill out
         }//if( !liveTimeStr.empty() )
         //        cerr << "meas->neutron_counts_sum_=" << meas->neutron_counts_sum_ << endl;
       }//if( pos != string::npos )
@@ -485,6 +486,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
         uint16_t neutsum;
         memcpy( &neutsum, data+36, 2 );
         meas->neutron_counts_sum_ = neutsum;
+        //meas->neutron_live_time_ is same as gamma live time, so we wont fill out
         meas->neutron_counts_.resize( 1, static_cast<float>(neutsum) );
       }//if( is135v2 )
       

@@ -141,17 +141,6 @@ namespace SpecUtils
                          const std::vector<float> &coeffs,
                          const std::vector<std::pair<float,float>> &dev_pairs );
     
-    /** Similar to #set_polynomial, but significantly loosens the offset (i.e., zeroth calibration
-     coefficient) check, to have a value between -500 and 5000.
-     
-     This is primarily to facilitate alpha-spectroscopy energy calibrations, which may have like a
-     2500 keV offset.
-     */
-    void set_polynomial_no_offset_check( const size_t num_channels,
-                                     const std::vector<float> &coeffs,
-                                     const std::vector<std::pair<float,float>> &dev_pairs );
-    
-    
     /** Functionally the same as #set_polynomial, but will set type to
      #EnergyCalType::UnspecifiedUsingDefaultPolynomial.
      
@@ -289,46 +278,24 @@ namespace SpecUtils
      */
     static const size_t sm_max_channels; // = 65536 + 8
     
-    /** The largest absolute value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
-     i.e., if a gamma spectrum has a larger value than this, then the calibration coeffiecients will be considered garbage and not used.
+    /** The largest positive value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
+     i.e., if a gamma spectrum has a larger value than this, then the calibration coefficients will be considered garbage and not used.
      
-     Current value is 500 keV.
+     Current value is 5500 keV (only alpha particle spectra seem to have values more than a few hundred keV).
+     
+     A lower bound of -500 keV is currently hard-coded.
      
      \sa set_polynomial, EnergyCalCheckType::Normal
      */
     static const float sm_polynomial_offset_limit;
     
-    /** Alpha particle spectra may have energy offsets of like 2500 keV, so this value gives the max absolute value of the
-     offset term for polynomial energy calibration, for those situations.
-     
-     \sa set_polynomial_no_offset_check, EnergyCalCheckType::LooseOffset
-     */
-    static const float sm_polynomial_extended_offset_limit;
-    
   protected:
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
-     increasnig values).
+     increasing values).
      
      Throws exception if error is found.
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
-    
-    /** Normally we expect energy offset (i.e., zeroth polynomial coefficient) to be not to large,
-     but for like alpha spectroscopy, it may be like 2500 keV, we
-     */
-    enum class EnergyCalCheckType
-    {
-      /** Absolute value of energy offset must less than 500 keV, as specified by #sm_polynomial_offset_limit. */
-      Normal,
-      
-      /** Absolute value of energy offset must less than 5000 keV, as specified by #sm_polynomial_extended_offset_limit. */
-      LooseOffset
-    };//enum class EnergyCalCheckType
-    
-    void set_polynomial_internal( const EnergyCalCheckType check_type,
-                        const size_t num_channels,
-                        const std::vector<float> &coeffs,
-                        const std::vector<std::pair<float,float>> &dev_pairs );
     
     EnergyCalType m_type;
     std::vector<float> m_coefficients;
@@ -673,6 +640,61 @@ namespace SpecUtils
                            const std::vector<float> &original_counts,
                            const std::vector<float> &new_energies,
                            std::vector<float> &resulting_counts );
+  
+  /** Reads an input CALp file and returns a valid energy calibration.
+   
+   @param input Input stream with CALp file information.  If nullptr is returned, this function will seekg the stream back to its tellg position
+          but if calibration is successfully parsed, than position will be at the end of information used.
+   @param num_channels The number of channels this calibration *might* be applied to; needed to fill in channel energies.  If less than
+          two, will return nullptr.  If CALp file is for lower channel energies (e.g., has a "Exact Energies" segment), then if the CALp has
+          more channels than the data, the input energy calibration will be truncated to specified \p num_channels.  If CALp has less
+          channels than nullptr will be returned.  If energy in CALp is invalid, then nullptr will be returned.
+   @param det_name [out] The detector name as given in the CALp file, or empty if not give.  Note that detector name is an InterSpec
+          specific extension to CALp files.
+   @returns a valid energy calibration.
+   
+   Throws exception on error.
+   
+   Example CALp file:
+   \verbatim
+   #PeakEasy CALp File Ver:  4.00
+   Offset (keV)           :  1.50000e+00
+   Gain (keV / Chan)      :  3.00000e+00
+   2nd Order Coef         :  0.00000e+00
+   3rd Order Coef         :  0.00000e+00
+   4th Order Coef         :  0.00000e+00
+   Deviation Pairs        :  5
+   7.70000e+01 -1.00000e+00
+   1.22000e+02 -5.00000e+00
+   2.39000e+02 -5.00000e+00
+   6.61000e+02 -2.90000e+01
+   2.61400e+03  0.00000e+00
+   #END
+   \endverbatim
+   */
+  std::shared_ptr<EnergyCalibration> energy_cal_from_CALp_file( std::istream &input,
+                                                               const size_t num_channels,
+                                                               std::string &det_name );
+  
+  
+  
+  /** Writes the given energy calibration object as a CALp file.
+   
+   If a spectrum file has multiple detectors, you may write out each calibration, with the detectors name, to a single file
+   
+   @param output The stream to write the output to.
+   @param The energy calibration to write.
+   @param detector_name The name of the detector - an InterSpec/SpecUtils specific extension of the CALp file format.  If blank,
+          wont be written.
+   @returns if CALp file was successfully written.
+   
+   Note, if the energy calibration is Full Range Fraction, then it will be converted to polynomial, and those coefficients written out, but also
+   the original FRF coefficients will be written out after the other content - this is a InterSpec/SpecUtils specific extension of CALp file
+   format.
+   */
+  bool write_CALp_file( std::ostream &output,
+                        const std::shared_ptr<const EnergyCalibration> &cal,
+                        const std::string &detector_name );
 }//namespace SpecUtils
 
 #endif

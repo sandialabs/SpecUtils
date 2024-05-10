@@ -180,7 +180,11 @@ enum class ParserType : int
   Json,
   /** CAEN Hexagon MCA gxml format. */
   CaenHexagonGXml,
-
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** The URI defined format; e.g., from a QR-code */
+  Uri,
+#endif
+  
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -245,6 +249,11 @@ enum class SaveSpectrumAsType : int
   /** See #SpecFile::write_template for details. */
   Template,
 #endif
+  
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** See #SpecFile::write_uri for details. */
+  Uri,
+#endif
 
   NumTypes
 };//enum SaveSpectrumAsType
@@ -288,6 +297,16 @@ enum class DetectorType : int
       R400 T2: NaI 23 x 21mm - Tungsten shielded, GM
    */
   IdentiFinderTungsten,
+  
+  /** G & NG Models models
+   NaI: 1.77 x 1.77 x 1.77 in (45 x 45 x 45 mm) cubic detector with silicon photomultiplier (SiPM)
+   */
+  IdentiFinderR425NaI,
+  
+  /** LG & LNG Models
+   LaBr3: 1.4 x 1.4 x 1.4 in (35 x 35 x 35 mm) cubic detector with silicon photomultiplier (SiPM)
+   */
+  IdentiFinderR425LaBr,
   
   /** R500 UL-LG: 38 x 38mm, LaBr, GM, LED
       R500 UL-LGH: 38 x 38mm, LaBr, GM
@@ -337,6 +356,7 @@ enum class DetectorType : int
   OrtecRadEagleLaBr,
   /** The LaBr3 may not always be detector, and then it will be assigned Sam940 */
   Sam940LaBr3,
+  
   Sam940,
   Sam945,
   Srpm210,
@@ -355,6 +375,19 @@ enum class DetectorType : int
   
   /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
   KromekD3S,
+  
+  /** PHDS Fulcrum; HPGe 12% efficient (rel. to 3x3 NaI)  handheld detector. */
+  Fulcrum,
+  
+  /** PHDS Fulcrum-40h; HPGe 40% efficient (rel. to 3x3 NaI) handheld detector. */
+  Fulcrum40h,
+  
+  /** BNC SAM-950 detector.  There are 1.5x1.5, 2x2, 3x3 NaI variants, as well as LaBr3 2x2, and CeBr3 2x2, but
+   these are not currently differentiated because I havent seen example files of them.
+   
+   Also not: The BNC SAMpack may erroneously claim to be a SAM-950 detector, so will get this DetectorType ID applied.
+   */
+  Sam950,
   
   Unknown
 };//enum DetectorType
@@ -532,6 +565,13 @@ public:
   
   //gamma_count_sum(): returns the sum of channel data counts for gamma data.
   double gamma_count_sum() const;
+  
+  /** Returns the neutron live time.
+   
+   If `neutron_live_time_` is greater than zero, will return it.
+   Otherwise if `contained_neutron_` is true, then will return `real_time_`.
+   */
+  float neutron_live_time() const;
   
   //neutron_counts_sum(): returns the sum of neutron counts.
   double neutron_counts_sum() const;
@@ -766,8 +806,10 @@ public:
    gamma detector, the passed in vector will have one element for each of the
    He3 tubes.  Most handheld detection systems have a single neutron detector
    that is read out, so the passed in counts would have a size of one.
+   
+   If `neutron_live_time` is less than or equal to zero, the gamma real time will be used.
    */
-  void set_neutron_counts( const std::vector<float> &counts );
+  void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time );
   
   //To set real and live times, see SpecFile::set_live_time(...)
   
@@ -951,25 +993,6 @@ public:
   void rebin( const std::shared_ptr<const EnergyCalibration> &cal );
   
   
-  //recalibrate_by_eqn(...) passing in a valid binning
-  //  std::shared_ptr<const std::vector<float>> object will save recomputing this quantity, however no
-  //  checks are performed to make sure 'eqn' actually cooresponds to 'binning'
-  //  For type==LowerChannelEdge, eqn should coorespond to the energies of the
-  //  lower edges of the bin.
-  //Throws exception if 'type' is InvalidEquationType, or potentially (but not
-  //  necassirily) if input is ill-specified, or if the passed in binning doesnt
-  //  have the proper number of channels.
-/*
-  void recalibrate_by_eqn( const std::vector<float> &eqn,
-                          const std::vector<std::pair<float,float>> &dev_pairs,
-                          SpecUtils::EnergyCalType type,
-                          std::shared_ptr<const std::vector<float>> binning
-#if( !SpecUtils_JAVA_SWIG )
-                          = std::shared_ptr<const std::vector<float>>()  //todo: fix this more better
-#endif
-                          );
-  */
-  
   /** Sets the energy calibration to the passed in value.
    
    This operation does not change #gamma_counts_, but instead changes the energie bounds for the
@@ -1033,6 +1056,12 @@ protected:
   //real_time_: in units of seconds.  Typically 0.0f if not specified.
   float real_time_;
 
+  /** The neutron detector live time, in units of seconds - if it is specifically specified in the spectrum file.
+   Will be equal to 0 if neutron live time is not specifically specified (in which case use `live_time_`), or
+   will be zero if `contained_neutron_` is false.
+   */
+  float neutron_live_time_;
+  
   //contained_neutron_: used to specify if there was a neutron detector, but
   //  0 counts were actually detected.
   bool contained_neutron_;
@@ -1352,6 +1381,7 @@ public:
   // simple setters
   void set_filename( const std::string &n );
   void set_remarks( const std::vector<std::string> &n );
+  void add_remark( const std::string &remark );
   void set_parse_warnings( const std::vector<std::string> &warnings );
   void set_uuid( const std::string &n );
   void set_lane_number( const int num );
@@ -1391,9 +1421,11 @@ public:
   //set_contained_neutrons(...): sets the specified measurement as either having
   //  contained neutron counts, or not.  If specified to be false, then counts
   //  is ignored.  If true, then the neutron sum counts is set to be as
-  //  specified.
+  //  specified.  If `neutron_live_time` is less than or equal to zero, then gamma
+  //  real time will be used.
   void set_contained_neutrons( const bool contained, const float counts,
-                               const std::shared_ptr<const Measurement> measurement );
+                               const std::shared_ptr<const Measurement> measurement,
+                              const float neutron_live_time );
 
   /** Sets the detectors analysis.
    
@@ -1443,8 +1475,18 @@ public:
   //  (e.g. no measurements have been added or removed without 'cleaningup').
   void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
+  /** Removes all multimedia entries. */
+  void clear_multimedia_data();
+  
   /** Adds the give #MultimediaData object to this file. */
   void add_multimedia_data( const MultimediaData &data );
+  
+  /** Sets the multimedia data (e.g.,  pictures).
+    
+   The passed in multimedia data replaces the current multimedia data.  Copies of the `MultimediaData`
+   are not made.
+  */
+  void set_multimedia_data( std::vector<std::shared_ptr<const MultimediaData>> &data );
   
   /** Combines the specified number of gamma channels together for all measurements with the given
    number of channels.
@@ -1603,13 +1645,13 @@ public:
   std::set<std::string> energy_cal_variants() const;
   
   
-  //keep_energy_cal_variant(): When #energy_cal_variants() returns multiple
+  //keep_energy_cal_variants(): When #energy_cal_variants() returns multiple
   //  variants, you can use this function to remove all energy calibration
   //  variants, besides the one you specify, from the measurement.  If a spectrum
   //  is not part of a variant, it is kept.
   //Returns return number of removed spectra.
   //Throws exception if you pass in an invalid variant.
-  size_t keep_energy_cal_variant( const std::string variant );
+  size_t keep_energy_cal_variants( const std::set<std::string> &variants );
   
   
   /** Enum to indicate "derived data" variant to keep. */
@@ -1629,8 +1671,13 @@ public:
    */
   size_t keep_derived_data_variant( const DerivedVariantToKeep tokeep );
   
+  /** Remove all data from the named detectors.
+   
+   Will throw exception if a specified detector is not a valid name.
+   */
+  size_t remove_detectors_data( const std::set<std::string> &dets_to_remove );
   
-  //rremove_neutron_measurements() only removes neutron measurements that do not
+  //remove_neutron_measurements() only removes neutron measurements that do not
   //  have a gamma binning defined
   size_t remove_neutron_measurements();
 
@@ -1686,6 +1733,13 @@ public:
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
   bool load_caen_gxml_file(const std::string& filename);
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** The URI defined format; e.g., from a QR-code.
+   The string can either be the URI(s) itself, or point to a file with the URI(s) in them.
+   If a multipart URI, source should have all URIs, with each URI starting with "RADDATA://".
+   */
+  bool load_uri_file( const std::string &uri_or_filename );
+#endif
 
   //load_from_N42: loads spectrum from a stream.  If failure, will return false
   //  and set the stream position back to original position.
@@ -1801,7 +1855,7 @@ public:
   //  for specifications of IAEA file standards.
   //This function is computationally slower than it could be, to allow for
   //  a little more diverse set of intput.
-  bool load_from_iaea( std::istream &istr );
+  virtual bool load_from_iaea( std::istream &istr );
 
   //bool load_from_chn(...): Load information from ORTECs binary CHN file.
   bool load_from_chn( std::istream &input );
@@ -1819,6 +1873,13 @@ public:
   /** Load from a CAEN Hexagon gxml file. */
   bool load_from_caen_gxml(std::istream& input);
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** The URI defined format; e.g., from a QR-code .
+   If a multipart URI, source should have all URIs, with each URI starting with "RADDATA://".
+   */
+  bool load_from_uri( std::istream& input );
+#endif
+  
   //cleanup_after_load():  Fixes up inconsistent calibrations, binnings and such,
   //  May throw exception on error.
   enum CleanupAfterLoadFlags
@@ -1833,6 +1894,9 @@ public:
     //  currently assigned sample or detector numbers, or change order of
     //  measurements_.
     DontChangeOrReorderSamples = 0x2,
+    
+    /** Forces measurements to be sorted by time, and have unique sample-number and detector names. */
+    ReorderSamplesByTime = 0x4,
     
     StandardCleanup = 0x0
   };//enum CleanupFlags
@@ -1871,9 +1935,9 @@ public:
   /** Sets the energy calibration for the specified #Measurement.
    
    This does not change the channel counts (i.e., #gamma_counts_), but does shift the energy of
-   spectral features (e.g., peaks, compton edges).
+   spectral features (e.g., peaks, Compton edges).
    
-   Throws excpetion if energy calibration channel counts are incompatible, or passed in #Measurment
+   Throws exception if energy calibration channel counts are incompatible, or passed in #Measurement
    is not owned by the SpecFile.
    */
   virtual void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal,
@@ -1897,22 +1961,28 @@ public:
                                std::set<int> sample_numbers,
                                std::vector<std::string> detector_names );
   
-  
-  //If only certain detectors are specified, then those detectors will be
-  //  recalibrated (channel contents not changed).  If rebin_other_detectors
-  //  is true, then the other detectors will be rebinned (channel contents
-  //  changed) so that they have the same calibration as the rest of the
-  //  detectors.
-  //Will throw exception if an empty set of detectors is passed in, or if none
-  //  of the passed in names match any of the available names, since these are
-  //  both likely a mistakes
-  /*
-  void recalibrate_by_eqn( const std::vector<float> &eqn,
-                           const std::vector<std::pair<float,float>> &dev_pairs,
-                           SpecUtils::EnergyCalType type,
-                           const std::vector<std::string> &detectors,
-                           const bool rebin_other_detectors );
-*/
+  /** Sets the energy calibration from a "CALp" file.
+   
+   CALp files are simple text files that contain the energy calibration coefficients, and possible non-linear deviation pairs.
+   InterSpec and PeakEasy can both produces these files, as well as the function
+   `SpecUtils::energy_cal_from_CALp_file(...)`.  The CALp files from InterSpec/SpecUtils may contain
+   calibrations for multiple different detectors.
+   
+   If the CALp file has a single energy calibration, it will be applied to all gamma spectra in this SpecFile.
+   If the CALp has (multiple) named detectors, then it will only be applied if the detector names in this SpecFile
+   are contained with the CALp file.
+   
+   This procedure only considers Measurements with at least 4 gamma channels (arbitrarily chosen)
+   
+   Throws exception on failure, in which case this SpecFile object will not have been changed, and the input
+   stream will be reset back to its original position.  Will fail if input energy calibration is invalid or incompatible (e.g.,
+   not enough lower channel energies specified), or if energy calibrations for all Measurements with at least 4 gamma
+   channels can not be identified.
+   
+   \sa SpecUtils::write_CALp_file
+   \sa SpecUtils::energy_cal_from_CALp_file
+   */
+  void set_energy_calibration_from_CALp_file( std::istream &input );
   
   /** Function to convert from detector names, into detector numbers.
    
@@ -2195,6 +2265,26 @@ public:
   
   bool write_template( std::ostream &output, const std::string template_file, bool strip_blocks ) const;
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** Writes the file to URI(s), for, e.g., creating QR-codes.
+   
+   @param output stream URI(s) will be written to.
+   @param num_uris The number of URIs to write.  If 1, then all spectra in the `SpecFile` will
+          be written into a single URI.  If greater than one, then all spectra will be summed to
+          a single spectrum, and it written to multiple URIs, separated by line breaks.
+          Must be a value in range [1,9].
+   @param encode_options A bitwise or of #Specutils::EncodeOptions.
+   @returns if successfully wrote things.
+   
+   Will throw on input error.
+   
+   If you would like more flexibility, see `to_url_spectra(...)` and `url_encode_spectrum(...)`
+   and/or `url_encode_spectra(...)` (you probably do want more flexibility in a lot of cases).
+   */
+  bool write_uri( std::ostream &output, const size_t num_uris,
+                 const uint8_t encode_options ) const;
+#endif
+  
   //Incase InterSpec specific changes are made, please change this number
   //  Version 4: Made it so portal data that starts with a long background as
   //             its first sample will have the 'id' attribute of the
@@ -2202,7 +2292,11 @@ public:
   //             ids similar to "Survey 1", "Survey 2", etc.  The id attrib
   //             of <spectrum> tags also start with these same strings.
   //             (Hack to be compatible with GADRAS)
-  #define SpecFile_2012N42_VERSION 4
+  //  Version 5: Added `Measurement::neutron_live_time_`, and now write out to
+  //             the <GrossCount> node correctly; previous to this, the gamma
+  //             live time would potentially be written out to the <LiveTimeDuration>
+  //             under the <GrossCount> node.  Changed 20240408.
+  #define SpecFile_2012N42_VERSION 5
   
   //The goal of create_2012_N42_xml(...) is that when read back into
   //  load_2012_N42_from_doc(...), the results should be identical (i.e. can
@@ -2268,18 +2362,27 @@ protected:
    */
   void ensure_unique_sample_numbers();
   
-  //has_unique_sample_and_detector_numbers(): checks to make sure 
+  /** Checks if the combination of sample number and detector-name uniquely specifies a measurement.
+   
+   \sa MeasurementProperties::kNotUniqueSampleDetectorNumbers
+   */
   bool has_unique_sample_and_detector_numbers() const;
   
-  //setSampleNumbersByTimeStamp():
-  //For files with < 500 samples, doesn't guarantee unique detctor-name
-  //  sample-number combinations, but does try to preserve initial sample-number
-  //  assignments.
-  //For files with >= 500 samples, it does garuntee unique detector-name
-  //  sample-number combinations, but it does not preserve initial sample-number
-  //  assignments.
-  //Called from cleanup_after_load()
-  void set_sample_numbers_by_time_stamp();
+  /** For files with &lt; 500 samples or `force_unique` true, doesn't guarantee unique detector-name
+      sample-number combinations, but does try to preserve initial sample-number
+      assignments.
+   For files with &ge; 500 samples, and `force_unique` false, it does guarantee unique detector-name
+   sample-number combinations, but it does not preserve initial sample-number assignments.
+  
+   @param sort_meas_types_separately If true, the measurements will first be sorted by measurement SourceType, and then
+          sorted by time.
+   @param force_unique If true, then will make sure sample-number and detector-name combinations are unique.  If false, and
+          less than 500 samples, than this isnt guaranteed.
+   
+   Called from `cleanup_after_load()`
+   */
+  void set_sample_numbers_by_time_stamp( const bool sort_meas_types_separately,
+                                        const bool force_unique  );
   
   
   //load20XXN42File(...): loads the specialized type on N42 file.

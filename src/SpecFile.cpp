@@ -66,6 +66,10 @@
 #include "SpecUtils/D3SpectrumExport.h"
 #endif
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+#include "SpecUtils/UriSpectrum.h"
+#endif
+
 
 #if( SpecUtils_USE_SIMD )
 // Should move to using a library for SIMD operations; some potential candidate libraries include:
@@ -672,6 +676,20 @@ double Measurement::gamma_count_sum() const
 {
   return gamma_count_sum_;
 }
+  
+float Measurement::neutron_live_time() const
+{
+  if( !contained_neutron_ )
+    return 0.0f;
+  
+  if( (neutron_live_time_ > 0.0f) && !IsNan(neutron_live_time_) && !IsInf(neutron_live_time_) )
+    return neutron_live_time_;
+  
+  if( (real_time_ <= 0.0f) && (live_time_ > 0.0f) )
+    return live_time_;
+  
+  return real_time_;
+}
 
 double Measurement::neutron_counts_sum() const
 {
@@ -791,6 +809,14 @@ void Measurement::set_remarks( const std::vector<std::string> &remar )
 }
   
 
+void SpecFile::add_remark( const std::string &remark )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  remarks_.push_back( remark );
+  modified_ = modifiedSinceDecode_ = true;
+}
+  
+
 void Measurement::set_parse_warnings(const std::vector<std::string>& warnings)
 {
   parse_warnings_ = warnings;
@@ -907,11 +933,17 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
 }//set_gamma_counts
   
   
-void Measurement::set_neutron_counts( const std::vector<float> &counts )
+void Measurement::set_neutron_counts( const std::vector<float> &counts, const float live_time )
 {
   neutron_counts_ = counts;
   neutron_counts_sum_ = 0.0;
   contained_neutron_ = !counts.empty();
+  
+  if( counts.empty() || (live_time < 0.0f) || IsInf(live_time) || IsNan(live_time) )
+    neutron_live_time_ = 0.0f;
+  else
+    neutron_live_time_ = live_time;
+  
   const size_t size = counts.size();
   for( size_t i = 0; i < size; ++i )
     neutron_counts_sum_ += counts[i];
@@ -974,9 +1006,14 @@ float Measurement::gamma_channel_lower( const size_t channel ) const
   assert( energy_calibration_ );
   const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
   
-  if( !energies || channel >= energies->size() )
+  if( !energies )
     throw std::runtime_error( "gamma_channel_lower: channel energies not defined" );
     
+  if( channel >= energies->size() )
+    throw std::runtime_error( "gamma_channel_lower: requesting larger channel ("
+                             + std::to_string(channel) + ") than available ("
+                             + std::to_string(energies->size()) + ")" );
+  
   return energies->operator[]( channel );
 }//float gamma_channel_lower( const size_t channel ) const
   
@@ -994,6 +1031,11 @@ float Measurement::gamma_channel_upper( const size_t channel ) const
   
   if( !energies || (energies->size() < 2) || ((channel+1) >= energies->size()) )
     throw std::runtime_error( "gamma_channel_upper: channel energies not defined" );
+  
+  if( (channel+1) >= energies->size() )
+    throw std::runtime_error( "gamma_channel_upper: requesting larger channel ("
+                             + std::to_string(channel) + ") than available ("
+                             + std::to_string(energies->size()) + ")" );
   
   return (*energies)[channel+1];
 }//float gamma_channel_upper( const size_t channel ) const
@@ -1263,6 +1305,9 @@ const char *suggestedNameEnding( const SaveSpectrumAsType type )
 #if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:           return "tmplt";
 #endif
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case SaveSpectrumAsType::Uri:                return "uri";
+#endif
     case SaveSpectrumAsType::NumTypes:          break;
   }//switch( m_format )
   
@@ -1310,6 +1355,10 @@ const char *descriptionText( const SaveSpectrumAsType type )
 #if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:           return "tmplt";
 #endif
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case SaveSpectrumAsType::Uri:                return "URI";
+#endif
+      
     case SaveSpectrumAsType::NumTypes:          return "";
   }
   return "";
@@ -1325,6 +1374,8 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_IdentiFinderNGDetectorStr    = "IdentiFINDER-NG";
   static const string sm_IdentiFinderLaBr3DetectorStr = "IdentiFINDER-LaBr3";
   static const string sm_IdentiFinderTungstenStr      = "IdentiFINDER-T";
+  static const string sm_IdentiFinderR425NaI          = "IdentiFinder-R425-NaI";
+  static const string sm_IdentiFinderR425LaBr         = "IdentiFinder-R425-LaBr";
   static const string sm_IdentiFinderR500NaIStr       = "IdentiFINDER-R500-NaI";
   static const string sm_IdentiFinderR500LaBrStr      = "IdentiFINDER-R500-LaBr3";
   static const string sm_IdentiFinderUnknownStr       = "IdentiFINDER-Unknown";
@@ -1360,6 +1411,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
   static const string sm_KromekD3S                    = "Kromek D3S";
+  static const string sm_Fulcrum                      = "Fulcrum";
+  static const string sm_Fulcrum40h                   = "Fulcrum-40h";
+  static const string sm_Sam950                       = "Sam-950";
   
   
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
@@ -1382,6 +1436,10 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_IdentiFinderTungstenStr;
     case DetectorType::IdentiFinderR500NaI:
       return sm_IdentiFinderR500NaIStr;
+    case DetectorType::IdentiFinderR425NaI:
+      return sm_IdentiFinderR425NaI;
+    case DetectorType::IdentiFinderR425LaBr:
+      return sm_IdentiFinderR425LaBr;
     case DetectorType::IdentiFinderR500LaBr:
       return sm_IdentiFinderR500LaBrStr;
     case DetectorType::IdentiFinderUnknown:
@@ -1450,6 +1508,12 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderLaBr;
     case DetectorType::KromekD3S:
       return sm_KromekD3S;
+    case DetectorType::Fulcrum:
+      return sm_Fulcrum;
+    case DetectorType::Fulcrum40h:
+      return sm_Fulcrum40h;
+    case DetectorType::Sam950:
+      return sm_Sam950;
   }//switch( type )
 
   return sm_UnknownDetectorStr;
@@ -1496,6 +1560,7 @@ void Measurement::reset()
   sample_number_ = 1;
   occupied_ = OccupancyStatus::Unknown;
   gamma_count_sum_ = 0.0;
+  neutron_live_time_ = 0.0f;
   neutron_counts_sum_ = 0.0;
   
   detector_name_.clear();
@@ -1640,14 +1705,30 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 }//void combine_gamma_channels( const size_t nchann )
 
+  
+void SpecFile::clear_multimedia_data()
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  multimedia_data_.clear();
+}//void clear_multimedia_data()
 
+  
 void SpecFile::add_multimedia_data( const MultimediaData &data )
 {
   shared_ptr<const MultimediaData> new_data = make_shared<MultimediaData>( data );
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   multimedia_data_.push_back( new_data );
 }//void add_multimedia_data( const MultimediaData &data )
 
 
+void SpecFile::set_multimedia_data( vector<shared_ptr<const MultimediaData>> &data )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  multimedia_data_ = data;
+  modified_ = modifiedSinceDecode_ = true;
+}//void set_multimedia_data( vector<shared_ptr<const MultimediaData>> &data )
+  
+  
 size_t SpecFile::do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform )
 {
@@ -1842,7 +1923,7 @@ void Measurement::truncate_gamma_channels( const size_t keep_first_channel,
     case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
     {
       const auto new_coefs = polynomial_cal_remove_first_channels( n_remove_front, old_coefs );
-      newcal->set_polynomial_no_offset_check( nnewchannel, new_coefs, old_dev );
+      newcal->set_polynomial( nnewchannel, new_coefs, old_dev );
       break;
     }//case Polynomial:
       
@@ -2376,8 +2457,9 @@ void SpecFile::set_title( const std::string &title,
 
 
 void SpecFile::set_contained_neutrons( const bool contained,
-                                             const float counts,
-                                             const std::shared_ptr<const Measurement> meas )
+                                      const float counts,
+                                      const std::shared_ptr<const Measurement> meas,
+                                      const float neutron_live_time )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   std::shared_ptr<Measurement> ptr = measurement( meas );
@@ -2392,10 +2474,15 @@ void SpecFile::set_contained_neutrons( const bool contained,
     ptr->neutron_counts_.resize( 1 );
     ptr->neutron_counts_[0] = counts;
     ptr->neutron_counts_sum_ = counts;
+    if( (neutron_live_time > 0.0f) && !IsInf(neutron_live_time) && !IsNan(neutron_live_time) )
+      ptr->neutron_live_time_ = neutron_live_time;
+    else
+      ptr->neutron_live_time_ = 0.0f;
   }else
   {
     ptr->neutron_counts_.resize( 0 );
     ptr->neutron_counts_sum_ = 0.0;
+    ptr->neutron_live_time_ = 0.0f;
   }
   
   modified_ = modifiedSinceDecode_ = true;
@@ -3006,6 +3093,16 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
     issues.push_back( buffer );
   }
   
+  const float lhs_neut_lt = lhs.neutron_live_time();
+  const float rhs_neut_lt = rhs.neutron_live_time();
+  if( fabs(lhs_neut_lt - rhs_neut_lt) > (0.001f*std::max(fabs(lhs_neut_lt),fabs(rhs_neut_lt))) )
+  {
+    snprintf( buffer, sizeof(buffer),
+             "Measurement: Neutron live time of LHS (%1.8E) doesnt match RHS (%1.8E)",
+             lhs_neut_lt, rhs_neut_lt );
+    issues.push_back( buffer );
+  }
+  
   if( fabs(lhs.neutron_counts_sum_ - rhs.neutron_counts_sum_) > (0.00001*std::max(fabs(lhs.neutron_counts_sum_),fabs(rhs.neutron_counts_sum_))) )
   {
     snprintf( buffer, sizeof(buffer),
@@ -3082,10 +3179,10 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
 #if( !REQUIRE_REMARKS_COMPARE )
     cerr << buffer << endl;
 #endif
-    for( size_t i = 0; i < nlhsremarks.size(); ++i )
-      cerr << "\tLHS: '" << nlhsremarks[i] << "'" << endl;
-    for( size_t i = 0; i < nrhsremarks.size(); ++i )
-      cerr << "\tRHS: '" << nrhsremarks[i] << "'" << endl;
+    //for( size_t i = 0; i < nlhsremarks.size(); ++i )
+    //  cerr << "\tLHS: '" << nlhsremarks[i] << "'" << endl;
+    //for( size_t i = 0; i < nrhsremarks.size(); ++i )
+    //  cerr << "\tRHS: '" << nrhsremarks[i] << "'" << endl;
     
 #if( REQUIRE_REMARKS_COMPARE )
     issues.push_back( buffer );
@@ -3281,7 +3378,7 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
           num_channel_warnings += 1;
           if( num_channel_warnings == 5 )
           {
-            issues.push_back( "Measurement: There are additional channel that doent match, but error messages will be suppressed." );
+            issues.push_back( "Measurement: There are additional channel that doesnt match, but error messages will be suppressed." );
             break;
           }else if( num_channel_warnings < 5 )
           {
@@ -3766,7 +3863,7 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
       ireplace_all( r, "  ", " " );
     
     if( !starts_with(r,"N42 file created by") )
-      nlhsremarkss.push_back( r );
+      nlhsremarkss.push_back( SpecUtils::trim_copy( r ) );
   }
   
   for( string r : rhs.remarks_ )
@@ -3775,7 +3872,7 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
       ireplace_all( r, "  ", " " );
     
     if( !starts_with(r,"N42 file created by") )
-      nrhsremarkss.push_back( r );
+      nrhsremarkss.push_back( SpecUtils::trim_copy( r ) );
   }
   
   
@@ -3784,9 +3881,9 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     if( find(begin(nlhsremarkss), end(nlhsremarkss), rem) == end(nlhsremarkss) )
     {
 #if( REQUIRE_REMARKS_COMPARE )
-      issues.push_back( "SpecFile: RHS contains remark LHS doesnt: " + rem );
+      issues.push_back( "SpecFile: RHS contains remark LHS doesnt: '" + rem + "'" );
 #else
-      cerr << "SpecFile: RHS contains remark LHS doesnt: " + rem << endl;
+      cerr << "SpecFile: RHS contains remark LHS doesnt: '" + rem + "'" << endl;
 #endif
     }//if( rem not in nlhsremarkss )
   }//for( const string &rem : nrhsremarkss )
@@ -3796,9 +3893,9 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
     if( find(begin(nrhsremarkss), end(nrhsremarkss), rem) == end(nrhsremarkss) )
     {
 #if( REQUIRE_REMARKS_COMPARE )
-      issues.push_back( "SpecFile: LHS contains remark RHS doesnt: " + rem );
+      issues.push_back( "SpecFile: LHS contains remark RHS doesnt: '" + rem + "'" );
 #else
-      cerr << "SpecFile: LHS contains remark RHS doesnt: " + rem << endl;
+      cerr << "SpecFile: LHS contains remark RHS doesnt: '" + rem + "'" << endl;
 #endif
     }//if( rem not in nrhsremarkss )
   }//for( const string &rem : nlhsremarkss )
@@ -4205,6 +4302,7 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   sample_number_ = rhs.sample_number_;
   occupied_ = rhs.occupied_;
   gamma_count_sum_ = rhs.gamma_count_sum_;
+  neutron_live_time_ = rhs.neutron_live_time_;
   neutron_counts_sum_ = rhs.neutron_counts_sum_;
   
   detector_name_ = rhs.detector_name_;
@@ -4334,9 +4432,15 @@ bool SpecFile::load_file( const std::string &filename,
       break;
 
     case ParserType::CaenHexagonGXml:
-      success = load_caen_gxml_file(filename);
+      success = load_caen_gxml_file( filename );
       break;
-
+      
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case ParserType::Uri:
+      success = load_uri_file( filename );
+      break;
+#endif
+      
     case ParserType::MicroRaider:
       success = load_json_file( filename );
     break;
@@ -4354,10 +4458,10 @@ bool SpecFile::load_file( const std::string &filename,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
           triedLzs = false, triedXmlScanData = false, triedJson = false,
-          tried_gxml = false, triedRadiaCode = false;
+          tried_gxml = false, triedRadiaCode = false, tried_uri = false;
       
       if( orig_file_ending.empty() )
-	    orig_file_ending = filename;
+        orig_file_ending = filename;
 
       if( !orig_file_ending.empty() )
       {
@@ -4511,21 +4615,30 @@ bool SpecFile::load_file( const std::string &filename,
         }//if( orig_file_ending=="xml" || orig_file_ending=="rco")
 
 
-        if (orig_file_ending == "json")
+        if( orig_file_ending == "json" )
         {
           triedJson = true;
           success = load_json_file(filename);
-          if (success) break;
+          if( success ) break;
         }//if( orig_file_ending=="xml" )
 
 
-        if (orig_file_ending == "gxml")
+        if( orig_file_ending == "gxml" )
         {
           tried_gxml = true;
           success = load_caen_gxml_file(filename);
-          if (success) break;
+          if( success ) break;
         }//if( orig_file_ending=="gxml" )
 
+        
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+        if( istarts_with(filename, "raddata://") || (orig_file_ending == "uri") )
+        {
+          tried_uri = true;
+          success = load_uri_file(filename);
+          if( success ) break;
+        }//if( orig_file_ending=="gxml" )
+#endif
       }//if( !orig_file_ending.empty() ) / else
 
       if( !success && !triedSpc )
@@ -4594,6 +4707,11 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !tried_gxml )
         success = load_caen_gxml_file( filename );
       
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+      if( !success && !tried_uri )
+        success = load_uri_file( filename );
+#endif
+      
       if( !success && !triedRadiaCode )
         success = load_radiacode_file( filename );
       
@@ -4629,7 +4747,8 @@ bool comp_by_start_time_source( const std::shared_ptr<Measurement> &lhs,
   return (left < right);
 }
 
-void  SpecFile::set_sample_numbers_by_time_stamp()
+void SpecFile::set_sample_numbers_by_time_stamp( const bool sort_meas_types_separately,
+                                                const bool force_unique )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
 
@@ -4645,7 +4764,7 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
   //  more than 500 measurements - this is because the faster method does not
   //  preserve existing sample numbers
 
-  if( measurements_.size() > 500 )
+  if( (measurements_.size() > 500) || force_unique )
   {
     vector<std::shared_ptr<Measurement>> sorted_meas, sorted_foreground, sorted_calibration, sorted_background, sorted_derived;
 
@@ -4655,6 +4774,12 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
     {
       if( !m )
         continue;
+      
+      if( !sort_meas_types_separately )
+      {
+        sorted_foreground.push_back( m );
+        continue;
+      }
       
       if( m->derived_data_properties() )
       {
@@ -4744,14 +4869,25 @@ void  SpecFile::set_sample_numbers_by_time_stamp()
       
       const int detnum = m->detector_number_;
       
-      if( m->derived_data_properties() )
+      if( !sort_meas_types_separately )
+      {
+        if( is_special(m->start_time_) )
+          invalid_times[detnum].push_back( m );
+        else
+          time_meas_map[m->start_time_][detnum].push_back( m );
+      }else if( m->derived_data_properties() )
+      {
         derived_data[detnum].push_back( m );
-      else if( m->source_type() == SourceType::IntrinsicActivity )
+      }else if( m->source_type() == SourceType::IntrinsicActivity )
+      {
         intrinsics[detnum].push_back( m );
-      else if( is_special(m->start_time_) )
+      }else if( is_special(m->start_time_) )
+      {
         invalid_times[detnum].push_back( m );
-      else
+      }else
+      {
         time_meas_map[m->start_time_][detnum].push_back( m );
+      }
     }//for( auto &m : measurements_ )
     
     //Now for simpleness, lets toss intrinsics, derived_data, and invalid_times into time_meas_map
@@ -4866,7 +5002,7 @@ void SpecFile::ensure_unique_sample_numbers()
     stable_sort( measurements_.begin(), measurements_.end(), &compare_by_derived_sample_det_time );
   }else
   {
-    set_sample_numbers_by_time_stamp();
+    set_sample_numbers_by_time_stamp( true, false );
   }
   
   //XXX - TODO should validate this a little further and check performance
@@ -4874,10 +5010,10 @@ void SpecFile::ensure_unique_sample_numbers()
   //      expensive "fix" below.
   //
   //Here we will check the first two sample number, and if they are '1' and '2'
-  //  repectively, we will not do anything.  If first sample is not 1, but
+  //  respectively, we will not do anything.  If first sample is not 1, but
   //  second sample is 2, we will change first sample to 1.  Otherwise if
   //  first two sample numbers isnt {1,2}, we will change all sample numbers to
-  //  start at 1 and increase continuosly by 1.
+  //  start at 1 and increase continuously by 1.
   //  (note: this mess of logic is "inspired" by heuristics, and that actually
   //   looping through all measurements of a large file is expensive)
   set<int> sample_numbers;
@@ -4953,6 +5089,14 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
   
   const bool rebinToCommonBinning = (flags & RebinToCommonBinning);
   
+  
+  const bool dont_reorder = (flags & DontChangeOrReorderSamples);
+  const bool reorder_by_time = (flags & ReorderSamplesByTime);
+  
+  assert( (dont_reorder + reorder_by_time) <= 1 );
+  if( (dont_reorder + reorder_by_time) > 1 )
+    throw std::logic_error( "SpecFile::cleanup_after_load: you may only specify one ordering; "
+                           "options received=" + std::to_string(flags) );
   
   //When loading the example passthrough N42 file, this function
   //  take about 60% of the parse time - due almost entirely to
@@ -5115,7 +5259,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
                 switch( othercal->type() )
                 {
                   case EnergyCalType::Polynomial:
-                    newcal->set_polynomial_no_offset_check( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
+                    newcal->set_polynomial( nchannel, othercal->coefficients(), othercal->deviation_pairs() );
                     break;
                     
                   case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
@@ -5218,6 +5362,15 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
       
       meas->contained_neutron_ |= ( (meas->neutron_counts_sum_ > 0.0)
                                      || !meas->neutron_counts_.empty() );
+      
+      assert( meas->contained_neutron_ || (meas->neutron_live_time_ == 0.0f) );
+      if( !meas->contained_neutron_ && (meas->neutron_live_time_ > 0.0f) )
+      {
+#if( PERFORM_DEVELOPER_CHECKS )
+        log_developer_error( __func__, "Found a case where neutron live time was specified, but no neutrons parsed" );
+#endif
+        meas->neutron_live_time_ = 0.0f;
+      }//
     }//for( auto &meas : measurements_ )
     
     
@@ -5235,7 +5388,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
        || !SpecUtils::valid_latitude(mean_latitude_) )
       mean_latitude_ = mean_longitude_ = -999.9;
     
-    if( flags & DontChangeOrReorderSamples )
+    if( reorder_by_time )
+    {
+      set_sample_numbers_by_time_stamp( false, true );
+    }else if( dont_reorder )
     {
       if( !has_unique_sample_and_detector_numbers() )
         properties_flags_ |= kNotUniqueSampleDetectorNumbers;
@@ -5457,7 +5613,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
           const size_t nbinShift = nbin - 1;
           const float channel_width = (max_energy - min_energy) / nbinShift;
           auto new_cal = make_shared<EnergyCalibration>();
-          new_cal->set_polynomial_no_offset_check( nbin, {min_energy,channel_width}, {} );
+          new_cal->set_polynomial( nbin, {min_energy,channel_width}, {} );
           
           for( const auto &meas : measurements_ )
           {
@@ -6043,13 +6199,23 @@ void SpecFile::merge_neutron_meas_into_gamma_meas()
       
       
       //TODO: should check and handle real time being different, as well
-      //      as start time.  Should also look into propogating detecor
+      //      as start time.  Should also look into propagating detector
       //      information and other quantities over.
+      
+      assert( gamma_meas->contained_neutron_ || gamma_meas->neutron_live_time_ == 0.0f );
+      if( !gamma_meas->contained_neutron_ || (gamma_meas->neutron_live_time_ < 0.0f) )
+        gamma_meas->neutron_live_time_ = 0.0f;
       
       gamma_meas->contained_neutron_ = true;
       gamma_meas->neutron_counts_.insert( end(gamma_meas->neutron_counts_),
                                          begin(meas->neutron_counts_), end(meas->neutron_counts_) );
       gamma_meas->neutron_counts_sum_ += meas->neutron_counts_sum_;
+      
+      if( meas->neutron_live_time_ > 0.0f )
+        gamma_meas->neutron_live_time_ += meas->neutron_live_time_;
+      else
+        gamma_meas->neutron_live_time_ += meas->real_time_;
+      
       gamma_meas->remarks_.insert( end(gamma_meas->remarks_),
                                   begin(meas->remarks_), end(meas->remarks_) );
       
@@ -6151,7 +6317,8 @@ void SpecFile::set_detector_type_from_other_info()
   const string &model = instrument_model_;
 //  const string &id = instrument_id_;
   
-  if( icontains(model,"SAM") && (contains(model,"940") || icontains(model,"Eagle+")) )
+  if( icontains(model,"SAM") && (contains(model,"940") || icontains(model,"Eagle+"))
+     && !icontains(manufacturer_,"Princeton") )
   {
     if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
@@ -6163,7 +6330,8 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }
   
-  if( icontains(model,"SAM") && contains(model,"945") )
+  if( icontains(model,"SAM") && contains(model,"945") 
+     && !icontains(manufacturer_,"Princeton") )
   {
     //if( icontains(model,"LaBr") )
       //detector_type_ = Sam945LaBr3;
@@ -6327,6 +6495,15 @@ void SpecFile::set_detector_type_from_other_info()
       return;
     }//if( icontains(model,"R500") )
     
+    if( icontains(model,"R425") )
+    {
+      if( icontains(model,"LG") || icontains(model,"LNG") || icontains(model,"LaBr")  )
+        detector_type_ = DetectorType::IdentiFinderR425LaBr;
+      else
+        detector_type_ = DetectorType::IdentiFinderR425NaI;
+      return;
+    }//if( icontains(model,"R425") )
+    
     if( icontains(model,"NG") || (icontains(model,"2") && !icontains(model,"LG")) )
     {
       detector_type_ = DetectorType::IdentiFinderNG;
@@ -6399,7 +6576,8 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( icontains(model,"RIIDEye") )
   
   
-  if( icontains(model,"SAM940") || icontains(model,"SAM 940") || icontains(model,"SAM Eagle") )
+  if( (icontains(model,"SAM940") || icontains(model,"SAM 940") || icontains(model,"SAM Eagle"))
+     && !icontains(manufacturer_,"Princeton") )
   {
     if( icontains(model,"LaBr") )
       detector_type_ = DetectorType::Sam940LaBr3;
@@ -6416,6 +6594,12 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }
   
+  
+  if( icontains(model,"SAM") && icontains(model,"950") )
+  {
+    detector_type_ = DetectorType::Sam950;
+    return;
+  }
   
   if( (icontains(manufacturer_,"ICx Radiation") || icontains(manufacturer_,"FLIR"))
            && icontains(model,"Raider") )
@@ -6446,7 +6630,9 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( icontains(model,"RadSeeker") )
   
   
-  if( icontains(manufacturer_, "Symetrica") )
+  if( icontains(manufacturer_, "Symetrica") 
+     || SpecUtils::icontains(model, "VeriFinder")
+     || SpecUtils::icontains(model, "Symetrica") )
   {
     // The potential models are:
     //  - SN20:   Handheld RIID, NaI
@@ -6459,6 +6645,10 @@ void SpecFile::set_detector_type_from_other_info()
     const bool isVerifinder = (SpecUtils::icontains(model, "SN2")
                                || SpecUtils::icontains(model, "VeriFinder")
                                || SpecUtils::icontains(model, "SL2") );
+    
+    
+    // model of "SN11" is the "Compact VeriFinder"
+    // model of "SN33" is also possible - looks to be 3x3x3 NaI, so probably the backpack system
     
     if( isVerifinder )
     {
@@ -6507,6 +6697,15 @@ void SpecFile::set_detector_type_from_other_info()
     //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
     //  exist and if its made up of other detectors, get rid of those spectra
   }//
+  
+  if( icontains(instrument_model_, "Fulcrum") )
+  {
+    if( icontains(instrument_model_, "40") )
+      detector_type_ = DetectorType::Fulcrum40h;
+    else
+      detector_type_ = DetectorType::Fulcrum;
+    return;
+  }//if( icontains(instrument_model_, "Fulcrum") )
   
   
   if( manufacturer_.size() || instrument_model_.size() )
@@ -6993,6 +7192,161 @@ size_t SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalib
   return matching_meas.size();
 }//set_energy_calibration(...)
 
+  
+void SpecFile::set_energy_calibration_from_CALp_file( std::istream &infile )
+{
+  const std::streampos start_pos = infile.tellg();
+ 
+  try
+  {
+    // TODO: currently if we have detectors/measurements with different number of channels, then we
+    //       may run into an error if the CALp file gives lower channel energies, but
+    //       `num_gamma_channels()` returned a different number of channels than is required for any
+    //       of the detectors
+    size_t fewest_num_channel = 65537, max_num_channels = 0;
+    
+    // Make a mapping of {detector name, number channels} to energy calibrations we
+    //  will read from the CALp file
+    map<pair<string,size_t>,shared_ptr<EnergyCalibration>> det_to_cal;
+    
+    for( const shared_ptr<Measurement> &m : measurements_ )
+    {
+      const size_t nchan = m->num_gamma_channels();
+      if( nchan > 3 )
+      {
+        fewest_num_channel = std::min( fewest_num_channel, nchan );
+        max_num_channels = std::max( max_num_channels, nchan );
+        det_to_cal[make_pair(m->detector_name_,nchan)] = nullptr;
+      }
+    }//for( const auto &m : measurements_ )
+    
+    if( max_num_channels < 3 )
+      throw runtime_error( "No gamma spectra to apply CALp to." );
+    
+    assert( !det_to_cal.empty() );
+    
+    while( infile.good() )
+    {
+      const std::streampos calp_pos = infile.tellg();
+      
+      string name;
+      shared_ptr<EnergyCalibration> cal;
+      
+      try
+      {
+        cal = energy_cal_from_CALp_file( infile, fewest_num_channel, name );
+      }catch( exception &e )
+      {
+        if( det_to_cal.empty() )
+          throw runtime_error( "CALp file was invalid, or incompatible" );
+        
+        break; //We just reached the end of the file probably, no biggy
+      }//try / catch
+      
+      assert( cal && cal->valid() );
+      assert( cal->type() != SpecUtils::EnergyCalType::InvalidEquationType );
+      
+      // The calibration may not be for the correct number of channels, for files that have detectors
+      //  with different num channels; we'll check for this here and fix the calibration up for this
+      //  case.
+      for( auto &name_nchan_cal : det_to_cal )
+      {
+        const string &meas_det_name = name_nchan_cal.first.first;
+        const size_t nchan = name_nchan_cal.first.second;
+        
+        if( !name.empty() && (meas_det_name != name) )
+          continue;
+        
+        // If we already have the right number of channels, we dont need to do anything
+        //  and can set the energy calibration here
+        if( nchan != fewest_num_channel )
+        {
+          try
+          {
+            switch( cal->type() )
+            {
+              case SpecUtils::EnergyCalType::Polynomial:
+              case SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial:
+                cal->set_polynomial( nchan, cal->coefficients(), cal->deviation_pairs() );
+                break;
+                
+              case SpecUtils::EnergyCalType::FullRangeFraction:
+                cal->set_full_range_fraction( nchan, cal->coefficients(), cal->deviation_pairs() );
+                break;
+                
+              case SpecUtils::EnergyCalType::LowerChannelEdge:
+              {
+                // We will need to re-read the calibration, with the updated number of channels.
+                if( !infile.seekg( calp_pos, ios::beg ) )
+                  throw runtime_error( "Failed to seek the input CALp file stream." );
+                
+                cal = SpecUtils::energy_cal_from_CALp_file( infile, nchan, name );
+                if( !cal )
+                  throw runtime_error( "CALp file is incompatible with detector '" + name + "'"
+                                      " having " + std::to_string(nchan) + " channels." );
+                break;
+              }//case SpecUtils::EnergyCalType::LowerChannelEdge:
+                
+              case SpecUtils::EnergyCalType::InvalidEquationType:
+                throw std::logic_error( "Invalid calibration type???" );
+                break;
+            }//switch( cal->type() )
+          }catch( std::exception &e )
+          {
+            throw runtime_error( "Failed to adjust the number of channels in the CALp file"
+                                " to what detector '" + name + "' required: " + string(e.what()) );
+          }//try / catch
+        }//if( nchan != fewest_num_channel )
+        
+        assert( cal && cal->valid() && (cal->num_channels() == nchan) );
+        
+        name_nchan_cal.second = cal;
+      }//for( const auto &name_nchan_cal : det_to_cal )
+    }//while( infile.good() )
+    
+    
+    // Now lets make sure we have energy calibrations for all measurements
+    for( auto &name_nchan_cal : det_to_cal )
+    {
+      const string &det_name = name_nchan_cal.first.first;
+      const size_t nchan = name_nchan_cal.first.second;
+      const shared_ptr<EnergyCalibration> &cal = name_nchan_cal.second;
+      
+      assert( !cal || cal->valid() );
+      
+      if( !cal || !cal->valid() )
+        throw runtime_error( "Failed to get an energy calibration for detector '" + det_name + "'"
+                            " with " + std::to_string(nchan) + " channels, from the CALp file.");
+    }//for( auto &name_nchan_cal : det_to_cal )
+    
+    // If we are here, we should be good to go
+    for( const auto &m : measurements_ )
+    {
+      const size_t nchan = m->num_gamma_channels();
+      if( nchan <= 3 )
+        continue;
+      
+      const auto pos = det_to_cal.find( make_pair(m->detector_name_, nchan) );
+      assert( pos != end(det_to_cal) );
+      if( pos == end(det_to_cal) )
+        throw std::logic_error( "Logic error retrieving energy calibration - this shouldnt have happened." );
+      
+      const shared_ptr<EnergyCalibration> cal = pos->second;
+      assert( cal && cal->valid() && (cal->num_channels() == nchan) );
+      if( !cal || !cal->valid() || (cal->num_channels() != nchan) )
+        throw std::logic_error( "Logic error with CALp energy calibration - this shouldnt have happened." );
+      
+      m->set_energy_calibration( cal );
+    }//for( const auto &m : measurements_ )
+  }catch( std::exception &e )
+  {
+    // Set the input file back to the original position
+    infile.seekg( start_pos, ios::beg );
+    
+    throw; //re-throw the exception
+  }//try / catch
+}//void set_energy_calibration_from_CALp_file( std::istream &input )
+  
 
 size_t SpecFile::memmorysize() const
 {
@@ -7242,6 +7596,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   dataH->live_time_ = 0.0f;
   dataH->gamma_count_sum_ = 0.0;
   dataH->neutron_counts_sum_ = 0.0;
+  dataH->neutron_live_time_ = 0.0f;
   dataH->sample_number_ = -1;
   if( sample_numbers.size() == 1 )
     dataH->sample_number_ = *begin(sample_numbers);
@@ -7310,7 +7665,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   size_t total_num_gamma_spec = 0;
   set<SourceType> source_types;
   set<string> remarks;
-  float neutron_meas_time = 0.0f;
   for( const int sample_number : sample_numbers )
   {
     for( const string &det : det_names )
@@ -7335,7 +7689,7 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         dataH->neutron_counts_[i] += meas->neutron_counts_[i];
         
       if( meas->contained_neutron() )
-        neutron_meas_time += meas->real_time();
+        dataH->neutron_live_time_ += meas->neutron_live_time();
       
       for( const std::string &remark : meas->remarks_ )
         remarks.insert( remark );
@@ -7741,14 +8095,6 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   if( is_special(dataH->start_time_) )
     dataH->start_time_ = time_point_t{};
   
-  // TODO: This is a hack, putting neutron real time into a string comment
-  if( neutron_meas_time > 0.0f )
-  {
-    char buffer[128];
-    snprintf( buffer, sizeof(buffer), "Neutron Real Time: %.5f s", neutron_meas_time );
-    dataH->remarks_.push_back( buffer );
-  }
-  
   for( const std::string &remark : remarks )
     dataH->remarks_.push_back( remark );
 
@@ -7987,30 +8333,27 @@ set<string> SpecFile::energy_cal_variants() const
 }//set<string> energy_cal_variants() const
 
 
-size_t SpecFile::keep_energy_cal_variant( const std::string variant )
+size_t SpecFile::keep_energy_cal_variants( const std::set<std::string> &variants )
 {
-  const string ending = "_intercal_" + variant;
   std::vector< std::shared_ptr<Measurement> > keepers;
-  
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
   const set<string> origvaraints = energy_cal_variants();
   
-  if( !origvaraints.count(variant) )
+  for( const string &variant : variants )
   {
-    string msg = "SpecFile::keep_energy_cal_variant():"
-    " measurement did not contain an energy variant named '"
-    + variant + "', only contained:";
-    for( auto iter = begin(origvaraints); iter != end(origvaraints); ++iter )
-      msg += " '" + (*iter) + "',";
-    if( origvaraints.empty() )
-      msg += " none";
-    
-    throw runtime_error( msg );
-  }//if( !origvaraints.count(variant) )
-  
-  if( origvaraints.size() == 1 )
-    return 0;
+    if( !origvaraints.count(variant) )
+    {
+      string msg = "SpecFile::keep_energy_cal_variants():"
+      " measurement did not contain an energy variant named '"
+      + variant + "', only contained:";
+      for( auto iter = begin(origvaraints); iter != end(origvaraints); ++iter )
+        msg += " '" + (*iter) + "',";
+      if( origvaraints.empty() )
+        msg += " none";
+      
+      throw runtime_error( msg );
+    }//if( !origvaraints.count(variant) )
+  }//for( const string &variant : variants )
   
   keepers.reserve( measurements_.size() );
   
@@ -8021,14 +8364,21 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
     if( pos == string::npos )
     {
       keepers.push_back( ptr );
-    }else if( ((pos + ending.size()) == detname.size())
-               && (strcmp(detname.c_str()+pos+10,variant.c_str())==0) )
+    }else
     {
-      ptr->detector_name_ = detname.substr( 0, pos );
-      keepers.push_back( ptr );
-    }
-    //else
-      //cout << "Getting rid of: " << detname << endl;
+      for( const string &variant : variants )
+      {
+        const size_t ending_size = variant.size() + 10; // 10 == ("_intercal_" + variant).size()
+        assert( ending_size == ("_intercal_" + variant).size() );
+        
+        if( ((pos + ending_size) == detname.size())
+           && (strcmp(detname.c_str()+pos+10,variant.c_str())==0) )
+        {
+          ptr->detector_name_ = detname.substr( 0, pos );
+          keepers.push_back( ptr );
+        }
+      }//for( const string &variant : variants )
+    }//if( not an energy cal variant ) / else
   }//for( auto &ptr : measurements_ )
   
   measurements_.swap( keepers );
@@ -8037,7 +8387,7 @@ size_t SpecFile::keep_energy_cal_variant( const std::string variant )
   modified_ = modifiedSinceDecode_ = true;
   
   return (keepers.size() - measurements_.size());
-}//void keep_energy_cal_variant( const std::string variant )
+}//void keep_energy_cal_variants( const std::string variant )
 
 
 size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep tokeep )
@@ -8078,6 +8428,7 @@ size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep
   }//for( auto &ptr : measurements_ )
   
   measurements_.swap( keepers );
+  uuid_.clear();
   cleanup_after_load();
   
   modified_ = modifiedSinceDecode_ = true;
@@ -8085,7 +8436,35 @@ size_t SpecFile::keep_derived_data_variant( const SpecFile::DerivedVariantToKeep
   return (keepers.size() - measurements_.size());
 }//size_t SpecFile::keep_derived_data_variant( const DerivedVariantToKeep tokeep )
 
+  
+size_t SpecFile::remove_detectors_data( const set<string> &dets_to_remove )
+{
+  if( dets_to_remove.empty() )
+    return 0;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+ 
+  for( const string &det : dets_to_remove )
+  {
+    if( std::find(begin(detector_names_), end(detector_names_), det) == end(detector_names_) )
+      throw runtime_error( "SpecFile::remove_detectors_data: invalid detector name '" + det + "'" );
+  }//for( const string &det : detectors )
+  
+  const size_t norig = measurements_.size();
+  
+  measurements_.erase( std::remove_if( begin(measurements_), end(measurements_),
+    [&dets_to_remove]( const shared_ptr<Measurement> &m ) -> bool {
+      return (dets_to_remove.count(m->detector_name_) > 0);
+    } ), end(measurements_) );
+  
+  cleanup_after_load();
+  
+  modified_ = modifiedSinceDecode_ = true;
+  
+  return (norig - measurements_.size());
+}//size_t remove_detectors_data( const std::set<std::string> detectors )
 
+  
 int SpecFile::background_sample_number() const
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -8406,6 +8785,7 @@ void SpecFile::write( std::ostream &strm,
       break;
     }
 #endif
+      
 #if( SpecUtils_INJA_TEMPLATES )
     case SaveSpectrumAsType::Template:  
     {
@@ -8415,6 +8795,16 @@ void SpecFile::write( std::ostream &strm,
       break;
     }
 #endif
+      
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    case SaveSpectrumAsType::Uri:
+    {
+      const size_t num_uri = 1;
+      success = info.write_uri( strm, num_uri, SpecUtils::EncodeOptions::UseUrlSafeBase64 );
+      break;
+    }
+#endif
+      
     case SaveSpectrumAsType::NumTypes:
       throw runtime_error( "Invalid output format specified" );
       break;

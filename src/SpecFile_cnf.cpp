@@ -596,9 +596,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
       for( const float v : cal_coefs )
         allZeros = allZeros && (v == 0.0f);
       
-      // Alpha spectra will have offsets of like 2500 keV, which will cause the exception from
-      //  #EnergyCalibration::set_polynomial.  So we'll check if this is maybe an alpha spectrum,
-      //  and if so, use #EnergyCalibration::set_polynomial_no_offset_check
+      // We could check if this is a alpha spectra or not...
+      /*
       bool is_alpha_spec = false;
       if( !allZeros )
       {
@@ -613,23 +612,15 @@ bool SpecFile::load_from_cnf( std::istream &input )
             input.seekg( segment_position, std::ios::beg );
             if( input.read( &(buffer[0]), 512 ) && (buffer.find("Alpha") != string::npos) )
             {
-              try
-              {
-                auto newcal = make_shared<EnergyCalibration>();
-                newcal->set_polynomial_no_offset_check( num_channels, cal_coefs, {} );
-                meas->energy_calibration_ = newcal;
-                is_alpha_spec = true;
-              }catch( std::exception &e )
-              {
-              }
-              
+              is_alpha_spec = true;
               break;
             }//if( we found the segment, and it had "Alpha" in it )
           }//if( find segment )
         }//for( loop over potential segments that might have "Alpha" in them )
       }//if( !allZeros )
+      */
       
-      if( !allZeros && !is_alpha_spec )
+      if( !allZeros )
         throw runtime_error( "Calibration parameters were invalid" );
     }//try /catch set calibration
     
@@ -1044,7 +1035,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         else //use the Ge defualts
         {
             enter_CAM_value(1.0, cnf_file, acqp_loc + 0x3C6, cam_type::cam_float);
-            enter_CAM_value(0.3, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
+            enter_CAM_value(0.035, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
         }
 
         //energy calibration

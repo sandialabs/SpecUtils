@@ -97,9 +97,16 @@ namespace  SpecUtils
   bool istarts_with( const std::string &line, const std::string &label );
   
   /** \brief Returns if the input ends with the specified substr, case
-   independant; is not UTF8 or locale aware.
+   independent; is not UTF8 or locale aware.
    */
   bool iends_with( const std::string &line, const std::string &label );
+  
+  /** \brief Case-insensitively finds the substring in the input.
+   
+   @returns The index of the first occurrence of `substr` in `input`.
+            If `substr` is not in `input`, then returns `std::string::npos`.
+   */
+  size_t ifind_substr_ascii( const std::string &input, const char * const substr );
   
   /** \brief Removes any character in chars_to_remove from line; is not UTF8 or
    locale aware.
@@ -259,19 +266,19 @@ namespace  SpecUtils
    \param cambio_zero_compress_fix In Cambio N42 files zeros written like "0"
    indicates zeroes compression, a zero written like "0.000", "-0.0", etc are
    all a single bin with content zero - so for this case, if you specify
-   cambio_zero_compress_fix this function substitures a really small number
+   cambio_zero_compress_fix this function substitutes a really small number
    (FLT_MIN) in place of zero so zero-decompression wont decompress that
    channel.
    \returns True if all characters in the string were either delimiters or were
    interpreted as part of a float, and the entire string was consumed (eg
-   there were no extra non-delimeter characters hanging on the end of the
+   there were no extra non-delimiter characters hanging on the end of the
    string).  A false return value indicates parsing failed one of these
-   conditions.
+   conditions. Strings like "3,-0.1.7,9.3" will yield 3 values, and return false.
    
    \code{.cpp}
    std::vector<float> contents;
    if( split_to_floats( "7.990,3,5 7 8", contents, ", ", false ) )
-   cout << "Succesed in parsing" <<endl;
+   cout << "Succeeded in parsing" << endl;
    assert( contents.size() == 5 );
    assert( contents[0] == 7.99f );
    assert( contents[4] == 8.0f );
@@ -305,6 +312,9 @@ namespace  SpecUtils
    such as 5.0E9.  The other implementation of this function is not effected
    by this potential issue (not this has not been seen to happen on channel
    counts of gamma data by wcjohns).
+   
+   Note that currently (as of 20240307) that strings like "661.7,-0.1.7,9.3", will parse
+   into 4 numbers {661.6,-0.1,0.7,9.3}, and this function will return true.
    
    \TODO: Investigate performance of using:
      - https://github.com/fastfloat/fast_float
@@ -359,6 +369,21 @@ namespace  SpecUtils
   std::wstring convert_from_utf8_to_utf16( const std::string &str );
  
 
+  /** \brief Prints the floating point value into its most compact form, for the specified
+   number of significant figures.
+   
+   Prints the most compact string representation of the value, with at least the specified
+   number of significant figures; if more significant figures can be included without increasing
+   result length, they will be included.
+   
+   Uses the "round to nearest and ties to even" convention.
+   
+   Note: this function is hand-rolled, and extremely slow, and likely missing some edge cases or
+         something.  There is likely a much more elegant and correct implementation for this.
+   */
+  std::string printCompact( const double value, const size_t sig_figs );
+  
+  
   /** \brief Turns a set of numbers with possible many sub-sequences with values
    that are adjacent into a convenient human-readable string.
    

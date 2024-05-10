@@ -193,7 +193,8 @@ bool SpecFile::load_from_aram( std::istream &input )
         if( xml_value_to_flt( XML_FIRST_ATTRIB(neutron_counts, "realtime"), real_time ) )
           fore_meas->remarks_.push_back( "Neutron real time: " + std::to_string(real_time/1000.0) + "s" );
         if( xml_value_to_flt( XML_FIRST_ATTRIB(neutron_counts, "livetime"), live_time ) )
-          fore_meas->remarks_.push_back( "Neutron live time: " + std::to_string(live_time/1000.0) + "s" );
+          fore_meas->neutron_live_time_ = live_time/1000.0;
+          //fore_meas->remarks_.push_back( "Neutron live time: " + std::to_string(live_time/1000.0) + "s" );
       }
     }//if( neutron_counts )
     

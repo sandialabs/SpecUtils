@@ -800,7 +800,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( line.empty() )
       continue;
     
-    ++nlines_total;
+    if( ++nlines_total > 75 )
+    {
+      // If its been more than 75 non-empty lines, and we still havent gotten to the spectrum,
+      //  its probably not a CSV/TXT spectrum file
+      //  75 is chosen so RadAssist files will read in, but .NCF files wont
+      throw runtime_error( "To many lines of info before spectrum data" );
+    }//if( ++nlines_total > 25 )
     
     vector<string> split_fields, fields;
     
@@ -825,7 +831,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if(simple_isdigit(fields[0][0]) )
+    if( simple_isdigit(fields[0][0]) )
     {
       //Check if we have a valid column map defined yet, either because it is empty, or it has one
       //  entry that is not counts.  This can happen if there was a header that was only partially
@@ -989,8 +995,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       auto energies = make_shared<vector<float>>();
       
       //After we hit a line that no longer starts with numbers, we actually want
-      // to leave istr at the beggining of that line so if another spectrum
-      // comes aftwards, we wont lose its first line of information
+      // to leave istr at the beginning of that line so if another spectrum
+      // comes afterwards, we wont lose its first line of information
       istream::pos_type position = istr.tellg();
       
       do
@@ -1285,6 +1291,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( !(stringstream(fields[1]) >> neutron_counts_sum_) )
           throw runtime_error( "Invalid neutroncount: " + fields[1] );
         contained_neutron_ = true;
+        //neutron_live_time_ is same as gamma live time, so we wont fill out
       }
     }else if( starts_with( fields[0], "samplenumber" ) )
     {

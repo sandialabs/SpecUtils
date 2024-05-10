@@ -221,6 +221,7 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
           meas->remarks_.push_back( "NeutronCountRate: " + neutroncountstr + " (error computing gross count)" ); //meh, should be fine...
         
         meas->neutron_counts_sum_ = neutrons;
+        //meas->neutron_live_time_ is same as measurement time
         meas->neutron_counts_[0] = neutrons;
         meas->contained_neutron_ = true;
       }else

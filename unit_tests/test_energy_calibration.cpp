@@ -320,3 +320,71 @@ BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
 }//BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
 
 
+BOOST_AUTO_TEST_CASE( testCALpFile )
+{
+  string calp_contents = R"(#PeakEasy CALp File Ver:  4.00
+Offset (keV)           :  1.50000e+00
+Gain (keV / Chan)      :  3.00000e+00
+2nd Order Coef         :  0.00000e+00
+3rd Order Coef         :  0.00000e+00
+4th Order Coef         :  0.00000e+00
+Deviation Pairs        :  5
+7.70000e+01 -1.00000e+00
+1.22000e+02 -5.00000e+00
+2.39000e+02 -5.00000e+00
+6.61000e+02 -2.90000e+01
+2.61400e+03  0.00000e+00
+#END)";
+  
+  stringstream input( calp_contents );
+
+
+  string det_name;
+  size_t num_channels = 1024;
+  shared_ptr<EnergyCalibration> cal;
+  
+  BOOST_CHECK_NO_THROW( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ) );
+  BOOST_REQUIRE_MESSAGE( !!cal, "Failed to read basic CALp file" );
+  
+  BOOST_CHECK( cal->valid() );
+  BOOST_CHECK_EQUAL( static_cast<int>(cal->type()), static_cast<int>(SpecUtils::EnergyCalType::Polynomial) );
+  BOOST_CHECK_EQUAL( cal->num_channels(), num_channels );
+  BOOST_CHECK_EQUAL( cal->deviation_pairs().size(), 5 );
+  BOOST_CHECK_EQUAL( cal->coefficients().size(), 2 );
+
+  BOOST_REQUIRE( cal->coefficients().size() >= 2 );
+  BOOST_CHECK_EQUAL( cal->coefficients()[0], 1.5 );
+  BOOST_CHECK_EQUAL( cal->coefficients()[1], 3.0 );
+
+  BOOST_REQUIRE( cal->deviation_pairs().size() == 5 );
+  BOOST_CHECK_EQUAL( cal->deviation_pairs()[0].first, 77.0f );
+  BOOST_CHECK_EQUAL( cal->deviation_pairs()[0].second, -1.0f );
+  BOOST_CHECK_EQUAL( cal->deviation_pairs()[1].first, 122.0f );
+  BOOST_CHECK_EQUAL( cal->deviation_pairs()[1].second, -5.0f );
+  //...
+  BOOST_CHECK_EQUAL( cal->deviation_pairs()[4].first, 2614.0f );
+  BOOST_CHECK_EQUAL( cal->deviation_pairs()[4].second, 0.0f );
+
+  // Test an invalid calibration specified in the CALp file
+  calp_contents = R"(#PeakEasy CALp File Ver:  4.00
+Offset (keV)           :  1.50000e+00
+Gain (keV / Chan)      :  -3.00000e+00
+2nd Order Coef         :  0.00000e+00
+3rd Order Coef         :  0.00000e+00
+4th Order Coef         :  0.00000e+00
+#END)";
+  input.str( calp_contents );
+  cal = nullptr;
+  BOOST_CHECK_THROW( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ), std::exception );
+  BOOST_CHECK( !cal );
+
+  // Test an empty CALp file
+  calp_contents = R"()";
+  input.str( calp_contents );
+  input.clear();
+  BOOST_CHECK_THROW( SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ), std::exception );
+
+  // TODO: add tests a multiple named detector demo, and then tests for `SpecFile::set_energy_calibration_from_CALp_file(...)`
+  //       could/should also add tests for other calibration types
+
+}//BOOST_AUTO_TEST_CASE( testCALpFile )

@@ -795,7 +795,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       double ns = meas.neutron_counts_sum();
       if( ns <= 0.0 || IsInf(ns) || IsNan(ns) )
         ns = 0.0;
-      ostr << ns << ",";
+      ostr << ns << ",neutronLiveTime:" << meas.neutron_live_time() << ",";
     }else
     {
       ostr << "null,";
@@ -847,7 +847,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "],";
     }//
     
-    ostr << std::setprecision(oldprecision);
+    ostr << std::setprecision(static_cast<int>(oldprecision));
     
     
     // foreground y-point values

@@ -27,18 +27,18 @@
 #include <iostream>
 #include <fstream>
 
+#include <boost/date_time/date.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+
 #define BOOST_TEST_MODULE TestTimeFromString
 #include <boost/test/unit_test.hpp>
 
 //#define BOOST_TEST_DYN_LINK
 // To use boost unit_test as header only (no link to boost unit test library):
 //#include <boost/test/included/unit_test.hpp>
-
-
-#include <boost/date_time/date.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/date_time/gregorian/gregorian.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 
 
 #include "SpecUtils/DateTime.h"
@@ -141,7 +141,7 @@ void compare_from_str( const string test, const string truth )
 void minimalTestFormats()
 {
   // datetimes.txt contains an extensive collection of formats and variants, but
-  //  since it isnt distributed in the repo, here is a minimal collection of formats
+  //  for concreteness, here is a minimal collection of formats
   //compare_from_str( "15-May-14 08:30:44 pm",  "20140515T203044" );
   //compare_from_str( "15-May-14 08:30:44 Pm",  "20140515T203044" );
   //cerr << "Only ran a couple tests for MinGW" << endl;
@@ -261,6 +261,7 @@ void minimalTestFormats()
   compare_from_str( "22-Mar-1999 05.06.07.000008", "19990322T050607.000008" );
   compare_from_str( "22-Mar-1999 05.06.07.0000088", "19990322T050607.000008" );
   compare_from_str( "22-Mar-1999 05.06.07.00000888 PM", "19990322T170607.000008" );
+  
   
   //Locale en_US : English, United States
   compare_from_str( "March 22, 1999", "19990322T000000" );
@@ -425,10 +426,11 @@ void minimalTestFormats()
 }//void minimalTestFormats()
 
 
-BOOST_AUTO_TEST_CASE(timeFromString) 
+BOOST_AUTO_TEST_CASE(timeFromString)
 {
   minimalTestFormats();
   
+  // "datetimes.txt" contains a lot of date/times that could be seen in spectrum files
   string indir, input_filename = "";
 
   const int argc = framework::master_test_suite().argc;
@@ -443,6 +445,11 @@ BOOST_AUTO_TEST_CASE(timeFromString)
     indir,
     "",
     ".",
+    "./test_data/",
+    "./unit_tests/test_data/",
+    "../unit_tests/test_data/",
+    "../../unit_tests/test_data/",
+    "../../../unit_tests/test_data/",
     "../../testing/",
     "../../../testing/",
     "../../../../testing/",

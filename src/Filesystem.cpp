@@ -36,14 +36,16 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
-#include <pathcch.h>
+//#include <pathcch.h>
 #include <Lmcons.h>
 #include <direct.h>
 #include <io.h>
 #include <shlwapi.h>
 //We will need to link to Shlawapi.lib, which I think uncommenting the next line would do... untested
 #pragma comment(lib, "Shlwapi.lib")
+#if( WINVER >= 0x0601 )
 #pragma comment(lib,"pathcch.lib") 
+#endif
 #elif __APPLE__
 #include <sys/time.h>
 #include <sys/sysctl.h>
@@ -260,13 +262,14 @@ bool is_file( const std::string &name )
 {
 #ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
-  //ifstream file( wname.c_str() );
-  //return file.good();
+  ifstream file( wname.c_str() );
+  return file.good();
   
-  struct _stat statbuf;
-  _wstat( wname.c_str(), &statbuf);
-  return S_ISREG(statbuf.st_mode) && ((statbuf.st_mode & _S_IREAD) == _S_IREAD);
-  //return (_waccess(wname.c_str(), 0x04) == 0) && !S_ISDIR(statbuf.st_mode);  //0x04 checks for read
+  // The below fails on Windows XP
+  //struct _stat statbuf;
+  //_wstat( wname.c_str(), &statbuf);
+  //return S_ISREG(statbuf.st_mode) && ((statbuf.st_mode & _S_IREAD) == _S_IREAD);
+  ////return (_waccess(wname.c_str(), 0x04) == 0) && !S_ISDIR(statbuf.st_mode);  //0x04 checks for read
 #else
   struct stat statbuf;
 
@@ -313,10 +316,12 @@ bool is_directory( const std::string &name )
 {
 #ifdef _WIN32
   const std::wstring wname = convert_from_utf8_to_utf16( name );
-  //could also use PathIsDirectoryW
-  struct _stat statbuf;
-  _wstat( wname.c_str(), &statbuf);
-  return S_ISDIR(statbuf.st_mode);
+  return PathIsDirectoryW( wname.c_str() );
+  
+  // Below doesnt work for WinXP
+  //struct _stat statbuf;
+  //_wstat( wname.c_str(), &statbuf);
+  //return S_ISDIR(statbuf.st_mode);
 #else
   struct stat statbuf;
   
@@ -653,14 +658,28 @@ size_t file_size( const std::string &path )
 {
 #ifdef _WIN32
   std::wstring wpath = convert_from_utf8_to_utf16( path );
+  
+#if( WINVER <= 0x0501 )
+  if( PathIsDirectoryW( wpath.c_str() ) )
+    return 0;
+
+  ifstream file(wpath.c_str());
+  if( !file.good() )
+	return 0;
+
+  file.seekg(0, ios::end);
+  return static_cast<size_t>(file.tellg());
+#else
+  // Doesnt work in Win XP
   struct _stat st;
   if( _wstat( wpath.c_str(), &st) < 0 )
     return 0;
-  
+
   if( S_ISDIR(st.st_mode) )
     return 0;
   
   return st.st_size;
+#endif
 #else
   struct stat st;
   if( stat(path.c_str(), &st) < 0 )
