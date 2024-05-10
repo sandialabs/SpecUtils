@@ -152,7 +152,7 @@ int main( int argc, char **argv )
   
   //test_base_directory: the directory where the test file structure is based.
 #if( !defined(WIN32) )
-  string test_base_directory = "/Users/wcjohns/rad_ana/InterSpec/testing/SpectrumFileFormats/file_format_test_spectra";
+  string test_base_directory = "/Users/wcjohns/rad_ana/SpectrumFileFormats/file_format_test_spectra";
 #else
   string test_base_directory = "Z:\\wcjohns\\rad_ana\\InterSpec\\testing\\SpectrumFileFormats\\file_format_test_spectra";
 #endif
