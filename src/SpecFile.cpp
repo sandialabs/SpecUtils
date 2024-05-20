@@ -815,7 +815,6 @@ void SpecFile::add_remark( const std::string &remark )
   remarks_.push_back( remark );
   modified_ = modifiedSinceDecode_ = true;
 }
-  
 
 void Measurement::set_parse_warnings(const std::vector<std::string>& warnings)
 {
@@ -4517,7 +4516,7 @@ bool SpecFile::load_file( const std::string &filename,
           if( success ) break;
         }//if( orig_file_ending=="chn" )
         
-        if( orig_file_ending=="tka" )
+        if( orig_file_ending=="tka" || orig_file_ending=="jac" )
         {
           triedTka = true;
           success = load_tka_file( filename );

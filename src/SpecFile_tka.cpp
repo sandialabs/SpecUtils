@@ -132,6 +132,25 @@ bool SpecFile::load_from_tka( std::istream &input )
     if( livetime > (realtime+FLT_EPSILON) || livetime<0.0f || realtime<0.0f || livetime>2592000.0f || realtime>2592000.0f )
       throw runtime_error( "Livetime or realtime invalid" );
     
+    // There is a .JAC file format that is almost the same as .tka files, but the third line
+    //  is a date time, like "2023-02-18 14:10:08".  So we'll check for this third line
+    //  and if it isnt a date time, we'll go back to our current position.
+    const istream::pos_type after_time_pos = input.tellg();
+    SpecUtils::time_point_t start_time{};
+    try
+    {
+      string line;
+      if( !SpecUtils::safe_get_line( input, line, 128 ) )
+        throw std::exception();
+      start_time = SpecUtils::time_from_string( line );
+      if( SpecUtils::is_special(start_time) )
+        throw std::exception();
+    }catch( std::exception & )
+    {
+      // We failed to read a date/time - not a JAC file
+      input.seekg( after_time_pos, ios::beg );
+    }//try / catch
+    
     double countssum = 0.0;
     auto channel_counts = make_shared<vector<float>>();
     while( (rval = get_next_number(dummy)) >= 0 )
@@ -152,6 +171,7 @@ bool SpecFile::load_from_tka( std::istream &input )
     meas->live_time_ = livetime;
     meas->gamma_count_sum_ = countssum;
     meas->gamma_counts_ = channel_counts;
+    meas->start_time_ = start_time;
     
     measurements_.push_back( meas );
     
