@@ -1066,6 +1066,9 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   this.updateLegend();
   this.drawScalerBackgroundSecondary();
 
+  if( this.options.showXAxisSliderChart && !this.sliderChart )
+    this.drawXAxisSliderChart();
+
   this.redraw()();
 }
 
@@ -5404,6 +5407,26 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     //   .attr("transform", "translate(0,0)")
     //   .attr("clip-path", "url(#sliderclip" + this.chart.id + ")");
 
+    // Add a close icon in upper right-hand side of self.sliderChart 
+    self.sliderClose = self.sliderChart.append("g").on("click", function(event){
+      console.log( "close clicked" );
+      self.cancelXAxisSliderChart();
+      self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, false );
+    });
+    
+    let cross = self.sliderClose.append("g");
+    self.sliderClose.append("rect").attr("width", 10).attr("height", 10).style( { "fill-opacity": 0.0, "fill": axiscolor } );
+    cross.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 8).attr("y2", 8);
+    cross.append("line").attr("x1", 8).attr("y1", 1).attr("x2", 1).attr("y2", 8);
+    cross.style( {"stroke-width": 1.0, "stroke": axiscolor, "stroke-opacity":  0.15 });
+    
+    // TODO: do this lightening/darkening in CSS
+    self.sliderClose.on("mouseover", function(){ cross.style( {"stroke-width": 1.5, "stroke": axiscolor, "stroke-opacity":  1 }); } )
+    .on("mouseout", function(){ cross.style( {"stroke-width": 1.5, "stroke": axiscolor, "stroke-opacity":  0.15 }); } );
+
+    //TODO: add a icon to show energy slider at bottom right.
+    //TODO: set self.sliderClose to null in cancelXAxisSliderChart().
+    //TODO: put showing this close icon, and the open icon, behind some preference
   }
 
   self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
@@ -5497,6 +5520,8 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
   self.sliderDragRight.attr("x", (sliderBoxX + sliderBoxWidth) - (Number(self.sliderDragRight.attr("width"))/2))
     .attr("y", self.size.sliderChartHeight/2 - Number(self.sliderDragRight.attr("height"))/2);
+
+  self.sliderClose.attr("transform","translate(" + (self.size.width) + "," + (-self.size.sliderChartHeight/2 + 10) + ")");
 
   self.drawSliderChartLines();
   drawDragRegionLines();
