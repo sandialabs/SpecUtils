@@ -269,7 +269,7 @@ namespace
   }//add_multimedia_data_to_2012_N42(...)
 
 
-  bool set_multimedia_data( SpecUtils::MultimediaData &data,
+  bool set_multimedia_data_from_xml( SpecUtils::MultimediaData &data,
                             const rapidxml::xml_node<char> * const multimedia_node )
   {
     if( !multimedia_node )
@@ -336,9 +336,9 @@ namespace
       return false;
     
     return true;
-  }//set_multimedia_data(...)
+  }//set_multimedia_data_from_xml(...)
 
-}//anonomous namespace for XML utilities
+}//anonymous namespace for XML utilities
 
 
 //getCalibrationToSpectrumMap(...): builds map from the binning shared vector to
@@ -2410,12 +2410,17 @@ void N42CalibrationCache2006::get_spectrum_energy_cal( const rapidxml::xml_node<
         string idid = haveids.first;
         idid = idid.size()>1 ? idid.substr(0,2) : idid;
       
+        bool matched = false;
         for( string calid : cal_ids )
         {
           calid = calid.size()>1 ? calid.substr(0,2) : calid;
-          if( calid == idid )
-            cal_ids.push_back( haveids.first );
+          matched = (calid == idid);
+          if( matched )
+            break;
         }
+        
+        if( matched )
+          cal_ids.push_back( haveids.first );
       }//for( const auto &haveids : m_id_cal_raw )
     }//if( !is_match )
   }//end lock on m_mutex
@@ -3905,7 +3910,8 @@ public:
           auto det_iter = id_to_dettype_ptr->find( meas->detector_name_ );
           if( det_iter == end(*id_to_dettype_ptr) )
           {
-            if( icontains( meas->detector_name_, "neut" ) )
+            if( icontains( meas->detector_name_, "neut" )
+               || icontains( meas->detector_name_, "DetN" ) )  // ex: "DetectorInfoDetN1"
             {
               // BNC detectors may not include a RadDetectorInformation element for the neutron detector
               det_type = DetectionType::NeutronDetection;
@@ -8187,7 +8193,9 @@ namespace SpecUtils
             const string idval = xml_value_str(id_att);
             if( SpecUtils::icontains(idval, "gamma") )
               type = GammaDetection;
-            else if( SpecUtils::icontains(idval, "neutron") )
+            else if( SpecUtils::icontains(idval, "neut") )
+              type = NeutronDetection;
+            else if( SpecUtils::icontains(idval, "DetN") ) //Ex. "DetectorInfoDetN1" - Symetrica SN3 has RadDetectorCategoryCode value of other
               type = NeutronDetection;
           }//if( type == OtherDetection )
         }//if( category_node && category_node->value_size() )
@@ -8339,7 +8347,7 @@ namespace SpecUtils
       XML_FOREACH_CHILD( multimedia_node, rad_data_node, "MultimediaData" )
       {
         auto data = make_shared<MultimediaData>();
-        if( set_multimedia_data( *data, multimedia_node ) )
+        if( set_multimedia_data_from_xml( *data, multimedia_node ) )
           multimedia_data_.push_back( data );
       }
     }//for( loop over <RadInstrumentData> nodes - ya, I know we shouldnt have to )

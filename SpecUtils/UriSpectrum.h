@@ -296,7 +296,12 @@ namespace SpecUtils
    */
   std::string url_encode( const std::string &url );
   
-  /** Decodes "percent encoded" strings. */
+  /** Decodes "percent encoded" strings. 
+   
+   Turns '+' characters into a space.
+   Non-ascii characters will remain the same.
+   If either of the characters following a '%' is not a hex character, the whole three-character sequence will not change.
+   */
   std::string url_decode( const std::string &url );
   
   /** Similar to `url_encode`, but only encodes non-ascii characters, as well as "%&;=/?#[]", as specified by RFC 6068. */

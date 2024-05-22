@@ -809,6 +809,13 @@ void Measurement::set_remarks( const std::vector<std::string> &remar )
 }
   
 
+void SpecFile::add_remark( const std::string &remark )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  remarks_.push_back( remark );
+  modified_ = modifiedSinceDecode_ = true;
+}
+
 void Measurement::set_parse_warnings(const std::vector<std::string>& warnings)
 {
   parse_warnings_ = warnings;
@@ -1697,14 +1704,30 @@ void Measurement::combine_gamma_channels( const size_t ncombine )
 #endif  //#if( PERFORM_DEVELOPER_CHECKS )
 }//void combine_gamma_channels( const size_t nchann )
 
+  
+void SpecFile::clear_multimedia_data()
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  multimedia_data_.clear();
+}//void clear_multimedia_data()
 
+  
 void SpecFile::add_multimedia_data( const MultimediaData &data )
 {
   shared_ptr<const MultimediaData> new_data = make_shared<MultimediaData>( data );
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
   multimedia_data_.push_back( new_data );
 }//void add_multimedia_data( const MultimediaData &data )
 
 
+void SpecFile::set_multimedia_data( vector<shared_ptr<const MultimediaData>> &data )
+{
+  std::unique_lock<std::recursive_mutex> lock( mutex_ );
+  multimedia_data_ = data;
+  modified_ = modifiedSinceDecode_ = true;
+}//void set_multimedia_data( vector<shared_ptr<const MultimediaData>> &data )
+  
+  
 size_t SpecFile::do_channel_data_xform( const size_t nchannels,
                 std::function< void(std::shared_ptr<Measurement>) > xform )
 {
@@ -4493,7 +4516,7 @@ bool SpecFile::load_file( const std::string &filename,
           if( success ) break;
         }//if( orig_file_ending=="chn" )
         
-        if( orig_file_ending=="tka" )
+        if( orig_file_ending=="tka" || orig_file_ending=="jac" )
         {
           triedTka = true;
           success = load_tka_file( filename );
@@ -6621,6 +6644,10 @@ void SpecFile::set_detector_type_from_other_info()
     const bool isVerifinder = (SpecUtils::icontains(model, "SN2")
                                || SpecUtils::icontains(model, "VeriFinder")
                                || SpecUtils::icontains(model, "SL2") );
+    
+    
+    // model of "SN11" is the "Compact VeriFinder"
+    // model of "SN33" is also possible - looks to be 3x3x3 NaI, so probably the backpack system
     
     if( isVerifinder )
     {

@@ -23,6 +23,7 @@
 
 #include "SpecUtils_config.h"
 
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -524,8 +525,11 @@ std::string url_decode( const std::string &input )
   for( size_t i = 0; i < input.length(); ++i )
   {
     const char c = input[i];
-      
-    if( (c == '%') && ((i + 2) < input.length()) )
+    
+    if( (c == '%')
+       && ((i + 2) < input.length())
+       && std::isxdigit( static_cast<unsigned char>(input[i+1]) )
+       && std::isxdigit( static_cast<unsigned char>(input[i+2]) ) )
     {
       const char raw[3] = { input[i+1], input[i+2], '\0' };
       

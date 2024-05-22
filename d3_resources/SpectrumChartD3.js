@@ -55,7 +55,6 @@ SpectrumChartD3 = function(elem, options) {
   
   //if( (typeof this.options.yscale) !== 'string' || (['lin', 'log', 'sqrt'].indexOf(this.options.yscale) < 0) ) this.options.yscale = "lin";
   if( (typeof this.options.yscale) !== 'string' ) this.options.yscale = "lin";
-  if( (typeof this.options.ylabel) !== 'string' ) this.options.ylabel = "Counts";
   if( (typeof this.options.gridx) !== 'boolean' ) this.options.gridx = false;
   if( (typeof this.options.gridy) !== 'boolean' ) this.options.gridy = false;
   if( (typeof this.options.compactXAxis) !== 'boolean' ) this.options.compactXAxis = false;
@@ -123,6 +122,8 @@ SpectrumChartD3 = function(elem, options) {
   //  But if the roid drag lines were created by clicking a peak (and hence this.showDragLineWhileInRoi is true), then double this value is used (i.e., this value on either side of ROI edge)
   self.options.roiDragWidth = (typeof options.roiDragWidth == 'number') ? options.roiDragWidth : 10;
   
+  self.setLocalizations( {}, true );//Set default localization strings
+
   this.padding = {
      "top":  5,
      "titlePad" : 5,
@@ -484,15 +485,10 @@ SpectrumChartD3 = function(elem, options) {
   this.setTitle( title, true );
 
   /* Add the x-axis label */
-  if (this.options.xlabel) {
-    this.xaxistitle = this.xAxisBody
-        .append("text")
-        .attr("class", "xaxistitle")
-        .text(this.options.xlabel)
-        .attr("x", 0.5*this.size.width)
-        .attr("y", 0)
-        .attr("dy",29)
-        .style("text-anchor", this.options.compactXAxis ? "start" : "middle");
+  if( this.options.txt.xAxisTitle.length > 0 ) {
+    this.setXAxisTitle( this.options.txt.xAxisTitle, true );
+    if( this.xaxistitle )
+      this.xaxistitle.attr("x", 0.5*this.size.width).attr("dy",29);
   }
 
   /* Add the y-axis label. */
@@ -822,6 +818,91 @@ SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumT
     i += rebinFactor;
   }
 }
+
+/** Takes in an object like { yAxisTitle: 'Counts', realTime: 'Real Time',... } that maps 
+ * from variables used in this code, to the strings that should be used.  Does not need to be complete
+*/
+SpectrumChartD3.prototype.setLocalizations = function( input, isInitialDef ) {
+  const self = this;
+
+  const defVals = {
+    xAxisTitle: "Energy (keV)",
+    yAxisTitle: "Counts",
+    yAxisTitleMulti: "Counts per {1} Channels",
+    realTime: "Real Time",
+    liveTime: "Live Time",
+    deadTime: "Dead Time",
+    scaledBy: "Scaled by",
+    zoomIn: "Zoom In",
+    neutrons: "neutrons",
+    Neutrons: "Neutrons",
+    cps: "cps",
+    roiCounts: "ROI counts",
+    gammaCounts: "Gamma Counts",
+    contArea: "cont. area",
+    peakCps: "peak cps",
+    peakArea: "peak area",
+    fwhm: "FWHM",
+    mean: "mean",
+    spectrum: "Spectrum",
+    comptonEdge: "Compton Edge",
+    sumPeak: "Sum Peak",
+    firstEnergyClick: "Click to set sum peak first energy.",
+    singleEscape: "Single Escape",
+    doubleEscape: "Double Escape",
+    eraseInRange: "Will Erase Peaks In Range",
+    zoomInY: "Zoom-In on Y-axis",
+    zoomOutY: "Zoom-out on Y-axis",
+    touchDefineRoi: "Move 2 fingers to right to define ROI",
+    foreNSigmaBelowBack: "Foreground is {1} σ below background.",
+    foreNSigmaAboveBack: "Foreground is {1} σ above background.",
+    backSubCounts: "counts (BG sub)",
+    afterScalingBy: "after scaling by ",
+    clickedPeak: "Clicked Peak",
+    recalFromTo: "Recalibrate data from {1} to {2} keV",
+    sumFromTo: "{1} to {2} keV",
+    comptonPeakAngle: "{1}° Compton Peak",
+  };
+
+  const notDefined = ( (typeof self.options.txt !== 'object') || (self.options.txt === null) || Array.isArray(self.options.txt) || (self.options.txt instanceof Function) );
+  if( notDefined )
+    self.options.txt = {}; //e.g., called from constructor of this object
+    
+
+  // Make sure self.options.txt has all properties we expect
+  Object.keys(defVals).forEach(key => {
+    if (!self.options.txt.hasOwnProperty(key)) {
+      self.options.txt[key] = defVals[key];
+    }
+  });
+
+  // Set values to new keys
+  Object.keys(input).forEach(key => {
+    if (!self.options.txt.hasOwnProperty(key) || (typeof input[key] !== 'string') ) {
+      console.error( "setLocalizations: input has invalid property,", key, ", with value:", input[key] );
+    }else{
+      self.options.txt[key] = input[key];
+    }
+  });
+
+  if( isInitialDef )
+    return;
+
+  if( input.hasOwnProperty("xAxisTitle") )
+  {
+    if( self.xaxistitle )
+      self.xaxistitle.text(self.options.txt.xAxisTitle);
+    else
+      self.setXAxisTitle( self.options.txt.xAxisTitle, true );
+  }
+    
+  if( input.hasOwnProperty("yAxisTitle") || input.hasOwnProperty("yAxisTitleMulti") )
+    self.updateYAxisTitleText();
+
+  if( !notDefined )
+    self.handleResize( false );
+}//SpectrumChartD3.prototype.setLocalizations = ...
+
 
 /**
  * Adds or replaces the first spectrum seen with the passed-in type in the raw data with new spectrum data.
@@ -1244,28 +1325,31 @@ SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
   this.refreshRefGammaLines();
 }
 
-SpectrumChartD3.prototype.setXAxisTitle = function(title) {
+SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
   var self = this;
 
-  self.options.xlabel = null;
+  self.options.txt.xAxisTitle = null;
   self.svg.select('.xaxistitle').remove();
 
   if( (title == null || typeof title !== 'string') || title.length === 0 )
     return;
   
-  self.options.xlabel = title;
+  self.options.txt.xAxisTitle = title;
   self.xaxistitle = this.xAxisBody
     .append("text")
     .attr("class", "xaxistitle")
     .attr("y", 0)
-    .text(self.options.xlabel)
+    .text(self.options.txt.xAxisTitle)
     .style("text-anchor", this.options.compactXAxis ? "start" : "middle");
 
-  self.handleResize( false );
+  if( !dontResize )
+    self.handleResize( false );
 }
 
-SpectrumChartD3.prototype.setYAxisTitle = function(title) {
-  this.options.ylabel = (typeof title === 'string') ? title : "";
+SpectrumChartD3.prototype.setYAxisTitle = function(title, titleMulti) {
+  this.options.txt.yAxisTitle = (typeof title === 'string') ? title : "";
+  if( typeof titleMulti === 'string' )
+    this.options.txt.yAxisTitleMulti = titleMulti;
   
   this.updateYAxisTitleText();
   
@@ -1273,10 +1357,10 @@ SpectrumChartD3.prototype.setYAxisTitle = function(title) {
 }
 
 SpectrumChartD3.prototype.updateYAxisTitleText = function() {
-  if( (this.options.ylabel.length === 0) || (this.rebinFactor === 1) )
-    this.vis.select(".yaxistitle").text( this.options.ylabel );
+  if( (this.options.txt.yAxisTitle.length === 0) || (this.rebinFactor === 1) )
+    this.vis.select(".yaxistitle").text( this.options.txt.yAxisTitle );
   else
-    this.vis.select(".yaxistitle").text( this.options.ylabel + " per " + this.rebinFactor + " Channels" );
+    this.vis.select(".yaxistitle").text( this.options.txt.yAxisTitleMulti.replace("{1}", String(this.rebinFactor)) );
 }
 
 
@@ -4121,7 +4205,9 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     ymmsg += (counts!==null?", ":"") + "y: " + (Math.round(10*y)/10);
     var bgsubmsg = "";
     if( backgroundSubtractCounts !== null )
-      bgsubmsg += "counts (BG sub): " + (Math.round(10*backgroundSubtractCounts)/10) + (foreground.rebinFactor === 1 ? "" : ("/" + foreground.rebinFactor));
+      bgsubmsg += self.options.txt.backSubCounts + ": " + (Math.round(10*backgroundSubtractCounts)/10) + (foreground.rebinFactor === 1 ? "" : ("/" + foreground.rebinFactor));
+
+      
 
     var bgsubmsglen = 0;
     if (backgroundSubtractCounts !== null)
@@ -4436,7 +4522,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
     let ltnode, lttxt, dttxt;
     if( typeof lt === "number" )
     {
-      lttxt = "Live Time: " + (sf*lt).toPrecision(4) + " s";
+      lttxt = self.options.txt.liveTime + ": " + (sf*lt).toPrecision(4) + " s";
       ltnode = thistxt.append('svg:tspan')
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
@@ -4447,17 +4533,17 @@ SpectrumChartD3.prototype.updateLegend = function() {
       thistxt.append('svg:tspan')
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
-        .text( "Real Time: " + (sf*rt).toPrecision(4) + " s");
+        .text( self.options.txt.realTime + ": " + (sf*rt).toPrecision(4) + " s");
           
     if( sf != 1 )
       thistxt.append('svg:tspan')
         .attr('x', "20")
         .attr('y', thisentry.node().getBBox().height)
-        .text( "Scaled by " + sf.toPrecision(4) );
+        .text( self.options.txt.scaledBy + " " + sf.toPrecision(4) );
       
     if( (typeof lt === "number") && (typeof rt === "number") && (rt > 0) && ltnode )
     {
-      dttxt = "Dead Time: " + (100*(rt - lt) / rt).toPrecision(3) + "%";
+      dttxt = self.options.txt.deadTime + ": " + (100*(rt - lt) / rt).toPrecision(3) + "%";
       // Hookup event handlers for mouse-over, jic we dont have neutron data
       thistxt
         .on("mouseover", function(){ ltnode.text(dttxt); } )
@@ -4490,7 +4576,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       let neutspan = thistxt.append('svg:tspan')
               .attr('x', "20")
               .attr('y', thisentry.node().getBBox().height)
-              .text( "Neutrons: " + toLegendRateStr(neut,3) + (isCps ? " cps" : ""));
+              .text( self.options.txt.Neutrons + ": " + toLegendRateStr(neut,3) + (isCps ? " " + self.options.txt.cps : ""));
       
       //If we are displaying neutron CPS, and this is not a foreground, then lets add an easy way to compare this rate
       //  to the foreground
@@ -4529,7 +4615,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
             .attr('x', "40")
             .attr('y', thisentry.node().getBBox().height - 4)
             .attr('style', 'font-size: 75%')
-            .html( "(" + toLegendRateStr(nsigma,1) + " &sigma; " + (isneg ? "below" : "above") + " background)" );
+            .html( "(" + (isneg ? self.options.txt.foreNSigmaBelowBack : self.options.txt.foreNSigmaAboveBack).replace("{1}", toLegendRateStr(nsigma,1)) + ")" );
         }//if( we have foreground neutron CPS info )
       }//if( this is not a foreground, and we are displaying neutron CPS )
       
@@ -4540,7 +4626,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
           .attr('x', "40")
           .attr('y', thisentry.node().getBBox().height - 5)
           .attr('style', 'display: none')
-          .text( toLegendRateStr(neutsum,3) + " neutrons" + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
+          .text( toLegendRateStr(neutsum,3) + " " + self.options.txt.neutrons + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
       
         thistxt  //This calls to .on("mouseover")/.on("mouseout") will overwrite eirlier hooked up calls
           .on("mouseover", function(){
@@ -7627,7 +7713,7 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
       .attr("id", "createPeakTouchText")
       .attr("class", "createPeakTouchText")
       .attr("y", 10)
-      .text("Move 2 fingers to right to define ROI");
+      .text( self.options.txt.touchDefineRoi );
   createPeakTouchText
       .attr("x", 0.5*(leftStartTouch[0] + rightTouch[0] - createPeakTouchText.node().getBoundingClientRect().width ) );
 }
@@ -8021,7 +8107,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
             .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
-            .text( "Single Escape" );
+            .text( self.options.txt.singleEscape );
       self.singleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
             .attr("class", "peakText")
             .attr( "fill", txtcolor )
@@ -8065,7 +8151,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
             .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
-            .text( "Double Escape" );
+            .text( self.options.txt.doubleEscape );
       self.doubleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under double Escape label */
             .attr("class", "peakText")
             .attr( "fill", txtcolor )
@@ -8112,7 +8198,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
-          .text( "Single Escape" );
+          .text( self.options.txt.singleEscape );
     self.singleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
           .attr("class", "peakText")
           .attr( "fill", txtcolor )
@@ -8165,7 +8251,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
-          .text( "Double Escape" );
+          .text( self.options.txt.doubleEscape );
     self.doubleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Double Escape label */
           .attr("class", "peakText")
           .attr( "fill", txtcolor )
@@ -8240,7 +8326,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     self.comptonPeakText
         .attr( "fill", txtcolor )
         .attr( "x", comptonPeakPix + xmax/200 )
-        .text( self.options.comptonPeakAngle + "° Compton Peak" )
+        .text( self.options.txt.comptonPeakAngle.replace("{1}", String(self.options.comptonPeakAngle)) );
         
     self.comptonPeakMeas
         .attr( "fill", txtcolor )
@@ -8286,7 +8372,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         .attr("stroke-width", 2);
       self.comptonEdgeText = self.vis.append("text")
         .attr("class", "peakText")
-        .text( "Compton Edge" );
+        .text( self.options.txt.comptonEdge );
       self.comptonEdgeMeas = self.vis.append("text")
         .attr("class", "peakText");
     }
@@ -8407,7 +8493,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         self.sumPeakHelpText = self.vis.append("text")
             .attr("class", "peakText")
             .attr("fill", "red")
-            .text( "Click to set sum peak first energy." );
+            .text( self.options.txt.firstEnergyClick );
       }
       
       self.sumPeakHelpText
@@ -8433,7 +8519,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           .attr("stroke-width", 2);
         self.leftSumPeakText = self.vis.append("text")
           .attr("class", "peakText")
-          .text( "Clicked Peak" );
+          .text( self.options.txt.clickedPeak );
         self.leftSumPeakMeas = self.vis.append("text")
           .attr("class", "peakText");
       }
@@ -8482,7 +8568,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           .attr("stroke-width", 2);
       self.sumPeakText = self.vis.append("text")
           .attr("class", "peakText")
-          .text( "Sum Peak" );
+          .text( self.options.txt.sumPeak );
       }
       
       if( !self.sumPeakMeas )
@@ -8815,7 +8901,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
           .attr("id", "zoomInXText")
           .attr("class", "chartLineText")
           .attr("y", Number(zoomInXBox.attr("height"))/2)
-          .text("Zoom In");
+          .text( self.options.txt.zoomIn );
       }
 
       /* keep zoom in label centered on the box */
@@ -9026,10 +9112,10 @@ SpectrumChartD3.prototype.handleMouseMoveZoomY = function () {
     }
 
     if (height > 0) {
-      zoomInYText.text("Zoom-In on Y-axis");
+      zoomInYText.text( self.options.txt.zoomInY );
       zoomInYBox.attr("class", "leftbuttonzoombox");
     } else {
-      var zoomOutText = "Zoom-out on Y-axis";
+      var zoomOutText = self.options.txt.zoomOutY;
       if (-height < 0.05*self.size.height)
         zoomOutText += " x2";
       else if (-height < 0.075*self.size.height)
@@ -9300,11 +9386,11 @@ SpectrumChartD3.prototype.handleTouchMoveZoomY = function() {
 
   zoomInYText.text(function() {
     if (topTouch.visY > topTouch.startY && bottomTouch.visY < bottomTouch.startY)
-      return "Zoom-Out on Y-axis";
+      return self.options.txt.zoomOutY;
     else if (topTouch.visY == topTouch.startY && bottomTouch.visY == bottomTouch.startY)
       return "";
     else
-      return "Zoom-In on Y-axis";
+      return self.options.txt.zoomInY;
   });
 
   
@@ -9336,9 +9422,9 @@ SpectrumChartD3.prototype.handleTouchEndZoomY = function() {
   
   if( Math.abs(ypix2 - ypix1) > 10 ) {
     // we are zooming in or out
-    if (zoomInYText.text().includes("Zoom-In")) {
+    if (zoomInYText.text() == self.options.txt.zoomInY ) {
       this.setYAxisRangeAnimated( [y1,y2] );
-    }else if( zoomInYText.text().includes("Zoom-Out") ) {
+    }else if( zoomInYText.text() == self.options.txt.zoomOutY ) {
       this.setYAxisRangeAnimated( this.getYAxisDomain() );
     }
   }else{
@@ -9410,7 +9496,8 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
 
   const start = recalibrationText.empty() ? self.lastMouseMovePos[0] : recalibrationStartLine.attr("x1");
   const now = self.lastMouseMovePos[0];
-  const txt = "Recalibrate data from " + self.xScale.invert(start).toFixed(2) + " to " + self.xScale.invert(now).toFixed(2) + " keV";
+
+  const txt = self.options.txt.recalFromTo.replace("{1}",String(self.xScale.invert(start).toFixed(2))).replace("{2}",self.xScale.invert(now).toFixed(2) );
   
   if (recalibrationText.empty()) {                       /* ctrl-option-drag text to say where recalibration ranges are */
     const txtcolor = self.getElementLineColor('.xaxistitle');
@@ -9597,7 +9684,7 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
       .attr("id", "deletePeaksText")
       .attr("class", "deletePeaksText")
       .attr("y", Number(deletePeaksBox.attr("height"))/2)
-      .text("Will Erase Peaks In Range");
+      .text( self.options.txt.eraseInRange );
 
   } else {  /* Erase-peaks range box has already been created, update it */
 
@@ -9702,7 +9789,7 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
 
 
   /* Move the erase peaks text in the middle of the erase peaks range box */
-  deletePeaksText.text(width > 0 ? "Will Erase Peaks In Range" : "");
+  deletePeaksText.text(width > 0 ? self.options.txt.eraseInRange : "");
   deletePeaksText.attr("x", Number(deletePeaksBox.attr("x")) + (Number(deletePeaksBox.attr("width"))/2) - Number(deletePeaksText[0][0].clientWidth)/2 );
 }
 
@@ -9927,14 +10014,14 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     .attr("id", "countGammasText")
     .attr("class", "countGammasText")
     .attr("y", Number(countGammasBox.attr("height"))/2)
-    .text("Gamma Counts");
+    .text( self.options.txt.gammaCounts );
   }
   
   var ypos = Number(countGammasBox.attr("height"))/2 + 15;   /* signifies the y-position of the text displayed */
   
   countGammasBox.attr("class", "countGammasBoxForward")
     .attr("x", nowx_px < startx_px ? nowx_px : startx_px);
-    countGammasText.text("Gamma Counts");
+    countGammasText.text( self.options.txt.gammaCounts );
     
   if (countGammaRangeText.empty())
     countGammaRangeText = self.vis.append("text")
@@ -9942,7 +10029,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     .attr("class", "countGammasText")
     .attr("y", ypos);
     
-  countGammaRangeText.text( sumEnergyRange[0].toFixed(1) + " to " + sumEnergyRange[1].toFixed(1) + " keV");
+  countGammaRangeText.text( self.options.txt.sumFromTo.replace("{1}", sumEnergyRange[0].toFixed(1)).replace("{2}", sumEnergyRange[1].toFixed(1)) );
   countGammaRangeText.attr("x", Number(countGammasBox.attr("x")) + (Number(countGammasBox.attr("width"))/2) - 30 );
   
   ypos += 15;
@@ -9983,7 +10070,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
       asterickText += "*";
       if (countsText)
       countsText += asterickText;
-      specialScaleSpectras.push( asterickText + "after scaling by " + spectrumScaleFactor.toFixed(3) );
+      specialScaleSpectras.push( asterickText + self.options.txt.afterScalingBy + spectrumScaleFactor.toFixed(3) );
     }
     
     /* Output the count gammas information to the chart */
@@ -10019,7 +10106,8 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     .attr("y", ypos);
     
     sigmaCount.attr("x", Number(countGammasText.attr("x")) - rightPadding + 10)
-    .text("Foreground is " + nsigma.toFixed(2) + " σ " + (isneg ? "below" : "above") + " background.");
+    .text( (isneg ? self.options.txt.foreNSigmaBelowBack : self.options.txt.foreNSigmaAboveBack).replace("{1}", String(nsigma.toFixed(2))) );
+
     ypos += 15;
     
   } else if (!sigmaCount.empty()) {
@@ -10337,20 +10425,20 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
   
   // Note: info.roiCounts and info.cpsTxt added to InterSpec 20201129, should deprecate contArea
   if( (typeof info.roiCounts) === 'number' )
-    createPeakInfoText(text, "ROI counts", info.roiCounts);
+    createPeakInfoText(text, self.options.txt.roiCounts, info.roiCounts);
   else
-    createPeakInfoText(text, "cont. area", info.contArea);
+    createPeakInfoText(text, self.options.txt.contArea, info.contArea);
   
   if( info.cpsTxt )
-    createPeakInfoText(text, "peak cps", info.cpsTxt);
+    createPeakInfoText(text, self.options.txt.peakCps, info.cpsTxt);
   
-  createPeakInfoText(text, "peak area", info.area + String.fromCharCode(0x00B1) + info.areaUncert);
+  createPeakInfoText(text, self.options.txt.peakArea, info.area + String.fromCharCode(0x00B1) + info.areaUncert);
   createPeakInfoText(text, String.fromCharCode(0x03C7) + "2/dof", info.chi2);
-  createPeakInfoText(text, "FWHM", info.fwhm + " keV (" + info.fwhmPerc + "%)");
-  createPeakInfoText(text, "mean", info.mean + " keV");
+  createPeakInfoText(text, self.options.txt.fwhm, info.fwhm + " keV (" + info.fwhmPerc + "%)");
+  createPeakInfoText(text, self.options.txt.mean, info.mean + " keV");
   
   if (areMultipleSpectrumPeaksShown)
-    createPeakInfoText(text, "Spectrum", self.rawData.spectra[info.spectrumIndex].title);
+    createPeakInfoText(text, self.options.txt.spectrum, self.rawData.spectra[info.spectrumIndex].title);
     
   const width = text.node().getBoundingClientRect().width + 10; // + 10 for padding right
   rect.attr('width', width);

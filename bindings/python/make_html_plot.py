@@ -91,7 +91,7 @@ if len(spectra_to_plot) < 1:
 
 print( "Will add {} plots to output.html".format(len(spectra_to_plot)) )
 
-f = open( "output.html", 'w' )
+f = open( "output.html", 'wb' )
 
 # Set options for displaying the chart
 options = SpecUtils.D3SpectrumChartOptions()
