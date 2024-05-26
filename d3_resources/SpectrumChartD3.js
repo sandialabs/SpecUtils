@@ -130,14 +130,14 @@ SpectrumChartD3 = function(elem, options) {
      "right":   10,
      "bottom": 5,
      "xTitlePad": 5, // vertical padding between y-axis numbers (non-compact) and the title, or for compact just the height down from axis; TODO: make this more consistent/better.
-     "left":     5,
-     "labelPad": 5,
-     "title":    23,
+     "left":     5,  //The distance between the left of chart, and y-axis text
+     "labelPad": 5,  //The distance between y-axis title, and the y-axis count text
+     "title":    23, //Chart title distance from top, if present
      "label":    8,
      "sliderChart":    8,
   };
   
-  this.padding.leftComputed = this.padding.left + this.padding.title + this.padding.label + this.padding.labelPad;
+  this.padding.leftComputed = this.padding.left + this.padding.label + this.padding.labelPad;
   this.padding.topComputed = this.padding.top + this.padding.titlePad + 15;
   this.padding.bottomComputed = this.padding.bottom +  this.padding.xTitlePad + 15;
   
@@ -492,7 +492,8 @@ SpectrumChartD3 = function(elem, options) {
   }
 
   /* Add the y-axis label. */
-  this.vis.append("g")
+  this.yAxisTitle = this.vis.append("g");
+  this.yAxisTitleText = this.yAxisTitle
     .append("text")
     .attr("class", "yaxistitle")
     .text( "" )
@@ -1276,20 +1277,21 @@ SpectrumChartD3.prototype.calcLeftPadding = function( updategeom ){
     return;
   }
   
-  var labels = this.yAxisBody.selectAll("g.tick").selectAll("text");
+  var labels = this.yAxisBody.selectAll("g.tick").selectAll("text"); // g.tick includes tick and number
   
   var labelw = 4;
   labels.forEach( function(label){
     labelw = Math.max( labelw, label.parentNode.getBBox().width );
   });
   
-  var labelpad = this.padding.labelPad;
-  var ticklen = 7; /*hardcoded as major tick x1 */
-  var title = this.svg.select(".yaxistitle");
-  if( title )
-    title.attr("transform","translate(-" + (labelw+labelpad) + " " + this.size.height/2+") rotate(-90)");
+  let titlew = 0;
+  const labelpad = this.padding.labelPad;
+  if( this.yAxisTitleText ){
+    titlew = this.yAxisTitleText[0][0].parentNode.getBBox().height;
+    this.yAxisTitle.attr("transform","translate(-" + (labelw+labelpad) + " " + this.size.height/2+") rotate(-90)");
+  }
   
-  var newleft = ticklen + labelw + labelpad + this.padding.left + 4;
+  const newleft = labelw + (titlew > 0 ? (titlew + labelpad) : 0) + this.padding.left + 4;
   
   if( !updategeom ) {
     this.padding.leftComputed = newleft;
@@ -1355,9 +1357,9 @@ SpectrumChartD3.prototype.setYAxisTitle = function(title, titleMulti) {
 
 SpectrumChartD3.prototype.updateYAxisTitleText = function() {
   if( (this.options.txt.yAxisTitle.length === 0) || (this.rebinFactor === 1) )
-    this.vis.select(".yaxistitle").text( this.options.txt.yAxisTitle );
+    this.yAxisTitleText.text( this.options.txt.yAxisTitle );
   else
-    this.vis.select(".yaxistitle").text( this.options.txt.yAxisTitleMulti.replace("{1}", String(this.rebinFactor)) );
+    this.yAxisTitleText.text( this.options.txt.yAxisTitleMulti.replace("{1}", String(this.rebinFactor)) );
 }
 
 
