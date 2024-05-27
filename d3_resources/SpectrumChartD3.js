@@ -1056,9 +1056,8 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   /* Hack: To properly choose the right set of points for the y-axis points */
   function y(line) {
     return function(d) {
-      var y = self.yScale(d['y']);
-      if (isNaN(y)) y = 0;
-      return y; 
+      const y = self.yScale(d['y']);
+      return isNaN(y) ? 0 : y;
     }
   }
 
@@ -1101,9 +1100,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
       }
       this['line' + i] = d3.svg.line()
         .interpolate("step-after")
-        .x( function(d, pi) {
-          return self.xScale(d.x);
-        })
+        .x( function(d){ return self.xScale(d.x); })
         .y( y(i) );
 
       this.chartBody.append("path")
@@ -1119,23 +1116,11 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     }
   }
 
-  /* + 10 to add at keast some padding for scale */
+  /* + 10 to add at least some padding for scale */
   self.options.maxScaleFactor = maxYScaleFactor + 10;
   var maxsfinput;
   if (maxsfinput = document.getElementById("max-sf")) {
     maxsfinput.value = self.options.maxScaleFactor;
-  }
-
-  /* Update the spectrum drop down for adjusting y-scale factors */
-  if (currentsftitle = document.getElementById("current-sf-title")) {
-    var titles = self.getSpectrumTitles();
-    currentsftitle.options.length = titles.length;
-    titles.forEach(function(title,i) {
-      if (i == 0)
-        currentsftitle.options[i] = new Option("None", "", true, false);
-      else
-        currentsftitle.options[i] = new Option(title, title, false, false);
-    });
   }
 
   if( this.options.gridx )
@@ -1198,34 +1183,6 @@ SpectrumChartD3.prototype.update = function() {
     
     line.attr("d", self['line'+i](self.rawData.spectra[i][key]));
   });
-
-  /*
-  if( self.xrange !== self.xScale.range() ) {
-    console.log( "xrange changed changed" );
-  }
-
-  if( self.xdomain !== self.xScale.domain() ) {
-    console.log( "xrange domain changed" );
-  }
-
-  if( self.yrange !== self.yScale.range() ) {
-    console.log( "yrange range changed" );
-  }
-
-  if( self.ydomain !== self.yScale.domain() ) {
-    console.log( "yrange domain changed" );
-  }
-
-  if( self.prevRebinFactor !== this.rebinFactor ) {
-    console.log( "rebin factor changed" );
-  }
-
-  self.prevRebinFactor = this.rebinFactor;
-  self.xrange = self.xScale.range();   
-  self.xdomain = self.xScale.domain(); 
-  self.yrange = self.yScale.range();  
-  self.ydomain = self.yScale.domain();
-  */
 
   if (d3.event && d3.event.keyCode) {
     d3.event.preventDefault();
@@ -3840,58 +3797,119 @@ SpectrumChartD3.prototype.drawSearchRanges = function() {
 
 
 SpectrumChartD3.prototype.drawHighlightRegions = function(){
-  var self = this;
+  const self = this;
   
-  if( !Array.isArray(self.highlightRegions) || self.highlightRegions.length===0 )
-    return;
-  
-  //highlightRegions is array of form: [{lowerEnergy,upperEnergy,fill,hash}]
- 
-  if( !self.highlightRegions || !self.highlightRegions.length ){
-    self.vis.selectAll("g.highlight").remove();
+  if( !Array.isArray(self.highlightRegions) || self.highlightRegions.length===0 ){
+    // self.setHighlightRegions(...) already removed the highlight regions
     return;
   }
+  
+  const lx = self.xScale.domain()[0], ux = self.xScale.domain()[1], h = self.size.height;
  
-  let domain = self.xScale.domain();
-  let lx = domain[0], ux = domain[1];
+  const inrange = [];
  
-  let inrange = [];
- 
+  //self.highlightRegions is array of form: [{lowerEnergy,upperEnergy,fill,hash,drawRegion(optional),text(optional)}]
+  //  Where drawRegion may be either 'All' (default if field not present), or 'BelowData'
   self.highlightRegions.forEach( function(w){
-    let lw = w.lowerEnergy;
-    let uw = w.upperEnergy;
+    const lw = w.lowerEnergy, uw = w.upperEnergy;
    
-    if( (uw > lx && uw < ux) || (lw > lx && lw < ux) || (lw <= lx && uw >= ux) )
+    if( (uw > lx && uw < ux) || (lw > lx && lw < ux) || (lw <= lx && uw >= ux) ){
+      console.assert( !w.drawRegion || (w.drawRegion === "All") || (w.drawRegion === "BelowData"), "Invalid HighlightRegion.drawRegion" );
       inrange.push(w);
+    }
   } );
  
-  var tx = function(d) { return "translate(" + self.xScale(Math.max(lx,d.lowerEnergy)) + ",0)"; };
-  var gy = self.vis.selectAll("g.highlight")
-               .data( inrange, function(d){return d;} )
-               .attr("transform", tx);
+  
+  // Find the spectrum to be used if we are drawing a `w.drawRegion==="BelowData"` region
+  //  TODO: allow the region to specify which spectrum to use - right now just using the last foreground
+  const spectra = self.rawData ? self.rawData.spectra : null;
+  let spectrum = (spectra && (spectra.length > 0)) ? spectra[0] : null;
+  for( let j = 0; j < spectra.length; ++j ){
+    if( spectra[j].type === "FOREGROUND" ){
+      spectrum = spectra[j];
+      break;
+    }
+  }
+  
+  //spectrum: { rebinFactor: 1, id: 0, backgroundID: 1, type: "FOREGROUND", points: [{x:0.2,x:0},{x:1.2,x:5},...], x: [0.2,1.2,...], y: [0,5,...], lineColor: 'rgb(0,0,0)', peaks: [{...}],... }
+  // spectrum.points gets updated as channels are combined and stuff
  
-  var gye = gy.enter().insert("g", "a")
-               .attr("class", "highlight")
-               .attr("transform", tx);
+  const belowDataPointsGenerator = function(region){
+    if( !spectrum )
+      return [];
+      
+    const points = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? spectrum.bgsubtractpoints : spectrum.points;
+    if( !points || !spectrum.points.length )
+      return [];
+    
+    const le = Math.max( lx, region.lowerEnergy );
+    const ue = Math.min( ux, region.upperEnergy );
+    const bi = d3.bisector(function(d){return d.x;});
+    const pl = spectrum.points.length;
+     
+    const lowerIndex = bi.left(points,le,1) - 1;
+    const upperIndex = Math.min( bi.left(points,ue,1) + 1, pl-1 );
+
+    const answer = points.slice( lowerIndex, upperIndex + 1 );
+   
+    // Close the path, limiting to regions lower and upper range
+    answer[0] = {x: le, y: answer[0].y};
+    answer[answer.length-1] = {x: ue, y: answer[answer.length-1].y};
+    answer.push( {x: ue, y: 0} );
+    answer.push( {x: le, y: 0} );
+    answer.push( {x: le, y: answer[0].y} );
+   
+    return answer;
+  };//belowDataPointsGenerator function
  
-  let h = self.size.height;
  
-  gye.append("rect")
-   //.attr("class", "d3closebut")
-     .attr('y', '0' /*function(d){ return self.options.refLineTopPad;}*/ )
-     .attr("x", "0" )
-     .style("fill", function(d){return d.fill;} );
+  const gy = self.vis.selectAll("g.highlight")
+    .data( inrange, function(d){return d;} );
  
-  /* Remove old elements as needed. */
+  // Update the points we will plot on each region
+  inrange.forEach( function(w){
+    const le = Math.max( lx, w.lowerEnergy ), ue = Math.min( ux, w.upperEnergy );
+    
+    w.isRect = (!w.drawRegion || (w.drawRegion !== "BelowData"));
+    if( w.isRect )
+      w.points = [{x: le, y: 0}, {x: ue, y: 0}, {x: ue, y: 1}, {x: le, y: 1}, {x: le, y: 0}];
+    else
+      w.points = belowDataPointsGenerator(w);
+  } );
+ 
+  const added = gy.enter().append("g")
+    .attr("class", "highlight");
+               
+  added.append("path");
+  added.append("text");
+ 
+  // Remove elements no longer needed
   gy.exit().remove();
  
-  gy.select("rect")
-    .attr('height', h /*-self.options.refLineTopPad*/ )
-    .attr('width', function(d){
-      let le = Math.max( lx, d.lowerEnergy );
-      let ue = Math.min( ux, d.upperEnergy );
-      return self.xScale(ue) - self.xScale(le);
- } );
+  // Define the line to use if we are doing a `w.drawRegion === "All"`
+  const rect_line = d3.svg.line()
+    .x( function(d){ return self.xScale(d.x); })
+    .y( function(d){ return d.y===0 ? 0 : h; } );
+  
+  // Define the line to use if we are doing a `w.drawRegion === "BelowData"`
+  const below_data_line = d3.svg.line()
+    .interpolate("step-after")
+    .x( function(d) { return self.xScale(d.x); })
+    .y( function(d) {
+      const y_px = self.yScale(d.y);
+      return isNaN(y_px) ? 0 : y_px;
+    } );
+ 
+  // Update the paths of all the elements
+  gy.select("path")
+    .attr("fill", function(d){return d.fill;} )
+    .attr("d", function(d){ return d.isRect ? rect_line(d.points) : below_data_line(d.points); } );
+      
+  // Update text content and position
+  gy.select("text")
+    .attr("y", h-10 )
+    .attr("x", function(d){ return self.xScale(0.5*(d.lowerEnergy + d.upperEnergy)); } )
+    .text( function(d){return d.text ? d.text : ""} );
 }//drawHighlightRegions(...)
 
 
@@ -8624,7 +8642,7 @@ SpectrumChartD3.prototype.setHighlightRegions = function(ranges) {
   
   if( !Array.isArray(ranges) || ranges.length===0 ){
     self.highlightRegions = null;
-    self.vis.selectAll("g.highlight").remove(); //drawHighlightRegions() returns immediatelt if self.highlightRegions is null.
+    self.vis.selectAll("g.highlight").remove(); //drawHighlightRegions() returns immediately if self.highlightRegions is null.
   } else {
     //ToDo add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
     self.highlightRegions = ranges;
