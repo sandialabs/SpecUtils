@@ -3851,7 +3851,9 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
     const upperIndex = Math.min( bi.left(points,ue,1) + 1, pl-1 );
 
     const answer = points.slice( lowerIndex, upperIndex + 1 );
-   
+    if( !answer.length )
+      return [];
+      
     // Close the path, limiting to regions lower and upper range
     answer[0] = {x: le, y: answer[0].y};
     answer[answer.length-1] = {x: ue, y: answer[answer.length-1].y};
@@ -3864,7 +3866,7 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
  
  
   const gy = self.vis.selectAll("g.highlight")
-    .data( inrange, function(d){return d;} );
+    .data( inrange, function(d){return d.hash;} );
  
   // Update the points we will plot on each region
   inrange.forEach( function(w){
@@ -3897,9 +3899,9 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
     .x( function(d) { return self.xScale(d.x); })
     .y( function(d) {
       const y_px = self.yScale(d.y);
-      return isNaN(y_px) ? 0 : y_px;
+      return isNaN(y_px) ? 0 : Math.min(y_px,h);
     } );
- 
+    
   // Update the paths of all the elements
   gy.select("path")
     .attr("fill", function(d){return d.fill;} )
