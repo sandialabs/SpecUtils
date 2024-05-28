@@ -3848,8 +3848,8 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
     const pl = spectrum.points.length;
      
     const lowerIndex = bi.left(points,le,1) - 1;
-    const upperIndex = Math.min( bi.left(points,ue,1) + 1, pl-1 );
-
+    const upperIndex = bi.right(points,ue,1);
+    
     const answer = points.slice( lowerIndex, upperIndex + 1 );
     if( !answer.length )
       return [];
