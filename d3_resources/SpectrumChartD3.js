@@ -126,7 +126,7 @@ SpectrumChartD3 = function(elem, options) {
 
   this.padding = {
      "top":  5,
-     "titlePad" : 5,
+     "titlePad" : 0,
      "right":   10,
      "bottom": 5,
      "xTitlePad": 5, // vertical padding between y-axis numbers (non-compact) and the title, or for compact just the height down from axis; TODO: make this more consistent/better.
@@ -480,8 +480,8 @@ SpectrumChartD3 = function(elem, options) {
     .attr("clip-path", "url(#clip" + this.chart.id + ")");
 
   /* add Chart Title */
-  var title = this.options.title;
-  this.options.title = null;
+  var title = this.options.txt.title;
+  this.options.txt.title = null;
   this.setTitle( title, true );
 
   /* Add the x-axis label */
@@ -1262,10 +1262,10 @@ SpectrumChartD3.prototype.calcLeftPadding = function( updategeom ){
 SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
   var titleh = 0;
   if( (title == null || typeof title !== 'string') || title.length === 0 ){
-    this.options.title = null;
+    this.options.txt.title = null;
     this.svg.select('.title').remove();
   } else {
-    if( this.options.title )
+    if( this.options.txt.title && (this.options.txt.title.length > 0) )
       titleh = this.svg.selectAll(".title").text( title ).node().getBBox().height;
     else
       titleh = this.svg.append("text")
@@ -1275,7 +1275,7 @@ SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
           .attr("dy", this.padding.title)
           .style("text-anchor","middle")
           .node().getBBox().height;
-    this.options.title = title;
+    this.options.txt.title = title;
   }
   this.handleResize( dontRedraw ); 
   this.refreshRefGammaLines();
@@ -1343,7 +1343,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   // TODO: actually measure `xlabelh`; we could either easily do it in `drawXTicks` or do it with something like:
   //   d3.selectAll(".xaxis g.tick")[0].forEach( function(a){ console.log( a.getBBox().height ); } );
   
-  if( this.options.title ) {
+  if( this.options.txt.title ) {
     this.svg.selectAll(".title").forEach( function(t){
       titleh = t[0].getBBox().height;  
    });
