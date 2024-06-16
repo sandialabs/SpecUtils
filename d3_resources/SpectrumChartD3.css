@@ -21,6 +21,7 @@ CSS variables InterSpec will define for colors:
 
 }
 
+
 .roiDragBox {
   fill-opacity: 0.2;
   stroke-width: 1px;
@@ -180,67 +181,78 @@ CSS variables InterSpec will define for colors:
 .activescaler > .scalerback{ /* fill-opacity: 0.85; */ }
 .scalerheader{ fill: rgba(185,185,185,0.80); fill-opacity: 0.55; }
 .activescaler > g > .scalerheader{ fill: #909090; fill-opacity: 0.95; }
-.scaleraxis{  }
-.scalertoggle{  }
-
-
-.leftbuttonzoombox {
-  fill: #666;
-  fill-opacity: 0.25;
-}
-
-.leftbuttonzoomoutboxy {
-  fill: #666;
-  fill-opacity: 0.1;
-}
-.deletePeaksBox {
-  fill: #666;
-  fill-opacity: 0.5;
-}
-.countGammasBoxForward {
-  fill: rgba(255,255,0,0.605);
-  fill-opacity: 1;
-}
-
-.sliderBox {
-  user-select: none;
-  -moz-user-select: none;
-
+  .scaleraxis{  }
+  .scalertoggle{  }
+  
+  
+  .leftbuttonzoombox {
+    fill: #666;
+    fill-opacity: 0.25;
+  }
+  
+  .leftbuttonzoomoutboxy {
+    fill: #666;
+    fill-opacity: 0.1;
+  }
+  .deletePeaksBox {
+    fill: #666;
+    fill-opacity: 0.5;
+  }
+  .countGammasBoxForward {
+    fill: rgba(255,255,0,0.605);
+    fill-opacity: 1;
+  }
+  
+  .sliderBox {
+    user-select: none;
+    -moz-user-select: none;
+  
   stroke-width: 0.2%;
   fill-opacity: 0.5;
   fill: var(--d3spec-axis-color, black);
   stroke: var(--d3spec-axis-color, black);
 }
-.sliderDragRegion {
-}
-.sliderDragRegionLine {
-}
-.sline {
-  fill: none;
-  stroke-width: 0.7px;
-}
-.rline {
-  fill: none;
-  stroke-width: 0.5px;
-}
+  .sliderDragRegion {
+  }
+  .sliderDragRegionLine {
+  }
+  .sline {
+    fill: none;
+    stroke-width: 0.7px;
+  }
+  .rline {
+    fill: none;
+    stroke-width: 0.5px;
+  }
+  
+  .focus circle {
+    fill: none;
+    stroke: steelblue;
+  }
 
-.focus circle {
-  fill: none;
-  stroke: steelblue;
-}
-
-.SpectrumChartD3 {
-  opacity--spec-chart-text-color
-}
 
 .SpectrumChartD3 .title { font-size: 1.5em; }
-.SpectrumChartD3 .chart {
-  background-color: #F7F2C5;
-  width: 80%;
-  margin-left: auto;
-  margin-right: auto;
-  height: 500px; 
+  .SpectrumChartD3 .chart {
+    background-color: #F7F2C5;
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    height: 500px;
+  }  
+
+
+g.highlight text {
+  font-size: 1em; /* Same size as .peaklabel */
+  /* TODO: We will set the color and size here... */
+  text-anchor: middle;
+  dominant-baseline: baseline;
 }
+  
+g.highlight path {
+  stroke: none;
+  stroke-width: 0px;
+}
+  
 
 
 .SpectrumChartD3 .slider-plot {
