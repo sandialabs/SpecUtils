@@ -100,6 +100,8 @@ SpectrumChartD3 = function(elem, options) {
   this.options.showSumPeaks = (typeof options.showSumPeaks == 'boolean') ? options.showSumPeaks : false;
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
   this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
+  this.options.showSliderCloseBtn = (typeof options.showSliderCloseBtn == 'boolean') ? options.showSliderCloseBtn : false;
+  
   
   
   self.options.spectrumLineWidth = (typeof options.spectrumLineWidth == 'number' && options.spectrumLineWidth>0 && options.spectrumLineWidth < 15) ? options.spectrumLineWidth : 1.0;
@@ -1509,8 +1511,50 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     this.legend.attr("transform", "translate(" + Math.max(0,legx) + "," + Math.max(legy,0) + ")" );
   }
 
-  if (this.options.showXAxisSliderChart) { self.drawXAxisSliderChart(); } 
-  else                                   { self.cancelXAxisSliderChart(); }
+  if( this.options.showXAxisSliderChart ){ 
+    self.drawXAxisSliderChart(); 
+    if( self.showXAxisSliderBtn ){
+      self.showXAxisSliderBtn.remove();
+      self.showXAxisSliderBtn = null; 
+    }
+  } else { 
+    self.cancelXAxisSliderChart(); 
+    
+    if( self.options.showSliderCloseBtn ){
+      if( !self.showXAxisSliderBtn ){
+        self.showXAxisSliderBtn = self.svg.append("g")
+          .attr("class", "slider-open")
+          .on("click", function(){
+            self.setShowXAxisSliderChart(true);
+            self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, true );
+          } );
+
+        // Add two rectangles to self.showXAxisSliderBtn
+        self.showXAxisSliderBtn.append("rect")
+          .attr("class", "slider-open-plot")
+          .attr("width", 12)
+          .attr("height", 8)
+          .attr("x", -15)
+          .attr("y", -9)
+          .attr("stroke-width", 0);
+
+        self.showXAxisSliderBtn.append("rect")
+          .attr("class", "slider-open-box")
+          .attr("width", 6)
+          .attr("height", 6)
+          .attr("x", -12)
+          .attr("y", -8)
+          .attr("stroke-width", 0);
+
+          // We could add some littl 1-pixed dots that are kinda like handle
+      }
+      
+      self.showXAxisSliderBtn.attr("transform", "translate(" + self.cx  + "," + self.cy + ")" );
+      
+      //TODO: get rid of all uses of self.getElementLineColor(...) - and use the CSS variables
+      //TODO: make sure saving SVG/PNG in InterSpec removes these buttons
+    }
+  }
   
   this.xScale.range([0, this.size.width]);
   this.yScale.range([0, this.size.height]);
@@ -1834,9 +1878,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
         .attr("x", -5)
         .attr("y", -10)
         .attr("width", 10)
-        .attr("height", 20)
-        .attr("stroke", axiscolor )
-        .attr("fill", axiscolor );
+        .attr("height", 20);
 
       //Add some lines inside the box for a little bit of texture
       for( const px of [-2,2] ){
@@ -5454,13 +5496,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   self.do_rebin();
   self.rebinForBackgroundSubtract();
   self.yScale.domain(self.getYAxisDomain());
-
-  let axiscolor = null;
   
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
-    axiscolor = self.getElementLineColor('.tick');
-    
     // G element of the slider chart
     self.sliderChart = d3.select("svg").append("g")
       //.attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
@@ -5471,9 +5509,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     // Plot area for data lines in slider chart
     self.sliderChartPlot = self.sliderChart.append("rect")
       .attr("id", "sliderchartarea"+self.chart.id )
-      .style("opacity","0.1")
-      .style("fill", axiscolor);
-      //.style("fill", "#EEEEEE");
+      .attr("class", "slider-plot");
 
     // Chart body for slider (keeps the data lines)
     self.sliderChartBody = self.sliderChart.append("g")
@@ -5493,26 +5529,21 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     //   .attr("transform", "translate(0,0)")
     //   .attr("clip-path", "url(#sliderclip" + this.chart.id + ")");
 
-    // Add a close icon in upper right-hand side of self.sliderChart 
-    self.sliderClose = self.sliderChart.append("g").on("click", function(event){
-      console.log( "close clicked" );
-      self.cancelXAxisSliderChart();
-      self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, false );
-    });
+    if( self.options.showSliderCloseBtn ){
+      // Add a close icon in upper right-hand side of self.sliderChart 
+      //  Note: we define a close button for the legend using a path instead - should probably unify which method we want to use
+      self.sliderClose = self.sliderChart.append("g")
+        .attr("class", "slider-close")
+        .on("click", function(event){
+          self.cancelXAxisSliderChart();
+          self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, false );
+        });
     
-    let cross = self.sliderClose.append("g");
-    self.sliderClose.append("rect").attr("width", 10).attr("height", 10).style( { "fill-opacity": 0.0, "fill": axiscolor } );
-    cross.append("line").attr("x1", 1).attr("y1", 1).attr("x2", 8).attr("y2", 8);
-    cross.append("line").attr("x1", 8).attr("y1", 1).attr("x2", 1).attr("y2", 8);
-    cross.style( {"stroke-width": 1.0, "stroke": axiscolor, "stroke-opacity":  0.15 });
-    
-    // TODO: do this lightening/darkening in CSS
-    self.sliderClose.on("mouseover", function(){ cross.style( {"stroke-width": 1.5, "stroke": axiscolor, "stroke-opacity":  1 }); } )
-    .on("mouseout", function(){ cross.style( {"stroke-width": 1.5, "stroke": axiscolor, "stroke-opacity":  0.15 }); } );
-
-    //TODO: add a icon to show energy slider at bottom right.
-    //TODO: set self.sliderClose to null in cancelXAxisSliderChart().
-    //TODO: put showing this close icon, and the open icon, behind some preference
+      let cross = self.sliderClose.append("g");
+      self.sliderClose.append("rect").attr("width", 10).attr("height", 10).style( { "fill-opacity": 0.0, "stroke": "none" } );
+      cross.append("line").attr("x1", 2).attr("y1", 2).attr("x2", 8).attr("y2", 8);
+      cross.append("line").attr("x1", 8).attr("y1", 2).attr("x2", 2).attr("y2", 8);
+    }//if( self.options.showSliderCloseBtn )
   }
 
   self.sliderChartPlot.attr("width", self.size.sliderChartWidth)
@@ -5539,31 +5570,18 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
   // Add the slider draggable box and edges
   if (!self.sliderBox) {
-    if( !axiscolor ){
-      axiscolor = self.getElementLineColor('.tick');
-    }
-    
     // Slider box
     self.sliderBox = self.sliderChart.append("rect")
       .attr("class", "sliderBox")
-      .style("fill-opacity","0.5")
-      .style("fill", axiscolor)
-      .attr("stroke", axiscolor)
-      .attr("stroke-width", "0.2%" )
       .on("mousedown", self.handleMouseDownSliderBox())
       .on("touchstart", self.handleTouchStartSliderBox())
       .on("touchmove", self.handleTouchMoveSliderChart());
 
     // Left slider drag region
     self.sliderDragLeft = self.sliderChart.append("rect")
-      .attr("id", "sliderDragLeft")
       .attr("class", "sliderDragRegion")
       .attr("rx", 2)
       .attr("ry", 2)
-      .style("fill-opacity","0.1")
-      .style("fill", axiscolor)
-      .attr("stroke",axiscolor)
-      .attr("stroke-width", "0.1%" )
       .on("mousedown", self.handleMouseDownLeftSliderDrag())
       .on("mousemove", self.handleMouseMoveLeftSliderDrag(false))
       .on("mouseout", self.handleMouseOutLeftSliderDrag())
@@ -5572,14 +5590,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
 
     // Right slider drag region
     self.sliderDragRight = self.sliderChart.append("rect")
-      .attr("id", "sliderDragRight")
       .attr("class", "sliderDragRegion")
       .attr("rx", 2)
       .attr("ry", 2)
-      .style("fill-opacity","0.1")
-      .style("fill", axiscolor)
-      .attr("stroke",axiscolor)
-      .attr("stroke-width", "0.1%" )
       .on("mousedown", self.handleMouseDownRightSliderDrag())
       .on("mousemove", self.handleMouseMoveRightSliderDrag(false))
       .on("mouseout", self.handleMouseOutRightSliderDrag())
@@ -5607,7 +5620,8 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   self.sliderDragRight.attr("x", (sliderBoxX + sliderBoxWidth) - (Number(self.sliderDragRight.attr("width"))/2))
     .attr("y", self.size.sliderChartHeight/2 - Number(self.sliderDragRight.attr("height"))/2);
 
-  self.sliderClose.attr("transform","translate(" + (self.size.width) + "," + (-self.size.sliderChartHeight/2 + 10) + ")");
+  if( self.sliderClose )
+    self.sliderClose.attr("transform","translate(" + self.size.width + ",0)");
 
   self.drawSliderChartLines();
   drawDragRegionLines();
@@ -5680,6 +5694,7 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
     self.sliderChartBody = null;
     self.sliderChartClipPath = null;
     self.sliderBox = null;
+    self.sliderClose = null;
   }
 
   self.sliderBoxDown = false;

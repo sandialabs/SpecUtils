@@ -9,9 +9,16 @@
    should be consistent between the charts
 */
 
+/*
+CSS variables InterSpec will define for colors:
+--d3spec-axis-color
+--d3spec-text-color
+*/
+
 /*******************/
 .SpectrumChartD3 {
   /* This is the <svg> element. */
+
 }
 
 .roiDragBox {
@@ -19,6 +26,9 @@
   stroke-width: 1px;
   user-select: none;
   -moz-user-select: none;
+
+  stroke: var(--d3spec-axis-color);
+  fill: var(--d3spec-axis-color);
 }
 
 .roiDragLine{
@@ -54,6 +64,14 @@
 .InterSpecD3Chart .axis > path, 
 .axis line { 
   fill: none; 
+}
+
+.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text {
+  fill: var(--d3spec-text-color, black);
+}
+
+.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick {
+  stroke: var(--d3spec-axis-color, black);
 }
 
 .InterSpecD3Chart .axis text { 
@@ -187,6 +205,11 @@
 .sliderBox {
   user-select: none;
   -moz-user-select: none;
+
+  stroke-width: 0.2%;
+  fill-opacity: 0.5;
+  fill: var(--d3spec-axis-color, black);
+  stroke: var(--d3spec-axis-color, black);
 }
 .sliderDragRegion {
 }
@@ -205,6 +228,11 @@
   fill: none;
   stroke: steelblue;
 }
+
+.SpectrumChartD3 {
+  opacity--spec-chart-text-color
+}
+
 .SpectrumChartD3 .title { font-size: 1.5em; }
 .SpectrumChartD3 .chart {
   background-color: #F7F2C5;
@@ -212,4 +240,50 @@
   margin-left: auto;
   margin-right: auto;
   height: 500px; 
+}
+
+
+.SpectrumChartD3 .slider-plot {
+  fill: var(--d3spec-axis-color, black);
+  opacity: 0.1;
+}
+
+.SpectrumChartD3 .slider-close {
+  stroke-width: 1.0px;
+  stroke-opacity:  0.2;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.SpectrumChartD3 .slider-close:hover {
+  stroke-opacity:  1;
+  stroke-width: 1.5px;
+}
+
+.SpectrumChartD3 .sliderDragRegion {
+  fill-opacity: 0.1;
+  fill: var(--d3spec-axis-color, black);
+  stroke: var(--d3spec-axis-color, black);
+  stroke-width: 0.1%;
+}
+
+.SpectrumChartD3 .slider-open {
+  opacity:  0.2;
+}
+
+.SpectrumChartD3 .slider-open:hover {
+  opacity:  1;
+}
+
+.SpectrumChartD3 .slider-open-plot{
+ /* slider-plot */
+ fill: var(--d3spec-axis-color, black);
+ opacity: 0.2;
+ stroke: none;
+}
+
+.SpectrumChartD3 .slider-open-box{
+  /* sliderBox */
+  fill-opacity: 0.45;
+  fill: var(--d3spec-axis-color, black);
+  stroke: none;
 }

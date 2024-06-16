@@ -748,6 +748,9 @@ namespace SpecUtils
           }
 #if( __cplusplus >= 201703L )
           unsigned long value;
+#ifdef __APPLE__
+#warn "Using std::from_chars(...), which requires macOS deployment target of at least 10.15, InterSpec currently targets 10.13"
+#endif
           const auto result = std::from_chars(str_start, str_end, value);
           if( (bool)result.ec || (result.ptr != str_end) )
             throw runtime_error( "Invalid hours or minutes field: '" + std::string(str_start,str_end) + "'" );

@@ -57,8 +57,8 @@
 
 #if( SpecUtils_USE_FROM_CHARS )
 #include <charconv>
-// LLVM 14, MSVC >= 2019, and gcc 12 seem to support floating point from_char, but Apple LLVM 14 does 
-// not (and thus not macOS or iOS), and I'm unsure about Android status.
+// LLVM 14, MSVC >= 2019, and gcc 12 seem to support floating point from_char, but Apple LLVM requires
+// minimum deployment targets of macOS 13.3, and iOS 16, and I'm unsure about Android status.
 // With MSVC 2019, from_chars is about 50% slower than boost; fast_float is just a hair slower than boost.
 //  I dont know if this is inherent, because of me doing something stupid (likely), or just that boost 
 //  is really hard to beat.
