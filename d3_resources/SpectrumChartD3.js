@@ -10429,7 +10429,7 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
   if( info.cpsTxt )
     createPeakInfoText(text, self.options.txt.peakCps, info.cpsTxt);
   
-  createPeakInfoText(text, self.options.txt.peakArea, info.area + String.fromCharCode(0x00B1) + info.areaUncert);
+  createPeakInfoText(text, self.options.txt.peakArea, info.area + ((info.areaUncert > 0.0) ? (String.fromCharCode(0x00B1) + info.areaUncert) : "") );
   createPeakInfoText(text, String.fromCharCode(0x03C7) + "2/dof", info.chi2);
   createPeakInfoText(text, self.options.txt.fwhm, info.fwhm + " keV (" + info.fwhmPerc + "%)");
   createPeakInfoText(text, self.options.txt.mean, info.mean + " keV");
