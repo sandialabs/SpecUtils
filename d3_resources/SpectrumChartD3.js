@@ -65,6 +65,8 @@ SpectrumChartD3 = function(elem, options) {
   if(typeof options.animationDuration !== 'number' || options.animationDuration < 0) this.options.animationDuration = 1000;
   this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
   if( (typeof this.options.showXAxisSliderChart) !== 'boolean' ) this.options.showXAxisSliderChart = false;
+  if( (typeof this.options.compactXAxisWithSliderChart) !== 'boolean' ) this.options.compactXAxisWithSliderChart = true;
+  
   
   if( (typeof options.sliderChartHeightFraction !== 'number') || options.sliderChartHeightFraction <= 0 || options.sliderChartHeightFraction > 0.75 )
     this.options.sliderChartHeightFraction = 0.1;
@@ -670,6 +672,12 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.scalerWidget.style("display", "none");
     }
     
+    if( this.sliderClose )
+      this.sliderClose.style("display", "none");
+
+    if( this.showXAxisSliderBtn )
+      this.showXAxisSliderBtn.style("display", "none");
+    
     if( this.peakInfo )
       this.peakInfo.style("display", "none");
     
@@ -686,6 +694,10 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.scalerWidget.style("display", null);
     if( this.peakInfo )
       this.peakInfo.style("display", null);
+    if( this.sliderClose )
+      this.sliderClose.style("display", null);
+    if( this.showXAxisSliderBtn )
+      this.showXAxisSliderBtn.style("display", null);
     return svgMarkup;
   }catch(e){
     throw 'Error creating SVG spectrum: ' + e;
@@ -1286,6 +1298,10 @@ SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
   this.refreshRefGammaLines();
 }
 
+SpectrumChartD3.prototype.hasCompactXAxis = function() {
+  return (this.options.showXAxisSliderChart ? this.options.compactXAxisWithSliderChart : this.options.compactXAxis);
+}
+
 SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
   var self = this;
 
@@ -1301,7 +1317,7 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
     .attr("class", "xaxistitle")
     .attr("y", 0)
     .text(self.options.txt.xAxisTitle)
-    .style("text-anchor", this.options.compactXAxis ? "start" : "middle");
+    .style("text-anchor", this.hasCompactXAxis() ? "start" : "middle");
 
   if( !dontResize )
     self.handleResize( false );
@@ -1361,7 +1377,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.padding.topComputed = titleh + this.padding.top + (titleh > 0 ? this.padding.titlePad : 0);
   
   /*Not sure where the -12 comes from, but things seem to work out... */
-  if( this.options.compactXAxis && xtitleh > 0 ) {
+  if( this.hasCompactXAxis() && xtitleh > 0 ) {
     var txth = 4 + this.padding.xTitlePad + xtitleh;
     this.padding.bottomComputed = this.padding.bottom + Math.max( txth, xlabelh-10 );
   } else {
@@ -1413,9 +1429,9 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
 
   if( this.xaxistitle ){
     // this.xaxistitle is appended to this.xAxisBody
-    //  Also, if this.options.compactXAxis, then "text-anchor" style is "start", else its "middle"
+    //  Also, if this.hasCompactXAxis(), then "text-anchor" style is "start", else its "middle"
     
-    if( this.options.compactXAxis ){
+    if( this.hasCompactXAxis() ){
       this.xaxistitle.attr("x", this.size.width - xaxistitleBB.width - 10);
       this.xaxistitle.attr("dy", xtitleh + this.padding.xTitlePad );
     } else {
@@ -1509,9 +1525,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
       }
       
       self.showXAxisSliderBtn.attr("transform", "translate(" + self.cx  + "," + self.cy + ")" );
-      
-      //TODO: get rid of all uses of self.getElementLineColor(...) - and use the CSS variables
-      //TODO: make sure saving SVG/PNG in InterSpec removes these buttons
     }
   }
   
@@ -5343,7 +5356,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   };
   
   
-  if( this.options.compactXAxis && self.xaxistitle ){
+  if( this.hasCompactXAxis() && self.xaxistitle ){
     
     // We'll check ticks to see if it overlaps with the title, starting from right-most tick
     const xtitle_px = Number( self.xaxistitle.attr("x") );
@@ -5369,7 +5382,7 @@ SpectrumChartD3.prototype.drawXTicks = function() {
         tick.select('text').text("");
       }
     }
-  }//if( this.options.compactXAxis and have x-axis title )
+  }//if( this.hasCompactXAxis() and have x-axis title )
 
   if( self.xGridBody ) {
     self.xGrid.tickValues( xtickvalues );
@@ -5426,10 +5439,7 @@ SpectrumChartD3.prototype.setCompactXAxis = function( compact ) {
   this.options.compactXAxis = Boolean(compact);
   
   if( this.xaxistitle )
-    this.xaxistitle.style("text-anchor", this.options.compactXAxis ? "start" : "middle");
-  
-  /*Might want to add ability to change xTitlePad here.  */
-  /*this.padding.xTitlePad = 10; */
+    this.xaxistitle.style("text-anchor", this.hasCompactXAxis() ? "start" : "middle");
     
   this.handleResize( false );
 }
@@ -5557,7 +5567,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       self.sliderClose = self.sliderChart.append("g")
         .attr("class", "slider-close")
         .on("click", function(event){
-          self.cancelXAxisSliderChart();
+          self.setShowXAxisSliderChart(false);
           self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, false );
         });
     
@@ -5730,6 +5740,10 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
 
 SpectrumChartD3.prototype.setShowXAxisSliderChart = function(d) {
   this.options.showXAxisSliderChart = d;
+
+  if( this.xaxistitle )
+    this.xaxistitle.style("text-anchor", this.hasCompactXAxis() ? "start" : "middle");
+
   this.drawXAxisSliderChart();
   this.handleResize( false );
 }
