@@ -2295,7 +2295,7 @@ void SpecFile::remove_measurements( const vector<std::shared_ptr<const Measureme
    }
    */
   
-  cleanup_after_load();
+  cleanup_after_load( DontChangeOrReorderSamples );
   modified_ = modifiedSinceDecode_ = true;
 }//void remove_measurements( const vector<std::shared_ptr<const Measurement>> meas )
 
@@ -2560,6 +2560,72 @@ void SpecFile::change_detector_name( const string &origname,
   modified_ = modifiedSinceDecode_ = true;
 }//change_detector_name(...)
 
+  
+void SpecFile::change_sample_numbers( const vector<pair<int,int>> &from_to_sample_nums )
+{
+  if( from_to_sample_nums.empty() )
+    return;
+  
+  std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
+  
+  // Go through and change sample numbers to the requested values
+  //  Note that this is very inefficient - we could use `sample_to_measurements_`
+  //  to greatly reduce the look-ups and searches, but the logic is a little more
+  //  nuanced, so we'll just do it the dumb-simple way for right now.
+  for( shared_ptr<Measurement> &meas : measurements_ )
+  {
+    const int sample = meas->sample_number_;
+    auto pos = std::find_if( begin(from_to_sample_nums), end(from_to_sample_nums),
+                            [sample]( const pair<int,int> &val ){
+      return val.first == sample;
+    } );
+    
+    if( pos != end(from_to_sample_nums) )
+      meas->sample_number_ = pos->second;
+  }//for( loop over measurements )
+  
+  sample_numbers_.clear();
+  sample_to_measurements_.clear();
+  
+  for( size_t i = 0; i < measurements_.size(); ++i )
+  {
+    shared_ptr<Measurement> &meas = measurements_[i];
+    sample_numbers_.insert( meas->sample_number_ );
+    sample_to_measurements_[meas->sample_number_].push_back( i );
+  }
+  
+  // We will only look to set `properties_flags_` that we may have changed values of
+  //  (again, we could be a little more intelligent about this, but we'll be simple
+  //  for the moment)
+  //
+  // Clear relevant bits, incase they aren't already
+  properties_flags_ &= ~MeasurementProperties::kNotTimeSortedOrder;
+  properties_flags_ &= ~MeasurementProperties::kNotSampleDetectorTimeSorted;
+  properties_flags_ &= ~MeasurementProperties::kNotUniqueSampleDetectorNumbers;
+  
+  for( size_t i = 1; i < measurements_.size(); ++i )
+  {
+    if( is_special(measurements_[i-1]->start_time_)
+       || is_special(measurements_[i]->start_time_) )
+      continue;
+    
+    if( measurements_[i-1]->start_time_ > measurements_[i]->start_time_ )
+      properties_flags_ |= kNotTimeSortedOrder;
+    
+    if( !compare_by_derived_sample_det_time(measurements_[i-1],measurements_[i]) )
+      properties_flags_ |= kNotSampleDetectorTimeSorted;
+    
+    if( (properties_flags_ & kNotTimeSortedOrder)
+       && (properties_flags_ & kNotSampleDetectorTimeSorted) )
+      break;
+  }//for( size_t i = 1; i < measurements_.size(); ++i )
+  
+  if( !has_unique_sample_and_detector_numbers() )
+    properties_flags_ |= kNotUniqueSampleDetectorNumbers;
+  
+  modified_ = modifiedSinceDecode_ = true;
+}//void change_sample_numbers( const std::vector<std::pair<int,int>> &from_to_sample_nums )
+  
 
 int SpecFile::occupancy_number_from_remarks() const
 {
