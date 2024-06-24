@@ -7148,30 +7148,30 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 }
 
 SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
-  var self = this;
+  const self = this;
   
   //console.log( "labelinfos=", labelinfos );
   
   /*
    ToDo items w.r.t. labels:
-     - Peak labels can overlap peaks - should be fixed.
-     - Add user labels not associated with peaks.
-     - Add right click menu to edit label (both for non-peak labels, and normal labels)
+   - Peak labels can overlap peaks - should be fixed.
+   - Add user labels not associated with peaks.
+   - Add right click menu to edit label (both for non-peak labels, and normal labels)
    */
   
-
+  
   if( !labelinfos || labelinfos.length===0 )
-    return;
-    
+  return;
+  
   if( !self.options.showUserLabels && !self.options.showPeakLabels && !self.options.showNuclideNames )
-    return null;
-    
+  return null;
+  
   let chart = self.peakVis;
   let chartBox = d3.select("#chartarea"+self.chart.id)[0][0].getBBox();    /* box coordinates for the chart area */
   
   // Don't draw peak label if chart isn't set up yet
   if( !chartBox.width || !chartBox.height )
-    return null;
+  return null;
   
   const chartw = chartBox.width;
   const charth = chartBox.height;
@@ -7191,24 +7191,31 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
    }
    */
   
+  
+  // The font-size of the labels.  Ex: null, "8px", "smaller", "12", "10px", "x-small", etc
+  const fontSize = null;
+  // The rotation angle of the labels.  A negative value rotates it the direction you probably want.
+  //  A value of 0 is horizontal, a value of -90 is vertical (i.e. up-and-down).  Only tested [0,-90]
+  const rotationAngle = -90;
+  
   let drawnlabels = [];
   
   for( let index = 0; index < labelinfos.length; ++index ){
     let info = labelinfos[index];
     if( !info || typeof(info)==='undefined' || !info.peak )
-      continue;
+    continue;
     
     let nuclide = info.peak.nuclide;
     if( !nuclide )
-      nuclide = info.peak.xray
+    nuclide = info.peak.xray
     if( !nuclide )
-      nuclide = info.peak.reaction
-  
+    nuclide = info.peak.reaction
+    
     //If we wont draw any text, just return now
     //  (ToDo: I think this case has already been filetered out, check, and if so remove next lines)
     if( !(self.options.showUserLabels && info.userLabel)
-        && !self.options.showPeakLabels
-        && !(self.options.showNuclideNames && nuclide) ){
+    && !self.options.showPeakLabels
+    && !(self.options.showNuclideNames && nuclide) ){
       continue;
     }
     
@@ -7219,7 +7226,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     
     //This next check doesnt appear to be necassary anymore.
     if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined'
-       || peak_ly===null || Number.isNaN(peak_ly) || typeof(peak_ly)==='undefined' )
+    || peak_ly===null || Number.isNaN(peak_ly) || typeof(peak_ly)==='undefined' )
     {
       console.log( 'Got peak_uy=' + peak_uy + ', peak_ly=' + peak_ly + ' for energy ' + info.energy, info );
       continue;
@@ -7234,8 +7241,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     label = chart.append("text");
     label.attr('class', 'peaklabel')
     .attr("text-anchor", "start")
-    .attr("y", peak_uy - 10 )
-    .attr("x", peak_x)           //Doesnt seem to be needed since we are using all <tspan>s
+    .attr("y", 0)
+    .attr("x", 0)
     .attr("energy", peakEnergy)  //Dont think this is needed
     .attr("fill", axiscolor )
     .attr("data-labelindex", index)  //Is there a better way to associate the labelinfos object with this label?  Probably, but whatever for now.
@@ -7245,56 +7252,77 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     .attr("data-peak-upper-y-px", peak_uy.toFixed(1) )
     ;
     
-    if( self.options.showUserLabels && info.userLabel ){
-      /* T-span element for the user label */
-      /* Gets priority for top-most text in label */
-      userLabel = label.append("tspan");
-      userLabel.attr("class", "userLabel")
-      .attr("dy", 0)
-      .attr("x", peak_x)
-      .text(info.userLabel);
+    let labelRows = [];
+    if( self.options.showUserLabels && info.userLabel && info.userLabel.length ){
+      labelRows.push( info.userLabel );
     }
     
     if( self.options.showPeakLabels ) {
-      /* T-span element for the peak label */
-      /* Gets second in priority for top-most text in label */
-      peakEnergyLabel = label.append("tspan");
-      peakEnergyLabel.attr("class", "peakEnergyLabel")
-      .attr("dy", userLabel ?  "1em" : 0)   /* If user label is not present, then this is the top-most element */
-      .attr("x", peak_x)
-      .text(peakEnergy);
+      labelRows.push( peakEnergy );
     }
     
     if( self.options.showNuclideNames && nuclide ) {
-      /* T-span element for nuclide label */
-      /* Third in priority for top-most text in label */
-      nuclideNameLabel = label.append("tspan");
-      nuclideNameLabel.attr("class", "nuclideLabel")
-      .attr("dy", self.options.showUserLabels && self.options.showPeakLabels ? "1em" : self.options.showUserLabels || self.options.showPeakLabels ?  "1em" : 0)
-      .attr("x", peak_x)
-      .text(nuclide.name);
-      
-      
-      /* Nuclide energy label displayed only if nuclide name labels are displayed! */
-      //console.log( 'nuclide: ', nuclide );
-      if( self.options.showNuclideEnergies )
-        nuclideNameLabel.text( nuclide.name + ", " + nuclide.energy.toFixed(2).toString() + " keV"
-                               + (nuclide.type ? " " + nuclide.type : "") );
+      let txt = nuclide.name;
+      if( self.options.showNuclideEnergies ) // Nuclide energy label displayed only if nuclide name labels are displayed!
+        txt += ", " + nuclide.energy.toFixed(2).toString() + " keV" + (nuclide.type ? " " + nuclide.type : "");
+      labelRows.push( txt );
     }//if( show nuclide name and we have a nuclide )
     
-
+    for( let i = 0; i < labelRows.length; ++i ){
+      label.append("tspan")
+        .attr("dy", (i===0) ? ("-" + (labelRows.length-1) + ".2em") : "1em" ) //The extra 0.2em is to vertically center the text
+        .attr("x", 0)
+        .attr("font-size", fontSize)
+        .attr("alignment-baseline","baseline")
+        .text(labelRows[i]);
+    }
+    
     // Add handlers to make text bold when you mouse over the label.
     label.on("mouseover", function(){ self.highlightLabel(this,false); } )
-         .on("mouseout",  function(){ self.unHighlightLabel(true); } );
+      .on("mouseout",  function(){ self.unHighlightLabel(true); } );
     
     if( self.isTouchDevice() )
-    label.on("touchstart", function(){ self.highlightLabel(this,false); } );
-
+      label.on("touchstart", function(){ self.highlightLabel(this,false); } );
     
     //Reposition label niavely.
     const lbb = label.node().getBBox();
     const labelh = Math.max(lbb.height,8);
     const labelw = Math.max(lbb.width,10);
+    
+    // Rotate `label` by X degrees, but keep bottom left of text at `peak_x` and `peak_uy`
+    let setLabelTransform = function(label,dx,dy){
+      // We will rotate text at bottom-left corner, but we want to niavely keep the label centered at the peak, in x
+      const wx = labelw*Math.cos( -rotationAngle*(Math.PI/180) );
+      const hx = labelh*Math.sin( -rotationAngle*(Math.PI/180) );
+      const x_center = 0.5*(wx - hx);
+      const xform = "translate(" + (peak_x - x_center + dx) + " " + (peak_uy + dy) + ") rotate(" + rotationAngle + " 0 0)";
+      label.attr("transform", xform );
+    };
+    setLabelTransform( label, 0, -10);
+    
+    
+    const labelBBox = label.node().getBBox();
+    const chartDomRect = self.chartBody.node().getBoundingClientRect();
+    const labelDomRect = label.node().getBoundingClientRect();
+    
+    
+    continue;
+    
+    {
+      const txtNode = thislabel.node();
+      const svgCtm = txtNode.getCTM();  // Get the transformation matrix (CTM) of the text element
+      const visCtm = self.peakVis.node().getCTM(); // Get x-form for self.peakVis, which we need coordinates relative to
+      
+      const fromTxtToVisCoords = function(x,y){
+        const pt = self.svg.node().createSVGPoint(); //TODO: createSVGPoint() is depreciated
+        pt.x = x;
+        pt.y = y;
+        const svgPoint = pt.matrixTransform(svgCtm); // Apply the transformation matrix to the point
+        return svgPoint.matrixTransform( visCtm.inverse() ); // Get coordinates relative to self.peakVis
+      };
+    }
+    
+    
     
     //ToDo: if( (peak_uy - 0.5*labelh) < 0 ), then try moving left or right to avoid overlapping with the peak.
     let labely = Math.max( 2+0.5*labelh, peak_uy - 0.5*labelh - 10 );
@@ -7344,23 +7372,24 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       let otherlabel = drawnlabels[otherindex];
       let othernode = otherlabel.node();
       
-      const leftw = othernode.getBBox().width;
+      const leftw = othernode.getBoundingClientRect().width;
       
-      let x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox()),
-          y_overlap = yoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+      let x_overlap = xoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect()),
+      y_overlap = yoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect());
       
       if( x_overlap > 0 && y_overlap > 0  ){
-        let newy = otherlabel.node().getBBox().y - 0.5*labelh - 2;
+        let newy = otherlabel.node().getBoundingClientRect().y - 0.5*labelh - 2;
         
         //Make sure we only move the label up, and by at least a few pixels, so the loop will be guaranteed to terminate
         if( newy >= (labely - 0.1*labelh) )
-          newy = labely - 0.5*labelh;
-         
+        newy = labely - 0.5*labelh;
+        
         reachedTop = (newy < (2+0.5*labelh));
-       
+        
         if( !reachedTop ){
           labely = newy;
           label.attr("y", labely );
+          setLabelTransform(label);
           
           //Now we have to start back over and make sure we havent started overlapping
           //  with any peaks before 'otherindex'.
@@ -7372,8 +7401,10 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     
     //If we reached the top of the chart, lets reset our height, and try a
     //  different approach
-    if( reachedTop )
+    if( reachedTop ){
       label.attr("y", origy );
+      setLabelTransform(label);
+    }
     
     //If reachedTop is true, then we still have an overlap
     let haveOverlap = reachedTop;
@@ -7384,12 +7415,12 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       haveOverlap = false;
       for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
         let otherlabel = drawnlabels[otherindex];
-        if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
+        if( checkoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect()) ){
           haveOverlap = true;
-          const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+          const x_overlap = xoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect());
           let otherinfo = labelinfos[parseInt(otherlabel.attr('data-labelindex'))];
           let otherPeakXpx = otherinfo.centroidXPx;
-          const otherWidth = otherlabel.node().getBBox().width;
+          const otherWidth = otherlabel.node().getBoundingClientRect().width;
           const otherNominalX = Math.min( Math.max(2, otherPeakXpx-0.5*otherWidth+5), chartw-otherWidth-2 );
           const otherCurrentX = parseFloat(otherlabel.attr("x"));
           const newOtherX = otherCurrentX - x_overlap - 2;
@@ -7397,16 +7428,18 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
             haveOverlap = false;
             
             otherlabel.attr("x", newOtherX );
+            setLabelTransform(otherlabel);
             otherlabel.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", newOtherX);});
             
             for( let testindex = 0; !haveOverlap && testindex < drawnlabels.length; ++testindex ){
               if( testindex !== otherindex )
-                haveOverlap = checkoverlap(otherlabel.node().getBBox(),drawnlabels[testindex].node().getBBox());
+              haveOverlap = checkoverlap(otherlabel.node().getBoundingClientRect(),drawnlabels[testindex].node().getBoundingClientRect());
             }
             
             if( haveOverlap ){
               // Move otherlabel back to its original position; haveOverlap being true will stop the loop over otherindex
               otherlabel.attr("x", otherCurrentX );
+              setLabelTransform(otherlabel);
               otherlabel.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", otherCurrentX);});
               //console.log( 'For collision with ' + label.attr("energy") + ' couldnt fix by moving '
               //             + otherlabel.attr("energy") + ' to left by ' + x_overlap + 'px');
@@ -7433,20 +7466,21 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       
       let maxxpx = Math.min( peak_x+0.5*labelw+5, chartw-labelw-2 );
       if( (index+1) < labelinfos.length )
-        maxxpx = Math.min( maxxpx, labelinfos[index+1].centroidXPx-0.5*labelw-5 );
+      maxxpx = Math.min( maxxpx, labelinfos[index+1].centroidXPx-0.5*labelw-5 );
       
       for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
         let otherlabel = drawnlabels[otherindex];
-        if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
+        if( checkoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect()) ){
           haveOverlap = true;
-          const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+          const x_overlap = xoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect());
           let newx = parseFloat(label.attr("x")) + x_overlap + 2;
           if( newx <= maxxpx ){
             haveOverlap = false;
             label.attr("x", newx );
+            setLabelTransform(label);
             label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", newx);});
             for( let testindex = 0; !haveOverlap && testindex < drawnlabels.length; ++testindex ){
-              haveOverlap = checkoverlap(otherlabel.node().getBBox(),label.node().getBBox());
+              haveOverlap = checkoverlap(otherlabel.node().getBoundingClientRect(),label.node().getBoundingClientRect());
             }
           }//
         }//if( overlap )
@@ -7454,6 +7488,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       
       if( haveOverlap ){
         label.attr("x", labelx = origx );
+        setLabelTransform(label);
         label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", origx);});
         //console.log( 'Moving label right didnt help.' );
       } else {
@@ -7471,12 +7506,13 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
         haveOverlap = false;
         labely = trial_y;
         label.attr("y", trial_y );
+        setLabelTransform(label);
         
         for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
           let otherlabel = drawnlabels[otherindex];
-          if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
+          if( checkoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBoundingClientRect()) ){
             haveOverlap = true;
-            trial_y += 5 + yoverlap(label.node().getBBox(),otherlabel.node().getBBox());
+            trial_y += 5 + yoverlap(label.node().getBoundingClientRect(),otherlabel.node().getBBox());
             //ToDo: could try moving to the right (up to 50% label width), and
             //      if that is less than some percentage of the total change in y to avoid the overlap,
             //      than we could do that
@@ -7486,6 +7522,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       
       if( haveOverlap ){
         label.attr("y", starty );
+        setLabelTransform(label);
       }
     }//if( haveOverlap - try putting label under spectrum )
     
@@ -10557,9 +10594,53 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   let thislabel = d3.select(labelEl);
   thislabel.attr('class', 'peakLabelBold');
   
-  const labelbbox = thislabel.node().getBBox();
-  const labelTop = labelbbox.y,
-  labelBottom = labelbbox.y + labelbbox.height;
+  // We will be appending the line connecting the label to the peak, to the `self.peakVis` <g>
+  //  element, which is a child of `self.vis` that has a transform of "translate(left-pad,top-pad)".
+  //  Also, the <text> element may have a rotation applied.
+  //  So we need to transform the the unrotated text position into the <svg> coordinates, then
+  //  subtract the translation of `self.vis`, to get the lines end-point.
+  const txtNode = thislabel.node();
+  const svgCtm = txtNode.getCTM();  // Get the transformation matrix (CTM) of the text element
+  const visCtm = self.peakVis.node().getCTM(); // Get x-form for self.peakVis, which we need coordinates relative to
+  
+  const fromTxtToVisCoords = function(x,y){
+    const pt = self.svg.node().createSVGPoint(); //TODO: createSVGPoint() is depreciated
+    pt.x = x;
+    pt.y = y;
+    const svgPoint = pt.matrixTransform(svgCtm); // Apply the transformation matrix to the point
+    return svgPoint.matrixTransform( visCtm.inverse() ); // Get coordinates relative to self.peakVis
+  };
+  
+  
+  const labelbbox = thislabel.node().getBBox(); // This is untranslated/unrotated
+  const labelDomRect = thislabel.node().getBoundingClientRect();  //This give height/width, as displayed
+  
+  const labelEndpoints = [ fromTxtToVisCoords( 0, 0 ), //bottom-left of text
+    fromTxtToVisCoords( 0, -0.5*labelbbox.height ), //mid-height-left of text
+    fromTxtToVisCoords( 0.5*labelbbox.width, 0 ), //bottom, middle-x of text
+    fromTxtToVisCoords( labelbbox.width, 0 ), //bottom right of text
+    fromTxtToVisCoords( labelbbox.width, -0.5*labelbbox.height ), //mid-height-right of text
+    fromTxtToVisCoords( labelbbox.width, -labelbbox.height ), //top-right of text
+    fromTxtToVisCoords( 0.5*labelbbox.width, -labelbbox.height ), //top middle-x of text
+    fromTxtToVisCoords( 0, -labelbbox.height ) //top-left of text
+  ];
+  
+  const visPt = labelEndpoints[0];
+  
+  /*
+   // Visualize text extent
+  for( let i = 0; i < labelEndpoints.length; i += 1 ){
+    self.peakVis
+    .append('circle')
+    .attr('cx', labelEndpoints[i].x )
+    .attr('cy', labelEndpoints[i].y )
+    .attr('r', 1)
+    .style('fill', 'green');
+  }
+  */
+  
+  const labelTop = visPt.y - labelDomRect.height,
+        labelBottom = visPt.y;
   
   /*
    //I think we have to make the rect right before the <text>....
@@ -10573,12 +10654,23 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   .attr("class", 'peakLabelBorder' );
   */
   
-  const x1 = labelbbox.x + 0.5*labelbbox.width;
   const x2 = labelEl.dataset.peakXPx;
-  const y1 = ((labelTop > labelEl.dataset.peakLowerYPx) ? labelTop : labelBottom);
   let y2 = 0.5*(parseFloat(labelEl.dataset.peakLowerYPx) + parseFloat(labelEl.dataset.peakUpperYPx));
   if( isFromPeakBeingHighlighted )
-    y2 = (labelbbox.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
+    y2 = (visPt.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
+  
+  // Pick x1 and x2 to be the shortest points to x2 and y2.
+  let x1 = labelEndpoints[0].x, y1 = labelEndpoints[0].y, prevdist;
+  for( let i = 0; i < labelEndpoints.length; i += 1 ){
+    const x_0 = labelEndpoints[i].x, y_0 = labelEndpoints[i].y;
+    const thisdist = Math.sqrt( (x_0 - x2)*(x_0 - x2) + (y_0 - y2)*(y_0 - y2) );
+    if( (i===0) || thisdist < prevdist )
+    {
+      prevdist = thisdist;
+      x1 = x_0;
+      y1 = y_0;
+    }
+  }
   
   //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
   const axiscolor = self.getElementLineColor('.tick');
