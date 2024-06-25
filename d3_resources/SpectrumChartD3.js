@@ -122,6 +122,12 @@ SpectrumChartD3 = function(elem, options) {
   //  But if the roid drag lines were created by clicking a peak (and hence this.showDragLineWhileInRoi is true), then double this value is used (i.e., this value on either side of ROI edge)
   self.options.roiDragWidth = (typeof options.roiDragWidth == 'number') ? options.roiDragWidth : 10;
   
+  // The font-size of the labels.  Ex: null, "8px", "smaller", "12", "10px", "x-small", etc
+  self.options.peakLabelSize = (typeof options.peakLabelSize == 'string') ? options.peakLabelSize : null;
+  // The rotation angle of the labels.  A negative value rotates it the direction you probably want.
+  //  A value of 0 is horizontal, a value of -90 is vertical (i.e. up-and-down).  Only tested [0,-90]
+  self.options.peakLabelRotation = (typeof options.peakLabelRotation == 'number') ? options.peakLabelRotation : 0;
+  
   self.setLocalizations( {}, true );//Set default localization strings
 
   this.padding = {
@@ -7167,11 +7173,8 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
    }
    */
   
-  // The font-size of the labels.  Ex: null, "8px", "smaller", "12", "10px", "x-small", etc
-  const fontSize = null;
-  // The rotation angle of the labels.  A negative value rotates it the direction you probably want.
-  //  A value of 0 is horizontal, a value of -90 is vertical (i.e. up-and-down).  Only tested [0,-90]
-  const rotationAngle = -90;
+  const fontSize = self.options.peakLabelSize;
+  const rotationAngle = self.options.peakLabelRotation;
   
   // The labels we added, as well as their associated data, including position
   let label_array = [];
@@ -8568,7 +8571,13 @@ SpectrumChartD3.prototype.setSumPeaks = function(d) {
   this.updateFeatureMarkers();
 }
 
+SpectrumChartD3.prototype.setPeakLabelSize = function(d) {
+  this.options.peakLabelSize = (typeof d == 'string') ? d : null;
+}
 
+SpectrumChartD3.prototype.setPeakLabelRotation = function(d) {
+  this.options.peakLabelRotation = (typeof d == 'number') ? d : 0;
+}
 
 SpectrumChartD3.prototype.setSearchWindows = function(ranges) {
   var self = this;
