@@ -127,6 +127,8 @@ SpectrumChartD3 = function(elem, options) {
   // The rotation angle of the labels.  A negative value rotates it the direction you probably want.
   //  A value of 0 is horizontal, a value of -90 is vertical (i.e. up-and-down).  Only tested [0,-90]
   self.options.peakLabelRotation = (typeof options.peakLabelRotation == 'number') ? options.peakLabelRotation : 0;
+  self.options.logYAxisMin = ((typeof options.logYAxisMin == 'number') && (options.logYAxisMin > 0)) ? options.logYAxisMin : 0.1;
+  
   
   self.setLocalizations( {}, true );//Set default localization strings
 
@@ -4697,6 +4699,7 @@ SpectrumChartD3.prototype.setShowLegend = function( show ) {
  * -------------- Y-axis Functions --------------
  */
 SpectrumChartD3.prototype.yticks = function() {
+  const self = this;
   var ticks = [];
   var EPSILON = 1.0E-3;
 
@@ -4705,9 +4708,9 @@ SpectrumChartD3.prototype.yticks = function() {
 
   var formatYNumber = function(v) {
     /*poorly simulating "%.3g" in snprintf */
-    /*SHould get rid of so many regexs, and shorten code (shouldnt there be a builtin function to print to "%.3"?) */
+    /*Should get rid of so many regexs, and shorten code (shouldnt there be a builtin function to print to "%.3"?) */
     var t;
-    if( v >= 1000 || v < 0.1 )
+    if( v >= 1000 || v < self.options.logYAxisMin )
     {
       t = v.toPrecision(3);
       t = t.replace(/\.0+e/g, "e").replace(/\.0+$/g, "");
@@ -4800,9 +4803,11 @@ SpectrumChartD3.prototype.yticks = function() {
 
     if( this.options.yscale === "log" )
     {
+      const yMinPrefPow = Math.floor( Math.log10(this.options.logYAxisMin) );
+      
       /*Get the power of 10 just below or equal to rendermin. */
-      var minpower = (renderymin > 0.0) ? Math.floor( Math.log10(renderymin) ) : -1;
-
+      var minpower = (renderymin > 0.0) ? Math.floor( Math.log10(renderymin) ) : yMinPrefPow;
+      
       /*Get the power of 10 just above or equal to renderymax.  If renderymax */
       /*  is less than or equal to 0, set power to be 0. */
       var maxpower = (renderymax > 0.0) ? Math.ceil( Math.log10(renderymax) ): 0;
@@ -4813,12 +4818,12 @@ SpectrumChartD3.prototype.yticks = function() {
         /*Happens when renderymin==renderymax which is a power of 10 */
         ++maxpower;
         --minpower;
-      }else if( maxpower > 2 && minpower < -1)
+      }else if( maxpower > 2 && minpower < yMinPrefPow)
       {
         /*We had a tiny value (possibly a fraction of a count), as well as a */
         /*  large value (>1000). */
-        minpower = -1;
-      }else if( maxpower >= 0 && minpower < -1 && (maxpower-minpower) > 6 )
+        minpower = yMinPrefPow;
+      }else if( maxpower >= 0 && minpower < yMinPrefPow && (maxpower-minpower) > 6 )
       {
         /*we had a tiny power (1.0E-5), as well as one between 1 and 999, */
         /*  so we will only show the most significant decades */
@@ -8579,6 +8584,10 @@ SpectrumChartD3.prototype.setPeakLabelRotation = function(d) {
   this.options.peakLabelRotation = (typeof d == 'number') ? d : 0;
 }
 
+SpectrumChartD3.prototype.setLogYAxisMin = function(d) {
+  this.options.logYAxisMin = (typeof d == 'number') && (d > 0.0) ? d : 0.1;
+}
+
 SpectrumChartD3.prototype.setSearchWindows = function(ranges) {
   var self = this;
 
@@ -10833,7 +10842,7 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
     /*  past where the data where hit. */
     var yfractop = self.options.logYFracTop, yfracbottom = self.options.logYFracBottom;
 
-    var y0Intitial = ((y0<=0.0) ? 0.1 : y0);
+    var y0Intitial = ((y0<=0.0) ? self.options.logYAxisMin : y0);
     var y1Intitial = ((y1<=0.0) ? 1.0 : y1);
     y1Intitial = ((y1Intitial<=y0Intitial) ? 1.1*y0Intitial : y1Intitial);
 
@@ -10846,7 +10855,7 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
     var ylower = Math.pow( 10.0, logLowerY );
     var yupper = Math.pow( 10.0, logUpperY );
 
-    y0 = ((y0<=0.0) ? 0.1 : ylower);
+    y0 = ((y0<=0.0) ? self.options.logYAxisMin : ylower);
     y1 = ((y1<=0.0) ? 1.0 : yupper);
   } else if( self.options.yscale == "lin" )  {
     y0 = ((y0 <= 0.0) ? (1+self.options.linYFracBottom)*y0 : (1-self.options.linYFracBottom)*y0);
