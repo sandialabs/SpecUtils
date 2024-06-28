@@ -20,6 +20,11 @@
 // For statically linking on Windows, we need this following define
 #define BOOST_PYTHON_STATIC_LIB
 
+// TODO: It would be nice to have the compiled results compatible with
+//       any python >= 3.5, which would require this next line, but this
+//       would require significant changes to use this limited API
+// #define Py_LIMITED_API 0x03050000
+
 #include "SpecUtils_config.h"
 
 #include "3rdparty/date/include/date/date.h"
