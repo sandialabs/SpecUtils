@@ -4385,16 +4385,25 @@ public:
         //Note: as of 20160531, this duplicate spectrum stuff is untested.
         const vector<std::shared_ptr<Measurement>>::const_iterator beginmeas = meas_to_add.begin();
         const vector<std::shared_ptr<Measurement>>::const_iterator endmeas = meas_to_add.end();
+      
+        // If multiple spectra, with different energy calibrations are given, we may
+        // need to rename detectors to use the "_intercal_" convention - so we'll track
+        // this with the following variables:
+        vector<bool> already_added_meas_name( meas_to_cal_id.size(), false );
+        vector< pair<std::shared_ptr<Measurement>,string> > meas_to_new_det_name;
+      
         for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
         {
           std::shared_ptr<Measurement> &meas = meas_to_cal_id[i].first;
+          const std::string &outer_cal_name = meas_to_cal_id[i].second;
+          
           if( std::find(beginmeas,endmeas,meas) == endmeas )
             continue;
           
-          vector< pair<std::shared_ptr<Measurement>,string> > samenames;
           for( size_t j = 0; j < i; ++j )
           {
             std::shared_ptr<Measurement> &innermeas = meas_to_cal_id[j].first;
+            const std::string &inner_cal_name = meas_to_cal_id[j].second;
             
             if( std::find(beginmeas,endmeas,innermeas) == endmeas )
               continue;
@@ -4408,22 +4417,30 @@ public:
               // Detector name, start, real, and live times are all the same, but energy
               //  calibration is different, we will use the "_intercal_" detector renaming
               //  convention.
-              samenames.push_back( make_pair(innermeas, meas_to_cal_id[j].second ) );
+              // Usually when we're here it means that the same spectrum was placed into the spectrum
+              //  file multiple times, but with different energy calibrations (maybe one with data up
+              //  to 3 MEV, and the other up to 9 MeV, or maybe one is linearized, while the other is
+              //  binned according to sqrt(energy), etc).
+              
+              if( !already_added_meas_name[i] )
+              {
+                string new_outer_det_name = meas->detector_name_ + "_intercal_" + outer_cal_name;
+                meas_to_new_det_name.push_back( make_pair(meas, std::move(new_outer_det_name) ) );
+                already_added_meas_name[i] = true;
+              }//if( !already_added_meas )
+              
+              if( !already_added_meas_name[j] )
+              {
+                string new_inner_det_name = innermeas->detector_name_ + "_intercal_" + inner_cal_name;
+                meas_to_new_det_name.push_back( make_pair(innermeas, std::move(new_inner_det_name) ) );
+                already_added_meas_name[j] = true;
+              }//if( !already_added_meas )
             }//if( detector name, real, live, and start times are all the same )
           }//for( size_t j = 0; j < i; ++j )
-          
-          if( samenames.size() )
-          {
-            // Usually when we're here it means that the same spectrum was placed into the spectrum
-            //  file multiple times, but with different energy calibrations (maybe one with data up
-            //  to 3 MEV, and the other up to 9 MeV, or maybe one is linearized, while the other is
-            //  binned according to sqrt(energy), etc).
-            meas->detector_name_ += "_intercal_" + meas_to_cal_id[i].second;
-            for( size_t j = 0; j < samenames.size(); ++j )
-              samenames[j].first->detector_name_ += "_intercal_" + samenames[j].second;
-          }//if( samenames.size() )
         }//for( size_t i = 1; i < meas_to_cal_id.size(); ++i )
         
+        for( const auto &meas_name : meas_to_new_det_name )
+          meas_name.first->detector_name_ = meas_name.second;
         
         // We will insert `meas_parse_warnings` into each Measurement we are adding; not ideal,
         //  but because we dont have a container for the <RadMeasurement> concept, this is the
