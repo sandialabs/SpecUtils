@@ -694,10 +694,28 @@ namespace
   }
 
   void addMeasurement_wrapper( SpecUtils::SpecFile *info,
-                             boost::python::object py_meas )
+                             boost::python::object py_meas,
+                             bool doCleanup )
   {
     std::shared_ptr<SpecUtils::Measurement> m = boost::python::extract<std::shared_ptr<SpecUtils::Measurement>>(py_meas);
-    info->add_measurement( m, true );
+    info->add_measurement( m, doCleanup );
+  }
+
+  void cleanupAfterLoad_wrapper(  SpecUtils::SpecFile *info, 
+                            bool DontChangeOrReorderSamples, 
+                            bool RebinToCommonBinning, 
+                            bool ReorderSamplesByTime )
+  {
+    unsigned int flags = 0x0;
+
+    if( DontChangeOrReorderSamples )
+      flags |= SpecUtils::SpecFile::CleanupAfterLoadFlags::DontChangeOrReorderSamples;
+    if( RebinToCommonBinning )
+      flags |= SpecUtils::SpecFile::CleanupAfterLoadFlags::RebinToCommonBinning;
+    if( ReorderSamplesByTime )
+      flags |= SpecUtils::SpecFile::CleanupAfterLoadFlags::ReorderSamplesByTime;
+    
+    info->cleanup_after_load( flags );
   }
 
   std::vector<std::string> to_cpp_remarks( boost::python::object py_remarks )
@@ -1436,26 +1454,26 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
         "is preserved in the output.\n"
         "Throws RuntimeError on failure." )
   .def( "writeCsv", &writeCsv_wrapper, args("OutputStream"),
-        "The spectra are written out in a two column format (seperated by a comma);\n"
+        "The spectra are written out in a two column format (separated by a comma);\n"
         "the first column is gamma channel lower edge energy, the second column is\n"
         "channel counts.  Each spectrum in the file are written out contiguously and\n"
-        "seperated by a header that reads \"Energy, Data\".  Windows style line endings\n"
+        "separated by a header that reads \"Energy, Data\".  Windows style line endings\n"
         "are used (\\n\\r).  This format loses all non-spectral information, including\n"
         "live and real times, and is intended to be an easy way to import the spectral\n"
         "information into other programs like Excel.\n"
         "Throws RuntimeError on write failure." )
   .def( "writeTxt", &writeTxt_wrapper, args("OutputStream"),
-        "Spectrum(s) will be written to an ascii text format.  At the beggining of the\n"
+        "Spectrum(s) will be written to an ascii text format.  At the beginning of the\n"
         "output the original file name, total live and real times, sum gamma counts,\n"
-        "sum neutron counts, and any file level remarks will be written on seperate\n"
+        "sum neutron counts, and any file level remarks will be written on separate\n"
         "labeled lines. Then after two blank lines each spectrum in the current file\n"
-        "will be written, seperated by two blank lines.  Each spectrum will contain\n"
+        "will be written, separated by two blank lines.  Each spectrum will contain\n"
         "all remarks, measurement start time (if valid), live and real times, sample\n"
         "number, detector name, detector type, GPS coordinates/time (if valid), \n"
         "serial number (if present), energy calibration type and coefficient values,\n"
         "and neutron counts (if valid); the channel number, channel lower energy,\n"
         "and channel counts is then provided with each channel being placed on a\n"
-        "seperate line and each field being seperated by a space.\n"
+        "separate line and each field being separated by a space.\n"
         "Any detector provided analysis in the original program, as well\n"
         "manufacturer, UUID, deviation pairs, lane information, location name, or\n"
         "spectrum title is lost.\n"
@@ -1524,8 +1542,15 @@ class_<SpecUtils::EnergyCalibration>("EnergyCalibration")
         args("Measurement"),
         "Removes the record from the spectrum file." )
   .def( "addMeasurement", &addMeasurement_wrapper, 
-        args("Measurement"),
-        "Add the record to the spectrum file." )
+        args("Measurement", "DoCleanup"),
+        "Add the record to the spectrum file\n."
+        "If DoCleanup is true, spectrum file sums will be computed, and possibly re-order\n"
+        "measurements.  If false, then you must call cleanupAfterLoad() when you are done\n"
+        "adding measurements." )
+  .def( "cleanupAfterLoad", cleanupAfterLoad_wrapper,
+        args("DontChangeOrReorderSamples", "RebinToCommonBinning", "ReorderSamplesByTime"),
+        ""
+  )
 
   // Begin setters
   .def( "setFileName", &SpecUtils::SpecFile::set_filename, 

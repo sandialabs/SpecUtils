@@ -170,7 +170,10 @@ newMeas.setRemarks( remarks )
 #  family of functions is also useful when the SpecFile "owns"
 #  the Measurement you want to modify (e.g., you read in from a 
 #  file).
-info.addMeasurement( newMeas )
+#
+# Since we are only adding one-measurement, we will do the "cleanup"
+#  of re-computing sums and all that in this next call  
+info.addMeasurement( newMeas, DoCleanup = True )
 
 # We can also set a number of meta-information quantities on the SpecFile
 info.setDetectorType( SpecUtils.DetectorType.DetectiveEx100 )
