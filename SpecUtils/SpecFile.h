@@ -2275,8 +2275,10 @@ public:
                       std::vector<std::string> det_names ) const;
 #endif
   
+#if( SpecUtils_INJA_TEMPLATES )
   bool write_template( std::ostream &output, const std::string template_file, bool strip_blocks ) const;
-
+#endif
+  
 #if( SpecUtils_ENABLE_URI_SPECTRA )
   /** Writes the file to URI(s), for, e.g., creating QR-codes.
    
