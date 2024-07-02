@@ -1669,11 +1669,6 @@ public:
   /** Enum to indicate "derived data" variant to keep. */
   enum class DerivedVariantToKeep{ NonDerived, Derived };
   
-  /** Returns the measurements that are the specified derived data type.
-   */
-  std::vector<std::shared_ptr<const Measurement>>
-  get_derived_data_variant_measurements( const DerivedVariantToKeep variant ) const;
-  
   /** When a spectrum file contains both "derived" and non-derived data, we may want to use only one of these variants of the data;
    this functions lets you discard the variant you arent interested in.
    

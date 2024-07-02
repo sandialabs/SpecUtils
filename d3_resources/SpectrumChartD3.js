@@ -4750,8 +4750,6 @@ SpectrumChartD3.prototype.yticks = function() {
     /*     to satisfy the spacing of labels we want with the given range. */
     var msd = range / nlabel / n;
 
-    console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
-
     if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
       return ticks;
     }
@@ -5167,22 +5165,15 @@ SpectrumChartD3.prototype.xticks = function() {
   ndigstart = Math.max(1,Math.min(ndigstart,5));
   
   var nlabel = Math.floor( this.size.width / (50 + 15*(ndigstart-1)) );
-
-  
-  var renderInterval;/* = range / 10.0; */
   var n = Math.pow(10, Math.floor(Math.log10(range/nlabel)));
   var msd = range / (n * nlabel);
-
 
   if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
     console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
     return ticks;
   }
 
-  var subdashes = 0;
-
-  /*console.log( "msd=" + msd + ", nlabel=" + nlabel + ", ndigstart=" + ndigstart ); */
-
+  let subdashes, renderInterval;
   if (msd < 1.5)
   {
     subdashes = 2;

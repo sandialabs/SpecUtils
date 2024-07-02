@@ -27,12 +27,6 @@ namespace std {
 
 
 %include "cpointer.i"
-%include "boost_ptime.i"
-
-
-
-
-
 
 
 %{ 
@@ -63,7 +57,7 @@ void closeFile(std::ostream *stream) {
 %}
 
 
-
+%include "SpecUtils_config.h"
 
 %{
 #include <string>
@@ -73,3 +67,17 @@ void closeFile(std::ostream *stream) {
 
 
 %include "SpecUtils/SpecFile.h"
+
+%{
+#include "SpecUtils/EnergyCalibration.h"
+%}
+
+%include "SpecUtils/EnergyCalibration.h"
+
+%{
+#include "D3SpectrumExportResources.h"
+#include "SpecUtils/D3SpectrumExport.h"
+%}
+
+%include "D3SpectrumExportResources.h"
+%include "SpecUtils/D3SpectrumExport.h"

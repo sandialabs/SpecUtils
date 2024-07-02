@@ -45,6 +45,10 @@ import gov.sandia.specutils.SaveSpectrumAsType;
 import gov.sandia.specutils.SpecFile;
 import gov.sandia.specutils.SpecUtilsSwig;
 import gov.sandia.specutils.StringVector;
+import gov.sandia.specutils.D3SpectrumOptions;
+import gov.sandia.specutils.D3SpectrumChartOptions;
+import gov.sandia.specutils.EnergyCalType;
+import gov.sandia.specutils.EnergyCalibration;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -428,7 +432,12 @@ public void readFile() {
     specFile.write_to_file("data_generatedFile.n42", sample_nums, det_nums, format);
     this.textInfo.append("wrote data_generatedFile.n42\n");
 
-
+    /* Write HTML file */ 
+    SWIGTYPE_p_std__ostream htmlfile = SpecUtilsSwig.openFile("data_generatedFile.html");
+    D3SpectrumChartOptions htmlOptions = new D3SpectrumChartOptions();
+    specFile.write_d3_html(htmlfile, htmlOptions, specFile.sample_numbers(), specFile.detector_names() );
+    SpecUtilsSwig.closeFile(htmlfile);
+    this.textInfo.append("wrote data_generatedFile.html\n");
 }
 
 
