@@ -438,6 +438,14 @@ public void readFile() {
     specFile.write_d3_html(htmlfile, htmlOptions, specFile.sample_numbers(), specFile.detector_names() );
     SpecUtilsSwig.closeFile(htmlfile);
     this.textInfo.append("wrote data_generatedFile.html\n");
+
+    /* Write HTML to a Java string */
+    SWIGTYPE_p_std__ostream htmlstrm = SpecUtilsSwig.createStringStream();
+    specFile.write_d3_html(htmlstrm, htmlOptions, specFile.sample_numbers(), specFile.detector_names() );
+    String html_content = SpecUtilsSwig.stringStreamToString(htmlstrm);
+    //System.out.println(html_content);
+    SpecUtilsSwig.cleanupStringString(htmlstrm);
+    this.textInfo.append("wrote data_generatedFile to string\n");
 }
 
 
