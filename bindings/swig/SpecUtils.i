@@ -29,7 +29,9 @@ namespace std {
 %include "cpointer.i"
 
 
+
 %{ 
+#include <string>  
 #include <iostream> 
 #include <sstream> 
 #include <fstream>
@@ -45,6 +47,20 @@ void closeFile(std::ostream *stream) {
   stream->flush();
   delete(stream);
 }
+
+std::ostream* createStringStream() { 
+  std::stringstream *sPtr = new std::stringstream();
+  return(sPtr);
+}
+
+std::string stringStreamToString(std::ostream *stream) { 
+  return dynamic_cast<std::stringstream *>(stream)->str();
+}
+
+void cleanupStringString(std::ostream *stream) { 
+  delete(stream);
+}
+
 %} 
 
 
