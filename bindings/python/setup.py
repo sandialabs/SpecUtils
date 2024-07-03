@@ -46,7 +46,7 @@ setup(
     # See class BinaryDistribution that was defined earlier
     distclass=BinaryDistribution,
 
-    version='0.0.1',
+    version='0.0.2',
     url='https://github.com/sandialabs/SpecUtils',
     author='William Johnson',
     author_email='wcjohns@sandia.gov',

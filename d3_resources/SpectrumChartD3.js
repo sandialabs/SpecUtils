@@ -126,6 +126,14 @@ SpectrumChartD3 = function(elem, options) {
   //  But if the roid drag lines were created by clicking a peak (and hence this.showDragLineWhileInRoi is true), then double this value is used (i.e., this value on either side of ROI edge)
   self.options.roiDragWidth = (typeof options.roiDragWidth == 'number') ? options.roiDragWidth : 10;
   
+  // The font-size of the labels.  Ex: null, "8px", "smaller", "12", "10px", "x-small", etc
+  self.options.peakLabelSize = (typeof options.peakLabelSize == 'string') ? options.peakLabelSize : null;
+  // The rotation angle of the labels.  A negative value rotates it the direction you probably want.
+  //  A value of 0 is horizontal, a value of -90 is vertical (i.e. up-and-down).  Only tested [0,-90]
+  self.options.peakLabelRotation = (typeof options.peakLabelRotation == 'number') ? options.peakLabelRotation : 0;
+  self.options.logYAxisMin = ((typeof options.logYAxisMin == 'number') && (options.logYAxisMin > 0)) ? options.logYAxisMin : 0.1;
+  
+  
   self.setLocalizations( {}, true );//Set default localization strings
 
   this.padding = {
@@ -4749,6 +4757,7 @@ SpectrumChartD3.prototype.setShowLegend = function( show ) {
  * -------------- Y-axis Functions --------------
  */
 SpectrumChartD3.prototype.yticks = function() {
+  const self = this;
   var ticks = [];
   var EPSILON = 1.0E-3;
 
@@ -4757,9 +4766,9 @@ SpectrumChartD3.prototype.yticks = function() {
 
   var formatYNumber = function(v) {
     /*poorly simulating "%.3g" in snprintf */
-    /*SHould get rid of so many regexs, and shorten code (shouldnt there be a builtin function to print to "%.3"?) */
+    /*Should get rid of so many regexs, and shorten code (shouldnt there be a builtin function to print to "%.3"?) */
     var t;
-    if( v >= 1000 || v < 0.1 )
+    if( v >= 1000 || v < self.options.logYAxisMin )
     {
       t = v.toPrecision(3);
       t = t.replace(/\.0+e/g, "e").replace(/\.0+$/g, "");
@@ -4798,8 +4807,6 @@ SpectrumChartD3.prototype.yticks = function() {
     /*msd: approx how many sub dashes we would expect there to have to be */
     /*     to satisfy the spacing of labels we want with the given range. */
     var msd = range / nlabel / n;
-
-    console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
 
     if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
       return ticks;
@@ -4852,9 +4859,11 @@ SpectrumChartD3.prototype.yticks = function() {
 
     if( this.options.yscale === "log" )
     {
+      const yMinPrefPow = Math.floor( Math.log10(this.options.logYAxisMin) );
+      
       /*Get the power of 10 just below or equal to rendermin. */
-      var minpower = (renderymin > 0.0) ? Math.floor( Math.log10(renderymin) ) : -1;
-
+      var minpower = (renderymin > 0.0) ? Math.floor( Math.log10(renderymin) ) : yMinPrefPow;
+      
       /*Get the power of 10 just above or equal to renderymax.  If renderymax */
       /*  is less than or equal to 0, set power to be 0. */
       var maxpower = (renderymax > 0.0) ? Math.ceil( Math.log10(renderymax) ): 0;
@@ -4865,12 +4874,12 @@ SpectrumChartD3.prototype.yticks = function() {
         /*Happens when renderymin==renderymax which is a power of 10 */
         ++maxpower;
         --minpower;
-      }else if( maxpower > 2 && minpower < -1)
+      }else if( maxpower > 2 && minpower < yMinPrefPow)
       {
         /*We had a tiny value (possibly a fraction of a count), as well as a */
         /*  large value (>1000). */
-        minpower = -1;
-      }else if( maxpower >= 0 && minpower < -1 && (maxpower-minpower) > 6 )
+        minpower = yMinPrefPow;
+      }else if( maxpower >= 0 && minpower < yMinPrefPow && (maxpower-minpower) > 6 )
       {
         /*we had a tiny power (1.0E-5), as well as one between 1 and 999, */
         /*  so we will only show the most significant decades */
@@ -5214,22 +5223,15 @@ SpectrumChartD3.prototype.xticks = function() {
   ndigstart = Math.max(1,Math.min(ndigstart,5));
   
   var nlabel = Math.floor( this.size.width / (50 + 15*(ndigstart-1)) );
-
-  
-  var renderInterval;/* = range / 10.0; */
   var n = Math.pow(10, Math.floor(Math.log10(range/nlabel)));
   var msd = range / (n * nlabel);
-
 
   if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
     console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
     return ticks;
   }
 
-  var subdashes = 0;
-
-  /*console.log( "msd=" + msd + ", nlabel=" + nlabel + ", ndigstart=" + ndigstart ); */
-
+  let subdashes, renderInterval;
   if (msd < 1.5)
   {
     subdashes = 2;
@@ -6700,8 +6702,9 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
     for( var i = xstartind; i < xendind; ++i ) {
-      thisx = ((i===xstartind) ? roiLB : ((i===(xendind-1)) ? roiUB : (0.5*(points[i].x + points[i+1].x))));
-      thisy = self.offset_integral( roi, points[i].x, points[i+1].x ) * scaleFactor;
+      const x0 = points[i].x, x1 = points[i+1].x;
+      thisx = ((i===xstartind) ? roiLB : ((i===(xendind-1)) ? roiUB : (0.5*(x0 + x1))));
+      thisy = self.offset_integral( roi, x0, x1 ) * scaleFactor;
       
       // Background Subtract - Subtract the current y-value with the corresponding background point
       if (useBackgroundSubtract) {
@@ -6733,7 +6736,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           labels[j].userLabel = roi.peaks[j].userLabel;
         }//if( the centroid of this peak is in this bin )
         
-        if( roi.peaks.length===1 || ((thisx >= vr[0]) && (thisx < vr[1])) ){
+        if( roi.peaks.length===1 || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1])) ){
           if( !paths[j+1].length ){
             paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
           }else{
@@ -6919,16 +6922,17 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     
     //Go from right to left drawing the peak lines that sit on the continuum.
     for( let xindex = xendind - 1; xindex >= xstartind; --xindex ) {
+      const x0 = points[xindex].x, x1 = points[xindex+1].x;
       peakamplitudes[xindex] = [];
       peak_area = 0.0;
-      //thisx = 0.5*(points[xindex].x + points[xindex+1].x);
-      thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(points[xindex].x + points[xindex+1].x))));
+      //thisx = 0.5*(x0 + x1);
+      thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(x0 + x1))));
       
-      cont_area = self.offset_integral( roi, points[xindex].x, points[xindex+1].x ) * scaleFactor;
+      cont_area = self.offset_integral( roi, x0, x1 ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
       if( useBackgroundSubtract ) 
-        cont_area -= background.points[bisector.left(background.points, points[xindex].x)].y;
+        cont_area -= background.points[bisector.left(background.points, x0)].y;
 
       peakamplitudes[xindex][0] = cont_area;
       peakamplitudes[xindex][1] = thisx;
@@ -6937,14 +6941,14 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         const ispeakcenter = (labels && labels[peakn] && labels[peakn].xindex===xindex);
         
         if( peak.type === 'GaussianDefined' ){
-          let area = photopeak_integral( peak, points[xindex].x, points[xindex+1].x ) * scaleFactor;
+          let area = photopeak_integral( peak, x0, x1 ) * scaleFactor;
           peak_area += area;
 
           m = peak.Centroid[0];
           s = peak.Width[0];
           const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
           
-          if( (roi.peaks.length == 1) || ((thisx > vr[0]) && (thisx < vr[1])) ){
+          if( (roi.peaks.length === 1) || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1]))  ){
             peakamplitudes[xindex][peakn+2] = area;
             let yvalpx = self.yScale(cont_area + area);
             minypx = Math.min(minypx,yvalpx);
@@ -6975,83 +6979,61 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
     
     //Make sure the peak line top connects with the continuum
-    for( var j = 0; j < roi.peaks.length; ++j ) {
-      var pathnum = j+1+roi.peaks.length;
+    for( let j = 0; j < roi.peaks.length; ++j ) {
+      let pathnum = j+1+roi.peaks.length;
       if( leftMostLineValue[j] && paths[pathnum] && paths[pathnum].length )
         paths[pathnum] += " " + self.xScale(leftMostLineValue[j].x) + "," + self.yScale(leftMostLineValue[j].y);
     }
-    
 
-    var leftMostFillValue = [];
-    //go from left to right, drawing fill area bottom
-    peakamplitudes.forEach( function(peakamps,xindex){
-      var cont = peakamps[0];
-      var thisx = peakamps[1];
-
+    let leftMostFillValue = [];
+  
+    function makePathForPeak(peakamps, xindex, leftToRight){
+      const cont = peakamps[0], thisx = peakamps[1];
+      const x0 = points[xindex].x, x1 = points[xindex+1].x;
+      
       peakamps.forEach( function( peakamp, peakindex ){
         if( peakindex < 2 )
           return;
         const peaknum = (peakindex - 2);
         const peak = roi.peaks[peaknum];
-        const m = peak.Centroid[0];
-        const s = peak.Width[0];
+        const m = peak.Centroid[0], s = peak.Width[0];
         const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
         
-        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
+        if( (roi.peaks.length !== 1) && !((vr[0] <= x1) && (vr[1] >= x0)) && !((thisx >= vr[0]) && (thisx < vr[1]))  )
           return;
         
-        var thisy = cont;
-        for( var j = 2; j < peakindex; ++j )
+        let thisy = cont;
+        for( var j = 2; j < (peakindex + (leftToRight ? 0 : 1)); ++j )
           thisy += peakamps[j];
-          
-        let yvalpx = self.yScale(thisy);
-        let xvalpx = self.xScale(thisx);
+        
+        const xvalpx = self.xScale(thisx);
+        const yvalpx = self.yScale(thisy);
         minypx = Math.min(minypx,yvalpx);
         maxypx = Math.max(maxypx,yvalpx);
-          
+        
         if( !paths[peaknum+1].length ){
-          leftMostFillValue[peaknum] = { x: xvalpx, y: yvalpx };
+          if( leftToRight )
+            leftMostFillValue[peaknum] = { x: xvalpx, y: yvalpx };
           paths[peaknum+1] = "M" + xvalpx + "," + yvalpx + " L";
         }else{
           paths[peaknum+1] += " " + xvalpx + "," + yvalpx;
         }
       } );
-    });
+    }; //makePathForPeak function
+    
+    
+    //go from left to right, drawing fill area bottom
+    peakamplitudes.forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,true); } );
 
     //console.log( 'minypx=' + minypx + ', maxypx=' + maxypx + ' height=' + self.size.height );
     
     //go right to left and draw the fill areas top
-    peakamplitudes.reverse().forEach( function(peakamps,xindex){
-      var cont = peakamps[0];
-      var thisx = peakamps[1];
-      
-      peakamps.forEach( function( peakamp, peakindex ){
-        if( peakindex < 2 )
-          return;
-
-          const peaknum = (peakindex - 2);
-        const peak = roi.peaks[peaknum];
-        const m = peak.Centroid[0];
-        const s = peak.Width[0];
-        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
-        
-        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
-          return;
-        
-        var thisy = cont;
-        for( var j = 2; j <= peakindex; ++j )
-          thisy += peakamps[j];
-
-        paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
-      } );
-    });
+    peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
 
     for( var peaknum = 0; peaknum < roi.peaks.length; ++peaknum ){
       if( leftMostFillValue[peaknum] && paths[peaknum+1].length )
         paths[peaknum+1] += " " + leftMostFillValue[peaknum].x + "," + leftMostFillValue[peaknum].y;
     }
-    
-    //console.log( 'roiPath labels=', labels );
     
     return {paths: paths, yRangePx: [minypx,maxypx], labelinfo: labels };
   }/*function roiPath(roi) */
@@ -7097,6 +7079,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       */
       if( num === 0 )
         return;
+        
+      console.assert( p.startsWith("M"), "Got path not starting with 'M': " + p );
+      if( p.endsWith("L") || !p.startsWith("M") ) //Protect against single channel paths we didnt complete above; TODO: fix this
+        return;
 
       //If only a single peak in a ROI, we will use the same path for outline and fill
       if( roi.peaks.length==1 && num > roi.peaks.length )
@@ -7106,7 +7092,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       let isFill  = (num <= (roi.peaks.length));
 
       var path = self.peakVis.append("path").attr("d", p );
-
 
       function onRightClickOnPeak() {
         console.log("Should (but not hooked up) Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
@@ -7154,18 +7139,18 @@ SpectrumChartD3.prototype.drawPeaks = function() {
             .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, peak, pathsAndRange.paths); } )
              ;
       }
-      
-
+    
       /* For right-clicking on a peak */
       path.on("contextmenu", onRightClickOnPeak);
     });//pathsAndRange.paths.forEach( function(p,num){
 
+    const p0 = (pathsAndRange.paths.length && roi.peaks.length) ? pathsAndRange.paths[0] : null;
+    console.assert( !p0 || p0.startsWith("M"), "Got p0 path not starting with 'M': " + p0 );
     
-    if( pathsAndRange.paths.length > 0 && roi.peaks.length > 1 ){
+    if( p0 && !p0.endsWith("L") && p0.startsWith("M") ){ //protect against single channel paths we didnt complete above; TODO: fix this
       //Draw the continuum line for multiple peak ROIs
-      var path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );  //ToDo: is there a better way to draw a SVG path?
-      path/*.attr("class", "spectrum-peak-" + specindex)*/
-          .attr("stroke-width",1)
+      const path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );
+      path.attr("stroke-width",1)
           .attr("fill-opacity",0)
           .attr("stroke", spectrum.peakColor );
     }
@@ -7201,51 +7186,66 @@ SpectrumChartD3.prototype.drawPeaks = function() {
   self.drawPeakLabels( labelinfo );
 }
 
-SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
-  var self = this;
-  
-  //console.log( "labelinfos=", labelinfos );
-  
-  /*
-   ToDo items w.r.t. labels:
-     - Peak labels can overlap peaks - should be fixed.
-     - Add user labels not associated with peaks.
-     - Add right click menu to edit label (both for non-peak labels, and normal labels)
-   */
-  
 
-  if( !labelinfos || labelinfos.length===0 )
+SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
+  const self = this;
+  
+  if( !labelinfos || !labelinfos.length )
     return;
-    
+  
   if( !self.options.showUserLabels && !self.options.showPeakLabels && !self.options.showNuclideNames )
-    return null;
-    
-  let chart = self.peakVis;
-  let chartBox = d3.select("#chartarea"+self.chart.id)[0][0].getBBox();    /* box coordinates for the chart area */
+    return;
+  
+  const chart = self.peakVis;
+  const chartBox = self.plot.node().getBBox();    /* box coordinates for the chart area */
   
   // Don't draw peak label if chart isn't set up yet
   if( !chartBox.width || !chartBox.height )
-    return null;
+    return;
   
-  const chartw = chartBox.width;
-  const charth = chartBox.height;
+  // We adjust label positions only after being idle for a little bit, using a timeout at the bottom of this function
+  window.clearTimeout( self.adjustLabelTimeout );
+  self.adjustLabelTimeout = null;
+  
   const axiscolor = self.getElementLineColor('.tick');
   
   /*
    labelinfos is an array of objects that look like:
    {
-   centroidMaxYPx: 33.6
-   centroidMinYPx: 43.0
-   centroidXPx: 111.4
-   energy: 244.162
-   peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), ...}
-   roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2),...}
-   roiPeakIndex: 0
-   userLabel: undefined
+      centroidMaxYPx: 33.6
+      centroidMinYPx: 43.0
+      centroidXPx: 111.4
+      energy: 244.162
+      peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), ...}
+      roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2),...}
+      roiPeakIndex: 0
+      userLabel: undefined
    }
    */
   
-  let drawnlabels = [];
+  const fontSize = self.options.peakLabelSize;
+  const rotationAngle = self.options.peakLabelRotation;
+  
+  // The labels we added, as well as their associated data, including position
+  let label_array = [];
+  
+  // Some transformation we will use to help position labels
+  const visCtm = self.peakVis.node().getCTM(); // Get x-form for self.peakVis, which we need coordinates relative to
+ 
+  // Rotate `label` by X degrees, but keep bottom left of text at `peak_x` and `peak_uy`
+  function setLabelTransform(label,roiInfo,dx,dy){
+    const peak_x = roiInfo.centroidXPx;
+    const peak_uy = roiInfo.centroidMaxYPx;
+    const lbb = label.node().getBBox();
+    
+    // We will rotate text at bottom-left corner, but we want to niavely keep the label centered at the peak, in x
+    const wx = Math.max(lbb.width,10) * Math.cos( -rotationAngle*(Math.PI/180) );
+    const hx = Math.max(lbb.height,8) * Math.sin( -rotationAngle*(Math.PI/180) );
+    const x_center = 0.5*(wx - hx);
+    const xform = "translate(" + (peak_x - x_center + dx) + " " + (peak_uy + dy) + ") rotate(" + rotationAngle + " 0 0)";
+    label.attr("transform", xform );
+  };
+  
   
   for( let index = 0; index < labelinfos.length; ++index ){
     let info = labelinfos[index];
@@ -7257,301 +7257,246 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       nuclide = info.peak.xray
     if( !nuclide )
       nuclide = info.peak.reaction
-  
-    //If we wont draw any text, just return now
-    //  (ToDo: I think this case has already been filetered out, check, and if so remove next lines)
-    if( !(self.options.showUserLabels && info.userLabel)
-        && !self.options.showPeakLabels
-        && !(self.options.showNuclideNames && nuclide) ){
+    
+    const peak_x = info.centroidXPx;
+    const peak_ly = info.centroidMinYPx;
+    const peak_uy = info.centroidMaxYPx;
+    
+    //This next check doesnt appear to be necessary anymore.
+    if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined' ){
+      console.log( 'Got peak_uy=' + peak_uy + ', for energy ' + info.energy, info );
       continue;
     }
     
-    let peak_x = info.centroidXPx;
-    let peak_ly = info.centroidMinYPx;
-    let peak_uy = info.centroidMaxYPx;
+    let labelRows = [];
+    if( self.options.showUserLabels && info.userLabel && info.userLabel.length )
+      labelRows.push( info.userLabel );
     
-    
-    //This next check doesnt appear to be necassary anymore.
-    if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined'
-       || peak_ly===null || Number.isNaN(peak_ly) || typeof(peak_ly)==='undefined' )
-    {
-      console.log( 'Got peak_uy=' + peak_uy + ', peak_ly=' + peak_ly + ' for energy ' + info.energy, info );
-      continue;
-    }
-    
-    
-    let peakEnergy = info.energy.toFixed(2) + " keV";
-    
-    var label, userLabel, peakEnergyLabel, nuclideNameLabel;
-    
-    /* Main label DOM */
-    label = chart.append("text");
-    label.attr('class', 'peaklabel')
-    .attr("text-anchor", "start")
-    .attr("y", peak_uy - 10 )
-    .attr("x", peak_x)           //Doesnt seem to be needed since we are using all <tspan>s
-    .attr("energy", peakEnergy)  //Dont think this is needed
-    .attr("fill", axiscolor )
-    .attr("data-labelindex", index)  //Is there a better way to associate the labelinfos object with this label?  Probably, but whatever for now.
-    .attr("data-peak-energy", info.energy.toFixed(2) )
-    .attr("data-peak-x-px", peak_x.toFixed(1) )
-    .attr("data-peak-lower-y-px", peak_ly.toFixed(1) )
-    .attr("data-peak-upper-y-px", peak_uy.toFixed(1) )
-    ;
-    
-    if( self.options.showUserLabels && info.userLabel ){
-      /* T-span element for the user label */
-      /* Gets priority for top-most text in label */
-      userLabel = label.append("tspan");
-      userLabel.attr("class", "userLabel")
-      .attr("dy", 0)
-      .attr("x", peak_x)
-      .text(info.userLabel);
-    }
-    
-    if( self.options.showPeakLabels ) {
-      /* T-span element for the peak label */
-      /* Gets second in priority for top-most text in label */
-      peakEnergyLabel = label.append("tspan");
-      peakEnergyLabel.attr("class", "peakEnergyLabel")
-      .attr("dy", userLabel ?  "1em" : 0)   /* If user label is not present, then this is the top-most element */
-      .attr("x", peak_x)
-      .text(peakEnergy);
-    }
+    if( self.options.showPeakLabels )
+      labelRows.push( info.energy.toFixed(2) + " keV" );
     
     if( self.options.showNuclideNames && nuclide ) {
-      /* T-span element for nuclide label */
-      /* Third in priority for top-most text in label */
-      nuclideNameLabel = label.append("tspan");
-      nuclideNameLabel.attr("class", "nuclideLabel")
-      .attr("dy", self.options.showUserLabels && self.options.showPeakLabels ? "1em" : self.options.showUserLabels || self.options.showPeakLabels ?  "1em" : 0)
-      .attr("x", peak_x)
-      .text(nuclide.name);
-      
-      
-      /* Nuclide energy label displayed only if nuclide name labels are displayed! */
-      //console.log( 'nuclide: ', nuclide );
-      if( self.options.showNuclideEnergies )
-        nuclideNameLabel.text( nuclide.name + ", " + nuclide.energy.toFixed(2).toString() + " keV"
-                               + (nuclide.type ? " " + nuclide.type : "") );
+      let txt = nuclide.name;
+      if( self.options.showNuclideEnergies ) // Nuclide energy label displayed only if nuclide name labels are displayed!
+      txt += ", " + nuclide.energy.toFixed(2).toString() + " keV" + (nuclide.type ? " " + nuclide.type : "");
+      labelRows.push( txt );
     }//if( show nuclide name and we have a nuclide )
     
-
+    //If we wont draw any text, skip this peaks
+    if( !labelRows.length )
+      continue;
+    
+    // Create label <text> element
+    const label = chart.append("text")
+      .attr("class", 'peaklabel')
+      .attr("text-anchor", "start")
+      .attr("y", 0)
+      .attr("x", 0)
+      .attr("fill", axiscolor )
+      .attr("data-peak-energy", info.energy.toFixed(2) )  //can access as label.dataset.peakEnergy
+      .attr("data-peak-x-px", peak_x.toFixed(1) )         //can access as label.dataset.peakXPx
+      .attr("data-peak-lower-y-px", peak_ly.toFixed(1) )  //can access as label.dataset.peakLowerYPx
+      .attr("data-peak-upper-y-px", peak_uy.toFixed(1) )  //can access as label.dataset.peakUpperYPx
+      ;
+    
+    for( let i = 0; i < labelRows.length; ++i ){
+      label.append("tspan")
+        .attr("dy", (i===0) ? ("-" + (labelRows.length-1) + ".2em") : "1em" ) //The extra 0.2em is to vertically center the text
+        .attr("x", 0)
+        .attr("font-size", fontSize)
+        .attr("alignment-baseline","baseline")
+        .text(labelRows[i]);
+    }
+    
+    d3.select(label).data( info );
+    
     // Add handlers to make text bold when you mouse over the label.
     label.on("mouseover", function(){ self.highlightLabel(this,false); } )
-         .on("mouseout",  function(){ self.unHighlightLabel(true); } );
+      .on("mouseout",  function(){ self.unHighlightLabel(true); } );
     
     if( self.isTouchDevice() )
-    label.on("touchstart", function(){ self.highlightLabel(this,false); } );
-
+      label.on("touchstart", function(){ self.highlightLabel(this,false); } );
     
     //Reposition label niavely.
-    const lbb = label.node().getBBox();
-    const labelh = Math.max(lbb.height,8);
-    const labelw = Math.max(lbb.width,10);
+    setLabelTransform( label, info, 0, -10 );
     
-    //ToDo: if( (peak_uy - 0.5*labelh) < 0 ), then try moving left or right to avoid overlapping with the peak.
-    let labely = Math.max( 2+0.5*labelh, peak_uy - 0.5*labelh - 10 );
-    let labelx = Math.min( Math.max(2, peak_x-0.5*labelw+5), chartw-labelw-2 );
-    
-    label.attr("y", labely ).attr("x", labelx );
-    label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", labelx);});
-    
-    //Dont bother doing overlap checking for left-most peak.
-    if( drawnlabels.length === 0 ){
-      drawnlabels.push( label );
-      continue;
-    }
-    
-    //Check for overlaps between two BBoxs.
-    const xoverlap = function(rect1,rect2){
-      return Math.max(0, Math.min(rect1.x+rect1.width, rect2.x+rect2.width) - Math.max(rect1.x, rect2.x));
+    // Calculate baseline position of label
+    const svgCtm = label.node().getCTM();  // Get the transformation matrix (CTM) of the text element
+    const labelBBox = label.node().getBBox();
+      
+    const fromTxtToVisCoords = function(x,y){
+      const pt = self.svg.node().createSVGPoint(); //TODO: createSVGPoint() is depreciated
+      pt.x = x;
+      pt.y = y;
+      const svgPoint = pt.matrixTransform(svgCtm); // Apply the transformation matrix to the point
+      return svgPoint.matrixTransform( visCtm.inverse() ); // Get coordinates relative to self.peakVis
     };
     
-    const yoverlap = function(rect1,rect2){
-      return Math.max(0, Math.min(rect1.y+rect1.height, rect2.y+rect2.height) - Math.max(rect1.y, rect2.y));
-    };
+    let data = {};
+    data.initialPos = [ fromTxtToVisCoords( 0, 0 ), //bottom-left of text
+      fromTxtToVisCoords( labelBBox.width, 0 ), //bottom right of text
+      fromTxtToVisCoords( labelBBox.width, -labelBBox.height ), //top-right of text
+      fromTxtToVisCoords( 0, -labelBBox.height ) //top-left of text
+    ];
     
-    // ToDo: implement checking for text overlapping peak areas...
-    const checkoverlap = function(rect1,rect2){
-      //overlapArea = xoverlap() * yoverlap();
-      return ((xoverlap(rect1,rect2) > 0) && (yoverlap(rect1,rect2) > 0))
-    };//checkoverlap
+    data.offset = [0, -10];
+    data.labelInfo = info;
+    data.label = label;
+    data.nominalX = peak_x;
+    data.nominalY = peak_uy - 10;
     
-    const origy = labely;
-    const origx = labelx;
-    
-    //First, lets try making the label go higher until we either have no collisions, or we reach the top
-    let iterNum = 0;
-    let reachedTop = false;
-    for( let otherindex = 0; !reachedTop && otherindex < drawnlabels.length; ++otherindex ){
-      
-      // Just in case, lets keep from an infinite loop - I dont think this should ever happen,
-      //  but JIC.  On a LaBr spectrum with lots of peaks/labels, I never saw over 20 iterations,
-      //  and its usually much less
-      if( ++iterNum > 50 )
-      {
-        console.log( "Breaking out of peak label placement search at " + iterNum + " iterations" );
-        break;
-      }
-      
-      let otherlabel = drawnlabels[otherindex];
-      let othernode = otherlabel.node();
-      
-      const leftw = othernode.getBBox().width;
-      
-      let x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox()),
-          y_overlap = yoverlap(label.node().getBBox(),otherlabel.node().getBBox());
-      
-      if( x_overlap > 0 && y_overlap > 0  ){
-        let newy = otherlabel.node().getBBox().y - 0.5*labelh - 2;
-        
-        //Make sure we only move the label up, and by at least a few pixels, so the loop will be guaranteed to terminate
-        if( newy >= (labely - 0.1*labelh) )
-          newy = labely - 0.5*labelh;
-         
-        reachedTop = (newy < (2+0.5*labelh));
-       
-        if( !reachedTop ){
-          labely = newy;
-          label.attr("y", labely );
-          
-          //Now we have to start back over and make sure we havent started overlapping
-          //  with any peaks before 'otherindex'.
-          otherindex = -1;
-          continue;
-        }
-      }//if( x_overlap > 0 && y_overlap > 0  )
-    }//for( let otherindex = 0; otherindex < drawnlabels.length; ++otherindex )
-    
-    //If we reached the top of the chart, lets reset our height, and try a
-    //  different approach
-    if( reachedTop )
-      label.attr("y", origy );
-    
-    //If reachedTop is true, then we still have an overlap
-    let haveOverlap = reachedTop;
-    
-    //Lets try moving the overlapping label to the left, left, up to 50% of its width
-    //  (from its original x), but only if this movement wont also cause an overlap.
-    if( haveOverlap ){
-      haveOverlap = false;
-      for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
-        let otherlabel = drawnlabels[otherindex];
-        if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
-          haveOverlap = true;
-          const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
-          let otherinfo = labelinfos[parseInt(otherlabel.attr('data-labelindex'))];
-          let otherPeakXpx = otherinfo.centroidXPx;
-          const otherWidth = otherlabel.node().getBBox().width;
-          const otherNominalX = Math.min( Math.max(2, otherPeakXpx-0.5*otherWidth+5), chartw-otherWidth-2 );
-          const otherCurrentX = parseFloat(otherlabel.attr("x"));
-          const newOtherX = otherCurrentX - x_overlap - 2;
-          if( (newOtherX > (2+0.5*otherWidth)) && (newOtherX >= (otherPeakXpx-otherWidth-10)) ){
-            haveOverlap = false;
-            
-            otherlabel.attr("x", newOtherX );
-            otherlabel.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", newOtherX);});
-            
-            for( let testindex = 0; !haveOverlap && testindex < drawnlabels.length; ++testindex ){
-              if( testindex !== otherindex )
-                haveOverlap = checkoverlap(otherlabel.node().getBBox(),drawnlabels[testindex].node().getBBox());
-            }
-            
-            if( haveOverlap ){
-              // Move otherlabel back to its original position; haveOverlap being true will stop the loop over otherindex
-              otherlabel.attr("x", otherCurrentX );
-              otherlabel.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", otherCurrentX);});
-              //console.log( 'For collision with ' + label.attr("energy") + ' couldnt fix by moving '
-              //             + otherlabel.attr("energy") + ' to left by ' + x_overlap + 'px');
-            } else {
-              //console.log( 'Did fix collision between ' + label.attr("energy") + ' and '
-              //             + otherlabel.attr("energy") + ' by moving to left by ' + x_overlap + 'px');
-            }
-          }//if( moving the label to the left enough is a possibility )
-        }//if( overlap )
-      }//for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex )
-    } else {
-      if( origy != label.attr("y") ){
-        //We did adjust peak label height
-        //ToDo: see if peak immediately to the left is higher or lower than this one, and see if
-        //      we can make sure the relative label heights are lower/higher to coorespond by possibly
-        //      doing doing a swap of y-coordinates, and then checking if this caused any overlaps.
-      }
-    }//if( moving label up didnt work ) / else
-    
-    
-    //Try moving this label to the right, by up to 50% of its width, but only if this doesnt cause it to go over the next peak
-    if( haveOverlap ){
-      haveOverlap = false;
-      
-      let maxxpx = Math.min( peak_x+0.5*labelw+5, chartw-labelw-2 );
-      if( (index+1) < labelinfos.length )
-        maxxpx = Math.min( maxxpx, labelinfos[index+1].centroidXPx-0.5*labelw-5 );
-      
-      for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
-        let otherlabel = drawnlabels[otherindex];
-        if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
-          haveOverlap = true;
-          const x_overlap = xoverlap(label.node().getBBox(),otherlabel.node().getBBox());
-          let newx = parseFloat(label.attr("x")) + x_overlap + 2;
-          if( newx <= maxxpx ){
-            haveOverlap = false;
-            label.attr("x", newx );
-            label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", newx);});
-            for( let testindex = 0; !haveOverlap && testindex < drawnlabels.length; ++testindex ){
-              haveOverlap = checkoverlap(otherlabel.node().getBBox(),label.node().getBBox());
-            }
-          }//
-        }//if( overlap )
-      }//for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex )
-      
-      if( haveOverlap ){
-        label.attr("x", labelx = origx );
-        label.selectAll("tspan").each(function(d,i){ d3.select(this).attr("x", origx);});
-        //console.log( 'Moving label right didnt help.' );
-      } else {
-        //console.log( 'Moving label right did help.' );
-      }
-    }//if( haveOverlap - try moving label to right )
-    
-    
-    //If > 25% of chart height is avaiable under the chart - put the label down there if we can
-    if( haveOverlap && (peak_ly < 0.75*charth) && ((peak_ly + labelh + 30) < charth) ){
-      const starty = label.attr("y");
-      let trial_y = peak_ly + 25;
-      
-      while( haveOverlap && ((trial_y + labelh + 5) < charth) ){
-        haveOverlap = false;
-        labely = trial_y;
-        label.attr("y", trial_y );
-        
-        for( let otherindex = 0; !haveOverlap && otherindex < drawnlabels.length; ++otherindex ){
-          let otherlabel = drawnlabels[otherindex];
-          if( checkoverlap(label.node().getBBox(),otherlabel.node().getBBox()) ){
-            haveOverlap = true;
-            trial_y += 5 + yoverlap(label.node().getBBox(),otherlabel.node().getBBox());
-            //ToDo: could try moving to the right (up to 50% label width), and
-            //      if that is less than some percentage of the total change in y to avoid the overlap,
-            //      than we could do that
-          }
-        }
-      }//while( lowering label until no overlap )
-      
-      if( haveOverlap ){
-        label.attr("y", starty );
-      }
-    }//if( haveOverlap - try putting label under spectrum )
-    
-    if( haveOverlap ){
-      //I guess we're out of luck here, we couldnt find a place to put the label
-      //  without it overlapping.
-      //console.log( 'Failed to find a non-overlapping spot for ' + + ' label' );
-    }
-    
-    drawnlabels.push( label );
+    label_array.push( data );
   }//labelinfos.foreach(...)
   
+    
+  const chartw = chartBox.width;
+  
+  /* Uses simulated annealing to determine label placement (I couldnt get force layout to work).
+  Idea taken from https://github.com/tinker10/D3-Labeler, however our needs are unique enough we couldnt just use it
+   */
+  function adjustLabels(){
+
+    // Define a weighting function to define how we want the labels to be oriented
+    function weightFcn( index ) {
+      const label = label_array[index];
+      const dx = label.offset[0], dy = label.offset[1] + 10;
+        
+      // penalty for moving away from default position - its okay to move in x, but dont go closer to peak in y
+      let penalty = 0.5 * Math.abs(dx) * Math.sqrt(Math.abs(dx));
+      penalty += ((dy > 10) ? 20 : ((dy > 0) ? 4 : -1)) * dy;
+      
+      // To calculate the overlap between the rectangles, we will rotate them (around origin for
+      //  simplicity) so they are parallel with x and y-axis, to make the math easier
+      function rotatePoint(p) { //rotates around origin
+        const t = -rotationAngle * Math.PI / 180;
+        return { x: (p.x*Math.cos(t) - p.y*Math.sin(t)), y: (p.x*Math.sin(t) + p.y*Math.cos(t)) };
+      };
+        
+      const ll1 = rotatePoint( { x: label.initialPos[3].x + dx, y: label.initialPos[3].y + dy } ); //lower-left
+      const ur1 = rotatePoint( { x: label.initialPos[1].x + dx, y: label.initialPos[1].y + dy } ); //upper-right
+        
+      for( let i = 0; i < label_array.length; ++i ){
+        if( i === index )
+          continue;
+        
+        function overlappingArea(l1, r1, l2, r2){
+          const x_dist = (Math.min(r1.x, r2.x) - Math.max(l1.x, l2.x));
+          const y_dist = (Math.min(r1.y, r2.y) - Math.max(l1.y, l2.y));
+          return (x_dist <= 0 || y_dist <= 0) ? 0 : x_dist * y_dist;
+        };
+            
+        const other = label_array[i];
+        let ll2 = rotatePoint({ x: other.initialPos[3].x + other.offset[0], y: other.initialPos[3].y + other.offset[1] });
+        let ur2 = rotatePoint({ x: other.initialPos[1].x + other.offset[0], y: other.initialPos[1].y + other.offset[1] });
+            
+        const overlap_area = overlappingArea(ll1, ur1, ll2, ur2);
+        penalty += (5.0 * overlap_area);
+            
+        //console.log( "overlap_area:" + overlap_area + ", ", [ll1, ur1], ", ", [ll2, ur2]);
+        let margin_overlap = overlap_area;
+        for( let y = 0; y < 2; ++y ){
+          ll2.x -= 3; ll2.y -= 3;
+          ur2.x += 3; ur2.y += 3;
+          
+          const this_overlap = overlappingArea(ll1, ur1, ll2, ur2);
+          console.assert( this_overlap >= margin_overlap );
+          
+          // Now add penalty if the nearest label is pretty close
+          penalty += 0.5*(2 - y)*(this_overlap - margin_overlap);
+          margin_overlap = this_overlap;
+        }
+      }
+        
+      return penalty;
+    };//function weightFcn
+      
+    // Randomly repositions a label, and keeps if it is better, according to current temperature
+    function tryNewMonteCarloPosition( currentTemperature ){
+      const i = Math.floor(Math.random() * label_array.length);
+      let label = label_array[i];
+        
+      const prev_x = label.offset[0], prev_y = label.offset[1];
+        
+      // Randomly move the label around
+      let new_dx = prev_x + (Math.random() - 0.5) * 15.0;
+      let new_dy = prev_y + (Math.random() - 0.5) * 7.5;
+        
+      // Make sure we arent going off the chart, or into the peak
+      for( let posIndex = 0; posIndex < label.initialPos.length; ++posIndex ){
+        const ip = label.initialPos[posIndex];
+        if( (ip.x + new_dx) > chartw )
+          new_dx = prev_x;
+        if( (ip.x + new_dx) < 0 )
+          new_dx = prev_x;
+            
+        // TODO: instead of having label use `centroidMaxYPx` as its floor, calculate the intersection area with the ROI outline path
+        //       see https://gist.github.com/mbostock/8027637 or something like https://github.com/d3/d3-polygon to detect if the label is overlapping with any ROIs
+        if( (ip.y + new_dy) < label.labelInfo.centroidMaxYPx )
+          new_dy = prev_y;
+      }
+        
+      // If this translation causes label to be _more_ above the chart, reject it
+      const initialTop = Math.min(label.initialPos[0].y, label.initialPos[1].y, label.initialPos[2].y, label.initialPos[3].y);
+      if( ((initialTop + new_dy) < 0) && (new_dy < prev_y) )
+        new_dy = prev_y;
+        
+      // Dont swap x-positions - keep labels in same order
+      let thisx = label.initialPos[0].x + new_dx;
+      if( i > 0 ){
+        const prevx = label_array[i-1].initialPos[0].x + label_array[i-1].offset[0];
+        if( prevx > thisx )
+          new_dx = prev_x;
+      }
+        
+      if( i+1 < label_array.length ){
+        const nextx = label_array[i+1].initialPos[0].x + label_array[i+1].offset[0];
+        if( thisx > nextx )
+          new_dx = prev_x;
+      }
+        
+      if( (new_dx === prev_x) && (new_dy === prev_y) )
+        return false;
+        
+      const orig_weight = weightFcn(i);
+      label.offset[0] = new_dx;
+      label.offset[1] = new_dy;
+      const new_weight = weightFcn(i);
+      const delta_weight = new_weight - orig_weight;
+        
+      const threshold = Math.random();
+      const prob = Math.exp( -delta_weight / currentTemperature );
+        
+      //console.log( "threshold: " + threshold + ", Math.exp(-" + delta_weight + "/" +currentTemperature + ")=" + Math.exp(-delta_weight/currentTemperature) );
+      if( threshold >= prob ){
+          // move back to old coordinates
+        label.offset[0] = prev_x;
+        label.offset[1] = prev_y;
+        return false;
+      }
+        
+      return true; //we kept solution
+    };//function tryNewMonteCarloPosition
+   
+    function monteCarloFindLabelPos( numIterations ){
+      let currentTemperature = 1.0;
+      for( let i = 0; i < numIterations; ++i ){
+        for( let j = 0; j < label_array.length; ++j ){
+          tryNewMonteCarloPosition( currentTemperature );
+        }
+        currentTemperature = currentTemperature - (1.0 / numIterations); // linear cooling
+      }
+    };//function mcFindLabelPos
+  
+  
+    monteCarloFindLabelPos( 1000 );
+  
+    for( let i = 0; i < label_array.length; ++i ){
+      setLabelTransform( label_array[i].label, label_array[i].labelInfo, label_array[i].offset[0], label_array[i].offset[1] );
+    }
+  }; //adjustLabels function
+  
+  // Setting the label positions is really expensive, only do if we havent updated labels for 50ms (arbitrarily chosen time)
+  self.adjustLabelTimeout = window.setTimeout( adjustLabels, 50 );
 }//SpectrumChartD3.prototype.drawPeakLabels = ...
 
 
@@ -8676,7 +8621,17 @@ SpectrumChartD3.prototype.setSumPeaks = function(d) {
   this.updateFeatureMarkers();
 }
 
+SpectrumChartD3.prototype.setPeakLabelSize = function(d) {
+  this.options.peakLabelSize = (typeof d == 'string') ? d : null;
+}
 
+SpectrumChartD3.prototype.setPeakLabelRotation = function(d) {
+  this.options.peakLabelRotation = (typeof d == 'number') ? d : 0;
+}
+
+SpectrumChartD3.prototype.setLogYAxisMin = function(d) {
+  this.options.logYAxisMin = (typeof d == 'number') && (d > 0.0) ? d : 0.1;
+}
 
 SpectrumChartD3.prototype.setSearchWindows = function(ranges) {
   var self = this;
@@ -10483,7 +10438,7 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
   if( info.cpsTxt )
     createPeakInfoText(text, self.options.txt.peakCps, info.cpsTxt);
   
-  createPeakInfoText(text, self.options.txt.peakArea, info.area + String.fromCharCode(0x00B1) + info.areaUncert);
+  createPeakInfoText(text, self.options.txt.peakArea, info.area + ((info.areaUncert > 0.0) ? (String.fromCharCode(0x00B1) + info.areaUncert) : "") );
   createPeakInfoText(text, String.fromCharCode(0x03C7) + "2/dof", info.chi2);
   createPeakInfoText(text, self.options.txt.fwhm, info.fwhm + " keV (" + info.fwhmPerc + "%)");
   createPeakInfoText(text, self.options.txt.mean, info.mean + " keV");
@@ -10580,7 +10535,6 @@ SpectrumChartD3.prototype.unhighlightPeak = function(highlightedPeak) {
  
  This means:
  - Label becomes bold
- - Label's z-index goes to very top (so that the whole text is shown)
  - A line is drawn from the label to its corresponding peak
  
  @param labelEl The HTML the <text> element of the label to highlight.
@@ -10592,9 +10546,7 @@ SpectrumChartD3.prototype.unhighlightPeak = function(highlightedPeak) {
         and we will draw a line to either the top or bottom of peak (whichever is closer)
  */
 SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHighlighted ) {
-  let self = this;
-  
-  //console.log( 'Highlighting label ' + labelEl.dataset.peakXPx + ' keV' );
+  const self = this;
   
   if( self.highlightedLabel === labelEl )
     return;
@@ -10605,34 +10557,63 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   if( self.dragging_plot )
     return;
   
-  /* Bold the label text and add a line (arrow) that points to the peak when moused over text. */
+  // Bold the label text and add a line (arrow) that points to the peak when moused over text.
   self.highlightedLabel = labelEl;
   
   let thislabel = d3.select(labelEl);
-  thislabel.attr('class', 'peakLabelBold');
+  thislabel.attr("class", "peaklabel peakLabelBold");
   
-  const labelbbox = thislabel.node().getBBox();
-  const labelTop = labelbbox.y,
-  labelBottom = labelbbox.y + labelbbox.height;
+  // We will be appending the line connecting the label to the peak, to the `self.peakVis` <g>
+  //  element, which is a child of `self.vis` that has a transform of "translate(left-pad,top-pad)".
+  //  Also, the <text> element may have a rotation applied.
+  //  So we need to transform the the unrotated text position into the <svg> coordinates, then
+  //  subtract the translation of `self.vis`, to get the lines end-point.
+  const svgCtm = thislabel.node().getCTM();  // Get the transformation matrix (CTM) of the text element
+  const visCtm = self.peakVis.node().getCTM(); // Get x-form for self.peakVis, which we need coordinates relative to
   
-  /*
-   //I think we have to make the rect right before the <text>....
-   // Should put <rect> and <text> within a <g> (and use a transform to place
-   // everything), if we want to draw a border around the text.
-  self.peakVis.append("rect")
-  .attr("width", labelbbox.width)
-  .attr("height", labelbbox.height)
-  .attr("x", labelbbox.x)
-  .attr("y", labelbbox.y)
-  .attr("class", 'peakLabelBorder' );
-  */
+  const fromTxtToVisCoords = function(x,y){
+    const pt = self.svg.node().createSVGPoint(); //TODO: createSVGPoint() is depreciated
+    pt.x = x;
+    pt.y = y;
+    const svgPoint = pt.matrixTransform(svgCtm); // Apply the transformation matrix to the point
+    return svgPoint.matrixTransform( visCtm.inverse() ); // Get coordinates relative to self.peakVis
+  };
   
-  const x1 = labelbbox.x + 0.5*labelbbox.width;
-  const x2 = labelEl.dataset.peakXPx;
-  const y1 = ((labelTop > labelEl.dataset.peakLowerYPx) ? labelTop : labelBottom);
+  const labelbbox = thislabel.node().getBBox(); // This is untranslated/unrotated
+  
+  const labelEndpoints = [ fromTxtToVisCoords( 0, 0 ), //bottom-left of text
+    fromTxtToVisCoords( 0, -0.5*labelbbox.height ), //mid-height-left of text
+    fromTxtToVisCoords( 0.5*labelbbox.width, 0 ), //bottom, middle-x of text
+    fromTxtToVisCoords( labelbbox.width, 0 ), //bottom right of text
+    fromTxtToVisCoords( labelbbox.width, -0.5*labelbbox.height ), //mid-height-right of text
+    fromTxtToVisCoords( labelbbox.width, -labelbbox.height ), //top-right of text
+    fromTxtToVisCoords( 0.5*labelbbox.width, -labelbbox.height ), //top middle-x of text
+    fromTxtToVisCoords( 0, -labelbbox.height ) //top-left of text
+  ];
+  
+  const visPt = labelEndpoints[0];
+  
+  // Visualize text extent, for debugging
+  //for( let i = 0; i < labelEndpoints.length; i += 1 )
+  //  self.peakVis.append('circle').attr('cx', labelEndpoints[i].x ).attr('cy', labelEndpoints[i].y ).attr('r', 1).style('fill', 'green');
+  
+  const x2 = labelEl.dataset.peakXPx;  //attribute 'data-peak-x-px' value
   let y2 = 0.5*(parseFloat(labelEl.dataset.peakLowerYPx) + parseFloat(labelEl.dataset.peakUpperYPx));
   if( isFromPeakBeingHighlighted )
-    y2 = (labelbbox.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
+    y2 = (visPt.y > labelEl.dataset.peakLowerYPx) ? labelEl.dataset.peakLowerYPx : labelEl.dataset.peakUpperYPx;
+  
+  // Pick x1 and x2 to be the shortest points to x2 and y2.
+  let x1 = labelEndpoints[0].x, y1 = labelEndpoints[0].y, prevdist;
+  for( let i = 0; i < labelEndpoints.length; i += 1 ){
+    const x_0 = labelEndpoints[i].x, y_0 = labelEndpoints[i].y;
+    const thisdist = Math.sqrt( (x_0 - x2)*(x_0 - x2) + (y_0 - y2)*(y_0 - y2) );
+    if( (i===0) || thisdist < prevdist )
+    {
+      prevdist = thisdist;
+      x1 = x_0;
+      y1 = y_0;
+    }
+  }
   
   //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
   const axiscolor = self.getElementLineColor('.tick');
@@ -10651,7 +10632,7 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   if( isFromPeakBeingHighlighted )
     return;
   
-  //Highlight peak cooresponding to this label
+  //Highlight peak corresponding to this label
   self.peakVis.select('path[data-energy="' + labelEl.dataset.peakEnergy + '"].peakFill').each( function(){
     self.highlightPeak(this,false);
   });
@@ -10906,7 +10887,7 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
     /*  past where the data where hit. */
     var yfractop = self.options.logYFracTop, yfracbottom = self.options.logYFracBottom;
 
-    var y0Intitial = ((y0<=0.0) ? 0.1 : y0);
+    var y0Intitial = ((y0<=0.0) ? self.options.logYAxisMin : y0);
     var y1Intitial = ((y1<=0.0) ? 1.0 : y1);
     y1Intitial = ((y1Intitial<=y0Intitial) ? 1.1*y0Intitial : y1Intitial);
 
@@ -10919,7 +10900,7 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
     var ylower = Math.pow( 10.0, logLowerY );
     var yupper = Math.pow( 10.0, logUpperY );
 
-    y0 = ((y0<=0.0) ? 0.1 : ylower);
+    y0 = ((y0<=0.0) ? self.options.logYAxisMin : ylower);
     y1 = ((y1<=0.0) ? 1.0 : yupper);
   } else if( self.options.yscale == "lin" )  {
     y0 = ((y0 <= 0.0) ? (1+self.options.linYFracBottom)*y0 : (1-self.options.linYFracBottom)*y0);

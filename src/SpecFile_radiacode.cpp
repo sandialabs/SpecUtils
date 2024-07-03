@@ -358,7 +358,12 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       if( serial_num_node && serial_num_node->value_size() )
       {
         instrument_id_ = xml_value_str( serial_num_node );
-        std::regex rc_sn_regex("^RC-(\\d{3})-\\d{6}$");
+        // RadiaCode now has a variant of the RC103 with a different
+        // scintillator. Instead of perhaps calling it a 104, they
+        // called it a 103G. For the moment, let's extend the regex
+        // to allow the G variant. We can revisit this if and when
+        // the proliferation of versions becomes a problem.
+        std::regex rc_sn_regex("^RC-(\\d{3}G?)-\\d{6}$");
 		std::smatch match_result;
 
 		if ( std::regex_search(instrument_id_, match_result, rc_sn_regex) )

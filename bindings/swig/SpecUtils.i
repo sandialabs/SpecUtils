@@ -27,15 +27,11 @@ namespace std {
 
 
 %include "cpointer.i"
-%include "boost_ptime.i"
-
-
-
-
 
 
 
 %{ 
+#include <string>  
 #include <iostream> 
 #include <sstream> 
 #include <fstream>
@@ -51,6 +47,20 @@ void closeFile(std::ostream *stream) {
   stream->flush();
   delete(stream);
 }
+
+std::ostream* createStringStream() { 
+  std::stringstream *sPtr = new std::stringstream();
+  return(sPtr);
+}
+
+std::string stringStreamToString(std::ostream *stream) { 
+  return dynamic_cast<std::stringstream *>(stream)->str();
+}
+
+void cleanupStringString(std::ostream *stream) { 
+  delete(stream);
+}
+
 %} 
 
 
@@ -63,7 +73,7 @@ void closeFile(std::ostream *stream) {
 %}
 
 
-
+%include "SpecUtils_config.h"
 
 %{
 #include <string>
@@ -73,3 +83,17 @@ void closeFile(std::ostream *stream) {
 
 
 %include "SpecUtils/SpecFile.h"
+
+%{
+#include "SpecUtils/EnergyCalibration.h"
+%}
+
+%include "SpecUtils/EnergyCalibration.h"
+
+%{
+#include "D3SpectrumExportResources.h"
+#include "SpecUtils/D3SpectrumExport.h"
+%}
+
+%include "D3SpectrumExportResources.h"
+%include "SpecUtils/D3SpectrumExport.h"

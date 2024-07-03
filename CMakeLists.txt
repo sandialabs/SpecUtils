@@ -232,9 +232,6 @@ endif( SpecUtils_JAVA_SWIG )
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
-#For CMake 3.8+, could specify C++11 using the following so it will be propagated to down-line targets...
-#target_compile_features(SpecUtils PUBLIC cxx_std_11)
-#set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
@@ -253,6 +250,11 @@ else(SpecUtils_USE_FROM_CHARS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
   )
+
+  #For CMake 3.8+, will specify following so it will be propagated to down-line targets
+  # This seems duplicate, but needed when compiling with SWIG
+  target_compile_features(SpecUtils PUBLIC cxx_std_11)
+  set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 endif(SpecUtils_USE_FROM_CHARS)
 
 

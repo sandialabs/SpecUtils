@@ -78,7 +78,15 @@ mkdir SpecUtils
 cp .\Release\libSpecUtils.dll .\SpecUtils\SpecUtils.pyd
 cp ..\bindings\python\__init__.py .\SpecUtils\
 cp ..\bindings\python\setup.py .
-pip install pip setuptools
-python.exe -m build --wheel
-python.exe -m pip install --user --force .\dist\SpecUtils-0.0.1-cp310-cp310-win_amd64.whl
+pip install pip setuptools wheel
+# We should be able to run the following command to make a package:
+# python.exe -m build --wheel
+# But I ran into an issue with the "Tag" wasnt compatible with the current
+# Python, so needed to use:
+python.exe setup.py bdist_wheel --plat-name=win_amd64
+# You can list tags compatible with your install `python.exe -m pip debug --verbose`
+# And you may be able.
+# If we ever get around to only using the stable API, we could use the command:
+# python.exe setup.py bdist_wheel --plat-name=win_amd64 --python-tag=cp35 --py-limited-api=cp35
+python.exe -m pip install --user --force .\dist\SpecUtils-0.0.1-cp312-cp312-win32.whl
 ```
