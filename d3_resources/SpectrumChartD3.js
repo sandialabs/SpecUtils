@@ -9506,7 +9506,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   const txt = self.options.txt.recalFromTo.replace("{1}",String(self.xScale.invert(start).toFixed(2))).replace("{2}",self.xScale.invert(now).toFixed(2) );
   
   if (recalibrationText.empty()) {                       /* ctrl-option-drag text to say where recalibration ranges are */
-    const txtcolor = self.getElementLineColor('.xaxistitle');
+    const txtcolor = window.getComputedStyle(document.documentElement).getPropertyValue('--d3spec-text-color');
     recalibrationText = self.vis.append("text")
       .attr("id", "recalibrationText")
       .attr("class", "mouseLineText")
