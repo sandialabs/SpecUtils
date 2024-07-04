@@ -909,7 +909,7 @@ vector<std::string> recursive_ls_internal_windows( const std::string &sourcedir,
   }while( FindNextFileW( hFind, &fdFile) ); //Find the next file.
   
   FindClose(hFind);
-  	
+  
   return files;
 }
 #endif  //#ifdef _WIN32
