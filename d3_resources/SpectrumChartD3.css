@@ -28,8 +28,8 @@ CSS variables InterSpec will define for colors:
   user-select: none;
   -moz-user-select: none;
 
-  stroke: var(--d3spec-axis-color);
-  fill: var(--d3spec-axis-color);
+  stroke: var(--d3spec-axis-color, black);
+  fill: var(--d3spec-axis-color, black);
 }
 
 .roiDragLine{
@@ -94,6 +94,7 @@ CSS variables InterSpec will define for colors:
 .peaklabel, .peakLabelBold {
   font-size: 1em;
   cursor: default;
+  fill: var(--d3spec-text-color, black);
 }
 
 /*
@@ -111,14 +112,45 @@ CSS variables InterSpec will define for colors:
 .peaklabelline {
   stroke-width: 1.5;
   z-index: 100;
+  stroke: var(--d3spec-axis-color, black);
 }
 
 
-.peakLine{ font-size: 0.8em; stroke-width: 2; }
-.escapeLineForward { font-size: 0.8em; stroke-width: 2; stroke-dasharray: 2; }
+.peakLine {
+  font-size: 0.8em;
+  stroke-width: 2;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.escapeLineForward {
+  font-size: 0.8em;
+  stroke-width: 2;
+  stroke-dasharray: 2;
+  stroke: var(--d3spec-axis-color, black);
+}
   
-.mouseLine      { font-size: 0.8em; stroke-width: 2; }
-.secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
+.SpectrumChartD3 .mouseLine {
+  font-size: 0.8em;
+  stroke-width: 2;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.SpectrumChartD3 .secondaryMouseLine {
+  font-size: 0.8em;
+  stroke-width: 1;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.SpectrumChartD3 .mouseLineText {
+  font-size: 0.8em;
+  font-family: Helvetica, Arial;
+  font-weight: bold
+  fill: var(--d3spec-text-color, black);
+}
+
+.SpectrumChartD3 .recalibrationMousePosLines {
+  stroke: var(--d3spec-axis-color, black);
+}
 
 .referenceGammaSelectDiv { display: inline-block; margin-left: 25px; }
 .referenceGammaSelect { width: 200px; height: 130px; }
@@ -157,10 +189,16 @@ CSS variables InterSpec will define for colors:
 /* .d3closebut:hover{ fill: #4d4d4d; } */
 
 .chartLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.mouseLineText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+
+
 .deletePeaksText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
 .countGammasText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.peakText{ font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.peakText {
+  font-size: 0.8em;
+  font-family: Helvetica, Arial;
+  font-weight: bold
+  fill: var(--d3spec-text-color, black);
+}
 .contEstLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey;  }
 .createPeakTouchText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey; fill: grey; }
 
@@ -173,8 +211,19 @@ CSS variables InterSpec will define for colors:
 .activescaler > .scalerback{ /* fill-opacity: 0.85; */ }
 .scalerheader{ fill: rgba(185,185,185,0.80); fill-opacity: 0.55; }
 .activescaler > g > .scalerheader{ fill: #909090; fill-opacity: 0.95; }
-  .scaleraxis{  }
-  .scalertoggle{  }
+
+.SpectrumChartD3 .scalertxt{
+  fill: var(--d3spec-text-color, black);
+}
+.scaleraxis {
+  stroke-opacity: 0.8;
+  fill-opacity: 0.3;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.scalertoggle {
+  stroke: var(--d3spec-axis-color, black);
+}
   
   
   .leftbuttonzoombox {

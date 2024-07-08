@@ -554,26 +554,6 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
 }
 
 
-/** Returns color of a D3 element in *this* chart.
- You pass in a string selector for a component in this chart, such as '.tick', or '.xaxistitle'
- and this function returns back to you its line color.
- The function is needed as some of the CSS rules are set dynamically in document CSS, and sometimes
- elements have a stroke, and sometimes a fill, so this function should be reasonably robust.
- 
- TODO: Is it better to use document.querySelector(...) than d3.select(...)?  should check into
- */
-SpectrumChartD3.prototype.getElementLineColor = function( selstr ){
-  let el = d3.select('#' + this.chart.id + ' ' + selstr);
-  if( el.empty() )
-    el = d3.select(selstr);
-  const s = el.empty() ? null : getComputedStyle( el[0][0] );
-  if( s && s.stroke && (s.stroke !== 'none') ) return s.stroke;
-  if( s && s.fill && (s.fill !== 'none') ) return s.fill;
-  return 'black';
-}
-
-
-
 SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
     let w = this.svg.attr("width");
@@ -587,7 +567,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     //  ".minorgrid", "stroke: #e6e6e6"
     //  ".xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text", "fill: black"
     //  ".xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick", "stroke: black"
-    //  ".peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine", "stroke: black"
+    //  ".peakLine, .escapeLineForward, .mouseLine, "stroke: black"
     //  "#" + id() + " > svg", "background: " + color.cssText()
     //  "#chartarea" + id(), "fill: " + c
     
@@ -662,7 +642,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
-    //+ '.peakLine, .escapeLineForward, .mouseLine, .secondaryMouseLine { stroke: black; }\n'
+    //+ '.peakLine, .escapeLineForward, .mouseLine\n'
     + '</style></defs>';
     
     
@@ -1847,9 +1827,6 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
         .attr("class", "roiDragLine")
         .attr("x1", 0)
         .attr("x2", 0);
-    
-      const axiscolor = self.getElementLineColor('.tick');
-      self.roiBeingDragged.axiscolor = axiscolor;
     
       g.append("rect")
         .attr("class", "roiDragBox")
@@ -6342,10 +6319,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
   //var toggleRadius = self.isTouchDevice() ? 10 : 7;  //ToDo: For touch devices if we go to 10 px, then it isnt centered on spectrum.sliderRect, and also it hangs off the screen (or at least would got to very edge.
   var toggleRadius = 7;
   var ypos = 15;
-
-  //Get axis color, text color and spec
-  let txtcolor = self.getElementLineColor('.xaxistitle');
-  let axiscolor = self.getElementLineColor('.tick')
   
   var scalenum = 0;
   self.rawData.spectra.forEach(function(spectrum,i) {
@@ -6365,10 +6338,10 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("transform","translate(" + 20*(scalenum-1) + "," + ypos + ")");
 
       spectrum.sliderText = spectrumSliderArea.append("text")
+        .attr("class", "scalertxt")
         .attr("x", 0)
         .attr("y", self.size.height-15)
         .attr("text-anchor", "start")
-        .attr("fill", txtcolor )
         .style( "display", "none" )
         .text( "" + spectrumScaleFactor.toFixed(3));
 
@@ -6378,10 +6351,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("x", 8)
         .attr("rx", 5)
         .attr("ry", 5)
-        .attr("stroke", axiscolor )
-        .attr("stroke-opacity", 0.8)
         .attr("fill", speccolor )
-        .attr("fill-opacity", 0.3)
         .attr("width", "4px")
         .attr("height", scalerHeight );
  
@@ -6391,7 +6361,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("cx", Number(spectrum.sliderRect.attr("x")) + toggleRadius/2 - 1)
         .attr("cy", Number(spectrum.sliderRect.attr("y")) + scalerHeight/2)
         .attr("r", toggleRadius)
-        .attr("stroke", axiscolor )
         .attr("stroke-opacity", 0.8)
         .attr("fill", speccolor )
         .attr("fill-opacity", 0.7)
@@ -7207,8 +7176,6 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   window.clearTimeout( self.adjustLabelTimeout );
   self.adjustLabelTimeout = null;
   
-  const axiscolor = self.getElementLineColor('.tick');
-  
   /*
    labelinfos is an array of objects that look like:
    {
@@ -7292,7 +7259,6 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       .attr("text-anchor", "start")
       .attr("y", 0)
       .attr("x", 0)
-      .attr("fill", axiscolor )
       .attr("data-peak-energy", info.energy.toFixed(2) )  //can access as label.dataset.peakEnergy
       .attr("data-peak-x-px", peak_x.toFixed(1) )         //can access as label.dataset.peakXPx
       .attr("data-peak-lower-y-px", peak_ly.toFixed(1) )  //can access as label.dataset.peakLowerYPx
@@ -7974,9 +7940,6 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
 
   const cursorIsOutOfBounds = (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
 
-  const axiscolor = self.getElementLineColor('.tick');
-  const txtcolor = self.getElementLineColor('.xaxistitle');
-  
   //Spacing between lines of text
   let linehspace = 13;
 
@@ -8010,12 +7973,10 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     /* Update the mouse edge and corresponding text position  */
     if ( self.mouseEdge ) {
         self.mouseEdge
-          .attr("stroke", axiscolor)
           .attr("x1", m[0])
           .attr("x2", m[0])
           .attr("y2", self.size.height);
         self.mouseEdgeText
-          .attr( "fill", txtcolor )
           .attr( "y", self.size.height/4)
           .attr( "x", m[0] + xmax/125 )
           .text( energy.toFixed(1) + " keV");
@@ -8024,7 +7985,6 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         self.mouseEdge = self.vis.append("line")
           .attr("class", "mouseLine")
           .attr("stroke-width", 2)
-          .attr("stroke", axiscolor)
           .attr("x1", m[0])
           .attr("x2", m[0])
           .attr("y1", 0)
@@ -8032,13 +7992,10 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
 
         self.mouseEdgeText = self.vis.append("text")
           .attr("class", "mouseLineText")
-          .attr( "fill", txtcolor )
           .attr( "x", m[0] + xmax/125 )
           .attr( "y", self.size.height/4)
           .text( energy.toFixed(1) + " keV");
     }
-    
-    self.mouseEdge.attr("stroke", axiscolor);
   }
 
 
@@ -8093,20 +8050,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       if( !self.singleEscapeForward && singleEscapeForwardEnergy >= 0 ) {  
         self.singleEscapeForward = self.vis.append("line")    /* create single forward escape line */
         .attr("class", "escapeLineForward")
-        .attr("stroke", axiscolor)
         .attr("x1", singleEscapeForwardPix)
         .attr("x2", singleEscapeForwardPix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
       self.singleEscapeForwardText = self.vis.append("text") /* create Single Forward Escape label beside line */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
             .text( self.options.txt.singleEscape );
       self.singleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", singleEscapeForwardPix + xmax/125 )
             .attr( "y", self.size.height/5.3 + linehspace)
             .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
@@ -8116,16 +8070,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
 
         } else if ( self.singleEscapeForward ) {      /* Move everything to where mouse is */
           self.singleEscapeForward
-            .attr("stroke", axiscolor)
             .attr("y2", self.size.height)
             .attr("x1", singleEscapeForwardPix)
             .attr("x2", singleEscapeForwardPix);
           self.singleEscapeForwardText
-            .attr( "fill", txtcolor )
             .attr( "y", self.size.height/5.3)
             .attr( "x", singleEscapeForwardPix + xmax/200 );
           self.singleEscapeForwardMeas
-            .attr( "fill", txtcolor )
             .attr( "y", self.size.height/5.3 + linehspace)
             .attr( "x", singleEscapeForwardPix + xmax/125 )
             .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
@@ -8137,20 +8088,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       if( !self.doubleEscapeForward && doubleEscapeForwardEnergy >= 0 ) {  
         self.doubleEscapeForward = self.vis.append("line")    /* create double forward escape line */
         .attr("class", "escapeLineForward")
-        .attr("stroke", axiscolor)
         .attr("x1", doubleEscapeForwardPix)
         .attr("x2", doubleEscapeForwardPix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
       self.doubleEscapeForwardText = self.vis.append("text") /* create double Forward Escape label beside line */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/200 )
             .attr( "y", self.size.height/5.3)
             .text( self.options.txt.doubleEscape );
       self.doubleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under double Escape label */
             .attr("class", "peakText")
-            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/125 )
             .attr( "y", self.size.height/5.3 + linehspace)
             .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
@@ -8160,16 +8108,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
 
         } else if ( self.doubleEscapeForward ) {      /* Move everything to where mouse is */
           self.doubleEscapeForward
-            .attr("stroke", axiscolor)
             .attr("y2", self.size.height)
             .attr("x1", doubleEscapeForwardPix)
             .attr("x2", doubleEscapeForwardPix);
           self.doubleEscapeForwardText
-            .attr( "fill", txtcolor )
             .attr( "y", self.size.height/5.3)
             .attr("x", doubleEscapeForwardPix + xmax/200 );
           self.doubleEscapeForwardMeas
-            .attr( "fill", txtcolor )
             .attr( "x", doubleEscapeForwardPix + xmax/125 )
             .attr( "y", self.size.height/5.3 + linehspace)
             .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
@@ -8184,20 +8129,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     if( !self.singleEscape && singleEscapeEnergy >= 0 ) {  
       self.singleEscape = self.vis.append("line")    /* create single escape line */
       .attr("class", "peakLine")
-      .attr("stroke", axiscolor)
       .attr("x1", singleEscapePix)
       .attr("x2", singleEscapePix)
       .attr("y1", 0)
       .attr("y2", self.size.height);
     self.singleEscapeText = self.vis.append("text") /* create Single Escape label beside line */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
           .text( self.options.txt.singleEscape );
     self.singleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/125 )
           .attr( "y", self.size.height/5.3 + linehspace)
           .text( singleEscapeEnergy.toFixed(1) + " keV" );
@@ -8212,16 +8154,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
 
       } else if ( self.singleEscape ) {      /* Move everything to where mouse is */
         self.singleEscape
-          .attr("stroke", axiscolor)
           .attr("y2", self.size.height)
           .attr("x1", singleEscapePix)
           .attr("x2", singleEscapePix);
         self.singleEscapeText
-          .attr( "fill", txtcolor )
           .attr( "y", self.size.height/5.3)
           .attr( "x", singleEscapePix + xmax/200 );
         self.singleEscapeMeas
-          .attr( "fill", txtcolor )
           .attr( "x", singleEscapePix + xmax/125 )
           .attr( "y", self.size.height/5.3 + linehspace)
           .text( singleEscapeEnergy.toFixed(1) + " keV" );
@@ -8237,20 +8176,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       self.doubleEscape = self.vis.append("line")  /* create double escape line */
       .attr("class", "peakLine")
       .attr("stroke-width", 2)
-      .attr("stroke", axiscolor)
       .attr("x1", doubleEscapePix)
       .attr("x2", doubleEscapePix)
       .attr("y1", 0)
       .attr("y2", self.size.height);
     self.doubleEscapeText = self.vis.append("text") /* create Double Escape label beside line */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/200 )
           .attr( "y", self.size.height/5.3)
           .text( self.options.txt.doubleEscape );
     self.doubleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Double Escape label */
           .attr("class", "peakText")
-          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/125 )
           .attr( "y", self.size.height/5.3 + linehspace)
           .text( doubleEscapeEnergy.toFixed(1) + " keV" );
@@ -8266,15 +8202,12 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       } else if ( self.doubleEscape ) {    /* Move everything to where mouse is */
 
         self.doubleEscape
-          .attr("stroke", axiscolor)
           .attr("y2", self.size.height)
           .attr("x1", doubleEscapePix)
           .attr("x2", doubleEscapePix);
         self.doubleEscapeText
-          .attr( "fill", txtcolor )
           .attr("x", doubleEscapePix + xmax/200 );
         self.doubleEscapeMeas
-          .attr( "fill", txtcolor )
           .attr( "x", doubleEscapePix + xmax/125 )
           .text( doubleEscapeEnergy.toFixed(1) + " keV" );
       }
@@ -8314,18 +8247,15 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     }
     
     self.comptonPeak
-        .attr("stroke", axiscolor)
         .attr("y2", self.size.height)
         .attr("x1", comptonPeakPix)
         .attr("x2", comptonPeakPix);
       
     self.comptonPeakText
-        .attr( "fill", txtcolor )
         .attr( "x", comptonPeakPix + xmax/200 )
         .text( self.options.txt.comptonPeakAngle.replace("{1}", String(self.options.comptonPeakAngle)) );
         
     self.comptonPeakMeas
-        .attr( "fill", txtcolor )
         .attr( "x", comptonPeakPix + xmax/125 )
         .text( comptonPeakEnergy.toFixed(1) + " keV" );
     
@@ -8374,17 +8304,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     }
     
     self.comptonEdge
-        .attr("stroke", axiscolor)
         .attr("x1", compEdgePix)
         .attr("x2", compEdgePix)
         .attr("y1", 0)
         .attr("y2", self.size.height);
     self.comptonEdgeText
-        .attr( "fill", txtcolor )
         .attr("x", compEdgePix + xmax/200 )
         .attr("y", self.size.height/22);
     self.comptonEdgeMeas
-        .attr( "fill", txtcolor )
         .attr( "x", compEdgePix + xmax/125 )
         .attr( "y", self.size.height/22 + linehspace)
         .text( compedge.toFixed(1) + " keV" );
@@ -8465,16 +8392,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
               .attr("class", "peakText");
         }
         
-
         self.clickedSumPeak
-            .attr("stroke", axiscolor)
             .attr("x1", clickedEdgePix)
             .attr("x2", clickedEdgePix)
             .attr("y1", 0)
             .attr("y2", self.size.height)
             .attr("energy", clickedEnergy);
         self.clickedSumPeakMeas
-            .attr( "fill", txtcolor )
             .attr( "x", clickedEdgePix + xmax/125 )
             .attr( "y", self.size.height/4)
             .text( clickedEnergy.toFixed(1) + " keV" );
@@ -8522,17 +8446,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       
       /* update the left sum peak line here */
       self.leftSumPeak
-          .attr("stroke", axiscolor)
           .attr("x1", leftSumPix)
           .attr("x2", leftSumPix)
           .attr("y1", 0)
           .attr("y2", self.size.height); 
       self.leftSumPeakText
-          .attr( "fill", txtcolor )
           .attr( "x", leftSumPix + xmax/125 )
           .attr( "y", self.size.height/3.4);
       self.leftSumPeakMeas
-          .attr( "fill", txtcolor )
           .attr( "x", leftSumPix + xmax/125 )
           .attr( "y", self.size.height/3.4 + linehspace)
           .text( energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV" );
@@ -8572,17 +8493,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
                 .attr("class", "peakText");
 
       self.sumPeak
-          .attr("stroke", axiscolor)
           .attr("x1", sumPix)
           .attr("x2", sumPix)
           .attr("y1", 0)
           .attr("y2", self.size.height);
       self.sumPeakText
-          .attr( "fill", txtcolor )
           .attr( "x", sumPix + xmax/125 )
           .attr( "y", self.size.height/4);
       self.sumPeakMeas
-          .attr( "fill", txtcolor )
           .attr( "x", sumPix + xmax/125 )
           .attr( "y", self.size.height/4 +  + linehspace)
           .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
@@ -9485,19 +9403,14 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   var recalibrationPeakVis = self.vis.select("#recalibrationPeakVis");
 
   /* Set the line that symbolizes where user initially began ctrl-option-drag */
-  
-  let axiscolor = 'black'
   if (recalibrationStartLine.empty()) {
-    axiscolor = self.getElementLineColor('.tick');
-    
     recalibrationStartLine = self.vis.append("line")
       .attr("id", "recalibrationStartLine")
       .attr("class", "mouseLine")
       .attr("x1", self.recalibrationMousePos[0])
       .attr("x2", self.recalibrationMousePos[0])
       .attr("y1", 0)
-      .attr("y2", self.size.height)
-      .attr("stroke",axiscolor);
+      .attr("y2", self.size.height);
   }
 
   const start = recalibrationText.empty() ? self.lastMouseMovePos[0] : recalibrationStartLine.attr("x1");
@@ -9506,13 +9419,11 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   const txt = self.options.txt.recalFromTo.replace("{1}",String(self.xScale.invert(start).toFixed(2))).replace("{2}",self.xScale.invert(now).toFixed(2) );
   
   if (recalibrationText.empty()) {                       /* ctrl-option-drag text to say where recalibration ranges are */
-    const txtcolor = window.getComputedStyle(document.documentElement).getPropertyValue('--d3spec-text-color');
     recalibrationText = self.vis.append("text")
       .attr("id", "recalibrationText")
       .attr("class", "mouseLineText")
       .attr("x", self.recalibrationMousePos[0] + 5 /* As padding from the starting line */ )
-      .attr("y", 15 ) //self.size.height/2
-      .attr("fill", txtcolor);
+      .attr("y", 15 ); //self.size.height/2
   }
   
   recalibrationText.text( txt )
@@ -9523,7 +9434,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       .attr("id", "recalibrationMousePosLines")
       .attr("y1", 0)
       .attr("y2", self.size.height)
-      .attr("stroke",axiscolor)
+      .attr("class", "recalibrationMousePosLines")
       .style("opacity", 0.75)
       .attr("stroke-width",0.5);
    
@@ -10615,9 +10526,6 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
     }
   }
   
-  //console.log( 'x1=' + x1 + ', x2=' + x2 + ', y1=' + y1 + ', y2=' + y2 );
-  const axiscolor = self.getElementLineColor('.tick');
-  
   //Only draw line between label and peak if it will be at least 10 pixels.
   if( Math.sqrt( Math.pow(x1-x2,2) + Math.pow(y1-y2,2) ) > 10 )
     self.peakLabelLine = self.peakVis.append('line')
@@ -10626,7 +10534,6 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
         .attr('y1', y1)
         .attr('x2', x2)
         .attr('y2', y2)
-        .attr('stroke', axiscolor)
         .attr("marker-end", "url(#triangle)");
   
   if( isFromPeakBeingHighlighted )
