@@ -504,7 +504,20 @@ SpectrumChartD3 = function(elem, options) {
   }
 
   /* Add the y-axis label. */
-  this.yAxisTitle = this.vis.append("g");
+  this.yAxisTitle = this.vis.append("g")
+    .on("dblclick", function(){ //toggle between linear and log when user double-clicks title text
+      d3.event.stopPropagation();
+      const ytype = (self.options.yscale === "log") ? "lin" : "log";
+      self.setYAxisType( (self.options.yscale === "log") ? "lin" : "log" );
+      self.WtEmit(self.chart.id, {name: 'yAxisTypeChanged'}, ytype );
+    })
+    //Prevent it looking like a double-click on the chart, like fitting for a peak
+    .on("click", function(){ d3.event.stopPropagation(); } )
+    .on("mousedown", function(){ d3.event.stopPropagation(); } )
+    .on("mouseup", function(){ d3.event.stopPropagation(); } )
+    .on("touchstart", function(){ d3.event.stopPropagation(); } )
+    .on("touchend", function(){ d3.event.stopPropagation(); } );
+    
   this.yAxisTitleText = this.yAxisTitle
     .append("text")
     .attr("class", "yaxistitle")
@@ -1305,7 +1318,18 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
     .attr("class", "xaxistitle")
     .attr("y", 0)
     .text(self.options.txt.xAxisTitle)
-    .style("text-anchor", this.hasCompactXAxis() ? "start" : "middle");
+    .style("text-anchor", this.hasCompactXAxis() ? "start" : "middle")
+    .on("dblclick", function(){
+      d3.event.stopPropagation();
+      const show = !self.options.showXAxisSliderChart
+      self.setShowXAxisSliderChart(show);
+      self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, show );
+    })
+    .on("mouseover", function(){ d3.event.stopPropagation(); })
+    .on("mouseout", function(){ d3.event.stopPropagation(); })
+    .on("mousedown.drag",  function(){ d3.event.stopPropagation(); } )
+    .on("touchstart.drag", function(){ d3.event.stopPropagation(); } )
+    ;
 
   if( !dontResize )
     self.handleResize( false );
@@ -1509,7 +1533,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
           .attr("y", -8)
           .attr("stroke-width", 0);
 
-          // We could add some littl 1-pixed dots that are kinda like handle
+          // We could add some little 1-pixel dots that are kinda like handle
       }
       
       self.showXAxisSliderBtn.attr("transform", "translate(" + self.cx  + "," + self.cy + ")" );
@@ -1852,7 +1876,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
         .attr("width", (showBoth ? 2 : 1) * dwidth )
         .attr("x", (showBoth ? -1 : -0.5)*dwidth )
         .style("cursor", "ew-resize" )
-        .attr("stroke", null )
+        .attr( "stroke", "none" )
         .style("fill", 'rgba(0, 0, 0, 0)');
     
       let adjustRoiFcn = function(){
@@ -5033,71 +5057,42 @@ SpectrumChartD3.prototype.setWheelScrollYAxis = function(d) {
 /**
  * -------------- Y-axis Scale Functions --------------
  */
-SpectrumChartD3.prototype.setLogY = function(){
-  /*To make the transition animated, see: http:/*bl.ocks.org/benjchristensen/2657838 */
-
-  if( this.options.yscale === "log" )
+SpectrumChartD3.prototype.setYAxisType = function( ytype ) {
+  if( ytype !== "log" && ytype !== "lin" && ytype !== "sqrt" )
+    throw 'Invalid y-axis scale: ' + ytype;
+    
+  if( this.options.yscale === ytype )
     return;
-
-  this.options.yscale = "log";
-
-  this.yScale = d3.scale.log()
-      .clamp(true)
-      .domain([0, 100])
-      .nice()
-      .range([1, this.size.height])
-      .nice();
-
+  
+  this.options.yscale = ytype;
+  if( ytype === "log" )
+    this.yScale = d3.scale.log().clamp(true);
+  else if( ytype === "lin" )
+    this.yScale = d3.scale.linear();
+  else
+    this.yScale = d3.scale.pow().exponent(0.5);
+  
+  this.yScale.domain([0, 100])
+    .nice()
+    .range([(ytype === "log" ? 1 : 0), this.size.height])
+    .nice();
+  
   this.yAxis.scale(this.yScale);
-
+  
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
-
+    
   this.redraw()();
-  this.redraw()(); //Necassary to get y-axis all lined up correctly
+  this.redraw()(); //Necessary to get y-axis all lined up correctly
 }
 
-SpectrumChartD3.prototype.setLinearY = function(){
-  if( this.options.yscale === "lin" )
-    return;
-
-  this.options.yscale = "lin";
-  this.yScale = d3.scale.linear()
-      .domain([0, 100])
-      .nice()
-      .range([0, this.size.height])
-      .nice();
-
-  this.yAxis.scale(this.yScale);
-
-  if( this.yGrid )
-    this.yGrid.scale( this.yScale );
-
-  this.redraw()();
-  this.redraw()(); //Necassary to get y-axis all lined up correctly 
-}
-
-SpectrumChartD3.prototype.setSqrtY = function(){
-  if( this.options.yscale === "sqrt" )
-    return;
-
-  this.options.yscale = "sqrt";
-  this.yScale = d3.scale.pow().exponent(0.5)
-      .domain([0, 100])
-      .range([0, this.size.height]);
-      
-  this.yAxis.scale(this.yScale);
-
-  if( this.yGrid )
-    this.yGrid.scale( this.yScale );
-
-  this.redraw()();
-  this.redraw()(); //Necassary to get y-axis all lined up correctly
-}
-
+// Next functions for backward compatibility
+SpectrumChartD3.prototype.setLogY = function(){ this.setYAxisType("log"); }
+SpectrumChartD3.prototype.setLinearY = function(){ this.setYAxisType("lin"); }
+SpectrumChartD3.prototype.setSqrtY = function(){ this.setYAxisType("sqrt"); }
 
 SpectrumChartD3.prototype.handleYAxisWheel = function() {
-  /*This function doesnt have the best behaviour in the world, but its a start */
+  /*This function doesnt have the best behavior in the world, but its a start */
   var self = this;
   /* console.log("handleYAxisWheel"); */
   
@@ -5110,9 +5105,7 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
   if( m[0] > 0 && !t )
     return false;
   
-  var wdelta;
-  /* wdelta = d3.event.wheelDelta == null ? d3.event.sourceEvent.wheelDelta : d3.event.wheelDelta;  /* old way using source events */
-  wdelta = d3.event.deltaY ? d3.event.deltaY : d3.event.sourceEvent ? d3.event.sourceEvent.wheelDelta : 0;
+  let wdelta = d3.event.deltaY ? d3.event.deltaY : d3.event.sourceEvent ? d3.event.sourceEvent.wheelDelta : 0;
 
   /* Implementation for touch interface */
   /* if (!wdelta && wdelta !== 0) { */
@@ -5129,11 +5122,9 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
   
   var mult = 0;
   if( wdelta > 0 ){
-    /*zoom out */
-    mult = 0.02;
+    mult = 0.02;  //zoom out
   } else if( wdelta != 0 ) {
-    /*zoom in */
-    mult = -0.02;
+    mult = -0.02; //zoom in
   }
 
   if( self.options.yscale == "log" ) {
@@ -5632,7 +5623,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     .attr("y", self.size.sliderChartHeight/2 - Number(self.sliderDragRight.attr("height"))/2);
 
   if( self.sliderClose )
-    self.sliderClose.attr("transform","translate(" + self.size.width + ",0)");
+    self.sliderClose.attr("transform","translate(" + (self.size.width + 11) + ",0)");
 
   self.drawSliderChartLines();
   drawDragRegionLines();

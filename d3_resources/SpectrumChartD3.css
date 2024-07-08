@@ -26,7 +26,6 @@ CSS variables InterSpec will define for colors:
   fill-opacity: 0.2;
   stroke-width: 1px;
   user-select: none;
-  -moz-user-select: none;
 
   stroke: var(--d3spec-axis-color, black);
   fill: var(--d3spec-axis-color, black);
@@ -53,7 +52,9 @@ CSS variables InterSpec will define for colors:
 }
 
 
-.InterSpecD3Chart .axis > .tick > line { stroke-width: 1px; }
+.InterSpecD3Chart .axis > .tick > line {
+  stroke-width: 1px;
+}
 
 
 .InterSpecD3Chart .axis text.xaxistitle, 
@@ -69,6 +70,14 @@ CSS variables InterSpec will define for colors:
 
 .xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text {
   fill: var(--d3spec-text-color, black);
+}
+
+.InterSpecD3Chart text.xaxistitle, .InterSpecD3Chart text.yaxistitle {
+  cursor: default;
+}
+
+.InterSpecD3Chart text.xaxistitle:hover, .InterSpecD3Chart text.yaxistitle:hover {
+  font-weight: bold;
 }
 
 .xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick {

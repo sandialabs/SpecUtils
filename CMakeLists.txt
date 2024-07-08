@@ -160,7 +160,6 @@ if( SpecUtils_ENABLE_D3_CHART )
        D3_MIN_JS
        SPECTRUM_CHART_D3_JS
        SPECTRUM_CHART_D3_CSS
-       SPECTRUM_CHART_D3_STANDALONE_CSS
   )
 
 # https://stackoverflow.com/questions/7932205/parallel-iteration-over-lists-in-makefile-or-cmake-file
