@@ -13,12 +13,16 @@
 CSS variables InterSpec will define for colors:
 --d3spec-axis-color
 --d3spec-text-color
+--d3spec-background-color
+--d3spec-chart-area-color
+--d3spec-grid-major-color
+--d3spec-grid-minor-color
 */
 
 /*******************/
-.SpectrumChartD3 {
+svg.SpectrumChartD3 {
   /* This is the <svg> element. */
-
+  background: var(--d3spec-background-color, none);
 }
 
 
@@ -48,7 +52,7 @@ CSS variables InterSpec will define for colors:
 /*******************/
 
 .chartarea{
-  
+  fill: var(--d3spec-chart-area-color, rgba(0,0,0,0));
 }
 
 
@@ -94,10 +98,16 @@ CSS variables InterSpec will define for colors:
     fill: none;
 }
 
-/* 
-.xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
-.minorgrid { stroke-opacity: 50%; }
-*/
+
+.xgrid > .tick, .ygrid > .tick {
+  /* stroke-opacity: 80%; */
+  stroke: var(--d3spec-grid-major-color, #b3b3b3);
+}
+
+.minorgrid {
+  /* stroke-opacity: 50%; */
+  stroke: var(--d3spec-grid-minor-color, #e6e6e6);
+}
 
 /* The box that holds the peak label text */
 .peaklabel, .peakLabelBold {

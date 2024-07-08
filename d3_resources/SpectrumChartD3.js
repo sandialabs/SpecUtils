@@ -614,13 +614,9 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       dombackground = null;
     }
     
-    // If the SVG doesnt have a defined fill
-    let svgback = getSvgFill('#' + this.id + ' > svg');
-    if( !svgback )
-    svgback = dombackground;
-    
-    let chartAreaFill = getSvgFill('#chartarea' + this.id);
-    
+    const svgstyle = getStyle('#' + this.chart.id + ' > svg');
+    const svgback = svgstyle && svgstyle.background ? svgstyle.background : dombackground;
+    let chartAreaFill = getSvgFill('#chartarea' + this.chart.id);
     let legStyle = getStyle( '.legend' );
     let legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
     let legColor = legStyle && legStyle.color ? legStyle.color : null;
@@ -643,7 +639,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     
     
     let svgDefs = '<defs><style type="text/css">\n'
-    + 'svg{ background-color:' + (svgback ? svgback : 'rgb(255,255,255)') + ';}\n'
+    + 'svg{ background:' + (svgback ? svgback : 'rgb(255,255,255)') + ';}\n'
     + '.chartarea{ fill: ' + (chartAreaFill ? chartAreaFill : 'rgba(0,0,0,0)') + ';}\n'
     + '.legend{ ' + (legFontSize ? 'font-size: ' + legFontSize + ';' : "")
     + (legColor ? 'fill: ' + legColor + ';' : "")
