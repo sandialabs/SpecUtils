@@ -421,6 +421,20 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     };//cleanup_current_meas lambda
     
     
+    // Create a lambda to skip all lines in the current section
+    auto burn_through_section = [&istr, &line, &skip_getline](){
+      while( SpecUtils::safe_get_line( istr, line ) )
+      {
+        trim(line);
+        if( starts_with(line,"$") )
+        {
+          skip_getline = true;
+          return;
+        }//if( we have overrun the data section )
+      }//while( SpecUtils::safe_get_line( istr, line ) )
+    };//burn_through_section lambda
+    
+    
     do
     {
       trim(line);
@@ -1420,15 +1434,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
                || starts_with(line,"$DT:") )
       {
         //Burn off things we dont care about
-        while( SpecUtils::safe_get_line( istr, line ) )
-        {
-          trim(line);
-          if( starts_with(line,"$") )
-          {
-            skip_getline = true;
-            break;
-          }//if( we have overrun the data section )
-        }
+        burn_through_section();
       }else if( starts_with(line,"$IDENTIFY_NUKLIDE:")
                || starts_with(line,"$IDENTIFY_PEAKS:")
                || starts_with(line,"$PRESETS:")
@@ -1463,20 +1469,94 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           //          if( line.size() )
           //            cout << "Got Something" << endl;
         }//while( SpecUtils::safe_get_line( istr, line ) )
-      }else if( starts_with(line,"$FLIR_NEUTRON_SWMM:")
-               || starts_with(line,"$TRANSFORMED_DATA:") )
+      }else if( starts_with(line,"$FLIR_NEUTRON_SWMM:") )
+      {
+        // The next lines are:
+        //  - neutron live-time
+        //  - neutron counts
+        //  - Looks to always be: "0.000"
+        //  - Looks to always be: "1.000"
+        if( !SpecUtils::safe_get_line( istr, line ) )
+          break;
+          
+        trim(line);
+        skip_getline = starts_with(line,"$");
+        if( skip_getline )
+          continue;
+        
+        float neutron_live_time = 0.0f;
+        if( !SpecUtils::parse_float( line.c_str(), line.size(), neutron_live_time ) )
+        {
+          parse_warnings_.push_back( "Failed to parse '" + line + "' as neutron live time" );
+          burn_through_section();
+          continue;
+        }
+        
+        if( !SpecUtils::safe_get_line( istr, line ) )
+          break;
+          
+        trim(line);
+        skip_getline = starts_with(line,"$");
+        if( skip_getline )
+          continue;
+        
+        float neutron_counts = 0.0f;
+        if( !SpecUtils::parse_float( line.c_str(), line.size(), neutron_counts ) )
+        {
+          parse_warnings_.push_back( "Failed to parse '" + line + "' as neutron counts" );
+          burn_through_section();
+          continue;
+        }
+        
+        if( !SpecUtils::safe_get_line( istr, line ) )
+          break;
+          
+        trim(line);
+        skip_getline = starts_with(line,"$");
+        if( skip_getline )
+          continue;
+        
+        assert( line == "0.000" );
+        if( line != "0.000" )
+          parse_warnings_.push_back( "Unexpected third line value in neutron section: '" + line + "', expected '0.000'." );
+        
+        if( !SpecUtils::safe_get_line( istr, line ) )
+          break;
+          
+        trim(line);
+        skip_getline = starts_with(line,"$");
+        if( skip_getline )
+          continue;
+        
+        assert( line == "1.000" || line == "0.000" );
+        if( (line != "1.000") && (line != "0.000") )
+          parse_warnings_.push_back( "Unexpected fourth line value in neutron section: '" + line + "', expected '0.000' or '1.000'." );
+        
+        if( neutron_live_time <= 0.0 || neutron_counts < 0.0 )
+        {
+          parse_warnings_.push_back( "Negative neutron live time or counts value: "
+                                    + std::to_string(neutron_live_time) + " seconds, "
+                                    + std::to_string(neutron_counts) + " counts." );
+        }else
+        {
+          // Do a sanity check that neutron live time is reasonable.
+          if( (meas->real_time_ > 0.0f) && (fabs(neutron_live_time - meas->real_time_) > 5) )
+            parse_warnings_.push_back( "Neutron live-time is different from gamma real-time ("
+                                      + std::to_string(neutron_live_time) 
+                                      + " vs " + std::to_string(meas->real_time_) + ")." );
+          meas->neutron_counts_sum_ += neutron_counts;
+          meas->neutron_counts_.push_back( neutron_counts );
+          assert( meas->neutron_live_time_ == 0.0f );
+          meas->neutron_live_time_ = std::max( meas->neutron_live_time_, 0.0f ); //jic
+          meas->neutron_live_time_ += neutron_live_time;
+        }
+        
+        burn_through_section();
+      }else if( starts_with(line,"$TRANSFORMED_DATA:") )
       {
         //we'll just burn through this section of the file since wcjohns doesnt
         //  understand the purpose or structure of these sections
-        while( SpecUtils::safe_get_line( istr, line ) )
-        {
-          trim(line);
-          if( starts_with(line,"$") )
-          {
-            skip_getline = true;
-            break;
-          }//if( we have overrun the data section )
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        burn_through_section();
       }else if( starts_with(line,"$KROMEK_INFO:") )
       {
         //  "$DATE_MEA:" appears to be the *end* of the measurement, so we'll correct for that
