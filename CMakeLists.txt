@@ -55,6 +55,14 @@ if( SpecUtils_BUILD_EXAMPLE )
 endif( SpecUtils_BUILD_EXAMPLE )
 
 if( SpecUtils_JAVA_SWIG )
+  #INCLUDE_DIRECTORIES("/opt/homebrew/opt/openjdk/include" ) 
+  #INCLUDE_DIRECTORIES("/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/include/darwin/")
+  #set(JAVA_AWT_LIBRARY "$ENV{JAVA_HOME}/lib/libjawt.so")
+  #set(JAVA_JVM_LIBRARY "$ENV{JAVA_HOME}/lib/server/libjvm.so")
+  #set(JAVA_INCLUDE_PATH "$ENV{JAVA_HOME}/include")
+  #set(JAVA_INCLUDE_PATH2 "$ENV{JAVA_HOME}/include/linux")
+  #set(JAVA_AWT_INCLUDE_PATH "$ENV{JAVA_HOME}/include")
+
   FIND_PACKAGE( SWIG REQUIRED )
   FIND_PACKAGE( JNI REQUIRED )
   INCLUDE( ${SWIG_USE_FILE} )
@@ -66,7 +74,8 @@ if( SpecUtils_JAVA_SWIG )
   SET_SOURCE_FILES_PROPERTIES(bindings/swig/SpecUtils.i PROPERTIES CPLUSPLUS ON)
   SET_SOURCE_FILES_PROPERTIES(bindings/swig/SpecUtils.i PROPERTIES SWIG_FLAGS "")
   SWIG_ADD_MODULE( SpecUtilsJni java bindings/swig/SpecUtils.i )
-  SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
+  #SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
+  swig_link_libraries(SpecUtilsJni SpecUtils)
 endif( SpecUtils_JAVA_SWIG )
 
 
@@ -225,7 +234,7 @@ if( SpecUtils_PYTHON_BINDINGS )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_JAVA_SWIG )
-  set( SpecUtils_LIB_TYPE SHARED )
+  #set( SpecUtils_LIB_TYPE SHARED ) # if we leave it static, SpecUtils code will be copied into SpecUtilsJni lib
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
@@ -290,7 +299,7 @@ endif( SpecUtils_PYTHON_BINDINGS )
 
 
 if( DEFINED boost_SOURCE_DIR )
-  target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )
+  target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional Boost::crc )
 endif( DEFINED boost_SOURCE_DIR )
 
 
@@ -307,6 +316,10 @@ elseif( WIN32 )
   #target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
+
+if( ANDROID )
+  target_link_libraries( SpecUtils PUBLIC log )
+endif( ANDROID )
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
