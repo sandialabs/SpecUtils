@@ -163,14 +163,12 @@ if( SpecUtils_ENABLE_D3_CHART )
        d3.v3.min.js
        SpectrumChartD3.js
        SpectrumChartD3.css
-       SpectrumChartD3StandAlone.css
   )
 
   set( D3_SUPPORT_FILE_MACROS
        D3_MIN_JS
        SPECTRUM_CHART_D3_JS
        SPECTRUM_CHART_D3_CSS
-       SPECTRUM_CHART_D3_STANDALONE_CSS
   )
 
 # https://stackoverflow.com/questions/7932205/parallel-iteration-over-lists-in-makefile-or-cmake-file
@@ -214,7 +212,6 @@ if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND OTHER_SUPPORT_FILES
         d3_resources/SpectrumChartD3.js
         d3_resources/SpectrumChartD3.css
-        d3_resources/SpectrumChartD3StandAlone.css
   )
 endif( SpecUtils_ENABLE_D3_CHART )
 
