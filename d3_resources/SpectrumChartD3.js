@@ -505,14 +505,13 @@ SpectrumChartD3 = function(elem, options) {
 
   /* Add the y-axis label. */
   this.yAxisTitle = this.vis.append("g")
-    .on("dblclick", function(){ //toggle between linear and log when user double-clicks title text
+    .on("click", function(){ //toggle between linear and log when user clicks title text
       d3.event.stopPropagation();
       const ytype = (self.options.yscale === "log") ? "lin" : "log";
       self.setYAxisType( (self.options.yscale === "log") ? "lin" : "log" );
       self.WtEmit(self.chart.id, {name: 'yAxisTypeChanged'}, ytype );
     })
     //Prevent it looking like a double-click on the chart, like fitting for a peak
-    .on("click", function(){ d3.event.stopPropagation(); } )
     .on("mousedown", function(){ d3.event.stopPropagation(); } )
     .on("mouseup", function(){ d3.event.stopPropagation(); } )
     .on("touchstart", function(){ d3.event.stopPropagation(); } )
@@ -672,8 +671,8 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     if( this.sliderClose )
       this.sliderClose.style("display", "none");
 
-    if( this.showXAxisSliderBtn )
-      this.showXAxisSliderBtn.style("display", "none");
+    //if( this.showXAxisSliderBtn )
+    //  this.showXAxisSliderBtn.style("display", "none");
     
     if( this.peakInfo )
       this.peakInfo.style("display", "none");
@@ -693,8 +692,8 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.peakInfo.style("display", null);
     if( this.sliderClose )
       this.sliderClose.style("display", null);
-    if( this.showXAxisSliderBtn )
-      this.showXAxisSliderBtn.style("display", null);
+    //if( this.showXAxisSliderBtn )
+    //  this.showXAxisSliderBtn.style("display", null);
     return svgMarkup;
   }catch(e){
     throw 'Error creating SVG spectrum: ' + e;
@@ -1308,6 +1307,13 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
   if( (title == null || typeof title !== 'string') || title.length === 0 )
     return;
   
+  let handleClick = function(){
+    d3.event.stopPropagation();
+    const show = !self.options.showXAxisSliderChart
+    self.setShowXAxisSliderChart(show);
+    self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, show );
+  };
+  
   self.options.txt.xAxisTitle = title;
   self.xaxistitle = this.xAxisBody
     .append("text")
@@ -1315,16 +1321,14 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
     .attr("y", 0)
     .text(self.options.txt.xAxisTitle)
     .style("text-anchor", this.hasCompactXAxis() ? "start" : "middle")
-    .on("dblclick", function(){
-      d3.event.stopPropagation();
-      const show = !self.options.showXAxisSliderChart
-      self.setShowXAxisSliderChart(show);
-      self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, show );
-    })
+    .on("click", handleClick )
     .on("mouseover", function(){ d3.event.stopPropagation(); })
     .on("mouseout", function(){ d3.event.stopPropagation(); })
     .on("mousedown.drag",  function(){ d3.event.stopPropagation(); } )
-    .on("touchstart.drag", function(){ d3.event.stopPropagation(); } )
+    .on("touchstart.drag", function(){
+      if( d3.event.touches && (d3.event.touches.length < 2) )
+        handleClick();
+    } )
     ;
 
   if( !dontResize )
@@ -1496,13 +1500,17 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
 
   if( this.options.showXAxisSliderChart ){ 
     self.drawXAxisSliderChart(); 
+    /*
     if( self.showXAxisSliderBtn ){
       self.showXAxisSliderBtn.remove();
       self.showXAxisSliderBtn = null; 
     }
-  } else { 
+     */
+  } else {
     self.cancelXAxisSliderChart(); 
     
+    /*
+     // I think I decided I didnt like this little button in the lower-right corner, now that we can click on the title to toggle it - so we'll comment it out for now, but if you search for "showSliderCloseBtn" and uncomment everything, it should still work.
     if( self.options.showSliderCloseBtn ){
       if( !self.showXAxisSliderBtn ){
         self.showXAxisSliderBtn = self.svg.append("g")
@@ -1510,7 +1518,14 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
           .on("click", function(){
             self.setShowXAxisSliderChart(true);
             self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, true );
-          } );
+          } )
+          .on("touchstart.drag", function(){ // I think this event gets cancelled somewhere, so it wont be converted to a "click" automatically
+            if( d3.event.touches && (d3.event.touches.length < 2) ){
+              self.setShowXAxisSliderChart(true);
+              self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, true );
+          }
+        } )
+     ;
 
         // Add two rectangles to self.showXAxisSliderBtn
         self.showXAxisSliderBtn.append("rect")
@@ -1534,6 +1549,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
       
       self.showXAxisSliderBtn.attr("transform", "translate(" + self.cx  + "," + self.cy + ")" );
     }
+    */
   }
   
   this.xScale.range([0, this.size.width]);
@@ -5535,7 +5551,13 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .on("click", function(event){
           self.setShowXAxisSliderChart(false);
           self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, false );
-        });
+        })
+        .on("touchstart.drag", function(){ // I think this event gets cancelled somewhere, so it wont be converted to a "click" automatically
+          if( d3.event.touches && (d3.event.touches.length < 2) ){
+            self.setShowXAxisSliderChart(false);
+            self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, false );
+          }
+        } );
     
       let cross = self.sliderClose.append("g");
       self.sliderClose.append("rect").attr("width", 10).attr("height", 10).style( { "fill-opacity": 0.0, "stroke": "none" } );
