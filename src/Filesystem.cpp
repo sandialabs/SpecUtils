@@ -25,9 +25,10 @@
 #include <random>
 #include <fstream>
 #include <cstring>
+#include <assert.h>
 #include <algorithm>
 
-#include <iostream> //temporatry for debug
+//#include <iostream> //temporary for debug
 
 #if( ANDROID )
 #include <android/log.h>
@@ -473,16 +474,29 @@ std::string filename( const std::string &path_and_name )
   if( path_and_name.back() == '/' )
     return "";
   
+  //basename is supposedly thread safe, and also you arent supposed to free what
+  //  it returns
+#if( __APPLE__ )
+  // However, on macOS 13.6.7 I ran into result from one thread being returned in another, so
+  //  we will use the `basename_r` variant.
+  //  TODO: check if `basename_r` is available other places, and use it there to.
+  char buffer[MAXPATHLEN + 1] = {'\0'};
+  char *bname = basename_r( path_and_name.c_str(), buffer );
+  assert( bname );
+  if( !bname )
+    return "";
+  string answer = bname;
+#else
   vector<char> pathvec( path_and_name.size() + 1 );
   memcpy( &(pathvec[0]), path_and_name.c_str(), path_and_name.size() + 1 );
   
-  //basename is supposedly thread safe, and also you arent supposed to free what
-  //  it returns
   char *bname = basename( &(pathvec[0]) );
   if( !bname ) //shouldnt ever happen!
     throw runtime_error( "Error with basename in filename()" );
   
   string answer = bname;
+#endif
+  
   if( answer == ".." || answer == "." )
     return "";
   
