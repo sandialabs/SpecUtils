@@ -8,7 +8,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils )
+project( SpecUtils VERSION 1.0.0 )
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
@@ -26,7 +26,6 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_USE_FROM_CHARS "Use c++17 std::from_chars for parsing floats/ints, instead of boost::spirit - about 50% slower." OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
-
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
 if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
@@ -232,6 +231,7 @@ endif( SpecUtils_JAVA_SWIG )
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
+
 #For CMake 3.8+, could specify C++11 using the following so it will be propagated to down-line targets...
 #target_compile_features(SpecUtils PUBLIC cxx_std_11)
 #set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
@@ -306,7 +306,7 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
+target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> $<INSTALL_INTERFACE:include/SpecUtils> ${Boost_INCLUDE_DIRS}
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
@@ -327,9 +327,53 @@ if( SpecUtils_BUILD_FUZZING_TESTS )
   add_subdirectory( fuzz_test )
 endif( SpecUtils_BUILD_FUZZING_TESTS )
 
+
+# Specify installation rules
+include(GNUInstallDirs)
+
+# Install the library
+install(TARGETS SpecUtils
+    EXPORT SpecUtilsTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+set( SpecUtils_config_OUT ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h )
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h
+    ${SpecUtils_config_OUT}
+)
+LIST(APPEND headers ${SpecUtils_config_OUT})
+# Install the headers
+install(FILES ${headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
+
+# Create and install the CMake package configuration files
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
 )
 
 
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+)
+
+install(EXPORT SpecUtilsTargets
+    FILE SpecUtilsTargets.cmake
+    NAMESPACE SpecUtils::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+)
