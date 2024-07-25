@@ -4015,7 +4015,6 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
 
   var lowerx = this.xScale.domain()[0], upperx = this.xScale.domain()[1];
 
-
   var reflines = [];
   self.refLines.forEach( function(input) {
     var lines = getLinesInRange(self.xScale.domain(),input.lines);
@@ -4035,19 +4034,18 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("class", "ref")
     .attr("transform", tx);
 
-  var stroke = function(d) { return d.parent.color; };
+  function stroke(d){ return d.parent.color; };
 
-  var dashfunc = function(d){
-    var particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum"];
-    var dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6") ];
-    var index = particles.indexOf(d.particle);
+  function dashfunc(d){
+    const particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum", "S.E.",   "D.E." ];
+    const dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6"),       ("4,1"),  ("4,1")];
+    const index = particles.indexOf(d.particle);
     if( index < 0 ) { console.log( 'Invalid particle: ' + d.particle ); return null; } //We can get here when lines that shared an energy were combined, so d.particle might for example be "gamma, xray"
     return (index > -1) ? dash[index] : null;
   };
 
   var h = self.size.height;
-  var m = Math.min(h,self.options.refLineTopPad); /* leave 20px margin at top of chart */
-
+  var m = Math.min(h,self.options.refLineTopPad); // leave 20px margin at top of chart
 
   gye.append("line")
     .style("stroke-dasharray", dashfunc )
@@ -4056,8 +4054,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("dx", "-0.5" )
      ;
 
-  /* Remove old elements as needed. */
-  gy.exit().remove();
+  gy.exit().remove();  // Remove old elements as needed.
   
   /* Now update the height of all the lines.  If we did this in the gye.append("line") */
   /*  line above then the values for existing lines wouldnt be updated (only */
