@@ -65,6 +65,7 @@ svg.SpectrumChartD3 {
 .InterSpecD3Chart text.xaxistitle, 
 .InterSpecD3Chart text.yaxistitle { 
   font-size: 14px; 
+  cursor: pointer;
 }
 
 .InterSpecD3Chart .axis > path, 
@@ -74,10 +75,6 @@ svg.SpectrumChartD3 {
 
 .xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text {
   fill: var(--d3spec-text-color, black);
-}
-
-.InterSpecD3Chart text.xaxistitle, .InterSpecD3Chart text.yaxistitle {
-  cursor: default;
 }
 
 .InterSpecD3Chart text.xaxistitle:hover, .InterSpecD3Chart text.yaxistitle:hover {

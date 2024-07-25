@@ -29,6 +29,7 @@
 #include <mutex>
 #include <vector>
 #include <thread>
+#include <utility>
 #include <exception>
 #include <functional>
 #include <condition_variable>
@@ -130,6 +131,16 @@ namespace SpecUtilsAsync
   protected:
     
 #if( defined(ThreadPool_USING_GCD) )
+    // If we call `join()` from too many threads we can lock the GCD pool up, so
+    //  we'll limit the number of ThreadPool objects with their own queues
+    static std::mutex sm_npool_mutex;
+    static int sm_npools;
+    
+    /** If we will submit jobs to GCD, or put in `m_nonPostedWorkers` */
+    bool m_canSubmitToGCD;
+    std::vector< std::function<void(void)> > m_nonPostedWorkers;
+    
+    /** The queue to submit to.  Is only valid if `m_canSubmitToGCD` is true, and otherwise can not be submitted to. */
     dispatch_queue_t m_queue;
     std::mutex m_exception_mutex;
     std::exception_ptr m_exception;
@@ -171,7 +182,7 @@ namespace SpecUtilsAsync
     
     
   private:
-#if( defined(ThreadPool_USING_WT) || defined(ThreadPool_USING_THREADS) )
+#if( defined(ThreadPool_USING_WT) || defined(ThreadPool_USING_THREADS) || defined(ThreadPool_USING_GCD) )
     //dowork(): actually calls the user passed in function, and decrements the
     //  m_nJobsLeft counter.  To be used from the backing thread pool, and not
     //  in do_asyncronous_work(...).
@@ -223,17 +234,17 @@ namespace SpecUtilsAsync
   {
     while( 1 )
     {
-      std::unique_ptr<Functionoid> work;
+      Functionoid work;
       
       {//begin codeblock to get the worker
         std::lock_guard<std::mutex> lock( gaurd );
         if( jobs.empty() )
           return;
-        work.reset( new Functionoid( jobs.back() ) );
+        work = std::move( jobs.back() );
         jobs.pop_back();
       }//end codeblock to get the worker
       
-      (*work)();
+      work();
     }//while(1)
   }//async_worker(...)
 #endif
@@ -251,6 +262,8 @@ namespace SpecUtilsAsync
 #else
   std::mutex queue_mutex;
   int nthread = (physcore ? num_physical_cpu_cores() : num_logical_cpu_cores() );
+  nthread = std::min( static_cast<int>(job_to_do.size()), nthread );
+  
   std::vector<std::shared_ptr<std::thread> > threads( nthread );
   for( int i = 0; i < nthread; ++i )
     threads[i] = std::make_shared<std::thread>( &(async_worker<Functionoid>),
