@@ -104,12 +104,10 @@ namespace D3SpectrumExport
   const unsigned char *d3_js();
   const unsigned char *spectrum_chart_d3_js(); // For chart interactions, animations, etc.
   const unsigned char *spectrum_char_d3_css();
-  const unsigned char *spectrum_chart_d3_standalone_css();
 #else
   const char *d3_js_filename();
   const char *spectrum_chart_d3_js_filename(); // For chart interactions, animations, etc.
   const char *spectrum_chart_d3_css_filename();
-  const char *spectrum_chart_d3_css_standalone_filename();
 #endif
   const char *spectrum_chart_setup_js();
   

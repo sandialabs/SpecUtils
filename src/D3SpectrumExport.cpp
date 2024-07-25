@@ -59,8 +59,7 @@ namespace
   };//ns_jsFiles[]
   
   const unsigned char * const ns_cssFiles[] = {
-    SPECTRUM_CHART_D3_CSS,  // For spectrum stylesheet
-    SPECTRUM_CHART_D3_STANDALONE_CSS
+    SPECTRUM_CHART_D3_CSS  // For spectrum stylesheet
   };//D3SpectrumChartOptions::cssFiles[]
 #else
   string file_to_string( const std::string &filename )
@@ -317,7 +316,6 @@ namespace D3SpectrumExport
   const unsigned char *d3_js(){ return D3_MIN_JS; }
   const unsigned char *spectrum_chart_d3_js(){ return SPECTRUM_CHART_D3_JS; }
   const unsigned char *spectrum_char_d3_css(){ return SPECTRUM_CHART_D3_CSS; }
-  const unsigned char *spectrum_chart_d3_standalone_css(){ return SPECTRUM_CHART_D3_STANDALONE_CSS; }
 #else
   const char *d3_js_filename(){ return D3_MIN_JS_FILENAME; }
   const char *spectrum_chart_d3_js_filename(){ return SPECTRUM_CHART_D3_JS_FILENAME; }
@@ -432,7 +430,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     ostr << "<script>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_JS_FILENAME) ) << "</script>" << endline;
     ostr << "<script>" << SPECTRUM_CHART_SETUP_JS << "</script>" << endline;
     ostr << "<style>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_CSS_FILENAME) ) << "</style>" << endline;
-    ostr << "<style>" << file_to_string( append_path(basdir, SPECTRUM_CHART_D3_STANDALONE_CSS_FILENAME) ) << "</style>" << endline;
+    // TODO: add cutsom style/color here
     
     //ostr << "<link rel=\"stylesheet\" type=\"text/css\" href=\"" << SPECTRUM_CHART_D3_CSS_FILENAME << "\">" << endline;
 #endif

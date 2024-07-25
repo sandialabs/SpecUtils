@@ -9,16 +9,30 @@
    should be consistent between the charts
 */
 
+/*
+CSS variables InterSpec will define for colors:
+--d3spec-axis-color
+--d3spec-text-color
+--d3spec-background-color
+--d3spec-chart-area-color
+--d3spec-grid-major-color
+--d3spec-grid-minor-color
+*/
+
 /*******************/
-.SpectrumChartD3 {
+svg.SpectrumChartD3 {
   /* This is the <svg> element. */
+  background: var(--d3spec-background-color, none);
 }
+
 
 .roiDragBox {
   fill-opacity: 0.2;
   stroke-width: 1px;
   user-select: none;
-  -moz-user-select: none;
+
+  stroke: var(--d3spec-axis-color, black);
+  fill: var(--d3spec-axis-color, black);
 }
 
 .roiDragLine{
@@ -38,22 +52,37 @@
 /*******************/
 
 .chartarea{
-  
+  fill: var(--d3spec-chart-area-color, rgba(0,0,0,0));
 }
 
 
-.InterSpecD3Chart .axis > .tick > line { stroke-width: 1px; }
+.InterSpecD3Chart .axis > .tick > line {
+  stroke-width: 1px;
+}
 
 
 .InterSpecD3Chart .axis text.xaxistitle, 
 .InterSpecD3Chart text.xaxistitle, 
 .InterSpecD3Chart text.yaxistitle { 
   font-size: 14px; 
+  cursor: pointer;
 }
 
 .InterSpecD3Chart .axis > path, 
 .axis line { 
   fill: none; 
+}
+
+.xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text {
+  fill: var(--d3spec-text-color, black);
+}
+
+.InterSpecD3Chart text.xaxistitle:hover, .InterSpecD3Chart text.yaxistitle:hover {
+  font-weight: bold;
+}
+
+.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick {
+  stroke: var(--d3spec-axis-color, black);
 }
 
 .InterSpecD3Chart .axis text { 
@@ -66,15 +95,22 @@
     fill: none;
 }
 
-/* 
-.xgrid > .tick, .ygrid > .tick{ stroke-opacity: 80%; }
-.minorgrid { stroke-opacity: 50%; }
-*/
+
+.xgrid > .tick, .ygrid > .tick {
+  /* stroke-opacity: 80%; */
+  stroke: var(--d3spec-grid-major-color, #b3b3b3);
+}
+
+.minorgrid {
+  /* stroke-opacity: 50%; */
+  stroke: var(--d3spec-grid-minor-color, #e6e6e6);
+}
 
 /* The box that holds the peak label text */
 .peaklabel, .peakLabelBold {
   font-size: 1em;
   cursor: default;
+  fill: var(--d3spec-text-color, black);
 }
 
 /*
@@ -92,22 +128,45 @@
 .peaklabelline {
   stroke-width: 1.5;
   z-index: 100;
+  stroke: var(--d3spec-axis-color, black);
 }
 
 
-/* The tspan that holds the user entered label within the peaklabel box */
-.userLabel{ }
-/* The tspan that holds peak energy within the peaklabel box */
-.peakEnergyLabel{}
-/* The tspan that holds the nuclide information within the peaklabel box */
-.nuclideLabel{}
+.peakLine {
+  font-size: 0.8em;
+  stroke-width: 2;
+  stroke: var(--d3spec-axis-color, black);
+}
 
-
-.peakLine{ font-size: 0.8em; stroke-width: 2; }
-.escapeLineForward { font-size: 0.8em; stroke-width: 2; stroke-dasharray: 2; }
+.escapeLineForward {
+  font-size: 0.8em;
+  stroke-width: 2;
+  stroke-dasharray: 2;
+  stroke: var(--d3spec-axis-color, black);
+}
   
-.mouseLine      { font-size: 0.8em; stroke-width: 2; }
-.secondaryMouseLine { font-size: 0.8em; stroke-width: 1; }
+.SpectrumChartD3 .mouseLine {
+  font-size: 0.8em;
+  stroke-width: 2;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.SpectrumChartD3 .secondaryMouseLine {
+  font-size: 0.8em;
+  stroke-width: 1;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.SpectrumChartD3 .mouseLineText {
+  font-size: 0.8em;
+  font-family: Helvetica, Arial;
+  font-weight: bold
+  fill: var(--d3spec-text-color, black);
+}
+
+.SpectrumChartD3 .recalibrationMousePosLines {
+  stroke: var(--d3spec-axis-color, black);
+}
 
 .referenceGammaSelectDiv { display: inline-block; margin-left: 25px; }
 .referenceGammaSelect { width: 200px; height: 130px; }
@@ -146,10 +205,16 @@
 /* .d3closebut:hover{ fill: #4d4d4d; } */
 
 .chartLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.mouseLineText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+
+
 .deletePeaksText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
 .countGammasText  {  font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
-.peakText{ font-size: 0.8em; font-family: Helvetica, Arial;  font-weight: bold }
+.peakText {
+  font-size: 0.8em;
+  font-family: Helvetica, Arial;
+  font-weight: bold
+  fill: var(--d3spec-text-color, black);
+}
 .contEstLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey;  }
 .createPeakTouchText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey; fill: grey; }
 
@@ -162,54 +227,132 @@
 .activescaler > .scalerback{ /* fill-opacity: 0.85; */ }
 .scalerheader{ fill: rgba(185,185,185,0.80); fill-opacity: 0.55; }
 .activescaler > g > .scalerheader{ fill: #909090; fill-opacity: 0.95; }
-.scaleraxis{  }
-.scalertoggle{  }
 
-
-.leftbuttonzoombox {
-  fill: #666;
-  fill-opacity: 0.25;
+.SpectrumChartD3 .scalertxt{
+  fill: var(--d3spec-text-color, black);
+}
+.scaleraxis {
+  stroke-opacity: 0.8;
+  fill-opacity: 0.3;
+  stroke: var(--d3spec-axis-color, black);
 }
 
-.leftbuttonzoomoutboxy {
-  fill: #666;
-  fill-opacity: 0.1;
+.scalertoggle {
+  stroke: var(--d3spec-axis-color, black);
 }
-.deletePeaksBox {
-  fill: #666;
+  
+  
+  .leftbuttonzoombox {
+    fill: #666;
+    fill-opacity: 0.25;
+  }
+  
+  .leftbuttonzoomoutboxy {
+    fill: #666;
+    fill-opacity: 0.1;
+  }
+  .deletePeaksBox {
+    fill: #666;
+    fill-opacity: 0.5;
+  }
+  .countGammasBoxForward {
+    fill: rgba(255,255,0,0.605);
+    fill-opacity: 1;
+  }
+  
+  .sliderBox {
+    user-select: none;
+    -moz-user-select: none;
+  
+  stroke-width: 0.2%;
   fill-opacity: 0.5;
+  fill: var(--d3spec-axis-color, black);
+  stroke: var(--d3spec-axis-color, black);
 }
-.countGammasBoxForward {
-  fill: rgba(255,255,0,0.605);
-  fill-opacity: 1;
-}
+  .sliderDragRegion {
+  }
+  .sliderDragRegionLine {
+  }
+  .sline {
+    fill: none;
+    stroke-width: 0.7px;
+  }
+  .rline {
+    fill: none;
+    stroke-width: 0.5px;
+  }
+  
+  .focus circle {
+    fill: none;
+    stroke: steelblue;
+  }
 
-.sliderBox {
-  user-select: none;
-  -moz-user-select: none;
-}
-.sliderDragRegion {
-}
-.sliderDragRegionLine {
-}
-.sline {
-  fill: none;
-  stroke-width: 0.7px;
-}
-.rline {
-  fill: none;
-  stroke-width: 0.5px;
-}
 
-.focus circle {
-  fill: none;
-  stroke: steelblue;
-}
 .SpectrumChartD3 .title { font-size: 1.5em; }
-.SpectrumChartD3 .chart {
-  background-color: #F7F2C5;
-  width: 80%;
-  margin-left: auto;
-  margin-right: auto;
-  height: 500px; 
+  .SpectrumChartD3 .chart {
+    background-color: #F7F2C5;
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    height: 500px;
+  }  
+
+
+g.highlight text {
+  font-size: 1em; /* Same size as .peaklabel */
+  /* TODO: We will set the color and size here... */
+  text-anchor: middle;
+  dominant-baseline: baseline;
+}
+  
+g.highlight path {
+  stroke: none;
+  stroke-width: 0px;
+}
+  
+
+
+.SpectrumChartD3 .slider-plot {
+  fill: var(--d3spec-axis-color, black);
+  opacity: 0.1;
+}
+
+.SpectrumChartD3 .slider-close {
+  stroke-width: 1.0px;
+  stroke-opacity:  0.2;
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.SpectrumChartD3 .slider-close:hover {
+  stroke-opacity:  1;
+  stroke-width: 1.5px;
+}
+
+.SpectrumChartD3 .sliderDragRegion {
+  fill-opacity: 0.1;
+  fill: var(--d3spec-axis-color, black);
+  stroke: var(--d3spec-axis-color, black);
+  stroke-width: 0.1%;
+}
+
+.SpectrumChartD3 .slider-open {
+  opacity:  0.2;
+}
+
+.SpectrumChartD3 .slider-open:hover {
+  opacity:  1;
+}
+
+.SpectrumChartD3 .slider-open-plot{
+ /* slider-plot */
+ fill: var(--d3spec-axis-color, black);
+ opacity: 0.2;
+ stroke: none;
+}
+
+.SpectrumChartD3 .slider-open-box{
+  /* sliderBox */
+  fill-opacity: 0.45;
+  fill: var(--d3spec-axis-color, black);
+  stroke: none;
 }

@@ -48,7 +48,7 @@ using namespace std;
 
 namespace SpecUtilsAsync
 {
-#if( defined(ThreadPool_USING_WT) )
+#if( defined(ThreadPool_USING_WT) || defined(ThreadPool_USING_GCD) )
   std::mutex ThreadPool::sm_npool_mutex;
   int ThreadPool::sm_npools = 0;
 #endif
@@ -89,7 +89,22 @@ namespace SpecUtilsAsync
   ThreadPool::ThreadPool()
   {
 #if( defined(ThreadPool_USING_GCD) )
-    m_queue = dispatch_queue_create("InterSpec.Sandia.ThreadPool", DISPATCH_QUEUE_CONCURRENT);
+    {// Begin lock on sm_npool_mutex
+      std::unique_lock<std::mutex> lock( sm_npool_mutex );
+      sm_npools += 1;
+      
+      // Looks like GCD currently has a max number of 64 threads, so if we create more threads than
+      //  this that depend upon each other (e.g., recursive use of ThreadPools), there could be a
+      //  chance we deadlock.  To avoid this, and not be too unreasonable, we'll cap the number
+      //  of ThreadPool objects at 48 (since this is already crazy territory).
+      m_canSubmitToGCD = (sm_npools < 48);
+    }// End lock on sm_npool_mutex
+    
+    if( m_canSubmitToGCD )
+      m_queue = dispatch_queue_create("InterSpec.Sandia.ThreadPool", DISPATCH_QUEUE_CONCURRENT);
+    else
+      m_queue = nullptr; //dispatch_get_global_queue( QOS_CLASS_DEFAULT, 0 );
+    
 #elif( defined(ThreadPool_USING_WT) )
     m_nJobsLeft = 0;
     
@@ -108,6 +123,14 @@ namespace SpecUtilsAsync
   ThreadPool::~ThreadPool()
   {
     // Throwing an exception from a destructor is dangerous
+    try
+    {
+      join();
+    }catch( std::exception & )
+    {
+      m_exception = std::current_exception();
+    }
+    
     {// begin lock on m_exception_mutex
       std::lock_guard<std::mutex> lock( m_exception_mutex );
       if( m_exception )
@@ -138,14 +161,19 @@ namespace SpecUtilsAsync
       }//if( m_exception )
     }// end lock on m_exception_mutex
     
-    join();
 #if( defined(ThreadPool_USING_WT) )
     std::unique_lock<std::mutex> lock( sm_npool_mutex );
     sm_npools -= 1;
 #endif
     
 #if( defined(ThreadPool_USING_GCD) )
-    dispatch_release( m_queue );
+    if( m_canSubmitToGCD )
+      dispatch_release( m_queue );
+    
+    {// Begin lock on sm_npool_mutex
+      std::unique_lock<std::mutex> lock( sm_npool_mutex );
+      sm_npools -= 1;
+    }// End lock on sm_npool_mutex
 #endif
   }//~ThreadPool()
   
@@ -154,7 +182,19 @@ namespace SpecUtilsAsync
   void ThreadPool::join()
   {
 #if( defined(ThreadPool_USING_GCD) )
-    dispatch_barrier_sync( m_queue, ^{} );
+    if( m_canSubmitToGCD )
+    {
+      assert( m_nonPostedWorkers.empty() );
+      
+      dispatch_barrier_sync( m_queue, ^{} );
+    }else
+    {
+      if( m_nonPostedWorkers.size() )
+      {
+        do_asyncronous_work( m_nonPostedWorkers, false );
+        m_nonPostedWorkers.clear();
+      }
+    }//if( m_canSubmitToGCD ) / else
     
     std::lock_guard<std::mutex> lock( m_exception_mutex );
     if( m_exception )
@@ -199,7 +239,7 @@ namespace SpecUtilsAsync
   }//void join()
   
   
-#if( defined(ThreadPool_USING_WT) || defined(ThreadPool_USING_THREADS) )
+#if( defined(ThreadPool_USING_WT) || defined(ThreadPool_USING_THREADS) || defined(ThreadPool_USING_GCD) )
   
   void ThreadPool::doworkasync( const std::function< void(void) > &fcn )
   {
@@ -246,19 +286,25 @@ namespace SpecUtilsAsync
   void ThreadPool::post( std::function< void(void) > worker )
   {
 #if( defined(ThreadPool_USING_GCD) )
-    dispatch_async( m_queue,
-      ^{
-         try
-         {
-           worker();
-          }catch( std::exception &e )
-          {
-            std::lock_guard<std::mutex> lock( m_exception_mutex );
-            //if( m_exception ) std::cerr << "ThreadPool::dowork async has caught multiple exceptions\n";
-            //std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
-            m_exception = std::current_exception();
-          }
-        } );
+    if( m_canSubmitToGCD )
+    {
+      dispatch_async( m_queue,
+                     ^{
+        try
+        {
+          worker();
+        }catch( std::exception &e )
+        {
+          std::lock_guard<std::mutex> lock( m_exception_mutex );
+          //if( m_exception ) std::cerr << "ThreadPool::dowork async has caught multiple exceptions\n";
+          //std::cerr << "ThreadPool::dowork async caught: " << e.what() << std::endl;
+          m_exception = std::current_exception();
+        }
+      } );
+    }else
+    {
+      m_nonPostedWorkers.push_back( std::bind( &ThreadPool::doworkasync, this, worker ) );
+    }//if( m_canSubmitToGCD ) / else
 #elif( defined(ThreadPool_USING_WT) )
     Wt::WServer *server = Wt::WServer::instance();
     

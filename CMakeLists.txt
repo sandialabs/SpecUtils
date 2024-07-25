@@ -153,14 +153,12 @@ if( SpecUtils_ENABLE_D3_CHART )
        d3.v3.min.js
        SpectrumChartD3.js
        SpectrumChartD3.css
-       SpectrumChartD3StandAlone.css
   )
 
   set( D3_SUPPORT_FILE_MACROS
        D3_MIN_JS
        SPECTRUM_CHART_D3_JS
        SPECTRUM_CHART_D3_CSS
-       SPECTRUM_CHART_D3_STANDALONE_CSS
   )
 
 # https://stackoverflow.com/questions/7932205/parallel-iteration-over-lists-in-makefile-or-cmake-file
@@ -204,7 +202,6 @@ if( SpecUtils_ENABLE_D3_CHART )
   list( APPEND OTHER_SUPPORT_FILES
         d3_resources/SpectrumChartD3.js
         d3_resources/SpectrumChartD3.css
-        d3_resources/SpectrumChartD3StandAlone.css
   )
 endif( SpecUtils_ENABLE_D3_CHART )
 
@@ -236,6 +233,7 @@ set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils"
 #target_compile_features(SpecUtils PUBLIC cxx_std_11)
 #set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 
+
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
     # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
@@ -253,6 +251,11 @@ else(SpecUtils_USE_FROM_CHARS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
   )
+
+  #For CMake 3.8+, will specify following so it will be propagated to down-line targets
+  # This seems duplicate, but needed when compiling with SWIG
+  target_compile_features(SpecUtils PUBLIC cxx_std_11)
+  set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
 endif(SpecUtils_USE_FROM_CHARS)
 
 

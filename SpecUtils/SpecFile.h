@@ -1436,6 +1436,7 @@ public:
    */
   void set_detectors_analysis( const DetectorAnalysis &ana );
   
+  
   /** Changes the detector, both as returned by #detector_names, and for each
       Measurement.
    
@@ -1446,6 +1447,16 @@ public:
    */
   void change_detector_name( const std::string &original_name,
                              const std::string &new_name );
+  
+  /** Changes the sample numbers of measurements, from a previous value, to a new value.
+   
+   Useful if you have removed a number of measurements and want to reset samples to start from 1.
+   
+   @param from_to_sample_nums vector of pairs that give the original sample number, and the value to change into.
+   
+   Throws exception if any of the original sample numbers dont correspond to measurements.
+   */
+  virtual void change_sample_numbers( const std::vector<std::pair<int,int>> &from_to_sample_nums );
   
   //add_measurement(...): adds the measurement to this SpecFile object and
   //  if 'doCleanup' is specified, then all sums will be recalculated, and
@@ -1473,6 +1484,7 @@ public:
   //  for removing large numbers of measurements.  This function assumes
   //  the internal state of this SpecFile object is consistent
   //  (e.g. no measurements have been added or removed without 'cleaningup').
+  //  Calls `cleanup_after_load( DontChangeOrReorderSamples );`
   void remove_measurements( const std::vector<std::shared_ptr<const Measurement>> &meas );
   
   /** Removes all multimedia entries. */
@@ -1547,7 +1559,7 @@ public:
   //  EventNumber will have to wait
   int occupancy_number_from_remarks() const;
 
-  //get all measurements cooresponding to 'sample_number', where
+  //get all measurements corresponding to 'sample_number', where
   //  sample_number may not be a zero based index (eg may start at one)
   std::vector< std::shared_ptr<const Measurement> > sample_measurements(
                                                 const int sample_number ) const;
@@ -1656,11 +1668,6 @@ public:
   
   /** Enum to indicate "derived data" variant to keep. */
   enum class DerivedVariantToKeep{ NonDerived, Derived };
-  
-  /** Returns the measurements that are the specified derived data type.
-   */
-  std::vector<std::shared_ptr<const Measurement>>
-  get_derived_data_variant_measurements( const DerivedVariantToKeep variant ) const;
   
   /** When a spectrum file contains both "derived" and non-derived data, we may want to use only one of these variants of the data;
    this functions lets you discard the variant you arent interested in.
@@ -2077,7 +2084,7 @@ public:
   
   
   /** The spectra in the current file are written out in a two column
-   format (seperated by a comma); the first column is gamma channel
+   format (separated by a comma); the first column is gamma channel
    lower edge energy, the second column is channel counts.  Each
    spectrum in the file are written out contiguously and seperated
    by a header that reads \"Energy, Data\".  Windows style line
@@ -2263,8 +2270,10 @@ public:
                       std::vector<std::string> det_names ) const;
 #endif
   
+#if( SpecUtils_INJA_TEMPLATES )
   bool write_template( std::ostream &output, const std::string template_file, bool strip_blocks ) const;
-
+#endif
+  
 #if( SpecUtils_ENABLE_URI_SPECTRA )
   /** Writes the file to URI(s), for, e.g., creating QR-codes.
    
@@ -2480,7 +2489,7 @@ protected:
    */
   std::vector<std::string>    detector_names_;
   
-  /** The detector number cooresponding to the #detector_names_.
+  /** The detector number corresponding to the #detector_names_.
    This vector has same number of entries as #detector_names_ and is ordered the same.
    
    \deprecated Please only use detector names.
