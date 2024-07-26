@@ -309,7 +309,7 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> $<INSTALL_INTERFACE:include/SpecUtils> ${Boost_INCLUDE_DIRS}
+target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> ${Boost_INCLUDE_DIRS}
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
@@ -329,7 +329,6 @@ endif( SpecUtils_BUILD_UNIT_TESTS )
 if( SpecUtils_BUILD_FUZZING_TESTS )
   add_subdirectory( fuzz_test )
 endif( SpecUtils_BUILD_FUZZING_TESTS )
-
 
 # Specify installation rules
 include(GNUInstallDirs)
@@ -366,8 +365,6 @@ configure_package_config_file(
     "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
 )
-
-
 
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
