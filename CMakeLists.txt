@@ -330,6 +330,8 @@ if( SpecUtils_BUILD_FUZZING_TESTS )
   add_subdirectory( fuzz_test )
 endif( SpecUtils_BUILD_FUZZING_TESTS )
 
+set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
+
 # Specify installation rules
 include(GNUInstallDirs)
 

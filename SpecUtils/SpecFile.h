@@ -1157,7 +1157,7 @@ protected:
   std::shared_ptr<const SpecUtils::LocationState> location_;
   
   friend class ::SpecMeas;
-  friend class SpecFile;
+  friend class SpecFile; // bruh...
   friend struct N42DecodeHelper2006;
   friend struct N42DecodeHelper2012;
   friend struct GrossCountNodeDecodeWorker;
