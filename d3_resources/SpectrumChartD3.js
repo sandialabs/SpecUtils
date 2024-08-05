@@ -651,6 +651,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
     //+ '.peakLine, .escapeLineForward, .mouseLine\n'
+    // Add in CSS variables here
     + '</style></defs>';
     
     
@@ -1115,12 +1116,11 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
       this.chartBody.append("path")
         .attr("id", "spectrumline"+i)
-        .attr("class", "speclinepath")
+        .attr("class", "speclinepath" + (spectrum.type ? " " + spectrum.type : "") )
         .attr("stroke-width", self.options.spectrumLineWidth)
-        .attr("fill", 'none' )
-        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : 'black')
+        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : null )
         .attr("d", this['line' + i](spectrum.points));
-
+        
       if (spectrum.yScaleFactor)
         maxYScaleFactor = Math.max(spectrum.yScaleFactor, maxYScaleFactor);
     }

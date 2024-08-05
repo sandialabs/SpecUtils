@@ -120,7 +120,14 @@ namespace D3SpectrumExport
     
     //An array of peaks. See peak_json(...) in InterSpec.cpp
     std::string peaks_json;
-    std::string line_color;  //standard css names, "steelblue", "black", etc
+    
+    /** Standard css color, "steelblue", "black", rgba(23,52,99,0.8), etc.
+     If empty, then line color will default to the color specified by `D3SpectrumOptions::spectrum_type`;
+     see  --d3spec-fore-line-color, --d3spec-back-line-color, and --d3spec-second-line-color.
+     */
+    std::string line_color;
+    
+    /** The default peak color, if the peak itself doesnt define a color. */
     std::string peak_color;
     
     /** If empty, title from Measurement will be used, but if non-empty, will override Measurement.
