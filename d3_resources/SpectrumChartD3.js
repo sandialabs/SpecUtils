@@ -568,44 +568,36 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
 
 SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
-    let w = this.svg.attr("width");
-    let h = this.svg.attr("height");
+    let w = this.svg.attr("width"), h = this.svg.attr("height");
         
-    //We will need to propagate all the styles we can dynamically set in the SVG (see
+    //We will need to propagate all the styles we set in the SVG (see SpectrumChartD3.css and
     //  D3SpectrumDisplayDiv::m_cssRules) to the <defs> section of the new SVG.
     
-    // The c++ sets the following rules:
-    //  ".xgrid > .tick, .ygrid > .tick", "stroke: #b3b3b3"
-    //  ".minorgrid", "stroke: #e6e6e6"
-    //  ".xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text", "fill: black"
-    //  ".xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick", "stroke: black"
-    //  ".peakLine, .escapeLineForward, .mouseLine, "stroke: black"
-    //  "#" + id() + " > svg", "background: " + color.cssText()
-    //  "#chartarea" + id(), "fill: " + c
-    
-    let getStyle = function( sel ){
+    function getStyle( sel ){
       let el = document.querySelector(sel);
       if( !el ) return null;
       return window.getComputedStyle( el );
     };
     
-    let getSvgFill = function( sel ){
+    function getSvgFill( sel ){
       let style = getStyle( sel );
       let fill = style && style.fill ? style.fill : "";
       let comps = fill.match(/\d+/g);
       if( (comps && (comps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) > 0.01))
-      || (fill.length > 2 && fill.substr(0,1)=='#') )
-      return fill;
+         || (fill.length > 2 && fill.substr(0,1)=='#') )
+        return fill;
       return null;
     };
     
+    function getCssRootVar(varname){
+      return getComputedStyle(document.documentElement).getPropertyValue(varname).trim();
+    };
     
-    var domstyle = getStyle( '.Wt-domRoot' );
-    var dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
+    const domstyle = getStyle( '.Wt-domRoot' );
+    let dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
     
     // Check of dom background is something other than "rgba(0, 0, 0, 0)"; not perfect yet, but kinda works
-    if( dombackground )
-    {
+    if( dombackground ) {
       let bgrndcomps = dombackground.match(/\d+/g); //Note: the double backslash is for the C++ compiler, if move to JS file, make into a single backslash
       if( !bgrndcomps
       || ((bgrndcomps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) < 0.01)
@@ -636,7 +628,6 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     let minorGridStyle = getStyle( '.minorgrid' );
     let minorGridStroke = minorGridStyle && minorGridStyle.stroke ? minorGridStyle.stroke : null;
     
-    
     let svgDefs = '<defs><style type="text/css">\n'
     + 'svg{ background:' + (svgback ? svgback : 'rgb(255,255,255)') + ';}\n'
     + '.chartarea{ fill: ' + (chartAreaFill ? chartAreaFill : 'rgba(0,0,0,0)') + ';}\n'
@@ -650,10 +641,11 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
-    //+ '.peakLine, .escapeLineForward, .mouseLine\n'
-    // Add in CSS variables here
+    + '.speclinepath, .SpectrumLegendLine { fill: none; }'
+    + '.speclinepath.FOREGROUND, .SpectrumLegendLine.FOREGROUND { stroke: ' + getCssRootVar('--d3spec-fore-line-color').trim() + '}'
+    + '.speclinepath.BACKGROUND, .SpectrumLegendLine.BACKGROUND { stroke: ' + getCssRootVar('--d3spec-back-line-color').trim() + '}'
+    + '.speclinepath.SECONDARY, .SpectrumLegendLine.SECONDARY { stroke: ' + getCssRootVar('--d3spec-second-line-color').trim() + '}'
     + '</style></defs>';
-    
     
     // Hide mouse information, and slider chart
     this.refLineInfo.style("display", "none");
@@ -679,10 +671,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.peakInfo.style("display", "none");
     
     let svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg"' + ' width="'  + w + '"' + ' height="' + h + '"' + '>'
-    + svgDefs
-    + this.svg.node().innerHTML.toString()
-    +'</svg>';
-    
+                    + svgDefs + this.svg.node().innerHTML.toString() +'</svg>';
     
     // Make slider chart and/or scalerWidget visible again, if they should be showing
     if( this.sliderChart && this.size.sliderChartHeight )
@@ -4603,10 +4592,9 @@ SpectrumChartD3.prototype.updateLegend = function() {
       
     thisentry.append("path")
         //.attr("id", "spectrum-legend-line-" + i)  // reference for when updating color
-        //.attr("class", "line" )
-        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : "black")
+        .attr("class", "SpectrumLegendLine " + (spectrum.type ? " " + spectrum.type : "") )
+        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : null)
         .attr("stroke-width", self.options.spectrumLineWidth )
-        .attr("fill", 'none' )
         .attr("d", "M0,-5 L12,-5");
       
     let thistxt = thisentry.append("text")

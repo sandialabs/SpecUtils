@@ -366,14 +366,20 @@ svg.SpectrumChartD3 {
   fill: none;
 }
   
-.SpectrumChartD3 path.speclinepath.FOREGROUND {
+.SpectrumChartD3 path.speclinepath.FOREGROUND, .SpectrumChartD3 path.SpectrumLegendLine.FOREGROUND {
   stroke: var(--d3spec-fore-line-color, black);
 }
   
-.SpectrumChartD3 path.speclinepath.BACKGROUND {
+.SpectrumChartD3 path.speclinepath.BACKGROUND, .SpectrumChartD3 path.SpectrumLegendLine.BACKGROUND {
   stroke: var(--d3spec-back-line-color, rgb(0,255,255) ); /* cyan */
 }
   
-.SpectrumChartD3 path.speclinepath.SECONDARY {
+.SpectrumChartD3 path.speclinepath.SECONDARY, .SpectrumChartD3 path.SpectrumLegendLine.SECONDARY {
   stroke: var(--d3spec-second-line-color, rgb(0,128,128) ); /* dark green */
 }
+
+.SpectrumChartD3 .SpectrumLegendLine {
+  fill: none;
+}
+
+
