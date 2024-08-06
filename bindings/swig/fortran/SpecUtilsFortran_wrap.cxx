@@ -660,10 +660,10 @@ struct SWIG_null_deleter {
 #define SWIG_NO_NULL_DELETER_SWIG_POINTER_OWN
 
 SWIGINTERN float SpecUtils_Measurement_gamma_count_at(SpecUtils::Measurement *self,int index){
-        return self->gamma_counts()->at(index);
+        return self->gamma_counts()->at(index-1);
     }
-SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int num){
-        return self->measurement(static_cast<size_t>(num));
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int index){
+        return self->measurement(static_cast<size_t>(index-1));
     }
 extern "C" {
 SWIGEXPORT SwigClassWrapper _wrap_new_IntVector__SWIG_0() {

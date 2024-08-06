@@ -9861,18 +9861,18 @@ fresult = swigc_SpecFile_mutex(farg1)
 swig_result%swigdata = fresult
 end function
 
-function swigf_SpecFile_measurement_at(self, num) &
+function swigf_SpecFile_measurement_at(self, index) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
 type(Measurement) :: swig_result
 class(SpecFile), intent(in) :: self
-integer(C_INT), intent(in) :: num
+integer(C_INT), intent(in) :: index
 type(SwigClassWrapper) :: fresult 
 type(SwigClassWrapper) :: farg1 
 integer(C_INT) :: farg2 
 
 farg1 = self%swigdata
-farg2 = num
+farg2 = index
 fresult = swigc_SpecFile_measurement_at(farg1, farg2)
 swig_result%swigdata = fresult
 end function

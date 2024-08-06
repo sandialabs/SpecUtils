@@ -38,16 +38,20 @@ namespace std {
 
 %extend SpecUtils::Measurement
 {
+    /// Return the count at a given index.
+    /// @param index is 1-based 
     float gamma_count_at(int index) 
     {
-        return $self->gamma_counts()->at(index);
+        return $self->gamma_counts()->at(index-1);
     }
 }
 
 %extend SpecUtils::SpecFile
 {
-    std::shared_ptr<const SpecUtils::Measurement> measurement_at(int num)
+    /// Return the measurement at a given index.
+    /// @param index is 1-based 
+    std::shared_ptr<const SpecUtils::Measurement> measurement_at(int index)
     {
-        return $self->measurement(static_cast<size_t>(num));
+        return $self->measurement(static_cast<size_t>(index-1));
     }
 }
