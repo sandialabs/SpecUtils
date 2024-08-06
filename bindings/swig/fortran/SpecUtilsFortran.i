@@ -34,14 +34,20 @@ namespace std {
 %ignore descriptionText;
 %ignore operator=;
 
-// %rename("mAt") SpecUtils::SpecFile::measurement(size_t num); // why doesn't this work?
-
 %include "SpecUtils/SpecFile.h"
 
+%extend SpecUtils::Measurement
+{
+    float gamma_count_at(int index) 
+    {
+        return $self->gamma_counts()->at(index);
+    }
+}
 
-
-%extend SpecUtils::SpecFile{
-    std::shared_ptr<const SpecUtils::Measurement> measurementAt(int num){
+%extend SpecUtils::SpecFile
+{
+    std::shared_ptr<const SpecUtils::Measurement> measurement_at(int num)
+    {
         return $self->measurement(static_cast<size_t>(num));
     }
 }

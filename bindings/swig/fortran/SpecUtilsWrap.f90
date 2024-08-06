@@ -414,6 +414,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: reset => swigf_Measurement_reset
   procedure :: rebin => swigf_Measurement_rebin
   procedure :: set_info_from_2006_N42_spectrum_node => swigf_Measurement_set_info_from_2006_N42_spectrum_node
+  procedure :: gamma_count_at => swigf_Measurement_gamma_count_at
   procedure :: release => swigf_Measurement_release
   procedure, private :: swigf_Measurement_op_assign__
   generic :: assignment(=) => swigf_Measurement_op_assign__
@@ -650,7 +651,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: create_2012_N42_xml => swigf_SpecFile_create_2012_N42_xml
   procedure :: write_2012_N42 => swigf_SpecFile_write_2012_N42
   procedure :: mutex => swigf_SpecFile_mutex
-  procedure :: measurementAt => swigf_SpecFile_measurementAt
+  procedure :: measurement_at => swigf_SpecFile_measurement_at
   procedure, private :: swigf_SpecFile_op_assign__
   generic :: measurement => swigf_SpecFile_measurement__SWIG_0, swigf_SpecFile_measurement__SWIG_1, &
     swigf_SpecFile_measurement__SWIG_2
@@ -2377,6 +2378,16 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
+
+function swigc_Measurement_gamma_count_at(farg1, farg2) &
+bind(C, name="_wrap_Measurement_gamma_count_at") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_INT), intent(in) :: farg2
+real(C_FLOAT) :: fresult
+end function
 
 subroutine swigc_delete_Measurement(farg1) &
 bind(C, name="_wrap_delete_Measurement")
@@ -4110,8 +4121,8 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper) :: fresult
 end function
 
-function swigc_SpecFile_measurementAt(farg1, farg2) &
-bind(C, name="_wrap_SpecFile_measurementAt") &
+function swigc_SpecFile_measurement_at(farg1, farg2) &
+bind(C, name="_wrap_SpecFile_measurement_at") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
@@ -7111,6 +7122,22 @@ farg2 = spectrum%swigdata
 call swigc_Measurement_set_info_from_2006_N42_spectrum_node(farg1, farg2)
 end subroutine
 
+function swigf_Measurement_gamma_count_at(self, index) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(Measurement), intent(in) :: self
+integer(C_INT), intent(in) :: index
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_INT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = index
+fresult = swigc_Measurement_gamma_count_at(farg1, farg2)
+swig_result = fresult
+end function
+
 subroutine swigf_Measurement_release(self)
 use, intrinsic :: ISO_C_BINDING
 class(Measurement), intent(inout) :: self
@@ -9834,7 +9861,7 @@ fresult = swigc_SpecFile_mutex(farg1)
 swig_result%swigdata = fresult
 end function
 
-function swigf_SpecFile_measurementAt(self, num) &
+function swigf_SpecFile_measurement_at(self, num) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
 type(Measurement) :: swig_result
@@ -9846,7 +9873,7 @@ integer(C_INT) :: farg2
 
 farg1 = self%swigdata
 farg2 = num
-fresult = swigc_SpecFile_measurementAt(farg1, farg2)
+fresult = swigc_SpecFile_measurement_at(farg1, farg2)
 swig_result%swigdata = fresult
 end function
 

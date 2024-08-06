@@ -659,7 +659,10 @@ struct SWIG_null_deleter {
 #define SWIG_NO_NULL_DELETER_SWIG_POINTER_NEW
 #define SWIG_NO_NULL_DELETER_SWIG_POINTER_OWN
 
-SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurementAt(SpecUtils::SpecFile *self,int num){
+SWIGINTERN float SpecUtils_Measurement_gamma_count_at(SpecUtils::Measurement *self,int index){
+        return self->gamma_counts()->at(index);
+    }
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int num){
         return self->measurement(static_cast<size_t>(num));
     }
 extern "C" {
@@ -3085,6 +3088,22 @@ SWIGEXPORT void _wrap_Measurement_set_info_from_2006_N42_spectrum_node(SwigClass
   SWIG_check_nonnull(farg2->cptr, "rapidxml::xml_node< char > *", "SWIGTYPE_p_p_rapidxml__xml_nodeT_char_t", "SpecUtils::Measurement::set_info_from_2006_N42_spectrum_node(rapidxml::xml_node< char > const *const)", return );
   arg2 = *((rapidxml::xml_node< char > **)(farg2->cptr));
   (arg1)->set_info_from_2006_N42_spectrum_node((rapidxml::xml_node< char > const *)arg2);
+}
+
+
+SWIGEXPORT float _wrap_Measurement_gamma_count_at(SwigClassWrapper *farg1, int const *farg2) {
+  float fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  int arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  float result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (int)(*farg2);
+  result = (float)SpecUtils_Measurement_gamma_count_at(arg1,arg2);
+  fresult = (float)(result);
+  return fresult;
 }
 
 
@@ -5814,16 +5833,16 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_mutex(SwigClassWrapper *farg1) {
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurementAt(SwigClassWrapper *farg1, int const *farg2) {
+SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurement_at(SwigClassWrapper *farg1, int const *farg2) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   int arg2 ;
   std::shared_ptr< SpecUtils::Measurement const > result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::measurementAt(int)", return SwigClassWrapper_uninitialized());
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::measurement_at(int)", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   arg2 = (int)(*farg2);
-  result = SpecUtils_SpecFile_measurementAt(arg1,arg2);
+  result = SpecUtils_SpecFile_measurement_at(arg1,arg2);
   fresult.cptr = result ? (new std::shared_ptr<const SpecUtils::Measurement >(static_cast< const std::shared_ptr<const SpecUtils::Measurement >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
