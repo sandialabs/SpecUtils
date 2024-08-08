@@ -1,9 +1,7 @@
 cmake_policy(SET CMP0048 NEW)
 project(SpecUtilsTests VERSION 1)
 
-cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
-
-enable_testing()
+cmake_minimum_required(VERSION VERSION 3.1...3.29 FATAL_ERROR)
 
 option( ADD_TEST_SPEC_DIR "Base Directory containing other directories that have valid spectrum files for test opening" "" )
 set( testdir "${CMAKE_CURRENT_SOURCE_DIR}" )
