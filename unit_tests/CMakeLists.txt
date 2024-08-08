@@ -28,7 +28,7 @@ endif( NOT Boost_FOUND )
 
 # Set some command line arguments that all/most of the tests will use
 set( COMMON_TEST_ARGS --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
-set( DATA_DIR_ARGS --indir=\\"${CMAKE_CURRENT_SOURCE_DIR}/test_data\\" )
+set( DATA_DIR_ARGS --indir=${CMAKE_CURRENT_SOURCE_DIR}/test_data )
 
 
 if( CMAKE_GENERATOR STREQUAL "Xcode" )
