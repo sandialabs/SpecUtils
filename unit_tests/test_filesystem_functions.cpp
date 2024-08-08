@@ -22,23 +22,18 @@
  */
 
 #include <string>
-#include <iostream>
-#include <fstream>
-#include <boost/algorithm/string.hpp>
 #include <vector>
 #include <cstdlib>
+#include <fstream>
+#include <iostream>
 #include <stdlib.h>
 #ifndef _WIN32
 #include <unistd.h>
 #endif
 #include <cstdlib>
 
-#define BOOST_TEST_MODULE testUtilityFilesystemFunctions
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include <boost/filesystem.hpp>
 
@@ -46,84 +41,83 @@
 #include "SpecUtils/Filesystem.h"
 
 using namespace std;
-using namespace boost::unit_test;
 
 
-BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
+TEST_CASE( "testUtilityFilesystemFunctions" ) {
 //A few easy filesystem functions; assumes UNIX
   const string hexs = "0123456789abcdef";
   
   //cout << "pp 'C:' -> " << boost::filesystem::path("C:").parent_path() << endl;
   
 #ifdef _WIN32
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "\\a\\b\\c\\d", "\\a\\b\\foo\\bar"), "..\\..\\foo\\bar" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a", "a\\b\\c"), "b\\c" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a\\b\\\\c\\x\\y", "a/b/c"), "..\\.." );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan\\File1.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "\\a\\b\\c\\d", "\\a\\b\\foo\\bar"), "..\\..\\foo\\bar" );
+  CHECK_EQ( SpecUtils::fs_relative( "a", "a\\b\\c"), "b\\c" );
+  CHECK_EQ( SpecUtils::fs_relative( "a\\b\\\\c\\x\\y", "a/b/c"), "..\\.." );
+  CHECK_EQ( SpecUtils::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan\\File1.txt" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "path\\to\\some\\file.txt"), "file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "C:\\\\path\\to\\some"), "some" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "C:\\\\path\\to\\some\\.."), ".." );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "C:\\\\path\\to\\some\\"), "some" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some/file.txt"), "file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "\\path\\to\\some\\file.txt"), "file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path\\to/some"), "some" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to\\some/"), "some" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some\\.."), ".." );
+  CHECK_EQ( SpecUtils::filename( "path\\to\\some\\file.txt"), "file.txt" );
+  CHECK_EQ( SpecUtils::filename( "C:\\\\path\\to\\some"), "some" );
+  CHECK_EQ( SpecUtils::filename( "C:\\\\path\\to\\some\\.."), ".." );
+  CHECK_EQ( SpecUtils::filename( "C:\\\\path\\to\\some\\"), "some" );
+  CHECK_EQ( SpecUtils::filename( "/path/to/some/file.txt"), "file.txt" );
+  CHECK_EQ( SpecUtils::filename( "\\path\\to\\some\\file.txt"), "file.txt" );
+  CHECK_EQ( SpecUtils::filename( "/path\\to/some"), "some" );
+  CHECK_EQ( SpecUtils::filename( "/path/to\\some/"), "some" );
+  CHECK_EQ( SpecUtils::filename( "/path/to/some\\.."), ".." );
   
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "usr"), "usr" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "\\\\"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "."), "." );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( ".."), ".." );
+  CHECK_EQ( SpecUtils::filename( "usr"), "usr" );
+  CHECK_EQ( SpecUtils::filename( "\\\\"), "" );
+  CHECK_EQ( SpecUtils::filename( "/"), "" );
+  CHECK_EQ( SpecUtils::filename( "."), "." );
+  CHECK_EQ( SpecUtils::filename( ".."), ".." );
   
   
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\\\path\\to\\some\\file.txt"), "C:\\\\path\\to\\some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\\\path\\to\\some\\path"), "C:\\\\path\\to\\some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\\\path\\to\\some\\path\\"), "C:\\\\path\\to\\some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\\\path\\to\\some\\path\\.."), "C:\\\\path\\to" ); //
+  CHECK_EQ( SpecUtils::parent_path( "C:\\\\path\\to\\some\\file.txt"), "C:\\\\path\\to\\some" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\\\path\\to\\some\\path"), "C:\\\\path\\to\\some" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\\\path\\to\\some\\path\\"), "C:\\\\path\\to\\some" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\\\path\\to\\some\\path\\.."), "C:\\\\path\\to" ); //
   
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\\\" ), "C:" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "." ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( ".." ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "somefile" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\\\somefile" ), "C:" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\\\" ), "C:" );
+  CHECK_EQ( SpecUtils::parent_path( "." ), "" );
+  CHECK_EQ( SpecUtils::parent_path( ".." ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "somefile" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\\\somefile" ), "C:" );
 
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(/user/docs/Letter.txt)str" ), R"str(/user/docs)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(C:\Letter.txt)str" ), R"str(C:)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\Server01\user\docs\Letter.txt)str" ), R"str(\\Server01\user\docs)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(C:\user\docs\somefile.ext)str" ), R"str(C:\user\docs)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(./inthisdir)str" ), R"str(.)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(../../greatgrandparent)str" ), R"str(../..)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\Program Files\Custom Utilities\StringFinder.exe)str" ), R"str(\Program Files\Custom Utilities)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(2018\January.xlsx)str" ), R"str(2018)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(C:\Projects\apilibrary\apilibrary.sln)str" ), R"str(C:\Projects\apilibrary)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(C:Projects\apilibrary\apilibrary.sln)str" ), R"str(C:Projects\apilibrary)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\system07\C$\)str" ), R"str(\\system07)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\Server2\Share\Test\Foo.txt)str" ), R"str(\\Server2\Share\Test)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\.\C:\Test\Foo.txt)str" ), R"str(\\.\C:\Test)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\?\C:\Test\Foo.txt)str" ), R"str(\\?\C:\Test)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\.\Volume{b75e2c83-0000-0000-0000-602f00000000}\Test\Foo.txt)str" ),
+  CHECK_EQ( SpecUtils::parent_path( R"str(/user/docs/Letter.txt)str" ), R"str(/user/docs)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(C:\Letter.txt)str" ), R"str(C:)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\Server01\user\docs\Letter.txt)str" ), R"str(\\Server01\user\docs)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(C:\user\docs\somefile.ext)str" ), R"str(C:\user\docs)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(./inthisdir)str" ), R"str(.)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(../../greatgrandparent)str" ), R"str(../..)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\Program Files\Custom Utilities\StringFinder.exe)str" ), R"str(\Program Files\Custom Utilities)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(2018\January.xlsx)str" ), R"str(2018)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(C:\Projects\apilibrary\apilibrary.sln)str" ), R"str(C:\Projects\apilibrary)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(C:Projects\apilibrary\apilibrary.sln)str" ), R"str(C:Projects\apilibrary)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\system07\C$\)str" ), R"str(\\system07)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\Server2\Share\Test\Foo.txt)str" ), R"str(\\Server2\Share\Test)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\.\C:\Test\Foo.txt)str" ), R"str(\\.\C:\Test)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\?\C:\Test\Foo.txt)str" ), R"str(\\?\C:\Test)str" );
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\.\Volume{b75e2c83-0000-0000-0000-602f00000000}\Test\Foo.txt)str" ),
                                              R"str(\\.\Volume{b75e2c83-0000-0000-0000-602f00000000}\Test)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( R"str(\\?\Volume{b75e2c83-0000-0000-0000-602f00000000}\Test\Foo.txt)str" ),
+  CHECK_EQ( SpecUtils::parent_path( R"str(\\?\Volume{b75e2c83-0000-0000-0000-602f00000000}\Test\Foo.txt)str" ),
                                              R"str(\\?\Volume{b75e2c83-0000-0000-0000-602f00000000}\Test)str" );
   
   
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "C:\\\\path\\to\\some\\file.txt"), ".txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "C:\\\\path\\to\\filename"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( ".profile"), ".profile" );
+  CHECK_EQ( SpecUtils::file_extension( "C:\\\\path\\to\\some\\file.txt"), ".txt" );
+  CHECK_EQ( SpecUtils::file_extension( "C:\\\\path\\to\\filename"), "" );
+  CHECK_EQ( SpecUtils::file_extension( ".profile"), ".profile" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file.txt"), "path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path/", "file.txt"), "path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path\\", "/file.txt"), "path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "/path", "file.txt"), "\\path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file" ), "path\\file" );
+  CHECK_EQ( SpecUtils::append_path( "path", "file.txt"), "path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path/", "file.txt"), "path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path\\", "/file.txt"), "path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "/path", "file.txt"), "\\path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path", "file" ), "path\\file" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(\\foo)str"), R"str(\\foo)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(\\foo/bar)str"), R"str(\\foo\bar)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(\\foo/bar/)str"), R"str(\\foo\bar\)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(C:\foo\bar)str"), R"str(C:\foo\bar)str" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(R"str(C:\foo\bar\..)str"), R"str(C:\foo)str" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(R"str(\\foo)str"), R"str(\\foo)str" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(R"str(\\foo/bar)str"), R"str(\\foo\bar)str" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(R"str(\\foo/bar/)str"), R"str(\\foo\bar\)str" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(R"str(C:\foo\bar)str"), R"str(C:\foo\bar)str" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(R"str(C:\foo\bar\..)str"), R"str(C:\foo)str" );
   
   // @TODO Read the following to actually understand Windows paths
   //       https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
@@ -169,136 +163,136 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   
   
   
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "C:\\a\\b\\c\\d", "C:\\a\\b\\foo\\bar"), "..\\..\\foo\\bar" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a", "a\\b\\\\c"), "b\\c" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a\\", "a\\b\\\\c"), "b\\c" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a\\b\\c\\x\\y", "a\\b\\c"), "..\\.." );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a\\b\\c\\\\x\\y", "a\\\\b\\c"), "..\\.." );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "output_dir", "output_dir\\lessson_plan\\File1.txt"), "lessson_plan\\File1.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "\\\\foo\\bar\\..\\daz", "\\\\foo\\daz"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "\\\\foo\\bar\\..\\daz", "\\\\foo\\daz\\hello.txt"), "hello.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "\\\\foo\\bar\\.\\\\\\..\\daz\\..\\daz\\dude", "\\\\foo\\daz\\hello.txt"), "..\\hello.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "C:\\a\\b\\c\\d", "C:\\a\\b\\foo\\bar"), "..\\..\\foo\\bar" );
+  CHECK_EQ( SpecUtils::fs_relative( "a", "a\\b\\\\c"), "b\\c" );
+  CHECK_EQ( SpecUtils::fs_relative( "a\\", "a\\b\\\\c"), "b\\c" );
+  CHECK_EQ( SpecUtils::fs_relative( "a\\b\\c\\x\\y", "a\\b\\c"), "..\\.." );
+  CHECK_EQ( SpecUtils::fs_relative( "a\\b\\c\\\\x\\y", "a\\\\b\\c"), "..\\.." );
+  CHECK_EQ( SpecUtils::fs_relative( "output_dir", "output_dir\\lessson_plan\\File1.txt"), "lessson_plan\\File1.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "\\\\foo\\bar\\..\\daz", "\\\\foo\\daz"), "" );
+  CHECK_EQ( SpecUtils::fs_relative( "\\\\foo\\bar\\..\\daz", "\\\\foo\\daz\\hello.txt"), "hello.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "\\\\foo\\bar\\.\\\\\\..\\daz\\..\\daz\\dude", "\\\\foo\\daz\\hello.txt"), "..\\hello.txt" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\file.txt"), "C:\\path\\to\\some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\path"), "C:\\path\\to\\some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\path\\"), "C:\\path\\to\\some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\path\\.."), "C:\\path\\to" ); //
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\path\\..\\..\\"), "C:\\path" ); //
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\..\\path" ), "C:\\path\\to\\some\\.." ); //
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\..\\..\\..\\" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\path\\to\\some\\..\\..\\..\\..\\" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "//" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "\\\\" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "C:\\" ), "C:" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "." ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( ".." ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "somefile" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( ".\\somefile" ), "." );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/somefile" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "\\somefile" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\file.txt"), "C:\\path\\to\\some" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\path"), "C:\\path\\to\\some" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\path\\"), "C:\\path\\to\\some" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\path\\.."), "C:\\path\\to" ); //
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\path\\..\\..\\"), "C:\\path" ); //
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\..\\path" ), "C:\\path\\to\\some\\.." ); //
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\..\\..\\..\\" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\path\\to\\some\\..\\..\\..\\..\\" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "//" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "\\\\" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "C:" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "C:\\" ), "C:" );
+  CHECK_EQ( SpecUtils::parent_path( "." ), "" );
+  CHECK_EQ( SpecUtils::parent_path( ".." ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "somefile" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( ".\\somefile" ), "." );
+  CHECK_EQ( SpecUtils::parent_path( "/somefile" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "\\somefile" ), "" );
   
 
   
   
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "/path/to/some/file.txt"), ".txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "\\path\\to\\some\\file.txt"), ".txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "/path/to/filename"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( ".profile"), ".profile" );
+  CHECK_EQ( SpecUtils::file_extension( "/path/to/some/file.txt"), ".txt" );
+  CHECK_EQ( SpecUtils::file_extension( "\\path\\to\\some\\file.txt"), ".txt" );
+  CHECK_EQ( SpecUtils::file_extension( "/path/to/filename"), "" );
+  CHECK_EQ( SpecUtils::file_extension( ".profile"), ".profile" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file.txt"), "path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path/", "file.txt"), "path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path/", "/file.txt"), "path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "/path", "file.txt"), "\\path\\file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file" ), "path\\file" );
+  CHECK_EQ( SpecUtils::append_path( "path", "file.txt"), "path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path/", "file.txt"), "path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path/", "/file.txt"), "path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "/path", "file.txt"), "\\path\\file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path", "file" ), "path\\file" );
 
   
-  BOOST_CHECK( !SpecUtils::is_absolute_path( "." ) );
-  BOOST_CHECK( !SpecUtils::is_absolute_path( "./someFile" ) );
-  BOOST_CHECK( SpecUtils::is_absolute_path( "\\\\" ) );
-  BOOST_CHECK( SpecUtils::is_absolute_path( "C:\\" ) );
+  CHECK( !SpecUtils::is_absolute_path( "." ) );
+  CHECK( !SpecUtils::is_absolute_path( "./someFile" ) );
+  CHECK( SpecUtils::is_absolute_path( "\\\\" ) );
+  CHECK( SpecUtils::is_absolute_path( "C:\\" ) );
 #else //#ifdef _WIN32
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/./bar/.."), "foo" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/.///bar/../"), "foo/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/bar/../../../dude"), "../dude" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("../"), "../" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(".."), ".." );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/bar/.."), "foo" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo/bar/../"), "foo/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/bar/"), "/foo/bar/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/bar"), "/foo/bar" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo///bar"), "/foo/bar" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/"), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("//"), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/.."), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/../.."), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/../../.."), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path(""), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("."), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/."), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("/foo/../."), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("foo"), "foo" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("./foo/bar"), "foo/bar" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("./foo/bar/.."), "foo" );
-  BOOST_CHECK_EQUAL( SpecUtils::lexically_normalize_path("./foo/bar/."), "foo/bar" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("foo/./bar/.."), "foo" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("foo/.///bar/../"), "foo/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("foo/bar/../../../dude"), "../dude" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("../"), "../" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(".."), ".." );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("foo/bar/.."), "foo" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("foo/bar/../"), "foo/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/foo/bar/"), "/foo/bar/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/foo/bar"), "/foo/bar" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/foo///bar"), "/foo/bar" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/"), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("//"), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/.."), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/../.."), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/foo/../../.."), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path(""), "" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("."), "" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/."), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("/foo/../."), "/" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("foo"), "foo" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("./foo/bar"), "foo/bar" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("./foo/bar/.."), "foo" );
+  CHECK_EQ( SpecUtils::lexically_normalize_path("./foo/bar/."), "foo/bar" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/a/b/c/d", "/a/b/foo/bar"), "../../foo/bar" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a", "a/b//c"), "b/c" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a/", "a/b//c"), "b/c" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a/b/c/x/y", "a/b/c"), "../.." );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "a/b/c//x/y", "a//b/c"), "../.." );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan/File1.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/foo/bar/../daz", "/foo/daz"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/foo/bar/../daz", "/foo/daz/hello.txt"), "hello.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::fs_relative( "/foo/bar/.///../daz/../daz/dude", "/foo/daz/hello.txt"), "../hello.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "/a/b/c/d", "/a/b/foo/bar"), "../../foo/bar" );
+  CHECK_EQ( SpecUtils::fs_relative( "a", "a/b//c"), "b/c" );
+  CHECK_EQ( SpecUtils::fs_relative( "a/", "a/b//c"), "b/c" );
+  CHECK_EQ( SpecUtils::fs_relative( "a/b/c/x/y", "a/b/c"), "../.." );
+  CHECK_EQ( SpecUtils::fs_relative( "a/b/c//x/y", "a//b/c"), "../.." );
+  CHECK_EQ( SpecUtils::fs_relative( "output_dir", "output_dir/lessson_plan/File1.txt"), "lessson_plan/File1.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "/foo/bar/../daz", "/foo/daz"), "" );
+  CHECK_EQ( SpecUtils::fs_relative( "/foo/bar/../daz", "/foo/daz/hello.txt"), "hello.txt" );
+  CHECK_EQ( SpecUtils::fs_relative( "/foo/bar/.///../daz/../daz/dude", "/foo/daz/hello.txt"), "../hello.txt" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/file.txt"), "/path/to/some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/path"), "/path/to/some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/path/"), "/path/to/some" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/path/.."), "/path/to" ); //
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/path/../../"), "/path" ); //
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/../path" ), "/path/to/some/.." ); //
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/../../../" ), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/../../../../" ), "/" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "." ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( ".." ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "somefile" ), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "./somefile" ), "." );
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/somefile" ), "/" );
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/file.txt"), "/path/to/some" );
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/path"), "/path/to/some" );
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/path/"), "/path/to/some" );
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/path/.."), "/path/to" ); //
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/path/../../"), "/path" ); //
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/../path" ), "/path/to/some/.." ); //
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/../../../" ), "/" );
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/../../../../" ), "/" );
+  CHECK_EQ( SpecUtils::parent_path( "/" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "." ), "" );
+  CHECK_EQ( SpecUtils::parent_path( ".." ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "somefile" ), "" );
+  CHECK_EQ( SpecUtils::parent_path( "./somefile" ), "." );
+  CHECK_EQ( SpecUtils::parent_path( "/somefile" ), "/" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::parent_path( "/path/to/some/../../../../" ), "/" );
+  CHECK_EQ( SpecUtils::parent_path( "/path/to/some/../../../../" ), "/" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some/file.txt"), "file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some"), "some" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some/"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/path/to/some/.."), "" );
+  CHECK_EQ( SpecUtils::filename( "/path/to/some/file.txt"), "file.txt" );
+  CHECK_EQ( SpecUtils::filename( "/path/to/some"), "some" );
+  CHECK_EQ( SpecUtils::filename( "/path/to/some/"), "" );
+  CHECK_EQ( SpecUtils::filename( "/path/to/some/.."), "" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "usr"), "usr" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "/"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( "."), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::filename( ".."), "" );
+  CHECK_EQ( SpecUtils::filename( "usr"), "usr" );
+  CHECK_EQ( SpecUtils::filename( "/"), "" );
+  CHECK_EQ( SpecUtils::filename( "."), "" );
+  CHECK_EQ( SpecUtils::filename( ".."), "" );
   
   
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "/path/to/some/file.txt"), ".txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( "/path/to/filename"), "" );
-  BOOST_CHECK_EQUAL( SpecUtils::file_extension( ".profile"), ".profile" );
+  CHECK_EQ( SpecUtils::file_extension( "/path/to/some/file.txt"), ".txt" );
+  CHECK_EQ( SpecUtils::file_extension( "/path/to/filename"), "" );
+  CHECK_EQ( SpecUtils::file_extension( ".profile"), ".profile" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file.txt"), "path/file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path/", "file.txt"), "path/file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path/", "/file.txt"), "path/file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "/path", "file.txt"), "/path/file.txt" );
-  BOOST_CHECK_EQUAL( SpecUtils::append_path( "path", "file" ), "path/file" );
+  CHECK_EQ( SpecUtils::append_path( "path", "file.txt"), "path/file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path/", "file.txt"), "path/file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path/", "/file.txt"), "path/file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "/path", "file.txt"), "/path/file.txt" );
+  CHECK_EQ( SpecUtils::append_path( "path", "file" ), "path/file" );
 
   
-  BOOST_CHECK( !SpecUtils::is_absolute_path( "." ) );
-  BOOST_CHECK( !SpecUtils::is_absolute_path( "./someFile" ) );
-  BOOST_CHECK( SpecUtils::is_absolute_path( "/" ) );
+  CHECK( !SpecUtils::is_absolute_path( "." ) );
+  CHECK( !SpecUtils::is_absolute_path( "./someFile" ) );
+  CHECK( SpecUtils::is_absolute_path( "/" ) );
 #endif
   
   
-  BOOST_CHECK( SpecUtils::is_absolute_path( SpecUtils::temp_dir() ) );
-  BOOST_CHECK( SpecUtils::is_absolute_path( SpecUtils::get_working_path() ) );
+  CHECK( SpecUtils::is_absolute_path( SpecUtils::temp_dir() ) );
+  CHECK( SpecUtils::is_absolute_path( SpecUtils::get_working_path() ) );
   
   cout << "SpecUtils::temp_dir()=" << SpecUtils::temp_dir() << endl;
   cout << "SpecUtils::get_working_path()=" << SpecUtils::get_working_path() << endl;
@@ -306,38 +300,38 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   
   
   const string tmpdir = SpecUtils::temp_dir();
-  BOOST_REQUIRE( !tmpdir.empty() );
-  BOOST_REQUIRE( SpecUtils::is_directory(tmpdir) );
-  BOOST_CHECK( !SpecUtils::is_file(tmpdir) );
+  REQUIRE( !tmpdir.empty() );
+  REQUIRE( SpecUtils::is_directory(tmpdir) );
+  CHECK( !SpecUtils::is_file(tmpdir) );
   
   
   const string testname1 = SpecUtils::temp_file_name( "myuniquename", SpecUtils::temp_dir() );
-  BOOST_CHECK( SpecUtils::contains( testname1, "myuniquename") );
-  BOOST_CHECK( testname1.size() > (tmpdir.size() + 12 + 8) );
-  BOOST_CHECK( !SpecUtils::is_directory(testname1) );
-  BOOST_CHECK( !SpecUtils::is_file(testname1) );
+  CHECK( SpecUtils::contains( testname1, "myuniquename") );
+  CHECK( testname1.size() > (tmpdir.size() + 12 + 8) );
+  CHECK( !SpecUtils::is_directory(testname1) );
+  CHECK( !SpecUtils::is_file(testname1) );
   
   const string testname2 = SpecUtils::temp_file_name( "myuniquename-%%%%%%%%%%", SpecUtils::temp_dir() );
-  BOOST_CHECK( SpecUtils::contains( testname2, "myuniquename") );;
-  BOOST_CHECK( !SpecUtils::is_directory(testname2) );
-  BOOST_CHECK( !SpecUtils::is_file(testname2) );
+  CHECK( SpecUtils::contains( testname2, "myuniquename") );;
+  CHECK( !SpecUtils::is_directory(testname2) );
+  CHECK( !SpecUtils::is_file(testname2) );
   const string testname2_ending = testname2.substr( testname2.length() - 11, 11 );
-  BOOST_CHECK( testname2_ending[0] == '-' );
+  CHECK( testname2_ending[0] == '-' );
   
   
   for( size_t i = 1; i < testname2_ending.size(); ++i )
   {
-    BOOST_CHECK( hexs.find(testname2_ending[i]) != string::npos );
+    CHECK( hexs.find(testname2_ending[i]) != string::npos );
   }
   
-  BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
-  BOOST_REQUIRE( SpecUtils::create_directory(testname2) == 1 );
-  BOOST_CHECK( SpecUtils::is_directory(testname2) );
-  BOOST_CHECK( !SpecUtils::is_file(testname2) );
+  CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+  REQUIRE( SpecUtils::create_directory(testname2) == 1 );
+  CHECK( SpecUtils::is_directory(testname2) );
+  CHECK( !SpecUtils::is_file(testname2) );
   
   //cout << "Created directory '" << testname2 << "'" << endl;
   
-  BOOST_CHECK( SpecUtils::can_rw_in_directory(testname2) );
+  CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
   
   //boost::filesystem::status(wtestname2).
@@ -347,13 +341,13 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
   boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
   boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
-  BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+  CHECK( !SpecUtils::can_rw_in_directory(testname2) );
   boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
-  BOOST_CHECK( SpecUtils::can_rw_in_directory(testname2) );
+  CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
   //On windows
   //boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
-  //BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+  //CHECK( !SpecUtils::can_rw_in_directory(testname2) );
   
   boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read | boost::filesystem::perms::owner_write );
 #else
@@ -363,16 +357,16 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
 #ifndef  __linux__
   // TODO: For some reason, running in Docker (so as root), the removing of permissions doesnt necessarily work
   boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
-  BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+  CHECK( !SpecUtils::can_rw_in_directory(testname2) );
 #endif
   
   boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
-  BOOST_CHECK( SpecUtils::can_rw_in_directory(testname2) );
+  CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
 #ifndef  __linux__
   // Similar Linux issue
   boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
-  BOOST_CHECK( !SpecUtils::can_rw_in_directory(testname2) );
+  CHECK( !SpecUtils::can_rw_in_directory(testname2) );
 #endif
   
   boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read );
@@ -389,9 +383,9 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
     {
       ++depth;
       currentdir = SpecUtils::temp_file_name( "subdir-" + std::to_string(depth) + "-%%%%%%%%%%", currentdir );
-      BOOST_CHECK( !SpecUtils::is_directory(currentdir) );
-      BOOST_REQUIRE( SpecUtils::create_directory(currentdir) == 1 );
-      BOOST_CHECK( SpecUtils::is_directory(currentdir) );
+      CHECK( !SpecUtils::is_directory(currentdir) );
+      REQUIRE( SpecUtils::create_directory(currentdir) == 1 );
+      CHECK( SpecUtils::is_directory(currentdir) );
       added_dirs.push_back( currentdir );
       if( depth == 1 )
         toplevel_dirs.push_back( currentdir );
@@ -401,7 +395,7 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
       for( int filenum = 0; filenum < nfilescreate; ++filenum )
       {
         string fname = SpecUtils::append_path( currentdir, "file_" + std::to_string(filenum) + ".txt" );
-        BOOST_CHECK( !SpecUtils::is_file(fname) );
+        CHECK( !SpecUtils::is_file(fname) );
         const int nbytes = (rand() % (1024*512));
         vector<char> writtenbytes;
         
@@ -413,7 +407,7 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
             ofstream outputfile( fname.c_str(), ios::out | ios::binary );
           #endif
 
-          BOOST_REQUIRE( outputfile.is_open() );
+          REQUIRE( outputfile.is_open() );
           for( int i = 0 ; i < nbytes; ++i )
           {
             const char byte = rand();
@@ -423,9 +417,9 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
         }//End writing to file
         
         
-        BOOST_CHECK( !SpecUtils::can_rw_in_directory(fname) );
+        CHECK( !SpecUtils::can_rw_in_directory(fname) );
         
-        //BOOST_CHECK( SpecUtils::make_canonical_path( f ) );
+        //CHECK( SpecUtils::make_canonical_path( f ) );
         string forigname = SpecUtils::filename(fname);
         string fparent = SpecUtils::parent_path(fname);
         string fparentname = SpecUtils::filename(fparent);
@@ -457,33 +451,33 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
                                forigname );
         
         string fname_canonical = fname;
-        BOOST_CHECK( SpecUtils::make_canonical_path(fname_canonical) );
+        CHECK( SpecUtils::make_canonical_path(fname_canonical) );
         string fname_canonical_check = fname_canonical;
-        BOOST_CHECK( SpecUtils::make_canonical_path(fname_canonical_check) );
-        BOOST_CHECK_EQUAL( fname_canonical_check, fname_canonical );
+        CHECK( SpecUtils::make_canonical_path(fname_canonical_check) );
+        CHECK_EQ( fname_canonical_check, fname_canonical );
         
-        BOOST_CHECK_MESSAGE( SpecUtils::make_canonical_path(onedotequiv), "Failed to canoniclize " << onedotequiv );
-        BOOST_CHECK_MESSAGE( SpecUtils::make_canonical_path(twodotequiv), "Failed to canoniclize " << twodotequiv );
-        BOOST_CHECK_MESSAGE( SpecUtils::make_canonical_path(threedotequiv), "Failed to canoniclize " << threedotequiv );
+        CHECK_MESSAGE( SpecUtils::make_canonical_path(onedotequiv), "Failed to canoniclize " << onedotequiv );
+        CHECK_MESSAGE( SpecUtils::make_canonical_path(twodotequiv), "Failed to canoniclize " << twodotequiv );
+        CHECK_MESSAGE( SpecUtils::make_canonical_path(threedotequiv), "Failed to canoniclize " << threedotequiv );
         
-        BOOST_CHECK_MESSAGE( threedotequiv.find("..") == string::npos, "threedotequiv='" << threedotequiv << "'" );
+        CHECK_MESSAGE( threedotequiv.find("..") == string::npos, "threedotequiv='" << threedotequiv << "'" );
         
         std::vector<char> read_bytes;
         SpecUtils::load_file_data( fname.c_str(), read_bytes );
         if( !read_bytes.empty() )
           read_bytes.resize(read_bytes.size()-1);  //Get rid of '\0' that was inserted
         
-        BOOST_CHECK_EQUAL( writtenbytes.size(), read_bytes.size() );
-        BOOST_CHECK( writtenbytes == read_bytes );
+        CHECK_EQ( writtenbytes.size(), read_bytes.size() );
+        CHECK( writtenbytes == read_bytes );
         
-        BOOST_CHECK( SpecUtils::is_file(fname) );
-        //BOOST_CHECK_EQUAL( SpecUtils::file_size(fname), nbytes );
+        CHECK( SpecUtils::is_file(fname) );
+        //CHECK_EQ( SpecUtils::file_size(fname), nbytes );
         
 #ifdef _WIN32
-        BOOST_CHECK_EQUAL( SpecUtils::file_size(fname),
+        CHECK_EQ( SpecUtils::file_size(fname),
                            boost::filesystem::file_size(SpecUtils::convert_from_utf8_to_utf16(fname) ) );
 #else
-        BOOST_CHECK_EQUAL( SpecUtils::file_size(fname), boost::filesystem::file_size(fname) );
+        CHECK_EQ( SpecUtils::file_size(fname), boost::filesystem::file_size(fname) );
 #endif
 
   
@@ -492,22 +486,22 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
       }//for( int filenum = 0; filenum < nfilescreate; ++filenum )
       
       const vector<string> lsfiles = SpecUtils::ls_files_in_directory( currentdir, "" );
-      BOOST_CHECK_EQUAL( lsfiles.size(), filesinthisdir.size() );
+      CHECK_EQ( lsfiles.size(), filesinthisdir.size() );
       for( string createdfile : filesinthisdir )
       {
         bool found_file = false;
-        BOOST_CHECK( SpecUtils::make_canonical_path( createdfile ) );
+        CHECK( SpecUtils::make_canonical_path( createdfile ) );
                     
         for( string f : lsfiles )
         {
-          BOOST_CHECK( SpecUtils::make_canonical_path( f ) );
+          CHECK( SpecUtils::make_canonical_path( f ) );
           found_file = (f == createdfile);
           //cout << "createdfile='" << createdfile << "', f='" << f << "'" << endl;
           if( found_file )
             break;
         }
         
-        BOOST_CHECK_MESSAGE( found_file, "Failed on " << createdfile );
+        CHECK_MESSAGE( found_file, "Failed on " << createdfile );
       }//for( string createdfile : filesinthisdir )
     }//while( (rand() % 2) == 1 )
   }//for( size_t subdirnum = 0; subdirnum < 100; ++subdirnum )
@@ -522,7 +516,7 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   std::sort( begin(toplevel_ls_dirs), end(toplevel_ls_dirs) );
   
   
-  BOOST_CHECK_MESSAGE( toplevel_dirs == toplevel_ls_dirs, "Expected " << toplevel_dirs.size() << " dirs, and got " << toplevel_ls_dirs.size() );
+  CHECK_MESSAGE( toplevel_dirs == toplevel_ls_dirs, "Expected " << toplevel_dirs.size() << " dirs, and got " << toplevel_ls_dirs.size() );
   
   
   vector<string> rls = SpecUtils::recursive_ls(testname2);
@@ -534,29 +528,29 @@ BOOST_AUTO_TEST_CASE( testUtilityFilesystemFunctions ) {
   std::sort( begin(rlstxt), end(rlstxt) );
   std::sort( begin(rlsnone), end(rlsnone) );
   
-  BOOST_CHECK_EQUAL(rls.size(), added_files.size());
-  BOOST_CHECK( rls == rlstxt );
-  BOOST_CHECK( added_files == rls );
-  BOOST_CHECK( rlsnone.empty() );
+  CHECK_EQ(rls.size(), added_files.size());
+  CHECK( rls == rlstxt );
+  CHECK( added_files == rls );
+  CHECK( rlsnone.empty() );
   
   for( const string f : added_files )
   {
-    BOOST_CHECK( SpecUtils::is_file(f) );
-    BOOST_CHECK( !SpecUtils::is_directory(f) );
+    CHECK( SpecUtils::is_file(f) );
+    CHECK( !SpecUtils::is_directory(f) );
     
     vector<char> old_file_data, new_file_data;
     SpecUtils::load_file_data( f.c_str(), old_file_data );
     
     const string newname = f + "renamed.t";
-    BOOST_CHECK( SpecUtils::rename_file( f, newname ) );
-    BOOST_CHECK( !SpecUtils::is_file(f) );
-    BOOST_CHECK( SpecUtils::is_file(newname) );
+    CHECK( SpecUtils::rename_file( f, newname ) );
+    CHECK( !SpecUtils::is_file(f) );
+    CHECK( SpecUtils::is_file(newname) );
     
     SpecUtils::load_file_data( newname.c_str(), new_file_data );
-    BOOST_CHECK( old_file_data == new_file_data );
+    CHECK( old_file_data == new_file_data );
     
-    BOOST_CHECK( SpecUtils::remove_file(newname) );
-    BOOST_CHECK( !SpecUtils::is_file(newname) );
+    CHECK( SpecUtils::remove_file(newname) );
+    CHECK( !SpecUtils::is_file(newname) );
   }//
   
 

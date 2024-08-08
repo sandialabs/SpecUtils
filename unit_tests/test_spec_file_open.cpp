@@ -24,34 +24,39 @@
 #include <string>
 #include <ostream> 
 
-#include <boost/algorithm/string.hpp>
 
-//#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE testFileOpen
-#include <boost/test/unit_test.hpp>
-
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
 
 using namespace std;
-using namespace boost::unit_test;
+
+// I couldnt quite figure out how to access command line arguments
+//  from doctest, so we'll just work around it a bit.
+vector<string> g_cl_args;
 
 
-BOOST_AUTO_TEST_CASE( testFileOpen )
+int main(int argc, char** argv)
 {
-  int argc = boost::unit_test::framework::master_test_suite().argc;
-  char **argv = boost::unit_test::framework::master_test_suite().argv;
+  for( int i = 0; i < argc; ++i )
+    g_cl_args.push_back( argv[i] );
   
+  return doctest::Context(argc, argv).run();
+}
+
+
+TEST_CASE( "testFileOpen" )
+{
   string indir;
   
-  for( int i = 1; i < argc; ++i )
+  for( size_t i = 1; i < g_cl_args.size(); ++i )
   {
-    const string arg = argv[i];
-    if( boost::algorithm::starts_with( arg, "--indir=" ) )
+    const string arg = g_cl_args[i];
+    
+    if( SpecUtils::istarts_with( arg, "--indir=" ) )
       indir = arg.substr( 8 );
   }//for( int arg = 1; arg < argc; ++ arg )
   
@@ -63,29 +68,29 @@ BOOST_AUTO_TEST_CASE( testFileOpen )
     indir = indir.substr( 0, indir.size()-1 );
   
   
-  BOOST_CHECK_MESSAGE( !indir.empty(), "No Input directory specified" << indir );
-  BOOST_CHECK_MESSAGE( SpecUtils::is_directory(indir), "Input is not a valid directory: " << indir );
+  CHECK_MESSAGE( !indir.empty(), "No Input directory specified" << indir );
+  CHECK_MESSAGE( SpecUtils::is_directory(indir), "Input is not a valid directory: " << indir );
   
   vector<std::string> files = SpecUtils::recursive_ls( indir );
   
-  BOOST_TEST_MESSAGE( "Input Directory:" << indir );
+  MESSAGE( "Input Directory:" << indir );
   
   for( size_t i = 0; i < files.size(); ++i )
   {
     const string file = files[i];
     
-    BOOST_TEST_MESSAGE( "Testing file: '" << file << "'" );
+    MESSAGE( "Testing file: '" << file << "'" );
     
     SpecUtils::SpecFile meas;
     const bool loaded = meas.load_file( file, SpecUtils::ParserType::Auto, file );
-    BOOST_CHECK_MESSAGE( loaded, "Failed to load " << file );
+    CHECK_MESSAGE( loaded, "Failed to load " << file );
     
     if( loaded )
     {
       const double sum_gamma = meas.gamma_count_sum();
-      BOOST_CHECK_MESSAGE( sum_gamma >= 1.0, "No decoded gammas in " << file );
+      CHECK_MESSAGE( sum_gamma >= 1.0, "No decoded gammas in " << file );
     }
   }//for( size_t i = 0; i < files.size(); ++i )
   
-//  BOOST_CHECK( false );
+//  CHECK( false );
 }

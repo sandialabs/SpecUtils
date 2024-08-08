@@ -29,17 +29,9 @@
 
 #include <boost/date_time/date.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/date_time/gregorian/gregorian.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 
-
-#define BOOST_TEST_MODULE TestTimeFromString
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
-
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest.h"
 
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
@@ -48,23 +40,32 @@
 
 
 using namespace std;
-using namespace boost::unit_test;
-using namespace boost::posix_time;
-using namespace boost::gregorian;
 
+// I couldnt quite figure out how to access command line arguments
+//  from doctest, so we'll just work around it a bit.
+vector<string> g_cl_args;
+
+
+int main(int argc, char** argv)
+{
+  for( int i = 0; i < argc; ++i )
+    g_cl_args.push_back( argv[i] );
+  
+  return doctest::Context(argc, argv).run();
+}
 
 void compare_delim_duration_from_str( const string test, const double truth )
 {
   const double dur = SpecUtils::delimited_duration_string_to_seconds( test );
   
-  BOOST_CHECK_MESSAGE( fabs(truth - dur) < 1.0E-7*fabs(truth),
+  CHECK_MESSAGE( fabs(truth - dur) < 1.0E-7*fabs(truth),
     "Delimited duration formatted '" << test << "' gave " << dur
      << " seconds, while we expected " << truth << " seconds (diff of "
      << fabs(truth - dur) << ")." );
 }//compare_delim_duration_from_str(...)
 
 
-BOOST_AUTO_TEST_CASE(durationFromString)
+TEST_CASE( "Duration From String" )
 {
   const double minute = 60;
   const double hour = 3600;
@@ -98,29 +99,29 @@ BOOST_AUTO_TEST_CASE(durationFromString)
   compare_delim_duration_from_str("  5:0:1.0      ", 5*hour + 1 );
   compare_delim_duration_from_str("  -1:0:0      ", -1*hour );
   
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":32"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":32:16"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("--01:32:16"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:32a"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("a 12:32"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(" a 12:32"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(" a12:32"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12::1"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12::1:"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01:-2"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01:2a"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:32:"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:-32:15.121"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds(":"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("123:60"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("123:61"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("a12:01"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01a"), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01a "), std::exception );
-  BOOST_CHECK_THROW( SpecUtils::delimited_duration_string_to_seconds("12:01 a"), std::exception );
-}//BOOST_AUTO_TEST_CASE(durationFromString)
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds(":"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds(":32"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds(":32:16"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("--01:32:16"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:32a"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("a 12:32"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds(" a 12:32"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds(" a12:32"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12::1"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12::1:"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:01:-2"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:01:2a"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:32:"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:-32:15.121"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds(":"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("123:60"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("123:61"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("a12:01"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:01a"), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:01a "), std::exception );
+  CHECK_THROWS_AS( SpecUtils::delimited_duration_string_to_seconds("12:01 a"), std::exception );
+}//TEST_CASE(durationFromString)
 
 void compare_from_str( const string test, const string truth )
 {
@@ -130,9 +131,9 @@ void compare_from_str( const string test, const string truth )
   const string test_fmt_str = SpecUtils::to_iso_string(testptime);
   const string truth_fmt_str = SpecUtils::to_iso_string(truthptime);
   
-  BOOST_REQUIRE_MESSAGE( !SpecUtils::is_special(truthptime), "Truth datetime ('" << truth << "') is invalid" );
+  REQUIRE_MESSAGE( !SpecUtils::is_special(truthptime), "Truth datetime ('" << truth << "') is invalid" );
   
-  BOOST_CHECK_MESSAGE( test_fmt_str==truth_fmt_str,
+  CHECK_MESSAGE( test_fmt_str==truth_fmt_str,
                        "Date formatted '" << test << "' gave datetime '" << test_fmt_str
                       << "' while we expected '" << truth_fmt_str << "' from ('" << truth << "')" );
 }//void compare_from_str( const string test, const string truth )
@@ -426,18 +427,17 @@ void minimalTestFormats()
 }//void minimalTestFormats()
 
 
-BOOST_AUTO_TEST_CASE(timeFromString)
+TEST_CASE( "Time From String" )
 {
   minimalTestFormats();
   
   // "datetimes.txt" contains a lot of date/times that could be seen in spectrum files
   string indir, input_filename = "";
 
-  const int argc = framework::master_test_suite().argc;
-  for( int i = 1; i < argc-1; ++i )
+  for( size_t i = 1; i < g_cl_args.size()-1; ++i )
   {
-    if( framework::master_test_suite().argv[i] == string("--indir") )
-      indir = framework::master_test_suite().argv[i+1];
+    if( g_cl_args[i] == string("--indir") )
+      indir = g_cl_args[i+1];
   }
   
   // We will look for "datetimes.txt", in a not-so-elegant way
@@ -463,13 +463,13 @@ BOOST_AUTO_TEST_CASE(timeFromString)
       input_filename = potential;
   }
   
-  BOOST_REQUIRE_MESSAGE( !input_filename.empty(),
+  REQUIRE_MESSAGE( !input_filename.empty(),
                         "Failed to find input text test file datetimes.txt - you may need to specify the '--indir' command line argument" );
 
   vector<string> original_string, iso_string;
   ifstream file( input_filename.c_str() );
 
-  BOOST_REQUIRE_MESSAGE( file.is_open(), "Failed to open input text test file '" <<  input_filename << "'" );
+  REQUIRE_MESSAGE( file.is_open(), "Failed to open input text test file '" <<  input_filename << "'" );
 
   string line;
   while( SpecUtils::safe_get_line(file, line) ) 
@@ -482,8 +482,8 @@ BOOST_AUTO_TEST_CASE(timeFromString)
 
     if( fields.size() != 2 )
     {
-      cerr << "Input line invalid: '" << line << "' should have to fields seprated by a comma" << endl;
-      continue; 
+      cerr << "Input line invalid: '" << line << "' should have to fields separated by a comma" << endl;
+      continue;
     }
 
     original_string.push_back( fields[0] );
@@ -493,7 +493,7 @@ BOOST_AUTO_TEST_CASE(timeFromString)
   assert( original_string.size() == iso_string.size() );
   //BOOST_TEST_MESSAGE( "Will test formats: " << iso_string.size() );
 
-  BOOST_REQUIRE( original_string.size() > 100 );
+  REQUIRE( original_string.size() > 100 );
   
   //convert string to ptime object then convert back to string
   for( size_t i = 0; i < original_string.size(); ++i ) 
@@ -508,9 +508,9 @@ BOOST_AUTO_TEST_CASE(timeFromString)
     //bool pass = "not-a-date-time"==s;
       
 
-    BOOST_CHECK_MESSAGE( orig_fmt_answ==iso_fmt_answ, "failed line " << i << " '" 
+    CHECK_MESSAGE( orig_fmt_answ==iso_fmt_answ, "failed line " << i << " '"
     << (orig_fmt_str+","+iso_frmt_str) << "' which gave '" << orig_fmt_answ_str << "' and '" << iso_fmt_answ_str << "'" );
   }
 
-  BOOST_TEST_MESSAGE( "Tested " << original_string.size() << " input strings" );
+  MESSAGE( "Tested " << original_string.size() << " input strings" );
 }

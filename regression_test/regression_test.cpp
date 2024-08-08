@@ -29,11 +29,10 @@
 #include <vector>
 #include <iomanip>
 #include <fstream>
+#include <sstream>
+#include <assert.h>
 #include <iostream>
 #include <algorithm>
-
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/DateTime.h"
@@ -46,8 +45,6 @@
 #endif
 
 using namespace std;
-using boost::filesystem::path;
-namespace po = boost::program_options;
 
 //g_truth_n42_dirname: name of the sub-directory that truth N42 files will be
 //  stored in.
@@ -67,15 +64,15 @@ const string g_parse_time_filename = "parsetimes.txt";
 
 //open_spec_file(): uses the OS X 'open' command to open the spectrum file
 //  with InterSpec running on localport:8080.
-void open_spec_file( const path &p );
+void open_spec_file( const std::string &p );
 
 //open_spec_file_in_textmate(): : uses the OS X 'open' command to open the
 //  spectrum file in textmate
-void open_spec_file_in_textmate( const path &p );
+void open_spec_file_in_textmate( const std::string &p );
 
 //open_directory(): uses OS X 'open' command to open a finder window for the
 //  specified directory; if a file is passed in, its parent directory is opened.
-void open_directory( const path &p );
+void open_directory( const std::string &p );
 
 //handle_no_truth_files(): interactively creates truth files, based on prompting
 //  user what actions should be taken (so they can decide it a truth file should
@@ -115,7 +112,7 @@ void check_equality_operator( const string basedir );
 //  back in and pass the 'equal_enough(...)' test, otherwise wont add truth n42
 //  file.  Will add resulting added file (and possibly directory) to GIT.
 //  Returns true if the truth N42 file was created.
-bool add_truth_n42( const  SpecUtils::SpecFile &m, const path &p, const bool force );
+bool add_truth_n42( const  SpecUtils::SpecFile &m, const std::string &p, const bool force );
 
 //check_parse_time(): compares the parse times of files with truth n42 files
 //  against previous parse times.  Parses the file 10 times and takes the
@@ -133,17 +130,17 @@ void print_one_line_summary( const SpecUtils::Measurement &info, std::ostream &o
 
 //candidate_test_files(): return all candidate files, regardless if they have a
 //  matching truth_n42.
-vector<path> candidate_test_files( const string basedir );
+vector<std::string> candidate_test_files( const string basedir );
 
 //candidates_with_truth_n42_files(): returns only candidate files that have
 //  truth information as well.
-vector<path> candidates_with_truth_n42_files( const string basedir );
+vector<std::string> candidates_with_truth_n42_files( const string basedir );
 
 //truth_n42_files(): return all truth_n42 files.
-vector<path> truth_n42_files( const string basedir );
+vector<std::string> truth_n42_files( const string basedir );
 
 //candidates_without_truth_n42_files(): return files that do not have truthfiles
-vector<path> candidates_without_truth_n42_files( const string basedir );
+vector<std::string> candidates_without_truth_n42_files( const string basedir );
 
 
 int main( int argc, char **argv )
@@ -157,45 +154,122 @@ int main( int argc, char **argv )
 #else
   string test_base_directory = "Z:\\wcjohns\\rad_ana\\InterSpec\\testing\\SpectrumFileFormats\\file_format_test_spectra";
 #endif
-
-  po::options_description desc("Allowed options");
   
-  desc.add_options()
-  ( "help,h", "produce help message")
-  ( "batch,b",
-    po::value<bool>(&g_automated_mode)->default_value(false),
-    "Run in non-interactive automated test mode.")
-  ( "basedir,d",
-    po::value<string>(&test_base_directory)->default_value(test_base_directory),
-    "Directory where the test files are located.")
-  ( "subdir,s",
-    po::value<string>(&g_sub_test_dir)->default_value(""),
-    "Sub-directory in 'basedir' of files to test.")
-  ( "action,a",
-   po::value< vector<string> >(),
-   "Action to perform. Either 'n42test', 'regression' (or equivalently 'test'),"
-   " 'addfiles', 'timing', or 'equality'.  If blank defaults to 'test' if in automated mode"
-   ", or 'n42test', 'addfiles', 'test', 'timing', 'equality' otherwise." )
-  ;
+  g_automated_mode = false;
+  g_sub_test_dir = "";
+  vector<string> actions;
   
-  po::variables_map vm;
-  
+  // Do a very minimal command-line argument parser
   try
   {
-    po::store( po::parse_command_line( argc, argv, desc ), vm );
-    po::notify( vm );
+    for( int i = 1; i < argc; ++i )
+    {
+      const string arg = argv[i];
+      
+      auto is_short_opt = []( const string &arg, const char test ) -> bool {
+        return ((arg.size() > 1) && ((arg[0] == '-') || (arg[0] == '/')) 
+                && (arg[1] == test) && ((arg.size() == 2) || (arg[2] == '=')) );
+      };
+      
+      auto is_long_opt = []( const string &arg, const string &test ) -> bool {
+        return (((arg.size() >= (2+test.size()))
+                && (arg[0] == '-') && (arg[1] == '-')
+                && (arg.substr(2,test.size()) == test)
+                && ((arg.size() == (2+test.size()))
+                    || (arg[2+test.size()] == '=')))
+        || ((arg.size() >= (1+test.size())) //Windows specify option using '/' character instead of '--'
+            && (arg[0] == '/')
+            && SpecUtils::iequals_ascii(arg.substr(1,test.size()), test) //For Windows, allow to be case insensitive
+            && ((arg.size() == (1+test.size()))
+                || (arg[1+test.size()] == '=')))
+                );
+      };
+      
+      auto get_arg_str_val = [&i,argv,argc,arg]() -> string {
+        const auto pos = arg.find("=");
+        if( pos != string::npos )
+          return arg.substr(pos+1);
+        if( (i+1) >= argc )
+          throw runtime_error( "No value specified for argument '" + arg + "'" );
+        string val = SpecUtils::trim_copy( argv[i+1] );
+        assert( !SpecUtils::istarts_with(val, "-") );
+        
+        i += 1; //advance the argument position, so we dont try and interpret this value as an argument
+        
+        cout << "Arg value: '" << val << "'" << endl;
+        
+        return val;
+      };//auto get_arg_str_val()
+      
+      auto get_arg_bool_val = [=]() -> bool {
+        using SpecUtils::iequals_ascii;
+        const string val = get_arg_str_val();
+        if( iequals_ascii(val,"0") || iequals_ascii(val,"false") || iequals_ascii(val,"no") )
+          return false;
+        else if( iequals_ascii(val,"1") || iequals_ascii(val,"true") || iequals_ascii(val,"yes") )
+          return true;
+        
+        throw runtime_error( "Invalid boolean value '" + val + "'" );
+        return false;
+      };//get_arg_bool_val(...)
+      
+      
+      if( (arg == "-h") || (arg == "--help") )
+      {
+        cout << "Available options:\n"
+        "\thelp,h\t"
+        "produce help message\n"
+        "\tbatch,b\t"
+        "Run in non-interactive automated test mode.\n"
+        "\tbasedir,d\t"
+        "Directory where the test files are located.\n"
+        "\tsubdir,s\t"
+        "Sub-directory in 'basedir' of files to test.\n"
+        "action,a\t"
+        "Action to perform. Either 'n42test', 'regression' (or equivalently 'test'),\n"
+        "\t\t'addfiles', 'timing', or 'equality'.  If blank defaults to 'test' if in\n"
+        "\t\tautomated mode, or 'n42test', 'addfiles', 'test', 'timing', 'equality' otherwise."
+        << endl;
+        
+        return EXIT_SUCCESS;
+      }else if( is_long_opt(arg, "batch") || is_short_opt(arg, 'b') )
+      {
+        g_automated_mode = get_arg_bool_val();
+      }else if( is_long_opt(arg, "basedir") || is_short_opt(arg, 'd') )
+      {
+        test_base_directory = get_arg_str_val();
+      }else if( is_long_opt(arg, "subdir") || is_short_opt(arg, 's') )
+      {
+        g_sub_test_dir = get_arg_str_val();
+      }else if( is_long_opt(arg, "action") || is_short_opt(arg, 'a') )
+      {
+        string arg = get_arg_str_val();
+        
+        // We'll allow specifying a CSV list of values, like `--action=A,b,c,d`
+        vector<string> vals;
+        SpecUtils::split( vals, arg, "," );
+        actions.insert( end(actions), begin(vals), end(vals) );
+        
+        // Or user could do something like `--action A b c d`
+        while( (i+1) < argc )
+        {
+          if( (argv[i+1][0] == '-') || (argv[i+1][0] == '/') )
+            break;
+            
+          actions.push_back( argv[i+1] );
+          i += 1;
+        }//while( (i+1) < argc )
+      }else
+      {
+        throw runtime_error( "Unknown arg '" + arg + "'" );
+      }
+    }//for( int i = 1; i < argc; ++i )
   }catch( std::exception &e )
   {
-    cerr << "Invalid command line argument\n\t" << e.what() << endl;
+    cerr << "Error parsing command line arguments: " << e.what() << endl;
     return EXIT_FAILURE;
-  }
+  }//try / catch to parse command line options
   
-  if( vm.count( "help" ) )
-  {
-    cout << desc << "\n";
-    return EXIT_SUCCESS;
-  }
-
   
   if( !SpecUtils::is_directory( test_base_directory ) )
   {
@@ -226,24 +300,13 @@ int main( int argc, char **argv )
          << "' subdirectory\n";
   }//if( !g_sub_test_dir.empty() )
   
-  vector<string> actions;
-  
-  if( vm.count("action") )
-    actions = vm["action"].as< vector<string> >();
   
   if( actions.empty() )
   {
     if( g_automated_mode )
-    {
       actions.push_back( "test" );
-    }else
-    {
-      actions.push_back( "addfiles" );
-      actions.push_back( "test" );
-      actions.push_back( "timing" );
-      actions.push_back( "n42test" );
-      actions.push_back( "equality" );
-    }
+    else
+      actions = vector<string>{ "addfiles", "test", "timing", "n42test", "equality" };
   }//if( vm.count("action") ) / else
   
   for( string action : actions )
@@ -271,55 +334,54 @@ int main( int argc, char **argv )
 
 
 
-void open_spec_file( const path &p )
+void open_spec_file( const std::string &p )
 {
   const string command = "open http://localhost:8080/?specfilename="
-                   + url_encode( p.string<string>() );
+                   + url_encode( p );
   system( command.c_str() );
   
 //The following wine comand crashes Peak Easy, but would be nice.
-//  command = "wine '/Users/wcjohns/Desktop/triage_spectra/PeakEasy 4.74/PeakEasy 4.74.exe' '" + path.string<string>() + "' &"
+//  command = "wine '/Users/wcjohns/Desktop/triage_spectra/PeakEasy 4.74/PeakEasy 4.74.exe' '" + path + "' &"
 //  system( command.c_str() );
 }//void open_spec_file( const path &p )
 
 
 
-void open_spec_file_in_textmate( const path &p )
+void open_spec_file_in_textmate( const std::string &p )
 {
   //const string command = "open -a TextMate '" + p.string<string>() + "'";
-  const string command = "/usr/local/bin/code '" + p.string<string>() + "'";
+  const string command = "/usr/local/bin/code '" + p + "'";
 
   system( command.c_str() );
-}//void open_spec_file_in_textmate( const path &p )
+}//void open_spec_file_in_textmate( const std::string &p )
 
 
 
-void open_directory( const path &p )
+void open_directory( const std::string &p )
 {
   string command = "open '";
   
-  if( !boost::filesystem::is_regular_file(p) )
-    command += p.string<string>() + "'";
+  if( !SpecUtils::is_file(p) )
+    command += p + "'";
   else
-    command += p.parent_path().string<string>() + "'";
+    command += SpecUtils::parent_path(p) + "'";
   
   system( command.c_str() );
-}//void open_directory( const path &p )
+}//void open_directory( const std::string &p )
 
 
 
 void check_parse_time( const string basedir )
 {
   const int ntimes_parse = 10;
-  map<path,double> cpu_parse_times, wall_parse_times;
-  const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
+  map<std::string,double> cpu_parse_times, wall_parse_times;
+  const vector<std::string> with_truth = candidates_with_truth_n42_files( basedir );
   
   const SpecUtils::time_point_t start_time = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
   
-  for( const path &fpath : with_truth )
+  for( const std::string &fpath : with_truth )
   {
-    const string filename = fpath.string<string>();
-    const string extention = fpath.extension().string<string>();
+    const string extention = SpecUtils::file_extension(fpath);
     
     for( int i = 0; i < ntimes_parse; ++i )
     {
@@ -328,7 +390,7 @@ void check_parse_time( const string basedir )
       const double orig_wall_time = SpecUtils::get_wall_time();
       const double orig_cpu_time = SpecUtils::get_cpu_time();
     
-      const bool parsed = info.load_file( filename, SpecUtils::ParserType::Auto, extention );
+      const bool parsed = info.load_file( fpath, SpecUtils::ParserType::Auto, extention );
     
       const double final_cpu_time = SpecUtils::get_cpu_time();
       const double final_wall_time = SpecUtils::get_wall_time();
@@ -337,7 +399,7 @@ void check_parse_time( const string basedir )
       {
         double cpu_dt = final_cpu_time - orig_cpu_time;
         double wall_dt = final_wall_time - orig_wall_time;
-        const map<path,double>::const_iterator pos = cpu_parse_times.find( fpath );
+        const map<string,double>::const_iterator pos = cpu_parse_times.find( fpath );
         if( pos != cpu_parse_times.end() && (pos->second < cpu_dt) )
         {
           cpu_dt = pos->second;
@@ -348,10 +410,10 @@ void check_parse_time( const string basedir )
         wall_parse_times[fpath] = wall_dt;
       }//if( parsed && orig_cpu_time > 0.0 && final_cpu_time > 0.0 )
     }//for( int i = 0; i < ntimes_parse; ++i )
-  }//for( const path &fpath : with_truth )
+  }//for( const string &fpath : with_truth )
   
   string prevtimestr;
-  map<path,double> previous_cpu_parse_times, previous_wall_parse_times;
+  map<string,double> previous_cpu_parse_times, previous_wall_parse_times;
   
   const string timingname
               = SpecUtils::append_path( basedir, g_parse_time_filename );
@@ -394,7 +456,7 @@ void check_parse_time( const string basedir )
   
   bool previous_had_all = true;
   cout << "Previous parse time: " << prevtimestr << endl;
-  for( map<path,double>::iterator i = cpu_parse_times.begin();
+  for( map<string,double>::iterator i = cpu_parse_times.begin();
       i != cpu_parse_times.end(); ++i )
   {
     const double cputime = i->second;
@@ -403,13 +465,14 @@ void check_parse_time( const string basedir )
     current_cpu_total += cputime;
     current_wall_total +=walltime;
     
-    string name = i->first.filename().string<string>();
+    
+    string name = SpecUtils::filename(i->first);
     if( name.size() > 30 )
       name = name.substr( 0, 27 ) + "...";
     cout << std::setw(31) << std::left << name << ": {cpu: "
          << setprecision(6) << std::fixed << cputime << ", wall: "
          << setprecision(6) << walltime << "}"
-         << ", size: " << (boost::filesystem::file_size(i->first) / 1024) << " kb\n";
+         << ", size: " << (SpecUtils::file_size(i->first) / 1024) << " kb\n";
     
     if( previous_cpu_parse_times.count(i->first) )
     {
@@ -451,10 +514,10 @@ void check_parse_time( const string basedir )
     if( file.is_open() )
     {
       file << SpecUtils::to_extended_iso_string( start_time ) << endl;
-      for( map<path,double>::iterator i = cpu_parse_times.begin();
+      for( map<string,double>::iterator i = cpu_parse_times.begin();
            i != cpu_parse_times.end(); ++i )
       {
-        file << i->first.string<string>() << endl << i->second
+        file << i->first << endl << i->second
             << " " << wall_parse_times[i->first] << endl;
       }
       
@@ -485,19 +548,19 @@ void check_files_with_truth_n42( const string basedir )
   int failed_truth_parsed = 0, initial_with_truth = 0, passed_tests = 0;
   int failed_tests = 0, updated_truths = 0, truths_failed_to_update = 0;
   
-  const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
+  const vector<string> with_truth = candidates_with_truth_n42_files( basedir );
   
-  map<path,double> parse_times;
+  map<string,double> parse_times;
   
   for( size_t file_index = 0; file_index < with_truth.size(); ++file_index )
   {
-    const path &fpath = with_truth[file_index];
+    const string &fpath = with_truth[file_index];
     
     ++initial;
     
-    const string filename = fpath.filename().string<string>();
-    const string originalpath = fpath.string<string>();
-    const string originalext = fpath.extension().string<string>();
+    const string filename = SpecUtils::filename(fpath);
+    const string originalpath = fpath;
+    const string originalext = SpecUtils::file_extension(fpath);
     
     
     //A little hack to only look at certain files when debugging; insert part of the filename
@@ -538,10 +601,10 @@ void check_files_with_truth_n42( const string basedir )
     
     ++initial_parsed;
     
-    const path tpath = fpath.parent_path() / g_truth_n42_dirname
-                       / (filename + ".n42");
     
-    if( !boost::filesystem::is_regular_file(tpath) )
+    const string tpath = SpecUtils::append_path( SpecUtils::append_path( SpecUtils::parent_path(fpath), g_truth_n42_dirname ), (filename + ".n42") );
+    
+    if( !SpecUtils::is_file(tpath) )
     {
       cerr << "Fatal error: " << fpath << " doesnt have truth file at "
            << tpath << "\n\n";
@@ -549,12 +612,12 @@ void check_files_with_truth_n42( const string basedir )
     }
     
     SpecUtils::SpecFile truth;
-    const bool truthstat = truth.load_file( tpath.string<string>().c_str(), SpecUtils::ParserType::N42_2012, "" );
+    const bool truthstat = truth.load_file( tpath, SpecUtils::ParserType::N42_2012, "" );
     
     if( !truthstat )
     {
       ++failed_truth_parsed;
-      cerr << "Failed to parse truth file " << tpath << "\n\tskipping.\n\n";
+      cerr << "Failed to parse truth file '" << tpath << "'\n\tskipping.\n\n";
       continue;
     }
     
@@ -670,7 +733,7 @@ void check_files_with_truth_n42( const string basedir )
       }//while( action != 'i' && action != 'u' )
     }//try / catch
     
-  }//for( const path &path : with_truth )
+  }//for( const string &path : with_truth )
   
   cout << "Of the " << initial << " initial test files " << initial_parsed
        << " were parsable (" << failed_original_parsed << " failed).\n"
@@ -691,18 +754,18 @@ void check_serialization_to_n42( const string basedir )
   size_t ninitial = 0, nOrigFileFailParse = 0,
          nFailToSerialize = 0, nSerializedFileFailParse = 0,
          npassed = 0, nfailed = 0;
-  vector<path> failedcompare;
-  const path tempdir = SpecUtils::temp_dir();
-  const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
-  for( const path &fpath : with_truth )
+  vector<string> failedcompare;
+  const string tempdir = SpecUtils::temp_dir();
+  const vector<string> with_truth = candidates_with_truth_n42_files( basedir );
+  for( const string &fpath : with_truth )
   {
     ++ninitial;
     
-    const string filename = fpath.filename().string<string>();
-    const string originalpath = fpath.string<string>();
-    const string originalext = fpath.extension().string<string>();
+    const string filename = SpecUtils::filename(fpath);
+    const string originalpath = fpath;
+    const string originalext = SpecUtils::file_extension(fpath);
     
-     SpecUtils::SpecFile info;
+    SpecUtils::SpecFile info;
     
     bool status = info.load_file( originalpath, SpecUtils::ParserType::Auto, originalext );
 
@@ -715,7 +778,7 @@ void check_serialization_to_n42( const string basedir )
     }//if( !status )
     
     
-    const string tempname = SpecUtils::temp_file_name( filename, tempdir.string<string>().c_str() );
+    const string tempname = SpecUtils::temp_file_name( filename, tempdir );
     
     {//Begin codeblock to serialize to temporary file
       ofstream output( tempname.c_str() );
@@ -778,7 +841,7 @@ void check_serialization_to_n42( const string basedir )
     }//try / catch
     
     SpecUtils::remove_file( tempname.c_str() );
-  }//for( const path &fpath : with_truth )
+  }//for( const string &fpath : with_truth )
   
   
   cout << "N42 Serialization Test Results:\n"
@@ -795,8 +858,8 @@ void check_serialization_to_n42( const string basedir )
   if( failedcompare.size() )
   {
     cout << "Files failing comparison:\n";
-    for( const path &p : failedcompare )
-      cout << "\t" << p << endl;
+    for( const string &p : failedcompare )
+      cout << "\t'" << p << "'" << endl;
     cout << endl << endl;
   }
   
@@ -819,19 +882,19 @@ void check_equality_operator( const string basedir )
   size_t ninitial = 0, nOrigFileFailParse = 0,
          npassed = 0, nfailed = 0;
   
-  vector<path> failedcompare;
+  vector<string> failedcompare;
   
   // We'll only test on files with a truth-level N42 file to make sure we only
   //  check files known to be good spectrum files.
-  const vector<path> with_truth = candidates_with_truth_n42_files( basedir );
+  const vector<string> with_truth = candidates_with_truth_n42_files( basedir );
   
-  for( const path &fpath : with_truth )
+  for( const string &fpath : with_truth )
   {
     ++ninitial;
     
-    const string filename = fpath.filename().string<string>();
-    const string originalpath = fpath.string<string>();
-    const string originalext = fpath.extension().string<string>();
+    const string filename = SpecUtils::filename(fpath);
+    const string originalpath = fpath;
+    const string originalext = SpecUtils::file_extension(fpath);
     
     SpecUtils::SpecFile info;
     
@@ -861,7 +924,7 @@ void check_equality_operator( const string basedir )
            << " failed with error:\n\t" << error_msg << "\n"
            << "\t(LHS is original parse, RHS is assigned copy)\n\n";
     }//try / catch
-  }//for( const path &fpath : with_truth )
+  }//for( const string &fpath : with_truth )
   
   
   cout << "Equality Operator Test Results:\n"
@@ -874,7 +937,7 @@ void check_equality_operator( const string basedir )
   if( failedcompare.size() )
   {
     cout << "Files failing operator= comparison:\n";
-    for( const path &p : failedcompare )
+    for( const string &p : failedcompare )
       cout << "\t" << p << endl;
     cout << endl << endl;
   }
@@ -892,60 +955,57 @@ void check_equality_operator( const string basedir )
 }//void check_equality_operator( const string basedir )
 
 
-bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
+bool add_truth_n42( const  SpecUtils::SpecFile &info, const string &p,
                     const bool force )
 {
-  const path parentdir = p.parent_path();
-  const path truthdir = parentdir / g_truth_n42_dirname;
-  const path truth_n42 = truthdir / (p.filename().string<string>() + ".n42");
-  path old_n42;
-  const bool prevexist = boost::filesystem::is_regular_file( truth_n42 );
+  const string parentdir = SpecUtils::parent_path(p);
+  const string truthdir = SpecUtils::append_path(parentdir, g_truth_n42_dirname);
+  const string truth_n42 = SpecUtils::append_path(truthdir, (SpecUtils::filename(p) + ".n42"));
+  string old_n42;
+  const bool prevexist = SpecUtils::is_file( truth_n42 );
   if( !force && prevexist )
   {
     cerr << "File " << truth_n42 << " already exits, not re-creating\n";
     return false;
   }if( prevexist )
   {
-    old_n42 = truth_n42.string<string>() + ".prev";
-    boost::filesystem::rename( truth_n42, old_n42 );
+    old_n42 = truth_n42 + ".prev";
+    SpecUtils::rename_file( truth_n42, old_n42 );
   }
   
   try
   {
-    if( !boost::filesystem::is_directory( truthdir ) )
+    if( !SpecUtils::is_directory( truthdir ) )
     {
       try
       {
-        boost::filesystem::create_directory( truthdir );
-        const string command = "git add '" + truthdir.string<string>() + "'";
+        SpecUtils::create_directory( truthdir );
+        const string command = "git add '" + truthdir + "'";
         const int val = system( command.c_str() );
         if( val != 0 )
           cerr << "\n\nThere may have been an issue adding " << truthdir
                << " to the GIT repository.  Return code " << val << "\n";
       }catch( std::exception &e )
       {
-        throw runtime_error( "Couldnt create directory "
-                        + truthdir.string<string>() + ", so skipping file" );
+        throw runtime_error( "Couldnt create directory " + truthdir + ", so skipping file" );
       }
-    }//if( !boost::filesystem::is_directory( truthdir ) )
+    }//if( !SpecUtils::is_directory( truthdir ) )
   
     {//begin write file
       ofstream output( truth_n42.c_str() );
       if( !output )
-        throw runtime_error( "Couldnt create file " + truth_n42.string<string>()
-                             + ", so skipping file" );
+        throw runtime_error( "Couldnt create file " + truth_n42 + ", so skipping file" );
   
       const bool status = info.write_2012_N42( output );
     
       if( !status )
-        throw runtime_error( "Failed to write to file "
-                        + truth_n42.string<string>() + ", so skipping file" );
+        throw runtime_error( "Failed to write to file " + truth_n42 + ", so skipping file" );
     }//end write files
   
     
      SpecUtils::SpecFile reloadedinfo;
     const bool reloadstatus
-          = reloadedinfo.load_file( truth_n42.string<string>().c_str(), SpecUtils::ParserType::N42_2012, "" );
+          = reloadedinfo.load_file( truth_n42, SpecUtils::ParserType::N42_2012, "" );
     if( !reloadstatus )
       throw runtime_error( "Failed to read in written n42 file" );
   
@@ -974,9 +1034,9 @@ bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
     }//try / catch for equal_enoughs
     
     if( !old_n42.empty() )
-      try{ boost::filesystem::remove( old_n42 ); }catch(...){}
+      SpecUtils::remove_file( old_n42 );
     
-    const string command = "git add '" + truth_n42.string<string>() + "'";
+    const string command = "git add '" + truth_n42 + "'";
     const int rval = system( command.c_str() );
     if( rval != 0 )
       cerr << "\n\nThere may have been an issue adding " << truth_n42
@@ -987,18 +1047,18 @@ bool add_truth_n42( const  SpecUtils::SpecFile &info, const path &p,
   }catch( std::exception &e )
   {
     cerr << e.what() << "\n\tskipping writing file\n";
-    if( !force && boost::filesystem::is_regular_file( truth_n42 ) )
+    if( !force && SpecUtils::is_file( truth_n42 ) )
     {
-      try{ boost::filesystem::remove( truth_n42 ); }catch(...){}
+      SpecUtils::remove_file( truth_n42 );
       if( !old_n42.empty() )
-        try{ boost::filesystem::rename( old_n42, truth_n42 ); }catch(...){}
+        SpecUtils::rename_file( old_n42, truth_n42 );
     }//if( a new file was written )
     
     return false;
   }//try / catch
   
   return true;
-}//void add_truth_n42(  SpecUtils::SpecFile &info, path &p )
+}//void add_truth_n42(  SpecUtils::SpecFile &info, string &p )
 
 
 
@@ -1009,12 +1069,12 @@ void handle_no_truth_files( const string basedir )
   
   cout << "\nFound " << no_truth.size() << " files without truth N42 files\n\n";
   
-  for( const auto &path : no_truth )
+  for( const string &path : no_truth )
   {
-    const string filenamestr = path.string<string>();
-    const string extention = path.extension().string<string>();
+    const string filenamestr = path;
+    const string extention = SpecUtils::file_extension(path);
     
-     SpecUtils::SpecFile info;
+    SpecUtils::SpecFile info;
     const bool status = info.load_file( filenamestr, SpecUtils::ParserType::Auto, extention );
     
     if( !status )
@@ -1065,7 +1125,7 @@ void handle_no_truth_files( const string basedir )
 
     if( action == 'i' )
       ++nignored;
-  }//for( const path &path : no_truth )
+  }//for( const string &path : no_truth )
 
   
   cout << "\n\nResults of trying to add truth N42 files:\n"
@@ -1175,16 +1235,16 @@ string url_encode( const string &value )
 
 
 
-vector<path> candidate_test_files( const string basedir )
+vector<string> candidate_test_files( const string basedir )
 {
-  vector<path> filenames;
+  vector<string> filenames;
   
   const vector<string> allfiles = SpecUtils::recursive_ls( basedir );
   
   for( const string &filepath : allfiles )
   {
     const string filename = SpecUtils::filename(filepath);
-    const string parentdir = path(filepath).parent_path().filename().string<string>();
+    const string parentdir = SpecUtils::filename( SpecUtils::parent_path(filepath) );
     
     if( filename != "source.txt"
         && filename != g_parse_time_filename
@@ -1198,37 +1258,37 @@ vector<path> candidate_test_files( const string basedir )
 
 
 
-vector<path> candidates_with_truth_n42_files( const string basedir )
+vector<string> candidates_with_truth_n42_files( const string basedir )
 {
-  vector<path> results;
-  const vector<path> truthfiles = truth_n42_files( basedir );
-  const vector<path> candidates = candidate_test_files( basedir );
+  vector<string> results;
+  const vector<string> truthfiles = truth_n42_files( basedir );
+  const vector<string> candidates = candidate_test_files( basedir );
   
-  for( const path &cand : candidates )
+  for( const string &cand : candidates )
   {
-    const string filename = cand.filename().string<string>() + ".n42";
-    const path testpath = cand.parent_path() / g_truth_n42_dirname / filename;
-    const vector<path>::const_iterator pos
-                     = find( truthfiles.begin(), truthfiles.end(), testpath );
+    const string filename = SpecUtils::filename(cand) + ".n42";
+    
+    const string testpath = SpecUtils::append_path( SpecUtils::append_path(SpecUtils::parent_path(cand), g_truth_n42_dirname), filename );
+    const vector<string>::const_iterator pos = find( begin(truthfiles), end(truthfiles), testpath );
     if( pos != truthfiles.end() )
       results.push_back( cand );
-  }//for( const path &cand : candidates )
+  }//for( const string &cand : candidates )
   
   return results;
-}//vector<path> candidates_with_truth_n42_files( const string basedir )
+}//vector<string> candidates_with_truth_n42_files( const string basedir )
 
 
 
-vector<path> truth_n42_files( const string basedir )
+vector<string> truth_n42_files( const string basedir )
 {
-  vector<path> filenames;
+  vector<string> filenames;
   
   const vector<string> allfiles = SpecUtils::recursive_ls( basedir );
   
   for( const string &filestr : allfiles )
   {
-    const string filename = path(filestr).filename().string<string>();
-    const string parentdir = path(filestr).parent_path().filename().string<string>();
+    const string filename = SpecUtils::filename(filestr);
+    const string parentdir = SpecUtils::filename(SpecUtils::parent_path(filestr));
     
     if( filename != "source.txt"
         && filename != g_parse_time_filename
@@ -1238,26 +1298,26 @@ vector<path> truth_n42_files( const string basedir )
   }//for( const path &filename : allfiles )
   
   return filenames;
-}//vector<path> truth_n42_files( const string basedir )
+}//vector<string> truth_n42_files( const string basedir )
 
 
 
-vector<path> candidates_without_truth_n42_files( const string basedir )
+vector<string> candidates_without_truth_n42_files( const string basedir )
 {
-  vector<path> results;
-  const vector<path> truthfiles = truth_n42_files( basedir );
-  const vector<path> candidates = candidate_test_files( basedir );
+  vector<string> results;
+  const vector<string> truthfiles = truth_n42_files( basedir );
+  const vector<string> candidates = candidate_test_files( basedir );
   
-  for( const path &cand : candidates )
+  for( const string &cand : candidates )
   {
-    const string filename = cand.filename().string<string>() + ".n42";
-    const path testpath = cand.parent_path() / g_truth_n42_dirname / filename;
-    const vector<path>::const_iterator pos
-                      = find( truthfiles.begin(), truthfiles.end(), testpath );
+    const string filename = SpecUtils::filename(cand) + ".n42";
+    const string parent_path = SpecUtils::parent_path(cand);
+    const string testpath = SpecUtils::append_path( SpecUtils::append_path(parent_path, g_truth_n42_dirname), filename );
+    const vector<string>::const_iterator pos = find( begin(truthfiles), end(truthfiles), testpath );
     if( pos == truthfiles.end() )
       results.push_back( cand );
-  }//for( const path &cand : candidates )
+  }//for( const string &cand : candidates )
   
   return results;
-}//vector<path> candidates_without_truth_n42_files( const string basedir )
+}//vector<string> candidates_without_truth_n42_files( const string basedir )
 

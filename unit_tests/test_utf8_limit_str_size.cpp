@@ -28,166 +28,160 @@
 #include <cmath>
 #include <climits>
 #include <iostream>
-#include <boost/algorithm/string.hpp>
 
-#define BOOST_TEST_MODULE test_utf8_limit_str_size
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "SpecUtils/StringAlgo.h"
 
 
 using namespace std;
-using namespace boost::unit_test;
 
 
-BOOST_AUTO_TEST_CASE( test_utf8_limit_str_size )
+TEST_CASE( "Test utf8 limit str size" )
 {
   string teststr = "";
   SpecUtils::utf8_limit_str_size( teststr, 0 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = "";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = "";
   SpecUtils::utf8_limit_str_size( teststr, 5 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = "AAAA";
   SpecUtils::utf8_limit_str_size( teststr, 0 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = "AAAA";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, "A" );
+  CHECK_EQ( teststr, "A" );
   
   teststr = "AAAA";
   SpecUtils::utf8_limit_str_size( teststr, 4 );
-  BOOST_CHECK_EQUAL( teststr, "AAAA" );
+  CHECK_EQ( teststr, "AAAA" );
   
   teststr = "AAA";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, "AAA" );
+  CHECK_EQ( teststr, "AAA" );
   
   teststr = "AAA";
   SpecUtils::utf8_limit_str_size( teststr, 4 );
-  BOOST_CHECK_EQUAL( teststr, "AAA" );
+  CHECK_EQ( teststr, "AAA" );
   
   teststr = u8"ⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 0 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = u8"ⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = u8"ⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 2 );
-  BOOST_CHECK_EQUAL( teststr, "" );
+  CHECK_EQ( teststr, "" );
   
   teststr = u8"ⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"ⓧ" );
+  CHECK_EQ( teststr, u8"ⓧ" );
   
   teststr = u8"aⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, "a" );
+  CHECK_EQ( teststr, "a" );
   
   teststr = u8"ⓧⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"ⓧ" );
+  CHECK_EQ( teststr, u8"ⓧ" );
   
   teststr = u8"ⓧⓧ";
   SpecUtils::utf8_limit_str_size( teststr, 6 );
-  BOOST_CHECK_EQUAL( teststr, u8"ⓧⓧ" );
+  CHECK_EQ( teststr, u8"ⓧⓧ" );
   
   teststr = u8"ⓧⓧaaa";
   SpecUtils::utf8_limit_str_size( teststr, 6 );
-  BOOST_CHECK_EQUAL( teststr, u8"ⓧⓧ" );
+  CHECK_EQ( teststr, u8"ⓧⓧ" );
   
   teststr = u8"ⓧⓧaaa";
   SpecUtils::utf8_limit_str_size( teststr, 7 );
-  BOOST_CHECK_EQUAL( teststr, u8"ⓧⓧa" );
+  CHECK_EQ( teststr, u8"ⓧⓧa" );
   
   
   teststr = u8"aaⓧⓧaaa";
   SpecUtils::utf8_limit_str_size( teststr, 5 );
-  BOOST_CHECK_EQUAL( teststr, u8"aaⓧ" );
+  CHECK_EQ( teststr, u8"aaⓧ" );
   
   teststr = u8"aaⓧⓧaaa";
   SpecUtils::utf8_limit_str_size( teststr, 6 );
-  BOOST_CHECK_EQUAL( teststr, u8"aaⓧ" );
+  CHECK_EQ( teststr, u8"aaⓧ" );
   
   teststr = u8"aaⓧⓧaaa";
   SpecUtils::utf8_limit_str_size( teststr, 7 );
-  BOOST_CHECK_EQUAL( teststr, u8"aaⓧ" );
+  CHECK_EQ( teststr, u8"aaⓧ" );
   
   
   teststr = u8"aõ";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"aõ" );
+  CHECK_EQ( teststr, u8"aõ" );
   
   teststr = u8"õa";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"õa" );
+  CHECK_EQ( teststr, u8"õa" );
   
   teststr = u8"õ";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"õ" );
+  CHECK_EQ( teststr, u8"õ" );
   
   teststr = u8"õ";
   SpecUtils::utf8_limit_str_size( teststr, 2 );
-  BOOST_CHECK_EQUAL( teststr, u8"õ" );
+  CHECK_EQ( teststr, u8"õ" );
   
   teststr = u8"õ";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, u8"" );
+  CHECK_EQ( teststr, u8"" );
   
   teststr = u8"÷õ";
   SpecUtils::utf8_limit_str_size( teststr, 2 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷" );
+  CHECK_EQ( teststr, u8"÷" );
   
   teststr = u8"÷õ";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷" );
+  CHECK_EQ( teststr, u8"÷" );
   
   teststr = u8"÷õ";
   SpecUtils::utf8_limit_str_size( teststr, 4 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷õ" );
+  CHECK_EQ( teststr, u8"÷õ" );
   
   teststr = u8"÷õ";
   SpecUtils::utf8_limit_str_size( teststr, 5 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷õ" );
+  CHECK_EQ( teststr, u8"÷õ" );
   
   teststr = u8"÷aõ";
   SpecUtils::utf8_limit_str_size( teststr, 5 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷aõ" );
+  CHECK_EQ( teststr, u8"÷aõ" );
   
   teststr = u8"÷aõa";
   SpecUtils::utf8_limit_str_size( teststr, 5 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷aõ" );
+  CHECK_EQ( teststr, u8"÷aõ" );
   
   teststr = u8"÷aõa";
   SpecUtils::utf8_limit_str_size( teststr, 3 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷a" );
+  CHECK_EQ( teststr, u8"÷a" );
   
   teststr = u8"÷aõa";
   SpecUtils::utf8_limit_str_size( teststr, 2 );
-  BOOST_CHECK_EQUAL( teststr, u8"÷" );
+  CHECK_EQ( teststr, u8"÷" );
   
   
   teststr = u8"÷aõa";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, u8"" );
+  CHECK_EQ( teststr, u8"" );
   
   teststr = u8"a÷aõa";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
-  BOOST_CHECK_EQUAL( teststr, u8"a" );
+  CHECK_EQ( teststr, u8"a" );
   
   
   /*
@@ -238,11 +232,11 @@ BOOST_AUTO_TEST_CASE( test_utf8_limit_str_size )
   while( SpecUtils::safe_get_line(output_check, line) )
     output_vector.push_back( line );
   
-  BOOST_REQUIRE_EQUAL( input_vector.size(), output_vector.size() );
+  REQUIRE_EQ( input_vector.size(), output_vector.size() );
   
 	for( size_t i = 0; i < input_vector.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL( input_vector[i], output_vector[i] );
+   CHECK_EQ( input_vector[i], output_vector[i] );
 	}
    */
 }

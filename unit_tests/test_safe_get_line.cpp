@@ -29,14 +29,8 @@
 #include <iostream>
 #include <fstream>
 
-#include <boost/algorithm/string.hpp>
-
-#define BOOST_TEST_MODULE testsafeGetLine
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "SpecUtils/ParseUtils.h"
 
@@ -52,13 +46,13 @@ void test_num_lines( const char *str, const size_t num_expected_lines )
   while( SpecUtils::safe_get_line(strm, line) )
     ++num_read_lines;
   
-  BOOST_CHECK_MESSAGE( num_read_lines==num_expected_lines, "Failed on \n'" + string(str) + "'\n Got "
-                      + std::to_string(num_read_lines) + " lines but expected " + std::to_string(num_expected_lines) + "\n" );
-  //BOOST_CHECK_EQUAL( num_read_lines, num_expected_lines );
+  CHECK_MESSAGE( num_read_lines==num_expected_lines, "Failed on \n'" << string(str) << "'\n Got "
+                      << std::to_string(num_read_lines) << " lines but expected " << std::to_string(num_expected_lines) << "\n" );
+  //CHECK_EQ( num_read_lines, num_expected_lines );
 }
 
 
-BOOST_AUTO_TEST_CASE(safeGetLine) {
+TEST_CASE( "safeGetLine" ) {
   
   const char *str = "1 Hello";
   test_num_lines( str, 1 );
@@ -122,8 +116,8 @@ void test_num_lines_len_limit( const char *str, const size_t strsizelimit, const
     msg += "'" + l + "'\n";
   msg += "___________________\n\n";
   
-  BOOST_CHECK_MESSAGE( num_read_lines==num_expected_lines, msg );
-  //BOOST_CHECK_EQUAL( num_read_lines, num_expected_lines );
+  CHECK_MESSAGE( num_read_lines==num_expected_lines, msg );
+  //CHECK_EQUAL( num_read_lines, num_expected_lines );
   
   if( !lines.empty() )
   {
@@ -132,12 +126,12 @@ void test_num_lines_len_limit( const char *str, const size_t strsizelimit, const
       msg += "'" + l + "'\n";
     msg += "___________________\n\n";
     
-    BOOST_CHECK_MESSAGE( lines.back() == lastline, msg );
+    CHECK_MESSAGE( lines.back() == lastline, msg );
   }
 }//test_num_lines_len_limit
 
 
-BOOST_AUTO_TEST_CASE(safeGetLineLenLimited) {
+TEST_CASE( "safeGetLineLenLimited" ) {
   
   const char *str = "1 Hello";
   test_num_lines_len_limit( str, 100, 1, str );
