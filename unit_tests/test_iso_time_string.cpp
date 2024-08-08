@@ -28,17 +28,12 @@
 #include <stdio.h>
 #include <iostream>
 
-#define BOOST_TEST_MODULE testIsoTimeString
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "3rdparty/date/include/date/date.h"
 
 #include <boost/date_time/date.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
@@ -46,8 +41,6 @@
 #include "SpecUtils/DateTime.h"
 
 using namespace std;
-using namespace boost::unit_test;
-
 
 boost::posix_time::ptime to_ptime( const SpecUtils::time_point_t &rhs )
 {
@@ -154,7 +147,7 @@ boost::posix_time::ptime random_ptime()
 
 
 
-BOOST_AUTO_TEST_CASE( isoString )
+TEST_CASE( "isoString" )
 {
   srand( (unsigned) time(NULL) );
   
@@ -180,30 +173,30 @@ BOOST_AUTO_TEST_CASE( isoString )
       our_iso_str.resize( 22, '0' );
     
     const boost::posix_time::ptime check = boost::posix_time::from_iso_string( our_iso_str );
-    BOOST_CHECK_MESSAGE( pt == check,
-                         "failed to read ISO time back in using boost::from_iso_string( '"
-                         + our_iso_str + "' ).");
-    BOOST_CHECK_MESSAGE( our_extended_str == boost_extended_str,
-                         "SpecUtils::to_extended_iso_string produced '"
-                         + our_extended_str
-                         + "' while boost::to_iso_extended_string produced '"
-                         + boost_extended_str + "'." );
-    BOOST_CHECK_MESSAGE( our_iso_str == boost_iso_str,
-                         "SpecUtils::to_iso_string produced '"
-                         + our_iso_str + "' while boost::to_iso_string produced '"
-                         + boost_iso_str + "'" );
+    CHECK_MESSAGE( pt == check,
+                  "failed to read ISO time back in using boost::from_iso_string( '"
+                  << our_iso_str << "' ).");
+    CHECK_MESSAGE( our_extended_str == boost_extended_str,
+                  "SpecUtils::to_extended_iso_string produced '"
+                  << our_extended_str
+                  << "' while boost::to_iso_extended_string produced '"
+                  << boost_extended_str << "'." );
+    CHECK_MESSAGE( our_iso_str == boost_iso_str,
+                  "SpecUtils::to_iso_string produced '"
+                  << our_iso_str << "' while boost::to_iso_string produced '"
+                  << boost_iso_str << "'" );
       
   
     const SpecUtils::time_point_t parse_check_iso = SpecUtils::time_from_string( our_iso_str.c_str() );
-    BOOST_CHECK_MESSAGE( parse_check_iso == tp,
-                         "Failed to read time from ISO string ('" + boost_iso_str
+    CHECK_MESSAGE( parse_check_iso == tp,
+                         "Failed to read time from ISO string ('" << boost_iso_str
                          + "'), parsed " + SpecUtils::to_iso_string(parse_check_iso) );
     
     const SpecUtils::time_point_t parse_check_ext = SpecUtils::time_from_string( our_extended_str.c_str() );
     
-    BOOST_CHECK_MESSAGE( parse_check_ext == tp,
-                         "Failed to read time from EXTENDED string ('" + boost_iso_str
-                         + "'), parsed " + SpecUtils::to_iso_string(parse_check_ext) );
+    CHECK_MESSAGE( parse_check_ext == tp,
+                  "Failed to read time from EXTENDED string ('" << boost_iso_str
+                  << "'), parsed " << SpecUtils::to_iso_string(parse_check_ext) );
   }//for( size_t i = 0; i < 1000; ++i )
     
   //check special time values
@@ -212,33 +205,33 @@ BOOST_AUTO_TEST_CASE( isoString )
   SpecUtils::time_point_t d3{};
   //SpecUtils::time_point_t d4 = std::chrono::system_clock::now();
 
-  BOOST_CHECK( SpecUtils::to_iso_string(d1) == "not-a-date-time" );
-  BOOST_CHECK( SpecUtils::to_iso_string(d2) == "not-a-date-time" );
-  BOOST_CHECK( SpecUtils::to_iso_string(d3) == "not-a-date-time" );
-  //BOOST_CHECK( SpecUtils::to_iso_string(d4) != "not-a-date-time" );
+  CHECK( SpecUtils::to_iso_string(d1) == "not-a-date-time" );
+  CHECK( SpecUtils::to_iso_string(d2) == "not-a-date-time" );
+  CHECK( SpecUtils::to_iso_string(d3) == "not-a-date-time" );
+  //CHECK( SpecUtils::to_iso_string(d4) != "not-a-date-time" );
 
   //"20140414T141201.621543"
   
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.62") ), "20140919T141201.62" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01") ), "20140919T141201" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.621543") ), "20140919T141201.621543" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.62") ), "20140919T141201.62" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01") ), "20140919T141201" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.621543") ), "20140919T141201.621543" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T14:12:01.62") ), "20140101T141201.62" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T14:12:01.623") ), "20140101T141201.623" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T14:12:01.626") ), "20140101T141201.626" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T00:00:00") ), "20140101T000000" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T14:12:01.62") ), "20140101T141201.62" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T14:12:01.623") ), "20140101T141201.623" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T14:12:01.626") ), "20140101T141201.626" );
+  CHECK_EQ( SpecUtils::to_iso_string( SpecUtils::time_from_string("20140101T00:00:00") ), "20140101T000000" );
   
   
   //"2014-04-14T14:12:01.621543"
-  BOOST_CHECK_EQUAL( SpecUtils::to_extended_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.62") ), "2014-09-19T14:12:01.62" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_extended_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01") ), "2014-09-19T14:12:01" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_extended_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.621543") ), "2014-09-19T14:12:01.621543" );
+  CHECK_EQ( SpecUtils::to_extended_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.62") ), "2014-09-19T14:12:01.62" );
+  CHECK_EQ( SpecUtils::to_extended_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01") ), "2014-09-19T14:12:01" );
+  CHECK_EQ( SpecUtils::to_extended_iso_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.621543") ), "2014-09-19T14:12:01.621543" );
   
-  BOOST_CHECK_EQUAL( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.62") ), "19-Sep-2014 14:12:01.62" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.62") ), "01-Jan-2014 14:12:01.62" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.623") ), "01-Jan-2014 14:12:01.62" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.626") ), "01-Jan-2014 14:12:01.63" );
-  BOOST_CHECK_EQUAL( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T00:00:00") ), "01-Jan-2014 00:00:00.00" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.62") ), "19-Sep-2014 14:12:01.62" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.62") ), "01-Jan-2014 14:12:01.62" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.623") ), "01-Jan-2014 14:12:01.62" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.626") ), "01-Jan-2014 14:12:01.63" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T00:00:00") ), "01-Jan-2014 00:00:00.00" );
   
 
   /** Converts the input to string in format d-mmm-YYYY HH:MM:SS AM,
