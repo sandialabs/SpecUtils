@@ -29,7 +29,6 @@
 #include <cmath>
 #include <climits>
 #include <float.h>
-#include <boost/algorithm/string.hpp>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"

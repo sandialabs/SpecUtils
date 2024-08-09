@@ -31,11 +31,10 @@
 #include <unistd.h>
 #endif
 #include <cstdlib>
+#include <filesystem>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-
-#include <boost/filesystem.hpp>
 
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
@@ -46,8 +45,6 @@ using namespace std;
 TEST_CASE( "testUtilityFilesystemFunctions" ) {
 //A few easy filesystem functions; assumes UNIX
   const string hexs = "0123456789abcdef";
-  
-  //cout << "pp 'C:' -> " << boost::filesystem::path("C:").parent_path() << endl;
   
 #ifdef _WIN32
   CHECK_EQ( SpecUtils::fs_relative( "\\a\\b\\c\\d", "\\a\\b\\foo\\bar"), "..\\..\\foo\\bar" );
@@ -334,42 +331,42 @@ TEST_CASE( "testUtilityFilesystemFunctions" ) {
   CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
   
-  //boost::filesystem::status(wtestname2).
+  //std::filesystem::status(wtestname2).
   
 #ifdef _WIN32
   const auto wtestname2 = SpecUtils::convert_from_utf8_to_utf16(testname2);
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
+  std::filesystem::permissions( wtestname2, std::filesystem::perms::all, std::filesystem::perm_options::remove );
+  std::filesystem::permissions( wtestname2, std::filesystem::perms::owner_all, std::filesystem::perm_options::add );
+  std::filesystem::permissions( wtestname2, std::filesystem::perms::owner_write, std::filesystem::perm_options::remove );
   CHECK( !SpecUtils::can_rw_in_directory(testname2) );
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
+  std::filesystem::permissions( wtestname2, std::filesystem::perms::owner_write, std::filesystem::perm_options::add );
   CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
   //On windows
-  //boost::filesystem::permissions( wtestname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
+  //std::filesystem::permissions( wtestname2, std::filesystem::perms::owner_read, std::filesystem::perm_options::remove );
   //CHECK( !SpecUtils::can_rw_in_directory(testname2) );
   
-  boost::filesystem::permissions( wtestname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read | boost::filesystem::perms::owner_write );
+  std::filesystem::permissions( wtestname2, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::add );
 #else
-  boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::all_all );
-  boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_all );
+  std::filesystem::permissions( testname2, std::filesystem::perms::all, std::filesystem::perm_options::remove );
+  std::filesystem::permissions( testname2, std::filesystem::perms::owner_all, std::filesystem::perm_options::add );
 
 #ifndef  __linux__
   // TODO: For some reason, running in Docker (so as root), the removing of permissions doesnt necessarily work
-  boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_write );
+  std::filesystem::permissions( testname2, std::filesystem::perms::owner_write, std::filesystem::perm_options::remove );
   CHECK( !SpecUtils::can_rw_in_directory(testname2) );
 #endif
   
-  boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_write );
+  std::filesystem::permissions( testname2, std::filesystem::perms::owner_write, std::filesystem::perm_options::add );
   CHECK( SpecUtils::can_rw_in_directory(testname2) );
   
 #ifndef  __linux__
   // Similar Linux issue
-  boost::filesystem::permissions( testname2, boost::filesystem::perms::remove_perms | boost::filesystem::perms::owner_read );
+  std::filesystem::permissions( testname2, std::filesystem::perms::owner_read, std::filesystem::perm_options::remove );
   CHECK( !SpecUtils::can_rw_in_directory(testname2) );
 #endif
   
-  boost::filesystem::permissions( testname2, boost::filesystem::perms::add_perms | boost::filesystem::perms::owner_read );
+  std::filesystem::permissions( testname2, std::filesystem::perms::owner_read, std::filesystem::perm_options::add );
 #endif
 
   
@@ -475,11 +472,10 @@ TEST_CASE( "testUtilityFilesystemFunctions" ) {
         
 #ifdef _WIN32
         CHECK_EQ( SpecUtils::file_size(fname),
-                           boost::filesystem::file_size(SpecUtils::convert_from_utf8_to_utf16(fname) ) );
+                 std::filesystem::file_size(SpecUtils::convert_from_utf8_to_utf16(fname) ) );
 #else
-        CHECK_EQ( SpecUtils::file_size(fname), boost::filesystem::file_size(fname) );
+        CHECK_EQ( SpecUtils::file_size(fname), std::filesystem::file_size(fname) );
 #endif
-
   
         filesinthisdir.push_back( fname );
         added_files.push_back( fname );
@@ -553,11 +549,10 @@ TEST_CASE( "testUtilityFilesystemFunctions" ) {
     CHECK( !SpecUtils::is_file(newname) );
   }//
   
-
   
 #ifdef _WIN32
-  boost::filesystem::remove_all(wtestname2);
+  std::filesystem::remove_all(wtestname2);
 #else
-  boost::filesystem::remove_all(testname2);
+  std::filesystem::remove_all(testname2);
 #endif
 }

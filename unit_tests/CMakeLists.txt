@@ -21,8 +21,10 @@ if( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
     endif( ${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.17.0" )
 endif( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 
+if( PERFORM_DEVELOPER_CHECKS )
+  find_package( Boost REQUIRED COMPONENTS date_time system )
+endif( PERFORM_DEVELOPER_CHECKS )
 
-find_package( Boost REQUIRED COMPONENTS program_options date_time system filesystem )
 
 if( NOT Boost_FOUND )
   message(FATAL_ERROR "Couldnt Find Boost")
@@ -32,7 +34,19 @@ endif( NOT Boost_FOUND )
 # We'll look for an installed version of doctest first
 find_package( doctest )
 
-# But if we dont find it, we'll Fetch it
+# If we didnt find the docktest package, see if the header is somewhere in the
+#   standard search path, and if so, use that
+if( NOT doctest_FOUND )
+  # TODO: test this little part
+  find_file( has_doctest "docktest.h" )
+  if( has_doctest )
+    set( doctest_FOUND YES )
+    get_filename_component( DOCTEST_INCLUDE_DIR ${has_doctest} DIRECTORY )
+  endif( has_doctest )
+endif( NOT doctest_FOUND )
+
+
+# But if we havent fount docktest, we'll Fetch it
 if( NOT doctest_FOUND )
   include(ExternalProject)
   find_package(Git REQUIRED)
@@ -96,6 +110,9 @@ ENDFOREACH()
 
 add_executable( test_iso_time_string test_iso_time_string.cpp )
 target_link_libraries( test_iso_time_string PRIVATE SpecUtils Boost::date_time)
+if( PERFORM_DEVELOPER_CHECKS )
+  target_link_libraries( test_iso_time_string PRIVATE Boost::date_time)
+endif( PERFORM_DEVELOPER_CHECKS )
 set_target_properties( test_iso_time_string PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
   NAME TestIsoTimeString
@@ -173,8 +190,9 @@ add_test(
 
 
 add_executable( test_filesystem_functions test_filesystem_functions.cpp )
-target_link_libraries( test_filesystem_functions PRIVATE SpecUtils Boost::filesystem )
-set_target_properties( test_filesystem_functions PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+target_link_libraries( test_filesystem_functions PRIVATE SpecUtils )
+# We have to use C++17 for `test_filesystem_functions` since we use std::filesystem in the tests
+set_target_properties( test_filesystem_functions PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
   NAME testUtilityFilesystemFunctions
   COMMAND $<TARGET_FILE:test_filesystem_functions> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
