@@ -2,7 +2,7 @@
 
 %{
 #include <SpecUtils/SpecFile.h>
-
+#include <SpecUtils/ParseUtils.h>
 %}
 
 
@@ -43,6 +43,18 @@ namespace std {
     float gamma_count_at(int index) 
     {
         return $self->gamma_counts()->at(index-1);
+    }
+
+    std::string get_description()
+    {
+        auto &remarks = $self->remarks();
+        return SpecUtils::get_description(remarks);
+    }
+
+    std::string get_source()
+    {
+        auto &remarks = $self->remarks();
+        return SpecUtils::get_source(remarks);
     }
 }
 

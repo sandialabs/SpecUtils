@@ -512,12 +512,8 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
 //  InterSpec is using to represent detector response functions on disk.
 const std::string &detectorTypeToString( const DetectorType type );
 
-
-
-
- 
-  
-  
+using FloatVec = std::vector<float>;
+using FloatVecPtr = std::shared_ptr<FloatVec>;    
   
 class Measurement
 {
@@ -537,9 +533,19 @@ public:
   
   //live_time(): returned in units of seconds.  Will be 0 if not known.
   float live_time() const;
+
+  void set_live_time(float time)
+  {
+    live_time_ = time;
+  }
   
   //real_time(): returned in units of seconds.  Will be 0 if not known.
   float real_time() const;
+
+  void set_real_time(float time)
+  {
+    real_time_ = time;
+  }
   
   //contained_neutron(): returns whether or not the measurement is thought to
   //  contain the possibility to detect neutrons (e.g. if a neutron detector was
@@ -792,7 +798,15 @@ public:
    */
   void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                 const float livetime, const float realtime );
-  
+
+  void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts );
+
+  void set_gamma_counts(const FloatVec& spectrum)
+  {
+    auto counts = std::make_shared<FloatVec>(spectrum);
+      
+    set_gamma_counts(counts, 0.0F, 0.0F);
+  }
   /** Sets the neutron counts, and also updates
    #Measurement::neutron_counts_sum_ and #Measurement::contained_neutron_ .
    
@@ -808,7 +822,7 @@ public:
    
    If `neutron_live_time` is less than or equal to zero, the gamma real time will be used.
    */
-  void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time );
+  void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time=-1.0F );
   
   //To set real and live times, see SpecFile::set_live_time(...)
   
@@ -1469,7 +1483,7 @@ public:
   //  number available if that detector does not already have that one or else
   //  its assigned to be one larger sample number - this by no means captures
   //  all use cases, but good enough for now.
-  void add_measurement( std::shared_ptr<Measurement> meas, const bool doCleanup );
+  void add_measurement( std::shared_ptr<Measurement> meas, const bool doCleanup=true );
   
   //remove_measurement(...): removes the measurement from this SpecFile
   //  object and if 'doCleanup' is specified, then all sums will be

@@ -36,6 +36,14 @@ if( CMAKE_GENERATOR STREQUAL "Xcode" )
 endif( CMAKE_GENERATOR STREQUAL "Xcode" )
 message( "Args: ${COMMON_TEST_ARGS}")
 
+
+add_executable( test_spec_file test_spec_file.cpp )
+target_link_libraries( test_spec_file PRIVATE SpecUtils )
+set_target_properties( test_spec_file PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test( NAME test_spec_file
+          COMMAND $<TARGET_FILE:test_spec_file> 
+)
+
 add_executable( test_energy_calibration test_energy_calibration.cpp )
 target_link_libraries( test_energy_calibration PRIVATE SpecUtils )
 set_target_properties( test_energy_calibration PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
@@ -96,7 +104,7 @@ add_executable( test_string_functions test_string_functions.cpp )
 target_link_libraries( test_string_functions PRIVATE SpecUtils )
 set_target_properties( test_string_functions PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
-  NAME TestUtilityStringFunctions
+  NAME test_string_functions
   COMMAND $<TARGET_FILE:test_string_functions> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
   WORKING_DIRECTORY ${test_data_dir}
 )

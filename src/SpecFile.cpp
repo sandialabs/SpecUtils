@@ -80,6 +80,7 @@
 //
 #if( defined(__x86_64__) || defined(__i386__) )
 #include <immintrin.h>
+#include "SpecFile.h"
 #else
 static_assert( 0, "SpecUtils_USE_SIMD is currently only enabled for i386/x86" );
 #endif
@@ -907,31 +908,35 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
 {
   live_time_ = livetime;
   real_time_ = realtime;
+  set_gamma_counts(counts);
+}//set_gamma_counts
+
+void Measurement::set_gamma_counts(std::shared_ptr<const SpecUtils::FloatVec> counts)
+{
   gamma_count_sum_ = 0.0;
-  
-  //const size_t oldnchan = gamma_counts_ ? gamma_counts_->size() : 0u;
-  
-  if( !counts )
+
+  // const size_t oldnchan = gamma_counts_ ? gamma_counts_->size() : 0u;
+
+  if (!counts)
     counts = std::make_shared<std::vector<float>>();
   gamma_counts_ = counts;
-  for( const float val : *counts )
+  for (const float val : *counts)
     gamma_count_sum_ += val;
-  
-  assert( energy_calibration_ );
-  
+
+  assert(energy_calibration_);
+
   const auto &cal = *energy_calibration_;
   const size_t newnchan = gamma_counts_->size();
   const size_t calnchan = cal.num_channels();
-  
-  if( (newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge) )
+
+  if ((newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge))
   {
-    //We could preserve the old coefficients for Polynomial and FRF, and just create a new
-    //  calibration... it isnt clear if we should do that, or just clear out the calibration...
+    // We could preserve the old coefficients for Polynomial and FRF, and just create a new
+    //   calibration... it isnt clear if we should do that, or just clear out the calibration...
     energy_calibration_ = std::make_shared<const SpecUtils::EnergyCalibration>();
   }
-}//set_gamma_counts
-  
-  
+}
+
 void Measurement::set_neutron_counts( const std::vector<float> &counts, const float live_time )
 {
   neutron_counts_ = counts;

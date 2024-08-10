@@ -644,8 +644,6 @@ TEST_CASE( "checkIFind" )
   CHECK_EQ(substr_pos, correct_substr_pos);
 }//TEST_CASE( checkIFind )
 
-
-
 TEST_CASE( "testPrintCompact" )
 {
   using namespace std;
@@ -807,3 +805,54 @@ TEST_CASE( "testPrintCompact" )
   check_range(-1000000.0,10000000.0);
   check_range(-1.0E32,1.0E32);
 }//void testPrintCompact()
+
+TEST_CASE( "Find Source String")
+{
+  std::vector<std::string> remarks{
+  "Description: TestDescription",
+  "Source: TestSource"};
+
+  auto expected = std::string("TestSource");
+  auto actual = SpecUtils::get_source(remarks);
+
+  CHECK(actual == expected);
+
+}
+
+TEST_CASE( "Find Description String")
+{
+  std::vector<std::string> remarks{
+  "Description: TestDescription",
+  "Source: TestSource"};
+
+  auto expected = std::string("TestDescription");
+  auto actual = SpecUtils::get_description(remarks);
+
+  CHECK(actual == expected);
+
+}
+
+TEST_CASE( "No Description Yields Empty String")
+{
+  std::vector<std::string> remarks{
+  "DescriptionZZZZZ: TestDescription",
+  "Source: TestSource"};
+
+  auto expected = std::string();
+  auto actual = SpecUtils::get_description(remarks);
+
+  CHECK(actual == expected);
+}
+
+TEST_CASE( "No Source Yields Empty String")
+{
+  std::vector<std::string> remarks{
+  "DescriptionZZZZZ: TestDescription",
+  "SourceYYYY: TestSource"};
+
+  auto expected = std::string();
+  auto actual = SpecUtils::get_source(remarks);
+
+  CHECK(actual == expected);
+}
+

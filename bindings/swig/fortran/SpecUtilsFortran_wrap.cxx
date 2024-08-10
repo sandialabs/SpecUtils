@@ -293,7 +293,7 @@ template <typename T> T SwigValueInit() {
 
 
 #include <SpecUtils/SpecFile.h>
-
+#include <SpecUtils/ParseUtils.h>
 
 
 #include <utility>
@@ -661,6 +661,14 @@ struct SWIG_null_deleter {
 
 SWIGINTERN float SpecUtils_Measurement_gamma_count_at(SpecUtils::Measurement *self,int index){
         return self->gamma_counts()->at(index-1);
+    }
+SWIGINTERN std::string SpecUtils_Measurement_get_description(SpecUtils::Measurement *self){
+        auto &remarks = self->remarks();
+        return SpecUtils::get_description(remarks);
+    }
+SWIGINTERN std::string SpecUtils_Measurement_get_source(SpecUtils::Measurement *self){
+        auto &remarks = self->remarks();
+        return SpecUtils::get_source(remarks);
     }
 SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int index){
         return self->measurement(static_cast<size_t>(index-1));
@@ -3103,6 +3111,46 @@ SWIGEXPORT float _wrap_Measurement_gamma_count_at(SwigClassWrapper *farg1, int c
   arg2 = (int)(*farg2);
   result = (float)SpecUtils_Measurement_gamma_count_at(arg1,arg2);
   fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigArrayWrapper _wrap_Measurement_get_description(SwigClassWrapper *farg1) {
+  SwigArrayWrapper fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  std::string result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = SpecUtils_Measurement_get_description(arg1);
+  fresult.size = (&result)->size();
+  if (fresult.size > 0) {
+    fresult.data = malloc(fresult.size);
+    memcpy(fresult.data, (&result)->c_str(), fresult.size);
+  } else {
+    fresult.data = NULL;
+  }
+  return fresult;
+}
+
+
+SWIGEXPORT SwigArrayWrapper _wrap_Measurement_get_source(SwigClassWrapper *farg1) {
+  SwigArrayWrapper fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  std::string result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = SpecUtils_Measurement_get_source(arg1);
+  fresult.size = (&result)->size();
+  if (fresult.size > 0) {
+    fresult.data = malloc(fresult.size);
+    memcpy(fresult.data, (&result)->c_str(), fresult.size);
+  } else {
+    fresult.data = NULL;
+  }
   return fresult;
 }
 

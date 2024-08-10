@@ -415,6 +415,8 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: rebin => swigf_Measurement_rebin
   procedure :: set_info_from_2006_N42_spectrum_node => swigf_Measurement_set_info_from_2006_N42_spectrum_node
   procedure :: gamma_count_at => swigf_Measurement_gamma_count_at
+  procedure :: get_description => swigf_Measurement_get_description
+  procedure :: get_source => swigf_Measurement_get_source
   procedure :: release => swigf_Measurement_release
   procedure, private :: swigf_Measurement_op_assign__
   generic :: assignment(=) => swigf_Measurement_op_assign__
@@ -2387,6 +2389,26 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 integer(C_INT), intent(in) :: farg2
 real(C_FLOAT) :: fresult
+end function
+
+function swigc_Measurement_get_description(farg1) &
+bind(C, name="_wrap_Measurement_get_description") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: fresult
+end function
+
+function swigc_Measurement_get_source(farg1) &
+bind(C, name="_wrap_Measurement_get_source") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: fresult
 end function
 
 subroutine swigc_delete_Measurement(farg1) &
@@ -7136,6 +7158,34 @@ farg1 = self%swigdata
 farg2 = index
 fresult = swigc_Measurement_gamma_count_at(farg1, farg2)
 swig_result = fresult
+end function
+
+function swigf_Measurement_get_description(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+character(len=:), allocatable :: swig_result
+class(Measurement), intent(in) :: self
+type(SwigArrayWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_get_description(farg1)
+call SWIGTM_fout_char_Sm_(fresult, swig_result)
+call SWIG_free(fresult%data)
+end function
+
+function swigf_Measurement_get_source(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+character(len=:), allocatable :: swig_result
+class(Measurement), intent(in) :: self
+type(SwigArrayWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_get_source(farg1)
+call SWIGTM_fout_char_Sm_(fresult, swig_result)
+call SWIG_free(fresult%data)
 end function
 
 subroutine swigf_Measurement_release(self)
