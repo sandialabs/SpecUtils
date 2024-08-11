@@ -800,8 +800,11 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     }
     
     // line color
-    ostr << "\n\t\t\t" << q << "lineColor" << q << ":" << q
-         << (options.line_color.size() ? options.line_color.c_str() : "black") << q << ",";
+    if( !options.line_color.empty() )
+    {
+      ostr << "\n\t\t\t" << q << "lineColor" << q << ":" << q
+      << (options.line_color.size() ? options.line_color.c_str() : "black") << q << ",";
+    }
     
     // peak color
     ostr << "\n\t\t\t" << q << "peakColor" << q << ":";
