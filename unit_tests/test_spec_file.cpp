@@ -58,8 +58,17 @@ TEST_CASE("Round Trip")
         m->set_real_time(100.0F);
 
         auto ecal = std::make_shared<SpecUtils::EnergyCalibration>();
-        auto coeffs = std::vector{4.41F, 3198.33F, 0.0F, 0.0F};
-        ecal->set_full_range_fraction(spectrum.size(), coeffs, {} );
+        auto coeffs = std::vector{4.41F, 3198.33F, 1.0F, 2.0F};
+
+        SpecUtils::DeviationPairs devPairs;
+        //auto 
+        for (size_t i = 0; i < 4; i++)
+        {
+            auto devPair = std::make_pair(i+10.0, i * -1.0F);
+            devPairs.push_back(devPair);
+        }
+        
+        ecal->set_full_range_fraction(spectrum.size(), coeffs, devPairs );
         m->set_energy_calibration(ecal);
 
         specfile.add_measurement(m);
@@ -90,6 +99,8 @@ TEST_CASE("Round Trip")
             
             auto newEcal = *actualM.energy_calibration();
             CHECK(newEcal.coefficients() == ecal->coefficients());
+
+            CHECK(expectedM.deviation_pairs() ==  actualM.deviation_pairs());
         }
     }
 
