@@ -35,7 +35,7 @@ TEST_CASE("Round Trip")
         auto m = std::make_shared<SpecUtils::Measurement>();
 
         const auto now_sys = std::chrono::system_clock::now();  
-        const auto now = std::chrono::time_point_cast<std::chrono::seconds>( now_sys );  
+        const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );  
 
         m->set_start_time(  now );
         m->set_title("Test Measurment");
@@ -84,9 +84,9 @@ TEST_CASE("Round Trip")
             auto &actualM = *(specfileToRead.measurements().at(0));
             CHECK(expectedM.title() == actualM.title());
 
-            //auto timesEqual = expectedM.start_time() == actualM.start_time();
-            auto timeStr1 = SpecUtils::to_iso_string(expectedM.start_time() );
-            auto timeStr2 = SpecUtils::to_iso_string(actualM.start_time() );
+            // times for PCFs should be compared as vax strings.
+            auto timeStr1 = SpecUtils::to_vax_string(expectedM.start_time() );
+            auto timeStr2 = SpecUtils::to_vax_string(actualM.start_time() );
             CHECK( timeStr1 == timeStr2);
 
             auto & expSpectrum = *expectedM.gamma_counts();
