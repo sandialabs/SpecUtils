@@ -1,7 +1,7 @@
 #include <SpecUtils/SpecFile.h>
 #include <SpecUtils/ParseUtils.h>
 #include <SpecUtils/EnergyCalibration.h>
-
+#include <SpecUtils/DateTime.h>
 #include <filesystem>
 namespace fs = std::filesystem;
 
@@ -37,7 +37,6 @@ TEST_CASE("Round Trip")
         const auto now_sys = std::chrono::system_clock::now();  
         const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );  
 
-        //SpecUtils::time_point_t now = SpecUtils::time_point_t::clock::now();
         m->set_start_time(  now );
         m->set_title("Test Measurment");
         auto remarks = m->remarks();
@@ -76,7 +75,10 @@ TEST_CASE("Round Trip")
             auto &actualM = *(specfileToRead.measurements().at(0));
             CHECK(expectedM.title() == actualM.title());
 
-            CHECK(now == actualM.start_time());
+            //auto timesEqual = expectedM.start_time() == actualM.start_time();
+            auto timeStr1 = SpecUtils::to_iso_string(expectedM.start_time() );
+            auto timeStr2 = SpecUtils::to_iso_string(actualM.start_time() );
+            CHECK( timeStr1 == timeStr2);
 
             auto & expSpectrum = *expectedM.gamma_counts();
             auto & actualSpectrum = *expectedM.gamma_counts();
