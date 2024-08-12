@@ -91,7 +91,11 @@ TEST_CASE("Round Trip")
 
             auto & expSpectrum = *expectedM.gamma_counts();
             auto & actualSpectrum = *expectedM.gamma_counts();
+            CHECK(actualSpectrum.at(100) > 0);
             CHECK(expSpectrum == actualSpectrum);
+
+            CHECK( actualM.neutron_counts().at(0) > 0 );
+            CHECK( actualM.neutron_counts() == expectedM.neutron_counts() );
 
             auto &rmarks = specfileToRead.remarks();
             CHECK( SpecUtils::get_description(remarks) == "test_descr" );
