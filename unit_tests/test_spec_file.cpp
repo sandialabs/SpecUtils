@@ -35,7 +35,7 @@ TEST_CASE("Round Trip")
         auto m = std::make_shared<SpecUtils::Measurement>();
 
         const auto now_sys = std::chrono::system_clock::now();  
-        const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );  
+        const auto now = std::chrono::time_point_cast<std::chrono::seconds>( now_sys );  
 
         m->set_start_time(  now );
         m->set_title("Test Measurment");
