@@ -574,9 +574,8 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     //  D3SpectrumDisplayDiv::m_cssRules) to the <defs> section of the new SVG.
     
     function getStyle( sel ){
-      let el = document.querySelector(sel);
-      if( !el ) return null;
-      return window.getComputedStyle( el );
+      const el = document.querySelector(sel);
+      return el ? window.getComputedStyle( el ) : null;
     };
     
     function getSvgFill( sel ){
@@ -589,9 +588,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       return null;
     };
     
-    function getCssRootVar(varname){
-      return getComputedStyle(document.documentElement).getPropertyValue(varname).trim();
-    };
+    function getStroke( sel ){ const s = getStyle(sel); return s && s.stroke ? s.stroke : null; }
     
     const domstyle = getStyle( '.Wt-domRoot' );
     let dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
@@ -607,26 +604,25 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     
     const svgstyle = getStyle('#' + this.chart.id + ' > svg');
     const svgback = svgstyle && svgstyle.background ? svgstyle.background : dombackground;
-    let chartAreaFill = getSvgFill('#chartarea' + this.chart.id);
-    let legStyle = getStyle( '.legend' );
-    let legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
-    let legColor = legStyle && legStyle.color ? legStyle.color : null;
+    const chartAreaFill = getSvgFill('#chartarea' + this.chart.id);
+    const legStyle = getStyle( '.legend' );
+    const legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
+    const legColor = legStyle && legStyle.color ? legStyle.color : null;
     
-    let legBackStyle = getStyle( '.legendBack' );
-    let legBackFill = legBackStyle && legBackStyle.fill ? legBackStyle.fill : null;
-    let legBackStroke = legBackStyle && legBackStyle.stroke ? legBackStyle.stroke : null;
+    const legBackStyle = getStyle( '.legendBack' );
+    const legBackFill = legBackStyle && legBackStyle.fill ? legBackStyle.fill : null;
+    const legBackStroke = getStroke( '.legendBack' );
     
-    let axisStyle = getStyle( '.xaxis' );
-    let axisFill = axisStyle && axisStyle.fill ? axisStyle.fill : null;
+    const axisStyle = getStyle( '.xaxis' );
+    const axisFill = axisStyle && axisStyle.fill ? axisStyle.fill : null;
     
-    let tickStyle = getStyle( '.xaxis > .tick > line' );
-    let tickStroke = tickStyle && tickStyle.stroke ? tickStyle.stroke : null;
+    const tickStroke = getStroke( '.xaxis > .tick > line' );
+    const gridTickStroke = getStroke( '.xgrid > .tick' );
+    const minorGridStroke = getStroke( '.minorgrid' );
     
-    let gridTickStyle = getStyle( '.xgrid > .tick' );
-    let gridTickStroke = gridTickStyle && gridTickStyle.stroke ? gridTickStyle.stroke : null;
-    
-    let minorGridStyle = getStyle( '.minorgrid' );
-    let minorGridStroke = minorGridStyle && minorGridStyle.stroke ? minorGridStyle.stroke : null;
+    const foreStroke = getStroke( 'path.speclinepath.FOREGROUND' );
+    const backStroke = getStroke( 'path.speclinepath.BACKGROUND' );
+    const secondStroke = getStroke( 'path.speclinepath.SECONDARY' );
     
     let svgDefs = '<defs><style type="text/css">\n'
     + 'svg{ background:' + (svgback ? svgback : 'rgb(255,255,255)') + ';}\n'
@@ -642,9 +638,9 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
     + '.speclinepath, .SpectrumLegendLine { fill: none; }'
-    + '.speclinepath.FOREGROUND, .SpectrumLegendLine.FOREGROUND { stroke: ' + getCssRootVar('--d3spec-fore-line-color').trim() + '}'
-    + '.speclinepath.BACKGROUND, .SpectrumLegendLine.BACKGROUND { stroke: ' + getCssRootVar('--d3spec-back-line-color').trim() + '}'
-    + '.speclinepath.SECONDARY, .SpectrumLegendLine.SECONDARY { stroke: ' + getCssRootVar('--d3spec-second-line-color').trim() + '}'
+    + (foreStroke ? '.speclinepath.FOREGROUND, .SpectrumLegendLine.FOREGROUND { stroke: ' + foreStroke + '}' : "")
+    + (backStroke ? '.speclinepath.BACKGROUND, .SpectrumLegendLine.BACKGROUND { stroke: ' + backStroke + '}' : "")
+    + (secondStroke ? '.speclinepath.SECONDARY, .SpectrumLegendLine.SECONDARY { stroke: ' + secondStroke + '}' : "")
     + '</style></defs>';
     
     // Hide mouse information, and slider chart
@@ -4482,7 +4478,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
                .attr( "rx", "5px")
                .attr( "ry", "5px");
     this.legBody = this.legend.append("g")
-                       .attr("transform","translate(8,17)");
+                       .attr("transform","translate(8,6)");
                        
     this.legendHeader = this.legend.append("g"); 
     this.legendHeader
@@ -4490,7 +4486,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
                .append('rect')
                .attr("class", "legendHeader")
                .attr('width', "100px")
-               .attr('height', "1.5em")
+               .attr('height', "20px")
                .attr( "rx", "5px")
                .attr( "ry", "5px")
                .style("cursor", "pointer");
@@ -4590,17 +4586,21 @@ SpectrumChartD3.prototype.updateLegend = function() {
     let thisentry = self.legBody.append("g")
         .attr("transform","translate(0," + ypos + ")");
       
+    let thistxt = thisentry.append("text")
+        .attr("class", "legentry");
+    
+    let titlenode = thistxt.append('svg:tspan')
+          .attr('x', "15")
+          .text( title );
+    const txtStart = 0.5*titlenode.node().getBBox().height;
+    titlenode.attr('y', txtStart);
+    
     thisentry.append("path")
         //.attr("id", "spectrum-legend-line-" + i)  // reference for when updating color
         .attr("class", "SpectrumLegendLine " + (spectrum.type ? " " + spectrum.type : "") )
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : null)
         .attr("stroke-width", self.options.spectrumLineWidth )
-        .attr("d", "M0,-5 L12,-5");
-      
-    let thistxt = thisentry.append("text")
-        .attr("class", "legentry")
-        .attr( "x", 15 )
-        .text(title);
+        .attr("d", "M0," + (txtStart - 1) + " L12," + (txtStart - 1) );
     
     let ltnode, lttxt, dttxt;
     if( typeof lt === "number" )
@@ -4608,20 +4608,20 @@ SpectrumChartD3.prototype.updateLegend = function() {
       lttxt = self.options.txt.liveTime + ": " + (sf*lt).toPrecision(4) + " s";
       ltnode = thistxt.append('svg:tspan')
         .attr('x', "20")
-        .attr('y', thisentry.node().getBBox().height)
+        .attr('y', txtStart + thisentry.node().getBBox().height)
         .text( lttxt );
     }
       
     if( typeof rt === "number" )
       thistxt.append('svg:tspan')
         .attr('x', "20")
-        .attr('y', thisentry.node().getBBox().height)
+        .attr('y', txtStart + thisentry.node().getBBox().height)
         .text( self.options.txt.realTime + ": " + (sf*rt).toPrecision(4) + " s");
           
     if( sf != 1 )
       thistxt.append('svg:tspan')
         .attr('x', "20")
-        .attr('y', thisentry.node().getBBox().height)
+        .attr('y', txtStart + thisentry.node().getBBox().height)
         .text( self.options.txt.scaledBy + " " + sf.toPrecision(4) );
       
     if( (typeof lt === "number") && (typeof rt === "number") && (rt > 0) && ltnode )
@@ -4658,7 +4658,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
         
       let neutspan = thistxt.append('svg:tspan')
               .attr('x', "20")
-              .attr('y', thisentry.node().getBBox().height)
+              .attr('y', txtStart + thisentry.node().getBBox().height)
               .text( self.options.txt.Neutrons + ": " + toLegendRateStr(neut,3) + (isCps ? " " + self.options.txt.cps : ""));
       
       //If we are displaying neutron CPS, and this is not a foreground, then lets add an easy way to compare this rate
@@ -4696,7 +4696,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
           
           thistxt.append('svg:tspan')
             .attr('x', "40")
-            .attr('y', thisentry.node().getBBox().height - 4)
+            .attr('y', txtStart + thisentry.node().getBBox().height - 4)
             .attr('style', 'font-size: 75%')
             .html( "(" + (isneg ? self.options.txt.foreNSigmaBelowBack : self.options.txt.foreNSigmaAboveBack).replace("{1}", toLegendRateStr(nsigma,1)) + ")" );
         }//if( we have foreground neutron CPS info )
@@ -4707,7 +4707,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       if( isCps ){
         thisentry.neutinfo = thistxt.append('svg:tspan')
           .attr('x', "40")
-          .attr('y', thisentry.node().getBBox().height - 5)
+          .attr('y', txtStart + thisentry.node().getBBox().height - 5)
           .attr('style', 'display: none')
           .text( toLegendRateStr(neutsum,3) + " " + self.options.txt.neutrons + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
       
