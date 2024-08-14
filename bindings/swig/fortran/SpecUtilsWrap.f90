@@ -348,7 +348,9 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
  contains
   procedure :: memmorysize => swigf_Measurement_memmorysize
   procedure :: live_time => swigf_Measurement_live_time
+  procedure :: set_live_time => swigf_Measurement_set_live_time
   procedure :: real_time => swigf_Measurement_real_time
+  procedure :: set_real_time => swigf_Measurement_set_real_time
   procedure :: contained_neutron => swigf_Measurement_contained_neutron
   procedure :: sample_number => swigf_Measurement_sample_number
   procedure :: title => swigf_Measurement_title
@@ -392,8 +394,8 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: set_occupancy_status => swigf_Measurement_set_occupancy_status
   procedure :: set_detector_name => swigf_Measurement_set_detector_name
   procedure :: set_detector_number => swigf_Measurement_set_detector_number
-  procedure :: set_gamma_counts => swigf_Measurement_set_gamma_counts
-  procedure :: set_neutron_counts => swigf_Measurement_set_neutron_counts
+  procedure, private :: swigf_Measurement_set_neutron_counts__SWIG_0
+  procedure, private :: swigf_Measurement_set_neutron_counts__SWIG_1
   procedure :: num_gamma_channels => swigf_Measurement_num_gamma_channels
   procedure :: find_gamma_channel => swigf_Measurement_find_gamma_channel
   procedure :: gamma_channel_content => swigf_Measurement_gamma_channel_content
@@ -417,9 +419,17 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: gamma_count_at => swigf_Measurement_gamma_count_at
   procedure :: get_description => swigf_Measurement_get_description
   procedure :: get_source => swigf_Measurement_get_source
+  procedure :: get_start_time_string => swigf_Measurement_get_start_time_string
+  procedure :: set_start_time_from_string => swigf_Measurement_set_start_time_from_string
+  procedure :: set_description => swigf_Measurement_set_description
+  procedure :: set_source => swigf_Measurement_set_source
+  procedure :: set_neutron_count => swigf_Measurement_set_neutron_count
+  procedure :: set_spectrum => swigf_Measurement_set_spectrum
+  procedure :: get_spectrum => swigf_Measurement_get_spectrum
   procedure :: release => swigf_Measurement_release
   procedure, private :: swigf_Measurement_op_assign__
   generic :: assignment(=) => swigf_Measurement_op_assign__
+  generic :: set_neutron_counts => swigf_Measurement_set_neutron_counts__SWIG_0, swigf_Measurement_set_neutron_counts__SWIG_1
  end type Measurement
  type, public :: SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2
   type(SwigClassWrapper), public :: swigdata
@@ -544,7 +554,8 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: set_detectors_analysis => swigf_SpecFile_set_detectors_analysis
   procedure :: change_detector_name => swigf_SpecFile_change_detector_name
   procedure :: change_sample_numbers => swigf_SpecFile_change_sample_numbers
-  procedure :: add_measurement => swigf_SpecFile_add_measurement
+  procedure, private :: swigf_SpecFile_add_measurement__SWIG_0
+  procedure, private :: swigf_SpecFile_add_measurement__SWIG_1
   procedure :: remove_measurement => swigf_SpecFile_remove_measurement
   procedure :: remove_measurements => swigf_SpecFile_remove_measurements
   procedure :: clear_multimedia_data => swigf_SpecFile_clear_multimedia_data
@@ -660,6 +671,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   generic :: write => swigf_SpecFile_write__SWIG_0, swigf_SpecFile_write__SWIG_1
   generic :: write_integer_chn => swigf_SpecFile_write_integer_chn__SWIG_0, swigf_SpecFile_write_integer_chn__SWIG_1
   generic :: cleanup_after_load => swigf_SpecFile_cleanup_after_load__SWIG_0, swigf_SpecFile_cleanup_after_load__SWIG_1
+  generic :: add_measurement => swigf_SpecFile_add_measurement__SWIG_0, swigf_SpecFile_add_measurement__SWIG_1
   generic :: assignment(=) => swigf_SpecFile_op_assign__
   generic :: set_remarks => swigf_SpecFile_set_remarks__SWIG_0, swigf_SpecFile_set_remarks__SWIG_1
   generic :: load_N42_from_data => swigf_SpecFile_load_N42_from_data__SWIG_0, swigf_SpecFile_load_N42_from_data__SWIG_1
@@ -763,40 +775,129 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_MultimediaData_op_assign__
   generic :: assignment(=) => swigf_MultimediaData_op_assign__
  end type MultimediaData
- interface MeasurementVector
-  module procedure swigf_new_MeasurementVector__SWIG_0, swigf_new_MeasurementVector__SWIG_1, &
-    swigf_new_MeasurementVector__SWIG_2, swigf_new_MeasurementVector__SWIG_3
+ ! struct std::pair< float,float >
+ type, public :: DevPair
+  type(SwigClassWrapper), public :: swigdata
+ contains
+  procedure :: set_first => swigf_DevPair_first_set
+  procedure :: get_first => swigf_DevPair_first_get
+  procedure :: set_second => swigf_DevPair_second_set
+  procedure :: get_second => swigf_DevPair_second_get
+  procedure :: release => swigf_DevPair_release
+  procedure, private :: swigf_DevPair_op_assign__
+  generic :: assignment(=) => swigf_DevPair_op_assign__
+ end type DevPair
+ ! enum class SpecUtils::EnergyCalType
+ enum, bind(c)
+  enumerator :: EnergyCalType_Polynomial
+  enumerator :: EnergyCalType_FullRangeFraction
+  enumerator :: EnergyCalType_LowerChannelEdge
+  enumerator :: EnergyCalType_UnspecifiedUsingDefaultPolynomial
+  enumerator :: EnergyCalType_InvalidEquationType
+ end enum
+ integer, parameter, public :: EnergyCalType = kind(EnergyCalType_Polynomial)
+ public :: EnergyCalType_Polynomial, EnergyCalType_FullRangeFraction, EnergyCalType_LowerChannelEdge, &
+    EnergyCalType_UnspecifiedUsingDefaultPolynomial, EnergyCalType_InvalidEquationType
+ ! struct SpecUtils::EnergyCalibration
+ type, public :: EnergyCalibration
+  type(SwigClassWrapper), public :: swigdata
+ contains
+  procedure :: type => swigf_EnergyCalibration_type
+  procedure :: valid => swigf_EnergyCalibration_valid
+  procedure :: coefficients => swigf_EnergyCalibration_coefficients
+  procedure :: deviation_pairs => swigf_EnergyCalibration_deviation_pairs
+  procedure :: channel_energies => swigf_EnergyCalibration_channel_energies
+  procedure :: num_channels => swigf_EnergyCalibration_num_channels
+  procedure :: set_polynomial => swigf_EnergyCalibration_set_polynomial
+  procedure :: set_default_polynomial => swigf_EnergyCalibration_set_default_polynomial
+  procedure :: set_full_range_fraction => swigf_EnergyCalibration_set_full_range_fraction
+  procedure, private :: swigf_EnergyCalibration_op_lt__
+  procedure, private :: swigf_EnergyCalibration_op_eq__
+  procedure, private :: swigf_EnergyCalibration_op_ne__
+  procedure :: memmorysize => swigf_EnergyCalibration_memmorysize
+  procedure :: channel_for_energy => swigf_EnergyCalibration_channel_for_energy
+  procedure :: energy_for_channel => swigf_EnergyCalibration_energy_for_channel
+  procedure :: lower_energy => swigf_EnergyCalibration_lower_energy
+  procedure :: upper_energy => swigf_EnergyCalibration_upper_energy
+  procedure, nopass :: get_sm_min_channels => swigf_EnergyCalibration_sm_min_channels_get
+  procedure, nopass :: get_sm_max_channels => swigf_EnergyCalibration_sm_max_channels_get
+  procedure, nopass :: get_sm_polynomial_offset_limit => swigf_EnergyCalibration_sm_polynomial_offset_limit_get
+  procedure :: release => swigf_EnergyCalibration_release
+  procedure, private :: swigf_EnergyCalibration_op_assign__
+  generic :: operator(.lt.) => swigf_EnergyCalibration_op_lt__
+  generic :: operator(.ne.) => swigf_EnergyCalibration_op_ne__
+  generic :: operator(.eq.) => swigf_EnergyCalibration_op_eq__
+  generic :: assignment(=) => swigf_EnergyCalibration_op_assign__
+ end type EnergyCalibration
+ type, public :: SWIGTYPE_p_std__shared_ptrT_SpecUtils__EnergyCalibration_t
+  type(SwigClassWrapper), public :: swigdata
+ end type
+ public :: energy_cal_combine_channels
+ public :: polynomial_binning
+ public :: fullrangefraction_energy
+ public :: polynomial_energy
+ public :: deviation_pair_correction
+ public :: correction_due_to_dev_pairs
+ public :: apply_deviation_pair
+ public :: polynomial_coef_to_fullrangefraction
+ public :: fullrangefraction_coef_to_polynomial
+ public :: mid_channel_polynomial_to_fullrangeFraction
+ public :: calibration_is_valid
+ public :: polynomial_cal_remove_first_channels
+ public :: rebin_by_lower_edge
+ public :: write_CALp_file
+ interface is_candidate_n42_file
+  module procedure swigf_is_candidate_n42_file__SWIG_0, swigf_is_candidate_n42_file__SWIG_1
+ end interface
+ public :: is_candidate_n42_file
+ interface IntVector
+  module procedure swigf_new_IntVector__SWIG_0, swigf_new_IntVector__SWIG_1, swigf_new_IntVector__SWIG_2, &
+    swigf_new_IntVector__SWIG_3
+ end interface
+ interface DevPair
+  module procedure swigf_new_DevPair__SWIG_0, swigf_new_DevPair__SWIG_1, swigf_new_DevPair__SWIG_2
  end interface
  interface DetectorAnalysisResult
   module procedure swigf_new_DetectorAnalysisResult
  end interface
- interface SpecFile
-  module procedure swigf_new_SpecFile__SWIG_0, swigf_new_SpecFile__SWIG_1
+ interface MeasurementVector
+  module procedure swigf_new_MeasurementVector__SWIG_0, swigf_new_MeasurementVector__SWIG_1, &
+    swigf_new_MeasurementVector__SWIG_2, swigf_new_MeasurementVector__SWIG_3
+ end interface
+ interface find_fullrangefraction_channel
+  module procedure swigf_find_fullrangefraction_channel__SWIG_0, swigf_find_fullrangefraction_channel__SWIG_1
+ end interface
+ public :: find_fullrangefraction_channel
+ interface FloatVector
+  module procedure swigf_new_FloatVector__SWIG_0, swigf_new_FloatVector__SWIG_1, swigf_new_FloatVector__SWIG_2, &
+    swigf_new_FloatVector__SWIG_3
+ end interface
+ interface DetectorAnalysis
+  module procedure swigf_new_DetectorAnalysis
  end interface
  interface DoubleVector
   module procedure swigf_new_DoubleVector__SWIG_0, swigf_new_DoubleVector__SWIG_1, swigf_new_DoubleVector__SWIG_2, &
     swigf_new_DoubleVector__SWIG_3
  end interface
- interface is_candidate_n42_file
-  module procedure swigf_is_candidate_n42_file__SWIG_0, swigf_is_candidate_n42_file__SWIG_1
+ interface EnergyCalibration
+  module procedure swigf_new_EnergyCalibration
  end interface
- public :: is_candidate_n42_file
+ interface SpecFile
+  module procedure swigf_new_SpecFile__SWIG_0, swigf_new_SpecFile__SWIG_1
+ end interface
+ interface fullrangefraction_binning
+  module procedure swigf_fullrangefraction_binning__SWIG_0, swigf_fullrangefraction_binning__SWIG_1
+ end interface
+ public :: fullrangefraction_binning
  interface Measurement
   module procedure swigf_new_Measurement
  end interface
+ interface find_polynomial_channel
+  module procedure swigf_find_polynomial_channel__SWIG_0, swigf_find_polynomial_channel__SWIG_1
+ end interface
+ public :: find_polynomial_channel
  interface MultimediaData
   module procedure swigf_new_MultimediaData
- end interface
- interface DetectorAnalysis
-  module procedure swigf_new_DetectorAnalysis
- end interface
- interface FloatVector
-  module procedure swigf_new_FloatVector__SWIG_0, swigf_new_FloatVector__SWIG_1, swigf_new_FloatVector__SWIG_2, &
-    swigf_new_FloatVector__SWIG_3
- end interface
- interface IntVector
-  module procedure swigf_new_IntVector__SWIG_0, swigf_new_IntVector__SWIG_1, swigf_new_IntVector__SWIG_2, &
-    swigf_new_IntVector__SWIG_3
  end interface
 
 ! WRAPPER DECLARATIONS
@@ -1780,6 +1881,14 @@ type(SwigClassWrapper), intent(in) :: farg1
 real(C_FLOAT) :: fresult
 end function
 
+subroutine swigc_Measurement_set_live_time(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_live_time")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
+
 function swigc_Measurement_real_time(farg1) &
 bind(C, name="_wrap_Measurement_real_time") &
 result(fresult)
@@ -1788,6 +1897,14 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 real(C_FLOAT) :: fresult
 end function
+
+subroutine swigc_Measurement_set_real_time(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_real_time")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
 
 function swigc_Measurement_contained_neutron(farg1) &
 bind(C, name="_wrap_Measurement_contained_neutron") &
@@ -2173,23 +2290,21 @@ type(SwigClassWrapper), intent(in) :: farg1
 integer(C_INT), intent(in) :: farg2
 end subroutine
 
-subroutine swigc_Measurement_set_gamma_counts(farg1, farg2, farg3, farg4) &
-bind(C, name="_wrap_Measurement_set_gamma_counts")
+subroutine swigc_Measurement_set_neutron_counts__SWIG_0(farg1, farg2, farg3) &
+bind(C, name="_wrap_Measurement_set_neutron_counts__SWIG_0")
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 real(C_FLOAT), intent(in) :: farg3
-real(C_FLOAT), intent(in) :: farg4
 end subroutine
 
-subroutine swigc_Measurement_set_neutron_counts(farg1, farg2, farg3) &
-bind(C, name="_wrap_Measurement_set_neutron_counts")
+subroutine swigc_Measurement_set_neutron_counts__SWIG_1(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_neutron_counts__SWIG_1")
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
-real(C_FLOAT), intent(in) :: farg3
 end subroutine
 
 function swigc_Measurement_num_gamma_channels(farg1) &
@@ -2410,6 +2525,69 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigArrayWrapper) :: fresult
 end function
+
+function swigc_Measurement_get_start_time_string(farg1) &
+bind(C, name="_wrap_Measurement_get_start_time_string") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: fresult
+end function
+
+subroutine swigc_Measurement_set_start_time_from_string(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_start_time_from_string")
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+end subroutine
+
+subroutine swigc_Measurement_set_description(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_description")
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+end subroutine
+
+subroutine swigc_Measurement_set_source(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_source")
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+end subroutine
+
+subroutine swigc_Measurement_set_neutron_count(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_neutron_count")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
+
+subroutine swigc_Measurement_set_spectrum(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_spectrum")
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+end subroutine
+
+subroutine swigc_Measurement_get_spectrum(farg1, farg2) &
+bind(C, name="_wrap_Measurement_get_spectrum")
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+end subroutine
 
 subroutine swigc_delete_Measurement(farg1) &
 bind(C, name="_wrap_delete_Measurement")
@@ -3030,13 +3208,21 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
-subroutine swigc_SpecFile_add_measurement(farg1, farg2, farg3) &
-bind(C, name="_wrap_SpecFile_add_measurement")
+subroutine swigc_SpecFile_add_measurement__SWIG_0(farg1, farg2, farg3) &
+bind(C, name="_wrap_SpecFile_add_measurement__SWIG_0")
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 integer(C_INT), intent(in) :: farg3
+end subroutine
+
+subroutine swigc_SpecFile_add_measurement__SWIG_1(farg1, farg2) &
+bind(C, name="_wrap_SpecFile_add_measurement__SWIG_1")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
 subroutine swigc_SpecFile_remove_measurement(farg1, farg2, farg3) &
@@ -4713,6 +4899,508 @@ type(SwigClassWrapper), intent(inout) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
+function swigc_new_DevPair__SWIG_0() &
+bind(C, name="_wrap_new_DevPair__SWIG_0") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_new_DevPair__SWIG_1(farg1, farg2) &
+bind(C, name="_wrap_new_DevPair__SWIG_1") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_FLOAT), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_new_DevPair__SWIG_2(farg1) &
+bind(C, name="_wrap_new_DevPair__SWIG_2") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
+subroutine swigc_DevPair_first_set(farg1, farg2) &
+bind(C, name="_wrap_DevPair_first_set")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
+
+function swigc_DevPair_first_get(farg1) &
+bind(C, name="_wrap_DevPair_first_get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT) :: fresult
+end function
+
+subroutine swigc_DevPair_second_set(farg1, farg2) &
+bind(C, name="_wrap_DevPair_second_set")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
+
+function swigc_DevPair_second_get(farg1) &
+bind(C, name="_wrap_DevPair_second_get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT) :: fresult
+end function
+
+subroutine swigc_delete_DevPair(farg1) &
+bind(C, name="_wrap_delete_DevPair")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(inout) :: farg1
+end subroutine
+
+subroutine swigc_DevPair_op_assign__(farg1, farg2) &
+bind(C, name="_wrap_DevPair_op_assign__")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(inout) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+end subroutine
+
+function swigc_EnergyCalibration_type(farg1) &
+bind(C, name="_wrap_EnergyCalibration_type") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_INT) :: fresult
+end function
+
+function swigc_EnergyCalibration_valid(farg1) &
+bind(C, name="_wrap_EnergyCalibration_valid") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_INT) :: fresult
+end function
+
+function swigc_EnergyCalibration_coefficients(farg1) &
+bind(C, name="_wrap_EnergyCalibration_coefficients") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_EnergyCalibration_deviation_pairs(farg1) &
+bind(C, name="_wrap_EnergyCalibration_deviation_pairs") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_EnergyCalibration_channel_energies(farg1) &
+bind(C, name="_wrap_EnergyCalibration_channel_energies") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_EnergyCalibration_num_channels(farg1) &
+bind(C, name="_wrap_EnergyCalibration_num_channels") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T) :: fresult
+end function
+
+function swigc_new_EnergyCalibration() &
+bind(C, name="_wrap_new_EnergyCalibration") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper) :: fresult
+end function
+
+subroutine swigc_EnergyCalibration_set_polynomial(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_EnergyCalibration_set_polynomial")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+end subroutine
+
+subroutine swigc_EnergyCalibration_set_default_polynomial(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_EnergyCalibration_set_default_polynomial")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+end subroutine
+
+subroutine swigc_EnergyCalibration_set_full_range_fraction(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_EnergyCalibration_set_full_range_fraction")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+end subroutine
+
+function swigc_EnergyCalibration_op_lt__(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibration_op_lt__") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_INT) :: fresult
+end function
+
+function swigc_EnergyCalibration_op_eq__(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibration_op_eq__") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_INT) :: fresult
+end function
+
+function swigc_EnergyCalibration_op_ne__(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibration_op_ne__") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_INT) :: fresult
+end function
+
+function swigc_EnergyCalibration_memmorysize(farg1) &
+bind(C, name="_wrap_EnergyCalibration_memmorysize") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T) :: fresult
+end function
+
+function swigc_EnergyCalibration_channel_for_energy(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibration_channel_for_energy") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_DOUBLE), intent(in) :: farg2
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_EnergyCalibration_energy_for_channel(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibration_energy_for_channel") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_DOUBLE), intent(in) :: farg2
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_EnergyCalibration_lower_energy(farg1) &
+bind(C, name="_wrap_EnergyCalibration_lower_energy") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT) :: fresult
+end function
+
+function swigc_EnergyCalibration_upper_energy(farg1) &
+bind(C, name="_wrap_EnergyCalibration_upper_energy") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT) :: fresult
+end function
+
+function swigc_EnergyCalibration_sm_min_channels_get() &
+bind(C, name="_wrap_EnergyCalibration_sm_min_channels_get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+integer(C_SIZE_T) :: fresult
+end function
+
+function swigc_EnergyCalibration_sm_max_channels_get() &
+bind(C, name="_wrap_EnergyCalibration_sm_max_channels_get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+integer(C_SIZE_T) :: fresult
+end function
+
+function swigc_EnergyCalibration_sm_polynomial_offset_limit_get() &
+bind(C, name="_wrap_EnergyCalibration_sm_polynomial_offset_limit_get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: fresult
+end function
+
+subroutine swigc_delete_EnergyCalibration(farg1) &
+bind(C, name="_wrap_delete_EnergyCalibration")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(inout) :: farg1
+end subroutine
+
+subroutine swigc_EnergyCalibration_op_assign__(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibration_op_assign__")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(inout) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+end subroutine
+
+function swigc_energy_cal_combine_channels(farg1, farg2) &
+bind(C, name="_wrap_energy_cal_combine_channels") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_polynomial_binning(farg1, farg2, farg3) &
+bind(C, name="_wrap_polynomial_binning") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_fullrangefraction_binning__SWIG_0(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_fullrangefraction_binning__SWIG_0") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+integer(C_INT), intent(in) :: farg4
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_fullrangefraction_binning__SWIG_1(farg1, farg2, farg3) &
+bind(C, name="_wrap_fullrangefraction_binning__SWIG_1") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_fullrangefraction_energy(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_fullrangefraction_energy") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_SIZE_T), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_polynomial_energy(farg1, farg2, farg3) &
+bind(C, name="_wrap_polynomial_energy") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_deviation_pair_correction(farg1, farg2) &
+bind(C, name="_wrap_deviation_pair_correction") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_correction_due_to_dev_pairs(farg1, farg2) &
+bind(C, name="_wrap_correction_due_to_dev_pairs") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_apply_deviation_pair(farg1, farg2) &
+bind(C, name="_wrap_apply_deviation_pair") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_polynomial_coef_to_fullrangefraction(farg1, farg2) &
+bind(C, name="_wrap_polynomial_coef_to_fullrangefraction") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_fullrangefraction_coef_to_polynomial(farg1, farg2) &
+bind(C, name="_wrap_fullrangefraction_coef_to_polynomial") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_mid_channel_polynomial_to_fullrangeFraction(farg1, farg2) &
+bind(C, name="_wrap_mid_channel_polynomial_to_fullrangeFraction") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_SIZE_T), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_calibration_is_valid(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_calibration_is_valid") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+integer(C_INT), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+integer(C_SIZE_T), intent(in) :: farg4
+integer(C_INT) :: fresult
+end function
+
+function swigc_polynomial_cal_remove_first_channels(farg1, farg2) &
+bind(C, name="_wrap_polynomial_cal_remove_first_channels") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+integer(C_INT), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_find_fullrangefraction_channel__SWIG_0(farg1, farg2, farg3, farg4, farg5) &
+bind(C, name="_wrap_find_fullrangefraction_channel__SWIG_0") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_SIZE_T), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+real(C_DOUBLE), intent(in) :: farg5
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_find_fullrangefraction_channel__SWIG_1(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_find_fullrangefraction_channel__SWIG_1") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_SIZE_T), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_find_polynomial_channel__SWIG_0(farg1, farg2, farg3, farg4, farg5) &
+bind(C, name="_wrap_find_polynomial_channel__SWIG_0") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_SIZE_T), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+real(C_DOUBLE), intent(in) :: farg5
+real(C_DOUBLE) :: fresult
+end function
+
+function swigc_find_polynomial_channel__SWIG_1(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_find_polynomial_channel__SWIG_1") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+real(C_DOUBLE), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_SIZE_T), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+real(C_DOUBLE) :: fresult
+end function
+
+subroutine swigc_rebin_by_lower_edge(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_rebin_by_lower_edge")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+end subroutine
+
+function swigc_write_CALp_file(farg1, farg2, farg3) &
+bind(C, name="_wrap_write_CALp_file") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+type(SwigArrayWrapper) :: farg3
+integer(C_INT) :: fresult
+end function
+
 end interface
 
 
@@ -6245,6 +6933,18 @@ fresult = swigc_Measurement_live_time(farg1)
 swig_result = fresult
 end function
 
+subroutine swigf_Measurement_set_live_time(self, time)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), intent(in) :: time
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = time
+call swigc_Measurement_set_live_time(farg1, farg2)
+end subroutine
+
 function swigf_Measurement_real_time(self) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -6257,6 +6957,18 @@ farg1 = self%swigdata
 fresult = swigc_Measurement_real_time(farg1)
 swig_result = fresult
 end function
+
+subroutine swigf_Measurement_set_real_time(self, time)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), intent(in) :: time
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = time
+call swigc_Measurement_set_real_time(farg1, farg2)
+end subroutine
 
 function swigf_Measurement_contained_neutron(self) &
 result(swig_result)
@@ -6818,25 +7530,7 @@ farg2 = detnum
 call swigc_Measurement_set_detector_number(farg1, farg2)
 end subroutine
 
-subroutine swigf_Measurement_set_gamma_counts(self, counts, livetime, realtime)
-use, intrinsic :: ISO_C_BINDING
-class(Measurement), intent(in) :: self
-class(FloatVector), intent(in) :: counts
-real(C_FLOAT), intent(in) :: livetime
-real(C_FLOAT), intent(in) :: realtime
-type(SwigClassWrapper) :: farg1 
-type(SwigClassWrapper) :: farg2 
-real(C_FLOAT) :: farg3 
-real(C_FLOAT) :: farg4 
-
-farg1 = self%swigdata
-farg2 = counts%swigdata
-farg3 = livetime
-farg4 = realtime
-call swigc_Measurement_set_gamma_counts(farg1, farg2, farg3, farg4)
-end subroutine
-
-subroutine swigf_Measurement_set_neutron_counts(self, counts, neutron_live_time)
+subroutine swigf_Measurement_set_neutron_counts__SWIG_0(self, counts, neutron_live_time)
 use, intrinsic :: ISO_C_BINDING
 class(Measurement), intent(in) :: self
 class(FloatVector), intent(in) :: counts
@@ -6848,7 +7542,19 @@ real(C_FLOAT) :: farg3
 farg1 = self%swigdata
 farg2 = counts%swigdata
 farg3 = neutron_live_time
-call swigc_Measurement_set_neutron_counts(farg1, farg2, farg3)
+call swigc_Measurement_set_neutron_counts__SWIG_0(farg1, farg2, farg3)
+end subroutine
+
+subroutine swigf_Measurement_set_neutron_counts__SWIG_1(self, counts)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+class(FloatVector), intent(in) :: counts
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = counts%swigdata
+call swigc_Measurement_set_neutron_counts__SWIG_1(farg1, farg2)
 end subroutine
 
 function swigf_Measurement_num_gamma_channels(self) &
@@ -7187,6 +7893,111 @@ fresult = swigc_Measurement_get_source(farg1)
 call SWIGTM_fout_char_Sm_(fresult, swig_result)
 call SWIG_free(fresult%data)
 end function
+
+function swigf_Measurement_get_start_time_string(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+character(len=:), allocatable :: swig_result
+class(Measurement), intent(in) :: self
+type(SwigArrayWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_get_start_time_string(farg1)
+call SWIGTM_fout_char_Sm_(fresult, swig_result)
+call SWIG_free(fresult%data)
+end function
+
+subroutine swigf_Measurement_set_start_time_from_string(self, time_str)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+character(len=*), intent(in) :: time_str
+type(SwigClassWrapper) :: farg1 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg2_temp 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_char_Sm_(time_str, farg2, farg2_temp)
+call swigc_Measurement_set_start_time_from_string(farg1, farg2)
+end subroutine
+
+subroutine swigf_Measurement_set_description(self, description)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+character(len=*), intent(in) :: description
+type(SwigClassWrapper) :: farg1 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg2_temp 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_char_Sm_(description, farg2, farg2_temp)
+call swigc_Measurement_set_description(farg1, farg2)
+end subroutine
+
+subroutine swigf_Measurement_set_source(self, source)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+character(len=*), intent(in) :: source
+type(SwigClassWrapper) :: farg1 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg2_temp 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_char_Sm_(source, farg2, farg2_temp)
+call swigc_Measurement_set_source(farg1, farg2)
+end subroutine
+
+subroutine swigf_Measurement_set_neutron_count(self, count)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), intent(in) :: count
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = count
+call swigc_Measurement_set_neutron_count(farg1, farg2)
+end subroutine
+
+subroutine SWIGTM_fin_float_Sb__SB_(finp, iminp)
+  use, intrinsic :: ISO_C_BINDING
+  real(C_FLOAT), dimension(:), intent(in), target :: finp
+  type(SwigArrayWrapper), intent(out) :: iminp
+  integer(C_SIZE_T) :: sz
+  real(C_FLOAT), pointer :: imtemp
+
+  sz = size(finp, kind=C_SIZE_T)
+  if (sz > 0_c_size_t) then
+    imtemp => finp(1)
+    iminp%data = c_loc(imtemp)
+  else
+    iminp%data = c_null_ptr
+  end if
+  iminp%size = sz
+end subroutine
+subroutine swigf_Measurement_set_spectrum(self, spectrum)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), dimension(:), target :: spectrum
+type(SwigClassWrapper) :: farg1 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_float_Sb__SB_(spectrum, farg2)
+call swigc_Measurement_set_spectrum(farg1, farg2)
+end subroutine
+
+subroutine swigf_Measurement_get_spectrum(self, spectrum)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), dimension(:), target :: spectrum
+type(SwigClassWrapper) :: farg1 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_float_Sb__SB_(spectrum, farg2)
+call swigc_Measurement_get_spectrum(farg1, farg2)
+end subroutine
 
 subroutine swigf_Measurement_release(self)
 use, intrinsic :: ISO_C_BINDING
@@ -8132,7 +8943,7 @@ farg2 = from_to_sample_nums%swigdata
 call swigc_SpecFile_change_sample_numbers(farg1, farg2)
 end subroutine
 
-subroutine swigf_SpecFile_add_measurement(self, meas, docleanup)
+subroutine swigf_SpecFile_add_measurement__SWIG_0(self, meas, docleanup)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
 class(Measurement), intent(in) :: meas
@@ -8144,7 +8955,19 @@ integer(C_INT) :: farg3
 farg1 = self%swigdata
 farg2 = meas%swigdata
 call SWIGTM_fin_bool(docleanup, farg3)
-call swigc_SpecFile_add_measurement(farg1, farg2, farg3)
+call swigc_SpecFile_add_measurement__SWIG_0(farg1, farg2, farg3)
+end subroutine
+
+subroutine swigf_SpecFile_add_measurement__SWIG_1(self, meas)
+use, intrinsic :: ISO_C_BINDING
+class(SpecFile), intent(in) :: self
+class(Measurement), intent(in) :: meas
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = meas%swigdata
+call swigc_SpecFile_add_measurement__SWIG_1(farg1, farg2)
 end subroutine
 
 subroutine swigf_SpecFile_remove_measurement(self, meas, docleanup)
@@ -10745,6 +11568,823 @@ farg2 = other%swigdata
 call swigc_MultimediaData_op_assign__(farg1, farg2)
 self%swigdata = farg1
 end subroutine
+
+function swigf_new_DevPair__SWIG_0() &
+result(self)
+use, intrinsic :: ISO_C_BINDING
+type(DevPair) :: self
+type(SwigClassWrapper) :: fresult 
+
+fresult = swigc_new_DevPair__SWIG_0()
+self%swigdata = fresult
+end function
+
+function swigf_new_DevPair__SWIG_1(first, second) &
+result(self)
+use, intrinsic :: ISO_C_BINDING
+type(DevPair) :: self
+real(C_FLOAT), intent(in) :: first
+real(C_FLOAT), intent(in) :: second
+type(SwigClassWrapper) :: fresult 
+real(C_FLOAT) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = first
+farg2 = second
+fresult = swigc_new_DevPair__SWIG_1(farg1, farg2)
+self%swigdata = fresult
+end function
+
+function swigf_new_DevPair__SWIG_2(p) &
+result(self)
+use, intrinsic :: ISO_C_BINDING
+type(DevPair) :: self
+class(DevPair), intent(in) :: p
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = p%swigdata
+fresult = swigc_new_DevPair__SWIG_2(farg1)
+self%swigdata = fresult
+end function
+
+subroutine swigf_DevPair_first_set(self, first)
+use, intrinsic :: ISO_C_BINDING
+class(DevPair), intent(in) :: self
+real(C_FLOAT), intent(in) :: first
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = first
+call swigc_DevPair_first_set(farg1, farg2)
+end subroutine
+
+function swigf_DevPair_first_get(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(DevPair), intent(in) :: self
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_DevPair_first_get(farg1)
+swig_result = fresult
+end function
+
+subroutine swigf_DevPair_second_set(self, second)
+use, intrinsic :: ISO_C_BINDING
+class(DevPair), intent(in) :: self
+real(C_FLOAT), intent(in) :: second
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = second
+call swigc_DevPair_second_set(farg1, farg2)
+end subroutine
+
+function swigf_DevPair_second_get(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(DevPair), intent(in) :: self
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_DevPair_second_get(farg1)
+swig_result = fresult
+end function
+
+subroutine swigf_DevPair_release(self)
+use, intrinsic :: ISO_C_BINDING
+class(DevPair), intent(inout) :: self
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+if (btest(farg1%cmemflags, swig_cmem_own_bit)) then
+call swigc_delete_DevPair(farg1)
+endif
+farg1%cptr = C_NULL_PTR
+farg1%cmemflags = 0
+self%swigdata = farg1
+end subroutine
+
+subroutine swigf_DevPair_op_assign__(self, other)
+use, intrinsic :: ISO_C_BINDING
+class(DevPair), intent(inout) :: self
+type(DevPair), intent(in) :: other
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = other%swigdata
+call swigc_DevPair_op_assign__(farg1, farg2)
+self%swigdata = farg1
+end subroutine
+
+function swigf_EnergyCalibration_type(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+integer(EnergyCalType) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_type(farg1)
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_valid(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(EnergyCalibration), intent(in) :: self
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_valid(farg1)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function swigf_EnergyCalibration_coefficients(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_coefficients(farg1)
+swig_result%swigdata = fresult
+end function
+
+function swigf_EnergyCalibration_deviation_pairs(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_deviation_pairs(farg1)
+swig_result%swigdata = fresult
+end function
+
+function swigf_EnergyCalibration_channel_energies(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_channel_energies(farg1)
+swig_result%swigdata = fresult
+end function
+
+function swigf_EnergyCalibration_num_channels(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+integer(C_SIZE_T) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+integer(C_SIZE_T) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_num_channels(farg1)
+swig_result = fresult
+end function
+
+function swigf_new_EnergyCalibration() &
+result(self)
+use, intrinsic :: ISO_C_BINDING
+type(EnergyCalibration) :: self
+type(SwigClassWrapper) :: fresult 
+
+fresult = swigc_new_EnergyCalibration()
+self%swigdata = fresult
+end function
+
+subroutine swigf_EnergyCalibration_set_polynomial(self, num_channels, coeffs, dev_pairs)
+use, intrinsic :: ISO_C_BINDING
+class(EnergyCalibration), intent(in) :: self
+integer(C_SIZE_T), intent(in) :: num_channels
+class(FloatVector), intent(in) :: coeffs
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+type(SwigClassWrapper) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = self%swigdata
+farg2 = num_channels
+farg3 = coeffs%swigdata
+farg4 = dev_pairs%swigdata
+call swigc_EnergyCalibration_set_polynomial(farg1, farg2, farg3, farg4)
+end subroutine
+
+subroutine swigf_EnergyCalibration_set_default_polynomial(self, num_channels, coeffs, dev_pairs)
+use, intrinsic :: ISO_C_BINDING
+class(EnergyCalibration), intent(in) :: self
+integer(C_SIZE_T), intent(in) :: num_channels
+class(FloatVector), intent(in) :: coeffs
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+type(SwigClassWrapper) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = self%swigdata
+farg2 = num_channels
+farg3 = coeffs%swigdata
+farg4 = dev_pairs%swigdata
+call swigc_EnergyCalibration_set_default_polynomial(farg1, farg2, farg3, farg4)
+end subroutine
+
+subroutine swigf_EnergyCalibration_set_full_range_fraction(self, num_channels, coeffs, dev_pairs)
+use, intrinsic :: ISO_C_BINDING
+class(EnergyCalibration), intent(in) :: self
+integer(C_SIZE_T), intent(in) :: num_channels
+class(FloatVector), intent(in) :: coeffs
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+type(SwigClassWrapper) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = self%swigdata
+farg2 = num_channels
+farg3 = coeffs%swigdata
+farg4 = dev_pairs%swigdata
+call swigc_EnergyCalibration_set_full_range_fraction(farg1, farg2, farg3, farg4)
+end subroutine
+
+function swigf_EnergyCalibration_op_lt__(self, rhs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(EnergyCalibration), intent(in) :: self
+class(EnergyCalibration), intent(in) :: rhs
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = rhs%swigdata
+fresult = swigc_EnergyCalibration_op_lt__(farg1, farg2)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function swigf_EnergyCalibration_op_eq__(self, rhs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(EnergyCalibration), intent(in) :: self
+class(EnergyCalibration), intent(in) :: rhs
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = rhs%swigdata
+fresult = swigc_EnergyCalibration_op_eq__(farg1, farg2)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function swigf_EnergyCalibration_op_ne__(self, rhs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(EnergyCalibration), intent(in) :: self
+class(EnergyCalibration), intent(in) :: rhs
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = rhs%swigdata
+fresult = swigc_EnergyCalibration_op_ne__(farg1, farg2)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function swigf_EnergyCalibration_memmorysize(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+integer(C_SIZE_T) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+integer(C_SIZE_T) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_memmorysize(farg1)
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_channel_for_energy(self, energy) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+real(C_DOUBLE), intent(in) :: energy
+real(C_DOUBLE) :: fresult 
+type(SwigClassWrapper) :: farg1 
+real(C_DOUBLE) :: farg2 
+
+farg1 = self%swigdata
+farg2 = energy
+fresult = swigc_EnergyCalibration_channel_for_energy(farg1, farg2)
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_energy_for_channel(self, channel) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+real(C_DOUBLE), intent(in) :: channel
+real(C_DOUBLE) :: fresult 
+type(SwigClassWrapper) :: farg1 
+real(C_DOUBLE) :: farg2 
+
+farg1 = self%swigdata
+farg2 = channel
+fresult = swigc_EnergyCalibration_energy_for_channel(farg1, farg2)
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_lower_energy(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_lower_energy(farg1)
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_upper_energy(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_upper_energy(farg1)
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_sm_min_channels_get() &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+integer(C_SIZE_T) :: swig_result
+integer(C_SIZE_T) :: fresult 
+
+fresult = swigc_EnergyCalibration_sm_min_channels_get()
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_sm_max_channels_get() &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+integer(C_SIZE_T) :: swig_result
+integer(C_SIZE_T) :: fresult 
+
+fresult = swigc_EnergyCalibration_sm_max_channels_get()
+swig_result = fresult
+end function
+
+function swigf_EnergyCalibration_sm_polynomial_offset_limit_get() &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+real(C_FLOAT) :: fresult 
+
+fresult = swigc_EnergyCalibration_sm_polynomial_offset_limit_get()
+swig_result = fresult
+end function
+
+subroutine swigf_EnergyCalibration_release(self)
+use, intrinsic :: ISO_C_BINDING
+class(EnergyCalibration), intent(inout) :: self
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+if (btest(farg1%cmemflags, swig_cmem_own_bit)) then
+call swigc_delete_EnergyCalibration(farg1)
+endif
+farg1%cptr = C_NULL_PTR
+farg1%cmemflags = 0
+self%swigdata = farg1
+end subroutine
+
+subroutine swigf_EnergyCalibration_op_assign__(self, other)
+use, intrinsic :: ISO_C_BINDING
+class(EnergyCalibration), intent(inout) :: self
+type(EnergyCalibration), intent(in) :: other
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = other%swigdata
+call swigc_EnergyCalibration_op_assign__(farg1, farg2)
+self%swigdata = farg1
+end subroutine
+
+function energy_cal_combine_channels(orig_cal, num_channel_combine) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(SWIGTYPE_p_std__shared_ptrT_SpecUtils__EnergyCalibration_t) :: swig_result
+class(EnergyCalibration), intent(in) :: orig_cal
+integer(C_SIZE_T), intent(in) :: num_channel_combine
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+
+farg1 = orig_cal%swigdata
+farg2 = num_channel_combine
+fresult = swigc_energy_cal_combine_channels(farg1, farg2)
+swig_result%swigdata = fresult
+end function
+
+function polynomial_binning(coeffs, nchannel, deviation_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+type(SwigClassWrapper) :: farg3 
+
+farg1 = coeffs%swigdata
+farg2 = nchannel
+farg3 = deviation_pairs%swigdata
+fresult = swigc_polynomial_binning(farg1, farg2, farg3)
+swig_result%swigdata = fresult
+end function
+
+function swigf_fullrangefraction_binning__SWIG_0(coeffs, nchannel, dev_pairs, include_upper_energy) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+logical, intent(in) :: include_upper_energy
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+type(SwigClassWrapper) :: farg3 
+integer(C_INT) :: farg4 
+
+farg1 = coeffs%swigdata
+farg2 = nchannel
+farg3 = dev_pairs%swigdata
+call SWIGTM_fin_bool(include_upper_energy, farg4)
+fresult = swigc_fullrangefraction_binning__SWIG_0(farg1, farg2, farg3, farg4)
+swig_result%swigdata = fresult
+end function
+
+function swigf_fullrangefraction_binning__SWIG_1(coeffs, nchannel, dev_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+type(SwigClassWrapper) :: farg3 
+
+farg1 = coeffs%swigdata
+farg2 = nchannel
+farg3 = dev_pairs%swigdata
+fresult = swigc_fullrangefraction_binning__SWIG_1(farg1, farg2, farg3)
+swig_result%swigdata = fresult
+end function
+
+function fullrangefraction_energy(channel_number, coeffs, nchannel, deviation_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: channel_number
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+integer(C_SIZE_T) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = channel_number
+farg2 = coeffs%swigdata
+farg3 = nchannel
+farg4 = deviation_pairs%swigdata
+fresult = swigc_fullrangefraction_energy(farg1, farg2, farg3, farg4)
+swig_result = fresult
+end function
+
+function polynomial_energy(channel_number, coeffs, deviation_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: channel_number
+class(FloatVector), intent(in) :: coeffs
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+type(SwigClassWrapper) :: farg3 
+
+farg1 = channel_number
+farg2 = coeffs%swigdata
+farg3 = deviation_pairs%swigdata
+fresult = swigc_polynomial_energy(farg1, farg2, farg3)
+swig_result = fresult
+end function
+
+function deviation_pair_correction(polynomial_energy0, dev_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: polynomial_energy0
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = polynomial_energy0
+farg2 = dev_pairs%swigdata
+fresult = swigc_deviation_pair_correction(farg1, farg2)
+swig_result = fresult
+end function
+
+function correction_due_to_dev_pairs(true_energy, dev_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: true_energy
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = true_energy
+farg2 = dev_pairs%swigdata
+fresult = swigc_correction_due_to_dev_pairs(farg1, farg2)
+swig_result = fresult
+end function
+
+function apply_deviation_pair(binning, dev_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: binning
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: dev_pairs
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = binning%swigdata
+farg2 = dev_pairs%swigdata
+fresult = swigc_apply_deviation_pair(farg1, farg2)
+swig_result%swigdata = fresult
+end function
+
+function polynomial_coef_to_fullrangefraction(coeffs, nchannel) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+
+farg1 = coeffs%swigdata
+farg2 = nchannel
+fresult = swigc_polynomial_coef_to_fullrangefraction(farg1, farg2)
+swig_result%swigdata = fresult
+end function
+
+function fullrangefraction_coef_to_polynomial(coeffs, nchannel) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+
+farg1 = coeffs%swigdata
+farg2 = nchannel
+fresult = swigc_fullrangefraction_coef_to_polynomial(farg1, farg2)
+swig_result%swigdata = fresult
+end function
+
+function mid_channel_polynomial_to_fullrangeFraction(coeffs, nchannel) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+integer(C_SIZE_T) :: farg2 
+
+farg1 = coeffs%swigdata
+farg2 = nchannel
+fresult = swigc_mid_channel_polynomial_to_fullrangeFraction(farg1, farg2)
+swig_result%swigdata = fresult
+end function
+
+function calibration_is_valid(type, eqn, devpairs, nbin) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+integer(EnergyCalType), intent(in) :: type
+class(FloatVector), intent(in) :: eqn
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: devpairs
+integer(C_SIZE_T), intent(in) :: nbin
+integer(C_INT) :: fresult 
+integer(C_INT) :: farg1 
+type(SwigClassWrapper) :: farg2 
+type(SwigClassWrapper) :: farg3 
+integer(C_SIZE_T) :: farg4 
+
+farg1 = type
+farg2 = eqn%swigdata
+farg3 = devpairs%swigdata
+farg4 = nbin
+fresult = swigc_calibration_is_valid(farg1, farg2, farg3, farg4)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function polynomial_cal_remove_first_channels(num_channels_remove, orig_coefs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+integer(C_INT), intent(in) :: num_channels_remove
+class(FloatVector), intent(in) :: orig_coefs
+type(SwigClassWrapper) :: fresult 
+integer(C_INT) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = num_channels_remove
+farg2 = orig_coefs%swigdata
+fresult = swigc_polynomial_cal_remove_first_channels(farg1, farg2)
+swig_result%swigdata = fresult
+end function
+
+function swigf_find_fullrangefraction_channel__SWIG_0(energy, coeffs, nchannel, deviation_pairs, accuracy) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: energy
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+real(C_DOUBLE), intent(in) :: accuracy
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+integer(C_SIZE_T) :: farg3 
+type(SwigClassWrapper) :: farg4 
+real(C_DOUBLE) :: farg5 
+
+farg1 = energy
+farg2 = coeffs%swigdata
+farg3 = nchannel
+farg4 = deviation_pairs%swigdata
+farg5 = accuracy
+fresult = swigc_find_fullrangefraction_channel__SWIG_0(farg1, farg2, farg3, farg4, farg5)
+swig_result = fresult
+end function
+
+function swigf_find_fullrangefraction_channel__SWIG_1(energy, coeffs, nchannel, deviation_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: energy
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+integer(C_SIZE_T) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = energy
+farg2 = coeffs%swigdata
+farg3 = nchannel
+farg4 = deviation_pairs%swigdata
+fresult = swigc_find_fullrangefraction_channel__SWIG_1(farg1, farg2, farg3, farg4)
+swig_result = fresult
+end function
+
+function swigf_find_polynomial_channel__SWIG_0(energy, coeffs, nchannel, deviation_pairs, accuracy) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: energy
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+real(C_DOUBLE), intent(in) :: accuracy
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+integer(C_SIZE_T) :: farg3 
+type(SwigClassWrapper) :: farg4 
+real(C_DOUBLE) :: farg5 
+
+farg1 = energy
+farg2 = coeffs%swigdata
+farg3 = nchannel
+farg4 = deviation_pairs%swigdata
+farg5 = accuracy
+fresult = swigc_find_polynomial_channel__SWIG_0(farg1, farg2, farg3, farg4, farg5)
+swig_result = fresult
+end function
+
+function swigf_find_polynomial_channel__SWIG_1(energy, coeffs, nchannel, deviation_pairs) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_DOUBLE) :: swig_result
+real(C_DOUBLE), intent(in) :: energy
+class(FloatVector), intent(in) :: coeffs
+integer(C_SIZE_T), intent(in) :: nchannel
+class(SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t), intent(in) :: deviation_pairs
+real(C_DOUBLE) :: fresult 
+real(C_DOUBLE) :: farg1 
+type(SwigClassWrapper) :: farg2 
+integer(C_SIZE_T) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = energy
+farg2 = coeffs%swigdata
+farg3 = nchannel
+farg4 = deviation_pairs%swigdata
+fresult = swigc_find_polynomial_channel__SWIG_1(farg1, farg2, farg3, farg4)
+swig_result = fresult
+end function
+
+subroutine rebin_by_lower_edge(original_energies, original_counts, new_energies, resulting_counts)
+use, intrinsic :: ISO_C_BINDING
+class(FloatVector), intent(in) :: original_energies
+class(FloatVector), intent(in) :: original_counts
+class(FloatVector), intent(in) :: new_energies
+class(FloatVector), intent(in) :: resulting_counts
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+type(SwigClassWrapper) :: farg3 
+type(SwigClassWrapper) :: farg4 
+
+farg1 = original_energies%swigdata
+farg2 = original_counts%swigdata
+farg3 = new_energies%swigdata
+farg4 = resulting_counts%swigdata
+call swigc_rebin_by_lower_edge(farg1, farg2, farg3, farg4)
+end subroutine
+
+function write_CALp_file(output, cal, detector_name) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(SWIGTYPE_p_std__ostream), intent(in) :: output
+class(SWIGTYPE_p_std__shared_ptrT_SpecUtils__EnergyCalibration_cYBZ7Z), intent(in) :: cal
+character(len=*), intent(in) :: detector_name
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg3_temp 
+type(SwigArrayWrapper) :: farg3 
+
+farg1 = output%swigdata
+farg2 = cal%swigdata
+call SWIGTM_fin_char_Sm_(detector_name, farg3, farg3_temp)
+fresult = swigc_write_CALp_file(farg1, farg2, farg3)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
 
 
 end module

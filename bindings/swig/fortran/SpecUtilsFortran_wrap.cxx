@@ -227,6 +227,8 @@ enum AssignmentType {
 #define SWIGPOLICY_SpecUtils_DetectorAnalysisResult swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_SpecUtils_DetectorAnalysis swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_SpecUtils_MultimediaData swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_std_pair_Sl__Sp_float_Sc_float_SP__Sg_ swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_SpecUtils_EnergyCalibration swig::ASSIGNMENT_DEFAULT
 
 #ifdef __cplusplus
 #include <utility>
@@ -294,6 +296,9 @@ template <typename T> T SwigValueInit() {
 
 #include <SpecUtils/SpecFile.h>
 #include <SpecUtils/ParseUtils.h>
+#include <SpecUtils/EnergyCalibration.h>
+#include <SpecUtils/DateTime.h>
+#include <SpecUtils/StringAlgo.h>
 
 
 #include <utility>
@@ -669,6 +674,60 @@ SWIGINTERN std::string SpecUtils_Measurement_get_description(SpecUtils::Measurem
 SWIGINTERN std::string SpecUtils_Measurement_get_source(SpecUtils::Measurement *self){
         auto &remarks = self->remarks();
         return SpecUtils::get_source(remarks);
+    }
+SWIGINTERN std::string SpecUtils_Measurement_get_start_time_string(SpecUtils::Measurement *self){
+        auto timeStr = SpecUtils::to_vax_string( self->start_time() );
+        return timeStr;
+    }
+SWIGINTERN void SpecUtils_Measurement_set_start_time_from_string(SpecUtils::Measurement *self,std::string time_str){
+        auto tp = SpecUtils::time_from_string(time_str);
+        self->set_start_time(tp);
+    }
+SWIGINTERN void SpecUtils_Measurement_set_description(SpecUtils::Measurement *self,std::string description){
+        auto remarks = self->remarks();
+
+        // If there is already a description, remove it first.
+        auto it = remarks.begin();
+        for(; it != remarks.end(); ) {
+            if(SpecUtils::istarts_with(*it, "Description:"))
+                it = remarks.erase(it);
+            it++;
+        }
+        remarks.push_back( "Description: " + description );
+        self->set_remarks(remarks);
+    }
+SWIGINTERN void SpecUtils_Measurement_set_source(SpecUtils::Measurement *self,std::string source){
+        auto remarks = self->remarks();
+
+        // If there is already a source, remove it first.
+        auto it = remarks.begin();
+        for(; it != remarks.end(); ) {
+            if(SpecUtils::istarts_with(*it, "source:"))
+                it = remarks.erase(it);
+            it++;
+        }
+        remarks.push_back( "Source: " + source );
+        self->set_remarks(remarks);
+    }
+SWIGINTERN void SpecUtils_Measurement_set_neutron_count(SpecUtils::Measurement *self,float count){
+        SpecUtils::FloatVec ncounts{count};
+        self->set_neutron_counts(ncounts, 0.0F);
+    }
+SWIGINTERN void SpecUtils_Measurement_set_spectrum(SpecUtils::Measurement *self,float const *spectrum,size_t num_channels){
+        SpecUtils::FloatVec counts;
+        for (size_t i = 0; i < num_channels; i++)
+        {
+            counts.push_back(spectrum[i]);
+        }
+        
+        self->set_gamma_counts(counts); 
+    }
+SWIGINTERN void SpecUtils_Measurement_get_spectrum(SpecUtils::Measurement *self,float *spectrum,size_t num_channels){
+        auto & counts = *self->gamma_counts();
+        for (size_t i = 0 ; i < num_channels  ; i++)
+        {
+            spectrum[i] = counts.at(i);
+        }        
     }
 SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int index){
         return self->measurement(static_cast<size_t>(index-1));
@@ -2108,6 +2167,18 @@ SWIGEXPORT float _wrap_Measurement_live_time(SwigClassWrapper *farg1) {
 }
 
 
+SWIGEXPORT void _wrap_Measurement_set_live_time(SwigClassWrapper *farg1, float const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float)(*farg2);
+  (arg1)->set_live_time(arg2);
+}
+
+
 SWIGEXPORT float _wrap_Measurement_real_time(SwigClassWrapper *farg1) {
   float fresult ;
   SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
@@ -2119,6 +2190,18 @@ SWIGEXPORT float _wrap_Measurement_real_time(SwigClassWrapper *farg1) {
   result = (float)((SpecUtils::Measurement const *)arg1)->real_time();
   fresult = (float)(result);
   return fresult;
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_real_time(SwigClassWrapper *farg1, float const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float)(*farg2);
+  (arg1)->set_real_time(arg2);
 }
 
 
@@ -2750,23 +2833,7 @@ SWIGEXPORT void _wrap_Measurement_set_detector_number(SwigClassWrapper *farg1, i
 }
 
 
-SWIGEXPORT void _wrap_Measurement_set_gamma_counts(SwigClassWrapper *farg1, SwigClassWrapper const *farg2, float const *farg3, float const *farg4) {
-  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
-  std::shared_ptr< std::vector< float > const > arg2 ;
-  float arg3 ;
-  float arg4 ;
-  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
-  
-  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
-  if (farg2->cptr) arg2 = *static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr);
-  arg3 = (float)(*farg3);
-  arg4 = (float)(*farg4);
-  (arg1)->set_gamma_counts(arg2,arg3,arg4);
-}
-
-
-SWIGEXPORT void _wrap_Measurement_set_neutron_counts(SwigClassWrapper *farg1, SwigClassWrapper *farg2, float const *farg3) {
+SWIGEXPORT void _wrap_Measurement_set_neutron_counts__SWIG_0(SwigClassWrapper *farg1, SwigClassWrapper *farg2, float const *farg3) {
   SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
   std::vector< float > *arg2 = 0 ;
   float arg3 ;
@@ -2778,6 +2845,19 @@ SWIGEXPORT void _wrap_Measurement_set_neutron_counts(SwigClassWrapper *farg1, Sw
   arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
   arg3 = (float)(*farg3);
   (arg1)->set_neutron_counts((std::vector< float > const &)*arg2,arg3);
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_neutron_counts__SWIG_1(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::vector< float > *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::Measurement::set_neutron_counts(std::vector< float > const &)", return )
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  (arg1)->set_neutron_counts((std::vector< float > const &)*arg2);
 }
 
 
@@ -3152,6 +3232,102 @@ SWIGEXPORT SwigArrayWrapper _wrap_Measurement_get_source(SwigClassWrapper *farg1
     fresult.data = NULL;
   }
   return fresult;
+}
+
+
+SWIGEXPORT SwigArrayWrapper _wrap_Measurement_get_start_time_string(SwigClassWrapper *farg1) {
+  SwigArrayWrapper fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  std::string result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = SpecUtils_Measurement_get_start_time_string(arg1);
+  fresult.size = (&result)->size();
+  if (fresult.size > 0) {
+    fresult.data = malloc(fresult.size);
+    memcpy(fresult.data, (&result)->c_str(), fresult.size);
+  } else {
+    fresult.data = NULL;
+  }
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_start_time_from_string(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::string arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  (&arg2)->assign(static_cast<char *>(farg2->data), farg2->size);
+  SpecUtils_Measurement_set_start_time_from_string(arg1,SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_description(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::string arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  (&arg2)->assign(static_cast<char *>(farg2->data), farg2->size);
+  SpecUtils_Measurement_set_description(arg1,SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_source(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::string arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  (&arg2)->assign(static_cast<char *>(farg2->data), farg2->size);
+  SpecUtils_Measurement_set_source(arg1,SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_neutron_count(SwigClassWrapper *farg1, float const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float)(*farg2);
+  SpecUtils_Measurement_set_neutron_count(arg1,arg2);
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_spectrum(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float *arg2 = (float *) 0 ;
+  size_t arg3 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float *)farg2->data;
+  arg3 = farg2->size;
+  SpecUtils_Measurement_set_spectrum(arg1,(float const *)arg2,SWIG_STD_MOVE(arg3));
+}
+
+
+SWIGEXPORT void _wrap_Measurement_get_spectrum(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float *arg2 = (float *) 0 ;
+  size_t arg3 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float *)farg2->data;
+  arg3 = farg2->size;
+  SpecUtils_Measurement_get_spectrum(arg1,arg2,SWIG_STD_MOVE(arg3));
 }
 
 
@@ -4112,7 +4288,7 @@ SWIGEXPORT void _wrap_SpecFile_change_sample_numbers(SwigClassWrapper *farg1, Sw
 }
 
 
-SWIGEXPORT void _wrap_SpecFile_add_measurement(SwigClassWrapper *farg1, SwigClassWrapper const *farg2, int const *farg3) {
+SWIGEXPORT void _wrap_SpecFile_add_measurement__SWIG_0(SwigClassWrapper *farg1, SwigClassWrapper const *farg2, int const *farg3) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::shared_ptr< SpecUtils::Measurement > arg2 ;
   bool arg3 ;
@@ -4122,6 +4298,17 @@ SWIGEXPORT void _wrap_SpecFile_add_measurement(SwigClassWrapper *farg1, SwigClas
   if (farg2->cptr) arg2 = *static_cast<std::shared_ptr< SpecUtils::Measurement >*>(farg2->cptr);
   arg3 = (*farg3 ? true : false);
   (arg1)->add_measurement(arg2,arg3);
+}
+
+
+SWIGEXPORT void _wrap_SpecFile_add_measurement__SWIG_1(SwigClassWrapper *farg1, SwigClassWrapper const *farg2) {
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > arg2 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::add_measurement(std::shared_ptr< SpecUtils::Measurement >)", return );
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  if (farg2->cptr) arg2 = *static_cast<std::shared_ptr< SpecUtils::Measurement >*>(farg2->cptr);
+  (arg1)->add_measurement(arg2);
 }
 
 
@@ -6751,6 +6938,790 @@ SWIGEXPORT void _wrap_MultimediaData_op_assign__(SwigClassWrapper *farg1, SwigCl
   (void)sizeof(arg2);
   SWIG_assign<SpecUtils::MultimediaData, SWIGPOLICY_SpecUtils_MultimediaData>(farg1, *farg2);
   
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_new_DevPair__SWIG_0() {
+  SwigClassWrapper fresult ;
+  std::pair< float,float > *result = 0 ;
+  
+  result = (std::pair< float,float > *)new std::pair< float,float >();
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_new_DevPair__SWIG_1(float const *farg1, float const *farg2) {
+  SwigClassWrapper fresult ;
+  float arg1 ;
+  float arg2 ;
+  std::pair< float,float > *result = 0 ;
+  
+  arg1 = (float)(*farg1);
+  arg2 = (float)(*farg2);
+  result = (std::pair< float,float > *)new std::pair< float,float >(arg1,arg2);
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_new_DevPair__SWIG_2(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  std::pair< float,float > *arg1 = 0 ;
+  std::pair< float,float > *result = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "std::pair< float,float > const &", "DevPair", "std::pair< float,float >::pair(std::pair< float,float > const &)", return SwigClassWrapper_uninitialized());
+  arg1 = (std::pair< float,float > *)farg1->cptr;
+  result = (std::pair< float,float > *)new std::pair< float,float >((std::pair< float,float > const &)*arg1);
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_DevPair_first_set(SwigClassWrapper *farg1, float const *farg2) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float arg2 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "std::pair< float,float > *", "DevPair", "std::pair< float,float >::first", return );
+  arg1 = (std::pair< float,float > *)farg1->cptr;
+  arg2 = (float)(*farg2);
+  if (arg1) (arg1)->first = arg2;
+}
+
+
+SWIGEXPORT float _wrap_DevPair_first_get(SwigClassWrapper *farg1) {
+  float fresult ;
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float result;
+  
+  SWIG_check_nonnull(farg1->cptr, "std::pair< float,float > *", "DevPair", "std::pair< float,float >::first", return 0);
+  arg1 = (std::pair< float,float > *)farg1->cptr;
+  result = (float) ((arg1)->first);
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_DevPair_second_set(SwigClassWrapper *farg1, float const *farg2) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float arg2 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "std::pair< float,float > *", "DevPair", "std::pair< float,float >::second", return );
+  arg1 = (std::pair< float,float > *)farg1->cptr;
+  arg2 = (float)(*farg2);
+  if (arg1) (arg1)->second = arg2;
+}
+
+
+SWIGEXPORT float _wrap_DevPair_second_get(SwigClassWrapper *farg1) {
+  float fresult ;
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float result;
+  
+  SWIG_check_nonnull(farg1->cptr, "std::pair< float,float > *", "DevPair", "std::pair< float,float >::second", return 0);
+  arg1 = (std::pair< float,float > *)farg1->cptr;
+  result = (float) ((arg1)->second);
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_delete_DevPair(SwigClassWrapper *farg1) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  
+  arg1 = (std::pair< float,float > *)farg1->cptr;
+  delete arg1;
+}
+
+
+SWIGEXPORT void _wrap_DevPair_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  std::pair< float,float > *arg2 = 0 ;
+  
+  (void)sizeof(arg1);
+  (void)sizeof(arg2);
+  SWIG_assign<std::pair< float,float >, SWIGPOLICY_std_pair_Sl__Sp_float_Sc_float_SP__Sg_>(farg1, *farg2);
+  
+}
+
+
+SWIGEXPORT int _wrap_EnergyCalibration_type(SwigClassWrapper *farg1) {
+  int fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  SpecUtils::EnergyCalType result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::type() const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (SpecUtils::EnergyCalType)((SpecUtils::EnergyCalibration const *)arg1)->type();
+  fresult = (int)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_EnergyCalibration_valid(SwigClassWrapper *farg1) {
+  int fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::valid() const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (bool)((SpecUtils::EnergyCalibration const *)arg1)->valid();
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibration_coefficients(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::vector< float > *result = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::coefficients() const", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (std::vector< float > *) &((SpecUtils::EnergyCalibration const *)arg1)->coefficients();
+  {
+    fresult.cptr = new std::shared_ptr<const std::vector<float> >(result SWIG_NO_NULL_DELETER_0);
+    fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  }
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibration_deviation_pairs(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::deviation_pairs() const", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (std::vector< std::pair< float,float > > *) &((SpecUtils::EnergyCalibration const *)arg1)->deviation_pairs();
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibration_channel_energies(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::shared_ptr< std::vector< float > const > *result = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::channel_energies() const", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (std::shared_ptr< std::vector< float > const > *) &((SpecUtils::EnergyCalibration const *)arg1)->channel_energies();
+  fresult.cptr = *result ? (new std::shared_ptr<const std::vector<float> >(static_cast< const std::shared_ptr<const std::vector<float> >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT size_t _wrap_EnergyCalibration_num_channels(SwigClassWrapper *farg1) {
+  size_t fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  size_t result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::num_channels() const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = ((SpecUtils::EnergyCalibration const *)arg1)->num_channels();
+  fresult = (size_t)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_new_EnergyCalibration() {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *result = 0 ;
+  
+  result = (SpecUtils::EnergyCalibration *)new SpecUtils::EnergyCalibration();
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_set_polynomial(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  size_t arg2 ;
+  std::vector< float > *arg3 = 0 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration *", "EnergyCalibration", "SpecUtils::EnergyCalibration::set_polynomial(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return );
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  arg2 = (size_t)(*farg2);
+  SWIG_check_sp_nonnull(farg3->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::EnergyCalibration::set_polynomial(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return )
+  arg3 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg3->cptr)->get();
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::EnergyCalibration::set_polynomial(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return );
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  (arg1)->set_polynomial(arg2,(std::vector< float > const &)*arg3,(std::vector< std::pair< float,float > > const &)*arg4);
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_set_default_polynomial(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  size_t arg2 ;
+  std::vector< float > *arg3 = 0 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration *", "EnergyCalibration", "SpecUtils::EnergyCalibration::set_default_polynomial(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return );
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  arg2 = (size_t)(*farg2);
+  SWIG_check_sp_nonnull(farg3->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::EnergyCalibration::set_default_polynomial(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return )
+  arg3 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg3->cptr)->get();
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::EnergyCalibration::set_default_polynomial(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return );
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  (arg1)->set_default_polynomial(arg2,(std::vector< float > const &)*arg3,(std::vector< std::pair< float,float > > const &)*arg4);
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_set_full_range_fraction(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  size_t arg2 ;
+  std::vector< float > *arg3 = 0 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration *", "EnergyCalibration", "SpecUtils::EnergyCalibration::set_full_range_fraction(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return );
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  arg2 = (size_t)(*farg2);
+  SWIG_check_sp_nonnull(farg3->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::EnergyCalibration::set_full_range_fraction(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return )
+  arg3 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg3->cptr)->get();
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::EnergyCalibration::set_full_range_fraction(size_t const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return );
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  (arg1)->set_full_range_fraction(arg2,(std::vector< float > const &)*arg3,(std::vector< std::pair< float,float > > const &)*arg4);
+}
+
+
+SWIGEXPORT int _wrap_EnergyCalibration_op_lt__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  int fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  SpecUtils::EnergyCalibration *arg2 = 0 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::operator <(SpecUtils::EnergyCalibration const &) const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  SWIG_check_nonnull(farg2->cptr, "SpecUtils::EnergyCalibration const &", "EnergyCalibration", "SpecUtils::EnergyCalibration::operator <(SpecUtils::EnergyCalibration const &) const", return 0);
+  arg2 = (SpecUtils::EnergyCalibration *)farg2->cptr;
+  result = (bool)((SpecUtils::EnergyCalibration const *)arg1)->operator <((SpecUtils::EnergyCalibration const &)*arg2);
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_EnergyCalibration_op_eq__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  int fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  SpecUtils::EnergyCalibration *arg2 = 0 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::operator ==(SpecUtils::EnergyCalibration const &) const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  SWIG_check_nonnull(farg2->cptr, "SpecUtils::EnergyCalibration const &", "EnergyCalibration", "SpecUtils::EnergyCalibration::operator ==(SpecUtils::EnergyCalibration const &) const", return 0);
+  arg2 = (SpecUtils::EnergyCalibration *)farg2->cptr;
+  result = (bool)((SpecUtils::EnergyCalibration const *)arg1)->operator ==((SpecUtils::EnergyCalibration const &)*arg2);
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_EnergyCalibration_op_ne__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  int fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  SpecUtils::EnergyCalibration *arg2 = 0 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::operator !=(SpecUtils::EnergyCalibration const &) const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  SWIG_check_nonnull(farg2->cptr, "SpecUtils::EnergyCalibration const &", "EnergyCalibration", "SpecUtils::EnergyCalibration::operator !=(SpecUtils::EnergyCalibration const &) const", return 0);
+  arg2 = (SpecUtils::EnergyCalibration *)farg2->cptr;
+  result = (bool)((SpecUtils::EnergyCalibration const *)arg1)->operator !=((SpecUtils::EnergyCalibration const &)*arg2);
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT size_t _wrap_EnergyCalibration_memmorysize(SwigClassWrapper *farg1) {
+  size_t fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  size_t result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::memmorysize() const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = ((SpecUtils::EnergyCalibration const *)arg1)->memmorysize();
+  fresult = (size_t)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_EnergyCalibration_channel_for_energy(SwigClassWrapper *farg1, double const *farg2) {
+  double fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  double arg2 ;
+  double result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::channel_for_energy(double const) const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  arg2 = (double)(*farg2);
+  result = (double)((SpecUtils::EnergyCalibration const *)arg1)->channel_for_energy(arg2);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_EnergyCalibration_energy_for_channel(SwigClassWrapper *farg1, double const *farg2) {
+  double fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  double arg2 ;
+  double result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::energy_for_channel(double const) const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  arg2 = (double)(*farg2);
+  result = (double)((SpecUtils::EnergyCalibration const *)arg1)->energy_for_channel(arg2);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT float _wrap_EnergyCalibration_lower_energy(SwigClassWrapper *farg1) {
+  float fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  float result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::lower_energy() const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (float)((SpecUtils::EnergyCalibration const *)arg1)->lower_energy();
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT float _wrap_EnergyCalibration_upper_energy(SwigClassWrapper *farg1) {
+  float fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  float result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const *", "EnergyCalibration", "SpecUtils::EnergyCalibration::upper_energy() const", return 0);
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  result = (float)((SpecUtils::EnergyCalibration const *)arg1)->upper_energy();
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT size_t _wrap_EnergyCalibration_sm_min_channels_get() {
+  size_t fresult ;
+  size_t result;
+  
+  result = (size_t)SpecUtils::EnergyCalibration::sm_min_channels;
+  fresult = (size_t)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT size_t _wrap_EnergyCalibration_sm_max_channels_get() {
+  size_t fresult ;
+  size_t result;
+  
+  result = (size_t)SpecUtils::EnergyCalibration::sm_max_channels;
+  fresult = (size_t)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT float _wrap_EnergyCalibration_sm_polynomial_offset_limit_get() {
+  float fresult ;
+  float result;
+  
+  result = (float)(float)SpecUtils::EnergyCalibration::sm_polynomial_offset_limit;
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_delete_EnergyCalibration(SwigClassWrapper *farg1) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  delete arg1;
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  SpecUtils::EnergyCalibration *arg2 = 0 ;
+  
+  (void)sizeof(arg1);
+  (void)sizeof(arg2);
+  SWIG_assign<SpecUtils::EnergyCalibration, SWIGPOLICY_SpecUtils_EnergyCalibration>(farg1, *farg2);
+  
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_energy_cal_combine_channels(SwigClassWrapper *farg1, size_t const *farg2) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = 0 ;
+  size_t arg2 ;
+  SwigValueWrapper< std::shared_ptr< SpecUtils::EnergyCalibration > > result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::EnergyCalibration const &", "EnergyCalibration", "SpecUtils::energy_cal_combine_channels(SpecUtils::EnergyCalibration const &,size_t const)", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::EnergyCalibration *)farg1->cptr;
+  arg2 = (size_t)(*farg2);
+  result = SpecUtils::energy_cal_combine_channels((SpecUtils::EnergyCalibration const &)*arg1,SWIG_STD_MOVE(arg2));
+  fresult.cptr = new (std::shared_ptr< SpecUtils::EnergyCalibration >)(result);
+  fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_polynomial_binning(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  size_t arg2 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  std::shared_ptr< std::vector< float > const > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::polynomial_binning(std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  arg2 = (size_t)(*farg2);
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::polynomial_binning(std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return SwigClassWrapper_uninitialized());
+  arg3 = (std::vector< std::pair< float,float > > *)farg3->cptr;
+  result = SpecUtils::polynomial_binning((std::vector< float > const &)*arg1,SWIG_STD_MOVE(arg2),(std::vector< std::pair< float,float > > const &)*arg3);
+  fresult.cptr = result ? (new std::shared_ptr<const std::vector<float> >(static_cast< const std::shared_ptr<const std::vector<float> >& >(result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_fullrangefraction_binning__SWIG_0(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3, int const *farg4) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  size_t arg2 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  bool arg4 ;
+  std::shared_ptr< std::vector< float > const > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::fullrangefraction_binning(std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &,bool const)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  arg2 = (size_t)(*farg2);
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::fullrangefraction_binning(std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &,bool const)", return SwigClassWrapper_uninitialized());
+  arg3 = (std::vector< std::pair< float,float > > *)farg3->cptr;
+  arg4 = (*farg4 ? true : false);
+  result = SpecUtils::fullrangefraction_binning((std::vector< float > const &)*arg1,SWIG_STD_MOVE(arg2),(std::vector< std::pair< float,float > > const &)*arg3,arg4);
+  fresult.cptr = result ? (new std::shared_ptr<const std::vector<float> >(static_cast< const std::shared_ptr<const std::vector<float> >& >(result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_fullrangefraction_binning__SWIG_1(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  size_t arg2 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  std::shared_ptr< std::vector< float > const > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::fullrangefraction_binning(std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  arg2 = (size_t)(*farg2);
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::fullrangefraction_binning(std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return SwigClassWrapper_uninitialized());
+  arg3 = (std::vector< std::pair< float,float > > *)farg3->cptr;
+  result = SpecUtils::fullrangefraction_binning((std::vector< float > const &)*arg1,SWIG_STD_MOVE(arg2),(std::vector< std::pair< float,float > > const &)*arg3);
+  fresult.cptr = result ? (new std::shared_ptr<const std::vector<float> >(static_cast< const std::shared_ptr<const std::vector<float> >& >(result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_fullrangefraction_energy(double const *farg1, SwigClassWrapper *farg2, size_t const *farg3, SwigClassWrapper *farg4) {
+  double fresult ;
+  double arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  size_t arg3 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::fullrangefraction_energy(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  arg3 = (size_t)(*farg3);
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::fullrangefraction_energy(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return 0);
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  result = (double)SpecUtils::fullrangefraction_energy(arg1,(std::vector< float > const &)*arg2,SWIG_STD_MOVE(arg3),(std::vector< std::pair< float,float > > const &)*arg4);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_polynomial_energy(double const *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3) {
+  double fresult ;
+  double arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::polynomial_energy(double const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::polynomial_energy(double const,std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return 0);
+  arg3 = (std::vector< std::pair< float,float > > *)farg3->cptr;
+  result = (double)SpecUtils::polynomial_energy(arg1,(std::vector< float > const &)*arg2,(std::vector< std::pair< float,float > > const &)*arg3);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_deviation_pair_correction(double const *farg1, SwigClassWrapper *farg2) {
+  double fresult ;
+  double arg1 ;
+  std::vector< std::pair< float,float > > *arg2 = 0 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_nonnull(farg2->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::deviation_pair_correction(double const,std::vector< std::pair< float,float > > const &)", return 0);
+  arg2 = (std::vector< std::pair< float,float > > *)farg2->cptr;
+  result = (double)SpecUtils::deviation_pair_correction(arg1,(std::vector< std::pair< float,float > > const &)*arg2);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_correction_due_to_dev_pairs(double const *farg1, SwigClassWrapper *farg2) {
+  double fresult ;
+  double arg1 ;
+  std::vector< std::pair< float,float > > *arg2 = 0 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_nonnull(farg2->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::correction_due_to_dev_pairs(double const,std::vector< std::pair< float,float > > const &)", return 0);
+  arg2 = (std::vector< std::pair< float,float > > *)farg2->cptr;
+  result = (double)SpecUtils::correction_due_to_dev_pairs(arg1,(std::vector< std::pair< float,float > > const &)*arg2);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_apply_deviation_pair(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  std::vector< std::pair< float,float > > *arg2 = 0 ;
+  std::shared_ptr< std::vector< float > const > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::apply_deviation_pair(std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  SWIG_check_nonnull(farg2->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::apply_deviation_pair(std::vector< float > const &,std::vector< std::pair< float,float > > const &)", return SwigClassWrapper_uninitialized());
+  arg2 = (std::vector< std::pair< float,float > > *)farg2->cptr;
+  result = SpecUtils::apply_deviation_pair((std::vector< float > const &)*arg1,(std::vector< std::pair< float,float > > const &)*arg2);
+  fresult.cptr = result ? (new std::shared_ptr<const std::vector<float> >(static_cast< const std::shared_ptr<const std::vector<float> >& >(result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_polynomial_coef_to_fullrangefraction(SwigClassWrapper *farg1, size_t const *farg2) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  size_t arg2 ;
+  std::vector< float > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::polynomial_coef_to_fullrangefraction(std::vector< float > const &,size_t const)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  arg2 = (size_t)(*farg2);
+  result = SpecUtils::polynomial_coef_to_fullrangefraction((std::vector< float > const &)*arg1,SWIG_STD_MOVE(arg2));
+  fresult.cptr = new std::shared_ptr< std::vector<float> >((new std::vector< float >(static_cast< const std::vector< float >& >(result))));
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_fullrangefraction_coef_to_polynomial(SwigClassWrapper *farg1, size_t const *farg2) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  size_t arg2 ;
+  std::vector< float > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::fullrangefraction_coef_to_polynomial(std::vector< float > const &,size_t const)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  arg2 = (size_t)(*farg2);
+  result = SpecUtils::fullrangefraction_coef_to_polynomial((std::vector< float > const &)*arg1,SWIG_STD_MOVE(arg2));
+  fresult.cptr = new std::shared_ptr< std::vector<float> >((new std::vector< float >(static_cast< const std::vector< float >& >(result))));
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_mid_channel_polynomial_to_fullrangeFraction(SwigClassWrapper *farg1, size_t const *farg2) {
+  SwigClassWrapper fresult ;
+  std::vector< float > *arg1 = 0 ;
+  size_t arg2 ;
+  std::vector< float > result;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::mid_channel_polynomial_to_fullrangeFraction(std::vector< float > const &,size_t const)", return SwigClassWrapper_uninitialized())
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  arg2 = (size_t)(*farg2);
+  result = SpecUtils::mid_channel_polynomial_to_fullrangeFraction((std::vector< float > const &)*arg1,SWIG_STD_MOVE(arg2));
+  fresult.cptr = new std::shared_ptr< std::vector<float> >((new std::vector< float >(static_cast< const std::vector< float >& >(result))));
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_calibration_is_valid(int const *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3, size_t const *farg4) {
+  int fresult ;
+  SpecUtils::EnergyCalType arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  size_t arg4 ;
+  bool result;
+  
+  arg1 = (SpecUtils::EnergyCalType)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::calibration_is_valid(SpecUtils::EnergyCalType const,std::vector< float > const &,std::vector< std::pair< float,float > > const &,size_t)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::calibration_is_valid(SpecUtils::EnergyCalType const,std::vector< float > const &,std::vector< std::pair< float,float > > const &,size_t)", return 0);
+  arg3 = (std::vector< std::pair< float,float > > *)farg3->cptr;
+  arg4 = (size_t)(*farg4);
+  result = (bool)SpecUtils::calibration_is_valid(arg1,(std::vector< float > const &)*arg2,(std::vector< std::pair< float,float > > const &)*arg3,SWIG_STD_MOVE(arg4));
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_polynomial_cal_remove_first_channels(int const *farg1, SwigClassWrapper *farg2) {
+  SwigClassWrapper fresult ;
+  int arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  std::vector< float > result;
+  
+  arg1 = (int)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::polynomial_cal_remove_first_channels(int const,std::vector< float > const &)", return SwigClassWrapper_uninitialized())
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  result = SpecUtils::polynomial_cal_remove_first_channels(arg1,(std::vector< float > const &)*arg2);
+  fresult.cptr = new std::shared_ptr< std::vector<float> >((new std::vector< float >(static_cast< const std::vector< float >& >(result))));
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_find_fullrangefraction_channel__SWIG_0(double const *farg1, SwigClassWrapper *farg2, size_t const *farg3, SwigClassWrapper *farg4, double const *farg5) {
+  double fresult ;
+  double arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  size_t arg3 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  double arg5 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::find_fullrangefraction_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &,double const)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  arg3 = (size_t)(*farg3);
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::find_fullrangefraction_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &,double const)", return 0);
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  arg5 = (double)(*farg5);
+  result = (double)SpecUtils::find_fullrangefraction_channel(arg1,(std::vector< float > const &)*arg2,SWIG_STD_MOVE(arg3),(std::vector< std::pair< float,float > > const &)*arg4,arg5);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_find_fullrangefraction_channel__SWIG_1(double const *farg1, SwigClassWrapper *farg2, size_t const *farg3, SwigClassWrapper *farg4) {
+  double fresult ;
+  double arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  size_t arg3 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::find_fullrangefraction_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  arg3 = (size_t)(*farg3);
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::find_fullrangefraction_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return 0);
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  result = (double)SpecUtils::find_fullrangefraction_channel(arg1,(std::vector< float > const &)*arg2,SWIG_STD_MOVE(arg3),(std::vector< std::pair< float,float > > const &)*arg4);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_find_polynomial_channel__SWIG_0(double const *farg1, SwigClassWrapper *farg2, size_t const *farg3, SwigClassWrapper *farg4, double const *farg5) {
+  double fresult ;
+  double arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  size_t arg3 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  double arg5 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::find_polynomial_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &,double const)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  arg3 = (size_t)(*farg3);
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::find_polynomial_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &,double const)", return 0);
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  arg5 = (double)(*farg5);
+  result = (double)SpecUtils::find_polynomial_channel(arg1,(std::vector< float > const &)*arg2,SWIG_STD_MOVE(arg3),(std::vector< std::pair< float,float > > const &)*arg4,arg5);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT double _wrap_find_polynomial_channel__SWIG_1(double const *farg1, SwigClassWrapper *farg2, size_t const *farg3, SwigClassWrapper *farg4) {
+  double fresult ;
+  double arg1 ;
+  std::vector< float > *arg2 = 0 ;
+  size_t arg3 ;
+  std::vector< std::pair< float,float > > *arg4 = 0 ;
+  double result;
+  
+  arg1 = (double)(*farg1);
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::find_polynomial_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return 0)
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  arg3 = (size_t)(*farg3);
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::pair< float,float > > const &", "SWIGTYPE_p_std__vectorT_std__pairT_float_float_t_t", "SpecUtils::find_polynomial_channel(double const,std::vector< float > const &,size_t const,std::vector< std::pair< float,float > > const &)", return 0);
+  arg4 = (std::vector< std::pair< float,float > > *)farg4->cptr;
+  result = (double)SpecUtils::find_polynomial_channel(arg1,(std::vector< float > const &)*arg2,SWIG_STD_MOVE(arg3),(std::vector< std::pair< float,float > > const &)*arg4);
+  fresult = (double)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_rebin_by_lower_edge(SwigClassWrapper *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4) {
+  std::vector< float > *arg1 = 0 ;
+  std::vector< float > *arg2 = 0 ;
+  std::vector< float > *arg3 = 0 ;
+  std::vector< float > *arg4 = 0 ;
+  
+  SWIG_check_sp_nonnull(farg1->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::rebin_by_lower_edge(std::vector< float > const &,std::vector< float > const &,std::vector< float > const &,std::vector< float > &)", return )
+  arg1 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg1->cptr)->get();
+  SWIG_check_sp_nonnull(farg2->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::rebin_by_lower_edge(std::vector< float > const &,std::vector< float > const &,std::vector< float > const &,std::vector< float > &)", return )
+  arg2 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg2->cptr)->get();
+  SWIG_check_sp_nonnull(farg3->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::rebin_by_lower_edge(std::vector< float > const &,std::vector< float > const &,std::vector< float > const &,std::vector< float > &)", return )
+  arg3 = (std::vector<float>*)static_cast<std::shared_ptr<const std::vector<float> >*>(farg3->cptr)->get();
+  SWIG_check_sp_nonnull(farg4->cptr, "std::vector< float > *", "FloatVector", "SpecUtils::rebin_by_lower_edge(std::vector< float > const &,std::vector< float > const &,std::vector< float > const &,std::vector< float > &)", return )
+  arg4 = (std::vector<float>*)static_cast<std::shared_ptr< std::vector<float> >*>(farg4->cptr)->get();
+  SpecUtils::rebin_by_lower_edge((std::vector< float > const &)*arg1,(std::vector< float > const &)*arg2,(std::vector< float > const &)*arg3,*arg4);
+}
+
+
+SWIGEXPORT int _wrap_write_CALp_file(SwigClassWrapper *farg1, SwigClassWrapper *farg2, SwigArrayWrapper *farg3) {
+  int fresult ;
+  std::ostream *arg1 = 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration const > *arg2 = 0 ;
+  std::string *arg3 = 0 ;
+  std::string tempstr3 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::write_CALp_file(std::ostream &,std::shared_ptr< SpecUtils::EnergyCalibration const > const &,std::string const &)", return 0);
+  arg1 = (std::ostream *)farg1->cptr;
+  SWIG_check_nonnull(farg2->cptr, "std::shared_ptr< SpecUtils::EnergyCalibration const > const &", "SWIGTYPE_p_std__shared_ptrT_SpecUtils__EnergyCalibration_cYBZ7Z", "SpecUtils::write_CALp_file(std::ostream &,std::shared_ptr< SpecUtils::EnergyCalibration const > const &,std::string const &)", return 0);
+  arg2 = (std::shared_ptr< SpecUtils::EnergyCalibration const > *)farg2->cptr;
+  tempstr3 = std::string(static_cast<char *>(farg3->data), farg3->size);
+  arg3 = &tempstr3;
+  result = (bool)SpecUtils::write_CALp_file(*arg1,(std::shared_ptr< SpecUtils::EnergyCalibration const > const &)*arg2,(std::string const &)*arg3);
+  fresult = (result ? 1 : 0);
+  return fresult;
 }
 
 
