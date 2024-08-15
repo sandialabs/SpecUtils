@@ -6,6 +6,7 @@
 #include <SpecUtils/EnergyCalibration.h>
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
+#include <SpecUtils/Filesystem.h>
 %}
 
 
@@ -13,20 +14,18 @@
 //%include "std_vector.i"
 /* instantiate the required template specializations */
 namespace std {
-    %template(IntVector)    vector<int>;
-    %template(DoubleVector) vector<double>;
+    //%template(IntVector)    vector<int>;
+    //%template(DoubleVector) vector<double>;
     %template(FloatVector)  vector<float>;
     %template(MeasurementVector)  vector<SpecUtils::Measurement>;
     
 }
 
-//%template(TimePoint) std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds>;
-
-
 %include "std_shared_ptr.i"
 %shared_ptr(vector<SpecUtils::Measurement>)
 %shared_ptr(SpecUtils::Measurement)
-%shared_ptr(std::vector<float>)
+%shared_ptr(SpecUtils::EnergyCalibration)
+//%shared_ptr(std::vector<float>) // this casued me problems -hugh
 
 %include "std_string.i"
 %apply std::string { std::string& }
@@ -37,13 +36,14 @@ namespace std {
 
 %ignore combine_gamma_channels;
 %ignore truncate_gamma_channels; 
-%ignore set_energy_calibration;
+//%ignore set_energy_calibration;
 %ignore descriptionText;
 %ignore operator=;
 %ignore set_gamma_counts;
 
 %include <typemaps.i>
 
+%apply int { size_t }
 
 %include "SpecUtils/SpecFile.h"
 
@@ -54,6 +54,11 @@ namespace std {
     float gamma_count_at(int index) 
     {
         return $self->gamma_counts()->at(index-1);
+    }
+
+    size_t get_num_channels()
+    {
+        return $self->gamma_counts()->size();
     }
 
     std::string get_description()
@@ -115,6 +120,16 @@ namespace std {
         SpecUtils::FloatVec ncounts{count};
         $self->set_neutron_counts(ncounts, 0.0F);
     }
+
+    float get_neutron_count()
+    {
+        auto count = 0.0F;
+        if (!$self->neutron_counts().empty())
+            count = $self->neutron_counts().front();
+
+        return count;            
+    }
+
     //%apply (SWIGTYPE ARRAY[], size_t num_channels) { (const float* spectrum, size_t num_channels) };
     %apply (SWIGTYPE *DATA, size_t SIZE) { (const float* spectrum, size_t num_channels) };
     void set_spectrum(const float *spectrum, size_t num_channels)
@@ -155,9 +170,12 @@ namespace std {
 %include "std_pair.i"
 
 %template(DevPair) std::pair<float, float>;
-//%template(DeviationPairs) std::vector<SpecUtils::DevPair>;
+%template(DeviationPairs) std::vector<std::pair<float, float>>;
 
 %ignore set_lower_channel_energy; 
 %ignore energy_cal_from_CALp_file;
 
 %include "SpecUtils/EnergyCalibration.h"
+
+%ignore make_canonical_path;
+%include "SpecUtils/FileSystem.h"
