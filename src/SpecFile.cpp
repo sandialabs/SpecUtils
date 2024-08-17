@@ -7730,6 +7730,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   map< shared_ptr<const EnergyCalibration>, vector<shared_ptr<const vector<float>>> > cal_to_meas;
 #endif
   
+  size_t num_gps = 0.0;
+  double avrg_latitude = 0.0, avrg_longitude = 0.0;
+  
   size_t total_num_gamma_spec = 0;
   set<SourceType> source_types;
   set<string> remarks;
@@ -7782,6 +7785,12 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
           dataH->exposure_rate_ += meas->exposure_rate_;
       }//if( meas->dose_rate_ >= 0.0f )
       
+      if( meas->has_gps_info() )
+      {
+        num_gps += 1;
+        avrg_latitude += meas->latitude();
+        avrg_longitude += meas->longitude();
+      }//if( meas->has_gps_info() )
       
       if( spec_size > 3 && meas->energy_calibration() && meas->energy_calibration()->valid() )
       {
@@ -7828,6 +7837,14 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     dataH->location_             = meas_per_thread[0][0]->location_;
   }//if( total_num_gamma_spec == 1 )
   
+  
+  if( (total_num_gamma_spec > 1)  && num_gps )
+  {
+    avrg_latitude /= num_gps;
+    avrg_longitude /= num_gps;
+    dataH->set_position( avrg_longitude, avrg_latitude, {} );
+  }//if( (total_num_gamma_spec > 1)  && num_gps )
+
   
   if( allBinningIsSame )
   {

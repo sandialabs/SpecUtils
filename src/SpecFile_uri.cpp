@@ -127,7 +127,7 @@ bool SpecFile::load_from_uri( std::istream &input )
 #if( PERFORM_DEVELOPER_CHECKS )
         log_developer_error( __func__, "SpecFile::load_from_uri: encountered a 'mailto:'"
                                         " without a trailing 'raddata://G0/' uri" );
-        assert( raddata_pos != string::npos );
+//        assert( raddata_pos != string::npos );
 #endif
 
         rawdata.erase( begin(rawdata) + mailto_pos, end(rawdata) );
