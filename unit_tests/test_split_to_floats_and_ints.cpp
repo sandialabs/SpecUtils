@@ -40,8 +40,6 @@
 using namespace std;
 
 
-// TODO: add test case for parse_float, parse_int, parse_double, functions
-
 /*
 TEST_CASE( "Time float parse"  )
 {
@@ -89,7 +87,9 @@ TEST_CASE( "split_to_floats"  )
 	const vector<float> comparison_vector1{5.5f, 4.5f, 3.5f,34000000.0f,1.23456f,1.234567f,1.2345678f,1.23456789f,0.1f,0.01f,0.001f,0.0001f,0.00001f,0.000001f,0.0000001f,0.00000001f};
 	vector<float> output_vector1, alt_output_vector1;
 	SpecUtils::split_to_floats( input_string1, output_vector1 );
-	SpecUtils::split_to_floats( &(input_string1[0]), alt_output_vector1," ,\r\n\t", false );
+  cout << "STarting" << endl;
+	SpecUtils::split_to_floats( &(input_string1[0]), alt_output_vector1, " ,\r\n\t", false );
+  cout << "Ending" << endl;
   
   REQUIRE_EQ( output_vector1.size(), comparison_vector1.size() );
   REQUIRE_EQ( alt_output_vector1.size(), comparison_vector1.size() );
@@ -160,18 +160,21 @@ TEST_CASE( "parse_float" )
 		float result;
 		const char *txt = "3.2";
 	  bool ok = SpecUtils::parse_float( txt, strlen(txt)-1, result );
-	  CHECK( (ok && result == 3.0f) );
+    CHECK( ok );
+	  CHECK_EQ( result, 3.0f );
 		
 		ok = SpecUtils::parse_float( txt, strlen(txt)-2, result );
 	  CHECK( (ok && result == 3.0f) );
 		
 		txt = "  +3.256 ";
 	  ok = SpecUtils::parse_float( txt, strlen(txt)-3, result );
-	  CHECK( (ok && result == 3.2f) );
+    CHECK( ok );
+	  CHECK_EQ( result, 3.2f );
 		
 		txt = "\t0.2";
 	  ok = SpecUtils::parse_float( txt, strlen(txt)-1, result );
-	  CHECK( (ok && result == 0.0f) );
+    CHECK( ok );
+    CHECK_EQ( result, 0.0f );
 	}
 	
 	{
@@ -283,6 +286,33 @@ TEST_CASE( "check_trailing_characters"  )
     CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 }
 
+TEST_CASE( "check non-null termination"  )
+{
+  //Make sure `split_to_floats` that takes in string length actually obeys length, and not
+  //  null-termination.
+  
+  bool ok;
+  vector<float> results;
+  const char *input;
+  size_t inputlen;
+  
+  input = "1 +2 3 4 5 6 7 8 9 10";
+  vector<float> good_input_vals{ 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f };
+  
+  inputlen = 8;
+  ok = SpecUtils::split_to_floats( input, inputlen, results );
+  CHECK( ok );
+  CHECK_EQ( results.size(), 4 );
+  for( size_t i = 0; i < results.size(); ++i )
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+  
+  inputlen = 9;
+  ok = SpecUtils::split_to_floats( input, inputlen, results );
+  CHECK( ok );
+  CHECK_EQ( results.size(), 4 );
+  for( size_t i = 0; i < results.size(); ++i )
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+}//TEST_CASE( "check non-null termination"  )
 
 
 TEST_CASE( "split_to_floats_cambio_fix"  )
@@ -709,34 +739,236 @@ TEST_CASE( "split_to_ints"  )
   string input_string16= "1,2 3  \t4\r5\n6,,,,,7,8,9,10";
  	int temp16[] = {1,2,3,4,5,6,7,8,9,10};
 	vector<int> output_vector16;
+  vector<long long> output_vector16_ll;
 	vector<int> comparison_vector16(temp16,temp16+10);
-	SpecUtils::split_to_ints(&(input_string16[0]),input_string16.size(),output_vector16);
-	for(int i=0; i < output_vector16.size();++i)
+  bool ok = SpecUtils::split_to_ints(&(input_string16[0]),input_string16.size(),output_vector16);
+  CHECK( ok );
+  ok = SpecUtils::split_to_long_longs(&(input_string16[0]),input_string16.size(),output_vector16_ll);
+  CHECK( ok );
+  
+  REQUIRE_EQ( output_vector16.size(), comparison_vector16.size() );
+  REQUIRE_EQ( output_vector16_ll.size(), comparison_vector16.size() );
+  
+	for( size_t i=0; i < output_vector16.size(); ++i )
 	{
-		CHECK_EQ(comparison_vector16[i],output_vector16[i]);
-
+		CHECK_EQ( comparison_vector16[i], output_vector16[i]);
+    CHECK_EQ( comparison_vector16[i], output_vector16_ll[i]);
 	}
 
-	  string input_string17= "11 45 67,678,67,,1,123,400,450\t56\r45\n11,000006,2147483646,2147483647,11";
+  string input_string17= "11 45 67,678,67,,1,123,400,450\t56\r45\n11,000006,2147483646,2147483647,11";
  	int temp17[] = {11,45,67,678,67,1,123,400,450,56,45,11,6,2147483646,2147483647,11};
 	vector<int> output_vector17;
+  vector<long long> output_vector17_ll;
 	vector<int> comparison_vector17(temp17,temp17+16);
-	SpecUtils::split_to_ints(&(input_string17[0]),input_string17.size(),output_vector17);
-	for( int i = 0; i < output_vector17.size(); ++i )
+  ok = SpecUtils::split_to_ints(&(input_string17[0]),input_string17.size(),output_vector17);
+  CHECK( ok );
+  ok = SpecUtils::split_to_long_longs(&(input_string17[0]),input_string17.size(),output_vector17_ll);
+  CHECK( ok );
+  
+  REQUIRE_EQ( output_vector17.size(), comparison_vector17.size() );
+  REQUIRE_EQ( output_vector17_ll.size(), comparison_vector17.size() );
+  
+	for( size_t i = 0; i < output_vector17.size(); ++i )
 	{
-		CHECK_EQ(comparison_vector17[i],output_vector17[i]);
+		CHECK_EQ( comparison_vector17[i], output_vector17[i] );
+    CHECK_EQ( output_vector17_ll[i], output_vector17[i] );
 	}
 
   string input_string19= "1,+5,+0,-0,-1,-2,-300,0000000,1,1,11";
  	int temp19[] = {1,5,0,0,-1,-2,-300,0,1,1,11};
 	vector<int> output_vector19;
+  vector<long long> output_vector19_ll;
 	vector<int> comparison_vector19(temp19,temp19+11);
-	SpecUtils::split_to_ints(&(input_string19[0]),input_string19.size(),output_vector19);
+	
+  ok = SpecUtils::split_to_ints( &(input_string19[0]), input_string19.size(), output_vector19 );
+  CHECK( ok );
+  ok = SpecUtils::split_to_long_longs( &(input_string19[0]), input_string19.size(), output_vector19_ll );
+  CHECK( ok );
 
-  for( int i = 1; i < output_vector19.size(); ++i )
+  REQUIRE_EQ( output_vector19.size(), comparison_vector19.size() );
+  REQUIRE_EQ( output_vector19_ll.size(), comparison_vector19.size() );
+  
+  for( size_t i = 1; i < output_vector19.size(); ++i )
 	{
-		CHECK_EQ(comparison_vector19[i],output_vector19[i]);
+		CHECK_EQ( comparison_vector19[i], output_vector19[i] );
+    CHECK_EQ( comparison_vector19[i], output_vector19_ll[i] );
 	}
 
-}
+  // `long long` is guaranteed to be at least 64 bit, with range [-9223372036854775808, 9223372036854775807]
+  const string input_string20 = "-9223372036854775808 0 9223372036854775807";
+  const vector<long long> comparison_vector20{ -9223372036854775807LL, 0LL, 9223372036854775807LL };
+  vector<long long> output_vector20;
+  ok = SpecUtils::split_to_long_longs( &(input_string20[0]), input_string20.size(), output_vector20 );
+  CHECK( ok );
+  REQUIRE_EQ( output_vector20.size(), comparison_vector20.size() );
+  for( size_t i = 1; i < output_vector20.size(); ++i )
+  {
+    CHECK_EQ( comparison_vector20[i], output_vector20[i] );
+  }
+  
+  
+  const string input_string21 = "0 1 2 aa";
+  vector<int> output_vector21;
+  vector<long long> output_vector21_ll;
+  ok = SpecUtils::split_to_long_longs( &(input_string21[0]), input_string21.size(), output_vector21_ll );
+  CHECK( !ok );
+  ok = SpecUtils::split_to_ints( &(input_string21[0]), input_string21.size(), output_vector21 );
+  CHECK( !ok );
+  
+}//TEST_CASE( "split_to_ints"  )
+
+
+TEST_CASE( "parse_int/float/double" )
+{
+  // `SpecUtils::parse_int(...)`, `parse_float`, and `parse_double` ignore leading whitespace
+  //  and trailing characters.
+  
+  std::string input = "50";
+  int int_result;
+  bool ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 50 );
+  
+  ok = SpecUtils::parse_int( &(input[0]), 1, int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 5 );
+  
+  input = "50 ";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 50 );
+  
+  ok = SpecUtils::parse_int( &(input[0]), 2, int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 50 );
+  
+  input = "-25";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, -25 );
+  
+  input = "-25";
+  ok = SpecUtils::parse_int( &(input[0]), 2, int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, -2 );
+  
+  input = "0";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 0 );
+  
+  input = "-0";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 0 );
+  
+  input = "+0";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 0 );
+  
+  input = " 5";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 5 );
+  
+  input = "   +5";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 5 );
+  
+  float float_result;
+  double double_result;
+  
+  input = " 5";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 5.0f );
+  CHECK_EQ( double_result, 5.0 );
+  
+  
+  input = "5.00001";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 5.00001f );
+  CHECK_EQ( double_result, 5.00001 );
+  
+  input = "+5.1";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 5.1f );
+  CHECK_EQ( double_result, 5.1 );
+  
+  
+  input = "-5.1";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, -5.1f );
+  CHECK_EQ( double_result, -5.1 );
+  
+  input = "0";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 0.0f );
+  CHECK_EQ( double_result, 0.0 );
+  
+  
+  input = "+0.0000";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 0.0f );
+  CHECK_EQ( double_result, 0.0 );
+  
+  input = "-0.0000";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 0.0f );
+  CHECK_EQ( double_result, 0.0 );
+  
+  input = "+1.200E-3";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 1.200E-3f );
+  CHECK_EQ( double_result, 1.200E-3 );
+  
+  
+  
+  input = std::to_string( std::numeric_limits<float>::max() );
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, std::numeric_limits<float>::max() );
+  
+  // When using boost::spirit to parse doubles, the very last digit of the parsed result may
+  //  not be rounded correctly - we'll allow for it, I guess, by just testing down to floating point precision
+  //string:              340282346638528859811704183484516925440.000000
+  //Parsed double:      3.402823466385288e+38  //Note: std::numeric_limits<double>::digits10==15 (i.e., 15 decimal digits of accuracy)
+  CHECK_EQ( static_cast<float>(double_result), std::numeric_limits<float>::max() );
+  
+  double double_input = std::numeric_limits<float>::max();
+  double_input *= 10.0;
+  input = std::to_string( double_input );
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ((ok && std::isinf(float_result)) || !ok) );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( static_cast<float>(0.1*double_result), std::numeric_limits<float>::max() );  //Just test to float precision - see note above
+}//TEST_CASE( "parse_int/float/double" )
 

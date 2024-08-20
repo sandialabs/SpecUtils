@@ -35,15 +35,20 @@ using namespace std;
 
 int main( int argc, char **argv )
 {
+  
+  /*
+  
   if( argc != 3 )
   {
     cout << "Usage: " << argv[0] << " <input filename> <output filename>\n"
          << "\tex: " << argv[0] << " input_file.spc output_file.n42" << endl;
     return EXIT_FAILURE;
   }
-
+   */
+  
   SpecUtils::SpecFile specfile;
-  if( !specfile.load_file( argv[1], SpecUtils::ParserType::Auto ) )
+  //if( !specfile.load_file( argv[1], SpecUtils::ParserType::Auto ) )
+  if( !specfile.load_file( "/Users/wcjohns/Downloads/Tl-201 IdentiFINDER (NaI) 1-day Old.SPE", SpecUtils::ParserType::Auto ) )
   {
     cerr << "Sorry, could not parse '" << argv[1] << "' as a spectrum file." << endl;
     return EXIT_FAILURE;
@@ -64,6 +69,8 @@ int main( int argc, char **argv )
     cout << "The first record has " << records[0]->num_gamma_channels() << " gamma channels." << endl;
   }
 
+  return 1;
+  
   //Save the output file.
   if( SpecUtils::is_file(argv[2]) )
   {

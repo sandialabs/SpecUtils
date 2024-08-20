@@ -223,6 +223,11 @@ namespace  SpecUtils
    The ascii float may have preceding whitespaces, and any text afterwards;
    both of which are ignored.
    
+   If number is larger than can be represented, this function may either return true with
+   result +inf (`SpecUtils_USE_FROM_CHARS`, `SpecUtils_USE_FAST_FLOAT`,
+   and `SpecUtils_USE_BOOST_SPIRIT`, ), or it could return false
+   (`SpecUtils_USE_STRTOD`).
+   
    \param input Pointer to start of ascii string.  May be null only if length
    is zero.
    \param length Number of bytes long the string to be parsed is.  A length

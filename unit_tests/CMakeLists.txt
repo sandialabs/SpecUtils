@@ -23,16 +23,15 @@ endif( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 
 if( PERFORM_DEVELOPER_CHECKS )
   find_package( Boost REQUIRED COMPONENTS date_time system )
+
+  if( NOT Boost_FOUND )
+    message(FATAL_ERROR "Couldnt Find Boost")
+  endif( NOT Boost_FOUND )
 endif( PERFORM_DEVELOPER_CHECKS )
 
 
-if( NOT Boost_FOUND )
-  message(FATAL_ERROR "Couldnt Find Boost")
-endif( NOT Boost_FOUND )
-
-
 # We'll look for an installed version of doctest first
-find_package( doctest )
+find_package( doctest QUIET )
 
 # If we didnt find the docktest package, see if the header is somewhere in the
 #   standard search path, and if so, use that
@@ -48,6 +47,10 @@ endif( NOT doctest_FOUND )
 
 # But if we havent fount docktest, we'll Fetch it
 if( NOT doctest_FOUND )
+  if(POLICY CMP0114)
+    cmake_policy(SET CMP0114 NEW) # For CMake >=3.19; `find_package` calls when the `PackageName_ROOT` environment variable is set. (e.g. Xcode)
+  endif()
+
   include(ExternalProject)
   find_package(Git REQUIRED)
 
@@ -79,7 +82,6 @@ set( DATA_DIR_ARGS --indir=\\"${CMAKE_CURRENT_SOURCE_DIR}/test_data\\" )
 if( CMAKE_GENERATOR STREQUAL "Xcode" )
   list( APPEND COMMON_TEST_ARGS --no-colors=1 )
 endif( CMAKE_GENERATOR STREQUAL "Xcode" )
-message( "Args: ${COMMON_TEST_ARGS}")
 
 add_executable( test_energy_calibration test_energy_calibration.cpp )
 target_link_libraries( test_energy_calibration PRIVATE SpecUtils )
@@ -109,7 +111,7 @@ ENDFOREACH()
 
 
 add_executable( test_iso_time_string test_iso_time_string.cpp )
-target_link_libraries( test_iso_time_string PRIVATE SpecUtils Boost::date_time)
+target_link_libraries( test_iso_time_string PRIVATE SpecUtils )
 if( PERFORM_DEVELOPER_CHECKS )
   target_link_libraries( test_iso_time_string PRIVATE Boost::date_time)
 endif( PERFORM_DEVELOPER_CHECKS )

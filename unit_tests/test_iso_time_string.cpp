@@ -170,7 +170,7 @@ SpecUtils::time_point_t random_time_point()
   
   SpecUtils::time_point_t tp{}; //01-Jan-1970 00:00:00, I think.
   tp += chrono::hours( rand() % (130*364*24) );
-  tp += chrono::microseconds( rand() % (60*60*1000000) );
+  tp += chrono::microseconds( rand() % (60LL*60LL*1000000LL) );
   
   return tp;
 }//SpecUtils::time_point_t random_time_point()

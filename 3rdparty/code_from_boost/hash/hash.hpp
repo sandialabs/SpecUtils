@@ -40,6 +40,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <climits>
 #include <type_traits>
 
 namespace boost_hash
