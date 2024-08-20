@@ -6809,6 +6809,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !icontains( instrument_model_, "LANL")
        && !icontains( instrument_model_, "LLNL")
        && !icontains( instrument_model_, "SNL")
+       && !icontains( manufacturer_, "Company ABC")
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {
