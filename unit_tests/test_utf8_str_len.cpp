@@ -21,34 +21,28 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <string>
-#include <ostream>
-#include <vector>
-#include <fstream>
 #include <cmath>
+#include <string>
+#include <vector>
 #include <climits>
+#include <fstream>
+#include <ostream>
 #include <iostream>
-#include <boost/algorithm/string.hpp>
 
-#define BOOST_TEST_MODULE test_utf8_str_len
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "SpecUtils/StringAlgo.h"
 
 using namespace std;
-using namespace boost::unit_test;
 
 void check_str( const std::string str, const size_t ncharacters )
 {
   const size_t ncounted = SpecUtils::utf8_str_len( str.c_str(), str.size() );
-  BOOST_CHECK_MESSAGE( ncharacters == ncounted, "Failed on string '" << str << "' with getting " << ncounted << " but expected " << ncharacters );
+  CHECK_MESSAGE( ncharacters == ncounted, "Failed on string '" << str << "' with getting " << ncounted << " but expected " << ncharacters );
 }
 
-BOOST_AUTO_TEST_CASE( test_utf8_str_len )
+TEST_CASE( "Testing utf8 strlen" )
 {
   //With MSVC 2017, even with adding the /utf-8 definition, string literals like u8"÷aõa"
   //  are not interpreted by the compiler right (or rather, how I would like - e.g., like
