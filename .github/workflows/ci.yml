@@ -29,8 +29,8 @@ jobs:
       if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y build-essential
 
-    - name: Set up dependencies
-      if: runner.os == 'macOS'
+    #- name: Set up dependencies
+    #  if: runner.os == 'macOS'
       #run: brew install cmake
 
     #- name: Set up dependencies
