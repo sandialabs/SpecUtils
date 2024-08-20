@@ -3418,9 +3418,9 @@ public:
         }catch(std::exception &e )
         {
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-          char buffer[512];
-          snprintf( buffer, sizeof(buffer), "Failed to parse <StateVector>: '%s'.", e.what() );
-          log_developer_error( __func__, buffer );
+          //char buffer[512];
+          //snprintf( buffer, sizeof(buffer), "Failed to parse <StateVector>: '%s'.", e.what() );
+          //log_developer_error( __func__, buffer );
           // assert( !node || XML_FIRST_INODE(node, "Remark") ); // The remark will say something like "InterSpec could not determine detector state"
 #endif
         }

@@ -215,7 +215,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = strlen(label);
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, false );
@@ -223,7 +223,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::istarts_with( line, label );
     
-    if( answer != correctAnswer )
+    if( (answer != correctAnswer) && len2 )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -241,7 +241,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = label.size();
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label.c_str(), len2, false );
@@ -249,7 +249,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::istarts_with( line, label );
     
-    if( answer != correctAnswer )
+    if( (answer != correctAnswer) && len2 )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -268,7 +268,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = strlen(label);
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, true );
@@ -276,7 +276,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::starts_with( line, label );
     
-    if( answer != correctAnswer )
+    if( (answer != correctAnswer) && len2 )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -295,7 +295,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = label.size();
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const char * const lineend = line.c_str() + (len1 - len2);
@@ -305,7 +305,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::iends_with( line, label );
     
-    if( answer != correctAnswer )
+    if( answer != correctAnswer && !label.empty() )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -324,7 +324,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = strlen(label);
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return string::npos;
     
     const auto case_insens_comp = []( const char &lhs, const char &rhs ) -> bool {
@@ -361,6 +361,9 @@ namespace SpecUtils
   bool icontains( const char *line, const size_t length,
                  const char *label, const size_t labellen )
   {
+    if( !length || !labellen )
+      return false;
+    
     const char *start = line;
     const char *end = start + length;
     const char *it = std::search( start, end, label, label+labellen,
@@ -400,6 +403,9 @@ namespace SpecUtils
   
   bool contains( const std::string &line, const char *label )
   {
+    if( !label || !strlen(label) )
+      return false;
+    
     const bool answer = (line.find(label) != string::npos);
     
 #if(PERFORM_DEVELOPER_CHECKS)

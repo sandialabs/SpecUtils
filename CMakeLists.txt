@@ -26,8 +26,40 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
-set( SpecUtils_FLT_PARSE_METHOD "FastFloat" CACHE STRING
-    "How to parse lists of numbers. Choose one of: FastFloat, FromChars, boost, strtod. Boost is fastest, FromChars requires a C++17 conformant compiler (note Apple clang does not implement), FastFloat requires having the header somewhere findable, and strod is the slowest." )
+# Determine how we should parse floats/ints - we'll prefer boost, if it has been found,
+# or else we'll look for `fast_float` if its around, then if the compiler supports
+#   `std::from_chars`, we'll use that.  Otherwise we'll default back to fast_floats
+#   and semi-offer to "Fetch" it.
+if( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
+  set( DEFAULT_NUMBER_PARSE_METHOD, "boost" )
+endif( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
+
+if( NOT DEFAULT_NUMBER_PARSE_METHOD )
+  find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
+  if( FAST_FLOAT_FILE_PATH )
+    set( DEFAULT_NUMBER_PARSE_METHOD, "FastFloat" )
+  endif( FAST_FLOAT_FILE_PATH )
+  
+  if( (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0) )
+    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
+  elif( (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        AND NOT (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "AppleClang")
+        AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 16.0) )
+    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
+  elif( MSVC AND (MSVC_VERSION GREATER_EQUAL 1920) )
+    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
+  elif( (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+        AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 19.0) )
+    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
+  endif()
+endif( NOT DEFAULT_NUMBER_PARSE_METHOD )
+
+set( SpecUtils_FLT_PARSE_METHOD ${DEFAULT_NUMBER_PARSE_METHOD} CACHE STRING [[How to parse lists of numbers.
+Choose one of: FastFloat, FromChars, boost, strtod.
+Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
+FastFloat requires having the header somewhere findable (or Fetching it), and strod is the slowest.
+]])
 set_property( CACHE SpecUtils_FLT_PARSE_METHOD PROPERTY STRINGS "FastFloat" "FromChars" "boost" "strtod" )
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
@@ -242,17 +274,19 @@ else()
 endif()
 
 if( SpecUtils_USE_FAST_FLOAT )
- find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
+  find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
  
- if( FAST_FLOAT_FILE_PATH )
+  if( FAST_FLOAT_FILE_PATH )
     # Extract the parent directory of the found file
     get_filename_component(PARENT_DIR ${FAST_FLOAT_PATH} DIRECTORY)
     
     message(STATUS "fast_float.h found at: ${FAST_FLOAT_PATH}")
     message(STATUS "Parent directory: ${FAST_FLOAT_PATH}")
     
-    target_include_directories( SpecUtils PRIVATE ${FAST_FLOAT_PATH} )
-  else( FAST_FLOAT_FILE_PATH )
+    target_include_directories( SpecUtils PUBLIC ${FAST_FLOAT_PATH} )
+  endif( FAST_FLOAT_FILE_PATH )
+  
+  if( NOT FAST_FLOAT_FILE_PATH )
     if( NOT SpecUtils_FETCH_FAST_FLOAT )
       message( "File fast_float.h not found - set SpecUtils_FETCH_FAST_FLOAT to ON to fetch")
       option( SpecUtils_FETCH_FAST_FLOAT "Fetch fast_float, if cant be found" OFF )
@@ -273,11 +307,10 @@ if( SpecUtils_USE_FAST_FLOAT )
 
       FetchContent_GetProperties( fast_float )
       FetchContent_MakeAvailable( fast_float )
-      target_include_directories( SpecUtils PRIVATE ${fast_float_SOURCE_DIR} )
+      
+      target_include_directories( SpecUtils PUBLIC ${fast_float_SOURCE_DIR} )
     endif( SpecUtils_FETCH_FAST_FLOAT )
-  endif( FAST_FLOAT_FILE_PATH )
-
- 
+  endif( NOT FAST_FLOAT_FILE_PATH )
 endif( SpecUtils_USE_FAST_FLOAT )
 
 # We only need boost libraries if we are using boost to parse floats, if we are performing developer
@@ -364,7 +397,7 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
+target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )

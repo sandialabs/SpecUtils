@@ -22,7 +22,7 @@ if( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 endif( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 
 if( PERFORM_DEVELOPER_CHECKS )
-  find_package( Boost REQUIRED COMPONENTS date_time system )
+  find_package( Boost REQUIRED )
 
   if( NOT Boost_FOUND )
     message(FATAL_ERROR "Couldnt Find Boost")
@@ -112,9 +112,6 @@ ENDFOREACH()
 
 add_executable( test_iso_time_string test_iso_time_string.cpp )
 target_link_libraries( test_iso_time_string PRIVATE SpecUtils )
-if( PERFORM_DEVELOPER_CHECKS )
-  target_link_libraries( test_iso_time_string PRIVATE Boost::date_time)
-endif( PERFORM_DEVELOPER_CHECKS )
 set_target_properties( test_iso_time_string PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
   NAME TestIsoTimeString

@@ -395,6 +395,19 @@ TEST_CASE( "testUtilityStringFunctions" ) {
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "6");
   
+  
+  // Make sure searches for empty substrings return false
+  CHECK( !SpecUtils::icontains( "TestLine", "" ) );
+  CHECK( !SpecUtils::icontains( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::contains( "TestLine", "" ) );
+  CHECK( !SpecUtils::contains( string("TestLine"), "" ) );
+  
+  CHECK( !SpecUtils::istarts_with( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::istarts_with( string("TestLine"), string("") ) );
+  CHECK( !SpecUtils::starts_with( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::iends_with( string("TestLine"), string("") ) );
+  
+  CHECK_EQ( SpecUtils::ifind_substr_ascii( string("TestLine"), ""), string::npos );
 
   // tests for SpecUtils::starts_with(string &line, const char* label)
   // 7 in text file
