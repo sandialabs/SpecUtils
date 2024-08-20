@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - feature/DeBoostify
+      - master
   pull_request:
     branches:
-      - feature/DeBoostify
+      - master
 
 jobs:
   build-and-test:
