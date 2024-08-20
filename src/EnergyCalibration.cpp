@@ -579,8 +579,8 @@ void EnergyCalibration::equal_enough( const EnergyCalibration &lhs, const Energy
     }
   }//for( loop over deviation pairs )
   
-  auto lhscoef = lhs.m_coefficients;
-  auto rhscoef = rhs.m_coefficients;
+  vector<float> lhscoef = lhs.m_coefficients;
+  vector<float> rhscoef = rhs.m_coefficients;
   
   //if( lhs_model == EnergyCalType::LowerChannelEdge )
   //{
@@ -734,7 +734,8 @@ shared_ptr<EnergyCalibration> energy_cal_combine_channels( const EnergyCalibrati
       newbinning[nnewchann] = old_energies.back();
       
       newcal->set_lower_channel_energy( nnewchann, std::move(newbinning) );
-    }//break
+      break;
+    }//case LowerChannelEdge:
       
     case SpecUtils::EnergyCalType::InvalidEquationType:
       break;
@@ -2109,7 +2110,7 @@ bool write_CALp_file( std::ostream &output, const shared_ptr<const EnergyCalibra
       
     case SpecUtils::EnergyCalType::LowerChannelEdge:
     {
-      const auto energies_ptr = cal->channel_energies();
+      const shared_ptr<const vector<float>> &energies_ptr = cal->channel_energies();
       if( !energies_ptr || energies_ptr->empty() ) //jic
       {
         assert( 0 );

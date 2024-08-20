@@ -47,29 +47,21 @@ endif( NOT doctest_FOUND )
 
 # But if we havent fount docktest, we'll Fetch it
 if( NOT doctest_FOUND )
-  if(POLICY CMP0114)
-    cmake_policy(SET CMP0114 NEW) # For CMake >=3.19; `find_package` calls when the `PackageName_ROOT` environment variable is set. (e.g. Xcode)
-  endif()
-
-  include(ExternalProject)
-  find_package(Git REQUIRED)
-
-  ExternalProject_Add(
-      doctest
-      PREFIX ${CMAKE_BINARY_DIR}/doctest
-      GIT_REPOSITORY https://github.com/doctest/doctest.git
-      GIT_TAG ae7a13539fb71f270b87eb2e874fbac80bc8dda2  #v2.4.11, Mar 15, 2023
-      GIT_SHALLOW ON
-      TIMEOUT 10
-      CONFIGURE_COMMAND ""
-      BUILD_COMMAND ""
-      INSTALL_COMMAND ""
-      LOG_DOWNLOAD ON
+  include(FetchContent)
+      
+  FetchContent_Declare(
+    doctest
+    URL https://github.com/doctest/doctest/releases/download/v2.4.11/doctest.h
+    URL_HASH SHA256=44FAA038E9C3F9728EFBDA143748D01124EA0A27F4BF78F35A15D8FAB2E039FB
+    DOWNLOAD_NO_EXTRACT TRUE
   )
 
-  ExternalProject_Get_Property(doctest source_dir)
-  set( DOCTEST_INCLUDE_DIR ${source_dir}/doctest CACHE INTERNAL "Path to include folder for doctest")
+  FetchContent_GetProperties( doctest )
+  FetchContent_MakeAvailable( doctest )
+
+  set( DOCTEST_INCLUDE_DIR ${doctest_SOURCE_DIR} CACHE INTERNAL "Path to include folder for doctest")
 endif( NOT doctest_FOUND )
+
 
 # Make include for Doctest
 include_directories( ${DOCTEST_INCLUDE_DIR} )

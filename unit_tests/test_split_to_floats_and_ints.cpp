@@ -966,7 +966,7 @@ TEST_CASE( "parse_int/float/double" )
   double_input *= 10.0;
   input = std::to_string( double_input );
   ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
-  CHECK( ((ok && std::isinf(float_result)) || !ok) );
+  CHECK( ((ok && (std::isinf)(float_result)) || !ok) );
   ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
   CHECK( ok );
   CHECK_EQ( static_cast<float>(0.1*double_result), std::numeric_limits<float>::max() );  //Just test to float precision - see note above

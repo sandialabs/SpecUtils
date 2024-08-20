@@ -1,4 +1,4 @@
-/* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
+﻿/* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
  
  Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC
  (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
@@ -43,7 +43,7 @@ TEST_CASE( "Test utf8 limit str size" )
   string teststr = "";
   SpecUtils::utf8_limit_str_size( teststr, 0 );
   CHECK_EQ( teststr, "" );
-  
+ 
   teststr = "";
   SpecUtils::utf8_limit_str_size( teststr, 1 );
   CHECK_EQ( teststr, "" );
@@ -72,7 +72,7 @@ TEST_CASE( "Test utf8 limit str size" )
   SpecUtils::utf8_limit_str_size( teststr, 4 );
   CHECK_EQ( teststr, "AAA" );
   
-  teststr = u8"ⓧ";
+  teststr = u8"ⓧ"; //E2 93 A7
   SpecUtils::utf8_limit_str_size( teststr, 0 );
   CHECK_EQ( teststr, "" );
   

@@ -26,41 +26,53 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
 
-# Determine how we should parse floats/ints - we'll prefer boost, if it has been found,
-# or else we'll look for `fast_float` if its around, then if the compiler supports
-#   `std::from_chars`, we'll use that.  Otherwise we'll default back to fast_floats
-#   and semi-offer to "Fetch" it.
-if( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
-  set( DEFAULT_NUMBER_PARSE_METHOD, "boost" )
-endif( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
 
-if( NOT DEFAULT_NUMBER_PARSE_METHOD )
-  find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
-  if( FAST_FLOAT_FILE_PATH )
-    set( DEFAULT_NUMBER_PARSE_METHOD, "FastFloat" )
-  endif( FAST_FLOAT_FILE_PATH )
-  
-  if( (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0) )
-    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
-  elif( (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        AND NOT (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "AppleClang")
-        AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 16.0) )
-    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
-  elif( MSVC AND (MSVC_VERSION GREATER_EQUAL 1920) )
-    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
-  elif( (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
-        AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 19.0) )
-    set( DEFAULT_NUMBER_PARSE_METHOD, "FromChars" )
-  endif()
-endif( NOT DEFAULT_NUMBER_PARSE_METHOD )
 
-set( SpecUtils_FLT_PARSE_METHOD ${DEFAULT_NUMBER_PARSE_METHOD} CACHE STRING [[How to parse lists of numbers.
+set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
 Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
 FastFloat requires having the header somewhere findable (or Fetching it), and strod is the slowest.
 ]])
 set_property( CACHE SpecUtils_FLT_PARSE_METHOD PROPERTY STRINGS "FastFloat" "FromChars" "boost" "strtod" )
+
+
+# Determine how we should parse floats/ints - we'll prefer boost, if it has been found,
+# or else we'll look for `fast_float` if its around, then if the compiler supports
+#   `std::from_chars`, we'll use that.  Otherwise we'll default back to fast_floats
+#   and semi-offer to "Fetch" it.
+if( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
+  set( DEFAULT_NUMBER_PARSE_METHOD "boost" )
+endif( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
+
+if( NOT DEFAULT_NUMBER_PARSE_METHOD )
+  find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
+  if( FAST_FLOAT_FILE_PATH )
+    set( DEFAULT_NUMBER_PARSE_METHOD "FastFloat" )
+  else( FAST_FLOAT_FILE_PATH )
+    if( (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+          AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    elseif( (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+          AND NOT (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "AppleClang")
+          AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16.0) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    elseif( MSVC AND (MSVC_VERSION VERSION_GREATER_EQUAL 1920) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    elseif( (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+          AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 19.0) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    else()
+      message( "WTF")
+    endif()
+  endif( FAST_FLOAT_FILE_PATH )
+endif( NOT DEFAULT_NUMBER_PARSE_METHOD )
+
+if( (NOT DEFINED SpecUtils_FLT_PARSE_METHOD OR SpecUtils_FLT_PARSE_METHOD STREQUAL "default_value") 
+    AND DEFAULT_NUMBER_PARSE_METHOD )
+    set(SpecUtils_FLT_PARSE_METHOD ${DEFAULT_NUMBER_PARSE_METHOD} CACHE STRING "Choose an option" FORCE)
+endif()
+
+
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
 if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )

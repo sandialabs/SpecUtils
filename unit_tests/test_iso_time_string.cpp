@@ -31,6 +31,9 @@
 #include <iostream>
 #include <stdlib.h>
 
+
+#undef isnan  // Undefine the isnan macro (compiule failure in doctest.h on Windows)
+
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
