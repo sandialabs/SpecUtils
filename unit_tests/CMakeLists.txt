@@ -207,7 +207,7 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   )
 endif()
 
-if( PERFORM_DEVELOPER_CHECKS )
+if( PERFORM_DEVELOPER_CHECKS AND (Boost_VERSION VERSION_GREATER_EQUAL "1.81.0") )
   add_executable( test_hash test_hash.cpp )
   target_link_libraries( test_hash PRIVATE SpecUtils Boost::system )
   target_include_directories( test_hash PUBLIC ../3rdparty )

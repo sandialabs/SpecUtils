@@ -30,10 +30,19 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-static_assert( PERFORM_DEVELOPER_CHECKS, "PERFORM_DEVELOPER_CHECKS must be set to on to test hashing (because we need to link to boost)" );
-
+#include <boost/version.hpp>
 #include <boost/functional/hash.hpp>
 #include "code_from_boost/hash/hash.hpp"
+
+static_assert( PERFORM_DEVELOPER_CHECKS, "PERFORM_DEVELOPER_CHECKS must be set to on to test hashing (because we need to link to boost)" );
+
+//Untested, but it looks like
+// It looks like the version of the hash code we are using was extracted from boost 108500,
+//  and from https://www.boost.org/users/history/ , it looks like container_hash was added
+//  in 1.81, so I'm guessing this is where the hash code changed.
+//  It looks like boost 1.78 doesnt give same hash values as boost 1.85.
+static_assert( BOOST_VERSION >= 108100, "Our hashing should only be compared against boost 1.85" );
+
 
 using namespace std;
 

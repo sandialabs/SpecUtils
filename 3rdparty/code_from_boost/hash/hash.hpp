@@ -1,5 +1,5 @@
 /**  
- * This file contains code extracted from boost 1.78, extracted by wcjohns 20240809.
+ * This file contains code extracted from boost 1.85 (or possible partially from 1.78), extracted by wcjohns 20240809.
  * 
  * It is the minimal amount of the boost hash implementation that we need to 
  * hash a SpecFile to generate a UUID based on spectrum file contents.
