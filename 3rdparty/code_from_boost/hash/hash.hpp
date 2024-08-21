@@ -41,6 +41,7 @@
 #include <vector>
 #include <cstdint>
 #include <climits>
+#include <numeric>
 #include <type_traits>
 
 namespace boost_hash
@@ -232,7 +233,12 @@ namespace boost_hash
         return w;
     }
     
-    std::size_t hash_range( std::size_t seed, const char *first, const char *last )
+    template<class It>
+    inline typename std::enable_if<
+      std::is_same<char, typename std::remove_const<typename std::remove_pointer<It>::type >::type >::value
+      && (std::numeric_limits<std::size_t>::digits > 32),
+    std::size_t>::type
+    hash_range( std::size_t seed, It first, It last )
     {
       const char *p = first;
       std::size_t n = static_cast<std::size_t>( last - first );
@@ -278,6 +284,65 @@ namespace boost_hash
       
       return mulx( h + w, k );
     }
+    
+    std::uint64_t mul32( std::uint32_t x, std::uint32_t y )
+    {
+        return static_cast<std::uint64_t>( x ) * y;
+    }
+    
+    template<class It>
+    inline typename std::enable_if<
+      std::is_same<char, typename std::remove_const<typename std::remove_pointer<It>::type >::type >::value
+      && (std::numeric_limits<std::size_t>::digits <= 32),
+    std::size_t>::type
+    hash_range( std::size_t seed, It first, It last )
+    {
+      It p = first;
+        std::size_t n = static_cast<std::size_t>( last - first );
+
+        std::uint32_t const q = 0x9e3779b9U;
+        std::uint32_t const k = 0xe35e67b1U; // q * q
+
+        std::uint64_t h = mul32( static_cast<std::uint32_t>( seed ) + q, k );
+        std::uint32_t w = static_cast<std::uint32_t>( h & 0xFFFFFFFF );
+
+        h ^= n;
+
+        while( n >= 4 )
+        {
+            std::uint32_t v1 = read32le( p );
+
+            w += q;
+            h ^= mul32( v1 + w, k );
+
+            p += 4;
+            n -= 4;
+        }
+
+        {
+            std::uint32_t v1 = 0;
+
+            if( n >= 1 )
+            {
+                std::size_t const x1 = ( n - 1 ) & 2; // 1: 0, 2: 0, 3: 2
+                std::size_t const x2 = n >> 1;        // 1: 0, 2: 1, 3: 1
+
+                v1 =
+                    static_cast<std::uint32_t>( static_cast<unsigned char>( p[ static_cast<std::ptrdiff_t>( x1 ) ] ) ) << x1 * 8 |
+                    static_cast<std::uint32_t>( static_cast<unsigned char>( p[ static_cast<std::ptrdiff_t>( x2 ) ] ) ) << x2 * 8 |
+                    static_cast<std::uint32_t>( static_cast<unsigned char>( p[ 0 ] ) );
+            }
+
+            w += q;
+            h ^= mul32( v1 + w, k );
+        }
+
+        w += q;
+        h ^= mul32( static_cast<std::uint32_t>( h & 0xFFFFFFFF ) + w, static_cast<std::uint32_t>( h >> 32 ) + w + k );
+
+        return static_cast<std::uint32_t>( h & 0xFFFFFFFF ) ^ static_cast<std::uint32_t>( h >> 32 );
+    }
+    
   }//namespace hash_detail
   
   // Hash floating point types (e.g., `float` and `double`)
@@ -298,7 +363,9 @@ namespace boost_hash
   
   std::size_t hash_value( const std::string &v )
   {
-    return boost_hash::hash_detail::hash_range( 0, v.data(), v.data() + v.size() );
+    const char *start = v.data();
+    const char *end = v.data() + v.size();
+    return boost_hash::hash_detail::hash_range( size_t(0), start, end );
   }
   
   template <class T>
