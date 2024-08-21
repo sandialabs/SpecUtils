@@ -38,7 +38,6 @@
 Shortcommings that wcjohns should address:
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
- - Neutron measurements should have their own live and real time
  - Neutron counts are typically merged into a gamma detectors Measurement if a
    reasonable pairing can be made. When and if this is done needs to be clearly
    specified, and either stopped of facilities added to keep neutron det. info.

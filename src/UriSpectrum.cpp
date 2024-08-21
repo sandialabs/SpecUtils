@@ -717,7 +717,7 @@ vector<uint8_t> encode_stream_vbyte( const vector<uint32_t> &input )
 #elif defined(__GNUC__) || defined(__GNUG__)
   static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "This function not tested in big-endian" );
 #elif defined(_MSC_VER)
-  // not sure, but not too worried
+  // Windows should always be little-endian
 #endif
   
 #if( PERFORM_DEVELOPER_CHECKS )

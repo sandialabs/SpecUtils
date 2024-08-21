@@ -19,22 +19,13 @@
 
 #include "SpecUtils_config.h"
 
-#include <string>
+#include <limits>
 #include <locale>
+#include <string>
+#include <cstring>
 #include <sstream>
+#include <algorithm>
 
-#include <boost/version.hpp>
-
-#if( BOOST_VERSION < 104500 )
-#include <boost/config/warning_disable.hpp>
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix_core.hpp>
-#include <boost/spirit/include/phoenix_operator.hpp>
-#include <boost/spirit/include/phoenix_stl.hpp>
-#endif
-
-#include <boost/fusion/adapted.hpp>
-#include <boost/spirit/include/qi.hpp>
 
 #if(PERFORM_DEVELOPER_CHECKS)
 #include <boost/algorithm/string.hpp>
@@ -46,7 +37,7 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
-//Pull in WideCharToMultiByte(...), etc from WIndows
+//Pull in WideCharToMultiByte(...), etc from Windows
 #define NOMINMAX
 #include <windows.h>
 
@@ -54,9 +45,11 @@
 #undef max
 #endif
 
+static_assert( (SpecUtils_USE_FAST_FLOAT + SpecUtils_USE_FROM_CHARS + SpecUtils_USE_BOOST_SPIRIT + SpecUtils_USE_STRTOD) == 1,
+              "You must have exactly one of the following turned on: SpecUtils_USE_FAST_FLOAT, "
+              "SpecUtils_USE_FROM_CHARS, SpecUtils_USE_BOOST_SPIRIT, SpecUtils_USE_STRTOD" );
 
 #if( SpecUtils_USE_FROM_CHARS )
-#include <charconv>
 // LLVM 14, MSVC >= 2019, and gcc 12 seem to support floating point from_char, but Apple LLVM requires
 // minimum deployment targets of macOS 13.3, and iOS 16, and I'm unsure about Android status.
 // With MSVC 2019, from_chars is about 50% slower than boost; fast_float is just a hair slower than boost.
@@ -69,18 +62,28 @@
 //   fast_float (3.5.1): 47113 ms, 47724 ms
 // Windows MSVC 2022 was also tested with similar-ish results as 2019.
 // 
-//  This is not near the ~1 GB/s fast_float bencharks list (and much closer to the strod speeds fast_float benchmark gets),
+//  This is not near the ~1 GB/s fast_float benchmarks list (and much closer to the strod speeds fast_float benchmark gets),
 //  so perhaps I'm doing something really wrong.
+  #include <charconv>
 
-// https://github.com/fastfloat/fast_float is nearly a drop-in replacement for std::from_chars, and and just about as fast as boost::spirit
-//#include "3rdparty/fast_float.h"
+#elif( SpecUtils_USE_FAST_FLOAT )
+  // https://github.com/fastfloat/fast_float is nearly a drop-in replacement for std::from_chars, and and just about as fast as boost::spirit
+  #include "fast_float.h"
+#elif( SpecUtils_USE_BOOST_SPIRIT )
+  #include <boost/version.hpp>
 
-#else
-// It would be nice to use <charconv> to do the conversion; but currently (20221005)
-//  support isnt that great. 
-//  The solution is probably to use  (which is what
-//  the compilers look to use anyway).
-#define HAVE_FLOAT_FROM_CHARS 0
+  #if( BOOST_VERSION < 104500 )
+    #include <boost/config/warning_disable.hpp>
+    #include <boost/spirit/include/qi.hpp>
+    #include <boost/spirit/include/phoenix_core.hpp>
+    #include <boost/spirit/include/phoenix_operator.hpp>
+    #include <boost/spirit/include/phoenix_stl.hpp>
+  #endif
+
+  #include <boost/fusion/adapted.hpp>
+  #include <boost/spirit/include/qi.hpp>
+#elif( SpecUtils_USE_STRTOD )
+  #include <cstdlib>
 #endif
 
 
@@ -120,8 +123,8 @@ namespace
     const std::locale &m_loc;
   };
   
-  //The below may not be instrinsic friendly; might be interesting to look and
-  // see if we could get better machine code by making instrinic friendly (maybe
+  //The below may not be intrinsic friendly; might be interesting to look and
+  // see if we could get better machine code by making intrinsic friendly (maybe
   // even have the float parsing functions inline)
   inline bool is_in( const char val, const char *delim )
   {
@@ -141,6 +144,13 @@ namespace
     return input;
   }
   
+  inline const char *next_word( const char *input, const char * const end, const char * const delim )
+  {
+    while( (input < end) && is_in(*input, delim) )
+      ++input;
+    return input;
+  }
+  
   inline const char *end_of_word( const char *input, const char *delim )
   {
     while( *input && !is_in(*input, delim) )
@@ -148,6 +158,54 @@ namespace
     return input;
   }
   
+  inline const char *end_of_word( const char *input, const char * const end, const char * const delim )
+  {
+    while( (input < end) && !is_in(*input, delim) )
+      ++input;
+    return input;
+  }
+  
+#if( SpecUtils_USE_STRTOD )
+  bool split_to_floats_strtod( const char *input, const size_t length, 
+                              const char * const delims,
+                              const bool cambio_fix,
+                              vector<float> &results )
+  {
+    const char * const end = input + length;
+    
+    const char *pos = next_word( input, end, delims );
+    
+    while( pos < end )
+    {
+      const char d = *pos;
+      if( !isdigit(d) && (d != '+') && (d != '-') && (d != '.') )
+        return false;
+      
+      const char * const word_end = end_of_word( pos, end, delims );
+      
+      try
+      {
+        double dvalue = stod( string(pos, (word_end - pos)) );
+        
+        if( cambio_fix && (dvalue == 0.0) )
+        {
+          const char nextchar[2] = { *(pos+1), '\0' };
+          if( !strstr(delims, nextchar) )  //If the next char is a delimiter, then we dont want to apply the fix, otherwise apply the fix
+            dvalue = std::numeric_limits<float>::min();
+        }//if( value == 0.0 )
+        
+        results.push_back( static_cast<float>(dvalue) );
+      }catch( std::exception & )
+      {
+        return false;
+      }
+      
+      pos = next_word( word_end, end, delims );
+    }//while( pos < end )
+    
+    return true;
+  }//split_to_floats_strtod(...)
+#endif //SpecUtils_USE_STRTOD
 }//namespace
 
 namespace SpecUtils
@@ -157,7 +215,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = strlen(label);
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, false );
@@ -165,7 +223,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::istarts_with( line, label );
     
-    if( answer != correctAnswer )
+    if( (answer != correctAnswer) && len2 )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -183,7 +241,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = label.size();
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label.c_str(), len2, false );
@@ -191,7 +249,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::istarts_with( line, label );
     
-    if( answer != correctAnswer )
+    if( (answer != correctAnswer) && len2 )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -210,7 +268,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = strlen(label);
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const bool answer = ::rapidxml::internal::compare( line.c_str(), len2, label, len2, true );
@@ -218,7 +276,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::starts_with( line, label );
     
-    if( answer != correctAnswer )
+    if( (answer != correctAnswer) && len2 )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -237,7 +295,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = label.size();
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return false;
     
     const char * const lineend = line.c_str() + (len1 - len2);
@@ -247,7 +305,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS)
     const bool correctAnswer = boost::algorithm::iends_with( line, label );
     
-    if( answer != correctAnswer )
+    if( answer != correctAnswer && !label.empty() )
     {
       char errormsg[1024];
       snprintf( errormsg, sizeof(errormsg),
@@ -266,7 +324,7 @@ namespace SpecUtils
     const size_t len1 = line.size();
     const size_t len2 = strlen(label);
     
-    if( len1 < len2 )
+    if( (len1 < len2) || !len2 )
       return string::npos;
     
     const auto case_insens_comp = []( const char &lhs, const char &rhs ) -> bool {
@@ -303,6 +361,9 @@ namespace SpecUtils
   bool icontains( const char *line, const size_t length,
                  const char *label, const size_t labellen )
   {
+    if( !length || !labellen )
+      return false;
+    
     const char *start = line;
     const char *end = start + length;
     const char *it = std::search( start, end, label, label+labellen,
@@ -342,6 +403,9 @@ namespace SpecUtils
   
   bool contains( const std::string &line, const char *label )
   {
+    if( !label || !strlen(label) )
+      return false;
+    
     const bool answer = (line.find(label) != string::npos);
     
 #if(PERFORM_DEVELOPER_CHECKS)
@@ -1026,10 +1090,6 @@ namespace SpecUtils
   }
   
   
-  
-  
-  
-  
   template <class T>
   bool split_to_integral_types( const char *input, const size_t length,
                                std::vector<T> &results )
@@ -1037,59 +1097,65 @@ namespace SpecUtils
     static_assert( std::is_same<T,int>::value || std::is_same<T,long long>::value,
                   "split_to_integral_types only implemented for int and long long" );
     
+    results.clear();
+
+    const size_t num_float_guess = (std::max)( size_t(1), (std::min)(length / 3, size_t(32768)) );
+    results.reserve(num_float_guess);
+    
     if( !input || !length )
       return true;
     
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
+    const char *start = input;
+    const char * const end = input + length;
+
+    while( start < end )
+    {
+      T result;
+#if( SpecUtils_USE_FROM_CHARS )
+      const std::from_chars_result status = std::from_chars(start, end, result);
+#else
+      const fast_float::from_chars_result status = fast_float::from_chars(start, end, result);
+#endif
+
+      if( status.ec != std::errc() )
+        return false;
+      
+      results.push_back( result );
+      
+      start = status.ptr + 1;
+      if( start >= end )
+        return true;
+
+      // For most of input `start` will be the character of the next number, but we need to test for this
+      if (((*start) < '0') || ((*start) > '9'))
+      {
+        // We will allow the delimiters " \t\n\r,"; I'm sure there is a much better way of testing for these
+        while ((start < end)
+          && (((*start) == ' ')
+            || ((*start) == '\t')
+            || ((*start) == '\n')
+            || ((*start) == '\r')
+            || ((*start) == ',')
+            // We want to allow numbers to start with a '+', which from_chars prohibits,
+            // but we also want require the next character to be a number or a decimal,
+            // and also for the '+' to not be the last character
+            || (((*start) == '+') && ((start + 1) < end) && ((((*(start + 1)) >= '0') && ((*(start + 1)) <= '9')) || ((*(start + 1)) == '.')))
+            )
+          )
+        {
+          ++start;
+        }
+      }//if (((*start) < '0') || ((*start) > '9'))
+    }//while( start < end )
+    
+    return true;
+    
+#elif( SpecUtils_USE_BOOST_SPIRIT && (BOOST_VERSION >= 104500) )
     namespace qi = boost::spirit::qi;
     
     const char *begin = input;
     const char *end = begin + length;
-    
-#if( BOOST_VERSION < 104500 )
-    errno = 0;
-    const string inputstr(input, input+length);
-    const char *delims = ", ";
-    size_t prev_delim_end = 0;
-    size_t delim_start = inputstr.find_first_of( delims, prev_delim_end );
-    bool ok = true;
-    while( ok && delim_start != std::string::npos )
-    {
-      if( (delim_start-prev_delim_end) > 0 )
-      {
-        T val;
-        if( std::is_same<T,int>::value )
-          val = strtol(inputstr.c_str()+prev_delim_end,nullptr,10);
-        else
-          val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
-        
-        /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
-        if( errno )
-          ok = false;
-        results.push_back( val );
-      }
-      
-      prev_delim_end = inputstr.find_first_not_of( delims, delim_start + 1 );
-      if( prev_delim_end != std::string::npos )
-        delim_start = inputstr.find_first_of( delims, prev_delim_end + 1 );
-      else
-        delim_start = std::string::npos;
-    }//while( this_pos < input.size() )
-    
-    if(ok && prev_delim_end < inputstr.size() )
-    {
-      T val;
-      if( std::is_same<T,int>::value )
-        val = strtol(inputstr.c_str()+prev_delim_end,nullptr,10);
-      else
-        val = strtoll(inputstr.c_str()+prev_delim_end,nullptr,10);
-      
-      /// \TODO: I think errno only gets set when input is out of range; should also check if string length then value is not zero
-      if( !errno )
-        results.push_back( val );
-    }
-    
-    return ok;
-#else
     
     bool ok;
     if( std::is_same<T,int>::value )
@@ -1116,8 +1182,44 @@ namespace SpecUtils
     }//if( ok && begin != end )
     
     return ok;
+#else
+    // SpecUtils_USE_STRTOD or (BOOST_VERSION < 104500)
+    //  (terribly inefficient, but probably not really used)
+    
+    const char * const delims = " \t\n\r,";
+    const char * const end = input + length;
+    
+    const char *pos = next_word( input, end, delims );
+    
+    while( pos < end )
+    {
+      const char d = *pos;
+      if( !isdigit(d) && (d != '+') && (d != '-') )
+        return false;
+      
+      const char * const word_end = end_of_word( pos, end, delims );
+      
+      try
+      {
+        T val;
+        if( std::is_same<T,int>::value )
+          val = static_cast<T>( stoi( string(pos, word_end - pos), nullptr, 10) ); //cast to prevent warning
+        else
+          val = static_cast<T>( stoll( string(pos, word_end - pos), nullptr, 10) );
+        
+        results.push_back( val );
+      }catch( std::exception & )
+      {
+        return false;
+      }
+    
+      pos = next_word( word_end, end, delims );
+    }//while( pos < end )
+    
+    return true;
 #endif
   }//split_to_integral_types
+  
   
   bool split_to_ints( const char *input, const size_t length,
                      std::vector<int> &results )
@@ -1139,23 +1241,29 @@ namespace SpecUtils
   
   bool split_to_floats( const char *input, const size_t length, vector<float> &results )
   {
-#if( SpecUtils_USE_FROM_CHARS )
+    results.clear();
+    
+    // This initial guess almost always over-predicts (when checked on a representative dataset)
+    //  but not by too much, and it reduces total time by about 20%
+    const size_t num_float_guess = (std::max)( size_t(1), (std::min)(length / 2, size_t(32768)) );
+    results.reserve(num_float_guess);
+    
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
      //  TODO: test this implementation against old implementation for the regression test
      const char *start = input;
      const char *end = input + length;
-     results.clear();
-
-     // This initual guess almost always overpredicts (when checked on a representative dataset)
-     //  but not by too much, and it reduces total time by about 20%
-     const size_t num_float_guess = std::max( size_t(1), std::min(length / 2, size_t(32768)) );
-     results.reserve(num_float_guess);
 
      while( start < end )
      {
        float result;
-       //const std::from_chars_result status = std::from_chars(start, end, result);
+#if( SpecUtils_USE_FROM_CHARS )
        const auto [ptr, ec] = std::from_chars(start, end, result);
-       //const auto [ptr, ec] = fast_float::from_chars(start, end, result);
+#else
+       // C++17 is required to use structured bindings `auto [ptr, ec] = ...`, so we'll use `from_chars_result`
+       const fast_float::from_chars_result status = fast_float::from_chars(start, end, result);
+       const char * const &ptr = status.ptr;
+       const std::errc &ec = status.ec;
+#endif
 
        if(ec == std::errc() )
        {
@@ -1194,14 +1302,10 @@ namespace SpecUtils
      }//while( start < end )
      
      return true;
-#else
-    
-    results.clear();
-    
+
+#elif( SpecUtils_USE_BOOST_SPIRIT )
     if( !input || !length )
       return true;
-    
-    results.reserve( std::min( length/2, size_t(65536) ) );
     
     namespace qi = boost::spirit::qi;
     
@@ -1267,7 +1371,7 @@ namespace SpecUtils
         {
           const float a = results[i];
           const float b = checked_result[i];
-          if( fabs(a-b) > 0.000001*(std::max(fabs(a),fabs(b)) ))
+          if( fabs(a-b) > 0.000001*((std::max)(fabs(a),fabs(b)) ))
           {
             char errormsg[1024];
             snprintf( errormsg, sizeof(errormsg),
@@ -1301,43 +1405,108 @@ namespace SpecUtils
     }//if( ok && begin != end )
     
     return ok;
+#elif( SpecUtils_USE_STRTOD )
+    return split_to_floats_strtod( input, length, " \t\n\r,", false, results );
+#else
+    static_assert( 0, "No float parsing method defined???" );
 #endif //SpecUtils_USE_FROM_CHARS / else
   }//bool split_to_floats(...)
   
   
   bool parse_double( const char *input, const size_t length, double &result )
   {
-    namespace qi = boost::spirit::qi;
+    result = 0.0;
     
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
+    const char *begin = next_word( input, input + length, " \t\n\r,+" ); // Fast forward through whitespace and '+'
+    const char *end = input + length;
+    
+#if( SpecUtils_USE_FROM_CHARS )
+    const auto status = std::from_chars(begin, end, result);
+#else
+    const auto status = fast_float::from_chars(begin, end, result);
+#endif
+    
+    const bool ok = (status.ec == std::errc());
+    //if( ok && ((status.ptr + 1) != end) )
+    //  return false;
+    return ok;
+#elif( SpecUtils_USE_BOOST_SPIRIT )
+    namespace qi = boost::spirit::qi;
     const char *begin = input;
     const char *end = begin + length;
-    
-    result = 0.0;
     const bool ok = qi::phrase_parse( begin, end, qi::double_, qi::space, result );
-    
+    //  if( ok && (begin != end) )
+    //    return false;
     return ok;
+#elif( SpecUtils_USE_STRTOD )
+    ;
+    try
+    {
+      result = std::stod( std::string(input, length) );
+    }catch( std::exception & )
+    {
+      return false;
+    }
+    return true;
+#endif
   }
 
 
   bool parse_float( const char *input, const size_t length, float &result )
   {
-    namespace qi = boost::spirit::qi;
+    result = 0.0f;
     
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
+    const char *begin = next_word( input, input + length, " \t\n\r,+" ); // Fast forward through whitespace and '+'
+    const char *end = input + length;
+    
+#if( SpecUtils_USE_FROM_CHARS )
+    const auto status = std::from_chars(begin, end, result);
+#else
+    const auto status = fast_float::from_chars(begin, end, result);
+#endif
+    const bool ok = (status.ec == std::errc());
+    //if( ok && ((status.ptr + 1) != end) )
+    //  return false;
+    return ok;
+#elif( SpecUtils_USE_BOOST_SPIRIT )
+    namespace qi = boost::spirit::qi;
     const char *begin = input;
     const char *end = begin + length;
-    
-    result = 0.0f;
     const bool ok = qi::phrase_parse( begin, end, qi::float_, qi::space, result );
-    
     //  if( ok && (begin != end) )
     //    return false;
-    
     return ok;
-  }
+#elif( SpecUtils_USE_STRTOD )
+    try
+    {
+      result = std::stof( std::string(input, length) );
+    }catch( std::exception & )
+    {
+      return false;
+    }
+    return true;
+#endif
+  }//parse_float(...)
   
 
   bool parse_int( const char *input, const size_t length, int &result )
   {
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
+    const char *begin = next_word( input, input + length, " \t\n\r,+" ); // Fast forward through whitespace and '+'
+    const char *end = input + length;
+    
+#if( SpecUtils_USE_FROM_CHARS )
+    const auto status = std::from_chars(begin, end, result);
+#else
+    const auto status = fast_float::from_chars(begin, end, result);
+#endif
+    const bool ok = (status.ec == std::errc());
+    //if( ok && ((status.ptr + 1) != end) )
+    //  return false;
+    return ok;
+#elif( SpecUtils_USE_BOOST_SPIRIT )
     namespace qi = boost::spirit::qi;
     
     const char *begin = input;
@@ -1345,11 +1514,20 @@ namespace SpecUtils
     
     result = 0;
     const bool ok = qi::phrase_parse( begin, end, qi::int_, qi::space, result );
-    
     //  if( ok && (begin != end) )
     //    return false;
-    
     return ok;
+#elif( SpecUtils_USE_STRTOD )
+    std::string temp_str( input, length );
+    try
+    {
+      result = std::stoi(temp_str);
+    }catch( std::exception & )
+    {
+      return false;
+    }
+    return true;
+#endif
   }
 
 
@@ -1367,75 +1545,12 @@ namespace SpecUtils
     }
 #endif
     
-    // PARSE_CONVERT_METHOD==1 is strtod
-    // PARSE_CONVERT_METHOD==2 is using boost::spirit::qi::parse
-    // PARSE_CONVERT_METHOD==3 is using strtok_r and atof
-    //  If option 3 is selected, then the signture of this function must be changed
-    //    from a const char *.
-    //  Also, methods 1 and 3 both implicitly add all the whitespaces to the
-    //    delimiters.
-    //  I think option 2 is the only 'correct' implementation, although the others
-    //  are close enough for parsing spectrum files. Options 1 and 3 became
-    //  depreciated 20151226
-    
-#define PARSE_CONVERT_METHOD 2
-    
-    const size_t input_size = contents.size();
-    if( input_size )
-    {
-      contents.clear();
-      contents.reserve( std::min( input_size/2, size_t(65536) ) );
-    }//if( input_size )
+    contents.clear();
     
     if( !input || !(*input) )
       return false;
     
-#if( PARSE_CONVERT_METHOD == 1 )
-    errno = 0;
-    const char *pos = input;
-    char *nextpos = input;
-    pos = next_word( nextpos, delims );
-    
-    do
-    {
-      const char d = *pos;
-      if( !isdigit(d) && d != '+' && d != '-' && d != '.' )
-        break;
-      
-      float value = static_cast<float>( strtod( pos, &nextpos ) );
-      //    cerr << "pos=" << (void *)pos << ", nextpos=" << (void *)nextpos << " and " << *nextpos << endl;
-      
-      if( errno )
-      {
-#if(PERFORM_DEVELOPER_CHECKS)
-        char errormsg[1024];
-        char strpart[128] = { 0 };
-        for( int c = 0; c < 127 && pos[c]; ++c )
-          strpart[c] = pos[c];
-        strpart[127] = '\0';
-        
-        snprintf( errormsg, sizeof(errormsg),
-                 "Couldnt convert string '%s' to a float using strtod(), error %i",
-                 strpart, errno );
-        log_developer_error( __func__, errormsg );
-#endif
-        return false;
-      }//if( errno )
-      
-      if( cambio_zero_compress_fix && (value == 0.0) )
-      {
-        const char nextchar[2] = { *(pos+1), '\0' };
-        if( !strstr(delims, nextchar) )  //If the next char is a delimeter, then we dont wantto apply the fix, otherwise apply the fix
-          value = FLT_MIN;
-      }//if( value == 0.0 )
-      
-      contents.push_back( value );
-      
-      pos = next_word( nextpos, delims );
-    }while( pos && (*pos) && (pos != nextpos) );
-    
-#elif( PARSE_CONVERT_METHOD == 2 )
-    
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT || SpecUtils_USE_BOOST_SPIRIT )
     const char *pos = input;
     // TODO: 20240307: strings like "661.7,-0.1.7,9.3" are parsing and returning true - we could/should fix this
     //bool all_fields_okay = true;
@@ -1443,19 +1558,44 @@ namespace SpecUtils
     while( *pos )
     {
       pos = next_word( pos, delims );
+      
       if( *pos == '\0' )
         return true;
       
-      const char * const start_pos = pos;
-      const char *end = end_of_word( pos, delims );
+      const char * start_pos = pos;
       
+#if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
+      // from_chars doesnt allow leading '+' sign
+      if( (*start_pos) == '+' )
+      {
+        ++start_pos;
+        
+        // If the next digit after the plus sign isnt a digit, return false
+        if( !(*start_pos) || ((*start_pos) < '0') || ((*start_pos) > '9') )
+          return false;
+      }
+#endif
+      
+      const char * const end = end_of_word( start_pos, delims );
+      
+#if( SpecUtils_USE_FROM_CHARS )
+      float value;
+      const auto status = std::from_chars(start_pos, end, value);
+      const bool ok = (status.ec == std::errc());
+      pos = status.ptr;
+#elif( SpecUtils_USE_FAST_FLOAT )
+      float value;
+      const auto status = fast_float::from_chars(start_pos, end, value);
+      const bool ok = (status.ec == std::errc());
+      pos = status.ptr;
+#else
       //Using a double here instead of a float causes about a 2.5% slow down.
       //  Using a float would be fine, but then you hit a limitation
       //  that the value before decimal point must be less than 2^32 (note, we are
       //  unlikely to ever see this in channel counts).
       double value;
       const bool ok = boost::spirit::qi::parse( pos, end, boost::spirit::qi::double_, value );
-      
+#endif
       
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       if( !ok )
@@ -1479,7 +1619,7 @@ namespace SpecUtils
         
         const float a = static_cast<float>( value );
         const float b = (float) atof( string(start_pos, end).c_str() );
-        if( fabs(a-b) > 0.000001f*(std::max(fabs(a),fabs(b)) ))
+        if( fabs(a-b) > 0.000001f*((std::max)(fabs(a),fabs(b)) ))
         {
           char errormsg[1024];
           snprintf( errormsg, sizeof(errormsg),
@@ -1500,94 +1640,17 @@ namespace SpecUtils
       if( cambio_zero_compress_fix && (value == 0.0)
          && !is_in( *(start_pos+1), delims ) )
       {
-        value = FLT_MIN;
+        value = std::numeric_limits<float>::min();
       }//if( value == 0.0 )
       
       contents.push_back( static_cast<float>(value) );
     }//while( *pos )
     
-    //return all_fields_okay;
-    
-#elif( PARSE_CONVERT_METHOD == 3 )
-    errno = 0;
-    float value;
-    char *pos_ptr = NULL;
-    
-    // Branches for Windows; strtok_r is on POSIX systems. strtok_s is the Windows equivalent.
-#ifdef _WIN32
-    char *value_str = strtok_s( input, delims, &pos_ptr );
-#else
-    char *value_str = strtok_r( input, delims, &pos_ptr );
+    return !(*pos);
+#elif( SpecUtils_USE_STRTOD )
+    const size_t length = strlen( input );
+    return split_to_floats_strtod( input, length, delims, cambio_zero_compress_fix, contents );
 #endif
-    
-    while( value_str != NULL )
-    {
-      //  XXX: using stringstream to convert the double makes split_to_floats(...)
-      //       take about 40% of the time of parsing an ICD1 file (the example
-      //       Passthrough) - using atof reduces this to 17.9% (and further down to
-      //       14% if 'contents' is passed in with space already reserved).
-      //       Running on a number of ICD1 files showed no errors using the
-      //       stringstream implementation, so will continue using atof.
-      //       Now approx 40% of time in this function is due to
-      //       vector<float>::push_back(...), and 50% to atof(...); 11% to strtok_r
-      //
-      //    if( !(stringstream(value_str) >> value) )
-      //      cerr << "Error converting '" << value_str << "' to float" << endl;
-      //
-      //Note that atof discards initial white spaces, meaning the functionality
-      //  of this function is not correct if the delimiters dont include all the
-      //  white space characters.
-      //    errno = (sscanf(value_str, "%f", &value) != 1);
-      //    value = fast_atof( value_str );
-      //    errno = !naive_atof( value, value_str );
-      value = (float)atof( value_str );
-      //    value = (float)strtod( value_str, NULL );
-      /*
-       {
-       //find next delim or end
-       const char *end = end_of_word( value_str, delims );
-       errno = !boost::spirit::qi::parse( (const char *)value_str, end, boost::spirit::qi::float_, value );
-       value_str = (char *)end;
-       }
-       */
-      if( errno )
-      {
-#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-        char errormsg[1024];
-        snprintf( errormsg, sizeof(errormsg),
-                 "Couldnt convert string '%s' to a float using atof(), error %i",
-                 value_str, errno );
-        log_developer_error( __func__, errormsg );
-#endif
-        return false;
-      }//if( errno )
-      
-      
-      //XXX
-      //  In Cambio N42 files zeros written like "0" indicates zeroes compression,
-      //  a zero written like "0.000", "-0.0", etc are all a sinle bin with
-      //  content zero - so for this case well substiture in a really small number
-      if( cambio_zero_compress_fix && (value == 0.0) )
-      {
-        if( strlen(value_str) > 1 )
-          value = FLT_MIN; //std::numeric_limits<float>::min();
-      }//if( value == 0.0 )
-      
-      contents.push_back( value );
-      
-      // Branches for Windows; strtok_r is on POSIX systems. strtok_s is the Windows equivalent.
-#ifdef _WIN32
-      value_str = strtok_s( NULL, delims, &pos_ptr );
-#else
-      value_str = strtok_r( NULL, delims, &pos_ptr );
-#endif
-    }//while( pch != NULL )
-    
-#else
-#error Invalid parse method specified
-#endif
-    
-    return true;
   }//vector<float> split_to_floats( ... )
   
 
@@ -1936,8 +1999,8 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
   {
     //This function largely derived from code found at:
     //  http://www.merriampark.com/ldcpp.htm  (by Anders Johnasen).
-    //  There was no accompaning lincense information, and since I found many
-    //  similar-but-seperate implementations on the internet, I take the code in
+    //  There was no accompanying license information, and since I found many
+    //  similar-but-separate implementations on the internet, I take the code in
     //  this function to be licensed under a 'do-what-you-will' public domain
     //  license. --Will Johnson 20100824
     
@@ -1946,8 +2009,8 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
     if( !max_str_len )
       return 0;
     
-    const size_t n = std::min( source.length(), max_str_len );
-    const size_t m = std::min( target.length(), max_str_len );
+    const size_t n = (std::min)( source.length(), max_str_len );
+    const size_t m = (std::min)( target.length(), max_str_len );
     if( !n )
       return static_cast<unsigned int>(m);
     
@@ -1976,7 +2039,7 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
         const size_t above = matrix[i-1][j];
         const size_t left = matrix[i][j-1];
         const size_t diag = matrix[i-1][j-1];
-        size_t cell = min( above + 1, min(left + 1, diag + cost));
+        size_t cell = (std::min)( above + 1, (std::min)(left + 1, diag + cost));
         
         // Step 6A: Cover transposition, in addition to deletion,
         // insertion and substitution. This step is taken from:
