@@ -31,6 +31,9 @@
 #include <iostream>
 #include <stdlib.h>
 
+#if(PERFORM_DEVELOPER_CHECKS)
+#include <boost/date_time/posix_time/posix_time.hpp>
+#endif
 
 #undef isnan  // Undefine the isnan macro (compiule failure in doctest.h on Windows)
 
@@ -64,6 +67,110 @@ SpecUtils::time_point_t random_time_point()
   return tp;
 }//SpecUtils::time_point_t random_time_point()
 
+#if( PERFORM_DEVELOPER_CHECKS )
+boost::posix_time::ptime to_ptime( const SpecUtils::time_point_t &rhs )
+{
+  auto dp = ::date::floor<::date::days>(rhs);
+  auto ymd = ::date::year_month_day{dp};
+  auto time = ::date::make_time(rhs - dp);
+  
+  boost::posix_time::time_duration td( time.hours().count(),
+                                      time.minutes().count(),
+                                      time.seconds().count(),
+                                      date::floor<chrono::microseconds>(time.subseconds()).count()
+                                      );
+  
+  boost::gregorian::greg_month month{boost::gregorian::Jan};
+  switch( static_cast<unsigned>(ymd.month()) )
+  {
+    case 1: month = boost::gregorian::Jan; break;
+    case 2: month = boost::gregorian::Feb; break;
+    case 3: month = boost::gregorian::Mar; break;
+    case 4: month = boost::gregorian::Apr; break;
+    case 5: month = boost::gregorian::May; break;
+    case 6: month = boost::gregorian::Jun; break;
+    case 7: month = boost::gregorian::Jul; break;
+    case 8: month = boost::gregorian::Aug; break;
+    case 9: month = boost::gregorian::Sep; break;
+    case 10: month = boost::gregorian::Oct; break;
+    case 11: month = boost::gregorian::Nov; break;
+    case 12: month = boost::gregorian::Dec; break;
+    default: assert( 0 ); throw runtime_error( "wth: invalid month?" ); break;
+  }
+  
+  const boost::gregorian::date d( static_cast<int>(ymd.year()), month, (unsigned)ymd.day() );
+  
+  return boost::posix_time::ptime( d, td );
+}//to_ptime(...)
+
+
+SpecUtils::time_point_t to_time_point( const boost::posix_time::ptime &rhs )
+{
+  if( rhs.is_special() )
+    return {};
+  
+  unsigned short year = static_cast<unsigned short>( rhs.date().year() );
+  const unsigned month = rhs.date().month().as_number();
+  const unsigned day = rhs.date().day().as_number();
+  
+  const int64_t nmicro = rhs.time_of_day().total_microseconds();
+  date::year_month_day ymd{ date::year(year), date::month(month), date::day(day) };
+  
+  date::sys_days days = ymd;
+  SpecUtils::time_point_t tp = days;
+  tp += chrono::microseconds(nmicro);
+  
+  return tp;
+}
+
+boost::posix_time::ptime random_ptime()
+{
+  const auto mon = boost::date_time::months_of_year( (rand()%12) + 1 );
+  
+  const int yr = 1401 + (rand()%700);
+  int day;
+  
+  switch( mon )
+  {
+    case boost::date_time::Feb:
+      day = 1 + (rand() % 28);
+      break;
+      
+    case boost::date_time::Sep:
+    case boost::date_time::Apr:
+    case boost::date_time::Jun:
+    case boost::date_time::Nov:
+      day = 1 + (rand() % 30);
+      break;
+    
+    case boost::date_time::Aug:
+    case boost::date_time::Dec:
+    case boost::date_time::Jan:
+    case boost::date_time::Jul:
+    case boost::date_time::Mar:
+    case boost::date_time::May:
+    case boost::date_time::Oct:
+      day = rand()%31+1;
+      break;
+      
+    case boost::date_time::NotAMonth:
+    case boost::date_time::NumMonths:
+    default:
+      assert(0);
+  }//switch( mon )
+  
+  
+  const boost::gregorian::date d(yr, mon, day);
+
+  const int hr = rand() % 24;
+  const int min = rand() % 60;
+  const int sec = rand() % 60;
+  const int frac = rand() % 1000000;
+  boost::posix_time::time_duration td( hr, min, sec, frac);
+
+  return boost::posix_time::ptime(d, td);
+}//random_ptime()
+#endif //PERFORM_DEVELOPER_CHECKS
 
 TEST_CASE( "isoString" )
 {

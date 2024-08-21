@@ -22,7 +22,7 @@ if( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 endif( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 
 if( PERFORM_DEVELOPER_CHECKS )
-  find_package( Boost REQUIRED )
+  find_package( Boost REQUIRED system )
 
   if( NOT Boost_FOUND )
     message(FATAL_ERROR "Couldnt Find Boost")
@@ -204,5 +204,16 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   add_test(
     NAME test_uri_spectrum
     COMMAND $<TARGET_FILE:test_uri_spectrum> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  )
+endif()
+
+if( PERFORM_DEVELOPER_CHECKS )
+  add_executable( test_hash test_hash.cpp )
+  target_link_libraries( test_hash PRIVATE SpecUtils Boost::system )
+  target_include_directories( test_hash PUBLIC ../3rdparty )
+  set_target_properties( test_hash PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+  add_test(
+    NAME test_hash
+    COMMAND $<TARGET_FILE:test_hash> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
   )
 endif()
