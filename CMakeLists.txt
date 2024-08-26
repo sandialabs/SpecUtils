@@ -21,6 +21,7 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interacti
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
@@ -89,10 +90,6 @@ if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
   endif(NOT hasParent)
 endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
 
-
-if( SpecUtils_PYTHON_BINDINGS )
-  list( APPEND boost_libs_required python )
-endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_BUILD_EXAMPLE )
   add_subdirectory( examples )
@@ -262,6 +259,11 @@ if( SpecUtils_JAVA_SWIG )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
+if( SpecUtils_C_BINDINGS )
+  list( APPEND headers bindings/c/SpecUtils_c.h )
+  list( APPEND sources bindings/c/SpecUtils_c.cpp )
+endif( SpecUtils_C_BINDINGS )
+
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
@@ -326,14 +328,22 @@ endif( SpecUtils_USE_FAST_FLOAT )
 # We only need boost libraries if we are using boost to parse floats, if we are performing developer
 #  checks, or we are creating Python bindings
 if( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_BINDINGS )
+  
   if( DEFINED boost_SOURCE_DIR )
     # We used CMake Fetch to get boost (e.g., in InterSpec)
     target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional Boost::crc )
+  
   else( DEFINED boost_SOURCE_DIR )
+  
+    if( SpecUtils_PYTHON_BINDINGS )
+      list( APPEND boost_libs_required python )
+    endif( SpecUtils_PYTHON_BINDINGS )
+  
     find_package( Boost REQUIRED COMPONENTS system ${boost_libs_required} )
     if( NOT Boost_FOUND )
       message(FATAL_ERROR "Couldnt Find Boost")
     endif( NOT Boost_FOUND )
+    
     target_link_libraries( SpecUtils PUBLIC Boost::system )
   endif( DEFINED boost_SOURCE_DIR )
 endif( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_BINDINGS )
@@ -389,7 +399,6 @@ endif( SpecUtils_ENABLE_URI_SPECTRA )
 
 
 if( SpecUtils_PYTHON_BINDINGS )
-  #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
   target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
 
