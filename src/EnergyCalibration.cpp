@@ -810,12 +810,12 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
     
     answer->operator[](i) = static_cast<float>( val );
     
-    //Note, #apply_deviation_pair will also check for strickly increasing, but _after_ applying
+    //Note, #apply_deviation_pair will also check for strictly increasing, but _after_ applying
     //  deviation pairs (since there you could have a FRF that is only valid with the dev pairs)
     // \ToDo: check for infs and NaNs too
     if( dev_pairs.empty() && (val <= prev_energy) )
     {
-      string msg = "Invalid FullRangeFranction equation {";
+      string msg = "Invalid FullRangeFraction equation {";
       for( size_t c = 0; c < ncoeffs; ++c )
         msg += (c ? ", " : "") + std::to_string(coeffs[c]);
       msg += "} starting at channel " + std::to_string(i);

@@ -986,7 +986,7 @@ public:
    satisfy these requirements if it was parsed from a file by this library, and this #Measurement
    has gamma counts.
    
-   After a succesful call to this function, #calibration will return the same value as passed into
+   After a successful call to this function, #calibration will return the same value as passed into
    this function.
    */
   void rebin( const std::shared_ptr<const EnergyCalibration> &cal );

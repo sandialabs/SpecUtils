@@ -337,6 +337,51 @@ static_assert( static_cast<int>(SpecUtils_EnergyCal_InvalidEquationType)
               "SpecUtils_EnergyCalType needs updating" );
 
 
+// Check `SpecUtils_OccupancyStatus` has same values as `SpecUtils::OccupancyStatus`.
+static_assert( static_cast<int>(SpecUtils_OccupancyStatus::SpecUtils_OccupancyStatus_NotOccupied)
+              == static_cast<int>(SpecUtils::OccupancyStatus::NotOccupied),
+              "SpecUtils_OccupancyStatus needs updating" );
+static_assert( static_cast<int>(SpecUtils_OccupancyStatus::SpecUtils_OccupancyStatus_Occupied)
+              == static_cast<int>(SpecUtils::OccupancyStatus::Occupied),
+              "SpecUtils_OccupancyStatus needs updating" );
+static_assert( static_cast<int>(SpecUtils_OccupancyStatus::SpecUtils_OccupancyStatus_Unknown)
+              == static_cast<int>(SpecUtils::OccupancyStatus::Unknown),
+              "SpecUtils_OccupancyStatus needs updating" );
+
+
+// Check `SpecUtils_QualityStatus_Good` has same values as `SpecUtils::QualityStatus`.
+static_assert( static_cast<int>(SpecUtils_QualityStatus::SpecUtils_QualityStatus_Good)
+              == static_cast<int>(SpecUtils::QualityStatus::Good),
+              "SpecUtils_QualityStatus needs updating" );
+static_assert( static_cast<int>(SpecUtils_QualityStatus::SpecUtils_QualityStatus_Suspect)
+              == static_cast<int>(SpecUtils::QualityStatus::Suspect),
+              "SpecUtils_QualityStatus needs updating" );
+static_assert( static_cast<int>(SpecUtils_QualityStatus::SpecUtils_QualityStatus_Bad)
+              == static_cast<int>(SpecUtils::QualityStatus::Bad),
+              "SpecUtils_QualityStatus needs updating" );
+static_assert( static_cast<int>(SpecUtils_QualityStatus::SpecUtils_QualityStatus_Missing)
+              == static_cast<int>(SpecUtils::QualityStatus::Missing),
+              "SpecUtils_QualityStatus needs updating" );
+
+// Check `SpecUtils_SourceType` has same values as `SpecUtils::SourceType`.
+static_assert( static_cast<int>(SpecUtils_SourceType::SpecUtils_SourceType_IntrinsicActivity)
+              == static_cast<int>(SpecUtils::SourceType::IntrinsicActivity),
+              "SpecUtils_SourceType needs updating" );
+static_assert( static_cast<int>(SpecUtils_SourceType::SpecUtils_SourceType_Calibration)
+              == static_cast<int>(SpecUtils::SourceType::Calibration),
+              "SpecUtils_SourceType needs updating" );
+static_assert( static_cast<int>(SpecUtils_SourceType::SpecUtils_SourceType_Background)
+              == static_cast<int>(SpecUtils::SourceType::Background),
+              "SpecUtils_SourceType needs updating" );
+static_assert( static_cast<int>(SpecUtils_SourceType::SpecUtils_SourceType_Foreground)
+              == static_cast<int>(SpecUtils::SourceType::Foreground),
+              "SpecUtils_SourceType needs updating" );
+static_assert( static_cast<int>(SpecUtils_SourceType::SpecUtils_SourceType_Unknown)
+              == static_cast<int>(SpecUtils::SourceType::Unknown),
+              "SpecUtils_SourceType needs updating" );
+
+
+
 namespace // - private functions for this file
 {
   shared_ptr<const SpecUtils::Measurement> get_shared_ptr( const SpecUtils::SpecFile * const specfile,
@@ -373,6 +418,27 @@ SpecUtils_SpecFile *SpecUtils_SpecFile_create()
   SpecUtils::SpecFile *ptr = new SpecUtils::SpecFile();
   return reinterpret_cast<SpecUtils_SpecFile *>( ptr );
 }
+
+
+SpecUtils_SpecFile *SpecUtils_SpecFile_clone( const SpecUtils_SpecFile * const instance )
+{
+  try
+  {
+    const SpecUtils::SpecFile *orig = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
+    if( !orig )
+      throw runtime_error( "null input" );
+    
+    SpecUtils::SpecFile *copy = new SpecUtils::SpecFile();
+    *copy = *orig;
+    
+    return reinterpret_cast<SpecUtils_SpecFile *>( copy );
+  }catch( std::exception &e )
+  {
+    cerr << "SpecUtils_SpecFile_clone: " << e.what() << endl;
+  }
+  
+  return nullptr;
+}
   
 
 void SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance )
@@ -381,6 +447,27 @@ void SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance )
   SpecUtils::SpecFile *ptr = reinterpret_cast<SpecUtils::SpecFile *>( instance );
   if( ptr )
     delete ptr;
+}
+
+
+void SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile *rhs )
+{
+  try
+  {
+    auto lhs_raw = reinterpret_cast<SpecUtils::SpecFile *>( lhs );
+    auto rhs_raw = reinterpret_cast<const SpecUtils::SpecFile *>( rhs );
+    if( !lhs_raw )
+      throw runtime_error( "null lhs" );
+    
+    if( !rhs_raw )
+      throw runtime_error( "null lhs" );
+    
+    *lhs_raw = *rhs_raw;
+  }catch( std::exception &e )
+  {
+    // Really dont expect to get here - so we arent returning an error code or anything
+    cerr << "SpecUtils_SpecFile_set_equal: " << e.what() << endl;
+  }
 }
 
 
@@ -452,7 +539,7 @@ bool SpecUtils_SpecFile_passthrough( const SpecUtils_SpecFile * const instance )
 }
 
   
-uint32_t SpecUtils_SpecFile_num_measurements( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -460,7 +547,7 @@ uint32_t SpecUtils_SpecFile_num_measurements( const SpecUtils_SpecFile * const i
 }
   
 
-uint32_t SpecUtils_SpecFile_num_gamma_channels( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -997,7 +1084,7 @@ void SpecUtils_SpecFile_add_remark( SpecUtils_SpecFile *instance,
                                 const char * const remark )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
-  assert( specfile && remarks );
+  assert( specfile && remark );
   if( specfile && remark )
     specfile->add_remark( remark );
 }
@@ -1008,7 +1095,7 @@ void SpecUtils_SpecFile_set_parse_warnings( SpecUtils_SpecFile *instance,
                                         const uint32_t number_warnings )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
-  assert( specfile && remarks );
+  assert( specfile && warnings );
   if( !specfile || !warnings )
     return;
   
@@ -1346,31 +1433,684 @@ bool SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *
   return true;
 }
 
-  
-/*
-// Measurement
-DLLEXPORT SpecUtils_Measurement* CALLINGCONVENTION SpecUtils_Measurement_create();
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance );
 
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_title(SpecUtils::Measurement* self, char* title);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_description(SpecUtils::Measurement* self, char* description_in);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_source_string(SpecUtils::Measurement* self, char* source_string_in);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_gamma_counts(SpecUtils::Measurement* self, float* counts_in, uint32_t nchannels, float live_time, float real_time);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_energy_calibration(SpecUtils::Measurement* self, float* coefficients, uint32_t num_coefficients );
-DLLEXPORT const char* CALLINGCONVENTION SpecUtils_Measurement_title( SpecUtils::Measurement* self );
-DLLEXPORT char* CALLINGCONVENTION SpecUtils_Measurement_start_time( SpecUtils::Measurement* self );
-DLLEXPORT uint32_t CALLINGCONVENTION SpecUtils_Measurement_num_gamma_channels( SpecUtils::Measurement* self );
-DLLEXPORT const float CALLINGCONVENTION SpecUtils_Measurement_gamma_count_at( SpecUtils::Measurement* self, uint32_t index );
-DLLEXPORT const float* CALLINGCONVENTION SpecUtils_Measurement_energy_bounds( SpecUtils::Measurement* self );
-DLLEXPORT uint32_t CALLINGCONVENTION SpecUtils_Measurement_energy_bounds_len( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_true_time( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_live_time( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_neutron_live_time( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_gamma_count_sum( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_neutron_count_sum( SpecUtils::Measurement* self );
-DLLEXPORT uint8_t CALLINGCONVENTION SpecUtils_Measurement_is_occupied( SpecUtils::Measurement* self );
-*/
+SpecUtils_Measurement *SpecUtils_Measurement_create()
+{
+  SpecUtils::Measurement *m = new SpecUtils::Measurement();
+  return reinterpret_cast<SpecUtils_Measurement *>( m );
+}
+
+
+SpecUtils_Measurement * SpecUtils_Measurement_clone( const SpecUtils_Measurement * const instance )
+{
+  try
+  {
+    auto original = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+    if( !original )
+      throw runtime_error( "null input." );
+    
+    SpecUtils::Measurement *our_copy = new SpecUtils::Measurement();
+    
+    *our_copy = *original;
+    
+    return reinterpret_cast<SpecUtils_Measurement *>( our_copy );
+  }catch( std::exception &e )
+  {
+    // Really dont expect to get here
+    cerr << "SpecUtils_Measurement_clone: " << e.what() << endl;
+  }
   
+  return nullptr;
+}
+  
+
+void SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    delete m;
+}
+
+
+uint32_t SpecUtils_Measurement_memmorysize( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? static_cast<uint32_t>(m->memmorysize()) : uint32_t(0);
+}
+
+
+void SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Measurement *rhs )
+{
+  try
+  {
+    auto lhs_raw = reinterpret_cast<SpecUtils::Measurement *>( lhs );
+    auto rhs_raw = reinterpret_cast<const SpecUtils::Measurement *>( rhs );
+    if( !lhs_raw )
+      throw runtime_error( "null lhs" );
+    
+    if( !rhs_raw )
+      throw runtime_error( "null lhs" );
+    
+    *lhs_raw = *rhs_raw;
+  }catch( std::exception &e )
+  {
+    // Really dont expect to get here - so we arent returning an error code or anything
+    cerr << "SpecUtils_Measurement_set_equal: " << e.what() << endl;
+  }
+}
+
+
+void SpecUtils_Measurement_reset( SpecUtils_Measurement *instance )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    m->reset();
+}
+
+
+void SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
+                                      const char * const description_cstr )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return;
+  
+  // We will erase existing description if empty string is passed in.
+  //  Otherwise we will update description.
+  string description( description_cstr ? description_cstr : "" );
+  if( !description.empty() )
+    description = "Description: " + description;
+  
+  vector<string> remarks = m->remarks();
+
+  // If there is already a description, over-write it
+  for( size_t i = 0; i < remarks.size(); ++i )
+  {
+    if( SpecUtils::istarts_with(remarks[i], "Description:") )
+    {
+      if( description.empty() )
+        remarks.erase( begin(remarks) + i );
+      else
+        remarks[i] = description;
+      
+      m->set_remarks( remarks );
+      return;
+    }
+  }//
+  
+  remarks.push_back( description );
+  m->set_remarks( remarks );
+}
+
+
+void SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
+                                        const char * const source_string_cstr )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return;
+  
+  // We will erase existing description if empty string is passed in.
+  //  Otherwise we will update description.
+  string src_string( source_string_cstr ? source_string_cstr : "" );
+  if( !src_string.empty() )
+    src_string = "Source: " + src_string;
+  
+  vector<string> remarks = m->remarks();
+
+  // If there is already a source string, over-write it
+  for( size_t i = 0; i < remarks.size(); ++i )
+  {
+    if( SpecUtils::istarts_with(remarks[i], "Source:") )
+    {
+      if( src_string.empty() )
+        remarks.erase( begin(remarks) + i );
+      else
+        remarks[i] = src_string;
+      
+      m->set_remarks( remarks );
+      return;
+    }
+  }//
+  
+  remarks.push_back( src_string );
+  m->set_remarks( remarks );
+}
+  
+
+void SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
+                                       const float *counts,
+                                       const uint32_t nchannels,
+                                       const float live_time,
+                                       const float real_time )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  assert( counts || (nchannels == 0) ); //If `counts` is null, then `nchannels` better be zero to.
+  
+  if( !m )
+    return;
+  
+  shared_ptr<vector<float>> cc = counts ? make_shared<vector<float>>(counts, counts + nchannels)
+                                        : nullptr;
+  m->set_gamma_counts( cc, live_time, real_time );
+}
+
+
+const char *SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  
+  const string &title = m->title();
+  return title.c_str();
+}
+
+
+void SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
+                                const char * const title )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m && title );
+  if( m )
+    m->set_title( title ? title : "" );
+}
+  
+
+int64_t SpecUtils_Measurement_start_time_usecs( SpecUtils_Measurement *instance )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return 0;
+  
+  SpecUtils::time_point_t st = m->start_time();
+  if( SpecUtils::is_special(st) )
+    return 0;
+  
+  const SpecUtils::time_point_t epoch{};
+  const auto total_time = chrono::duration_cast<chrono::microseconds>(st - epoch);
+  
+  return total_time.count();
+}
+  
+
+void SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
+                                           const int64_t start_time )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  
+  SpecUtils::time_point_t tp{};
+  tp += std::chrono::microseconds( start_time );
+  if( m )
+    m->set_start_time( tp );
+}
+
+
+bool SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
+                                            const char * const start_time_str )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  
+  SpecUtils::time_point_t tp{};
+  if( start_time_str )
+    tp = SpecUtils::time_from_string( start_time_str );
+  
+  if( m )
+    m->set_start_time( tp );
+}
+  
+  
+uint32_t SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? static_cast<uint32_t>(m->num_gamma_channels()) : uint32_t(0);
+}
+  
+
+const float *SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  const shared_ptr<const vector<float>> &counts = m->gamma_channel_contents();
+  return counts ? counts->data() : nullptr;
+}
+
+
+const float *SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  
+  const shared_ptr<const vector<float>> &energies = m->channel_energies();
+  return energies ? energies->data() : nullptr;
+}
+
+const SpecUtils_EnergyCal *
+SpecUtils_Measurement_energy_calibration( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  
+  shared_ptr<const SpecUtils::EnergyCalibration> cal = m->energy_calibration();
+  return cal ? reinterpret_cast<const SpecUtils_EnergyCal *>( cal.get() ) : nullptr;
+}
+  
+
+const SpecUtils_CountedRef_EnergyCal *
+SpecUtils_Measurement_energy_calibration_ref( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  
+  shared_ptr<const SpecUtils::EnergyCalibration> cal = m->energy_calibration();
+  if( !cal )
+    return nullptr;
+  
+  auto new_cal_ptr = new shared_ptr<const SpecUtils::EnergyCalibration>( cal );
+  return reinterpret_cast<const SpecUtils_CountedRef_EnergyCal *>( new_cal_ptr );
+}
+
+
+float SpecUtils_Measurement_real_time( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->real_time() : 0.0f;
+}
+
+
+float SpecUtils_Measurement_live_time( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->live_time() : 0.0f;
+}
+  
+
+float SpecUtils_Measurement_neutron_live_time( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->neutron_live_time() : 0.0f;
+}
+  
+
+double SpecUtils_Measurement_gamma_count_sum( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->gamma_count_sum() : 0.0;
+}
+  
+
+double SpecUtils_Measurement_neutron_count_sum( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->neutron_counts_sum() : 0.0;
+}
+
+
+bool SpecUtils_Measurement_is_occupied( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? (m->occupied() == SpecUtils::OccupancyStatus::Occupied) : false;
+}
+
+
+bool SpecUtils_Measurement_contained_neutron( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->contained_neutron() : false;
+}
+
+
+int SpecUtils_Measurement_sample_number( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->sample_number() : -999;
+}
+
+void SpecUtils_Measurement_set_sample_number( SpecUtils_Measurement *instance,
+                                        const int samplenum )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    m->set_sample_number( samplenum );
+}
+
+
+const char *SpecUtils_Measurement_detector_name( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  const string &name = m->detector_name();
+  return name.c_str();
+}
+
+
+void SpecUtils_Measurement_set_detector_name( SpecUtils_Measurement *instance,
+                                        const char *name )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    m->set_detector_name( name ? name : "" );
+}
+
+
+float SpecUtils_Measurement_speed( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->speed() : 0.0f;
+}
+
+
+enum SpecUtils_OccupancyStatus 
+SpecUtils_Measurement_occupancy_status( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  const SpecUtils::OccupancyStatus status = m ? m->occupied() : SpecUtils::OccupancyStatus::Unknown;
+  return SpecUtils_OccupancyStatus( static_cast<int>(status) );
+}
+
+
+void SpecUtils_Measurement_set_occupancy_status( SpecUtils_Measurement *instance,
+                     const SpecUtils_OccupancyStatus status )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    m->set_occupancy_status( SpecUtils::OccupancyStatus(static_cast<int>(status)) );
+}
+
+
+bool SpecUtils_Measurement_has_gps_info( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->has_gps_info() : false;
+}
+
+
+double SpecUtils_Measurement_latitude( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->latitude() : -999.9;
+}
+
+double SpecUtils_Measurement_longitude( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->longitude() : -999.9;
+}
+
+int64_t SpecUtils_Measurement_position_time_microsec( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return 0;
+  
+  const SpecUtils::time_point_t &st = m->start_time();
+  const SpecUtils::time_point_t epoch{};
+  const auto total_time = chrono::duration_cast<chrono::microseconds>(st - epoch);
+  return static_cast<int64_t>( total_time.count() );
+}
+
+
+void SpecUtils_Measurement_set_position( SpecUtils_Measurement *instance,
+                                   const double longitude,
+                                   const double latitude,
+                                   const int64_t position_time_microsec )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return;
+  
+  SpecUtils::time_point_t dt{};
+  if( position_time_microsec )
+    dt += std::chrono::microseconds( position_time_microsec );
+  
+  m->set_position( longitude, latitude, dt );
+}
+
+
+float SpecUtils_Measurement_dose_rate( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->dose_rate() : 0.0f;
+}
+
+
+float SpecUtils_Measurement_exposure_rate( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->exposure_rate() : 0.0f;
+}
+
+const char *SpecUtils_Measurement_detector_type( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->detector_type().c_str() : nullptr;
+}
+
+
+enum SpecUtils_QualityStatus
+SpecUtils_Measurement_quality_status( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? SpecUtils_QualityStatus(static_cast<int>(m->quality_status()))
+          : SpecUtils_QualityStatus::SpecUtils_QualityStatus_Missing;
+}
+
+
+enum SpecUtils_SourceType
+SpecUtils_Measurement_source_type( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? SpecUtils_SourceType(static_cast<int>(m->source_type()))
+          : SpecUtils_SourceType::SpecUtils_SourceType_Unknown;
+}
+
+
+void SpecUtils_Measurement_set_source_type( SpecUtils_Measurement *instance,
+                                      const SpecUtils_SourceType type )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    m->set_source_type( SpecUtils::SourceType(static_cast<int>(type)) );
+}
+  
+
+uint32_t SpecUtils_Measurement_number_remarks( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? static_cast<uint32_t>(m->remarks().size()) : uint32_t(0);
+}
+
+
+const char *SpecUtils_Measurement_remark( const SpecUtils_Measurement * const instance,
+                             const uint32_t remark_index )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  
+  const vector<string> &remarks = m->remarks();
+  return (remark_index < remarks.size()) ? remarks[remark_index].c_str() : nullptr;
+}
+
+
+void SpecUtils_Measurement_set_remarks( SpecUtils_Measurement *instance,
+                                  const char **remarks,
+                                  const uint32_t number_remarks )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  
+  if( !m )
+    return;
+  if( !remarks || (number_remarks == 0) )
+    m->set_remarks( {} );
+  else
+    m->set_remarks( vector<string>(remarks, remarks+number_remarks) );
+}
+
+
+uint32_t SpecUtils_Measurement_number_parse_warnings( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? static_cast<uint32_t>(m->parse_warnings().size()) : uint32_t(0);
+}
+
+
+const char *SpecUtils_Measurement_parse_warning( const SpecUtils_Measurement * const instance,
+                                    const uint32_t index )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return nullptr;
+  
+  const vector<string> &warnings = m->parse_warnings();
+  return (index < warnings.size()) ? warnings[index].c_str() : nullptr;
+}
+  
+
+double SpecUtils_Measurement_gamma_integral( const SpecUtils_Measurement * const instance,
+                                     const float lower_energy, const float upper_energy )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->gamma_integral( lower_energy, upper_energy ) : 0.0;
+}
+  
+
+double SpecUtils_Measurement_gamma_channels_sum( const SpecUtils_Measurement * const instance,
+                                         const uint32_t startbin,
+                                         const uint32_t endbin )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->gamma_channels_sum( startbin, endbin ) : 0.0;
+}
+
+
+uint32_t SpecUtils_Measurement_derived_data_properties( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->derived_data_properties() : uint32_t(0);
+}
+  
+
+bool SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
+                                             const uint32_t nchannel )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  
+  try
+  {
+    if( !m )
+      throw runtime_error( "null input" );
+    m->combine_gamma_channels( nchannel );
+  }catch( std::exception &e )
+  {
+    cerr << "SpecUtils_Measurement_combine_gamma_channels: " << e.what() << endl;
+    return false;
+  }
+  
+  return true;
+}
+  
+
+bool SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
+                            const SpecUtils_CountedRef_EnergyCal * const cal_ptr )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  const shared_ptr<const SpecUtils::EnergyCalibration> *cal
+                    = reinterpret_cast<const shared_ptr<const SpecUtils::EnergyCalibration> *>( cal_ptr );
+  assert( m && cal );
+  
+  try
+  {
+    if( !cal )
+      throw runtime_error( "nullptr input energy cal" );
+    
+    m->rebin( *cal );
+  }catch( std::exception &e )
+  {
+    cerr << "SpecUtils_Measurement_rebin: " << e.what() << endl;
+    return false;
+  }
+  
+  return true;
+}
+  
+
+bool SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
+                                             const SpecUtils_CountedRef_EnergyCal * const cal_ptr )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  const shared_ptr<const SpecUtils::EnergyCalibration> *cal
+                    = reinterpret_cast<const shared_ptr<const SpecUtils::EnergyCalibration> *>( cal_ptr );
+  assert( m && cal );
+  try
+  {
+    if( !cal )
+      throw runtime_error( "nullptr input energy cal" );
+    
+    m->set_energy_calibration( *cal );
+  }catch( std::exception &e )
+  {
+    cerr << "SpecUtils_Measurement_set_energy_calibration: " << e.what() << endl;
+    return false;
+  }
+  
+  return true;
+}
+
 
 SpecUtils_EnergyCal *SpecUtils_EnergyCal_create()
 {

@@ -41,13 +41,25 @@ typedef struct SpecUtils_CountedRef_EnergyCal SpecUtils_CountedRef_EnergyCal;
  
  Note: You must call `SpecUtils_SpecFile_destroy(instance)` to de-allocate this object to avoid a memory leak.
  */
-DLLEXPORT SpecUtils_SpecFile* CALLINGCONVENTION 
+DLLEXPORT SpecUtils_SpecFile * CALLINGCONVENTION
 SpecUtils_SpecFile_create();
+  
+/** Creates a copy of passed in `SpecUtils_SpecFile`.
+ 
+ Note: You must call `SpecUtils_SpecFile_destroy(instance)` to de-allocate this object to avoid a memory leak.
+ */
+DLLEXPORT SpecUtils_SpecFile * CALLINGCONVENTION
+SpecUtils_SpecFile_clone( const SpecUtils_SpecFile * const instance );
   
 /** De-allocates a `SpecUtils::SpecFile` object created using `SpecUtils_SpecFile_create()`.
  */
 DLLEXPORT void CALLINGCONVENTION 
 SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance );
+  
+  
+  /** Sets the `lhs` equal to the `rhs`. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile *rhs );
   
 /** Parses the specified spectrum file into the  provided `SpecUtils::SpecFile` instance.
  
@@ -98,8 +110,8 @@ enum SpecUtils_ParserType
  */
 DLLEXPORT bool CALLINGCONVENTION 
 SpecFile_load_file_from_format( SpecUtils_SpecFile * const instance,
-                                  const char * const filename,
-                                  const SpecUtils_ParserType type );
+                                const char * const filename,
+                               const enum SpecUtils_ParserType type );
   
   
 /** A C enum corresponding to the C++ enum class `SpecUtils::SaveSpectrumAsType`.
@@ -149,7 +161,7 @@ enum SpecUtils_SaveSpectrumAsType
 DLLEXPORT bool CALLINGCONVENTION 
 SpecUtils_write_to_file( SpecUtils_SpecFile *instance,
                            const char *filename,
-                           SpecUtils_SaveSpectrumAsType type );
+                        enum SpecUtils_SaveSpectrumAsType type );
 
 /** Returns if the spectrum file is likely a portal or search mode system.
  
@@ -162,7 +174,7 @@ SpecUtils_SpecFile_passthrough( const SpecUtils_SpecFile * const instance );
 /** Returns the number of `SpecUtils_Measurement` measurements held by the specified `SpecUtils_SpecFile`.
  */
 DLLEXPORT uint32_t CALLINGCONVENTION 
-SpecUtils_SpecFile_num_measurements( const SpecUtils_SpecFile * const instance );
+SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instance );
   
 /** Return the maximum number of gamma channels of any `SpecUtils_Measurement` owned by the provided
  `SpecUtils_SpecFile` instance.
@@ -170,7 +182,7 @@ SpecUtils_SpecFile_num_measurements( const SpecUtils_SpecFile * const instance )
  Note: individual measurements may have different numbers of channels.
  */
 DLLEXPORT uint32_t CALLINGCONVENTION 
-SpecUtils_SpecFile_num_gamma_channels( const SpecUtils_SpecFile * const instance );
+SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const instance );
   
 /** Returns pointer to the measurement at the specified index.
  
@@ -464,7 +476,7 @@ enum SpecUtils_DetectorType
 This may be inferred from spectrum file format or from comments or information within the 
 spectrum file.
  */
-DLLEXPORT SpecUtils_DetectorType CALLINGCONVENTION
+DLLEXPORT enum SpecUtils_DetectorType CALLINGCONVENTION
 SpecUtils_SpecFile_detector_type( const SpecUtils_SpecFile * const instance );
 
 /** Returns the instrument type as specified, or inferred, from the spectrum file.
@@ -545,7 +557,7 @@ SpecUtils_SpecFile_set_instrument_type( SpecUtils_SpecFile *instance,
   
 DLLEXPORT void CALLINGCONVENTION
 SpecUtils_SpecFile_set_detector_type( SpecUtils_SpecFile *instance,
-                                       const SpecUtils_DetectorType type );
+                                     const enum SpecUtils_DetectorType type );
   
 DLLEXPORT void CALLINGCONVENTION
 SpecUtils_SpecFile_set_manufacturer( SpecUtils_SpecFile *instance,
@@ -641,7 +653,7 @@ enum SpecUtils_SourceType
 /** Sets the source-type of a specific measurement. */
 DLLEXPORT bool CALLINGCONVENTION
 SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
-                       const SpecUtils_SourceType type,
+                                               const enum SpecUtils_SourceType type,
                        const SpecUtils_Measurement * const measurement );
   
 /** Sets the GPS coordinates for the measurement
@@ -676,58 +688,306 @@ SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *insta
                          const SpecUtils_Measurement * const measurement );
   
   
-  
-  
-/*
 // Measurement
-DLLEXPORT SpecUtils_Measurement* CALLINGCONVENTION SpecUtils_Measurement_create();
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance );
+/** Creates a initialized `SpecUtils::Measurement` object. 
+ 
+ You must either add the returned pointer to a `SpecUtils_SpecFile`, or call
+ `SpecUtils_Measurement_destroy(instance)` on result to not leak memory.
+ 
+ \sa `SpecUtils_SpecFile_add_measurement`
+ */
+DLLEXPORT SpecUtils_Measurement * CALLINGCONVENTION
+SpecUtils_Measurement_create();
 
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_title(SpecUtils::Measurement* self, char* title);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_description(SpecUtils::Measurement* self, char* description_in);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_source_string(SpecUtils::Measurement* self, char* source_string_in);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_gamma_counts(SpecUtils::Measurement* self, float* counts_in, uint32_t nchannels, float live_time, float real_time);
-DLLEXPORT void CALLINGCONVENTION SpecUtils_Measurement_set_energy_calibration(SpecUtils::Measurement* self, float* coefficients, uint32_t num_coefficients );
-DLLEXPORT const char* CALLINGCONVENTION SpecUtils_Measurement_title( SpecUtils::Measurement* self );
-DLLEXPORT char* CALLINGCONVENTION SpecUtils_Measurement_start_time( SpecUtils::Measurement* self );
-DLLEXPORT uint32_t CALLINGCONVENTION SpecUtils_Measurement_num_gamma_channels( SpecUtils::Measurement* self );
-DLLEXPORT const float CALLINGCONVENTION SpecUtils_Measurement_gamma_count_at( SpecUtils::Measurement* self, uint32_t index );
-DLLEXPORT const float* CALLINGCONVENTION SpecUtils_Measurement_energy_bounds( SpecUtils::Measurement* self );
-DLLEXPORT uint32_t CALLINGCONVENTION SpecUtils_Measurement_energy_bounds_len( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_true_time( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_live_time( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_neutron_live_time( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_gamma_count_sum( SpecUtils::Measurement* self );
-DLLEXPORT float CALLINGCONVENTION SpecUtils_Measurement_neutron_count_sum( SpecUtils::Measurement* self );
-DLLEXPORT uint8_t CALLINGCONVENTION SpecUtils_Measurement_is_occupied( SpecUtils::Measurement* self );
-*/
+/** Creates a copy of a `SpecUtils::Measurement`.
+ 
+ You must either add the returned pointer to a `SpecUtils_SpecFile`, or call
+ `SpecUtils_Measurement_destroy(instance)` on result to not leak memory.
+ */
+DLLEXPORT SpecUtils_Measurement * CALLINGCONVENTION
+SpecUtils_Measurement_clone( const SpecUtils_Measurement * const instance );
   
-  /** Create a SpecUtils::EnergyCalibration object.
-   You will need to set calibration coefficients before it will be useful.
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance );
+
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_Measurement_memmorysize( const SpecUtils_Measurement * const instance );
+
+/** Sets the `lhs` equal to the `rhs`. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Measurement *rhs );
+  
+/** Resets the Measurement to the same state as when initially allocated. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_reset( SpecUtils_Measurement *instance );
+  
+
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
+                                      const char * const description );
+
+/** This is a GADRAS specific function - it actually adds a remark to Measurement that starts with "Source:" */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
+                                        const char * const source_string );
+  
+DLLEXPORT void CALLINGCONVENTION 
+SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
+                                       const float *counts,
+                                       const uint32_t nchannels,
+                                       const float live_time,
+                                       const float real_time );
+  
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
+                                const char * const title );
+  
+/** Returns number of micro-seconds since the UNIX epoch (i.e., Jan 1, 1970) that this measurement
+ started.
+ 
+ A returned value of zero indicates no time available.
+ */
+DLLEXPORT int64_t CALLINGCONVENTION
+SpecUtils_Measurement_start_time_usecs( SpecUtils_Measurement *instance );
+  
+/** Sets the start time of the measurement, using micro-seconds since the UNIX epoch to define the time. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
+                                           const int64_t start_time );
+  
+/** Similar to `SpecUtils_Measurement_set_start_time_usecs(...)`, but you can pass the date/time in as a
+  string.  Recommend using VAX (ex "19-Sep-2014 14:12:01.62") or ISO (ex "2014-04-14T14:12:01.621543"), so
+  it is not ambiguous.
+     
+  @returns if successful (valid date/time string).
+*/
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
+                                            const char * const start_time_str );
+  
+  
+DLLEXPORT uint32_t CALLINGCONVENTION 
+SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance );
+  
+/** Returns array of gamma channel counts, having `SpecUtils_Measurement_number_gamma_channels(instance)`
+ entries.
+ 
+ May return `NULL` pointer if no counts.
+ */
+DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const instance );
+
+/** Returns array of lower channel energies. 
+ 
+ Returned array will have one more entry than the number of gamma channels.
+ Could potentially return `NULL`.
+ 
+ \sa SpecUtils_Measurement_number_gamma_channels
+ */
+DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instance );
+
+/** Returns a pointer to the energy calibration for this measurement.
+ 
+ You do NOT own the object pointed to by the returned answer.  
+ Do NOT call `SpecUtils_CountedRef_EnergyCal_destroy(instance)`
+ or `SpecUtils_EnergyCal_make_counted_ref(instance)` on the returned pointer.
+ */
+DLLEXPORT const SpecUtils_EnergyCal * CALLINGCONVENTION
+SpecUtils_Measurement_energy_calibration( const SpecUtils_Measurement * const instance );
+  
+/** Returns a pointer to a `shared_ptr<const SpecUtils::EnergyCalibration>` object.
    
-   You need to either call `SpecUtils_EnergyCal_destroy(instance)` for the returned
-   result, or call
-   */
-  DLLEXPORT SpecUtils_EnergyCal * CALLINGCONVENTION
-  SpecUtils_EnergyCal_create();
+ You own the object pointed to by the returned answer - so you need to call
+ `SpecUtils_CountedRef_EnergyCal_destroy(instance)`, or else it will be a memory leak.
+ 
+ Returned pointer will be `NULL` if measurement didnt have energy calibration set.
+*/
+DLLEXPORT const SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
+SpecUtils_Measurement_energy_calibration_ref( const SpecUtils_Measurement * const instance );
+  
+  
+DLLEXPORT float CALLINGCONVENTION 
+SpecUtils_Measurement_real_time( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_Measurement_live_time( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT float CALLINGCONVENTION 
+SpecUtils_Measurement_neutron_live_time( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT double CALLINGCONVENTION 
+SpecUtils_Measurement_gamma_count_sum( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_Measurement_neutron_count_sum( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_is_occupied( const SpecUtils_Measurement * const instance );
     
-  /** De-allocates a */
-  DLLEXPORT void CALLINGCONVENTION
-  SpecUtils_EnergyCal_destroy( SpecUtils_EnergyCal *instance );
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_contained_neutron( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT int CALLINGCONVENTION
+SpecUtils_Measurement_sample_number(const SpecUtils_Measurement * const instance);
+
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_sample_number( SpecUtils_Measurement *instance,
+                                          const int samplenum );
+  
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_detector_name( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_detector_name( SpecUtils_Measurement * instance,
+                                          const char *name );
+  
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_Measurement_speed( const SpecUtils_Measurement * const instance );
+  
+enum SpecUtils_OccupancyStatus
+{
+  SpecUtils_OccupancyStatus_NotOccupied,
+  SpecUtils_OccupancyStatus_Occupied,
+  SpecUtils_OccupancyStatus_Unknown
+};
+  
+DLLEXPORT enum SpecUtils_OccupancyStatus CALLINGCONVENTION
+SpecUtils_Measurement_occupancy_status( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_occupancy_status( SpecUtils_Measurement *instance,
+                       const enum SpecUtils_OccupancyStatus status );
+  
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_has_gps_info( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_Measurement_latitude( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_Measurement_longitude( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT int64_t CALLINGCONVENTION
+SpecUtils_Measurement_position_time_microsec( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_position( SpecUtils_Measurement *instance,
+                                     const double longitude,
+                                     const double latitude,
+                                     const int64_t position_time_microsec );
     
-  DLLEXPORT SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
-  SpecUtils_CountedRef_EnergyCal_create();
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_Measurement_dose_rate( const SpecUtils_Measurement * const instance );
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_Measurement_exposure_rate( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_detector_type( const SpecUtils_Measurement * const instance );
+  
+enum SpecUtils_QualityStatus
+{
+  SpecUtils_QualityStatus_Good,
+  SpecUtils_QualityStatus_Suspect,
+  SpecUtils_QualityStatus_Bad,
+  SpecUtils_QualityStatus_Missing
+};
+
+DLLEXPORT enum SpecUtils_QualityStatus CALLINGCONVENTION
+SpecUtils_Measurement_quality_status( const SpecUtils_Measurement * const instance );
+
+DLLEXPORT enum SpecUtils_SourceType CALLINGCONVENTION
+SpecUtils_Measurement_source_type( const SpecUtils_Measurement * const instance );
+
+DLLEXPORT void
+SpecUtils_Measurement_set_source_type( SpecUtils_Measurement *instance,
+                                        const enum SpecUtils_SourceType type );
     
-  DLLEXPORT void CALLINGCONVENTION
-  SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance );
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_Measurement_number_remarks( const SpecUtils_Measurement * const instance );
+  
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_remark( const SpecUtils_Measurement * const instance,
+                               const uint32_t remark_index );
+  
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_remarks( SpecUtils_Measurement *instance,
+                                    const char **remarks,
+                                    const uint32_t number_remarks );
+  
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_Measurement_number_parse_warnings( const SpecUtils_Measurement * const instance );
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_parse_warning( const SpecUtils_Measurement * const instance,
+                                      const uint32_t remark_index );
+    
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_Measurement_gamma_integral( const SpecUtils_Measurement * const instance,
+                                       const float lower_energy, const float upper_energy );
+    
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_Measurement_gamma_channels_sum( const SpecUtils_Measurement * const instance,
+                                           const uint32_t startbin,
+                                           const uint32_t endbin );
+  
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_Measurement_derived_data_properties( const SpecUtils_Measurement * const instance );
+    
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
+                                               const uint32_t nchannel );
+  
+/** Changes the channel energies to match the provided energy calibration.
+   
+  Does not change the energy of peaks, but does change the channel numbers of peaks, and counts of
+  the channels, and possibly even the number of channels.
+*/
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
+                              const SpecUtils_CountedRef_EnergyCal * const cal );
+    
+/** Sets the energy calibration of the Measurement.
+   
+  Does not change the channel counts, or channel numbers of peaks, but (may) change the energy of peaks
+   
+  @returns If the new energy calibration is applied.  Change of calibration may not be applied if the input calibration
+            has the wrong number of channels, is invalid, etc
+  */
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
+                                               const SpecUtils_CountedRef_EnergyCal * const cal );
+    
+  
+  
+/** Create a SpecUtils::EnergyCalibration object.
+  You will need to set calibration coefficients before it will be useful.
+   
+  You need to either call `SpecUtils_EnergyCal_destroy(instance)` for the returned
+  result, or call
+*/
+DLLEXPORT SpecUtils_EnergyCal * CALLINGCONVENTION
+SpecUtils_EnergyCal_create();
+    
+/** De-allocates a EnergyCalibration. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_EnergyCal_destroy( SpecUtils_EnergyCal *instance );
+    
+DLLEXPORT SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
+SpecUtils_CountedRef_EnergyCal_create();
+    
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance );
 
   /** Returns the `SpecUtils_EnergyCal` pointer owned by a `SpecUtils_CountedRef_EnergyCal`
    
    Do NOT call `SpecUtils_EnergyCal_destroy(instance)` on the returned result - its lifetime is managed
    by the counted ref pointer you passed in
    */
-  DLLEXPORT const SpecUtils_EnergyCal * CALLINGCONVENTION
-  SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance );
+DLLEXPORT const SpecUtils_EnergyCal * CALLINGCONVENTION
+SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance );
    
    /** Converts the passed in `SpecUtils_EnergyCal` object to a `SpecUtils_CountedRef_EnergyCal`,
     which will then manage the `SpecUtils_EnergyCal` lifetime.
@@ -736,94 +996,93 @@ DLLEXPORT uint8_t CALLINGCONVENTION SpecUtils_Measurement_is_occupied( SpecUtils
     and must not have been passed to this function before.  Also you must NOT call
     `SpecUtils_EnergyCal_destroy(instance)` for the `SpecUtils_EnergyCal` passed in.
     */
-  DLLEXPORT SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
-  SpecUtils_EnergyCal_make_counted_ref( SpecUtils_EnergyCal *instance );
+DLLEXPORT SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
+SpecUtils_EnergyCal_make_counted_ref( SpecUtils_EnergyCal *instance );
     
     
     
-  /** Energy calibration type - please see `SpecUtils::EnergyCalType` for full documentation. */
-  enum SpecUtils_EnergyCalType
-  {
-    SpecUtils_EnergyCal_Polynomial,
-    SpecUtils_EnergyCal_FullRangeFraction,
-    SpecUtils_EnergyCal_LowerChannelEdge,
-    SpecUtils_EnergyCal_UnspecifiedUsingDefaultPolynomial,
-    SpecUtils_EnergyCal_InvalidEquationType
-  };//enum SpecUtils_EnergyCalType
+/** Energy calibration type - please see `SpecUtils::EnergyCalType` for full documentation. */
+enum SpecUtils_EnergyCalType
+{
+  SpecUtils_EnergyCal_Polynomial,
+  SpecUtils_EnergyCal_FullRangeFraction,
+  SpecUtils_EnergyCal_LowerChannelEdge,
+  SpecUtils_EnergyCal_UnspecifiedUsingDefaultPolynomial,
+  SpecUtils_EnergyCal_InvalidEquationType
+};//enum SpecUtils_EnergyCalType
 
-  DLLEXPORT SpecUtils_EnergyCalType CALLINGCONVENTION
-  SpecUtils_EnergyCal_type( const SpecUtils_EnergyCal * const instance );
+DLLEXPORT enum SpecUtils_EnergyCalType CALLINGCONVENTION
+SpecUtils_EnergyCal_type( const SpecUtils_EnergyCal * const instance );
 
-  DLLEXPORT bool CALLINGCONVENTION
-  SpecUtils_EnergyCal_valid( const SpecUtils_EnergyCal * const instance );
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_EnergyCal_valid( const SpecUtils_EnergyCal * const instance );
+    
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_EnergyCal_number_coefficients( const SpecUtils_EnergyCal * const instance );
+    
+DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_EnergyCal_coefficients( const SpecUtils_EnergyCal * const instance );
 
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_EnergyCal_number_deviation_pairs( const SpecUtils_EnergyCal * const instance );
     
-  DLLEXPORT uint32_t CALLINGCONVENTION
-  SpecUtils_EnergyCal_number_coefficients( const SpecUtils_EnergyCal * const instance );
-    
-  DLLEXPORT const float * CALLINGCONVENTION
-  SpecUtils_EnergyCal_coefficients( const SpecUtils_EnergyCal * const instance );
-
-  DLLEXPORT uint32_t CALLINGCONVENTION
-  SpecUtils_EnergyCal_number_deviation_pairs( const SpecUtils_EnergyCal * const instance );
-    
-  DLLEXPORT float CALLINGCONVENTION
-  SpecUtils_EnergyCal_deviation_energy( const SpecUtils_EnergyCal * const instance,
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_EnergyCal_deviation_energy( const SpecUtils_EnergyCal * const instance,
                                        const uint32_t deviation_pair_index );
-  DLLEXPORT float CALLINGCONVENTION
-  SpecUtils_EnergyCal_deviation_offset( const SpecUtils_EnergyCal * const instance,
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_EnergyCal_deviation_offset( const SpecUtils_EnergyCal * const instance,
                                          const uint32_t deviation_pair_index );
     
-  DLLEXPORT uint32_t CALLINGCONVENTION
-  SpecUtils_EnergyCal_number_channels( const SpecUtils_EnergyCal * const instance );
+DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_EnergyCal_number_channels( const SpecUtils_EnergyCal * const instance );
 
-  /** The channel lower energies array.
+/** The channel lower energies array.
    Will have one more entry that the number of channels (the last entry gives last channel upper energy).
-   */
-  DLLEXPORT const float * CALLINGCONVENTION
-  SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance );
+*/
+DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance );
     
-  /** Sets the polynomial coefficients, and non-linear deviation pairs for the energy calibration object.
+/** Sets the polynomial coefficients, and non-linear deviation pairs for the energy calibration object.
    
-   @param instance The `SpecUtils_EnergyCal` to modify.
-   @param num_channels The number of channels this energy calibration is for.
-   @param coeffs The array of polynomial energy calibration coefficients.
-   @param number_coeffs The number of entries in the `coeffs` array.  Must be at least two coefficients.
-   @param dev_pairs An array giving deviation pairs where the entries are energy followed by offset, e.g.,
+  @param instance The `SpecUtils_EnergyCal` to modify.
+  @param num_channels The number of channels this energy calibration is for.
+  @param coeffs The array of polynomial energy calibration coefficients.
+  @param number_coeffs The number of entries in the `coeffs` array.  Must be at least two coefficients.
+  @param dev_pairs An array giving deviation pairs where the entries are energy followed by offset, e.g.,
           for 3 deviations pairs, the entries in this array would be: [energy_0, offset_0, energy_1, offset_1, energy_2, offset_2]
           May be `NULL`.
-   @param number_dev_pairs The number of deviation pairs in the `dev_pairs` array; that is the
+  @param number_dev_pairs The number of deviation pairs in the `dev_pairs` array; that is the
           `dev_pairs` array must have twice this many entries in it.
-   @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
+  @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
             Will return false if coefficients or deviation pairs are invalid (e.g., not enough coefficients, NaN of Inf coefficients,
             results in non monotonically increasing channel energies, or are otherwise unreasonable).
-   */
-  DLLEXPORT bool CALLINGCONVENTION
-  SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
-                                     const uint32_t num_channels,
-                                     const float *coeffs,
-                                     const uint32_t number_coeffs,
-                                     const float * const dev_pairs,
-                                     const uint32_t number_dev_pairs );
+*/
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
+                                    const uint32_t num_channels,
+                                    const float *coeffs,
+                                    const uint32_t number_coeffs,
+                                    const float * const dev_pairs,
+                                    const uint32_t number_dev_pairs );
 
-  /** Sets the full-range fraction coefficients, and non-linear deviation pairs for the energy calibration object.
+/** Sets the full-range fraction coefficients, and non-linear deviation pairs for the energy calibration object.
      
-     @param instance The `SpecUtils_EnergyCal` to modify.
-     @param num_channels The number of channels this energy calibration is for.
-     @param coeffs The array of polynomial energy calibration coefficients.
-     @param number_coeffs The number of entries in the `coeffs` array.  Must be at least two coefficients, and
-            should be 5 or fewer coefficients.
-     @param dev_pairs An array giving deviation pairs where the entries are energy followed by offset, e.g.,
-            for 3 deviations pairs, the entries in this array would be: [energy_0, offset_0, energy_1, offset_1, energy_2, offset_2]
-            May be `NULL`.
-     @param number_dev_pairs The number of deviation pairs in the `dev_pairs` array; that is the
-            `dev_pairs` array must have twice this many entries in it.
-     @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
-              Will return false if coefficients or deviation pairs are invalid (e.g., not enough coefficients, NaN of Inf coefficients,
-              results in non monotonically increasing channel energies, or are otherwise unreasonable).
-  */
-  DLLEXPORT bool CALLINGCONVENTION
-  SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
+  @param instance The `SpecUtils_EnergyCal` to modify.
+  @param num_channels The number of channels this energy calibration is for.
+  @param coeffs The array of polynomial energy calibration coefficients.
+  @param number_coeffs The number of entries in the `coeffs` array.  Must be at least two coefficients, and
+          should be 5 or fewer coefficients.
+  @param dev_pairs An array giving deviation pairs where the entries are energy followed by offset, e.g.,
+          for 3 deviations pairs, the entries in this array would be: [energy_0, offset_0, energy_1, offset_1, energy_2, offset_2]
+          May be `NULL`.
+  @param number_dev_pairs The number of deviation pairs in the `dev_pairs` array; that is the
+          `dev_pairs` array must have twice this many entries in it.
+  @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
+            Will return false if coefficients or deviation pairs are invalid (e.g., not enough coefficients, NaN of Inf coefficients,
+            results in non monotonically increasing channel energies, or are otherwise unreasonable).
+*/
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
                                               const uint32_t num_channels,
                                               const float *coeffs,
                                               const uint32_t num_coeffs,
@@ -841,48 +1100,48 @@ DLLEXPORT uint8_t CALLINGCONVENTION SpecUtils_Measurement_is_occupied( SpecUtils
    @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
             Will return false if input energies are invalid, not increasing, or not enough of them for the number of channels.
    */
-  DLLEXPORT bool CALLINGCONVENTION
-  SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
+DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
                                               const uint32_t num_channels,
                                               const uint32_t num_energies,
                                               const float * const channel_energies );
 
-  /** Returns the fractional channel number a given energy corresponds to.
+/** Returns the fractional channel number a given energy corresponds to.
    
-   If energy calibration coefficients are not set, then will return -999.9.
+  If energy calibration coefficients are not set, then will return -999.9.
    
-   \sa SpecUtils_EnergyCal_valid
-   */
-  DLLEXPORT double CALLINGCONVENTION
-  SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instance,
-                                           const double energy );
+  \sa SpecUtils_EnergyCal_valid
+*/
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instance,
+                                          const double energy );
 
-  /** Returns the energy for a fractional channel.  That is, if channel is an integer, will return the lower energy of channel, and if
+/** Returns the energy for a fractional channel.  That is, if channel is an integer, will return the lower energy of channel, and if
    the fractional part of the channel is 0.5, will return the midpoint of the channel.
    
    If energy calibration coefficients are not set, then will return -999.9.
-   */
-  DLLEXPORT double CALLINGCONVENTION
-  SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instance,
+*/
+DLLEXPORT double CALLINGCONVENTION
+SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instance,
                                            const double channel );
 
-  /** Returns the lower energy this energy calibration is valid for.
+/** Returns the lower energy this energy calibration is valid for.
    
    If energy calibration coefficients are not set, then will return -999.9f.
    
-   \sa SpecUtils_EnergyCal_valid
-   */
-  DLLEXPORT float CALLINGCONVENTION
-  SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance );
+  \sa SpecUtils_EnergyCal_valid
+*/
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance );
 
-  /** Returns the upper energy (e.g., upper energy of the last channel) this energy calibration is valid for.
+/** Returns the upper energy (e.g., upper energy of the last channel) this energy calibration is valid for.
      
      If energy calibration coefficients are not set, then will return -999.9f.
      
      \sa SpecUtils_EnergyCal_valid
-    */
-  DLLEXPORT float CALLINGCONVENTION
-  SpecUtils_EnergyCal_upper_energy( const SpecUtils_EnergyCal * const instance );
+*/
+DLLEXPORT float CALLINGCONVENTION
+SpecUtils_EnergyCal_upper_energy( const SpecUtils_EnergyCal * const instance );
     
     
     
