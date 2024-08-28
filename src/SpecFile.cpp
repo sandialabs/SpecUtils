@@ -45,6 +45,8 @@
 #include <stdexcept>
 #include <functional>
 #include <sys/stat.h>
+#include <cstring> // For strerror
+#include <cerrno>  // For errno
 
 #include <boost/functional/hash.hpp>
 
@@ -8660,8 +8662,8 @@ void SpecFile::write_to_file( const std::string filename,
     samples = sample_numbers_;
     detectors = set<int>( detector_numbers_.begin(), detector_numbers_.end() );
   }
-  
-  write_to_file( filename, samples, detectors, format );
+  auto newname =  SpecUtils::trim_copy(filename);
+  write_to_file( newname, samples, detectors, format );
 }//void write_to_file(...)
 
 
@@ -8681,7 +8683,11 @@ void SpecFile::write_to_file( const std::string name,
 #endif
 
   if( !output )
-    throw runtime_error( "Failed to open file (" + name + ") for writing" );
+  {
+    auto errorStr = std::string(std::strerror(errno));
+    throw runtime_error( "Failed to open file (" + name + "): " + errorStr );
+  }
+
   
   write( output, sample_nums, det_nums, format );
 }//void write_to_file(...)

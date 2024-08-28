@@ -23,6 +23,40 @@ void CheckFileExistanceAndDelete(fs::path filePath)
 }
 using SpecUtils::FloatVec;
 using SpecUtils::FloatVecPtr;
+using SpecUtils::time_point_t;
+
+#if 0
+TEST_CASE("Time")
+{
+    auto timepoint = SpecUtils::time_from_string("2024-Feb-28 00:00:00.62Z");
+
+    auto expectedTS = 1709103600.0F;
+
+    auto tmp =  timepoint.time_since_epoch().count();
+    tmp /= 1e6;
+    
+    CHECK( expectedTS == doctest::Approx(tmp));
+
+    //auto tp2 = std::chrono::time_point_cast<std::chrono::seconds>( expectedTS );  
+}
+#endif
+
+TEST_CASE("More Time")
+{
+        // Unix timestamp (seconds since epoch)
+    std::time_t unix_timestamp = 1709103600; // Example timestamp
+
+    // Convert the Unix timestamp to a time_point with second precision
+    auto tp_seconds = std::chrono::system_clock::from_time_t(unix_timestamp);
+
+    // Cast the time_point to microseconds precision
+    time_point_t tp_microseconds = std::chrono::time_point_cast<std::chrono::microseconds>(tp_seconds);
+
+    auto timestr = SpecUtils::to_vax_string(tp_microseconds); 
+    // Output the time_point
+    //std::time_t tp_microseconds_time_t = std::chrono::system_clock::to_time_t(tp_microseconds);
+    std::cout << "Time point (microseconds precision): " << timestr << std::endl;
+}
 
 TEST_CASE("Round Trip")
 {
@@ -36,6 +70,7 @@ TEST_CASE("Round Trip")
 
         const auto now_sys = std::chrono::system_clock::now();  
         const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );  
+        std::cerr << "now: " << now.time_since_epoch().count() << std::endl;
 
         m->set_start_time(  now );
         m->set_title("Test Measurment");
@@ -46,6 +81,8 @@ TEST_CASE("Round Trip")
 
         FloatVec ncounts{99.0F};
         m->set_neutron_counts(ncounts, 0.0F);
+        m->set_live_time(10.55F);
+        m->set_real_time(11.66F);
 
         FloatVec spectrum;
         for (size_t i = 0; i < 128; i++)
@@ -54,11 +91,9 @@ TEST_CASE("Round Trip")
         }
 
         m->set_gamma_counts(spectrum);
-        m->set_live_time(99.0F);
-        m->set_real_time(100.0F);
 
         auto ecal = std::make_shared<SpecUtils::EnergyCalibration>();
-        auto coeffs = std::vector{4.41F, 3198.33F, 1.0F, 2.0F};
+        auto coeffs = std::vector{4.41F, 3198.33F, 1.0F, 2.0F, 1.5f};
 
         SpecUtils::DeviationPairs devPairs;
         //auto 
@@ -69,6 +104,7 @@ TEST_CASE("Round Trip")
         }
         
         ecal->set_full_range_fraction(spectrum.size(), coeffs, devPairs );
+        //ecal->set_default_polynomial(spectrum.size(), coeffs, devPairs );
         m->set_energy_calibration(ecal);
 
         specfile.add_measurement(m);
@@ -94,6 +130,10 @@ TEST_CASE("Round Trip")
             CHECK(actualSpectrum.at(100) > 0);
             CHECK(expSpectrum == actualSpectrum);
 
+
+            CHECK(actualM.live_time() > 0.0F);
+            CHECK(actualM.live_time() == expectedM.live_time());
+
             CHECK( actualM.neutron_counts().at(0) > 0 );
             CHECK( actualM.neutron_counts() == expectedM.neutron_counts() );
 
@@ -105,6 +145,16 @@ TEST_CASE("Round Trip")
             CHECK(newEcal.coefficients() == ecal->coefficients());
 
             CHECK(expectedM.deviation_pairs() ==  actualM.deviation_pairs());
+        }
+
+        SUBCASE("Writing over existing file fails")
+        {
+            CHECK_THROWS( specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf) );
+        }
+
+        SUBCASE("Writing over existing file passes")
+        {
+            // specfile.write(fname, SpecUtils::SaveSpectrumAsType::Pcf);
         }
     }
 
