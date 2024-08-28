@@ -801,11 +801,13 @@ public:
 
   void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts );
 
+  /// @brief Make a copy of a spectrum
+  /// @param spectrum 'naked' vector of counts
   void set_gamma_counts(const FloatVec& spectrum)
   {
     auto counts = std::make_shared<FloatVec>(spectrum);
       
-    set_gamma_counts(counts, 0.0F, 0.0F);
+    set_gamma_counts(counts);
   }
   /** Sets the neutron counts, and also updates
    #Measurement::neutron_counts_sum_ and #Measurement::contained_neutron_ .
