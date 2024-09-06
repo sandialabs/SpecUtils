@@ -251,24 +251,32 @@ svg.SpectrumChartD3 {
 .scalerheader{ fill: rgba(185,185,185,0.80); fill-opacity: 0.55; }
 .activescaler > g > .scalerheader{ fill: #909090; fill-opacity: 0.95; }
   
-  .SpectrumChartD3 .scalertxt{
-    fill: var(--d3spec-text-color, black);
-  }
-  .scaleraxis {
-    stroke-opacity: 0.8;
-    fill-opacity: 0.3;
-    stroke: var(--d3spec-axis-color, black);
-  }
+.SpectrumChartD3 .scalertxt{
+  fill: var(--d3spec-text-color, black);
+}
+.scaleraxis {
+  stroke-opacity: 0.8;
+  fill-opacity: 0.3;
+  stroke: var(--d3spec-axis-color, black);
+}
   
-  .scalertoggle {
-    stroke: var(--d3spec-axis-color, black);
-  }
-  
-  
-  .leftbuttonzoombox {
-    fill: #666;
-    fill-opacity: 0.25;
-  }
+.scalertoggle {
+  stroke: var(--d3spec-axis-color, black);
+}
+
+.BackgroundScaler .scaleraxis, .BackgroundScaler .scalertoggle {
+  fill: var(--d3spec-back-line-color, black);
+}
+
+.SecondaryScaler .scaleraxis.secondary, .SecondaryScaler .scalertoggle.secondary {
+  fill: var(--d3spec-second-line-color, black);
+}
+
+
+.leftbuttonzoombox {
+  fill: #666;
+  fill-opacity: 0.25;
+}
   
   .leftbuttonzoomoutboxy {
     fill: #666;

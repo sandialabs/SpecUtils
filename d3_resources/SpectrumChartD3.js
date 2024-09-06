@@ -6325,12 +6325,17 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     if (spectrumScaleFactor != null && spectrumScaleFactor >= 0) {
       scalenum += 1;
       
-      let speccolor = spectrum.lineColor ? spectrum.lineColor : 'black';
+      const speccolor = spectrum.lineColor; //If null, will use CSS variables
       
       var spectrumSliderArea = self.scalerWidgetBody.append("g")
         .attr("id", spectrumSelector + "SliderArea")
         .attr("transform","translate(" + 20*(scalenum-1) + "," + ypos + ")");
-
+          
+      if( spectrum.type === self.spectrumTypes.BACKGROUND )
+        spectrumSliderArea.attr("class", "BackgroundScaler");
+      else if( spectrum.type === self.spectrumTypes.SECONDARY )
+        spectrumSliderArea.attr("class", "SecondaryScaler");
+        
       spectrum.sliderText = spectrumSliderArea.append("text")
         .attr("class", "scalertxt")
         .attr("x", 0)
