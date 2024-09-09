@@ -134,6 +134,9 @@ TEST_CASE("Round Trip")
             CHECK(actualM.live_time() > 0.0F);
             CHECK(actualM.live_time() == expectedM.live_time());
 
+            CHECK(actualM.real_time() > 0.0F);
+            CHECK(actualM.real_time() == expectedM.real_time());
+
             CHECK( actualM.neutron_counts().at(0) > 0 );
             CHECK( actualM.neutron_counts() == expectedM.neutron_counts() );
 
@@ -152,10 +155,6 @@ TEST_CASE("Round Trip")
             CHECK_THROWS( specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf) );
         }
 
-        SUBCASE("Writing over existing file passes")
-        {
-            // specfile.write(fname, SpecUtils::SaveSpectrumAsType::Pcf);
-        }
     }
 
 
