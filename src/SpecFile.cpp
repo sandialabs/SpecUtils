@@ -48,7 +48,9 @@
 #include <cstring> // For strerror
 #include <cerrno>  // For errno
 
+#if( PERFORM_DEVELOPER_CHECKS )
 #include <boost/functional/hash.hpp>
+#endif
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
@@ -63,6 +65,8 @@
 #include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/SerialToDetectorModel.h"
+
+#include "code_from_boost/hash/hash.hpp"
 
 #if( SpecUtils_ENABLE_D3_CHART )
 #include "SpecUtils/D3SpectrumExport.h"
@@ -79,7 +83,7 @@
 //   https://github.com/VcDevel/Vc (BSD 3 Clause)
 //   https://github.com/xtensor-stack/xsimd (BSD 3 Clause)
 //   https://github.com/simd-everywhere/simde (MIT)
-//
+//   https://eigen.tuxfamily.org/  (MPL2) can probably simply use Eigen::Map
 #if( defined(__x86_64__) || defined(__i386__) )
 #include <immintrin.h>
 #include "SpecFile.h"
@@ -6812,6 +6816,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !icontains( instrument_model_, "LANL")
        && !icontains( instrument_model_, "LLNL")
        && !icontains( instrument_model_, "SNL")
+       && !icontains( manufacturer_, "Company ABC")
        && !(manufacturer_=="" && instrument_model_=="")
        )
     {
@@ -6934,62 +6939,115 @@ std::string SpecFile::generate_psuedo_uuid() const
   
   std::size_t seed = 0;
   
+  boost_hash::hash_combine( seed, gamma_live_time_ );
+  boost_hash::hash_combine( seed, gamma_real_time_ );
+  boost_hash::hash_combine( seed, gamma_count_sum_ );
   
-  boost::hash_combine( seed, gamma_live_time_ );
-  boost::hash_combine( seed, gamma_real_time_ );
+  boost_hash::hash_combine( seed, neutron_counts_sum_ );
   
-  boost::hash_combine( seed, gamma_count_sum_ );
-  boost::hash_combine( seed, neutron_counts_sum_ );
-//  boost::hash_combine( seed, filename_ );
-  boost::hash_combine( seed, detector_names_ );
-//  boost::hash_combine( seed, detector_numbers_ );
-  boost::hash_combine( seed, neutron_detector_names_ );
-
+//  boost_hash::hash_combine( seed, filename_ );
+  boost_hash::hash_combine( seed, detector_names_ );
+  
+//  boost_hash::hash_combine( seed, detector_numbers_ );
+  boost_hash::hash_combine( seed, neutron_detector_names_ );
+  
 // Wont use gamma_detector_names_ for compatibility pre 20190813 when field was added
-//  boost::hash_combine( seed, gamma_detector_names_ );
+//  boost_hash::hash_combine( seed, gamma_detector_names_ );
   
   if( !remarks_.empty() )
-    boost::hash_combine( seed, remarks_ );
+    boost_hash::hash_combine( seed, remarks_ );
+
   //parse_warnings_
-  boost::hash_combine( seed, lane_number_ );
-  if( !measurement_location_name_.empty() )
-  boost::hash_combine( seed, measurement_location_name_ );
-  if( !inspection_.empty() )
-    boost::hash_combine( seed, inspection_ );
+  boost_hash::hash_combine( seed, lane_number_ );
   
-  boost::hash_combine( seed, instrument_type_ );
-  boost::hash_combine( seed, manufacturer_ );
-  boost::hash_combine( seed, instrument_model_ );
+  if( !measurement_location_name_.empty() )
+    boost_hash::hash_combine( seed, measurement_location_name_ );
+  if( !inspection_.empty() )
+    boost_hash::hash_combine( seed, inspection_ );
+  
+  boost_hash::hash_combine( seed, instrument_type_ );
+  boost_hash::hash_combine( seed, manufacturer_ );
+  boost_hash::hash_combine( seed, instrument_model_ );
   
   if( SpecUtils::valid_latitude(mean_latitude_)
      && SpecUtils::valid_longitude(mean_longitude_) )
   {
-    boost::hash_combine( seed, mean_latitude_ );
-    boost::hash_combine( seed, mean_longitude_ );
+    boost_hash::hash_combine( seed, mean_latitude_ );
+    boost_hash::hash_combine( seed, mean_longitude_ );
   }
   
   //Note, not including properties_flags_
   
-  boost::hash_combine( seed, instrument_id_ );
-  boost::hash_combine( seed, measurements_.size() );
-//  boost::hash_combine( seed, detectors_analysis_ );
-  boost::hash_combine( seed, int(detector_type_) );
-  boost::hash_combine( seed, measurement_operator_ );
+  boost_hash::hash_combine( seed, instrument_id_ );
+  boost_hash::hash_combine( seed, measurements_.size() );
+//  boost_hash::hash_combine( seed, detectors_analysis_ );
+  boost_hash::hash_combine( seed, int(detector_type_) );
+  boost_hash::hash_combine( seed, measurement_operator_ );
   
   for( const std::shared_ptr<const Measurement> meas : measurements_ )
   {
-    boost::hash_combine( seed, meas->live_time() );
-    boost::hash_combine( seed, meas->real_time() );
-    boost::hash_combine( seed, meas->gamma_count_sum() );
-    boost::hash_combine( seed, meas->neutron_counts_sum() );
+    boost_hash::hash_combine( seed, meas->live_time() );
+    boost_hash::hash_combine( seed, meas->real_time() );
+    boost_hash::hash_combine( seed, meas->gamma_count_sum() );
+    boost_hash::hash_combine( seed, meas->neutron_counts_sum() );
     
     if( SpecUtils::valid_latitude(meas->latitude()) )
-      boost::hash_combine( seed, meas->latitude() );
+      boost_hash::hash_combine( seed, meas->latitude() );
     if( SpecUtils::valid_longitude(meas->longitude()) )
-      boost::hash_combine( seed, meas->longitude() );
-    //  boost::hash_combine( seed, position_time_ );
+      boost_hash::hash_combine( seed, meas->longitude() );
+    //  boost_hash::hash_combine( seed, position_time_ );
   }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
 
+#if( PERFORM_DEVELOPER_CHECKS )
+  {// Begin use boost::hash proper, instead of our extracted version of it
+    std::size_t boost_seed = 0;
+    
+    boost::hash_combine( boost_seed, gamma_live_time_ );
+    boost::hash_combine( boost_seed, gamma_real_time_ );
+    boost::hash_combine( boost_seed, gamma_count_sum_ );
+    boost::hash_combine( boost_seed, neutron_counts_sum_ );
+    boost::hash_combine( boost_seed, detector_names_ );
+    boost::hash_combine( boost_seed, neutron_detector_names_ );
+    if( !remarks_.empty() )
+      boost::hash_combine( boost_seed, remarks_ );
+    boost::hash_combine( boost_seed, lane_number_ );
+    if( !measurement_location_name_.empty() )
+      boost::hash_combine( boost_seed, measurement_location_name_ );
+    if( !inspection_.empty() )
+      boost::hash_combine( boost_seed, inspection_ );
+    boost::hash_combine( boost_seed, instrument_type_ );
+    boost::hash_combine( boost_seed, manufacturer_ );
+    boost::hash_combine( boost_seed, instrument_model_ );
+    if( SpecUtils::valid_latitude(mean_latitude_)
+       && SpecUtils::valid_longitude(mean_longitude_) )
+    {
+      boost::hash_combine( boost_seed, mean_latitude_ );
+      boost::hash_combine( boost_seed, mean_longitude_ );
+    }
+    boost::hash_combine( boost_seed, instrument_id_ );
+    boost::hash_combine( boost_seed, measurements_.size() );
+    boost::hash_combine( boost_seed, int(detector_type_) );
+    boost::hash_combine( boost_seed, measurement_operator_ );
+    
+    for( const std::shared_ptr<const Measurement> meas : measurements_ )
+    {
+      boost::hash_combine( boost_seed, meas->live_time() );
+      boost::hash_combine( boost_seed, meas->real_time() );
+      boost::hash_combine( boost_seed, meas->gamma_count_sum() );
+      boost::hash_combine( boost_seed, meas->neutron_counts_sum() );
+      if( SpecUtils::valid_latitude(meas->latitude()) )
+        boost::hash_combine( boost_seed, meas->latitude() );
+      if( SpecUtils::valid_longitude(meas->longitude()) )
+        boost::hash_combine( boost_seed, meas->longitude() );
+    }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
+    
+    assert( seed == boost_seed );
+    
+    if( seed != boost_seed )
+      log_developer_error( __func__, "The extracted implementation of boost::hash didnt match the one in boost." );
+  }// End use boost::hash proper, instead of our extracted version of it
+#endif //if( PERFORM_DEVELOPER_CHECKS )
+  
   
 //  std::set<int> sample_numbers_;
 //  std::shared_ptr<const DetectorAnalysis> detectors_analysis_;
@@ -7737,6 +7795,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
   map< shared_ptr<const EnergyCalibration>, vector<shared_ptr<const vector<float>>> > cal_to_meas;
 #endif
   
+  size_t num_gps = 0.0;
+  double avrg_latitude = 0.0, avrg_longitude = 0.0;
+  
   size_t total_num_gamma_spec = 0;
   set<SourceType> source_types;
   set<string> remarks;
@@ -7789,6 +7850,12 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
           dataH->exposure_rate_ += meas->exposure_rate_;
       }//if( meas->dose_rate_ >= 0.0f )
       
+      if( meas->has_gps_info() )
+      {
+        num_gps += 1;
+        avrg_latitude += meas->latitude();
+        avrg_longitude += meas->longitude();
+      }//if( meas->has_gps_info() )
       
       if( spec_size > 3 && meas->energy_calibration() && meas->energy_calibration()->valid() )
       {
@@ -7835,6 +7902,14 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
     dataH->location_             = meas_per_thread[0][0]->location_;
   }//if( total_num_gamma_spec == 1 )
   
+  
+  if( (total_num_gamma_spec > 1)  && num_gps )
+  {
+    avrg_latitude /= num_gps;
+    avrg_longitude /= num_gps;
+    dataH->set_position( avrg_longitude, avrg_latitude, {} );
+  }//if( (total_num_gamma_spec > 1)  && num_gps )
+
   
   if( allBinningIsSame )
   {

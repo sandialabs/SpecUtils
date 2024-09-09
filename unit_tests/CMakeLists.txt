@@ -19,12 +19,14 @@ if( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
     endif( ${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.17.0" )
 endif( BUILD_AS_LOCAL_SERVER AND (CMAKE_GENERATOR STREQUAL "Xcode") )
 
+if( PERFORM_DEVELOPER_CHECKS )
+  find_package( Boost REQUIRED system )
 
-find_package( Boost REQUIRED COMPONENTS program_options date_time system filesystem )
+  if( NOT Boost_FOUND )
+    message(FATAL_ERROR "Couldnt Find Boost")
+  endif( NOT Boost_FOUND )
+endif( PERFORM_DEVELOPER_CHECKS )
 
-if( NOT Boost_FOUND )
-  message(FATAL_ERROR "Couldnt Find Boost")
-endif( NOT Boost_FOUND )
 
 # Set some command line arguments that all/most of the tests will use
 set( COMMON_TEST_ARGS --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
@@ -72,7 +74,7 @@ ENDFOREACH()
 
 
 add_executable( test_iso_time_string test_iso_time_string.cpp )
-target_link_libraries( test_iso_time_string PRIVATE SpecUtils Boost::date_time)
+target_link_libraries( test_iso_time_string PRIVATE SpecUtils )
 set_target_properties( test_iso_time_string PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
   NAME TestIsoTimeString
@@ -150,8 +152,9 @@ add_test(
 
 
 add_executable( test_filesystem_functions test_filesystem_functions.cpp )
-target_link_libraries( test_filesystem_functions PRIVATE SpecUtils Boost::filesystem )
-set_target_properties( test_filesystem_functions PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+target_link_libraries( test_filesystem_functions PRIVATE SpecUtils )
+# We have to use C++17 for `test_filesystem_functions` since we use std::filesystem in the tests
+set_target_properties( test_filesystem_functions PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
   NAME testUtilityFilesystemFunctions
   COMMAND $<TARGET_FILE:test_filesystem_functions> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
@@ -172,5 +175,16 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   add_test(
     NAME test_uri_spectrum
     COMMAND $<TARGET_FILE:test_uri_spectrum> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  )
+endif()
+
+if( PERFORM_DEVELOPER_CHECKS AND (Boost_VERSION VERSION_GREATER_EQUAL "1.81.0") )
+  add_executable( test_hash test_hash.cpp )
+  target_link_libraries( test_hash PRIVATE SpecUtils Boost::system )
+  target_include_directories( test_hash PUBLIC ../3rdparty )
+  set_target_properties( test_hash PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+  add_test(
+    NAME test_hash
+    COMMAND $<TARGET_FILE:test_hash> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
   )
 endif()

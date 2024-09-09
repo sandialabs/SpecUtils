@@ -390,7 +390,7 @@ namespace SpecUtils
                                  const size_t nchannel,
                                  const std::vector<std::pair<float,float>> &deviation_pairs );
   
-  /** Gives the energy cooresponding to the passed in _channel_number_.
+  /** Gives the energy corresponding to the passed in _channel_number_.
    
    @param channel_number The channel number you would like the energy for.
           This value may be non-integer (ex, if you want the energy of a peak

@@ -22,13 +22,10 @@
  */
 
 #include <time.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <iostream>
 #include <fstream>
-
-#include <boost/date_time/date.hpp>
-#include <boost/algorithm/string.hpp>
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
@@ -490,7 +487,7 @@ TEST_CASE( "Time From String" )
     iso_string.push_back( fields[1] );
   }//while( getline in file )
 
-  assert( original_string.size() == iso_string.size() );
+  REQUIRE( original_string.size() == iso_string.size() );
   //BOOST_TEST_MESSAGE( "Will test formats: " << iso_string.size() );
 
   REQUIRE( original_string.size() > 100 );

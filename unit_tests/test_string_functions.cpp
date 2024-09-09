@@ -60,13 +60,12 @@ int main(int argc, char** argv)
 TEST_CASE( "testUtilityStringFunctions" ) {
 
   string indir;
+  //indir = "/Users/wcjohns/rad_ana/SpecUtils/unit_tests/";
   for( size_t i = 1; (i+1) < g_cl_args.size(); ++i )
   {
     if( g_cl_args[i] == string("--indir") )
       indir = g_cl_args[i+1];
   }
-  
-  indir = "/Users/wcjohns/rad_ana/InterSpec_master/external_libs/SpecUtils/unit_tests/";
   
   string test_in_file, test_out_file;
   const string potential_input_paths[] = { ".", indir,
@@ -363,17 +362,19 @@ TEST_CASE( "testUtilityStringFunctions" ) {
     REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
     REQUIRE_EQ( tests[index1].substr(0,1), "5" );
     
-    string test = tests[index1].substr(2);
-    string message = test + "  " + correctOutput[index2];
-    CHECK_MESSAGE(SpecUtils::contains(test, correctOutput[index2].substr(2).c_str()), message);
+    string teststr = tests[index1].substr(2);
+    string substr = correctOutput[index2].substr(2);
+    string message = "Test string is '" + teststr + "', and searching for substring '" + substr + "' (should find)";
+    CHECK_MESSAGE(SpecUtils::contains(teststr, substr.c_str()), message);
     index2++;
-    message = test + "  " + correctOutput[index2];
-    CHECK_MESSAGE(!SpecUtils::contains(test, correctOutput[index2].substr(2).c_str()), message);
+    substr = correctOutput[index2];
+    message = "Test string is '" + teststr + "', and searching for substring '" + substr + "' (should NOT find)";
+    CHECK_MESSAGE(!SpecUtils::contains(teststr, substr.c_str()), message);
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "5" );
   
   const char *e = "";
-  CHECK( SpecUtils::contains(q, e) );
+  CHECK( !SpecUtils::contains(q, e) );
 
 
   // tests for SpecUtils::icontains(string &line, const char *label)
@@ -386,15 +387,30 @@ TEST_CASE( "testUtilityStringFunctions" ) {
     REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
     REQUIRE_EQ( tests[index1].substr(0,1), "6" );
     
-    string test = tests[index1].substr(2);
-    string message = test + "  " + correctOutput[index2];
-    CHECK_MESSAGE(SpecUtils::icontains(test, correctOutput[index2].substr(2).c_str()), message);
+    string teststr = tests[index1].substr(2);
+    string substr = correctOutput[index2].substr(2);
+    string message = "Line being searched is '" + teststr + "', with substring '" + correctOutput[index2] + "' (should find)";
+    CHECK_MESSAGE(SpecUtils::icontains(teststr, substr.c_str()), message);
     index2++;
-    message = test + "  " + correctOutput[index2];
-    CHECK_MESSAGE(!SpecUtils::icontains(test, correctOutput[index2].substr(2).c_str()), message);
+    substr = correctOutput[index2].substr(2);
+    message = "Line being searched is '" + teststr + "', with substring '" + correctOutput[index2] + "' (should NOT find)";
+    CHECK_MESSAGE(!SpecUtils::icontains(teststr, substr.c_str()), message);
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "6");
   
+  
+  // Make sure searches for empty substrings return false
+  CHECK( !SpecUtils::icontains( "TestLine", "" ) );
+  CHECK( !SpecUtils::icontains( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::contains( "TestLine", "" ) );
+  CHECK( !SpecUtils::contains( string("TestLine"), "" ) );
+  
+  CHECK( !SpecUtils::istarts_with( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::istarts_with( string("TestLine"), string("") ) );
+  CHECK( !SpecUtils::starts_with( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::iends_with( string("TestLine"), string("") ) );
+  
+  CHECK_EQ( SpecUtils::ifind_substr_ascii( string("TestLine"), ""), string::npos );
 
   // tests for SpecUtils::starts_with(string &line, const char* label)
   // 7 in text file
@@ -643,6 +659,8 @@ TEST_CASE( "checkIFind" )
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
   CHECK_EQ(substr_pos, correct_substr_pos);
 }//TEST_CASE( checkIFind )
+
+
 
 TEST_CASE( "testPrintCompact" )
 {

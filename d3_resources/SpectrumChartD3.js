@@ -568,44 +568,33 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
 
 SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
-    let w = this.svg.attr("width");
-    let h = this.svg.attr("height");
+    let w = this.svg.attr("width"), h = this.svg.attr("height");
         
-    //We will need to propagate all the styles we can dynamically set in the SVG (see
+    //We will need to propagate all the styles we set in the SVG (see SpectrumChartD3.css and
     //  D3SpectrumDisplayDiv::m_cssRules) to the <defs> section of the new SVG.
     
-    // The c++ sets the following rules:
-    //  ".xgrid > .tick, .ygrid > .tick", "stroke: #b3b3b3"
-    //  ".minorgrid", "stroke: #e6e6e6"
-    //  ".xaxistitle, .yaxistitle, .yaxis, .yaxislabel, .xaxis, .xaxis > .tick > text, .yaxis > .tick > text", "fill: black"
-    //  ".xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick", "stroke: black"
-    //  ".peakLine, .escapeLineForward, .mouseLine, "stroke: black"
-    //  "#" + id() + " > svg", "background: " + color.cssText()
-    //  "#chartarea" + id(), "fill: " + c
-    
-    let getStyle = function( sel ){
-      let el = document.querySelector(sel);
-      if( !el ) return null;
-      return window.getComputedStyle( el );
+    function getStyle( sel ){
+      const el = document.querySelector(sel);
+      return el ? window.getComputedStyle( el ) : null;
     };
     
-    let getSvgFill = function( sel ){
+    function getSvgFill( sel ){
       let style = getStyle( sel );
       let fill = style && style.fill ? style.fill : "";
       let comps = fill.match(/\d+/g);
       if( (comps && (comps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) > 0.01))
-      || (fill.length > 2 && fill.substr(0,1)=='#') )
-      return fill;
+         || (fill.length > 2 && fill.substr(0,1)=='#') )
+        return fill;
       return null;
     };
     
+    function getStroke( sel ){ const s = getStyle(sel); return s && s.stroke ? s.stroke : null; }
     
-    var domstyle = getStyle( '.Wt-domRoot' );
-    var dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
+    const domstyle = getStyle( '.Wt-domRoot' );
+    let dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
     
     // Check of dom background is something other than "rgba(0, 0, 0, 0)"; not perfect yet, but kinda works
-    if( dombackground )
-    {
+    if( dombackground ) {
       let bgrndcomps = dombackground.match(/\d+/g); //Note: the double backslash is for the C++ compiler, if move to JS file, make into a single backslash
       if( !bgrndcomps
       || ((bgrndcomps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) < 0.01)
@@ -615,27 +604,25 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     
     const svgstyle = getStyle('#' + this.chart.id + ' > svg');
     const svgback = svgstyle && svgstyle.background ? svgstyle.background : dombackground;
-    let chartAreaFill = getSvgFill('#chartarea' + this.chart.id);
-    let legStyle = getStyle( '.legend' );
-    let legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
-    let legColor = legStyle && legStyle.color ? legStyle.color : null;
+    const chartAreaFill = getSvgFill('#chartarea' + this.chart.id);
+    const legStyle = getStyle( '.legend' );
+    const legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
+    const legColor = legStyle && legStyle.color ? legStyle.color : null;
     
-    let legBackStyle = getStyle( '.legendBack' );
-    let legBackFill = legBackStyle && legBackStyle.fill ? legBackStyle.fill : null;
-    let legBackStroke = legBackStyle && legBackStyle.stroke ? legBackStyle.stroke : null;
+    const legBackStyle = getStyle( '.legendBack' );
+    const legBackFill = legBackStyle && legBackStyle.fill ? legBackStyle.fill : null;
+    const legBackStroke = getStroke( '.legendBack' );
     
-    let axisStyle = getStyle( '.xaxis' );
-    let axisFill = axisStyle && axisStyle.fill ? axisStyle.fill : null;
+    const axisStyle = getStyle( '.xaxis' );
+    const axisFill = axisStyle && axisStyle.fill ? axisStyle.fill : null;
     
-    let tickStyle = getStyle( '.xaxis > .tick > line' );
-    let tickStroke = tickStyle && tickStyle.stroke ? tickStyle.stroke : null;
+    const tickStroke = getStroke( '.xaxis > .tick > line' );
+    const gridTickStroke = getStroke( '.xgrid > .tick' );
+    const minorGridStroke = getStroke( '.minorgrid' );
     
-    let gridTickStyle = getStyle( '.xgrid > .tick' );
-    let gridTickStroke = gridTickStyle && gridTickStyle.stroke ? gridTickStyle.stroke : null;
-    
-    let minorGridStyle = getStyle( '.minorgrid' );
-    let minorGridStroke = minorGridStyle && minorGridStyle.stroke ? minorGridStyle.stroke : null;
-    
+    const foreStroke = getStroke( 'path.speclinepath.FOREGROUND' );
+    const backStroke = getStroke( 'path.speclinepath.BACKGROUND' );
+    const secondStroke = getStroke( 'path.speclinepath.SECONDARY' );
     
     let svgDefs = '<defs><style type="text/css">\n'
     + 'svg{ background:' + (svgback ? svgback : 'rgb(255,255,255)') + ';}\n'
@@ -650,9 +637,11 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + (tickStroke ? '.xaxis > .domain, .yaxis > .domain, .xaxis > .tick > line, .yaxis > .tick > line, .yaxistick { stroke: ' + tickStroke + '; }\n' : "")
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
-    //+ '.peakLine, .escapeLineForward, .mouseLine\n'
+    + '.speclinepath, .SpectrumLegendLine { fill: none; }'
+    + (foreStroke ? '.speclinepath.FOREGROUND, .SpectrumLegendLine.FOREGROUND { stroke: ' + foreStroke + '}' : "")
+    + (backStroke ? '.speclinepath.BACKGROUND, .SpectrumLegendLine.BACKGROUND { stroke: ' + backStroke + '}' : "")
+    + (secondStroke ? '.speclinepath.SECONDARY, .SpectrumLegendLine.SECONDARY { stroke: ' + secondStroke + '}' : "")
     + '</style></defs>';
-    
     
     // Hide mouse information, and slider chart
     this.refLineInfo.style("display", "none");
@@ -678,10 +667,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.peakInfo.style("display", "none");
     
     let svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg"' + ' width="'  + w + '"' + ' height="' + h + '"' + '>'
-    + svgDefs
-    + this.svg.node().innerHTML.toString()
-    +'</svg>';
-    
+                    + svgDefs + this.svg.node().innerHTML.toString() +'</svg>';
     
     // Make slider chart and/or scalerWidget visible again, if they should be showing
     if( this.sliderChart && this.size.sliderChartHeight )
@@ -1115,12 +1101,11 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
       this.chartBody.append("path")
         .attr("id", "spectrumline"+i)
-        .attr("class", "speclinepath")
+        .attr("class", "speclinepath" + (spectrum.type ? " " + spectrum.type : "") )
         .attr("stroke-width", self.options.spectrumLineWidth)
-        .attr("fill", 'none' )
-        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : 'black')
+        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : null )
         .attr("d", this['line' + i](spectrum.points));
-
+        
       if (spectrum.yScaleFactor)
         maxYScaleFactor = Math.max(spectrum.yScaleFactor, maxYScaleFactor);
     }
@@ -4015,7 +4000,6 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
 
   var lowerx = this.xScale.domain()[0], upperx = this.xScale.domain()[1];
 
-
   var reflines = [];
   self.refLines.forEach( function(input) {
     var lines = getLinesInRange(self.xScale.domain(),input.lines);
@@ -4035,19 +4019,18 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("class", "ref")
     .attr("transform", tx);
 
-  var stroke = function(d) { return d.parent.color; };
+  function stroke(d){ return d.parent.color; };
 
-  var dashfunc = function(d){
-    var particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum"];
-    var dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6") ];
-    var index = particles.indexOf(d.particle);
+  function dashfunc(d){
+    const particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum", "S.E.",   "D.E." ];
+    const dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6"),       ("4,1"),  ("4,1")];
+    const index = particles.indexOf(d.particle);
     if( index < 0 ) { console.log( 'Invalid particle: ' + d.particle ); return null; } //We can get here when lines that shared an energy were combined, so d.particle might for example be "gamma, xray"
     return (index > -1) ? dash[index] : null;
   };
 
   var h = self.size.height;
-  var m = Math.min(h,self.options.refLineTopPad); /* leave 20px margin at top of chart */
-
+  var m = Math.min(h,self.options.refLineTopPad); // leave 20px margin at top of chart
 
   gye.append("line")
     .style("stroke-dasharray", dashfunc )
@@ -4056,8 +4039,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("dx", "-0.5" )
      ;
 
-  /* Remove old elements as needed. */
-  gy.exit().remove();
+  gy.exit().remove();  // Remove old elements as needed.
   
   /* Now update the height of all the lines.  If we did this in the gye.append("line") */
   /*  line above then the values for existing lines wouldnt be updated (only */
@@ -4496,7 +4478,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
                .attr( "rx", "5px")
                .attr( "ry", "5px");
     this.legBody = this.legend.append("g")
-                       .attr("transform","translate(8,17)");
+                       .attr("transform","translate(8,6)");
                        
     this.legendHeader = this.legend.append("g"); 
     this.legendHeader
@@ -4504,7 +4486,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
                .append('rect')
                .attr("class", "legendHeader")
                .attr('width', "100px")
-               .attr('height', "1.5em")
+               .attr('height', "20px")
                .attr( "rx", "5px")
                .attr( "ry", "5px")
                .style("cursor", "pointer");
@@ -4604,18 +4586,21 @@ SpectrumChartD3.prototype.updateLegend = function() {
     let thisentry = self.legBody.append("g")
         .attr("transform","translate(0," + ypos + ")");
       
+    let thistxt = thisentry.append("text")
+        .attr("class", "legentry");
+    
+    let titlenode = thistxt.append('svg:tspan')
+          .attr('x', "15")
+          .text( title );
+    const txtStart = 0.5*titlenode.node().getBBox().height;
+    titlenode.attr('y', txtStart);
+    
     thisentry.append("path")
         //.attr("id", "spectrum-legend-line-" + i)  // reference for when updating color
-        //.attr("class", "line" )
-        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : "black")
+        .attr("class", "SpectrumLegendLine " + (spectrum.type ? " " + spectrum.type : "") )
+        .attr("stroke", spectrum.lineColor ? spectrum.lineColor : null)
         .attr("stroke-width", self.options.spectrumLineWidth )
-        .attr("fill", 'none' )
-        .attr("d", "M0,-5 L12,-5");
-      
-    let thistxt = thisentry.append("text")
-        .attr("class", "legentry")
-        .attr( "x", 15 )
-        .text(title);
+        .attr("d", "M0," + (txtStart - 1) + " L12," + (txtStart - 1) );
     
     let ltnode, lttxt, dttxt;
     if( typeof lt === "number" )
@@ -4623,20 +4608,20 @@ SpectrumChartD3.prototype.updateLegend = function() {
       lttxt = self.options.txt.liveTime + ": " + (sf*lt).toPrecision(4) + " s";
       ltnode = thistxt.append('svg:tspan')
         .attr('x', "20")
-        .attr('y', thisentry.node().getBBox().height)
+        .attr('y', txtStart + thisentry.node().getBBox().height)
         .text( lttxt );
     }
       
     if( typeof rt === "number" )
       thistxt.append('svg:tspan')
         .attr('x', "20")
-        .attr('y', thisentry.node().getBBox().height)
+        .attr('y', txtStart + thisentry.node().getBBox().height)
         .text( self.options.txt.realTime + ": " + (sf*rt).toPrecision(4) + " s");
           
     if( sf != 1 )
       thistxt.append('svg:tspan')
         .attr('x', "20")
-        .attr('y', thisentry.node().getBBox().height)
+        .attr('y', txtStart + thisentry.node().getBBox().height)
         .text( self.options.txt.scaledBy + " " + sf.toPrecision(4) );
       
     if( (typeof lt === "number") && (typeof rt === "number") && (rt > 0) && ltnode )
@@ -4673,7 +4658,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
         
       let neutspan = thistxt.append('svg:tspan')
               .attr('x', "20")
-              .attr('y', thisentry.node().getBBox().height)
+              .attr('y', txtStart + thisentry.node().getBBox().height)
               .text( self.options.txt.Neutrons + ": " + toLegendRateStr(neut,3) + (isCps ? " " + self.options.txt.cps : ""));
       
       //If we are displaying neutron CPS, and this is not a foreground, then lets add an easy way to compare this rate
@@ -4711,7 +4696,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
           
           thistxt.append('svg:tspan')
             .attr('x', "40")
-            .attr('y', thisentry.node().getBBox().height - 4)
+            .attr('y', txtStart + thisentry.node().getBBox().height - 4)
             .attr('style', 'font-size: 75%')
             .html( "(" + (isneg ? self.options.txt.foreNSigmaBelowBack : self.options.txt.foreNSigmaAboveBack).replace("{1}", toLegendRateStr(nsigma,1)) + ")" );
         }//if( we have foreground neutron CPS info )
@@ -4722,7 +4707,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       if( isCps ){
         thisentry.neutinfo = thistxt.append('svg:tspan')
           .attr('x', "40")
-          .attr('y', thisentry.node().getBBox().height - 5)
+          .attr('y', txtStart + thisentry.node().getBBox().height - 5)
           .attr('style', 'display: none')
           .text( toLegendRateStr(neutsum,3) + " " + self.options.txt.neutrons + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
       
@@ -6340,12 +6325,17 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     if (spectrumScaleFactor != null && spectrumScaleFactor >= 0) {
       scalenum += 1;
       
-      let speccolor = spectrum.lineColor ? spectrum.lineColor : 'black';
+      const speccolor = spectrum.lineColor; //If null, will use CSS variables
       
       var spectrumSliderArea = self.scalerWidgetBody.append("g")
         .attr("id", spectrumSelector + "SliderArea")
         .attr("transform","translate(" + 20*(scalenum-1) + "," + ypos + ")");
-
+          
+      if( spectrum.type === self.spectrumTypes.BACKGROUND )
+        spectrumSliderArea.attr("class", "BackgroundScaler");
+      else if( spectrum.type === self.spectrumTypes.SECONDARY )
+        spectrumSliderArea.attr("class", "SecondaryScaler");
+        
       spectrum.sliderText = spectrumSliderArea.append("text")
         .attr("class", "scalertxt")
         .attr("x", 0)

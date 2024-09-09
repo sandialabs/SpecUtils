@@ -21,18 +21,16 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <string>
-#include <ostream>
-#include <vector>
-#include <fstream>
 #include <cmath>
+#include <string>
+#include <vector>
 #include <climits>
+#include <fstream>
+#include <ostream>
 #include <iostream>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-
-#include <boost/algorithm/string.hpp>
 
 #include "SpecUtils/StringAlgo.h"
 

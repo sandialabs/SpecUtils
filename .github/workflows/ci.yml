@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-test:
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            num-parse-method: boost
+          - os: ubuntu-latest
+            num-parse-method: FastFloat
+          - os: ubuntu-latest
+            num-parse-method: FromChars
+          - os: ubuntu-latest
+            num-parse-method: strtod
+          - os: macos-latest
+            num-parse-method: FastFloat
+          - os: windows-latest
+            num-parse-method: FromChars
+          - os: windows-latest
+            num-parse-method: strtod
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v2.0.2
+      with:
+        cmake-version: '3.25'
+
+    # For linux, we will perform developer checks, so we need boost
+    - name: Set up dependencies
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y build-essential libboost-all-dev
+
+    - name: Create build directory
+      run: mkdir build
+
+    - name: Configure CMake on Windows
+      if: runner.os == 'Windows'
+      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON
+
+    # On linux we will perform developer checks and compile as debug to catch asserts
+    - name: Configure CMake on Linux
+      if: runner.os == 'Linux'
+      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=ON -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON
+      
+    - name: Configure CMake on macOS
+      if: runner.os == 'macOS'
+      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON
+
+    - name: Build macOS and Windows
+      if: runner.os != 'Linux'
+      run: cmake --build build --config Release
+
+    - name: Build Linux
+      if: runner.os == 'Linux'
+      run: cmake --build build --config Debug
+
+    - name: Run tests
+      run: ctest --test-dir build -C Release
