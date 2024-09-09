@@ -322,7 +322,7 @@ if( SpecUtils_USE_FAST_FLOAT )
       FetchContent_GetProperties( fast_float )
       FetchContent_MakeAvailable( fast_float )
       
-      target_include_directories( SpecUtils PUBLIC ${fast_float_SOURCE_DIR} )
+      target_include_directories( SpecUtils PRIVATE ${fast_float_SOURCE_DIR} )
     endif( SpecUtils_FETCH_FAST_FLOAT )
   endif( NOT FAST_FLOAT_FILE_PATH )
 endif( SpecUtils_USE_FAST_FLOAT )
