@@ -32,29 +32,25 @@
 #include <unistd.h>
 #endif
 
-#include <boost/crc.hpp>
-#include <boost/algorithm/string.hpp>
-
-#define BOOST_TEST_MODULE TestUriSpectrum
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
-
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/UriSpectrum.h"
 
+#if( PERFORM_DEVELOPER_CHECKS )
+#include <boost/crc.hpp>
+#endif
+
 using namespace std;
 using namespace SpecUtils;
-using namespace boost::unit_test;
 
+#define CHECK_FRACTIONALLY_NEAR(a,b,c) do{ CHECK( fabs(a-b) <= c*std::max(fabs(a),fabs(b)) ); }while(0);
+#define CHECK_NEAR(a,b,c) do{ CHECK( fabs(a-b) <= fabs(c) ); }while(0);
 
-
-BOOST_AUTO_TEST_CASE( testDeflate ) {
+TEST_CASE( "testDeflate" ) {
   random_device rnd_device;
   mt19937 mersenne_engine{ rnd_device() };
   uniform_int_distribution<size_t> length_dist{1, 1024*5};
@@ -74,9 +70,9 @@ BOOST_AUTO_TEST_CASE( testDeflate ) {
     deflate_compress( (const void *)original_data.data(), original_data.size(), compressed_data );
     
     string decompressed_data;
-    BOOST_CHECK_NO_THROW( deflate_decompress( (void *)&(compressed_data[0]), compressed_data.size(), decompressed_data ) );
+    CHECK_NOTHROW( deflate_decompress( (void *)&(compressed_data[0]), compressed_data.size(), decompressed_data ) );
     
-    BOOST_CHECK_EQUAL( original_data, decompressed_data );
+    CHECK_EQ( original_data, decompressed_data );
   }//for( create a bunch of random strings )
   
   
@@ -86,15 +82,15 @@ BOOST_AUTO_TEST_CASE( testDeflate ) {
   string expected = "SpecUtils implements spectrum URI and QR codes.";
   
   string decompressed;
-  BOOST_CHECK_NO_THROW( deflate_decompress( (void *)&(compressed[0]), compressed.size(), decompressed ) );
+  CHECK_NOTHROW( deflate_decompress( (void *)&(compressed[0]), compressed.size(), decompressed ) );
 
-  BOOST_CHECK_EQUAL( decompressed, expected );
+  CHECK_EQ( decompressed, expected );
   
   // TODO: add test case of compressing and checking that it gets to be a known value
-}//BOOST_AUTO_TEST_CASE( testBinaryEncodings )
+}//TEST_CASE( testBinaryEncodings )
 
 
-BOOST_AUTO_TEST_CASE( testSpectrumUriEncodings ) {
+TEST_CASE( "testSpectrumUriEncodings" ) {
 
 //std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &meas );
 
@@ -103,46 +99,46 @@ BOOST_AUTO_TEST_CASE( testSpectrumUriEncodings ) {
  //                                 std::vector<std::shared_ptr<const SpecUtils::Measurement>> specs,
  //                                 std::string detector_model );
 
-}//BOOST_AUTO_TEST_CASE( testSpectrumUriEncodings )
+}//TEST_CASE( testSpectrumUriEncodings )
 
 
 
 void test_equalish( const UrlSpectrum &orig, const UrlSpectrum &decoded, const bool is_first )
 {
-  BOOST_CHECK( orig.m_source_type == decoded.m_source_type );
-  BOOST_REQUIRE( orig.m_energy_cal_coeffs.size() == decoded.m_energy_cal_coeffs.size() );
+  CHECK( orig.m_source_type == decoded.m_source_type );
+  REQUIRE( orig.m_energy_cal_coeffs.size() == decoded.m_energy_cal_coeffs.size() );
   
   for( size_t cal_index = 0; cal_index < orig.m_energy_cal_coeffs.size(); ++cal_index )
   {
-    BOOST_CHECK_CLOSE( orig.m_energy_cal_coeffs[cal_index], decoded.m_energy_cal_coeffs[cal_index], 0.01 );
+    CHECK_FRACTIONALLY_NEAR( orig.m_energy_cal_coeffs[cal_index], decoded.m_energy_cal_coeffs[cal_index], 0.0001 );
   }
     
-  BOOST_REQUIRE( orig.m_dev_pairs.size() == decoded.m_dev_pairs.size() );
+  REQUIRE( orig.m_dev_pairs.size() == decoded.m_dev_pairs.size() );
   for( size_t cal_index = 0; cal_index < orig.m_dev_pairs.size(); ++cal_index )
   {
-    BOOST_CHECK_CLOSE( orig.m_dev_pairs[cal_index].first, decoded.m_dev_pairs[cal_index].first, 0.01 );
-    BOOST_CHECK_CLOSE( orig.m_dev_pairs[cal_index].second, decoded.m_dev_pairs[cal_index].second, 0.01 );
+    CHECK_FRACTIONALLY_NEAR( orig.m_dev_pairs[cal_index].first, decoded.m_dev_pairs[cal_index].first, 0.0001 );
+    CHECK_FRACTIONALLY_NEAR( orig.m_dev_pairs[cal_index].second, decoded.m_dev_pairs[cal_index].second, 0.0001 );
   }
             
-  BOOST_CHECK( orig.m_model == decoded.m_model );
-  BOOST_CHECK( orig.m_title == decoded.m_title );
+  CHECK( orig.m_model == decoded.m_model );
+  CHECK( orig.m_title == decoded.m_title );
             
   const auto tdiff = orig.m_start_time - decoded.m_start_time;
-  BOOST_CHECK( (tdiff < std::chrono::seconds(2)) && (tdiff > std::chrono::seconds(-2)) );
+  CHECK( ((tdiff < std::chrono::seconds(2)) && (tdiff > std::chrono::seconds(-2))) );
             
-  BOOST_CHECK_CLOSE( orig.m_latitude, decoded.m_latitude, 0.01 );
-  BOOST_CHECK_CLOSE( orig.m_longitude, decoded.m_longitude, 0.01 );
+  CHECK_FRACTIONALLY_NEAR( orig.m_latitude, decoded.m_latitude, 0.0001 );
+  CHECK_FRACTIONALLY_NEAR( orig.m_longitude, decoded.m_longitude, 0.0001 );
             
-  BOOST_CHECK( orig.m_neut_sum == decoded.m_neut_sum );
+  CHECK( orig.m_neut_sum == decoded.m_neut_sum );
             
-  BOOST_CHECK_CLOSE( orig.m_live_time, decoded.m_live_time, 0.01 );
-  BOOST_CHECK_CLOSE( orig.m_real_time, decoded.m_real_time, 0.01 );
+  CHECK_FRACTIONALLY_NEAR( orig.m_live_time, decoded.m_live_time, 0.0001 );
+  CHECK_FRACTIONALLY_NEAR( orig.m_real_time, decoded.m_real_time, 0.0001 );
             
-  BOOST_CHECK( orig.m_channel_data == decoded.m_channel_data );
+  CHECK( orig.m_channel_data == decoded.m_channel_data );
 }//void test_equalish( const UrlSpectrum &lhs, const UrlSpectrum &rhs, const bool is_first )
 
 
-BOOST_AUTO_TEST_CASE( SimpleSpecEncode )
+TEST_CASE( "SimpleSpecEncode" )
 {
   UrlSpectrum spec;
 
@@ -164,32 +160,32 @@ BOOST_AUTO_TEST_CASE( SimpleSpecEncode )
 
   const uint8_t encode_options = 0;
   vector<string> encoded;
-  BOOST_REQUIRE_NO_THROW( encoded = url_encode_spectra( {spec}, encode_options, 1 ) );
-  BOOST_REQUIRE( encoded.size() == 1 );
+  REQUIRE_NOTHROW( encoded = url_encode_spectra( {spec}, encode_options, 1 ) );
+  REQUIRE( encoded.size() == 1 );
 
   vector<UrlSpectrum> decoded;
-  BOOST_REQUIRE_NO_THROW( decoded = decode_spectrum_urls( { url_decode( encoded[0] ) } ) );
-  BOOST_REQUIRE( decoded.size() == 1 );
+  REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( encoded[0] ) } ) );
+  REQUIRE( decoded.size() == 1 );
 
   test_equalish( spec, decoded[0], true );
   
   
   EncodedSpectraInfo url_info;
-  BOOST_REQUIRE_NO_THROW( url_info = get_spectrum_url_info( url_decode( encoded[0] ) ) );
-  BOOST_CHECK_EQUAL( url_info.m_encode_options, encode_options );
-  BOOST_CHECK_EQUAL( url_info.m_num_spectra, 1 );
-  BOOST_CHECK_EQUAL( url_info.m_url_num, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_number_urls, 1 );
-  BOOST_CHECK_EQUAL( url_info.m_crc, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_orig_url, url_decode(encoded[0]) );
+  REQUIRE_NOTHROW( url_info = get_spectrum_url_info( url_decode( encoded[0] ) ) );
+  CHECK_EQ( url_info.m_encode_options, encode_options );
+  CHECK_EQ( url_info.m_num_spectra, 1 );
+  CHECK_EQ( url_info.m_url_num, 0 );
+  CHECK_EQ( url_info.m_number_urls, 1 );
+  CHECK_EQ( url_info.m_crc, 0 );
+  CHECK_EQ( url_info.m_orig_url, url_decode(encoded[0]) );
   //url_info.m_raw_data;
   //url_info.m_data;
   
   
-}//BOOST_AUTO_TEST_CASE( SimpleSpecEncode )
+}//TEST_CASE( SimpleSpecEncode )
 
 
-BOOST_AUTO_TEST_CASE( TestEncodeOptions )
+TEST_CASE( "TestEncodeOptions" )
 {
   UrlSpectrum spec;
   
@@ -231,8 +227,8 @@ BOOST_AUTO_TEST_CASE( TestEncodeOptions )
   for( const uint8_t encode_options : encode_opts )
   {
     vector<string> encoded;
-    BOOST_REQUIRE_NO_THROW( encoded = url_encode_spectra( {spec}, encode_options, 1 ) );
-    BOOST_REQUIRE( encoded.size() == 1 );
+    REQUIRE_NOTHROW( encoded = url_encode_spectra( {spec}, encode_options, 1 ) );
+    REQUIRE( encoded.size() == 1 );
     
     string uri = encoded[0];
     
@@ -241,20 +237,20 @@ BOOST_AUTO_TEST_CASE( TestEncodeOptions )
       size_t pos = uri.find( "raddata://" );
       if( pos == string::npos )
         pos = uri.find( "RADDATA://" );
-      BOOST_REQUIRE( pos != string::npos );
+      REQUIRE( pos != string::npos );
       uri = uri.substr( pos );
       uri = url_decode( uri );
     }
     
     vector<UrlSpectrum> decoded;
-    BOOST_REQUIRE_NO_THROW( decoded = decode_spectrum_urls( { url_decode( uri ) } ) );
-    BOOST_REQUIRE( decoded.size() == 1 );
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( uri ) } ) );
+    REQUIRE( decoded.size() == 1 );
     
     test_equalish( spec, decoded[0], true );
   }
-}//BOOST_AUTO_TEST_CASE( TestEncodeOptions )
+}//TEST_CASE( TestEncodeOptions )
 
-BOOST_AUTO_TEST_CASE( TestNonAsciiTitleAndModelStrings )
+TEST_CASE( "TestNonAsciiTitleAndModelStrings" )
 {
   UrlSpectrum spec;
   
@@ -275,19 +271,19 @@ BOOST_AUTO_TEST_CASE( TestNonAsciiTitleAndModelStrings )
   for( const uint8_t encode_options : encode_opts )
   {
     vector<string> encoded;
-    BOOST_REQUIRE_NO_THROW( encoded = url_encode_spectra( {spec}, encode_options, 1 ) );
-    BOOST_REQUIRE( encoded.size() == 1 );
+    REQUIRE_NOTHROW( encoded = url_encode_spectra( {spec}, encode_options, 1 ) );
+    REQUIRE( encoded.size() == 1 );
     
     vector<UrlSpectrum> decoded;
-    BOOST_REQUIRE_NO_THROW( decoded = decode_spectrum_urls( { url_decode( encoded[0] ) } ) );
-    BOOST_REQUIRE( decoded.size() == 1 );
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( encoded[0] ) } ) );
+    REQUIRE( decoded.size() == 1 );
     
     test_equalish( spec, decoded[0], true );
   }
-}//BOOST_AUTO_TEST_CASE( TestNonAsciiTitleAndModelStrings )
+}//TEST_CASE( TestNonAsciiTitleAndModelStrings )
 
 
-BOOST_AUTO_TEST_CASE( MultiUriSpectrum )
+TEST_CASE( "MultiUriSpectrum" )
 {
   UrlSpectrum spec;
   
@@ -310,9 +306,9 @@ BOOST_AUTO_TEST_CASE( MultiUriSpectrum )
   const uint8_t encode_options = 0;
   const size_t num_parts = 9; // We could maybe get away with encoded.size() == 7, but we'll stretch to 9
   vector<string> encoded;
-  BOOST_REQUIRE_NO_THROW( encoded = url_encode_spectra( {spec}, encode_options, num_parts ) );
+  REQUIRE_NOTHROW( encoded = url_encode_spectra( {spec}, encode_options, num_parts ) );
   
-  BOOST_REQUIRE( encoded.size() == num_parts );
+  REQUIRE( encoded.size() == num_parts );
   
   vector<string> urls;
   string total_uri;
@@ -322,15 +318,15 @@ BOOST_AUTO_TEST_CASE( MultiUriSpectrum )
     urls.push_back( unencoded );
     
     const size_t g0_pos = unencoded.find( "G0/" );
-    BOOST_REQUIRE( g0_pos != string::npos );
-    BOOST_CHECK_LT( g0_pos, 120 );
+    REQUIRE( g0_pos != string::npos );
+    CHECK_LT( g0_pos, 120 );
     
     total_uri += unencoded.substr(g0_pos + 3);
   }
   
   vector<UrlSpectrum> decoded;
-  BOOST_REQUIRE_NO_THROW( decoded = decode_spectrum_urls( urls ) );
-  BOOST_REQUIRE( decoded.size() == 1 );
+  REQUIRE_NOTHROW( decoded = decode_spectrum_urls( urls ) );
+  REQUIRE( decoded.size() == 1 );
   
   test_equalish( spec, decoded[0], true );
   
@@ -338,20 +334,20 @@ BOOST_AUTO_TEST_CASE( MultiUriSpectrum )
   for( size_t i = 0; i < urls.size(); ++i )
   {
     EncodedSpectraInfo url_info;
-    BOOST_REQUIRE_NO_THROW( url_info = get_spectrum_url_info( urls[i] ) );
-    BOOST_CHECK_EQUAL( url_info.m_encode_options, encode_options );
-    BOOST_CHECK_EQUAL( url_info.m_num_spectra, 1 );
-    BOOST_CHECK_EQUAL( url_info.m_url_num, i );
-    BOOST_CHECK_EQUAL( url_info.m_number_urls, num_parts );
-    //BOOST_CHECK_EQUAL( url_info.m_crc, expected_crc ); TODO: fix this!
-    BOOST_CHECK_EQUAL( url_info.m_orig_url, urls[i] );
+    REQUIRE_NOTHROW( url_info = get_spectrum_url_info( urls[i] ) );
+    CHECK_EQ( url_info.m_encode_options, encode_options );
+    CHECK_EQ( url_info.m_num_spectra, 1 );
+    CHECK_EQ( url_info.m_url_num, i );
+    CHECK_EQ( url_info.m_number_urls, num_parts );
+    //CHECK_EQ( url_info.m_crc, expected_crc ); TODO: fix this!
+    CHECK_EQ( url_info.m_orig_url, urls[i] );
     //first_url_info.m_raw_data;
     //first_url_info.m_data;
   }//for( size_t i = 0; i < urls.size(); ++i )
-}//BOOST_AUTO_TEST_CASE( SimpleSpecEncode )
+}//TEST_CASE( SimpleSpecEncode )
 
 
-BOOST_AUTO_TEST_CASE( TwoSpectrumEncode )
+TEST_CASE( "TwoSpectrumEncode" )
 {
   UrlSpectrum spec, back;
   
@@ -382,15 +378,15 @@ BOOST_AUTO_TEST_CASE( TwoSpectrumEncode )
   
   // Dont set the second spectrums energy calibration to same as first to check that its assigned during decode since same model detector
   
-  BOOST_REQUIRE( spec.m_channel_data.size() == back.m_channel_data.size() );
+  REQUIRE( spec.m_channel_data.size() == back.m_channel_data.size() );
   
   const uint8_t encode_options = 0;
   vector<string> encoded;
-  BOOST_REQUIRE_NO_THROW( encoded = url_encode_spectra( {spec, back}, encode_options, 1 ) );
-  BOOST_REQUIRE( encoded.size() == 1 );
+  REQUIRE_NOTHROW( encoded = url_encode_spectra( {spec, back}, encode_options, 1 ) );
+  REQUIRE( encoded.size() == 1 );
   
   const vector<UrlSpectrum> decoded = decode_spectrum_urls( { url_decode( encoded[0] ) } );
-  BOOST_REQUIRE( decoded.size() == 2 );
+  REQUIRE( decoded.size() == 2 );
   
   // Now setup the values we expect decoded from background
   UrlSpectrum expected_back = back;
@@ -404,20 +400,20 @@ BOOST_AUTO_TEST_CASE( TwoSpectrumEncode )
   
   
   EncodedSpectraInfo url_info;
-  BOOST_REQUIRE_NO_THROW( url_info = get_spectrum_url_info( url_decode( encoded[0] ) ) );
+  REQUIRE_NOTHROW( url_info = get_spectrum_url_info( url_decode( encoded[0] ) ) );
   
-  BOOST_CHECK_EQUAL( url_info.m_encode_options, encode_options );
-  BOOST_CHECK_EQUAL( url_info.m_num_spectra, 2 );
-  BOOST_CHECK_EQUAL( url_info.m_url_num, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_number_urls, 1 );
-  //BOOST_CHECK_EQUAL( url_info.m_crc, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_orig_url, url_decode(encoded[0]) );
+  CHECK_EQ( url_info.m_encode_options, encode_options );
+  CHECK_EQ( url_info.m_num_spectra, 2 );
+  CHECK_EQ( url_info.m_url_num, 0 );
+  CHECK_EQ( url_info.m_number_urls, 1 );
+  //CHECK_EQ( url_info.m_crc, 0 );
+  CHECK_EQ( url_info.m_orig_url, url_decode(encoded[0]) );
   
   
-}//BOOST_AUTO_TEST_CASE( TwoSpectrumEncode )
+}//TEST_CASE( TwoSpectrumEncode )
 
 
-BOOST_AUTO_TEST_CASE( TestFromUri )
+TEST_CASE( "TestFromUri" )
 {
   
 // URI taken from figure 0-1 of "Draft Specification for Representing Gamma Radiation Spectra in QR codes, v1.1"
@@ -450,90 +446,90 @@ BOOST_AUTO_TEST_CASE( TestFromUri )
 
 
   EncodedSpectraInfo url_info;
-  BOOST_REQUIRE_NO_THROW( url_info = get_spectrum_url_info( url_decode( test_uri ) ) );
+  REQUIRE_NOTHROW( url_info = get_spectrum_url_info( url_decode( test_uri ) ) );
   
-  BOOST_CHECK_EQUAL( url_info.m_encode_options, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_num_spectra, 2 );
-  BOOST_CHECK_EQUAL( url_info.m_url_num, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_number_urls, 1 );
-  BOOST_CHECK_EQUAL( url_info.m_crc, 0 );
-  BOOST_CHECK_EQUAL( url_info.m_orig_url, url_decode(test_uri) );
+  CHECK_EQ( url_info.m_encode_options, 0 );
+  CHECK_EQ( url_info.m_num_spectra, 2 );
+  CHECK_EQ( url_info.m_url_num, 0 );
+  CHECK_EQ( url_info.m_number_urls, 1 );
+  CHECK_EQ( url_info.m_crc, 0 );
+  CHECK_EQ( url_info.m_orig_url, url_decode(test_uri) );
   //url_info.m_raw_data;
   //url_info.m_data;
 
   vector<UrlSpectrum> decoded;
-  BOOST_REQUIRE_NO_THROW( decoded = decode_spectrum_urls( {url_decode(test_uri)} ) );
+  REQUIRE_NOTHROW( decoded = decode_spectrum_urls( {url_decode(test_uri)} ) );
 
-  BOOST_REQUIRE( decoded.size() == 2 );
+  REQUIRE( decoded.size() == 2 );
   
   const auto &fore = decoded[0];
   const auto &back = decoded[1];
-  BOOST_CHECK_CLOSE( fore.m_live_time, 119.84, 0.01 );
-  BOOST_CHECK_CLOSE( fore.m_real_time, 120, 0.01 );
+  CHECK_FRACTIONALLY_NEAR( fore.m_live_time, 119.84f, 0.0001 );
+  CHECK_FRACTIONALLY_NEAR( fore.m_real_time, 120.0f, 0.0001 );
   
-  BOOST_CHECK_CLOSE( back.m_live_time, 300.06, 0.01 );  // What was encoded - but clearly a non-sense value
-  BOOST_CHECK_CLOSE( back.m_real_time, 120.00, 0.01 );  // What was encoded - but clearly a non-sense value
+  CHECK_FRACTIONALLY_NEAR( back.m_live_time, 300.06f, 0.0001 );  // What was encoded - but clearly a non-sense value
+  CHECK_FRACTIONALLY_NEAR( back.m_real_time, 120.00f, 0.0001 );  // What was encoded - but clearly a non-sense value
   
-  BOOST_CHECK( fore.m_source_type == SpecUtils::SourceType::Foreground );
-  BOOST_CHECK( back.m_source_type == SpecUtils::SourceType::Background );
+  CHECK( fore.m_source_type == SpecUtils::SourceType::Foreground );
+  CHECK( back.m_source_type == SpecUtils::SourceType::Background );
   
-  BOOST_CHECK_EQUAL( fore.m_model, "Some Model" );
-  BOOST_CHECK_EQUAL( back.m_model, "Some Model" );
+  CHECK_EQ( fore.m_model, "Some Model" );
+  CHECK_EQ( back.m_model, "Some Model" );
   
-  BOOST_CHECK_EQUAL( fore.m_channel_data.size(), 1024 );
-  BOOST_CHECK_EQUAL( back.m_channel_data.size(), 1024 );
+  CHECK_EQ( fore.m_channel_data.size(), 1024 );
+  CHECK_EQ( back.m_channel_data.size(), 1024 );
   
-  BOOST_REQUIRE_EQUAL( fore.m_energy_cal_coeffs.size(), 3 );
-  BOOST_CHECK_CLOSE( fore.m_energy_cal_coeffs[0], -2.73386598, 0.0001 );
-  BOOST_CHECK_CLOSE( fore.m_energy_cal_coeffs[1], 2.79616, 0.0001 );
-  BOOST_CHECK_CLOSE( fore.m_energy_cal_coeffs[2], 0.000225977, 0.0001 );
-  BOOST_REQUIRE_EQUAL( fore.m_dev_pairs.size(), 0 );
+  REQUIRE_EQ( fore.m_energy_cal_coeffs.size(), 3 );
+  CHECK_FRACTIONALLY_NEAR( fore.m_energy_cal_coeffs[0], -2.73386598f, 0.000001 );
+  CHECK_FRACTIONALLY_NEAR( fore.m_energy_cal_coeffs[1], 2.79616f, 0.000001 );
+  CHECK_FRACTIONALLY_NEAR( fore.m_energy_cal_coeffs[2], 0.000225977f, 0.000001 );
+  REQUIRE_EQ( fore.m_dev_pairs.size(), 0 );
   
-  BOOST_REQUIRE_EQUAL( back.m_energy_cal_coeffs.size(), 3 );
-  BOOST_CHECK_CLOSE( back.m_energy_cal_coeffs[0], -2.73386598, 0.0001 );
-  BOOST_CHECK_CLOSE( back.m_energy_cal_coeffs[1], 2.79616, 0.001 );
-  BOOST_CHECK_CLOSE( back.m_energy_cal_coeffs[2], 0.000225977, 0.0001 );
-  BOOST_REQUIRE_EQUAL( back.m_dev_pairs.size(), 0 );
+  REQUIRE_EQ( back.m_energy_cal_coeffs.size(), 3 );
+  CHECK_FRACTIONALLY_NEAR( back.m_energy_cal_coeffs[0], -2.73386598f, 0.000001 );
+  CHECK_FRACTIONALLY_NEAR( back.m_energy_cal_coeffs[1], 2.79616f, 0.00001 );
+  CHECK_FRACTIONALLY_NEAR( back.m_energy_cal_coeffs[2], 0.000225977f, 0.000001 );
+  REQUIRE_EQ( back.m_dev_pairs.size(), 0 );
   
-  BOOST_REQUIRE_LE( fore.m_neut_sum, -1 );
-  BOOST_REQUIRE_LE( back.m_neut_sum, -1 );
+  REQUIRE_LE( fore.m_neut_sum, -1 );
+  REQUIRE_LE( back.m_neut_sum, -1 );
   
-  BOOST_CHECK_CLOSE( back.m_latitude, -999.9, 0.1 );
-  BOOST_CHECK_CLOSE( back.m_longitude, -999.9, 0.1 );
+  CHECK_FRACTIONALLY_NEAR( back.m_latitude, -999.9, 0.001 );
+  CHECK_FRACTIONALLY_NEAR( back.m_longitude, -999.9, 0.001 );
   
-  BOOST_CHECK( fore.m_start_time == time_from_string("2020-01-01T01:00:00") );
+  CHECK( fore.m_start_time == time_from_string("2020-01-01T01:00:00") );
   
 
   shared_ptr<SpecFile> spec_file;
-  BOOST_REQUIRE_NO_THROW( spec_file = to_spec_file( decoded ) );
-  BOOST_REQUIRE( !!spec_file );
-  BOOST_REQUIRE_EQUAL( spec_file->num_measurements(), 2 );
+  REQUIRE_NOTHROW( spec_file = to_spec_file( decoded ) );
+  REQUIRE( !!spec_file );
+  REQUIRE_EQ( spec_file->num_measurements(), 2 );
 
   shared_ptr<const Measurement> fore_file = spec_file->measurements()[0];
   shared_ptr<const Measurement> back_file = spec_file->measurements()[1];
-  BOOST_REQUIRE( !!fore_file );
-  BOOST_REQUIRE( !!back_file );
+  REQUIRE( !!fore_file );
+  REQUIRE( !!back_file );
   
-  BOOST_CHECK( fore_file->source_type() == SpecUtils::SourceType::Foreground );
-  BOOST_CHECK( back_file->source_type() == SpecUtils::SourceType::Background );
+  CHECK( fore_file->source_type() == SpecUtils::SourceType::Foreground );
+  CHECK( back_file->source_type() == SpecUtils::SourceType::Background );
   
-  BOOST_CHECK_CLOSE( fore_file->gamma_count_sum(), 67771, 0.001 );
-  BOOST_CHECK_CLOSE( back_file->gamma_count_sum(), 35501, 0.001 );
+  CHECK_FRACTIONALLY_NEAR( fore_file->gamma_count_sum(), 67771, 0.00001 );
+  CHECK_FRACTIONALLY_NEAR( back_file->gamma_count_sum(), 35501, 0.00001 );
   
-  BOOST_CHECK_CLOSE( fore_file->live_time(), 119.84, 0.01 );
-  BOOST_CHECK_CLOSE( fore_file->real_time(), 120, 0.01 );
+  CHECK_FRACTIONALLY_NEAR( fore_file->live_time(), 119.84f, 0.0001f );
+  CHECK_FRACTIONALLY_NEAR( fore_file->real_time(), 120.0f, 0.0001f );
   
-  BOOST_CHECK_CLOSE( back_file->live_time(), 300.06, 0.01 );  // What was encoded - but clearly a non-sense value
-  BOOST_CHECK_CLOSE( back_file->real_time(), 120.00, 0.01 );  // What was encoded - but clearly a non-sense value
+  CHECK_FRACTIONALLY_NEAR( back_file->live_time(), 300.06f, 0.0001f );  // What was encoded - but clearly a non-sense value
+  CHECK_FRACTIONALLY_NEAR( back_file->real_time(), 120.00f, 0.0001f );  // What was encoded - but clearly a non-sense value
   
-  BOOST_CHECK_EQUAL( spec_file->instrument_model(), "Some Model" );
+  CHECK_EQ( spec_file->instrument_model(), "Some Model" );
   
-  BOOST_CHECK( fore_file->start_time() == time_from_string("2020-01-01T01:00:00") );
-}//BOOST_AUTO_TEST_CASE( TestFromUri )
+  CHECK( fore_file->start_time() == time_from_string("2020-01-01T01:00:00") );
+}//TEST_CASE( TestFromUri )
 
 
 
-BOOST_AUTO_TEST_CASE( testCalcCrc16Arc )
+TEST_CASE( "testCalcCrc16Arc" )
 {
   const std::pair<std::string,uint16_t> known_values[] = {
     {"", 0},
@@ -545,36 +541,272 @@ BOOST_AUTO_TEST_CASE( testCalcCrc16Arc )
     {"\xCF\x87\xC2\xB2", 10334},
     {"\x01\x02\x03\x04", 4001},
     {" Some other val ", 29802},
-    {"123456789", 47933}
+    {"123456789", 47933},
+    // A bunch of randomly generated strings
+    {string("\x88\x98\x47\x6f\x1c\xb7\x2b\xc5\xb2\x77\x77\x52\x69\xfc\xbd\x81\x1d\x25\xcb\x56\x72\x06\x7e\x7f\xf5",25),5705},
+    {string("\xe6\x0e",2),42187},
+    {string("\xae\x1c\xa5\xaa\x62\x86\x9b\x7c\x75\xbe\x86\xfa\xfb\x0d\xc8\x90\x4e\x24\xcb\xfb\xef\xa8\x2e\x2b\x0e\xd0",26),63895},
+    {string("\x53\x33\xc0\x00\x85\x40\x03\x4e\xf0\x83\xa4\x48\x65\xd3\x1d\x92\xb9\xcf\x32\xda\xee\x1e\xd7",23),6529},
+    {string("\x82\x5f\x37\x2a\xde\x61\x85\x03\xf7",9),41883},
+    {string("\x81\x3f\xc0\x5e\xc2\xac\x2d\xe5\x54\x5e\x71\x8d\x49\xe3\x1e\x21\xb8\xc4\x72",19),15141},
+    {string("\x62\x06\x66\xd7\xd8\xa1\x98\xb3\xf5\x03\xb4",11),12172},
+    {string("\x43\x0c\xb1\xb5\x38\x4f\xa6\xef\x1c\x61\x64\x7c\x3a\xc7\x31\x5b\xad\x25\x81\xe4\xa4\xf7\xc1\x13",24),19742},
+    {string("\x31\xb8\x9a\xe3\xa3\x32\x02\x70\x7b\x98\xe8\x94\x76\x4b\x72\xee\x31\x0e\xfd\x62\x45",21),10292},
+    {string("\xfd\x7d\x13\x14\xaf\x8e\x1b\x58\xff\x20\x4c\xa1\xa8\xb7\xb5\x9f\x3d",17),29398},
+    {string("\x16\x25\xb1\x49\x08\xe8\xdb\x60\xb5\x2d\xd5\x3c\xb6\x8d\x52\xa5\x8f\x85\x70\xfd\x77\x26\x65\x4b\x5e\x93\xea\xfb\xdc\x1b",30),37309},
+    {string("\xd2\xc0\xb9",3),35633},
+    {string("\x36\x15\x7e\x3b\x80\xba\x95\xc8\x01\xfe\x05\x8b\x26\x1c\xc3\x89\xcd\xe2\xaa\xe7\x1c\xe9\xec\xcd",24),12553},
+    {string("\x8d\xe1\x35\x02\xe6\x39\xd4\x83\xbf\xb1\x15\x4e\xa2\xb4\x29\xa6\x13\xfe\x43\x3d\x76\x5e\x6b",23),59727},
+    {string("\x2c\x79\x9d\x2e\x82\xa3\x46\xf1\x7b\xc7\xc7\xfa\xce\xeb\x2a\x89\xd4\x78\x5e\x6f\xe8\xfe\x07\x19\x1c\xfa\x2e\x7a\x2f\xa9",30),3403},
+    {string("\x68\xeb\xe7\x7f\x41\x65\x68\x9c\x29\x76\xa1\x74\xb7\xe9",14),52324},
+    {string("\x84\x6c\xb2\xb5\xc6\xe1\x17\xc8\xf8\x60\x3c\x4b\xa7\xbb\xaf\x56\xa7\x23\x77\x74\xb8\xd5",22),2627},
+    {string("\xd9\xa1\x28\xfe\x76\xbd\xc1\xd8\x14\x5c\x0e\xfe\x61\x60\xb2\xf7\xb4\x94\x5d\xcf\x19",21),61284},
+    {string("\x38\xcc\x2d\x9d\x14\x84\xaa\xb7",8),4254},
+    {string("\x2d\xe9\x99\x42\x86\xbb\x84\x0a\xf7\xf1\x42\x03\xe4\x74",14),16138},
+    {string("\x1a\xd5\x08\xba\x80\x2d\xdc\xb0\xee\x4f",10),43036},
+    {string("\x20\xff\x51\x4d\x92\xfe\x21\xb3\x41\x8e\xf0\xc6\xe1\x11\xdf\x4d",16),39086},
+    {string("\x0f\x4f\xcf\x1f",4),64294},
+    {string("\xef\x85\x25\x9d\x3a\x33\xb2\xb5\x46\xcf\x2b\xfd\x5f\x96\xe0\x26\x63\x07\x32\xad\x4d\x4b\xf0",23),1186},
+    {string("\xd7\xa7\x5a\x37\xa6\x54\x41\xc4\x44\xc6",10),23911},
+    {string("\x18\xe2\xf6\xe3\x05\x80\x4b\x50\xb4\x8c\xca\x65\x9f\x25\x65",15),32995},
+    {string("\xda\x70\xc5\x35\x66\x8c\xb8\xb8\x69\xab\x7c\x35\xc1\x67\xcc\xcc\x2c\xa4\x9a\x31\x75\xdb\xcc\x07\xec\x1d\xb3\xb0\x0c",29),27421},
+    {string("\x46\xfd\x19\x96\x4a\x2d\x42\x9c\xe3\x4a",10),52535},
+    {string("\x20\x32\x6a\x2f\x0c\x57\x5a\x6a\x1c\x24\x3c\x67\xfa\x6c\xaf\x85\x59\x95\xb8\x1a\x73",21),7111},
+    {string("\x99\x3f\x18\xc1\x51\xf7\xa8\x3b\xb2\xac\x52\x26\xb6\x88\xd5\x87\x39\x04\x1e\x15\x1a\xf9\x47\x5b\xfa",25),23456},
+    {string("\x5d\x42\xdd\xa3\x5b\x4e\x9c\x57\x31\x78\xbf\xb2\x05\xdb",14),7365},
+    {string("\xcb\x87\x3b\x7e\x4a\x8d\xad\xe7\xf6\x6f\x80\x1b\xe2\x67\x48",15),27616},
+    {string("\xe6\xdf\x6e\x2f\x1b\x8c\x3e\x38\x37\x75\x46\xe5\x04\x2b\x5c\xb0\x5e\xde\x04",19),48043},
+    {string("\xe2\xbd\xe1\x24\x20\x53\x11\xf3\x67\x81\xeb\x79\xf3\xd6\xbf\x2c\x17\x56\xa1\xc2\x3c\x0f\x82\x62\x3d",25),35311},
+    {string("\xf7\x13\xe4\xa9\x9c\xf6\x75\x16\x10\x1f\xd6\x9b\xd6\x35\xe1\xc5\x52\x58\xbe",19),43044},
+    {string("\x1f\x6b",2),57161},
+    {string("\xc9\xb6\xdc\x13\x49\x64\xfa\x46\x24\x57\xf7\xe5\xc5\x56\x75\xc5\x00\x08\x3c\x76\xce\x01\x02\x78\x01",25),33578},
+    {string("\x12\x0a\x5f\xa3\x61\xf6\xe1",7),54354},
+    {string("\xf6\x6f\x2a\xc6\x08\xda\x83\xd4\x35\x6d\xf1\x16\xd2\xed\x7b\xc6\x58\x0c\x7f\xb5\x77\x13\xf3",23),56563},
+    {string("\x45\x4c\xd8\x4c\xe7\x75\x81\xea",8),27788},
+    {string("\x5f\xb5\xc4\x44\xf0\xb1\xbd\xa7\xd3\x15\xfc\x41\x23\x04\xb5\xdd\xa9\xca",18),19023},
+    {string("\xb5\x2a\x52\x3d\x22\x3f\x5a\xa0\xa6\xf9\x1f\x33\x1a",13),1805},
+    {string("\x7a\x01\x34\xee\xe6\xc1\x2b\x2a\xbd\x49\x6c\xe0\x9b\xc0\x98\x09\xa4\x9e\x47\x35\x8a\x01\x58\x44",24),30313},
+    {string("\x6f\x1d\x7e\x41\xe9\x2d\x55\xab",8),49767},
+    {string("\xb1\x39\xc6\x6b\x9b\xf2",6),1312},
+    {string("\x1f\xa1\x23\x5b\x14\xae\x64\x18\x60\xd2\x09\xf7\x58\x96\x89\x50\x76\x7a\x13\xf4\xf7\x26\x9e",23),24197},
+    {string("\x26\x2c\xa7\x69\x77\xdc\xd9\xe8\xca\xc2\x78\x25\x0e\x33\x11\x04\xf8\xea\x74\xea\xdf\x28\xd6\x1c",24),60823},
+    {string("\x58\xcf\xb8\xb3\xdc\x36\xc1\x29\x7d\xc7\xaa\xde\xa4\x48\xd4\x8f\xbd\x87\x7f\x7b\x88",21),60651},
+    {string("\xdc\xd5\xad\x10\x19\x06\xac\xd5\xad\x7e\x0c\x7d\xfc\x5f",14),26371},
+    {string("\x04\x76\x0e\xf4\x64\x4c\xd6\xbc",8),63783},
+    {string("\x6b\xce\xe5\x7d\x0e\x9b\xab\x2a\xa5\xd7\x14\xad\xca\xc5\xf3\x51\xe4",17),62282},
+    {string("\x4d\x0a\xb9",3),1367},
+    {string("\x29\xef\xc3\x96\x24\x16",6),34964},
+    {string("\x09\xff\xf3\xaf\xff\x64\x0f\x17\x03\x51\x13\x28\x06\xc5\x43\xe9\x71\x85\x92\x6c\x2b\xde",22),43868},
+    {string("\xbe\x78\xd9\xd7\x69\x59\xa6\x03",8),51939},
+    {string("\xf5\x42\x53\x3e\x50\x71\xf4\xf3\x36\xcf\x59\xed\x8f\x28",14),61714},
+    {string("\xdc\x49\x44\x2f\x87\x33\x7a\x18\x34\x92\xc1\x97\xb1\x14\xf0\x9d\xb0\x17",18),43975},
+    {string("\x04\xe7\xca\x5f\x04\x72\xcb\xea\xa1\x96\xa2\xc6\x38\x11\xd5\xe0\xc6\x64\xdc\xfa\x2d\xdb\x80\x58\x88\x84\x41\x9b",28),15716},
+    {string("\xc9\x72\xe9\x71\x79\x2a\x05\x8d\xf1\xbd\x9d\x57\xd5\xa3\xde\x4c\xde\x99\x68\x2f\x37\x99\x5e\xa3\x97\x8b\xc6\x44",28),22995},
+    {string("\x2b\xc9\xd5\x74\x71\x5b\x56\xeb\x0a\xee\x1d\x65\x5b\xb1\xd8\xd3\x20\x39\xd3\x73\xe4\x14\x37\x43",24),5451},
+    {string("\x73\x13\xc8\x91\xaf\x87\x39\xc6\x30\xbe\xbf\xd6\x5e\x2e\x77",15),10253},
+    {string("\xb4\x25\x66\x9c\xb7\x2b\xee\xdc\xa9\x01\xf8\x9a\xd3\xfa\xeb\x0e\x5f\xff\x6b\xe1\x22\x66",22),53420},
+    {string("\x51\xb7\xb9\x76\x01\x63\x92\xc1\x0f\x78\xf4\x29\x53\x51\x32\x54",16),3670},
+    {string("\x17\x42\xf5\x2f\x7a\xe9\x68\x02\x87\x7a\x72\x6c\x88\x85\x06\x47\x31\xdb\xbf\x97\x31\x79\x15",23),755},
+    {string("\x99\xf8\x99\x0e\xe9\xf1\x2a\x6a\x82\xcd\x58\x14\x5b\x9c\x6a\xc4\x87\x1b\x8f\xab\x5e\x51\xa1\x74\xf7\xd5\x1b\xe4\xa5",29),61277},
+    {string("\x68\x9a\xfa\x59\xd2\x7b\x4b\x21\x66\x4c\x51\x6d\xd5\x44\xb3\xb4\x46",17),47115},
+    {string("\x01\x0b\xb7\x88\xa6\x70\xac\x3d\xc4\xa0\x36\xa5\xe3",13),35992},
+    {string("\xa4\xe1",2),35002},
+    {string("\xb1\xb6\xea\x30\xe3\x7a\x45\x85\x97\x0b\x9f\x8f\xe2\x4a\x42\x95\x31\x5d",18),16451},
+    {string("\x71\x02\x24\x9a\x53\xbb\x85\x42\x44\x76\xb3\xbe\x53\x0c\x2e\xc3\xb7\xc5\x43\x3e\xce\x69\x5e\xd4\x26\x30\xbd\x1d",28),23955},
+    {string("\xee\x14\x7a\x7e\xa9\xf6\xf1",7),64666},
+    {string("\x0b\x6e\x6a\x05\x4c\x06\xd9\x17\x3d\x4a\xaa\xc3\x8c\x6a\xe2\xcf\x10\xfa\xcc\x84\x64\x8c",22),53189},
+    {string("\x02\xcc\x45\x19\x7f\xcf\x99\xc6\x77\x33\x87",11),27226},
+    {string("\xa3\x90\xa8\x9b\x7d\xc1\x1c\x31\xd8\xbf\xa9\xcb\x8e\x68\x18\x5e\xc0\xf0\xad\x6f\xf9\x2f\x65\x1d\x02\xe0\x98\x4c\x5b\x47",30),40606},
+    {string("\x51\xf5\x86\x93\xbd\xd9\xc9\xfc\x3c\xf0",10),34218},
+    {string("\x18\x12\x26\xa8\x3e\x86\xb4\xb2\xdc\x76\x91\x51\xce\x32\x5c\x6e\xa2\x22\xb3\xf5\xd0\x90\x52\xec",24),48235},
+    {string("\x8b\x3a\x5e\x24\x01\x78\x1d\x26\x2c\xfd\xbe\xda\x30\x26\x2b\xaa",16),39409},
+    {string("\x41\x72\x80\x2f\x68\x6a\xe3",7),10684},
+    {string("\xcf\x19\x27",3),46459},
+    {string("\xa6\xf7\x76\x46\xd5\x0d\xa8\x20\xbf\xd2",10),41099},
+    {string("\xa7\x3d\x5d\x69\x50\x3d\x80\x16\x3c\x11\xb0\x14",12),10612},
+    {string("\x2f\xbc\x38\xb6\xa4\x46\xc4\x9b\x54\x87\xd4\x6a\x87\xb8\xf7\x0f\x6f",17),34740},
+    {string("\xcc\xf5\x8e\x84\x59\x66\x36\x77\x64\x38\xa1\xee\x74\xc0\x8d",15),61871},
+    {string("\xe2\x94\x83\x68\x8a\x39\x75\x33\xba\xe6",10),28417},
+    {string("\xb0\xea\xae\x69\xbb\x55\x4f\x82\xab\x4b\xbf\xd4\x80\x1e\x5d\xc2\xc8\x02\x11\x68\x6c\xfa\x45\x5f\x18",25),55605},
+    {string("\x12\x47\x00",3),62867},
+    {string("\xea\xe0\x0f\x1b\xb9\x6e\xcb\x8b\x03\xf7\x19",11),35242},
+    {string("\xb2\x17\x3a\xd5\x5a\x7f\x68\xef\x2a\x51\xd4\x45\x1b\x21\x17\x0f\xee\x2a\xea\x22\xda\x87",22),38003},
+    {string("\x03",1),320},
+    {string("\x24\x19\x50\x4b\xb2\xf4\x6e\x1e\x9b",9),9494},
+    {string("\xbd\xf8\xaf\x44\x69\xbd\x02\x93\x0d\xab\xd7\x37\x28\xb9\xd3\x9a\x96\x08\x34\xed\xcf\x89\x19",23),26692},
+    {string("\x26\xe1\x7f\xe1\x18\xa8\x62\x06\x41\xf7",10),9343},
+    {string("\xc1\x93\x40\x51",4),60733},
+    {string("\x9a\xaa\xc6\x76\x92\x29\x4b\xd2\x21\x38\x4f\x18\x19\x15\x37\x17\x5b\x76\x47\x21\x7a\x43\xf1",23),42428},
+    {string("\x8c\x10\xa2\xed\x4f\xe4\xb6\xe1\x8b\x0d\xdf\x57\xfc\xba\x6a\x00\x4a\x64\x52\xa3\x6f\xb0\x7d\x47\x6d\x5f\xfb\x56",28),5889},
+    {string("\x6a\xd3\x49\x4f\x80\xf7\xf2\x19\x9e\x8b\x87\x02\x19\xe7\xdf\x73\xe2\xa7\x58\xf5\x3b\x4b\x44\x23\xaf",25),49455},
+    {string("\xfd\x23\xf9\x53\xdc\xb1\x71\x3e\xa3\x69\xfd\xf5\xd8\x2f\x7c\x6d\x3f\x54\xe9",19),55969},
+    {string("\xc3\x98\x9a\xeb\x50\x4c\xae\x3d\x89\xa4\x1d\xb8\x41\x7a\x55\x3f\xd4\xa4\x61\xfc\xfa\xf1",22),12832},
+    {string("\xd1\xcc\x7e\x9a\x5b\x9d\x13\xba\x98",9),50134},
+    {string("\xd6\x7d\xa3\xb8\x8a\xf2",6),30779},
+    {string("\x3b\xb2\x04\xeb\xc6\x87\xfa\x99\x83\x52",10),674},
+    {string("\x4f\xde\x70\x49\x4b\xae\x58",7),25078},
+    {string("\x57\x36\xde\x77\xac\xd5\x6f\x8b\xf3\x3a\x35\xc3\xe3\xb6\x52\x7a\x7b\x04\x7b\xc6\xcb\xf0\xb6\x3b\xd1\x1e\x68\xee\x02",29),60540},
+    {string("\xad\x5c\xce\x2e\x5b",5),11394},
+    {string("\x0d\xac\x5c\x07\xcd\x24\x8b\x97\x95\xaf\x09\x38\x5b\x10\x49\x4b\x4d",17),42472},
+    {string("\xa1\x6b\x70\x00\x6f\x6a\x7d\xac\xd4\xa6\x47\x1e\xf5\xc7\x6f\xa7\x83\x8d\xe1\x1e\xd8\xa7\x24\x41\x5e",25),64779},
+    {string("\xb6\x19\x2b\xf1\xd8\x19\x80\x34",8),8691},
+    {string("\x26\x36\x22\x8a\x4a\xca\x6f\xfd\xfe\xc8\x35\xd9\x7c\x6e\x54\x72\x0a\xb2\x89\xc4\x81\xde\xca\xe7\x19\xf8\xb1",27),19469},
+    {string("\x02\xf2\xbf\x9f\xa6\x5e\xda\xa8\x2a\x02",10),49421},
+    {string("\x19\x6b\x55\xbb",4),41737},
+    {string("\xf5\x22\x1f\x7f\xe6\x02\x0a\xf6",8),45770},
+    {string("\x5a\x44\x70\xf0\x0f\x51\x5e\x04\x01\xf5\xb6",11),1220},
+    {string("\x1a\xd3\x09\x42\x48\x21\xc6",7),3960},
+    {string("\xb0\x36\xdb\xc3\x74\x11\xb6\xc0\x0a\xc5\x99\xe7\xcc\xde\x91\xd1\x29",17),32048},
+    {string("\x51\xa6\xf1\xc9\xe0\x45\xca\xd5\x86\x16\x09\x38\x27\x4e\x8b\xc4\xb3\x81\x4d\xfe\x1d\xe6",22),24999},
+    {string("\x10\x65\x45\x21\x09\x1b\x19\x1b\x7c\x1e\xfa\x61\xe4\x04\x93\x58\x88\x49\x82\x9f\x3f\x03\x51\x5a",24),48063},
+    {string("\x9a\x14\x01\x44\xbf\xd3\xd2\x50\xdf\x97\xfc\xa5\xad\xb2\x34\x18\x07\x37\xc5\x8f\x80\xc7\x75\x49\xd2\x4c\x04\x0a",28),9204},
+    {string("\xcc\x2e\x56\xd5\x42\x0e\x6e\x94\x6b\x3a\x68\x07\x5b\x95\xaf\x2c\x0d\x5d\x50\x0a\xbc\x2b\xf6\xb7\xd7\xa8\x0c\xb1",28),27582},
+    {string("\x98\x8c\xaf\x80\xf3\xf1\x01\x4a\x2e\x35\x4e\xc2\x5c",13),56303},
+    {string("\x6d\xd7\x69\x0c\xcb\x5c\xbd\x04\xc6\x57\x6b\x86\x00\xf0\x58\xcd\xad\xda\xdd\xfb\xd1\xc3",22),46687},
+    {string("\x78\x40\x46\x7b\x8b\xf8\x48\xc0\x62\x6f\xdd\x90",12),17480},
+    {string("\xa8\x14\x6f\xc6\x94\x3d\x86\x10\x5c\x95\x64\xbf\xe5\xe1\xd4\x95\x25\x31\xcd\x5d\x97\xc3\xf0\x08\xc1\xa5\x64\x3e\xa2\x44",30),10593},
+    {string("\x54\xba\x42\x13\x9d\x69\x24\x7d\x99\xfb\xf0\xfb\x61\x1d\xf6\x20\x0d\x24\xba\xf2\xa9\x32\xa6\xc1\x6a\xf3\x40",27),44179},
+    {string("\x23\x61",2),55512},
+    {string("\xcb",1),38721},
+    {string("\xfe\xc4\x7d\x75\x1a\x32\x8a\x38\x0b\xb9\x2d\xd9\xf4\xf8\xd7\xad\xd9\x46\xb1\xb1",20),13310},
+    {string("\x4a\x51\x2c\xc0\x39\x66\x30\xd3\xa0\xb1\xcf\xf2\x50\x85\x7e\x2a\x88\xe1\x34\xf7\x5a\xe8\x42\x79\xa7\x21",26),5059},
+    {string("\x35\x80\x64\x05",4),59364},
+    {string("\xd1\x3e\x2e\xd6\x75\xfd\xa1\xce\x68\x18",10),11378},
+    {string("\x64\x76\x5f\xa7\xc7\xa2\xcd\xd1\xbf\xab\xcd\x8d\x44\x96\x93\xa8\x58\x2a\x0a\x21\xe4\x34",22),46993},
+    {string("\x6e\x73\x15",3),8837},
+    {string("\x88\x53\x3a\x5d\x01\xd0\x3a\xc8\x14\x0b\x22\x63\x96\xd4\x7b\x30\x01\xf1\x65\xb0\xaf\x15\x08\x60\x06\xa8\x13",27),45951},
+    {string("\x1a\x48\x3e\x62\xcd\xfc\xc3\x98",8),42779},
+    {string("\x9f\x3f\xe1\xb2\x82\x68\xe2\xcb\x88\xa0\x78\x41\xb2\x40\xf9\x43\x70\x11\x85\x3d\x58\xa1\x5b",23),49364},
+    {string("\x93\x38\x11\x61\x19\x93\x07\xa8\x18\x06\xa4\xff\x92\x15\x12\x6f\xf6\x7b\x28\x58\x6c\x82",22),2660},
+    {string("\x95\xe0\x12\x57\x79\x87\x5a\x95\xfb",9),17945},
+    {string("\x1b\x93\x60\x5a\x44\x06\x04\x4f\x09\xb0\xbf\x0f\x32\xf8\x44\x82\x66\xdc\x2a\x6c\x9e",21),8393},
+    {string("\xb3\xb2\x5f\x05\x9a\xde\x28\x07\xc1\x4e\x6a\xe7\x88\x21\xa7\x20\xcd",17),55855},
+    {string("\x2e\x25\x84\xde\x7d",5),41530},
+    {string("\x09\x26\x21\x04\x24\x49\xb8\x6d\x6a\x0d\x16\x6d\xf9\x07\xc2\xc0\x6b\xff\x42\x89\xb6\xbe\x1c\xaa\x3a\x95\x5c\x69",28),53802},
+    {string("\xaf\x4e\x64\x91\x34\x9a\x98",7),5159},
+    {string("\x51\xce\x83\x45\xcc\xbe\x06\xf7\xed\x7c\x7b\xb2\x7e\x7f\x9c\xe4",16),53872},
+    {string("\x37\xe8\xb5\x13\xb7\xa2\x78\x90\x99\x4e\x86\x15\xa1\x60\x42\x56\xc7\xaa",18),30240},
+    {string("\x6b\xe9\x3a\x83\x6b\x3b\x5c\x11\xd1\xaf\x42\x09\x28\x9e\x4d\x79\x8b\x3b\xa8\xc3\x7a\xbb\x98\xf2\x87\x57",26),59699},
+    {string("\x00\x5b\x8d\xcb\xde\xf8\x11\x6c\x83\xf6\x71\xd0\xe1\xd9\x81\x04\x8b\xd6\xc1\x1e\xe6\x9b\xa5\x3b",24),38424},
+    {string("\x8d\x8f\xa4\xdf",4),57121},
+    {string("\xb6\xfc\x6b\x2e\x3f\xab\x5d\x3f\x12\xe7\x59\xf5\x8b\x51\x8d\xb5\x93\xf3\xa7\xea\x0f\x82\xfd\x1a\xca",25),6681},
+    {string("\x0b\xb5\x5b\x0b\x7a\xa0\x88\xf8\x06\xd7\x5f\xa7\xeb\xfc\x5a\x3c\xac\xda\xef\x33\xb8\x09\x09\x56\x62",25),814},
+    {string("\xb2\x98",2),2677},
+    {string("\x95\x54\x3a\x8d\x2e\x15\x96\xaf\x75\xc8\x20\x66\x7b\x37\x64\xdf\x80",17),27018},
+    {string("\xdb\xc7\xec",3),34339},
+    {string("\x0d\x0f\xd3\x03\x34\x6d\x08\x1d\x7b\x4e\x68\x25\x45\x7a\xd2\xb8\xf1\x9c\xa7\x5c\x21\xa6\x94\x25\xaf\xe7\x1d\x7c\xe9",29),36145},
+    {string("\x0d\x54\x35\xb3\x35\xc9\x47\x6a\x22\x55\xb7\x12\x87\xca\x65\xe4\xae\xf0\x32\x1e\x9c\x59\x60\xcf\xc4",25),53932},
+    {string("\x91\x17\x43\x72\x21\xc4\xe9\xe7\xa2\x6f\x49\x20\xe2\x2f\x47\x10",16),29952},
+    {string("\xb8\x75\x6b\x5d\xfe\x59\xaf\x8d\x5b\x74\xa2\x48\x57\xc8\x39\x62",16),47999},
+    {string("\x86\xb6\x69\x80\x27\x46\x2d",7),8650},
+    {string("\xec\x8b\x34\x8e\x42\x35\x7c\xb0\xf3\x76\x1b\xf7\xe3\x6d\x52\x81\x9b\x35\xed\x4f\xf9\x0e\x09\x56",24),10955},
+    {string("\x2c\x1e\x96\x07\x46\x77\xb1\xb0\x02\xfa\x98\xcd\xd2",13),29935},
+    {string("\x30\x0f\x34\xd9\xcc\x4e\x8c\x37\xca\xe9\xff\x50\x57\x45\x0f\xda\x86\x82",18),42623},
+    {string("\xea\x4f\x63\x43\x6e",5),49487},
+    {string("\x7e\x3a\x9c\x82\xf8\x03\xe1\x53\x3c\xdc\x53\x58",12),27542},
+    {string("\x91\x58\x32\x51\x62\x42\x91\xba\x74",9),21620},
+    {string("\x56\xe7\x26\x87\x7e\xa5\x1a\xb0\xa3",9),223},
+    {string("\x00",1),0},
+    {string("\x4c\xae",2),31925},
+    {string("\x1b\x1f\x0e\x77\x5e\x04\xb6\xb8\xbf",9),20576},
+    {string("\x3f\x95\x0f\xae\xda\xb9",6),13809},
+    {string("\x52\x14\xb1\x7f\xab\xa9\x69\x71\xda\x0c\x01",11),14229},
+    {string("\x8d\x6e\xb9\xa4\x54\xee",6),10029},
+    {string("\xaf\x9d\xdd\x2f\x4e\xc7\xce\xd5\x7f\xee\x27\xe4\x35\xd1\xfa\xd8\x5f\xa9\x61\xe9\xb9\xad",22),43625},
+    {string("\x56",1),16000},
+    {string("\x2f\xa0\x1f\x35\xfc\xf6\x0a\xc3\xb6\x93\xbb\x73\x23\xed\x7f\x3d\xd3\xe3\x3a\x62\x0a\x2a\xd9\x5c\x27\x43\x22\x2b\x6f",29),14833},
+    {string("\xc8\x66\xd1\xcb\x40\xf6\x8d\x89\xdf\x18\x91\x09\xb0\x5f\x18\x8e",16),64627},
+    {string("\xab\xe0\x3d\x97\x8b\xbb\x2a\xbb\x6e\xd8\xdd\x69\x0e\x36\xc2\xcc\x11\x0e\x1c\xbb\x4a\x2f\x79\x22\xb0",25),22707},
+    {string("\xbe\xbc\x44\xb6\xcc\xc7\x01\xf0\x44\xd9\x7f\x17\x7d\xb4\xc1\x6b\x87\xbb\xf1",19),57923},
+    {string("\x7d\xf3\x87\xeb\xdc\x55\xf7\xc5\x5d\x1b\x0f\x40\x16\xf2\xe7\x8f\x08\xc8\xa3\x1f\x4e",21),8953},
+    {string("\x8c\x81\x34",3),27808},
+    {string("\x07\x66\x6f\x08\xe5\x19\xe9\xf9\x69\xd2\x67\x6a\xd8\x07\xbe\x6e\xcf\xdb\x7e\x03\x24\xf1\x2a",23),57605},
+    {string("\x91\x73\xa1\xbc\xe6\x6b\xb1\x4e\xbe\x73",10),21716},
+    {string("\x87\x99\xb1\x22\xc4\x0b\xc4\x38\x01\x57\xad\x6e\xe4\xbd\xcb\x34\x6a\xaa\x40\xf1\x72\x7a\xb1\x7c\x4d\xb9\x6a\x40\xc9",29),7602},
+    {string("\x2e\x35\xdb\x96\x16\x29\x26\x8a\xbd\x03\x46\x0d\xe6\x09\x9a\x48",16),2462},
+    {string("\x7c\x6d\x14",3),18413},
+    {string("\xab",1),48961},
+    {string("\x50\x8f\x8a\x4f\x83\x25\x0a\x12",8),45711},
+    {string("\xfb\xe3\xc4\x74\x67\x5b\xec\x7c\xae\x6f\x54\x70\x5e\xb0\xa9\xdb",16),42501},
+    {string("\x00\x88\xbb\xae\x07\x82\x14\x1f\x77\xc6\x27\xff\xc8\x3a\xaa\x28\xa7\x3e\x08\x12\xb9\xdd",22),1429},
+    {string("\xfd\x37\x4b\xfa\xd3\x1a\xe5\x4d\x2a\xfa\xb7\x7f\x81\x7f",14),652},
+    {string("\xbc\x86\x66\x2c\x36\xe6\xa0\x7a\x28\xfa\xf6\x6d\x07\x33\x22\x32\xe5",17),1114},
+    {string("\x18\x89\x13\xb6\xe1\x2c\x86\x0c\x6e\x39\xa3\x2b\xbf\x4f\x7b\x9c\xe3\xa9\xff\x81\xd6\x01",22),10096},
+    {string("\x37\x3e\xd6\xb3\xf8\x98\x51\x20\xf9\x4c\x18\xba\x4d\x52\x9c",15),64938},
+    {string("\x98\x02\x7f\x5f\x4e\xec\x9f\x90\x72\xa8\x85",11),10760},
+    {string("\xf0\xe1\xfd\x08\x1d\xa5\x03\xb3\x36\x5e\x23\xe8\xc6\x07\xcd\x7b\x68\x46\x57\xa3\x57\x84\x71\x53\x94\xaf\xc4",27),9737},
+    {string("\xf0\xc5\x1b\x2f",4),4456},
+    {string("\x16\xfc\x56\xf9\xd5\x11\x40\x39\xae\xb5\xac\xe3\xf7\x18\x7d\xd2\x07\x2e\x9a\x9e\x61\xfc\x5b\xd4\x54\x40\x95\x5a\xe1\x26",30),58273},
+    {string("\xd3\x0f\x3c\xd7\xf9\x74\x10\x9c",8),18622},
+    {string("\xf3\xfa\x58\x12\xf7\x92\x49\x45",8),49093},
+    {string("\x7f\x10\x70\x83\xcf\x47\xad\xff\x8d\x82\xa0\x82\x72\xb0\x8f\x26\x0f\x74\xc5\x76\x33\x2e\x71\x82\x89\x53\x1e\x24",28),45307},
+    {string("\x8f\x56\xaa\xb2\x31\x66\x91\x95\x55\x2a\x3f\x08\xcd\x10\xee\x16\x69\xd5\xd5\xde\x31\x9f",22),39323},
+    {string("\x7d\x05\x13\xee\x2d\xf1\x0f\x00\xa1\x77\x86\xeb\x7d\x09\xc2\x3d\x9d",17),54897},
+    {string("\xb9\xd3\x89\x9d\x96\xd4\x69\x47\x78\xba\xbd\x8b\x90\x2d\xe6\xf0\x23\xed\xa7\xc9",20),38991},
+    {string("\x4d\x57\x69\x6e\xa5\x9c\xea\xb6\x7c\x3c\x9d\x07\x81\x42",14),45635},
+    {string("\x21\xf5\x11\xfd\x5d\x00\x3b",7),2360},
+    {string("\xfc\xc3\x21\xa8\x10\xdb",6),27286},
+    {string("\xde\xe9\x05\x5f\xbd",5),53109},
+    {string("\x07\xd9\xab\x03\x50\x62\x9e\x08\x3e\x68\x6a\xb0\xa2\x45\x80\xe5\x61\x67\x1c\x3a\x00\xde\x51\xd5\x78",25),6319},
+    {string("\x7e\x61\xeb\xb5\xe1",5),6897},
+    {string("\xbd\xeb\xd3\xea\x90\xfa\x44",7),25737},
+    {string("\x9d\x00\x5e\x2b\xaa\xc5",6),24257},
+    {string("\x4e\xde\xda\xa2\x6a\xcc\xd4\x80\xa9\xfd\x9e\x14\xae",13),63550},
+    {string("\xe3\x73\xee\x8d\x27\xeb\xe0\x8e\xe0\xa4\x5f\xe8\x95\x2d\x01\x3a\x07\x8b\x23\x0d\xa2\x1b\x53\xe8",24),20996},
+    {string("\x06\x98\xb9\x92\x36\xfa\x0e\xaf\x88\x71\x3c\x0e\x03\x9d\x59\xa0\x01\x19\x26\x50\x50\x23\xeb",23),47797},
+    {string("\x4d\xf5\xb8\x46\x94\x0f\x8c\xc2",8),29451},
+    {string("\x7b\x86\x09\xa8\x4b\x04\x13\xee\x65\x87\x5d\xe4\x13\x35\xbc",15),7859},
+    {string("\x33\x68",2),7701},
+    {string("\x59\x2c\xa8\x0e\x64\xd5\xb8\x4a\x9d\xd3\xae\x64\xd4\x45\x3a\x6a\x0a\xbb\x77\xb2\x40\xfc\xb0\x06\x50",25),36863},
+    {string("\xa3\x0a\x3d\x73\x73\x66\x0a\xc9\x43\x1f\x5f\x09\x93\x1c\xcf\x75\x26\x89",18),3260},
+    {string("\x7b\x33\xa6\x2f\xe5\x92\xb4\xe2\x95\x21\x03\x37\xe4\xf7\x19\xcb\xfa\x8b\xfb\xfa\xb1\xe7\x29",23),23686},
+    {string("\x60\x70\xb1\x29\x4c\x35\x67\x11\x39\xca\xfa\xe7\x70\x81\x49\x25\xa6\x54",18),22511},
+    {string("\x14\x86\xbe\x47\xb3\xbc\x1d\x18\xe5\xc5\xef\x61\xdf\x2f\x1a\xd9\xf1\xe5\x7c\xd7\xfb\xb1\x21\xf8\x16\x8c\x8c\x86",28),24247},
+    {string("\x52\xaf",2),7293},
+    {string("\x21\x55\xb3\x33\x75\x38\x8e\xdc\x5c\x41\xfe\x99\xe1\x0b\x3f\x8c\x40\xf9\x01\xa9\x09",21),47963},
+    {string("\x77\x1d\xdf\x2e\x5b\x7a\xa7\x9f\xea\x58\x6e\xbf\xb9\x69",14),52471},
+    {string("\x93\x97\x9b\xc1\x53\xb6\x7e\x71\x5e\x59\x4d\x66\xa9\x5a\x99\x5a\xb6\x4e\xbb\x7b\x1a\x01\x57\x6a\x64",25),51668},
+    {string("\xb8\x17\x98\x52\xe2\x55\x6e\xb2\xd0\xcb\x68\x43\x20\x85\x0d\xa1\x80\x07\x2f\xc3\x4f\x40\xf1\xe1\xb4\x43\x97\x23\x44\x72",30),2181},
+    {string("\xdf\x93\xba\xeb\x0c\xf2\xdd\x0d\x40\x27\x2c\xcf\xc9\x4b\x3a\xc9",16),3932},
+    {string("\x8a\x1c\x57\x37\x3e\xeb\x05\xe6\xc8\xb9\xfb\x79\x22\x4a\xaa\xae\x25\x92\x67\xb4\xf4\x81\x55\x59\x40\xa3\xc7\xc8\xca",29),38558},
+    {string("\xb1\x45\x1a\x88\x3a\xba\xbe\x9f\x93\xd6",10),54260}
   };
 
   for( const auto &str_crc : known_values )
   {
+#if( PERFORM_DEVELOPER_CHECKS )
     boost::crc_16_type crc_computer;
     crc_computer.process_bytes( (void const *)str_crc.first.data(), str_crc.first.size() );
     const uint16_t boost_crc = crc_computer.checksum();
 
-    BOOST_REQUIRE( boost_crc == str_crc.second );
-
+    REQUIRE( boost_crc == str_crc.second );
+#endif //PERFORM_DEVELOPER_CHECKS
+    
     const uint16_t our_crc = SpecUtils::calc_CRC16_ARC( str_crc.first );
-    BOOST_CHECK_EQUAL( our_crc, str_crc.second );
+    CHECK_EQ( our_crc, str_crc.second );
   }//for( const auto &str_crc : known_values )
 
+#if( PERFORM_DEVELOPER_CHECKS )
+  //cout << "const std::pair<std::string,uint16_t> rnd_tst_values[] = {" << endl;
   
   // Generate a bunch of random strings, and check things there
   random_device rnd_device;
   mt19937 mersenne_engine{ rnd_device() };
-  uniform_int_distribution<size_t> length_dist{1, 1024*128};
+  uniform_int_distribution<size_t> length_dist{1, 30 /*1024*128*/};
   uniform_int_distribution<unsigned int> value_dist{0, 255};
 
   for( size_t i = 0; i < 512; ++i )
   {
     const size_t len = length_dist(mersenne_engine);
     string input( len, '\0' );
-    for( char &c : input )
+    //cout << "\t{string(\"";
+    for( size_t i = 0; i < input.size(); ++i )
     {
+      char &c = input[i];
       const uint8_t rval = static_cast<uint8_t>( value_dist(mersenne_engine) );
       c = reinterpret_cast<const char &>( rval );
+      
+      //std::cout << "\\x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(rval);
     }
     
     boost::crc_16_type crc_computer;
@@ -583,19 +815,22 @@ BOOST_AUTO_TEST_CASE( testCalcCrc16Arc )
 
     const uint16_t our_crc = SpecUtils::calc_CRC16_ARC( input );
 
-    BOOST_CHECK_EQUAL( our_crc, boost_crc );
+    //cout << "\"," << std::dec << len << ")," << std::dec << static_cast<int>(boost_crc) << "}," << endl;
+    
+    CHECK_EQ( our_crc, boost_crc );
   }//for( create a bunch of random strings )
-}//BOOST_AUTO_TEST_CASE( testCalcCrc16Arc )
+#endif //PERFORM_DEVELOPER_CHECKS
+}//TEST_CASE( testCalcCrc16Arc )
 
 
-BOOST_AUTO_TEST_CASE( base64url_encoding )
+TEST_CASE( "base64url_encoding" )
 {
-  BOOST_CHECK( base64url_encode("HelloWorld",true) == "SGVsbG9Xb3JsZA==" );
-  BOOST_CHECK( base64url_encode("HelloWorld",false) == "SGVsbG9Xb3JsZA" );
+  CHECK( base64url_encode("HelloWorld",true) == "SGVsbG9Xb3JsZA==" );
+  CHECK( base64url_encode("HelloWorld",false) == "SGVsbG9Xb3JsZA" );
 
-  BOOST_CHECK( base64url_encode("0/?",false) == "MC8_" );
-  BOOST_CHECK( base64url_encode("0/?/\\}{_=+,",false) == "MC8_L1x9e189Kyw" );
-  BOOST_CHECK( base64url_encode("",false) == "" );
+  CHECK( base64url_encode("0/?",false) == "MC8_" );
+  CHECK( base64url_encode("0/?/\\}{_=+,",false) == "MC8_L1x9e189Kyw" );
+  CHECK( base64url_encode("",false) == "" );
   
   
   for( uint8_t i = 0x00; true ; ++i )
@@ -603,11 +838,11 @@ BOOST_AUTO_TEST_CASE( base64url_encoding )
     const char val = reinterpret_cast<char &>( i );
     const string input( 3, val );
     const string encode_output = base64url_encode( input, false );
-    BOOST_CHECK( encode_output.size() == 4 );
+    CHECK( encode_output.size() == 4 );
     const vector<uint8_t> decode_output_bytes = base64url_decode( encode_output );
     string decode_output( decode_output_bytes.size(), '\0' );
     memcpy( &(decode_output[0]), &(decode_output_bytes[0]), decode_output_bytes.size() );
-    BOOST_CHECK( decode_output == input );
+    CHECK( decode_output == input );
     
     if( i == 255 )
       break;
@@ -622,13 +857,13 @@ BOOST_AUTO_TEST_CASE( base64url_encoding )
     
     const string encode_output = base64url_encode( input, (rand() % 2) );
     const vector<uint8_t> decode_output_bytes = base64url_decode( encode_output );
-    BOOST_CHECK( decode_output_bytes == input );
+    CHECK( decode_output_bytes == input );
   }//for( size_t i = 0; i < 1000; ++i )
   
-}//BOOST_AUTO_TEST_CASE( base64url_encoding )
+}//TEST_CASE( base64url_encoding )
 
 
-BOOST_AUTO_TEST_CASE( base45Encoding )
+TEST_CASE( "base45Encoding" )
 {
   string encode_output, decode_input;
   vector<uint8_t> encode_input, decode_output;
@@ -636,107 +871,107 @@ BOOST_AUTO_TEST_CASE( base45Encoding )
   //Encoding example 1:
   encode_input = { 65, 66 };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "BB8" );
+  CHECK( encode_output == "BB8" );
   
   //Encoding example 2:
   encode_input = { 72, 101, 108, 108, 111, 33, 33 };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "%69 VD92EX0" );
+  CHECK( encode_output == "%69 VD92EX0" );
   
   //Encoding example 3:
   encode_input = { 98, 97, 115, 101, 45, 52, 53 };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "UJCLQE7W581" );
+  CHECK( encode_output == "UJCLQE7W581" );
   
   //Decoding example 1:
   decode_output = base45_decode( "QED8WEX0" );
   const string expected_decode_output = "ietf!";
   
-  BOOST_CHECK( decode_output.size() == expected_decode_output.size() );
+  CHECK( decode_output.size() == expected_decode_output.size() );
   for( size_t i = 0; i < decode_output.size(); ++i )
   {
-    BOOST_CHECK( static_cast<char>(decode_output[i]) == expected_decode_output[i] );
+    CHECK( static_cast<char>(decode_output[i]) == expected_decode_output[i] );
   }
   
   // invalid character
-  BOOST_REQUIRE_THROW( base45_decode( "=~QED8WEX0" ), std::exception );
+  REQUIRE_THROWS_AS( base45_decode( "=~QED8WEX0" ), std::exception );
   
   // invalid number characters
-  BOOST_REQUIRE_THROW( base45_decode( "A" ), std::exception );
-  BOOST_REQUIRE_THROW( base45_decode( "AAAA" ), std::exception );
+  REQUIRE_THROWS_AS( base45_decode( "A" ), std::exception );
+  REQUIRE_THROWS_AS( base45_decode( "AAAA" ), std::exception );
   
   // Triplet producing too large of a value (>=65536)
-  BOOST_REQUIRE_THROW( base45_decode( "GGW" ), std::exception );
+  REQUIRE_THROWS_AS( base45_decode( "GGW" ), std::exception );
   
   
   encode_input = { 0x80, 0x80 };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "1BG" );
+  CHECK( encode_output == "1BG" );
   decode_output = base45_decode( encode_output );
-  BOOST_CHECK( decode_output == encode_input );
+  CHECK( decode_output == encode_input );
   
   
   encode_input = { 0x80, 0x80, 0x80 };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "1BG%2" );
+  CHECK( encode_output == "1BG%2" );
   decode_output = base45_decode( encode_output );
-  BOOST_CHECK( decode_output == encode_input );
+  CHECK( decode_output == encode_input );
   
   
   encode_input = { 0x8F, 0x80, 0x8F };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "G6I83" );
+  CHECK( encode_output == "G6I83" );
   decode_output = base45_decode( encode_output );
-  BOOST_CHECK( decode_output == encode_input );
+  CHECK( decode_output == encode_input );
   
   
   encode_input = { 0x8F, 0x80, 0x8F, 0xF0 };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "G6I%8I" );
+  CHECK( encode_output == "G6I%8I" );
   decode_output = base45_decode( encode_output );
-  BOOST_CHECK( decode_output == encode_input );
+  CHECK( decode_output == encode_input );
   
   encode_input = { 0x01, 0xFF };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "GB0" );
+  CHECK( encode_output == "GB0" );
   decode_output = base45_decode( encode_output );
-  BOOST_CHECK( decode_output == encode_input );
+  CHECK( decode_output == encode_input );
   
   encode_input = { 0xAA, 0xFF };
   encode_output = base45_encode( encode_input );
-  BOOST_CHECK( encode_output == "ZRL" );
+  CHECK( encode_output == "ZRL" );
   decode_output = base45_decode( encode_output );
-  BOOST_CHECK( decode_output == encode_input );
+  CHECK( decode_output == encode_input );
   
   for( uint8_t i = 0x00; true ; ++i )
   {
     const char val = reinterpret_cast<char &>( i );
     const string input( 2, val );
     const string encode_output = base45_encode( input );
-    BOOST_CHECK( encode_output.size() == 3 );
+    CHECK( encode_output.size() == 3 );
     const vector<uint8_t> decode_output_bytes = base45_decode( encode_output );
     string decode_output( decode_output_bytes.size(), '\0' );
     memcpy( &(decode_output[0]), &(decode_output_bytes[0]), decode_output_bytes.size() );
-    BOOST_CHECK( decode_output == input );
+    CHECK( decode_output == input );
     
     if( i == 255 )
       break;
   }
-}//BOOST_AUTO_TEST_CASE( base45Encoding )
+}//TEST_CASE( base45Encoding )
 
 
 
-BOOST_AUTO_TEST_CASE( testPercentEncoding ) 
+TEST_CASE( "testPercentEncoding" )
 {
   string original, expected, encoded, decoded;
 
   original = "Why dids a?!Three % did^!`?";  //Note that the ! character doesnt have to be encoded, although some encoders do
   expected = "Why%20dids%20a%3F!Three%20%25%20did%5E!%60%3F";
   encoded = SpecUtils::url_encode( original );
-  BOOST_CHECK_EQUAL( expected, encoded );
+  CHECK_EQ( expected, encoded );
   
   decoded = SpecUtils::url_decode( encoded );
-  BOOST_CHECK_EQUAL( original, decoded );
+  CHECK_EQ( original, decoded );
 
 
   // Email encode not allowed: "%&;=/?#[]"
@@ -745,17 +980,17 @@ BOOST_AUTO_TEST_CASE( testPercentEncoding )
   expected = "What Does %25@%3Bmean<> |";
 
   encoded = SpecUtils::email_encode( original );
-  BOOST_CHECK_EQUAL( encoded, expected );
+  CHECK_EQ( encoded, expected );
 
   decoded = SpecUtils::url_decode( encoded );
-  BOOST_CHECK_EQUAL( original, decoded );
+  CHECK_EQ( original, decoded );
 
   // TODO: add more test cases here
 
-}//BOOST_AUTO_TEST_CASE( testPercentEncoding )
+}//TEST_CASE( testPercentEncoding )
 
 
-BOOST_AUTO_TEST_CASE( StreamVByte )
+TEST_CASE( "StreamVByte" )
 {
   for( size_t i = 0; i < 50; ++i )
   {
@@ -766,16 +1001,16 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     
     const vector<uint8_t> encoded = encode_stream_vbyte( input );
     const size_t nbytedec = decode_stream_vbyte(encoded,decoded);
-    BOOST_CHECK( nbytedec == encoded.size() );
-    BOOST_CHECK( decoded == input );
+    CHECK( nbytedec == encoded.size() );
+    CHECK( decoded == input );
 
     if( len )
     {
       vector<uint8_t> bad_bytes( begin(encoded), begin(encoded) + (encoded.size() - 1) );
-      BOOST_REQUIRE_THROW( decode_stream_vbyte( bad_bytes, decoded ), std::exception );
+      REQUIRE_THROWS_AS( decode_stream_vbyte( bad_bytes, decoded ), std::exception );
       vector<uint8_t> bad_bytes_2 = encoded;
       bad_bytes_2[0] += 1;
-      BOOST_REQUIRE_THROW( decode_stream_vbyte( bad_bytes_2, decoded ), std::exception );
+      REQUIRE_THROWS_AS( decode_stream_vbyte( bad_bytes_2, decoded ), std::exception );
     }
   }//for( size_t i = 0; i < 10; ++i )
 
@@ -799,7 +1034,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 2, 2, 0, 21, 1, 1, 0, 7, 1, 0, 1, 1, 1, 0, 3, 1, 0, 6,
     1, 0, 16, 1, 0, 14, 1, 0, 1, 1, 1, 0, 8, 1, 0, 2, 1, 0, 40, 1,
     0, 21  };
-  BOOST_REQUIRE( test_1_chan_cnts.size() == 322 );
+  REQUIRE( test_1_chan_cnts.size() == 322 );
   const vector<uint8_t> test_1_packed{
     66, 1, 0, 0, 84, 85, 1, 0, 84, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 38, 108, 156, 169, 219, 247, 243, 26, 1, 51, 1, 57, 1, 62, 1,
@@ -811,13 +1046,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     12, 1, 0, 1, 1, 1, 0, 18, 2, 1, 1, 0, 8, 1, 0, 16, 1, 0, 9, 1, 0, 1, 1, 0, 23, 1, 0, 2, 2, 0, 21, 1, 1, 0, 7, 1, 0, 1, 1, 1, 0, 3, 1, 0, 6, 1, 0, 16, 1, 0,
     14, 1, 0, 1, 1, 1, 0, 8, 1, 0, 2, 1, 0, 40, 1, 0, 21
   };
-  BOOST_REQUIRE( test_1_packed.size() == 417 );
+  REQUIRE( test_1_packed.size() == 417 );
   const vector<uint8_t> test_1_encoded = encode_stream_vbyte( test_1_chan_cnts );
-  BOOST_CHECK( test_1_encoded == test_1_packed );
+  CHECK( test_1_encoded == test_1_packed );
   vector<uint32_t> test_1_dec;
   const size_t test_1_nbytedec = decode_stream_vbyte(test_1_encoded,test_1_dec);
-  BOOST_CHECK( test_1_nbytedec == test_1_packed.size() );
-  BOOST_CHECK( test_1_dec == test_1_chan_cnts );
+  CHECK( test_1_nbytedec == test_1_packed.size() );
+  CHECK( test_1_dec == test_1_chan_cnts );
   
   
   
@@ -839,7 +1074,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 1, 1, 0, 3, 1, 0, 2, 1, 0, 1, 1, 0, 10, 1, 0, 1, 1, 0,
     26, 1, 0, 2, 1, 0, 18, 1, 0, 18, 1, 1, 0, 8, 1, 0, 28, 2, 1, 0,
     7, 1, 0, 15, 1, 0, 30, 1, 0, 6, 1, 0, 66  };
-  BOOST_REQUIRE( test_2_chan_cnts.size() == 293 );
+  REQUIRE( test_2_chan_cnts.size() == 293 );
   const vector<uint8_t> test_2_packed{
     37, 1, 0, 64, 85, 85, 1, 0, 84, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 36, 96, 143, 221, 231, 20, 1, 30, 1, 36, 1, 57, 1, 85, 1, 75, 1, 69, 1, 40, 1, 41,
@@ -850,13 +1085,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     4, 1, 0, 2, 1, 0, 2, 1, 0, 2, 2, 0, 1, 1, 2, 1, 0, 1, 1, 1, 1, 1, 1, 2, 0, 1, 1, 1, 0, 3, 1, 0, 1, 1, 0, 3, 1, 0, 2, 1, 0, 1, 1, 0, 10, 1, 0, 1, 1, 0,
     26, 1, 0, 2, 1, 0, 18, 1, 0, 18, 1, 1, 0, 8, 1, 0, 28, 2, 1, 0, 7, 1, 0, 15, 1, 0, 30, 1, 0, 6, 1, 0, 66
   };
-  BOOST_REQUIRE( test_2_packed.size() == 383 );
+  REQUIRE( test_2_packed.size() == 383 );
   const vector<uint8_t> test_2_encoded = encode_stream_vbyte( test_2_chan_cnts );
-  BOOST_CHECK( test_2_encoded == test_2_packed );
+  CHECK( test_2_encoded == test_2_packed );
   vector<uint32_t> test_2_dec;
   const size_t test_2_nbytedec = decode_stream_vbyte(test_2_encoded,test_2_dec);
-  BOOST_CHECK( test_2_nbytedec == test_2_packed.size() );
-  BOOST_CHECK( test_2_dec == test_2_chan_cnts );
+  CHECK( test_2_nbytedec == test_2_packed.size() );
+  CHECK( test_2_dec == test_2_chan_cnts );
   
   
   
@@ -881,7 +1116,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     8, 1, 0, 8, 1, 0, 5, 1, 0, 3, 1, 0, 14, 1, 0, 5, 1, 0, 9, 2,
     0, 11, 2, 0, 19, 1, 0, 8, 1, 0, 7, 1, 0, 4, 1, 0, 32, 1, 0, 4,
     1, 0, 25  };
-  BOOST_REQUIRE( test_3_chan_cnts.size() == 343 );
+  REQUIRE( test_3_chan_cnts.size() == 343 );
   const vector<uint8_t> test_3_packed{
     87, 1, 0, 64, 85, 85, 0, 0, 84, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 39, 111, 136, 215, 238, 21, 1, 40, 1, 59,
@@ -893,13 +1128,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 2, 0, 1, 1, 1, 2, 0, 1, 1, 0, 1, 1, 1, 1, 0, 7, 1, 0, 3, 1, 0, 20, 1, 1, 0, 1, 1, 0, 2, 1, 0, 2, 1, 1, 0, 1, 1, 0, 9, 1, 0, 13, 1, 0, 4, 1, 0, 1, 2,
     0, 8, 1, 0, 8, 1, 0, 5, 1, 0, 3, 1, 0, 14, 1, 0, 5, 1, 0, 9, 2, 0, 11, 2, 0, 19, 1, 0, 8, 1, 0, 7, 1, 0, 4, 1, 0, 32, 1, 0, 4, 1, 0, 25
   };
-  BOOST_REQUIRE( test_3_packed.size() == 444 );
+  REQUIRE( test_3_packed.size() == 444 );
   const vector<uint8_t> test_3_encoded = encode_stream_vbyte( test_3_chan_cnts );
-  BOOST_CHECK( test_3_encoded == test_3_packed );
+  CHECK( test_3_encoded == test_3_packed );
   vector<uint32_t> test_3_dec;
   const size_t test_3_nbytedec = decode_stream_vbyte(test_3_encoded,test_3_dec);
-  BOOST_CHECK( test_3_nbytedec == test_3_packed.size() );
-  BOOST_CHECK( test_3_dec == test_3_chan_cnts );
+  CHECK( test_3_nbytedec == test_3_packed.size() );
+  CHECK( test_3_dec == test_3_chan_cnts );
   
   
   
@@ -922,7 +1157,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 2, 2, 1, 0, 2, 1, 0, 5, 1, 0, 5, 1, 0, 14, 1, 0, 3, 1, 0,
     2, 1, 0, 1, 1, 0, 12, 1, 0, 4, 1, 0, 27, 1, 0, 5, 1, 0, 28, 1,
     0, 6, 2, 0, 17, 1, 0, 20, 1, 0, 8, 1, 0, 68  };
-  BOOST_REQUIRE( test_4_chan_cnts.size() == 314 );
+  REQUIRE( test_4_chan_cnts.size() == 314 );
   const vector<uint8_t> test_4_packed{
     58, 1, 0, 64, 85, 85, 0, 0, 84, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 42, 97, 132, 163, 242, 22, 1, 32, 1, 61, 1, 47, 1, 45, 1, 66, 1,
@@ -934,13 +1169,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 4, 1, 0, 2, 2, 1, 0, 2, 1, 0, 5, 1, 0, 5, 1, 0, 14, 1, 0, 3, 1, 0, 2, 1, 0, 1, 1, 0, 12, 1, 0, 4, 1, 0, 27, 1, 0, 5, 1, 0, 28, 1, 0, 6, 2, 0, 17, 1,
     0, 20, 1, 0, 8, 1, 0, 68
   };
-  BOOST_REQUIRE( test_4_packed.size() == 408 );
+  REQUIRE( test_4_packed.size() == 408 );
   const vector<uint8_t> test_4_encoded = encode_stream_vbyte( test_4_chan_cnts );
-  BOOST_CHECK( test_4_encoded == test_4_packed );
+  CHECK( test_4_encoded == test_4_packed );
   vector<uint32_t> test_4_dec;
   const size_t test_4_nbytedec = decode_stream_vbyte(test_4_encoded,test_4_dec);
-  BOOST_CHECK( test_4_nbytedec == test_4_packed.size() );
-  BOOST_CHECK( test_4_dec == test_4_chan_cnts );
+  CHECK( test_4_nbytedec == test_4_packed.size() );
+  CHECK( test_4_dec == test_4_chan_cnts );
   
   
   
@@ -964,7 +1199,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 7, 1, 0, 2, 1, 1, 0, 6, 1, 1, 0, 6, 1, 0, 2, 1, 0, 7,
     1, 0, 32, 1, 0, 22, 1, 0, 3, 1, 0, 14, 1, 0, 8, 1, 0, 14, 1, 0,
     22, 1, 0, 6, 1, 0, 42, 1, 0, 23  };
-  BOOST_REQUIRE( test_5_chan_cnts.size() == 330 );
+  REQUIRE( test_5_chan_cnts.size() == 330 );
   const vector<uint8_t> test_5_packed{
     74, 1, 0, 64, 85, 21, 0, 0, 84, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 41, 89, 143, 180, 248, 11, 1, 16, 1, 30, 1, 30, 1,
@@ -976,13 +1211,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 1, 1, 0, 3, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 3, 1, 0, 7, 1, 0, 1, 1, 0, 2, 1, 1, 0, 7, 1, 0, 2, 1, 1, 0, 6, 1, 1, 0, 6, 1, 0, 2, 1, 0, 7, 1, 0, 32,
     1, 0, 22, 1, 0, 3, 1, 0, 14, 1, 0, 8, 1, 0, 14, 1, 0, 22, 1, 0, 6, 1, 0, 42, 1, 0, 23
   };
-  BOOST_REQUIRE( test_5_packed.size() == 427 );
+  REQUIRE( test_5_packed.size() == 427 );
   const vector<uint8_t> test_5_encoded = encode_stream_vbyte( test_5_chan_cnts );
-  BOOST_CHECK( test_5_encoded == test_5_packed );
+  CHECK( test_5_encoded == test_5_packed );
   vector<uint32_t> test_5_dec;
   const size_t test_5_nbytedec = decode_stream_vbyte(test_5_encoded,test_5_dec);
-  BOOST_CHECK( test_5_nbytedec == test_5_packed.size() );
-  BOOST_CHECK( test_5_dec == test_5_chan_cnts );
+  CHECK( test_5_nbytedec == test_5_packed.size() );
+  CHECK( test_5_dec == test_5_chan_cnts );
   
   
   
@@ -1258,7 +1493,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     5, 8, 5, 4, 1, 1, 2, 0, 6, 1, 0, 76, 1, 0, 56, 1, 0, 38, 1, 0,
     76, 1, 0, 55, 1, 0, 43, 1, 0, 86, 1, 0, 73, 1, 0, 52, 1, 0, 98, 1,
     0, 131, 1, 0, 245  };
-  BOOST_REQUIRE( test_6_chan_cnts.size() == 5365 );
+  REQUIRE( test_6_chan_cnts.size() == 5365 );
   const vector<uint8_t> test_6_packed{
     245, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1396,13 +1631,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     52, 1, 0, 35, 1, 0, 25, 2, 1, 2, 2, 3, 6, 4, 6, 5, 8, 5, 4, 1, 1, 2, 0, 6, 1, 0, 76, 1, 0, 56, 1, 0, 38, 1, 0, 76, 1, 0, 55, 1, 0, 43, 1, 0, 86, 1, 0, 73, 1, 0,
     52, 1, 0, 98, 1, 0, 131, 1, 0, 245
   };
-  BOOST_REQUIRE( test_6_packed.size() == 6710 );
+  REQUIRE( test_6_packed.size() == 6710 );
   const vector<uint8_t> test_6_encoded = encode_stream_vbyte( test_6_chan_cnts );
-  BOOST_CHECK( test_6_encoded == test_6_packed );
+  CHECK( test_6_encoded == test_6_packed );
   vector<uint32_t> test_6_dec;
   const size_t test_6_nbytedec = decode_stream_vbyte(test_6_encoded,test_6_dec);
-  BOOST_CHECK( test_6_nbytedec == test_6_packed.size() );
-  BOOST_CHECK( test_6_dec == test_6_chan_cnts );
+  CHECK( test_6_nbytedec == test_6_packed.size() );
+  CHECK( test_6_dec == test_6_chan_cnts );
   
   
   
@@ -1678,7 +1913,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 60, 1, 0, 38, 1, 0, 12, 1, 0, 5, 1, 0, 3, 1, 1, 1, 1, 1,
     4, 7, 3, 7, 11, 5, 4, 2, 1, 1, 0, 113, 1, 0, 38, 1, 0, 374, 1, 0,
     196, 1, 0, 26, 1, 0, 100, 1, 0, 166, 1, 0, 26  };
-  BOOST_REQUIRE( test_7_chan_cnts.size() == 5373 );
+  REQUIRE( test_7_chan_cnts.size() == 5373 );
   const vector<uint8_t> test_7_packed{
     253, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 84, 1, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1816,13 +2051,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 1, 0, 18, 1, 0, 38, 1, 0, 19, 1, 0, 19, 1, 0, 24, 1, 0, 63, 1, 0, 61, 1, 0, 24, 1, 0, 34, 1, 0, 60, 1, 0, 38, 1, 0, 12, 1, 0, 5, 1, 0, 3, 1, 1, 1, 1, 1, 4, 7,
     3, 7, 11, 5, 4, 2, 1, 1, 0, 113, 1, 0, 38, 1, 0, 118, 1, 1, 0, 196, 1, 0, 26, 1, 0, 100, 1, 0, 166, 1, 0, 26
   };
-  BOOST_REQUIRE( test_7_packed.size() == 6732 );
+  REQUIRE( test_7_packed.size() == 6732 );
   const vector<uint8_t> test_7_encoded = encode_stream_vbyte( test_7_chan_cnts );
-  BOOST_CHECK( test_7_encoded == test_7_packed );
+  CHECK( test_7_encoded == test_7_packed );
   vector<uint32_t> test_7_dec;
   const size_t test_7_nbytedec = decode_stream_vbyte(test_7_encoded,test_7_dec);
-  BOOST_CHECK( test_7_nbytedec == test_7_packed.size() );
-  BOOST_CHECK( test_7_dec == test_7_chan_cnts );
+  CHECK( test_7_nbytedec == test_7_packed.size() );
+  CHECK( test_7_dec == test_7_chan_cnts );
   
   
   
@@ -2102,7 +2337,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 40, 1, 0, 17, 1, 0, 7, 1, 0, 1, 1, 0, 72, 1, 0, 49, 1, 0,
     10, 1, 0, 11, 1, 0, 95, 1, 0, 87, 1, 0, 1, 1, 0, 71, 1, 0, 60, 1,
     0, 6, 1, 0, 123, 1, 0, 11, 1, 0, 121, 1, 0, 248  };
-  BOOST_REQUIRE( test_8_chan_cnts.size() == 5454 );
+  REQUIRE( test_8_chan_cnts.size() == 5454 );
   const vector<uint8_t> test_8_packed{
     78, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2242,13 +2477,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 73, 1, 0, 2, 1, 0, 1, 2, 2, 10, 4, 3, 6, 9, 5, 0, 1, 1, 2, 1, 0, 40, 1, 0, 17, 1, 0, 7, 1, 0, 1, 1, 0, 72, 1, 0, 49, 1, 0, 10, 1, 0, 11, 1, 0, 95, 1, 0, 87,
     1, 0, 1, 1, 0, 71, 1, 0, 60, 1, 0, 6, 1, 0, 123, 1, 0, 11, 1, 0, 121, 1, 0, 248
   };
-  BOOST_REQUIRE( test_8_packed.size() == 6824 );
+  REQUIRE( test_8_packed.size() == 6824 );
   const vector<uint8_t> test_8_encoded = encode_stream_vbyte( test_8_chan_cnts );
-  BOOST_CHECK( test_8_encoded == test_8_packed );
+  CHECK( test_8_encoded == test_8_packed );
   vector<uint32_t> test_8_dec;
   const size_t test_8_nbytedec = decode_stream_vbyte(test_8_encoded,test_8_dec);
-  BOOST_CHECK( test_8_nbytedec == test_8_packed.size() );
-  BOOST_CHECK( test_8_dec == test_8_chan_cnts );
+  CHECK( test_8_nbytedec == test_8_packed.size() );
+  CHECK( test_8_dec == test_8_chan_cnts );
   
   
   
@@ -2526,7 +2761,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     53, 1, 0, 251, 1, 0, 55, 1, 0, 15, 1, 0, 20, 1, 0, 24, 1, 0, 13, 1,
     0, 126, 1, 0, 44, 1, 0, 123, 1, 0, 10, 1, 0, 43, 1, 0, 16, 1, 0, 188,
     1, 0, 20, 1, 0, 1, 1, 0, 30  };
-  BOOST_REQUIRE( test_9_chan_cnts.size() == 5409 );
+  REQUIRE( test_9_chan_cnts.size() == 5409 );
   const vector<uint8_t> test_9_packed{
     33, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2665,13 +2900,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 4, 1, 0, 54, 1, 0, 1, 1, 2, 2, 2, 6, 6, 8, 3, 4, 4, 5, 2, 0, 53, 1, 0, 251, 1, 0, 55, 1, 0, 15, 1, 0, 20, 1, 0, 24, 1, 0, 13, 1, 0, 126, 1, 0, 44, 1, 0, 123, 1,
     0, 10, 1, 0, 43, 1, 0, 16, 1, 0, 188, 1, 0, 20, 1, 0, 1, 1, 0, 30
   };
-  BOOST_REQUIRE( test_9_packed.size() == 6770 );
+  REQUIRE( test_9_packed.size() == 6770 );
   const vector<uint8_t> test_9_encoded = encode_stream_vbyte( test_9_chan_cnts );
-  BOOST_CHECK( test_9_encoded == test_9_packed );
+  CHECK( test_9_encoded == test_9_packed );
   vector<uint32_t> test_9_dec;
   const size_t test_9_nbytedec = decode_stream_vbyte(test_9_encoded,test_9_dec);
-  BOOST_CHECK( test_9_nbytedec == test_9_packed.size() );
-  BOOST_CHECK( test_9_dec == test_9_chan_cnts );
+  CHECK( test_9_nbytedec == test_9_packed.size() );
+  CHECK( test_9_dec == test_9_chan_cnts );
   
   
   
@@ -2951,7 +3186,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 40, 1, 0, 17, 1, 0, 7, 1, 0, 1, 1, 0, 72, 1, 0, 49, 1, 0,
     10, 1, 0, 11, 1, 0, 95, 1, 0, 87, 1, 0, 1, 1, 0, 71, 1, 0, 60, 1,
     0, 6, 1, 0, 123, 1, 0, 11, 1, 0, 121, 1, 0, 247  };
-  BOOST_REQUIRE( test_10_chan_cnts.size() == 5454 );
+  REQUIRE( test_10_chan_cnts.size() == 5454 );
   const vector<uint8_t> test_10_packed{
     78, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3091,13 +3326,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 73, 1, 0, 2, 1, 0, 1, 2, 2, 10, 4, 3, 6, 9, 5, 0, 1, 1, 2, 1, 0, 40, 1, 0, 17, 1, 0, 7, 1, 0, 1, 1, 0, 72, 1, 0, 49, 1, 0, 10, 1, 0, 11, 1, 0, 95, 1, 0, 87,
     1, 0, 1, 1, 0, 71, 1, 0, 60, 1, 0, 6, 1, 0, 123, 1, 0, 11, 1, 0, 121, 1, 0, 247
   };
-  BOOST_REQUIRE( test_10_packed.size() == 6824 );
+  REQUIRE( test_10_packed.size() == 6824 );
   const vector<uint8_t> test_10_encoded = encode_stream_vbyte( test_10_chan_cnts );
-  BOOST_CHECK( test_10_encoded == test_10_packed );
+  CHECK( test_10_encoded == test_10_packed );
   vector<uint32_t> test_10_dec;
   const size_t test_10_nbytedec = decode_stream_vbyte(test_10_encoded,test_10_dec);
-  BOOST_CHECK( test_10_nbytedec == test_10_packed.size() );
-  BOOST_CHECK( test_10_dec == test_10_chan_cnts );
+  CHECK( test_10_nbytedec == test_10_packed.size() );
+  CHECK( test_10_dec == test_10_chan_cnts );
   
   
   
@@ -3139,7 +3374,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 1, 1, 0, 1, 1, 0, 15, 1, 0, 9, 1, 0, 4, 1, 1, 0, 1, 1, 0,
     4, 1, 2, 0, 2, 1, 0, 3, 1, 0, 2, 1, 0, 15, 2, 0, 102, 1, 0, 1,
     1, 0, 15  };
-  BOOST_REQUIRE( test_11_chan_cnts.size() == 683 );
+  REQUIRE( test_11_chan_cnts.size() == 683 );
   const vector<uint8_t> test_11_packed{
     171, 2, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3160,13 +3395,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 21, 1, 0, 3, 1, 0, 20, 1, 1, 0, 13, 1, 0, 1, 1, 0, 1, 1, 0, 15, 1, 0, 9, 1, 0, 4, 1, 1, 0, 1, 1, 0, 4, 1, 2, 0, 2, 1, 0, 3, 1, 0, 2, 1, 0, 15, 2, 0,
     102, 1, 0, 1, 1, 0, 15
   };
-  BOOST_REQUIRE( test_11_packed.size() == 857 );
+  REQUIRE( test_11_packed.size() == 857 );
   const vector<uint8_t> test_11_encoded = encode_stream_vbyte( test_11_chan_cnts );
-  BOOST_CHECK( test_11_encoded == test_11_packed );
+  CHECK( test_11_encoded == test_11_packed );
   vector<uint32_t> test_11_dec;
   const size_t test_11_nbytedec = decode_stream_vbyte(test_11_encoded,test_11_dec);
-  BOOST_CHECK( test_11_nbytedec == test_11_packed.size() );
-  BOOST_CHECK( test_11_dec == test_11_chan_cnts );
+  CHECK( test_11_nbytedec == test_11_packed.size() );
+  CHECK( test_11_dec == test_11_chan_cnts );
   
   
   
@@ -3211,7 +3446,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 13, 1, 0, 35, 1, 0, 8, 1, 1, 0, 16, 1, 0, 7, 1, 0, 10, 1,
     1, 0, 13, 1, 0, 23, 1, 0, 3, 1, 0, 4, 1, 0, 1, 1, 0, 4, 1, 0,
     27, 1, 0, 6, 1, 0, 42  };
-  BOOST_REQUIRE( test_12_chan_cnts.size() == 747 );
+  REQUIRE( test_12_chan_cnts.size() == 747 );
   const vector<uint8_t> test_12_packed{
     235, 2, 80, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
     85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3238,13 +3473,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     6, 1, 0, 11, 1, 1, 1, 0, 3, 1, 1, 0, 2, 2, 0, 5, 2, 0, 15, 1, 0, 6, 1, 0, 4, 1, 0, 22, 2, 0, 10, 1, 0, 13, 1, 0, 35, 1, 0, 8, 1, 1, 0, 16, 1, 0, 7, 1, 0, 10,
     1, 1, 0, 13, 1, 0, 23, 1, 0, 3, 1, 0, 4, 1, 0, 1, 1, 0, 4, 1, 0, 27, 1, 0, 6, 1, 0, 42
   };
-  BOOST_REQUIRE( test_12_packed.size() == 1178 );
+  REQUIRE( test_12_packed.size() == 1178 );
   const vector<uint8_t> test_12_encoded = encode_stream_vbyte( test_12_chan_cnts );
-  BOOST_CHECK( test_12_encoded == test_12_packed );
+  CHECK( test_12_encoded == test_12_packed );
   vector<uint32_t> test_12_dec;
   const size_t test_12_nbytedec = decode_stream_vbyte(test_12_encoded,test_12_dec);
-  BOOST_CHECK( test_12_nbytedec == test_12_packed.size() );
-  BOOST_CHECK( test_12_dec == test_12_chan_cnts );
+  CHECK( test_12_nbytedec == test_12_packed.size() );
+  CHECK( test_12_dec == test_12_chan_cnts );
   
   
   
@@ -3284,7 +3519,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 13, 1, 0, 1, 1, 0, 3, 1, 0, 6, 1, 0, 34, 1, 0, 26, 1, 0, 2,
     1, 0, 8, 1, 0, 18, 1, 0, 14, 1, 0, 6, 1, 0, 14, 1, 0, 79, 1, 1,
     0, 21  };
-  BOOST_REQUIRE( test_13_chan_cnts.size() == 642 );
+  REQUIRE( test_13_chan_cnts.size() == 642 );
   const vector<uint8_t> test_13_packed{
     130, 2, 64, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 21, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3306,13 +3541,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 15, 1, 0, 12, 1, 0, 3, 1, 0, 3, 1, 0, 3, 1, 0, 1, 1, 0, 1, 1, 1, 0, 4, 1, 1, 0, 2, 1, 0, 5, 2, 0, 11, 1, 0, 1, 1, 0, 9, 1, 1, 0, 6, 1, 0, 6, 1, 0, 16,
     1, 0, 13, 1, 0, 1, 1, 0, 3, 1, 0, 6, 1, 0, 34, 1, 0, 26, 1, 0, 2, 1, 0, 8, 1, 0, 18, 1, 0, 14, 1, 0, 6, 1, 0, 14, 1, 0, 79, 1, 1, 0, 21
   };
-  BOOST_REQUIRE( test_13_packed.size() == 943 );
+  REQUIRE( test_13_packed.size() == 943 );
   const vector<uint8_t> test_13_encoded = encode_stream_vbyte( test_13_chan_cnts );
-  BOOST_CHECK( test_13_encoded == test_13_packed );
+  CHECK( test_13_encoded == test_13_packed );
   vector<uint32_t> test_13_dec;
   const size_t test_13_nbytedec = decode_stream_vbyte(test_13_encoded,test_13_dec);
-  BOOST_CHECK( test_13_nbytedec == test_13_packed.size() );
-  BOOST_CHECK( test_13_dec == test_13_chan_cnts );
+  CHECK( test_13_nbytedec == test_13_packed.size() );
+  CHECK( test_13_dec == test_13_chan_cnts );
   
   
   
@@ -3355,7 +3590,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     4, 1, 0, 3, 1, 0, 3, 1, 0, 13, 1, 0, 3, 1, 1, 0, 20, 1, 0, 50,
     1, 0, 1, 1, 0, 2, 1, 0, 12, 1, 0, 1, 1, 0, 7, 1, 0, 5, 1, 0,
     10, 1, 0, 1, 1, 0, 4, 1, 0, 21, 1, 0, 1, 1, 0, 9, 1, 0, 84  };
-  BOOST_REQUIRE( test_14_chan_cnts.size() == 719 );
+  REQUIRE( test_14_chan_cnts.size() == 719 );
   const vector<uint8_t> test_14_packed{
     207, 2, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3377,13 +3612,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     3, 1, 0, 13, 1, 0, 3, 1, 1, 0, 20, 1, 0, 50, 1, 0, 1, 1, 0, 2, 1, 0, 12, 1, 0, 1, 1, 0, 7, 1, 0, 5, 1, 0, 10, 1, 0, 1, 1, 0, 4, 1, 0, 21, 1, 0, 1, 1, 0, 9,
     1, 0, 84
   };
-  BOOST_REQUIRE( test_14_packed.size() == 903 );
+  REQUIRE( test_14_packed.size() == 903 );
   const vector<uint8_t> test_14_encoded = encode_stream_vbyte( test_14_chan_cnts );
-  BOOST_CHECK( test_14_encoded == test_14_packed );
+  CHECK( test_14_encoded == test_14_packed );
   vector<uint32_t> test_14_dec;
   const size_t test_14_nbytedec = decode_stream_vbyte(test_14_encoded,test_14_dec);
-  BOOST_CHECK( test_14_nbytedec == test_14_packed.size() );
-  BOOST_CHECK( test_14_dec == test_14_chan_cnts );
+  CHECK( test_14_nbytedec == test_14_packed.size() );
+  CHECK( test_14_dec == test_14_chan_cnts );
   
   
   
@@ -3426,7 +3661,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 2, 1, 0, 7, 1, 0, 5, 1, 0, 6, 1, 0, 14, 1, 0, 47, 1, 1,
     0, 6, 1, 0, 8, 1, 0, 9, 1, 0, 9, 1, 1, 0, 69, 1, 0, 25, 1, 0,
     10, 1, 0, 1, 1, 0, 14, 1, 0, 23  };
-  BOOST_REQUIRE( test_15_chan_cnts.size() == 710 );
+  REQUIRE( test_15_chan_cnts.size() == 710 );
   const vector<uint8_t> test_15_packed{
     198, 2, 80, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3450,13 +3685,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     5, 1, 1, 0, 2, 1, 0, 2, 1, 0, 2, 1, 0, 1, 1, 1, 1, 0, 2, 1, 0, 15, 1, 0, 14, 1, 0, 2, 1, 0, 7, 1, 0, 5, 1, 0, 6, 1, 0, 14, 1, 0, 47, 1, 1, 0, 6, 1, 0, 8,
     1, 0, 9, 1, 0, 9, 1, 1, 0, 69, 1, 0, 25, 1, 0, 10, 1, 0, 1, 1, 0, 14, 1, 0, 23
   };
-  BOOST_REQUIRE( test_15_packed.size() == 1025 );
+  REQUIRE( test_15_packed.size() == 1025 );
   const vector<uint8_t> test_15_encoded = encode_stream_vbyte( test_15_chan_cnts );
-  BOOST_CHECK( test_15_encoded == test_15_packed );
+  CHECK( test_15_encoded == test_15_packed );
   vector<uint32_t> test_15_dec;
   const size_t test_15_nbytedec = decode_stream_vbyte(test_15_encoded,test_15_dec);
-  BOOST_CHECK( test_15_nbytedec == test_15_packed.size() );
-  BOOST_CHECK( test_15_dec == test_15_chan_cnts );
+  CHECK( test_15_nbytedec == test_15_packed.size() );
+  CHECK( test_15_dec == test_15_chan_cnts );
   
   
   
@@ -3720,7 +3955,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 86, 1, 0, 38, 1, 0, 408, 1, 0, 372, 1, 0, 21, 1, 0, 31, 1, 0, 75,
     1, 0, 38, 1, 0, 254, 1, 0, 434, 1, 0, 94, 1, 0, 102, 1, 0, 42, 1, 0,
     168, 1, 0, 61, 1, 0, 198  };
-  BOOST_REQUIRE( test_16_chan_cnts.size() == 5127 );
+  REQUIRE( test_16_chan_cnts.size() == 5127 );
   const vector<uint8_t> test_16_packed{
     7, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -3852,13 +4087,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 61, 1, 0, 2, 1, 0, 87, 1, 0, 96, 1, 0, 18, 1, 0, 203, 1, 0, 119, 1, 0, 86, 1, 0, 38, 1, 0, 152, 1, 1, 0, 116, 1, 1, 0, 21, 1, 0, 31, 1, 0, 75, 1, 0, 38, 1, 0, 254, 1,
     0, 178, 1, 1, 0, 94, 1, 0, 102, 1, 0, 42, 1, 0, 168, 1, 0, 61, 1, 0, 198
   };
-  BOOST_REQUIRE( test_16_packed.size() == 6421 );
+  REQUIRE( test_16_packed.size() == 6421 );
   const vector<uint8_t> test_16_encoded = encode_stream_vbyte( test_16_chan_cnts );
-  BOOST_CHECK( test_16_encoded == test_16_packed );
+  CHECK( test_16_encoded == test_16_packed );
   vector<uint32_t> test_16_dec;
   const size_t test_16_nbytedec = decode_stream_vbyte(test_16_encoded,test_16_dec);
-  BOOST_CHECK( test_16_nbytedec == test_16_packed.size() );
-  BOOST_CHECK( test_16_dec == test_16_chan_cnts );
+  CHECK( test_16_nbytedec == test_16_packed.size() );
+  CHECK( test_16_dec == test_16_chan_cnts );
   
   
   
@@ -4223,7 +4458,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 16, 1, 0, 104, 1, 0, 492, 1, 0, 207, 1, 0, 114, 1, 0, 123, 1, 0,
     412, 1, 0, 7, 1, 0, 658, 1, 0, 33, 1, 0, 507, 1, 0, 238, 1, 0, 14, 1,
     0, 311, 1, 0, 109  };
-  BOOST_REQUIRE( test_17_chan_cnts.size() == 7145 );
+  REQUIRE( test_17_chan_cnts.size() == 7145 );
   const vector<uint8_t> test_17_packed{
     233, 27, 0, 0, 0, 64, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
     85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
@@ -4427,13 +4662,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     114, 1, 0, 127, 1, 0, 44, 1, 0, 17, 1, 0, 32, 1, 0, 35, 1, 0, 200, 1, 0, 56, 1, 0, 61, 1, 0, 222, 1, 1, 0, 142, 1, 0, 25, 1, 0, 24, 2, 1, 0, 48, 1, 1, 0, 61, 1, 0, 16, 1,
     0, 104, 1, 0, 236, 1, 1, 0, 207, 1, 0, 114, 1, 0, 123, 1, 0, 156, 1, 1, 0, 7, 1, 0, 146, 2, 1, 0, 33, 1, 0, 251, 1, 1, 0, 238, 1, 0, 14, 1, 0, 55, 1, 1, 0, 109
   };
-  BOOST_REQUIRE( test_17_packed.size() == 10046 );
+  REQUIRE( test_17_packed.size() == 10046 );
   const vector<uint8_t> test_17_encoded = encode_stream_vbyte( test_17_chan_cnts );
-  BOOST_CHECK( test_17_encoded == test_17_packed );
+  CHECK( test_17_encoded == test_17_packed );
   vector<uint32_t> test_17_dec;
   const size_t test_17_nbytedec = decode_stream_vbyte(test_17_encoded,test_17_dec);
-  BOOST_CHECK( test_17_nbytedec == test_17_packed.size() );
-  BOOST_CHECK( test_17_dec == test_17_chan_cnts );
+  CHECK( test_17_nbytedec == test_17_packed.size() );
+  CHECK( test_17_dec == test_17_chan_cnts );
   
   
   
@@ -4686,7 +4921,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 721, 1, 0, 80, 1, 0, 20, 1, 0, 434, 1, 0, 65, 1, 0, 136, 1, 0,
     148, 1, 0, 35, 1, 0, 53, 1, 0, 387, 1, 0, 92, 1, 0, 106, 1, 0, 516, 1,
     0, 568, 1, 0, 187, 1, 0, 249, 1, 0, 59, 1, 0, 122  };
-  BOOST_REQUIRE( test_18_chan_cnts.size() == 4914 );
+  REQUIRE( test_18_chan_cnts.size() == 4914 );
   const vector<uint8_t> test_18_packed{
     50, 19, 0, 0, 0, 84, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
     85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
@@ -4828,13 +5063,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 20, 1, 0, 178, 1, 1, 0, 65, 1, 0, 136, 1, 0, 148, 1, 0, 35, 1, 0, 53, 1, 0, 131, 1, 1, 0, 92, 1, 0, 106, 1, 0, 4, 2, 1, 0, 56, 2, 1, 0, 187, 1, 0, 249, 1, 0, 59, 1,
     0, 122
   };
-  BOOST_REQUIRE( test_18_packed.size() == 6902 );
+  REQUIRE( test_18_packed.size() == 6902 );
   const vector<uint8_t> test_18_encoded = encode_stream_vbyte( test_18_chan_cnts );
-  BOOST_CHECK( test_18_encoded == test_18_packed );
+  CHECK( test_18_encoded == test_18_packed );
   vector<uint32_t> test_18_dec;
   const size_t test_18_nbytedec = decode_stream_vbyte(test_18_encoded,test_18_dec);
-  BOOST_CHECK( test_18_nbytedec == test_18_packed.size() );
-  BOOST_CHECK( test_18_dec == test_18_chan_cnts );
+  CHECK( test_18_nbytedec == test_18_packed.size() );
+  CHECK( test_18_dec == test_18_chan_cnts );
   
   
   
@@ -5205,7 +5440,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     1, 0, 195, 1, 0, 263, 1, 0, 2, 1, 0, 188, 1, 0, 11, 1, 0, 69, 1, 0,
     14, 1, 0, 126, 1, 0, 34, 1, 0, 100, 1, 0, 124, 1, 0, 37, 1, 0, 140, 1,
     0, 135, 1, 0, 14  };
-  BOOST_REQUIRE( test_19_chan_cnts.size() == 7265 );
+  REQUIRE( test_19_chan_cnts.size() == 7265 );
   const vector<uint8_t> test_19_packed{
     97, 28, 0, 0, 64, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
     85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85,
@@ -5409,13 +5644,13 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     127, 1, 0, 28, 1, 0, 17, 1, 0, 195, 1, 0, 7, 1, 1, 0, 2, 1, 0, 188, 1, 0, 11, 1, 0, 69, 1, 0, 14, 1, 0, 126, 1, 0, 34, 1, 0, 100, 1, 0, 124, 1, 0, 37, 1, 0, 140, 1, 0, 135,
     1, 0, 14
   };
-  BOOST_REQUIRE( test_19_packed.size() == 10003 );
+  REQUIRE( test_19_packed.size() == 10003 );
   const vector<uint8_t> test_19_encoded = encode_stream_vbyte( test_19_chan_cnts );
-  BOOST_CHECK( test_19_encoded == test_19_packed );
+  CHECK( test_19_encoded == test_19_packed );
   vector<uint32_t> test_19_dec;
   const size_t test_19_nbytedec = decode_stream_vbyte(test_19_encoded,test_19_dec);
-  BOOST_CHECK( test_19_nbytedec == test_19_packed.size() );
-  BOOST_CHECK( test_19_dec == test_19_chan_cnts );
+  CHECK( test_19_nbytedec == test_19_packed.size() );
+  CHECK( test_19_dec == test_19_chan_cnts );
   
   
   
@@ -5683,7 +5918,7 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     38, 1, 0, 83, 1, 0, 109, 1, 0, 256, 1, 0, 137, 1, 0, 81, 1, 0, 54, 1,
     0, 180, 1, 0, 45, 1, 0, 270, 1, 0, 28, 1, 0, 136, 1, 0, 17, 1, 0, 65,
     1, 0, 15, 1, 0, 263, 1, 0, 172, 1, 0, 56  };
-  BOOST_REQUIRE( test_20_chan_cnts.size() == 5212 );
+  REQUIRE( test_20_chan_cnts.size() == 5212 );
   const vector<uint8_t> test_20_packed{
     92, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -5817,12 +6052,12 @@ BOOST_AUTO_TEST_CASE( StreamVByte )
     0, 119, 1, 0, 2, 1, 0, 70, 1, 0, 15, 1, 0, 6, 1, 0, 38, 1, 0, 83, 1, 0, 109, 1, 0, 0, 1, 1, 0, 137, 1, 0, 81, 1, 0, 54, 1, 0, 180, 1, 0, 45, 1, 0, 14, 1, 1, 0, 28, 1,
     0, 136, 1, 0, 17, 1, 0, 65, 1, 0, 15, 1, 0, 7, 1, 1, 0, 172, 1, 0, 56
   };
-  BOOST_REQUIRE( test_20_packed.size() == 6521 );
+  REQUIRE( test_20_packed.size() == 6521 );
   const vector<uint8_t> test_20_encoded = encode_stream_vbyte( test_20_chan_cnts );
-  BOOST_CHECK( test_20_encoded == test_20_packed );
+  CHECK( test_20_encoded == test_20_packed );
   vector<uint32_t> test_20_dec;
   const size_t test_20_nbytedec = decode_stream_vbyte(test_20_encoded,test_20_dec);
-  BOOST_CHECK( test_20_nbytedec == test_20_packed.size() );
-  BOOST_CHECK( test_20_dec == test_20_chan_cnts );
+  CHECK( test_20_nbytedec == test_20_packed.size() );
+  CHECK( test_20_dec == test_20_chan_cnts );
   
-}//BOOST_AUTO_TEST_CASE( StreamVByte )
+}//TEST_CASE( StreamVByte )

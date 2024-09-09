@@ -2,13 +2,13 @@ if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW) # For CMake 3.15 and newer, enable use of CMAKE_MSVC_RUNTIME_LIBRARY, without requiring CMake 3.15
 endif()
 
-cmake_minimum_required(VERSION 3.1...3.22)
+cmake_minimum_required(VERSION 3.1...3.29)
 
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils )
+project( SpecUtils VERSION 1.0.0 )
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
@@ -17,15 +17,60 @@ option( SpecUtils_USE_WT_THREADPOOL "Whether or not to use the Wt thread pool (o
 option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
 option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
-option( SpecUtils_BUILD_REGRESSION_TEST "Creates executuable to perform interactive regression test" OFF )
+option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
-option( SpecUtils_USE_FROM_CHARS "Use c++17 std::from_chars for parsing floats/ints, instead of boost::spirit - about 50% slower." OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
-option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution" off )
+option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
+
+
+
+set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
+Choose one of: FastFloat, FromChars, boost, strtod.
+Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
+FastFloat requires having the header somewhere findable (or Fetching it), and strod is the slowest.
+]])
+set_property( CACHE SpecUtils_FLT_PARSE_METHOD PROPERTY STRINGS "FastFloat" "FromChars" "boost" "strtod" )
+
+
+# Determine how we should parse floats/ints - we'll prefer boost, if it has been found,
+# or else we'll look for `fast_float` if its around, then if the compiler supports
+#   `std::from_chars`, we'll use that.  Otherwise we'll default back to fast_floats
+#   and semi-offer to "Fetch" it.
+if( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
+  set( DEFAULT_NUMBER_PARSE_METHOD "boost" )
+endif( (NOT DEFAULT_NUMBER_PARSE_METHOD) AND Boost_FOUND )
+
+if( NOT DEFAULT_NUMBER_PARSE_METHOD )
+  find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
+  if( FAST_FLOAT_FILE_PATH )
+    set( DEFAULT_NUMBER_PARSE_METHOD "FastFloat" )
+  else( FAST_FLOAT_FILE_PATH )
+    if( (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+          AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    elseif( (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+          AND NOT (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "AppleClang")
+          AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16.0) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    elseif( MSVC AND (MSVC_VERSION VERSION_GREATER_EQUAL 1920) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    elseif( (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+          AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 19.0) )
+      set( DEFAULT_NUMBER_PARSE_METHOD "FromChars" )
+    endif()
+  endif( FAST_FLOAT_FILE_PATH )
+endif( NOT DEFAULT_NUMBER_PARSE_METHOD )
+
+if( (NOT DEFINED SpecUtils_FLT_PARSE_METHOD OR SpecUtils_FLT_PARSE_METHOD STREQUAL "default_value") 
+    AND DEFAULT_NUMBER_PARSE_METHOD )
+    set(SpecUtils_FLT_PARSE_METHOD ${DEFAULT_NUMBER_PARSE_METHOD} CACHE STRING "Choose an option" FORCE)
+endif()
+
 
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
@@ -46,10 +91,6 @@ if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
 endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
 
 
-if( SpecUtils_PYTHON_BINDINGS )
-  list( APPEND boost_libs_required python )
-endif( SpecUtils_PYTHON_BINDINGS )
-
 if( SpecUtils_BUILD_EXAMPLE )
   add_subdirectory( examples )
 endif( SpecUtils_BUILD_EXAMPLE )
@@ -68,14 +109,6 @@ if( SpecUtils_JAVA_SWIG )
   SWIG_ADD_MODULE( SpecUtilsJni java bindings/swig/SpecUtils.i )
   SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
 endif( SpecUtils_JAVA_SWIG )
-
-
-if( NOT DEFINED boost_SOURCE_DIR )
-  find_package( Boost REQUIRED COMPONENTS ${boost_libs_required} )
-  if( NOT Boost_FOUND )
-    message(FATAL_ERROR "Couldnt Find Boost")
-  endif( NOT Boost_FOUND )
-endif( NOT DEFINED boost_SOURCE_DIR )
 
 
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
@@ -226,9 +259,94 @@ if( SpecUtils_JAVA_SWIG )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
+if( SpecUtils_C_BINDINGS )
+  list( APPEND headers bindings/c/SpecUtils_c.h )
+  list( APPEND sources bindings/c/SpecUtils_c.cpp )
+endif( SpecUtils_C_BINDINGS )
+
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
+
+set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched
+set( SpecUtils_USE_FROM_CHARS OFF )   # Supported by MSVC >= 2019, and gcc >= 12.  Not supported by Apple clang. In MSVC, about 50% slower than boost::spirit
+set( SpecUtils_USE_BOOST_SPIRIT OFF ) # Uses boost::spirit, and fasted method (maybe a hair faster than fastfloat)
+set( SpecUtils_USE_STRTOD OFF )       # Slowest method, but works
+
+if(SpecUtils_FLT_PARSE_METHOD STREQUAL "FastFloat")
+  set( SpecUtils_USE_FAST_FLOAT ON )
+elseif(SpecUtils_FLT_PARSE_METHOD STREQUAL "FromChars")
+  set( SpecUtils_USE_FROM_CHARS ON )
+elseif(SpecUtils_FLT_PARSE_METHOD STREQUAL "boost")
+  set( SpecUtils_USE_BOOST_SPIRIT ON )
+elseif(SpecUtils_FLT_PARSE_METHOD STREQUAL "strtod")
+  set( SpecUtils_USE_STRTOD ON )
+else()
+    message(FATAL_ERROR "Invalid value for SpecUtils_FLT_PARSE_METHOD: ${SpecUtils_FLT_PARSE_METHOD}")
+endif()
+
+if( SpecUtils_USE_FAST_FLOAT )
+  find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
+ 
+  if( FAST_FLOAT_FILE_PATH )
+    # Extract the parent directory of the found file
+    get_filename_component(PARENT_DIR ${FAST_FLOAT_PATH} DIRECTORY)
+    
+    message(STATUS "fast_float.h found at: ${FAST_FLOAT_PATH}")
+    message(STATUS "Parent directory: ${FAST_FLOAT_PATH}")
+    
+    target_include_directories( SpecUtils PUBLIC ${FAST_FLOAT_PATH} )
+  endif( FAST_FLOAT_FILE_PATH )
+  
+  if( NOT FAST_FLOAT_FILE_PATH )
+    if( NOT SpecUtils_FETCH_FAST_FLOAT )
+      message( "File fast_float.h not found - set SpecUtils_FETCH_FAST_FLOAT to ON to fetch")
+      option( SpecUtils_FETCH_FAST_FLOAT "Fetch fast_float, if cant be found" OFF )
+    endif( NOT SpecUtils_FETCH_FAST_FLOAT )
+    
+    if( SpecUtils_FETCH_FAST_FLOAT )
+      # If you need to use a proxy, either configure it in your environment, or
+      #  specify a cmake argument like `-Dhttps_proxy=https://proxy.example.com:8080`
+      
+      include(FetchContent)
+      
+      FetchContent_Declare(
+        fast_float
+        URL https://github.com/fastfloat/fast_float/releases/download/v6.1.4/fast_float.h
+        URL_HASH SHA256=9567742ed302c6a5ff0000beaba3d84f45b31b5f296c3bf3f26a442c6f01f129
+        DOWNLOAD_NO_EXTRACT TRUE
+      )
+
+      FetchContent_GetProperties( fast_float )
+      FetchContent_MakeAvailable( fast_float )
+      
+      target_include_directories( SpecUtils PUBLIC ${fast_float_SOURCE_DIR} )
+    endif( SpecUtils_FETCH_FAST_FLOAT )
+  endif( NOT FAST_FLOAT_FILE_PATH )
+endif( SpecUtils_USE_FAST_FLOAT )
+
+# We only need boost libraries if we are using boost to parse floats, if we are performing developer
+#  checks, or we are creating Python bindings
+if( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_BINDINGS )
+  
+  if( DEFINED boost_SOURCE_DIR )
+    # We used CMake Fetch to get boost (e.g., in InterSpec)
+    target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional Boost::crc )
+  
+  else( DEFINED boost_SOURCE_DIR )
+  
+    if( SpecUtils_PYTHON_BINDINGS )
+      list( APPEND boost_libs_required python )
+    endif( SpecUtils_PYTHON_BINDINGS )
+  
+    find_package( Boost REQUIRED COMPONENTS system ${boost_libs_required} )
+    if( NOT Boost_FOUND )
+      message(FATAL_ERROR "Couldnt Find Boost")
+    endif( NOT Boost_FOUND )
+    
+    target_link_libraries( SpecUtils PUBLIC Boost::system )
+  endif( DEFINED boost_SOURCE_DIR )
+endif( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
@@ -281,14 +399,8 @@ endif( SpecUtils_ENABLE_URI_SPECTRA )
 
 
 if( SpecUtils_PYTHON_BINDINGS )
-  #target_link_libraries( SpecUtils PUBLIC Boost::python ${PYTHON_LIBRARIES} )
   target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
-
-
-if( DEFINED boost_SOURCE_DIR )
-  target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional )
-endif( DEFINED boost_SOURCE_DIR )
 
 
 if( SpecUtils_JAVA_SWIG )
@@ -305,7 +417,7 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${Boost_INCLUDE_DIRS}
+target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
@@ -318,6 +430,8 @@ endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 
 if( SpecUtils_BUILD_UNIT_TESTS )
+  enable_testing()  # Enable here to allow running `ctest` from top-most build dir
+
   add_subdirectory( unit_tests )
 endif( SpecUtils_BUILD_UNIT_TESTS )
 

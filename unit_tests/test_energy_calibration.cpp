@@ -28,14 +28,8 @@
 #include <sstream>
 #include <ostream>
 
-#include <boost/algorithm/string.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE testCalibration
-#include <boost/test/unit_test.hpp>
-
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
@@ -47,8 +41,6 @@
 
 using namespace std;
 using namespace SpecUtils;
-using namespace boost::unit_test;
-
 
 string print_vec( const vector<float> &info )
 {
@@ -82,7 +74,7 @@ bool is_similar( const vector<float> &lhs, const vector<float> &rhs )
 }//bool is_similar( const vector<float> &lhs, const vector<float> &rhs )
 
 
-BOOST_AUTO_TEST_CASE( testCalibration )
+TEST_CASE( "testCalibration" )
 {
   using namespace SpecUtils;
 
@@ -95,17 +87,17 @@ BOOST_AUTO_TEST_CASE( testCalibration )
   vector<float> poly_coefs = fullrangefraction_coef_to_polynomial( frf_coefs, nbin );
   vector<float> new_frf_coefs = polynomial_coef_to_fullrangefraction( poly_coefs, nbin );
   
-  BOOST_CHECK_MESSAGE( is_similar( frf_coefs, new_frf_coefs ), \
+  CHECK_MESSAGE( is_similar( frf_coefs, new_frf_coefs ), \
                        "Full Width Fraction coefficnets didnt make round trip: " \
                        << print_vec(frf_coefs) << "--->" << print_vec(new_frf_coefs) );
 
   vector<pair<float,float>> dev_pairs;
   auto frf_binning = fullrangefraction_binning( frf_coefs, nbin, dev_pairs );
   
-  BOOST_REQUIRE_MESSAGE( !!frf_binning, \
+  REQUIRE_MESSAGE( !!frf_binning, \
                          "Failed to make Full Width Fraction Binning for " \
                          << print_vec(frf_coefs) );
-  BOOST_REQUIRE_MESSAGE( frf_binning->size() == nbin, \
+  REQUIRE_MESSAGE( frf_binning->size() == nbin, \
                          "Full range fraction returned " << frf_binning->size() \
                          << " intead of the expected " << nbin );
   
@@ -115,7 +107,7 @@ BOOST_AUTO_TEST_CASE( testCalibration )
     const float lowerbinenergy = fullrangefraction_energy( bin, frf_coefs, nbin, dev_pairs );
     const float expected = frf_binning->at(i);
     const float larger = std::max(fabs(lowerbinenergy),fabs(expected));
-    BOOST_REQUIRE_MESSAGE( fabs(lowerbinenergy-expected) <= 1.0E-5*larger, \
+    REQUIRE_MESSAGE( fabs(lowerbinenergy-expected) <= 1.0E-5*larger, \
                            "fullrangefraction_energy disagreed with fullrangefraction_binning" \
                            " (starting) at bin " << i \
                            << " got " << lowerbinenergy << " and " << expected \
@@ -124,11 +116,11 @@ BOOST_AUTO_TEST_CASE( testCalibration )
   
   
   auto poly_binning = polynomial_binning( poly_coefs, nbin, dev_pairs );
-  BOOST_REQUIRE_MESSAGE( !!poly_binning, \
+  REQUIRE_MESSAGE( !!poly_binning, \
                         "Failed to make Polynomial Binning for " \
                         << print_vec(poly_coefs) );
   
-  BOOST_REQUIRE_MESSAGE( poly_binning->size() == nbin, \
+  REQUIRE_MESSAGE( poly_binning->size() == nbin, \
                         "Polynomial binning returned " << poly_binning->size() \
                         << " intead of the expected " << nbin );
   
@@ -140,14 +132,14 @@ BOOST_AUTO_TEST_CASE( testCalibration )
     const float poly = poly_binning->at(i);
     const float larger = std::max(fabs(fwf),fabs(poly));
     
-    BOOST_REQUIRE_MESSAGE( fabs(fwf-poly) <= 1.0E-5*larger, "" \
+    REQUIRE_MESSAGE( fabs(fwf-poly) <= 1.0E-5*larger, "" \
                            "Lower channel energies for FWF and Polynomial coefficnets arent equal" \
                            " (starting) at bin " << i \
                            << " got " << fwf << " and " << poly \
                            << "respectively  for coefs=" << print_vec(frf_coefs) \
                            << " giving values: " << fwf << " and " << poly << " respectively" );
     
-    BOOST_REQUIRE_MESSAGE( fabs(poly_eqn_energy-poly) <= 1.0E-5*larger, "" \
+    REQUIRE_MESSAGE( fabs(poly_eqn_energy-poly) <= 1.0E-5*larger, "" \
                           "Lower channel energy for polynomial_energy and Poly binning arent equal" \
                           " (starting) at bin " << i \
                           << " got " << poly_eqn_energy << " and " << poly \
@@ -159,11 +151,11 @@ BOOST_AUTO_TEST_CASE( testCalibration )
 
 //  Need to test SpecFile::calibrationIsValid(...)
   
-//  BOOST_TEST_MESSAGE( "Input Directory:" << indir );
-//  BOOST_CHECK( false );
-}//BOOST_AUTO_TEST_CASE( testCalibration )
+//  TEST_MESSAGE( "Input Directory:" << indir );
+//  CHECK( false );
+}//TEST_CASE( testCalibration )
 
-BOOST_AUTO_TEST_CASE( testFullRangeFractionFindEnergy )
+TEST_CASE( "testFullRangeFractionFindEnergy" )
 {
   // \TODO: Further tests to make:
   //        - Add deviation pairs
@@ -189,12 +181,12 @@ BOOST_AUTO_TEST_CASE( testFullRangeFractionFindEnergy )
   for( size_t i = 0; i < nenergies; ++i )
   {
     const float energy = energies[i];
-    BOOST_CHECK_NO_THROW( binnum = find_fullrangefraction_channel( energy, fwf_coefs, nbin, dev_pairs, accuracy ) );
+    CHECK_NOTHROW( binnum = find_fullrangefraction_channel( energy, fwf_coefs, nbin, dev_pairs, accuracy ) );
     const float binenergy = SpecUtils::fullrangefraction_energy( binnum, fwf_coefs, nbin, dev_pairs );
 
 
 
-    BOOST_REQUIRE_MESSAGE( fabs(binenergy-energy) < 0.1, "Found bin " << binnum \
+    REQUIRE_MESSAGE( fabs(binenergy-energy) < 0.1, "Found bin " << binnum \
                            << " for energy " << energy \
                            << " but found bin actually cooresponds to " \
                            << binenergy << " keV" );
@@ -202,12 +194,12 @@ BOOST_AUTO_TEST_CASE( testFullRangeFractionFindEnergy )
   
   //...
 
-}//BOOST_AUTO_TEST_CASE( testFullRangeFractionFindEnergy )
+}//TEST_CASE( testFullRangeFractionFindEnergy )
 
 
 
 
-BOOST_AUTO_TEST_CASE( testPolynomialFindEnergy )
+TEST_CASE( "testPolynomialFindEnergy" )
 {
   // \TODO: Further tests to make:
   //        - Add more deviation pairs
@@ -226,38 +218,38 @@ BOOST_AUTO_TEST_CASE( testPolynomialFindEnergy )
   
   for( const float energy : energies )
   {
-    BOOST_CHECK_NO_THROW( binnum = find_polynomial_channel( energy, poly_coefs, nbin, dev_pairs, accuracy ) );
+    CHECK_NOTHROW( binnum = find_polynomial_channel( energy, poly_coefs, nbin, dev_pairs, accuracy ) );
     const float binenergy = polynomial_energy( binnum, poly_coefs, dev_pairs );
     
     //Note: this doesnt test the case for multiple solution that the wanted solution is returned,
     //      it just checks the solution is correct.
     
-    BOOST_REQUIRE_MESSAGE( fabs(binenergy-energy) < 0.1, "Found bin " << binnum \
+    REQUIRE_MESSAGE( fabs(binenergy-energy) < 0.1, "Found bin " << binnum \
                            << " for energy " << energy \
                            << " but found bin actually cooresponds to " \
                            << binenergy << " keV" );
   }//for( loop over energies )
 
-}//BOOST_AUTO_TEST_CASE( testPolynomialFindEnergy )
+}//TEST_CASE( testPolynomialFindEnergy )
 
 
-BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyLinearSimple )
+TEST_CASE( "testPolynomialFindEnergyLinearSimple" )
 {
   const float energies[] = { -100.1f, -10.0f, 511.005f, 1121.68f, 1450.87f, 1480.65f, 60000.0f };
   
   for( const float energy : energies )
   {
     float binnum;
-    BOOST_CHECK_NO_THROW( binnum = find_polynomial_channel( energy, {0.0f, 1.0f}, 1024, {}, 0.001f ) );
-    BOOST_REQUIRE_MESSAGE( fabs(binnum - energy) < 0.1, "Found bin " << binnum \
+    CHECK_NOTHROW( binnum = find_polynomial_channel( energy, {0.0f, 1.0f}, 1024, {}, 0.001f ) );
+    REQUIRE_MESSAGE( fabs(binnum - energy) < 0.1, "Found bin " << binnum \
                            << " for energy " << energy \
                            << " but found bin actually cooresponds to " \
                            << binnum << " keV" );
   }//for( loop over energies )
-}//BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyLinearSimple )
+}//TEST_CASE( testPolynomialFindEnergyLinearSimple )
 
 
-BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyRand )
+TEST_CASE( "testPolynomialFindEnergyRand" )
 {
   const size_t nbin = 1024;
   const vector<float> poly_coefs = { -10.0f, 3.0f, -1.0f/(4.0f*nbin) };
@@ -275,15 +267,15 @@ BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyRand )
     const float channel = dist(mt);
     const float channel_energy = polynomial_energy( channel, poly_coefs, dev_pairs );
     float found_channel;
-    BOOST_CHECK_NO_THROW( found_channel = find_polynomial_channel( channel_energy, poly_coefs, nbin, dev_pairs, accuracy ) );
-    BOOST_REQUIRE_MESSAGE( fabs(channel - found_channel) < 0.01, "Found channel " << found_channel \
+    CHECK_NOTHROW( found_channel = find_polynomial_channel( channel_energy, poly_coefs, nbin, dev_pairs, accuracy ) );
+    REQUIRE_MESSAGE( fabs(channel - found_channel) < 0.01, "Found channel " << found_channel \
                            << " for channel_energy " << channel_energy \
                            << " but actually wanted channel " << channel );
   }//for( loop over energies )
-}//BOOST_AUTO_TEST_CASE( testPolynomialFindEnergyRand )
+}//TEST_CASE( testPolynomialFindEnergyRand )
 
 
-BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
+TEST_CASE( "testEnergyCalibrationLowerChannel" )
 {
   const size_t nbin = 1024;
   vector<float> lower_channel( nbin + 1, 0.0f );
@@ -291,12 +283,12 @@ BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
     lower_channel[i] = i;
   
   EnergyCalibration cal;
-  BOOST_CHECK_NO_THROW( cal.set_lower_channel_energy( nbin, lower_channel ) );
+  CHECK_NOTHROW( cal.set_lower_channel_energy( nbin, lower_channel ) );
   
-  BOOST_CHECK_THROW( cal.channel_for_energy(nbin+2), std::exception );
-  BOOST_CHECK_THROW( cal.channel_for_energy( -1 ), std::exception );
-  BOOST_CHECK_THROW( cal.energy_for_channel( nbin+2 ), std::exception );
-  BOOST_CHECK_THROW( cal.energy_for_channel( -1 ), std::exception );
+  CHECK_THROWS_AS( cal.channel_for_energy(nbin+2), std::exception );
+  CHECK_THROWS_AS( cal.channel_for_energy( -1 ), std::exception );
+  CHECK_THROWS_AS( cal.energy_for_channel( nbin+2 ), std::exception );
+  CHECK_THROWS_AS( cal.energy_for_channel( -1 ), std::exception );
   
   std::random_device rd;
   std::mt19937 mt(rd());
@@ -307,20 +299,20 @@ BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
     const float energy = dist(mt);
     
     float found_channel;
-    BOOST_CHECK_NO_THROW( found_channel = cal.channel_for_energy( energy ) );
-    BOOST_REQUIRE_MESSAGE( fabs(found_channel - energy) < 0.001, "Found channel " << found_channel \
+    CHECK_NOTHROW( found_channel = cal.channel_for_energy( energy ) );
+    REQUIRE_MESSAGE( fabs(found_channel - energy) < 0.001, "Found channel " << found_channel \
                            << " for energy " << energy );
     
     const float channel = dist(mt);
     const float found_energy = cal.energy_for_channel( channel );
-    BOOST_REQUIRE_MESSAGE( fabs(found_energy - channel) < 0.001, "Found energy " << found_energy \
+    REQUIRE_MESSAGE( fabs(found_energy - channel) < 0.001, "Found energy " << found_energy \
                            << " for channel " << channel );
   }//for( loop over energies )
   
-}//BOOST_AUTO_TEST_CASE( testEnergyCalibrationLowerChannel )
+}//TEST_CASE( testEnergyCalibrationLowerChannel )
 
 
-BOOST_AUTO_TEST_CASE( testCALpFile )
+TEST_CASE( "testCALpFile" )
 {
   string calp_contents = R"(#PeakEasy CALp File Ver:  4.00
 Offset (keV)           :  1.50000e+00
@@ -343,27 +335,27 @@ Deviation Pairs        :  5
   size_t num_channels = 1024;
   shared_ptr<EnergyCalibration> cal;
   
-  BOOST_CHECK_NO_THROW( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ) );
-  BOOST_REQUIRE_MESSAGE( !!cal, "Failed to read basic CALp file" );
+  CHECK_NOTHROW( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ) );
+  REQUIRE_MESSAGE( !!cal, "Failed to read basic CALp file" );
   
-  BOOST_CHECK( cal->valid() );
-  BOOST_CHECK_EQUAL( static_cast<int>(cal->type()), static_cast<int>(SpecUtils::EnergyCalType::Polynomial) );
-  BOOST_CHECK_EQUAL( cal->num_channels(), num_channels );
-  BOOST_CHECK_EQUAL( cal->deviation_pairs().size(), 5 );
-  BOOST_CHECK_EQUAL( cal->coefficients().size(), 2 );
+  CHECK( cal->valid() );
+  CHECK_EQ( static_cast<int>(cal->type()), static_cast<int>(SpecUtils::EnergyCalType::Polynomial) );
+  CHECK_EQ( cal->num_channels(), num_channels );
+  CHECK_EQ( cal->deviation_pairs().size(), 5 );
+  CHECK_EQ( cal->coefficients().size(), 2 );
 
-  BOOST_REQUIRE( cal->coefficients().size() >= 2 );
-  BOOST_CHECK_EQUAL( cal->coefficients()[0], 1.5 );
-  BOOST_CHECK_EQUAL( cal->coefficients()[1], 3.0 );
+  REQUIRE( cal->coefficients().size() >= 2 );
+  CHECK_EQ( cal->coefficients()[0], 1.5 );
+  CHECK_EQ( cal->coefficients()[1], 3.0 );
 
-  BOOST_REQUIRE( cal->deviation_pairs().size() == 5 );
-  BOOST_CHECK_EQUAL( cal->deviation_pairs()[0].first, 77.0f );
-  BOOST_CHECK_EQUAL( cal->deviation_pairs()[0].second, -1.0f );
-  BOOST_CHECK_EQUAL( cal->deviation_pairs()[1].first, 122.0f );
-  BOOST_CHECK_EQUAL( cal->deviation_pairs()[1].second, -5.0f );
+  REQUIRE( cal->deviation_pairs().size() == 5 );
+  CHECK_EQ( cal->deviation_pairs()[0].first, 77.0f );
+  CHECK_EQ( cal->deviation_pairs()[0].second, -1.0f );
+  CHECK_EQ( cal->deviation_pairs()[1].first, 122.0f );
+  CHECK_EQ( cal->deviation_pairs()[1].second, -5.0f );
   //...
-  BOOST_CHECK_EQUAL( cal->deviation_pairs()[4].first, 2614.0f );
-  BOOST_CHECK_EQUAL( cal->deviation_pairs()[4].second, 0.0f );
+  CHECK_EQ( cal->deviation_pairs()[4].first, 2614.0f );
+  CHECK_EQ( cal->deviation_pairs()[4].second, 0.0f );
 
   // Test an invalid calibration specified in the CALp file
   calp_contents = R"(#PeakEasy CALp File Ver:  4.00
@@ -375,16 +367,16 @@ Gain (keV / Chan)      :  -3.00000e+00
 #END)";
   input.str( calp_contents );
   cal = nullptr;
-  BOOST_CHECK_THROW( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ), std::exception );
-  BOOST_CHECK( !cal );
+  CHECK_THROWS_AS( cal = SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ), std::exception );
+  CHECK( !cal );
 
   // Test an empty CALp file
   calp_contents = R"()";
   input.str( calp_contents );
   input.clear();
-  BOOST_CHECK_THROW( SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ), std::exception );
+  CHECK_THROWS_AS( SpecUtils::energy_cal_from_CALp_file( input, num_channels, det_name ), std::exception );
 
   // TODO: add tests a multiple named detector demo, and then tests for `SpecFile::set_energy_calibration_from_CALp_file(...)`
   //       could/should also add tests for other calibration types
 
-}//BOOST_AUTO_TEST_CASE( testCALpFile )
+}//TEST_CASE( testCALpFile )

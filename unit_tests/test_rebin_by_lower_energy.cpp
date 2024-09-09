@@ -21,9 +21,11 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-
 #include <vector>
 #include <iostream>
+
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/EnergyCalibration.h"
@@ -42,12 +44,16 @@ void test_rebin_case( const std::vector<float> &original_energies,
   for( size_t i = 0; i < resulting_counts.size(); ++i )
     newsum += resulting_counts[i];
   
-  if( fabs(newsum-origsum) > 0.01*original_energies.size()/16384.0 )
-    printf( "Failed with difference %f\n", (newsum-origsum) );
-  printf( "Original %9f vs new %9f\n\n\n", origsum, newsum );
+  //if( (fabs(newsum-origsum) > 0.01*original_energies.size()/16384.0)
+  //   || (fabs(newsum-origsum) > 1.0E-6*origsum) )
+  //  printf( "Failed with difference %f\n", (newsum-origsum) );
+  //printf( "Original %9f vs new %9f\n\n\n", origsum, newsum );
+  
+  CHECK_MESSAGE( ( (fabs(newsum-origsum) < 0.01*original_energies.size()/16384.0)
+                  && (fabs(newsum-origsum) < 1.0E-5*origsum) ), "Failed with difference " << (newsum-origsum) << " and origsum=" << origsum );
 }//test_rebin_case
 
-void test_rebin()
+TEST_CASE( "Test Rebin" )
 {
   {
     printf( "Trying case with coutns at very begging\n" );
@@ -117,10 +123,10 @@ void test_rebin()
   }
 }
 
-int main( int argc, char **argv )
-{
-  test_rebin();
-  return 0; // ctest will say this test fails if you return a non-zero exit code
-}
+//int main( int argc, char **argv )
+//{
+//  test_rebin();
+//  return 0; // ctest will say this test fails if you return a non-zero exit code
+//}
 
 
