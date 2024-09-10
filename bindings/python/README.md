@@ -64,11 +64,10 @@ python3 setup.py bdist_wheel
 python3 -m pip install --user --force dist/SpecUtils-0.0.1-cp39-cp39-macosx_12_0_x86_64.whl
 ```
 
-
 ## Windows build instructions
 Assumes you already compiled boost with Python support. See XXXX on how to do this.
 
-Run these powershell scripts to build SpecUtils with python bindings and install the bindings into your python environment.
+Run these powershell scripts to build SpecUtils with python bindings and install the bindings into your python environment. Tested with python 3.11.
 
 ```ps1
 .\build-4-python.ps1
