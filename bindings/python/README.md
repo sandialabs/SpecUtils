@@ -70,6 +70,7 @@ Assumes you already compiled boost with Python support. See XXXX on how to do th
 Run these powershell scripts to build SpecUtils with python bindings and install the bindings into your python environment. Tested with python 3.11.
 
 ```ps1
+# Run these in a Visual Studio Development Powershell Console
 .\build-4-python.ps1
 .\make-wheel.ps1
 ```
