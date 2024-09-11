@@ -71,6 +71,6 @@ Run these powershell scripts to build SpecUtils with python bindings and install
 
 ```ps1
 # Run these in a Visual Studio Development Powershell Console
-.\build-4-python.ps1
-.\make-wheel.ps1
+PS C:\Projects\code\SpecUtils\bindings\python> .\build-4-python.ps1
+PS C:\Projects\code\SpecUtils\bindings\python> .\make-wheel.ps1
 ```
