@@ -5,6 +5,8 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
+#undef isnan  // Undefine the isnan macro (compile failure in doctest.h on Windows)
+
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
