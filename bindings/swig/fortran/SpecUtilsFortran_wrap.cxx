@@ -652,6 +652,19 @@ SWIGINTERN void SpecUtils_Measurement_get_spectrum(SpecUtils::Measurement *self,
 SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int index){
         return self->measurement(static_cast<size_t>(index-1));
     }
+SWIGINTERN int SpecUtils_SpecFile_get_max_channel_count(SpecUtils::SpecFile *self){
+        auto maxCount = 0;
+        auto numMeasurements = self->num_measurements();
+
+        for(int i = 0; i < numMeasurements; i++)
+        {
+            auto m = self->measurement(i);
+            auto numChannels = static_cast<int>(m->num_gamma_channels());
+            maxCount = std::max(maxCount, numChannels);
+        }
+
+        return maxCount;            
+    }
 SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__set(std::vector< std::pair< float,float > > *self,std::vector< std::pair< float,float > >::size_type index,std::pair< float,float > const &v){
         SWIG_check_range(index, self->size(),
                          "std::vector<""std::pair< float,float >" ">::set",
@@ -5462,6 +5475,19 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurement_at(SwigClassWrapper *farg
   result = SpecUtils_SpecFile_measurement_at(arg1,arg2);
   fresult.cptr = result ? (new std::shared_ptr<const SpecUtils::Measurement >(static_cast< const std::shared_ptr<const SpecUtils::Measurement >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_SpecFile_get_max_channel_count(SwigClassWrapper *farg1) {
+  int fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  int result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::get_max_channel_count()", return 0);
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  result = (int)SpecUtils_SpecFile_get_max_channel_count(arg1);
+  fresult = (int)(result);
   return fresult;
 }
 

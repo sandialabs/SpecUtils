@@ -611,6 +611,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: write_2012_N42 => swigf_SpecFile_write_2012_N42
   procedure :: mutex => swigf_SpecFile_mutex
   procedure :: measurement_at => swigf_SpecFile_measurement_at
+  procedure :: get_max_channel_count => swigf_SpecFile_get_max_channel_count
   procedure, private :: swigf_SpecFile_op_assign__
   generic :: measurement => swigf_SpecFile_measurement__SWIG_0, swigf_SpecFile_measurement__SWIG_1, &
     swigf_SpecFile_measurement__SWIG_2
@@ -3955,6 +3956,15 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 integer(C_INT), intent(in) :: farg2
 type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_SpecFile_get_max_channel_count(farg1) &
+bind(C, name="_wrap_SpecFile_get_max_channel_count") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_INT) :: fresult
 end function
 
 subroutine swigc_SpecFile_op_assign__(farg1, farg2) &
@@ -10242,6 +10252,19 @@ farg1 = self%swigdata
 farg2 = index
 fresult = swigc_SpecFile_measurement_at(farg1, farg2)
 swig_result%swigdata = fresult
+end function
+
+function swigf_SpecFile_get_max_channel_count(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+integer(C_INT) :: swig_result
+class(SpecFile), intent(in) :: self
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_SpecFile_get_max_channel_count(farg1)
+swig_result = fresult
 end function
 
 subroutine swigf_SpecFile_op_assign__(self, other)

@@ -130,7 +130,6 @@ namespace std {
         return count;            
     }
 
-    //%apply (SWIGTYPE ARRAY[], size_t num_channels) { (const float* spectrum, size_t num_channels) };
     %apply (SWIGTYPE *DATA, size_t SIZE) { (const float* spectrum, size_t num_channels) };
     void set_spectrum(const float *spectrum, size_t num_channels)
     {
@@ -162,6 +161,21 @@ namespace std {
     std::shared_ptr<const SpecUtils::Measurement> measurement_at(int index)
     {
         return $self->measurement(static_cast<size_t>(index-1));
+    }
+
+    int get_max_channel_count()
+    {
+        auto maxCount = 0;
+        auto numMeasurements = $self->num_measurements();
+
+        for(int i = 0; i < numMeasurements; i++)
+        {
+            auto m = $self->measurement(i);
+            auto numChannels = static_cast<int>(m->num_gamma_channels());
+            maxCount = std::max(maxCount, numChannels);
+        }
+
+        return maxCount;            
     }
 }
 
