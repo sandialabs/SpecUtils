@@ -9,6 +9,7 @@ namespace fs = std::filesystem;
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include <random>
 
 void CheckFileExistanceAndDelete(fs::path filePath)
 {
@@ -118,6 +119,8 @@ TEST_CASE("Round Trip")
             SpecUtils::SpecFile specfileToRead;
             auto success = specfileToRead.load_file(fname, SpecUtils::ParserType::Auto);
             CHECK(success);
+
+            //CHECK( specfileToRead.max_channel_count() == 128 );
             auto &expectedM = *(specfile.measurements().at(0));
             auto &actualM = *(specfileToRead.measurements().at(0));
             CHECK(expectedM.title() == actualM.title());
@@ -160,6 +163,162 @@ TEST_CASE("Round Trip")
     }
 
 
+}
 
+
+int generateRandomNumber(int min=64, int max=1024) {
+    // Create a random device and seed the random number generator
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    
+    // Define the range
+    std::uniform_int_distribution<> dis(min, max);
+    
+    // Generate and return the random number
+    return dis(gen);
+}
+
+TEST_CASE("Get Max Channel Count")
+{
+    SpecUtils::SpecFile specfile;
+    auto numMesurments = 20;
+    int max_channel_count = 0; // Initialize max_channel_count
+
+
+    for (size_t i = 0; i < numMesurments; i++)
+    {
+        auto m = std::make_shared<SpecUtils::Measurement>();
+        auto numChannels = generateRandomNumber();
+
+        // Update max_channel_count
+        max_channel_count = std::max(max_channel_count, numChannels);
+
+        FloatVec spectrum;
+        for (size_t i = 0; i < numChannels; i++)
+        {
+            spectrum.push_back(i * 1.0F);
+        }
+
+        m->set_gamma_counts(spectrum);
+        specfile.add_measurement(m);
+    }
+    
+    CHECK(max_channel_count > 0 );
+}
+
+class MyEcal : public SpecUtils::EnergyCalibration
+{
+    public:
+    SpecUtils::DeviationPairs & getDevPairs()
+    {
+        return m_deviation_pairs;
+    }
+};
+
+TEST_CASE("Deviation Pair Map")
+{
+    SpecUtils::SpecFile specfile;
+
+    auto maxDevPairs = 20;
+    auto maxMCA = 8;
+    auto maxPanel = 8;
+    auto maxCol = 4;
+
+    auto pairVal = 1;
+    for (size_t i = 0; i < maxCol; i++)
+    {
+        for (size_t j = 0; j < maxPanel; j++)
+        {
+            for (size_t k = 0; k < maxMCA; k++)
+            {
+                auto m = std::make_shared<SpecUtils::Measurement>();
+                MyEcal ecal;
+                auto &devPairs = ecal.getDevPairs();
+                for (size_t p = 0; p < maxDevPairs; p++)
+                {
+                    auto first = pairVal++;
+                    auto second = pairVal++;
+
+                    auto devPair = std::make_pair(first, second);
+                    devPairs.push_back(devPair);
+                }
+            }
+        }
+    }
+}
+
+
+std::pair<float, float> getDeviationPair(size_t i, size_t j, size_t k, size_t l)
+{
+    const auto maxDevPairs = 20;
+    const auto maxMCA = 8;
+    const auto maxPanel = 8;
+    const auto maxCol = 4;
+
+    // Validate the indices to ensure they are within bounds
+    if (i >= maxCol || j >= maxPanel || k >= maxMCA || l >= maxDevPairs)
+    {
+        throw std::out_of_range("Index out of range");
+    }
+
+    // Calculate the total number of pairs before the given indices
+    size_t totalPairs = l + k * maxDevPairs + j * maxDevPairs * maxMCA + i * maxDevPairs * maxMCA * maxPanel;
+
+    // Calculate the pairVal
+    size_t pairVal = 1 + 2 * totalPairs;
+
+    // Calculate the first and second pair values
+    float first = (pairVal) * 1.0F;
+    float second = (pairVal + 1) * 1.0F;
+
+    return {first, second};
+}
+
+TEST_CASE("Deviation Pair Map Array")
+{
+    const auto maxDevPairs = 20;
+    const auto maxMCA = 8;
+    const auto maxPanel = 8;
+    const auto maxCol = 4;
+
+    auto pairVal = 0;
+
+
+    // real, dimension(2,MAX_DEVIATION_PAIRS,MAX_MCA_COUNT,MAX_PANEL_COUNT,MAX_COLUMN_COUNT) :: DeviationPairs
+    float deviationPairsArray[maxCol][maxPanel][maxMCA][maxDevPairs][2]; //
+    for (size_t i = 0; i < maxCol; i++)
+    {
+        for (size_t j = 0; j < maxPanel; j++)
+        {
+            for (size_t k = 0; k < maxMCA; k++)
+            {
+                for (size_t l = 0; l < maxDevPairs; l++)
+                {
+                    auto first = ++pairVal * 1.0F;
+                    auto second = ++pairVal * 1.0F;
+
+                    deviationPairsArray[i][j][k][l][0] = first;
+                    deviationPairsArray[i][j][k][l][1] = second;
+                }
+            }
+        }
+    }
+
+    {
+            size_t i = 0, j = 0, k = 0, l = 0;
+            CHECK( deviationPairsArray[i][j][k][l][0] == 1.0F);
+            CHECK( deviationPairsArray[i][j][k][l][1] == 2.0F);
+    }
+    {
+            size_t i = 0, j = 0, k = 0, l = 9;
+            CHECK( deviationPairsArray[i][j][k][l][0] == 19.0F);
+            CHECK( deviationPairsArray[i][j][k][l][1] == 20.0F);
+    }
+    {
+            size_t i = 1, j = 2, k = 3, l = 4;
+            auto pair = getDeviationPair(i, j, k, l);
+            CHECK( deviationPairsArray[i][j][k][l][0] == pair.first);
+            CHECK( deviationPairsArray[i][j][k][l][1] == pair.second);
+    }
 
 }
