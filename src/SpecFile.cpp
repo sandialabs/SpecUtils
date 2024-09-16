@@ -49,6 +49,7 @@
 #include <cerrno>  // For errno
 
 #if( PERFORM_DEVELOPER_CHECKS )
+#include <boost/version.hpp>
 #include <boost/functional/hash.hpp>
 #endif
 
@@ -6998,7 +6999,7 @@ std::string SpecFile::generate_psuedo_uuid() const
     //  boost_hash::hash_combine( seed, position_time_ );
   }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
 
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && (BOOST_VERSION >= 108100) )
   {// Begin use boost::hash proper, instead of our extracted version of it
     std::size_t boost_seed = 0;
     
