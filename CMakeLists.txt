@@ -31,7 +31,7 @@ option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive 
 
 
 
-set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
+set( SpecUtils_FLT_PARSE_METHOD "strtod" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
 Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
 FastFloat requires having the header somewhere findable (or Fetching it), and strod is the slowest.
