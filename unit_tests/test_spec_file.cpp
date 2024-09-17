@@ -219,36 +219,51 @@ TEST_CASE("Deviation Pair Map")
 {
     SpecUtils::SpecFile specfile;
 
-    auto maxDevPairs = 20;
-    auto maxMCA = 8;
-    auto maxPanel = 8;
-    auto maxCol = 4;
+    const auto maxDevPairs = 20;
+    const auto maxMCA = 8;
+    const auto maxPanel = 8;
+    const auto maxCol = 4;
 
-    auto pairVal = 1;
-    for (size_t i = 0; i < maxCol; i++)
+    auto pairVal = 0;
+    for (size_t col_i = 0; col_i < maxCol; col_i++)
     {
-        for (size_t j = 0; j < maxPanel; j++)
+        for (size_t panel_j = 0; panel_j < maxPanel; panel_j++)
         {
-            for (size_t k = 0; k < maxMCA; k++)
+            for (size_t mca_k = 0; mca_k < maxMCA; mca_k++)
             {
                 auto m = std::make_shared<SpecUtils::Measurement>();
+                //std::ostringstream sstrm;
+                //sstrm << 
+                //m->set_detector_name()
+                //auto ecal 
                 MyEcal ecal;
                 auto &devPairs = ecal.getDevPairs();
                 for (size_t p = 0; p < maxDevPairs; p++)
                 {
-                    auto first = pairVal++;
-                    auto second = pairVal++;
+                    auto first = ++pairVal;
+                    auto second = ++pairVal;
 
                     auto devPair = std::make_pair(first, second);
                     devPairs.push_back(devPair);
                 }
+                m->set_energy_calibration(std::make_shared<SpecUtils::EnergyCalibration>(ecal));
+                specfile.add_measurement(m);
             }
         }
     }
+
+        float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxCol] ={};
+        SpecUtils::mapDevPairsToArray(specfile, fortranArray);
+
+        // {
+        //     size_t i = 0, j = 0, k = 0, devPair = 9;
+        //     CHECK(fortranArray[0][devPair][k][j][i] == 19.0F);
+        //     CHECK(fortranArray[1][devPair][k][j][i] == 20.0F);
+        // }
 }
 
 
-std::pair<float, float> getDeviationPair(size_t i, size_t j, size_t k, size_t l)
+std::pair<float, float> getDeviationPair(size_t col, size_t panel, size_t mca, size_t devPair)
 {
     const auto maxDevPairs = 20;
     const auto maxMCA = 8;
@@ -256,13 +271,13 @@ std::pair<float, float> getDeviationPair(size_t i, size_t j, size_t k, size_t l)
     const auto maxCol = 4;
 
     // Validate the indices to ensure they are within bounds
-    if (i >= maxCol || j >= maxPanel || k >= maxMCA || l >= maxDevPairs)
+    if (col >= maxCol || panel >= maxPanel || mca >= maxMCA || devPair >= maxDevPairs)
     {
         throw std::out_of_range("Index out of range");
     }
 
     // Calculate the total number of pairs before the given indices
-    size_t totalPairs = l + k * maxDevPairs + j * maxDevPairs * maxMCA + i * maxDevPairs * maxMCA * maxPanel;
+    size_t totalPairs = devPair + mca * maxDevPairs + panel * maxDevPairs * maxMCA + col * maxDevPairs * maxMCA * maxPanel;
 
     // Calculate the pairVal
     size_t pairVal = 1 + 2 * totalPairs;
@@ -274,35 +289,58 @@ std::pair<float, float> getDeviationPair(size_t i, size_t j, size_t k, size_t l)
     return {first, second};
 }
 
+template <size_t MAX_COLUMN_COUNT, size_t MAX_PANEL_COUNT, size_t MAX_MCA_COUNT, size_t MAX_DEV_PAIRS, size_t D5>
+void process5DArray(float (&arr)[MAX_COLUMN_COUNT][MAX_PANEL_COUNT][MAX_MCA_COUNT][MAX_DEV_PAIRS][D5], std::function<void(float&)> operation) {
+    for (size_t i = 0; i < MAX_COLUMN_COUNT; ++i) {
+        for (size_t j = 0; j < MAX_PANEL_COUNT; ++j) {
+            for (size_t k = 0; k < MAX_MCA_COUNT; ++k) {
+                for (size_t l = 0; l < MAX_DEV_PAIRS; ++l) {
+                    for (size_t m = 0; m < D5; ++m) {
+                        operation(arr[i][j][k][l][m]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <size_t MAX_COLUMN_COUNT, size_t MAX_PANEL_COUNT, size_t MAX_MCA_COUNT, size_t MAX_DEV_PAIRS, size_t D5>
+void processArray(float (&arr)[MAX_COLUMN_COUNT][MAX_PANEL_COUNT][MAX_MCA_COUNT][MAX_DEV_PAIRS][D5], std::function<void(float*)> operation) {
+    for (size_t col = 0; col < MAX_COLUMN_COUNT; ++col) {
+        for (size_t panel = 0; panel < MAX_PANEL_COUNT; ++panel) {
+            for (size_t mca = 0; mca < MAX_MCA_COUNT; ++mca) {
+                for (size_t devPair = 0; devPair < MAX_DEV_PAIRS; ++devPair) {
+                        operation(arr[col][panel][mca][devPair]);
+                }
+            }
+        }
+    }
+}
+
+
 TEST_CASE("Deviation Pair Map Array")
 {
     const auto maxDevPairs = 20;
     const auto maxMCA = 8;
     const auto maxPanel = 8;
-    const auto maxCol = 4;
+    const auto maxHardwareColumns = 4;
 
     auto pairVal = 0;
 
+    auto assignLambda = [&pairVal](float & val) {
+        val = ++pairVal;
+    };
+    float deviationPairsArray[maxHardwareColumns][maxPanel][maxMCA][maxDevPairs][2] ={}; //
 
-    // real, dimension(2,MAX_DEVIATION_PAIRS,MAX_MCA_COUNT,MAX_PANEL_COUNT,MAX_COLUMN_COUNT) :: DeviationPairs
-    float deviationPairsArray[maxCol][maxPanel][maxMCA][maxDevPairs][2]; //
-    for (size_t i = 0; i < maxCol; i++)
-    {
-        for (size_t j = 0; j < maxPanel; j++)
-        {
-            for (size_t k = 0; k < maxMCA; k++)
-            {
-                for (size_t l = 0; l < maxDevPairs; l++)
-                {
-                    auto first = ++pairVal * 1.0F;
-                    auto second = ++pairVal * 1.0F;
+    //process5DArray(deviationPairsArray, assignLambda);
 
-                    deviationPairsArray[i][j][k][l][0] = first;
-                    deviationPairsArray[i][j][k][l][1] = second;
-                }
-            }
-        }
-    }
+    auto assignLambda2 = [&pairVal](float * pair) {
+        pair[0] = ++pairVal;
+        pair[1] = ++pairVal;
+    };
+    processArray(deviationPairsArray, assignLambda2);
+
+
 
     {
             size_t i = 0, j = 0, k = 0, l = 0;
@@ -320,5 +358,17 @@ TEST_CASE("Deviation Pair Map Array")
             CHECK( deviationPairsArray[i][j][k][l][0] == pair.first);
             CHECK( deviationPairsArray[i][j][k][l][1] == pair.second);
     }
+
+    // Fortran deviation pairs array: real, dimension(2,MAX_DEVIATION_PAIRS,MAX_MCA_COUNT,MAX_PANEL_COUNT,MAX_COLUMN_COUNT) :: DeviationPairs
+    float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxHardwareColumns];
+    SpecUtils::mapCArrayToFortranArray(deviationPairsArray, fortranArray);
+
+    {
+            size_t i = 0, j = 0, k = 0, l = 9;
+            CHECK( fortranArray[0][l][k][j][i] == 19.0F);
+            CHECK( fortranArray[1][l][k][j][i] == 20.0F);
+    }
+
+    
 
 }

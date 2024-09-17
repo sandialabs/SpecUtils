@@ -585,7 +585,6 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: merge_neutron_meas_into_gamma_meas => swigf_SpecFile_merge_neutron_meas_into_gamma_meas
   procedure :: rebin_measurement => swigf_SpecFile_rebin_measurement
   procedure :: rebin_all_measurements => swigf_SpecFile_rebin_all_measurements
-  procedure, private :: swigf_SpecFile_set_energy_calibration__SWIG_0
   procedure :: set_energy_calibration_from_CALp_file => swigf_SpecFile_set_energy_calibration_from_CALp_file
   procedure :: detector_names_to_numbers => swigf_SpecFile_detector_names_to_numbers
   procedure, private :: swigf_SpecFile_write_to_file__SWIG_0
@@ -618,7 +617,6 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   generic :: write => swigf_SpecFile_write__SWIG_0, swigf_SpecFile_write__SWIG_1
   generic :: write_integer_chn => swigf_SpecFile_write_integer_chn__SWIG_0, swigf_SpecFile_write_integer_chn__SWIG_1
   generic :: cleanup_after_load => swigf_SpecFile_cleanup_after_load__SWIG_0, swigf_SpecFile_cleanup_after_load__SWIG_1
-  generic :: set_energy_calibration => swigf_SpecFile_set_energy_calibration__SWIG_0
   generic :: add_measurement => swigf_SpecFile_add_measurement__SWIG_0, swigf_SpecFile_add_measurement__SWIG_1
   generic :: assignment(=) => swigf_SpecFile_op_assign__
   generic :: set_remarks => swigf_SpecFile_set_remarks__SWIG_0, swigf_SpecFile_set_remarks__SWIG_1
@@ -723,6 +721,9 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_MultimediaData_op_assign__
   generic :: assignment(=) => swigf_MultimediaData_op_assign__
  end type MultimediaData
+ public :: cpp_sum
+ public :: mapDevPairsToArray
+ public :: mapCArrayToFortranArray
  ! struct std::pair< float,float >
  type, public :: DevPair
   type(SwigClassWrapper), public :: swigdata
@@ -3673,15 +3674,6 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
-subroutine swigc_SpecFile_set_energy_calibration__SWIG_0(farg1, farg2, farg3) &
-bind(C, name="_wrap_SpecFile_set_energy_calibration__SWIG_0")
-use, intrinsic :: ISO_C_BINDING
-import :: swigclasswrapper
-type(SwigClassWrapper), intent(in) :: farg1
-type(SwigClassWrapper), intent(in) :: farg2
-type(SwigClassWrapper), intent(in) :: farg3
-end subroutine
-
 subroutine swigc_SpecFile_set_energy_calibration_from_CALp_file(farg1, farg2) &
 bind(C, name="_wrap_SpecFile_set_energy_calibration_from_CALp_file")
 use, intrinsic :: ISO_C_BINDING
@@ -4525,6 +4517,29 @@ use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(inout) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
+end subroutine
+
+function swigc_cpp_sum(farg1) &
+bind(C, name="_wrap_cpp_sum") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+type(C_PTR), value :: farg1
+real(C_FLOAT) :: fresult
+end function
+
+subroutine swigc_mapDevPairsToArray(farg1, farg2) &
+bind(C, name="_wrap_mapDevPairsToArray")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(C_PTR), value :: farg2
+end subroutine
+
+subroutine swigc_mapCArrayToFortranArray(farg1, farg2) &
+bind(C, name="_wrap_mapCArrayToFortranArray")
+use, intrinsic :: ISO_C_BINDING
+type(C_PTR), value :: farg1
+type(C_PTR), value :: farg2
 end subroutine
 
 function swigc_new_DevPair__SWIG_0() &
@@ -9766,21 +9781,6 @@ farg2 = cal%swigdata
 call swigc_SpecFile_rebin_all_measurements(farg1, farg2)
 end subroutine
 
-subroutine swigf_SpecFile_set_energy_calibration__SWIG_0(self, cal, measurement2)
-use, intrinsic :: ISO_C_BINDING
-class(SpecFile), intent(in) :: self
-class(EnergyCalibration), intent(in) :: cal
-class(Measurement), intent(in) :: measurement2
-type(SwigClassWrapper) :: farg1 
-type(SwigClassWrapper) :: farg2 
-type(SwigClassWrapper) :: farg3 
-
-farg1 = self%swigdata
-farg2 = cal%swigdata
-farg3 = measurement2%swigdata
-call swigc_SpecFile_set_energy_calibration__SWIG_0(farg1, farg2, farg3)
-end subroutine
-
 subroutine swigf_SpecFile_set_energy_calibration_from_CALp_file(self, input)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
@@ -11084,6 +11084,43 @@ farg1 = self%swigdata
 farg2 = other%swigdata
 call swigc_MultimediaData_op_assign__(farg1, farg2)
 self%swigdata = farg1
+end subroutine
+
+function cpp_sum(inp) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+real(C_FLOAT), dimension(3,3,3,3,3), target :: inp
+real(C_FLOAT) :: fresult 
+type(C_PTR) :: farg1 
+
+farg1 = c_loc(inp)
+fresult = swigc_cpp_sum(farg1)
+swig_result = fresult
+end function
+
+subroutine mapDevPairsToArray(specfile0, fortranarray)
+use, intrinsic :: ISO_C_BINDING
+class(SpecFile), intent(in) :: specfile0
+real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
+type(SwigClassWrapper) :: farg1 
+type(C_PTR) :: farg2 
+
+farg1 = specfile0%swigdata
+farg2 = c_loc(fortranarray)
+call swigc_mapDevPairsToArray(farg1, farg2)
+end subroutine
+
+subroutine mapCArrayToFortranArray(carray, fortranarray)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT), dimension(2,20,8,8,4), target :: carray
+real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
+type(C_PTR) :: farg1 
+type(C_PTR) :: farg2 
+
+farg1 = c_loc(carray)
+farg2 = c_loc(fortranarray)
+call swigc_mapCArrayToFortranArray(farg1, farg2)
 end subroutine
 
 function swigf_new_DevPair__SWIG_0() &

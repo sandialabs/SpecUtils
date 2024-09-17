@@ -5001,21 +5001,6 @@ SWIGEXPORT void _wrap_SpecFile_rebin_all_measurements(SwigClassWrapper *farg1, S
 }
 
 
-SWIGEXPORT void _wrap_SpecFile_set_energy_calibration__SWIG_0(SwigClassWrapper *farg1, SwigClassWrapper const *farg2, SwigClassWrapper const *farg3) {
-  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::shared_ptr< SpecUtils::EnergyCalibration const > *arg2 = 0 ;
-  std::shared_ptr< SpecUtils::Measurement const > *arg3 = 0 ;
-  std::shared_ptr< SpecUtils::EnergyCalibration const > tempnull2 ;
-  std::shared_ptr< SpecUtils::Measurement const > tempnull3 ;
-  
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::set_energy_calibration(std::shared_ptr< SpecUtils::EnergyCalibration const > const &,std::shared_ptr< SpecUtils::Measurement const > const &)", return );
-  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  arg2 = farg2->cptr ? static_cast<std::shared_ptr< SpecUtils::EnergyCalibration const > * >(farg2->cptr) : &tempnull2;
-  arg3 = farg3->cptr ? static_cast<std::shared_ptr< SpecUtils::Measurement const > * >(farg3->cptr) : &tempnull3;
-  (arg1)->set_energy_calibration((std::shared_ptr< SpecUtils::EnergyCalibration const > const &)*arg2,(std::shared_ptr< SpecUtils::Measurement const > const &)*arg3);
-}
-
-
 SWIGEXPORT void _wrap_SpecFile_set_energy_calibration_from_CALp_file(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::istream *arg2 = 0 ;
@@ -6346,6 +6331,39 @@ SWIGEXPORT void _wrap_MultimediaData_op_assign__(SwigClassWrapper *farg1, SwigCl
   (void)sizeof(arg2);
   SWIG_assign<SpecUtils::MultimediaData, SWIGPOLICY_SpecUtils_MultimediaData>(farg1, *farg2);
   
+}
+
+
+SWIGEXPORT float _wrap_cpp_sum(SwigClassWrapper *farg1) {
+  float fresult ;
+  float (*arg1)[3][3][3][3] ;
+  float result;
+  
+  arg1 = (float (*)[3][3][3][3])(farg1);
+  result = (float)SpecUtils::cpp_sum((float const (*)[3][3][3][3])arg1);
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_mapDevPairsToArray(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::SpecFile *arg1 = 0 ;
+  float (*arg2)[20][8][8][4] ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const &", "SpecFile", "SpecUtils::mapDevPairsToArray(SpecUtils::SpecFile const &,float [2][20][8][8][4])", return );
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  arg2 = (float (*)[20][8][8][4])(farg2);
+  SpecUtils::mapDevPairsToArray((SpecUtils::SpecFile const &)*arg1,(float (*)[20][8][8][4])arg2);
+}
+
+
+SWIGEXPORT void _wrap_mapCArrayToFortranArray(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  float (*arg1)[8][8][20][2] ;
+  float (*arg2)[20][8][8][4] ;
+  
+  arg1 = (float (*)[8][8][20][2])(farg1);
+  arg2 = (float (*)[20][8][8][4])(farg2);
+  SpecUtils::mapCArrayToFortranArray((float const (*)[8][8][20][2])arg1,(float (*)[20][8][8][4])arg2);
 }
 
 

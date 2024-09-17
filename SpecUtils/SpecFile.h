@@ -2890,5 +2890,38 @@ struct MultimediaData
 #endif
 };//struct MultimediaData
 
+inline float cpp_sum(const float inp[3][3][3][3][3])
+{
+  return 0.0F;
+}
+
+inline void mapDevPairsToArray(const SpecFile & specFile, float fortranArray[2][20][8][8][4])
+{
+  auto measurements = specFile.measurements();
+  for(auto & m : measurements)
+  {
+    auto &devPairs = m->deviation_pairs();
+    for(auto & devPair : devPairs)
+    {
+      //auto column ;
+      //au
+    }
+  }
+  
+}
+// Function to map C array to Fortran array
+inline void mapCArrayToFortranArray(const float cArray[4][8][8][20][2], float fortranArray[2][20][8][8][4]) {
+    for (size_t i = 0; i < 4; ++i) {
+        for (size_t j = 0; j < 8; ++j) {
+            for (size_t k = 0; k < 8; ++k) {
+                for (size_t l = 0; l < 20; ++l) {
+                    for (size_t m = 0; m < 2; ++m) {
+                        fortranArray[m][l][k][j][i] = cArray[i][j][k][l][m];
+                    }
+                }
+            }
+        }
+    }
+}
 }//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h

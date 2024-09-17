@@ -45,6 +45,12 @@ namespace std {
 
 %apply int { size_t }
 
+//%apply real ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
+%apply SWIGTYPE ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
+
+//%rename(set_ecal) SpecUtils::Measurement::set_energy_calibration;
+%ignore SpecUtils::SpecFile::set_energy_calibration;
+
 %include "SpecUtils/SpecFile.h"
 
 %extend SpecUtils::Measurement
@@ -192,4 +198,5 @@ namespace std {
 %include "SpecUtils/EnergyCalibration.h"
 
 %ignore make_canonical_path;
+
 %include "SpecUtils/FileSystem.h"

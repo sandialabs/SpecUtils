@@ -491,3 +491,5 @@ install(EXPORT SpecUtilsTargets
     NAMESPACE SpecUtils::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
 )
+
+add_subdirectory(bindings)
