@@ -2,6 +2,7 @@
 #include <SpecUtils/ParseUtils.h>
 #include <SpecUtils/EnergyCalibration.h>
 #include <SpecUtils/DateTime.h>
+#include <SpecUtils/PcfUtils.h>
 #include <filesystem>
 namespace fs = std::filesystem;
 
@@ -35,10 +36,10 @@ TEST_CASE("Time")
 
     auto expectedTS = 1709103600.0F;
 
-    auto tmp =  timepoint.time_since_epoch().count();
+    auto tmp = timepoint.time_since_epoch().count();
     tmp /= 1e6;
-    
-    CHECK( expectedTS == doctest::Approx(tmp));
+
+    CHECK(expectedTS == doctest::Approx(tmp));
 
     //auto tp2 = std::chrono::time_point_cast<std::chrono::seconds>( expectedTS );  
 }
@@ -46,7 +47,7 @@ TEST_CASE("Time")
 
 TEST_CASE("More Time")
 {
-        // Unix timestamp (seconds since epoch)
+    // Unix timestamp (seconds since epoch)
     std::time_t unix_timestamp = 1709103600; // Example timestamp
 
     // Convert the Unix timestamp to a time_point with second precision
@@ -55,7 +56,7 @@ TEST_CASE("More Time")
     // Cast the time_point to microseconds precision
     time_point_t tp_microseconds = std::chrono::time_point_cast<std::chrono::microseconds>(tp_seconds);
 
-    auto timestr = SpecUtils::to_vax_string(tp_microseconds); 
+    auto timestr = SpecUtils::to_vax_string(tp_microseconds);
     // Output the time_point
     //std::time_t tp_microseconds_time_t = std::chrono::system_clock::to_time_t(tp_microseconds);
     std::cout << "Time point (microseconds precision): " << timestr << std::endl;
@@ -71,18 +72,18 @@ TEST_CASE("Round Trip")
         CheckFileExistanceAndDelete(fname);
         auto m = std::make_shared<SpecUtils::Measurement>();
 
-        const auto now_sys = std::chrono::system_clock::now();  
-        const auto now = std::chrono::time_point_cast<std::chrono::microseconds>( now_sys );  
+        const auto now_sys = std::chrono::system_clock::now();
+        const auto now = std::chrono::time_point_cast<std::chrono::microseconds>(now_sys);
         std::cerr << "now: " << now.time_since_epoch().count() << std::endl;
 
-        m->set_start_time(  now );
+        m->set_start_time(now);
         m->set_title("Test Measurment");
         auto remarks = m->remarks();
         remarks.push_back("Description: test_descr");
         remarks.push_back("Source: source123");
         m->set_remarks(remarks);
 
-        FloatVec ncounts{99.0F};
+        FloatVec ncounts{ 99.0F };
         m->set_neutron_counts(ncounts, 0.0F);
         m->set_live_time(10.55F);
         m->set_real_time(11.66F);
@@ -96,17 +97,17 @@ TEST_CASE("Round Trip")
         m->set_gamma_counts(spectrum);
 
         auto ecal = std::make_shared<SpecUtils::EnergyCalibration>();
-        auto coeffs = std::vector{4.41F, 3198.33F, 1.0F, 2.0F, 1.5f};
+        auto coeffs = std::vector{ 4.41F, 3198.33F, 1.0F, 2.0F, 1.5f };
 
         SpecUtils::DeviationPairs devPairs;
         //auto 
         for (size_t i = 0; i < 4; i++)
         {
-            auto devPair = std::make_pair(i+10.0, i * -1.0F);
+            auto devPair = std::make_pair(i + 10.0, i * -1.0F);
             devPairs.push_back(devPair);
         }
-        
-        ecal->set_full_range_fraction(spectrum.size(), coeffs, devPairs );
+
+        ecal->set_full_range_fraction(spectrum.size(), coeffs, devPairs);
         //ecal->set_default_polynomial(spectrum.size(), coeffs, devPairs );
         m->set_energy_calibration(ecal);
 
@@ -121,17 +122,17 @@ TEST_CASE("Round Trip")
             CHECK(success);
 
             //CHECK( specfileToRead.max_channel_count() == 128 );
-            auto &expectedM = *(specfile.measurements().at(0));
-            auto &actualM = *(specfileToRead.measurements().at(0));
+            auto& expectedM = *(specfile.measurements().at(0));
+            auto& actualM = *(specfileToRead.measurements().at(0));
             CHECK(expectedM.title() == actualM.title());
 
             // times for PCFs should be compared as vax strings.
-            auto timeStr1 = SpecUtils::to_vax_string(expectedM.start_time() );
-            auto timeStr2 = SpecUtils::to_vax_string(actualM.start_time() );
-            CHECK( timeStr1 == timeStr2);
+            auto timeStr1 = SpecUtils::to_vax_string(expectedM.start_time());
+            auto timeStr2 = SpecUtils::to_vax_string(actualM.start_time());
+            CHECK(timeStr1 == timeStr2);
 
-            auto & expSpectrum = *expectedM.gamma_counts();
-            auto & actualSpectrum = *expectedM.gamma_counts();
+            auto& expSpectrum = *expectedM.gamma_counts();
+            auto& actualSpectrum = *expectedM.gamma_counts();
             CHECK(actualSpectrum.at(100) > 0);
             CHECK(expSpectrum == actualSpectrum);
 
@@ -142,22 +143,22 @@ TEST_CASE("Round Trip")
             CHECK(actualM.real_time() > 0.0F);
             CHECK(actualM.real_time() == expectedM.real_time());
 
-            CHECK( actualM.neutron_counts().at(0) > 0 );
-            CHECK( actualM.neutron_counts() == expectedM.neutron_counts() );
+            CHECK(actualM.neutron_counts().at(0) > 0);
+            CHECK(actualM.neutron_counts() == expectedM.neutron_counts());
 
-            auto &rmarks = specfileToRead.remarks();
-            CHECK( SpecUtils::get_description(remarks) == "test_descr" );
-            CHECK( SpecUtils::get_source(remarks) == "source123" );
-            
+            auto& rmarks = specfileToRead.remarks();
+            CHECK(SpecUtils::PCF::get_description(remarks) == "test_descr");
+            CHECK(SpecUtils::PCF::get_source(remarks) == "source123");
+
             auto newEcal = *actualM.energy_calibration();
             CHECK(newEcal.coefficients() == ecal->coefficients());
 
-            CHECK(expectedM.deviation_pairs() ==  actualM.deviation_pairs());
+            CHECK(expectedM.deviation_pairs() == actualM.deviation_pairs());
         }
 
         SUBCASE("Writing over existing file fails")
         {
-            CHECK_THROWS( specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf) );
+            CHECK_THROWS(specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf));
         }
 
     }
@@ -166,14 +167,14 @@ TEST_CASE("Round Trip")
 }
 
 
-int generateRandomNumber(int min=64, int max=1024) {
+int generateRandomNumber(int min = 64, int max = 1024) {
     // Create a random device and seed the random number generator
     std::random_device rd;
     std::mt19937 gen(rd());
-    
+
     // Define the range
     std::uniform_int_distribution<> dis(min, max);
-    
+
     // Generate and return the random number
     return dis(gen);
 }
@@ -202,68 +203,12 @@ TEST_CASE("Get Max Channel Count")
         m->set_gamma_counts(spectrum);
         specfile.add_measurement(m);
     }
-    
-    CHECK(max_channel_count > 0 );
-}
 
-class MyEcal : public SpecUtils::EnergyCalibration
-{
-    public:
-    SpecUtils::DeviationPairs & getDevPairs()
-    {
-        return m_deviation_pairs;
-    }
-};
-
-TEST_CASE("Deviation Pair Map")
-{
-    SpecUtils::SpecFile specfile;
-
-    const auto maxDevPairs = 20;
-    const auto maxMCA = 8;
-    const auto maxPanel = 8;
-    const auto maxCol = 4;
-
-    auto pairVal = 0;
-    for (size_t col_i = 0; col_i < maxCol; col_i++)
-    {
-        for (size_t panel_j = 0; panel_j < maxPanel; panel_j++)
-        {
-            for (size_t mca_k = 0; mca_k < maxMCA; mca_k++)
-            {
-                auto m = std::make_shared<SpecUtils::Measurement>();
-                //std::ostringstream sstrm;
-                //sstrm << 
-                //m->set_detector_name()
-                //auto ecal 
-                MyEcal ecal;
-                auto &devPairs = ecal.getDevPairs();
-                for (size_t p = 0; p < maxDevPairs; p++)
-                {
-                    auto first = ++pairVal;
-                    auto second = ++pairVal;
-
-                    auto devPair = std::make_pair(first, second);
-                    devPairs.push_back(devPair);
-                }
-                m->set_energy_calibration(std::make_shared<SpecUtils::EnergyCalibration>(ecal));
-                specfile.add_measurement(m);
-            }
-        }
-    }
-
-        float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxCol] ={};
-        SpecUtils::mapDevPairsToArray(specfile, fortranArray);
-
-        // {
-        //     size_t i = 0, j = 0, k = 0, devPair = 9;
-        //     CHECK(fortranArray[0][devPair][k][j][i] == 19.0F);
-        //     CHECK(fortranArray[1][devPair][k][j][i] == 20.0F);
-        // }
+    CHECK(max_channel_count > 0);
 }
 
 
-std::pair<float, float> getDeviationPair(size_t col, size_t panel, size_t mca, size_t devPair)
+std::pair<float, float> getExpectedDeviationPair(size_t col, size_t panel, size_t mca, size_t devPair)
 {
     const auto maxDevPairs = 20;
     const auto maxMCA = 8;
@@ -286,37 +231,113 @@ std::pair<float, float> getDeviationPair(size_t col, size_t panel, size_t mca, s
     float first = (pairVal) * 1.0F;
     float second = (pairVal + 1) * 1.0F;
 
-    return {first, second};
+    return { first, second };
 }
 
-template <size_t MAX_COLUMN_COUNT, size_t MAX_PANEL_COUNT, size_t MAX_MCA_COUNT, size_t MAX_DEV_PAIRS, size_t D5>
-void process5DArray(float (&arr)[MAX_COLUMN_COUNT][MAX_PANEL_COUNT][MAX_MCA_COUNT][MAX_DEV_PAIRS][D5], std::function<void(float&)> operation) {
-    for (size_t i = 0; i < MAX_COLUMN_COUNT; ++i) {
-        for (size_t j = 0; j < MAX_PANEL_COUNT; ++j) {
-            for (size_t k = 0; k < MAX_MCA_COUNT; ++k) {
-                for (size_t l = 0; l < MAX_DEV_PAIRS; ++l) {
-                    for (size_t m = 0; m < D5; ++m) {
-                        operation(arr[i][j][k][l][m]);
-                    }
-                }
-            }
-        }
+class MyEcal : public SpecUtils::EnergyCalibration
+{
+public:
+    SpecUtils::DeviationPairs& getDevPairs()
+    {
+        return m_deviation_pairs;
     }
-}
+};
 
-template <size_t MAX_COLUMN_COUNT, size_t MAX_PANEL_COUNT, size_t MAX_MCA_COUNT, size_t MAX_DEV_PAIRS, size_t D5>
-void processArray(float (&arr)[MAX_COLUMN_COUNT][MAX_PANEL_COUNT][MAX_MCA_COUNT][MAX_DEV_PAIRS][D5], std::function<void(float*)> operation) {
+template <size_t MAX_COLUMN_COUNT = 4, size_t MAX_PANEL_COUNT = 8, size_t MAX_MCA_COUNT = 8, size_t MAX_DEV_PAIRS = 20>
+void devPairComboLoop(std::function<void(size_t col, size_t panel, size_t mca, size_t devPair)> operation) {
     for (size_t col = 0; col < MAX_COLUMN_COUNT; ++col) {
         for (size_t panel = 0; panel < MAX_PANEL_COUNT; ++panel) {
             for (size_t mca = 0; mca < MAX_MCA_COUNT; ++mca) {
                 for (size_t devPair = 0; devPair < MAX_DEV_PAIRS; ++devPair) {
-                        operation(arr[col][panel][mca][devPair]);
+                    operation(col, panel, mca, devPair);
                 }
             }
         }
     }
 }
 
+TEST_CASE("Deviation Pair Map")
+{
+    SpecUtils::SpecFile specfile;
+
+    const auto maxDevPairs = 20;
+    const auto maxMCA = 8;
+    const auto maxPanel = 8;
+    const auto maxCol = 4;
+
+    auto pairVal = 0;
+    for (size_t col_i = 0; col_i < maxCol; col_i++)
+    {
+        for (size_t panel_j = 0; panel_j < maxPanel; panel_j++)
+        {
+            for (size_t mca_k = 0; mca_k < maxMCA; mca_k++)
+            {
+                auto m = std::make_shared<SpecUtils::Measurement>();
+                MyEcal ecal;
+                auto& devPairs = ecal.getDevPairs();
+                for (size_t p = 0; p < maxDevPairs; p++)
+                {
+                    auto first = ++pairVal;
+                    auto second = ++pairVal;
+
+                    auto devPair = std::make_pair(first, second);
+                    devPairs.push_back(devPair);
+                }
+                m->set_energy_calibration(std::make_shared<SpecUtils::EnergyCalibration>(ecal));
+
+                auto& remarks = m->remarks();
+                {
+                    std::ostringstream sstrm;
+                    sstrm << "column: " << col_i;
+                    remarks.push_back(sstrm.str());
+
+                    CHECK(col_i == SpecUtils::PCF::get_column(remarks));
+                }
+                {
+                    std::ostringstream sstrm;
+                    sstrm << "panel: " << panel_j;
+                    remarks.push_back(sstrm.str());
+
+                    CHECK(panel_j == SpecUtils::PCF::get_panel(remarks));
+
+                }
+                m->set_detector_number(mca_k);
+
+                specfile.add_measurement(m);
+
+            }
+        }
+    }
+
+    float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxCol] = {};
+    SpecUtils::PCF::mapDevPairsToArray(specfile, fortranArray);
+
+    {
+        size_t col = 0, panel = 0, mca = 0, devPair = 9;
+        CHECK(fortranArray[0][devPair][mca][panel][col] == 19.0F);
+        CHECK(fortranArray[1][devPair][mca][panel][col] == 20.0F);
+    }
+    {
+        size_t col = 0, panel = 0, mca = 0, devPair = 9;
+        auto expectedPair = getExpectedDeviationPair(col, panel, mca, devPair);
+        CHECK(fortranArray[0][devPair][mca][panel][col] == expectedPair.first);
+        CHECK(fortranArray[1][devPair][mca][panel][col] == expectedPair.second);
+    }
+    {
+        size_t col = 1, panel = 2, mca = 3, devPair = 9;
+        auto expectedPair = getExpectedDeviationPair(col, panel, mca, devPair);
+        CHECK(fortranArray[0][devPair][mca][panel][col] == expectedPair.first);
+        CHECK(fortranArray[1][devPair][mca][panel][col] == expectedPair.second);
+    }
+    {
+        auto checkLambda = [&fortranArray](size_t col, size_t panel, size_t mca, size_t devPair) {
+            auto expectedPair = getExpectedDeviationPair(col, panel, mca, devPair);
+            CHECK(fortranArray[0][devPair][mca][panel][col] == expectedPair.first);
+            CHECK(fortranArray[1][devPair][mca][panel][col] == expectedPair.second);
+        };
+        devPairComboLoop(checkLambda);
+    }
+}
 
 TEST_CASE("Deviation Pair Map Array")
 {
@@ -327,48 +348,51 @@ TEST_CASE("Deviation Pair Map Array")
 
     auto pairVal = 0;
 
-    auto assignLambda = [&pairVal](float & val) {
-        val = ++pairVal;
-    };
-    float deviationPairsArray[maxHardwareColumns][maxPanel][maxMCA][maxDevPairs][2] ={}; //
+    float deviationPairsArray[maxHardwareColumns][maxPanel][maxMCA][maxDevPairs][2] = {};
 
-    //process5DArray(deviationPairsArray, assignLambda);
-
-    auto assignLambda2 = [&pairVal](float * pair) {
+    auto assignLambda = [&pairVal, &deviationPairsArray](size_t col, size_t panel, size_t mca, size_t devPair) {
+        float* pair = deviationPairsArray[col][panel][mca][devPair];
         pair[0] = ++pairVal;
         pair[1] = ++pairVal;
-    };
-    processArray(deviationPairsArray, assignLambda2);
+        };
+    devPairComboLoop(assignLambda);
 
 
+    auto checkLambda = [&deviationPairsArray](size_t col, size_t panel, size_t mca, size_t devPair) {
+        auto expectedPair = getExpectedDeviationPair(col, panel, mca, devPair);
+        float* pair = deviationPairsArray[col][panel][mca][devPair];
+        CHECK(pair[0] == expectedPair.first);
+        CHECK(pair[1] == expectedPair.second);
+        };
+    devPairComboLoop(checkLambda);
 
     {
-            size_t i = 0, j = 0, k = 0, l = 0;
-            CHECK( deviationPairsArray[i][j][k][l][0] == 1.0F);
-            CHECK( deviationPairsArray[i][j][k][l][1] == 2.0F);
+        size_t i = 0, j = 0, k = 0, l = 0;
+        CHECK(deviationPairsArray[i][j][k][l][0] == 1.0F);
+        CHECK(deviationPairsArray[i][j][k][l][1] == 2.0F);
     }
     {
-            size_t i = 0, j = 0, k = 0, l = 9;
-            CHECK( deviationPairsArray[i][j][k][l][0] == 19.0F);
-            CHECK( deviationPairsArray[i][j][k][l][1] == 20.0F);
+        size_t i = 0, j = 0, k = 0, l = 9;
+        CHECK(deviationPairsArray[i][j][k][l][0] == 19.0F);
+        CHECK(deviationPairsArray[i][j][k][l][1] == 20.0F);
     }
     {
-            size_t i = 1, j = 2, k = 3, l = 4;
-            auto pair = getDeviationPair(i, j, k, l);
-            CHECK( deviationPairsArray[i][j][k][l][0] == pair.first);
-            CHECK( deviationPairsArray[i][j][k][l][1] == pair.second);
+        size_t i = 1, j = 2, k = 3, l = 4;
+        auto pair = getExpectedDeviationPair(i, j, k, l);
+        CHECK(deviationPairsArray[i][j][k][l][0] == pair.first);
+        CHECK(deviationPairsArray[i][j][k][l][1] == pair.second);
     }
 
     // Fortran deviation pairs array: real, dimension(2,MAX_DEVIATION_PAIRS,MAX_MCA_COUNT,MAX_PANEL_COUNT,MAX_COLUMN_COUNT) :: DeviationPairs
     float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxHardwareColumns];
-    SpecUtils::mapCArrayToFortranArray(deviationPairsArray, fortranArray);
+    SpecUtils::PCF::mapCArrayToFortranArray(deviationPairsArray, fortranArray);
 
     {
-            size_t i = 0, j = 0, k = 0, l = 9;
-            CHECK( fortranArray[0][l][k][j][i] == 19.0F);
-            CHECK( fortranArray[1][l][k][j][i] == 20.0F);
+        size_t i = 0, j = 0, mca = 0, devPair = 9;
+        CHECK(fortranArray[0][devPair][mca][j][i] == 19.0F);
+        CHECK(fortranArray[1][devPair][mca][j][i] == 20.0F);
     }
 
-    
+
 
 }

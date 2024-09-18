@@ -907,6 +907,9 @@ void Measurement::set_detector_name( const std::string &name )
 void Measurement::set_detector_number( const int detnum )
 {
   detector_number_ = detnum;
+  std::ostringstream sstrm;
+  sstrm << detnum;
+  set_detector_name(sstrm.str());
 }
 
   

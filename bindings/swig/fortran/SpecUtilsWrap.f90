@@ -311,7 +311,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: detector_type => swigf_Measurement_detector_type
   procedure :: quality_status => swigf_Measurement_quality_status
   procedure :: source_type => swigf_Measurement_source_type
-  procedure :: remarks => swigf_Measurement_remarks
+  procedure, private :: swigf_Measurement_remarks__SWIG_0
   procedure :: parse_warnings => swigf_Measurement_parse_warnings
   procedure :: start_time => swigf_Measurement_start_time
   procedure :: start_time_copy => swigf_Measurement_start_time_copy
@@ -371,6 +371,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: release => swigf_Measurement_release
   procedure, private :: swigf_Measurement_op_assign__
   generic :: assignment(=) => swigf_Measurement_op_assign__
+  generic :: remarks => swigf_Measurement_remarks__SWIG_0
   generic :: set_neutron_counts => swigf_Measurement_set_neutron_counts__SWIG_0, swigf_Measurement_set_neutron_counts__SWIG_1
  end type Measurement
  type, public :: SWIGTYPE_p_std__vectorT_int_t
@@ -721,9 +722,6 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_MultimediaData_op_assign__
   generic :: assignment(=) => swigf_MultimediaData_op_assign__
  end type MultimediaData
- public :: cpp_sum
- public :: mapDevPairsToArray
- public :: mapCArrayToFortranArray
  ! struct std::pair< float,float >
  type, public :: DevPair
   type(SwigClassWrapper), public :: swigdata
@@ -1683,8 +1681,8 @@ type(SwigClassWrapper), intent(in) :: farg1
 integer(C_INT) :: fresult
 end function
 
-function swigc_Measurement_remarks(farg1) &
-bind(C, name="_wrap_Measurement_remarks") &
+function swigc_Measurement_remarks__SWIG_0(farg1) &
+bind(C, name="_wrap_Measurement_remarks__SWIG_0") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
@@ -4519,29 +4517,6 @@ type(SwigClassWrapper), intent(inout) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
-function swigc_cpp_sum(farg1) &
-bind(C, name="_wrap_cpp_sum") &
-result(fresult)
-use, intrinsic :: ISO_C_BINDING
-type(C_PTR), value :: farg1
-real(C_FLOAT) :: fresult
-end function
-
-subroutine swigc_mapDevPairsToArray(farg1, farg2) &
-bind(C, name="_wrap_mapDevPairsToArray")
-use, intrinsic :: ISO_C_BINDING
-import :: swigclasswrapper
-type(SwigClassWrapper), intent(in) :: farg1
-type(C_PTR), value :: farg2
-end subroutine
-
-subroutine swigc_mapCArrayToFortranArray(farg1, farg2) &
-bind(C, name="_wrap_mapCArrayToFortranArray")
-use, intrinsic :: ISO_C_BINDING
-type(C_PTR), value :: farg1
-type(C_PTR), value :: farg2
-end subroutine
-
 function swigc_new_DevPair__SWIG_0() &
 bind(C, name="_wrap_new_DevPair__SWIG_0") &
 result(fresult)
@@ -6712,7 +6687,7 @@ fresult = swigc_Measurement_source_type(farg1)
 swig_result = fresult
 end function
 
-function swigf_Measurement_remarks(self) &
+function swigf_Measurement_remarks__SWIG_0(self) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
 type(SWIGTYPE_p_std__vectorT_std__string_t) :: swig_result
@@ -6721,7 +6696,7 @@ type(SwigClassWrapper) :: fresult
 type(SwigClassWrapper) :: farg1 
 
 farg1 = self%swigdata
-fresult = swigc_Measurement_remarks(farg1)
+fresult = swigc_Measurement_remarks__SWIG_0(farg1)
 swig_result%swigdata = fresult
 end function
 
@@ -11084,43 +11059,6 @@ farg1 = self%swigdata
 farg2 = other%swigdata
 call swigc_MultimediaData_op_assign__(farg1, farg2)
 self%swigdata = farg1
-end subroutine
-
-function cpp_sum(inp) &
-result(swig_result)
-use, intrinsic :: ISO_C_BINDING
-real(C_FLOAT) :: swig_result
-real(C_FLOAT), dimension(3,3,3,3,3), target :: inp
-real(C_FLOAT) :: fresult 
-type(C_PTR) :: farg1 
-
-farg1 = c_loc(inp)
-fresult = swigc_cpp_sum(farg1)
-swig_result = fresult
-end function
-
-subroutine mapDevPairsToArray(specfile0, fortranarray)
-use, intrinsic :: ISO_C_BINDING
-class(SpecFile), intent(in) :: specfile0
-real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
-type(SwigClassWrapper) :: farg1 
-type(C_PTR) :: farg2 
-
-farg1 = specfile0%swigdata
-farg2 = c_loc(fortranarray)
-call swigc_mapDevPairsToArray(farg1, farg2)
-end subroutine
-
-subroutine mapCArrayToFortranArray(carray, fortranarray)
-use, intrinsic :: ISO_C_BINDING
-real(C_FLOAT), dimension(2,20,8,8,4), target :: carray
-real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
-type(C_PTR) :: farg1 
-type(C_PTR) :: farg2 
-
-farg1 = c_loc(carray)
-farg2 = c_loc(fortranarray)
-call swigc_mapCArrayToFortranArray(farg1, farg2)
 end subroutine
 
 function swigf_new_DevPair__SWIG_0() &

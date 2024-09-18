@@ -39,6 +39,7 @@
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
+#include "SpecUtils/PcfUtils.h"
 
 using namespace std;
 
@@ -831,7 +832,7 @@ TEST_CASE( "Find Source String")
   "Source: TestSource"};
 
   auto expected = std::string("TestSource");
-  auto actual = SpecUtils::get_source(remarks);
+  auto actual = SpecUtils::PCF::get_source(remarks);
 
   CHECK(actual == expected);
 
@@ -844,7 +845,7 @@ TEST_CASE( "Find Description String")
   "Source: TestSource"};
 
   auto expected = std::string("TestDescription");
-  auto actual = SpecUtils::get_description(remarks);
+  auto actual = SpecUtils::PCF::get_description(remarks);
 
   CHECK(actual == expected);
 
@@ -857,7 +858,7 @@ TEST_CASE( "No Description Yields Empty String")
   "Source: TestSource"};
 
   auto expected = std::string();
-  auto actual = SpecUtils::get_description(remarks);
+  auto actual = SpecUtils::PCF::get_description(remarks);
 
   CHECK(actual == expected);
 }
@@ -869,7 +870,7 @@ TEST_CASE( "No Source Yields Empty String")
   "SourceYYYY: TestSource"};
 
   auto expected = std::string();
-  auto actual = SpecUtils::get_source(remarks);
+  auto actual = SpecUtils::PCF::get_source(remarks);
 
   CHECK(actual == expected);
 }

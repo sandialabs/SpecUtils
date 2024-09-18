@@ -7,6 +7,7 @@
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
 #include <SpecUtils/Filesystem.h>
+#include <SpecUtils/PcfUtils.h>
 %}
 
 
@@ -45,13 +46,13 @@ namespace std {
 
 %apply int { size_t }
 
-//%apply real ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
 %apply SWIGTYPE ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
 
 //%rename(set_ecal) SpecUtils::Measurement::set_energy_calibration;
 %ignore SpecUtils::SpecFile::set_energy_calibration;
 
 %include "SpecUtils/SpecFile.h"
+
 
 %extend SpecUtils::Measurement
 {
@@ -70,13 +71,13 @@ namespace std {
     std::string get_description()
     {
         auto &remarks = $self->remarks();
-        return SpecUtils::get_description(remarks);
+        return SpecUtils::PCF::get_description(remarks);
     }
 
     std::string get_source()
     {
         auto &remarks = $self->remarks();
-        return SpecUtils::get_source(remarks);
+        return SpecUtils::PCF::get_source(remarks);
     }
 
     std::string get_start_time_string()
