@@ -2,6 +2,8 @@
 #include <vector>
 #include <string>
 
+#include <SpecUtils/SpecFile.h>
+
 namespace SpecUtils
 {
     namespace PCF
@@ -74,8 +76,7 @@ namespace SpecUtils
             return std::stoi(retVal);
         }
 
-        template <class SpecFileType>
-        inline void mapDevPairsToArray(const SpecFileType &specFile, float (&fortranArray)[2][20][8][8][4])
+        inline void mapDevPairsToArray(const SpecUtils::SpecFile &specFile, float fortranArray[2][20][8][8][4])
         {
             const auto &measurements = specFile.measurements();
             for (auto &m : measurements)

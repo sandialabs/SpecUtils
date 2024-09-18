@@ -842,6 +842,8 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
  public :: lexically_normalize_path
  public :: load_file_data
  public :: likely_not_spec_file
+ public :: mapDevPairsToArray
+ public :: mapCArrayToFortranArray
  interface is_candidate_n42_file
   module procedure swigf_is_candidate_n42_file__SWIG_0, swigf_is_candidate_n42_file__SWIG_1
  end interface
@@ -5497,6 +5499,21 @@ import :: swigarraywrapper
 type(SwigArrayWrapper) :: farg1
 integer(C_INT) :: fresult
 end function
+
+subroutine swigc_mapDevPairsToArray(farg1, farg2) &
+bind(C, name="_wrap_mapDevPairsToArray")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(C_PTR), value :: farg2
+end subroutine
+
+subroutine swigc_mapCArrayToFortranArray(farg1, farg2) &
+bind(C, name="_wrap_mapCArrayToFortranArray")
+use, intrinsic :: ISO_C_BINDING
+type(C_PTR), value :: farg1
+type(C_PTR), value :: farg2
+end subroutine
 
 end interface
 
@@ -12625,6 +12642,30 @@ call SWIGTM_fin_char_Sm_(file, farg1, farg1_temp)
 fresult = swigc_likely_not_spec_file(farg1)
 call SWIGTM_fout_bool(fresult, swig_result)
 end function
+
+subroutine mapDevPairsToArray(specfile0, fortranarray)
+use, intrinsic :: ISO_C_BINDING
+class(SpecFile), intent(in) :: specfile0
+real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
+type(SwigClassWrapper) :: farg1 
+type(C_PTR) :: farg2 
+
+farg1 = specfile0%swigdata
+farg2 = c_loc(fortranarray)
+call swigc_mapDevPairsToArray(farg1, farg2)
+end subroutine
+
+subroutine mapCArrayToFortranArray(carray, fortranarray)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT), dimension(2,20,8,8,4), target :: carray
+real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
+type(C_PTR) :: farg1 
+type(C_PTR) :: farg2 
+
+farg1 = c_loc(carray)
+farg2 = c_loc(fortranarray)
+call swigc_mapCArrayToFortranArray(farg1, farg2)
+end subroutine
 
 
 end module

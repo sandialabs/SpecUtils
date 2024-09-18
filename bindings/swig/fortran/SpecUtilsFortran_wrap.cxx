@@ -7914,5 +7914,26 @@ SWIGEXPORT int _wrap_likely_not_spec_file(SwigArrayWrapper *farg1) {
 }
 
 
+SWIGEXPORT void _wrap_mapDevPairsToArray(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::SpecFile *arg1 = 0 ;
+  float (*arg2)[20][8][8][4] ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const &", "SpecFile", "SpecUtils::PCF::mapDevPairsToArray(SpecUtils::SpecFile const &,float [2][20][8][8][4])", return );
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  arg2 = (float (*)[20][8][8][4])(farg2);
+  SpecUtils::PCF::mapDevPairsToArray((SpecUtils::SpecFile const &)*arg1,(float (*)[20][8][8][4])arg2);
+}
+
+
+SWIGEXPORT void _wrap_mapCArrayToFortranArray(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  float (*arg1)[8][8][20][2] ;
+  float (*arg2)[20][8][8][4] ;
+  
+  arg1 = (float (*)[8][8][20][2])(farg1);
+  arg2 = (float (*)[20][8][8][4])(farg2);
+  SpecUtils::PCF::mapCArrayToFortranArray((float const (*)[8][8][20][2])arg1,(float (*)[20][8][8][4])arg2);
+}
+
+
 } // extern
 

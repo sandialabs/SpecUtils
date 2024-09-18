@@ -201,3 +201,5 @@ namespace std {
 %ignore make_canonical_path;
 
 %include "SpecUtils/FileSystem.h"
+
+%include "SpecUtils/PcfUtils.h"
