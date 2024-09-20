@@ -519,6 +519,7 @@ class Measurement
 {
 public:
   Measurement();
+  virtual ~Measurement() {} // Virtual destructor to enable RTTI
   
   //operator=: operates as expected for most member variables.  Smart pointer
   //  to const objects (channel data and channel energies) are shallow copied.
@@ -653,8 +654,7 @@ public:
   //  SpecFile::remarks().
   const std::vector<std::string> &remarks() const;
 
-  /// @brief get a mutable reference to remarks
-  std::vector<std::string> &remarks()
+  std::vector<std::string> &mutable_remarks()
   {
     return remarks_;
   }
@@ -2675,6 +2675,12 @@ protected:
 protected:
   /** This mutex protects all member variables. ... keep documenting locking model the retest with fb infer add mutext to Measurement, and a CMake option to turn-off thread safety (and also defaults to off) ... will need to convert return by refernces to return by value for thread safe functions. */
   mutable std::recursive_mutex mutex_;
+
+  /// @brief Allow subclasses to customize measurement class
+  virtual std::shared_ptr<Measurement> make_measurement()
+  {
+      return std::make_shared<Measurement>();
+  }
   
   
 public:

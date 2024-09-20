@@ -7,7 +7,7 @@
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
 #include <SpecUtils/Filesystem.h>
-#include <SpecUtils/PcfUtils.h>
+#include <SpecUtils/PcfExtensions.h>
 %}
 
 
@@ -25,7 +25,9 @@ namespace std {
 %include "std_shared_ptr.i"
 %shared_ptr(vector<SpecUtils::Measurement>)
 %shared_ptr(SpecUtils::Measurement)
+%shared_ptr(SpecUtils::PCF::MeasurementExt)
 %shared_ptr(SpecUtils::EnergyCalibration)
+%shared_ptr(SpecUtils::PCF::EnergyCalibrationExt)
 //%shared_ptr(std::vector<float>) // this casued me problems -hugh
 
 %include "std_string.i"
@@ -68,18 +70,6 @@ namespace std {
         return $self->gamma_counts()->size();
     }
 
-    std::string get_description()
-    {
-        auto &remarks = $self->remarks();
-        return SpecUtils::PCF::get_description(remarks);
-    }
-
-    std::string get_source()
-    {
-        auto &remarks = $self->remarks();
-        return SpecUtils::PCF::get_source(remarks);
-    }
-
     std::string get_start_time_string()
     {
         auto timeStr = SpecUtils::to_vax_string( $self->start_time() );
@@ -91,37 +81,7 @@ namespace std {
         auto tp = SpecUtils::time_from_string(time_str);
         $self->set_start_time(tp);
     }
-
-    void set_description(std::string description)
-    {
-        auto remarks = $self->remarks();
-
-        // If there is already a description, remove it first.
-        auto it = remarks.begin();
-        for(; it != remarks.end(); ) {
-            if(SpecUtils::istarts_with(*it, "Description:"))
-                it = remarks.erase(it);
-            it++;
-        }
-        remarks.push_back( "Description: " + description );
-        $self->set_remarks(remarks);
-    }
-
-    void set_source(std::string source)
-    {
-        auto remarks = $self->remarks();
-
-        // If there is already a source, remove it first.
-        auto it = remarks.begin();
-        for(; it != remarks.end(); ) {
-            if(SpecUtils::istarts_with(*it, "source:"))
-                it = remarks.erase(it);
-            it++;
-        }
-        remarks.push_back( "Source: " + source );
-        $self->set_remarks(remarks);
-    }
-
+    
     void set_neutron_count(float count)
     {
         SpecUtils::FloatVec ncounts{count};
@@ -198,8 +158,16 @@ namespace std {
 
 %include "SpecUtils/EnergyCalibration.h"
 
+%extend SpecUtils::EnergyCalibration
+{
+    // void set_deviation_pairs(std::vector<std::pair<float, float>> devPairs)
+    // {
+    //     $self->m_deviation_pairs = devPairs;
+    // }
+}
+
 %ignore make_canonical_path;
 
 %include "SpecUtils/FileSystem.h"
 
-%include "SpecUtils/PcfUtils.h"
+%include "SpecUtils/PcfExtensions.h"

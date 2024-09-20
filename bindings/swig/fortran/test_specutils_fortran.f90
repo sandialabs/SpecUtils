@@ -2,6 +2,10 @@ program TestSpecUtils
     use testdrive, only : error_type, check
     use specutilswrap
     implicit none
+    integer, parameter :: maxDevPairs = 20
+    integer, parameter :: maxMCA = 8
+    integer, parameter :: maxPanel = 8
+    integer, parameter :: maxCol = 4
 
     call SpecUtilsRoundTrip()
     call DerivationPairMap()
@@ -11,8 +15,8 @@ program TestSpecUtils
 subroutine SpecUtilsRoundTrip()
 !    use, intrinsic :: ISO_C_BINDING
     type(error_type), allocatable :: error
-    type(SpecFile) :: sf
-    type(Measurement) :: m
+    type(PcfFile) :: sf
+    type(MeasurementExt) :: m
     character(len=:), allocatable :: filePath
     character(len=:), allocatable :: title
     integer :: istat, i
@@ -30,12 +34,14 @@ subroutine SpecUtilsRoundTrip()
         call check( error, success )
     end if    
 
-    m = Measurement()
+    m = MeasurementExt()
 
     call m%set_start_time_from_string("14-Nov-1995 12:17:41.43")
     call m%set_title("SpecUtilsRoundTrip")
     call m%set_description("TestDescription")
     call m%set_source("TestSource")
+    ! call m%set_column(99)
+    ! call m%set_panel(55)
     call m%set_neutron_count(99.0)
 
     allocate( spectrum(128) )
@@ -65,7 +71,7 @@ subroutine SpecUtilsRoundTrip()
     call ecalIn%set_full_range_fraction(size(spectrum), coeffsIn, devPairsIn)
     call m%set_energy_calibration(ecalIn)
 
-    sf = SpecFile()
+    sf = PcfFile()
     call sf%add_measurement(m)
     call sf%write_to_file(filePath, SaveSpectrumAsType_Pcf) 
 
@@ -80,10 +86,10 @@ subroutine SpecUtilsRoundTrip()
 end subroutine
 
 subroutine SpecUtilsRoundTrip_Read(expectedSpecFile, filePath)
-    type(SpecFile), intent(in) :: expectedSpecFile
+    type(PcfFile), intent(in) :: expectedSpecFile
     type(error_type), allocatable :: error
-    type(SpecFile) :: actualSpecFile
-    type(Measurement) :: expM, actM
+    type(PcfFile) :: actualSpecFile
+    type(MeasurementExt) :: expM, actM
     character(len=:), allocatable, intent(in) :: filePath
     character(len=:), allocatable :: title
     integer :: istat, i, numChannels
@@ -94,16 +100,20 @@ subroutine SpecUtilsRoundTrip_Read(expectedSpecFile, filePath)
     type(DeviationPairs) :: devPairsAct, devPairsExp
     type(DevPair) :: devPairAct, devPairExp
 
-    actualSpecFile = SpecFile()
+    actualSpecFile = PcfFile()
     success = actualSpecFile%load_file(filePath, ParserType_Auto)
     call check(error, success)
 
-    expM = expectedSpecFile%measurement_at(1)
-    actM = actualSpecFile%measurement_at(1)
+    expM = expectedSpecFile%get_measurement_at(0)
+    actM = actualSpecFile%get_measurement_at(0)
 
     call check(error, actM%title(), expM%title() )
+    call check(error, actM%get_description() .ne. '' )    
     call check(error, actM%get_description(), expM%get_description() )
+    call check(error, actM%get_source() .ne. '' )    
     call check(error, actM%get_source(), expM%get_source() )
+    !call check(error, actM%get_column(), expM%get_column() )
+    !call check(error, actM%get_panel(), expM%get_panel() )
     call check(error, actM%get_start_time_string(), expM%get_start_time_string() )
     call check(error, actM%live_time() .gt. 0.0)
     call check(error, actM%live_time(), expM%live_time() )
@@ -155,9 +165,52 @@ subroutine SpecUtilsRoundTrip_Read(expectedSpecFile, filePath)
     call actualSpecFile%release()
 end subroutine
 
+subroutine getExpectedDeviationPair(col, panel, mca, devPair, first, second)
+    integer, intent(in) :: col, panel, mca, devPair
+    real, intent(out) :: first, second
+    integer :: totalPairs, pairVal
+
+    ! Validate the indices to ensure they are within bounds
+    if (col >= maxCol .or. panel >= maxPanel .or. mca >= maxMCA .or. devPair >= maxDevPairs) then
+        print *, "Index out of range"
+        stop
+    end if
+
+    ! Calculate the total number of pairs before the given indices
+    totalPairs = devPair + mca * maxDevPairs + panel * maxDevPairs * maxMCA + col * maxDevPairs * maxMCA * maxPanel
+
+    ! Calculate the pairVal
+    pairVal = 1 + 2 * totalPairs
+
+    ! Calculate the first and second pair values
+    first = real(pairVal)
+    second = real(pairVal + 1)
+end subroutine getExpectedDeviationPair
 
 subroutine DerivationPairMap()
     type(error_type), allocatable :: error
-    call check(error, 0, 0)
+    type(SpecFile) :: sf
+    type(Measurement) :: m
+    type(DeviationPairs) :: devPairs
+    type(DevPair) :: devPairAct, devPairExp
+    real :: devPairArray(2, maxDevPairs, maxMCA, maxPanel, maxCol)
+    integer :: col_i, panel_j, mca_k, p
+    real :: first, second
+    integer :: pairVal
+    integer :: col, panel, mca, devPair
+
+    sf = SpecFile()
+    do col = 1, maxCol
+        do panel = 1, maxPanel
+            do mca = 1, maxMCA
+                m = Measurement()
+                do devPair = 1, maxDevPairs
+                    
+                end do
+            end do
+        end do
+    end do
+    
 end subroutine
+
 end program

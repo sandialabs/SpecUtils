@@ -1472,7 +1472,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
       for( float &f : *channel_data )  //This should probably be vectorized or something
         ensure_valid_float( f );
       
-      auto meas = std::make_shared<Measurement>();
+      auto meas = make_measurement();
       
       const istream::pos_type specend = input.tellg();
       const size_t speclen = static_cast<size_t>( 0 + specend - specstart );
