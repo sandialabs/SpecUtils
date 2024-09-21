@@ -793,7 +793,8 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       double ns = meas.neutron_counts_sum();
       if( ns <= 0.0 || IsInf(ns) || IsNan(ns) )
         ns = 0.0;
-      ostr << ns << ",neutronLiveTime:" << meas.neutron_live_time() << ",";
+      ostr << ns << ",\n\t\t\t" << q << "neutronLiveTime" << q << ":" 
+        << meas.neutron_live_time() << ",";
     }else
     {
       ostr << "null,";

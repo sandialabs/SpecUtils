@@ -44,20 +44,24 @@ using namespace std;
 
 namespace
 {
-  // The data file doesn't contain live or dead time, so we'll assume a 54 us per-pulse
-  //  dead time (niavely, and only preliminarily estimated using two source test - see Knoll
-  //  pg 122).
+  // Up through at least Sep 2024, the Radiacode XML files dont contain dead-time,
+  //  However, we can estimate this based on dead-time per pulse.
+  //  From https://github.com/sandialabs/SpecUtils/issues/35 , we expect dead
+  //  time to be 5 us per pulse (although a previous preliminary measurement yielded 54 us)
   float estimate_radiacode102_live_time( const float real_time, const double total_counts )
   {
     if( (real_time <= 0.0) || (total_counts <= 0.0) )
       return real_time;
     
+    const double dead_time_pp = 5.0E-06;
     const double detected_cps = total_counts / real_time;
-    if( (detected_cps > 18600) || IsNan(detected_cps) || IsInf(detected_cps) )
+    if( (detected_cps > (1.0 / dead_time_pp)) || IsNan(detected_cps) || IsInf(detected_cps) )
       return real_time;
     
-    const double estimated_true_cps = (18691.6)/(18691.6/detected_cps - 1);
-    return static_cast<float>( real_time * (detected_cps / estimated_true_cps) );
+    const double estimated_true_cps = (detected_cps)/(1 - detected_cps * dead_time_pp);
+    const double live_time = real_time * (detected_cps / estimated_true_cps);
+    
+    return static_cast<float>(live_time);
   };//float estimate_radiacode102_live_time( const float real_time, const double total_counts )
 }//namespace
 
@@ -224,10 +228,17 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       shared_ptr<Measurement> meas = make_shared<Measurement>();
       
       const rapidxml::xml_node<char> * const real_time_node = XML_FIRST_INODE( spectrum_node, "MeasurementTime" );
+      const rapidxml::xml_node<char> * const live_time_node = XML_FIRST_INODE( spectrum_node, "LiveTime" );
       
       if( !real_time_node || !parse_float(real_time_node->value(), real_time_node->value_size(), meas->real_time_) )
         meas->parse_warnings_.push_back( "Could not parse measurement duration." );
       meas->live_time_ = meas->real_time_; // Only clock-time is given in the file.
+      
+      if( live_time_node && live_time_node->value_size() )
+      {
+        if( !parse_float(live_time_node->value(), live_time_node->value_size(), meas->live_time_) )
+          meas->parse_warnings_.push_back( "Could not parse live-time." );
+      }
       
       // Start/End time are sibling nodes of EnergySpectrum when they should
       // be children of that node... the same as MeasurementTime. At least
@@ -312,7 +323,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       meas->contained_neutron_ = false;
       
       // Make up for estimated dead-time
-      if( is_radiacode )
+      if( (!live_time_node || !live_time_node->value_size()) && is_radiacode )
       {
         meas->live_time_ = estimate_radiacode102_live_time( meas->real_time_, meas->gamma_count_sum_ );
         // If this correction makes a difference, warn users that it may not be super great,
