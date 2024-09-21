@@ -2746,8 +2746,21 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     assert( n_channel > 0 );
     
-    counts_ref[0] = 0;
-    counts_ref[n_channel-1] = 0;
+    
+    // Lets check if values in first and last channels are reasonable, and if not, set to zero
+    if( n_channel > 2 )
+    {
+      const float max_val = *std::max_element( begin(counts_ref)+1, end(counts_ref) - 1 );
+      
+      float &first_val = counts_ref[0];
+      float &last_val = counts_ref[n_channel-1];
+      
+      if( (first_val < 0.0f) || (first_val > (5.0f*max_val)) ) //We have checked for inf/NaN above
+        first_val = 0;
+      
+      if( (last_val < 0.0f) || (last_val > (5.0f*max_val)) )
+        last_val = 0;
+    }//if( n_channel > 2 )
     
     for( size_t i = 0; i < n_channel; ++i )
       sum_gamma += counts_ref[i];
