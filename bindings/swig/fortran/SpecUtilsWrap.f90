@@ -838,7 +838,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
  public :: lexically_normalize_path
  public :: load_file_data
  public :: likely_not_spec_file
- ! class SpecUtils::PCF::MeasurementExt
+ ! class SpecUtils::MeasurementExt
  type, extends(Measurement), public :: MeasurementExt
  contains
   procedure :: set_description => swigf_MeasurementExt_set_description
@@ -849,7 +849,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_MeasurementExt_op_assign__
   generic :: assignment(=) => swigf_MeasurementExt_op_assign__
  end type MeasurementExt
- ! class SpecUtils::PCF::EnergyCalibrationExt
+ ! class SpecUtils::EnergyCalibrationExt
  type, extends(EnergyCalibration), public :: EnergyCalibrationExt
  contains
   procedure :: get_dev_pairs => swigf_EnergyCalibrationExt_get_dev_pairs
@@ -857,7 +857,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_EnergyCalibrationExt_op_assign__
   generic :: assignment(=) => swigf_EnergyCalibrationExt_op_assign__
  end type EnergyCalibrationExt
- ! class SpecUtils::PCF::PcfFile
+ ! class SpecUtils::PcfFile
  type, extends(SpecFile), public :: PcfFile
  contains
   procedure :: read => swigf_PcfFile_read

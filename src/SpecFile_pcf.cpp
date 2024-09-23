@@ -1180,6 +1180,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
       //  if this is the case
       have_deviation_pairs = false;
       
+      // col_index?
       for( int row_index = 0; row_index < (compressed_devpair ? 4 : 2); ++row_index )
       {
         for( int panel_index = 0; panel_index < 8; ++panel_index )
@@ -1201,6 +1202,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
               memcpy( vals, &(dev_pair_bytes[byte_pos]), 80 );
               for( int i = 0; i < 20; ++i )
               {
+                // extract to vritual method add_devpair(), extension class can save off col, panel, mcs
+                // maybe save in lookup table? tuple<col, panel, mca, dev_pairs>
                 last_nonzero = (vals[2*i] || vals[2*i+1]) ? i+1 : last_nonzero;
                 devpairs.push_back( pair<float,float>(vals[2*i],vals[2*i+1]) );
               }

@@ -218,12 +218,12 @@ enum AssignmentType {
 #define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_vector_Sl__Sp_SpecUtils_Measurement_SP__Sg__SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl__Sp_SpecUtils_Measurement_SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_SpecUtils_Measurement_SP__Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_shared_ptr_Sl__Sp_SpecUtils_PCF_MeasurementExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_SpecUtils_PCF_MeasurementExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_std_shared_ptr_Sl__Sp_SpecUtils_MeasurementExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_SpecUtils_MeasurementExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl__Sp_SpecUtils_EnergyCalibration_SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_SpecUtils_EnergyCalibration_SP__Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_shared_ptr_Sl__Sp_SpecUtils_PCF_EnergyCalibrationExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_SpecUtils_PCF_EnergyCalibrationExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_std_shared_ptr_Sl__Sp_SpecUtils_EnergyCalibrationExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_std_shared_ptr_Sl__Sp_q_Sp_const_SP__Sf_SpecUtils_EnergyCalibrationExt_SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_SpecUtils_Measurement swig::ASSIGNMENT_SMARTPTR
 #define SWIGPOLICY_SpecUtils_SpecFile swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_SpecUtils_DetectorAnalysisResult swig::ASSIGNMENT_DEFAULT
@@ -232,9 +232,9 @@ enum AssignmentType {
 #define SWIGPOLICY_std_pair_Sl__Sp_float_Sc_float_SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_vector_Sl__Sp_std_pair_Sl__Sp_float_Sc_float_SP__Sg__SP__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_SpecUtils_EnergyCalibration swig::ASSIGNMENT_SMARTPTR
-#define SWIGPOLICY_SpecUtils_PCF_MeasurementExt swig::ASSIGNMENT_SMARTPTR
-#define SWIGPOLICY_SpecUtils_PCF_EnergyCalibrationExt swig::ASSIGNMENT_SMARTPTR
-#define SWIGPOLICY_SpecUtils_PCF_PcfFile swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_SpecUtils_MeasurementExt swig::ASSIGNMENT_SMARTPTR
+#define SWIGPOLICY_SpecUtils_EnergyCalibrationExt swig::ASSIGNMENT_SMARTPTR
+#define SWIGPOLICY_SpecUtils_PcfFile swig::ASSIGNMENT_DEFAULT
 
 #ifdef __cplusplus
 #include <utility>
@@ -7839,13 +7839,13 @@ SWIGEXPORT int _wrap_likely_not_spec_file(SwigArrayWrapper *farg1) {
 
 
 SWIGEXPORT void _wrap_MeasurementExt_set_description(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
-  SpecUtils::PCF::MeasurementExt *arg1 = (SpecUtils::PCF::MeasurementExt *) 0 ;
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
   std::string *arg2 = 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt > *smartarg1 ;
+  std::shared_ptr< SpecUtils::MeasurementExt > *smartarg1 ;
   std::string tempstr2 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::MeasurementExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::MeasurementExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
   tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
   arg2 = &tempstr2;
   (arg1)->set_description((std::string const &)*arg2);
@@ -7853,13 +7853,13 @@ SWIGEXPORT void _wrap_MeasurementExt_set_description(SwigClassWrapper *farg1, Sw
 
 
 SWIGEXPORT void _wrap_MeasurementExt_set_source(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
-  SpecUtils::PCF::MeasurementExt *arg1 = (SpecUtils::PCF::MeasurementExt *) 0 ;
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
   std::string *arg2 = 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt > *smartarg1 ;
+  std::shared_ptr< SpecUtils::MeasurementExt > *smartarg1 ;
   std::string tempstr2 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::MeasurementExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::MeasurementExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
   tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
   arg2 = &tempstr2;
   (arg1)->set_source((std::string const &)*arg2);
@@ -7868,13 +7868,13 @@ SWIGEXPORT void _wrap_MeasurementExt_set_source(SwigClassWrapper *farg1, SwigArr
 
 SWIGEXPORT SwigArrayWrapper _wrap_MeasurementExt_get_description(SwigClassWrapper *farg1) {
   SwigArrayWrapper fresult ;
-  SpecUtils::PCF::MeasurementExt *arg1 = (SpecUtils::PCF::MeasurementExt *) 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt const > *smartarg1 ;
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
+  std::shared_ptr< SpecUtils::MeasurementExt const > *smartarg1 ;
   std::string result;
   
-  smartarg1 = (std::shared_ptr<const SpecUtils::PCF::MeasurementExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::MeasurementExt*)(smartarg1->get()) : NULL;
-  result = ((SpecUtils::PCF::MeasurementExt const *)arg1)->get_description();
+  smartarg1 = (std::shared_ptr<const SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
+  result = ((SpecUtils::MeasurementExt const *)arg1)->get_description();
   fresult.size = (&result)->size();
   if (fresult.size > 0) {
     fresult.data = malloc(fresult.size);
@@ -7888,13 +7888,13 @@ SWIGEXPORT SwigArrayWrapper _wrap_MeasurementExt_get_description(SwigClassWrappe
 
 SWIGEXPORT SwigArrayWrapper _wrap_MeasurementExt_get_source(SwigClassWrapper *farg1) {
   SwigArrayWrapper fresult ;
-  SpecUtils::PCF::MeasurementExt *arg1 = (SpecUtils::PCF::MeasurementExt *) 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt const > *smartarg1 ;
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
+  std::shared_ptr< SpecUtils::MeasurementExt const > *smartarg1 ;
   std::string result;
   
-  smartarg1 = (std::shared_ptr<const SpecUtils::PCF::MeasurementExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::MeasurementExt*)(smartarg1->get()) : NULL;
-  result = ((SpecUtils::PCF::MeasurementExt const *)arg1)->get_source();
+  smartarg1 = (std::shared_ptr<const SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
+  result = ((SpecUtils::MeasurementExt const *)arg1)->get_source();
   fresult.size = (&result)->size();
   if (fresult.size > 0) {
     fresult.data = malloc(fresult.size);
@@ -7908,46 +7908,46 @@ SWIGEXPORT SwigArrayWrapper _wrap_MeasurementExt_get_source(SwigClassWrapper *fa
 
 SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementExt() {
   SwigClassWrapper fresult ;
-  SpecUtils::PCF::MeasurementExt *result = 0 ;
+  SpecUtils::MeasurementExt *result = 0 ;
   
-  result = (SpecUtils::PCF::MeasurementExt *)new SpecUtils::PCF::MeasurementExt();
-  fresult.cptr = result ? new std::shared_ptr< SpecUtils::PCF::MeasurementExt >(result SWIG_NO_NULL_DELETER_1) : NULL;
+  result = (SpecUtils::MeasurementExt *)new SpecUtils::MeasurementExt();
+  fresult.cptr = result ? new std::shared_ptr< SpecUtils::MeasurementExt >(result SWIG_NO_NULL_DELETER_1) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
 SWIGEXPORT void _wrap_delete_MeasurementExt(SwigClassWrapper *farg1) {
-  SpecUtils::PCF::MeasurementExt *arg1 = (SpecUtils::PCF::MeasurementExt *) 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt > *smartarg1 ;
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
+  std::shared_ptr< SpecUtils::MeasurementExt > *smartarg1 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::MeasurementExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::MeasurementExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
   (void)arg1; delete smartarg1; 
 }
 
 
 SWIGEXPORT void _wrap_MeasurementExt_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  SpecUtils::PCF::MeasurementExt *arg1 = (SpecUtils::PCF::MeasurementExt *) 0 ;
-  SpecUtils::PCF::MeasurementExt *arg2 = 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt > *smartarg1 ;
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
+  SpecUtils::MeasurementExt *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::MeasurementExt > *smartarg1 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::MeasurementExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::MeasurementExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
   (void)sizeof(arg2);
-  SWIG_assign<std::shared_ptr< SpecUtils::PCF::MeasurementExt >, SWIGPOLICY_SpecUtils_PCF_MeasurementExt>(farg1, *farg2);
+  SWIG_assign<std::shared_ptr< SpecUtils::MeasurementExt >, SWIGPOLICY_SpecUtils_MeasurementExt>(farg1, *farg2);
   
 }
 
 
 SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibrationExt_get_dev_pairs(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  SpecUtils::PCF::EnergyCalibrationExt *arg1 = (SpecUtils::PCF::EnergyCalibrationExt *) 0 ;
-  std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt > *smartarg1 ;
+  SpecUtils::EnergyCalibrationExt *arg1 = (SpecUtils::EnergyCalibrationExt *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibrationExt > *smartarg1 ;
   SpecUtils::DeviationPairs *result = 0 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibrationExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
   result = (SpecUtils::DeviationPairs *) &(arg1)->get_dev_pairs();
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
@@ -7957,45 +7957,45 @@ SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibrationExt_get_dev_pairs(SwigClassWr
 
 SWIGEXPORT SwigClassWrapper _wrap_new_EnergyCalibrationExt() {
   SwigClassWrapper fresult ;
-  SpecUtils::PCF::EnergyCalibrationExt *result = 0 ;
+  SpecUtils::EnergyCalibrationExt *result = 0 ;
   
-  result = (SpecUtils::PCF::EnergyCalibrationExt *)new SpecUtils::PCF::EnergyCalibrationExt();
-  fresult.cptr = result ? new std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt >(result SWIG_NO_NULL_DELETER_1) : NULL;
+  result = (SpecUtils::EnergyCalibrationExt *)new SpecUtils::EnergyCalibrationExt();
+  fresult.cptr = result ? new std::shared_ptr< SpecUtils::EnergyCalibrationExt >(result SWIG_NO_NULL_DELETER_1) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
 SWIGEXPORT void _wrap_delete_EnergyCalibrationExt(SwigClassWrapper *farg1) {
-  SpecUtils::PCF::EnergyCalibrationExt *arg1 = (SpecUtils::PCF::EnergyCalibrationExt *) 0 ;
-  std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt > *smartarg1 ;
+  SpecUtils::EnergyCalibrationExt *arg1 = (SpecUtils::EnergyCalibrationExt *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibrationExt > *smartarg1 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibrationExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
   (void)arg1; delete smartarg1; 
 }
 
 
 SWIGEXPORT void _wrap_EnergyCalibrationExt_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  SpecUtils::PCF::EnergyCalibrationExt *arg1 = (SpecUtils::PCF::EnergyCalibrationExt *) 0 ;
-  SpecUtils::PCF::EnergyCalibrationExt *arg2 = 0 ;
-  std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt > *smartarg1 ;
+  SpecUtils::EnergyCalibrationExt *arg1 = (SpecUtils::EnergyCalibrationExt *) 0 ;
+  SpecUtils::EnergyCalibrationExt *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibrationExt > *smartarg1 ;
   
-  smartarg1 = (std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::PCF::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibrationExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
   (void)sizeof(arg2);
-  SWIG_assign<std::shared_ptr< SpecUtils::PCF::EnergyCalibrationExt >, SWIGPOLICY_SpecUtils_PCF_EnergyCalibrationExt>(farg1, *farg2);
+  SWIG_assign<std::shared_ptr< SpecUtils::EnergyCalibrationExt >, SWIGPOLICY_SpecUtils_EnergyCalibrationExt>(farg1, *farg2);
   
 }
 
 
 SWIGEXPORT void _wrap_PcfFile_read(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
-  SpecUtils::PCF::PcfFile *arg1 = (SpecUtils::PCF::PcfFile *) 0 ;
+  SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
   std::string *arg2 = 0 ;
   std::string tempstr2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PCF::PcfFile *", "PcfFile", "SpecUtils::PCF::PcfFile::read(std::string const &)", return );
-  arg1 = (SpecUtils::PCF::PcfFile *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PcfFile *", "PcfFile", "SpecUtils::PcfFile::read(std::string const &)", return );
+  arg1 = (SpecUtils::PcfFile *)farg1->cptr;
   tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
   arg2 = &tempstr2;
   (arg1)->read((std::string const &)*arg2);
@@ -8003,27 +8003,27 @@ SWIGEXPORT void _wrap_PcfFile_read(SwigClassWrapper *farg1, SwigArrayWrapper *fa
 
 
 SWIGEXPORT void _wrap_PcfFile_add_measurement_ext(SwigClassWrapper *farg1, SwigClassWrapper const *farg2) {
-  SpecUtils::PCF::PcfFile *arg1 = (SpecUtils::PCF::PcfFile *) 0 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt > arg2 ;
+  SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
+  std::shared_ptr< SpecUtils::MeasurementExt > arg2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PCF::PcfFile *", "PcfFile", "SpecUtils::PCF::PcfFile::add_measurement_ext(std::shared_ptr< SpecUtils::PCF::MeasurementExt >)", return );
-  arg1 = (SpecUtils::PCF::PcfFile *)farg1->cptr;
-  if (farg2->cptr) arg2 = *static_cast<std::shared_ptr< SpecUtils::PCF::MeasurementExt >*>(farg2->cptr);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PcfFile *", "PcfFile", "SpecUtils::PcfFile::add_measurement_ext(std::shared_ptr< SpecUtils::MeasurementExt >)", return );
+  arg1 = (SpecUtils::PcfFile *)farg1->cptr;
+  if (farg2->cptr) arg2 = *static_cast<std::shared_ptr< SpecUtils::MeasurementExt >*>(farg2->cptr);
   (arg1)->add_measurement_ext(arg2);
 }
 
 
 SWIGEXPORT SwigClassWrapper _wrap_PcfFile_get_measurement_at(SwigClassWrapper *farg1, int const *farg2) {
   SwigClassWrapper fresult ;
-  SpecUtils::PCF::PcfFile *arg1 = (SpecUtils::PCF::PcfFile *) 0 ;
+  SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
   int arg2 ;
-  std::shared_ptr< SpecUtils::PCF::MeasurementExt > result;
+  std::shared_ptr< SpecUtils::MeasurementExt > result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PCF::PcfFile *", "PcfFile", "SpecUtils::PCF::PcfFile::get_measurement_at(int)", return SwigClassWrapper_uninitialized());
-  arg1 = (SpecUtils::PCF::PcfFile *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PcfFile *", "PcfFile", "SpecUtils::PcfFile::get_measurement_at(int)", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::PcfFile *)farg1->cptr;
   arg2 = (int)(*farg2);
   result = (arg1)->get_measurement_at(arg2);
-  fresult.cptr = result ? (new std::shared_ptr< SpecUtils::PCF::MeasurementExt >(static_cast< const std::shared_ptr< SpecUtils::PCF::MeasurementExt >& >(result))) : NULL;
+  fresult.cptr = result ? (new std::shared_ptr< SpecUtils::MeasurementExt >(static_cast< const std::shared_ptr< SpecUtils::MeasurementExt >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
@@ -8031,11 +8031,11 @@ SWIGEXPORT SwigClassWrapper _wrap_PcfFile_get_measurement_at(SwigClassWrapper *f
 
 SWIGEXPORT SwigClassWrapper _wrap_PcfFile_make_measurement(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  SpecUtils::PCF::PcfFile *arg1 = (SpecUtils::PCF::PcfFile *) 0 ;
+  SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
   std::shared_ptr< SpecUtils::Measurement > result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PCF::PcfFile *", "PcfFile", "SpecUtils::PCF::PcfFile::make_measurement()", return SwigClassWrapper_uninitialized());
-  arg1 = (SpecUtils::PCF::PcfFile *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PcfFile *", "PcfFile", "SpecUtils::PcfFile::make_measurement()", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::PcfFile *)farg1->cptr;
   result = (arg1)->make_measurement();
   fresult.cptr = result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
@@ -8045,9 +8045,9 @@ SWIGEXPORT SwigClassWrapper _wrap_PcfFile_make_measurement(SwigClassWrapper *far
 
 SWIGEXPORT SwigClassWrapper _wrap_new_PcfFile() {
   SwigClassWrapper fresult ;
-  SpecUtils::PCF::PcfFile *result = 0 ;
+  SpecUtils::PcfFile *result = 0 ;
   
-  result = (SpecUtils::PCF::PcfFile *)new SpecUtils::PCF::PcfFile();
+  result = (SpecUtils::PcfFile *)new SpecUtils::PcfFile();
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
   return fresult;
@@ -8055,20 +8055,20 @@ SWIGEXPORT SwigClassWrapper _wrap_new_PcfFile() {
 
 
 SWIGEXPORT void _wrap_delete_PcfFile(SwigClassWrapper *farg1) {
-  SpecUtils::PCF::PcfFile *arg1 = (SpecUtils::PCF::PcfFile *) 0 ;
+  SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
   
-  arg1 = (SpecUtils::PCF::PcfFile *)farg1->cptr;
+  arg1 = (SpecUtils::PcfFile *)farg1->cptr;
   delete arg1;
 }
 
 
 SWIGEXPORT void _wrap_PcfFile_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  SpecUtils::PCF::PcfFile *arg1 = (SpecUtils::PCF::PcfFile *) 0 ;
-  SpecUtils::PCF::PcfFile *arg2 = 0 ;
+  SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
+  SpecUtils::PcfFile *arg2 = 0 ;
   
   (void)sizeof(arg1);
   (void)sizeof(arg2);
-  SWIG_assign<SpecUtils::PCF::PcfFile, SWIGPOLICY_SpecUtils_PCF_PcfFile>(farg1, *farg2);
+  SWIG_assign<SpecUtils::PcfFile, SWIGPOLICY_SpecUtils_PcfFile>(farg1, *farg2);
   
 }
 
@@ -8077,10 +8077,10 @@ SWIGEXPORT void _wrap_mapDevPairsToArray__SWIG_0(SwigClassWrapper *farg1, SwigCl
   std::vector< std::shared_ptr< SpecUtils::Measurement const > > *arg1 = 0 ;
   float (*arg2)[20][8][8][4] ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement const > > const &", "SWIGTYPE_p_std__vectorT_std__shared_ptrT_SpecUtils__MeasurVEY9A", "SpecUtils::PCF::mapDevPairsToArray(std::vector< std::shared_ptr< SpecUtils::Measurement const > > const &,float [2][20][8][8][4])", return );
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement const > > const &", "SWIGTYPE_p_std__vectorT_std__shared_ptrT_SpecUtils__MeasurVEY9A", "SpecUtils::mapDevPairsToArray(std::vector< std::shared_ptr< SpecUtils::Measurement const > > const &,float [2][20][8][8][4])", return );
   arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement const > > *)farg1->cptr;
   arg2 = (float (*)[20][8][8][4])(farg2);
-  SpecUtils::PCF::mapDevPairsToArray((std::vector< std::shared_ptr< SpecUtils::Measurement const > > const &)*arg1,(float (*)[20][8][8][4])arg2);
+  SpecUtils::mapDevPairsToArray((std::vector< std::shared_ptr< SpecUtils::Measurement const > > const &)*arg1,(float (*)[20][8][8][4])arg2);
 }
 
 
@@ -8088,10 +8088,10 @@ SWIGEXPORT void _wrap_mapDevPairsToArray__SWIG_1(SwigClassWrapper *farg1, SwigCl
   SpecUtils::SpecFile *arg1 = 0 ;
   float (*arg2)[20][8][8][4] ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const &", "SpecFile", "SpecUtils::PCF::mapDevPairsToArray(SpecUtils::SpecFile const &,float [2][20][8][8][4])", return );
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const &", "SpecFile", "SpecUtils::mapDevPairsToArray(SpecUtils::SpecFile const &,float [2][20][8][8][4])", return );
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   arg2 = (float (*)[20][8][8][4])(farg2);
-  SpecUtils::PCF::mapDevPairsToArray((SpecUtils::SpecFile const &)*arg1,(float (*)[20][8][8][4])arg2);
+  SpecUtils::mapDevPairsToArray((SpecUtils::SpecFile const &)*arg1,(float (*)[20][8][8][4])arg2);
 }
 
 
@@ -8101,7 +8101,7 @@ SWIGEXPORT void _wrap_mapCArrayToFortranArray(SwigClassWrapper *farg1, SwigClass
   
   arg1 = (float (*)[8][8][20][2])(farg1);
   arg2 = (float (*)[20][8][8][4])(farg2);
-  SpecUtils::PCF::mapCArrayToFortranArray((float const (*)[8][8][20][2])arg1,(float (*)[20][8][8][4])arg2);
+  SpecUtils::mapCArrayToFortranArray((float const (*)[8][8][20][2])arg1,(float (*)[20][8][8][4])arg2);
 }
 
 

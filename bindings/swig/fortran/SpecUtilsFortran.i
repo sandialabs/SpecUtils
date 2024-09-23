@@ -25,9 +25,9 @@ namespace std {
 %include "std_shared_ptr.i"
 %shared_ptr(vector<SpecUtils::Measurement>)
 %shared_ptr(SpecUtils::Measurement)
-%shared_ptr(SpecUtils::PCF::MeasurementExt)
+%shared_ptr(SpecUtils::MeasurementExt)
 %shared_ptr(SpecUtils::EnergyCalibration)
-%shared_ptr(SpecUtils::PCF::EnergyCalibrationExt)
+%shared_ptr(SpecUtils::EnergyCalibrationExt)
 //%shared_ptr(std::vector<float>) // this casued me problems -hugh
 
 %include "std_string.i"

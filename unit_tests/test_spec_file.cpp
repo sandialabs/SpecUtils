@@ -68,9 +68,9 @@ TEST_CASE("Round Trip")
 
     SUBCASE("Write PCF File")
     {
-        SpecUtils::PCF::PcfFile specfile;
+        SpecUtils::PcfFile specfile;
         CheckFileExistanceAndDelete(fname);
-        auto m = std::make_shared<SpecUtils::PCF::MeasurementExt>();
+        auto m = std::make_shared<SpecUtils::MeasurementExt>();
 
         m->set_detector_name("Aa1");
 
@@ -119,7 +119,7 @@ TEST_CASE("Round Trip")
 
         SUBCASE("Read PCF File")
         {
-            SpecUtils::PCF::PcfFile specfileToRead;
+            SpecUtils::PcfFile specfileToRead;
             specfileToRead.read(fname);
 
             //CHECK( specfileToRead.max_channel_count() == 128 );
@@ -298,7 +298,7 @@ TEST_CASE("Deviation Pair Map")
     }
 
     float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxCol] = {};
-    SpecUtils::PCF::mapDevPairsToArray(specfile, fortranArray);
+    SpecUtils::mapDevPairsToArray(specfile, fortranArray);
     if (false)
     {
         auto checkLambda = [&fortranArray](size_t col, size_t panel, size_t mca, size_t devPair) {
@@ -339,7 +339,7 @@ TEST_CASE("Deviation Pair Map Array")
 
     // Fortran deviation pairs array: real, dimension(2,MAX_DEVIATION_PAIRS,MAX_MCA_COUNT,MAX_PANEL_COUNT,MAX_COLUMN_COUNT) :: DeviationPairs
     float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxHardwareColumns];
-    SpecUtils::PCF::mapCArrayToFortranArray(deviationPairsArray, fortranArray);
+    SpecUtils::mapCArrayToFortranArray(deviationPairsArray, fortranArray);
 
     {
         size_t i = 0, j = 0, mca = 0, devPair = 9;
