@@ -2755,10 +2755,10 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       float &first_val = counts_ref[0];
       float &last_val = counts_ref[n_channel-1];
       
-      if( (first_val < 0.0f) || (first_val > (5.0f*max_val)) ) //We have checked for inf/NaN above
+      if( fabs(first_val) > (10.0f*max_val) ) //We have checked for inf/NaN above
         first_val = 0;
       
-      if( (last_val < 0.0f) || (last_val > (5.0f*max_val)) )
+      if( fabs(last_val) > (10.0f*max_val) )
         last_val = 0;
     }//if( n_channel > 2 )
     
