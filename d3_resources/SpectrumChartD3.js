@@ -85,6 +85,9 @@ SpectrumChartD3 = function(elem, options) {
   if( (typeof this.options.doubleClickDelay) !== 'number' ) this.options.doubleClickDelay = 500;
   
   this.options.refLineTopPad = 30;
+  this.options.refLineWidth = 1;
+  this.options.refLineWidthHover = 2;
+  this.options.featureLineWidth = 2;
   
   self.options.logYFracTop = 0.05;
   self.options.logYFracBottom = 0.025;
@@ -3983,7 +3986,7 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
  * -------------- Reference Gamma Lines Functions --------------
  */
 SpectrumChartD3.prototype.drawRefGammaLines = function() {
-  /*Drawing of the refrenece lines is super duper un-optimized!!! */
+  /*Drawing of the reference lines is super duper un-optimized!!! */
   const self = this;
 
   if( !self.refLines || !self.refLines.length || !self.refLines[0].lines  || !self.refLines[0].lines.length ) {
@@ -4013,13 +4016,13 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   var gy = self.vis.selectAll("g.ref")
             .data( reflines, function(d){return d.id;} )
             .attr("transform", tx)
-            .attr("stroke-width",1);
+            .attr("stroke-width", self.options.refLineWidth );
 
   var gye = gy.enter().insert("g", "a")
     .attr("class", "ref")
     .attr("transform", tx);
 
-  function stroke(d){ return d.parent.color; };
+  function stroke(d){ return d.color ? d.color : d.parent.color; };
 
   function dashfunc(d){
     const particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum", "S.E.",   "D.E." ];
@@ -4413,8 +4416,10 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     self.refLineInfoTxt.attr("transform", tx );
   }
 
-
-  d3.select(nearestline).attr("stroke-width",2).select("line").attr("dx", "-1" );
+  d3.select(nearestline)
+    .attr("stroke-width",self.options.refLineWidthHover)
+    .select("line")
+    .attr("dx", "-1" );
 }
 
 SpectrumChartD3.prototype.setShowMouseStats = function(d) {
@@ -8174,7 +8179,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     if( !self.doubleEscape && doubleEscapeEnergy >= 0 ) {
       self.doubleEscape = self.vis.append("line")  /* create double escape line */
       .attr("class", "peakLine")
-      .attr("stroke-width", 2)
+      .attr("stroke-width", self.options.featureLineWidth)
       .attr("x1", doubleEscapePix)
       .attr("x2", doubleEscapePix)
       .attr("y1", 0)
@@ -8235,7 +8240,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       /* draw compton edge line here */
       self.comptonPeak = self.vis.append("line")
         .attr("class", "peakLine")
-        .attr("stroke-width", 2)
+        .attr("stroke-width", self.options.featureLineWidth)
         .attr("y1", 0);
       self.comptonPeakText = self.vis.append("text")
         .attr("class", "peakText")
@@ -8294,7 +8299,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       /* draw compton edge line here */
       self.comptonEdge = self.vis.append("line")
         .attr("class", "peakLine")
-        .attr("stroke-width", 2);
+        .attr("stroke-width", self.options.featureLineWidth);
       self.comptonEdgeText = self.vis.append("text")
         .attr("class", "peakText")
         .text( self.options.txt.comptonEdge );
@@ -8386,7 +8391,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           /* draw compton edge line here */
           self.clickedSumPeak = self.vis.append("line")
               .attr("class", "peakLine")
-              .attr("stroke-width", 2);
+              .attr("stroke-width", self.options.featureLineWidth);
           self.clickedSumPeakMeas = self.vis.append("text")
               .attr("class", "peakText");
         }
@@ -8435,7 +8440,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         /* draw left-sum peak line here */
         self.leftSumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2);
+          .attr("stroke-width", self.options.featureLineWidth);
         self.leftSumPeakText = self.vis.append("text")
           .attr("class", "peakText")
           .text( self.options.txt.clickedPeak );
@@ -8481,7 +8486,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         /* draw sum peak line here */
         self.sumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2);
+          .attr("stroke-width", self.options.featureLineWidth);
       self.sumPeakText = self.vis.append("text")
           .attr("class", "peakText")
           .text( self.options.txt.sumPeak );
