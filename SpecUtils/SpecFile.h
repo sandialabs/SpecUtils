@@ -2902,6 +2902,7 @@ struct MultimediaData
 #endif
 };//struct MultimediaData
 
+int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca);
 
 }//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h

@@ -14,6 +14,11 @@ namespace SpecUtils
     class MeasurementExt : public SpecUtils::Measurement
     {
     public:
+        MeasurementExt() : Measurement()
+        {
+
+        }
+
         void set_description(const std::string &description)
         {
             auto &remarks = remarks_;
@@ -75,20 +80,84 @@ namespace SpecUtils
             }
             return retVal;
         }
+    
+        /// @brief return zero-based panel number based on detector name
+        int panel() 
+        {
+            if (panel_ < 0)
+                update_detector_name_params();
+            return panel_;
+        }
+
+        /// @brief return zero-based column number based on detector name
+        int column() 
+        {
+            if (column_ < 0)
+                update_detector_name_params();
+            return column_;
+        }
+
+        /// @brief return zero-based mca number based on detector name
+        int mca() 
+        {
+            if (mca_ < 1)
+                update_detector_name_params();
+            return mca_;
+        }
+
+        protected:
+        int panel_ = -1;
+        int column_ = -1;
+        int mca_ = -1;
+
+        void update_detector_name_params()
+        {
+            auto detName = detector_name();
+            pcf_det_name_to_dev_pair_index(detName, column_, panel_, mca_);
+        }
     };
 
     class EnergyCalibrationExt : public SpecUtils::EnergyCalibration
     {
     public:
+        EnergyCalibrationExt() : SpecUtils::EnergyCalibration()
+        {
+            m_type = EnergyCalType::FullRangeFraction;
+            //*m_channel_energies({1,2,3,4,5});
+
+            //m_channel_energies = std::make_shared<const std::vector<float>>(std::vector<float>{1.0f, 2.0f, 3.0f});
+            m_channel_energies = std::make_shared<const std::vector<float>>(129, 1.0f);
+        }
         SpecUtils::DeviationPairs &get_dev_pairs()
         {
             return m_deviation_pairs;
         }
+
+        FloatVec & get_coeffs()
+        {
+            return m_coefficients;
+        }
+
+        void set_channel_energies( const FloatVec& e )
+        {
+            //m_channel_energies = std::make_shared<const FloatVec>({1,2,3,4,5});
+            //m_channel_energies->push_back(10);
+            // //for(auto c : e)
+            // {
+            //     *m_channel_energies = e;
+            // }
+        }
+
+
     };
 
     class PcfFile : public SpecUtils::SpecFile
     {
     public:
+        PcfFile() : SpecFile()
+        {
+
+        }
         void read(const std::string &fname)
         {
             auto success = load_pcf_file(fname);
@@ -163,31 +232,25 @@ namespace SpecUtils
         return std::stoi(retVal);
     }
 
-    inline void mapDevPairsToArray(const std::vector<std::shared_ptr<const SpecUtils::Measurement>> &measurements, float fortranArray[2][20][8][8][4]);
-
-    inline void mapDevPairsToArray(const SpecUtils::SpecFile &specFile, float fortranArray[2][20][8][8][4])
+    inline void mapDevPairsToArray(SpecUtils::PcfFile &specFile, float fortranArray[2][20][8][8][4])
     {
-        const auto &measurements = specFile.measurements();
-        mapDevPairsToArray(measurements, fortranArray);
-    }
-
-    void mapDevPairsToArray(const std::vector<std::shared_ptr<const SpecUtils::Measurement>> &measurements, float fortranArray[2][20][8][8][4])
-    {
-        // for (auto &m : measurements)
-        // {
-        //     auto &remarks = m->remarks();
-        //     auto column = get_column();
-        //     auto panel = get_panel();
-        //     auto mca = m->detector_number();
-        //     auto &devPairs = m->deviation_pairs();
-        //     auto devPairIdx = 0;
-        //     for (auto &devPair : devPairs)
-        //     {
-        //         fortranArray[0][devPairIdx][mca][panel][column] = devPair.first;
-        //         fortranArray[1][devPairIdx][mca][panel][column] = devPair.second;
-        //         devPairIdx++;
-        //     }
-        // }
+        auto numMeasurements = specFile.num_measurements();
+        for (size_t i = 0; i < numMeasurements; i++)
+        {
+            auto &m = *(specFile.get_measurement_at(i));
+            auto column = m.column();
+            auto panel = m.panel();
+            auto mca = m.mca();
+            auto &devPairs = m.deviation_pairs();
+            auto devPairIdx = 0;
+            for (auto &devPair : devPairs)
+            {
+                fortranArray[0][devPairIdx][mca][panel][column] = devPair.first;
+                fortranArray[1][devPairIdx][mca][panel][column] = devPair.second;
+                devPairIdx++;
+            }
+        }
+            
     }
 
     // Function to map C array to Fortran array

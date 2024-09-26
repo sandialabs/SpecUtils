@@ -92,46 +92,11 @@ namespace
   };//parse_pcf_field
   
   
-  
-  //returns negative if invalid name
-  int pcf_det_name_to_dev_pair_index( std::string name, int &col, int &panel, int &mca )
-  {
-    col = panel = mca = -1;
-    
-    //loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
-    //  loop over panels (8) //Aa1, Ab1, Ac1
-    //    loop over MCAs (8) //Aa1, Aa2, Aa3, etc
-    //      loop over deviation pairs (20)
-    //        energy (float uncompressed, or int16_t compressed)
-    //        offset (float uncompressed, or int16_t compressed)
-    
-    if( name.size() < 2 || name.size() > 3
-       || name[name.size()-1] < '1' || name[name.size()-1] > '8' )
-    {
-      return -1;
-    }
-    
-    SpecUtils::to_lower_ascii( name );
-    
-    const char col_char = ((name.size()==3) ? name[1] : 'a');
-    const char panel_char = name[0];
-    const char mca_char = name[name.size()-1];
-    
-    if( col_char < 'a' || col_char > 'd' || panel_char < 'a' || panel_char > 'h' )
-      return -1;
-    
-    col = col_char - 'a';
-    panel = panel_char - 'a';
-    mca = mca_char - '1';
-    
-    return col*(8*8*2*20) + panel*(8*2*20) + mca*(2*20);
-  }
-  
-  
+
   int pcf_det_name_to_dev_pair_index( std::string name )
   {
     int col, panel, mca;
-    return pcf_det_name_to_dev_pair_index( name, col, panel, mca );
+    return SpecUtils::pcf_det_name_to_dev_pair_index( name, col, panel, mca );
   };//pcf_det_name_to_dev_pair_index lambda
   
 }//namespace
@@ -139,7 +104,40 @@ namespace
 
 namespace SpecUtils
 {
-  
+
+// returns negative if invalid name
+int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
+{
+  col = panel = mca = -1;
+
+  // loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
+  //   loop over panels (8) //Aa1, Ab1, Ac1
+  //     loop over MCAs (8) //Aa1, Aa2, Aa3, etc
+  //       loop over deviation pairs (20)
+  //         energy (float uncompressed, or int16_t compressed)
+  //         offset (float uncompressed, or int16_t compressed)
+
+  if (name.size() < 2 || name.size() > 3 || name[name.size() - 1] < '1' || name[name.size() - 1] > '8')
+  {
+    return -1;
+  }
+
+  SpecUtils::to_lower_ascii(name);
+
+  const char col_char = ((name.size() == 3) ? name[1] : 'a');
+  const char panel_char = name[0];
+  const char mca_char = name[name.size() - 1];
+
+  if (col_char < 'a' || col_char > 'd' || panel_char < 'a' || panel_char > 'h')
+    return -1;
+
+  col = col_char - 'a';
+  panel = panel_char - 'a';
+  mca = mca_char - '1';
+  // TODO - is this correct?
+  return col * (8 * 8 * 2 * 20) + panel * (8 * 2 * 20) + mca * (2 * 20);
+}
+
 /** Gives the maximum number of channels any spectrum in the file will need to write to PCF file (rounded up to the nearest multiple of
  64 channels), as well as a sets a pointer to the lower channel energies to write to the first record, but only if lower channel energy
  calibration should be used (if FRF should be used, then pointer will be reset to nulltr).
@@ -416,6 +414,8 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
     if( meas->gamma_counts_ && !meas->gamma_counts_->empty())
     {
       has_some_dev_pairs |= (!meas->deviation_pairs().empty());
+
+      // TODO - not sure this correctly sets need_compress_pairs
       if( name.size() >= 3
          && (name[1]=='c' || name[1]=='C' || name[1]=='d' || name[1]=='D')
          && (name[0]>='a' && name[0]<='g')
@@ -467,7 +467,7 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
     const string &name = det_devs.first;
     const auto &pairs = det_devs.second;
     
-    int index = pcf_det_name_to_dev_pair_index( name );
+    int index = ::pcf_det_name_to_dev_pair_index( name );
     
     if( index < 0 || (index+39) > maxnvals )
     {
