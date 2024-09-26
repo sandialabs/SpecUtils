@@ -8077,6 +8077,17 @@ SWIGEXPORT void _wrap_EnergyCalibrationExt_op_assign__(SwigClassWrapper *farg1, 
 }
 
 
+SWIGEXPORT SwigClassWrapper _wrap_new_PcfFile() {
+  SwigClassWrapper fresult ;
+  SpecUtils::PcfFile *result = 0 ;
+  
+  result = (SpecUtils::PcfFile *)new SpecUtils::PcfFile();
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
 SWIGEXPORT void _wrap_PcfFile_read(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
   SpecUtils::PcfFile *arg1 = (SpecUtils::PcfFile *) 0 ;
   std::string *arg2 = 0 ;
@@ -8127,17 +8138,6 @@ SWIGEXPORT SwigClassWrapper _wrap_PcfFile_make_measurement(SwigClassWrapper *far
   result = (arg1)->make_measurement();
   fresult.cptr = result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
-  return fresult;
-}
-
-
-SWIGEXPORT SwigClassWrapper _wrap_new_PcfFile() {
-  SwigClassWrapper fresult ;
-  SpecUtils::PcfFile *result = 0 ;
-  
-  result = (SpecUtils::PcfFile *)new SpecUtils::PcfFile();
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 

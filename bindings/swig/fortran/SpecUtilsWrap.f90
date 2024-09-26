@@ -5661,6 +5661,14 @@ type(SwigClassWrapper), intent(inout) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
+function swigc_new_PcfFile() &
+bind(C, name="_wrap_new_PcfFile") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper) :: fresult
+end function
+
 subroutine swigc_PcfFile_read(farg1, farg2) &
 bind(C, name="_wrap_PcfFile_read")
 use, intrinsic :: ISO_C_BINDING
@@ -5694,14 +5702,6 @@ result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
-type(SwigClassWrapper) :: fresult
-end function
-
-function swigc_new_PcfFile() &
-bind(C, name="_wrap_new_PcfFile") &
-result(fresult)
-use, intrinsic :: ISO_C_BINDING
-import :: swigclasswrapper
 type(SwigClassWrapper) :: fresult
 end function
 
@@ -13050,6 +13050,16 @@ call swigc_EnergyCalibrationExt_op_assign__(farg1, farg2)
 self%swigdata = farg1
 end subroutine
 
+function swigf_new_PcfFile() &
+result(self)
+use, intrinsic :: ISO_C_BINDING
+type(PcfFile) :: self
+type(SwigClassWrapper) :: fresult 
+
+fresult = swigc_new_PcfFile()
+self%swigdata = fresult
+end function
+
 subroutine swigf_PcfFile_read(self, fname)
 use, intrinsic :: ISO_C_BINDING
 class(PcfFile), intent(in) :: self
@@ -13102,16 +13112,6 @@ type(SwigClassWrapper) :: farg1
 farg1 = self%swigdata
 fresult = swigc_PcfFile_make_measurement(farg1)
 swig_result%swigdata = fresult
-end function
-
-function swigf_new_PcfFile() &
-result(self)
-use, intrinsic :: ISO_C_BINDING
-type(PcfFile) :: self
-type(SwigClassWrapper) :: fresult 
-
-fresult = swigc_new_PcfFile()
-self%swigdata = fresult
 end function
 
 subroutine swigf_PcfFile_release(self)
