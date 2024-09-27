@@ -75,9 +75,9 @@ std::array<std::string, 10> generateDetectorNames() {
     // Random number generation setup
     static std::random_device rd; // Obtain a random number from hardware
     static std::mt19937 eng(rd()); // Seed the generator
-    std::uniform_int_distribution<> panelDist(1, 5); // Panel numbers from 1 to 5
+    std::uniform_int_distribution<> panelDist(1, 4); // Panel numbers from 1 to 5
     std::uniform_int_distribution<> columnDist(1, 4); // Column numbers from 1 to 5
-    std::uniform_int_distribution<> mcaDist(1, 3); // MCA numbers from 1 to 3
+    std::uniform_int_distribution<> mcaDist(1, 8); // MCA numbers from 1 to 3
     std::uniform_int_distribution<> neutronDist(0, 1); // Randomly decide if it's a neutron detector
 
     // Generate 10 random detector names
@@ -278,154 +278,6 @@ TEST_CASE("Get Max Channel Count")
     }
 
     CHECK(max_channel_count > 0);
-}
-
-std::pair<float, float> getExpectedDeviationPair(size_t col, size_t panel, size_t mca, size_t devPair)
-{
-    const auto maxDevPairs = 20;
-    const auto maxMCA = 8;
-    const auto maxPanel = 8;
-    const auto maxCol = 4;
-
-    // Validate the indices to ensure they are within bounds
-    if (col >= maxCol || panel >= maxPanel || mca >= maxMCA || devPair >= maxDevPairs)
-    {
-        throw std::out_of_range("Index out of range");
-    }
-
-    // Calculate the total number of pairs before the given indices
-    size_t totalPairs = devPair + mca * maxDevPairs + panel * maxDevPairs * maxMCA + col * maxDevPairs * maxMCA * maxPanel;
-
-    // Calculate the pairVal
-    size_t pairVal = 1 + 2 * totalPairs;
-
-    // Calculate the first and second pair values
-    float first = (pairVal) * 1.0F;
-    float second = (pairVal + 1) * 1.0F;
-
-    return {first, second};
-}
-
-class MyEcal : public SpecUtils::EnergyCalibration
-{
-public:
-    SpecUtils::DeviationPairs &getDevPairs()
-    {
-        return m_deviation_pairs;
-    }
-};
-
-template <size_t MAX_COLUMN_COUNT = 4, size_t MAX_PANEL_COUNT = 8, size_t MAX_MCA_COUNT = 8, size_t MAX_DEV_PAIRS = 20>
-void devPairComboLoop(std::function<void(size_t col, size_t panel, size_t mca, size_t devPair)> operation)
-{
-    for (size_t col = 0; col < MAX_COLUMN_COUNT; ++col)
-    {
-        for (size_t panel = 0; panel < MAX_PANEL_COUNT; ++panel)
-        {
-            for (size_t mca = 0; mca < MAX_MCA_COUNT; ++mca)
-            {
-                for (size_t devPair = 0; devPair < MAX_DEV_PAIRS; ++devPair)
-                {
-                    operation(col, panel, mca, devPair);
-                }
-            }
-        }
-    }
-}
-
-TEST_CASE("Deviation Pair Map")
-{
-    SpecUtils::PcfFile specfile;
-
-    const auto maxDevPairs = 20;
-    const auto maxMCA = 8;
-    const auto maxPanel = 8;
-    const auto maxCol = 4;
-
-    auto pairVal = 0;
-    for (size_t col_i = 0; col_i < maxCol; col_i++)
-    {
-        for (size_t panel_j = 0; panel_j < maxPanel; panel_j++)
-        {
-            for (size_t mca_k = 0; mca_k < maxMCA; mca_k++)
-            {
-                auto m = std::make_shared<SpecUtils::MeasurementExt>();
-
-                auto detName = getDetectorName(panel_j+1, col_i+1, mca_k+1);
-                m->set_detector_name(detName);
-
-                CHECK(m->column() == col_i);
-                CHECK(m->panel() == panel_j);
-                CHECK(m->mca() == mca_k);
-
-                MyEcal ecal;
-                auto &devPairs = ecal.getDevPairs();
-                for (size_t p = 0; p < maxDevPairs; p++)
-                {
-                    auto first = ++pairVal;
-                    auto second = ++pairVal;
-
-                    auto devPair = std::make_pair(first, second);
-                    devPairs.push_back(devPair);
-                }
-                m->set_energy_calibration(std::make_shared<SpecUtils::EnergyCalibration>(ecal));
-
-                specfile.add_measurement(m);
-            }
-        }
-    }
-
-    float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxCol] = {};
-    SpecUtils::mapDevPairsToArray(specfile, fortranArray);
-    if (true)
-    {
-        auto checkLambda = [&fortranArray](size_t col, size_t panel, size_t mca, size_t devPair)
-        {
-            auto expectedPair = getExpectedDeviationPair(col, panel, mca, devPair);
-            CHECK(fortranArray[0][devPair][mca][panel][col] == expectedPair.first);
-            CHECK(fortranArray[1][devPair][mca][panel][col] == expectedPair.second);
-        };
-        devPairComboLoop(checkLambda);
-    }
-}
-
-TEST_CASE("Deviation Pair Map Array")
-{
-    const auto maxDevPairs = 20;
-    const auto maxMCA = 8;
-    const auto maxPanel = 8;
-    const auto maxHardwareColumns = 4;
-
-    auto pairVal = 0;
-
-    float deviationPairsArray[maxHardwareColumns][maxPanel][maxMCA][maxDevPairs][2] = {};
-
-    auto assignLambda = [&pairVal, &deviationPairsArray](size_t col, size_t panel, size_t mca, size_t devPair)
-    {
-        float *pair = deviationPairsArray[col][panel][mca][devPair];
-        pair[0] = ++pairVal;
-        pair[1] = ++pairVal;
-    };
-    devPairComboLoop(assignLambda);
-
-    auto checkLambda = [&deviationPairsArray](size_t col, size_t panel, size_t mca, size_t devPair)
-    {
-        auto expectedPair = getExpectedDeviationPair(col, panel, mca, devPair);
-        float *pair = deviationPairsArray[col][panel][mca][devPair];
-        CHECK(pair[0] == expectedPair.first);
-        CHECK(pair[1] == expectedPair.second);
-    };
-    devPairComboLoop(checkLambda);
-
-    // Fortran deviation pairs array: real, dimension(2,MAX_DEVIATION_PAIRS,MAX_MCA_COUNT,MAX_PANEL_COUNT,MAX_COLUMN_COUNT) :: DeviationPairs
-    float fortranArray[2][maxDevPairs][maxMCA][maxPanel][maxHardwareColumns];
-    SpecUtils::mapCArrayToFortranArray(deviationPairsArray, fortranArray);
-
-    {
-        size_t i = 0, j = 0, mca = 0, devPair = 9;
-        CHECK(fortranArray[0][devPair][mca][j][i] == 19.0F);
-        CHECK(fortranArray[1][devPair][mca][j][i] == 20.0F);
-    }
 }
 
 TEST_CASE("Find Source String")

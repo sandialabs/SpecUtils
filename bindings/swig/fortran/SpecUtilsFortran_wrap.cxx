@@ -7977,6 +7977,19 @@ SWIGEXPORT int _wrap_MeasurementExt_mca(SwigClassWrapper *farg1) {
 }
 
 
+SWIGEXPORT void _wrap_MeasurementExt_set_ecal(SwigClassWrapper *farg1, SwigClassWrapper const *farg2) {
+  SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration const > *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::MeasurementExt > *smartarg1 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration const > tempnull2 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::MeasurementExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::MeasurementExt*)(smartarg1->get()) : NULL;
+  arg2 = farg2->cptr ? static_cast<std::shared_ptr< SpecUtils::EnergyCalibration const > * >(farg2->cptr) : &tempnull2;
+  (arg1)->set_ecal((std::shared_ptr< SpecUtils::EnergyCalibration const > const &)*arg2);
+}
+
+
 SWIGEXPORT void _wrap_delete_MeasurementExt(SwigClassWrapper *farg1) {
   SpecUtils::MeasurementExt *arg1 = (SpecUtils::MeasurementExt *) 0 ;
   std::shared_ptr< SpecUtils::MeasurementExt > *smartarg1 ;
@@ -8026,6 +8039,19 @@ SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibrationExt_get_dev_pairs(SwigClassWr
 }
 
 
+SWIGEXPORT void _wrap_EnergyCalibrationExt_set_dev_pairs(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::EnergyCalibrationExt *arg1 = (SpecUtils::EnergyCalibrationExt *) 0 ;
+  SpecUtils::DeviationPairs *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibrationExt > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibrationExt >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
+  SWIG_check_nonnull(farg2->cptr, "SpecUtils::DeviationPairs &", "DeviationPairs", "SpecUtils::EnergyCalibrationExt::set_dev_pairs(SpecUtils::DeviationPairs &)", return );
+  arg2 = (SpecUtils::DeviationPairs *)farg2->cptr;
+  (arg1)->set_dev_pairs(*arg2);
+}
+
+
 SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibrationExt_get_coeffs(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
   SpecUtils::EnergyCalibrationExt *arg1 = (SpecUtils::EnergyCalibrationExt *) 0 ;
@@ -8038,19 +8064,6 @@ SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibrationExt_get_coeffs(SwigClassWrapp
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
   return fresult;
-}
-
-
-SWIGEXPORT void _wrap_EnergyCalibrationExt_set_channel_energies(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  SpecUtils::EnergyCalibrationExt *arg1 = (SpecUtils::EnergyCalibrationExt *) 0 ;
-  SpecUtils::FloatVec *arg2 = 0 ;
-  std::shared_ptr< SpecUtils::EnergyCalibrationExt > *smartarg1 ;
-  
-  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibrationExt >*)(farg1->cptr);
-  arg1 = smartarg1 ? (SpecUtils::EnergyCalibrationExt*)(smartarg1->get()) : NULL;
-  SWIG_check_nonnull(farg2->cptr, "SpecUtils::FloatVec const &", "FloatVector", "SpecUtils::EnergyCalibrationExt::set_channel_energies(SpecUtils::FloatVec const &)", return );
-  arg2 = (SpecUtils::FloatVec *)farg2->cptr;
-  (arg1)->set_channel_energies((SpecUtils::FloatVec const &)*arg2);
 }
 
 
@@ -8158,27 +8171,6 @@ SWIGEXPORT void _wrap_PcfFile_op_assign__(SwigClassWrapper *farg1, SwigClassWrap
   (void)sizeof(arg2);
   SWIG_assign<SpecUtils::PcfFile, SWIGPOLICY_SpecUtils_PcfFile>(farg1, *farg2);
   
-}
-
-
-SWIGEXPORT void _wrap_mapDevPairsToArray(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  SpecUtils::PcfFile *arg1 = 0 ;
-  float (*arg2)[20][8][8][4] ;
-  
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::PcfFile &", "PcfFile", "SpecUtils::mapDevPairsToArray(SpecUtils::PcfFile &,float [2][20][8][8][4])", return );
-  arg1 = (SpecUtils::PcfFile *)farg1->cptr;
-  arg2 = (float (*)[20][8][8][4])(farg2);
-  SpecUtils::mapDevPairsToArray(*arg1,(float (*)[20][8][8][4])arg2);
-}
-
-
-SWIGEXPORT void _wrap_mapCArrayToFortranArray(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  float (*arg1)[8][8][20][2] ;
-  float (*arg2)[20][8][8][4] ;
-  
-  arg1 = (float (*)[8][8][20][2])(farg1);
-  arg2 = (float (*)[20][8][8][4])(farg2);
-  SpecUtils::mapCArrayToFortranArray((float const (*)[8][8][20][2])arg1,(float (*)[20][8][8][4])arg2);
 }
 
 

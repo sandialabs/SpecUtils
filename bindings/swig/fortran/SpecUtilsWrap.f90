@@ -849,6 +849,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: panel => swigf_MeasurementExt_panel
   procedure :: column => swigf_MeasurementExt_column
   procedure :: mca => swigf_MeasurementExt_mca
+  procedure :: set_ecal => swigf_MeasurementExt_set_ecal
   procedure :: release => swigf_MeasurementExt_release
   procedure, private :: swigf_MeasurementExt_op_assign__
   generic :: assignment(=) => swigf_MeasurementExt_op_assign__
@@ -857,8 +858,8 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
  type, extends(EnergyCalibration), public :: EnergyCalibrationExt
  contains
   procedure :: get_dev_pairs => swigf_EnergyCalibrationExt_get_dev_pairs
+  procedure :: set_dev_pairs => swigf_EnergyCalibrationExt_set_dev_pairs
   procedure :: get_coeffs => swigf_EnergyCalibrationExt_get_coeffs
-  procedure :: set_channel_energies => swigf_EnergyCalibrationExt_set_channel_energies
   procedure :: release => swigf_EnergyCalibrationExt_release
   procedure, private :: swigf_EnergyCalibrationExt_op_assign__
   generic :: assignment(=) => swigf_EnergyCalibrationExt_op_assign__
@@ -874,8 +875,6 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_PcfFile_op_assign__
   generic :: assignment(=) => swigf_PcfFile_op_assign__
  end type PcfFile
- public :: mapDevPairsToArray
- public :: mapCArrayToFortranArray
  interface is_candidate_n42_file
   module procedure swigf_is_candidate_n42_file__SWIG_0, swigf_is_candidate_n42_file__SWIG_1
  end interface
@@ -5597,6 +5596,14 @@ type(SwigClassWrapper), intent(in) :: farg1
 integer(C_INT) :: fresult
 end function
 
+subroutine swigc_MeasurementExt_set_ecal(farg1, farg2) &
+bind(C, name="_wrap_MeasurementExt_set_ecal")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+end subroutine
+
 subroutine swigc_delete_MeasurementExt(farg1) &
 bind(C, name="_wrap_delete_MeasurementExt")
 use, intrinsic :: ISO_C_BINDING
@@ -5629,6 +5636,14 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper) :: fresult
 end function
 
+subroutine swigc_EnergyCalibrationExt_set_dev_pairs(farg1, farg2) &
+bind(C, name="_wrap_EnergyCalibrationExt_set_dev_pairs")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+end subroutine
+
 function swigc_EnergyCalibrationExt_get_coeffs(farg1) &
 bind(C, name="_wrap_EnergyCalibrationExt_get_coeffs") &
 result(fresult)
@@ -5637,14 +5652,6 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper) :: fresult
 end function
-
-subroutine swigc_EnergyCalibrationExt_set_channel_energies(farg1, farg2) &
-bind(C, name="_wrap_EnergyCalibrationExt_set_channel_energies")
-use, intrinsic :: ISO_C_BINDING
-import :: swigclasswrapper
-type(SwigClassWrapper), intent(in) :: farg1
-type(SwigClassWrapper), intent(in) :: farg2
-end subroutine
 
 subroutine swigc_delete_EnergyCalibrationExt(farg1) &
 bind(C, name="_wrap_delete_EnergyCalibrationExt")
@@ -5718,21 +5725,6 @@ use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(inout) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
-end subroutine
-
-subroutine swigc_mapDevPairsToArray(farg1, farg2) &
-bind(C, name="_wrap_mapDevPairsToArray")
-use, intrinsic :: ISO_C_BINDING
-import :: swigclasswrapper
-type(SwigClassWrapper), intent(in) :: farg1
-type(C_PTR), value :: farg2
-end subroutine
-
-subroutine swigc_mapCArrayToFortranArray(farg1, farg2) &
-bind(C, name="_wrap_mapCArrayToFortranArray")
-use, intrinsic :: ISO_C_BINDING
-type(C_PTR), value :: farg1
-type(C_PTR), value :: farg2
 end subroutine
 
 end interface
@@ -12948,6 +12940,18 @@ fresult = swigc_MeasurementExt_mca(farg1)
 swig_result = fresult
 end function
 
+subroutine swigf_MeasurementExt_set_ecal(self, cal)
+use, intrinsic :: ISO_C_BINDING
+class(MeasurementExt), intent(in) :: self
+class(EnergyCalibration), intent(in) :: cal
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = cal%swigdata
+call swigc_MeasurementExt_set_ecal(farg1, farg2)
+end subroutine
+
 subroutine swigf_MeasurementExt_release(self)
 use, intrinsic :: ISO_C_BINDING
 class(MeasurementExt), intent(inout) :: self
@@ -12998,6 +13002,18 @@ fresult = swigc_EnergyCalibrationExt_get_dev_pairs(farg1)
 swig_result%swigdata = fresult
 end function
 
+subroutine swigf_EnergyCalibrationExt_set_dev_pairs(self, devpairs)
+use, intrinsic :: ISO_C_BINDING
+class(EnergyCalibrationExt), intent(in) :: self
+class(DeviationPairs), intent(in) :: devpairs
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = devpairs%swigdata
+call swigc_EnergyCalibrationExt_set_dev_pairs(farg1, farg2)
+end subroutine
+
 function swigf_EnergyCalibrationExt_get_coeffs(self) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -13010,18 +13026,6 @@ farg1 = self%swigdata
 fresult = swigc_EnergyCalibrationExt_get_coeffs(farg1)
 swig_result%swigdata = fresult
 end function
-
-subroutine swigf_EnergyCalibrationExt_set_channel_energies(self, e)
-use, intrinsic :: ISO_C_BINDING
-class(EnergyCalibrationExt), intent(in) :: self
-class(FloatVector), intent(in) :: e
-type(SwigClassWrapper) :: farg1 
-type(SwigClassWrapper) :: farg2 
-
-farg1 = self%swigdata
-farg2 = e%swigdata
-call swigc_EnergyCalibrationExt_set_channel_energies(farg1, farg2)
-end subroutine
 
 subroutine swigf_EnergyCalibrationExt_release(self)
 use, intrinsic :: ISO_C_BINDING
@@ -13139,30 +13143,6 @@ farg1 = self%swigdata
 farg2 = other%swigdata
 call swigc_PcfFile_op_assign__(farg1, farg2)
 self%swigdata = farg1
-end subroutine
-
-subroutine mapDevPairsToArray(specfile0, fortranarray)
-use, intrinsic :: ISO_C_BINDING
-class(PcfFile), intent(in) :: specfile0
-real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
-type(SwigClassWrapper) :: farg1 
-type(C_PTR) :: farg2 
-
-farg1 = specfile0%swigdata
-farg2 = c_loc(fortranarray)
-call swigc_mapDevPairsToArray(farg1, farg2)
-end subroutine
-
-subroutine mapCArrayToFortranArray(carray, fortranarray)
-use, intrinsic :: ISO_C_BINDING
-real(C_FLOAT), dimension(2,20,8,8,4), target :: carray
-real(C_FLOAT), dimension(4,8,8,20,2), target :: fortranarray
-type(C_PTR) :: farg1 
-type(C_PTR) :: farg2 
-
-farg1 = c_loc(carray)
-farg2 = c_loc(fortranarray)
-call swigc_mapCArrayToFortranArray(farg1, farg2)
 end subroutine
 
 

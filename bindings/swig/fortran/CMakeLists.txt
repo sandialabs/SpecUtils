@@ -12,4 +12,4 @@ target_link_libraries(specutils_fortran PRIVATE specutils_fortran_wrap)
 add_executable(test_specutils_fortran test_specutils_fortran.f90 )
 target_link_libraries(test_specutils_fortran test_drive specutils_fortran )
 
-add_test(NAME specutils_fortran_test COMMAND test_specutils_fortran)
+add_test(NAME test_specutils_fortran COMMAND test_specutils_fortran)

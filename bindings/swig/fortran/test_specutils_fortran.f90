@@ -12,6 +12,35 @@ program TestSpecUtils
     print *, "Success!"
     contains
 
+subroutine mapDevPairsToArray2(specFile, fortranArray)
+    implicit none
+    type(PcfFile), intent(in) :: specFile
+    real :: fortranArray(2, 20, 8, 8, 4)
+    integer :: numMeasurements, i, devPairIdx
+    type(MeasurementExt) :: m
+    integer :: column, panel, mca, numDevPairs
+    type(DevPair) :: pair
+    type(DeviationPairs) :: devPairs
+
+    numMeasurements = specFile%num_measurements()
+
+    do i = 1, numMeasurements
+        m = specFile%get_measurement_at(i-1)
+        column = m%column()
+        panel = m%panel()
+        mca = m%mca()
+        devPairs = m%deviation_pairs()
+        devPairIdx = 1
+
+        numDevPairs = devPairs%size()
+        do devPairIdx = 1, numDevPairs
+            pair = devPairs%get(devPairIdx)
+            fortranArray(1, devPairIdx, mca + 1, panel + 1, column + 1) = pair%get_first()
+            fortranArray(2, devPairIdx, mca + 1, panel + 1, column + 1) = pair%get_second()
+        end do
+    end do
+end subroutine 
+
 subroutine SpecUtilsRoundTrip()
 !    use, intrinsic :: ISO_C_BINDING
     type(error_type), allocatable :: error
@@ -27,6 +56,7 @@ subroutine SpecUtilsRoundTrip()
     type(DeviationPairs) :: devPairsIn
     type(DevPair) :: devPairVal
     type(EnergyCalibration) :: ecalIn
+    real :: devPairArray(2, maxDevPairs, maxMCA, maxPanel, maxCol)
 
     filePath = "spec-utils-round-trip.pcf"
     if ( is_file(filePath) ) then 
@@ -37,11 +67,10 @@ subroutine SpecUtilsRoundTrip()
     m = MeasurementExt()
 
     call m%set_start_time_from_string("14-Nov-1995 12:17:41.43")
-    call m%set_title("SpecUtilsRoundTrip")
+    call m%set_title("SpecUtilsRoundTrip Det=Ba2")
+    call m%set_detector_name("Ba2");
     call m%set_description("TestDescription")
     call m%set_source("TestSource")
-    ! call m%set_column(99)
-    ! call m%set_panel(55)
     call m%set_neutron_count(99.0)
 
     allocate( spectrum(128) )
@@ -76,6 +105,11 @@ subroutine SpecUtilsRoundTrip()
     call sf%write_to_file(filePath, SaveSpectrumAsType_Pcf) 
 
     call SpecUtilsRoundTrip_Read(sf, filePath)
+
+    call mapDevPairsToArray2(sf, devPairArray)
+
+    call check( error, devPairArray(1, 1, 2, 2, 1), 11.0 )
+    call check( error, devPairArray(2, 1, 2, 2, 1), -1.0 )
 
     call sf%release()
     call coeffsIn%release()
@@ -177,7 +211,7 @@ subroutine getExpectedDeviationPair(col, panel, mca, devPair, first, second)
     end if
 
     ! Calculate the total number of pairs before the given indices
-    totalPairs = devPair + mca * maxDevPairs + panel * maxDevPairs * maxMCA + col * maxDevPairs * maxMCA * maxPanel
+    totalPairs = devPair-1 + (mca-1) * maxDevPairs + (panel-1) * maxDevPairs * maxMCA + (col-1) * maxDevPairs * maxMCA * maxPanel
 
     ! Calculate the pairVal
     pairVal = 1 + 2 * totalPairs
@@ -185,31 +219,84 @@ subroutine getExpectedDeviationPair(col, panel, mca, devPair, first, second)
     ! Calculate the first and second pair values
     first = real(pairVal)
     second = real(pairVal + 1)
-end subroutine getExpectedDeviationPair
+end subroutine 
+
+subroutine getDetectorName(panel, column, mca, isNeutron, detectorName)
+    integer, intent(in) :: panel, column, mca
+    logical, intent(in), optional :: isNeutron
+    character(len=20), intent(out) :: detectorName
+    character(len=1) :: panelChar, columnChar, mcaChar
+
+    ! Validate input parameters
+    if (panel < 1 .or. column < 1 .or. mca < 1) then
+        print *, "Error: Panel, column, and MCA numbers must be greater than 0."
+        stop
+    end if
+
+    ! Convert panel, column, and MCA to the appropriate characters
+    panelChar = char(iachar('A') + (panel - 1))
+    columnChar = char(iachar('a') + (column - 1))
+    mcaChar = char(iachar('1') + (mca - 1))
+
+    ! Construct the detector name
+    detectorName = panelChar // columnChar // mcaChar
+
+    ! Append 'N' if it's a neutron detector
+    if (present(isNeutron) .and. isNeutron) then
+        detectorName = detectorName // 'N'
+    end if
+
+end subroutine
 
 subroutine DerivationPairMap()
     type(error_type), allocatable :: error
-    type(SpecFile) :: sf
-    type(Measurement) :: m
+    type(PcfFile) :: sf
+    type(EnergyCalibrationExt) :: ecal
+    type(MeasurementExt) :: m
     type(DeviationPairs) :: devPairs
-    type(DevPair) :: devPairAct, devPairExp
+    type(DevPair) :: devPairAct, devPairExp, dp
+    character(len=20) :: detectorName
     real :: devPairArray(2, maxDevPairs, maxMCA, maxPanel, maxCol)
     integer :: col_i, panel_j, mca_k, p
     real :: first, second
     integer :: pairVal
-    integer :: col, panel, mca, devPair
+    integer :: col, panel, mca, devPair_i
 
-    sf = SpecFile()
+    sf = PcfFile()
+    pairVal = 0
     do col = 1, maxCol
         do panel = 1, maxPanel
             do mca = 1, maxMCA
-                m = Measurement()
-                do devPair = 1, maxDevPairs
-                    
+                m = MeasurementExt()
+                devPairs = DeviationPairs()
+                call getDetectorName(panel,col,mca,.false.,detectorName)
+                call m%set_detector_name(detectorName)
+                do devPair_i = 1, maxDevPairs
+                    dp = DevPair()
+                    pairVal = pairVal + 1
+                    call dp%set_first(real(pairVal))
+                    pairVal = pairVal + 1
+                    call dp%set_second(real(pairVal))
+                    call devPairs%push_back(dp)                      
                 end do
+                ecal = EnergyCalibrationExt()
+                call ecal%set_dev_pairs(devPairs)
+                call m%set_ecal(ecal)
+                call sf%add_measurement(m)
             end do
         end do
     end do
+
+    call mapDevPairsToArray2(sf, devPairArray)
+
+    col =3
+    panel = 2
+    mca = 7
+    devPair_i = 19
+    call getExpectedDeviationPair(col, panel, mca, devPair_i, first, second)
+
+    call check( error, devPairArray(1,devPair_i,mca,panel,col), first)
+    call check( error, devPairArray(2,devPair_i,mca,panel,col), second)
     
 end subroutine
 

@@ -899,8 +899,8 @@ void Measurement::set_occupancy_status( const OccupancyStatus status )
 
 
 void Measurement::set_detector_name( const std::string &name )
-{
-  detector_name_ = name;
+{ 
+  detector_name_ = trim_copy(name);
 }
 
 

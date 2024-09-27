@@ -105,6 +105,12 @@ namespace SpecUtils
             return mca_;
         }
 
+        /// @brief Overload for testing
+        void set_ecal( const std::shared_ptr<const EnergyCalibration> &cal )
+        {
+            energy_calibration_ = cal;
+        }
+
         protected:
         int panel_ = -1;
         int column_ = -1;
@@ -123,31 +129,22 @@ namespace SpecUtils
         EnergyCalibrationExt() : SpecUtils::EnergyCalibration()
         {
             m_type = EnergyCalType::FullRangeFraction;
-            //*m_channel_energies({1,2,3,4,5});
-
-            //m_channel_energies = std::make_shared<const std::vector<float>>(std::vector<float>{1.0f, 2.0f, 3.0f});
-            m_channel_energies = std::make_shared<const std::vector<float>>(129, 1.0f);
         }
+
         SpecUtils::DeviationPairs &get_dev_pairs()
         {
             return m_deviation_pairs;
+        }
+
+        void set_dev_pairs(SpecUtils::DeviationPairs & devPairs)
+        {
+            m_deviation_pairs = devPairs;
         }
 
         FloatVec & get_coeffs()
         {
             return m_coefficients;
         }
-
-        void set_channel_energies( const FloatVec& e )
-        {
-            //m_channel_energies = std::make_shared<const FloatVec>({1,2,3,4,5});
-            //m_channel_energies->push_back(10);
-            // //for(auto c : e)
-            // {
-            //     *m_channel_energies = e;
-            // }
-        }
-
 
     };
 
@@ -230,48 +227,6 @@ namespace SpecUtils
             }
         }
         return std::stoi(retVal);
-    }
-
-    inline void mapDevPairsToArray(SpecUtils::PcfFile &specFile, float fortranArray[2][20][8][8][4])
-    {
-        auto numMeasurements = specFile.num_measurements();
-        for (size_t i = 0; i < numMeasurements; i++)
-        {
-            auto &m = *(specFile.get_measurement_at(i));
-            auto column = m.column();
-            auto panel = m.panel();
-            auto mca = m.mca();
-            auto &devPairs = m.deviation_pairs();
-            auto devPairIdx = 0;
-            for (auto &devPair : devPairs)
-            {
-                fortranArray[0][devPairIdx][mca][panel][column] = devPair.first;
-                fortranArray[1][devPairIdx][mca][panel][column] = devPair.second;
-                devPairIdx++;
-            }
-        }
-            
-    }
-
-    // Function to map C array to Fortran array
-    inline void mapCArrayToFortranArray(const float cArray[4][8][8][20][2], float fortranArray[2][20][8][8][4])
-    {
-        for (size_t i = 0; i < 4; ++i)
-        {
-            for (size_t j = 0; j < 8; ++j)
-            {
-                for (size_t k = 0; k < 8; ++k)
-                {
-                    for (size_t l = 0; l < 20; ++l)
-                    {
-                        for (size_t m = 0; m < 2; ++m)
-                        {
-                            fortranArray[m][l][k][j][i] = cArray[i][j][k][l][m];
-                        }
-                    }
-                }
-            }
-        }
     }
 
 } // namespace SpecUtils
