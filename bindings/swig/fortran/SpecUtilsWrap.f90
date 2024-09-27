@@ -306,6 +306,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: has_gps_info => swigf_Measurement_has_gps_info
   procedure :: dose_rate => swigf_Measurement_dose_rate
   procedure :: exposure_rate => swigf_Measurement_exposure_rate
+  procedure :: pcf_tag => swigf_Measurement_pcf_tag
   procedure :: position_time => swigf_Measurement_position_time
   procedure :: detector_name => swigf_Measurement_detector_name
   procedure :: detector_number => swigf_Measurement_detector_number
@@ -337,6 +338,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: set_detector_number => swigf_Measurement_set_detector_number
   procedure, private :: swigf_Measurement_set_neutron_counts__SWIG_0
   procedure, private :: swigf_Measurement_set_neutron_counts__SWIG_1
+  procedure :: set_pcf_tag => swigf_Measurement_set_pcf_tag
   procedure :: num_gamma_channels => swigf_Measurement_num_gamma_channels
   procedure :: find_gamma_channel => swigf_Measurement_find_gamma_channel
   procedure :: gamma_channel_content => swigf_Measurement_gamma_channel_content
@@ -1674,6 +1676,15 @@ type(SwigClassWrapper), intent(in) :: farg1
 real(C_FLOAT) :: fresult
 end function
 
+function swigc_Measurement_pcf_tag(farg1) &
+bind(C, name="_wrap_Measurement_pcf_tag") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+character(C_CHAR) :: fresult
+end function
+
 function swigc_Measurement_position_time(farg1) &
 bind(C, name="_wrap_Measurement_position_time") &
 result(fresult)
@@ -1946,6 +1957,14 @@ use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
+end subroutine
+
+subroutine swigc_Measurement_set_pcf_tag(farg1, farg2) &
+bind(C, name="_wrap_Measurement_set_pcf_tag")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+character(C_CHAR), intent(in) :: farg2
 end subroutine
 
 function swigc_Measurement_num_gamma_channels(farg1) &
@@ -6850,6 +6869,19 @@ fresult = swigc_Measurement_exposure_rate(farg1)
 swig_result = fresult
 end function
 
+function swigf_Measurement_pcf_tag(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+character(C_CHAR) :: swig_result
+class(Measurement), intent(in) :: self
+character(C_CHAR) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_pcf_tag(farg1)
+swig_result = fresult
+end function
+
 function swigf_Measurement_position_time(self) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -7252,6 +7284,18 @@ type(SwigClassWrapper) :: farg2
 farg1 = self%swigdata
 farg2 = counts%swigdata
 call swigc_Measurement_set_neutron_counts__SWIG_1(farg1, farg2)
+end subroutine
+
+subroutine swigf_Measurement_set_pcf_tag(self, tag_char)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+character(C_CHAR), intent(in) :: tag_char
+type(SwigClassWrapper) :: farg1 
+character(C_CHAR) :: farg2 
+
+farg1 = self%swigdata
+farg2 = tag_char
+call swigc_Measurement_set_pcf_tag(farg1, farg2)
 end subroutine
 
 function swigf_Measurement_num_gamma_channels(self) &

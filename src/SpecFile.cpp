@@ -1601,6 +1601,8 @@ void Measurement::reset()
   
   dose_rate_ = exposure_rate_ = -1.0f;
   
+  pcf_tag_ = '\0';
+  
   location_.reset();
 }//void reset()
 
@@ -1630,6 +1632,18 @@ float Measurement::dose_rate() const
 float Measurement::exposure_rate() const
 {
   return exposure_rate_;
+}
+  
+  
+char Measurement::pcf_tag() const
+{
+  return pcf_tag_;
+}
+  
+  
+void Measurement::set_pcf_tag( const char tag_char )
+{
+  pcf_tag_ = tag_char;
 }
 
   
@@ -3558,6 +3572,12 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
                      + " while RHS is " + std::to_string(rhs.exposure_rate_) );
   }
   
+  if( lhs.pcf_tag_ != rhs.pcf_tag_ )
+  {
+    issues.push_back( string("Measurement: The PCF tag of LHS is ") + lhs.pcf_tag_
+                     + " while RHS is " + std::to_string(rhs.pcf_tag_) );
+  }
+  
   if( (!lhs.location_) != (!rhs.location_) )
   {
     issues.push_back( "Measurement: The "
@@ -4411,6 +4431,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   
   dose_rate_ = rhs.dose_rate_;
   exposure_rate_ = rhs.exposure_rate_;
+  
+  pcf_tag_ = rhs.pcf_tag_;
   
   location_ = rhs.location_;
   
@@ -7853,6 +7875,9 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         else
           dataH->exposure_rate_ += meas->exposure_rate_;
       }//if( meas->dose_rate_ >= 0.0f )
+      
+      if( meas->pcf_tag_ != '\0' )
+        dataH->pcf_tag_ = meas->pcf_tag_;
       
       if( meas->has_gps_info() )
       {

@@ -97,12 +97,14 @@ std::array<std::string, 10> generateDetectorNames() {
 }
 
 
-std::shared_ptr<SpecUtils::MeasurementExt> makeMeasurement(int id, std::string detName)
+std::shared_ptr<SpecUtils::MeasurementExt> makeMeasurement(int id, std::string detName, char tag)
 {
     auto m = std::make_shared<SpecUtils::MeasurementExt>();
 
     //auto detName = "Aa" + std::to_string(id);
     m->set_detector_name(detName); 
+
+    m->set_pcf_tag(tag);
 
     m->set_start_time(getStartTime());
 
@@ -156,12 +158,15 @@ TEST_CASE("Round Trip")
         //auto detNames = generateDetectorNames();
         //std::vector<std::string> detNames = { "Ba1", "Aa2", "Bc3", "Cb4" }; // Bc3 computes an out of range index
         std::vector<std::string> detNames = { "Ba1", "Aa2", "Bb3", "Cb4" };
+
+        auto tags = std::vector<char>{'T', 'K', '-', '<'};
         auto numMeasurements = detNames.size();
 
         for (size_t i = 0; i < numMeasurements; i++)
         {
             auto detName = detNames[i];
-            auto m = makeMeasurement(i + 1, detName);
+            auto tag = tags[i];
+            auto m = makeMeasurement(i + 1, detName, tag);
             specfile.add_measurement(m);
         }
 
@@ -195,6 +200,8 @@ TEST_CASE("Round Trip")
                 auto &expectedM = *(specfile.get_measurement_at(i));
                 auto &actualM = *(specfileToRead.get_measurement_at(i));
                 CHECK(expectedM.title() == actualM.title());
+                CHECK(actualM.pcf_tag() != '\0');
+                CHECK(expectedM.pcf_tag() == actualM.pcf_tag());
 
                 CHECK_FALSE(actualM.detector_name().empty());
                 CHECK(actualM.detector_name() == expectedM.detector_name() );

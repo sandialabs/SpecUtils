@@ -751,7 +751,6 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
       string spectrum_title;  //ex: 'Survey 1 Det=Aa1 Background @250cm'
       string collection_time;  //Formatted like: '2010-02-24T00:08:24.82Z'
       
-      char character_tag;
       float live_time, true_time, halflife = 0.0, molecular_weight = 0.0,
       spectrum_multiplier = 0.0, offset, gain, quadratic, cubic, low_energy,
       neutron_counts;
@@ -959,18 +958,18 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
       else
         collection_time = "                       "; //"01-Jan-1900 00:00:00.00";  //23 characters
       
-      character_tag = ' ';
+      char character_tag = meas->pcf_tag();
       
       //From phone conversation with Dean 20170816:
       //  The meaning of the 'tag' character is highly overloaded, and can mean,
-      //  among other usses:
+      //  among other uses:
       //    '-' not occupied, and anything else occupied - for RPM data
       //    '-' use a dashed line when plotting
       //    '<' Use filled region style when plotting
       //    'T' Calibration from thorium
-      //    'K' Calibration from potasium
+      //    'K' Calibration from potassium
       
-      if( passthrough() )
+      if( ((character_tag == '\0') || (character_tag == ' ')) && passthrough() )
       {
         if( (meas->occupied() ==  OccupancyStatus::NotOccupied)
            && (meas->source_type() != SourceType::Background) )
@@ -1696,6 +1695,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
       if( !source_list.empty() )
         meas->remarks_.push_back( "Source: " + source_list );
       
+      meas->pcf_tag_ = character_tag;
       if( character_tag == '-' )
       {
         meas->occupied_ =  OccupancyStatus::NotOccupied;
@@ -1705,7 +1705,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         meas->occupied_ = OccupancyStatus::Occupied;
         
         //Background spectra should not have the tag character be a dash, as the
-        //  tag chacter could indicate calibration isotope.
+        //  tag character could indicate calibration isotope.
         if( meas->source_type_ == SourceType::Background )
           meas->occupied_ =  OccupancyStatus::NotOccupied;
       }else

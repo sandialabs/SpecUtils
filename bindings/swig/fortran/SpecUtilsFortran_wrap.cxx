@@ -1749,6 +1749,20 @@ SWIGEXPORT float _wrap_Measurement_exposure_rate(SwigClassWrapper *farg1) {
 }
 
 
+SWIGEXPORT char _wrap_Measurement_pcf_tag(SwigClassWrapper *farg1) {
+  char fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement const > *smartarg1 ;
+  char result;
+  
+  smartarg1 = (std::shared_ptr<const SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = (char)((SpecUtils::Measurement const *)arg1)->pcf_tag();
+  fresult = (char)(result);
+  return fresult;
+}
+
+
 SWIGEXPORT SwigClassWrapper _wrap_Measurement_position_time(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
   SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
@@ -2197,6 +2211,18 @@ SWIGEXPORT void _wrap_Measurement_set_neutron_counts__SWIG_1(SwigClassWrapper *f
   SWIG_check_nonnull(farg2->cptr, "std::vector< float > const &", "FloatVector", "SpecUtils::Measurement::set_neutron_counts(std::vector< float > const &)", return );
   arg2 = (std::vector< float > *)farg2->cptr;
   (arg1)->set_neutron_counts((std::vector< float > const &)*arg2);
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_pcf_tag(SwigClassWrapper *farg1, char const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  char arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (char)(*farg2);
+  (arg1)->set_pcf_tag(arg2);
 }
 
 
