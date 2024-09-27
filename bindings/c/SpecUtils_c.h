@@ -768,6 +768,14 @@ DLLEXPORT bool CALLINGCONVENTION
 SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
                                             const char * const start_time_str );
   
+/** Returns the application-specific "tag" characters used by the PCF file format. */
+DLLEXPORT char CALLINGCONVENTION
+SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance );
+
+/** Sets the application-specific "tag" characters used by the PCF file format. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
+                                  const char tag_char );
   
 DLLEXPORT uint32_t CALLINGCONVENTION 
 SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance );

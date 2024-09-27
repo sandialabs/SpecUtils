@@ -1669,6 +1669,22 @@ bool SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
     m->set_start_time( tp );
 }
   
+char SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  return m ? m->pcf_tag() : '\0';
+}
+
+
+void SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
+                                  const char tag_char )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( m )
+    m->set_pcf_tag( tag_char );
+}
   
 uint32_t SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance )
 {

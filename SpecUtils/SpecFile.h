@@ -614,6 +614,11 @@ public:
    */
   float exposure_rate() const;
   
+  /** Returns the application specific "tag" character, used by the PCF file format. 
+   Values of '\0' or ' ' generally indicate it is not set.
+   */
+  char pcf_tag() const;
+  
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns time_point_t{} otherwise.
   const time_point_t position_time() const;
@@ -811,6 +816,9 @@ public:
   void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time );
   
   //To set real and live times, see SpecFile::set_live_time(...)
+  
+  /** Sets the application specific "tag" character, used by the PCF file format. */
+  void set_pcf_tag( const char tag_char );
   
   /** returns the number of channels in #gamma_counts_.
    Note: energy calibration could still be invalid and not have channel energies defined, even
@@ -1133,6 +1141,18 @@ protected:
    */
   float exposure_rate_;
 
+  /** A application-specific data element used by the PCF format. 
+   
+   For the PCF format, the meaning of the 'tag' character is highly overloaded, and can mean, 
+   among other uses:
+       '-' not occupied, and anything else occupied - for RPM data
+       '-' use a dashed line when plotting
+       '<' Use filled region style when plotting
+       'T' Calibration from thorium
+       'K' Calibration from potassium
+   */
+  char pcf_tag_;
+  
   /** The #LocationState indicates the position, speed, and/or orientation of the instrument,
    detector, or item being measured.  At the moment, only one of these quantities are recorded,
    primarily to reduce complexity since the author hasnt encountered any files that actually
