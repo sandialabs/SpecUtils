@@ -6639,8 +6639,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     let roiLB = Math.max(roi.lowerEnergy,minx);
     let roiUB = Math.min(roi.upperEnergy,maxx);
     
-    var xstartind = bisector.left( points, roiLB );
-    var xendind = bisector.right( points, roiUB );
+    let xstartind = bisector.left( points, roiLB );
+    let xendind = bisector.right( points, roiUB );
 
     // Boolean to signify whether to subtract points from background
     const useBackgroundSubtract = self.options.backgroundSubtract && background;
@@ -6651,26 +6651,25 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( xendind >= (points.length-2) )
       xendind = points.length - 2;
    
+    if( xstartind >= xendind )
+      return { paths: paths };
+   
     /*The continuum values used for the first and last bin of the ROI are fudged */
     /*  for now...  To be fixed */
-    var thisy = null, thisx = null, m, s, peak_area, cont_area;
+    let thisy = null, thisx = null, m, s, peak_area, cont_area;
     
-    //Need to go thorugh and get min/max, in px of each ROI, and save it somehome
-    //  so we can draw the line in only the ROI's y-domain
-    //var minyval_px = self.size.height
-    //    , maxyval_py = 0;
-    var firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
+    let firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
     
     // Background Subtract - Subtract the initial y-value with the corresponding background point
     if (useBackgroundSubtract) {
-      var bi = bisector.left(background.points, points[xstartind-(xstartind?1:0)].x);
+      const bi = bisector.left(background.points, points[xstartind-(xstartind?1:0)].x);
       firsty -= background.points[bi] ? background.points[bi].y : 0;
     }
     
     //paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
     paths[0] = "M" + self.xScale(roiLB) + "," + self.yScale(firsty) + " L";
     
-    for( var j = 0; j < 2*roi.peaks.length; ++j )
+    for( let j = 0; j < 2*roi.peaks.length; ++j )
       paths[j+1] = "";
       
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
@@ -6710,6 +6709,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         }//if( the centroid of this peak is in this bin )
         
         if( roi.peaks.length===1 || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1])) ){
+          // This next index looks suspect, should it be `j+1+roi.peaks.length`
           if( !paths[j+1].length ){
             paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
           }else{
@@ -7001,7 +7001,33 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     //console.log( 'minypx=' + minypx + ', maxypx=' + maxypx + ' height=' + self.size.height );
     
     //go right to left and draw the fill areas top
-    peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
+    // TODO: We should be able to use this next line to make the paths for peaks, but it ends up being a bit wonky
+    //peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
+    // But if we use this next loop instead, things are fine:
+    peakamplitudes.reverse().forEach( function(peakamps,xindex){
+      var cont = peakamps[0];
+      var thisx = peakamps[1];
+          
+      peakamps.forEach( function( peakamp, peakindex ){
+        if( peakindex < 2 )
+          return;
+
+        const peaknum = (peakindex - 2);
+        const peak = roi.peaks[peaknum];
+        const m = peak.Centroid[0];
+        const s = peak.Width[0];
+        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
+          
+        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
+          return;
+          
+        var thisy = cont;
+        for( var j = 2; j <= peakindex; ++j )
+          thisy += peakamps[j];
+
+        paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+      } );
+    });
 
     for( var peaknum = 0; peaknum < roi.peaks.length; ++peaknum ){
       if( leftMostFillValue[peaknum] && paths[peaknum+1].length )
@@ -7049,8 +7075,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       /* - The first path will be an underline of entire ROI
          - The next roi.peaks.length entries are the fills for each of the peaks
          - The next roi.peaks.length entries are the path of the peak, that sits on the ROI
+       
+       If a peak in the ROI is not visible (ROI partially off screen), then path will be empty.
       */
-      if( num === 0 )
+      if( (num === 0) || !p.length )
         return;
         
       console.assert( p.startsWith("M"), "Got path not starting with 'M': " + p );
