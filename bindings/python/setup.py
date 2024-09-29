@@ -13,7 +13,7 @@ class BinaryDistribution(dist.Distribution):
         return True
 
 # optional, use README.md as long_description
-this_directory = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+this_directory = os.path.dirname(__file__)
 with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 

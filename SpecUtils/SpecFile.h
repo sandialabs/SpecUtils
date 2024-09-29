@@ -38,7 +38,6 @@
 Shortcommings that wcjohns should address:
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
- - Neutron measurements should have their own live and real time
  - Neutron counts are typically merged into a gamma detectors Measurement if a
    reasonable pairing can be made. When and if this is done needs to be clearly
    specified, and either stopped of facilities added to keep neutron det. info.
@@ -615,6 +614,11 @@ public:
    */
   float exposure_rate() const;
   
+  /** Returns the application specific "tag" character, used by the PCF file format. 
+   Values of '\0' or ' ' generally indicate it is not set.
+   */
+  char pcf_tag() const;
+  
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns time_point_t{} otherwise.
   const time_point_t position_time() const;
@@ -813,6 +817,9 @@ public:
   
   //To set real and live times, see SpecFile::set_live_time(...)
   
+  /** Sets the application specific "tag" character, used by the PCF file format. */
+  void set_pcf_tag( const char tag_char );
+  
   /** returns the number of channels in #gamma_counts_.
    Note: energy calibration could still be invalid and not have channel energies defined, even
    when this returns a non-zero value.
@@ -987,7 +994,7 @@ public:
    satisfy these requirements if it was parsed from a file by this library, and this #Measurement
    has gamma counts.
    
-   After a succesful call to this function, #calibration will return the same value as passed into
+   After a successful call to this function, #calibration will return the same value as passed into
    this function.
    */
   void rebin( const std::shared_ptr<const EnergyCalibration> &cal );
@@ -1134,6 +1141,18 @@ protected:
    */
   float exposure_rate_;
 
+  /** A application-specific data element used by the PCF format. 
+   
+   For the PCF format, the meaning of the 'tag' character is highly overloaded, and can mean, 
+   among other uses:
+       '-' not occupied, and anything else occupied - for RPM data
+       '-' use a dashed line when plotting
+       '<' Use filled region style when plotting
+       'T' Calibration from thorium
+       'K' Calibration from potassium
+   */
+  char pcf_tag_;
+  
   /** The #LocationState indicates the position, speed, and/or orientation of the instrument,
    detector, or item being measured.  At the moment, only one of these quantities are recorded,
    primarily to reduce complexity since the author hasnt encountered any files that actually
@@ -1283,14 +1302,14 @@ public:
   const SpecFile &operator=( const SpecFile &rhs );
 
   //load_file(...): returns true when file is successfully loaded, false
-  //  otherwise. Callling this function with parser_type==Auto is
+  //  otherwise. Calling this function with parser_type==Auto is
   //  the easiest way to load a spectrum file when you dont know the type of
   //  file.  The file_ending_hint is only used in the case of Auto
   //  and uses the file ending to effect the order of parsers tried, example
   //  values for this mught be: "n24", "pcf", "chn", etc. The entire filename
   //  can be passed in since only the letters after the last period are used
   //  Note: on Windows the filename must be UTF-8, and not whatever the current
-  //        codepoint is.
+  //        code-point is.
   bool load_file( const std::string &filename,
                   ParserType parser_type,
                   std::string file_ending_hint
@@ -1305,7 +1324,7 @@ public:
    #Measurement::parse_warnings.
    
    An example condition when a message might be made is if it is know the
-   neutron real time can sometimes not coorespond to the gamma real time.
+   neutron real time can sometimes not correspond to the gamma real time.
    */
   const std::vector<std::string> &parse_warnings() const;
   
@@ -1778,7 +1797,7 @@ public:
   bool load_from_micro_raider_from_data( const char *data );
   
   //load_from_binary_exploranium(...): returns success status; calls reset()
-  //  upon falure, and puts istr to original location
+  //  upon failure, and puts istr to original location
   bool load_from_binary_exploranium( std::istream &istr );
   
   //load_from_pcf(...): Set info from GADRAS PCF files.  Returns success
@@ -2012,7 +2031,7 @@ public:
   //  the same file while this function is being called.
   //  If no exception is thrown the specified file will exist and contain the
   //  relevant information/format.
-  //  If an exception is thrown, there are no garuntees as to if the file will
+  //  If an exception is thrown, there are no guarantees as to if the file will
   //  exist, or what its contents will be.
   void write_to_file( const std::string filename,
                       const SaveSpectrumAsType format ) const;

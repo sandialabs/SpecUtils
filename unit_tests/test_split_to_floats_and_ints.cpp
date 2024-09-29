@@ -29,30 +29,19 @@
 #include <cmath>
 #include <climits>
 #include <float.h>
-#include <boost/algorithm/string.hpp>
 
-#define BOOST_TEST_MODULE split_to_floats_and_ints_suite
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest.h"
 
 
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 
 using namespace std;
-using namespace boost::unit_test;
 
-
-BOOST_AUTO_TEST_SUITE( split_to_floats_and_ints_suite )
-
-
-// TODO: add test case for parse_float, parse_int, parse_double, functions
 
 /*
-BOOST_AUTO_TEST_CASE( time_float_parse  )
+TEST_CASE( "Time float parse"  )
 {
   ifstream file( "float_benchmark.csv" );
 	
@@ -86,34 +75,38 @@ BOOST_AUTO_TEST_CASE( time_float_parse  )
   }//for( const string &val : lines )
   
   cout << "Took: " << std::chrono::duration_cast<std::chrono::milliseconds>(total_dur).count() << " ms to parse all the input." << endl;
-}//BOOST_AUTO_TEST_CASE( time_float_parse  )
+}//TEST_CASE( time_float_parse  )
 */
 
+#define CHECK_FRACTIONALLY_NEAR(a,b,c) do{ CHECK( fabs(a-b) <= c*std::max(fabs(a),fabs(b)) ); }while(0);
+#define CHECK_NEAR(a,b,c) do{ CHECK( fabs(a-b) <= fabs(c) ); }while(0);
 
-BOOST_AUTO_TEST_CASE( split_to_floats  )
+TEST_CASE( "split_to_floats"  )
 {
 	string input_string1= "5.5 4.5 3.5,34000000,1.23456,1.234567,1.2345678,1.23456789,.1,.01,.001,.0001,.00001,.000001,.0000001,.00000001";
 	const vector<float> comparison_vector1{5.5f, 4.5f, 3.5f,34000000.0f,1.23456f,1.234567f,1.2345678f,1.23456789f,0.1f,0.01f,0.001f,0.0001f,0.00001f,0.000001f,0.0000001f,0.00000001f};
 	vector<float> output_vector1, alt_output_vector1;
 	SpecUtils::split_to_floats( input_string1, output_vector1 );
-	SpecUtils::split_to_floats( &(input_string1[0]), alt_output_vector1," ,\r\n\t", false );
+  cout << "STarting" << endl;
+	SpecUtils::split_to_floats( &(input_string1[0]), alt_output_vector1, " ,\r\n\t", false );
+  cout << "Ending" << endl;
   
-  BOOST_REQUIRE_EQUAL( output_vector1.size(), comparison_vector1.size() );
-  BOOST_REQUIRE_EQUAL( alt_output_vector1.size(), comparison_vector1.size() );
+  REQUIRE_EQ( output_vector1.size(), comparison_vector1.size() );
+  REQUIRE_EQ( alt_output_vector1.size(), comparison_vector1.size() );
   
 	for( int i = 0; i < output_vector1.size(); ++i )
 	{
-    BOOST_CHECK_CLOSE( comparison_vector1[i], output_vector1[i], 0.000001);
+    CHECK_FRACTIONALLY_NEAR( comparison_vector1[i], output_vector1[i], 0.000001 );
 	}
 
 	for( int i = 0; i < alt_output_vector1.size(); ++i )
 	{
-		BOOST_CHECK_CLOSE( comparison_vector1[i], alt_output_vector1[i], 0.000001 );
+    CHECK_FRACTIONALLY_NEAR( comparison_vector1[i], alt_output_vector1[i], 0.000001 );
   }
 }
 
 
-BOOST_AUTO_TEST_CASE( parse_float )
+TEST_CASE( "parse_float" )
 {
 	const string good_input_strs[] = {
     "3.2", "-3.2", "+3.2", " 3.2 ", "\t\t\t\t3.2",
@@ -140,7 +133,7 @@ BOOST_AUTO_TEST_CASE( parse_float )
 	const size_t num_good_inputs_vals = sizeof(good_input_vals) / sizeof(good_input_vals[0]);
 	const size_t num_bad_inputs_strs = sizeof(bad_input_strs) / sizeof(bad_input_strs[0]);
 	
-  BOOST_REQUIRE_EQUAL( num_good_input_strs, num_good_inputs_vals );
+  REQUIRE_EQ( num_good_input_strs, num_good_inputs_vals );
 	
 	
 	for( size_t i = 0; i < num_good_input_strs; ++i )
@@ -148,9 +141,9 @@ BOOST_AUTO_TEST_CASE( parse_float )
 		float result;
 		const string &s = good_input_strs[i];
 		const bool ok = SpecUtils::parse_float( s.c_str(), s.size(), result );
-		BOOST_CHECK_MESSAGE( ok, "Failed to parse '" << s << " to a float'" );
-		//BOOST_CHECK_SMALL( result - good_input_vals[i], 0.00001*good_input_vals[i] )
-		BOOST_CHECK_CLOSE( result, good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+		CHECK_MESSAGE( ok, "Failed to parse '" << s << " to a float'" );
+		//CHECK_SMALL( result - good_input_vals[i], 0.00001*good_input_vals[i] )
+    CHECK_FRACTIONALLY_NEAR( result, good_input_vals[i], 0.0001 );
 	}
 
   for( size_t i = 0; i < num_bad_inputs_strs; ++i )
@@ -158,8 +151,8 @@ BOOST_AUTO_TEST_CASE( parse_float )
 		float result;
 		const string &s = bad_input_strs[i];
 		const bool ok = SpecUtils::parse_float( s.c_str(), s.size(), result );
-		BOOST_CHECK_MESSAGE( !ok, "Parsed '" << s << "' and got " << result << " when shouldnt have" );
-		BOOST_CHECK_EQUAL(result,0.0f);
+		CHECK_MESSAGE( !ok, "Parsed '" << s << "' and got " << result << " when shouldnt have" );
+		CHECK_EQ(result,0.0f);
 	}
 	
 	
@@ -167,30 +160,33 @@ BOOST_AUTO_TEST_CASE( parse_float )
 		float result;
 		const char *txt = "3.2";
 	  bool ok = SpecUtils::parse_float( txt, strlen(txt)-1, result );
-	  BOOST_CHECK( ok && result == 3.0f );
+    CHECK( ok );
+	  CHECK_EQ( result, 3.0f );
 		
 		ok = SpecUtils::parse_float( txt, strlen(txt)-2, result );
-	  BOOST_CHECK( ok && result == 3.0f );
+	  CHECK( (ok && result == 3.0f) );
 		
 		txt = "  +3.256 ";
 	  ok = SpecUtils::parse_float( txt, strlen(txt)-3, result );
-	  BOOST_CHECK( ok && result == 3.2f );
+    CHECK( ok );
+	  CHECK_EQ( result, 3.2f );
 		
 		txt = "\t0.2";
 	  ok = SpecUtils::parse_float( txt, strlen(txt)-1, result );
-	  BOOST_CHECK( ok && result == 0.0f );
+    CHECK( ok );
+    CHECK_EQ( result, 0.0f );
 	}
 	
 	{
 		float result;
 	  bool ok = SpecUtils::parse_float( NULL, 0, result );
-	  BOOST_CHECK( !ok );
+	  CHECK( !ok );
 	}
 	
 }
 
 /*
-BOOST_AUTO_TEST_CASE( check_multi_dots  )
+TEST_CASE( "check_multi_dots"  )
 {
   // As of 20240307, these checks wont pass.
   bool ok;
@@ -201,17 +197,17 @@ BOOST_AUTO_TEST_CASE( check_multi_dots  )
   input = "661.7,-0.1.7,9.3";
   inputlen = strlen( input );
   ok = SpecUtils::split_to_floats( input, inputlen, results );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), 2 );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), 2 );
 
   ok = SpecUtils::split_to_floats( input, results, ", ", false );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), 2 );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), 2 );
 }
 */
 
 
-BOOST_AUTO_TEST_CASE( check_trailing_characters  )
+TEST_CASE( "check_trailing_characters"  )
 {
   bool ok;
   vector<float> results;
@@ -223,76 +219,103 @@ BOOST_AUTO_TEST_CASE( check_trailing_characters  )
   
   vector<float> good_input_vals{ 9.9, 88.3, 0, 10, 0.0, 9, -1, 0, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
-  BOOST_CHECK( ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
   
 
   ok = SpecUtils::split_to_floats( input, results, " ,\t\n", false );
-  BOOST_CHECK( ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
 
   input = "9.9 0.0 0 1 abs";
   inputlen = strlen( input );
   good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   ok = SpecUtils::split_to_floats( input, results, " ", false );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
   
   
   input = "9.9 0.0 0 1 -";
   inputlen = strlen( input );
   good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   ok = SpecUtils::split_to_floats( input, results, " ", false );
-  BOOST_CHECK( !ok );
+  CHECK( !ok );
 
   input = "9.9 0.0 0 1 +";
   inputlen = strlen( input );
   good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   ok = SpecUtils::split_to_floats( input, results, " ", false );
-  BOOST_CHECK( !ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( !ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 
   input = "9.9 0.0 0 1 ";
   inputlen = strlen( input );
   good_input_vals = vector<float>{ 9.9, 0.0, 0, 1 };
   ok = SpecUtils::split_to_floats( input, inputlen, results );
 
-  BOOST_CHECK( ok );
-  BOOST_CHECK_EQUAL( results.size(), good_input_vals.size() );
+  CHECK( ok );
+  CHECK_EQ( results.size(), good_input_vals.size() );
   for( size_t i = 0; i < good_input_vals.size(); ++i )
-    BOOST_CHECK_CLOSE( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
 }
 
+TEST_CASE( "check non-null termination"  )
+{
+  //Make sure `split_to_floats` that takes in string length actually obeys length, and not
+  //  null-termination.
+  
+  bool ok;
+  vector<float> results;
+  const char *input;
+  size_t inputlen;
+  
+  input = "1 +2 3 4 5 6 7 8 9 10";
+  vector<float> good_input_vals{ 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f };
+  
+  inputlen = 8;
+  ok = SpecUtils::split_to_floats( input, inputlen, results );
+  CHECK( ok );
+  CHECK_EQ( results.size(), 4 );
+  for( size_t i = 0; i < results.size(); ++i )
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+  
+  inputlen = 9;
+  ok = SpecUtils::split_to_floats( input, inputlen, results );
+  CHECK( ok );
+  CHECK_EQ( results.size(), 4 );
+  for( size_t i = 0; i < results.size(); ++i )
+    CHECK_NEAR( results[i], good_input_vals[i], fabs(good_input_vals[i])*0.000001 );
+}//TEST_CASE( "check non-null termination"  )
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats_cambio_fix  )
+TEST_CASE( "split_to_floats_cambio_fix"  )
 {
   const char *input = "9.9, 88.3, 0, 10, 0.0, 9, -1 0 0.0 0,0,  1";
 
@@ -303,45 +326,45 @@ BOOST_AUTO_TEST_CASE( split_to_floats_cambio_fix  )
   const bool without_fix_ok
   = SpecUtils::split_to_floats( input, without_fix, " ,\r\n\t", false );
 
-  BOOST_CHECK( with_fix_ok );
-  BOOST_CHECK( without_fix_ok );
+  CHECK( with_fix_ok );
+  CHECK( without_fix_ok );
 
-  BOOST_CHECK_EQUAL( with_fix.size(), 12 );
-  BOOST_CHECK_EQUAL( without_fix.size(), 12 );
+  CHECK_EQ( with_fix.size(), 12 );
+  CHECK_EQ( without_fix.size(), 12 );
 
-  BOOST_CHECK_EQUAL( with_fix[2], 0.0f );
-  BOOST_CHECK_EQUAL( without_fix[2], 0.0f );
+  CHECK_EQ( with_fix[2], 0.0f );
+  CHECK_EQ( without_fix[2], 0.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[3], 10.0f );
-  BOOST_CHECK_EQUAL( without_fix[3], 10.0f );
+  CHECK_EQ( with_fix[3], 10.0f );
+  CHECK_EQ( without_fix[3], 10.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[4], FLT_MIN );
-  BOOST_CHECK_EQUAL( without_fix[4], 0.0f );
+  CHECK_EQ( with_fix[4], FLT_MIN );
+  CHECK_EQ( without_fix[4], 0.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[5], 9.0f );
-  BOOST_CHECK_EQUAL( without_fix[5], 9.0f );
+  CHECK_EQ( with_fix[5], 9.0f );
+  CHECK_EQ( without_fix[5], 9.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[6], -1.0f );
-  BOOST_CHECK_EQUAL( without_fix[6], -1.0f );
+  CHECK_EQ( with_fix[6], -1.0f );
+  CHECK_EQ( without_fix[6], -1.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[7], 0.0f );
-  BOOST_CHECK_EQUAL( without_fix[7], 0.0f );
+  CHECK_EQ( with_fix[7], 0.0f );
+  CHECK_EQ( without_fix[7], 0.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[8], FLT_MIN );
-  BOOST_CHECK_EQUAL( without_fix[8], 0.0f );
+  CHECK_EQ( with_fix[8], FLT_MIN );
+  CHECK_EQ( without_fix[8], 0.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[9], 0.0f );
-  BOOST_CHECK_EQUAL( without_fix[9], 0.0f );
+  CHECK_EQ( with_fix[9], 0.0f );
+  CHECK_EQ( without_fix[9], 0.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[10], 0.0f );
-  BOOST_CHECK_EQUAL( without_fix[10], 0.0f );
+  CHECK_EQ( with_fix[10], 0.0f );
+  CHECK_EQ( without_fix[10], 0.0f );
 
-  BOOST_CHECK_EQUAL( with_fix[11], 1.0f );
-  BOOST_CHECK_EQUAL( without_fix[11], 1.0f );
+  CHECK_EQ( with_fix[11], 1.0f );
+  CHECK_EQ( without_fix[11], 1.0f );
 }
 
 
-BOOST_AUTO_TEST_CASE( shouldnt_parse_any_floats  )
+TEST_CASE( "shouldnt_parse_any_floats"  )
 {
   const char *input_strings[]
    = {
@@ -356,17 +379,17 @@ BOOST_AUTO_TEST_CASE( shouldnt_parse_any_floats  )
     string input_string = input_strings[i];
 
     bool success = SpecUtils::split_to_floats( input_string, results );
-//    BOOST_CHECK_EQUAL( success, false );
-    BOOST_CHECK_EQUAL( results.size(), 0 );
+//    CHECK_EQ( success, false );
+    CHECK_EQ( results.size(), 0 );
 
     success = SpecUtils::split_to_floats( &(input_string[0]), alt_results, " ,\r\n\t",false);
-//    BOOST_CHECK_EQUAL( success, false );
-    BOOST_CHECK_EQUAL( alt_results.size(), 0 );
+//    CHECK_EQ( success, false );
+    CHECK_EQ( alt_results.size(), 0 );
   }
 }
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats2  )
+TEST_CASE( "split_to_floats2"  )
 {
 	string input_string2= "5.5, 4.5, 3.5";
 	float temp2[] = {5.5, 4.5, 3.5};
@@ -377,17 +400,17 @@ BOOST_AUTO_TEST_CASE( split_to_floats2  )
 
   for(int i = 0; i < output_vector2.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector2[i],output_vector2[i]);
+		CHECK_EQ(comparison_vector2[i],output_vector2[i]);
 	}
 
   for( int i = 0; i < alt_output_vector2.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector2[i],alt_output_vector2[i]);
+		CHECK_EQ(comparison_vector2[i],alt_output_vector2[i]);
 	}
 }
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats3  )
+TEST_CASE( "split_to_floats3"  )
 {
   bool success;
   string input_string3= "0 1 2 3 0 1 2 3 0.0 1.0 2.0 3.0 0.0 1.0 2.0 3.0";
@@ -397,22 +420,22 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector3,alt_output_vector3;
 	vector<float> comparison_vector3(temp3,temp3+16);
 	success = SpecUtils::split_to_floats(input_string3,output_vector3);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string3[0]),alt_output_vector3," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector3.size(), temp3_len );
-  BOOST_CHECK_EQUAL( alt_output_vector3.size(), temp3_len );
+  CHECK_EQ( output_vector3.size(), temp3_len );
+  CHECK_EQ( alt_output_vector3.size(), temp3_len );
 
 	for( int i = 0; i < output_vector3.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector3[i],output_vector3[i]);
+		CHECK_EQ(comparison_vector3[i],output_vector3[i]);
 	}
 
 	for( int i = 0; i < alt_output_vector3.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector3[i],alt_output_vector3[i]);
+		CHECK_EQ(comparison_vector3[i],alt_output_vector3[i]);
 	}
 
 
@@ -423,22 +446,22 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector4,alt_output_vector4;
 	vector<float> comparison_vector4(temp4,temp4+5);
 	success = SpecUtils::split_to_floats(input_string4,output_vector4);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string4[0]),alt_output_vector4," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector4.size(), temp4_len );
-  BOOST_CHECK_EQUAL( alt_output_vector4.size(), temp4_len );
+  CHECK_EQ( output_vector4.size(), temp4_len );
+  CHECK_EQ( alt_output_vector4.size(), temp4_len );
 
 	for( int i = 0; i < output_vector4.size(); ++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector4[i],output_vector4[i]);
+		CHECK_EQ(comparison_vector4[i],output_vector4[i]);
 	}
 
   for( int i=0; i < alt_output_vector4.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector4[i],alt_output_vector4[i]);
+		CHECK_EQ(comparison_vector4[i],alt_output_vector4[i]);
 	}
 
 
@@ -449,23 +472,23 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector5,alt_output_vector5;
 	vector<float> comparison_vector5(temp5,temp5+3);
 	success = SpecUtils::split_to_floats(input_string5,output_vector5);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string5[0]),alt_output_vector5," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector5.size(), temp5_len );
-  BOOST_CHECK_EQUAL( alt_output_vector5.size(), temp5_len );
+  CHECK_EQ( output_vector5.size(), temp5_len );
+  CHECK_EQ( alt_output_vector5.size(), temp5_len );
 
 
 	for( int i = 0; i < output_vector5.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector5[i],output_vector5[i]);
+		CHECK_EQ(comparison_vector5[i],output_vector5[i]);
 	}
 
 	for (int i=0;i<alt_output_vector5.size();++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector5[i],alt_output_vector5[i]);
+		CHECK_EQ(comparison_vector5[i],alt_output_vector5[i]);
 	}
 
   string input_string6= "5.5 1.234567";
@@ -475,22 +498,22 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector6,alt_output_vector6;
 	vector<float> comparison_vector6(temp6,temp6+2);
 	success = SpecUtils::split_to_floats(input_string6,output_vector6);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string6[0]),alt_output_vector6," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector6.size(), temp6_len );
-  BOOST_CHECK_EQUAL( alt_output_vector6.size(), temp6_len );
+  CHECK_EQ( output_vector6.size(), temp6_len );
+  CHECK_EQ( alt_output_vector6.size(), temp6_len );
 
 	for( int i = 0; i < output_vector6.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector6[i],output_vector6[i]);
+		CHECK_EQ(comparison_vector6[i],output_vector6[i]);
 	}
 
 	for( int i = 0; i < alt_output_vector6.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector6[i],alt_output_vector6[i]);
+		CHECK_EQ(comparison_vector6[i],alt_output_vector6[i]);
 	}
 
   string input_string7= "5.5       4.67";
@@ -500,22 +523,22 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector7,alt_output_vector7;
 	vector<float> comparison_vector7(temp7,temp7+2);
 	success = SpecUtils::split_to_floats(input_string7,output_vector7);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string7[0]),alt_output_vector7," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector7.size(), temp7_len );
-  BOOST_CHECK_EQUAL( alt_output_vector7.size(), temp7_len );
+  CHECK_EQ( output_vector7.size(), temp7_len );
+  CHECK_EQ( alt_output_vector7.size(), temp7_len );
 
   for( int i=0; i < output_vector7.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector7[i],output_vector7[i]);
+		CHECK_EQ(comparison_vector7[i],output_vector7[i]);
 	}
 
 	for( int i = 0; i < alt_output_vector7.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector7[i],alt_output_vector7[i]);
+		CHECK_EQ(comparison_vector7[i],alt_output_vector7[i]);
 	}
 
   string input_string8= "5.5,4.5,,3.5,,,,,2.5";
@@ -525,22 +548,22 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector8,alt_output_vector8;
 	vector<float> comparison_vector8(temp8,temp8+4);
 	success = SpecUtils::split_to_floats(input_string8,output_vector8);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string8[0]),alt_output_vector8," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector8.size(), temp8_len );
-  BOOST_CHECK_EQUAL( alt_output_vector8.size(), temp8_len );
+  CHECK_EQ( output_vector8.size(), temp8_len );
+  CHECK_EQ( alt_output_vector8.size(), temp8_len );
 
 	for( int i = 0; i < output_vector8.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector8[i],output_vector8[i]);
+		CHECK_EQ(comparison_vector8[i],output_vector8[i]);
 	}
 
 	for( int i = 0; i < alt_output_vector8.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector8[i],alt_output_vector8[i]);
+		CHECK_EQ(comparison_vector8[i],alt_output_vector8[i]);
 	}
 
   //Note that the value before the decimal point must be smaller than 4294967296
@@ -552,21 +575,21 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector9, alt_output_vector9;
 
 	success = SpecUtils::split_to_floats( input_string9, output_vector9 );
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 	SpecUtils::split_to_floats(&(input_string9[0]),alt_output_vector9," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector9.size(), temp9_len );
-  BOOST_CHECK_EQUAL( alt_output_vector9.size(), temp9_len );
+  CHECK_EQ( output_vector9.size(), temp9_len );
+  CHECK_EQ( alt_output_vector9.size(), temp9_len );
 
   for(int i=0; i < output_vector9.size();++i)
 	{
-		BOOST_CHECK_EQUAL(temp9[i],output_vector9[i]);
+		CHECK_EQ(temp9[i],output_vector9[i]);
 	}
 
 	for (int i=0;i<alt_output_vector9.size();++i)
 	{
-		BOOST_CHECK_EQUAL(temp9[i],alt_output_vector9[i]);
+		CHECK_EQ(temp9[i],alt_output_vector9[i]);
 	}
 
   string input_string10= "2.5\r3.5\r4.5\r\n5.5\t6.5 +123,+1.23,-123,-1.23,-100,-1000,-10000,-100000,-1000000,-10000000,-100000000,-1000000000,-0,-0.0,-0.00,-0.000,-0.0,,0,1             2, 1\n\n\n\n2,1\r\r\r\r2,1\t\t\t\t2";
@@ -576,27 +599,27 @@ BOOST_AUTO_TEST_CASE( split_to_floats3  )
 	vector<float> output_vector10,alt_output_vector10;
 	vector<float> comparison_vector10(temp10,temp10+31);
 	success = SpecUtils::split_to_floats( input_string10, output_vector10 );
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
 	success = SpecUtils::split_to_floats(&(input_string10[0]),alt_output_vector10," ,\r\n\t",false);
-  BOOST_CHECK_EQUAL( success, true );
+  CHECK_EQ( success, true );
 
-  BOOST_CHECK_EQUAL( output_vector10.size(), temp10_len);
-  BOOST_CHECK_EQUAL( alt_output_vector10.size(), temp10_len);
+  CHECK_EQ( output_vector10.size(), temp10_len);
+  CHECK_EQ( alt_output_vector10.size(), temp10_len);
 
 	for( int i = 0; i < output_vector10.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector10[i],output_vector10[i]);
+		CHECK_EQ(comparison_vector10[i],output_vector10[i]);
 	}
 
 	for (int i=0;i<alt_output_vector10.size();++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector10[i],alt_output_vector10[i]);
+		CHECK_EQ(comparison_vector10[i],alt_output_vector10[i]);
 	}
 }
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats4  )
+TEST_CASE( "split_to_floats4"  )
 {
   string input_string11= "1 2 3";
 	const float temp11[] = { 1.0f, 2.0f, 3.0f };
@@ -608,17 +631,17 @@ BOOST_AUTO_TEST_CASE( split_to_floats4  )
 
   for(int i = 0; i < output_vector11.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector11[i],output_vector11[i]);
+		CHECK_EQ(comparison_vector11[i],output_vector11[i]);
 	}
 
 	for( int i = 0; i < alt_output_vector11.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector11[i],alt_output_vector11[i]);
+		CHECK_EQ(comparison_vector11[i],alt_output_vector11[i]);
 	}
 }
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats5  )
+TEST_CASE( "split_to_floats5"  )
 {
   string input_string12= "1200.25\n3556 22222222";
 	float temp12[] = {1200.25,3556,22222222};
@@ -630,17 +653,17 @@ BOOST_AUTO_TEST_CASE( split_to_floats5  )
 
 	for(int i=0; i < output_vector12.size();++i)
 	{
-		BOOST_CHECK_EQUAL( comparison_vector12[i], output_vector12[i] );
+		CHECK_EQ( comparison_vector12[i], output_vector12[i] );
 	}
 
 	for (int i=0;i<alt_output_vector12.size();++i)
 	{
-		BOOST_CHECK_EQUAL( comparison_vector12[i], alt_output_vector12[i] );
+		CHECK_EQ( comparison_vector12[i], alt_output_vector12[i] );
 	}
 }
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats6  )
+TEST_CASE( "split_to_floats6"  )
 {
 	string input_string13= "1.2e3,4.5e0,4.55e1,-1.2e3,-4.5e0,-4.55e1";
 	float temp13[] = {1200,4.5,45.5,-1200,-4.5,-45.5};
@@ -651,17 +674,17 @@ BOOST_AUTO_TEST_CASE( split_to_floats6  )
 
   for( int i = 0; i < output_vector13.size(); ++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector13[i],output_vector13[i]);
+		CHECK_EQ(comparison_vector13[i],output_vector13[i]);
 	}
 
   for (int i=0;i<alt_output_vector13.size();++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector13[i],alt_output_vector13[i]);
+		CHECK_EQ(comparison_vector13[i],alt_output_vector13[i]);
 	}
 }
 
 /*
-BOOST_AUTO_TEST_CASE( split_to_floats7  )
+TEST_CASE( "split_to_floats7"  )
 {
   string input_string14= "\"1.23\", 1";
 	float temp14[] = {1.23f,1.0f};
@@ -671,17 +694,17 @@ BOOST_AUTO_TEST_CASE( split_to_floats7  )
 	SpecUtils::split_to_floats(&(input_string14[0]),alt_output_vector14," ,\r\n\t",false);
 	for( int i = 0; i < output_vector14.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector14[i],output_vector14[i]);
+		CHECK_EQ(comparison_vector14[i],output_vector14[i]);
 	}
 
 	for( int i = 0; i < alt_output_vector14.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector14[i],alt_output_vector14[i]);
+		CHECK_EQ(comparison_vector14[i],alt_output_vector14[i]);
 	}
 }
 
 
-BOOST_AUTO_TEST_CASE( split_to_floats8  )
+TEST_CASE( "split_to_floats8"  )
 {
     string input_string15= "'1.23', 1";
 	float temp15[] = {(float)1.23,(float)1};
@@ -691,17 +714,17 @@ BOOST_AUTO_TEST_CASE( split_to_floats8  )
 	SpecUtils::split_to_floats(&(input_string15[0]),alt_output_vector15," ,\r\n\t",false);
 	for(int i=1; i < output_vector15.size();++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector15[i],output_vector15[i]);
+		CHECK_EQ(comparison_vector15[i],output_vector15[i]);
 
 	}
 	for (int i=0;i<alt_output_vector15.size();++i)
 	{
-		BOOST_CHECK_EQUAL(comparison_vector15[i],alt_output_vector15[i]);
+		CHECK_EQ(comparison_vector15[i],alt_output_vector15[i]);
 	}
 }
 */
 
-BOOST_AUTO_TEST_CASE( split_to_ints  )
+TEST_CASE( "split_to_ints"  )
 {
 //start of testing split_to_ints
     //if the function encounters a decimal point "." or any letter "e" (for exponents) at any location in the string, the operation exits
@@ -716,35 +739,236 @@ BOOST_AUTO_TEST_CASE( split_to_ints  )
   string input_string16= "1,2 3  \t4\r5\n6,,,,,7,8,9,10";
  	int temp16[] = {1,2,3,4,5,6,7,8,9,10};
 	vector<int> output_vector16;
+  vector<long long> output_vector16_ll;
 	vector<int> comparison_vector16(temp16,temp16+10);
-	SpecUtils::split_to_ints(&(input_string16[0]),input_string16.size(),output_vector16);
-	for(int i=0; i < output_vector16.size();++i)
+  bool ok = SpecUtils::split_to_ints(&(input_string16[0]),input_string16.size(),output_vector16);
+  CHECK( ok );
+  ok = SpecUtils::split_to_long_longs(&(input_string16[0]),input_string16.size(),output_vector16_ll);
+  CHECK( ok );
+  
+  REQUIRE_EQ( output_vector16.size(), comparison_vector16.size() );
+  REQUIRE_EQ( output_vector16_ll.size(), comparison_vector16.size() );
+  
+	for( size_t i=0; i < output_vector16.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector16[i],output_vector16[i]);
-
+		CHECK_EQ( comparison_vector16[i], output_vector16[i]);
+    CHECK_EQ( comparison_vector16[i], output_vector16_ll[i]);
 	}
 
-	  string input_string17= "11 45 67,678,67,,1,123,400,450\t56\r45\n11,000006,2147483646,2147483647,11";
+  string input_string17= "11 45 67,678,67,,1,123,400,450\t56\r45\n11,000006,2147483646,2147483647,11";
  	int temp17[] = {11,45,67,678,67,1,123,400,450,56,45,11,6,2147483646,2147483647,11};
 	vector<int> output_vector17;
+  vector<long long> output_vector17_ll;
 	vector<int> comparison_vector17(temp17,temp17+16);
-	SpecUtils::split_to_ints(&(input_string17[0]),input_string17.size(),output_vector17);
-	for( int i = 0; i < output_vector17.size(); ++i )
+  ok = SpecUtils::split_to_ints(&(input_string17[0]),input_string17.size(),output_vector17);
+  CHECK( ok );
+  ok = SpecUtils::split_to_long_longs(&(input_string17[0]),input_string17.size(),output_vector17_ll);
+  CHECK( ok );
+  
+  REQUIRE_EQ( output_vector17.size(), comparison_vector17.size() );
+  REQUIRE_EQ( output_vector17_ll.size(), comparison_vector17.size() );
+  
+	for( size_t i = 0; i < output_vector17.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector17[i],output_vector17[i]);
+		CHECK_EQ( comparison_vector17[i], output_vector17[i] );
+    CHECK_EQ( output_vector17_ll[i], output_vector17[i] );
 	}
 
   string input_string19= "1,+5,+0,-0,-1,-2,-300,0000000,1,1,11";
  	int temp19[] = {1,5,0,0,-1,-2,-300,0,1,1,11};
 	vector<int> output_vector19;
+  vector<long long> output_vector19_ll;
 	vector<int> comparison_vector19(temp19,temp19+11);
-	SpecUtils::split_to_ints(&(input_string19[0]),input_string19.size(),output_vector19);
+	
+  ok = SpecUtils::split_to_ints( &(input_string19[0]), input_string19.size(), output_vector19 );
+  CHECK( ok );
+  ok = SpecUtils::split_to_long_longs( &(input_string19[0]), input_string19.size(), output_vector19_ll );
+  CHECK( ok );
 
-  for( int i = 1; i < output_vector19.size(); ++i )
+  REQUIRE_EQ( output_vector19.size(), comparison_vector19.size() );
+  REQUIRE_EQ( output_vector19_ll.size(), comparison_vector19.size() );
+  
+  for( size_t i = 1; i < output_vector19.size(); ++i )
 	{
-		BOOST_CHECK_EQUAL(comparison_vector19[i],output_vector19[i]);
+		CHECK_EQ( comparison_vector19[i], output_vector19[i] );
+    CHECK_EQ( comparison_vector19[i], output_vector19_ll[i] );
 	}
 
-}
+  // `long long` is guaranteed to be at least 64 bit, with range [-9223372036854775808, 9223372036854775807]
+  const string input_string20 = "-9223372036854775808 0 9223372036854775807";
+  const vector<long long> comparison_vector20{ -9223372036854775807LL, 0LL, 9223372036854775807LL };
+  vector<long long> output_vector20;
+  ok = SpecUtils::split_to_long_longs( &(input_string20[0]), input_string20.size(), output_vector20 );
+  CHECK( ok );
+  REQUIRE_EQ( output_vector20.size(), comparison_vector20.size() );
+  for( size_t i = 1; i < output_vector20.size(); ++i )
+  {
+    CHECK_EQ( comparison_vector20[i], output_vector20[i] );
+  }
+  
+  
+  const string input_string21 = "0 1 2 aa";
+  vector<int> output_vector21;
+  vector<long long> output_vector21_ll;
+  ok = SpecUtils::split_to_long_longs( &(input_string21[0]), input_string21.size(), output_vector21_ll );
+  CHECK( !ok );
+  ok = SpecUtils::split_to_ints( &(input_string21[0]), input_string21.size(), output_vector21 );
+  CHECK( !ok );
+  
+}//TEST_CASE( "split_to_ints"  )
 
-BOOST_AUTO_TEST_SUITE_END()
+
+TEST_CASE( "parse_int/float/double" )
+{
+  // `SpecUtils::parse_int(...)`, `parse_float`, and `parse_double` ignore leading whitespace
+  //  and trailing characters.
+  
+  std::string input = "50";
+  int int_result;
+  bool ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 50 );
+  
+  ok = SpecUtils::parse_int( &(input[0]), 1, int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 5 );
+  
+  input = "50 ";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 50 );
+  
+  ok = SpecUtils::parse_int( &(input[0]), 2, int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 50 );
+  
+  input = "-25";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, -25 );
+  
+  input = "-25";
+  ok = SpecUtils::parse_int( &(input[0]), 2, int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, -2 );
+  
+  input = "0";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 0 );
+  
+  input = "-0";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 0 );
+  
+  input = "+0";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 0 );
+  
+  input = " 5";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 5 );
+  
+  input = "   +5";
+  ok = SpecUtils::parse_int( &(input[0]), input.size(), int_result );
+  CHECK( ok );
+  CHECK_EQ( int_result, 5 );
+  
+  float float_result;
+  double double_result;
+  
+  input = " 5";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 5.0f );
+  CHECK_EQ( double_result, 5.0 );
+  
+  
+  input = "5.00001";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 5.00001f );
+  CHECK_EQ( double_result, 5.00001 );
+  
+  input = "+5.1";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 5.1f );
+  CHECK_EQ( double_result, 5.1 );
+  
+  
+  input = "-5.1";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, -5.1f );
+  CHECK_EQ( double_result, -5.1 );
+  
+  input = "0";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 0.0f );
+  CHECK_EQ( double_result, 0.0 );
+  
+  
+  input = "+0.0000";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 0.0f );
+  CHECK_EQ( double_result, 0.0 );
+  
+  input = "-0.0000";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 0.0f );
+  CHECK_EQ( double_result, 0.0 );
+  
+  input = "+1.200E-3";
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, 1.200E-3f );
+  CHECK_EQ( double_result, 1.200E-3 );
+  
+  
+  
+  input = std::to_string( std::numeric_limits<float>::max() );
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ok );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( float_result, std::numeric_limits<float>::max() );
+  
+  // When using boost::spirit to parse doubles, the very last digit of the parsed result may
+  //  not be rounded correctly - we'll allow for it, I guess, by just testing down to floating point precision
+  //string:              340282346638528859811704183484516925440.000000
+  //Parsed double:      3.402823466385288e+38  //Note: std::numeric_limits<double>::digits10==15 (i.e., 15 decimal digits of accuracy)
+  CHECK_EQ( static_cast<float>(double_result), std::numeric_limits<float>::max() );
+  
+  double double_input = std::numeric_limits<float>::max();
+  double_input *= 10.0;
+  input = std::to_string( double_input );
+  ok = SpecUtils::parse_float( &(input[0]), input.size(), float_result );
+  CHECK( ((ok && (std::isinf)(float_result)) || !ok) );
+  ok = SpecUtils::parse_double( &(input[0]), input.size(), double_result );
+  CHECK( ok );
+  CHECK_EQ( static_cast<float>(0.1*double_result), std::numeric_limits<float>::max() );  //Just test to float precision - see note above
+}//TEST_CASE( "parse_int/float/double" )
+

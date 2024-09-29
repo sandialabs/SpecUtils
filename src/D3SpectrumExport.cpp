@@ -229,7 +229,7 @@ namespace
   
   void sanitize_unicode( stringstream &sout, const std::string& text )
   {
-    char buf[4];
+    char buf[4] = {'\0'};
     
     for (const char *c = text.c_str(); *c;) {
       assert( c <= (text.c_str() + text.size()) );
@@ -793,7 +793,8 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       double ns = meas.neutron_counts_sum();
       if( ns <= 0.0 || IsInf(ns) || IsNan(ns) )
         ns = 0.0;
-      ostr << ns << ",neutronLiveTime:" << meas.neutron_live_time() << ",";
+      ostr << ns << ",\n\t\t\t" << q << "neutronLiveTime" << q << ":" 
+        << meas.neutron_live_time() << ",";
     }else
     {
       ostr << "null,";
@@ -838,7 +839,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       ostr << "\n\t" << q << "x" << q << ": [";
       if( meas.num_gamma_channels() && meas.channel_energies() )
       {
-        ostr << std::setprecision(std::numeric_limits<float>::digits10 + 1);
+        ostr << std::setprecision( static_cast<std::streamsize>(std::numeric_limits<float>::digits10 + 1) );
         const vector<float> &x  = *meas.channel_energies();
         for( size_t i = 0; i < x.size(); ++i )
         {

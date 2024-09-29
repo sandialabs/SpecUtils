@@ -1231,15 +1231,6 @@ bool SpecFile::write_binary_spc( std::ostream &output,
   
   if( !is_special(summed->start_time()) )
   {
-    /*
-     original implementation (to be removed after 20220906):
-     const boost::posix_time::ptime &startime = summed->start_time();
-     const boost::gregorian::date epoch_date( 1979, boost::gregorian::Jan, 1 );
-     const boost::gregorian::days daydiff = startime.date() - epoch_date;
-     const double dayfrac = startime.time_of_day().total_microseconds() / (24.0*60.0*60.0*1.0E6);
-     dACQTI8 = daydiff.days() + dayfrac;
-     sACQTIM = static_cast<float>( dACQTI8 );
-     */
     const time_point_t &startime = summed->start_time();
     
     const date::year_month_day spc_epoch_date( date::year(1979), date::month(1u), date::day(1u) );
@@ -2755,8 +2746,21 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     assert( n_channel > 0 );
     
-    counts_ref[0] = 0;
-    counts_ref[n_channel-1] = 0;
+    
+    // Lets check if values in first and last channels are reasonable, and if not, set to zero
+    if( n_channel > 2 )
+    {
+      const float max_val = *std::max_element( begin(counts_ref)+1, end(counts_ref) - 1 );
+      
+      float &first_val = counts_ref[0];
+      float &last_val = counts_ref[n_channel-1];
+      
+      if( fabs(first_val) > (10.0f*max_val) ) //We have checked for inf/NaN above
+        first_val = 0;
+      
+      if( fabs(last_val) > (10.0f*max_val) )
+        last_val = 0;
+    }//if( n_channel > 2 )
     
     for( size_t i = 0; i < n_channel; ++i )
       sum_gamma += counts_ref[i];

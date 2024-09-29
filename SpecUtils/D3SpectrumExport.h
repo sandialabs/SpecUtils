@@ -51,10 +51,20 @@ namespace D3SpectrumExport
   struct D3SpectrumOptions;
   struct D3SpectrumChartOptions;
   
-  //Writes the spectrum component of the js that SpectrumChartD3 expects.
-  // An annotated example of what would be written is:
-  // { "title": "Line Title", "peaks":"[...]", "liveTime": 300, "realTime": 320, "neutrons": 0,
-  //   "lineColor": "black", "x": [0, 2.93, 5.86, ..., 3000], "y": [0,1,10,...0], "yScaleFactor": 1.0 }
+  /** Writes the spectrum JSON (not javascript as the function name implies) that SpectrumChartD3 expects.
+   
+   @param ostr The stream to write the JSON to
+   @param options The options to use for plotting the data.
+   @param specID The ID to assign to this spectrum - this should be a unique value for the spectra you are
+          plotting in the same plot.
+   @param backgroundID The ID of the background spectrum, for this spectrum; set to a negative value if
+          no background.  Used for background subtraction mostly.
+   @returns If stream was able to accept all the data that was written to it.
+  
+   An annotated example of what would be written is:
+   { "title": "Line Title", "peaks":"[...]", "liveTime": 300, "realTime": 320, "neutrons": 0,
+      "lineColor": "black", "x": [0, 2.93, 5.86, ..., 3000], "y": [0,1,10,...0], "yScaleFactor": 1.0 }
+   */
   bool write_spectrum_data_js( std::ostream &ostr,
                                const SpecUtils::Measurement &meas,
                                const D3SpectrumOptions &options,
@@ -127,7 +137,10 @@ namespace D3SpectrumExport
      */
     std::string line_color;
     
-    /** The default peak color, if the peak itself doesnt define a color. */
+    /** The default peak color, if the peak itself doesnt define a color. 
+     
+     Will default to a random color if not specified.
+     */
     std::string peak_color;
     
     /** If empty, title from Measurement will be used, but if non-empty, will override Measurement.

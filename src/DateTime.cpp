@@ -746,18 +746,13 @@ namespace SpecUtils
             if( !isdigit(*ch) && ((*ch) != '-') && ((*ch) != '+') )
               throw runtime_error( string("Invalid character ('") + (*ch) + string("')") );
           }
-#if( __cplusplus >= 201703L )
-          unsigned long value;
-#ifdef __APPLE__
-#warn "Using std::from_chars(...), which requires macOS deployment target of at least 10.15, InterSpec currently targets 10.13"
-#endif
-          const auto result = std::from_chars(str_start, str_end, value);
-          if( (bool)result.ec || (result.ptr != str_end) )
+          
+          int value;
+          const bool ok = parse_int( str_start, (str_end - str_start), value );
+          if( !ok || (value < 0) )
             throw runtime_error( "Invalid hours or minutes field: '" + std::string(str_start,str_end) + "'" );
-#else
-          const unsigned long value = std::stoul( std::string(str_start,str_end), nullptr, 10 );
-#endif
-          if( fieldnum == 1 && value >= 60 )
+                    
+          if( (fieldnum == 1) && (value >= 60) )
             throw runtime_error( "Hours or Minutes is larger than 60 (" + std::to_string(value) + ")" );
           
           answer += value * (fieldnum==0 ? 3600.0 : 60.0);

@@ -32,35 +32,40 @@
 #include <unistd.h>
 #endif
 
-#include <boost/algorithm/string.hpp>
 
-#define BOOST_TEST_MODULE testUtilityStringFunctions
-#include <boost/test/unit_test.hpp>
-
-//#define BOOST_TEST_DYN_LINK
-// To use boost unit_test as header only (no link to boost unit test library):
-//#include <boost/test/included/unit_test.hpp>
-
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest.h"
 
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/ParseUtils.h"
 
 using namespace std;
-using namespace boost::unit_test;
 
 
-BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
+// I couldnt quite figure out how to access command line arguments
+//  from doctest, so we'll just work around it a bit.
+vector<string> g_cl_args;
+
+
+int main(int argc, char** argv)
+{
+  for( int i = 0; i < argc; ++i )
+    g_cl_args.push_back( argv[i] );
+  
+  return doctest::Context(argc, argv).run();
+}
+
+
+TEST_CASE( "testUtilityStringFunctions" ) {
 
   string indir;
-  const int argc = framework::master_test_suite().argc;
-  for( int i = 1; i < argc-1; ++i )
+  //indir = "/Users/wcjohns/rad_ana/SpecUtils/unit_tests/";
+  for( size_t i = 1; (i+1) < g_cl_args.size(); ++i )
   {
-    if( framework::master_test_suite().argv[i] == string("--indir") )
-      indir = framework::master_test_suite().argv[i+1];
+    if( g_cl_args[i] == string("--indir") )
+      indir = g_cl_args[i+1];
   }
-  
-  indir = "/Users/wcjohns/rad_ana/InterSpec_master/external_libs/SpecUtils/unit_tests/";
   
   string test_in_file, test_out_file;
   const string potential_input_paths[] = { ".", indir,
@@ -107,8 +112,8 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   while( SpecUtils::safe_get_line(utf8_output, line)  )
     correctOutput.emplace_back( std::move(line) );
   
-  BOOST_REQUIRE_GT( tests.size(), 0 );
-  BOOST_REQUIRE_GT( correctOutput.size(), 0 );
+  REQUIRE_GT( tests.size(), 0 );
+  REQUIRE_GT( correctOutput.size(), 0 );
   
   
   //At the beggining of every line of test_string_functions_input.txt and
@@ -120,35 +125,35 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
 
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "1" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "1" );
     
     string test = tests[index1].substr(2);
     SpecUtils::trim(test);
-    BOOST_CHECK_EQUAL(test, correctOutput[index2].substr(2));
+    CHECK_EQ(test, correctOutput[index2].substr(2));
     index1++; index2++;
   }while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0, 1) == "1" );
   
   // test empty string
   string s = "";
   SpecUtils::trim(s);
-  BOOST_CHECK_EQUAL(s, "");
+  CHECK_EQ(s, "");
   
   // test string with only whitespace
   s = "   ";
   SpecUtils::trim(s);
-  BOOST_CHECK_EQUAL(s, "");
+  CHECK_EQ(s, "");
 
 
   // tests for SpecUtils::to_lower(string &input) - 2 in text files
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "2" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "2" );
     
     string test = tests[index1].substr(2);
     
@@ -156,7 +161,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
       SpecUtils::to_lower_ascii(test);
-      BOOST_CHECK_EQUAL(test, correctOutput[index2].substr(2));
+      CHECK_EQ(test, correctOutput[index2].substr(2));
     }
     
     index1++; index2++;
@@ -166,10 +171,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   // ASCII tests
   s = "     ";
   SpecUtils::to_lower_ascii(s);
-  BOOST_CHECK_EQUAL(s, "     ");
+  CHECK_EQ(s, "     ");
   s = "";
   SpecUtils::to_lower_ascii(s);
-  BOOST_CHECK_EQUAL(s, "");
+  CHECK_EQ(s, "");
   
   // tests for all printable ASCII characters
   string allASCII;
@@ -186,24 +191,24 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   }
   
   SpecUtils::to_lower_ascii(allASCII);
-  BOOST_CHECK_EQUAL(allASCII, correctAllASCII);
+  CHECK_EQ(allASCII, correctAllASCII);
   
   // tests for ASCII escape characters
   s = '\t';
   string correctS;
   correctS = '\t';
   SpecUtils::to_lower_ascii(s);
-  BOOST_CHECK_EQUAL(s, correctS);
+  CHECK_EQ(s, correctS);
   
   s = '\n';
   correctS = '\n';
   SpecUtils::to_lower_ascii(s);
-  BOOST_CHECK_EQUAL(s, correctS);
+  CHECK_EQ(s, correctS);
   
   s = '\r';
   correctS = '\r';
   SpecUtils::to_lower_ascii(s);
-  BOOST_CHECK_EQUAL(s, correctS);
+  CHECK_EQ(s, correctS);
   
   // test of ASCII string of random lenth and random characters
   random_device r;
@@ -226,7 +231,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   }
   
   SpecUtils::to_lower_ascii(random_ASCII);
-  BOOST_CHECK_EQUAL(random_ASCII, correct_random_ASCII);
+  CHECK_EQ(random_ASCII, correct_random_ASCII);
   
   
   // test for SpecUtils::to_upper_ascii(string &input)
@@ -235,10 +240,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   // expected output is found in testUtilityStringFunctionsOutput.txt
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "3" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "3" );
     
     string test = tests[index1].substr(2);
     
@@ -246,7 +251,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
       SpecUtils::to_upper_ascii(test);
-      BOOST_CHECK_EQUAL(test, correctOutput[index2].substr(2));
+      CHECK_EQ(test, correctOutput[index2].substr(2));
     }
     
     index1++; index2++;
@@ -255,11 +260,11 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
   s = "     ";
   SpecUtils::to_upper_ascii(s);
-  BOOST_CHECK_EQUAL(s, "     ");
+  CHECK_EQ(s, "     ");
   
   s= "";
   SpecUtils::to_upper_ascii(s);
-  BOOST_CHECK_EQUAL(s, "");
+  CHECK_EQ(s, "");
   
   // test of all printable ASCII characters
   allASCII = "";
@@ -275,23 +280,23 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
       correctAllASCII += (char)i;
   }
   SpecUtils::to_upper_ascii(allASCII);
-  BOOST_CHECK_EQUAL(allASCII, correctAllASCII);
+  CHECK_EQ(allASCII, correctAllASCII);
   
   // tests for ASCII escape characters
   s = '\t';
   correctS = '\t';
   SpecUtils::to_upper_ascii(s);
-  BOOST_CHECK_EQUAL(s, correctS);
+  CHECK_EQ(s, correctS);
   
   s = '\n';
   correctS = '\n';
   SpecUtils::to_upper_ascii(s);
-  BOOST_CHECK_EQUAL(s, correctS);
+  CHECK_EQ(s, correctS);
   
   s = '\r';
   correctS = '\r';
   SpecUtils::to_upper_ascii(s);
-  BOOST_CHECK_EQUAL(s, correctS);
+  CHECK_EQ(s, correctS);
   
   // test for ASCII string of random length with random characters
   random_length = (int)dist1(m1);
@@ -310,17 +315,17 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
       correct_random_ASCII += (char)(random);
   }//
   SpecUtils::to_upper_ascii(random_ASCII);
-  BOOST_CHECK_EQUAL(random_ASCII, correct_random_ASCII);
+  CHECK_EQ(random_ASCII, correct_random_ASCII);
   
   // tests for SpecUtils::iequals_ascii(const char *str, const char *test)
   // 4 in text file
   // each *str is tested with two *test with the first expected to pass and second to fail
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "4" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "4" );
     
     string message;
     string test = tests[index1].substr(2);
@@ -328,7 +333,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
       message = test + "  " + correctOutput[index2].substr(2);
-      BOOST_CHECK_MESSAGE(SpecUtils::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
+      CHECK_MESSAGE(SpecUtils::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
     }
     
     index2++;
@@ -336,7 +341,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     if( SpecUtils::utf8_str_len(test.c_str(),test.size()) == test.size() )
     {
       message = test + "  " + correctOutput[index2].substr(2);
-      BOOST_CHECK_MESSAGE(!SpecUtils::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
+      CHECK_MESSAGE(!SpecUtils::iequals_ascii(test.c_str(), correctOutput[index2].substr(2).c_str()), message);
     }
     
     index1++;
@@ -345,29 +350,31 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
   s = "    ";
   string q;
-  BOOST_CHECK( !SpecUtils::iequals_ascii(s.c_str(), q.c_str()) );
+  CHECK( !SpecUtils::iequals_ascii(s.c_str(), q.c_str()) );
   
   // tests for SpecUtils::contains(const string &line, const char *label)
   // 5 in text file
   // each &line is tested with two *label with the first expected to pass and second to fail
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "5" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "5" );
     
-    string test = tests[index1].substr(2);
-    string message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(SpecUtils::contains(test, correctOutput[index2].substr(2).c_str()), message);
+    string teststr = tests[index1].substr(2);
+    string substr = correctOutput[index2].substr(2);
+    string message = "Test string is '" + teststr + "', and searching for substring '" + substr + "' (should find)";
+    CHECK_MESSAGE(SpecUtils::contains(teststr, substr.c_str()), message);
     index2++;
-    message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(!SpecUtils::contains(test, correctOutput[index2].substr(2).c_str()), message);
+    substr = correctOutput[index2];
+    message = "Test string is '" + teststr + "', and searching for substring '" + substr + "' (should NOT find)";
+    CHECK_MESSAGE(!SpecUtils::contains(teststr, substr.c_str()), message);
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "5" );
   
   const char *e = "";
-  BOOST_CHECK( SpecUtils::contains(q, e) );
+  CHECK( !SpecUtils::contains(q, e) );
 
 
   // tests for SpecUtils::icontains(string &line, const char *label)
@@ -375,37 +382,52 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   // each &line is tested with two *label with the first expected to pass and second to fail
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "6" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "6" );
     
-    string test = tests[index1].substr(2);
-    string message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(SpecUtils::icontains(test, correctOutput[index2].substr(2).c_str()), message);
+    string teststr = tests[index1].substr(2);
+    string substr = correctOutput[index2].substr(2);
+    string message = "Line being searched is '" + teststr + "', with substring '" + correctOutput[index2] + "' (should find)";
+    CHECK_MESSAGE(SpecUtils::icontains(teststr, substr.c_str()), message);
     index2++;
-    message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(!SpecUtils::icontains(test, correctOutput[index2].substr(2).c_str()), message);
+    substr = correctOutput[index2].substr(2);
+    message = "Line being searched is '" + teststr + "', with substring '" + correctOutput[index2] + "' (should NOT find)";
+    CHECK_MESSAGE(!SpecUtils::icontains(teststr, substr.c_str()), message);
     index2++; index1++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "6");
   
+  
+  // Make sure searches for empty substrings return false
+  CHECK( !SpecUtils::icontains( "TestLine", "" ) );
+  CHECK( !SpecUtils::icontains( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::contains( "TestLine", "" ) );
+  CHECK( !SpecUtils::contains( string("TestLine"), "" ) );
+  
+  CHECK( !SpecUtils::istarts_with( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::istarts_with( string("TestLine"), string("") ) );
+  CHECK( !SpecUtils::starts_with( string("TestLine"), "" ) );
+  CHECK( !SpecUtils::iends_with( string("TestLine"), string("") ) );
+  
+  CHECK_EQ( SpecUtils::ifind_substr_ascii( string("TestLine"), ""), string::npos );
 
   // tests for SpecUtils::starts_with(string &line, const char* label)
   // 7 in text file
   // each &line is test with two *label with the first expected to pass and second to fail
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "7" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "7" );
     
     string test = tests[index1].substr(2);
     string message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(SpecUtils::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
+    CHECK_MESSAGE(SpecUtils::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
     index2++;
     message = test + "  " + correctOutput[index2];
-    BOOST_CHECK_MESSAGE(!SpecUtils::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
+    CHECK_MESSAGE(!SpecUtils::starts_with(test, correctOutput[index2].substr(2).c_str()), message);
     index1++; index2++;
   }while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "7");
 
@@ -414,10 +436,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   // 8 in text file
   do
   {
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "8" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "8" );
     
     string input = tests[index1].substr(2);
     index1++;
@@ -428,10 +450,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     SpecUtils::split(results, input, delims.c_str());
     int expected_length = atoi(correctOutput[index2].substr(2).c_str());
     int length = (int)(results.size());
-    BOOST_CHECK_EQUAL(expected_length, length);
+    CHECK_EQ(expected_length, length);
     index2++;
     for(int i=0; i<length; i++) {
-      BOOST_CHECK_EQUAL(results[i], correctOutput[index2].substr(2));
+      CHECK_EQ(results[i], correctOutput[index2].substr(2));
       index2++;
     }
     results.clear();
@@ -443,73 +465,73 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   const char* delims = "";
   vector<string> results;
   SpecUtils::split(results, input, delims);
-  BOOST_CHECK(results.size() == 1);
-  BOOST_CHECK_EQUAL(results[0], input);
+  CHECK(results.size() == 1);
+  CHECK_EQ(results[0], input);
 
   SpecUtils::split( results, ",,,hello how are,,", ", " );
-  BOOST_CHECK_EQUAL(results.size(), 3);
-  BOOST_CHECK_EQUAL(results[0], "hello");
-  BOOST_CHECK_EQUAL(results[1], "how");
-  BOOST_CHECK_EQUAL(results[2], "are");
+  CHECK_EQ(results.size(), 3);
+  CHECK_EQ(results[0], "hello");
+  CHECK_EQ(results[1], "how");
+  CHECK_EQ(results[2], "are");
   
   SpecUtils::split( results, ",,,hello how are,,", "," );
-  BOOST_CHECK_EQUAL(results.size(), 1);
-  BOOST_CHECK_EQUAL(results[0], "hello how are");
+  CHECK_EQ(results.size(), 1);
+  CHECK_EQ(results[0], "hello how are");
   
   SpecUtils::split( results, ",hello,,  how     are  ", ", " );
-  BOOST_CHECK_EQUAL(results.size(), 3);
-  BOOST_CHECK_EQUAL(results[0], "hello");
-  BOOST_CHECK_EQUAL(results[1], "how");
-  BOOST_CHECK_EQUAL(results[2], "are");
+  CHECK_EQ(results.size(), 3);
+  CHECK_EQ(results[0], "hello");
+  CHECK_EQ(results[1], "how");
+  CHECK_EQ(results[2], "are");
   
   SpecUtils::split( results, ", hello,,  how     are  ", " ;" );
-  BOOST_CHECK_EQUAL(results.size(), 4);
-  BOOST_CHECK_EQUAL(results[0], ",");
-  BOOST_CHECK_EQUAL(results[1], "hello,,");
-  BOOST_CHECK_EQUAL(results[2], "how");
-  BOOST_CHECK_EQUAL(results[3], "are");
+  CHECK_EQ(results.size(), 4);
+  CHECK_EQ(results[0], ",");
+  CHECK_EQ(results[1], "hello,,");
+  CHECK_EQ(results[2], "how");
+  CHECK_EQ(results[3], "are");
   
   
   SpecUtils::split( results, "hello, how, are,", "," );
-  BOOST_CHECK_EQUAL(results.size(), 3);
-  BOOST_CHECK_EQUAL(results[0], "hello");
-  BOOST_CHECK_EQUAL(results[1], " how");
-  BOOST_CHECK_EQUAL(results[2], " are");
+  CHECK_EQ(results.size(), 3);
+  CHECK_EQ(results[0], "hello");
+  CHECK_EQ(results[1], " how");
+  CHECK_EQ(results[2], " are");
   
   input = "hello how are you doing 543 342 ";
   SpecUtils::split_no_delim_compress( results, input, "" );
-  BOOST_CHECK(results.size() == 1);
-  BOOST_CHECK_EQUAL(results[0], input);
+  CHECK(results.size() == 1);
+  CHECK_EQ(results[0], input);
 
   input = "hello how are you doing 543 342 ";
   SpecUtils::split_no_delim_compress( results, input, "," );
-  BOOST_CHECK(results.size() == 1);
-  BOOST_CHECK_EQUAL(results[0], input);
+  CHECK(results.size() == 1);
+  CHECK_EQ(results[0], input);
 
   input = ",,,hello how are you doing 543 342 ,,";
   SpecUtils::split_no_delim_compress( results, input, "," );
-  BOOST_CHECK(results.size() == 6);
-  BOOST_CHECK(results[0].empty());
-  BOOST_CHECK(results[1].empty());
-  BOOST_CHECK(results[2].empty());
-  BOOST_CHECK_EQUAL(results[3], "hello how are you doing 543 342 ");
-  BOOST_CHECK(results[4].empty());
-  BOOST_CHECK(results[5].empty());
+  CHECK(results.size() == 6);
+  CHECK(results[0].empty());
+  CHECK(results[1].empty());
+  CHECK(results[2].empty());
+  CHECK_EQ(results[3], "hello how are you doing 543 342 ");
+  CHECK(results[4].empty());
+  CHECK(results[5].empty());
 
 
   input = ",A, AAA";
   SpecUtils::split_no_delim_compress( results, input, ", " );
-  BOOST_CHECK(results.size() == 4);
-  BOOST_CHECK(results[0].empty());
-  BOOST_CHECK_EQUAL(results[1], "A");
-  BOOST_CHECK(results[2].empty());
-  BOOST_CHECK_EQUAL(results[3], "AAA");
+  CHECK(results.size() == 4);
+  CHECK(results[0].empty());
+  CHECK_EQ(results[1], "A");
+  CHECK(results[2].empty());
+  CHECK_EQ(results[3], "AAA");
 
   input = ",A, AAA ";
   SpecUtils::split_no_delim_compress( results, input, ", " );
-  BOOST_CHECK( results.size() == 5 );
-  BOOST_CHECK_EQUAL( results[3], "AAA" );
-  BOOST_CHECK( results[4].empty() );
+  CHECK( results.size() == 5 );
+  CHECK_EQ( results[3], "AAA" );
+  CHECK( results[4].empty() );
     
 
   // tests for SpecUtils::ireplace_all(string &input, const char *pattern, const char *replacement)
@@ -521,10 +543,10 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
 	  //Got:      '\x20\xffffffff\x5f\x5f\x25\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x25\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\xffffff9b\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x54\x54\x3c\x50\x4d\x54' (length 3e).
 
   
-    BOOST_REQUIRE_LT( index1, tests.size() );
-    BOOST_REQUIRE_LT( index2, correctOutput.size() );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
-    BOOST_REQUIRE_EQUAL( tests[index1].substr(0,1), "9" );
+    REQUIRE_LT( index1, tests.size() );
+    REQUIRE_LT( index2, correctOutput.size() );
+    REQUIRE_EQ( tests[index1].substr(0,1), correctOutput[index2].substr(0,1) );
+    REQUIRE_EQ( tests[index1].substr(0,1), "9" );
     
     string input = tests[index1].substr(2);
     index1++;
@@ -533,7 +555,7 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
     string replacement = tests[index1].substr(2);
     index1++;
     SpecUtils::ireplace_all(input, pattern.c_str(), replacement.c_str());
-    BOOST_CHECK_EQUAL(input, correctOutput[index2].substr(2));
+    CHECK_EQ(input, correctOutput[index2].substr(2));
     index2++;
   } while( (index1 < tests.size()) && (index2 < correctOutput.size()) && tests[index1].substr(0,1) == "9" );
   
@@ -547,100 +569,100 @@ BOOST_AUTO_TEST_CASE( testUtilityStringFunctions ) {
   
 }
 
-BOOST_AUTO_TEST_CASE( checkIFind )
+TEST_CASE( "checkIFind" )
 {
   string corpus = "Hello Dude";
   const char *substr = "dude";
   size_t correct_substr_pos = 6;
   size_t substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "Dude";
   substr = "Dude";
   correct_substr_pos = 0;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   
   corpus = "Dude what";
   substr = "Dude";
   correct_substr_pos = 0;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "Dude  what";
   substr = "  ";
   correct_substr_pos = 4;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   
   corpus = "Dude what";
   substr = "--";
   correct_substr_pos = std::string::npos;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   
   corpus = "--";
   substr = "---";
   correct_substr_pos = std::string::npos;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
 
   corpus = "-a--";
   substr = "---";
   correct_substr_pos = std::string::npos;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
 
   corpus = "-a--";
   substr = "-";
   correct_substr_pos = 0;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "-a--";
   substr = "--";
   correct_substr_pos = 2;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   
   corpus = "A";
   substr = "a";
   correct_substr_pos = 0;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "Aa";
   substr = "a";
   correct_substr_pos = 0;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "A - BEACh";
   substr = "bEACH";
   correct_substr_pos = 4;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "shor";
   substr = "LongerString";
   correct_substr_pos = string::npos;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
+  CHECK_EQ(substr_pos, correct_substr_pos);
   
   corpus = "12345";
   substr = "23";
   correct_substr_pos = 1;
   substr_pos = SpecUtils::ifind_substr_ascii(corpus, substr);
-  BOOST_CHECK_EQUAL(substr_pos, correct_substr_pos);
-}//BOOST_AUTO_TEST_CASE( checkIFind )
+  CHECK_EQ(substr_pos, correct_substr_pos);
+}//TEST_CASE( checkIFind )
 
 
 
-BOOST_AUTO_TEST_CASE( testPrintCompact )
+TEST_CASE( "testPrintCompact" )
 {
   using namespace std;
   
@@ -715,61 +737,61 @@ BOOST_AUTO_TEST_CASE( testPrintCompact )
 //
 //   cout << endl << endl;
 //
-  BOOST_CHECK( SpecUtils::printCompact(1e-08,2) == "1E-8" );
-  BOOST_CHECK( SpecUtils::printCompact(1e-05,7) == "1E-5" );
-  BOOST_CHECK( SpecUtils::printCompact(1e-05,1) == "1E-5" );
-  BOOST_CHECK( SpecUtils::printCompact(1.0001,3) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(1.0001,4) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(1.0001,5) == "1.0001" );
-  BOOST_CHECK( SpecUtils::printCompact(1.0001,6) == "1.0001" );
-  BOOST_CHECK( SpecUtils::printCompact(100000,2) == "1E5" );
-  BOOST_CHECK( SpecUtils::printCompact(80999,2) == "80999" );
-  BOOST_CHECK( SpecUtils::printCompact(89999,2) == "9E4" );
-  BOOST_CHECK( SpecUtils::printCompact(99999,2) == "1E5" );
-  BOOST_CHECK( SpecUtils::printCompact(100000,8) == "1E5" );
-  BOOST_CHECK( SpecUtils::printCompact(1e+08,2) == "1E8" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,1) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,2) == "1.2" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,3) == "1.23" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,4) == "1.234" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,5) == "1.2345" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,6) == "1.2345" );
-  BOOST_CHECK( SpecUtils::printCompact(1.2345,7) == "1.2345" );
-  BOOST_CHECK( SpecUtils::printCompact(1234.5,4) == "1234" );
-  BOOST_CHECK( SpecUtils::printCompact(1234.5,5) == "1234.5" );
-  BOOST_CHECK( SpecUtils::printCompact(1235.5,4) == "1236" );
-  BOOST_CHECK( SpecUtils::printCompact(1235.5,5) == "1235.5" );
-  BOOST_CHECK( SpecUtils::printCompact(-1234.5,5) == "-1234.5" );
-  BOOST_CHECK( SpecUtils::printCompact(999.9,2) == "1E3" );
-  BOOST_CHECK( SpecUtils::printCompact(999.9,3) == "1E3" );
-  BOOST_CHECK( SpecUtils::printCompact(999.9,4) == "999.9" );
-  BOOST_CHECK( SpecUtils::printCompact(999.9,5) == "999.9" );
-  BOOST_CHECK( SpecUtils::printCompact(0.9999,1) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(0.9999,2) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(0.9999,3) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(0.9999,4) == "0.9999" );
-  BOOST_CHECK( SpecUtils::printCompact(0.998,3) == "0.998" );
-  BOOST_CHECK( SpecUtils::printCompact(0.998,2) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(0.998,1) == "1" );
-  BOOST_CHECK( SpecUtils::printCompact(-0.998,3) == "-0.998" );
-  BOOST_CHECK( SpecUtils::printCompact(-0.998,2) == "-1" );
-  BOOST_CHECK( SpecUtils::printCompact(-0.998,1) == "-1" );
-  BOOST_CHECK( SpecUtils::printCompact(1.998,1) == "2" );
-  BOOST_CHECK( SpecUtils::printCompact(1.998,2) == "2" );
-  BOOST_CHECK( SpecUtils::printCompact(1.998,3) == "2" );
-  BOOST_CHECK( SpecUtils::printCompact(1.998,4) == "1.998" );
-  BOOST_CHECK( SpecUtils::printCompact(-1.998,1) == "-2" );
-  BOOST_CHECK( SpecUtils::printCompact(-1.998,2) == "-2" );
-  BOOST_CHECK( SpecUtils::printCompact(-1.998,3) == "-2" );
-  BOOST_CHECK( SpecUtils::printCompact(-1.998,4) == "-1.998" );
-  BOOST_CHECK( SpecUtils::printCompact(0.00998,1) == "0.01" );
-  BOOST_CHECK( SpecUtils::printCompact(0.00998,2) == "0.01" );
-  BOOST_CHECK( SpecUtils::printCompact(0.00998,3) == "0.00998" );
-  BOOST_CHECK( SpecUtils::printCompact(0.00998,4) == "0.00998" );
-  BOOST_CHECK( SpecUtils::printCompact(0.00998,5) == "0.00998" );
-  BOOST_CHECK( SpecUtils::printCompact(0.00998,6) == "0.00998" );
-  BOOST_CHECK( SpecUtils::printCompact(std::numeric_limits<double>::infinity(),6) == "inf" );
-  BOOST_CHECK( SpecUtils::printCompact(std::numeric_limits<double>::quiet_NaN(),6) == "nan" );
+  CHECK( SpecUtils::printCompact(1e-08,2) == "1E-8" );
+  CHECK( SpecUtils::printCompact(1e-05,7) == "1E-5" );
+  CHECK( SpecUtils::printCompact(1e-05,1) == "1E-5" );
+  CHECK( SpecUtils::printCompact(1.0001,3) == "1" );
+  CHECK( SpecUtils::printCompact(1.0001,4) == "1" );
+  CHECK( SpecUtils::printCompact(1.0001,5) == "1.0001" );
+  CHECK( SpecUtils::printCompact(1.0001,6) == "1.0001" );
+  CHECK( SpecUtils::printCompact(100000,2) == "1E5" );
+  CHECK( SpecUtils::printCompact(80999,2) == "80999" );
+  CHECK( SpecUtils::printCompact(89999,2) == "9E4" );
+  CHECK( SpecUtils::printCompact(99999,2) == "1E5" );
+  CHECK( SpecUtils::printCompact(100000,8) == "1E5" );
+  CHECK( SpecUtils::printCompact(1e+08,2) == "1E8" );
+  CHECK( SpecUtils::printCompact(1.2345,1) == "1" );
+  CHECK( SpecUtils::printCompact(1.2345,2) == "1.2" );
+  CHECK( SpecUtils::printCompact(1.2345,3) == "1.23" );
+  CHECK( SpecUtils::printCompact(1.2345,4) == "1.234" );
+  CHECK( SpecUtils::printCompact(1.2345,5) == "1.2345" );
+  CHECK( SpecUtils::printCompact(1.2345,6) == "1.2345" );
+  CHECK( SpecUtils::printCompact(1.2345,7) == "1.2345" );
+  CHECK( SpecUtils::printCompact(1234.5,4) == "1234" );
+  CHECK( SpecUtils::printCompact(1234.5,5) == "1234.5" );
+  CHECK( SpecUtils::printCompact(1235.5,4) == "1236" );
+  CHECK( SpecUtils::printCompact(1235.5,5) == "1235.5" );
+  CHECK( SpecUtils::printCompact(-1234.5,5) == "-1234.5" );
+  CHECK( SpecUtils::printCompact(999.9,2) == "1E3" );
+  CHECK( SpecUtils::printCompact(999.9,3) == "1E3" );
+  CHECK( SpecUtils::printCompact(999.9,4) == "999.9" );
+  CHECK( SpecUtils::printCompact(999.9,5) == "999.9" );
+  CHECK( SpecUtils::printCompact(0.9999,1) == "1" );
+  CHECK( SpecUtils::printCompact(0.9999,2) == "1" );
+  CHECK( SpecUtils::printCompact(0.9999,3) == "1" );
+  CHECK( SpecUtils::printCompact(0.9999,4) == "0.9999" );
+  CHECK( SpecUtils::printCompact(0.998,3) == "0.998" );
+  CHECK( SpecUtils::printCompact(0.998,2) == "1" );
+  CHECK( SpecUtils::printCompact(0.998,1) == "1" );
+  CHECK( SpecUtils::printCompact(-0.998,3) == "-0.998" );
+  CHECK( SpecUtils::printCompact(-0.998,2) == "-1" );
+  CHECK( SpecUtils::printCompact(-0.998,1) == "-1" );
+  CHECK( SpecUtils::printCompact(1.998,1) == "2" );
+  CHECK( SpecUtils::printCompact(1.998,2) == "2" );
+  CHECK( SpecUtils::printCompact(1.998,3) == "2" );
+  CHECK( SpecUtils::printCompact(1.998,4) == "1.998" );
+  CHECK( SpecUtils::printCompact(-1.998,1) == "-2" );
+  CHECK( SpecUtils::printCompact(-1.998,2) == "-2" );
+  CHECK( SpecUtils::printCompact(-1.998,3) == "-2" );
+  CHECK( SpecUtils::printCompact(-1.998,4) == "-1.998" );
+  CHECK( SpecUtils::printCompact(0.00998,1) == "0.01" );
+  CHECK( SpecUtils::printCompact(0.00998,2) == "0.01" );
+  CHECK( SpecUtils::printCompact(0.00998,3) == "0.00998" );
+  CHECK( SpecUtils::printCompact(0.00998,4) == "0.00998" );
+  CHECK( SpecUtils::printCompact(0.00998,5) == "0.00998" );
+  CHECK( SpecUtils::printCompact(0.00998,6) == "0.00998" );
+  CHECK( SpecUtils::printCompact(std::numeric_limits<double>::infinity(),6) == "inf" );
+  CHECK( SpecUtils::printCompact(std::numeric_limits<double>::quiet_NaN(),6) == "nan" );
   
   auto check_range = []( const double lower, const double upper ){
     const size_t nchecks = 100;
@@ -785,14 +807,14 @@ BOOST_AUTO_TEST_CASE( testPrintCompact )
       
       double readinval;
       const int nread = sscanf( strval.c_str(), "%lf", &readinval );
-      BOOST_CHECK( nread == 1 );
+      CHECK( nread == 1 );
       
       const double eps = 0.5 * std::pow(10.0, -(nsig - 1)) * fabs(number);
 
      //Example: if number is 1.2345E12 --> 1234.5E9, printed to 4 sig figs, then eps is 0.5*1.2345E9
 
-      BOOST_CHECK( fabs( fabs(number) - fabs(readinval) ) <= eps );
-      BOOST_CHECK( number==0.0 || readinval==0.0 || (std::signbit(number) == std::signbit(readinval)) );
+      CHECK( fabs( fabs(number) - fabs(readinval) ) <= eps );
+      CHECK( (number==0.0 || readinval==0.0 || (std::signbit(number) == std::signbit(readinval))) );
     }
   };//check_range(...)
   

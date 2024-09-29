@@ -55,30 +55,39 @@ namespace  SpecUtils
   /** \brief Converts each ascii letter to upper case, not UTF8 safe/aware. */
   void to_upper_ascii( std::string &input );
   
-  /** \brief Case independant string comparison. Not UTF8 or locale aware. */
+  /** \brief Case independent string comparison. Not UTF8 or locale aware. */
   bool iequals_ascii( const char *str, const char *test );
   
-  /** \brief Case independant string comparison. Not UTF8 or locale aware. */
+  /** \brief Case independent string comparison. Not UTF8 or locale aware. */
   bool iequals_ascii( const std::string &str, const char *test );
   
-  /** \brief Case independant string comparison. Not UTF8 or locale aware. */
+  /** \brief Case independent string comparison. Not UTF8 or locale aware. */
   bool iequals_ascii( const std::string &str, const std::string &test );
   
   /** \brief Returns if the substring is contained within the input string. */
   bool contains( const std::string &input, const char *substr );
   
   /** \brief Returns if the substring is contained within the input string,
-   independant of case; not UTF8 or locale aware.
+   independent of case; not UTF8 or locale aware.
+   
+   if `substr` is empty, will return false, which may be different than behavior of
+   `boost::algorithm::icontains(...)`.
    */
   bool icontains( const std::string &input, const char *substr );
   
   /** \brief Returns if the substring is contained within the input string,
-   independant of case; not UTF8 or locale aware.
+   independent of case; not UTF8 or locale aware.
+   
+   if `substr` is empty, will return false, which may be different than behavior of
+   `boost::algorithm::icontains(...)`.
    */
   bool icontains( const std::string &input, const std::string &substr );
   
   /** \brief Returns if the substring is contained within the input string,
-   independant of case; not UTF8 or locale aware.
+   independent of case; not UTF8 or locale aware.
+   
+   if `substr` is empty, will return false, which may be different than behavior of
+   `boost::algorithm::icontains(...)`.
    */
   bool icontains( const char *input, const size_t input_len,
                  const char *substr, const size_t substr_len );
@@ -87,12 +96,12 @@ namespace  SpecUtils
   bool starts_with( const std::string &input, const char *substr );
   
   /** \brief Returns if the input starts with the specified substr, case
-   independant; is not UTF8 or locale aware.
+   independent; is not UTF8 or locale aware.
    */
   bool istarts_with( const std::string &line, const char *label );
   
   /** \brief Returns if the input starts with the specified substr, case
-   independant; is not UTF8 or locale aware.
+   independent; is not UTF8 or locale aware.
    */
   bool istarts_with( const std::string &line, const std::string &label );
   
@@ -222,6 +231,11 @@ namespace  SpecUtils
    
    The ascii float may have preceding whitespaces, and any text afterwards;
    both of which are ignored.
+   
+   If number is larger than can be represented, this function may either return true with
+   result +inf (`SpecUtils_USE_FROM_CHARS`, `SpecUtils_USE_FAST_FLOAT`,
+   and `SpecUtils_USE_BOOST_SPIRIT`, ), or it could return false
+   (`SpecUtils_USE_STRTOD`).
    
    \param input Pointer to start of ascii string.  May be null only if length
    is zero.
