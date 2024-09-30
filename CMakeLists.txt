@@ -116,11 +116,12 @@ endif( SpecUtils_JAVA_SWIG )
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
-  FIND_PACKAGE(PythonLibs)
-  IF(NOT PYTHONLIBS_FOUND)
+  FIND_PACKAGE(Python3 COMPONENTS Development )
+  IF(NOT Python3_FOUND)
     MESSAGE(FATAL_ERROR "Unable to find PythonLibs.")
   ENDIF()
-endif( SpecUtils_PYTHON_BINDINGS )
+  message( "Python include dirs: ${Python3_INCLUDE_DIRS}")
+endif()
 
 set( sources
      src/SpecFile.cpp
@@ -402,7 +403,7 @@ endif( SpecUtils_ENABLE_URI_SPECTRA )
 
 
 if( SpecUtils_PYTHON_BINDINGS )
-  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
+  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${Python3_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 
@@ -420,7 +421,7 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> ${Boost_INCLUDE_DIRS}
+target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> 
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )

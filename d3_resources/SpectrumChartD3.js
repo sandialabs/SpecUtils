@@ -85,6 +85,9 @@ SpectrumChartD3 = function(elem, options) {
   if( (typeof this.options.doubleClickDelay) !== 'number' ) this.options.doubleClickDelay = 500;
   
   this.options.refLineTopPad = 30;
+  this.options.refLineWidth = 1;
+  this.options.refLineWidthHover = 2;
+  this.options.featureLineWidth = 2;
   
   self.options.logYFracTop = 0.05;
   self.options.logYFracBottom = 0.025;
@@ -3983,7 +3986,7 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
  * -------------- Reference Gamma Lines Functions --------------
  */
 SpectrumChartD3.prototype.drawRefGammaLines = function() {
-  /*Drawing of the refrenece lines is super duper un-optimized!!! */
+  /*Drawing of the reference lines is super duper un-optimized!!! */
   const self = this;
 
   if( !self.refLines || !self.refLines.length || !self.refLines[0].lines  || !self.refLines[0].lines.length ) {
@@ -4013,13 +4016,13 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   var gy = self.vis.selectAll("g.ref")
             .data( reflines, function(d){return d.id;} )
             .attr("transform", tx)
-            .attr("stroke-width",1);
+            .attr("stroke-width", self.options.refLineWidth );
 
   var gye = gy.enter().insert("g", "a")
     .attr("class", "ref")
     .attr("transform", tx);
 
-  function stroke(d){ return d.parent.color; };
+  function stroke(d){ return d.color ? d.color : d.parent.color; };
 
   function dashfunc(d){
     const particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum", "S.E.",   "D.E." ];
@@ -4413,8 +4416,10 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     self.refLineInfoTxt.attr("transform", tx );
   }
 
-
-  d3.select(nearestline).attr("stroke-width",2).select("line").attr("dx", "-1" );
+  d3.select(nearestline)
+    .attr("stroke-width",self.options.refLineWidthHover)
+    .select("line")
+    .attr("dx", "-1" );
 }
 
 SpectrumChartD3.prototype.setShowMouseStats = function(d) {
@@ -6634,8 +6639,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     let roiLB = Math.max(roi.lowerEnergy,minx);
     let roiUB = Math.min(roi.upperEnergy,maxx);
     
-    var xstartind = bisector.left( points, roiLB );
-    var xendind = bisector.right( points, roiUB );
+    let xstartind = bisector.left( points, roiLB );
+    let xendind = bisector.right( points, roiUB );
 
     // Boolean to signify whether to subtract points from background
     const useBackgroundSubtract = self.options.backgroundSubtract && background;
@@ -6646,26 +6651,25 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( xendind >= (points.length-2) )
       xendind = points.length - 2;
    
+    if( xstartind >= xendind )
+      return { paths: paths };
+   
     /*The continuum values used for the first and last bin of the ROI are fudged */
     /*  for now...  To be fixed */
-    var thisy = null, thisx = null, m, s, peak_area, cont_area;
+    let thisy = null, thisx = null, m, s, peak_area, cont_area;
     
-    //Need to go thorugh and get min/max, in px of each ROI, and save it somehome
-    //  so we can draw the line in only the ROI's y-domain
-    //var minyval_px = self.size.height
-    //    , maxyval_py = 0;
-    var firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
+    let firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
     
     // Background Subtract - Subtract the initial y-value with the corresponding background point
     if (useBackgroundSubtract) {
-      var bi = bisector.left(background.points, points[xstartind-(xstartind?1:0)].x);
+      const bi = bisector.left(background.points, points[xstartind-(xstartind?1:0)].x);
       firsty -= background.points[bi] ? background.points[bi].y : 0;
     }
     
     //paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
     paths[0] = "M" + self.xScale(roiLB) + "," + self.yScale(firsty) + " L";
     
-    for( var j = 0; j < 2*roi.peaks.length; ++j )
+    for( let j = 0; j < 2*roi.peaks.length; ++j )
       paths[j+1] = "";
       
     //Go from left to right and create lower path for each of the outlines that sit on the continuum
@@ -6705,6 +6709,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         }//if( the centroid of this peak is in this bin )
         
         if( roi.peaks.length===1 || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1])) ){
+          // This next index looks suspect, should it be `j+1+roi.peaks.length`
           if( !paths[j+1].length ){
             paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
           }else{
@@ -6996,7 +7001,33 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     //console.log( 'minypx=' + minypx + ', maxypx=' + maxypx + ' height=' + self.size.height );
     
     //go right to left and draw the fill areas top
-    peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
+    // TODO: We should be able to use this next line to make the paths for peaks, but it ends up being a bit wonky
+    //peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
+    // But if we use this next loop instead, things are fine:
+    peakamplitudes.reverse().forEach( function(peakamps,xindex){
+      var cont = peakamps[0];
+      var thisx = peakamps[1];
+          
+      peakamps.forEach( function( peakamp, peakindex ){
+        if( peakindex < 2 )
+          return;
+
+        const peaknum = (peakindex - 2);
+        const peak = roi.peaks[peaknum];
+        const m = peak.Centroid[0];
+        const s = peak.Width[0];
+        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
+          
+        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
+          return;
+          
+        var thisy = cont;
+        for( var j = 2; j <= peakindex; ++j )
+          thisy += peakamps[j];
+
+        paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
+      } );
+    });
 
     for( var peaknum = 0; peaknum < roi.peaks.length; ++peaknum ){
       if( leftMostFillValue[peaknum] && paths[peaknum+1].length )
@@ -7044,8 +7075,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       /* - The first path will be an underline of entire ROI
          - The next roi.peaks.length entries are the fills for each of the peaks
          - The next roi.peaks.length entries are the path of the peak, that sits on the ROI
+       
+       If a peak in the ROI is not visible (ROI partially off screen), then path will be empty.
       */
-      if( num === 0 )
+      if( (num === 0) || !p.length )
         return;
         
       console.assert( p.startsWith("M"), "Got path not starting with 'M': " + p );
@@ -8174,7 +8207,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     if( !self.doubleEscape && doubleEscapeEnergy >= 0 ) {
       self.doubleEscape = self.vis.append("line")  /* create double escape line */
       .attr("class", "peakLine")
-      .attr("stroke-width", 2)
+      .attr("stroke-width", self.options.featureLineWidth)
       .attr("x1", doubleEscapePix)
       .attr("x2", doubleEscapePix)
       .attr("y1", 0)
@@ -8235,7 +8268,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       /* draw compton edge line here */
       self.comptonPeak = self.vis.append("line")
         .attr("class", "peakLine")
-        .attr("stroke-width", 2)
+        .attr("stroke-width", self.options.featureLineWidth)
         .attr("y1", 0);
       self.comptonPeakText = self.vis.append("text")
         .attr("class", "peakText")
@@ -8294,7 +8327,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
       /* draw compton edge line here */
       self.comptonEdge = self.vis.append("line")
         .attr("class", "peakLine")
-        .attr("stroke-width", 2);
+        .attr("stroke-width", self.options.featureLineWidth);
       self.comptonEdgeText = self.vis.append("text")
         .attr("class", "peakText")
         .text( self.options.txt.comptonEdge );
@@ -8386,7 +8419,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           /* draw compton edge line here */
           self.clickedSumPeak = self.vis.append("line")
               .attr("class", "peakLine")
-              .attr("stroke-width", 2);
+              .attr("stroke-width", self.options.featureLineWidth);
           self.clickedSumPeakMeas = self.vis.append("text")
               .attr("class", "peakText");
         }
@@ -8435,7 +8468,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         /* draw left-sum peak line here */
         self.leftSumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2);
+          .attr("stroke-width", self.options.featureLineWidth);
         self.leftSumPeakText = self.vis.append("text")
           .attr("class", "peakText")
           .text( self.options.txt.clickedPeak );
@@ -8481,7 +8514,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
         /* draw sum peak line here */
         self.sumPeak = self.vis.append("line")
           .attr("class", "peakLine")
-          .attr("stroke-width", 2);
+          .attr("stroke-width", self.options.featureLineWidth);
       self.sumPeakText = self.vis.append("text")
           .attr("class", "peakText")
           .text( self.options.txt.sumPeak );

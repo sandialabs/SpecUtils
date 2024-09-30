@@ -6964,37 +6964,28 @@ std::string SpecFile::generate_psuedo_uuid() const
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   std::size_t seed = 0;
-  
-  boost_hash::hash_combine( seed, gamma_live_time_ );
+  boost_hash::hash_combine( seed, gamma_live_time_ ); //( seed + 0x9e3779b9 + boost_hash::hash_value( v ) )
   boost_hash::hash_combine( seed, gamma_real_time_ );
   boost_hash::hash_combine( seed, gamma_count_sum_ );
-  
   boost_hash::hash_combine( seed, neutron_counts_sum_ );
-  
 //  boost_hash::hash_combine( seed, filename_ );
   boost_hash::hash_combine( seed, detector_names_ );
-  
 //  boost_hash::hash_combine( seed, detector_numbers_ );
   boost_hash::hash_combine( seed, neutron_detector_names_ );
-  
 // Wont use gamma_detector_names_ for compatibility pre 20190813 when field was added
 //  boost_hash::hash_combine( seed, gamma_detector_names_ );
   
   if( !remarks_.empty() )
     boost_hash::hash_combine( seed, remarks_ );
-
   //parse_warnings_
   boost_hash::hash_combine( seed, lane_number_ );
-  
   if( !measurement_location_name_.empty() )
     boost_hash::hash_combine( seed, measurement_location_name_ );
   if( !inspection_.empty() )
     boost_hash::hash_combine( seed, inspection_ );
-  
   boost_hash::hash_combine( seed, instrument_type_ );
   boost_hash::hash_combine( seed, manufacturer_ );
   boost_hash::hash_combine( seed, instrument_model_ );
-  
   if( SpecUtils::valid_latitude(mean_latitude_)
      && SpecUtils::valid_longitude(mean_longitude_) )
   {
@@ -7009,7 +7000,6 @@ std::string SpecFile::generate_psuedo_uuid() const
 //  boost_hash::hash_combine( seed, detectors_analysis_ );
   boost_hash::hash_combine( seed, int(detector_type_) );
   boost_hash::hash_combine( seed, measurement_operator_ );
-  
   for( const std::shared_ptr<const Measurement> meas : measurements_ )
   {
     boost_hash::hash_combine( seed, meas->live_time() );
@@ -7023,11 +7013,9 @@ std::string SpecFile::generate_psuedo_uuid() const
       boost_hash::hash_combine( seed, meas->longitude() );
     //  boost_hash::hash_combine( seed, position_time_ );
   }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
-
 #if( PERFORM_DEVELOPER_CHECKS && (BOOST_VERSION >= 108100) )
   {// Begin use boost::hash proper, instead of our extracted version of it
     std::size_t boost_seed = 0;
-    
     boost::hash_combine( boost_seed, gamma_live_time_ );
     boost::hash_combine( boost_seed, gamma_real_time_ );
     boost::hash_combine( boost_seed, gamma_count_sum_ );
@@ -7054,7 +7042,6 @@ std::string SpecFile::generate_psuedo_uuid() const
     boost::hash_combine( boost_seed, measurements_.size() );
     boost::hash_combine( boost_seed, int(detector_type_) );
     boost::hash_combine( boost_seed, measurement_operator_ );
-    
     for( const std::shared_ptr<const Measurement> meas : measurements_ )
     {
       boost::hash_combine( boost_seed, meas->live_time() );
@@ -7066,7 +7053,6 @@ std::string SpecFile::generate_psuedo_uuid() const
       if( SpecUtils::valid_longitude(meas->longitude()) )
         boost::hash_combine( boost_seed, meas->longitude() );
     }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
-    
     assert( seed == boost_seed );
     
     if( seed != boost_seed )
