@@ -29,9 +29,7 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 
-
-
-set( SpecUtils_FLT_PARSE_METHOD "strtod" CACHE STRING [[How to parse lists of numbers.
+set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
 Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
 FastFloat requires having the header somewhere findable (or Fetching it), and strod is the slowest.
