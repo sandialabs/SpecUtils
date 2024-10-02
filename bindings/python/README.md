@@ -64,28 +64,13 @@ python3 setup.py bdist_wheel
 python3 -m pip install --user --force dist/SpecUtils-0.0.1-cp39-cp39-macosx_12_0_x86_64.whl
 ```
 
-
 ## Windows build instructions
-Assumes you already compiled boost with Python support
-```bash
-cd SpecUtils
-mkdir build_python
-cd build_python
-cmake -DSpecUtils_PYTHON_BINDINGS=ON -DCMAKE_PREFIX_PATH=/path/to/boost ..
-cmake --build . --config Release -j8
+Assumes you already compiled boost with Python support. The script `get-boost.ps1` will help you with this.
 
-mkdir SpecUtils
-cp .\Release\libSpecUtils.dll .\SpecUtils\SpecUtils.pyd
-cp ..\bindings\python\__init__.py .\SpecUtils\
-cp ..\bindings\python\setup.py .
-pip install pip setuptools wheel
-# We should be able to run the following command to make a package:
-# python.exe -m build --wheel
-# But I ran into an issue with the "Tag" wasnt compatible with the current
-# Python, so needed to use:
-python.exe setup.py bdist_wheel --plat-name=win_amd64
-# You can list tags compatible with your install `python.exe -m pip debug --verbose`
-# And you may be able.
-# If we ever get around to only using the stable API, we could use the command:
-# python.exe setup.py bdist_wheel --plat-name=win_amd64 --python-tag=cp35 --py-limited-api=cp35
-python.exe -m pip install --user --force .\dist\SpecUtils-0.0.2-cp312-cp312-win_amd64.whl
+Run these powershell scripts to build SpecUtils with python bindings and install the bindings into your python environment. Tested with python 3.11.
+
+```ps1
+# Run these in a Visual Studio Development Powershell Console
+PS C:\Projects\code\SpecUtils\bindings\python> .\build-4-python.ps1
+PS C:\Projects\code\SpecUtils\bindings\python> .\make-wheel.ps1
+```
