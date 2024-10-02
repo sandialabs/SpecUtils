@@ -88,5 +88,4 @@ python.exe setup.py bdist_wheel --plat-name=win_amd64
 # And you may be able.
 # If we ever get around to only using the stable API, we could use the command:
 # python.exe setup.py bdist_wheel --plat-name=win_amd64 --python-tag=cp35 --py-limited-api=cp35
-python.exe -m pip install --user --force .\dist\SpecUtils-0.0.1-cp312-cp312-win32.whl
-```
+python.exe -m pip install --user --force .\dist\SpecUtils-0.0.2-cp312-cp312-win_amd64.whl
