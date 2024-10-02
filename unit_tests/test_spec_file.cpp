@@ -156,8 +156,8 @@ TEST_CASE("Round Trip")
         CheckFileExistanceAndDelete(n42Fname);
 
         //auto detNames = generateDetectorNames();
-        //std::vector<std::string> detNames = { "Ba1", "Aa2", "Bc3", "Cb4" }; // Bc3 computes an out of range index
-        std::vector<std::string> detNames = { "Ba1", "Aa2", "Bb3", "Cb4" };
+        std::vector<std::string> detNames = { "Ba1", "Aa2", "Bc3", "Cb4" }; // Bc3 computes an out of range index
+        //std::vector<std::string> detNames = { "Ba1", "Aa2", "Bb3", "Cb4" };
 
         auto tags = std::vector<char>{'T', 'K', '-', '<'};
         auto numMeasurements = detNames.size();
@@ -182,7 +182,7 @@ TEST_CASE("Round Trip")
             auto &m = *(specfile.get_measurement_at(2));
 
             CHECK(m.panel() == 2 - 1);
-            CHECK(m.column() == 2 - 1);
+            CHECK(m.column() == 3 - 1);
             CHECK(m.mca() == 3 - 1);
         }
 
