@@ -23,6 +23,7 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interacti
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_FORTRAN_SWIG "Creates swig/FORTRAN bindings to the c++ code" OFF )
 option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
@@ -409,6 +410,9 @@ if( SpecUtils_JAVA_SWIG )
   target_link_libraries( SpecUtils PUBLIC ${JAVA_LIBRARIES} )
 endif( SpecUtils_JAVA_SWIG )
 
+if( SpecUtils_FORTRAN_SWIG )
+  add_subdirectory(bindings/swig/fortran)
+endif( SpecUtils_FORTRAN_SWIG )
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )
@@ -491,5 +495,3 @@ install(EXPORT SpecUtilsTargets
     NAMESPACE SpecUtils::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
 )
-
-add_subdirectory(bindings)
