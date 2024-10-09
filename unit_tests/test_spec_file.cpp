@@ -156,7 +156,11 @@ TEST_CASE("Round Trip")
         CheckFileExistanceAndDelete(n42Fname);
 
         //auto detNames = generateDetectorNames();
-        std::vector<std::string> detNames = { "Ba1", "Aa2", "Bc3", "Cb4" }; // Bc3 computes an out of range index
+      
+      // Note that using "Bc3" as a detector name causes the PCF file to use "compressed" deviation
+      //  pairs (i.e., int16_t values for both energy and offset, instead of floats), because the
+      //  "c" indicates third column.
+        std::vector<std::string> detNames = { "Ba1", "Aa2", "Bc3", "Cb4" };
         //std::vector<std::string> detNames = { "Ba1", "Aa2", "Bb3", "Cb4" };
 
         auto tags = std::vector<char>{'T', 'K', '-', '<'};
@@ -197,8 +201,8 @@ TEST_CASE("Round Trip")
 
             for (size_t i = 0; i < numMeasurements; i++)
             {
-                auto &expectedM = *(specfile.get_measurement_at(i));
-                auto &actualM = *(specfileToRead.get_measurement_at(i));
+                auto &expectedM = *(specfile.get_measurement_at( static_cast<int>(i) ));
+                auto &actualM = *(specfileToRead.get_measurement_at( static_cast<int>(i) ));
                 CHECK(expectedM.title() == actualM.title());
                 CHECK(actualM.pcf_tag() != '\0');
                 CHECK(expectedM.pcf_tag() == actualM.pcf_tag());

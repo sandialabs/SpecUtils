@@ -119,7 +119,7 @@ namespace SpecUtils
         void update_detector_name_params()
         {
             auto detName = detector_name();
-            pcf_det_name_to_dev_pair_index(detName, column_, panel_, mca_);
+            SpecUtils::pcf_det_name_to_dev_pair_index(detName, column_, panel_, mca_);
         }
     };
 

@@ -105,39 +105,45 @@ namespace
 namespace SpecUtils
 {
 
-// returns negative if invalid name
-int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
-{
-  col = panel = mca = -1;
-
-  // loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
-  //   loop over panels (8) //Aa1, Ab1, Ac1
-  //     loop over MCAs (8) //Aa1, Aa2, Aa3, etc
-  //       loop over deviation pairs (20)
-  //         energy (float uncompressed, or int16_t compressed)
-  //         offset (float uncompressed, or int16_t compressed)
-
-  if (name.size() < 2 || name.size() > 3 || name[name.size() - 1] < '1' || name[name.size() - 1] > '8')
+  int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
   {
-    return -1;
-  }
+    col = panel = mca = -1;
 
-  SpecUtils::to_lower_ascii(name);
+    //Note: PCF file specification uses the following definition
+      // loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
+      //   loop over panels (8) //Aa1, Ab1, Ac1
+      //     loop over MCAs (8) //Aa1, Aa2, Aa3, etc
+      //       loop over deviation pairs (20)
+      //         energy (float uncompressed, or int16_t compressed)
+      //         offset (float uncompressed, or int16_t compressed)
+    //  However, this differs from the N42-2006 specification that the first letter specifies the
+    //  panel, the second the column.
+    if( (name.size() < 2) || (name.size() > 3) || (name.back() < '1') || (name.back() > '8') )
+    {
+      return -1;
+    }
 
-  const char col_char = ((name.size() == 3) ? name[1] : 'a');
-  const char panel_char = name[0];
-  const char mca_char = name[name.size() - 1];
+    SpecUtils::to_lower_ascii(name);
 
-  if (col_char < 'a' || col_char > 'd' || panel_char < 'a' || panel_char > 'h')
-    return -1;
+    const char col_char = ((name.size() >= 3) ? name[1] : 'a');
+    const char panel_char = name[0];
+    const char mca_char = name[name.size() - 1];
 
-  col = col_char - 'a';
-  panel = panel_char - 'a';
-  mca = mca_char - '1';
-  // TODO - is this correct?
-  return col * (8 * 8 * 2 * 20) + panel * (8 * 2 * 20) + mca * (2 * 20);
-}
+    if( (col_char < 'a') || (col_char > 'd')
+       || (panel_char < 'a') || (panel_char > 'h')
+       || (mca_char < '1') || (mca_char > '8') )
+    {
+      return -1;
+    }
+    
+    col = col_char - 'a';
+    panel = panel_char - 'a';
+    mca = mca_char - '1';
 
+    return col * (8 * 8 * 2 * 20) + panel * (8 * 2 * 20) + mca * (2 * 20);
+  }//int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
+    
+  
 /** Gives the maximum number of channels any spectrum in the file will need to write to PCF file (rounded up to the nearest multiple of
  64 channels), as well as a sets a pointer to the lower channel energies to write to the first record, but only if lower channel energy
  calibration should be used (if FRF should be used, then pointer will be reset to nulltr).
@@ -415,16 +421,17 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
     {
       has_some_dev_pairs |= (!meas->deviation_pairs().empty());
 
-      // TODO - not sure this correctly sets need_compress_pairs
-      if( name.size() >= 3
-         && (name[1]=='c' || name[1]=='C' || name[1]=='d' || name[1]=='D')
-         && (name[0]>='a' && name[0]<='g')
-         && (name[2]>'0' && name[2]<'9') )
-        need_compress_pairs = true;
+      int col, panel, mca;
+      const int dev_pair_index = pcf_det_name_to_dev_pair_index( name, col, panel, mca );
+      
+      if( dev_pair_index >= 0 )
+        need_compress_pairs |= (col >= 2);
       
       dev_pairs[name] = meas->deviation_pairs();
-    }
+    }//if( we have gamma counts for this measurement )
   }//for( size_t i = 0; !detnames.empty() && i < measurements_.size(); ++i )
+  
+  need_compress_pairs |= (dev_pairs.size() > 128);
   
   //cerr << "Put " << dev_pairs.size() << " dev pairs in, with " << detnames.size()
   //     << " detnames remaining. has_some_dev_pairs=" << has_some_dev_pairs << endl;
@@ -486,6 +493,10 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
     {
       const size_t bytepos = (index + 2*i)*valsize;
       
+      assert( (bytepos + 2*valsize) <= nDevBytes ); //Should never happen here, since `name` is a valid N42 detector name if we are here
+      if( (bytepos + 2*valsize) > nDevBytes )
+        continue;
+      
       if( need_compress_pairs )
       {
 #if( defined(_MSC_VER) && _MSC_VER <= 1700 )
@@ -534,9 +545,13 @@ void SpecFile::write_deviation_pairs_to_pcf( std::ostream &ostr ) const
         if( !written_index.count(index) )
         {
           const auto &dpairs = dev_pairs[name];
-          for( size_t i = 0; i < dpairs.size() && i < 20; ++i )
+          for( size_t i = 0; (i < dpairs.size()) && (i < 20); ++i )
           {
             const size_t bytepos = (index + 2*i)*valsize;
+            
+            assert( (bytepos + 2*valsize) <= nDevBytes ); //Should never happen
+            if( (bytepos + 2*valsize) > nDevBytes )
+              continue;
             
             if( need_compress_pairs )
             {
@@ -1201,7 +1216,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
               memcpy( vals, &(dev_pair_bytes[byte_pos]), 80 );
               for( int i = 0; i < 20; ++i )
               {
-                // extract to vritual method add_devpair(), extension class can save off col, panel, mcs
+                // extract to virtual method add_devpair(), extension class can save off col, panel, mcs
                 // maybe save in lookup table? tuple<col, panel, mca, dev_pairs>
                 last_nonzero = (vals[2*i] || vals[2*i+1]) ? i+1 : last_nonzero;
                 devpairs.push_back( pair<float,float>(vals[2*i],vals[2*i+1]) );
@@ -1823,7 +1838,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
           if( measurements_[first_sample]->sample_number_ >= 0 )
             break;
         
-        if( first_sample >= measurements_.size() )  //SHouldnt ever happen
+        if( first_sample >= measurements_.size() )  //Shouldnt ever happen
         {
 #if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
           log_developer_error( __func__, "Logic error: someSamplesHaveNumbers is true, but could find meas now!" );
@@ -1913,15 +1928,23 @@ bool SpecFile::load_from_pcf( std::istream &input )
     
     if( have_deviation_pairs )
     {
-      bool used_deviation_pairs[4][8][8] = {}; //iniitalizes tp zero/false
+      bool used_deviation_pairs[4][8][8] = { false }; //initializes to zero/false
       
       //Assign deviation pairs to detectors with names like "Aa1", "Ab2", etc.
       for( const string &name : detector_names )
       {
         int col, panel, mca;
         pcf_det_name_to_dev_pair_index( name, col, panel, mca );
-        if( col < 0 || panel < 0 || mca < 0 || col > (compressed_devpair ? 1 : 3) || panel > 7 || mca > 7 )
+        
+        assert( (col <= 3) && (col >= -1) );
+        assert( (panel <= 7) && (panel >= -1) );
+        assert( (mca <= 7) && (mca >= -1) );
+        
+        if( (col < 0) || (panel < 0) || (mca < 0)
+           || (col > (compressed_devpair ? 3 : 1)) || (panel > 7) || (mca > 7) )
+        {
           continue;
+        }
         
         det_name_to_devs[name] = deviation_pairs[col][panel][mca];
         used_deviation_pairs[col][panel][mca] = true;
