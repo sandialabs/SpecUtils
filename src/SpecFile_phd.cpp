@@ -182,8 +182,8 @@ bool SpecFile::load_from_phd( std::istream &input )
           if( fields.size() == 1 )  //you need at least two rows for phd format
             throw runtime_error( "Unexpected spectrum data line-size" );
           
-          if( (floorf(fields[0]) != fields[0]) || (fields[0] < 1.0f) || IsNan(fields[0]) || IsInf(fields[0]) )
-            throw runtime_error( "First col of spectrum data must be integer >= 1" );
+          if( (floorf(fields[0]) != fields[0]) || (fields[0] < 0.0f) || IsNan(fields[0]) || IsInf(fields[0]) )
+            throw runtime_error( "First col of spectrum data must be integer >= 0" );
           
           const size_t start_channel = static_cast<size_t>( fields[0] );
           
