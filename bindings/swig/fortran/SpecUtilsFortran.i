@@ -170,4 +170,3 @@ namespace std {
 
 %include "SpecUtils/FileSystem.h"
 
-%include "SpecUtils/PcfExtensions.h"
