@@ -1,16 +1,17 @@
-#include <SpecUtils/SpecFile.h>
-#include <SpecUtils/ParseUtils.h>
-#include <SpecUtils/EnergyCalibration.h>
-#include <SpecUtils/DateTime.h>
-#include "../SpecUtils/PcfExtensions.h"
+#include <random>
 #include <filesystem>
+
+#include "SpecUtils/DateTime.h"
+#include "SpecUtils/SpecFile.h"
+#include "SpecUtils/ParseUtils.h"
+#include "SpecUtils/EnergyCalibration.h"
+
 namespace fs = std::filesystem;
 
 #undef isnan // Undefine the isnan macro (compile failure in doctest.h on Windows)
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include <random>
 
 void CheckFileExistanceAndDelete(fs::path filePath)
 {
@@ -97,9 +98,9 @@ std::array<std::string, 10> generateDetectorNames() {
 }
 
 
-std::shared_ptr<SpecUtils::MeasurementExt> makeMeasurement(int id, std::string detName, char tag)
+std::shared_ptr<SpecUtils::Measurement> makeMeasurement(int id, std::string detName, char tag)
 {
-    auto m = std::make_shared<SpecUtils::MeasurementExt>();
+    auto m = std::make_shared<SpecUtils::Measurement>();
 
     //auto detName = "Aa" + std::to_string(id);
     m->set_detector_name(detName); 
@@ -112,10 +113,11 @@ std::shared_ptr<SpecUtils::MeasurementExt> makeMeasurement(int id, std::string d
     m->set_title(title);
 
     auto descr = "test_descr " + std::to_string(id);
-    m->set_description(descr);
-
+    m->set_measurement_description( descr );
+  
     auto source = "source " + std::to_string(id);
-    m->set_source(source);
+    m->set_source_description( source );
+  
 
     SpecUtils::FloatVec ncounts{id + 99.0F};
     m->set_neutron_counts(ncounts, 0.0F);
@@ -151,7 +153,7 @@ TEST_CASE("Round Trip")
 
     SUBCASE("Write PCF File")
     {
-        SpecUtils::PcfFile specfile;
+        SpecUtils::SpecFile specfile;
         CheckFileExistanceAndDelete(fname);
         CheckFileExistanceAndDelete(n42Fname);
 
@@ -170,24 +172,24 @@ TEST_CASE("Round Trip")
         {
             auto detName = detNames[i];
             auto tag = tags[i];
-            auto m = makeMeasurement(i + 1, detName, tag);
+            auto m = makeMeasurement( static_cast<int>(i) + 1, detName, tag);
             specfile.add_measurement(m);
         }
 
         {
-            auto &m = *(specfile.get_measurement_at(0));
+            auto &m = *(specfile.measurement(size_t(0)) );
 
-            CHECK(m.panel() == 2 - 1);
-            CHECK(m.column() == 1 - 1);
-            CHECK(m.mca() == 1 - 1);
+            CHECK(m.rpm_panel_number() == 2 - 1);
+            CHECK(m.rpm_column_number() == 1 - 1);
+            CHECK(m.rpm_mca_number() == 1 - 1);
         }
 
         {
-            auto &m = *(specfile.get_measurement_at(2));
+            auto &m = *(specfile.measurement(size_t(2)));
 
-            CHECK(m.panel() == 2 - 1);
-            CHECK(m.column() == 3 - 1);
-            CHECK(m.mca() == 3 - 1);
+            CHECK(m.rpm_panel_number() == 2 - 1);
+            CHECK(m.rpm_column_number() == 3 - 1);
+            CHECK(m.rpm_mca_number() == 3 - 1);
         }
 
         specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
@@ -196,13 +198,14 @@ TEST_CASE("Round Trip")
 
         SUBCASE("Read PCF File")
         {
-            SpecUtils::PcfFile specfileToRead;
-            specfileToRead.read(fname);
-
+          SpecUtils::SpecFile specfileToRead;
+          const bool success_reading = specfileToRead.load_file(fname, SpecUtils::ParserType::Pcf);
+          REQUIRE( success_reading );
+          
             for (size_t i = 0; i < numMeasurements; i++)
             {
-                auto &expectedM = *(specfile.get_measurement_at( static_cast<int>(i) ));
-                auto &actualM = *(specfileToRead.get_measurement_at( static_cast<int>(i) ));
+                auto &expectedM = *(specfile.measurement(i));
+                auto &actualM = *(specfileToRead.measurement(i));
                 CHECK(expectedM.title() == actualM.title());
                 CHECK(actualM.pcf_tag() != '\0');
                 CHECK(expectedM.pcf_tag() == actualM.pcf_tag());
@@ -231,11 +234,11 @@ TEST_CASE("Round Trip")
                 CHECK(actualM.neutron_counts().at(0) > 0);
                 CHECK(actualM.neutron_counts() == expectedM.neutron_counts());
 
-                CHECK_FALSE(actualM.get_description().empty());
-                CHECK(actualM.get_description() == expectedM.get_description());
+                CHECK_FALSE(actualM.measurement_description().empty());
+                CHECK(actualM.measurement_description() == expectedM.measurement_description());
 
-                CHECK_FALSE(actualM.get_source().empty());
-                CHECK(actualM.get_source() == expectedM.get_source());
+                CHECK_FALSE(actualM.source_description().empty());
+                CHECK(actualM.source_description() == expectedM.source_description());
 
                 auto newEcal = *actualM.energy_calibration();
                 CHECK(newEcal.coefficients() == expectedM.energy_calibration()->coefficients());
@@ -297,18 +300,19 @@ TEST_CASE("Find Source String")
         "Description: TestDescription",
         "Source: TestSource"};
 
-    SpecUtils::MeasurementExt m;
-    m.set_remarks(remarks);
-
+    SpecUtils::Measurement m;
+    m.set_source_description( "TestSource" );
+    m.set_measurement_description( "TestDescription" );
+    
     auto expected = std::string("TestSource");
-    auto actual = m.get_source();
+    auto actual = m.source_description();
 
     CHECK(actual == expected);
     SUBCASE("Find Description String")
     {
 
         auto expected = std::string("TestDescription");
-        auto actual = m.get_description();
+        auto actual = m.measurement_description();
 
         CHECK(actual == expected);
     }
@@ -320,18 +324,18 @@ TEST_CASE("No Description Yields Empty String")
         "DescriptionZZZZZ: TestDescription",
         "SourceYYYYY: TestSource"};
 
-    SpecUtils::MeasurementExt m;
+    SpecUtils::Measurement m;
     m.set_remarks(remarks);
 
     auto expected = std::string();
-    auto actual = m.get_description();
+    auto actual = m.measurement_description();
 
     CHECK(actual == expected);
 
     SUBCASE("No Source Yields Empty String")
     {
         auto expected = std::string();
-        auto actual = m.get_source();
+        auto actual = m.source_description();
 
         CHECK(actual == expected);
     }

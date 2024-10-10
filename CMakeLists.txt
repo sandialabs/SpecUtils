@@ -169,7 +169,6 @@ set( headers
      SpecUtils/Filesystem.h
      SpecUtils/DateTime.h
      SpecUtils/ParseUtils.h
-     SpecUtils/PcfExtensions.h
      SpecUtils/SpecFile_location.h
      SpecUtils/RapidXmlUtils.hpp
 )
