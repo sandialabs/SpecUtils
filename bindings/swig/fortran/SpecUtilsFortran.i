@@ -128,8 +128,12 @@ namespace std {
     /// @param index is 1-based 
     std::shared_ptr<const SpecUtils::Measurement> measurement_at(int index)
     {
-        std::cout << "measurement_at: index: " << index << std::endl;
-        return $self->measurement(static_cast<size_t>(index-1));
+
+        auto newIndex = static_cast<size_t>(index-1);
+
+        std::cout << __func__ << ": newIndex: " << newIndex << std::endl;
+        std::cout << __func__ << ": num_measurements: " << $self->num_measurements() << std::endl;
+        return $self->measurement(newIndex);
     }
 
     int get_max_channel_count()

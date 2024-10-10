@@ -622,8 +622,12 @@ SWIGINTERN void SpecUtils_Measurement_get_spectrum(SpecUtils::Measurement *self,
         }        
     }
 SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int index){
-        std::cout << "measurement_at: index: " << index << std::endl;
-        return self->measurement(static_cast<size_t>(index-1));
+
+        auto newIndex = static_cast<size_t>(index-1);
+
+        std::cout << __func__ << ": newIndex: " << newIndex << std::endl;
+        std::cout << __func__ << ": num_measurements: " << self->num_measurements() << std::endl;
+        return self->measurement(newIndex);
     }
 SWIGINTERN int SpecUtils_SpecFile_get_max_channel_count(SpecUtils::SpecFile *self){
         auto maxCount = 0;
