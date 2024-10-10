@@ -1641,6 +1641,8 @@ bool SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
   
   if( m )
     m->set_start_time( tp );
+  
+  return m && !SpecUtils::is_special(tp);
 }
   
 char SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance )
