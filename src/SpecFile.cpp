@@ -499,7 +499,7 @@ std::shared_ptr<const Measurement> SpecFile::measurement(
   const size_t n = measurements_.size();
   
   if( num >= n )
-    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index" );
+    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index" + std::to_string(num));
   
   return measurements_[num];
 }
