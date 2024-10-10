@@ -1352,7 +1352,24 @@ bool SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instanc
     return false;
   
   const SpecUtils::SourceType st = SpecUtils::SourceType( static_cast<int>(type) );
+  
+  switch( st )
+  {
+    case SpecUtils::SourceType::IntrinsicActivity:
+    case SpecUtils::SourceType::Calibration:
+    case SpecUtils::SourceType::Background:
+    case SpecUtils::SourceType::Foreground:
+    case SpecUtils::SourceType::Unknown:
+      break;
+    
+    default:
+      assert( 0 );
+      return false;
+  }//switch( st )
+  
   specfile->set_source_type( st, m );
+  
+  return true;
 }
 
 
@@ -1369,8 +1386,17 @@ bool SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
     
   SpecUtils::time_point_t tp{};
   tp += chrono::microseconds( microseconds_since_unix_epoch );
+    
+  try
+  {
+    specfile->set_position( longitude, latitude, tp, m );
+  }catch( std::exception & )
+  {
+    assert( 0 );
+    return false;
+  }
   
-  specfile->set_position( longitude, latitude, tp, m );
+  return m->has_gps_info();
 }
   
 
