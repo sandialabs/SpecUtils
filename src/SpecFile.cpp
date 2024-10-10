@@ -1914,7 +1914,7 @@ void SpecFile::combine_gamma_channels( const size_t ncombine,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> m = measurement( meas );
+  std::shared_ptr<Measurement> m = unconstify_measurement( meas );
   if( !m )
     throw runtime_error( "SpecFile::combine_gamma_channels(): measurement"
                          " passed in is not owned by this SpecFile." );
@@ -2108,7 +2108,7 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   
-  std::shared_ptr<Measurement> m = measurement( meas );
+  std::shared_ptr<Measurement> m = unconstify_measurement( meas );
   if( !m )
     throw runtime_error( "SpecFile::truncate_gamma_channels(): measurement"
                         " passed in is not owned by this SpecFile." );
@@ -2129,7 +2129,7 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
 
 
 
-std::shared_ptr<Measurement> SpecFile::measurement( std::shared_ptr<const Measurement> meas )
+std::shared_ptr<Measurement> SpecFile::unconstify_measurement( std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -2155,7 +2155,7 @@ void SpecFile::set_live_time( const float lt,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_live_time(...): measurement"
                          " passed in didnt belong to this SpecFile" );
@@ -2171,7 +2171,7 @@ void SpecFile::set_real_time( const float rt, std::shared_ptr<const Measurement>
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_real_time(...): measurement"
                          " passed in didnt belong to this SpecFile" );
@@ -2445,7 +2445,7 @@ void SpecFile::set_start_time( const time_point_t &timestamp,
                     const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_start_time(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2458,7 +2458,7 @@ void SpecFile::set_remarks( const std::vector<std::string> &remarks,
                  const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_remarks(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2471,7 +2471,7 @@ void SpecFile::set_source_type( const SourceType type,
                                     const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_source_type(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2486,7 +2486,7 @@ void SpecFile::set_position( double longitude, double latitude,
                             const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_position(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2523,7 +2523,7 @@ void SpecFile::set_title( const std::string &title,
                                  const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_title(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2540,7 +2540,7 @@ void SpecFile::set_contained_neutrons( const bool contained,
                                       const float neutron_live_time )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_containtained_neutrons(...): "
                         "measurement passed in didnt belong to this "
@@ -7285,7 +7285,7 @@ void SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalibra
   if( !cal )
     throw runtime_error( "set_calibration: invalid calibration passed in" );
           
-  std::shared_ptr<Measurement> meas = measurement(constmeas);
+  std::shared_ptr<Measurement> meas = unconstify_measurement(constmeas);
           
   if( !meas )
     throw runtime_error( "set_calibration: invalid passed in measurement" );

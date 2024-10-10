@@ -2444,7 +2444,7 @@ protected:
   //measurement(...): converts a const Measurement ptr to a non-const Measurement
   // ptr, as well as checking that the Measurement actually belong to this
   //  SpecFile object. Returns empty pointer on error.
-  std::shared_ptr<Measurement> measurement( std::shared_ptr<const Measurement> meas );
+  std::shared_ptr<Measurement> unconstify_measurement( std::shared_ptr<const Measurement> meas );
   
   //find_detector_names(): looks through measurements_ to find all detector
   //  names.
