@@ -923,14 +923,8 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
       trim( spectrum_title );
       SpecUtils::ireplace_all( spectrum_title, "  ", " " );
       
-      string source_list, spectrum_desc;
-      for( const string &remark : meas->remarks() )
-      {
-        if( SpecUtils::istarts_with(remark, "Description:") )
-          spectrum_desc = remark.substr(12);
-        else if( SpecUtils::istarts_with(remark, "Source:") )
-          source_list = remark.substr(7);
-      }//for( const string &remark : meas->remarks() )
+      string source_list = meas->source_description_;
+      string spectrum_desc = meas->measurement_description_;
       
       SpecUtils::trim( spectrum_title );
       SpecUtils::trim( spectrum_desc );
@@ -1703,14 +1697,10 @@ bool SpecFile::load_from_pcf( std::istream &input )
       //else meas->source_type_ = SourceType::Unknown
       
       meas->title_ = spectrum_title;
-      
-      if( !spectrum_desc.empty() )
-        meas->remarks_.push_back( "Description: " + spectrum_desc );
-      
-      if( !source_list.empty() )
-        meas->remarks_.push_back( "Source: " + source_list );
-      
+      meas->measurement_description_ = spectrum_desc;
+      meas->source_description_ = source_list;
       meas->pcf_tag_ = character_tag;
+      
       if( character_tag == '-' )
       {
         meas->occupied_ =  OccupancyStatus::NotOccupied;

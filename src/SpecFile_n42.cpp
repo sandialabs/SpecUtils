@@ -2626,7 +2626,19 @@ struct N42DecodeHelper2006
           meas.pcf_tag_ = tag_str.empty() ? '\0' : tag_str[0];
           continue;
         }
-          
+        
+        if( SpecUtils::istarts_with( remark, "Source:") )
+        {
+          meas.source_description_ = SpecUtils::trim_copy( remark.substr(7) );
+          continue;
+        }
+        
+        if( SpecUtils::istarts_with( remark, "Description:") )
+        {
+          meas.measurement_description_ = SpecUtils::trim_copy( remark.substr(12) );
+          continue;
+        }
+        
         meas.remarks_.push_back( remark );
           
         if( meas.sample_number_ < 0 )
@@ -3642,6 +3654,12 @@ public:
             {
               const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
               meas->pcf_tag_ = tag_str.empty() ? '\0' : tag_str[0];
+            }else if( SpecUtils::istarts_with( remark, "Source:") )
+            {
+              meas->source_description_ = SpecUtils::trim_copy( remark.substr(7) );
+            }else if( SpecUtils::istarts_with( remark, "Description:") )
+            {
+              meas->measurement_description_ = SpecUtils::trim_copy( remark.substr(12) );
             }else if( remark.size() )
             {
               meas->remarks_.emplace_back( std::move(remark) );
@@ -4040,6 +4058,12 @@ public:
               //See notes in equivalent portion of code for the <Spectrum> tag
               const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
               meas->pcf_tag_ = tag_str.empty() ? '\0' : tag_str.front();
+            }else if( SpecUtils::istarts_with( remark, "Source:") )
+            {
+              meas->source_description_ = SpecUtils::trim_copy( remark.substr(7) );
+            }else if( SpecUtils::istarts_with( remark, "Description:") )
+            {
+              meas->measurement_description_ = SpecUtils::trim_copy( remark.substr(12) );
             }else if( !remark.empty() )
             {
               meas->remarks_.push_back( remark );
@@ -9327,6 +9351,12 @@ namespace SpecUtils
     
     if( pcf_tag_ != '\0' )
       remarks.push_back( string("Tag: ") + pcf_tag_ );
+    
+    if( !source_description_.empty() )
+      remarks.push_back( "Source: " + source_description_ );
+    
+    if( !measurement_description_.empty() )
+      remarks.push_back( "Description: " + measurement_description_ );
     
     bool wroteSurvey = false, wroteName = false, wroteSpeed = false;
     

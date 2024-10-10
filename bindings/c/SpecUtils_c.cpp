@@ -1516,34 +1516,8 @@ void SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
-  if( !m )
-    return;
-  
-  // We will erase existing description if empty string is passed in.
-  //  Otherwise we will update description.
-  string description( description_cstr ? description_cstr : "" );
-  if( !description.empty() )
-    description = "Description: " + description;
-  
-  vector<string> remarks = m->remarks();
-
-  // If there is already a description, over-write it
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Description:") )
-    {
-      if( description.empty() )
-        remarks.erase( begin(remarks) + i );
-      else
-        remarks[i] = description;
-      
-      m->set_remarks( remarks );
-      return;
-    }
-  }//
-  
-  remarks.push_back( description );
-  m->set_remarks( remarks );
+  if( m )
+    m->set_measurement_description( description_cstr ? description_cstr : "" );
 }
 
 
@@ -1552,34 +1526,8 @@ void SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
-  if( !m )
-    return;
-  
-  // We will erase existing description if empty string is passed in.
-  //  Otherwise we will update description.
-  string src_string( source_string_cstr ? source_string_cstr : "" );
-  if( !src_string.empty() )
-    src_string = "Source: " + src_string;
-  
-  vector<string> remarks = m->remarks();
-
-  // If there is already a source string, over-write it
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Source:") )
-    {
-      if( src_string.empty() )
-        remarks.erase( begin(remarks) + i );
-      else
-        remarks[i] = src_string;
-      
-      m->set_remarks( remarks );
-      return;
-    }
-  }//
-  
-  remarks.push_back( src_string );
-  m->set_remarks( remarks );
+  if( m )
+    m->set_source_description( source_string_cstr ? source_string_cstr : "" );
 }
   
 

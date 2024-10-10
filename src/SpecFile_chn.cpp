@@ -518,7 +518,6 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
     ostr.write( "\0", 1 );
   
   
-  
   string detdesc = summed->title_;
   for( const string &remark : remarks_ )
   {

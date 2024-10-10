@@ -1120,7 +1120,31 @@ uint32_t Measurement::derived_data_properties() const
   return derived_data_properties_;
 }
 
+  
+int Measurement::rpm_panel_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return panel;
+}
+  
 
+int Measurement::rpm_column_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return col;
+}
+  
+
+int Measurement::rpm_mca_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return mca;
+}
+
+  
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {
@@ -1602,6 +1626,8 @@ void Measurement::reset()
   dose_rate_ = exposure_rate_ = -1.0f;
   
   pcf_tag_ = '\0';
+  source_description_.clear();
+  measurement_description_.clear();
   
   location_.reset();
 }//void reset()
@@ -1646,6 +1672,30 @@ void Measurement::set_pcf_tag( const char tag_char )
   pcf_tag_ = tag_char;
 }
 
+
+void Measurement::set_source_description( const std::string &description )
+{
+  source_description_ = description;
+}
+  
+
+const string &Measurement::source_description() const
+{
+  return source_description_;
+}
+
+  
+void Measurement::set_measurement_description( const std::string &description )
+{
+  measurement_description_ = description;
+}
+
+  
+const string &Measurement::measurement_description() const
+{
+  return measurement_description_;
+}
+  
   
 void Measurement::combine_gamma_channels( const size_t ncombine )
 {
@@ -3578,6 +3628,18 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
                      + " while RHS is " + std::to_string(rhs.pcf_tag_) );
   }
   
+  if( lhs.source_description_ != rhs.source_description_ )
+  {
+    issues.push_back( string("Measurement: The source description of LHS is ")
+                     + lhs.source_description_ + " while RHS is " + rhs.source_description_ );
+  }
+  
+  if( lhs.measurement_description_ != rhs.measurement_description_ )
+  {
+    issues.push_back( string("Measurement: The measurement description of LHS is ")
+                + lhs.measurement_description_ + " while RHS is " + rhs.measurement_description_ );
+  }
+  
   if( (!lhs.location_) != (!rhs.location_) )
   {
     issues.push_back( "Measurement: The "
@@ -4433,6 +4495,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   exposure_rate_ = rhs.exposure_rate_;
   
   pcf_tag_ = rhs.pcf_tag_;
+  source_description_ = rhs.source_description_;
+  measurement_description_ = rhs.measurement_description_;
   
   location_ = rhs.location_;
   
@@ -7864,6 +7928,22 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       
       if( meas->pcf_tag_ != '\0' )
         dataH->pcf_tag_ = meas->pcf_tag_;
+      
+      string &src_desc = dataH->source_description_;
+      const string &rhs_src_desc = meas->source_description_;
+      if( !rhs_src_desc.empty()
+         && (src_desc.empty() || (src_desc.find(rhs_src_desc) == string::npos)) )
+      {
+        src_desc += (src_desc.empty() ? "" : ",") + rhs_src_desc;
+      }
+      
+      string &meas_desc = dataH->measurement_description_;
+      const string &rhs_meas_desc = meas->measurement_description_;
+      if( !rhs_meas_desc.empty() 
+         && (meas_desc.empty() || (meas_desc.find(rhs_meas_desc) == string::npos)) )
+      {
+        meas_desc += (meas_desc.empty() ? "" : ",") + rhs_meas_desc;
+      }
       
       if( meas->has_gps_info() )
       {

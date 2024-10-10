@@ -626,6 +626,25 @@ public:
    */
   char pcf_tag() const;
   
+  /** Returns the source description.
+   
+   This is free-form text to describe the source, and may be used in an application specific manor.
+   For example, GADRAS-DRF will use strings such as: "Am241,10uC", "Am241,10uC{an=26,ad=10}",
+    "60CO_123456" (where 123456 is the Co60 source serial number), or
+    "PotassiumInSoil,1.80 Ci{24.9,2.2}+ThoriumInSoil,7.63 Ci{24.9,2.2}+UraniumInSoil,2.76 Ci{24.9,2.2}"
+   
+   This field corresponds roughly to the information that would be put into a N42 RadItemInformation element, or a PCF
+   spectrum source list.
+   */
+  const std::string &source_description() const;
+  
+  /** Returns the measurement description.
+   
+   This is a free-form text field, primarily meant to correspond to PCF records spectrum description field.
+   */
+  const std::string &measurement_description() const;
+  
+  
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns time_point_t{} otherwise.
   const time_point_t position_time() const;
@@ -842,6 +861,22 @@ public:
   /** Sets the application specific "tag" character, used by the PCF file format. */
   void set_pcf_tag( const char tag_char );
   
+  /** Sets the source description for this measurement.
+   
+   This is a free-form text field, but a convention that may be used is that of GADRAS-DRF, such as
+    "Am241,10uC", "Am241,10uC{an=26,ad=10}", "60CO_123456" (where 123456 is the Co60 source serial number), etc
+   
+   This field corresponds roughly to the information that would be put into a N42 RadItemInformation element, or a PCF
+   spectrum source list.
+   */
+  void set_source_description( const std::string &description );
+  
+  /** Set the measurements description.
+   
+   This is a free-form text field, primarily meant to correspond to PCF records spectrum description field.
+   */
+  void set_measurement_description( const std::string &description );
+    
   /** returns the number of channels in #gamma_counts_.
    Note: energy calibration could still be invalid and not have channel energies defined, even
    when this returns a non-zero value.
@@ -963,6 +998,21 @@ public:
   uint32_t derived_data_properties() const;
   
   
+  /** For data from a RPM the detector name provides the location of this detector within the portal; the function returns
+   the panel number.
+   
+   @returns The panel number, as interpreted from the detector name.  Will return -1 if the name does not conform to
+            the N42-2006 convention of e.g., "Aa1", "Bc4", etc.  If a valid name, will return a value of 0, 1, 2, or 3.
+   
+   This is a convenience function for calling `pcf_det_name_to_dev_pair_index(...)`
+   */
+  int rpm_panel_number() const;
+  
+  /** Similar to `rpm_panel_number()`, but returns panel number (-1 on invalid detector name, or otherwise values [0,7]. */
+  int rpm_column_number() const;
+  
+  /** Similar to `rpm_panel_number()`, but returns mca number (-1 on invalid detector name, or otherwise values [0,7]. */
+  int rpm_mca_number() const;
   
   //Functions to write this Measurement object out to external formats
   
@@ -1173,7 +1223,24 @@ protected:
        'T' Calibration from thorium
        'K' Calibration from potassium
    */
-  char pcf_tag_ = '\0';
+  char pcf_tag_;
+  
+  /** Free-form text description of the source, for example "Am241,10uC", "Am241,10uC{an=26,ad=10}",
+    "60CO_123456" (where 123456 is the Co60 source serial number), etc.
+   
+   This field corresponds roughly to the information that would be put into a N42 RadItemInformation element, or a PCF
+   spectrum source list.
+   
+   TODO: Update to use a structure similar to RadItemInformation
+   */
+  std::string source_description_;
+  
+  /** Corresponds to a PCF records spectrum description field.
+   */
+  std::string measurement_description_;
+  
+  //void set_description(const std::string &description)
+  //  void set_source(const std::string &source)
   
   /** The #LocationState indicates the position, speed, and/or orientation of the instrument,
    detector, or item being measured.  At the moment, only one of these quantities are recorded,
