@@ -45,6 +45,8 @@
 #include <stdexcept>
 #include <functional>
 #include <sys/stat.h>
+#include <cstring> // For strerror
+#include <cerrno>  // For errno
 
 #if( PERFORM_DEVELOPER_CHECKS )
 #include <boost/version.hpp>
@@ -85,6 +87,7 @@
 //   https://eigen.tuxfamily.org/  (MPL2) can probably simply use Eigen::Map
 #if( defined(__x86_64__) || defined(__i386__) )
 #include <immintrin.h>
+#include "SpecFile.h"
 #else
 static_assert( 0, "SpecUtils_USE_SIMD is currently only enabled for i386/x86" );
 #endif
@@ -896,14 +899,17 @@ void Measurement::set_occupancy_status( const OccupancyStatus status )
 
 
 void Measurement::set_detector_name( const std::string &name )
-{
-  detector_name_ = name;
+{ 
+  detector_name_ = trim_copy(name);
 }
 
 
 void Measurement::set_detector_number( const int detnum )
 {
   detector_number_ = detnum;
+  std::ostringstream sstrm;
+  sstrm << detnum;
+  set_detector_name(sstrm.str());
 }
 
   
@@ -912,31 +918,35 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
 {
   live_time_ = livetime;
   real_time_ = realtime;
+  set_gamma_counts(counts);
+}//set_gamma_counts
+
+void Measurement::set_gamma_counts(std::shared_ptr<const SpecUtils::FloatVec> counts)
+{
   gamma_count_sum_ = 0.0;
-  
-  //const size_t oldnchan = gamma_counts_ ? gamma_counts_->size() : 0u;
-  
-  if( !counts )
+
+  // const size_t oldnchan = gamma_counts_ ? gamma_counts_->size() : 0u;
+
+  if (!counts)
     counts = std::make_shared<std::vector<float>>();
   gamma_counts_ = counts;
-  for( const float val : *counts )
+  for (const float val : *counts)
     gamma_count_sum_ += val;
-  
-  assert( energy_calibration_ );
-  
+
+  assert(energy_calibration_);
+
   const auto &cal = *energy_calibration_;
   const size_t newnchan = gamma_counts_->size();
   const size_t calnchan = cal.num_channels();
-  
-  if( (newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge) )
+
+  if ((newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge))
   {
-    //We could preserve the old coefficients for Polynomial and FRF, and just create a new
-    //  calibration... it isnt clear if we should do that, or just clear out the calibration...
+    // We could preserve the old coefficients for Polynomial and FRF, and just create a new
+    //   calibration... it isnt clear if we should do that, or just clear out the calibration...
     energy_calibration_ = std::make_shared<const SpecUtils::EnergyCalibration>();
   }
-}//set_gamma_counts
-  
-  
+}
+
 void Measurement::set_neutron_counts( const std::vector<float> &counts, const float live_time )
 {
   neutron_counts_ = counts;
@@ -1110,7 +1120,31 @@ uint32_t Measurement::derived_data_properties() const
   return derived_data_properties_;
 }
 
+  
+int Measurement::rpm_panel_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return panel;
+}
+  
 
+int Measurement::rpm_column_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return col;
+}
+  
+
+int Measurement::rpm_mca_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return mca;
+}
+
+  
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {
@@ -1592,6 +1626,8 @@ void Measurement::reset()
   dose_rate_ = exposure_rate_ = -1.0f;
   
   pcf_tag_ = '\0';
+  source_description_.clear();
+  measurement_description_.clear();
   
   location_.reset();
 }//void reset()
@@ -1636,6 +1672,30 @@ void Measurement::set_pcf_tag( const char tag_char )
   pcf_tag_ = tag_char;
 }
 
+
+void Measurement::set_source_description( const std::string &description )
+{
+  source_description_ = description;
+}
+  
+
+const string &Measurement::source_description() const
+{
+  return source_description_;
+}
+
+  
+void Measurement::set_measurement_description( const std::string &description )
+{
+  measurement_description_ = description;
+}
+
+  
+const string &Measurement::measurement_description() const
+{
+  return measurement_description_;
+}
+  
   
 void Measurement::combine_gamma_channels( const size_t ncombine )
 {
@@ -3568,6 +3628,18 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
                      + " while RHS is " + std::to_string(rhs.pcf_tag_) );
   }
   
+  if( lhs.source_description_ != rhs.source_description_ )
+  {
+    issues.push_back( string("Measurement: The source description of LHS is ")
+                     + lhs.source_description_ + " while RHS is " + rhs.source_description_ );
+  }
+  
+  if( lhs.measurement_description_ != rhs.measurement_description_ )
+  {
+    issues.push_back( string("Measurement: The measurement description of LHS is ")
+                + lhs.measurement_description_ + " while RHS is " + rhs.measurement_description_ );
+  }
+  
   if( (!lhs.location_) != (!rhs.location_) )
   {
     issues.push_back( "Measurement: The "
@@ -4423,6 +4495,8 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   exposure_rate_ = rhs.exposure_rate_;
   
   pcf_tag_ = rhs.pcf_tag_;
+  source_description_ = rhs.source_description_;
+  measurement_description_ = rhs.measurement_description_;
   
   location_ = rhs.location_;
   
@@ -7855,6 +7929,22 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
       if( meas->pcf_tag_ != '\0' )
         dataH->pcf_tag_ = meas->pcf_tag_;
       
+      string &src_desc = dataH->source_description_;
+      const string &rhs_src_desc = meas->source_description_;
+      if( !rhs_src_desc.empty()
+         && (src_desc.empty() || (src_desc.find(rhs_src_desc) == string::npos)) )
+      {
+        src_desc += (src_desc.empty() ? "" : ",") + rhs_src_desc;
+      }
+      
+      string &meas_desc = dataH->measurement_description_;
+      const string &rhs_meas_desc = meas->measurement_description_;
+      if( !rhs_meas_desc.empty() 
+         && (meas_desc.empty() || (meas_desc.find(rhs_meas_desc) == string::npos)) )
+      {
+        meas_desc += (meas_desc.empty() ? "" : ",") + rhs_meas_desc;
+      }
+      
       if( meas->has_gps_info() )
       {
         num_gps += 1;
@@ -8742,8 +8832,8 @@ void SpecFile::write_to_file( const std::string filename,
     samples = sample_numbers_;
     detectors = set<int>( detector_numbers_.begin(), detector_numbers_.end() );
   }
-  
-  write_to_file( filename, samples, detectors, format );
+  auto newname =  SpecUtils::trim_copy(filename);
+  write_to_file( newname, samples, detectors, format );
 }//void write_to_file(...)
 
 
@@ -8763,7 +8853,11 @@ void SpecFile::write_to_file( const std::string name,
 #endif
 
   if( !output )
-    throw runtime_error( "Failed to open file (" + name + ") for writing" );
+  {
+    auto errorStr = std::string(std::strerror(errno));
+    throw runtime_error( "Failed to open file (" + name + "): " + errorStr );
+  }
+
   
   write( output, sample_nums, det_nums, format );
 }//void write_to_file(...)

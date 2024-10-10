@@ -660,7 +660,7 @@ SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
    
   @param microseconds_since_unix_epoch The time of the GPS reading.  Use a value of 0 to indicate not relevant.
    
-  Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`).
+  Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`), and if values are valid lat/long.
 */
 DLLEXPORT bool CALLINGCONVENTION
 SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
