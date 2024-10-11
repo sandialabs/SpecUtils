@@ -23,13 +23,12 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interacti
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_FORTRAN_SWIG "Creates swig/FORTRAN bindings to the c++ code" OFF )
 option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
-
-
 
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
@@ -116,11 +115,12 @@ endif( SpecUtils_JAVA_SWIG )
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
 
 if( SpecUtils_PYTHON_BINDINGS )
-  FIND_PACKAGE(PythonLibs)
-  IF(NOT PYTHONLIBS_FOUND)
+  FIND_PACKAGE(Python3 COMPONENTS Development )
+  IF(NOT Python3_FOUND)
     MESSAGE(FATAL_ERROR "Unable to find PythonLibs.")
   ENDIF()
-endif( SpecUtils_PYTHON_BINDINGS )
+  message( "Python include dirs: ${Python3_INCLUDE_DIRS}")
+endif()
 
 set( sources
      src/SpecFile.cpp
@@ -401,7 +401,7 @@ endif( SpecUtils_ENABLE_URI_SPECTRA )
 
 
 if( SpecUtils_PYTHON_BINDINGS )
-  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${PYTHON_LIBRARIES} )
+  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${Python3_LIBRARIES} )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 
@@ -409,6 +409,9 @@ if( SpecUtils_JAVA_SWIG )
   target_link_libraries( SpecUtils PUBLIC ${JAVA_LIBRARIES} )
 endif( SpecUtils_JAVA_SWIG )
 
+if( SpecUtils_FORTRAN_SWIG )
+  add_subdirectory(bindings/swig/fortran)
+endif( SpecUtils_FORTRAN_SWIG )
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )
@@ -419,7 +422,7 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> ${Boost_INCLUDE_DIRS}
+target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> 
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )

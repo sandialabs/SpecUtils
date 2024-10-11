@@ -660,7 +660,7 @@ SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
    
   @param microseconds_since_unix_epoch The time of the GPS reading.  Use a value of 0 to indicate not relevant.
    
-  Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`).
+  Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`), and if values are valid lat/long.
 */
 DLLEXPORT bool CALLINGCONVENTION
 SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
@@ -768,6 +768,14 @@ DLLEXPORT bool CALLINGCONVENTION
 SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
                                             const char * const start_time_str );
   
+/** Returns the application-specific "tag" characters used by the PCF file format. */
+DLLEXPORT char CALLINGCONVENTION
+SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance );
+
+/** Sets the application-specific "tag" characters used by the PCF file format. */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
+                                  const char tag_char );
   
 DLLEXPORT uint32_t CALLINGCONVENTION 
 SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance );

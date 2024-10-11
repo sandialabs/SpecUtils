@@ -293,40 +293,6 @@ Integral float_to_integral( float d )
     return std::signbit(d) ? min_int_val : max_int_val;
   }//float_to_integral
 
-  template<class StringVec>
-  inline std::string get_source(const StringVec & vec)
-  {
-    auto retVal = std::string();
-    auto sourceStringOffset = 8U;
-    for(auto str : vec)
-    {
-      if(SpecUtils::istarts_with(str, "Source:"))
-      {
-        retVal = str.substr(sourceStringOffset);
-        trim(retVal);
-        break;
-      }    
-    }
-    return retVal;
-  }
-
-  template<class StringVec>
-  inline std::string get_description(const StringVec & vec)
-  {
-    auto retVal = std::string();
-    auto descrOffset = 12U;
-    for(auto str : vec)
-    {
-      if(SpecUtils::istarts_with(str, "Description:"))
-      {
-        retVal = str.substr(descrOffset);
-        trim(retVal);
-        break;
-      }    
-    }
-    return retVal;
-  }
-
 }//namespace SpecUtils
 
 #endif //SpecUtils_ParseUtils_h

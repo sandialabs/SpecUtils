@@ -41,7 +41,11 @@ message( "Args: ${COMMON_TEST_ARGS}")
 
 add_executable( test_spec_file test_spec_file.cpp )
 target_link_libraries( test_spec_file PRIVATE SpecUtils )
-set_target_properties( test_spec_file PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+set_target_properties( test_spec_file PROPERTIES 
+    CXX_STANDARD 20 
+    CXX_STANDARD_REQUIRED YES 
+    CXX_EXTENSIONS YES )
+ 
 add_test( NAME test_spec_file
           COMMAND $<TARGET_FILE:test_spec_file> 
 )

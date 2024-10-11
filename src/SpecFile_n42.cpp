@@ -1252,6 +1252,14 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
           Spectrum->append_node( remark );
         }
         
+        if( m->pcf_tag() != '\0' )
+        {
+          const string tag_remark = string("Tag: ") + m->pcf_tag();
+          val = doc->allocate_string( tag_remark.c_str(), tag_remark.size()+1 );
+          xml_node<char> *remark = doc->allocate_node( node_element, "Remark", val );
+          Spectrum->append_node( remark );
+        }//
+        
         const std::vector<std::string> &remarks = m->remarks();
         for( size_t i = 0; i < remarks.size(); ++i )
         {
@@ -1330,6 +1338,14 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
             xml_node<char> *remark = doc->allocate_node( node_element, "Remark", val );
             GrossCounts->append_node( remark );
           }//if( m->title_.size() )
+          
+          if( m->pcf_tag() != '\0' )
+          {
+            const string tag_remark = string("Tag: ") + m->pcf_tag();
+            val = doc->allocate_string( tag_remark.c_str(), tag_remark.size()+1 );
+            xml_node<char> *remark = doc->allocate_node( node_element, "Remark", val );
+            GrossCounts->append_node( remark );
+          }//
           
           const auto &remarks = m->remarks();
           for( size_t i = 0; i < remarks.size(); ++i )
@@ -2603,7 +2619,26 @@ struct N42DecodeHelper2006
           meas.title_ = remark;
           continue;
         }
-          
+        
+        if( SpecUtils::istarts_with( remark, "Tag:") )
+        {
+          const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
+          meas.pcf_tag_ = tag_str.empty() ? '\0' : tag_str[0];
+          continue;
+        }
+        
+        if( SpecUtils::istarts_with( remark, "Source:") )
+        {
+          meas.source_description_ = SpecUtils::trim_copy( remark.substr(7) );
+          continue;
+        }
+        
+        if( SpecUtils::istarts_with( remark, "Description:") )
+        {
+          meas.measurement_description_ = SpecUtils::trim_copy( remark.substr(12) );
+          continue;
+        }
+        
         meas.remarks_.push_back( remark );
           
         if( meas.sample_number_ < 0 )
@@ -3615,6 +3650,16 @@ public:
                 rel_loc->from_cartesian( dx, dy, dz );
               }
               */
+            }else if( SpecUtils::istarts_with( remark, "Tag:") )
+            {
+              const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
+              meas->pcf_tag_ = tag_str.empty() ? '\0' : tag_str[0];
+            }else if( SpecUtils::istarts_with( remark, "Source:") )
+            {
+              meas->source_description_ = SpecUtils::trim_copy( remark.substr(7) );
+            }else if( SpecUtils::istarts_with( remark, "Description:") )
+            {
+              meas->measurement_description_ = SpecUtils::trim_copy( remark.substr(12) );
             }else if( remark.size() )
             {
               meas->remarks_.emplace_back( std::move(remark) );
@@ -4008,6 +4053,17 @@ public:
             {
               //See notes in equivalent portion of code for the <Spectrum> tag
               meas->title_ += SpecUtils::trim_copy( remark.substr(6) );
+            }else if( SpecUtils::istarts_with( remark, "Tag:") )
+            {
+              //See notes in equivalent portion of code for the <Spectrum> tag
+              const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
+              meas->pcf_tag_ = tag_str.empty() ? '\0' : tag_str.front();
+            }else if( SpecUtils::istarts_with( remark, "Source:") )
+            {
+              meas->source_description_ = SpecUtils::trim_copy( remark.substr(7) );
+            }else if( SpecUtils::istarts_with( remark, "Description:") )
+            {
+              meas->measurement_description_ = SpecUtils::trim_copy( remark.substr(12) );
             }else if( !remark.empty() )
             {
               meas->remarks_.push_back( remark );
@@ -9292,6 +9348,15 @@ namespace SpecUtils
     
     if( title_.size() )
       remarks.push_back( "Title: " + title_ );
+    
+    if( pcf_tag_ != '\0' )
+      remarks.push_back( string("Tag: ") + pcf_tag_ );
+    
+    if( !source_description_.empty() )
+      remarks.push_back( "Source: " + source_description_ );
+    
+    if( !measurement_description_.empty() )
+      remarks.push_back( "Description: " + measurement_description_ );
     
     bool wroteSurvey = false, wroteName = false, wroteSpeed = false;
     

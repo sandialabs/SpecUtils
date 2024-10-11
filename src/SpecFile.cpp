@@ -49,6 +49,7 @@
 #include <cerrno>  // For errno
 
 #if( PERFORM_DEVELOPER_CHECKS )
+#include <boost/version.hpp>
 #include <boost/functional/hash.hpp>
 #endif
 
@@ -498,7 +499,7 @@ std::shared_ptr<const Measurement> SpecFile::measurement(
   const size_t n = measurements_.size();
   
   if( num >= n )
-    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index" );
+    throw std::runtime_error( "SpecFile::measurement(size_t): invalid index: " + std::to_string(num) + "; num_measurements: " + std::to_string(n));
   
   return measurements_[num];
 }
@@ -898,14 +899,17 @@ void Measurement::set_occupancy_status( const OccupancyStatus status )
 
 
 void Measurement::set_detector_name( const std::string &name )
-{
-  detector_name_ = name;
+{ 
+  detector_name_ = trim_copy(name);
 }
 
 
 void Measurement::set_detector_number( const int detnum )
 {
   detector_number_ = detnum;
+  std::ostringstream sstrm;
+  sstrm << detnum;
+  set_detector_name(sstrm.str());
 }
 
   
@@ -1116,7 +1120,31 @@ uint32_t Measurement::derived_data_properties() const
   return derived_data_properties_;
 }
 
+  
+int Measurement::rpm_panel_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return panel;
+}
+  
 
+int Measurement::rpm_column_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return col;
+}
+  
+
+int Measurement::rpm_mca_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return mca;
+}
+
+  
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {
@@ -1597,6 +1625,10 @@ void Measurement::reset()
   
   dose_rate_ = exposure_rate_ = -1.0f;
   
+  pcf_tag_ = '\0';
+  source_description_.clear();
+  measurement_description_.clear();
+  
   location_.reset();
 }//void reset()
 
@@ -1627,7 +1659,43 @@ float Measurement::exposure_rate() const
 {
   return exposure_rate_;
 }
+  
+  
+char Measurement::pcf_tag() const
+{
+  return pcf_tag_;
+}
+  
+  
+void Measurement::set_pcf_tag( const char tag_char )
+{
+  pcf_tag_ = tag_char;
+}
 
+
+void Measurement::set_source_description( const std::string &description )
+{
+  source_description_ = description;
+}
+  
+
+const string &Measurement::source_description() const
+{
+  return source_description_;
+}
+
+  
+void Measurement::set_measurement_description( const std::string &description )
+{
+  measurement_description_ = description;
+}
+
+  
+const string &Measurement::measurement_description() const
+{
+  return measurement_description_;
+}
+  
   
 void Measurement::combine_gamma_channels( const size_t ncombine )
 {
@@ -1846,7 +1914,7 @@ void SpecFile::combine_gamma_channels( const size_t ncombine,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> m = measurement( meas );
+  std::shared_ptr<Measurement> m = unconstify_measurement( meas );
   if( !m )
     throw runtime_error( "SpecFile::combine_gamma_channels(): measurement"
                          " passed in is not owned by this SpecFile." );
@@ -2040,7 +2108,7 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   
-  std::shared_ptr<Measurement> m = measurement( meas );
+  std::shared_ptr<Measurement> m = unconstify_measurement( meas );
   if( !m )
     throw runtime_error( "SpecFile::truncate_gamma_channels(): measurement"
                         " passed in is not owned by this SpecFile." );
@@ -2061,7 +2129,7 @@ void SpecFile::truncate_gamma_channels( const size_t keep_first_channel,
 
 
 
-std::shared_ptr<Measurement> SpecFile::measurement( std::shared_ptr<const Measurement> meas )
+std::shared_ptr<Measurement> SpecFile::unconstify_measurement( std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
@@ -2087,7 +2155,7 @@ void SpecFile::set_live_time( const float lt,
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_live_time(...): measurement"
                          " passed in didnt belong to this SpecFile" );
@@ -2103,7 +2171,7 @@ void SpecFile::set_real_time( const float rt, std::shared_ptr<const Measurement>
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_real_time(...): measurement"
                          " passed in didnt belong to this SpecFile" );
@@ -2377,7 +2445,7 @@ void SpecFile::set_start_time( const time_point_t &timestamp,
                     const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_start_time(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2390,7 +2458,7 @@ void SpecFile::set_remarks( const std::vector<std::string> &remarks,
                  const std::shared_ptr<const Measurement> meas  )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_remarks(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2403,7 +2471,7 @@ void SpecFile::set_source_type( const SourceType type,
                                     const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_source_type(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2418,7 +2486,7 @@ void SpecFile::set_position( double longitude, double latitude,
                             const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_position(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2455,7 +2523,7 @@ void SpecFile::set_title( const std::string &title,
                                  const std::shared_ptr<const Measurement> meas )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_title(...): measurement"
                         " passed in didnt belong to this SpecFile" );
@@ -2472,7 +2540,7 @@ void SpecFile::set_contained_neutrons( const bool contained,
                                       const float neutron_live_time )
 {
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  std::shared_ptr<Measurement> ptr = measurement( meas );
+  std::shared_ptr<Measurement> ptr = unconstify_measurement( meas );
   if( !ptr )
     throw runtime_error( "SpecFile::set_containtained_neutrons(...): "
                         "measurement passed in didnt belong to this "
@@ -3554,6 +3622,24 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
                      + " while RHS is " + std::to_string(rhs.exposure_rate_) );
   }
   
+  if( lhs.pcf_tag_ != rhs.pcf_tag_ )
+  {
+    issues.push_back( string("Measurement: The PCF tag of LHS is ") + lhs.pcf_tag_
+                     + " while RHS is " + std::to_string(rhs.pcf_tag_) );
+  }
+  
+  if( lhs.source_description_ != rhs.source_description_ )
+  {
+    issues.push_back( string("Measurement: The source description of LHS is ")
+                     + lhs.source_description_ + " while RHS is " + rhs.source_description_ );
+  }
+  
+  if( lhs.measurement_description_ != rhs.measurement_description_ )
+  {
+    issues.push_back( string("Measurement: The measurement description of LHS is ")
+                + lhs.measurement_description_ + " while RHS is " + rhs.measurement_description_ );
+  }
+  
   if( (!lhs.location_) != (!rhs.location_) )
   {
     issues.push_back( "Measurement: The "
@@ -4407,6 +4493,10 @@ const Measurement &Measurement::operator=( const Measurement &rhs )
   
   dose_rate_ = rhs.dose_rate_;
   exposure_rate_ = rhs.exposure_rate_;
+  
+  pcf_tag_ = rhs.pcf_tag_;
+  source_description_ = rhs.source_description_;
+  measurement_description_ = rhs.measurement_description_;
   
   location_ = rhs.location_;
   
@@ -6938,37 +7028,28 @@ std::string SpecFile::generate_psuedo_uuid() const
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   
   std::size_t seed = 0;
-  
-  boost_hash::hash_combine( seed, gamma_live_time_ );
+  boost_hash::hash_combine( seed, gamma_live_time_ ); //( seed + 0x9e3779b9 + boost_hash::hash_value( v ) )
   boost_hash::hash_combine( seed, gamma_real_time_ );
   boost_hash::hash_combine( seed, gamma_count_sum_ );
-  
   boost_hash::hash_combine( seed, neutron_counts_sum_ );
-  
 //  boost_hash::hash_combine( seed, filename_ );
   boost_hash::hash_combine( seed, detector_names_ );
-  
 //  boost_hash::hash_combine( seed, detector_numbers_ );
   boost_hash::hash_combine( seed, neutron_detector_names_ );
-  
 // Wont use gamma_detector_names_ for compatibility pre 20190813 when field was added
 //  boost_hash::hash_combine( seed, gamma_detector_names_ );
   
   if( !remarks_.empty() )
     boost_hash::hash_combine( seed, remarks_ );
-
   //parse_warnings_
   boost_hash::hash_combine( seed, lane_number_ );
-  
   if( !measurement_location_name_.empty() )
     boost_hash::hash_combine( seed, measurement_location_name_ );
   if( !inspection_.empty() )
     boost_hash::hash_combine( seed, inspection_ );
-  
   boost_hash::hash_combine( seed, instrument_type_ );
   boost_hash::hash_combine( seed, manufacturer_ );
   boost_hash::hash_combine( seed, instrument_model_ );
-  
   if( SpecUtils::valid_latitude(mean_latitude_)
      && SpecUtils::valid_longitude(mean_longitude_) )
   {
@@ -6983,7 +7064,6 @@ std::string SpecFile::generate_psuedo_uuid() const
 //  boost_hash::hash_combine( seed, detectors_analysis_ );
   boost_hash::hash_combine( seed, int(detector_type_) );
   boost_hash::hash_combine( seed, measurement_operator_ );
-  
   for( const std::shared_ptr<const Measurement> meas : measurements_ )
   {
     boost_hash::hash_combine( seed, meas->live_time() );
@@ -6997,11 +7077,9 @@ std::string SpecFile::generate_psuedo_uuid() const
       boost_hash::hash_combine( seed, meas->longitude() );
     //  boost_hash::hash_combine( seed, position_time_ );
   }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
-
-#if( PERFORM_DEVELOPER_CHECKS )
+#if( PERFORM_DEVELOPER_CHECKS && (BOOST_VERSION >= 108100) )
   {// Begin use boost::hash proper, instead of our extracted version of it
     std::size_t boost_seed = 0;
-    
     boost::hash_combine( boost_seed, gamma_live_time_ );
     boost::hash_combine( boost_seed, gamma_real_time_ );
     boost::hash_combine( boost_seed, gamma_count_sum_ );
@@ -7028,7 +7106,6 @@ std::string SpecFile::generate_psuedo_uuid() const
     boost::hash_combine( boost_seed, measurements_.size() );
     boost::hash_combine( boost_seed, int(detector_type_) );
     boost::hash_combine( boost_seed, measurement_operator_ );
-    
     for( const std::shared_ptr<const Measurement> meas : measurements_ )
     {
       boost::hash_combine( boost_seed, meas->live_time() );
@@ -7040,7 +7117,6 @@ std::string SpecFile::generate_psuedo_uuid() const
       if( SpecUtils::valid_longitude(meas->longitude()) )
         boost::hash_combine( boost_seed, meas->longitude() );
     }//for( const std::shared_ptr<const Measurement> meas : measurements_ )
-    
     assert( seed == boost_seed );
     
     if( seed != boost_seed )
@@ -7209,7 +7285,7 @@ void SpecFile::set_energy_calibration( const std::shared_ptr<const EnergyCalibra
   if( !cal )
     throw runtime_error( "set_calibration: invalid calibration passed in" );
           
-  std::shared_ptr<Measurement> meas = measurement(constmeas);
+  std::shared_ptr<Measurement> meas = unconstify_measurement(constmeas);
           
   if( !meas )
     throw runtime_error( "set_calibration: invalid passed in measurement" );
@@ -7849,6 +7925,25 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         else
           dataH->exposure_rate_ += meas->exposure_rate_;
       }//if( meas->dose_rate_ >= 0.0f )
+      
+      if( meas->pcf_tag_ != '\0' )
+        dataH->pcf_tag_ = meas->pcf_tag_;
+      
+      string &src_desc = dataH->source_description_;
+      const string &rhs_src_desc = meas->source_description_;
+      if( !rhs_src_desc.empty()
+         && (src_desc.empty() || (src_desc.find(rhs_src_desc) == string::npos)) )
+      {
+        src_desc += (src_desc.empty() ? "" : ",") + rhs_src_desc;
+      }
+      
+      string &meas_desc = dataH->measurement_description_;
+      const string &rhs_meas_desc = meas->measurement_description_;
+      if( !rhs_meas_desc.empty() 
+         && (meas_desc.empty() || (meas_desc.find(rhs_meas_desc) == string::npos)) )
+      {
+        meas_desc += (meas_desc.empty() ? "" : ",") + rhs_meas_desc;
+      }
       
       if( meas->has_gps_info() )
       {

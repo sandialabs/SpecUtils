@@ -7,6 +7,8 @@
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
 #include <SpecUtils/Filesystem.h>
+#include <iostream>
+
 %}
 
 
@@ -24,7 +26,9 @@ namespace std {
 %include "std_shared_ptr.i"
 %shared_ptr(vector<SpecUtils::Measurement>)
 %shared_ptr(SpecUtils::Measurement)
+%shared_ptr(SpecUtils::MeasurementExt)
 %shared_ptr(SpecUtils::EnergyCalibration)
+%shared_ptr(SpecUtils::EnergyCalibrationExt)
 //%shared_ptr(std::vector<float>) // this casued me problems -hugh
 
 %include "std_string.i"
@@ -45,7 +49,13 @@ namespace std {
 
 %apply int { size_t }
 
+%apply SWIGTYPE ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
+
+//%rename(set_ecal) SpecUtils::Measurement::set_energy_calibration;
+%ignore SpecUtils::SpecFile::set_energy_calibration;
+
 %include "SpecUtils/SpecFile.h"
+
 
 %extend SpecUtils::Measurement
 {
@@ -61,18 +71,6 @@ namespace std {
         return $self->gamma_counts()->size();
     }
 
-    std::string get_description()
-    {
-        auto &remarks = $self->remarks();
-        return SpecUtils::get_description(remarks);
-    }
-
-    std::string get_source()
-    {
-        auto &remarks = $self->remarks();
-        return SpecUtils::get_source(remarks);
-    }
-
     std::string get_start_time_string()
     {
         auto timeStr = SpecUtils::to_vax_string( $self->start_time() );
@@ -84,37 +82,7 @@ namespace std {
         auto tp = SpecUtils::time_from_string(time_str);
         $self->set_start_time(tp);
     }
-
-    void set_description(std::string description)
-    {
-        auto remarks = $self->remarks();
-
-        // If there is already a description, remove it first.
-        auto it = remarks.begin();
-        for(; it != remarks.end(); ) {
-            if(SpecUtils::istarts_with(*it, "Description:"))
-                it = remarks.erase(it);
-            it++;
-        }
-        remarks.push_back( "Description: " + description );
-        $self->set_remarks(remarks);
-    }
-
-    void set_source(std::string source)
-    {
-        auto remarks = $self->remarks();
-
-        // If there is already a source, remove it first.
-        auto it = remarks.begin();
-        for(; it != remarks.end(); ) {
-            if(SpecUtils::istarts_with(*it, "source:"))
-                it = remarks.erase(it);
-            it++;
-        }
-        remarks.push_back( "Source: " + source );
-        $self->set_remarks(remarks);
-    }
-
+    
     void set_neutron_count(float count)
     {
         SpecUtils::FloatVec ncounts{count};
@@ -130,7 +98,6 @@ namespace std {
         return count;            
     }
 
-    //%apply (SWIGTYPE ARRAY[], size_t num_channels) { (const float* spectrum, size_t num_channels) };
     %apply (SWIGTYPE *DATA, size_t SIZE) { (const float* spectrum, size_t num_channels) };
     void set_spectrum(const float *spectrum, size_t num_channels)
     {
@@ -161,7 +128,27 @@ namespace std {
     /// @param index is 1-based 
     std::shared_ptr<const SpecUtils::Measurement> measurement_at(int index)
     {
-        return $self->measurement(static_cast<size_t>(index-1));
+
+        auto newIndex = static_cast<size_t>(index-1);
+
+        std::cout << __func__ << ": newIndex: " << newIndex << std::endl;
+        std::cout << __func__ << ": num_measurements: " << $self->num_measurements() << std::endl;
+        return $self->measurement(newIndex);
+    }
+
+    int get_max_channel_count()
+    {
+        auto maxCount = 0;
+        auto numMeasurements = $self->num_measurements();
+
+        for(int i = 0; i < numMeasurements; i++)
+        {
+            auto m = $self->measurement(i);
+            auto numChannels = static_cast<int>(m->num_gamma_channels());
+            maxCount = std::max(maxCount, numChannels);
+        }
+
+        return maxCount;            
     }
 }
 
@@ -177,5 +164,15 @@ namespace std {
 
 %include "SpecUtils/EnergyCalibration.h"
 
+%extend SpecUtils::EnergyCalibration
+{
+    // void set_deviation_pairs(std::vector<std::pair<float, float>> devPairs)
+    // {
+    //     $self->m_deviation_pairs = devPairs;
+    // }
+}
+
 %ignore make_canonical_path;
+
 %include "SpecUtils/FileSystem.h"
+
