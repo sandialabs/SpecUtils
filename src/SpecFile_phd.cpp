@@ -162,8 +162,10 @@ bool SpecFile::load_from_phd( std::istream &input )
         
         const float upper_energy = (fields.size()>1 && fields[1]>500.0f && fields[1]<13000.0f) ? fields[1] : 0.0f;
         const size_t nchannel = static_cast<size_t>( fields[0] );
-        auto counts = std::make_shared< vector<float> >(nchannel,0.0f);
+        if( (nchannel < 1) || (nchannel > 1024*65536) )
+          throw runtime_error( "Invalid number of channels (" + std::to_string(nchannel) + ")" );
         
+        auto counts = std::make_shared< vector<float> >(nchannel,0.0f);
         
         size_t last_channel = 0;
         while( SpecUtils::safe_get_line(input, line, max_len) )
@@ -187,7 +189,7 @@ bool SpecFile::load_from_phd( std::istream &input )
           
           const size_t start_channel = static_cast<size_t>( fields[0] );
           
-          if( (start_channel <= last_channel) || (start_channel > nchannel) )
+          if( (last_channel != 0) && ((start_channel <= last_channel) || (start_channel > nchannel)) )
             throw runtime_error( "Channels not ordered as expected" );
 
           //We'll let the fuzzing test give us out-of-order channels, but otherwise require the file
@@ -269,9 +271,9 @@ bool SpecFile::load_from_phd( std::istream &input )
     measurements_.push_back( meas );
     
     cleanup_after_load();
-  }catch( std::exception & )
+  }catch( std::exception &e )
   {
-    //cerr  << SRC_LOCATION << "caught: " << e.what() << endl;
+    cerr  << "caught: " << e.what() << endl;
     reset();
     input.clear();
     input.seekg( orig_pos, ios::beg );
