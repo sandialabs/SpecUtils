@@ -36,7 +36,7 @@ set( DATA_DIR_ARGS --indir=${CMAKE_CURRENT_SOURCE_DIR}/test_data )
 if( CMAKE_GENERATOR STREQUAL "Xcode" )
   list( APPEND COMMON_TEST_ARGS --no-colors=1 )
 endif( CMAKE_GENERATOR STREQUAL "Xcode" )
-message( "Args: ${COMMON_TEST_ARGS}")
+#message( "Args: ${COMMON_TEST_ARGS}")
 
 
 add_executable( test_spec_file test_spec_file.cpp )

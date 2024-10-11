@@ -1544,20 +1544,8 @@ const char *SpecUtils_Measurement_description( const SpecUtils_Measurement * con
   if( !m )
     return "";
   
-  const vector<string> &remarks = m->remarks();
-  
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Description:") )
-    {
-      const char *answer = remarks[i].c_str() + 12;
-      while( *answer && ((*answer) == ' ') )
-        ++answer;
-      return answer;
-    }
-  }//
-  
-  return "";
+  const std::string &desc = m->measurement_description();
+  return desc.c_str();
 }
 
 
@@ -1578,20 +1566,8 @@ const char *SpecUtils_Measurement_source_string( const SpecUtils_Measurement * c
   if( !m )
     return "";
   
-  const vector<string> &remarks = m->remarks();
-  
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Source:") )
-    {
-      const char *answer = remarks[i].c_str() + 7;
-      while( *answer && ((*answer) == ' ') )
-        ++answer;
-      return answer;
-    }
-  }//
-  
-  return "";
+  const std::string &src = m->source_description();
+  return src.c_str();
 }
 
 

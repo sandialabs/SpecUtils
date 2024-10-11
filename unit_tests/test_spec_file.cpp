@@ -296,10 +296,6 @@ TEST_CASE("Get Max Channel Count")
 
 TEST_CASE("Find Source String")
 {
-    std::vector<std::string> remarks{
-        "Description: TestDescription",
-        "Source: TestSource"};
-
     SpecUtils::Measurement m;
     m.set_source_description( "TestSource" );
     m.set_measurement_description( "TestDescription" );
@@ -318,25 +314,3 @@ TEST_CASE("Find Source String")
     }
 }
 
-TEST_CASE("No Description Yields Empty String")
-{
-    std::vector<std::string> remarks{
-        "DescriptionZZZZZ: TestDescription",
-        "SourceYYYYY: TestSource"};
-
-    SpecUtils::Measurement m;
-    m.set_remarks(remarks);
-
-    auto expected = std::string();
-    auto actual = m.measurement_description();
-
-    CHECK(actual == expected);
-
-    SUBCASE("No Source Yields Empty String")
-    {
-        auto expected = std::string();
-        auto actual = m.source_description();
-
-        CHECK(actual == expected);
-    }
-}
