@@ -823,3 +823,4 @@ TEST_CASE( "testPrintCompact" )
   check_range(-1000000.0,10000000.0);
   check_range(-1.0E32,1.0E32);
 }//void testPrintCompact()
+

@@ -41,6 +41,9 @@
  */
 namespace SpecUtils
 {
+              
+  using DevPair = std::pair<float,float>;             
+  using DeviationPairs = std::vector<DevPair>; 
   /** The energy (or FWHM) calibration type that the calibration coefficients
    should be interpreted as.
    
