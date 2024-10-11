@@ -1,5 +1,6 @@
 #include <random>
 #include <numeric>
+#include <algorithm>
 #include <filesystem>
 
 #include "SpecUtils/DateTime.h"
