@@ -28,6 +28,14 @@ option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) function
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 
 
+if( SpecUtils_PYTHON_BINDINGS )
+  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" ON )
+  list( APPEND sources bindings/python/SpecFile_py.cpp )
+else()
+  #default to building a static lib
+  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
+endif()
+
 
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
@@ -247,16 +255,11 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   find_package( ZLIB REQUIRED )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
-#default to building a static lib
-set( SpecUtils_LIB_TYPE STATIC )
-
 if( SpecUtils_PYTHON_BINDINGS )
-  set( SpecUtils_LIB_TYPE SHARED )
   list( APPEND sources bindings/python/SpecFile_py.cpp )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_JAVA_SWIG )
-  set( SpecUtils_LIB_TYPE SHARED )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
@@ -264,6 +267,12 @@ if( SpecUtils_C_BINDINGS )
   list( APPEND headers bindings/c/SpecUtils_c.h )
   list( APPEND sources bindings/c/SpecUtils_c.cpp )
 endif( SpecUtils_C_BINDINGS )
+
+if( SpecUtils_SHARED_LIB )
+  set( SpecUtils_LIB_TYPE SHARED )
+else( SpecUtils_SHARED_LIB )
+  set( SpecUtils_LIB_TYPE STATIC )
+endif( SpecUtils_SHARED_LIB )
 
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
