@@ -50,16 +50,16 @@ jobs:
 
     - name: Configure CMake on Windows
       if: runner.os == 'Windows'
-      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DSpecUtils_C_BINDINGS=ON
+      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DSpecUtils_C_BINDINGS=ON -DCMAKE_INSTALL_PREFIX=install_prefix
 
     # On linux we will perform developer checks and compile as debug to catch asserts
     - name: Configure CMake on Linux
       if: runner.os == 'Linux'
-      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=ON -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DSpecUtils_C_BINDINGS=ON -DSpecUtils_FORTRAN_SWIG=ON
+      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=ON -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DSpecUtils_C_BINDINGS=ON -DSpecUtils_FORTRAN_SWIG=ON -DCMAKE_INSTALL_PREFIX=install_prefix
       
     - name: Configure CMake on macOS
       if: runner.os == 'macOS'
-      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DSpecUtils_C_BINDINGS=ON
+      run: cmake -S ${{ github.workspace }} -B build -DSpecUtils_BUILD_UNIT_TESTS=ON -DSpecUtils_BUILD_REGRESSION_TEST=ON -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DSpecUtils_C_BINDINGS=ON -DCMAKE_INSTALL_PREFIX=install_prefix
 
     - name: Build macOS and Windows
       if: runner.os != 'Linux'
@@ -71,3 +71,50 @@ jobs:
 
     - name: Run tests
       run: ctest --rerun-failed --output-on-failure --test-dir build -C Release
+
+    - name: Package Lib
+      if: runner.os == 'boost' && runner.os == 'Windows'
+      run: |
+        cmake -S ${{ github.workspace }} -B build_static_lib_shared_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_static_lib_shared_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=ON -DSpecUtils_SHARED_LIB=OFF
+        cmake --build build_static_lib_shared_runtime --config Release --target package
+        #
+        cmake -S ${{ github.workspace }} -B build_shared_lib_shared_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_build_shared_lib_shared_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=ON -DSpecUtils_SHARED_LIB=ON
+        cmake --build build_shared_lib_shared_runtime --config Release --target package
+        #
+        cmake -S ${{ github.workspace }} -B build_shared_lib_static_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_build_shared_lib_static_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=OFF -DSpecUtils_SHARED_LIB=ON
+        cmake --build build_shared_lib_static_runtime --config Release --target package
+        #
+        cmake -S ${{ github.workspace }} -B build_static_lib_static_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_build_static_lib_static_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=OFF -DSpecUtils_SHARED_LIB=OFF
+        cmake --build build_static_lib_static_runtime --config Release --target package
+
+# Update the bleeding-edge tag to be current commit
+    - name: Run latest-tag
+      uses: EndBug/latest-tag@v1.6.1
+      if: runner.os == 'Windows'
+      with:
+        ref: bleeding-edge
+        description: Latest successful automated build
+
+    - name: Upload windows build to GitHub Artifact
+      uses: actions/upload-artifact@v4
+      if: runner.os == 'Windows'
+      with: 
+        name: SpecUtils_${{ runner.os }}_latest
+        path: '.\build_*\*.zip'
+    
+    - name: Create Release
+      uses: ncipollo/release-action@v1.13.0
+      if: runner.os == 'Windows'
+      with:
+        artifacts: '.\build_*\*.zip'
+        draft: false
+        prerelease: true
+        body: "An automated, and untested build of the latest code pushed to the repository."
+        allowUpdates: true
+        generateReleaseNotes: false
+        name: "Bleeding Edge Build"
+        removeArtifacts: true
+        replacesArtifacts: true
+        tag: 'bleeding-edge'
+        commit: ${{ github.sha }}
+        makeLatest: true
