@@ -30,6 +30,14 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 
+if( SpecUtils_PYTHON_BINDINGS )
+  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" ON )
+  list( APPEND sources bindings/python/SpecFile_py.cpp )
+else()
+  #default to building a static lib
+  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
+endif()
+
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
 Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
@@ -75,7 +83,7 @@ endif()
 
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
-if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+if( MSVC )
   get_directory_property(hasParent PARENT_DIRECTORY)
   if(NOT hasParent)
     option(${PROJECT_NAME}_USE_MSVC_MultiThreadDLL "Use dynamically-link runtime library." OFF)
@@ -89,7 +97,7 @@ if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
     endif()
     message(STATUS "Using CMAKE_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY}")
   endif(NOT hasParent)
-endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+endif( MSVC )
 
 
 if( SpecUtils_BUILD_EXAMPLE )
@@ -248,16 +256,11 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   find_package( ZLIB REQUIRED )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
-#default to building a static lib
-set( SpecUtils_LIB_TYPE STATIC )
-
 if( SpecUtils_PYTHON_BINDINGS )
-  set( SpecUtils_LIB_TYPE SHARED )
   list( APPEND sources bindings/python/SpecFile_py.cpp )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_JAVA_SWIG )
-  set( SpecUtils_LIB_TYPE SHARED )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
@@ -265,6 +268,12 @@ if( SpecUtils_C_BINDINGS )
   list( APPEND headers bindings/c/SpecUtils_c.h )
   list( APPEND sources bindings/c/SpecUtils_c.cpp )
 endif( SpecUtils_C_BINDINGS )
+
+if( SpecUtils_SHARED_LIB )
+  set( SpecUtils_LIB_TYPE SHARED )
+else( SpecUtils_SHARED_LIB )
+  set( SpecUtils_LIB_TYPE STATIC )
+endif( SpecUtils_SHARED_LIB )
 
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
@@ -450,6 +459,7 @@ set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
 # Specify installation rules
 include(GNUInstallDirs)
 
+
 # Install the library
 install(TARGETS SpecUtils
     EXPORT SpecUtilsTargets
@@ -494,3 +504,24 @@ install(EXPORT SpecUtilsTargets
     NAMESPACE SpecUtils::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
 )
+
+set(CPACK_PACKAGE_NAME "SpecUtils")
+
+
+if( SpecUtils_SHARED_LIB )
+  set( SpecUtils_PACKAGE_POSTFIX "SharedLib" )
+else( SpecUtils_SHARED_LIB )
+  set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
+endif( SpecUtils_SHARED_LIB )
+
+if( DEFINED ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+  if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
+  else()
+    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
+  endif()
+endif()
+
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${SpecUtils_PACKAGE_POSTFIX}")
+set(CPACK_GENERATOR "ZIP")
+include(CPack)
