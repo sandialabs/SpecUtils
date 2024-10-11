@@ -721,11 +721,19 @@ SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Mea
 DLLEXPORT void CALLINGCONVENTION
 SpecUtils_Measurement_reset( SpecUtils_Measurement *instance );
   
+/** Returns the measurement description. Zero terminated, and non-null. */
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_description( const SpecUtils_Measurement * const instance );
 
+  
 DLLEXPORT void CALLINGCONVENTION
 SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
                                       const char * const description );
 
+/** Returns the measurement description. Zero terminated, and non-null. */
+DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_Measurement_source_string( const SpecUtils_Measurement * const instance );
+  
 /** This is a GADRAS specific function - it actually adds a remark to Measurement that starts with "Source:" */
 DLLEXPORT void CALLINGCONVENTION
 SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
@@ -737,6 +745,21 @@ SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
                                        const uint32_t nchannels,
                                        const float live_time,
                                        const float real_time );
+
+/** Sets the neutron counts.
+ 
+ @param instance The `SpecUtils_Measurement` to to modify.
+ @param counts The array of counts from each neutron detector.  Most detectors will probably have one entry
+        but for example, if you have multiple He3 tubes, you may have multiple entries.
+ @param num_tubes The number of entries in `counts`.
+ @param neutron_live_time The live time of the neutron measurement.  If it is the same as the gamma detector
+        in this measurement, you can provide a negative value, and the gamma real-time will be used.
+ */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_Measurement_set_neutron_counts( SpecUtils_Measurement *instance,
+                                         const float * const counts,
+                                         const uint32_t num_tubes,
+                                         const float neutron_live_time );
   
 DLLEXPORT const char * CALLINGCONVENTION
 SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance );

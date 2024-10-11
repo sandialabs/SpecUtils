@@ -1135,10 +1135,13 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
       
       const string detnam = !m->detector_name().empty() ? m->detector_name() : s_unnamed_det_placeholder;
       
-      //Below choice of zero compressing if the gamma sum is less than 15 times the
-      //  number of gamma channels is arbitrarily chosen, and has not been
-      //  benchmarked or checked it is a reasonable value
-      const bool zerocompressed = (!!m->gamma_counts() && (m->gamma_count_sum()<15.0*m->gamma_counts()->size()));
+      // Zero compression can increase the length of the XML if there are a lot of zero channels
+      //  right next to non-zero channels.  We could use a simple heuristic, like is commented
+      //  out below, to try to pick the shorter option, but for now we'll just be consistent and
+      //  always use it.
+      //const bool zerocompressed = (!!m->gamma_counts() && (m->gamma_count_sum()<15.0*m->gamma_counts()->size()));
+      const bool zerocompressed = true;
+      
       vector<float> compressedchannels;
       
       if( zerocompressed )

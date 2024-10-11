@@ -1537,6 +1537,30 @@ void SpecUtils_Measurement_reset( SpecUtils_Measurement *instance )
 }
 
 
+const char *SpecUtils_Measurement_description( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return "";
+  
+  const vector<string> &remarks = m->remarks();
+  
+  for( size_t i = 0; i < remarks.size(); ++i )
+  {
+    if( SpecUtils::istarts_with(remarks[i], "Description:") )
+    {
+      const char *answer = remarks[i].c_str() + 12;
+      while( *answer && ((*answer) == ' ') )
+        ++answer;
+      return answer;
+    }
+  }//
+  
+  return "";
+}
+
+
 void SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
                                       const char * const description_cstr )
 {
@@ -1544,6 +1568,30 @@ void SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
   assert( m );
   if( m )
     m->set_measurement_description( description_cstr ? description_cstr : "" );
+}
+
+
+const char *SpecUtils_Measurement_source_string( const SpecUtils_Measurement * const instance )
+{
+  auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
+  assert( m );
+  if( !m )
+    return "";
+  
+  const vector<string> &remarks = m->remarks();
+  
+  for( size_t i = 0; i < remarks.size(); ++i )
+  {
+    if( SpecUtils::istarts_with(remarks[i], "Source:") )
+    {
+      const char *answer = remarks[i].c_str() + 7;
+      while( *answer && ((*answer) == ' ') )
+        ++answer;
+      return answer;
+    }
+  }//
+  
+  return "";
 }
 
 
@@ -1574,6 +1622,23 @@ void SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
                                         : nullptr;
   m->set_gamma_counts( cc, live_time, real_time );
 }
+
+
+void SpecUtils_Measurement_set_neutron_counts( SpecUtils_Measurement *instance,
+                                         const float * const counts,
+                                         const uint32_t num_tubes,
+                                         const float neutron_live_time )
+{
+  auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
+  assert( m );
+  assert( counts || (num_tubes == 0) ); //If `counts` is null, then `num_tubes` better be zero to.
+  
+  if( !m )
+    return;
+  
+  const vector<float> nc = counts ? vector<float>(counts, counts + num_tubes) : vector<float>{};
+  m->set_neutron_counts( nc, neutron_live_time );
+}//SpecUtils_Measurement_set_neutron_counts(...)
 
 
 const char *SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance )
