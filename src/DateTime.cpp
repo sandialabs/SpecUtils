@@ -160,7 +160,7 @@ namespace SpecUtils
     // We'll round to nearest hundredth; not really sure if rounding, or truncating is the proper thing to do.
     const int hundreth = static_cast<int>( std::round( microsecs.count() / 10000.0 ) ); //round to nearest hundredth of a second
     
-    char buffer[32];
+    char buffer[32] = { '\0' };
     snprintf( buffer, sizeof(buffer), "%02i-%s-%04i %02i:%02i:%02i.%02i",
              day, month, year, hour, mins, secs, hundreth );
     
