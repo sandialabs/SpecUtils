@@ -43,7 +43,7 @@ jobs:
     # For linux, we will perform developer checks, so we need boost
     - name: Set up dependencies
       if: runner.os == 'Linux'
-      run: sudo apt-get update && sudo apt-get install -y build-essential libboost-all-dev gfortran
+      run: sudo apt-get update && sudo apt-get install -y build-essential libboost-all-dev gfortran zlib1g-dev
 
     - name: Create build directory
       run: mkdir build
@@ -77,15 +77,31 @@ jobs:
       run: |
         cmake -S ${{ github.workspace }} -B build_static_lib_shared_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_static_lib_shared_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=ON -DSpecUtils_SHARED_LIB=OFF
         cmake --build build_static_lib_shared_runtime --config Release --target package
+        echo "Files present after package build_static_lib_shared_runtime"
+        ls
+        ls build_static_lib_shared_runtime
+        ls build_static_lib_shared_runtime/Release
         #
         cmake -S ${{ github.workspace }} -B build_shared_lib_shared_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_build_shared_lib_shared_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=ON -DSpecUtils_SHARED_LIB=ON
         cmake --build build_shared_lib_shared_runtime --config Release --target package
+        echo "Files present after package build_shared_lib_shared_runtime"
+        ls
+        ls build_static_lib_shared_runtime
+        ls build_static_lib_shared_runtime/Release
         #
         cmake -S ${{ github.workspace }} -B build_shared_lib_static_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_build_shared_lib_static_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=OFF -DSpecUtils_SHARED_LIB=ON
         cmake --build build_shared_lib_static_runtime --config Release --target package
+        echo "Files present after package build_shared_lib_static_runtime"
+        ls
+        ls build_static_lib_shared_runtime
+        ls build_static_lib_shared_runtime/Release
         #
         cmake -S ${{ github.workspace }} -B build_static_lib_static_runtime -DSpecUtils_BUILD_UNIT_TESTS=OFF -DSpecUtils_BUILD_REGRESSION_TEST=OFF -DSpecUtils_ENABLE_EQUALITY_CHECKS=OFF -DPERFORM_DEVELOPER_CHECKS=OFF -DSpecUtils_ENABLE_D3_CHART=ON -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.num-parse-method }} -DSpecUtils_FETCH_FAST_FLOAT=ON -DCMAKE_INSTALL_PREFIX=install_prefix_build_static_lib_static_runtime -DSpecUtils_USE_MSVC_MultiThreadDLL=OFF -DSpecUtils_SHARED_LIB=OFF
         cmake --build build_static_lib_static_runtime --config Release --target package
+        echo "Files present after package build_static_lib_static_runtime"
+        ls
+        ls build_static_lib_shared_runtime
+        ls build_static_lib_shared_runtime/Release
 
 # Update the bleeding-edge tag to be current commit
     - name: Run latest-tag
@@ -118,3 +134,8 @@ jobs:
         tag: 'bleeding-edge'
         commit: ${{ github.sha }}
         makeLatest: true
+    
+    - name: "Cleanup and finish"
+        run: |
+          Get-ChildItem '.\build_*\*.zip' | foreach { Remove-Item -Path $_.FullName }
+          echo "Job status is ${{ job.status }}."
