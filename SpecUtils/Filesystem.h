@@ -63,14 +63,14 @@ namespace  SpecUtils
 { 
   //The below uses home-spun methods, and hasn't been tested with symbolic links.
   /** \brief Removes file from the filesystem, returning true if successful. */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool remove_file( const std::string &name );
   
   
   /** \brief Returns if the specified name corresponds to a file that can be
    read. 
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool is_file( const std::string &name );
   
   /** Renames a file from source to destination, returning if operation was
@@ -80,13 +80,13 @@ namespace  SpecUtils
    Will fail if destination already exists.
    Will fail is destination is a directory.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool rename_file( const std::string &source, const std::string &destination );
   
   /** \brief Returns if the specified name is a directory that can be accessed
    on the filesystem. 
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool is_directory( const std::string &name );
   
   /** Creates specified directory.
@@ -95,7 +95,7 @@ namespace  SpecUtils
    - -1 if directory existed
    - 1 if directory successfully made.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   int create_directory( const std::string &name );
   
   /** Checks that path passed in is a directory, and the current process can
@@ -107,7 +107,7 @@ namespace  SpecUtils
    
    \TODO: for windows move to using `AccessCheck(...)` or just remove this function.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool can_rw_in_directory( const std::string &name );
   
   /** \brief Concatenates parts of a filesystem name according to the operating
@@ -117,7 +117,7 @@ namespace  SpecUtils
    or "path\to\file.txt" on Windows.
    On Windows will convert all '/' characters to '\'.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string append_path( const std::string &base, const std::string &name );
   
   /** \brief Returns just the filename of a path passed in
@@ -134,7 +134,7 @@ namespace  SpecUtils
    
    May throw exception, although very unlikely.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string filename( const std::string &path_and_name );
   
   /** \brief Returns the parent path of the passed in path
@@ -175,7 +175,7 @@ namespace  SpecUtils
    May throw exception if input path has illegal characters (e.g., basename(...)
    (unix) or _wsplitpath_s (win32) fails.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string parent_path( const std::string &path );
   
   /** \brief Returns the extension of a filename, if there is one.
@@ -189,12 +189,12 @@ namespace  SpecUtils
    May throw exception if input path has illegal characters (e.g., basename(...)
    (unix) or _wsplitpath_s (win32) fails.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string file_extension( const std::string &path );
   
   /** \brief Gives the size of the file in bytes.  Returns 0 if not a file.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   size_t file_size( const std::string &path );
   
   /** \brief Returns temporary directory as designated by the operating system
@@ -207,12 +207,12 @@ namespace  SpecUtils
    Does not check that the returned path is a directory, or that you have read
    and/or write permissions on it.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string temp_dir();
   
   /** Determines is the path passed in is absolute or not.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool is_absolute_path( const std::string &path );
   
   /** Get the current working directory.
@@ -222,7 +222,7 @@ namespace  SpecUtils
    
    Returns empty string on error.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string get_working_path();
   
   /** \brief Gives a unique file name.
@@ -243,7 +243,7 @@ namespace  SpecUtils
    
    Note: this function is home-spun, so dont rely on it being the best.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string temp_file_name( std::string filebasename, std::string directory );
   
   /** Converts path to a canonical absolute path (no dot, dot-dot or symbolic
@@ -261,7 +261,7 @@ namespace  SpecUtils
    arbitrary length, but this would then require dropping support for
    Windows 7.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool make_canonical_path( std::string &path, const std::string &cwd = "" );
   
   /** Limit of how far down any of the recursive 'ls' functions can recurse down.
@@ -294,7 +294,7 @@ namespace  SpecUtils
    \param ending If not empty, only files ending with the specified string will
    be returned; ending is not case sensitive.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::vector<std::string> recursive_ls( const std::string &sourcedir,
                                         const std::string &ending = "" );
   
@@ -315,7 +315,7 @@ namespace  SpecUtils
    \param user_data argument passed to match_fcn to help it make the
    decision.  May be null if match_fcn allows for it to be null.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::vector<std::string> recursive_ls( const std::string &sourcedir,
                                         file_match_function_t match_fcn,
                                         void *user_data );
@@ -330,7 +330,7 @@ namespace  SpecUtils
    \param ending If not empty, only files ending with the specified string will
    be returned; ending is not case sensistive.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
                                                  const std::string &ending = "" );
   
@@ -346,7 +346,7 @@ namespace  SpecUtils
    a file should be included in the results; this is optional to use
    according to requirements of your match_fcn.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::vector<std::string> ls_files_in_directory( const std::string &sourcedir,
                                                  file_match_function_t match_fcn,
                                                  void *match_data );
@@ -362,7 +362,7 @@ namespace  SpecUtils
    get back {"src/path/a", "src/path/b", "src/path/c"}.
    
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::vector<std::string> ls_directories_in_directory( const std::string &src );
   
   
@@ -384,7 +384,7 @@ namespace  SpecUtils
    assert( fs_relative( "a", "a/b/c") == "b/c");
    assert( fs_relative( "a/b/c/x/y", "a/b/c") == "../..");
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string fs_relative( std::string from_path, std::string to_path );
   
   /** Removes all "." elements; for absolute paths will resolve/remove all ".."
@@ -412,7 +412,7 @@ namespace  SpecUtils
    "/.."                    --> "/"
    "./foo/bar/."            --> "foo/bar"
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string lexically_normalize_path( const std::string &input );
   
   //ToDo: add in path comparisons (which don't resolve files, just use strings)
@@ -435,7 +435,7 @@ namespace  SpecUtils
    
    Throws exception on failure.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   void load_file_data( const char * const filename, std::vector<char> &data );
   
   
@@ -445,7 +445,7 @@ namespace  SpecUtils
     to not be spectrum files (but may also filter out a small amount of actual
     spectrum files in practice).
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   bool likely_not_spec_file( const std::string &file );
 }//namespace  SpecUtils
 

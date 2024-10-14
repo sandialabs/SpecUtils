@@ -56,9 +56,9 @@ namespace SpecUtilsAsync
 {
   //num_logical_cpu_cores(): if cpu has hyperthreading this is 2x physical
   //  If SpecUtils_USING_NO_THREADING is true, then returns 1
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   int num_logical_cpu_cores();
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   int num_physical_cpu_cores();
 
   
@@ -82,7 +82,7 @@ namespace SpecUtilsAsync
   //    do_asyncronous_work).
 
   
-  class SpecUtils_DLLEXPORT ThreadPool
+  class SPECUTILS_EXPORT ThreadPool
   {
     /*
      ToDo:

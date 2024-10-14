@@ -38,7 +38,7 @@ namespace  SpecUtils
    
    This is in analogy with boost::posix_time::ptime, that we upgraded the code from.
    */
-  SpecUtils_DLLEXPORT 
+  SPECUTILS_EXPORT 
   bool is_special( const time_point_t &t );
 
   //to_iso_string(...) and to_extended_iso_string(...) are implemented here
@@ -47,13 +47,13 @@ namespace  SpecUtils
   /** Converts the input time to an iso formatted string.
    Ex. "20140414T141201.621543"
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string to_iso_string( const time_point_t &t );
   
   /** Converts the input time to an extended iso formatted string.
    Ex. "2014-04-14T14:12:01.621543"
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string to_extended_iso_string( const time_point_t &t );
   
   /** Converts the input to string in format d-mmm-YYYY HH:MM:SS AM,
@@ -61,14 +61,14 @@ namespace  SpecUtils
    Returns "not-a-date-time" if input is not valid.
    Ex. 24hr format: "9-Sep-2014 15:02:15", AM/PM: "9-Sep-2014 03:02:15 PM"
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string to_common_string( const time_point_t &t, const bool twenty_four_hour );
   
   /** Converts input to the 23 character VAX format "DD-MMM-YYYY HH:MM:SS.SS".
    Returns empty string if input is not valid.
    Ex. "19-Sep-2014 14:12:01.62"
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   std::string to_vax_string( time_point_t t );
   
   /** \brief Describes how to attempt to parse date/times when it is ambigous,
@@ -114,7 +114,7 @@ namespace  SpecUtils
    
    Does not throw.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   time_point_t time_from_string( std::string time_string,
                                  const DateParseEndianType endian = DateParseEndianType::MiddleEndianFirst );
   
@@ -133,13 +133,13 @@ namespace  SpecUtils
    more complete implementation, but hasnt been tested against parsing spectrum
    files.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   float time_duration_string_to_seconds( const char *duration_str, const size_t length );
 
   /** Convenience function for getting time duration from a ISO 8601 like
    std::string.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   float time_duration_string_to_seconds( const std::string &duration );
   
   /** Converts a string formatted like "[-]h[h][:mm][:ss][.fff]", (ex. "02:15:01.332") to number of
@@ -159,7 +159,7 @@ namespace  SpecUtils
    
    Throws exception if input is invalid.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   double delimited_duration_string_to_seconds( const std::string &duration );
 
   /** \brief Gives the CPU time in seconds.
@@ -169,7 +169,7 @@ namespace  SpecUtils
    
    \returns The CPU time in seconds, or on error -DBL_MAX.
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   double get_cpu_time();
   
   
@@ -182,7 +182,7 @@ namespace  SpecUtils
    Note May have an occasional jump of a few seconds on Windows due to a
    hardware issue (fixed on newer windows/hardware?)
    */
-  SpecUtils_DLLEXPORT
+  SPECUTILS_EXPORT
   double get_wall_time();
   
 }//namespace  SpecUtils

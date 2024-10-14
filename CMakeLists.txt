@@ -283,6 +283,18 @@ set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils"
 # Make so on Windows the functions/classes will be exported
 target_compile_definitions( SpecUtils PRIVATE SpecUtils_EXPORTS )
 
+# Include the GenerateExportHeader module
+include(GenerateExportHeader)
+generate_export_header(SpecUtils
+    BASE_NAME SpecUtils
+    EXPORT_FILE_NAME ${CMAKE_BINARY_DIR}/SpecUtilsExport.h
+)
+
+if( NOT SpecUtils_SHARED_LIB )
+  target_compile_definitions( SpecUtils PRIVATE SPECUTILS_STATIC_DEFINE )
+endif()
+
+
 set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched
 set( SpecUtils_USE_FROM_CHARS OFF )   # Supported by MSVC >= 2019, and gcc >= 12.  Not supported by Apple clang. In MSVC, about 50% slower than boost::spirit
 set( SpecUtils_USE_BOOST_SPIRIT OFF ) # Uses boost::spirit, and fasted method (maybe a hair faster than fastfloat)
@@ -480,7 +492,7 @@ configure_file(
 )
 LIST(APPEND headers ${SpecUtils_config_OUT})
 # Install the headers
-install(FILES ${headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
+install(FILES ${headers} ${CMAKE_BINARY_DIR}/SpecUtilsExport.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
 
 # Create and install the CMake package configuration files
 include(CMakePackageConfigHelpers)
