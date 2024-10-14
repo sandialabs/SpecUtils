@@ -134,7 +134,7 @@ jobs:
         tag: 'bleeding-edge'
         commit: ${{ github.sha }}
         makeLatest: true
-    
+
     - name: "Cleanup and finish"
         run: |
           Get-ChildItem '.\build_*\*.zip' | foreach { Remove-Item -Path $_.FullName }
