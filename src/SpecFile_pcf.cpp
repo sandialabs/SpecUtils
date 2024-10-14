@@ -159,7 +159,11 @@ namespace
 
 namespace SpecUtils
 {
-
+  int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
+  {
+    return pcf_det_name_to_dev_pair_index(name, col, panel, mca);
+  }
+  
 int Measurement::rpm_panel_number() const
 {
   int col, panel, mca;
