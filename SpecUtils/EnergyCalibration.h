@@ -504,6 +504,7 @@ namespace SpecUtils
    @returns the full range fraction coefficients.  If input coefficients is
             empty or number of channels is zero, will return empty vector.
    */
+  SPECUTILS_EXPORT
   std::vector<float>
   polynomial_coef_to_fullrangefraction( const std::vector<float> &coeffs,
                                         const size_t nchannel );
