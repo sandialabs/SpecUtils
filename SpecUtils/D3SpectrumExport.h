@@ -124,7 +124,7 @@ namespace D3SpectrumExport
   
   /** Specifies the options for a single spectrum displayed on the chart
    */
-  struct D3SpectrumOptions
+  struct SpecUtils_DLLEXPORT D3SpectrumOptions
   {
     D3SpectrumOptions(); //black line, no peaks, scale factor 1.0
     
@@ -175,7 +175,7 @@ namespace D3SpectrumExport
    of those state values.
    
    */
-  struct D3SpectrumChartOptions
+  struct SpecUtils_DLLEXPORT D3SpectrumChartOptions
   {
     D3SpectrumChartOptions();
     D3SpectrumChartOptions(  std::string title,

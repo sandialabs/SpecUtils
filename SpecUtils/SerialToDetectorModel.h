@@ -95,6 +95,7 @@ namespace SerialToDetectorModel
       was determined, and the fourth column gives other places where data for
       this detector may be found.
    */
+  SpecUtils_DLLEXPORT
   void set_detector_model_input_csv( const std::string &filename );
   
   
@@ -144,6 +145,7 @@ namespace SerialToDetectorModel
   /** return string representation of DetectorModel; exact same as how enum
       value is defined (e.g., "Unknown", "DetectiveEx100", etc.).
   */
+  SpecUtils_DLLEXPORT
   const std::string &to_str( const DetectorModel model );
   
   
@@ -151,6 +153,7 @@ namespace SerialToDetectorModel
   /** Returns the #DetectorModel based on serial number match, or
       #DetectorModel::Unknown if the serial number isnt known.
    */
+  SpecUtils_DLLEXPORT
   DetectorModel detective_model_from_serial( const std::string &instrument_id );
 
   
@@ -166,10 +169,11 @@ namespace SerialToDetectorModel
    
       Returns DetectorModel::UnknownSerialNumber if couldnt figure anything out.
    */
+  SpecUtils_DLLEXPORT
   DetectorModel guess_detective_model_from_serial( const std::string &instrument_id );
   
   
-  struct DetectorModelInfo
+  struct SpecUtils_DLLEXPORT DetectorModelInfo
   {
     /** So far, all Detective detector serial numbers I've seen either fit into
         (some only barely) a 32bit int, or are non-ASCII text.  For non ASCII
@@ -194,8 +198,10 @@ namespace SerialToDetectorModel
   
   
 #if( PERFORM_DEVELOPER_CHECKS )
+  SpecUtils_DLLEXPORT
   void write_csv_file( std::ostream &strm );
   
+  SpecUtils_DLLEXPORT
   std::shared_ptr<std::vector<DetectorModelInfo>> serial_informations();
   
   /** Grabbing the serial numbers from binary Ortec files may result is getting
@@ -207,6 +213,7 @@ namespace SerialToDetectorModel
    Note: This function is always implemented for internal use, but only exposed
    externally if PERFORM_DEVELOPER_CHECKS is enabled.
    */
+  SpecUtils_DLLEXPORT
   std::vector<uint32_t> candidate_serial_nums_from_str( const std::string &instrument_id );
 #endif
 }//namespace SerialToDetectorModel

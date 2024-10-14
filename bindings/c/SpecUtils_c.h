@@ -4,21 +4,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifndef CALLINGCONVENTION
+#ifndef SpecUtils_C_CALLCONV
 #ifdef _WIN32
-    #define CALLINGCONVENTION __cdecl
+    #define SpecUtils_C_CALLCONV __cdecl
 #else
-    #define CALLINGCONVENTION
+    #define SpecUtils_C_CALLCONV
 #endif
-#endif //CALLINGCONVENTION
+#endif //SpecUtils_C_CALLCONV
 
-#ifndef DLLEXPORT
 #ifdef _WIN32
-    #define DLLEXPORT __declspec(dllexport)
+  #ifdef SpecUtils_EXPORTS
+    #define SpecUtils_C_DLLEXPORT __declspec(dllexport)
+  #else
+    #define SpecUtils_C_DLLEXPORT __declspec(dllimport)
+  #endif
 #else
-    #define DLLEXPORT
-#endif
-#endif //DLLEXPORT
+    #define SpecUtils_C_DLLEXPORT
+#endif //SpecUtils_C_DLLEXPORT
 
 #ifdef __cplusplus
 extern "C" 
@@ -41,24 +43,24 @@ typedef struct SpecUtils_CountedRef_EnergyCal SpecUtils_CountedRef_EnergyCal;
  
  Note: You must call `SpecUtils_SpecFile_destroy(instance)` to de-allocate this object to avoid a memory leak.
  */
-DLLEXPORT SpecUtils_SpecFile * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_SpecFile * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_create();
   
 /** Creates a copy of passed in `SpecUtils_SpecFile`.
  
  Note: You must call `SpecUtils_SpecFile_destroy(instance)` to de-allocate this object to avoid a memory leak.
  */
-DLLEXPORT SpecUtils_SpecFile * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_SpecFile * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_clone( const SpecUtils_SpecFile * const instance );
   
 /** De-allocates a `SpecUtils::SpecFile` object created using `SpecUtils_SpecFile_create()`.
  */
-DLLEXPORT void CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance );
   
   
   /** Sets the `lhs` equal to the `rhs`. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile *rhs );
   
 /** Parses the specified spectrum file into the  provided `SpecUtils::SpecFile` instance.
@@ -77,7 +79,7 @@ SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile 
   `SpecFile_load_file_from_format(instance,filename,SpecUtils_Input_Auto)`
  
  */
-DLLEXPORT bool CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecFile_load_file( SpecUtils_SpecFile *instance,
                      const char * const filename );
 
@@ -108,7 +110,7 @@ enum SpecUtils_ParserType
  is somehow not properly detecting the input format (which should not happen), or the filename doesnt hint at the
  file type, and you dont want to waste the CPU time figuring it out from the file contents.
  */
-DLLEXPORT bool CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecFile_load_file_from_format( SpecUtils_SpecFile * const instance,
                                 const char * const filename,
                                const enum SpecUtils_ParserType type );
@@ -158,7 +160,7 @@ enum SpecUtils_SaveSpectrumAsType
         are undefined, so on failure you should check if the file specified by `filename` exists,
         and delete it.
  */
-DLLEXPORT bool CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_write_to_file( SpecUtils_SpecFile *instance,
                            const char *filename,
                         enum SpecUtils_SaveSpectrumAsType type );
@@ -167,13 +169,13 @@ SpecUtils_write_to_file( SpecUtils_SpecFile *instance,
  
  E.g. a system that measurements at regular intervals, where it would make sense to plot a time-history chart
  */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_passthrough( const SpecUtils_SpecFile * const instance );
 
   
 /** Returns the number of `SpecUtils_Measurement` measurements held by the specified `SpecUtils_SpecFile`.
  */
-DLLEXPORT uint32_t CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instance );
   
 /** Return the maximum number of gamma channels of any `SpecUtils_Measurement` owned by the provided
@@ -181,7 +183,7 @@ SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instanc
  
  Note: individual measurements may have different numbers of channels.
  */
-DLLEXPORT uint32_t CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const instance );
   
 /** Returns pointer to the measurement at the specified index.
@@ -190,7 +192,7 @@ SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const insta
  @param index The index of the measurement to return, should be from 0 to `SpecUtils_SpecFile_num_gamma_channels(instance) -1`.
  @returns pointer to specified measurement - or NULL if index is to large.
  */
-DLLEXPORT const SpecUtils_Measurement* CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const SpecUtils_Measurement* SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_get_measurement_by_index( const SpecUtils_SpecFile * const instance,
                                      const uint32_t index );
   
@@ -205,7 +207,7 @@ SpecUtils_SpecFile_get_measurement_by_index( const SpecUtils_SpecFile * const in
  
  \sa
  */
-DLLEXPORT const SpecUtils_Measurement* CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const SpecUtils_Measurement* SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_get_measurement_by_sample_det( const SpecUtils_SpecFile * const instance,
                                           const int sample_number,
                                           const char * const det_name );
@@ -215,7 +217,7 @@ SpecUtils_SpecFile_get_measurement_by_sample_det( const SpecUtils_SpecFile * con
  The data for each detector is referenced using the detectors name, and usually
  defined by the input spectrum file.
  */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_detectors( const SpecUtils_SpecFile * const instance );
 
 /** Returns the detector name, for the specified index.
@@ -228,12 +230,12 @@ SpecUtils_SpecFile_number_detectors( const SpecUtils_SpecFile * const instance )
  
  \sa SpecUtils_SpecFile_number_detectors
  */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_detector_name( const SpecUtils_SpecFile * const instance,
                                  const uint32_t index );
 
 /** Returns the number of detectors who provide any gamma spectra. */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_gamma_detectors( const SpecUtils_SpecFile * const instance );
 
 /** Returns the gamma detector name, for the specified index.
@@ -244,16 +246,16 @@ SpecUtils_SpecFile_number_gamma_detectors( const SpecUtils_SpecFile * const inst
  
  \sa SpecUtils_SpecFile_number_gamma_detectors
 */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_gamma_detector_name( const SpecUtils_SpecFile * const instance,
                                    const uint32_t index );
   
 /** Same as `SpecUtils_SpecFile_number_gamma_detectors`, but for neutrons */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_neutron_detectors( const SpecUtils_SpecFile * const instance );
 
 /** Same as `SpecUtils_SpecFile_gamma_detector_name`, but for neutrons */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_neutron_detector_name( const SpecUtils_SpecFile * const instance,
                                      const uint32_t index );
   
@@ -274,7 +276,7 @@ SpecUtils_SpecFile_neutron_detector_name( const SpecUtils_SpecFile * const insta
  (if this is the case, the most common deviation from normal is the neutron detector(s) having
  a different real time than gamma detectors).
  */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_samples( const SpecUtils_SpecFile * const instance );
   
 /** Returns the sample number, for a given index.
@@ -283,7 +285,7 @@ SpecUtils_SpecFile_number_samples( const SpecUtils_SpecFile * const instance );
  @param index Inclusively between 0 and `SpecUtils_SpecFile_number_samples(instance) - 1`.
  @returns The sample number for the given index.  If index is invalid, returns `INT_MIN`
  */
-DLLEXPORT int CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT int SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_sample_number( const SpecUtils_SpecFile * const instance, const uint32_t index );
 
 /** Adds a measurement to the specified spectrum file.
@@ -301,7 +303,7 @@ SpecUtils_SpecFile_sample_number( const SpecUtils_SpecFile * const instance, con
  
  After calling this function, any pointers to detector names, or sample numbers, etc will be invalidated.
  */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_add_measurement( SpecUtils_SpecFile * instance,
                 SpecUtils_Measurement *measurement,
                 const bool do_cleanup );
@@ -322,7 +324,7 @@ SpecUtils_SpecFile_add_measurement( SpecUtils_SpecFile * instance,
  
  After calling this function, any pointers to detector names, or sample numbers, etc will be invalidated.
  */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_remove_measurement( SpecUtils_SpecFile * instance,
                    const SpecUtils_Measurement * const measurement,
                    const bool do_cleanup );
@@ -342,14 +344,14 @@ SpecUtils_SpecFile_remove_measurement( SpecUtils_SpecFile * instance,
  
  After calling this function, any pointers to detector names, or sample numbers, etc will be invalidated.
  */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_remove_measurements( SpecUtils_SpecFile * instance,
                     const SpecUtils_Measurement ** const measurements,
                     const uint32_t number_to_remove );
 
   
 /** Resets the spectrum file to its initially empty state. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_reset( SpecUtils_SpecFile * instance );
 
 /** Cleans up the spectrum file, after adding measurements, recalculating sums, assigning sample
@@ -363,7 +365,7 @@ SpecUtils_SpecFile_reset( SpecUtils_SpecFile * instance );
  
  After calling this function, any pointers to detector names, or sample numbers, etc will be invalidated.
  */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_cleanup( SpecUtils_SpecFile * instance,
                                 const bool dont_change_sample_numbers,
                                 const bool reorder_by_time );
@@ -371,7 +373,7 @@ SpecUtils_SpecFile_cleanup( SpecUtils_SpecFile * instance,
 /** Returns if the spectrum file has been modified since it was loaded, or
  `SpecUtils_SpecFile_cleanup(...)` last called
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_modified( const SpecUtils_SpecFile * const instance );
   
 /** Sums the spectra and neutron counts of the specified measurements.
@@ -387,7 +389,7 @@ SpecUtils_SpecFile_modified( const SpecUtils_SpecFile * const instance );
         Will return `NULL` if any sample numbers of detector names are invalid, or no valid measurements
         are specified.
  */
-DLLEXPORT SpecUtils_Measurement * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_Measurement * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_sum_measurements( const SpecUtils_SpecFile * const instance,
                                     const int * const sample_numbers,
                                     const uint32_t number_sample_numbers,
@@ -395,54 +397,54 @@ SpecUtils_SpecFile_sum_measurements( const SpecUtils_SpecFile * const instance,
                                     const uint32_t number_detector_names );
 
 /** Returns the approximate number of bytes this spectrum file takes up in memory. */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_memmorysize( const SpecUtils_SpecFile * const instance );
   
 
 /** Returns the number of file-level remarks the spectrum file contained. */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_remarks( const SpecUtils_SpecFile * const instance );
 
 /** Returns null-terminated strings of file-level remarks in the file.
  
  Will return `NULL` only in requested index is too large.
  */
-DLLEXPORT const char * CALLINGCONVENTION
-SpecUtils_SpecFile_remark( const SpecUtils_SpecFile * const instance, 
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
+SpecUtils_SpecFile_remark( const SpecUtils_SpecFile * const instance,
                           const uint32_t remark_index );
   
 /** Returns number of warnings generated during spectrum file parsing. */
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_number_parse_warnings( const SpecUtils_SpecFile * const instance );
 
 /** Returns individual parse warnings. */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_parse_warning( const SpecUtils_SpecFile * const instance,
                                  const uint32_t warning_index  );
   
   
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_sum_gamma_live_time( const SpecUtils_SpecFile * const instance );
 
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_sum_gamma_real_time( const SpecUtils_SpecFile * const instance );
 
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_gamma_count_sum( const SpecUtils_SpecFile * const instance );
 
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_neutron_counts_sum( const SpecUtils_SpecFile * const instance );
   
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_filename( const SpecUtils_SpecFile * const instance );
 
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_uuid( const SpecUtils_SpecFile * const instance );
   
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_measurement_location_name( const SpecUtils_SpecFile * const instance );
     
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_measurement_operator( const SpecUtils_SpecFile * const instance );
 
 /** The C equivalent of `SpecUtils::DetectorType`.
@@ -476,7 +478,7 @@ enum SpecUtils_DetectorType
 This may be inferred from spectrum file format or from comments or information within the 
 spectrum file.
  */
-DLLEXPORT enum SpecUtils_DetectorType CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT enum SpecUtils_DetectorType SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_detector_type( const SpecUtils_SpecFile * const instance );
 
 /** Returns the instrument type as specified, or inferred, from the spectrum file.
@@ -484,90 +486,90 @@ SpecUtils_SpecFile_detector_type( const SpecUtils_SpecFile * const instance );
  Examples of returned values are: "Spectrometer", "PortalMonitor", "SpecPortal", "RadionuclideIdentifier", 
  "PersonalRadiationDetector", "SurveyMeter", "Other", etc
  */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_instrument_type( const SpecUtils_SpecFile * const instance );
 
 /** The instrument manufacturer specified in, or inferred from, the spectrum file */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_manufacturer( const SpecUtils_SpecFile * const instance );
 
 /** The instrument model specified in, or inferred from, the spectrum file */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_instrument_model( const SpecUtils_SpecFile * const instance );
   
 /** The serial number of the instrument that made the spectrum file. */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_instrument_id( const SpecUtils_SpecFile * const instance );
   
   
 /** Returns if mean longitude/latitude are valid gps coords */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_has_gps_info( const SpecUtils_SpecFile * const instance );
   
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_mean_latitude( const SpecUtils_SpecFile * const instance );
   
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_mean_longitude( const SpecUtils_SpecFile * const instance );
     
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_contains_derived_data( const SpecUtils_SpecFile * const instance );
   
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_contains_non_derived_data( const SpecUtils_SpecFile * const instance );
   
   
 // simple setters
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_filename( SpecUtils_SpecFile *instance,
                                   const char * const filename );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_remarks( SpecUtils_SpecFile *instance,
                                  const char ** const remarks,
                                  const uint32_t number_remarks );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_add_remark( SpecUtils_SpecFile *instance,
                                 const char * const remark );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_parse_warnings( SpecUtils_SpecFile *instance,
                                         const char ** const warnings,
                                         const uint32_t number_warnings );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_uuid( SpecUtils_SpecFile *instance,
                               const char * const file_uuid );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_lane_number( SpecUtils_SpecFile *instance, const int num );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_location_name( SpecUtils_SpecFile *instance,
                                                    const char * const location_name );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_inspection( SpecUtils_SpecFile *instance,
                                     const char * const inspection_type );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_instrument_type( SpecUtils_SpecFile *instance,
                                          const char * const instrument_type );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_detector_type( SpecUtils_SpecFile *instance,
                                      const enum SpecUtils_DetectorType type );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_manufacturer( SpecUtils_SpecFile *instance,
                                       const char * const manufacturer_name );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_instrument_model( SpecUtils_SpecFile *instance,
                                           const char * const model );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_instrument_id( SpecUtils_SpecFile *instance,
                                        const char * const serial_number );
   
@@ -575,7 +577,7 @@ SpecUtils_SpecFile_set_instrument_id( SpecUtils_SpecFile *instance,
    
   @returns if rename was successful.
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_change_detector_name( SpecUtils_SpecFile *instance,
                             const char * const original_name,
                             const char * const new_name );
@@ -584,7 +586,7 @@ SpecUtils_SpecFile_change_detector_name( SpecUtils_SpecFile *instance,
    
   @returns if was successful
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 set_energy_calibration_from_CALp_file( SpecUtils_SpecFile *instance,
                                              const char * const CALp_filepath );
   
@@ -595,7 +597,7 @@ set_energy_calibration_from_CALp_file( SpecUtils_SpecFile *instance,
    
   Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_live_time( SpecUtils_SpecFile *instance,
                                    const float live_time,
                                    const SpecUtils_Measurement * const measurement );
@@ -604,7 +606,7 @@ SpecUtils_SpecFile_set_measurement_live_time( SpecUtils_SpecFile *instance,
    
   Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_real_time( SpecUtils_SpecFile *instance,
                                    const float real_time,
                                    const SpecUtils_Measurement * const measurement );
@@ -615,7 +617,7 @@ SpecUtils_SpecFile_set_measurement_real_time( SpecUtils_SpecFile *instance,
    
   @returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_start_time( SpecUtils_SpecFile *instance,
                                     const int64_t microseconds_since_unix_epoch,
                                     const SpecUtils_Measurement * const measurement );
@@ -626,7 +628,7 @@ SpecUtils_SpecFile_set_measurement_start_time( SpecUtils_SpecFile *instance,
    
   @returns if successful (valid date/time and measurement is valid).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_start_time_str( SpecUtils_SpecFile *instance,
                                     const char *date_time,
                                     const SpecUtils_Measurement * const measurement );
@@ -635,7 +637,7 @@ SpecUtils_SpecFile_set_measurement_start_time_str( SpecUtils_SpecFile *instance,
    
   Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_remarks( SpecUtils_SpecFile *instance,
                                  const char ** const remarks,
                                  const uint32_t number_remarks,
@@ -651,7 +653,7 @@ enum SpecUtils_SourceType
 };
   
 /** Sets the source-type of a specific measurement. */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
                                                const enum SpecUtils_SourceType type,
                        const SpecUtils_Measurement * const measurement );
@@ -662,19 +664,19 @@ SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
    
   Returns if successful (i.e., if measurement was owned by the `SpecUtils_SpecFile`), and if values are valid lat/long.
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
                     const double longitude,
                     const double latitude,
                     const int64_t microseconds_since_unix_epoch,
                     const SpecUtils_Measurement * const measurement );
   
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_title( SpecUtils_SpecFile * instance,
                  const char * const title,
                  const SpecUtils_Measurement * const measurement );
   
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_contained_neutrons( SpecUtils_SpecFile *instance,
                               const bool contained, const float counts,
                               const float neutron_live_time,
@@ -682,7 +684,7 @@ SpecUtils_SpecFile_set_measurement_contained_neutrons( SpecUtils_SpecFile *insta
 
   
   
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *instance,
                          SpecUtils_CountedRef_EnergyCal *energy_cal,
                          const SpecUtils_Measurement * const measurement );
@@ -696,7 +698,7 @@ SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *insta
  
  \sa `SpecUtils_SpecFile_add_measurement`
  */
-DLLEXPORT SpecUtils_Measurement * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_Measurement * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_create();
 
 /** Creates a copy of a `SpecUtils::Measurement`.
@@ -704,42 +706,42 @@ SpecUtils_Measurement_create();
  You must either add the returned pointer to a `SpecUtils_SpecFile`, or call
  `SpecUtils_Measurement_destroy(instance)` on result to not leak memory.
  */
-DLLEXPORT SpecUtils_Measurement * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_Measurement * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_clone( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance );
 
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_memmorysize( const SpecUtils_Measurement * const instance );
 
 /** Sets the `lhs` equal to the `rhs`. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Measurement *rhs );
   
 /** Resets the Measurement to the same state as when initially allocated. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_reset( SpecUtils_Measurement *instance );
   
 /** Returns the measurement description. Zero terminated, and non-null. */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_description( const SpecUtils_Measurement * const instance );
 
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
                                       const char * const description );
 
 /** Returns the measurement description. Zero terminated, and non-null. */
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_source_string( const SpecUtils_Measurement * const instance );
   
 /** This is a GADRAS specific function - it actually adds a remark to Measurement that starts with "Source:" */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
                                         const char * const source_string );
   
-DLLEXPORT void CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
                                        const float *counts,
                                        const uint32_t nchannels,
@@ -755,16 +757,16 @@ SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
  @param neutron_live_time The live time of the neutron measurement.  If it is the same as the gamma detector
         in this measurement, you can provide a negative value, and the gamma real-time will be used.
  */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_neutron_counts( SpecUtils_Measurement *instance,
                                          const float * const counts,
                                          const uint32_t num_tubes,
                                          const float neutron_live_time );
   
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
                                 const char * const title );
   
@@ -773,11 +775,11 @@ SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
  
  A returned value of zero indicates no time available.
  */
-DLLEXPORT int64_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT int64_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_start_time_usecs( SpecUtils_Measurement *instance );
   
 /** Sets the start time of the measurement, using micro-seconds since the UNIX epoch to define the time. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
                                            const int64_t start_time );
   
@@ -787,20 +789,20 @@ SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
      
   @returns if successful (valid date/time string).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
                                             const char * const start_time_str );
   
 /** Returns the application-specific "tag" characters used by the PCF file format. */
-DLLEXPORT char CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT char SpecUtils_C_CALLCONV
 SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance );
 
 /** Sets the application-specific "tag" characters used by the PCF file format. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
                                   const char tag_char );
   
-DLLEXPORT uint32_t CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance );
   
 /** Returns array of gamma channel counts, having `SpecUtils_Measurement_number_gamma_channels(instance)`
@@ -808,7 +810,7 @@ SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const
  
  May return `NULL` pointer if no counts.
  */
-DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const float * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const instance );
 
 /** Returns array of lower channel energies. 
@@ -818,7 +820,7 @@ SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const 
  
  \sa SpecUtils_Measurement_number_gamma_channels
  */
-DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const float * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instance );
 
 /** Returns a pointer to the energy calibration for this measurement.
@@ -827,7 +829,7 @@ SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instanc
  Do NOT call `SpecUtils_CountedRef_EnergyCal_destroy(instance)`
  or `SpecUtils_EnergyCal_make_counted_ref(instance)` on the returned pointer.
  */
-DLLEXPORT const SpecUtils_EnergyCal * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const SpecUtils_EnergyCal * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_energy_calibration( const SpecUtils_Measurement * const instance );
   
 /** Returns a pointer to a `shared_ptr<const SpecUtils::EnergyCalibration>` object.
@@ -837,46 +839,46 @@ SpecUtils_Measurement_energy_calibration( const SpecUtils_Measurement * const in
  
  Returned pointer will be `NULL` if measurement didnt have energy calibration set.
 */
-DLLEXPORT const SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const SpecUtils_CountedRef_EnergyCal * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_energy_calibration_ref( const SpecUtils_Measurement * const instance );
   
   
-DLLEXPORT float CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_Measurement_real_time( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_Measurement_live_time( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT float CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_Measurement_neutron_live_time( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT double CALLINGCONVENTION 
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_Measurement_gamma_count_sum( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_Measurement_neutron_count_sum( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_is_occupied( const SpecUtils_Measurement * const instance );
     
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_contained_neutron( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT int CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT int SpecUtils_C_CALLCONV
 SpecUtils_Measurement_sample_number(const SpecUtils_Measurement * const instance);
 
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_sample_number( SpecUtils_Measurement *instance,
                                           const int samplenum );
   
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_detector_name( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_detector_name( SpecUtils_Measurement * instance,
                                           const char *name );
   
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_Measurement_speed( const SpecUtils_Measurement * const instance );
   
 enum SpecUtils_OccupancyStatus
@@ -886,37 +888,37 @@ enum SpecUtils_OccupancyStatus
   SpecUtils_OccupancyStatus_Unknown
 };
   
-DLLEXPORT enum SpecUtils_OccupancyStatus CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT enum SpecUtils_OccupancyStatus SpecUtils_C_CALLCONV
 SpecUtils_Measurement_occupancy_status( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_occupancy_status( SpecUtils_Measurement *instance,
                        const enum SpecUtils_OccupancyStatus status );
   
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_has_gps_info( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_Measurement_latitude( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_Measurement_longitude( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT int64_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT int64_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_position_time_microsec( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_position( SpecUtils_Measurement *instance,
                                      const double longitude,
                                      const double latitude,
                                      const int64_t position_time_microsec );
     
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_Measurement_dose_rate( const SpecUtils_Measurement * const instance );
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_Measurement_exposure_rate( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_detector_type( const SpecUtils_Measurement * const instance );
   
 enum SpecUtils_QualityStatus
@@ -927,47 +929,47 @@ enum SpecUtils_QualityStatus
   SpecUtils_QualityStatus_Missing
 };
 
-DLLEXPORT enum SpecUtils_QualityStatus CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT enum SpecUtils_QualityStatus SpecUtils_C_CALLCONV
 SpecUtils_Measurement_quality_status( const SpecUtils_Measurement * const instance );
 
-DLLEXPORT enum SpecUtils_SourceType CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT enum SpecUtils_SourceType SpecUtils_C_CALLCONV
 SpecUtils_Measurement_source_type( const SpecUtils_Measurement * const instance );
 
-DLLEXPORT void
+SpecUtils_C_DLLEXPORT void
 SpecUtils_Measurement_set_source_type( SpecUtils_Measurement *instance,
                                         const enum SpecUtils_SourceType type );
     
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_number_remarks( const SpecUtils_Measurement * const instance );
   
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_remark( const SpecUtils_Measurement * const instance,
                                const uint32_t remark_index );
   
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_remarks( SpecUtils_Measurement *instance,
                                     const char **remarks,
                                     const uint32_t number_remarks );
   
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_number_parse_warnings( const SpecUtils_Measurement * const instance );
-DLLEXPORT const char * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const char * SpecUtils_C_CALLCONV
 SpecUtils_Measurement_parse_warning( const SpecUtils_Measurement * const instance,
                                       const uint32_t remark_index );
     
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_Measurement_gamma_integral( const SpecUtils_Measurement * const instance,
                                        const float lower_energy, const float upper_energy );
     
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_Measurement_gamma_channels_sum( const SpecUtils_Measurement * const instance,
                                            const uint32_t startbin,
                                            const uint32_t endbin );
   
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_Measurement_derived_data_properties( const SpecUtils_Measurement * const instance );
     
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
                                                const uint32_t nchannel );
   
@@ -976,7 +978,7 @@ SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
   Does not change the energy of peaks, but does change the channel numbers of peaks, and counts of
   the channels, and possibly even the number of channels.
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
                               const SpecUtils_CountedRef_EnergyCal * const cal );
     
@@ -987,7 +989,7 @@ SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
   @returns If the new energy calibration is applied.  Change of calibration may not be applied if the input calibration
             has the wrong number of channels, is invalid, etc
   */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
                                                const SpecUtils_CountedRef_EnergyCal * const cal );
     
@@ -999,17 +1001,17 @@ SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
   You need to either call `SpecUtils_EnergyCal_destroy(instance)` for the returned
   result, or call
 */
-DLLEXPORT SpecUtils_EnergyCal * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_EnergyCal * SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_create();
     
 /** De-allocates a EnergyCalibration. */
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_destroy( SpecUtils_EnergyCal *instance );
     
-DLLEXPORT SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_CountedRef_EnergyCal * SpecUtils_C_CALLCONV
 SpecUtils_CountedRef_EnergyCal_create();
     
-DLLEXPORT void CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT void SpecUtils_C_CALLCONV
 SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance );
 
   /** Returns the `SpecUtils_EnergyCal` pointer owned by a `SpecUtils_CountedRef_EnergyCal`
@@ -1017,7 +1019,7 @@ SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance
    Do NOT call `SpecUtils_EnergyCal_destroy(instance)` on the returned result - its lifetime is managed
    by the counted ref pointer you passed in
    */
-DLLEXPORT const SpecUtils_EnergyCal * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const SpecUtils_EnergyCal * SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance );
    
    /** Converts the passed in `SpecUtils_EnergyCal` object to a `SpecUtils_CountedRef_EnergyCal`,
@@ -1027,7 +1029,7 @@ SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance );
     and must not have been passed to this function before.  Also you must NOT call
     `SpecUtils_EnergyCal_destroy(instance)` for the `SpecUtils_EnergyCal` passed in.
     */
-DLLEXPORT SpecUtils_CountedRef_EnergyCal * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT SpecUtils_CountedRef_EnergyCal * SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_make_counted_ref( SpecUtils_EnergyCal *instance );
     
     
@@ -1042,35 +1044,35 @@ enum SpecUtils_EnergyCalType
   SpecUtils_EnergyCal_InvalidEquationType
 };//enum SpecUtils_EnergyCalType
 
-DLLEXPORT enum SpecUtils_EnergyCalType CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT enum SpecUtils_EnergyCalType SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_type( const SpecUtils_EnergyCal * const instance );
 
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_valid( const SpecUtils_EnergyCal * const instance );
     
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_number_coefficients( const SpecUtils_EnergyCal * const instance );
     
-DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const float * SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_coefficients( const SpecUtils_EnergyCal * const instance );
 
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_number_deviation_pairs( const SpecUtils_EnergyCal * const instance );
     
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_deviation_energy( const SpecUtils_EnergyCal * const instance,
                                        const uint32_t deviation_pair_index );
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_deviation_offset( const SpecUtils_EnergyCal * const instance,
                                          const uint32_t deviation_pair_index );
     
-DLLEXPORT uint32_t CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT uint32_t SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_number_channels( const SpecUtils_EnergyCal * const instance );
 
 /** The channel lower energies array.
    Will have one more entry that the number of channels (the last entry gives last channel upper energy).
 */
-DLLEXPORT const float * CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT const float * SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance );
     
 /** Sets the polynomial coefficients, and non-linear deviation pairs for the energy calibration object.
@@ -1088,7 +1090,7 @@ SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance
             Will return false if coefficients or deviation pairs are invalid (e.g., not enough coefficients, NaN of Inf coefficients,
             results in non monotonically increasing channel energies, or are otherwise unreasonable).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
                                     const uint32_t num_channels,
                                     const float *coeffs,
@@ -1112,7 +1114,7 @@ SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
             Will return false if coefficients or deviation pairs are invalid (e.g., not enough coefficients, NaN of Inf coefficients,
             results in non monotonically increasing channel energies, or are otherwise unreasonable).
 */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
                                               const uint32_t num_channels,
                                               const float *coeffs,
@@ -1131,7 +1133,7 @@ SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
    @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
             Will return false if input energies are invalid, not increasing, or not enough of them for the number of channels.
    */
-DLLEXPORT bool CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT bool SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
                                               const uint32_t num_channels,
                                               const uint32_t num_energies,
@@ -1143,7 +1145,7 @@ SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
    
   \sa SpecUtils_EnergyCal_valid
 */
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instance,
                                           const double energy );
 
@@ -1152,7 +1154,7 @@ SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instan
    
    If energy calibration coefficients are not set, then will return -999.9.
 */
-DLLEXPORT double CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT double SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instance,
                                            const double channel );
 
@@ -1162,7 +1164,7 @@ SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instan
    
   \sa SpecUtils_EnergyCal_valid
 */
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance );
 
 /** Returns the upper energy (e.g., upper energy of the last channel) this energy calibration is valid for.
@@ -1171,7 +1173,7 @@ SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance );
      
      \sa SpecUtils_EnergyCal_valid
 */
-DLLEXPORT float CALLINGCONVENTION
+SpecUtils_C_DLLEXPORT float SpecUtils_C_CALLCONV
 SpecUtils_EnergyCal_upper_energy( const SpecUtils_EnergyCal * const instance );
     
     

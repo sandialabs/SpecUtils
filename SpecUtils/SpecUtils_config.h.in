@@ -66,6 +66,24 @@
 #define IsNan(x) (std::isnan)(x)
 #endif
 
+//#ifndef SpecUtils_CALLCONV
+//  #ifdef _WIN32
+//    #define SpecUtils_CALLCONV __cdecl
+//  #else
+//    #define SpecUtils_CALLCONV
+//  #endif
+//#endif //SpecUtils_CALLCONV
+
+#ifdef _WIN32
+  #ifdef SpecUtils_EXPORTS
+    #define SpecUtils_DLLEXPORT __declspec(dllexport)
+  #else
+    #define SpecUtils_DLLEXPORT __declspec(dllimport)
+  #endif
+#else
+    #define SpecUtils_DLLEXPORT
+#endif //SpecUtils_DLLEXPORT
+
 #if(PERFORM_DEVELOPER_CHECKS)
 //log_developer_error(...) is implemented in SpecFile.cpp, but
 //  declared here so can be used everywhere.

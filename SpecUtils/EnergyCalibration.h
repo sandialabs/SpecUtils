@@ -99,7 +99,7 @@ namespace SpecUtils
    \TODO: move find_gamma_channel, gamma_energy_min/max, gamma_channel_width,
           gamma_channel_lower/upper/center, etc from #SpecUtils::Measurement to #EnergyCalibration
    */
-  struct EnergyCalibration
+  struct SpecUtils_DLLEXPORT EnergyCalibration
   {
     /** @returns the energy calibration type. */
     EnergyCalType type() const;
@@ -320,6 +320,7 @@ namespace SpecUtils
           
    Throws exception if channels to combine is 0.
    */
+  SpecUtils_DLLEXPORT
   std::shared_ptr<EnergyCalibration> energy_cal_combine_channels( const EnergyCalibration &orig_cal,
                                                                  const size_t num_channel_combine );
   
@@ -340,6 +341,7 @@ namespace SpecUtils
    
    Throws exception if an invalid energy calibration (i.e., channel energies not increasing)
    */
+  SpecUtils_DLLEXPORT
   std::shared_ptr< const std::vector<float> >
   polynomial_binning( const std::vector<float> &coeffs,
                      const size_t nchannel,
@@ -364,6 +366,7 @@ namespace SpecUtils
    
    Throws exception if an invalid energy calibration (i.e., channel energies not increasing)
    */
+  SpecUtils_DLLEXPORT
   std::shared_ptr< const std::vector<float> >
   fullrangefraction_binning( const std::vector<float> &coeffs,
                             const size_t nchannel,
@@ -385,6 +388,7 @@ namespace SpecUtils
    Doesnt perform a check that the coefficients or deviation pairs are actually valid.
    Throws exception if deviation pairs are not sorted.
    */
+  SpecUtils_DLLEXPORT
   double fullrangefraction_energy( const double channel_number,
                                  const std::vector<float> &coeffs,
                                  const size_t nchannel,
@@ -406,6 +410,7 @@ namespace SpecUtils
    
    Throws exception if deviation pairs are not sorted.
    */
+  SpecUtils_DLLEXPORT
   double polynomial_energy( const double channel_number,
                            const std::vector<float> &coeffs,
                            const std::vector<std::pair<float,float>> &deviation_pairs );
@@ -442,6 +447,7 @@ namespace SpecUtils
      be set at 1460 keV
    - Deviation pairs set to zero would be defined for 239 keV and 2614 keV
    */
+  SpecUtils_DLLEXPORT
   double deviation_pair_correction( const double polynomial_energy,
                                       const std::vector<std::pair<float,float>> &dev_pairs );
   
@@ -461,6 +467,7 @@ namespace SpecUtils
          future this should be able to be made exactly accuate (within numerical
          limits anyway).
    */
+  SpecUtils_DLLEXPORT
   double correction_due_to_dev_pairs( const double true_energy,
                                      const std::vector<std::pair<float,float>> &dev_pairs );
   
@@ -480,6 +487,7 @@ namespace SpecUtils
    Throws exception if resulting energy calibration wont be strictly increasing after applying
    deviation pair.
    */
+  SpecUtils_DLLEXPORT
   std::shared_ptr<const std::vector<float>>
   apply_deviation_pair( const std::vector<float> &binning,
                         const std::vector<std::pair<float,float>> &dev_pairs );
@@ -511,6 +519,7 @@ namespace SpecUtils
    @returns the polynomial coefficients.  If input coefficients is empty or
             number of channels is zero, will return empty vector.
    */
+  SpecUtils_DLLEXPORT
   std::vector<float>
   fullrangefraction_coef_to_polynomial( const std::vector<float> &coeffs,
                                         const size_t nchannel );
@@ -520,6 +529,7 @@ namespace SpecUtils
    the energy given by the equation is the middle of the channel (which is
    non-standard) to standard full range fraction equation coefficients.
    */
+  SpecUtils_DLLEXPORT
   std::vector<float>
   mid_channel_polynomial_to_fullrangeFraction( const std::vector<float> &coeffs,
                                                const size_t nchannel );
@@ -531,6 +541,7 @@ namespace SpecUtils
   //  right. LowerChannelEdge type is check that each bin is increasing over
   //  previous, and that it has at least as many bins as nbin.
   //  InvalidEquationType always returns false.
+  SpecUtils_DLLEXPORT
   bool calibration_is_valid( const EnergyCalType type,
                                    const std::vector<float> &eqn,
                                    const std::vector< std::pair<float,float> > &devpairs,
@@ -553,6 +564,7 @@ namespace SpecUtils
    Changes the polynomial calibration coefficients
    Would probably work for adding channels, but untested.
    */
+  SpecUtils_DLLEXPORT
   std::vector<float>
   polynomial_cal_remove_first_channels( const int num_channels_remove,
                                         const std::vector<float> &orig_coefs );
@@ -582,6 +594,7 @@ namespace SpecUtils
    \TODO: Use #correction_due_to_dev_pairs to make it so algabraic approach can
           always be used.
   */
+  SpecUtils_DLLEXPORT
   double find_fullrangefraction_channel( const double energy,
                                    const std::vector<float> &coeffs,
                                    const size_t nchannel,
@@ -609,8 +622,9 @@ namespace SpecUtils
      binary search is performed to find the bin that comes within the specified accuracy.
    
      Note: that #correction_due_to_dev_pairs is used to correct for deviation pairs when using the,
-     algebraic appoach, and currently (20200820) may be correct to only 0.01 keV.
+     algebraic approach, and currently (20200820) may be correct to only 0.01 keV.
   */
+  SpecUtils_DLLEXPORT
   double find_polynomial_channel( const double energy,
                                  const std::vector<float> &coeffs,
                                  const size_t nchannel,
@@ -639,6 +653,7 @@ namespace SpecUtils
    
    Throw exception if any input has less than four channels.
    */
+  SpecUtils_DLLEXPORT
   void rebin_by_lower_edge( const std::vector<float> &original_energies,
                            const std::vector<float> &original_counts,
                            const std::vector<float> &new_energies,
@@ -675,6 +690,7 @@ namespace SpecUtils
    #END
    \endverbatim
    */
+  SpecUtils_DLLEXPORT
   std::shared_ptr<EnergyCalibration> energy_cal_from_CALp_file( std::istream &input,
                                                                const size_t num_channels,
                                                                std::string &det_name );
@@ -695,6 +711,7 @@ namespace SpecUtils
    the original FRF coefficients will be written out after the other content - this is a InterSpec/SpecUtils specific extension of CALp file
    format.
    */
+  SpecUtils_DLLEXPORT
   bool write_CALp_file( std::ostream &output,
                         const std::shared_ptr<const EnergyCalibration> &cal,
                         const std::string &detector_name );
