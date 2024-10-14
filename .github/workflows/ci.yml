@@ -134,8 +134,8 @@ jobs:
         tag: 'bleeding-edge'
         commit: ${{ github.sha }}
         makeLatest: true
-
+# Delete all the zip files we created
     - name: "Cleanup and finish"
-        run: |
-          Get-ChildItem '.\build_*\*.zip' | foreach { Remove-Item -Path $_.FullName }
-          echo "Job status is ${{ job.status }}."
+      run: |
+        Get-ChildItem '.\build_*\*.zip' | foreach { Remove-Item -Path $_.FullName }
+        echo "Job status is ${{ job.status }}."
