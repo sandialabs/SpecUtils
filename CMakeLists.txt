@@ -512,6 +512,13 @@ set(CPACK_PACKAGE_NAME "SpecUtils")
 
 if( SpecUtils_SHARED_LIB )
   set( SpecUtils_PACKAGE_POSTFIX "SharedLib" )
+  if( WIN32 )
+    # Not sure why we manually have to do this
+    install(FILES
+      "${CMAKE_CURRENT_BINARY_DIR}/Release/libSpecUtils.lib"
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/
+    )
+  endif( WIN32 )
 else( SpecUtils_SHARED_LIB )
   set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
 endif( SpecUtils_SHARED_LIB )
