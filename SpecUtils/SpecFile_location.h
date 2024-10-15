@@ -44,7 +44,7 @@ namespace SpecUtils
  
  For reading from other formats
  */
-struct GeographicPoint
+struct SPECUTILS_EXPORT GeographicPoint
 {
   GeographicPoint();
   
@@ -96,7 +96,7 @@ struct GeographicPoint
  #TODO: conversions between cartesian and polar coordinates totally untested!
  #TODO: Need to put in an Origin, e.g., <GeographicPoint> or <OriginDescription>
  */
-struct RelativeLocation
+struct SPECUTILS_EXPORT RelativeLocation
 {
   RelativeLocation();
   
@@ -235,7 +235,7 @@ struct RelativeLocation
  
  Values are in degrees, not radians.
  */
-struct Orientation
+struct SPECUTILS_EXPORT Orientation
 {
   Orientation();
   
@@ -259,7 +259,7 @@ struct Orientation
  Note: N42-2012, allows a state to provide Choice of {<GeographicPoint>, <LocationDescription>,
  or <RelativeLocation>}, but we currently only implement <GeographicPoint>.
  */
-struct LocationState
+struct SPECUTILS_EXPORT LocationState
 {
   LocationState();
   

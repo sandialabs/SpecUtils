@@ -1121,30 +1121,6 @@ uint32_t Measurement::derived_data_properties() const
 }
 
   
-int Measurement::rpm_panel_number() const
-{
-  int col, panel, mca;
-  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
-  return panel;
-}
-  
-
-int Measurement::rpm_column_number() const
-{
-  int col, panel, mca;
-  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
-  return col;
-}
-  
-
-int Measurement::rpm_mca_number() const
-{
-  int col, panel, mca;
-  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
-  return mca;
-}
-
-  
 double gamma_integral( const std::shared_ptr<const Measurement> &hist,
                  const float minEnergy, const float maxEnergy )
 {

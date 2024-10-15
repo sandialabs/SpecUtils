@@ -36,7 +36,7 @@ set( DATA_DIR_ARGS --indir=${CMAKE_CURRENT_SOURCE_DIR}/test_data )
 if( CMAKE_GENERATOR STREQUAL "Xcode" )
   list( APPEND COMMON_TEST_ARGS --no-colors=1 )
 endif( CMAKE_GENERATOR STREQUAL "Xcode" )
-message( "Args: ${COMMON_TEST_ARGS}")
+#message( "Args: ${COMMON_TEST_ARGS}")
 
 
 add_executable( test_spec_file test_spec_file.cpp )
@@ -181,6 +181,16 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
     COMMAND $<TARGET_FILE:test_uri_spectrum> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
   )
 endif()
+
+if( SpecUtils_C_BINDINGS )
+  add_executable( test_c_interface test_c_interface.cpp )
+  target_link_libraries( test_c_interface PRIVATE SpecUtils )
+  set_target_properties( test_c_interface PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+  add_test(
+    NAME test_c_interface
+    COMMAND $<TARGET_FILE:test_c_interface> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  )
+endif( SpecUtils_C_BINDINGS )
 
 if( PERFORM_DEVELOPER_CHECKS AND (Boost_VERSION VERSION_GREATER_EQUAL "1.81.0") )
   add_executable( test_hash test_hash.cpp )

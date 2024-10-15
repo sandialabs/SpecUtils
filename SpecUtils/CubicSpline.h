@@ -49,7 +49,7 @@ namespace SpecUtils
    
    Where x_i and y_i are #CubicSplineNode::x and #CubicSplineNode::y respectively.
    */
-  struct CubicSplineNode
+  struct SPECUTILS_EXPORT CubicSplineNode
   {
     /** The starting x-value of the interval. */
     double x;
@@ -72,6 +72,7 @@ namespace SpecUtils
    
    Will throw exception on error.
    */
+  SPECUTILS_EXPORT
   std::vector<CubicSplineNode>
   create_cubic_spline( const std::vector<std::pair<float,float>> &data,
                        const DerivativeType left_bc_type,
@@ -86,6 +87,7 @@ namespace SpecUtils
    respectively (this is non-standard behavior for cubic splines, but how
    non-linear deviation pairs are defined).
    */
+  SPECUTILS_EXPORT
   double eval_cubic_spline( const double x,
                            const std::vector<CubicSplineNode> &nodes );
   
@@ -95,6 +97,7 @@ namespace SpecUtils
    no duplicate x values (if there are duplicates, the one with the smallest
    y-value is used).
    */
+  SPECUTILS_EXPORT
   std::vector<CubicSplineNode>
   create_cubic_spline_for_dev_pairs( const std::vector<std::pair<float,float>> &dps );
   
@@ -110,6 +113,7 @@ namespace SpecUtils
    See #correction_due_to_dev_pairs for a functioned guaranteed to get you within
    0.0001 keV of the correct answer.
    */
+  SPECUTILS_EXPORT 
   std::vector<CubicSplineNode>
   create_inverse_dev_pairs_cubic_spline( const std::vector<std::pair<float,float>> &dps );
   

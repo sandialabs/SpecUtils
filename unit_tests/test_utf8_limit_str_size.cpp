@@ -1,4 +1,4 @@
-/* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
+﻿/* SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
  
  Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC
  (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.

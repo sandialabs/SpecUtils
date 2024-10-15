@@ -30,6 +30,16 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 
+
+if( SpecUtils_PYTHON_BINDINGS )
+  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" ON )
+  list( APPEND sources bindings/python/SpecFile_py.cpp )
+else()
+  #default to building a static lib
+  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
+endif()
+
+
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
 Choose one of: FastFloat, FromChars, boost, strtod.
 Boost is fastest, FromChars requires a C++17 conformant compiler and runtime (note Apple clang does not implement),
@@ -75,7 +85,7 @@ endif()
 
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
-if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+if( MSVC )
   get_directory_property(hasParent PARENT_DIRECTORY)
   if(NOT hasParent)
     option(${PROJECT_NAME}_USE_MSVC_MultiThreadDLL "Use dynamically-link runtime library." OFF)
@@ -89,7 +99,7 @@ if( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
     endif()
     message(STATUS "Using CMAKE_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY}")
   endif(NOT hasParent)
-endif( MSVC AND (SpecUtils_PYTHON_BINDINGS OR SpecUtils_BUILD_UNIT_TESTS) )
+endif( MSVC )
 
 
 if( SpecUtils_BUILD_EXAMPLE )
@@ -248,16 +258,11 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   find_package( ZLIB REQUIRED )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
-#default to building a static lib
-set( SpecUtils_LIB_TYPE STATIC )
-
 if( SpecUtils_PYTHON_BINDINGS )
-  set( SpecUtils_LIB_TYPE SHARED )
   list( APPEND sources bindings/python/SpecFile_py.cpp )
 endif( SpecUtils_PYTHON_BINDINGS )
 
 if( SpecUtils_JAVA_SWIG )
-  set( SpecUtils_LIB_TYPE SHARED )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
 
@@ -266,8 +271,28 @@ if( SpecUtils_C_BINDINGS )
   list( APPEND sources bindings/c/SpecUtils_c.cpp )
 endif( SpecUtils_C_BINDINGS )
 
+if( SpecUtils_SHARED_LIB )
+  set( SpecUtils_LIB_TYPE SHARED )
+else( SpecUtils_SHARED_LIB )
+  set( SpecUtils_LIB_TYPE STATIC )
+endif( SpecUtils_SHARED_LIB )
+
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
+
+# Make so on Windows the functions/classes will be exported
+target_compile_definitions( SpecUtils PRIVATE SpecUtils_EXPORTS )
+
+# Include the GenerateExportHeader module
+include(GenerateExportHeader)
+generate_export_header(SpecUtils
+    BASE_NAME SpecUtils
+    EXPORT_FILE_NAME ${CMAKE_BINARY_DIR}/SpecUtilsExport.h
+)
+
+if( NOT SpecUtils_SHARED_LIB )
+  target_compile_definitions( SpecUtils PRIVATE SPECUTILS_STATIC_DEFINE )
+endif()
 
 
 set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched
@@ -450,12 +475,13 @@ set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
 # Specify installation rules
 include(GNUInstallDirs)
 
+
 # Install the library
 install(TARGETS SpecUtils
     EXPORT SpecUtilsTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For DLLs
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
@@ -466,7 +492,7 @@ configure_file(
 )
 LIST(APPEND headers ${SpecUtils_config_OUT})
 # Install the headers
-install(FILES ${headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
+install(FILES ${headers} ${CMAKE_BINARY_DIR}/SpecUtilsExport.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
 
 # Create and install the CMake package configuration files
 include(CMakePackageConfigHelpers)
@@ -494,3 +520,27 @@ install(EXPORT SpecUtilsTargets
     NAMESPACE SpecUtils::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
 )
+
+set(CPACK_PACKAGE_NAME "SpecUtils")
+
+
+if( SpecUtils_SHARED_LIB )
+  set( SpecUtils_PACKAGE_POSTFIX "SharedLib" )
+else( SpecUtils_SHARED_LIB )
+  set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
+endif( SpecUtils_SHARED_LIB )
+
+if( DEFINED ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+  if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
+  else()
+    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
+  endif()
+endif()
+
+# Lets just use the MAJOR.MINOR version of the compiler in the name.
+string(REGEX MATCH "^[0-9]+\\.[0-9]+" COMPILER_VERSION_SHORT "${CMAKE_CXX_COMPILER_VERSION}")
+
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
+set(CPACK_GENERATOR "ZIP")
+include(CPack)

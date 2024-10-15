@@ -1,4 +1,7 @@
+#include <array>
 #include <random>
+#include <numeric>
+#include <algorithm>
 #include <filesystem>
 
 #include "SpecUtils/DateTime.h"
@@ -136,7 +139,7 @@ std::shared_ptr<SpecUtils::Measurement> makeMeasurement(int id, std::string detN
     auto devPairs = SpecUtils::DeviationPairs();
     for (size_t i = 0; i < 20; i++)
     {
-        auto devPair = std::make_pair(id + i + 10.0, id + i * -1.0F);
+        auto devPair = std::make_pair(id + i + 10.0f, id + i * -1.0F);
         devPairs.push_back(devPair);
     }
 
@@ -221,7 +224,7 @@ TEST_CASE("Round Trip")
 
                 auto &expSpectrum = *expectedM.gamma_counts();
                 auto &actualSpectrum = *expectedM.gamma_counts();
-                auto sum = std::accumulate(actualSpectrum.begin(), actualSpectrum.end(), 0);
+                auto sum = std::accumulate(actualSpectrum.begin(), actualSpectrum.end(), 0.0);
                 CHECK(sum > 0);
                 CHECK(expSpectrum == actualSpectrum);
 
@@ -296,10 +299,6 @@ TEST_CASE("Get Max Channel Count")
 
 TEST_CASE("Find Source String")
 {
-    std::vector<std::string> remarks{
-        "Description: TestDescription",
-        "Source: TestSource"};
-
     SpecUtils::Measurement m;
     m.set_source_description( "TestSource" );
     m.set_measurement_description( "TestDescription" );
@@ -318,25 +317,3 @@ TEST_CASE("Find Source String")
     }
 }
 
-TEST_CASE("No Description Yields Empty String")
-{
-    std::vector<std::string> remarks{
-        "DescriptionZZZZZ: TestDescription",
-        "SourceYYYYY: TestSource"};
-
-    SpecUtils::Measurement m;
-    m.set_remarks(remarks);
-
-    auto expected = std::string();
-    auto actual = m.measurement_description();
-
-    CHECK(actual == expected);
-
-    SUBCASE("No Source Yields Empty String")
-    {
-        auto expected = std::string();
-        auto actual = m.source_description();
-
-        CHECK(actual == expected);
-    }
-}

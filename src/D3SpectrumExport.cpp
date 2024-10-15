@@ -690,7 +690,7 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     
     const string div_id = "chart1";
     
-    ostr << "<body><div id=\"" << div_id << "\" class=\"chart\" oncontextmenu=\"return false;\";></div>" << endline;  // Adding the main chart div
+    ostr << "<body><div id=\"" << div_id << "\" class=\"chart\" oncontextmenu=\"return false;\"></div>" << endline;  // Adding the main chart div
     
     
     ostr << "<script>" << endline;

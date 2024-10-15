@@ -93,18 +93,22 @@ namespace
   
   
 
-  int pcf_det_name_to_dev_pair_index( std::string name )
-  {
-    int col, panel, mca;
-    return SpecUtils::pcf_det_name_to_dev_pair_index( name, col, panel, mca );
-  };//pcf_det_name_to_dev_pair_index lambda
-  
-}//namespace
-
-
-namespace SpecUtils
-{
-
+  /** When passed in a N42-2006 Radiation Portal Monitor (RPM) detector name (e.x., "Aa1", "Ba2", "Ad4", etc), gives the
+   RPM column, panel, and MCA number corresponding to that name, and returns the starting index for the deviation
+   pairs in a PCF file.
+   
+   @param name The detector name to determine the indexes for.  If not a valid N42 name (e.x., valid names are like "Aa1", "Ba2",
+          "Ad4", etc), then all indexes will be set to -1, and -1 returned.  Note that name case does not matter (eg "Aa1" is
+          equivalent to "aa1").  The name must be either two or three letters long.  If the name is only two characters long (e.x., "A1",
+          "B2"), then the column will be assigned an index of zero.
+   @param [out] col The RPM column determined from the name.  Will be in range of [-1, 3].
+   @param [out] panel The RPM panel determined from the name.  Will be in [-1, 7].
+   @param [out] panel The RPM MCA determined from the name.  Will be in [-1, 7].
+   
+   @returns The starting index of deviation pairs in the PCF file deviation pairs array.  That is,
+          `col*(8*8*2*20) + panel*(8*2*20) + mca*(2*20)`.
+            Will be negative one if an non-RPM detector name is passed in.
+   */
   int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
   {
     col = panel = mca = -1;
@@ -142,7 +146,46 @@ namespace SpecUtils
 
     return col * (8 * 8 * 2 * 20) + panel * (8 * 2 * 20) + mca * (2 * 20);
   }//int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
+  
+  
+  int pcf_det_name_to_dev_pair_index( std::string name )
+  {
+    int col, panel, mca;
+    return pcf_det_name_to_dev_pair_index( name, col, panel, mca );
+  };//pcf_det_name_to_dev_pair_index lambda
+  
+}//namespace
+
+
+namespace SpecUtils
+{
+  int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
+  {
+    return ::pcf_det_name_to_dev_pair_index(name, col, panel, mca);
+  }
+  
+int Measurement::rpm_panel_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return panel;
+}
     
+  
+int Measurement::rpm_column_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return col;
+}
+  
+  
+int Measurement::rpm_mca_number() const
+{
+  int col, panel, mca;
+  pcf_det_name_to_dev_pair_index( detector_name_, col, panel, mca );
+  return mca;
+}
   
 /** Gives the maximum number of channels any spectrum in the file will need to write to PCF file (rounded up to the nearest multiple of
  64 channels), as well as a sets a pointer to the lower channel energies to write to the first record, but only if lower channel energy
