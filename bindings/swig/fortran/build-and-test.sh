@@ -13,7 +13,7 @@ cmake -S /mnt/c/Projects/code/SpecUtils \
  -DSpecUtils_ENABLE_D3_CHART=OFF \
  -DSpecUtils_USING_NO_THREADING=ON \
  -DSpecUtils_D3_SUPPORT_FILE_STATIC=OFF \
- -DSpecUtils_ENABLE_URI_SPECTRA=OFF \
+ -DSpecUtils_ENABLE_URI_SPECTRA=ON \
  -DCMAKE_BUILD_TYPE=Release \
  -DSpecUtils_FLT_PARSE_METHOD=FastFloat \
  -DSpecUtils_FETCH_FAST_FLOAT=ON \
