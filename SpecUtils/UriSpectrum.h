@@ -122,7 +122,7 @@ namespace SpecUtils
 
 
   /** Struct that represents information that can be included in a spectrum URL. */
-  struct UrlSpectrum
+  struct SPECUTILS_EXPORT UrlSpectrum
   {
     SpecUtils::SourceType m_source_type = SpecUtils::SourceType(4); // There is static_assert in .cpp file to make sure SpecUtils::SourceType::Unknown == 4
     std::vector<float> m_energy_cal_coeffs;
@@ -146,10 +146,12 @@ namespace SpecUtils
     std::vector<uint32_t> m_channel_data;
   };//struct UrlSpectrum
 
+  SPECUTILS_EXPORT
   std::vector<UrlSpectrum> to_url_spectra(
                                   std::vector<std::shared_ptr<const SpecUtils::Measurement>> specs,
                                   std::string detector_model );
 
+  SPECUTILS_EXPORT
   std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &meas );
   
   /** Encodes the specified measurements into one or more URIs.
@@ -170,6 +172,7 @@ namespace SpecUtils
    
    Throws exception on error.
    */
+  SPECUTILS_EXPORT
   std::vector<std::string> url_encode_spectra( const std::vector<UrlSpectrum> &measurements,
                                               const uint8_t encode_options,
                                               const size_t num_parts );
@@ -206,13 +209,14 @@ namespace SpecUtils
    
    Throws exception on error.
    */
+  SPECUTILS_EXPORT
   std::vector<std::string> url_encode_spectrum( const UrlSpectrum &meas,
                                                const uint8_t encode_options,
                                                const size_t num_parts,
                                                const unsigned int skip_encode_options );
 
 
-  struct EncodedSpectraInfo
+  struct SPECUTILS_EXPORT EncodedSpectraInfo
   {
     /** See #EncodeOptions for bit meanings. */
     uint8_t m_encode_options = 0;
@@ -252,10 +256,13 @@ namespace SpecUtils
  
   Throws exception on error.
   */
+  SPECUTILS_EXPORT
   EncodedSpectraInfo get_spectrum_url_info( std::string url );
 
 
+  SPECUTILS_EXPORT
   std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url );
+  SPECUTILS_EXPORT
   std::vector<uint32_t> spectrum_decode_not_first_url( std::string url );
 
   /** Decodes the given urls to a single spectrum (one or more input urls), or
@@ -263,6 +270,7 @@ namespace SpecUtils
  
   Expects each urls to have already been url-decoded.
   */
+  SPECUTILS_EXPORT
   std::vector<UrlSpectrum> decode_spectrum_urls( std::vector<std::string> urls );
 
   
@@ -270,30 +278,37 @@ namespace SpecUtils
    
    The resulting string will only contain characters that can be encoded into a Alphanumeric QR code.
    */
+  SPECUTILS_EXPORT
   std::string base45_encode( const std::vector<uint8_t> &input );
   
   /** Same as other  `base45_encode` function, just takes a string as input. */
+  SPECUTILS_EXPORT
   std::string base45_encode( const std::string &input );
 
   /** Performs the reverse of `base45_encode`. */
+  SPECUTILS_EXPORT
   std::vector<uint8_t> base45_decode( const std::string &input );
 
   /** "base64url" encoding is a URL and filename safe variant of base64 encoding.
    See: https://datatracker.ietf.org/doc/html/rfc4648#section-5
    and: https://en.wikipedia.org/wiki/Base64#Implementations_and_history
    */
+  SPECUTILS_EXPORT
   std::string base64url_encode( const std::string &input, const bool use_padding );
   
   /** Performs "base64url" encoding, same as other function by same name. */
+  SPECUTILS_EXPORT
   std::string base64url_encode( const std::vector<uint8_t> &input, const bool use_padding );
   
   /** Decodes "base64url" encoded strings. */
+  SPECUTILS_EXPORT
   std::vector<uint8_t> base64url_decode( const std::string &input );
   
   /** Performs "percent encoding" of the input
    
    Converts any non-ascii character, or the characters " $&+,:;=?@'\"<>#%{}|\\^~[]`/" to their percent hex encodings.
    */
+  SPECUTILS_EXPORT
   std::string url_encode( const std::string &url );
   
   /** Decodes "percent encoded" strings. 
@@ -302,19 +317,25 @@ namespace SpecUtils
    Non-ascii characters will remain the same.
    If either of the characters following a '%' is not a hex character, the whole three-character sequence will not change.
    */
+  SPECUTILS_EXPORT
   std::string url_decode( const std::string &url );
   
   /** Similar to `url_encode`, but only encodes non-ascii characters, as well as "%&;=/?#[]", as specified by RFC 6068. */
+  SPECUTILS_EXPORT
   std::string email_encode( const std::string &url );
   
   /** Performs DEFLATE (aka, zip) compression */
+  SPECUTILS_EXPORT
   void deflate_compress( const void *in_data, size_t in_data_size, std::string &out_data );
   /** Performs DEFLATE (aka, zip) compression */
+  SPECUTILS_EXPORT
   void deflate_compress( const void *in_data, size_t in_data_size, std::vector<uint8_t> &out_data );
   
   /** Performs DEFLATE (aka, zip) de-compression */
+  SPECUTILS_EXPORT
   void deflate_decompress( void *in_data, size_t in_data_size, std::string &out_data );
   /** Performs DEFLATE (aka, zip) de-compression */
+  SPECUTILS_EXPORT
   void deflate_decompress( void *in_data, size_t in_data_size, std::vector<uint8_t> &out_data );
 
   
@@ -322,12 +343,14 @@ namespace SpecUtils
    but pre-pended with a uint16_t to give number of integer entries, has a c++ interface, and is way,
    way slower, but is a safer in terms of buffer overflow.
    */
+  SPECUTILS_EXPORT
   std::vector<uint8_t> encode_stream_vbyte( const std::vector<uint32_t> &input );
 
   /** Performs the same encoding as `streamvbyte_decode` from https://github.com/lemire/streamvbyte,
    but assumes data is prepended with uin16_t that gives the number of integer entries, has a c++
    interface, is way, way slower, but is a safer in terms of buffer overflow.
    */
+  SPECUTILS_EXPORT
   size_t decode_stream_vbyte( const std::vector<uint8_t> &inbuff, std::vector<uint32_t> &answer );
   
   /** Calculates the "CRC-16/ARC" (Augmented Reversed with Carry) of input string.
@@ -343,6 +366,7 @@ namespace SpecUtils
    
    This is the equivalent of `boost::crc_16_type`.
   */
+  SPECUTILS_EXPORT
   uint16_t calc_CRC16_ARC( const std::string &input );
 }//namespace QRSpectrum
 

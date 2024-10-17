@@ -66,11 +66,14 @@
 #define IsNan(x) (std::isnan)(x)
 #endif
 
+
 #if(PERFORM_DEVELOPER_CHECKS)
 //log_developer_error(...) is implemented in SpecFile.cpp, but
 //  declared here so can be used everywhere.
 //Error messages go to developer_errors.log in the cwd
 void log_developer_error( const char *location, const char *error );
 #endif
+
+#include "SpecUtilsExport.h"
 
 #endif // InterSpec_config_h
