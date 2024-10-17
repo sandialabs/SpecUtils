@@ -13,3 +13,11 @@ if( SpecUtils_BUILD_UNIT_TESTS )
   target_link_libraries(test_specutils_fortran test_drive specutils_fortran )
   add_test(NAME test_specutils_fortran COMMAND test_specutils_fortran)
 endif( SpecUtils_BUILD_UNIT_TESTS )
+
+
+
+# Install the library
+install(TARGETS specutils_fortran_wrap
+    EXPORT SpecUtilsTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+)
