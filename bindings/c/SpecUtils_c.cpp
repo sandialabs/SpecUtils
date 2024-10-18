@@ -413,16 +413,14 @@ namespace // - private functions for this file
 }//namespace - private functions for this file
 
 
-SpecUtils_SpecFile * SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_create()
+SpecUtils_SpecFile *SpecUtils_SpecFile_create()
 {
   SpecUtils::SpecFile *ptr = new SpecUtils::SpecFile();
   return reinterpret_cast<SpecUtils_SpecFile *>( ptr );
 }
 
 
-SpecUtils_SpecFile * SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_clone( const SpecUtils_SpecFile * const instance )
+SpecUtils_SpecFile *SpecUtils_SpecFile_clone( const SpecUtils_SpecFile * const instance )
 {
   try
   {
@@ -443,8 +441,7 @@ SpecUtils_SpecFile_clone( const SpecUtils_SpecFile * const instance )
 }
   
 
-void SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance )
+void SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance )
 {
   assert( instance );
   SpecUtils::SpecFile *ptr = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -453,8 +450,7 @@ SpecUtils_SpecFile_destroy( SpecUtils_SpecFile *instance )
 }
 
 
-void SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile *rhs )
+void SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile *rhs )
 {
   try
   {
@@ -475,8 +471,7 @@ SpecUtils_SpecFile_set_equal( SpecUtils_SpecFile *lhs, const SpecUtils_SpecFile 
 }
 
 
-bool SpecUtils_C_CALLCONV 
-SpecFile_load_file( SpecUtils_SpecFile *instance, const char * const filename )
+bool SpecFile_load_file( SpecUtils_SpecFile *instance, const char * const filename )
 {
   assert( instance );
   if( !instance )
@@ -489,8 +484,7 @@ SpecFile_load_file( SpecUtils_SpecFile *instance, const char * const filename )
 }
 
 
-bool SpecUtils_C_CALLCONV 
-SpecFile_load_file_from_format( SpecUtils_SpecFile * const instance,
+bool SpecFile_load_file_from_format( SpecUtils_SpecFile * const instance,
                                   const char * const filename,
                                   const SpecUtils_ParserType type )
 {
@@ -512,8 +506,7 @@ SpecFile_load_file_from_format( SpecUtils_SpecFile * const instance,
   
   
 
-bool SpecUtils_C_CALLCONV 
-SpecUtils_write_to_file( SpecUtils_SpecFile *instance,
+bool SpecUtils_write_to_file( SpecUtils_SpecFile *instance,
                            const char *filename,
                            SpecUtils_SaveSpectrumAsType type )
 {
@@ -538,8 +531,7 @@ SpecUtils_write_to_file( SpecUtils_SpecFile *instance,
   
 
 
-bool SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_passthrough( const SpecUtils_SpecFile * const instance )
+bool SpecUtils_SpecFile_passthrough( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -547,8 +539,7 @@ SpecUtils_SpecFile_passthrough( const SpecUtils_SpecFile * const instance )
 }
 
   
-uint32_t SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -556,8 +547,7 @@ SpecUtils_SpecFile_number_measurements( const SpecUtils_SpecFile * const instanc
 }
   
 
-uint32_t SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -565,7 +555,7 @@ SpecUtils_SpecFile_number_gamma_channels( const SpecUtils_SpecFile * const insta
 }
 
 
-const SpecUtils_Measurement * SpecUtils_C_CALLCONV
+const SpecUtils_Measurement *
 SpecUtils_SpecFile_get_measurement_by_index( const SpecUtils_SpecFile * const instance,
                                      const uint32_t index )
 {
@@ -578,7 +568,7 @@ SpecUtils_SpecFile_get_measurement_by_index( const SpecUtils_SpecFile * const in
 }
   
 
-const SpecUtils_Measurement * SpecUtils_C_CALLCONV
+const SpecUtils_Measurement *
 SpecUtils_SpecFile_get_measurement_by_sample_det( const SpecUtils_SpecFile * const instance,
                                           const int sample_number,
                                           const char * const det_name )
@@ -595,7 +585,7 @@ SpecUtils_SpecFile_get_measurement_by_sample_det( const SpecUtils_SpecFile * con
 }
   
 
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_detectors( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_detectors( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -603,7 +593,7 @@ uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_detectors( const SpecUti
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_detector_name( const SpecUtils_SpecFile * const instance,
+const char *SpecUtils_SpecFile_detector_name( const SpecUtils_SpecFile * const instance,
                                  const uint32_t index )
 {
   assert( instance );
@@ -619,7 +609,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_detector_name( const SpecUt
 }
 
 
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_gamma_detectors( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_gamma_detectors( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -627,7 +617,7 @@ uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_gamma_detectors( const S
 }
 
 
-const char * SpecUtils_C_CALLCONV
+DLLEXPORT const char * CALLINGCONVENTION
 SpecUtils_SpecFile_gamma_detector_name( const SpecUtils_SpecFile * const instance,
                                    const uint32_t index )
 {
@@ -644,7 +634,7 @@ SpecUtils_SpecFile_gamma_detector_name( const SpecUtils_SpecFile * const instanc
 }
 
 
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_neutron_detectors( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_neutron_detectors( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -652,7 +642,7 @@ uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_neutron_detectors( const
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_neutron_detector_name( const SpecUtils_SpecFile * const instance,
+const char * SpecUtils_SpecFile_neutron_detector_name( const SpecUtils_SpecFile * const instance,
                                      const uint32_t index )
 {
   assert( instance );
@@ -668,15 +658,20 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_neutron_detector_name( cons
 }
 
   
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_samples( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_samples( const SpecUtils_SpecFile * const instance )
 {
   assert( instance );
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   return ptr ? static_cast<uint32_t>(ptr->sample_numbers().size()) : uint32_t(0);
 }
   
-
-int SpecUtils_C_CALLCONV
+/** Returns the sample number, for a given index.
+ 
+ @param instance The `SpecUtils_SpecFile` to access.
+ @param index Inclusively between 0 and `SpecUtils_SpecFile_number_samples(instance) - 1`.
+ @returns The sample number for the given index.  If index is invalid, returns `INT_MIN`
+ */
+DLLEXPORT int CALLINGCONVENTION
 SpecUtils_SpecFile_sample_number( const SpecUtils_SpecFile * const instance, const uint32_t index )
 {
   assert( instance );
@@ -692,7 +687,7 @@ SpecUtils_SpecFile_sample_number( const SpecUtils_SpecFile * const instance, con
 }
 
 
-bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_add_measurement( SpecUtils_SpecFile * instance,
+bool SpecUtils_SpecFile_add_measurement( SpecUtils_SpecFile * instance,
                 SpecUtils_Measurement *measurement,
                 const bool do_cleanup )
 {
@@ -708,7 +703,7 @@ bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_add_measurement( SpecUtils_SpecFile
 }
 
 
-bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_remove_measurement( SpecUtils_SpecFile * instance,
+bool SpecUtils_SpecFile_remove_measurement( SpecUtils_SpecFile * instance,
                    const SpecUtils_Measurement * const measurement,
                    const bool do_cleanup )
 {
@@ -725,7 +720,7 @@ bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_remove_measurement( SpecUtils_SpecF
 }
 
 
-bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_remove_measurements( SpecUtils_SpecFile * instance,
+bool SpecUtils_SpecFile_remove_measurements( SpecUtils_SpecFile * instance,
                     const SpecUtils_Measurement ** const measurements,
                     const uint32_t number_to_remove )
 {
@@ -751,7 +746,7 @@ bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_remove_measurements( SpecUtils_Spec
 }
 
 
-void SpecUtils_C_CALLCONV SpecUtils_SpecFile_reset( SpecUtils_SpecFile * instance )
+void SpecUtils_SpecFile_reset( SpecUtils_SpecFile * instance )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
   if( specfile )
@@ -759,7 +754,7 @@ void SpecUtils_C_CALLCONV SpecUtils_SpecFile_reset( SpecUtils_SpecFile * instanc
 }
 
 
-void SpecUtils_C_CALLCONV SpecUtils_SpecFile_cleanup( SpecUtils_SpecFile * instance,
+void SpecUtils_SpecFile_cleanup( SpecUtils_SpecFile * instance,
                                 const bool dont_change_sample_numbers,
                                 const bool reorder_by_time )
 {
@@ -779,7 +774,7 @@ void SpecUtils_C_CALLCONV SpecUtils_SpecFile_cleanup( SpecUtils_SpecFile * insta
 }
 
 
-bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_modified( const SpecUtils_SpecFile * const instance )
+bool SpecUtils_SpecFile_modified( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -787,7 +782,7 @@ bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_modified( const SpecUtils_SpecFile 
 }
   
 
-SpecUtils_Measurement * SpecUtils_C_CALLCONV
+SpecUtils_Measurement *
 SpecUtils_SpecFile_sum_measurements( const SpecUtils_SpecFile * const instance,
                                     const int * const sample_numbers,
                                     const uint32_t number_sample_numbers,
@@ -815,7 +810,7 @@ SpecUtils_SpecFile_sum_measurements( const SpecUtils_SpecFile * const instance,
 }//
 
 
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_memmorysize( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_memmorysize( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -823,7 +818,7 @@ uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_memmorysize( const SpecUtils_Sp
 }
   
 
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_remarks( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_remarks( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -831,7 +826,7 @@ uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_remarks( const SpecUtils
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_remark( const SpecUtils_SpecFile * const instance,
+const char *SpecUtils_SpecFile_remark( const SpecUtils_SpecFile * const instance,
                           const uint32_t index )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -845,7 +840,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_remark( const SpecUtils_Spe
 }
   
 
-uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_parse_warnings( const SpecUtils_SpecFile * const instance )
+uint32_t SpecUtils_SpecFile_number_parse_warnings( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -853,7 +848,7 @@ uint32_t SpecUtils_C_CALLCONV SpecUtils_SpecFile_number_parse_warnings( const Sp
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_parse_warning( const SpecUtils_SpecFile * const instance,
+const char *SpecUtils_SpecFile_parse_warning( const SpecUtils_SpecFile * const instance,
                                  const uint32_t index  )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
@@ -867,7 +862,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_parse_warning( const SpecUt
 }
   
 
-float SpecUtils_C_CALLCONV SpecUtils_SpecFile_sum_gamma_live_time( const SpecUtils_SpecFile * const instance )
+float SpecUtils_SpecFile_sum_gamma_live_time( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -875,7 +870,7 @@ float SpecUtils_C_CALLCONV SpecUtils_SpecFile_sum_gamma_live_time( const SpecUti
 }
 
 
-float SpecUtils_C_CALLCONV SpecUtils_SpecFile_sum_gamma_real_time( const SpecUtils_SpecFile * const instance )
+float SpecUtils_SpecFile_sum_gamma_real_time( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -883,7 +878,7 @@ float SpecUtils_C_CALLCONV SpecUtils_SpecFile_sum_gamma_real_time( const SpecUti
 }
 
 
-double SpecUtils_C_CALLCONV SpecUtils_SpecFile_gamma_count_sum( const SpecUtils_SpecFile * const instance )
+double SpecUtils_SpecFile_gamma_count_sum( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -891,7 +886,7 @@ double SpecUtils_C_CALLCONV SpecUtils_SpecFile_gamma_count_sum( const SpecUtils_
 }
 
 
-double SpecUtils_C_CALLCONV SpecUtils_SpecFile_neutron_counts_sum( const SpecUtils_SpecFile * const instance )
+double SpecUtils_SpecFile_neutron_counts_sum( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -899,7 +894,7 @@ double SpecUtils_C_CALLCONV SpecUtils_SpecFile_neutron_counts_sum( const SpecUti
 }
   
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_filename( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_filename( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -912,7 +907,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_filename( const SpecUtils_S
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_uuid( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_uuid( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -925,7 +920,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_uuid( const SpecUtils_SpecF
 }
   
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_measurement_location_name( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_measurement_location_name( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -938,7 +933,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_measurement_location_name( 
 }
     
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_measurement_operator( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_measurement_operator( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -951,7 +946,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_measurement_operator( const
 }
 
 
-SpecUtils_DetectorType SpecUtils_C_CALLCONV SpecUtils_SpecFile_detector_type( const SpecUtils_SpecFile * const instance )
+SpecUtils_DetectorType SpecUtils_SpecFile_detector_type( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -963,7 +958,7 @@ SpecUtils_DetectorType SpecUtils_C_CALLCONV SpecUtils_SpecFile_detector_type( co
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_instrument_type( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_instrument_type( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -976,7 +971,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_instrument_type( const Spec
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_manufacturer( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_manufacturer( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -989,7 +984,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_manufacturer( const SpecUti
 }
 
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_instrument_model( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_instrument_model( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1002,7 +997,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_instrument_model( const Spe
 }
   
 
-const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_instrument_id( const SpecUtils_SpecFile * const instance )
+const char *SpecUtils_SpecFile_instrument_id( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1015,7 +1010,7 @@ const char * SpecUtils_C_CALLCONV SpecUtils_SpecFile_instrument_id( const SpecUt
 }
   
 
-bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_has_gps_info( const SpecUtils_SpecFile * const instance )
+bool SpecUtils_SpecFile_has_gps_info( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1023,8 +1018,7 @@ bool SpecUtils_C_CALLCONV SpecUtils_SpecFile_has_gps_info( const SpecUtils_SpecF
 }
   
 
-double SpecUtils_C_CALLCONV 
-SpecUtils_SpecFile_mean_latitude( const SpecUtils_SpecFile * const instance )
+double SpecUtils_SpecFile_mean_latitude( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1032,8 +1026,7 @@ SpecUtils_SpecFile_mean_latitude( const SpecUtils_SpecFile * const instance )
 }
 
   
-double SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_mean_longitude( const SpecUtils_SpecFile * const instance )
+double SpecUtils_SpecFile_mean_longitude( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1041,8 +1034,7 @@ SpecUtils_SpecFile_mean_longitude( const SpecUtils_SpecFile * const instance )
 }
     
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_contains_derived_data( const SpecUtils_SpecFile * const instance )
+bool SpecUtils_SpecFile_contains_derived_data( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1050,8 +1042,7 @@ SpecUtils_SpecFile_contains_derived_data( const SpecUtils_SpecFile * const insta
 }
   
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_contains_non_derived_data( const SpecUtils_SpecFile * const instance )
+bool SpecUtils_SpecFile_contains_non_derived_data( const SpecUtils_SpecFile * const instance )
 {
   const SpecUtils::SpecFile *specfile = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   assert( specfile );
@@ -1059,8 +1050,7 @@ SpecUtils_SpecFile_contains_non_derived_data( const SpecUtils_SpecFile * const i
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_filename( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_filename( SpecUtils_SpecFile *instance,
                                   const char * const filename )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1070,8 +1060,7 @@ SpecUtils_SpecFile_set_filename( SpecUtils_SpecFile *instance,
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_remarks( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_remarks( SpecUtils_SpecFile *instance,
                                  const char ** const remarks,
                                  const uint32_t number_remarks )
 {
@@ -1091,8 +1080,7 @@ SpecUtils_SpecFile_set_remarks( SpecUtils_SpecFile *instance,
 }
 
   
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_add_remark( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_add_remark( SpecUtils_SpecFile *instance,
                                 const char * const remark )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1102,8 +1090,7 @@ SpecUtils_SpecFile_add_remark( SpecUtils_SpecFile *instance,
 }
 
   
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_parse_warnings( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_parse_warnings( SpecUtils_SpecFile *instance,
                                         const char ** const warnings,
                                         const uint32_t number_warnings )
 {
@@ -1123,8 +1110,7 @@ SpecUtils_SpecFile_set_parse_warnings( SpecUtils_SpecFile *instance,
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_uuid( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_uuid( SpecUtils_SpecFile *instance,
                               const char * const file_uuid )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1134,18 +1120,15 @@ SpecUtils_SpecFile_set_uuid( SpecUtils_SpecFile *instance,
 }
 
   
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_lane_number( SpecUtils_SpecFile *instance, const int num )
+void SpecUtils_SpecFile_set_lane_number( SpecUtils_SpecFile *instance, const int num )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
   assert( specfile );
   if( specfile )
     specfile->set_lane_number( num );
 }
-
-
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_location_name( SpecUtils_SpecFile *instance,
+  
+void SpecUtils_SpecFile_set_measurement_location_name( SpecUtils_SpecFile *instance,
                                                    const char * const location_name )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1155,8 +1138,7 @@ SpecUtils_SpecFile_set_measurement_location_name( SpecUtils_SpecFile *instance,
 }
   
 
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_inspection( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_inspection( SpecUtils_SpecFile *instance,
                                     const char * const inspection_type )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1166,8 +1148,7 @@ SpecUtils_SpecFile_set_inspection( SpecUtils_SpecFile *instance,
 }
   
   
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_instrument_type( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_instrument_type( SpecUtils_SpecFile *instance,
                                          const char * const instrument_type )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1177,8 +1158,7 @@ SpecUtils_SpecFile_set_instrument_type( SpecUtils_SpecFile *instance,
 }
 
   
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_detector_type( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_detector_type( SpecUtils_SpecFile *instance,
                                        const SpecUtils_DetectorType type )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1191,8 +1171,7 @@ SpecUtils_SpecFile_set_detector_type( SpecUtils_SpecFile *instance,
 }
 
   
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_manufacturer( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_manufacturer( SpecUtils_SpecFile *instance,
                                       const char * const manufacturer_name )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1202,8 +1181,7 @@ SpecUtils_SpecFile_set_manufacturer( SpecUtils_SpecFile *instance,
 }
   
 
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_instrument_model( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_instrument_model( SpecUtils_SpecFile *instance,
                                           const char * const model )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1213,8 +1191,7 @@ SpecUtils_SpecFile_set_instrument_model( SpecUtils_SpecFile *instance,
 }
   
 
-void SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_instrument_id( SpecUtils_SpecFile *instance,
+void SpecUtils_SpecFile_set_instrument_id( SpecUtils_SpecFile *instance,
                                        const char * const serial_number )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1224,8 +1201,7 @@ SpecUtils_SpecFile_set_instrument_id( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_change_detector_name( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_change_detector_name( SpecUtils_SpecFile *instance,
                             const char * const original_name,
                             const char * const new_name )
 {
@@ -1250,8 +1226,7 @@ SpecUtils_SpecFile_change_detector_name( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-set_energy_calibration_from_CALp_file( SpecUtils_SpecFile *instance,
+bool set_energy_calibration_from_CALp_file( SpecUtils_SpecFile *instance,
                                              const char * const CALp_filepath )
 {
   SpecUtils::SpecFile *specfile = reinterpret_cast<SpecUtils::SpecFile *>( instance );
@@ -1283,8 +1258,7 @@ set_energy_calibration_from_CALp_file( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_live_time( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_live_time( SpecUtils_SpecFile *instance,
                                    const float live_time,
                                    const SpecUtils_Measurement * const measurement )
 {
@@ -1298,8 +1272,7 @@ SpecUtils_SpecFile_set_measurement_live_time( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_real_time( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_real_time( SpecUtils_SpecFile *instance,
                                    const float real_time,
                                    const SpecUtils_Measurement * const measurement )
 {
@@ -1313,8 +1286,7 @@ SpecUtils_SpecFile_set_measurement_real_time( SpecUtils_SpecFile *instance,
 }
   
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_start_time( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_start_time( SpecUtils_SpecFile *instance,
                                     const int64_t microseconds_since_unix_epoch,
                                     const SpecUtils_Measurement * const measurement )
 {
@@ -1331,8 +1303,7 @@ SpecUtils_SpecFile_set_measurement_start_time( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_start_time_str( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_start_time_str( SpecUtils_SpecFile *instance,
                                     const char *date_time,
                                     const SpecUtils_Measurement * const measurement )
 {
@@ -1351,8 +1322,7 @@ SpecUtils_SpecFile_set_measurement_start_time_str( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_remarks( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_remarks( SpecUtils_SpecFile *instance,
                                  const char ** const remarks,
                                  const uint32_t number_remarks,
                                  const SpecUtils_Measurement * const measurement )
@@ -1372,8 +1342,7 @@ SpecUtils_SpecFile_set_measurement_remarks( SpecUtils_SpecFile *instance,
   
   
   
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
                        const SpecUtils_SourceType type,
                        const SpecUtils_Measurement * const measurement )
 {
@@ -1404,8 +1373,7 @@ SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
                     const double longitude,
                     const double latitude,
                     const int64_t microseconds_since_unix_epoch,
@@ -1432,8 +1400,7 @@ SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
 }
   
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_title( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_title( SpecUtils_SpecFile *instance,
                  const char * const title,
                  const SpecUtils_Measurement * const measurement )
 {
@@ -1446,8 +1413,7 @@ SpecUtils_SpecFile_set_measurement_title( SpecUtils_SpecFile *instance,
 }
 
   
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_contained_neutrons( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_contained_neutrons( SpecUtils_SpecFile *instance,
                               const bool contained, const float counts,
                               const float neutron_live_time,
                               const SpecUtils_Measurement * const measurement )
@@ -1467,8 +1433,7 @@ SpecUtils_SpecFile_set_measurement_contained_neutrons( SpecUtils_SpecFile *insta
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *instance,
+bool SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *instance,
                          SpecUtils_CountedRef_EnergyCal *energy_cal,
                          const SpecUtils_Measurement * const measurement )
 {
@@ -1495,16 +1460,14 @@ SpecUtils_SpecFile_set_measurement_energy_calibration( SpecUtils_SpecFile *insta
 }
 
 
-SpecUtils_Measurement * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_create()
+SpecUtils_Measurement *SpecUtils_Measurement_create()
 {
   SpecUtils::Measurement *m = new SpecUtils::Measurement();
   return reinterpret_cast<SpecUtils_Measurement *>( m );
 }
 
 
-SpecUtils_Measurement * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_clone( const SpecUtils_Measurement * const instance )
+SpecUtils_Measurement * SpecUtils_Measurement_clone( const SpecUtils_Measurement * const instance )
 {
   try
   {
@@ -1527,8 +1490,7 @@ SpecUtils_Measurement_clone( const SpecUtils_Measurement * const instance )
 }
   
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance )
+void SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1537,8 +1499,7 @@ SpecUtils_Measurement_destroy( SpecUtils_Measurement *instance )
 }
 
 
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_memmorysize( const SpecUtils_Measurement * const instance )
+uint32_t SpecUtils_Measurement_memmorysize( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1546,8 +1507,7 @@ SpecUtils_Measurement_memmorysize( const SpecUtils_Measurement * const instance 
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Measurement *rhs )
+void SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Measurement *rhs )
 {
   try
   {
@@ -1568,8 +1528,7 @@ SpecUtils_Measurement_set_equal( SpecUtils_Measurement *lhs, const SpecUtils_Mea
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_reset( SpecUtils_Measurement *instance )
+void SpecUtils_Measurement_reset( SpecUtils_Measurement *instance )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1578,8 +1537,7 @@ SpecUtils_Measurement_reset( SpecUtils_Measurement *instance )
 }
 
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_description( const SpecUtils_Measurement * const instance )
+const char *SpecUtils_Measurement_description( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1591,8 +1549,7 @@ SpecUtils_Measurement_description( const SpecUtils_Measurement * const instance 
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
                                       const char * const description_cstr )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1602,8 +1559,7 @@ SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
 }
 
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_source_string( const SpecUtils_Measurement * const instance )
+const char *SpecUtils_Measurement_source_string( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1615,8 +1571,7 @@ SpecUtils_Measurement_source_string( const SpecUtils_Measurement * const instanc
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
                                         const char * const source_string_cstr )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1626,8 +1581,7 @@ SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
 }
   
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
                                        const float *counts,
                                        const uint32_t nchannels,
                                        const float live_time,
@@ -1646,8 +1600,7 @@ SpecUtils_Measurement_set_gamma_counts( SpecUtils_Measurement *instance,
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_neutron_counts( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_neutron_counts( SpecUtils_Measurement *instance,
                                          const float * const counts,
                                          const uint32_t num_tubes,
                                          const float neutron_live_time )
@@ -1664,8 +1617,7 @@ SpecUtils_Measurement_set_neutron_counts( SpecUtils_Measurement *instance,
 }//SpecUtils_Measurement_set_neutron_counts(...)
 
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance )
+const char *SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1677,8 +1629,7 @@ SpecUtils_Measurement_title( const SpecUtils_Measurement * const instance )
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
                                 const char * const title )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1688,8 +1639,7 @@ SpecUtils_Measurement_set_title( SpecUtils_Measurement *instance,
 }
   
 
-int64_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_start_time_usecs( SpecUtils_Measurement *instance )
+int64_t SpecUtils_Measurement_start_time_usecs( SpecUtils_Measurement *instance )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1707,8 +1657,7 @@ SpecUtils_Measurement_start_time_usecs( SpecUtils_Measurement *instance )
 }
   
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
                                            const int64_t start_time )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1721,8 +1670,7 @@ SpecUtils_Measurement_set_start_time_usecs( SpecUtils_Measurement *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
+bool SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
                                             const char * const start_time_str )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1738,8 +1686,7 @@ SpecUtils_Measurement_set_start_time_str( SpecUtils_Measurement *instance,
   return m && !SpecUtils::is_special(tp);
 }
   
-char SpecUtils_C_CALLCONV
-SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance )
+char SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1747,8 +1694,7 @@ SpecUtils_Measurement_pcf_tag( const SpecUtils_Measurement * const instance )
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
                                   const char tag_char )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1757,8 +1703,7 @@ SpecUtils_Measurement_set_pcf_tag( SpecUtils_Measurement *instance,
     m->set_pcf_tag( tag_char );
 }
   
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance )
+uint32_t SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1766,8 +1711,7 @@ SpecUtils_Measurement_number_gamma_channels( const SpecUtils_Measurement * const
 }
   
 
-const float * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const instance )
+const float *SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1778,8 +1722,7 @@ SpecUtils_Measurement_gamma_channel_counts( const SpecUtils_Measurement * const 
 }
 
 
-const float * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instance )
+const float *SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1790,7 +1733,7 @@ SpecUtils_Measurement_energy_bounds( const SpecUtils_Measurement * const instanc
   return energies ? energies->data() : nullptr;
 }
 
-const SpecUtils_EnergyCal * SpecUtils_C_CALLCONV
+const SpecUtils_EnergyCal *
 SpecUtils_Measurement_energy_calibration( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -1803,7 +1746,7 @@ SpecUtils_Measurement_energy_calibration( const SpecUtils_Measurement * const in
 }
   
 
-const SpecUtils_CountedRef_EnergyCal * SpecUtils_C_CALLCONV
+const SpecUtils_CountedRef_EnergyCal *
 SpecUtils_Measurement_energy_calibration_ref( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -1820,8 +1763,7 @@ SpecUtils_Measurement_energy_calibration_ref( const SpecUtils_Measurement * cons
 }
 
 
-float SpecUtils_C_CALLCONV
-SpecUtils_Measurement_real_time( const SpecUtils_Measurement * const instance )
+float SpecUtils_Measurement_real_time( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1829,8 +1771,7 @@ SpecUtils_Measurement_real_time( const SpecUtils_Measurement * const instance )
 }
 
 
-float SpecUtils_C_CALLCONV
-SpecUtils_Measurement_live_time( const SpecUtils_Measurement * const instance )
+float SpecUtils_Measurement_live_time( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1838,8 +1779,7 @@ SpecUtils_Measurement_live_time( const SpecUtils_Measurement * const instance )
 }
   
 
-float SpecUtils_C_CALLCONV
-SpecUtils_Measurement_neutron_live_time( const SpecUtils_Measurement * const instance )
+float SpecUtils_Measurement_neutron_live_time( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1847,8 +1787,7 @@ SpecUtils_Measurement_neutron_live_time( const SpecUtils_Measurement * const ins
 }
   
 
-double SpecUtils_C_CALLCONV
-SpecUtils_Measurement_gamma_count_sum( const SpecUtils_Measurement * const instance )
+double SpecUtils_Measurement_gamma_count_sum( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1856,8 +1795,7 @@ SpecUtils_Measurement_gamma_count_sum( const SpecUtils_Measurement * const insta
 }
   
 
-double SpecUtils_C_CALLCONV
-SpecUtils_Measurement_neutron_count_sum( const SpecUtils_Measurement * const instance )
+double SpecUtils_Measurement_neutron_count_sum( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1865,8 +1803,7 @@ SpecUtils_Measurement_neutron_count_sum( const SpecUtils_Measurement * const ins
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_is_occupied( const SpecUtils_Measurement * const instance )
+bool SpecUtils_Measurement_is_occupied( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1874,8 +1811,7 @@ SpecUtils_Measurement_is_occupied( const SpecUtils_Measurement * const instance 
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_contained_neutron( const SpecUtils_Measurement * const instance )
+bool SpecUtils_Measurement_contained_neutron( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1883,16 +1819,14 @@ SpecUtils_Measurement_contained_neutron( const SpecUtils_Measurement * const ins
 }
 
 
-int SpecUtils_C_CALLCONV
-SpecUtils_Measurement_sample_number( const SpecUtils_Measurement * const instance )
+int SpecUtils_Measurement_sample_number( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
   return m ? m->sample_number() : -999;
 }
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_sample_number( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_sample_number( SpecUtils_Measurement *instance,
                                         const int samplenum )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1902,8 +1836,7 @@ SpecUtils_Measurement_set_sample_number( SpecUtils_Measurement *instance,
 }
 
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_detector_name( const SpecUtils_Measurement * const instance )
+const char *SpecUtils_Measurement_detector_name( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1914,8 +1847,7 @@ SpecUtils_Measurement_detector_name( const SpecUtils_Measurement * const instanc
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_detector_name( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_detector_name( SpecUtils_Measurement *instance,
                                         const char *name )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1925,8 +1857,7 @@ SpecUtils_Measurement_set_detector_name( SpecUtils_Measurement *instance,
 }
 
 
-float SpecUtils_C_CALLCONV
-SpecUtils_Measurement_speed( const SpecUtils_Measurement * const instance )
+float SpecUtils_Measurement_speed( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1934,7 +1865,7 @@ SpecUtils_Measurement_speed( const SpecUtils_Measurement * const instance )
 }
 
 
-enum SpecUtils_OccupancyStatus SpecUtils_C_CALLCONV
+enum SpecUtils_OccupancyStatus 
 SpecUtils_Measurement_occupancy_status( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -1944,8 +1875,7 @@ SpecUtils_Measurement_occupancy_status( const SpecUtils_Measurement * const inst
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_occupancy_status( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_occupancy_status( SpecUtils_Measurement *instance,
                      const SpecUtils_OccupancyStatus status )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -1955,8 +1885,7 @@ SpecUtils_Measurement_set_occupancy_status( SpecUtils_Measurement *instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_has_gps_info( const SpecUtils_Measurement * const instance )
+bool SpecUtils_Measurement_has_gps_info( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1964,26 +1893,21 @@ SpecUtils_Measurement_has_gps_info( const SpecUtils_Measurement * const instance
 }
 
 
-double SpecUtils_C_CALLCONV
-SpecUtils_Measurement_latitude( const SpecUtils_Measurement * const instance )
+double SpecUtils_Measurement_latitude( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
   return m ? m->latitude() : -999.9;
 }
 
-
-double SpecUtils_C_CALLCONV
-SpecUtils_Measurement_longitude( const SpecUtils_Measurement * const instance )
+double SpecUtils_Measurement_longitude( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
   return m ? m->longitude() : -999.9;
 }
 
-
-int64_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_position_time_microsec( const SpecUtils_Measurement * const instance )
+int64_t SpecUtils_Measurement_position_time_microsec( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -1997,8 +1921,7 @@ SpecUtils_Measurement_position_time_microsec( const SpecUtils_Measurement * cons
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_position( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_position( SpecUtils_Measurement *instance,
                                    const double longitude,
                                    const double latitude,
                                    const int64_t position_time_microsec )
@@ -2016,8 +1939,7 @@ SpecUtils_Measurement_set_position( SpecUtils_Measurement *instance,
 }
 
 
-float SpecUtils_C_CALLCONV
-SpecUtils_Measurement_dose_rate( const SpecUtils_Measurement * const instance )
+float SpecUtils_Measurement_dose_rate( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -2025,16 +1947,14 @@ SpecUtils_Measurement_dose_rate( const SpecUtils_Measurement * const instance )
 }
 
 
-float SpecUtils_C_CALLCONV
-SpecUtils_Measurement_exposure_rate( const SpecUtils_Measurement * const instance )
+float SpecUtils_Measurement_exposure_rate( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
   return m ? m->exposure_rate() : 0.0f;
 }
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_detector_type( const SpecUtils_Measurement * const instance )
+const char *SpecUtils_Measurement_detector_type( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -2042,7 +1962,7 @@ SpecUtils_Measurement_detector_type( const SpecUtils_Measurement * const instanc
 }
 
 
-enum SpecUtils_QualityStatus SpecUtils_C_CALLCONV
+enum SpecUtils_QualityStatus
 SpecUtils_Measurement_quality_status( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -2052,7 +1972,7 @@ SpecUtils_Measurement_quality_status( const SpecUtils_Measurement * const instan
 }
 
 
-enum SpecUtils_SourceType SpecUtils_C_CALLCONV
+enum SpecUtils_SourceType
 SpecUtils_Measurement_source_type( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -2062,8 +1982,7 @@ SpecUtils_Measurement_source_type( const SpecUtils_Measurement * const instance 
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_source_type( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_source_type( SpecUtils_Measurement *instance,
                                       const SpecUtils_SourceType type )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -2073,8 +1992,7 @@ SpecUtils_Measurement_set_source_type( SpecUtils_Measurement *instance,
 }
   
 
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_number_remarks( const SpecUtils_Measurement * const instance )
+uint32_t SpecUtils_Measurement_number_remarks( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -2082,8 +2000,7 @@ SpecUtils_Measurement_number_remarks( const SpecUtils_Measurement * const instan
 }
 
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_remark( const SpecUtils_Measurement * const instance,
+const char *SpecUtils_Measurement_remark( const SpecUtils_Measurement * const instance,
                              const uint32_t remark_index )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -2096,8 +2013,7 @@ SpecUtils_Measurement_remark( const SpecUtils_Measurement * const instance,
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_remarks( SpecUtils_Measurement *instance,
+void SpecUtils_Measurement_set_remarks( SpecUtils_Measurement *instance,
                                   const char **remarks,
                                   const uint32_t number_remarks )
 {
@@ -2113,8 +2029,7 @@ SpecUtils_Measurement_set_remarks( SpecUtils_Measurement *instance,
 }
 
 
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_number_parse_warnings( const SpecUtils_Measurement * const instance )
+uint32_t SpecUtils_Measurement_number_parse_warnings( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -2122,8 +2037,7 @@ SpecUtils_Measurement_number_parse_warnings( const SpecUtils_Measurement * const
 }
 
 
-const char * SpecUtils_C_CALLCONV
-SpecUtils_Measurement_parse_warning( const SpecUtils_Measurement * const instance,
+const char *SpecUtils_Measurement_parse_warning( const SpecUtils_Measurement * const instance,
                                     const uint32_t index )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -2136,8 +2050,7 @@ SpecUtils_Measurement_parse_warning( const SpecUtils_Measurement * const instanc
 }
   
 
-double SpecUtils_C_CALLCONV
-SpecUtils_Measurement_gamma_integral( const SpecUtils_Measurement * const instance,
+double SpecUtils_Measurement_gamma_integral( const SpecUtils_Measurement * const instance,
                                      const float lower_energy, const float upper_energy )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
@@ -2146,8 +2059,7 @@ SpecUtils_Measurement_gamma_integral( const SpecUtils_Measurement * const instan
 }
   
 
-double SpecUtils_C_CALLCONV
-SpecUtils_Measurement_gamma_channels_sum( const SpecUtils_Measurement * const instance,
+double SpecUtils_Measurement_gamma_channels_sum( const SpecUtils_Measurement * const instance,
                                          const uint32_t startbin,
                                          const uint32_t endbin )
 {
@@ -2157,8 +2069,7 @@ SpecUtils_Measurement_gamma_channels_sum( const SpecUtils_Measurement * const in
 }
 
 
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_Measurement_derived_data_properties( const SpecUtils_Measurement * const instance )
+uint32_t SpecUtils_Measurement_derived_data_properties( const SpecUtils_Measurement * const instance )
 {
   auto m = reinterpret_cast<const SpecUtils::Measurement *>( instance );
   assert( m );
@@ -2166,8 +2077,7 @@ SpecUtils_Measurement_derived_data_properties( const SpecUtils_Measurement * con
 }
   
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
+bool SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
                                              const uint32_t nchannel )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -2188,8 +2098,7 @@ SpecUtils_Measurement_combine_gamma_channels( SpecUtils_Measurement *instance,
 }
   
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
+bool SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
                             const SpecUtils_CountedRef_EnergyCal * const cal_ptr )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -2213,8 +2122,7 @@ SpecUtils_Measurement_rebin( SpecUtils_Measurement *instance,
 }
   
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
+bool SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
                                              const SpecUtils_CountedRef_EnergyCal * const cal_ptr )
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
@@ -2237,16 +2145,14 @@ SpecUtils_Measurement_set_energy_calibration( SpecUtils_Measurement *instance,
 }
 
 
-SpecUtils_EnergyCal * SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_create()
+SpecUtils_EnergyCal *SpecUtils_EnergyCal_create()
 {
   SpecUtils::EnergyCalibration *cal = new SpecUtils::EnergyCalibration();
   return reinterpret_cast<SpecUtils_EnergyCal *>( cal );
 }
 
 
-void SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_destroy( SpecUtils_EnergyCal *instance )
+void SpecUtils_EnergyCal_destroy( SpecUtils_EnergyCal *instance )
 {
   auto cal = reinterpret_cast<SpecUtils::EnergyCalibration *>( instance );
   assert( cal );
@@ -2255,8 +2161,7 @@ SpecUtils_EnergyCal_destroy( SpecUtils_EnergyCal *instance )
 }
 
 
-SpecUtils_CountedRef_EnergyCal * SpecUtils_C_CALLCONV
-SpecUtils_CountedRef_EnergyCal_create()
+SpecUtils_CountedRef_EnergyCal *SpecUtils_CountedRef_EnergyCal_create()
 {
   auto obj_ptr = new shared_ptr<SpecUtils::EnergyCalibration>();
   *obj_ptr = make_shared<SpecUtils::EnergyCalibration>();
@@ -2264,8 +2169,7 @@ SpecUtils_CountedRef_EnergyCal_create()
 }
 
     
-void SpecUtils_C_CALLCONV
-SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance )
+void SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance )
 {
   auto ptr = reinterpret_cast<shared_ptr<SpecUtils::EnergyCalibration> *>( instance );
   assert( ptr );
@@ -2274,8 +2178,7 @@ SpecUtils_CountedRef_EnergyCal_destroy( SpecUtils_CountedRef_EnergyCal *instance
 }
 
 
-const SpecUtils_EnergyCal * SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance )
+const SpecUtils_EnergyCal *SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance )
 {
   shared_ptr<const SpecUtils::EnergyCalibration> *cal
                 = reinterpret_cast<shared_ptr<const SpecUtils::EnergyCalibration> *>( instance );
@@ -2284,8 +2187,7 @@ SpecUtils_EnergyCal_ptr_from_ref( SpecUtils_CountedRef_EnergyCal *instance )
 }
    
 
-SpecUtils_CountedRef_EnergyCal * SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_make_counted_ref( SpecUtils_EnergyCal *instance )
+SpecUtils_CountedRef_EnergyCal *SpecUtils_EnergyCal_make_counted_ref( SpecUtils_EnergyCal *instance )
 {
   auto ptr = reinterpret_cast<SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2298,8 +2200,7 @@ SpecUtils_EnergyCal_make_counted_ref( SpecUtils_EnergyCal *instance )
     
 
 
-SpecUtils_EnergyCalType SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_type( const SpecUtils_EnergyCal * const instance )
+SpecUtils_EnergyCalType SpecUtils_EnergyCal_type( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2309,8 +2210,7 @@ SpecUtils_EnergyCal_type( const SpecUtils_EnergyCal * const instance )
   return SpecUtils_EnergyCalType( static_cast<int>( ptr->type() ) );
 }
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_valid( const SpecUtils_EnergyCal * const instance )
+bool SpecUtils_EnergyCal_valid( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2318,17 +2218,14 @@ SpecUtils_EnergyCal_valid( const SpecUtils_EnergyCal * const instance )
 }
 
     
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_number_coefficients( const SpecUtils_EnergyCal * const instance )
+uint32_t SpecUtils_EnergyCal_number_coefficients( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
   return ptr ? static_cast<uint32_t>(ptr->coefficients().size()) : uint32_t(0);
 }
-  
-
-const float * SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_coefficients( const SpecUtils_EnergyCal * const instance )
+    
+const float *SpecUtils_EnergyCal_coefficients( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2338,9 +2235,7 @@ SpecUtils_EnergyCal_coefficients( const SpecUtils_EnergyCal * const instance )
   return coefs.data();
 }
 
-
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_number_deviation_pairs( const SpecUtils_EnergyCal * const instance )
+uint32_t SpecUtils_EnergyCal_number_deviation_pairs( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2351,9 +2246,7 @@ SpecUtils_EnergyCal_number_deviation_pairs( const SpecUtils_EnergyCal * const in
   return static_cast<uint32_t>( devs.size() );
 }
     
-
-float SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_deviation_energy( const SpecUtils_EnergyCal * const instance,
+float SpecUtils_EnergyCal_deviation_energy( const SpecUtils_EnergyCal * const instance,
                                        const uint32_t index )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
@@ -2368,9 +2261,7 @@ SpecUtils_EnergyCal_deviation_energy( const SpecUtils_EnergyCal * const instance
   return devs[index].first;
 }
 
-
-float SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_deviation_offset( const SpecUtils_EnergyCal * const instance,
+float SpecUtils_EnergyCal_deviation_offset( const SpecUtils_EnergyCal * const instance,
                                          const uint32_t index )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
@@ -2385,18 +2276,14 @@ SpecUtils_EnergyCal_deviation_offset( const SpecUtils_EnergyCal * const instance
   return devs[index].second;
 }
     
-
-uint32_t SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_number_channels( const SpecUtils_EnergyCal * const instance )
+uint32_t SpecUtils_EnergyCal_number_channels( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
   return ptr ? static_cast<uint32_t>(ptr->num_channels()) : uint32_t(0);
 }
 
-
-const float * SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance )
+const float *SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2407,9 +2294,22 @@ SpecUtils_EnergyCal_channel_energies( const SpecUtils_EnergyCal * const instance
   return channel_energies ? channel_energies->data() : nullptr;
 }
     
-
-bool SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
+  /** Sets the polynomial coefficients, and non-linear deviation pairs for the energy calibration object.
+   
+   @param instance The `SpecUtils_EnergyCal` to modify.
+   @param num_channels The number of channels this energy calibration is for.
+   @param coeffs The array of polynomial energy calibration coefficients.
+   @param number_coeffs The number of entries in the `coeffs` array.  Must be at least two coefficients.
+   @param dev_pairs An array giving deviation pairs where the entries are energy followed by offset, e.g.,
+          for 3 deviations pairs, the entries in this array would be: [energy_0, offset_0, energy_1, offset_1, energy_2, offset_2]
+          May be `NULL`.
+   @param number_dev_pairs The number of deviation pairs in the `dev_pairs` array; that is the
+          `dev_pairs` array must have twice this many entries in it.
+   @returns If the energy calibration supplied is valid, and hence the `SpecUtils_EnergyCal` instance updated.
+            Will return false if coefficients or deviation pairs are invalid (e.g., not enough coefficients, NaN of Inf coefficients,
+            results in non monotonically increasing channel energies, or are otherwise unreasonable).
+   */
+bool SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
                                      const uint32_t num_channels,
                                      const float *coeffs,
                                      const uint32_t number_coeffs,
@@ -2443,8 +2343,7 @@ SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
+bool SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
                                               const uint32_t num_channels,
                                               const float *coeffs,
                                               const uint32_t num_coeffs,
@@ -2477,8 +2376,7 @@ SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance,
 }
 
 
-bool SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
+bool SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
                                               const uint32_t num_channels,
                                               const uint32_t num_energies,
                                               const float * const channel_energies )
@@ -2502,8 +2400,7 @@ SpecUtils_EnergyCal_set_lower_channel_energy( SpecUtils_EnergyCal * instance,
 }
 
 
-double SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instance,
+double SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instance,
                                            const double energy )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
@@ -2512,8 +2409,7 @@ SpecUtils_EnergyCal_channel_for_energy( const SpecUtils_EnergyCal * const instan
 }
 
 
-double SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instance,
+double SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instance,
                                            const double channel )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
@@ -2521,9 +2417,7 @@ SpecUtils_EnergyCal_energy_for_channel( const SpecUtils_EnergyCal * const instan
   return ptr ? ptr->energy_for_channel( channel ) : -999.9;
 }
 
-
-float SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance )
+float SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );
@@ -2531,8 +2425,7 @@ SpecUtils_EnergyCal_lower_energy( const SpecUtils_EnergyCal * const instance )
 }
 
   
-float SpecUtils_C_CALLCONV
-SpecUtils_EnergyCal_upper_energy( const SpecUtils_EnergyCal * const instance )
+float SpecUtils_EnergyCal_upper_energy( const SpecUtils_EnergyCal * const instance )
 {
   auto ptr = reinterpret_cast<const SpecUtils::EnergyCalibration *>( instance );
   assert( ptr );

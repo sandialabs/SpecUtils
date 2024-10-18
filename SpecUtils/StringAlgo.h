@@ -41,39 +41,30 @@
 namespace  SpecUtils
 {
   /** \brief Removes leading and trailing whitespaces (ex, " \f\n\r\t\v") according to std::isspace. */
-  SPECUTILS_EXPORT
   void trim( std::string &str );
   
   /** \brief Removes leading and trailing whitespaces (" \f\n\r\t\v"). */
-  SPECUTILS_EXPORT
   std::string trim_copy( std::string str );
   
   /** \brief Converts each ascii letter to lower case, not UTF8 safe/aware. */
-  SPECUTILS_EXPORT
   void to_lower_ascii( std::string &input );
   
   /** \brief Converts each ascii letter to lower case, not UTF8 safe/aware. */
-  SPECUTILS_EXPORT
   std::string to_lower_ascii_copy( std::string input );
   
   /** \brief Converts each ascii letter to upper case, not UTF8 safe/aware. */
-  SPECUTILS_EXPORT
   void to_upper_ascii( std::string &input );
   
   /** \brief Case independent string comparison. Not UTF8 or locale aware. */
-  SPECUTILS_EXPORT
   bool iequals_ascii( const char *str, const char *test );
   
   /** \brief Case independent string comparison. Not UTF8 or locale aware. */
-  SPECUTILS_EXPORT
   bool iequals_ascii( const std::string &str, const char *test );
   
   /** \brief Case independent string comparison. Not UTF8 or locale aware. */
-  SPECUTILS_EXPORT
   bool iequals_ascii( const std::string &str, const std::string &test );
   
   /** \brief Returns if the substring is contained within the input string. */
-  SPECUTILS_EXPORT
   bool contains( const std::string &input, const char *substr );
   
   /** \brief Returns if the substring is contained within the input string,
@@ -82,7 +73,6 @@ namespace  SpecUtils
    if `substr` is empty, will return false, which may be different than behavior of
    `boost::algorithm::icontains(...)`.
    */
-  SPECUTILS_EXPORT
   bool icontains( const std::string &input, const char *substr );
   
   /** \brief Returns if the substring is contained within the input string,
@@ -91,7 +81,6 @@ namespace  SpecUtils
    if `substr` is empty, will return false, which may be different than behavior of
    `boost::algorithm::icontains(...)`.
    */
-  SPECUTILS_EXPORT
   bool icontains( const std::string &input, const std::string &substr );
   
   /** \brief Returns if the substring is contained within the input string,
@@ -100,30 +89,25 @@ namespace  SpecUtils
    if `substr` is empty, will return false, which may be different than behavior of
    `boost::algorithm::icontains(...)`.
    */
-  SPECUTILS_EXPORT
   bool icontains( const char *input, const size_t input_len,
                  const char *substr, const size_t substr_len );
   
   /** \brief Returns if the input starts with the specified substr. */
-  SPECUTILS_EXPORT
   bool starts_with( const std::string &input, const char *substr );
   
   /** \brief Returns if the input starts with the specified substr, case
    independent; is not UTF8 or locale aware.
    */
-  SPECUTILS_EXPORT
   bool istarts_with( const std::string &line, const char *label );
   
   /** \brief Returns if the input starts with the specified substr, case
    independent; is not UTF8 or locale aware.
    */
-  SPECUTILS_EXPORT
   bool istarts_with( const std::string &line, const std::string &label );
   
   /** \brief Returns if the input ends with the specified substr, case
    independent; is not UTF8 or locale aware.
    */
-  SPECUTILS_EXPORT
   bool iends_with( const std::string &line, const std::string &label );
   
   /** \brief Case-insensitively finds the substring in the input.
@@ -131,13 +115,11 @@ namespace  SpecUtils
    @returns The index of the first occurrence of `substr` in `input`.
             If `substr` is not in `input`, then returns `std::string::npos`.
    */
-  SPECUTILS_EXPORT
   size_t ifind_substr_ascii( const std::string &input, const char * const substr );
   
   /** \brief Removes any character in chars_to_remove from line; is not UTF8 or
    locale aware.
    */
-  SPECUTILS_EXPORT
   void erase_any_character( std::string &line, const char *chars_to_remove );
   
   /** \brief Splits an input string according to specified delimiters.
@@ -158,7 +140,6 @@ namespace  SpecUtils
      {",,,hello how are,,", ", "}  -> {"hello", "how", "are"}
      {",,,hello how are,,", ","}  ->  {"hello how are"}
    */
-  SPECUTILS_EXPORT
   void split( std::vector<std::string> &results,
              const std::string &input, const char *delims );
   
@@ -175,14 +156,12 @@ namespace  SpecUtils
    encountered. '\0' cannot be specified as a delimiter, and an empty string
    will return 0 results if input is empty, and one result otherwise.
    */
-  SPECUTILS_EXPORT
   void split_no_delim_compress( std::vector<std::string> &results,
                                const std::string &input, const char *delims );
   
   /** \brief Replaces all (case insensitive) instances of <i>pattern</i> with
    <i>replacement</i> in <i>input</i>.  Not UTF8 or locale aware.
    */
-  SPECUTILS_EXPORT
   void ireplace_all( std::string &input,
                     const char *pattern, const char *replacement );
   
@@ -212,7 +191,6 @@ namespace  SpecUtils
    (ex: `str + str_size_bytes` will typically point to a '\0' character, but
    doesnt have to).
    */
-  SPECUTILS_EXPORT
   size_t utf8_str_len( const char * const str, const size_t str_size_bytes );
 
 
@@ -221,7 +199,6 @@ namespace  SpecUtils
  
    \param str input UTF8 encoded string that MUST be null terminated.
    */
-  SPECUTILS_EXPORT
   size_t utf8_str_len( const char * const str );
   
   /** \brief Reduces string size to the specified number of bytes, or the
@@ -229,7 +206,6 @@ namespace  SpecUtils
    character.  Does not include the null terminating byte (e.g., will take
    max_bytes+1 bytes to represent in a c-string).
    */
-  SPECUTILS_EXPORT
   void utf8_limit_str_size( std::string &str, const size_t max_bytes );
   
   /** Gives the index to place a null terminating character that is less
@@ -245,7 +221,6 @@ namespace  SpecUtils
    \returns The location (index), in bytes, to place the new terminating '\0'
    character.
    */
-  SPECUTILS_EXPORT
   size_t utf8_str_size_limit( const char * const str,
                              size_t num_in_bytes, const size_t max_bytes );
   
@@ -269,11 +244,9 @@ namespace  SpecUtils
    \param result The result of parsing.  If parsing failed, will be 0.0f.
    \returns True if was able to parse a number, false otherwise.
    */
-  SPECUTILS_EXPORT
   bool parse_float( const char *input, const size_t length, float &result );
 
   /** Same as #parse_float, but for doubles. */
-  SPECUTILS_EXPORT
   bool parse_double( const char *input, const size_t length, double &result );
   
 
@@ -289,7 +262,6 @@ namespace  SpecUtils
    \param result The result of parsing.  If parsing failed, will be 0.
    \returns True if was able to parse a number, false otherwise.
    */
-  SPECUTILS_EXPORT
   bool parse_int( const char *input, const size_t length, int &result );
   
   /** \brief Parses a string of ascii floats seperated by user specified
@@ -328,7 +300,6 @@ namespace  SpecUtils
    
    \TODO: change this to be range based, instead of zero-terminated string input
    */
-  SPECUTILS_EXPORT
   bool split_to_floats( const char *input,
                        std::vector<float> &contents,
                        const char * const delims, // = " ,\r\n\t",
@@ -364,12 +335,10 @@ namespace  SpecUtils
      - https://github.com/abseil/abseil-cpp/blob/master/absl/strings/charconv.h
      - https://github.com/simdjson/simdjson/blob/master/src/generic/stage2/numberparsing.h
    */
-  SPECUTILS_EXPORT
   bool split_to_floats( const char *input, const size_t length,
                        std::vector<float> &results );
   
   /* \brief A convenience function. */
-  SPECUTILS_EXPORT
   bool split_to_floats( const std::string &input, std::vector<float> &results );
   
   
@@ -384,13 +353,11 @@ namespace  SpecUtils
    be interpreted as ints, and the entire string was consumed during parsing
    (no trailing text besides delimiters).
    */
-  SPECUTILS_EXPORT
   bool split_to_ints( const char *input, const size_t length,
                      std::vector<int> &results );
   
   /** Same as split_to_ints, but for long longs.
    */
-  SPECUTILS_EXPORT
   bool split_to_long_longs( const char *input, const size_t length,
                            std::vector<long long> &results );
   
@@ -402,8 +369,7 @@ namespace  SpecUtils
    
    If input is improperly encoded, or other error, will return empty string.
     */
-  SPECUTILS_EXPORT
-  std::string convert_from_utf16_to_utf8( const std::wstring &wstr );
+   std::string convert_from_utf16_to_utf8( const std::wstring &wstr );
  
   /** Converts from UTF-8 to UTF-16 strings; primarily useful on Windows.
   
@@ -414,7 +380,6 @@ namespace  SpecUtils
    
   If input is improperly encoded, or other error, will return empty string.
   */
-  SPECUTILS_EXPORT
   std::wstring convert_from_utf8_to_utf16( const std::string &str );
  
 
@@ -430,7 +395,6 @@ namespace  SpecUtils
    Note: this function is hand-rolled, and extremely slow, and likely missing some edge cases or
          something.  There is likely a much more elegant and correct implementation for this.
    */
-  SPECUTILS_EXPORT
   std::string printCompact( const double value, const size_t sig_figs );
   
   
@@ -440,7 +404,6 @@ namespace  SpecUtils
    For sequences such as {0,1,2,3,4,5,10,99,100,101,102,200}, will return a
    human readable string similar to "1-5,10,99-102,200"
    */
-  SPECUTILS_EXPORT
   std::string sequencesToBriefString( const std::set<int> &sequence );
   
   //see CompactFileManager::handleUserChangeSampleNum(...) for code that
@@ -461,7 +424,6 @@ namespace  SpecUtils
           to return 0.  The default value of 128 is arbitrary, but still
           larger than any of the expected use cases in SpecUtils/InterSpec/Cambio.
    */
-  SPECUTILS_EXPORT
   unsigned int levenshtein_distance( const std::string &source,
                                     const std::string &target,
                                     const size_t max_str_len = 128 );

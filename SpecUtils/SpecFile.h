@@ -515,7 +515,7 @@ const std::string &detectorTypeToString( const DetectorType type );
 using FloatVec = std::vector<float>;
 using FloatVecPtr = std::shared_ptr<FloatVec>;    
   
-class SPECUTILS_EXPORT Measurement
+class Measurement
 {
 public:
   Measurement();
@@ -1375,7 +1375,7 @@ public:
  ```
  
  */
-class SPECUTILS_EXPORT SpecFile
+class SpecFile
 {
 public:
   SpecFile();
@@ -2797,7 +2797,7 @@ public:
 //    MinimumDoseRateValue, BackgroundDoseRateValue,
 //    BackgroundDoseRateUncertaintyValue, TotalDoseValue,
 //    as well as more better recording out SourcePosition.
-class SPECUTILS_EXPORT DetectorAnalysisResult
+class DetectorAnalysisResult
 {
 public:
   std::string remark_;
@@ -2844,7 +2844,7 @@ public:
 /** A class that aims to eventually be about equivalent of the N42 2012 
     <AnalysisResults> tag.
  */
-class SPECUTILS_EXPORT DetectorAnalysis
+class DetectorAnalysis
 {
 public:
   //Need to make an association of this with the sample/detector number, and
@@ -2919,7 +2919,7 @@ public:
  
  Currently only the subset of fields relevant to InterSpec is implemented;
  */
-struct SPECUTILS_EXPORT MultimediaData
+struct MultimediaData
 {
   /** Corresponds to the N42.42 <Remark> element. */
   std::string remark_;

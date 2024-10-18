@@ -280,8 +280,6 @@ endif( SpecUtils_SHARED_LIB )
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
-# Make so on Windows the functions/classes will be exported
-target_compile_definitions( SpecUtils PRIVATE SpecUtils_EXPORTS )
 
 # Include the GenerateExportHeader module
 include(GenerateExportHeader)

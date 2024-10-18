@@ -44,14 +44,12 @@ namespace  SpecUtils
    See code for code source.
    Note that this function is probably very slow, and could be upgraded.
   */
-  SPECUTILS_EXPORT
   std::istream &safe_get_line( std::istream &is, std::string &t );
 
 
   /** Same as other variant of #safe_get_line, except allows specifying the
    maximum number of bytes to read; specifying zero means no limit.
    */
-  SPECUTILS_EXPORT
   std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxlength );
 
 
@@ -62,7 +60,6 @@ namespace  SpecUtils
    value.  The value following a zero is rounded to nearest integer (no integer
    check is performed).
    */
-  SPECUTILS_EXPORT
   void expand_counted_zeros( const std::vector<float> &data,
                             std::vector<float> &results );
   
@@ -70,7 +67,6 @@ namespace  SpecUtils
   /** Performs the counted zero compression.
    Note that contents less than 10.0f*FLT_MIN are assumed to be zeros.
    */
-  SPECUTILS_EXPORT
   void compress_to_counted_zeros( const std::vector<float> &data,
                                  std::vector<float> &results );
 
@@ -83,7 +79,6 @@ namespace  SpecUtils
    
    @return Success status of parsing the input string to lat/long
    */
-  SPECUTILS_EXPORT
   bool parse_deg_min_sec_lat_lon( const char *str, const size_t len,
                                   double &lat, double &lon );
 
@@ -93,24 +88,20 @@ namespace  SpecUtils
    
    @return on success returns parsed value, or on failure returns -999.9
    */
-  SPECUTILS_EXPORT
   double conventional_lat_or_long_str_to_flt( std::string input );
   
   
   /** Checks if abs(latitude) is less or equal to 90. */
-  SPECUTILS_EXPORT
   bool valid_latitude( const double latitude );
   
   
   /** Checks if abs(longitude) is less than or equal to 180. */
-  SPECUTILS_EXPORT
   bool valid_longitude( const double longitude );
   
 
   /** Tries to extract sample number from remark in file - mostly from N42-2006
    files.
    */
-  SPECUTILS_EXPORT
   int sample_num_from_remark( std::string remark ); //returns -1 on error
   
   /** Tries to extract speed from a remark string - mostly from N42-2006, and
@@ -123,14 +114,12 @@ namespace  SpecUtils
    
    Throws exception if not successful.
    */
-  SPECUTILS_EXPORT
   float speed_from_remark( std::string remark );
   
 
   /** Looks for GADRAS style detector names in remarks, or something from the
       N42 conventions of 'Aa1', 'Aa2', etc.  Returns empty string on failure.
    */
-  SPECUTILS_EXPORT
   std::string detector_name_from_remark( const std::string &remark );
   
   /** Looks for x position information in remark.
@@ -141,7 +130,6 @@ namespace  SpecUtils
    
    Throws exception if not successful.
   */
-  SPECUTILS_EXPORT
   float dx_from_remark( std::string remark );
 
   /** Looks for y position information in remark
@@ -152,7 +140,6 @@ namespace  SpecUtils
    
    Throws exception if not successful.
   */
-  SPECUTILS_EXPORT
   float dy_from_remark( std::string remark );
 
   /** Looks for y position information in remark
@@ -161,7 +148,6 @@ namespace  SpecUtils
    
     TODO: does not currently take into account units (e.g., cm)
    */
-  SPECUTILS_EXPORT
   float dz_from_remark( std::string remark );
 
   /** Currently finds strings similar to "@250 cm" that is common in PCF title fields
@@ -174,7 +160,6 @@ namespace  SpecUtils
    
    TODO: Implement more general function like `float distance_from_remark( const std::string & )`
    */
-  SPECUTILS_EXPORT
   std::string distance_from_pcf_title( const std::string &remark );
 
 
@@ -186,7 +171,6 @@ namespace  SpecUtils
     
    Throws exception on error.
    */
-  SPECUTILS_EXPORT
   float dose_units_usvPerH( const char *str, const size_t str_length );
 
   
@@ -194,7 +178,6 @@ namespace  SpecUtils
    E.x., "PortalMonitor" -> "Portal Monitor", or
   "SpecPortal" -> "Spectroscopic Portal Monitor"
    */
-  SPECUTILS_EXPORT
   const std::string &convert_n42_instrument_type_from_2006_to_2012(
                                                     const std::string &input );
   
