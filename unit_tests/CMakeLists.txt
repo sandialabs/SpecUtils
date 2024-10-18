@@ -1,9 +1,7 @@
 cmake_policy(SET CMP0048 NEW)
 project(SpecUtilsTests VERSION 1)
 
-cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
-
-enable_testing()
+cmake_minimum_required(VERSION VERSION 3.1...3.29 FATAL_ERROR)
 
 option( ADD_TEST_SPEC_DIR "Base Directory containing other directories that have valid spectrum files for test opening" "" )
 set( testdir "${CMAKE_CURRENT_SOURCE_DIR}" )
@@ -30,50 +28,27 @@ if( PERFORM_DEVELOPER_CHECKS )
 endif( PERFORM_DEVELOPER_CHECKS )
 
 
-# We'll look for an installed version of doctest first
-find_package( doctest QUIET )
-
-# If we didnt find the docktest package, see if the header is somewhere in the
-#   standard search path, and if so, use that
-if( NOT doctest_FOUND )
-  # TODO: test this little part
-  find_file( has_doctest "docktest.h" )
-  if( has_doctest )
-    set( doctest_FOUND YES )
-    get_filename_component( DOCTEST_INCLUDE_DIR ${has_doctest} DIRECTORY )
-  endif( has_doctest )
-endif( NOT doctest_FOUND )
-
-
-# But if we havent fount docktest, we'll Fetch it
-if( NOT doctest_FOUND )
-  include(FetchContent)
-      
-  FetchContent_Declare(
-    doctest
-    URL https://github.com/doctest/doctest/releases/download/v2.4.11/doctest.h
-    URL_HASH SHA256=44FAA038E9C3F9728EFBDA143748D01124EA0A27F4BF78F35A15D8FAB2E039FB
-    DOWNLOAD_NO_EXTRACT TRUE
-  )
-
-  FetchContent_GetProperties( doctest )
-  FetchContent_MakeAvailable( doctest )
-
-  set( DOCTEST_INCLUDE_DIR ${doctest_SOURCE_DIR} CACHE INTERNAL "Path to include folder for doctest")
-endif( NOT doctest_FOUND )
-
-
-# Make include for Doctest
-include_directories( ${DOCTEST_INCLUDE_DIR} )
-
 # Set some command line arguments that all/most of the tests will use
 set( COMMON_TEST_ARGS --log_level=test_suite --report_level=detailed --catch_system_errors=yes )
-set( DATA_DIR_ARGS --indir=\\"${CMAKE_CURRENT_SOURCE_DIR}/test_data\\" )
+set( DATA_DIR_ARGS --indir=${CMAKE_CURRENT_SOURCE_DIR}/test_data )
 
 
 if( CMAKE_GENERATOR STREQUAL "Xcode" )
   list( APPEND COMMON_TEST_ARGS --no-colors=1 )
 endif( CMAKE_GENERATOR STREQUAL "Xcode" )
+#message( "Args: ${COMMON_TEST_ARGS}")
+
+
+add_executable( test_spec_file test_spec_file.cpp )
+target_link_libraries( test_spec_file PRIVATE SpecUtils )
+set_target_properties( test_spec_file PROPERTIES 
+    CXX_STANDARD 20 
+    CXX_STANDARD_REQUIRED YES 
+    CXX_EXTENSIONS YES )
+ 
+add_test( NAME test_spec_file
+          COMMAND $<TARGET_FILE:test_spec_file> 
+)
 
 add_executable( test_energy_calibration test_energy_calibration.cpp )
 target_link_libraries( test_energy_calibration PRIVATE SpecUtils )
@@ -135,7 +110,7 @@ add_executable( test_string_functions test_string_functions.cpp )
 target_link_libraries( test_string_functions PRIVATE SpecUtils )
 set_target_properties( test_string_functions PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
 add_test(
-  NAME TestUtilityStringFunctions
+  NAME test_string_functions
   COMMAND $<TARGET_FILE:test_string_functions> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
   WORKING_DIRECTORY ${test_data_dir}
 )
