@@ -23,7 +23,9 @@ option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interacti
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
-option( SpecUtils_FORTRAN_SWIG "Creates swig/FORTRAN bindings to the c++ code" OFF )
+option( SpecUtils_FORTRAN_SWIG "Enables build/test of swig/FORTRAN bindings" OFF )
+option( SpecUtils_FORTRAN_SWIG_GEN "When this is on, cmake will attemp to generate swig fortran bindings. 
+                                    Requires swig-fortran: https://github.com/swig-fortran/swig" OFF )
 option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )

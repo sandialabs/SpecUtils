@@ -14,10 +14,8 @@
 
 %include "stl.i"
 //%include "std_vector.i"
-/* instantiate the required template specializations */
+
 namespace std {
-    //%template(IntVector)    vector<int>;
-    //%template(DoubleVector) vector<double>;
     %template(FloatVector)  vector<float>;
     %template(MeasurementVector)  vector<SpecUtils::Measurement>;
     
@@ -29,18 +27,14 @@ namespace std {
 %shared_ptr(SpecUtils::MeasurementExt)
 %shared_ptr(SpecUtils::EnergyCalibration)
 %shared_ptr(SpecUtils::EnergyCalibrationExt)
-//%shared_ptr(std::vector<float>) // this casued me problems -hugh
+//%shared_ptr(std::vector<float>) // this caused me problems -hugh
 
 %include "std_string.i"
 %apply std::string { std::string& }
-//%include "std_wstring.i"
 %include "wchar.i"
-
-//%template(StringVector)  std::vector<std::string>;
 
 %ignore combine_gamma_channels;
 %ignore truncate_gamma_channels; 
-//%ignore set_energy_calibration;
 %ignore descriptionText;
 %ignore operator=;
 %ignore set_gamma_counts;
@@ -51,11 +45,9 @@ namespace std {
 
 %apply SWIGTYPE ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
 
-//%rename(set_ecal) SpecUtils::Measurement::set_energy_calibration;
 %ignore SpecUtils::SpecFile::set_energy_calibration;
 
 %include "SpecUtils/SpecFile.h"
-
 
 %extend SpecUtils::Measurement
 {
@@ -152,8 +144,6 @@ namespace std {
     }
 }
 
-//%include "SpecUtils/DateTime.h"
-
 %include "std_pair.i"
 
 %template(DevPair) std::pair<float, float>;
@@ -163,14 +153,6 @@ namespace std {
 %ignore energy_cal_from_CALp_file;
 
 %include "SpecUtils/EnergyCalibration.h"
-
-%extend SpecUtils::EnergyCalibration
-{
-    // void set_deviation_pairs(std::vector<std::pair<float, float>> devPairs)
-    // {
-    //     $self->m_deviation_pairs = devPairs;
-    // }
-}
 
 %ignore make_canonical_path;
 
