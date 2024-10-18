@@ -6,20 +6,22 @@ project (specutils-swig-fortran Fortran CXX C)
 
 # Define the SWIG interface file
 set(SWIG_INTERFACE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsFortran.i)
+set(SWIG_FORTRAN_WRAPPER ${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsWrap.f90)
+set(SWIG_CPP_WRAPPER ${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsFortran_wrap.cxx)
 
 # Add a custom command to generate the wrapper code
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsFortran_wrap.cxx  ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsWrap.f90
+    OUTPUT ${SWIG_CPP_WRAPPER} ${SWIG_FORTRAN_WRAPPER}
     COMMAND ${CMAKE_COMMAND} -E echo "Generating SWIG wrapper..."
-    COMMAND swig -I../../../ -fortran -c++ -outcurrentdir -debug-classes ${SWIG_INTERFACE_FILE}
+    COMMAND swig -I../../../ -fortran -c++ -outdir ${CMAKE_CURRENT_BINARY_DIR}  -o ${SWIG_CPP_WRAPPER} -debug-classes ${SWIG_INTERFACE_FILE}
     DEPENDS ${SWIG_INTERFACE_FILE}
     COMMENT "Generating SWIG wrapper code"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_library(specutils_fortran_wrap ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsFortran_wrap.cxx )
+add_library(specutils_fortran_wrap ${SWIG_CPP_WRAPPER} )
 set_property(TARGET specutils_fortran_wrap PROPERTY POSITION_INDEPENDENT_CODE ON )
-add_library(specutils_fortran SHARED SpecUtilsWrap.f90 )
+add_library(specutils_fortran SHARED ${SWIG_FORTRAN_WRAPPER} )
 target_link_libraries(specutils_fortran_wrap PUBLIC SpecUtils)
 target_compile_options(specutils_fortran PUBLIC -ffree-line-length-none -ffixed-line-length-150)
 target_link_libraries(specutils_fortran PRIVATE specutils_fortran_wrap)
