@@ -42,6 +42,9 @@ subroutine SpecUtilsRoundTrip()
     call m%set_measurement_description("TestDescription")
     call m%set_source_description("TestSource")
     call m%set_neutron_count(99.0)
+    call check(error, m%rpm_panel_number(), 2-1 )
+    call check(error, m%rpm_column_number(), 1-1 )
+    call check(error, m%rpm_mca_number(), 2-1 )
 
     allocate( spectrum(128) )
     DO i = 1, 128
@@ -105,7 +108,7 @@ subroutine SpecUtilsRoundTrip_Read(expectedSpecFile, filePath)
     type(DevPair) :: devPairAct, devPairExp
 
     actualSpecFile = SpecFile()
-    success = actualSpecFile%load_file(filePath, ParserType_Auto)
+    success = actualSpecFile%load_file(filePath, ParserType_Pcf)
     call check(error, success)
 
     expM = expectedSpecFile%measurement_at(1)
@@ -118,12 +121,17 @@ subroutine SpecUtilsRoundTrip_Read(expectedSpecFile, filePath)
     call check(error, actM%measurement_description(), expM%measurement_description() )
     call check(error, actM%source_description() .ne. '' )    
     call check(error, actM%source_description(), expM%source_description() )
-    call check(error, actM%rpm_panel_number() > 0 )
+
+    ! Panel, column and mca numbers are 1-based
+    call check(error, actM%rpm_panel_number() >= 0 )
     call check(error, actM%rpm_panel_number(), expM%rpm_panel_number() )    
     
-    call check(error, actM%rpm_column_number() > 0 )
+    call check(error, actM%rpm_column_number() >= 0 )
     call check(error, actM%rpm_column_number(), expM%rpm_column_number() )
-    !call check(error, actM%get_panel(), expM%get_panel() )
+    
+    call check(error, actM%rpm_mca_number() >= 0 )
+    call check(error, actM%rpm_mca_number(), expM%rpm_mca_number() )
+
     call check(error, actM%get_start_time_string(), expM%get_start_time_string() )
     call check(error, actM%live_time() .gt. 0.0)
     call check(error, actM%live_time(), expM%live_time() )
