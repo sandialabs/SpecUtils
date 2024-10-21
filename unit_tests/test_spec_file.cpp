@@ -48,16 +48,18 @@ void getGammaSpectrum(FloatVec &spectrum)
     }
 }
 
-std::string getDetectorName(int panel, int column, int mca, bool isNeutron = false) {
+std::string getDetectorName(int panel, int column, int mca, bool isNeutron = false)
+{
     // Validate input parameters
-    if (panel < 1 || column < 1 || mca < 1) {
+    if (panel < 1 || column < 1 || mca < 1)
+    {
         throw std::invalid_argument("Panel, column, and MCA numbers must be greater than 0.");
     }
 
     // Convert panel, column, and MCA to the appropriate characters
-    char panelChar = 'A' + (panel - 1); // 'A' for panel 1, 'B' for panel 2, etc.
+    char panelChar = 'A' + (panel - 1);   // 'A' for panel 1, 'B' for panel 2, etc.
     char columnChar = 'a' + (column - 1); // 'a' for column 1, 'b' for column 2, etc.
-    char mcaChar = '1' + (mca - 1); // '1' for MCA 1, '2' for MCA 2, etc.
+    char mcaChar = '1' + (mca - 1);       // '1' for MCA 1, '2' for MCA 2, etc.
 
     // Construct the detector name
     std::string detectorName;
@@ -66,30 +68,33 @@ std::string getDetectorName(int panel, int column, int mca, bool isNeutron = fal
     detectorName += mcaChar;
 
     // Append 'N' if it's a neutron detector
-    if (isNeutron) {
+    if (isNeutron)
+    {
         detectorName += 'N';
     }
 
     return detectorName;
 }
 
-std::array<std::string, 10> generateDetectorNames() {
+std::array<std::string, 10> generateDetectorNames()
+{
     std::array<std::string, 10> detectorNames;
 
     // Random number generation setup
-    static std::random_device rd; // Obtain a random number from hardware
-    static std::mt19937 eng(rd()); // Seed the generator
-    std::uniform_int_distribution<> panelDist(1, 4); // Panel numbers from 1 to 5
-    std::uniform_int_distribution<> columnDist(1, 4); // Column numbers from 1 to 5
-    std::uniform_int_distribution<> mcaDist(1, 8); // MCA numbers from 1 to 3
+    static std::random_device rd;                      // Obtain a random number from hardware
+    static std::mt19937 eng(rd());                     // Seed the generator
+    std::uniform_int_distribution<> panelDist(1, 4);   // Panel numbers from 1 to 5
+    std::uniform_int_distribution<> columnDist(1, 4);  // Column numbers from 1 to 5
+    std::uniform_int_distribution<> mcaDist(1, 8);     // MCA numbers from 1 to 3
     std::uniform_int_distribution<> neutronDist(0, 1); // Randomly decide if it's a neutron detector
 
     // Generate 10 random detector names
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10; ++i)
+    {
         int panel = panelDist(eng);
         int column = columnDist(eng);
         int mca = mcaDist(eng);
-        //bool isNeutron = neutronDist(eng) == 1; // 50% chance of being a neutron detector
+        // bool isNeutron = neutronDist(eng) == 1; // 50% chance of being a neutron detector
         bool isNeutron = false; // 50% chance of being a neutron detector
 
         detectorNames[i] = getDetectorName(panel, column, mca, isNeutron);
@@ -100,13 +105,12 @@ std::array<std::string, 10> generateDetectorNames() {
     return detectorNames;
 }
 
-
 std::shared_ptr<SpecUtils::Measurement> makeMeasurement(int id, std::string detName, char tag)
 {
     auto m = std::make_shared<SpecUtils::Measurement>();
 
-    //auto detName = "Aa" + std::to_string(id);
-    m->set_detector_name(detName); 
+    // auto detName = "Aa" + std::to_string(id);
+    m->set_detector_name(detName);
 
     m->set_pcf_tag(tag);
 
@@ -116,11 +120,10 @@ std::shared_ptr<SpecUtils::Measurement> makeMeasurement(int id, std::string detN
     m->set_title(title);
 
     auto descr = "test_descr " + std::to_string(id);
-    m->set_measurement_description( descr );
-  
+    m->set_measurement_description(descr);
+
     auto source = "source " + std::to_string(id);
-    m->set_source_description( source );
-  
+    m->set_source_description(source);
 
     SpecUtils::FloatVec ncounts{id + 99.0F};
     m->set_neutron_counts(ncounts, 0.0F);
@@ -152,7 +155,7 @@ std::shared_ptr<SpecUtils::Measurement> makeMeasurement(int id, std::string detN
 TEST_CASE("Round Trip")
 {
     auto fname = std::string("round-trip-cpp.pcf");
-    auto n42Fname = fname+".n42";
+    auto n42Fname = fname + ".n42";
 
     SUBCASE("Write PCF File")
     {
@@ -160,13 +163,13 @@ TEST_CASE("Round Trip")
         CheckFileExistanceAndDelete(fname);
         CheckFileExistanceAndDelete(n42Fname);
 
-        //auto detNames = generateDetectorNames();
-      
-      // Note that using "Bc3" as a detector name causes the PCF file to use "compressed" deviation
-      //  pairs (i.e., int16_t values for both energy and offset, instead of floats), because the
-      //  "c" indicates third column.
-        std::vector<std::string> detNames = { "Ba1", "Aa2", "Bc3", "Cb4" };
-        //std::vector<std::string> detNames = { "Ba1", "Aa2", "Bb3", "Cb4" };
+        // auto detNames = generateDetectorNames();
+
+        // Note that using "Bc3" as a detector name causes the PCF file to use "compressed" deviation
+        //  pairs (i.e., int16_t values for both energy and offset, instead of floats), because the
+        //  "c" indicates third column.
+        std::vector<std::string> detNames = {"Ba1", "Aa2", "Bc3", "Cb4"};
+        // std::vector<std::string> detNames = { "Ba1", "Aa2", "Bb3", "Cb4" };
 
         auto tags = std::vector<char>{'T', 'K', '-', '<'};
         auto numMeasurements = detNames.size();
@@ -175,12 +178,12 @@ TEST_CASE("Round Trip")
         {
             auto detName = detNames[i];
             auto tag = tags[i];
-            auto m = makeMeasurement( static_cast<int>(i) + 1, detName, tag);
+            auto m = makeMeasurement(static_cast<int>(i) + 1, detName, tag);
             specfile.add_measurement(m);
         }
 
         {
-            auto &m = *(specfile.measurement(size_t(0)) );
+            auto &m = *(specfile.measurement(size_t(0)));
 
             CHECK(m.rpm_panel_number() == 2 - 1);
             CHECK(m.rpm_column_number() == 1 - 1);
@@ -197,14 +200,13 @@ TEST_CASE("Round Trip")
 
         specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
         specfile.write_to_file(n42Fname, SpecUtils::SaveSpectrumAsType::N42_2012);
-        
 
         SUBCASE("Read PCF File")
         {
-          SpecUtils::SpecFile specfileToRead;
-          const bool success_reading = specfileToRead.load_file(fname, SpecUtils::ParserType::Pcf);
-          REQUIRE( success_reading );
-          
+            SpecUtils::SpecFile specfileToRead;
+            const bool success_reading = specfileToRead.load_file(fname, SpecUtils::ParserType::Pcf);
+            REQUIRE(success_reading);
+
             for (size_t i = 0; i < numMeasurements; i++)
             {
                 auto &expectedM = *(specfile.measurement(i));
@@ -214,8 +216,17 @@ TEST_CASE("Round Trip")
                 CHECK(expectedM.pcf_tag() == actualM.pcf_tag());
 
                 CHECK_FALSE(actualM.detector_name().empty());
-                CHECK(actualM.detector_name() == expectedM.detector_name() );
-                CHECK(actualM.detector_number() == expectedM.detector_number() );
+                CHECK(actualM.detector_name() == expectedM.detector_name());
+                CHECK(actualM.detector_number() == expectedM.detector_number());
+
+                CHECK(actualM.rpm_panel_number() >= 0 );
+                CHECK(actualM.rpm_panel_number() == expectedM.rpm_panel_number() );
+
+                CHECK(actualM.rpm_column_number() >= 0 );
+                CHECK(actualM.rpm_column_number() == expectedM.rpm_column_number() );
+
+                CHECK(actualM.rpm_mca_number() >= 0);
+                CHECK(actualM.rpm_mca_number() == expectedM.rpm_mca_number() );
 
                 // times for PCFs should be compared as vax strings.
                 auto timeStr1 = SpecUtils::to_vax_string(expectedM.start_time());
@@ -300,9 +311,9 @@ TEST_CASE("Get Max Channel Count")
 TEST_CASE("Find Source String")
 {
     SpecUtils::Measurement m;
-    m.set_source_description( "TestSource" );
-    m.set_measurement_description( "TestDescription" );
-    
+    m.set_source_description("TestSource");
+    m.set_measurement_description("TestDescription");
+
     auto expected = std::string("TestSource");
     auto actual = m.source_description();
 
@@ -316,4 +327,3 @@ TEST_CASE("Find Source String")
         CHECK(actual == expected);
     }
 }
-

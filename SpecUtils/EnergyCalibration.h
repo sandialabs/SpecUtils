@@ -291,8 +291,7 @@ namespace SpecUtils
      \sa set_polynomial, EnergyCalCheckType::Normal
      */
     static const float sm_polynomial_offset_limit;
-    
-  protected:
+
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
      increasing values).
      

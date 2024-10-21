@@ -7,8 +7,6 @@
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
 #include <SpecUtils/Filesystem.h>
-#include <iostream>
-
 %}
 
 
@@ -120,11 +118,7 @@ namespace std {
     /// @param index is 1-based 
     std::shared_ptr<const SpecUtils::Measurement> measurement_at(int index)
     {
-
         auto newIndex = static_cast<size_t>(index-1);
-
-        std::cout << __func__ << ": newIndex: " << newIndex << std::endl;
-        std::cout << __func__ << ": num_measurements: " << $self->num_measurements() << std::endl;
         return $self->measurement(newIndex);
     }
 

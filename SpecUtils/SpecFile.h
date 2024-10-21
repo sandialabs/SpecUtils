@@ -1085,6 +1085,12 @@ public:
    from a file.
    */
   void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal );
+
+  /// @brief Used for testing
+  void set_ecal( const std::shared_ptr<const EnergyCalibration> &cal )
+  {
+    energy_calibration_ = cal;
+  }
   
   
 

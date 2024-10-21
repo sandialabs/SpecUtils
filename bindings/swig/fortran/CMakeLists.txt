@@ -10,7 +10,10 @@ if (SpecUtils_FORTRAN_SWIG_GEN)
       OUTPUT ${SWIG_CPP_WRAPPER} ${SWIG_FORTRAN_WRAPPER}
       COMMAND ${CMAKE_COMMAND} -E echo "Generating SWIG wrapper..."
       COMMAND swig -I../../../ -fortran -c++ -outdir ${CMAKE_CURRENT_BINARY_DIR}  -o ${SWIG_CPP_WRAPPER} ${SWIG_INTERFACE_FILE}
-      DEPENDS ${SWIG_INTERFACE_FILE}
+      DEPENDS ${SWIG_INTERFACE_FILE} 
+              ${CMAKE_SOURCE_DIR}/SpecUtils/EnergyCalibration.h 
+              ${CMAKE_SOURCE_DIR}/SpecUtils/SpecFile.h
+              ${CMAKE_SOURCE_DIR}/SpecUtils/FileSystem.h
       COMMENT "Generating SWIG **Fortran** wrapper code"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )

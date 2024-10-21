@@ -303,8 +303,6 @@ template <typename T> T SwigValueInit() {
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
 #include <SpecUtils/Filesystem.h>
-#include <iostream>
-
 
 
 #include <utility>
@@ -622,11 +620,7 @@ SWIGINTERN void SpecUtils_Measurement_get_spectrum(SpecUtils::Measurement *self,
         }        
     }
 SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at(SpecUtils::SpecFile *self,int index){
-
         auto newIndex = static_cast<size_t>(index-1);
-
-        std::cout << __func__ << ": newIndex: " << newIndex << std::endl;
-        std::cout << __func__ << ": num_measurements: " << self->num_measurements() << std::endl;
         return self->measurement(newIndex);
     }
 SWIGINTERN int SpecUtils_SpecFile_get_max_channel_count(SpecUtils::SpecFile *self){
@@ -2654,6 +2648,19 @@ SWIGEXPORT void _wrap_Measurement_set_energy_calibration(SwigClassWrapper *farg1
   arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
   arg2 = farg2->cptr ? static_cast<std::shared_ptr< SpecUtils::EnergyCalibration const > * >(farg2->cptr) : &tempnull2;
   (arg1)->set_energy_calibration((std::shared_ptr< SpecUtils::EnergyCalibration const > const &)*arg2);
+}
+
+
+SWIGEXPORT void _wrap_Measurement_set_ecal(SwigClassWrapper *farg1, SwigClassWrapper const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration const > *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration const > tempnull2 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = farg2->cptr ? static_cast<std::shared_ptr< SpecUtils::EnergyCalibration const > * >(farg2->cptr) : &tempnull2;
+  (arg1)->set_ecal((std::shared_ptr< SpecUtils::EnergyCalibration const > const &)*arg2);
 }
 
 
@@ -7144,6 +7151,128 @@ SWIGEXPORT float _wrap_EnergyCalibration_sm_polynomial_offset_limit_get() {
   
   result = (float)(float)SpecUtils::EnergyCalibration::sm_polynomial_offset_limit;
   fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_check_lower_energies(SwigClassWrapper *farg1, int const *farg2, SwigClassWrapper *farg3) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  size_t arg2 ;
+  std::vector< float > *arg3 = 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  arg2 = (size_t)(*farg2);
+  SWIG_check_nonnull(farg3->cptr, "std::vector< float > const &", "FloatVector", "SpecUtils::EnergyCalibration::check_lower_energies(size_t const,std::vector< float > const &)", return );
+  arg3 = (std::vector< float > *)farg3->cptr;
+  (arg1)->check_lower_energies(arg2,(std::vector< float > const &)*arg3);
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_m_type_set(SwigClassWrapper *farg1, int const *farg2) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  SpecUtils::EnergyCalType arg2 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  arg2 = (SpecUtils::EnergyCalType)(*farg2);
+  if (arg1) (arg1)->m_type = arg2;
+}
+
+
+SWIGEXPORT int _wrap_EnergyCalibration_m_type_get(SwigClassWrapper *farg1) {
+  int fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  SpecUtils::EnergyCalType result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  result = (SpecUtils::EnergyCalType) ((arg1)->m_type);
+  fresult = (int)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_m_coefficients_set(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::vector< float > *arg2 = (std::vector< float > *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  arg2 = (std::vector< float > *)farg2->cptr;
+  if (arg1) (arg1)->m_coefficients = *arg2;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibration_m_coefficients_get(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  std::vector< float > *result = 0 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  result = (std::vector< float > *)& ((arg1)->m_coefficients);
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_m_deviation_pairs_set(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::vector< std::pair< float,float > > *arg2 = (std::vector< std::pair< float,float > > *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  arg2 = (std::vector< std::pair< float,float > > *)farg2->cptr;
+  if (arg1) (arg1)->m_deviation_pairs = *arg2;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibration_m_deviation_pairs_get(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  result = (std::vector< std::pair< float,float > > *)& ((arg1)->m_deviation_pairs);
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_EnergyCalibration_m_channel_energies_set(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::shared_ptr< std::vector< float > const > *arg2 = (std::shared_ptr< std::vector< float > const > *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  arg2 = (std::shared_ptr< std::vector< float > const > *)farg2->cptr;
+  if (arg1) (arg1)->m_channel_energies = *arg2;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_EnergyCalibration_m_channel_energies_get(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::EnergyCalibration *arg1 = (SpecUtils::EnergyCalibration *) 0 ;
+  std::shared_ptr< SpecUtils::EnergyCalibration > *smartarg1 ;
+  std::shared_ptr< std::vector< float > const > *result = 0 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::EnergyCalibration >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::EnergyCalibration*)(smartarg1->get()) : NULL;
+  result = (std::shared_ptr< std::vector< float > const > *)& ((arg1)->m_channel_energies);
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 
