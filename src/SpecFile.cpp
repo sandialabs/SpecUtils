@@ -724,6 +724,11 @@ const std::string &Measurement::detector_name() const
   return detector_name_;
 }
 
+void Measurement::update_detector_name_from_title()
+{
+  detector_name_ = detector_name_from_remark( title() );
+}
+
 int Measurement::detector_number() const
 {
   return detector_number_;

@@ -311,6 +311,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: measurement_description => swigf_Measurement_measurement_description
   procedure :: position_time => swigf_Measurement_position_time
   procedure :: detector_name => swigf_Measurement_detector_name
+  procedure :: update_detector_name_from_title => swigf_Measurement_update_detector_name_from_title
   procedure :: detector_number => swigf_Measurement_detector_number
   procedure :: detector_type => swigf_Measurement_detector_type
   procedure :: quality_status => swigf_Measurement_quality_status
@@ -324,6 +325,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: calibration_coeffs => swigf_Measurement_calibration_coeffs
   procedure :: deviation_pairs => swigf_Measurement_deviation_pairs
   procedure :: energy_calibration => swigf_Measurement_energy_calibration
+  procedure :: mutable_energy_calibration => swigf_Measurement_mutable_energy_calibration
   procedure :: channel_energies => swigf_Measurement_channel_energies
   procedure :: gamma_counts => swigf_Measurement_gamma_counts
   procedure :: neutron_counts => swigf_Measurement_neutron_counts
@@ -806,6 +808,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, nopass :: get_sm_max_channels => swigf_EnergyCalibration_sm_max_channels_get
   procedure, nopass :: get_sm_polynomial_offset_limit => swigf_EnergyCalibration_sm_polynomial_offset_limit_get
   procedure :: check_lower_energies => swigf_EnergyCalibration_check_lower_energies
+  procedure :: mutable_deviation_pairs => swigf_EnergyCalibration_mutable_deviation_pairs
   procedure :: set_m_type => swigf_EnergyCalibration_m_type_set
   procedure :: get_m_type => swigf_EnergyCalibration_m_type_get
   procedure :: set_m_coefficients => swigf_EnergyCalibration_m_coefficients_set
@@ -1696,6 +1699,13 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigArrayWrapper) :: fresult
 end function
 
+subroutine swigc_Measurement_update_detector_name_from_title(farg1) &
+bind(C, name="_wrap_Measurement_update_detector_name_from_title")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+end subroutine
+
 function swigc_Measurement_detector_number(farg1) &
 bind(C, name="_wrap_Measurement_detector_number") &
 result(fresult)
@@ -1807,6 +1817,15 @@ end function
 
 function swigc_Measurement_energy_calibration(farg1) &
 bind(C, name="_wrap_Measurement_energy_calibration") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_Measurement_mutable_energy_calibration(farg1) &
+bind(C, name="_wrap_Measurement_mutable_energy_calibration") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
@@ -5097,6 +5116,15 @@ integer(C_INT), intent(in) :: farg2
 type(SwigClassWrapper), intent(in) :: farg3
 end subroutine
 
+function swigc_EnergyCalibration_mutable_deviation_pairs(farg1) &
+bind(C, name="_wrap_EnergyCalibration_mutable_deviation_pairs") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
 subroutine swigc_EnergyCalibration_m_type_set(farg1, farg2) &
 bind(C, name="_wrap_EnergyCalibration_m_type_set")
 use, intrinsic :: ISO_C_BINDING
@@ -6855,6 +6883,15 @@ call SWIGTM_fout_char_Sm_(fresult, swig_result)
 call SWIG_free(fresult%data)
 end function
 
+subroutine swigf_Measurement_update_detector_name_from_title(self)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+call swigc_Measurement_update_detector_name_from_title(farg1)
+end subroutine
+
 function swigf_Measurement_detector_number(self) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -7022,6 +7059,19 @@ type(SwigClassWrapper) :: farg1
 
 farg1 = self%swigdata
 fresult = swigc_Measurement_energy_calibration(farg1)
+swig_result%swigdata = fresult
+end function
+
+function swigf_Measurement_mutable_energy_calibration(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(EnergyCalibration) :: swig_result
+class(Measurement), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_mutable_energy_calibration(farg1)
 swig_result%swigdata = fresult
 end function
 
@@ -12088,6 +12138,19 @@ farg2 = nchannels
 farg3 = energies%swigdata
 call swigc_EnergyCalibration_check_lower_energies(farg1, farg2, farg3)
 end subroutine
+
+function swigf_EnergyCalibration_mutable_deviation_pairs(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(DeviationPairs) :: swig_result
+class(EnergyCalibration), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_EnergyCalibration_mutable_deviation_pairs(farg1)
+swig_result%swigdata = fresult
+end function
 
 subroutine swigf_EnergyCalibration_m_type_set(self, m_type)
 use, intrinsic :: ISO_C_BINDING

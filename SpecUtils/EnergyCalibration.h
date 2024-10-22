@@ -299,6 +299,10 @@ namespace SpecUtils
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
     
+    DeviationPairs & mutable_deviation_pairs()
+    {
+       return m_deviation_pairs;
+    }
     EnergyCalType m_type;
     std::vector<float> m_coefficients;
     std::vector<std::pair<float,float>> m_deviation_pairs;

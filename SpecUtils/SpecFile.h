@@ -653,6 +653,9 @@ public:
   //  May be empty string for single detector systems, or otherwise.
   //  ex: Aa1, Ba1, etc.
   const std::string &detector_name() const;
+
+  /// @brief PCFs store the detector name in the title so add the abiltity set update the detector name 
+  void update_detector_name_from_title();
   
   //detector_number(): returns the detector number of the detector within the
   //  detection system.  Will have a 1 to 1 coorespondence with detector_name().
@@ -724,6 +727,11 @@ public:
   
   /** Returns the energy calibration. Will not be null. */
   std::shared_ptr<const EnergyCalibration> energy_calibration() const;
+
+  std::shared_ptr<const EnergyCalibration> mutable_energy_calibration()
+  {
+    return energy_calibration_;
+  }
   
   //channel_energies(): returns a vector containing the starting (lower) energy
   //  of the gamma channels, calculated using the energy calibration
