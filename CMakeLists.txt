@@ -9,8 +9,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
 endif()
 
 project( SpecUtils VERSION 1.0.0 )
-
-enable_testing()
+enable_testing()  # Enable here to allow running `ctest` from top-most build dir
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
@@ -460,8 +459,7 @@ endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 
 if( SpecUtils_BUILD_UNIT_TESTS )
-  enable_testing()  # Enable here to allow running `ctest` from top-most build dir
-
+  include (CTest)
   add_subdirectory( unit_tests )
 endif( SpecUtils_BUILD_UNIT_TESTS )
 
