@@ -64,7 +64,7 @@ namespace  SpecUtils
    Returns empty string if input is not valid.
    Ex. "19-Sep-2014 14:12:01.62"
    */
-  std::string to_vax_string( const time_point_t &t );
+  std::string to_vax_string( time_point_t t );
   
   /** \brief Describes how to attempt to parse date/times when it is ambigous,
    and you might have some prior information based on the source.
