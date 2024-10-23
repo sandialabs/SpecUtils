@@ -5504,7 +5504,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
     // G element of the slider chart
-    self.sliderChart = d3.select("svg").append("g")
+    d3.select(self.chart)
+    
+    self.sliderChart = d3.select(self.chart).select("svg").append("g")
       //.attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
       // .on("mousemove", self.handleMouseMoveSliderChart());
       .on("touchstart", self.handleTouchStartSliderChart())
