@@ -47,11 +47,14 @@
                      -sevenZipPath "C:\Path\To\7z.exe"
 #>
 param (
-    [string]$buildPath = "c:\temp\boost-build",
-    [string]$installPath = "c:\boost-install",
+    [string]$buildPath = "c:\temp\boost-build-py313-try3",
+    [string]$installPath = "c:\boost-install-py313",
     [string]$boostUrl = "https://archives.boost.io/release/1.86.0/source/boost_1_86_0.7z",
     [string]$boostRequiredSha256 = "413ee9d5754d0ac5994a3bf70c3b5606b10f33824fdd56cf04d425f2fc6bb8ce",
-    [string]$sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+    [string]$sevenZipPath = "C:\Program Files\7-Zip\7z.exe",
+    [string]$pythonVersion = "3.13",
+    [string]$pythonIncludeDir = "C:\Users\hpbiven\AppData\Local\Programs\Python\Python313\include",
+    [string]$pythonLibDir = "C:\Users\hpbiven\AppData\Local\Programs\Python\Python313\libs"
 )
 
 if (-not $buildPath -or -not $installPath) {
@@ -89,21 +92,25 @@ $installDir = Resolve-Path -Path $installPath
 Write-Host "Will build in $buildDir"
 Write-Host "Will install to $installDir"
 
-Set-Location -Path $buildDir
+pushd -Path $buildDir
 
-$boostFile = [System.IO.Path]::GetFileName($boostUrl)
-$boostDir = [System.IO.Path]::GetFileNameWithoutExtension($boostFile)
-$boostBuiltFile = "built_$boostDir"
+$boostZipFile = [System.IO.Path]::GetFileName($boostUrl)
+$boostDir = [System.IO.Path]::GetFileNameWithoutExtension($boostZipFile)
+$boostBuildStatusFile = "built_$boostDir"
 
-if (-not (Test-Path -Path $boostBuiltFile)) {
-    if (-not (Test-Path -Path $boostFile)) {
-        Invoke-WebRequest -Uri $boostUrl -OutFile $boostFile
-        Write-Host "Downloaded Boost"
+# Determine the user's Downloads folder path
+$downloadsFolder = [System.IO.Path]::Combine([System.Environment]::GetFolderPath('UserProfile'), 'Downloads')
+$boostZipFilePath = [System.IO.Path]::Combine($downloadsFolder, $boostZipFile)
+
+if (-not (Test-Path -Path $boostBuildStatusFile)) {
+    if (-not (Test-Path -Path $boostZipFilePath)) {
+        Invoke-WebRequest -Uri $boostUrl -OutFile $boostZipFilePath
+        Write-Host "Downloaded Boost to $boostZipFilePath"
     } else {
-        Write-Host "$boostFile already downloaded"
+        Write-Host "$boostZipFile already downloaded in $downloadsFolder"
     }
 
-    $boostSha256 = (Get-FileHash -Path $boostFile -Algorithm SHA256).Hash
+    $boostSha256 = (Get-FileHash -Path $boostZipFilePath -Algorithm SHA256).Hash
 
     if ($boostSha256 -ne $boostRequiredSha256) {
         Write-Host "Invalid hash of boost. Expected $boostRequiredSha256 and got $boostSha256"
@@ -112,8 +119,8 @@ if (-not (Test-Path -Path $boostBuiltFile)) {
     }
 
     if (-not (Test-Path -Path $boostDir)) {
-        & "C:\Program Files\7-Zip\7z.exe" x $boostFile -o"$buildDir"
-        Write-Host "Unzipped $boostFile"
+        & "$sevenZipPath" x $boostZipFilePath -o"$buildDir"
+        Write-Host "Unzipped $boostZipFilePath"
     } else {
         Write-Host "Boost was already unzipped"
     }
@@ -124,18 +131,17 @@ if (-not (Test-Path -Path $boostBuiltFile)) {
     & cmd /c .\bootstrap.bat
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Failed to run bootstrap.bat"
-        Set-Location -Path $origDir
+        popd
         exit 2
     }
 
     Write-Host "Building boost"
-    & .\b2.exe --build-type=minimal --with-system --with-python runtime-link=static link=static threading=multi variant=release address-model=64 architecture=x86 --prefix=$installDir --build-dir=win_build -j8 install
-    # if you want everything
+    & .\b2.exe --build-type=minimal --with-python runtime-link=static link=static threading=multi variant=release address-model=64 architecture=x86 --prefix=$installDir --build-dir=win_build -j8 install toolset=msvc-14.3 python=$pythonVersion 
     #& .\b2.exe --build-type=complete runtime-link=static link=static threading=multi address-model=64 architecture=x86 --prefix=$installDir --build-dir=win_build -j8 install
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Failed to build boost"
-        Set-Location -Path $origDir
-        exit 2
+        popd
+        exit 3
     }
     #Remove-Item -Recurse -Force win_build
 
@@ -147,12 +153,12 @@ if (-not (Test-Path -Path $boostBuiltFile)) {
     #Remove-Item -Recurse -Force $boostDir
     #Write-Host "Removed $boostDir directory"
 
-    New-Item -ItemType File -Path $boostBuiltFile | Out-Null
+    New-Item -ItemType File -Path $boostBuildStatusFile | Out-Null
 } else {
-    Write-Host "Boost was already built ($boostBuiltFile existed)"
+    Write-Host "Boost was already built ($boostBuildStatusFile existed)"
 }
 
 Write-Host "Completed Successfully"
-Set-Location -Path $origDir
+popd
 
 exit 0
