@@ -5738,7 +5738,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     {
     }//if( !measurements_.empty() )
     
-    if( uuid_.empty() )
+    // If the spectrum file didnt specify a UUID, we will generate one.
+    //  Also, at least some R225 detectors, which have a format like "{3b01677f-...274}",
+    //  seem to always use the same UUID, so we will regenerate for those as well.
+    if( uuid_.empty() || ((uuid_.front() == '{') && (uuid_.back() == '}')) )
       uuid_ = generate_psuedo_uuid();
     
     set_detector_type_from_other_info();
