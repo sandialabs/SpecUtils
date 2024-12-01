@@ -47,7 +47,7 @@ using namespace std;
 namespace SpecUtils
 {
 const size_t EnergyCalibration::sm_min_channels = 1;
-const size_t EnergyCalibration::sm_max_channels = 65536 + 8;
+const size_t EnergyCalibration::sm_max_channels = 131072; //65536 + 8;
 
 const float EnergyCalibration::sm_polynomial_offset_limit = 5500.0f;
   
@@ -121,7 +121,9 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
     throw runtime_error( "EnergyCalibration::set_polynomial: requires >=1 channels" );
   
   if( num_channels > sm_max_channels )
-    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with <= 64k channels" );
+    throw runtime_error( "EnergyCalibration::set_polynomial: must be called with <= "
+                        + std::to_string(sm_max_channels) + " channels"
+                        " (called for " + std::to_string(num_channels) + ")" );
   
   //Find the last non-zero coefficients (e.g., strip off trailing zeros)
   size_t last_iter = coeffs.size();
