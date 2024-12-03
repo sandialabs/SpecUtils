@@ -2134,11 +2134,40 @@ std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_inf
           }
         }//for( auto &meas : measurements )
       }//if( we can re-use energy cal ) / else
-    }//if( !spec.m_energy_cal_coeffs.empty() )
+    }else if( first_cal && (spec.m_channel_data.size() == first_cal->num_channels()) )
+    {
+      // If no energy cal specified, see if one for this number of channels was already given.
+      m->set_energy_calibration( first_cal );
+    }//if( !spec.m_energy_cal_coeffs.empty() ) / else
     
     measurements.push_back( m );
     specfile->add_measurement( m, false );
   }//for( const UrlSpectrum &spec : spec_infos )
+  
+  // If energy calibrations were not specified for any of the measurements, try to copy from another
+  //  (this is unlikely to be needed, because usually the first spectrum will have energy cal, and
+  //   the check above will fill in subsequent, but this is jic energy cal was specified for second
+  //   one, and not first).
+  for( size_t i = 0; i < measurements.size(); ++i )
+  {
+    auto m = measurements[i];
+    assert( m );
+    auto cal = m->energy_calibration();
+    if( cal && cal->valid() )
+      continue;
+    
+    for( size_t j = 0; j < measurements.size(); ++j )
+    {
+      auto other_cal = measurements[j]->energy_calibration();
+      if( (i != j) && other_cal && other_cal->valid()
+          && (m->num_gamma_channels() == other_cal->num_channels()) )
+      {
+        m->set_energy_calibration( other_cal );
+        break;
+      }
+    }//
+  }//for( size_t i = 0; i < measurements.size(); ++i )
+  
   
   specfile->cleanup_after_load();
   
