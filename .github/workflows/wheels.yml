@@ -25,7 +25,7 @@ jobs:
       run: pipx run build --sdist ./bindings/python
 
     - name: Check metadata
-      run: pipx run twine check dist/*
+      run: pipx run twine check ./bindings/pythondist/*
 
     - uses: actions/upload-artifact@v4
       with:
