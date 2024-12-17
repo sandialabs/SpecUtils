@@ -7,7 +7,13 @@ To compile the bindings, run the following commands:
 ```
 mkdir my_venv
 python3 -m venv my_venv
+
+# Activate the virtual environment
+# Unix: 
 source my_venv/bin/activate
+# Windows PowerShell
+#.\my_venv\Scripts\Activate.ps1
+
 cd my_venv
 pip install /path/to/SpecUtils/bindings/python
 ```

@@ -82,5 +82,6 @@ nanobind_add_stub(
   SpecUtils_stub
     MODULE SpecUtils
     OUTPUT SpecUtils.pyi
+    PYTHON_PATH $<TARGET_FILE_DIR:PySpecUtils>
     DEPENDS PySpecUtils
 )
