@@ -18,7 +18,7 @@ jobs:
         #platform: [windows-latest, macos-latest, ubuntu-latest]
         #platform: [macos-latest, ubuntu-latest]
         platform: [ubuntu-latest]
-        python-version: ["3.8", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
