@@ -7,7 +7,7 @@ name = "SpecUtils"
 version = "0.0.1"
 description = "Python bindings for SpecUtils using nanobind and scikit-build"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 authors = [
     { name = "Will Johnson", email = "wcjohns@sandia.gov" },
 ]
