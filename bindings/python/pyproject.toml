@@ -3,7 +3,7 @@ requires = ["scikit-build-core >=0.10", "nanobind >=1.3.2", "typing-extensions >
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "SpecUtils"
+name = "SandiaSpecUtils"
 version = "0.0.1"
 description = "Python bindings for SpecUtils using nanobind and scikit-build"
 readme = "README.md"
