@@ -48,6 +48,8 @@ jobs:
         submodules: true
 
     - uses: pypa/cibuildwheel@v2.22
+      with:
+        package-dir: ./bindings/python
 
     - name: Verify clean directory
       run: git diff --exit-code
