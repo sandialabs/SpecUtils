@@ -82,7 +82,6 @@ jobs:
       run: |
         pwd
         ls
-        ls ./*/
 
     - uses: pypa/gh-action-pypi-publish@release/v1
       with:
