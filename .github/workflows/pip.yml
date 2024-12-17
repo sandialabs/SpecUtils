@@ -33,7 +33,7 @@ jobs:
     - name: Build and install
       run: |
         python -m pip install pytest
-        pip install --verbose .
+        pip install --verbose ./bindings/python
 
     - name: Test
       run: python -m pytest
