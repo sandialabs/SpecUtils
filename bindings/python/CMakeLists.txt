@@ -1,6 +1,8 @@
-CMakeLists.txtcmake_minimum_required(VERSION 3.15...3.26)
+cmake_minimum_required(VERSION 3.15...3.26)
 
 project(SpecUtils_py LANGUAGES CXX)
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set( SpecUtils_ENABLE_D3_CHART ON CACHE BOOL "" )
 set( SpecUtils_D3_SUPPORT_FILE_STATIC ON CACHE BOOL "" )
@@ -12,7 +14,6 @@ set( SpecUtils_SHARED_LIB OFF CACHE BOOL "" )  #we'll statically link SpecUtils 
 set( SpecUtils_FLT_PARSE_METHOD "strtod" CACHE STRING "Float parsing method" )
 
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
-
 
 if (NOT SKBUILD)
   message(FATAL_ERROR "\
@@ -72,7 +73,6 @@ nanobind_add_module(
 
 set_target_properties( PySpecUtils PROPERTIES OUTPUT_NAME "SpecUtils" )
 target_link_libraries( PySpecUtils PUBLIC SpecUtils )
-set_target_properties(TARGET PySpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 # Install directive for scikit-build-core
 install(TARGETS PySpecUtils LIBRARY DESTINATION SpecUtils)
