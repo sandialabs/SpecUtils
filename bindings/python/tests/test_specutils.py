@@ -2,12 +2,18 @@ import unittest
 import SpecUtils
 from datetime import datetime
 
+import os
+from pathlib import Path
+
+
 class TestSpecUtilsBasic(unittest.TestCase):
     def setUp(self):
         self.spec = SpecUtils.SpecFile()
 
     def test_load_file(self):
-        self.spec.loadFile("examples/passthrough.n42", SpecUtils.ParserType.Auto)
+        script_dir = Path(__file__).parent.resolve()
+        file_path = os.path.join(script_dir, "..", "examples", "passthrough.n42")
+        self.spec.loadFile(file_path, SpecUtils.ParserType.Auto)
         self.assertTrue(self.spec.numMeasurements() > 0)
 
     def test_create_measurement(self):
