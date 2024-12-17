@@ -78,8 +78,14 @@ jobs:
       with:
         pattern: dist-*
         merge-multiple: true
+    - shell: bash
+      run: |
+        pwd
+        ls
+        ls ./*/
 
     - uses: pypa/gh-action-pypi-publish@release/v1
       with:
+        packages-dir: /home/runner/work/SpecUtils/SpecUtils
         user: __token__
         password: ${{ secrets.pypi_password }}
