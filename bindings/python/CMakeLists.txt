@@ -14,10 +14,9 @@ set( SpecUtils_FLT_PARSE_METHOD "strtod" CACHE STRING "Float parsing method" )
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
 
 if (NOT SKBUILD)
-  message(WARNING "\
-  This CMake file is meant to be executed using 'scikit-build'. Running
-  it directly will almost certainly not produce the desired result. If
-  you are a user trying to install this package, please use the command
+  message(FATAL_ERROR "\
+  This CMake file is must be executed using 'scikit-build'. 
+  If you are a user trying to install this package, please use the command
   below, which will install all necessary build dependencies, compile
   the package in an isolated environment, and then install it.
   =====================================================================
@@ -28,7 +27,7 @@ if (NOT SKBUILD)
   in your environment once and use the following command that avoids
   a costly creation of a new virtual environment at every compilation:
   =====================================================================
-   $ pip install nanobind scikit-build-core[pyproject]
+   $ pip install nanobind scikit-build-core
    $ pip install --no-build-isolation -ve .
   =====================================================================
   You may optionally add -Ceditable.rebuild=true to auto-rebuild when

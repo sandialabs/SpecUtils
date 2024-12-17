@@ -46,7 +46,7 @@ static_assert( SpecUtils_D3_SUPPORT_FILE_STATIC,
 #include <locale>
 #include <limits>
 #include <memory>
-#include <iostream>
+#include <fstream> // temporary for testing
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -54,7 +54,10 @@ static_assert( SpecUtils_D3_SUPPORT_FILE_STATIC,
 #include <nanobind/nanobind.h>
 
 #include <datetime.h>  // compile with -I/path/to/python/include
+#include <nanobind/stl/set.h>
 #include <nanobind/stl/chrono.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/shared_ptr.h>
 
 
 using namespace std;
@@ -65,184 +68,289 @@ namespace
 {
   //Begin structs to help convert between c++ and python
   
-  class PythonInputDevice
-  {
-  public:
-    typedef char char_type;
-    //typedef boost::iostreams::seekable_device_tag category;
-    
-    explicit PythonInputDevice( py::object object ) : object_(object)
-    {}
-    
-    std::streamsize write( const char *s, std::streamsize n )
-    {
-      return 0;
-    }
-    
-    std::streamsize read( char_type *buffer, std::streamsize buffer_size )
-    {
-      py::object pyread = object_.attr( "read" );
-      if( pyread.is_none() )
-        throw std::runtime_error( "Python stream has no attibute 'read'" );
-      
-      py::object py_data = pyread( buffer_size );
-      const std::string data = py::cast<std::string>( py_data );
-      
-      if( data.empty() && buffer_size != 0 )
-        return -1;
-      
-      std::copy( data.begin(), data.end(), buffer );
-      
-      return data.size();
-    }//read()
-    
-    
-    std::streamoff seek( std::streamoff offset, std::ios_base::seekdir way )
-    {
-      int pway = 0;
-      switch( way )
-      {
-        case std::ios_base::beg: pway = 0; break;
-        case std::ios_base::cur: pway = 1; break;
-        case std::ios_base::end: pway = 2; break;
-      }//switch( way )
-      
-      py::object pyseek = object_.attr( "seek" );
-      py::object pytell = object_.attr( "tell" );
-      
-      if( pyseek.is_none() )
-        throw std::runtime_error( "Python stream has no attribute 'seek'" );
-      
-      if( pytell.is_none() )
-        throw std::runtime_error( "Python stream has no attribute 'tell'" );
-      
-      const py::object pynewpos = pyseek( offset, pway );
-      const py::object pyoffset = pytell();
-      const std::streamoff newpos = py::cast<std::streamoff>( pyoffset );
-    
-      return newpos;
-    }//seek()
-    
-  private:
-    py::object object_;
-  };//class PythonInputDevice
-    
-  
-  
-  /*
-  class PythonOutputDevice
-  {
-    //see https://stackoverflow.com/questions/26033781/converting-python-io-object-to-stdostream-when-using-boostpython
-  public:
-    typedef char char_type;
-    
-    //struct category : boost::iostreams::sink_tag, boost::iostreams::flushable_tag
-    //{};
-    
-    explicit PythonOutputDevice( py::object object ) : object_( object )
-    {}
-    
-    std::streamsize write( const char *buffer, std::streamsize buffer_size )
-    {
-      py::object pywrite = object_.attr( "write" );
-      
-      if( pywrite.is_none() )
-        throw std::runtime_error( "Python stream has no attribute 'write'" );
-      
-      // If we are writing a large output (buffer_size >= 4096), we wont necassarily write
-      //  all the bytes in one go.  When this happens, it seems future writes fail, and we dont
-      //  get the output we want.  So instead, we will do a loop here to force writing everything...
-      std::streamsize nwritten = 0;
-      while( nwritten < buffer_size )
-      {
-        const auto buff_start = buffer + nwritten;
-        const auto nbytes_to_write = buffer_size - nwritten;
-
-        // Python 3
-        Py_buffer pybuffer;
-        int res = PyBuffer_FillInfo(&pybuffer, 0, (void *)buff_start, nbytes_to_write, true, PyBUF_CONTIG_RO);
-        if (res == -1) {
-          PyErr_Print();
-          throw std::runtime_error( "Python stream error writing to buffer" );
+  /** Class to wrap a output python stream, so that we can use it as a c++ streambuf
+   */
+  class OutputStreambuf : public std::streambuf {
+    public:
+    OutputStreambuf(py::object python_stream) 
+        : python_stream(python_stream) {
+        // Check for required methods
+        if (!hasattr(python_stream, "write")) {
+            throw std::runtime_error("Python stream has no 'write' method");
         }
-        py::object data( py::handle(PyMemoryView_FromBuffer(&pybuffer)) );
-
-        py::object pynwrote = pywrite( data );
-        const std::streamsize bytes_written = py::cast<std::streamsize>( pynwrote );
+        if (!hasattr(python_stream, "flush")) {
+            throw std::runtime_error("Python stream has no 'flush' method");
+        }
         
-        nwritten += bytes_written;
+        buffer_.resize(buffer_size);
+        setp(&buffer_.front(), &buffer_.front() + buffer_size);
+    }
+
+    ~OutputStreambuf() override {
+      sync();
+    }
+
+    int overflow(int c) override {
+        if (sync() == -1) {
+            return EOF;
+        }
+
+        if (c != EOF) {
+            *pptr() = c;
+            pbump(1);
+        }
+
+        return c;
+    }
+
+    int sync() override {
+        const std::ptrdiff_t n = pptr() - pbase();
+        if (n > 0) {
+            py::bytes data(pbase(), n);
+            python_stream.attr("write")(data);
+            python_stream.attr("flush")();
+            setp(pbase(), epptr());  // Reset put pointer
+        }
+        return 0;
+    }
+
+    py::object python_stream;
+    static const size_t buffer_size = 4096;  // Adjust buffer size as needed
+    std::vector<char> buffer_;
+  };//class OutputStreambuf : public std::streambuf
+  
+
+/*
+// Simple version of OutputStreambuf that writes a byte at a time.
+//  I think the more efficient version of this class above is working well, but keeping this
+//  around until done with testing.
+ class OutputStreambuf : public std::streambuf {
+public:
+    OutputStreambuf(py::object python_stream) : python_stream(python_stream) {}
+
+    int overflow(int c) override {
+        if (c != EOF) {
+            char ch = c;
+            py::bytes data(&ch, 1);
+            python_stream.attr("write")(data);
+        }
+        return 0;
+    }
+
+    int sync() override {
+        python_stream.attr("flush")();
+        return 0;
+    }
+
+    py::object python_stream;
+};
+*/
+
+  class PythonInputStreambuf : public std::streambuf {
+public:
+  explicit PythonInputStreambuf(py::object python_stream) 
+    : python_stream_(python_stream), 
+      buffer_(buffer_size),
+      read_position_(0),
+      buffer_filled_(0)
+  {
+    // Set the get buffer
+    char *base = &buffer_.front();
+    setg(base, base, base);
+  }
+
+  py::object get_python_stream() const {
+    return python_stream_;
+  }
+protected:
+  // Called when buffer is empty and more input is needed
+  int_type underflow() override {
+    if (gptr() < egptr()) // buffer not exhausted
+      return traits_type::to_int_type(*gptr());
+    
+    // Get more data from Python stream
+    py::object pyread = python_stream_.attr("read");
+    if (pyread.is_none()){
+      cerr << "PythonInputStreambuf::underflow: pyread is none" << endl;
+      return traits_type::eof();
+    }
+        
+    // Try to fill our buffer
+    py::object py_data = pyread(buffer_size);
+    
+    // This next line requires the file to be opened binary mode - if in text mode, we would cast to string instead
+    py::bytes bytes_data = py::cast<py::bytes>(py_data);
+    const char* data = bytes_data.c_str();
+    size_t size = bytes_data.size();
+    
+    if ( !size ){
+      cerr << "PythonInputStreambuf::underflow: size is 0" << endl;
+      return traits_type::eof();
+    }
+
+    // Copy to our buffer
+    std::copy(data, data + size, &buffer_.front());
+
+    // Set buffer pointers
+    char *base = &buffer_.front();
+    setg(base, base, base + bytes_data.size());
+
+    return traits_type::to_int_type(*gptr());
+  }
+
+  // Support for seeking
+  std::streampos seekpos(std::streampos pos, std::ios_base::openmode which) override {
+    cerr << "PythonInputStreambuf::seekpos: 0" << endl;
+    if (which & std::ios_base::in) {
+      py::object pyseek = python_stream_.attr("seek");
+      if (!pyseek.is_none()) {
+        cerr << "PythonInputStreambuf::seekpos: " << pos  << " which: " << which << endl;
+        pyseek(pos, 0);
+        
+        // Reset our buffer
+        char *base = &buffer_.front();
+        setg(base, base, base);
+        
+        return pos;
+      }else{
+        cerr << "Python stream has no attribute 'seek'" << endl;
+      }
+    }else{
+      cerr << "Python stream is not input" << endl;
+    }
+    return -1;
+  }
+
+  std::streampos seekoff(std::streamoff off, std::ios_base::seekdir way,
+                        std::ios_base::openmode which) override 
+  {
+    // This function returns the new absolute position, or -1 if an error occurs.
+
+    if (which & std::ios_base::in) {
+
+      py::object pyseek = python_stream_.attr("seek");
+      if (pyseek.is_none()) {
+        cerr << "PythonInputStreambuf::seekoff: pyseek is none" << endl;
+        return -1;
       }
 
-      return nwritten;
-    }
-    
-    bool flush()
-    {
-      py::object flush = object_.attr( "flush" );
-      
-      if( flush.is_none() )
-        throw std::runtime_error( "Python stream has no attribute 'flush'" );
-        
-      flush();
-      return true;
-    }
-    
-  private:
-    py::object object_;
-  };//class PythonOutputDevice
-  */
-  
-/*
-  struct ChronoTimePointTypeCaster : nanobind::detail::type_caster<SpecUtils::time_point_t>
-  {
-    bool from_python( py::handle src, uint8_t flags, cleanup_list* cleanup) noexcept override {
-        if (!PyDateTime_Check(src.ptr())) {
-            return false; // Not a datetime object
+      py::object pytell = python_stream_.attr("tell");
+      if( pytell.is_none() ) {
+        cerr << "PythonInputStreambuf::seekoff: pytell is none" << endl;
+        return -1;
+      }
+
+
+      int whence;
+      switch( way ) 
+      {
+        case std::ios_base::beg: 
+        {
+          whence = 0; 
+          break;
         }
 
-        PyDateTime_DateTime* datetime_obj = (PyDateTime_DateTime*)src.ptr();
+        case std::ios_base::cur: 
+        {
+          // In seeking relative to current position, we have issue an issue since we are internally buffering
+          //  the data, so we need that position as well as the python file position.
+          //  To fix this up, we will just use whence = 0 (absolute from begining), and convert our relative
+          //  offset an absolute offset, and use whence = 0.
+          // whence = 1; 
+          
 
-        int year = PyDateTime_GET_YEAR(datetime_obj);
-        int month = PyDateTime_GET_MONTH(datetime_obj);
-        int day = PyDateTime_GET_DAY(datetime_obj);
-        int hour = PyDateTime_GET_HOUR(datetime_obj);
-        int minute = PyDateTime_GET_MINUTE(datetime_obj);
-        int second = PyDateTime_GET_SECOND(datetime_obj);
-        int microsecond = PyDateTime_GET_MICROSECOND(datetime_obj);
+          std::streamoff python_pos;
+          try 
+          {
+            // Casting to a std::streamoff causes an exception, so we cast to int64_t instead.
+            python_pos = py::cast<int64_t>(pytell());
+          } catch (const std::exception &e) {
+            cerr << "PythonInputStreambuf::seekoff: error in pytell: " << e.what() << endl;
+            return -1;
+          }catch( ... )
+          {
+            cerr << "PythonInputStreambuf::seekoff: error in pytell - unspecified exception" << endl;
+            return -1;
+          }
+          
+          const std::streamoff buffered = egptr() - gptr();
+          
+          // If we are being called with off == 0, we just want to return the current position
+          if( off == 0 )
+            return (python_pos - buffered);
 
-        std::tm timeinfo = {};
-        timeinfo.tm_year = year - 1900;
-        timeinfo.tm_mon = month - 1;
-        timeinfo.tm_mday = day;
-        timeinfo.tm_hour = hour;
-        timeinfo.tm_min = minute;
-        timeinfo.tm_sec = second;
+          // Otherwise, we need to convert our relative offset to an absolute offset
+          whence = 0;
+          off = (python_pos - buffered) + off;
+        
+          break;
+        }
 
-        std::time_t tt = std::mktime(&timeinfo);
-        value = std::chrono::system_clock::from_time_t(tt);
-        value += std::chrono::microseconds(microsecond);
+        case std::ios_base::end:
+        {
+           whence = 2; 
+           break;
+        }
 
-        return true;
+        default: return -1;
+      }
+
+      // Reset our buffer
+      char *base = &buffer_.front();
+      setg(base, base, base);
+
+      pyseek(off, whence);
+        
+      // Get current position
+      std::streamoff pos;
+      try
+      {
+        pos = py::cast<int64_t>(pytell());
+      }catch( ... )
+      {
+        cerr << "PythonInputStreambuf::seekoff: error in pytell - error converting python pos to int64_t" << endl;
+        if( whence == 0 )
+          return off; //assume the call to pyseek was successful
+        else
+          return -1; //We dont know the file size, otherwise we could do filesize - off
+      }
+          
+      return pos;
+    }else{
+      cerr << "Python stream is not input" << endl;
     }
+    return -1;
+  }
 
-    // Convert MyCustomType to Python object
-    handle to_python(const SpecUtils::time_point_t& src, rv_policy policy, cleanup_list* cleanup) noexcept override {
-        std::time_t tt = std::chrono::system_clock::to_time_t(src);
-        std::tm* timeinfo = std::localtime(&tt);
+private:
+  py::object python_stream_;
+  static const size_t buffer_size;
+  std::vector<char> buffer_;
+  size_t read_position_;
+  size_t buffer_filled_;
+};//class PythonInputStreambuf
+const size_t PythonInputStreambuf::buffer_size = 4096;
 
-        auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(src.time_since_epoch()).count() % 1000000;
 
-        return PyDateTime_FromDateAndTime(timeinfo->tm_year + 1900, 
-                                          timeinfo->tm_mon + 1, 
-                                          timeinfo->tm_mday, 
-                                          timeinfo->tm_hour, 
-                                          timeinfo->tm_min, 
-                                          timeinfo->tm_sec, 
-                                          microseconds);
-    }
-  };
-  */
-  
+/** Class to wrap a python stream, so that we can use it as a c++ istream
+ */
+class PythonInputStream : public std::istream {
+public:
+  explicit PythonInputStream(py::object python_stream)
+    : std::istream(nullptr),
+      streambuf_(python_stream)
+  {
+    rdbuf(&streambuf_);
+  }
+
+  py::object get_python_stream() const {
+    return streambuf_.get_python_stream();
+  }
+private:
+  PythonInputStreambuf streambuf_;
+};//class PythonInputStream
+
+
   
   
   void pyListToSampleNumsOrNames( const py::list &dn_list, 
@@ -319,6 +427,151 @@ namespace
     }//if( !success )
   }//loadFile(...)
   
+
+/* All these load*_wrapper functions are because I couldnt get nanbind to 
+to automatically convert the python stream to a c++ istream (i.e. PythonInputStreambuf).
+*/
+bool loadFromN42_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_N42(input);
+}
+
+bool loadFromIaeaSpc_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_iaea_spc(input);
+}
+
+bool loadFromBinarySpc_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_binary_spc(input);
+}
+
+bool loadFromBinaryExploranium_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_binary_exploranium(input);
+}
+
+bool loadFromPcf_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_pcf(input);
+}
+
+bool loadFromTxtOrCsv_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_txt_or_csv(input);
+}
+
+bool loadFromGr135Txt_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_Gr135_txt(input);
+}
+
+bool loadFromSpectroscopicDailyFile_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_spectroscopic_daily_file(input);
+}
+
+bool loadFromSrpm210Csv_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_srpm210_csv(input);
+}
+
+bool loadFromD3SRaw_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_D3S_raw(input);
+}
+
+bool loadFromAmptekMca_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_amptek_mca(input);
+}
+
+bool loadFromOrtecListmode_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_ortec_listmode(input);
+}
+
+bool loadFromLsrmSpe_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_lsrm_spe(input);
+}
+
+bool loadFromTka_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_tka(input);
+}
+
+bool loadFromMultiact_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_multiact(input);
+}
+
+bool loadFromPhd_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_phd(input);
+}
+
+bool loadFromLzs_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_lzs(input);
+}
+
+bool loadFromRadiacode_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_radiacode(input);
+}
+
+bool loadFromRadiacodeSpectrogram_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_radiacode_spectrogram(input);
+}
+
+bool loadFromXmlScanData_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_xml_scan_data(input);
+}
+
+bool loadFromIaea_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_iaea(input);
+}
+
+bool loadFromChn_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_chn(input);
+}
+
+bool loadFromCnf_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_cnf(input);
+}
+
+bool loadFromTracsMps_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_tracs_mps(input);
+}
+
+bool loadFromAram_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_aram(input);
+}
+
+bool loadFromJson_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_json(input);
+}
+
+bool loadFromCaenGxml_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_caen_gxml(input);
+}
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+    PythonInputStream input(pystream);
+    return info->load_from_uri(input);
+}
+#endif
   
   //I couldnt quite figure out how to get Python to play nicely with const
   //  references to smart pointers, so instead am using some thin wrapper
@@ -504,42 +757,42 @@ namespace
   
   void writePcf_wrapper( const SpecUtils::SpecFile *info, py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( !info->write_pcf( output ) )
-    //  throw std::runtime_error( "Failed to write PCF file." );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( !info->write_pcf( output ) )
+      throw std::runtime_error( "Failed to write PCF file." );
   }
   
   void write2006N42_wrapper( const SpecUtils::SpecFile *info, py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( !info->write_2006_N42( output ) )
-    //  throw std::runtime_error( "Failed to write 2006 N42 file." );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( !info->write_2006_N42( output ) )
+      throw std::runtime_error( "Failed to write 2006 N42 file." );
   }
   
   void write2012N42Xml_wrapper( const SpecUtils::SpecFile *info, py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( !info->write_2012_N42( output ) )
-    //  throw std::runtime_error( "Failed to write 2012 N42 file." );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( !info->write_2012_N42( output ) )
+      throw std::runtime_error( "Failed to write 2012 N42 file." );
   }
   
   void writeCsv_wrapper( const SpecUtils::SpecFile *info, py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( !info->write_csv( output ) )
-    //  throw std::runtime_error( "Failed to write CSV file." );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( !info->write_csv( output ) )
+      throw std::runtime_error( "Failed to write CSV file." );
   }
   
   void writeTxt_wrapper( const SpecUtils::SpecFile *info, py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( !info->write_txt( output ) )
-    //  throw std::runtime_error( "Failed to TXT file." );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( !info->write_txt( output ) )
+      throw std::runtime_error( "Failed to TXT file." );
   }
   
   void writeIntegerChn_wrapper( const SpecUtils::SpecFile *info,
@@ -562,30 +815,28 @@ namespace
     for( size_t i = 0; i < n; ++i )
       det_names.push_back( py::cast<std::string>( dn_list[i] ) );
     
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( !info->write_integer_chn( output, sample_nums, det_names ) )
-    //  throw std::runtime_error( "Failed to write Integer CHN file." );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( !info->write_integer_chn( output, sample_nums, det_names ) )
+      throw std::runtime_error( "Failed to write Integer CHN file." );
   }
   
   
   void setInfoFromN42File_wrapper( SpecUtils::SpecFile *info,
                                   py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonInputDevice> input( pystream );
-    //if( !info->load_from_N42( input ) )
-    //  throw std::runtime_error( "Failed to decode input as a valid N42 file." );
+    PythonInputStream input(pystream);
+    if (!info->load_from_N42(input))
+      throw std::runtime_error("Failed to decode input as a valid N42 file.");
   }//setInfoFromN42File_wrapper(...)
   
   
   void setInfoFromPcfFile_wrapper( SpecUtils::SpecFile *info,
                                   py::object pystream )
   {
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonInputDevice> input( pystream );
-    //if( !info->load_from_pcf( input ) )
-    //  throw std::runtime_error( "Failed to decode input as a valid PCF file." );
+    PythonInputStream input(pystream);
+    if (!info->load_from_pcf(input))
+      throw std::runtime_error("Failed to decode input as a valid PCF file.");
   }//setInfoFromPcfFile_wrapper(...)
   
 
@@ -639,12 +890,12 @@ namespace
     
     pyListToSampleNumsOrNames( dn_list, det_names, det_nums );
 
-    throw runtime_error( "not imp" );
-    //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-    //if( det_names.size() )
-    //  info->write( output, sample_nums, det_names, type );
-    //else
-    //  info->write( output, sample_nums, det_nums, type );
+    OutputStreambuf outputbuf( pystream );
+    std::ostream output( &outputbuf );
+    if( det_names.size() )
+      info->write( output, sample_nums, det_names, type );
+    else
+      info->write( output, sample_nums, det_nums, type );
   }
 
   void removeMeasurement_wrapper( SpecUtils::SpecFile *info,
@@ -817,10 +1068,9 @@ bool write_spectrum_data_js_wrapper( py::object pystream,
                                     const D3SpectrumExport::D3SpectrumOptions *options,
                                     const size_t specID, const int backgroundID )
 {
-  throw runtime_error( "not imp" );
-  return false;
-  //boost::iostreams::stream<PythonOutputDevice> output( pystream ); 
-  //return D3SpectrumExport::write_spectrum_data_js( output, *meas, *options, specID, backgroundID );
+  OutputStreambuf outputbuf( pystream );
+  std::ostream output( &outputbuf );
+  return D3SpectrumExport::write_spectrum_data_js( output, *meas, *options, specID, backgroundID );
 }
 
 
@@ -829,10 +1079,9 @@ bool write_d3_html_wrapper( py::object pystream,
                             py::list meas_list,
                             D3SpectrumExport::D3SpectrumChartOptions options )
 {
-  throw runtime_error( "not imp" );
-  return false;
-  //boost::iostreams::stream<PythonOutputDevice> output( pystream );
- 
+  OutputStreambuf outputbuf( pystream );
+  std::ostream output( &outputbuf );
+    
   // From python the list would be like: [(meas_0,options_0),(meas_1,options_1),(meas_2,options_2)]
   
   vector<pair<const SpecUtils::Measurement *,D3SpectrumExport::D3SpectrumOptions>> meass;
@@ -846,16 +1095,16 @@ bool write_d3_html_wrapper( py::object pystream,
     meass.push_back( std::make_pair(meas,opts) );
   }
   
-  //return D3SpectrumExport::write_d3_html( output, meass, options );
+  return D3SpectrumExport::write_d3_html( output, meass, options );
 }
  
 bool write_and_set_data_for_chart_wrapper( py::object pystream,
                                            const std::string &div_name,
                                            py::list meas_list )
  {
-   //boost::iostreams::stream<PythonOutputDevice> output( pystream );
- throw runtime_error( "not imp" );
-  return false;
+   OutputStreambuf outputbuf( pystream );
+   std::ostream output( &outputbuf );
+    
    vector<pair<const SpecUtils::Measurement *,D3SpectrumExport::D3SpectrumOptions>> meass;
    
    size_t n = meas_list.size();
@@ -867,17 +1116,15 @@ bool write_and_set_data_for_chart_wrapper( py::object pystream,
      meass.push_back( std::make_pair(meas,opts) );
    }
 
-   //return write_and_set_data_for_chart( output, div_name, meass );
+   return write_and_set_data_for_chart( output, div_name, meass );
  }
 
 
 bool write_html_page_header_wrapper( py::object pystream, const std::string &page_title )
 {
-  throw runtime_error( "not imp" );
-  return false;
-  
-  //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-  //return D3SpectrumExport::write_html_page_header( output, page_title );
+  OutputStreambuf outputbuf( pystream );
+  std::ostream output( &outputbuf );
+  return D3SpectrumExport::write_html_page_header( output, page_title );
 }
 
 
@@ -886,12 +1133,11 @@ bool write_js_for_chart_wrapper( py::object pystream, const std::string &div_nam
                         const std::string &x_axis_title,
                         const std::string &y_axis_title )
 {
-  throw runtime_error( "not imp" );
-  return false;
-  //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-  
-  //return D3SpectrumExport::write_js_for_chart( output, div_name, chart_title,
-  //                                                    x_axis_title, y_axis_title );
+  OutputStreambuf outputbuf( pystream );
+  std::ostream output( &outputbuf );
+
+  return D3SpectrumExport::write_js_for_chart( output, div_name, chart_title,
+                                                      x_axis_title, y_axis_title );
 }
 
 
@@ -900,22 +1146,18 @@ bool write_set_options_for_chart_wrapper( py::object pystream,
                                           const std::string &div_name,
                                           const D3SpectrumExport::D3SpectrumChartOptions &options )
 {
-  throw runtime_error( "not imp" );
-  return false;
-  //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-  
-  //return write_set_options_for_chart( output, div_name, options );
+  OutputStreambuf outputbuf( pystream );
+  std::ostream output( &outputbuf );
+  return write_set_options_for_chart( output, div_name, options );
 }
 
 bool write_html_display_options_for_chart_wrapper( py::object pystream,
                                                    const std::string &div_name,
                                                    const D3SpectrumExport::D3SpectrumChartOptions &options )
 {
-  throw runtime_error( "not imp" );
-  return false;
-  //boost::iostreams::stream<PythonOutputDevice> output( pystream );
-  
-  //return write_html_display_options_for_chart( output, div_name, options );
+  OutputStreambuf outputbuf( pystream );
+  std::ostream output( &outputbuf );
+  return write_html_display_options_for_chart( output, div_name, options );
 }
 
 #endif
@@ -923,17 +1165,62 @@ bool write_html_display_options_for_chart_wrapper( py::object pystream,
 }//namespace
 
 
+/*
+//NB_MAKE_OPAQUE(PythonInputStream);
+// https://github.com/lief-project/LIEF/blob/a5cf7266675ffeac7e5530c5018c76dea0c1b5ab/api/python/src/pyIOStream.cpp
+namespace nanobind {
+  template <> struct detail::type_caster<PythonInputStream> {
+    NB_TYPE_CASTER(PythonInputStream, const_name("IOBase"));
+
+    bool from_python(handle src, uint8_t flags, cleanup_list* cleanup) noexcept {
+      // Check if input is a file-like object with read method
+      if (!hasattr(src, "read"))
+        return false;
+
+      // Convert handle to py::object to work with it
+      //py::object obj = src.cast<py::object>();
+      py::object obj( src, py::detail::borrow_t{} );
+
+      // Check if it has seek/tell methods for random access 
+      if (!hasattr(obj, "seek") || !hasattr(obj, "tell"))
+        return false;
+
+      try {
+        // Create new PythonInputStream from Python object
+        value = PythonInputStream(obj);
+        return true;
+      } catch (...) {
+        return false;
+      }
+    }
+
+    static handle from_cpp(PythonInputStream& stream, rv_policy policy,
+                          cleanup_list* cleanup) noexcept {
+      try {
+        // Get the underlying Python stream object if needed
+        // You'll need to add a method to access the underlying Python stream
+        // or make the member public
+        return stream.get_python_stream(); 
+      } catch (...) {
+        return handle();
+      }
+    }
+  };
+}
+*/
+
 
 //Begin definition of python functions
 
-//make is so loadFile will take at least 3 arguments, but can take 4 (e.g. allow
-//  default last argument)
-//BOOST_PYTHON_FUNCTION_OVERLOADS(loadFile_overloads, loadFile, 3, 4)
-
 NB_MODULE(SpecUtils, m) {
   using namespace py::literals;
+
+  // Register the type caster for std::istream
+  //py::class_<PythonInputStream, std::istream>(m, "PythonInputStream");
+  //m.def("make_istream", [](py::object obj) {
+  //  return std::make_unique<PythonInputStream>(obj);
+  //});
   
-  m.def("add", [](int a, int b) { return a + b; }, "a"_a, "b"_a);
 
   //Register our enums
   py::enum_<SpecUtils::ParserType>(m, "ParserType")
@@ -1073,23 +1360,25 @@ py::enum_<SpecUtils::EnergyCalType>(m, "EnergyCalType")
     .value("UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial)
     .export_values();
 
-/*
+
 //disambiguate the set_lower_channel_energy function, from its overload
 void (SpecUtils::EnergyCalibration::*set_lower_channel_energy_fcn_ptr)( const size_t, const std::vector<float> & ) = &SpecUtils::EnergyCalibration::set_lower_channel_energy;
 
 
 py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
+  //.def(py::new_([](py::kwargs kwargs){ return make_shared<SpecUtils::EnergyCalibration>();}))
+  .def(py::init<>())
   .def( "type", &SpecUtils::EnergyCalibration::type, 
     "Returns the energy calibration type" )
   .def( "valid", &SpecUtils::EnergyCalibration::valid,
     "Returns if the energy calibration is valid." )
-  .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, py::return_value_policy::reference,
+  .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, py::rv_policy::reference_internal,
     "Returns the list of energy calibration coeficients.\n"
     "Will only be empty for SpecUtils.EnergyCalType.InvalidEquationType." )
   // TODO: I think we should put a wrapper around channel_energies, and return a proper python list
-  .def( "channelEnergies", &SpecUtils::EnergyCalibration::channel_energies, py::return_value_policy::reference,
+  .def( "channelEnergies", &SpecUtils::EnergyCalibration::channel_energies, py::rv_policy::reference_internal,
     "Returns lower channel energies; will have one more entry than the number of channels." )
-  .def( "deviationPairs", &SpecUtils::EnergyCalibration::deviation_pairs, py::return_value_policy::reference )
+  .def( "deviationPairs", &SpecUtils::EnergyCalibration::deviation_pairs, py::rv_policy::reference_internal )
   .def( "numChannels", &SpecUtils::EnergyCalibration::num_channels,
     "Returns the number of channels this energy calibration is for." )
   .def( "channelForEnergy", &SpecUtils::EnergyCalibration::channel_for_energy,
@@ -1128,32 +1417,35 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
 
 
   {//begin Measurement class scope
-    py::class_<SpecUtils::Measurement, py::noncopyable>(m, "Measurement")
+    py::class_<SpecUtils::Measurement>(m, "Measurement")
+    //.def(py::new_([](){ return make_shared<SpecUtils::Measurement>();}))
+    .def(py::init<>())
     .def( "liveTime", &SpecUtils::Measurement::live_time, "The live time help" )
     .def( "realTime", &SpecUtils::Measurement::real_time )
     .def( "containedNeutron", &SpecUtils::Measurement::contained_neutron )
     .def( "sampleNumber", &SpecUtils::Measurement::sample_number )
-    .def( "title", &SpecUtils::Measurement::title, py::return_value_policy::copy )
+    .def( "title", &SpecUtils::Measurement::title, py::rv_policy::copy )
     .def( "occupied", &SpecUtils::Measurement::occupied )
     .def( "gammaCountSum", &SpecUtils::Measurement::gamma_count_sum )
     .def( "neutronCountsSum", &SpecUtils::Measurement::neutron_counts_sum )
     .def( "speed", &SpecUtils::Measurement::speed )
     .def( "latitude", &SpecUtils::Measurement::latitude )
     .def( "longitude", &SpecUtils::Measurement::longitude )
+    .def( "positionTime", &SpecUtils::Measurement::position_time )
     .def( "hasGpsInfo", &SpecUtils::Measurement::has_gps_info )
-    .def( "detectorName", &SpecUtils::Measurement::detector_name, py::return_value_policy::copy )
+    .def( "detectorName", &SpecUtils::Measurement::detector_name, py::rv_policy::copy )
     .def( "detectorNumber", &SpecUtils::Measurement::detector_number )
-    .def( "detectorType", &SpecUtils::Measurement::detector_type, py::return_value_policy::copy )
+    .def( "detectorType", &SpecUtils::Measurement::detector_type, py::rv_policy::copy )
     .def( "qualityStatus", &SpecUtils::Measurement::quality_status )
     .def( "sourceType", &SpecUtils::Measurement::source_type )
     .def( "energyCalibrationModel", &SpecUtils::Measurement::energy_calibration_model )
     .def( "remarks", &measurement_remarks_wrapper )
     .def( "startTime", &start_time_wrapper )
-    .def( "calibrationCoeffs", &SpecUtils::Measurement::calibration_coeffs, py::return_value_policy::reference )
-    .def( "deviationPairs", &SpecUtils::Measurement::deviation_pairs, py::return_value_policy::reference )
+    .def( "calibrationCoeffs", &SpecUtils::Measurement::calibration_coeffs, py::rv_policy::reference )
+    .def( "deviationPairs", &SpecUtils::Measurement::deviation_pairs, py::rv_policy::reference )
     .def( "channelEnergies", &channel_energies_wrapper )
     .def( "gammaCounts", &gamma_counts_wrapper )
-    .def( "neutronCounts", &SpecUtils::Measurement::neutron_counts, py::return_value_policy::reference )
+    .def( "neutronCounts", &SpecUtils::Measurement::neutron_counts, py::rv_policy::reference )
     .def( "numGammaChannels", &SpecUtils::Measurement::num_gamma_channels )
     .def( "findGammaChannel", &SpecUtils::Measurement::find_gamma_channel )
     .def( "gammaChannelContent", &SpecUtils::Measurement::gamma_channel_content )
@@ -1224,22 +1516,27 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   }//end Measurement class scope
 
   
-  
+  /*
   //Register smart pointers we will use with python.
   py::class_<SpecUtils::EnergyCalibration, std::shared_ptr<SpecUtils::EnergyCalibration>>(m, "EnergyCalibration");
-  py::class_<SpecUtils::Measurement, std::shared_ptr<SpecUtils::Measurement>, py::noncopyable>(m, "Measurement");
+  //py::class_<SpecUtils::Measurement, std::shared_ptr<SpecUtils::Measurement>, py::noncopyable>(m, "Measurement");
   py::class_<std::vector<float>>(m, "FloatVec");
   py::class_<std::vector<std::string>>(m, "StringVec");
   py::class_<std::vector<std::shared_ptr<const SpecUtils::Measurement>>>(m, "MeasurementVec");
 
+
   PyDateTime_IMPORT;
   chrono_time_point_from_python_datetime();
   py::implicitly_convertible<chrono::system_clock::time_point, SpecUtils::time_point_t>();
+*/
+
 
   //disambiguate a few functions that have overloads
   std::shared_ptr<const SpecUtils::Measurement> (SpecUtils::SpecFile::*meas_fcn_ptr)(size_t) const = &SpecUtils::SpecFile::measurement;
   
   py::class_<SpecUtils::SpecFile>(m, "SpecFile")
+  .def(py::init<>())
+  //.def(py::new_([](){ return make_shared<SpecUtils::SpecFile>(); }))
   .def( "loadFile", &loadFile, 
         "file_name"_a, "parser_type"_a, "file_ending_hint"_a = "",
         "Callling this function with parser_type==SpecUtils.ParserType.kAutoParser\n"
@@ -1249,6 +1546,64 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
         "values for this might be: \"n24\", \"pcf\", \"chn\", etc. The entire filename\n"
         "can be passed in since only the letters after the last period are used.\n"
         "Throws RuntimeError if the file can not be opened or parsed." ) 
+    .def("loadFromN42", &loadFromN42_wrapper, "input"_a,
+         "Load N42 format data from input stream")
+    .def("loadFromIaeaSpc", &loadFromIaeaSpc_wrapper, "input"_a,
+         "Load IAEA SPE format data from input stream")
+    .def("loadFromBinarySpc", &loadFromBinarySpc_wrapper, "input"_a,
+         "Load binary SPC format data from input stream")
+    .def("loadFromBinaryExploranium", &loadFromBinaryExploranium_wrapper, "input"_a,
+         "Load binary Exploranium format data from input stream")
+    .def("loadFromPcf", &loadFromPcf_wrapper, "input"_a,
+         "Load PCF format data from input stream")
+    .def("loadFromTxtOrCsv", &loadFromTxtOrCsv_wrapper, "input"_a,
+         "Load text or CSV format data from input stream")
+    .def("loadFromGr135Txt", &loadFromGr135Txt_wrapper, "input"_a,
+         "Load GR135 text format data from input stream")
+    .def("loadFromSpectroscopicDailyFile", &loadFromSpectroscopicDailyFile_wrapper, "input"_a,
+         "Load spectroscopic daily file format data from input stream")
+    .def("loadFromSrpm210Csv", &loadFromSrpm210Csv_wrapper, "input"_a,
+         "Load SRPM210 CSV format data from input stream")
+    .def("loadFromD3SRaw", &loadFromD3SRaw_wrapper, "input"_a,
+         "Load D3S raw format data from input stream")
+    .def("loadFromAmptekMca", &loadFromAmptekMca_wrapper, "input"_a,
+         "Load Amptek MCA format data from input stream")
+    .def("loadFromOrtecListmode", &loadFromOrtecListmode_wrapper, "input"_a,
+         "Load Ortec listmode format data from input stream")
+    .def("loadFromLsrmSpe", &loadFromLsrmSpe_wrapper, "input"_a,
+         "Load LSRM SPE format data from input stream")
+    .def("loadFromTka", &loadFromTka_wrapper, "input"_a,
+         "Load TKA format data from input stream")
+    .def("loadFromMultiact", &loadFromMultiact_wrapper, "input"_a,
+         "Load MultiAct format data from input stream")
+    .def("loadFromPhd", &loadFromPhd_wrapper, "input"_a,
+         "Load PHD format data from input stream")
+    .def("loadFromLzs", &loadFromLzs_wrapper, "input"_a,
+         "Load LZS format data from input stream")
+    .def("loadFromRadiacode", &loadFromRadiacode_wrapper, "input"_a,
+         "Load Radiacode format data from input stream")
+    .def("loadFromRadiacodeSpectrogram", &loadFromRadiacodeSpectrogram_wrapper, "input"_a,
+         "Load Radiacode spectrogram format data from input stream")
+    .def("loadFromXmlScanData", &loadFromXmlScanData_wrapper, "input"_a,
+         "Load XML scan data format data from input stream")
+    .def("loadFromIaea", &loadFromIaea_wrapper, "input"_a,
+         "Load IAEA format data from input stream")
+    .def("loadFromChn", &loadFromChn_wrapper, "input"_a,
+         "Load CHN format data from input stream")
+    .def("loadFromCnf", &loadFromCnf_wrapper, "input"_a,
+         "Load CNF format data from input stream")
+    .def("loadFromTracsMps", &loadFromTracsMps_wrapper, "input"_a,
+         "Load TRACS MPS format data from input stream")
+    .def("loadFromAram", &loadFromAram_wrapper, "input"_a,
+         "Load ARAM format data from input stream")
+    .def("loadFromJson", &loadFromJson_wrapper, "input"_a,
+         "Load JSON format data from input stream")
+    .def("loadFromCaenGxml", &loadFromCaenGxml_wrapper, "input"_a,
+         "Load CAEN GXml format data from input stream")
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    .def("loadFromUri", &loadFromUri_wrapper, "input"_a,
+         "Load URI format data from input stream")
+#endif
   .def( "modified", &SpecUtils::SpecFile::modified,
         "Indicates if object has been modified since last save." )
   .def( "numMeasurements", &SpecUtils::SpecFile::num_measurements,
@@ -1256,7 +1611,8 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   .def( "measurement", meas_fcn_ptr, "i"_a,
         "Returns the i'th measurement, where valid values are between 0 and\n"
         "SpecFile.numMeasurements()-1.\n"
-        "Throws RuntimeError if i is out of range." )
+        "Throws RuntimeError if i is out of range.",
+        py::rv_policy::reference )
   .def( "measurements", &get_measurements_wrapper,
         "Returns a list of all Measurement's that were parsed." )
   .def( "gammaLiveTime", &SpecUtils::SpecFile::gamma_live_time,
@@ -1268,7 +1624,7 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
         "Returns the summed number of gamma counts from all parsed Measurements." )
   .def( "neutronCountsSum", &SpecUtils::SpecFile::neutron_counts_sum,
         "Returns the summed number of neutron counts from all parsed Measurements." )
-  .def( "filename", &SpecUtils::SpecFile::filename, py::return_value_policy::copy,
+  .def( "filename", &SpecUtils::SpecFile::filename, py::rv_policy::copy,
         "Returns the filename of parsed file; if the \"file\" was parsed from a\n"
         "stream, then may be empty unless user specifically set it using \n"
         "setFilename (not currently implemented for python)." )
@@ -1285,7 +1641,7 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
         "Returns list of names of detectors that contained neutron information." )
   .def( "gammaDetectorNames", &gamma_detector_names_wrapper,
         "Returns list of names of detectors that contained gamma spectra." )
-  .def( "uuid", &SpecUtils::SpecFile::uuid, py::return_value_policy::copy,
+  .def( "uuid", &SpecUtils::SpecFile::uuid, py::rv_policy::copy,
         "Returns the unique ID string for this parsed spectrum file.  The UUID\n"
         "may have been specified in the input file itself, or if not, it is\n"
         "generated using the file contents.  This value will always be the same\n"
@@ -1297,13 +1653,13 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   .def( "laneNumber", &SpecUtils::SpecFile::lane_number,
         "Returns the lane number of the RPM if specified in the spectrum file, otherwise\n"
         "will have a value of -1." )
-  .def( "measurementLocationName", &SpecUtils::SpecFile::measurement_location_name, py::return_value_policy::copy,
+  .def( "measurementLocationName", &SpecUtils::SpecFile::measurement_location_name, py::rv_policy::copy,
         "Returns the location name specified in the spectrum file; will be an\n"
         "empty string if not specified." )
-  .def( "inspection", &SpecUtils::SpecFile::inspection, py::return_value_policy::copy,
+  .def( "inspection", &SpecUtils::SpecFile::inspection, py::rv_policy::copy,
         "Returns the inspection type (e.g. primary, secondary, etc.) specified\n"
         "in the spectrum file. If not specified an empty string will be returned." )
-  .def( "measurementOperator", &SpecUtils::SpecFile::measurement_operator, py::return_value_policy::copy,
+  .def( "measurementOperator", &SpecUtils::SpecFile::measurement_operator, py::rv_policy::copy,
         "Returns the detector operators name if specified in the spectrum file.\n"
         "If not specified an empty string will be returned." )
   .def( "sampleNumbers", &sample_numbers_wrapper,
@@ -1317,18 +1673,18 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   .def( "detectorType", &SpecUtils::SpecFile::detector_type,
         "Returns the detector type specified in the spectrum file, or an empty string\n"
         "if none was specified.  Example values could include: 'HPGe 50%' or 'NaI'.")
-  .def( "instrumentType", &SpecUtils::SpecFile::instrument_type, py::return_value_policy::copy,
+  .def( "instrumentType", &SpecUtils::SpecFile::instrument_type, py::rv_policy::copy,
         "Returns the instrument type if specified in (or infered from) the spectrum\n"
         "file, or an empty string otherwise. Example values could include: PortalMonitor,\n"
         "SpecPortal, RadionuclideIdentifier, etc." )
-  .def( "manufacturer", &SpecUtils::SpecFile::manufacturer, py::return_value_policy::copy,
+  .def( "manufacturer", &SpecUtils::SpecFile::manufacturer, py::rv_policy::copy,
         "Returns the detector manufacturer if specified (or infered), or an empty\n"
         "string otherwise." )
-  .def( "instrumentModel", &SpecUtils::SpecFile::instrument_model, py::return_value_policy::copy,
+  .def( "instrumentModel", &SpecUtils::SpecFile::instrument_model, py::rv_policy::copy,
         "Returns the instrument model if specified, or infered from, the spectrum file.\n"
         "Returns empty string otherwise.  Examples include: 'Falcon 5000', 'ASP', \n"
         "'identiFINDER', etc." )
-  .def( "instrumentId", &SpecUtils::SpecFile::instrument_id, py::return_value_policy::copy,
+  .def( "instrumentId", &SpecUtils::SpecFile::instrument_id, py::rv_policy::copy,
         "Returns the instrument ID (typically the serial number) specified in the\n"
         "file, or an empty string otherwise." )
   .def( "hasGpsInfo", &SpecUtils::SpecFile::has_gps_info,
@@ -1552,50 +1908,50 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
         "Title"_a, "Measurement"_a,
         "Sets the title of the specified Measurement." )
   .def( "setNeutronCounts", &SpecUtils::SpecFile::set_contained_neutrons, 
-        "ContainedNeutrons"_a, "Counts"_a, "Measurement"_a,
+        "ContainedNeutrons"_a, "Counts"_a, "Measurement"_a, "LiveTime"_a
         "Sets the title of the specified Measurement." )
   ;
 
-  
-  
+
 #if( SpecUtils_ENABLE_D3_CHART )
   using namespace D3SpectrumExport;
-
   
   // TODO: document these next member variables
   py::class_<D3SpectrumExport::D3SpectrumChartOptions>(m, "D3SpectrumChartOptions")
-  .def_readwrite("title", &D3SpectrumChartOptions::m_title )
-  .def_readwrite("x_axis_title", &D3SpectrumChartOptions::m_xAxisTitle )
-  .def_readwrite("y_axis_title", &D3SpectrumChartOptions::m_yAxisTitle )
-  .def_readwrite("data_title", &D3SpectrumChartOptions::m_dataTitle )
-  .def_readwrite("use_log_y_axis", &D3SpectrumChartOptions::m_useLogYAxis )
-  .def_readwrite("show_vertical_grid_lines", &D3SpectrumChartOptions::m_showVerticalGridLines )
-  .def_readwrite("show_horizontal_grid_lines", &D3SpectrumChartOptions::m_showHorizontalGridLines )
-  .def_readwrite("legend_enabled", &D3SpectrumChartOptions::m_legendEnabled )
-  .def_readwrite("compact_x_axis", &D3SpectrumChartOptions::m_compactXAxis )
-  .def_readwrite("show_peak_user_labels", &D3SpectrumChartOptions::m_showPeakUserLabels )
-  .def_readwrite("show_peak_energy_labels", &D3SpectrumChartOptions::m_showPeakEnergyLabels )
-  .def_readwrite("show_peak_nuclide_labels", &D3SpectrumChartOptions::m_showPeakNuclideLabels )
-  .def_readwrite("show_peak_nuclide_energy_labels", &D3SpectrumChartOptions::m_showPeakNuclideEnergyLabels )
-  .def_readwrite("show_escape_peak_marker", &D3SpectrumChartOptions::m_showEscapePeakMarker )
-  .def_readwrite("show_compton_peak_marker", &D3SpectrumChartOptions::m_showComptonPeakMarker )
-  .def_readwrite("show_compton_edge_marker", &D3SpectrumChartOptions::m_showComptonEdgeMarker )
-  .def_readwrite("show_sum_peak_marker", &D3SpectrumChartOptions::m_showSumPeakMarker )
-  .def_readwrite("background_subtract", &D3SpectrumChartOptions::m_backgroundSubtract )
-  .def_readwrite("allow_drag_roi_extent", &D3SpectrumChartOptions::m_allowDragRoiExtent )
-  .def_readwrite("x_min", &D3SpectrumChartOptions::m_xMin )
-  .def_readwrite("x_max", &D3SpectrumChartOptions::m_xMax )
-  //.def_readwrite("m_reference_lines_json", &D3SpectrumChartOptions::m_reference_lines_json )
+  .def(py::init<>())
+  .def_rw("title", &D3SpectrumChartOptions::m_title )
+  .def_rw("x_axis_title", &D3SpectrumChartOptions::m_xAxisTitle )
+  .def_rw("y_axis_title", &D3SpectrumChartOptions::m_yAxisTitle )
+  .def_rw("data_title", &D3SpectrumChartOptions::m_dataTitle )
+  .def_rw("use_log_y_axis", &D3SpectrumChartOptions::m_useLogYAxis )
+  .def_rw("show_vertical_grid_lines", &D3SpectrumChartOptions::m_showVerticalGridLines )
+  .def_rw("show_horizontal_grid_lines", &D3SpectrumChartOptions::m_showHorizontalGridLines )
+  .def_rw("legend_enabled", &D3SpectrumChartOptions::m_legendEnabled )
+  .def_rw("compact_x_axis", &D3SpectrumChartOptions::m_compactXAxis )
+  .def_rw("show_peak_user_labels", &D3SpectrumChartOptions::m_showPeakUserLabels )
+  .def_rw("show_peak_energy_labels", &D3SpectrumChartOptions::m_showPeakEnergyLabels )
+  .def_rw("show_peak_nuclide_labels", &D3SpectrumChartOptions::m_showPeakNuclideLabels )
+  .def_rw("show_peak_nuclide_energy_labels", &D3SpectrumChartOptions::m_showPeakNuclideEnergyLabels )
+  .def_rw("show_escape_peak_marker", &D3SpectrumChartOptions::m_showEscapePeakMarker )
+  .def_rw("show_compton_peak_marker", &D3SpectrumChartOptions::m_showComptonPeakMarker )
+  .def_rw("show_compton_edge_marker", &D3SpectrumChartOptions::m_showComptonEdgeMarker )
+  .def_rw("show_sum_peak_marker", &D3SpectrumChartOptions::m_showSumPeakMarker )
+  .def_rw("background_subtract", &D3SpectrumChartOptions::m_backgroundSubtract )
+  .def_rw("allow_drag_roi_extent", &D3SpectrumChartOptions::m_allowDragRoiExtent )
+  .def_rw("x_min", &D3SpectrumChartOptions::m_xMin )
+  .def_rw("x_max", &D3SpectrumChartOptions::m_xMax )
+  //.def_rw("m_reference_lines_json", &D3SpectrumChartOptions::m_reference_lines_json )
   ;
   
   
   py::class_<D3SpectrumExport::D3SpectrumOptions>(m, "D3SpectrumOptions")
-  //  .def_readwrite("peaks_json", &D3SpectrumOptions::peaks_json )
-    .def_readwrite("line_color", &D3SpectrumOptions::line_color, "A valid CSS color for the line" )
-    .def_readwrite("peak_color", &D3SpectrumOptions::peak_color, "A valid CSS color for the peak"  )
-    .def_readwrite("title", &D3SpectrumOptions::title,
+  //  .def_rw("peaks_json", &D3SpectrumOptions::peaks_json )
+    .def(py::init<>())
+    .def_rw("line_color", &D3SpectrumOptions::line_color, "A valid CSS color for the line" )
+    .def_rw("peak_color", &D3SpectrumOptions::peak_color, "A valid CSS color for the peak"  )
+    .def_rw("title", &D3SpectrumOptions::title,
                 "If empty, title from Measurement will be used, but if non-empty, will override Measurement." )
-    .def_readwrite("display_scale_factor", &D3SpectrumOptions::display_scale_factor,
+    .def_rw("display_scale_factor", &D3SpectrumOptions::display_scale_factor,
                  "The y-axis scale factor to use for displaying the spectrum.\n"
                  "This is typically used for live-time normalization of the background\n"
                  "spectrum to match the foreground live-time.  Ex., if background live-time\n"
@@ -1604,7 +1960,7 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
                  "\n"
                  "Note: this value is displayed on the legend, but no where else on the\n"
                  "chart." )
-    .def_readwrite("spectrum_type", &D3SpectrumOptions::spectrum_type )
+    .def_rw("spectrum_type", &D3SpectrumOptions::spectrum_type )
   ;
   
   // TODO: document these next functions
@@ -1615,8 +1971,5 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   m.def( "write_html_display_options_for_chart", &write_html_display_options_for_chart_wrapper );
   m.def( "write_d3_html", &write_d3_html_wrapper );
   m.def( "write_and_set_data_for_chart", &write_and_set_data_for_chart_wrapper );
-   
-
 #endif
-  */
 }//BOOST_PYTHON_MODULE(SpecUtils)
