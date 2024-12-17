@@ -36,4 +36,4 @@ jobs:
         pip install --verbose ./bindings/python
 
     - name: Test
-      run: python -m pytest
+      run: python -m unittest discover ./tests

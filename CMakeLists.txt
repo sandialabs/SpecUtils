@@ -255,7 +255,7 @@ endif( SpecUtils_SHARED_LIB )
 
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
-
+set_target_properties( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
 
 set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched
 set( SpecUtils_USE_FROM_CHARS OFF )   # Supported by MSVC >= 2019, and gcc >= 12.  Not supported by Apple clang. In MSVC, about 50% slower than boost::spirit
