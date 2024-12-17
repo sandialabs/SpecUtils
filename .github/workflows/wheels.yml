@@ -56,7 +56,7 @@ jobs:
       shell: bash
 
     - name: Upload wheels
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3.1.1
       with:
         path: wheelhouse/*.whl
         name: dist-${{ matrix.os }}
