@@ -170,10 +170,8 @@ protected:
     
     // Get more data from Python stream
     py::object pyread = python_stream_.attr("read");
-    if (pyread.is_none()){
-      cerr << "PythonInputStreambuf::underflow: pyread is none" << endl;
+    if (pyread.is_none())
       return traits_type::eof();
-    }
         
     // Try to fill our buffer
     py::object py_data = pyread(buffer_size);

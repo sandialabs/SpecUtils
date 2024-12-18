@@ -56,8 +56,8 @@ You can install the package using pip like this:
 mkdir my_venv
 python -m venv my_venv
 
-pip install SandiaSpecUtils
 source my_venv/bin/activate
+pip install SandiaSpecUtils
 
 python
 >>> import SpecUtils
