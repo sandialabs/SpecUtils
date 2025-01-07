@@ -117,13 +117,42 @@ bool SpecFile::load_txt_or_csv_file( const std::string &filename )
       // I *think* input should now be UTF-8???
     }
     */
-   
+  
     
-    for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
-    {
-      if( first_bytes[i] > 127 )
-        return false;
-    }
+    //for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
+    //{
+    //  if( first_bytes[i] > 127 )
+    //    return false;
+    //}
+    //TODO: extract below into its own function and add tests for
+    {// Begin check if UTF-8 string
+      int bytesToProcess = 0;
+      for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
+      {
+        const uint8_t c = first_bytes[i];
+        if (bytesToProcess == 0)
+        {
+          // Determine how many bytes to expect
+          if ((c & 0x80) == 0) {
+            continue;            // 1-byte character (ASCII)
+          } else if ((c & 0xE0) == 0xC0) {
+            bytesToProcess = 1;  // 2-byte character
+          } else if ((c & 0xF0) == 0xE0) {
+            bytesToProcess = 2;  // 3-byte character
+          } else if ((c & 0xF8) == 0xF0) {
+            bytesToProcess = 3;  // 4-byte character
+          } else {
+            return false; // Invalid leading byte
+          }
+        } else {
+          // Expecting continuation byte
+          if ((c & 0xC0) != 0x80) {
+            return false; // Not a valid continuation byte
+          }
+          bytesToProcess--;
+        }
+      }
+    }// End check if valid UTF-8 string
    
     
     //while( input->good() )
@@ -1094,6 +1123,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                  || istarts_with( fields[0], "data" )
                  || istarts_with( fields[0], "energy" )
                  || istarts_with( fields[0], "Ch" )
+                 || istarts_with( fields[0], "Канал" )
                  || fields[0]=="##" ) )
     {
       ++nlines_used;
@@ -1102,6 +1132,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       {
         if( starts_with( fields[i], "channel" )
            || starts_with( fields[i], "ch" )
+           || starts_with( fields[i], "Канал" )
            || fields[i]=="##" )
         {
           column_map[i] = kChannel;
@@ -1123,7 +1154,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
             if( istarts_with(restofline, "count")
                || istarts_with(restofline, "data")
                || istarts_with(restofline, "signal")
-               || istarts_with(restofline, "detector") )
+               || istarts_with(restofline, "detector")
+               || istarts_with(restofline, "Отсчеты") )
             {
               column_map[i+1] = kCounts;
             }
@@ -1244,7 +1276,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       
       start_time_ = time_from_string( timestr.c_str() );
     }else if( istarts_with( fields[0], "LiveTime" )
-             || istarts_with( fields[0], "live time" ) )
+             || istarts_with( fields[0], "live time" )
+             || istarts_with( fields[0], "Живое время" ) )
     {
       ++nlines_used;
       
@@ -1265,7 +1298,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       }
     }else if( istarts_with( fields[0], "realtime" )
              || istarts_with( fields[0], "Real time" )
-             || istarts_with( fields[0], "Total time") )
+             || istarts_with( fields[0], "Total time")
+             || istarts_with( fields[0], "Реальное время") )
     {
       ++nlines_used;
       
