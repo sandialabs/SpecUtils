@@ -8,7 +8,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils VERSION 1.0.0 )
+project( SpecUtils VERSION 2025.1.0 )
 enable_testing()  # Enable here to allow running `ctest` from top-most build dir
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
@@ -539,6 +539,6 @@ endif()
 # Lets just use the MAJOR.MINOR version of the compiler in the name.
 string(REGEX MATCH "^[0-9]+\\.[0-9]+" COMPILER_VERSION_SHORT "${CMAKE_CXX_COMPILER_VERSION}")
 
-set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
 set(CPACK_GENERATOR "ZIP")
 include(CPack)
