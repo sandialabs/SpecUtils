@@ -11,6 +11,9 @@ endif()
 project( SpecUtils VERSION 2025.1.0 )
 enable_testing()  # Enable here to allow running `ctest` from top-most build dir
 
+# Add this line to specify the architectures for MacOS
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for MacOS" FORCE)
+
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
 option( SpecUtils_ENABLE_URI_SPECTRA "Enables encoding/decoding spectra to URIs (for, ex, QR-codes) - requires linking to zlib" OFF )
