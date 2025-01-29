@@ -118,50 +118,14 @@ bool SpecFile::load_txt_or_csv_file( const std::string &filename )
     }
     */
   
-    
-    //for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
-    //{
-    //  if( first_bytes[i] > 127 )
-    //    return false;
-    //}
-    //TODO: extract below into its own function and add tests for
     {// Begin check if UTF-8 string
-      int bytesToProcess = 0;
-      for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
-      {
-        const uint8_t c = first_bytes[i];
-        if (bytesToProcess == 0)
-        {
-          // Determine how many bytes to expect
-          if ((c & 0x80) == 0) {
-            continue;            // 1-byte character (ASCII)
-          } else if ((c & 0xE0) == 0xC0) {
-            bytesToProcess = 1;  // 2-byte character
-          } else if ((c & 0xF0) == 0xE0) {
-            bytesToProcess = 2;  // 3-byte character
-          } else if ((c & 0xF8) == 0xF0) {
-            bytesToProcess = 3;  // 4-byte character
-          } else {
-            return false; // Invalid leading byte
-          }
-        } else {
-          // Expecting continuation byte
-          if ((c & 0xC0) != 0x80) {
-            return false; // Not a valid continuation byte
-          }
-          bytesToProcess--;
-        }
-      }
+      const size_t start_offset = (is_utf8 ? 3 : 0);
+      const char *start_str = (const char *)first_bytes + start_offset;
+      const size_t start_str_len = sizeof(first_bytes) - start_offset - 1; //minus 1 for null-term
+      
+      if( !valid_utf8( start_str, start_str_len ) )
+        return false;
     }// End check if valid UTF-8 string
-   
-    
-    //while( input->good() )
-    //{
-    //  const int c = input->get();
-    //  if( input->good() && c>127 )
-    //    return false;
-    //}//while( input.good() )
-    
     
     //we have an ascii file if we've made it here
     input->clear();
