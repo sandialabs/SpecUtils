@@ -5793,7 +5793,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
     {
     }//if( !measurements_.empty() )
     
-    if( uuid_.empty() )
+    // If the spectrum file didnt specify a UUID, we will generate one.
+    //  Also, at least some R225 detectors, which have a format like "{3b01677f-...274}",
+    //  seem to always use the same UUID, so we will regenerate for those as well.
+    if( uuid_.empty() || ((uuid_.front() == '{') && (uuid_.back() == '}')) )
       uuid_ = generate_psuedo_uuid();
     
     set_detector_type_from_other_info();
@@ -6570,7 +6573,12 @@ void SpecFile::set_detector_type_from_other_info()
     else if( icontains(instrument_model_,"uDetective")
             || (icontains(instrument_model_,"Detective") && icontains(instrument_model_,"micro")) )
       detector_type_ = DetectorType::MicroDetective;
-    else if( iequals_ascii(instrument_model_,"Detective X") )
+    else if( iequals_ascii(instrument_model_,"Detective X")
+            || iequals_ascii(instrument_model_,"Detective-X")
+            || iequals_ascii(instrument_model_,"DetectiveX")
+            || iequals_ascii(instrument_model_,"DetX")
+            || iequals_ascii(instrument_model_,"Det-X")
+            || iequals_ascii(instrument_model_,"Det X"))
       detector_type_ = DetectorType::DetectiveX;
     else if( icontains(instrument_model_,"Detective") )
       detector_type_ = DetectorType::DetectiveUnknown;

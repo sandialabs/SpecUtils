@@ -1496,11 +1496,11 @@ bool SpecFile::load_from_pcf( std::istream &input )
           break;
       }//if( num_channel == 0 )
       
-      if( num_channel < 0 || num_channel>65536 )
+      if( num_channel < 0 || (num_channel > EnergyCalibration::sm_max_channels) )
       {
         char buffer[64];
         snprintf( buffer, sizeof(buffer),
-                 "Invaid number of channels: %i", int(num_channel) );
+                 "Invalid number of channels: %i", int(num_channel) );
         throw runtime_error( buffer );
       }//if( num_channel < 0 || num_channel>65536 )
       

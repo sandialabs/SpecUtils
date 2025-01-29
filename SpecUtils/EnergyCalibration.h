@@ -279,7 +279,7 @@ namespace SpecUtils
      
      Values larger than this will cause an exception to be thrown when setting the calibration.
      */
-    static const size_t sm_max_channels; // = 65536 + 8
+    static const size_t sm_max_channels; // 131072 (previous to 20241112, used 65536 + 8)
     
     /** The largest positive value of the offset (zeroth energy cal term) allowed for normal polynomial energy calibration.
      i.e., if a gamma spectrum has a larger value than this, then the calibration coefficients will be considered garbage and not used.

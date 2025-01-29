@@ -5504,7 +5504,9 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
     // G element of the slider chart
-    self.sliderChart = d3.select("svg").append("g")
+    d3.select(self.chart)
+    
+    self.sliderChart = d3.select(self.chart).select("svg").append("g")
       //.attr("transform", "translate(" + self.padding.leftComputed + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")")
       // .on("mousemove", self.handleMouseMoveSliderChart());
       .on("touchstart", self.handleTouchStartSliderChart())
@@ -7001,7 +7003,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     //console.log( 'minypx=' + minypx + ', maxypx=' + maxypx + ' height=' + self.size.height );
     
     //go right to left and draw the fill areas top
-    // TODO: We should be able to use this next line to make the paths for peaks, but it ends up being a bit wonky
+    // TODO: We should be able to use this next line to make the paths for peaks, but it ends up being a bit wonky (See commit fc790795b24d21431467c32ca189c05e2f9b0f12 for when this issue was introduced)
     //peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
     // But if we use this next loop instead, things are fine:
     peakamplitudes.reverse().forEach( function(peakamps,xindex){
@@ -10763,14 +10765,14 @@ SpectrumChartD3.prototype.getCountsForEnergy = function(spectrum, energy) {
 
 
 
-/* Returns the data y-range for the currently viewed x-range. */
+/* Returns the data y-range for the currently viewed x-range.  Third element of returned array gives smallest non-zero height in the range */
 SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   var self = this;
   
   if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
-    return [0, 3000];
+    return [0, 3000, self.options.logYAxisMin];
   
-  var y0, y1;
+  var y0, y1, minNonZeroY0 = self.options.logYAxisMin;
   var minx = self.xScale.domain()[0], maxx = self.xScale.domain()[1];
   var foreground = self.rawData.spectra[0];
   var firstData = self.displayed_start(foreground);
@@ -10780,6 +10782,7 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   if( firstData >= 0 ){
     const forkey = self.options.backgroundSubtract && ('bgsubtractpoints' in foreground) ? 'bgsubtractpoints' : 'points';
     y0 = y1 = foreground[forkey][firstData].y;
+    if( y0 > 0 ) minNonZeroY0 = y0;
     
     self.rawData.spectra.forEach(function(spectrum) {
       // Don't consider background spectrum if we're viewing the Background Subtract
@@ -10790,8 +10793,10 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
       
       for (var i = firstData; i < lastData; i++) {
         if (spectrum[speckey][i]) {
-          y0 = Math.min( y0, spectrum[speckey][i].y );
-          y1 = Math.max( y1, spectrum[speckey][i].y );
+          const y = spectrum[speckey][i].y;
+          y0 = Math.min( y0, y );
+          y1 = Math.max( y1, y );
+          if( y > 0 ) minNonZeroY0 = Math.min( minNonZeroY0, y );
         }
       }
     });
@@ -10803,7 +10808,7 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   if( y0 > y1 ) { y1 = [y0, y0 = y1][0]; }
   if( y0 == y1 ){ y0 -=1; y1 += 1; }
 
-  return [y0, y1];
+  return [y0, y1, minNonZeroY0];
 }
 
 /**
@@ -10822,11 +10827,15 @@ SpectrumChartD3.prototype.getYAxisDomain = function(){
   
   
   if( self.options.yscale == "log" ) {
-    /*Specify the (approx) fraction of the chart that the scale should extend */
-    /*  past where the data where hit. */
+    // Specify the (approx) fraction of the chart that the scale should extend past the data
     var yfractop = self.options.logYFracTop, yfracbottom = self.options.logYFracBottom;
 
     var y0Intitial = ((y0<=0.0) ? self.options.logYAxisMin : y0);
+    
+    // If the y-range doesnt go above 1.0, lets set the y-axis minimum to be based on minimum non-zero counts
+    if( (y0 <= 0.0) && (yrange.length > 2) && (yrange[2] > 0.0) && (yrange[2] < self.options.logYAxisMin) && (yrange[1] < 1) )
+      y0 = y0Intitial = 0.5*yrange[2];
+    
     var y1Intitial = ((y1<=0.0) ? 1.0 : y1);
     y1Intitial = ((y1Intitial<=y0Intitial) ? 1.1*y0Intitial : y1Intitial);
 

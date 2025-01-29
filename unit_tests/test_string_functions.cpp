@@ -824,3 +824,57 @@ TEST_CASE( "testPrintCompact" )
   check_range(-1.0E32,1.0E32);
 }//void testPrintCompact()
 
+
+TEST_CASE( "testValidUtf8" )
+{
+  using namespace SpecUtils;
+  
+  // Valid UTF-8 strings
+  const char* valid_utf8_strings[] = {
+    "Hello, World!",               // Basic ASCII
+    "Привет",                       // Cyrillic
+    "こんにちは",                   // Japanese
+    "😊",                           // Emoji
+    "\xE2\x9C\x94",                // Check mark (U+2714)
+    "\xF0\x9F\x98\x81",            // Grinning face (U+1F600)
+    "\xE2\x82\xAC",                // Euro sign (U+20AC)
+    "\xF0\x9F\x8C\x90",            // Earth globe (U+1F30D)
+    "\xF0\x9F\x92\xA9",            // Money bag (U+1F4B0)
+  };
+  
+  for (const auto& str : valid_utf8_strings) {
+    CHECK(valid_utf8(str, std::strlen(str)));
+  }
+  
+  // Invalid UTF-8 strings
+  const char* invalid_utf8_strings[] = {
+    "\x80",                         // Invalid start byte
+    "\xC3\x28",                     // Invalid continuation byte
+    "\xE2\x82\x28",                 // Invalid continuation byte
+    "\xF0\x28\x8C\x28",             // Invalid continuation byte
+    "\xF0\x9F\x98\x28",             // Invalid continuation byte
+    "\xC3\xA9\xC3\x28",             // Mixed valid and invalid
+    "\xE2\x82\xAC\xE2\x28",         // Mixed valid and invalid
+    "\xF0\x9F\x92\xA9\xF0\x28",     // Mixed valid and invalid
+  };
+  
+  for (const auto& str : invalid_utf8_strings) {
+    CHECK(!valid_utf8(str, std::strlen(str)));
+  }
+  
+  
+  // Edge cases
+  CHECK(valid_utf8("", 0)); // Empty string
+  CHECK(valid_utf8("\xC2\xA9", 2)); // Single valid UTF-8 character (©)
+  CHECK(!valid_utf8("\xC2", 1)); // Incomplete multibyte sequence
+  CHECK(!valid_utf8("\xE2\x82", 2)); // Incomplete multibyte sequence
+  CHECK(!valid_utf8("\xF0\x9F\x98", 3)); // Incomplete multibyte sequence
+  
+  // Large valid UTF-8 string
+  std::string large_valid_utf8(10000, 'a'); // A large string of 'a's
+  CHECK(valid_utf8(large_valid_utf8.c_str(), large_valid_utf8.size()));
+  
+  // Large invalid UTF-8 string
+  std::string large_invalid_utf8(10000, '\x80'); // A large string of invalid bytes
+  CHECK(!valid_utf8(large_invalid_utf8.c_str(), large_invalid_utf8.size()));
+}//TEST_CASE( "testValidUtf8" )

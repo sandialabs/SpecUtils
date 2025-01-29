@@ -20,7 +20,6 @@ option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
 option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
-option( SpecUtils_PYTHON_BINDINGS "Creates python bindings to the c++ code" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_FORTRAN_SWIG "Enables build/test of swig/FORTRAN bindings" OFF )
 option( SpecUtils_FORTRAN_SWIG_GEN "When this is on, cmake will attemp to generate swig fortran bindings. 
@@ -30,15 +29,7 @@ option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
-
-
-if( SpecUtils_PYTHON_BINDINGS )
-  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" ON )
-  list( APPEND sources bindings/python/SpecFile_py.cpp )
-else()
-  #default to building a static lib
-  option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
-endif()
+option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
 
 
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
@@ -86,7 +77,7 @@ endif()
 
 
 # If we are building this on Windows, not as a sub-project, lets enable selecting C++ runtime
-if( MSVC )
+if( MSVC AND SpecUtils_BUILD_UNIT_TESTS )
   get_directory_property(hasParent PARENT_DIRECTORY)
   if(NOT hasParent)
     option(${PROJECT_NAME}_USE_MSVC_MultiThreadDLL "Use dynamically-link runtime library." OFF)
@@ -100,7 +91,7 @@ if( MSVC )
     endif()
     message(STATUS "Using CMAKE_MSVC_RUNTIME_LIBRARY ${CMAKE_MSVC_RUNTIME_LIBRARY}")
   endif(NOT hasParent)
-endif( MSVC )
+endif( MSVC AND SpecUtils_BUILD_UNIT_TESTS )
 
 
 if( SpecUtils_BUILD_EXAMPLE )
@@ -124,14 +115,6 @@ endif( SpecUtils_JAVA_SWIG )
 
 
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
-
-if( SpecUtils_PYTHON_BINDINGS )
-  FIND_PACKAGE(Python3 COMPONENTS Development )
-  IF(NOT Python3_FOUND)
-    MESSAGE(FATAL_ERROR "Unable to find PythonLibs.")
-  ENDIF()
-  message( "Python include dirs: ${Python3_INCLUDE_DIRS}")
-endif()
 
 set( sources
      src/SpecFile.cpp
@@ -259,10 +242,6 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   find_package( ZLIB REQUIRED )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
-if( SpecUtils_PYTHON_BINDINGS )
-  list( APPEND sources bindings/python/SpecFile_py.cpp )
-endif( SpecUtils_PYTHON_BINDINGS )
-
 if( SpecUtils_JAVA_SWIG )
   list( APPEND sources bindings/swig/SpecUtils.i )
 endif( SpecUtils_JAVA_SWIG )
@@ -351,20 +330,14 @@ if( SpecUtils_USE_FAST_FLOAT )
   endif( NOT FAST_FLOAT_FILE_PATH )
 endif( SpecUtils_USE_FAST_FLOAT )
 
-# We only need boost libraries if we are using boost to parse floats, if we are performing developer
-#  checks, or we are creating Python bindings
-if( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_BINDINGS )
+# We only need boost libraries if we are using boost to parse floats, if we are performing developer checks
+if( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS )
   
   if( DEFINED boost_SOURCE_DIR )
     # We used CMake Fetch to get boost (e.g., in InterSpec)
     target_link_libraries( SpecUtils PUBLIC Boost::system Boost::spirit Boost::fusion Boost::algorithm Boost::functional Boost::crc )
   
   else( DEFINED boost_SOURCE_DIR )
-  
-    if( SpecUtils_PYTHON_BINDINGS )
-      list( APPEND boost_libs_required python )
-    endif( SpecUtils_PYTHON_BINDINGS )
-  
     find_package( Boost REQUIRED COMPONENTS system ${boost_libs_required} )
     if( NOT Boost_FOUND )
       message(FATAL_ERROR "Couldnt Find Boost")
@@ -372,7 +345,7 @@ if( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_B
     
     target_link_libraries( SpecUtils PUBLIC Boost::system )
   endif( DEFINED boost_SOURCE_DIR )
-endif( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS OR SpecUtils_PYTHON_BINDINGS )
+endif( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS )
 
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
@@ -418,15 +391,9 @@ elseif( NOT SpecUtils_USING_NO_THREADING )
 endif( SpecUtils_USE_WT_THREADPOOL )
 
 
-
 if( SpecUtils_ENABLE_URI_SPECTRA )
   target_link_libraries( SpecUtils PUBLIC ZLIB::ZLIB )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
-
-
-if( SpecUtils_PYTHON_BINDINGS )
-  target_link_libraries( SpecUtils PUBLIC Boost::python ${Boost_PYTHON_LIBRARY} ${Python3_LIBRARIES} )
-endif( SpecUtils_PYTHON_BINDINGS )
 
 
 if( SpecUtils_JAVA_SWIG )

@@ -23,6 +23,7 @@
 #include <cctype>
 #include <string>
 #include <limits>
+#include <cstdint>
 #include <sstream>
 #include <algorithm>
 
