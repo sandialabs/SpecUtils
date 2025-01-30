@@ -73,7 +73,7 @@ TEST_CASE( "TestCWrapperOpenFile" )
     "../../../unit_tests/test_data"
   };
   
-  const std::string rel_file_name = "spectra/drf_cal_HPGe_Am241.pcf";
+  const std::string rel_file_name = "spectra/Example1.pcf";
   
   for( const std::string dir : potential_input_paths )
   {

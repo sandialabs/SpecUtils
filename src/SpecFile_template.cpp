@@ -271,7 +271,7 @@ namespace SpecUtils
 			return value1 % value2;
 			});
 
-		srand(time(NULL)); // This is important for the random numbers to work correctly
+		srand( static_cast<unsigned>(time(NULL)) ); // This is important for the random numbers to work correctly
 
 		env.add_callback("rand", 2, [](Arguments& args) {
 			int value1 = args.at(0)->get<int>();

@@ -489,7 +489,7 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
     }
     
     if( strlen(txtdcreption) )
-      remarks_.push_back( "Description: " + string(txtdcreption) );
+      meas->measurement_description_ = txtdcreption;
     if( strlen(devaddress) )
       remarks_.push_back( "Device Address: " + string(devaddress) );
     if( strlen(mcb_type) )

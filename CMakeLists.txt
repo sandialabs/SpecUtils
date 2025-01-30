@@ -8,7 +8,11 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils VERSION 1.0.0 )
+project( SpecUtils VERSION 2025.1.0 )
+enable_testing()  # Enable here to allow running `ctest` from top-most build dir
+
+# Add this line to specify the architectures for MacOS
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for MacOS" FORCE)
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
 option( SpecUtils_D3_SUPPORT_FILE_STATIC "Compiles the JS and CSS files into memory, rather than reading files on disk; disable to allow changing JS/CSS without having to recompile" ON )
@@ -20,6 +24,9 @@ option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_FORTRAN_SWIG "Enables build/test of swig/FORTRAN bindings" OFF )
+option( SpecUtils_FORTRAN_SWIG_GEN "When this is on, cmake will attemp to generate swig fortran bindings. 
+                                    Requires swig-fortran: https://github.com/swig-fortran/swig" OFF )
 option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
@@ -256,6 +263,19 @@ endif( SpecUtils_SHARED_LIB )
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
+
+# Include the GenerateExportHeader module
+include(GenerateExportHeader)
+generate_export_header(SpecUtils
+    BASE_NAME SpecUtils
+    EXPORT_FILE_NAME ${CMAKE_BINARY_DIR}/SpecUtilsExport.h
+)
+
+if( NOT SpecUtils_SHARED_LIB )
+  target_compile_definitions( SpecUtils PRIVATE SPECUTILS_STATIC_DEFINE )
+endif()
+
+
 set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched
 set( SpecUtils_USE_FROM_CHARS OFF )   # Supported by MSVC >= 2019, and gcc >= 12.  Not supported by Apple clang. In MSVC, about 50% slower than boost::spirit
 set( SpecUtils_USE_BOOST_SPIRIT OFF ) # Uses boost::spirit, and fasted method (maybe a hair faster than fastfloat)
@@ -308,7 +328,7 @@ if( SpecUtils_USE_FAST_FLOAT )
       FetchContent_GetProperties( fast_float )
       FetchContent_MakeAvailable( fast_float )
       
-      target_include_directories( SpecUtils PUBLIC ${fast_float_SOURCE_DIR} )
+      target_include_directories( SpecUtils PRIVATE ${fast_float_SOURCE_DIR} )
     endif( SpecUtils_FETCH_FAST_FLOAT )
   endif( NOT FAST_FLOAT_FILE_PATH )
 endif( SpecUtils_USE_FAST_FLOAT )
@@ -383,6 +403,9 @@ if( SpecUtils_JAVA_SWIG )
   target_link_libraries( SpecUtils PUBLIC ${JAVA_LIBRARIES} )
 endif( SpecUtils_JAVA_SWIG )
 
+if( SpecUtils_FORTRAN_SWIG )
+  add_subdirectory(bindings/swig/fortran)
+endif( SpecUtils_FORTRAN_SWIG )
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )
@@ -393,8 +416,8 @@ elseif( WIN32 )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
 
-target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
-                            PRIVATE ${THIRD_PARTY_DIR} )
+target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> 
+                            PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
   if( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
@@ -406,8 +429,7 @@ endif( SpecUtils_BUILD_REGRESSION_TEST )
 
 
 if( SpecUtils_BUILD_UNIT_TESTS )
-  enable_testing()  # Enable here to allow running `ctest` from top-most build dir
-
+  include (CTest)
   add_subdirectory( unit_tests )
 endif( SpecUtils_BUILD_UNIT_TESTS )
 
@@ -416,9 +438,81 @@ if( SpecUtils_BUILD_FUZZING_TESTS )
   add_subdirectory( fuzz_test )
 endif( SpecUtils_BUILD_FUZZING_TESTS )
 
+set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
+
+set( SpecUtils_config_OUT ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h )
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h
+    ${SpecUtils_config_OUT}
 )
+LIST(APPEND headers ${SpecUtils_config_OUT})
+
+get_directory_property(hasParent PARENT_DIRECTORY)
+if( NOT hasParent  )
+  # Specify installation rules
+  include(GNUInstallDirs)
 
 
+  # Install the library
+  install(TARGETS SpecUtils
+      EXPORT SpecUtilsTargets
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For DLLs
+      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+
+  # Install the headers
+  install(FILES ${headers} ${CMAKE_BINARY_DIR}/SpecUtilsExport.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
+
+  # Create and install the CMake package configuration files
+  include(CMakePackageConfigHelpers)
+
+  write_basic_package_version_file(
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
+      VERSION ${PROJECT_VERSION}
+      COMPATIBILITY AnyNewerVersion
+  )
+
+  configure_package_config_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsConfig.cmake.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
+      INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+  )
+
+  install(FILES
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+  )
+
+  install(EXPORT SpecUtilsTargets
+      FILE SpecUtilsTargets.cmake
+      NAMESPACE SpecUtils::
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+  )
+
+  set(CPACK_PACKAGE_NAME "SpecUtils")
+
+
+  if( SpecUtils_SHARED_LIB )
+    set( SpecUtils_PACKAGE_POSTFIX "SharedLib" )
+  else( SpecUtils_SHARED_LIB )
+    set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
+  endif( SpecUtils_SHARED_LIB )
+
+  if( DEFINED ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+    if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+      set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
+    else()
+      set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
+    endif()
+  endif()
+
+  # Lets just use the MAJOR.MINOR version of the compiler in the name.
+  string(REGEX MATCH "^[0-9]+\\.[0-9]+" COMPILER_VERSION_SHORT "${CMAKE_CXX_COMPILER_VERSION}")
+
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
+  set(CPACK_GENERATOR "ZIP")
+  include(CPack)
+endif( NOT hasParent )
