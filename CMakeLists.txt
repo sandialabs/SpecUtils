@@ -440,75 +440,79 @@ endif( SpecUtils_BUILD_FUZZING_TESTS )
 
 set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
 
-# Specify installation rules
-include(GNUInstallDirs)
+
+get_directory_property(hasParent PARENT_DIRECTORY)
+if( NOT hasParent  )
+  # Specify installation rules
+  include(GNUInstallDirs)
 
 
-# Install the library
-install(TARGETS SpecUtils
-    EXPORT SpecUtilsTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For DLLs
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+  # Install the library
+  install(TARGETS SpecUtils
+      EXPORT SpecUtilsTargets
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For DLLs
+      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
 
-set( SpecUtils_config_OUT ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h )
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
-    ${SpecUtils_config_OUT}
-)
-LIST(APPEND headers ${SpecUtils_config_OUT})
-# Install the headers
-install(FILES ${headers} ${CMAKE_BINARY_DIR}/SpecUtilsExport.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
+  set( SpecUtils_config_OUT ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h )
+  configure_file(
+      ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
+      ${SpecUtils_config_OUT}
+  )
+  LIST(APPEND headers ${SpecUtils_config_OUT})
+  # Install the headers
+  install(FILES ${headers} ${CMAKE_BINARY_DIR}/SpecUtilsExport.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
 
-# Create and install the CMake package configuration files
-include(CMakePackageConfigHelpers)
+  # Create and install the CMake package configuration files
+  include(CMakePackageConfigHelpers)
 
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY AnyNewerVersion
-)
+  write_basic_package_version_file(
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
+      VERSION ${PROJECT_VERSION}
+      COMPATIBILITY AnyNewerVersion
+  )
 
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
-)
+  configure_package_config_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsConfig.cmake.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
+      INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+  )
 
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
-)
+  install(FILES
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfig.cmake"
+      "${CMAKE_CURRENT_BINARY_DIR}/SpecUtilsConfigVersion.cmake"
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+  )
 
-install(EXPORT SpecUtilsTargets
-    FILE SpecUtilsTargets.cmake
-    NAMESPACE SpecUtils::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
-)
+  install(EXPORT SpecUtilsTargets
+      FILE SpecUtilsTargets.cmake
+      NAMESPACE SpecUtils::
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SpecUtils
+  )
 
-set(CPACK_PACKAGE_NAME "SpecUtils")
+  set(CPACK_PACKAGE_NAME "SpecUtils")
 
 
-if( SpecUtils_SHARED_LIB )
-  set( SpecUtils_PACKAGE_POSTFIX "SharedLib" )
-else( SpecUtils_SHARED_LIB )
-  set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
-endif( SpecUtils_SHARED_LIB )
+  if( SpecUtils_SHARED_LIB )
+    set( SpecUtils_PACKAGE_POSTFIX "SharedLib" )
+  else( SpecUtils_SHARED_LIB )
+    set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
+  endif( SpecUtils_SHARED_LIB )
 
-if( DEFINED ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
-  if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
-    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
-  else()
-    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
+  if( DEFINED ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+    if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+      set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
+    else()
+      set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
+    endif()
   endif()
-endif()
 
-# Lets just use the MAJOR.MINOR version of the compiler in the name.
-string(REGEX MATCH "^[0-9]+\\.[0-9]+" COMPILER_VERSION_SHORT "${CMAKE_CXX_COMPILER_VERSION}")
+  # Lets just use the MAJOR.MINOR version of the compiler in the name.
+  string(REGEX MATCH "^[0-9]+\\.[0-9]+" COMPILER_VERSION_SHORT "${CMAKE_CXX_COMPILER_VERSION}")
 
-set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
-set(CPACK_GENERATOR "ZIP")
-include(CPack)
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
+  set(CPACK_GENERATOR "ZIP")
+  include(CPack)
+endif( NOT hasParent  )
