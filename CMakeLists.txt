@@ -440,6 +440,12 @@ endif( SpecUtils_BUILD_FUZZING_TESTS )
 
 set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
 
+set( SpecUtils_config_OUT ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h )
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
+    ${SpecUtils_config_OUT}
+)
+LIST(APPEND headers ${SpecUtils_config_OUT})
 
 get_directory_property(hasParent PARENT_DIRECTORY)
 if( NOT hasParent  )
@@ -456,12 +462,6 @@ if( NOT hasParent  )
       INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   )
 
-  set( SpecUtils_config_OUT ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h )
-  configure_file(
-      ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
-      ${SpecUtils_config_OUT}
-  )
-  LIST(APPEND headers ${SpecUtils_config_OUT})
   # Install the headers
   install(FILES ${headers} ${CMAKE_BINARY_DIR}/SpecUtilsExport.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SpecUtils)
 
@@ -515,4 +515,4 @@ if( NOT hasParent  )
   set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
   set(CPACK_GENERATOR "ZIP")
   include(CPack)
-endif( NOT hasParent  )
+endif( NOT hasParent )
