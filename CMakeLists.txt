@@ -28,6 +28,7 @@ option( SpecUtils_FORTRAN_SWIG "Enables build/test of swig/FORTRAN bindings" OFF
 option( SpecUtils_FORTRAN_SWIG_GEN "When this is on, cmake will attemp to generate swig fortran bindings. 
                                     Requires swig-fortran: https://github.com/swig-fortran/swig" OFF )
 option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
+option( SpecUtils_CSharp "Creates C# bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
@@ -406,6 +407,10 @@ endif( SpecUtils_JAVA_SWIG )
 if( SpecUtils_FORTRAN_SWIG )
   add_subdirectory(bindings/swig/fortran)
 endif( SpecUtils_FORTRAN_SWIG )
+
+if( SpecUtils_CSharp )
+  add_subdirectory(bindings/swig/csharp)
+endif( )
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )
