@@ -31,6 +31,8 @@
 #include <istream>
 #include <ostream>
 
+#include "SpecUtils/StringAlgo.h"
+
 /** Some functions and definitions that help to parse and write spectrum files,
  but maybe dont fit in other sections of code.
  */
@@ -290,6 +292,7 @@ Integral float_to_integral( float d )
     static constexpr Integral max_int_val = std::numeric_limits<Integral>::max();
     return std::signbit(d) ? min_int_val : max_int_val;
   }//float_to_integral
+
 }//namespace SpecUtils
 
 #endif //SpecUtils_ParseUtils_h
