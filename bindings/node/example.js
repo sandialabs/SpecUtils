@@ -7,7 +7,7 @@ const specutils = require('./SpecUtilsJS.node');
 
 const inputfile = "example.n42";
 const outputfile = "./temp.pcf";
-const outputformat = "PCF";  //Other possible formats: "TXT", "CSV", "PCF", "N42-2006", N42-2012", "CHN", "SPC-int", "SPC" (or equiv "SPC-float"), "SPC-ascii", "GR130v0", "GR135v2", "SPE" (or equiv "IAEA"), "HTML".
+const outputformat = "PCF";  //Other possible formats: "TXT", "CSV", "CNF", "TKA", "PCF", "N42-2006", N42-2012", "CHN", "SPC-int", "SPC" (or equiv "SPC-float"), "SPC-ascii", "GR130v0", "GR135v2", "SPE" (or equiv "IAEA"), "HTML".
 
 let spec;
 try

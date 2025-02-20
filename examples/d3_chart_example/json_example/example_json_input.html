@@ -7,19 +7,25 @@
     <script type="text/javascript" src="SpectrumChartD3.js"></script>
 
     <link rel="stylesheet" type="text/css" href="SpectrumChartD3.css">
+    <input type="file" id="file-selector" accept=".json">
 
     <script>
       //some boilerplate to load the JSON file
       function loadJSON(callback){
-        var xobj = new XMLHttpRequest();
-        xobj.overrideMimeType("application/json");
-        xobj.open( 'GET', 'example_json_input.json', true);
-        xobj.onreadystatechange = function(){
-          if(xobj.readyState==4 /*&& xobj.status=="200"*/ ){
-            callback(xobj.responseText);
+        const fileSelector = document.getElementById('file-selector');
+        fileSelector.addEventListener('change', (event) => {
+          const fileList = event.target.files;
+          // Make sure a file was selected
+          if (fileSelector.files.length > 0) {
+            var reader = new FileReader(); // File reader to read the file 
+            // This event listener will happen when the reader has read the file
+            reader.addEventListener('load', function() {
+              console.log(JSON.parse(reader.result));
+              callback(reader.result);
+            });
+            reader.readAsText(fileList[0]); // Read the uploaded file
           }
-        };
-        xobj.send(null);
+        });
       }
 
       function init(){
