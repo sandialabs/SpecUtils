@@ -424,6 +424,8 @@ endif( MINGW )
 target_include_directories( SpecUtils PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> 
                             PRIVATE ${THIRD_PARTY_DIR} ${PYTHON_INCLUDE_DIRS} )
 
+set_target_properties(SpecUtils PROPERTIES LINKER_LANGUAGE CXX POSITION_INDEPENDENT_CODE ON)                            
+
 if( SpecUtils_BUILD_REGRESSION_TEST )
   if( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
     message(FATAL_ERROR "You must enable SpecUtils_ENABLE_EQUALITY_CHECKS to build regression test.")

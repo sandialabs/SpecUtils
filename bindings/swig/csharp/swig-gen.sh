@@ -5,7 +5,7 @@ out_dir=csharp_out
 
 mkdir -p $out_dir
 
-swig -I../../../ -csharp -c++ -outdir $out_dir -debug-classes ./SpecUtilsCSharp.i
+swig -I../../../ -csharp -c++ -outdir $out_dir -debug-classes -namespace "Sandia.SpecUtils" ./SpecUtilsCSharp.i
 
 # gad_dev=/mnt/c/Projects/code/gadras.worktrees/feature/406-spectra-file-io-out-of-fortran
 # cpp_wrap_dest=$gad_dev/CGADFunc/FileIO/src

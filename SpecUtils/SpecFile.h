@@ -973,7 +973,7 @@ public:
    \sa properties_flags_
    \sa MeasurementProperties::
    */
-  enum class DerivedDataProperties : uint32_t
+  enum class DerivedDataProperties : unsigned int
   {
     /** Bit always set if this #Measurement is "derived", according to the N42-2012 standard. */
     IsDerived            = (1 << 0),

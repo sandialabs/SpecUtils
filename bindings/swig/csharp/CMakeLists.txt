@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.25)
-project (specutils-csharp VERSION 2025.1.0 LANGUAGES CSharp CXX)
+project (SpecUtilsCSharp VERSION 2025.1.0 LANGUAGES CSharp CXX)
 
 INCLUDE(CSharpUtilities)
 
@@ -19,17 +19,28 @@ set(SWIG_CPP_WRAPPER ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtilsCSharp_wrap.cxx)
 #     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 # )
 
-add_library(specutils_csharp_wrap SHARED ${SWIG_CPP_WRAPPER} )
-target_link_libraries(specutils_csharp_wrap PRIVATE SpecUtils)
+add_library(SpecUtilsWrap SHARED ${SWIG_CPP_WRAPPER} )
+target_link_libraries(SpecUtilsWrap PUBLIC SpecUtils)
 
-# Install the library
-install(TARGETS specutils_csharp_wrap
-    EXPORT SpecUtilsTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+set (csharp_outdir "csharp_out")
+
+CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/AssemblyInfo.cs.template" "${CMAKE_CURRENT_SOURCE_DIR}/${csharp_outdir}/AssemblyInfo.cs")
+
+file(GLOB CSHARP_SRC ${csharp_outdir}/*.cs)
+
+add_library(SpecUtilsCSharp SHARED ${CSHARP_SRC})
+
+# Set CLR assembly properties.
+SET_TARGET_PROPERTIES(SpecUtilsCSharp PROPERTIES
+    VS_DOTNET_REFERENCES "System;System.Core"
+    VS_GLOBAL_ROOTNAMESPACE "Sandia.SpecUtils"
 )
 
-CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/AssemblyInfo.cs.template" "${CMAKE_CURRENT_SOURCE_DIR}/csharp_out/AssemblyInfo.cs")
+add_executable(test_app ${CMAKE_CURRENT_SOURCE_DIR}/Test.cs)
+target_link_libraries(test_app SpecUtilsCSharp)
 
-file(GLOB CSHARP_SRC csharp_out/*.cs)
-
-add_library(specutils_csharp SHARED ${CSHARP_SRC})
+# Install the library
+install(TARGETS SpecUtilsWrap SpecUtilsCSharp test_app
+    EXPORT SpecUtilsTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}  # For shared libraries on UNIX-like systems
+)
