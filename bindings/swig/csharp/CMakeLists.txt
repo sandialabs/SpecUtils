@@ -32,14 +32,20 @@ add_library(SpecUtilsCSharp SHARED ${CSHARP_SRC})
 
 # Set CLR assembly properties.
 SET_TARGET_PROPERTIES(SpecUtilsCSharp PROPERTIES
-    VS_DOTNET_REFERENCES "System;System.Core"
+    VS_DOTNET_REFERENCES "System;System.Core;System.Runtime"
     VS_GLOBAL_ROOTNAMESPACE "Sandia.SpecUtils"
     DOTNET_TARGET_FRAMEWORK_VERSION "v4.6"
     
 )
 
 add_executable(test_app ${CMAKE_CURRENT_SOURCE_DIR}/Test.cs)
-target_link_libraries(test_app SpecUtilsCSharp)
+target_link_libraries(test_app SpecUtilsCSharp SpecUtilsWrap)
+SET_TARGET_PROPERTIES(test_app PROPERTIES
+    VS_DOTNET_REFERENCES "System;System.Core;System.Runtime;Microsoft.VisualStudio.QualityTools.UnitTestFramework"
+    VS_GLOBAL_ROOTNAMESPACE "Sandia.SpecUtils"
+    DOTNET_TARGET_FRAMEWORK_VERSION "v4.6"
+    
+)
 
 set(CPACK_NUGET_PACKAGE_TFMS "net46;.NETFramework4.6")
 #set(CPACK_NUGET_PACKAGE_DEPENDENCIES_net46 "SpecUtilsCSharp")
