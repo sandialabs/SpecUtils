@@ -36,7 +36,6 @@
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
-                "SpecUtils_CSharp": "ON",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
             },
             "vendor": {
@@ -58,12 +57,14 @@
     "buildPresets": [
         {
             "name": "win-x64-debug",
+            "description": "You can install like this: cmake --install out/build/msvc --prefix out/install/win-x64-debug --config Debug  ",
             "configurePreset": "msvc",
             "configuration": "Debug",
             "resolvePackageReferences": "on"
         },
         {
             "name": "win-x64-release",
+            "description": "To install this run: cmake --install out/build/msvc --prefix out/install/win-x64-release --config Release",
             "configurePreset": "msvc",
             "configuration": "Release",
             "resolvePackageReferences": "on"
