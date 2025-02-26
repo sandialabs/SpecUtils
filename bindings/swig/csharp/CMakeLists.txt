@@ -34,13 +34,32 @@ add_library(SpecUtilsCSharp SHARED ${CSHARP_SRC})
 SET_TARGET_PROPERTIES(SpecUtilsCSharp PROPERTIES
     VS_DOTNET_REFERENCES "System;System.Core"
     VS_GLOBAL_ROOTNAMESPACE "Sandia.SpecUtils"
+    DOTNET_TARGET_FRAMEWORK_VERSION "v4.6"
+    
 )
 
 add_executable(test_app ${CMAKE_CURRENT_SOURCE_DIR}/Test.cs)
 target_link_libraries(test_app SpecUtilsCSharp)
 
-# Install the library
-install(TARGETS SpecUtilsWrap SpecUtilsCSharp test_app
-    EXPORT SpecUtilsTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}  # For shared libraries on UNIX-like systems
+set(CPACK_NUGET_PACKAGE_TFMS "net46;.NETFramework4.6")
+#set(CPACK_NUGET_PACKAGE_DEPENDENCIES_net46 "SpecUtilsCSharp")
+#set(CPACK_NUGET_DEPENDENCIES "cmake0.0;NETFramework4.6")
+set (RID win11-64)
+
+# Install the SpecUtilsCSharp library
+install(TARGETS SpecUtilsCSharp 
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/net46
+    # LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+    # ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
 )
+
+install(TARGETS SpecUtilsWrap 
+#RUNTIME DESTINATION  ${CMAKE_INSTALL_LIBDIR}/${RID}
+RUNTIME DESTINATION  ${CMAKE_INSTALL_LIBDIR}/../build
+    # LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
+    # ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
+)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils.targets DESTINATION ${CMAKE_INSTALL_LIBDIR}/../build )
+
+include(CPack)
