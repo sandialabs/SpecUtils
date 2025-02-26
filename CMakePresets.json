@@ -1,0 +1,100 @@
+{
+    "version": 8,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 29,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "GCC-Debug",
+            "hidden": false,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "SpecUtils_ENABLE_D3_CHART": "OFF",
+                "SpecUtils_BUILD_UNIT_TESTS": "ON",
+                "SpecUtils_USING_NO_THREADING": "ON",
+                "SpecUtils_FLT_PARSE_METHOD": "FastFloat",
+                "SpecUtils_FETCH_FAST_FLOAT": "ON",
+                "SpecUtils_FORTRAN_SWIG": "ON",
+                "SpecUtils_FORTRAN_SWIG_GEN": "ON"
+            }
+        },
+        {
+            "name": "GCC-Release",
+            "inherits": "GCC-Debug",
+            "hidden": false,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "windows",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "SpecUtils_CSharp": "ON",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Windows"
+                    ]
+                }
+            },
+            "architecture": {
+                "value": "x64"
+            }
+        },
+        {
+            "name": "msvc",
+            "inherits": "windows"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "win-x64-debug",
+            "configurePreset": "msvc",
+            "configuration": "Debug",
+            "resolvePackageReferences": "on"
+        },
+        {
+            "name": "win-x64-release",
+            "configurePreset": "msvc",
+            "configuration": "Release",
+            "resolvePackageReferences": "on"
+        },
+        {
+            "name": "GCC-Debug",
+            "hidden": false,
+            "configurePreset": "GCC-Debug",
+            "jobs": 20
+        },
+        {
+            "name": "GCC-Release",
+            "hidden": false,
+            "configurePreset": "GCC-Release",
+            "jobs": 20
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "default",
+            "configurePreset": "GCC-Release",
+            "generators": [
+                "TGZ", "TZ"
+            ]
+        },
+        {
+            "name": "nuget",
+            "configurePreset": "msvc",
+            "generators": [
+                "NuGet"
+            ]
+        }
+    ]
+}
