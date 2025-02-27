@@ -28,14 +28,15 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <functional>
-#include <memory>
 
 /*
-Shortcommings that wcjohns should address:
+Shortcomings that wcjohns should address:
  - Many of the N24 fields possible are not checked for
     - comments for multiple different tags, ...
  - Neutron counts are typically merged into a gamma detectors Measurement if a
@@ -64,7 +65,7 @@ Shortcommings that wcjohns should address:
    I'm not sure if the derived spectra should be in with the rest of the spectra
  - When multiple copies of data is included in file with different energy
    calibrations (different energy ranges, or linear vs log energy scale),
-   currently denote this by artificaually creating new detector and adding
+   currently denote this by artificially creating new detector and adding
    "_intercal_<calid>" to its name; should impose a better mechanism to handle
    this.
  - the generated UUID should maybe be more stable with respect to just the

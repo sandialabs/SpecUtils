@@ -1516,7 +1516,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         if( skip_getline )
           continue;
         
-        assert( line == "0.000" );
+//        assert( (line == "0.000") || (line == "20.000") );
         if( line != "0.000" )
           parse_warnings_.push_back( "Unexpected third line value in neutron section: '" + line + "', expected '0.000'." );
         
@@ -1528,7 +1528,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         if( skip_getline )
           continue;
         
-        assert( line == "1.000" || line == "0.000" );
+//        assert( line == "1.000" || line == "0.000" );
         if( (line != "1.000") && (line != "0.000") )
           parse_warnings_.push_back( "Unexpected fourth line value in neutron section: '" + line + "', expected '0.000' or '1.000'." );
         
