@@ -271,9 +271,9 @@ bool SpecFile::load_from_phd( std::istream &input )
     measurements_.push_back( meas );
     
     cleanup_after_load();
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
-    cerr  << "caught: " << e.what() << endl;
+    //cerr  << "caught: " << e.what() << endl;
     reset();
     input.clear();
     input.seekg( orig_pos, ios::beg );

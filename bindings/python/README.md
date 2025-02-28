@@ -1,76 +1,88 @@
-Instructions to build and install a python wheel file.
+# Gamma Spectrum file utilities
 
-It could be more automated, or polished, or whatever, but this works.
-
-
-## macOS build instructions 
-Tested on M1 on Ventura, with Xcode 15.1
-```bash
-# Setup deployment target and path where you will install boost
-export MACOSX_DEPLOYMENT_TARGET=10.13
-export MY_BOOST_PREFIX=/path/to/install/prefix/to/macOS_boost_1_85_prefix
+[SpecUtils](https://github.com/sandialabs/SpecUtils) is a library for reading, manipulating, and exporting spectrum files produced by RadioIsotope Identification Devices (RIIDs), Radiation Portal Monitors (RPMs), radiation search systems, Personal Radiation Detectors (PRDs), and many laboratory detection systems.
+It opens [N42](https://www.nist.gov/programs-projects/ansiieee-n4242-standard) (2006 and 2012 formats), [SPE](https://inis.iaea.org/collection/NCLCollectionStore/_Public/32/042/32042415.pdf), [SPC](https://web.archive.org/web/20160418031030/www.ortec-online.com/download/ortec-software-file-structure-manual.pdf), CSV, TXT, [PCF](https://www.osti.gov/biblio/1378172-pcf-file-format), [DAT](https://www.aseg.org.au/sites/default/files/gr-135.pdf), and many more files; altogether much more than a 100 file format variants.  This library lets you either programmatically access and/or modify the parsed information, or you can save it to any of 13 different formats, or create spectrum files from scratch.
 
 
-# Download and build boost with Python support (any non-ancient version of boost should work)
-cd /tmp/
-curl -L https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.gz -o boost_1_85_0.tar.gz
-tar -xzvf boost_1_85_0.tar.gz
-cd boost_1_85_0
+This package is a Python wrapper around the C++ [SpecUtils](https://github.com/sandialabs/SpecUtils) library, with the bindings created using [nanobind](https://github.com/wjakob/nanobind).  [SpecUtils](https://github.com/sandialabs/SpecUtils) is primarily developed as part of [InterSpec](https://github.com/sandialabs/InterSpec/), but is also used by [Cambio](https://github.com/sandialabs/Cambio/), and a number of other projects.
 
-# build the b2 executable
-./bootstrap.sh cxxflags="--arch arm64 -mmacosx-version-min=10.13" cflags="-arch arm64 -mmacosx-version-min=10.13" linkflags="-arch arm64 -mmacosx-version-min=10.13" --prefix=${MY_BOOST_PREFIX}
+An example use is:
+```python
+import SpecUtils
 
-# point boost to the Python install we want to use, by using a user-config.jam file
-#  Here I'm using the brew install of python 3.11
-echo "using python : 3.11.6 : /opt/homebrew/opt/python3/bin/python3 : /opt/homebrew/opt/python3/Frameworks/Python.framework/Versions/3.11/include/python3.11/ : /opt/homebrew/opt/python3/Frameworks/Python.framework/Versions/3.11/lib/libpython3.11.dylib ;" > user-config.jam
+# Create a SpecFile object
+spec = SpecUtils.SpecFile()
 
-# build and install boost for arm64 - we will only make static libs, so this way the 
-#  final SpecUtils module library will be self contained.
-./b2 --user-config=./user-config.jam toolset=clang-darwin target-os=darwin architecture=arm abi=aapcs cxxflags="-stdlib=libc++ -arch arm64 -std=c++14 -mmacosx-version-min=10.13" cflags="-arch arm64  -mmacosx-version-min=10.13" linkflags="-stdlib=libc++ -arch arm64 -std=c++14 -mmacosx-version-min=10.13" link=static variant=release threading=multi --build-dir=macOS_arm64_build --prefix=${MY_BOOST_PREFIX} -a install
+# Load a spectrum file
+spec.loadFile("spectrum_file.n42", SpecUtils.ParserType.Auto)
 
-# remove the boost src and build files
-cd ..
-rm -r boost_1_85_0.tar.gz boost_1_85_0
+# Get list of all individual records in the spectrum file
+meass = spec.measurements() 
+print( "There are", len(meass), "spectrum records." )
 
-# build SpecUtils
-cd /path/to/SpecUtils
-mkdir build_python
-cd build_python
-cmake -DSpecUtils_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET="10.13" -DCMAKE_PREFIX_PATH=${MY_BOOST_PREFIX} -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64" ..
-cmake --build . --config Release -j10
+# Get first measurement
+meas = meass[0]
 
+# Get gamma counts, and the lower energy of each channel
+counts = meas.gammaCounts()
+energies = meas.channelEnergies()
 
-# now, lets test it
-mkdir pytest
-cd pytest
-# We need to rename the shared library to something that will work with Python
-cp ../libSpecUtils.dylib ./SpecUtils.so
-cp ../../bindings/python/test_python.py .
-# The `test_python.py` script uses the `passthrough.n42` file from InterSpec, so
-# we need to copy that into the current directory
-cp /path/to/InterSpec/example_spectra/passthrough.n42 .
+# Get neutron counts
+neutrons = meas.neutronCountsSum()
 
-# Now run the test script, making sure to use the same Python we compiled boost against
-/opt/homebrew/opt/python3/bin/python3 test_python.py
-# You should see some output
+# Get start time
+startime = meas.startTime()
 
-
-# if you want, you can create a proper package (although these instructions may be out of date)
-mkdir SpecUtils
-cp ../bindings/python/__init__.py ./SpecUtils/
-cp libSpecUtils.dylib ./SpecUtils/SpecUtils.so
-ln -s ../bindings/python/setup.py .
-python3 setup.py bdist_wheel
-python3 -m pip install --user --force dist/SpecUtils-0.0.1-cp39-cp39-macosx_12_0_x86_64.whl
+# Print out CSV information of energies and counts
+print( "StartTime: ", startime )
+print( "Neutron counts: ", neutrons, "\n" )
+print( "Energy (keV), Counts" )
+for i in range(len(counts)):
+    print( f"{energies[i]},{counts[i]}" )
 ```
 
-## Windows build instructions
-Assumes you already compiled boost with Python support. The script `get-boost.ps1` will help you with this.
-
-Run these powershell scripts to build SpecUtils with python bindings and install the bindings into your python environment. Tested with python 3.11.
-
-```ps1
-# Run these in a Visual Studio Development Powershell Console
-PS C:\Projects\code\SpecUtils\bindings\python> .\build-4-python.ps1
-PS C:\Projects\code\SpecUtils\bindings\python> .\make-wheel.ps1
+For further examples, see the [examples](https://github.com/sandialabs/SpecUtils/tree/master/bindings/python/examples) directory.
+To run the examples, run the following commands:
 ```
+python test_python.py
+python make_file_example.py
+python make_html_plot.py /some/path/to/a/file.n42
+```
+
+
+## Installation
+You can install the package using pip like this:
+```
+mkdir my_venv
+python -m venv my_venv
+
+source my_venv/bin/activate
+pip install SandiaSpecUtils
+
+python
+>>> import SpecUtils
+>>> spec = SpecUtils.SpecFile()
+>>> ...
+```
+
+
+Or instead, you can compile from source yourself, with something like:
+```
+git clone https://github.com/sandialabs/SpecUtils.git SpecUtils
+
+# Optionsally make/use a virtual environment
+mkdir my_venv
+python3 -m venv my_venv
+source my_venv/bin/activate  # Windows PowerShell: .\my_venv\Scripts\Activate.ps1
+
+# Compile and install the bindings
+pip install SpecUtils/bindings/python
+
+# Use the package
+python
+>>> import SpecUtils
+```
+
+
+## Support
+Please create an issue on the [SpecUtils GitHub repository](https://github.com/sandialabs/SpecUtils/issues), or email InterSpec@sandia.gov if you have any questions or problems.
