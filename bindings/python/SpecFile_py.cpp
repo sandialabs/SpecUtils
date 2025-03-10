@@ -982,11 +982,22 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
   py::list cal_channel_energies_wrapper( const SpecUtils::EnergyCalibration *cal )
   {
     py::list l;
-    if( !cal->channel_energies() )
+    if( !cal || !cal->channel_energies() )
      return l;
     
     for( auto p : *cal->channel_energies() )
       l.append( p );
+    return l;
+  }
+
+  py::list cal_coefficients_wrapper( const SpecUtils::EnergyCalibration *cal )
+  {
+    py::list l;
+    if( !cal )
+     return l;
+    
+    for( const float p : cal->coefficients() )
+      l.append( static_cast<double>(p) );
     return l;
   }
 
@@ -1381,8 +1392,8 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
     "Returns the energy calibration type" )
   .def( "valid", &SpecUtils::EnergyCalibration::valid,
     "Returns if the energy calibration is valid." )
-  .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, py::rv_policy::reference_internal,
-    "Returns the list of energy calibration coeficients.\n"
+  .def( "coefficients", &cal_coefficients_wrapper,
+    "Returns the list of energy calibration coefficients.\n"
     "Will only be empty for SpecUtils.EnergyCalType.InvalidEquationType." )
   .def( "channelEnergies", &cal_channel_energies_wrapper,
       "Returns lower channel energies; will have one more entry than the number of channels." )
