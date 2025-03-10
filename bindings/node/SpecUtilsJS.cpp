@@ -1,6 +1,7 @@
 #include <set>
 #include <string>
 #include <iterator>
+#include <cassert>
 
 #include <napi.h>
 #include <napi-inl.h>
@@ -9,6 +10,7 @@
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/Filesystem.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/DateTime.h"
 
 
 namespace
@@ -521,11 +523,11 @@ Napi::Value SpecRecord::source_type(const Napi::CallbackInfo& info)
 /** Returns start time, as a Date object of measurement start, if avaialble, otherwise null. */
 Napi::Value SpecRecord::start_time(const Napi::CallbackInfo& info)
 {
-  if( m_meas->start_time().is_special() )
+  if( SpecUtils::is_special(m_meas->start_time()) )
     return Napi::Value();
   
-  const boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
-  const auto x = (m_meas->start_time() - epoch).total_milliseconds();
+  auto duration = m_meas->start_time().time_since_epoch();
+  const auto x = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count();
   
   //return Napi::Date::New( info.Env(), static_cast<double>(x) );
   return Napi::Number::New( info.Env(), static_cast<double>(x) );
@@ -622,11 +624,11 @@ Napi::Value SpecRecord::longitude(const Napi::CallbackInfo& info)
 /** Returns Date object of GPS fix.  Null if not avaialble. */
 Napi::Value SpecRecord::position_time(const Napi::CallbackInfo& info)
 {
-  if( !m_meas->has_gps_info() || m_meas->position_time().is_special() )
+  if( !m_meas->has_gps_info() || SpecUtils::is_special(m_meas->position_time()) )
     return Napi::Value();
   
-  const boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
-  const auto x = (m_meas->position_time() - epoch).total_milliseconds();
+  auto duration = m_meas->position_time().time_since_epoch();
+  const auto x = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count();
   
   //return Napi::Date::New( info.Env(), static_cast<double>(x) );
   return Napi::Number::New( info.Env(), static_cast<double>(x) );
@@ -1217,7 +1219,7 @@ Napi::Value SpecFile::sum_measurements(const Napi::CallbackInfo& info)
   std::shared_ptr<SpecUtils::Measurement> meas;
   try
   {
-    meas = m_spec->sum_measurements( samplenums, detectornames );
+    meas = m_spec->sum_measurements( samplenums, detectornames, nullptr );
   }catch( std::exception &e )
   {
     Napi::Error::New( info.Env(), "Failed summing SpecRecords: "
@@ -1300,6 +1302,10 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
     type = SpecUtils::SaveSpectrumAsType::Txt;
   else if( format == "CSV" )
     type = SpecUtils::SaveSpectrumAsType::Csv;
+  else if( format == "CNF" )
+    type = SpecUtils::SaveSpectrumAsType::Cnf;
+  else if( format == "TKA" )
+    type = SpecUtils::SaveSpectrumAsType::Tka;
   else if( format == "PCF" )
     type = SpecUtils::SaveSpectrumAsType::Pcf;
   else if( format == "N42-2006" )
