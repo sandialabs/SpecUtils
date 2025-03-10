@@ -979,6 +979,17 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
     info->set_parse_warnings( remarks );
   }
 
+  py::list cal_channel_energies_wrapper( const SpecUtils::EnergyCalibration *cal )
+  {
+    py::list l;
+    if( !cal->channel_energies() )
+     return l;
+    
+    for( auto p : *cal->channel_energies() )
+      l.append( p );
+    return l;
+  }
+
 std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromPolynomial_wrapper( const size_t num_channels,
                          py::list py_coefs )
 {
@@ -1373,9 +1384,8 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, py::rv_policy::reference_internal,
     "Returns the list of energy calibration coeficients.\n"
     "Will only be empty for SpecUtils.EnergyCalType.InvalidEquationType." )
-  // TODO: I think we should put a wrapper around channel_energies, and return a proper python list
-  .def( "channelEnergies", &SpecUtils::EnergyCalibration::channel_energies, py::rv_policy::reference_internal,
-    "Returns lower channel energies; will have one more entry than the number of channels." )
+  .def( "channelEnergies", &cal_channel_energies_wrapper,
+      "Returns lower channel energies; will have one more entry than the number of channels." )
   .def( "deviationPairs", &SpecUtils::EnergyCalibration::deviation_pairs, py::rv_policy::reference_internal )
   .def( "numChannels", &SpecUtils::EnergyCalibration::num_channels,
     "Returns the number of channels this energy calibration is for." )
