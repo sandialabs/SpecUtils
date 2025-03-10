@@ -584,6 +584,17 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
       l.append( p );
     return l;
   }
+
+  py::list meas_cal_coefficients_wrapper( const SpecUtils::Measurement *meas )
+  {
+    py::list l;
+    if( !meas )
+     return l;
+    
+    for( const float p : meas->calibration_coeffs() )
+      l.append( static_cast<double>(p) );
+    return l;
+  }
   
   py::list gamma_counts_wrapper( const SpecUtils::Measurement *meas )
   {
@@ -1000,6 +1011,7 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
       l.append( static_cast<double>(p) );
     return l;
   }
+
 
 std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromPolynomial_wrapper( const size_t num_channels,
                          py::list py_coefs )
@@ -1460,7 +1472,7 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
     .def( "energyCalibrationModel", &SpecUtils::Measurement::energy_calibration_model )
     .def( "remarks", &measurement_remarks_wrapper )
     .def( "startTime", &start_time_wrapper )
-    .def( "calibrationCoeffs", &SpecUtils::Measurement::calibration_coeffs, py::rv_policy::reference )
+    .def( "calibrationCoeffs", &meas_cal_coefficients_wrapper )
     .def( "deviationPairs", &SpecUtils::Measurement::deviation_pairs, py::rv_policy::reference )
     .def( "channelEnergies", &channel_energies_wrapper )
     .def( "gammaCounts", &gamma_counts_wrapper )
