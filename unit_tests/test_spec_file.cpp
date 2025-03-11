@@ -202,12 +202,14 @@ TEST_CASE("Round Trip")
             CHECK(m.rpm_mca_number() == 3 - 1);
         }
         specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
+
+        CHECK_FALSE(specfile.filename() == fname);
         specfile.write_to_file(n42Fname, SpecUtils::SaveSpectrumAsType::N42_2012);
 
         SUBCASE("Read PCF File")
         {
             SpecUtils::SpecFile specfileToRead;
-            const bool success_reading = specfileToRead.load_file(fname, SpecUtils::ParserType::Pcf);
+            const bool success_reading = specfileToRead.load_file(fname, SpecUtils::ParserType::Auto);
             REQUIRE(success_reading);
 
             for (size_t i = 0; i < numMeasurements; i++)
@@ -266,9 +268,12 @@ TEST_CASE("Round Trip")
             }
         }
 
-        SUBCASE("Writing over existing file fails")
+        SUBCASE("Writing over existing file is succesful if overwrite is allowed")
         {
-            CHECK_THROWS(specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf));
+            CHECK(specfile.filename().empty());
+
+            specfile.set_allow_overwrite(true);
+            specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
         }
     }
 }
@@ -331,4 +336,22 @@ TEST_CASE("Find Source String")
 
         CHECK(actual == expected);
     }
+}
+
+TEST_CASE("Gamma counts copy")
+{
+    SpecUtils::Measurement m;
+
+    SpecUtils::FloatVec inSpectrum;
+    
+    for (size_t i = 0; i < 1024; i++)
+    {
+        inSpectrum.push_back(i+1.0F);
+    }
+
+    m.set_gamma_counts(inSpectrum);
+
+    auto outSpectrum = m.gamma_counts_copy();
+    
+    CHECK(outSpectrum == inSpectrum);
 }

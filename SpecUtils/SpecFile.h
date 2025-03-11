@@ -755,6 +755,11 @@ public:
   //  Measurement is not properly initialized.
   const std::shared_ptr< const std::vector<float> > &gamma_counts() const;
   
+  std::vector<float> gamma_counts_copy() const
+  {
+    return *(gamma_counts_);
+  }
+
   //neutron_counts(): the channel counts of neutron data.  Currently none of
   //  the file formats give channelized neutron data, so this function may
   //  be removed in the future; use neutron_counts_sum() instead.  Currently
@@ -1514,6 +1519,16 @@ public:
   void set_manufacturer( const std::string &n );
   void set_instrument_model( const std::string &n );
   void set_instrument_id( const std::string &n );
+
+  void set_allow_overwrite(bool flag)
+  {
+    allow_overwrite_ = flag;
+  }
+
+  bool allow_overwrite() const
+  {
+    return allow_overwrite_;
+  }
 
   //A little more complex setters:
   //set_live_time(...) and set_real_time(...) update both the measurement
@@ -2595,11 +2610,14 @@ protected:
                 std::function< void(std::shared_ptr<Measurement>) > xform );
   
   //Data members
+
+  /// @brief Don't throw an exception when trying to overwrite a file.
+  bool allow_overwrite_ = false;
   float gamma_live_time_;      //sum over all measurements
   float gamma_real_time_;      //sum over all measurements
   double gamma_count_sum_;      //sum over all measurements
   double neutron_counts_sum_;   //sum over all measurements
-  std::string                 filename_;
+  std::string filename_;
   
   /** Names of all detectors this SpecFile contains.
    There are no duplicates in this vector, and entries should be sorted alphabetically.
