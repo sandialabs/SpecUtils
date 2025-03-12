@@ -25,6 +25,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <algorithm>
+#include <sstream>
 
 #include "SpecUtils/CubicSpline.h"
 
@@ -96,7 +97,12 @@ create_cubic_spline( const std::vector<std::pair<float,float>> &data,
   // TODO: sort input
   for( size_t i = 0; i < ndata - 1; ++i ) {
     if( data[i].first >= data[i+1].first )
-      throw std::runtime_error( "create_cubic_spline: input data not sorted." );
+    {
+      std::ostringstream strm( "create_cubic_spline: input data not sorted.");
+      strm << "i: " << i << "; data[i].first: " << data[i].first << "; data[i+1].first: " << data[i+1].first; 
+      throw std::runtime_error( strm.str() );
+    }
+
   }
   
   // Create tri-diagonal matrix that we will solve for.
