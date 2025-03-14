@@ -10247,15 +10247,19 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const areaUncert = peak.Amplitude[1].toFixed(1);
 
   let nuc = null;
-  if( peak.nuclide && peak.nuclide.name ){
-    //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", energy: 1408.01}
-    nuc = peak.nuclide.name + " (";
-    if( peak.nuclide.decayParent !== peak.nuclide.name )
-      nuc = nuc + peak.nuclide.decayParent + ", ";
-    if( peak.nuclide.energy )
-      nuc = nuc + peak.nuclide.energy.toFixed(2) + " keV";
-    if( peak.nuclide.type )
-      nuc = nuc + " " + peak.nuclide.type;
+  //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", energy: 1408.01}
+  //xray: {name: "Uranium", energy: 114.8440 }
+  //reaction: {name: "Fe(n,g)", energy: 4996.23, type: "D.E."}
+  let nucinfo = peak.nuclide ? peak.nuclide : (peak.xray ? peak.xray : (peak.reaction ? peak.reaction : null));
+  
+  if( nucinfo && nucinfo.name ){
+    nuc = nucinfo.name + " (";
+    if( nucinfo.decayParent && (nucinfo.decayParent !== nucinfo.name) )
+      nuc = nuc + nucinfo.decayParent + ", ";
+    if( nucinfo.energy )
+      nuc = nuc + nucinfo.energy.toFixed(2) + " keV";
+    if( nucinfo.type )
+      nuc = nuc + " " + nucinfo.type;
     nuc = nuc + ")";
   }
   
