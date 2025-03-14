@@ -584,6 +584,17 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
       l.append( p );
     return l;
   }
+
+  py::list meas_cal_coefficients_wrapper( const SpecUtils::Measurement *meas )
+  {
+    py::list l;
+    if( !meas )
+     return l;
+    
+    for( const float p : meas->calibration_coeffs() )
+      l.append( static_cast<double>(p) );
+    return l;
+  }
   
   py::list gamma_counts_wrapper( const SpecUtils::Measurement *meas )
   {
@@ -979,6 +990,29 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
     info->set_parse_warnings( remarks );
   }
 
+  py::list cal_channel_energies_wrapper( const SpecUtils::EnergyCalibration *cal )
+  {
+    py::list l;
+    if( !cal || !cal->channel_energies() )
+     return l;
+    
+    for( auto p : *cal->channel_energies() )
+      l.append( p );
+    return l;
+  }
+
+  py::list cal_coefficients_wrapper( const SpecUtils::EnergyCalibration *cal )
+  {
+    py::list l;
+    if( !cal )
+     return l;
+    
+    for( const float p : cal->coefficients() )
+      l.append( static_cast<double>(p) );
+    return l;
+  }
+
+
 std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromPolynomial_wrapper( const size_t num_channels,
                          py::list py_coefs )
 {
@@ -1058,7 +1092,70 @@ std::shared_ptr<SpecUtils::EnergyCalibration> energyCalFromLowerChannelEnergies_
   cal->set_lower_channel_energy( num_channels, energies );
   return cal;
 }
+
+py::list polynomial_coef_to_fullrangefraction_wrapper( py::list py_coefs, const size_t nchannel )
+{
+  vector<float> coefs;
+  size_t n = py_coefs.size();
+  for( size_t i = 0; i < n; ++i )
+    coefs.push_back( py::cast<float>( py_coefs[i] ) );
+
+  const vector<float> frf_coefs = SpecUtils::polynomial_coef_to_fullrangefraction( coefs, nchannel );
+  
+  py::list answer;
+  for( const float p : frf_coefs )
+    answer.append( static_cast<double>(p) );
+  return answer;
+}
+
+py::list fullrangefraction_coef_to_polynomial_wrapper( py::list py_coefs, const size_t nchannel )
+{
+  vector<float> coefs;
+  size_t n = py_coefs.size();
+  for( size_t i = 0; i < n; ++i )
+    coefs.push_back( py::cast<float>( py_coefs[i] ) );
     
+  const vector<float> poly_coefs = SpecUtils::fullrangefraction_coef_to_polynomial( coefs, nchannel );
+
+  py::list answer;
+  for( const float p : poly_coefs )
+    answer.append( static_cast<double>(p) );
+  return answer;
+}
+
+
+py::list mid_channel_polynomial_to_fullrangeFraction_wrapper( py::list py_coefs, const size_t nchannel )
+{
+  vector<float> coefs;
+  size_t n = py_coefs.size();
+  for( size_t i = 0; i < n; ++i )
+    coefs.push_back( py::cast<float>( py_coefs[i] ) );
+
+  const vector<float> frf_coefs = SpecUtils::mid_channel_polynomial_to_fullrangeFraction( coefs, nchannel );
+  
+  py::list answer;
+  for( const float p : frf_coefs )
+    answer.append( static_cast<double>(p) );
+  return answer;
+}
+
+py::list mid_channel_polynomial_to_lower_channel_energy_poly_wrapper( py::list py_coefs, const size_t nchannel )
+{
+  vector<float> coefs;
+  size_t n = py_coefs.size();
+  for( size_t i = 0; i < n; ++i )
+    coefs.push_back( py::cast<float>( py_coefs[i] ) );
+
+  const vector<float> frf_coefs = SpecUtils::mid_channel_polynomial_to_fullrangeFraction( coefs, nchannel );
+  const vector<float> poly_coefs = SpecUtils::fullrangefraction_coef_to_polynomial( frf_coefs, nchannel );
+
+  py::list answer;
+  for( const float p : poly_coefs )
+    answer.append( static_cast<double>(p) );
+  return answer;
+}
+
+
 
 #if( SpecUtils_ENABLE_D3_CHART )
 bool write_spectrum_data_js_wrapper( py::object pystream,
@@ -1370,12 +1467,11 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
     "Returns the energy calibration type" )
   .def( "valid", &SpecUtils::EnergyCalibration::valid,
     "Returns if the energy calibration is valid." )
-  .def( "coefficients", &SpecUtils::EnergyCalibration::coefficients, py::rv_policy::reference_internal,
-    "Returns the list of energy calibration coeficients.\n"
+  .def( "coefficients", &cal_coefficients_wrapper,
+    "Returns the list of energy calibration coefficients.\n"
     "Will only be empty for SpecUtils.EnergyCalType.InvalidEquationType." )
-  // TODO: I think we should put a wrapper around channel_energies, and return a proper python list
-  .def( "channelEnergies", &SpecUtils::EnergyCalibration::channel_energies, py::rv_policy::reference_internal,
-    "Returns lower channel energies; will have one more entry than the number of channels." )
+  .def( "channelEnergies", &cal_channel_energies_wrapper,
+      "Returns lower channel energies; will have one more entry than the number of channels." )
   .def( "deviationPairs", &SpecUtils::EnergyCalibration::deviation_pairs, py::rv_policy::reference_internal )
   .def( "numChannels", &SpecUtils::EnergyCalibration::num_channels,
     "Returns the number of channels this energy calibration is for." )
@@ -1388,30 +1484,64 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
   .def( "upperEnergy", &SpecUtils::EnergyCalibration::upper_energy,
     "Returns highest energy of this energy calibration." )
   .def( "setPolynomial", &SpecUtils::EnergyCalibration::set_polynomial,
-     "NumChannels"_a, "Coeffiecients"_a, "DeviationPairs"_a,
-    "Sets the energy calibration information from Polynomial defined coefficents." )
+     "NumChannels"_a, "Coefficients"_a, "DeviationPairs"_a,
+    "Sets the energy calibration information from Polynomial defined coefficients." )
   .def( "setFullRangeFraction", &SpecUtils::EnergyCalibration::set_full_range_fraction,
-     "NumChannels"_a, "Coeffiecients"_a, "DeviationPairs"_a,
-    "Sets the energy calibration information from Full Range Fraction (e.g., what PCF files use) defined coefficents." )
+     "NumChannels"_a, "Coefficients"_a, "DeviationPairs"_a,
+    "Sets the energy calibration information from Full Range Fraction (e.g., what PCF files use) defined coefficients." )
   .def( "setLowerChannelEnergy", set_lower_channel_energy_fcn_ptr,
      "NumChannels"_a, "Energies"_a,
     "Sets the energy calibration information from lower channel energies." )
   .def_static( "fromPolynomial", &energyCalFromPolynomial_wrapper,
-    "NumChannels"_a, "Coeffiecients"_a, 
+    "NumChannels"_a, "Coefficients"_a, 
     "Creates a new energy calibration object from a polynomial definition." )
   .def_static( "fromPolynomial", &energyCalFromPolynomial_2_wrapper,
-    "NumChannels"_a, "Coeffiecients"_a, "DeviationPairs"_a, 
+    "NumChannels"_a, "Coefficients"_a, "DeviationPairs"_a, 
     "Creates a new energy calibration object from a polynomial definition, with some nonlinear-deviation pairs." )
   .def_static( "fromFullRangeFraction", &energyCalFromFullRangeFraction_wrapper,
-    "NumChannels"_a, "Coeffiecients"_a, 
+    "NumChannels"_a, "Coefficients"_a, 
     "Creates a new energy calibration object from a Full Range Fraction definition." )
   .def_static( "fromFullRangeFraction", &energyCalFromFullRangeFraction_2_wrapper,
-    "NumChannels"_a, "Coeffiecients"_a, "DeviationPairs"_a, 
+    "NumChannels"_a, "Coefficients"_a, "DeviationPairs"_a, 
     "Creates a new energy calibration object from a Full Range Fraction definition, with some nonlinear-deviation pairs." )
   .def_static( "fromLowerChannelEnergies", &energyCalFromLowerChannelEnergies_wrapper,
     "NumChannels"_a, "Energies"_a, 
     "Creates a new energy calibration object from a lower channel energies." )
 ;
+
+
+m.def("polynomialCoefToFullRangeFraction", 
+  &polynomial_coef_to_fullrangefraction_wrapper, 
+  "coeffs"_a, "nchannel"_a,
+  "Converts from polynomial energy calibration coefficients, to Full Range Fraction coefficients."
+  " Only works for up to the first four coefficients, as the fifth"
+  " one for FRF does not translate easily to polynomial, so it will be ignored if"
+  " present."
+).def("fullRangeFractionCoefToPolynomial", 
+  &fullrangefraction_coef_to_polynomial_wrapper, 
+  "coeffs"_a, "nchannel"_a,
+  "Converts from Full Range Fraction energy calibration coefficients, to polynomial coefficients."
+  " Only works for up to the first four coefficients, as the fifth"
+  " one for FRF does not translate easily to polynomial, so it will be ignored if"
+  " present."
+)
+.def("MidChannelPolynomialToFullRangeFraction", 
+  &mid_channel_polynomial_to_fullrangeFraction_wrapper, 
+  "coeffs"_a, "nchannel"_a,
+  "Converts coefficients from polynomial equation that uses the convention"
+  " the energy given by the equation is the middle of the channel (which is"
+  "non-standard) to standard full range fraction equation coefficients.\n"
+  "Only considers up to the first four coefficients."
+).def("MidChannelPolynomialToLowerEdgePolynomial", 
+  &mid_channel_polynomial_to_lower_channel_energy_poly_wrapper, 
+  "coeffs"_a, "nchannel"_a,
+  "Converts coefficients from polynomial equation that uses the convention"
+  " the energy given by the equation is the middle of the channel (which is"
+  "non-standard) to standard polynomial equation coefficients that give"
+  " lower energy of each channel.\n"
+  "Only considers up to the first four coefficients."
+);
+
 
 
   {//begin Measurement class scope
@@ -1439,7 +1569,7 @@ py::class_<SpecUtils::EnergyCalibration>(m, "EnergyCalibration")
     .def( "energyCalibrationModel", &SpecUtils::Measurement::energy_calibration_model )
     .def( "remarks", &measurement_remarks_wrapper )
     .def( "startTime", &start_time_wrapper )
-    .def( "calibrationCoeffs", &SpecUtils::Measurement::calibration_coeffs, py::rv_policy::reference )
+    .def( "calibrationCoeffs", &meas_cal_coefficients_wrapper )
     .def( "deviationPairs", &SpecUtils::Measurement::deviation_pairs, py::rv_policy::reference )
     .def( "channelEnergies", &channel_energies_wrapper )
     .def( "gammaCounts", &gamma_counts_wrapper )
