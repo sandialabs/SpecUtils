@@ -56,6 +56,22 @@ cmake --build build_dir --target install --config Release
 # These commands will copy 'SpecUtilsJS.node' and 'example.js' 
 # to 'build_dir/example/' so you can run like:
 node build_dir/example/example.js
+
+# Alternatively, linux_build.sh shall be used to build the binaries.
+The options are,
+
+> ./linux_build.sh -h
+Syntax: ./build_linux.sh [-p|h|c]
+options:
+p     Boost library path.
+c     Clean build.
+h     Print this Help.
+
+# For example, [./build_linux.sh -c -p /usr/include/boost]
+
+# To execute the example
+node node_release/example.js
+
 ```
 
 # Example Use In JavaScript
