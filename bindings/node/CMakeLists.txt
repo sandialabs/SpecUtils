@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
 
 set( CMAKE_CXX_STANDARD 11 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set( TRY_TO_STATIC_LINK ON CACHE BOOL "Lets statically link everything" )
 
@@ -20,10 +21,12 @@ IF(WIN32)
     #0x0601==Win7, 0x0501==WinXP
 ENDIF(WIN32)
 
-
+IF(UNIX)
+  include_directories (./linux_build)
+ENDIF(UNIX)
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
 
-include_directories( ${CMAKE_JS_INC})
+include_directories(${CMAKE_JS_INC})
 set( SOURCE_FILES example.js SpecUtilsJS.h SpecUtilsJS.cpp )
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES} ${CMAKE_JS_SRC})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
@@ -35,9 +38,8 @@ target_include_directories( ${PROJECT_NAME} PUBLIC
 )
 
 
-install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/example.js
-         DESTINATION ${PROJECT_BINARY_DIR}/example/ )
-install( TARGETS ${PROJECT_NAME} DESTINATION ${PROJECT_BINARY_DIR}/example/ )
+install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/example.js DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/node_release/ )
+install( TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/node_release/ )
 
 
 

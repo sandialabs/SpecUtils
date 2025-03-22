@@ -26,6 +26,7 @@ CSS variables InterSpec will define for colors, and line widths:
 svg.SpectrumChartD3 {
   /* This is the <svg> element. */
   background: var(--d3spec-background-color, none);
+  min-height: 700px;
 }
 
 
