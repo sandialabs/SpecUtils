@@ -7,10 +7,12 @@
     <script type="text/javascript" src="SpectrumChartD3.js"></script>
 
     <link rel="stylesheet" type="text/css" href="SpectrumChartD3.css">
+    <input type="file" id="file-selector" accept=".json">
 
     <script>
       //some boilerplate to load the JSON file
       function loadJSON(callback){
+        // Some browsers (at least FF) will let you load 'example_json_input.json' from disk, so we'll try this.
         var xobj = new XMLHttpRequest();
         xobj.overrideMimeType("application/json");
         xobj.open( 'GET', 'example_json_input.json', true);
@@ -20,6 +22,22 @@
           }
         };
         xobj.send(null);
+
+        // For other browsers, the user must have the user initiate things.
+        const fileSelector = document.getElementById('file-selector');
+        fileSelector.addEventListener('change', (event) => {
+          const fileList = event.target.files;
+          // Make sure a file was selected
+          if (fileSelector.files.length > 0) {
+            var reader = new FileReader(); // File reader to read the file 
+            // This event listener will happen when the reader has read the file
+            reader.addEventListener('load', function() {
+              console.log(JSON.parse(reader.result));
+              callback(reader.result);
+            });
+            reader.readAsText(fileList[0]); // Read the uploaded file
+          }
+        });
       }
 
       function init(){
@@ -58,7 +76,17 @@
           graph.setData( chart_data );
           graph.setLogY();
 
-          window.addEventListener('resize', function(){ graph.handleResize(); } );
+          const handleResize = function(){
+            const chart = document.getElementById('chart1');
+            chart.style.width = (0.9*window.innerWidth) + "px";
+            chart.style.height = Math.min( 0.4*window.innerWidth, 0.75*window.innerHeight ) + "px";
+
+            graph.handleResize(); 
+          };
+
+          window.addEventListener('resize', handleResize );
+          
+          handleResize();
         });
       }
 
@@ -73,7 +101,7 @@
         under development, and <a href="SpectrumChartD3.css">SpectrumChartD3.css</a> can be customized to change the display style.
        </p></div>
 
-    <div id="chart1" class="chart" oncontextmenu="return false;";></div>
+    <div id="chart1" class="chart" oncontextmenu="return false;" style="margin-left: auto; margin-right: auto; min-height: 150px;"></div>
 
     <!-- Everything bellow here are optional controls you can offer for displaying the spectra: -->
     <script>

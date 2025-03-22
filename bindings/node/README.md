@@ -33,12 +33,17 @@ cd /path/to/SpecUtils/bindings/node/
 npm install --save-dev node-addon-api
 
 # If boost is in a standard location, you can just run
-cmake-js
+cmake-js --CDSpecUtils_FLT_PARSE_METHOD="strtod"
+
+# Note that the 'SpecUtils_FLT_PARSE_METHOD' options are "FastFloat", "FromChars", 
+# "boost", and "strtod"; See SpecUtils/CMakeLists.txt for details, but "strtod"
+# should work everywhere. "FromChars" works with reasonably modern compilers, except 
+# not with the Xcode supplied compiler.  "boost" is fastest, but requires boost 
+# installed.  "FastFloat" is a great choice, and if its not in your include path,
+# CMake will attempt to fetch it.
 
 # Or to have a little more control over things
-cmake-js --CDBOOST_ROOT=/path/to/boost \
-         --CDCMAKE_BUILD_TYPE="Release" \
-         --out="build_dir"
+cmake-js --CDSpecUtils_FLT_PARSE_METHOD="strtod" --CDCMAKE_BUILD_TYPE="Release" --out="build_dir"
 
 # If you make changes and want to recompile
 cmake-js build --out="build_dir"
@@ -54,8 +59,8 @@ cmake-js build --out=build_dir --target install
 cmake --build build_dir --target install --config Release
 
 # These commands will copy 'SpecUtilsJS.node' and 'example.js' 
-# to 'build_dir/example/' so you can run like:
-node build_dir/example/example.js
+# to 'node_release/' in your build directory, so you can run like:
+node build_dir/node_release/example.js
 ```
 
 # Example Use In JavaScript

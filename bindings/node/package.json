@@ -18,9 +18,8 @@
     "email": "wcjohns@sandia.gov"
   },
   "license": "LGPL-2.1-only",
-  "dependencies": {},
   "devDependencies": {
-    "cmake-js": "^6.0.0",
-    "node-addon-api": "^2.0.0"
+    "cmake-js": "^6.3.2",
+    "node-addon-api": "^2.0.2"
   }
 }
