@@ -26,6 +26,7 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
+option( SpecUtils_NODE_BINDINGS "Creates node bindings to the node code" OFF )
 
 
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
@@ -253,6 +254,10 @@ else( SpecUtils_SHARED_LIB )
   set( SpecUtils_LIB_TYPE STATIC )
 endif( SpecUtils_SHARED_LIB )
 
+if ( NOT SpecUtils_SHARED_LIB )
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
@@ -392,6 +397,17 @@ elseif( WIN32 )
   #target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
+
+if( SpecUtils_NODE_BINDINGS )
+  add_custom_target (
+          npm-install
+          ALL
+          COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/bindings/node && npm install node-addon-api && npm install cmake-js
+  )
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bindings/node/node_modules/node-addon-api/external-napi)
+  link_directories(${CMAKE_CURRENT_BINARY_DIR})
+  add_subdirectory( bindings/node )
+endif()
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
                             PRIVATE ${THIRD_PARTY_DIR} )
