@@ -665,6 +665,17 @@ bool loadFromUri_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
     l.append( p );
     return l;
   }
+
+  py::list detector_analysis_results_wrapper(const SpecUtils::SpecFile *info) {
+    py::list results;
+    auto analysis = info->detectors_analysis();
+    if (analysis) {
+        for (const auto &result : analysis->results_) {
+            results.append(result);
+        }
+    }
+    return results;
+  }
   
   py::list measurement_remarks_wrapper( const SpecUtils::Measurement *info )
   {
@@ -1643,6 +1654,19 @@ m.def("polynomialCoefToFullRangeFraction",
     ;
   }//end Measurement class scope
 
+  {//begin DetectorAnalysisResult class scope
+    py::class_<SpecUtils::DetectorAnalysisResult>(m, "DetectorAnalysisResult")
+    .def(py::init<>(), "Creates a default DetectorAnalysisResult")
+    .def("remark", [](const SpecUtils::DetectorAnalysisResult &res) { return res.remark_; })
+    .def("nuclide", [](const SpecUtils::DetectorAnalysisResult &res) { return res.nuclide_; })
+    .def("activity", [](const SpecUtils::DetectorAnalysisResult &res) { return res.activity_; })
+    .def("nuclideType", [](const SpecUtils::DetectorAnalysisResult &res) { return res.nuclide_type_; })
+    .def("idConfidence", [](const SpecUtils::DetectorAnalysisResult &res) { return res.id_confidence_; })
+    .def("distance", [](const SpecUtils::DetectorAnalysisResult &res) { return res.distance_; })
+    .def("doseRate", [](const SpecUtils::DetectorAnalysisResult &res) { return res.dose_rate_; })
+    .def("realTime", [](const SpecUtils::DetectorAnalysisResult &res) { return res.real_time_; })
+    .def("detector", [](const SpecUtils::DetectorAnalysisResult &res) { return res.detector_; });
+  }//end DetectorAnalysisResult class scope
   
   /*
   //Register smart pointers we will use with python.
@@ -1743,6 +1767,8 @@ m.def("polynomialCoefToFullRangeFraction",
         py::rv_policy::reference )
   .def( "measurements", &get_measurements_wrapper,
         "Returns a list of all Measurement's that were parsed." )
+  .def( "detectorAnalysisResults", &detector_analysis_results_wrapper,
+        "Returns a list of DetectorAnalysisResult objects.")
   .def( "gammaLiveTime", &SpecUtils::SpecFile::gamma_live_time,
         "Returns the sum of detector live times of the all the parsed Measurements." )
   .def( "gammaRealTime", &SpecUtils::SpecFile::gamma_real_time,
