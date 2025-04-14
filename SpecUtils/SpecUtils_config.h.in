@@ -73,4 +73,6 @@
 void log_developer_error( const char *location, const char *error );
 #endif
 
+//#include "SpecUtilsExport.h"
+
 #endif // InterSpec_config_h

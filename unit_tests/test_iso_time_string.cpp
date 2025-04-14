@@ -528,8 +528,15 @@ TEST_CASE( "isoString" )
   CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.623") ), "01-Jan-2014 14:12:01.62" );
   CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T14:12:01.626") ), "01-Jan-2014 14:12:01.63" );
   CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("20140101T00:00:00") ), "01-Jan-2014 00:00:00.00" );
+  // Check when we need to round the tenth of the second, because the hundreth of a second rounds to 100
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.999999") ), "19-Sep-2014 14:12:02.00" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.994") ), "19-Sep-2014 14:12:01.99" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 14:12:01.995") ), "19-Sep-2014 14:12:02.00" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 23:59:59.995") ), "20-Sep-2014 00:00:00.00" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 23:59:59.994") ), "19-Sep-2014 23:59:59.99" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 11:59:59.995") ), "19-Sep-2014 12:00:00.00" );
+  CHECK_EQ( SpecUtils::to_vax_string( SpecUtils::time_from_string("2014-Sep-19 11:59:59.994") ), "19-Sep-2014 11:59:59.99" );
   
-
   /** Converts the input to string in format d-mmm-YYYY HH:MM:SS AM,
    where mmm is 3 char month name; d is day number with no leading zeros.
    Returns "not-a-date-time" if input is not valid.

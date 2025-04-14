@@ -1352,7 +1352,24 @@ bool SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instanc
     return false;
   
   const SpecUtils::SourceType st = SpecUtils::SourceType( static_cast<int>(type) );
+  
+  switch( st )
+  {
+    case SpecUtils::SourceType::IntrinsicActivity:
+    case SpecUtils::SourceType::Calibration:
+    case SpecUtils::SourceType::Background:
+    case SpecUtils::SourceType::Foreground:
+    case SpecUtils::SourceType::Unknown:
+      break;
+    
+    default:
+      assert( 0 );
+      return false;
+  }//switch( st )
+  
   specfile->set_source_type( st, m );
+  
+  return true;
 }
 
 
@@ -1369,8 +1386,17 @@ bool SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
     
   SpecUtils::time_point_t tp{};
   tp += chrono::microseconds( microseconds_since_unix_epoch );
+    
+  try
+  {
+    specfile->set_position( longitude, latitude, tp, m );
+  }catch( std::exception & )
+  {
+    assert( 0 );
+    return false;
+  }
   
-  specfile->set_position( longitude, latitude, tp, m );
+  return m->has_gps_info();
 }
   
 
@@ -1518,20 +1544,8 @@ const char *SpecUtils_Measurement_description( const SpecUtils_Measurement * con
   if( !m )
     return "";
   
-  const vector<string> &remarks = m->remarks();
-  
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Description:") )
-    {
-      const char *answer = remarks[i].c_str() + 12;
-      while( *answer && ((*answer) == ' ') )
-        ++answer;
-      return answer;
-    }
-  }//
-  
-  return "";
+  const std::string &desc = m->measurement_description();
+  return desc.c_str();
 }
 
 
@@ -1540,34 +1554,8 @@ void SpecUtils_Measurement_set_description( SpecUtils_Measurement *instance,
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
-  if( !m )
-    return;
-  
-  // We will erase existing description if empty string is passed in.
-  //  Otherwise we will update description.
-  string description( description_cstr ? description_cstr : "" );
-  if( !description.empty() )
-    description = "Description: " + description;
-  
-  vector<string> remarks = m->remarks();
-
-  // If there is already a description, over-write it
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Description:") )
-    {
-      if( description.empty() )
-        remarks.erase( begin(remarks) + i );
-      else
-        remarks[i] = description;
-      
-      m->set_remarks( remarks );
-      return;
-    }
-  }//
-  
-  remarks.push_back( description );
-  m->set_remarks( remarks );
+  if( m )
+    m->set_measurement_description( description_cstr ? description_cstr : "" );
 }
 
 
@@ -1578,20 +1566,8 @@ const char *SpecUtils_Measurement_source_string( const SpecUtils_Measurement * c
   if( !m )
     return "";
   
-  const vector<string> &remarks = m->remarks();
-  
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Source:") )
-    {
-      const char *answer = remarks[i].c_str() + 7;
-      while( *answer && ((*answer) == ' ') )
-        ++answer;
-      return answer;
-    }
-  }//
-  
-  return "";
+  const std::string &src = m->source_description();
+  return src.c_str();
 }
 
 
@@ -1600,34 +1576,8 @@ void SpecUtils_Measurement_set_source_string( SpecUtils_Measurement *instance,
 {
   auto m = reinterpret_cast<SpecUtils::Measurement *>( instance );
   assert( m );
-  if( !m )
-    return;
-  
-  // We will erase existing description if empty string is passed in.
-  //  Otherwise we will update description.
-  string src_string( source_string_cstr ? source_string_cstr : "" );
-  if( !src_string.empty() )
-    src_string = "Source: " + src_string;
-  
-  vector<string> remarks = m->remarks();
-
-  // If there is already a source string, over-write it
-  for( size_t i = 0; i < remarks.size(); ++i )
-  {
-    if( SpecUtils::istarts_with(remarks[i], "Source:") )
-    {
-      if( src_string.empty() )
-        remarks.erase( begin(remarks) + i );
-      else
-        remarks[i] = src_string;
-      
-      m->set_remarks( remarks );
-      return;
-    }
-  }//
-  
-  remarks.push_back( src_string );
-  m->set_remarks( remarks );
+  if( m )
+    m->set_source_description( source_string_cstr ? source_string_cstr : "" );
 }
   
 
