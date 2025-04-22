@@ -328,6 +328,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: mutable_energy_calibration => swigf_Measurement_mutable_energy_calibration
   procedure :: channel_energies => swigf_Measurement_channel_energies
   procedure :: gamma_counts => swigf_Measurement_gamma_counts
+  procedure :: gamma_counts_copy => swigf_Measurement_gamma_counts_copy
   procedure :: neutron_counts => swigf_Measurement_neutron_counts
   procedure :: location_state => swigf_Measurement_location_state
   procedure :: set_title => swigf_Measurement_set_title
@@ -497,6 +498,8 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: set_manufacturer => swigf_SpecFile_set_manufacturer
   procedure :: set_instrument_model => swigf_SpecFile_set_instrument_model
   procedure :: set_instrument_id => swigf_SpecFile_set_instrument_id
+  procedure :: set_allow_overwrite => swigf_SpecFile_set_allow_overwrite
+  procedure :: allow_overwrite => swigf_SpecFile_allow_overwrite
   procedure :: set_live_time => swigf_SpecFile_set_live_time
   procedure :: set_real_time => swigf_SpecFile_set_real_time
   procedure :: set_start_time => swigf_SpecFile_set_start_time
@@ -1851,6 +1854,15 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper) :: fresult
 end function
 
+function swigc_Measurement_gamma_counts_copy(farg1) &
+bind(C, name="_wrap_Measurement_gamma_counts_copy") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
 function swigc_Measurement_neutron_counts(farg1) &
 bind(C, name="_wrap_Measurement_neutron_counts") &
 result(fresult)
@@ -2809,6 +2821,23 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigArrayWrapper) :: farg2
 end subroutine
+
+subroutine swigc_SpecFile_set_allow_overwrite(farg1, farg2) &
+bind(C, name="_wrap_SpecFile_set_allow_overwrite")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_INT), intent(in) :: farg2
+end subroutine
+
+function swigc_SpecFile_allow_overwrite(farg1) &
+bind(C, name="_wrap_SpecFile_allow_overwrite") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+integer(C_INT) :: fresult
+end function
 
 subroutine swigc_SpecFile_set_live_time(farg1, farg2, farg3) &
 bind(C, name="_wrap_SpecFile_set_live_time")
@@ -7101,6 +7130,19 @@ fresult = swigc_Measurement_gamma_counts(farg1)
 swig_result%swigdata = fresult
 end function
 
+function swigf_Measurement_gamma_counts_copy(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(FloatVector) :: swig_result
+class(Measurement), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_gamma_counts_copy(farg1)
+swig_result%swigdata = fresult
+end function
+
 function swigf_Measurement_neutron_counts(self) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -8541,6 +8583,43 @@ call SWIGTM_fin_char_Sm_(n, farg2, farg2_temp)
 call swigc_SpecFile_set_instrument_id(farg1, farg2)
 end subroutine
 
+
+subroutine SWIGTM_fin_bool(finp, iminp)
+  use, intrinsic :: ISO_C_BINDING
+  logical, intent(in) :: finp
+  integer(kind=C_INT), intent(out) :: iminp
+  if (finp .eqv. .true.) then
+    iminp = 1
+  else
+    iminp = 0
+  end if
+end subroutine
+
+subroutine swigf_SpecFile_set_allow_overwrite(self, flag)
+use, intrinsic :: ISO_C_BINDING
+class(SpecFile), intent(in) :: self
+logical, intent(in) :: flag
+type(SwigClassWrapper) :: farg1 
+integer(C_INT) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_bool(flag, farg2)
+call swigc_SpecFile_set_allow_overwrite(farg1, farg2)
+end subroutine
+
+function swigf_SpecFile_allow_overwrite(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(SpecFile), intent(in) :: self
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_SpecFile_allow_overwrite(farg1)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
 subroutine swigf_SpecFile_set_live_time(self, lt, measurement2)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
@@ -8651,18 +8730,6 @@ farg1 = self%swigdata
 call SWIGTM_fin_char_Sm_(title, farg2, farg2_temp)
 farg3 = measurement2%swigdata
 call swigc_SpecFile_set_title(farg1, farg2, farg3)
-end subroutine
-
-
-subroutine SWIGTM_fin_bool(finp, iminp)
-  use, intrinsic :: ISO_C_BINDING
-  logical, intent(in) :: finp
-  integer(kind=C_INT), intent(out) :: iminp
-  if (finp .eqv. .true.) then
-    iminp = 1
-  else
-    iminp = 0
-  end if
 end subroutine
 
 subroutine swigf_SpecFile_set_contained_neutrons(self, contained, counts, measurement3, neutron_live_time)

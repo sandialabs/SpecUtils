@@ -1567,6 +1567,7 @@ SWIGEXPORT SwigArrayWrapper _wrap_Measurement_title(SwigClassWrapper *farg1) {
   smartarg1 = (std::shared_ptr<const SpecUtils::Measurement >*)(farg1->cptr);
   arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
   result = (std::string *) &((SpecUtils::Measurement const *)arg1)->title();
+  result += '\0';
   fresult.size = result->size();
   if (fresult.size > 0) {
     fresult.data = malloc(fresult.size);
@@ -2082,6 +2083,21 @@ SWIGEXPORT SwigClassWrapper _wrap_Measurement_gamma_counts(SwigClassWrapper *far
   result = (std::shared_ptr< std::vector< float > const > *) &((SpecUtils::Measurement const *)arg1)->gamma_counts();
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_Measurement_gamma_counts_copy(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement const > *smartarg1 ;
+  std::vector< float > result;
+  
+  smartarg1 = (std::shared_ptr<const SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = ((SpecUtils::Measurement const *)arg1)->gamma_counts_copy();
+  fresult.cptr = new (std::vector< float >)(result);
+  fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
   return fresult;
 }
 
@@ -3604,6 +3620,30 @@ SWIGEXPORT void _wrap_SpecFile_set_instrument_id(SwigClassWrapper *farg1, SwigAr
   tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
   arg2 = &tempstr2;
   (arg1)->set_instrument_id((std::string const &)*arg2);
+}
+
+
+SWIGEXPORT void _wrap_SpecFile_set_allow_overwrite(SwigClassWrapper *farg1, int const *farg2) {
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  bool arg2 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::set_allow_overwrite(bool)", return );
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  arg2 = (*farg2 ? true : false);
+  (arg1)->set_allow_overwrite(arg2);
+}
+
+
+SWIGEXPORT int _wrap_SpecFile_allow_overwrite(SwigClassWrapper *farg1) {
+  int fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::allow_overwrite() const", return 0);
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->allow_overwrite();
+  fresult = (result ? 1 : 0);
+  return fresult;
 }
 
 

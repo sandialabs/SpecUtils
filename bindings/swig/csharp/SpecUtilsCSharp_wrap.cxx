@@ -465,6 +465,213 @@ SWIGINTERN void SWIG_CSharpException(int code, const char *msg) {
 
 #include <utility>
 
+SWIGINTERN std::vector< float > *new_std_vector_Sl_float_Sg___SWIG_2(int capacity){
+        std::vector< float >* pv = 0;
+        if (capacity >= 0) {
+          pv = new std::vector< float >();
+          pv->reserve(capacity);
+       } else {
+          throw std::out_of_range("capacity");
+       }
+       return pv;
+      }
+SWIGINTERN float std_vector_Sl_float_Sg__getitemcopy(std::vector< float > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          return (*self)[index];
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN std::vector< float >::value_type const &std_vector_Sl_float_Sg__getitem(std::vector< float > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          return (*self)[index];
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__setitem(std::vector< float > *self,int index,float const &val){
+        if (index>=0 && index<(int)self->size())
+          (*self)[index] = val;
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__AddRange(std::vector< float > *self,std::vector< float > const &values){
+        self->insert(self->end(), values.begin(), values.end());
+      }
+SWIGINTERN std::vector< float > *std_vector_Sl_float_Sg__GetRange(std::vector< float > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        return new std::vector< float >(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__Insert(std::vector< float > *self,int index,float const &x){
+        if (index>=0 && index<(int)self->size()+1)
+          self->insert(self->begin()+index, x);
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__InsertRange(std::vector< float > *self,int index,std::vector< float > const &values){
+        if (index>=0 && index<(int)self->size()+1)
+          self->insert(self->begin()+index, values.begin(), values.end());
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__RemoveAt(std::vector< float > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          self->erase(self->begin() + index);
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__RemoveRange(std::vector< float > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        self->erase(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN std::vector< float > *std_vector_Sl_float_Sg__Repeat(float const &value,int count){
+        if (count < 0)
+          throw std::out_of_range("count");
+        return new std::vector< float >(count, value);
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__Reverse__SWIG_0(std::vector< float > *self){
+        std::reverse(self->begin(), self->end());
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__Reverse__SWIG_1(std::vector< float > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        std::reverse(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN void std_vector_Sl_float_Sg__SetRange(std::vector< float > *self,int index,std::vector< float > const &values){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (index+values.size() > self->size())
+          throw std::out_of_range("index");
+        std::copy(values.begin(), values.end(), self->begin()+index);
+      }
+SWIGINTERN bool std_vector_Sl_float_Sg__Contains(std::vector< float > *self,float const &value){
+        return std::find(self->begin(), self->end(), value) != self->end();
+      }
+SWIGINTERN int std_vector_Sl_float_Sg__IndexOf(std::vector< float > *self,float const &value){
+        int index = -1;
+        std::vector< float >::iterator it = std::find(self->begin(), self->end(), value);
+        if (it != self->end())
+          index = (int)(it - self->begin());
+        return index;
+      }
+SWIGINTERN int std_vector_Sl_float_Sg__LastIndexOf(std::vector< float > *self,float const &value){
+        int index = -1;
+        std::vector< float >::reverse_iterator rit = std::find(self->rbegin(), self->rend(), value);
+        if (rit != self->rend())
+          index = (int)(self->rend() - 1 - rit);
+        return index;
+      }
+SWIGINTERN bool std_vector_Sl_float_Sg__Remove(std::vector< float > *self,float const &value){
+        std::vector< float >::iterator it = std::find(self->begin(), self->end(), value);
+        if (it != self->end()) {
+          self->erase(it);
+          return true;
+        }
+        return false;
+      }
+SWIGINTERN std::vector< SpecUtils::Measurement > *new_std_vector_Sl_SpecUtils_Measurement_Sg___SWIG_2(int capacity){
+        std::vector< SpecUtils::Measurement >* pv = 0;
+        if (capacity >= 0) {
+          pv = new std::vector< SpecUtils::Measurement >();
+          pv->reserve(capacity);
+       } else {
+          throw std::out_of_range("capacity");
+       }
+       return pv;
+      }
+SWIGINTERN SpecUtils::Measurement std_vector_Sl_SpecUtils_Measurement_Sg__getitemcopy(std::vector< SpecUtils::Measurement > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          return (*self)[index];
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN std::vector< SpecUtils::Measurement >::value_type const &std_vector_Sl_SpecUtils_Measurement_Sg__getitem(std::vector< SpecUtils::Measurement > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          return (*self)[index];
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__setitem(std::vector< SpecUtils::Measurement > *self,int index,SpecUtils::Measurement const &val){
+        if (index>=0 && index<(int)self->size())
+          (*self)[index] = val;
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__AddRange(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement > const &values){
+        self->insert(self->end(), values.begin(), values.end());
+      }
+SWIGINTERN std::vector< SpecUtils::Measurement > *std_vector_Sl_SpecUtils_Measurement_Sg__GetRange(std::vector< SpecUtils::Measurement > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        return new std::vector< SpecUtils::Measurement >(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__Insert(std::vector< SpecUtils::Measurement > *self,int index,SpecUtils::Measurement const &x){
+        if (index>=0 && index<(int)self->size()+1)
+          self->insert(self->begin()+index, x);
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__InsertRange(std::vector< SpecUtils::Measurement > *self,int index,std::vector< SpecUtils::Measurement > const &values){
+        if (index>=0 && index<(int)self->size()+1)
+          self->insert(self->begin()+index, values.begin(), values.end());
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__RemoveAt(std::vector< SpecUtils::Measurement > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          self->erase(self->begin() + index);
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__RemoveRange(std::vector< SpecUtils::Measurement > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        self->erase(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN std::vector< SpecUtils::Measurement > *std_vector_Sl_SpecUtils_Measurement_Sg__Repeat(SpecUtils::Measurement const &value,int count){
+        if (count < 0)
+          throw std::out_of_range("count");
+        return new std::vector< SpecUtils::Measurement >(count, value);
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__Reverse__SWIG_0(std::vector< SpecUtils::Measurement > *self){
+        std::reverse(self->begin(), self->end());
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__Reverse__SWIG_1(std::vector< SpecUtils::Measurement > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        std::reverse(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__SetRange(std::vector< SpecUtils::Measurement > *self,int index,std::vector< SpecUtils::Measurement > const &values){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (index+values.size() > self->size())
+          throw std::out_of_range("index");
+        std::copy(values.begin(), values.end(), self->begin()+index);
+      }
 
 #include <wchar.h>
 #include <limits.h>
@@ -490,6 +697,12 @@ struct SWIG_null_deleter {
 #define SWIG_NO_NULL_DELETER_SWIG_POINTER_NEW
 #define SWIG_NO_NULL_DELETER_SWIG_POINTER_OWN
 
+SWIGINTERN float SpecUtils_Measurement_gamma_count_at_oned_based(SpecUtils::Measurement *self,int index){
+        return self->gamma_counts()->at(index-1);
+    }
+SWIGINTERN float SpecUtils_Measurement_gamma_count_at(SpecUtils::Measurement *self,int index){
+        return self->gamma_counts()->at(index);
+    }
 SWIGINTERN size_t SpecUtils_Measurement_get_num_channels(SpecUtils::Measurement *self){
         return self->gamma_counts()->size();
     }
@@ -512,6 +725,10 @@ SWIGINTERN float SpecUtils_Measurement_get_neutron_count(SpecUtils::Measurement 
 
         return count;            
     }
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement const > SpecUtils_SpecFile_measurement_at_one_based(SpecUtils::SpecFile *self,int index){
+        auto newIndex = static_cast<size_t>(index-1);
+        return self->measurement(newIndex);
+    }
 SWIGINTERN int SpecUtils_SpecFile_get_max_channel_count(SpecUtils::SpecFile *self){
         auto maxCount = 0;
         auto numMeasurements = self->num_measurements();
@@ -525,10 +742,887 @@ SWIGINTERN int SpecUtils_SpecFile_get_max_channel_count(SpecUtils::SpecFile *sel
 
         return maxCount;            
     }
+SWIGINTERN std::vector< std::pair< float,float > > *new_std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg___SWIG_2(int capacity){
+        std::vector< std::pair< float,float > >* pv = 0;
+        if (capacity >= 0) {
+          pv = new std::vector< std::pair< float,float > >();
+          pv->reserve(capacity);
+       } else {
+          throw std::out_of_range("capacity");
+       }
+       return pv;
+      }
+SWIGINTERN std::pair< float,float > std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__getitemcopy(std::vector< std::pair< float,float > > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          return (*self)[index];
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN std::vector< std::pair< float,float > >::value_type const &std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__getitem(std::vector< std::pair< float,float > > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          return (*self)[index];
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__setitem(std::vector< std::pair< float,float > > *self,int index,std::pair< float,float > const &val){
+        if (index>=0 && index<(int)self->size())
+          (*self)[index] = val;
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__AddRange(std::vector< std::pair< float,float > > *self,std::vector< std::pair< float,float > > const &values){
+        self->insert(self->end(), values.begin(), values.end());
+      }
+SWIGINTERN std::vector< std::pair< float,float > > *std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__GetRange(std::vector< std::pair< float,float > > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        return new std::vector< std::pair< float,float > >(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Insert(std::vector< std::pair< float,float > > *self,int index,std::pair< float,float > const &x){
+        if (index>=0 && index<(int)self->size()+1)
+          self->insert(self->begin()+index, x);
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__InsertRange(std::vector< std::pair< float,float > > *self,int index,std::vector< std::pair< float,float > > const &values){
+        if (index>=0 && index<(int)self->size()+1)
+          self->insert(self->begin()+index, values.begin(), values.end());
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__RemoveAt(std::vector< std::pair< float,float > > *self,int index){
+        if (index>=0 && index<(int)self->size())
+          self->erase(self->begin() + index);
+        else
+          throw std::out_of_range("index");
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__RemoveRange(std::vector< std::pair< float,float > > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        self->erase(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN std::vector< std::pair< float,float > > *std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Repeat(std::pair< float,float > const &value,int count){
+        if (count < 0)
+          throw std::out_of_range("count");
+        return new std::vector< std::pair< float,float > >(count, value);
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Reverse__SWIG_0(std::vector< std::pair< float,float > > *self){
+        std::reverse(self->begin(), self->end());
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Reverse__SWIG_1(std::vector< std::pair< float,float > > *self,int index,int count){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (count < 0)
+          throw std::out_of_range("count");
+        if (index >= (int)self->size()+1 || index+count > (int)self->size())
+          throw std::invalid_argument("invalid range");
+        std::reverse(self->begin()+index, self->begin()+index+count);
+      }
+SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__SetRange(std::vector< std::pair< float,float > > *self,int index,std::vector< std::pair< float,float > > const &values){
+        if (index < 0)
+          throw std::out_of_range("index");
+        if (index+values.size() > self->size())
+          throw std::out_of_range("index");
+        std::copy(values.begin(), values.end(), self->begin()+index);
+      }
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_FloatVector__SWIG_0___() {
+  void * jresult ;
+  std::vector< float > *result = 0 ;
+  
+  result = (std::vector< float > *)new std::vector< float >();
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_FloatVector__SWIG_1___(void * jarg1) {
+  void * jresult ;
+  std::vector< float > *arg1 = 0 ;
+  std::vector< float > *result = 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1;
+  if (!arg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< float > const & is null", 0);
+    return 0;
+  } 
+  result = (std::vector< float > *)new std::vector< float >((std::vector< float > const &)*arg1);
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Clear___(void * jarg1) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  (arg1)->clear();
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Add___(void * jarg1, float jarg2) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  float *arg2 = 0 ;
+  float temp2 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  temp2 = (float)jarg2; 
+  arg2 = &temp2; 
+  (arg1)->push_back((float const &)*arg2);
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_size___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  std::vector< float >::size_type result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  result = ((std::vector< float > const *)arg1)->size();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_empty___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  bool result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  result = (bool)((std::vector< float > const *)arg1)->empty();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_capacity___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  std::vector< float >::size_type result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  result = ((std::vector< float > const *)arg1)->capacity();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_reserve___(void * jarg1, unsigned int jarg2) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  std::vector< float >::size_type arg2 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (std::vector< float >::size_type)jarg2; 
+  (arg1)->reserve(SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_FloatVector__SWIG_2___(int jarg1) {
+  void * jresult ;
+  int arg1 ;
+  std::vector< float > *result = 0 ;
+  
+  arg1 = (int)jarg1; 
+  try {
+    result = (std::vector< float > *)new_std_vector_Sl_float_Sg___SWIG_2(arg1);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_getitemcopy___(void * jarg1, int jarg2) {
+  float jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  float result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = (float)std_vector_Sl_float_Sg__getitemcopy(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_getitem___(void * jarg1, int jarg2) {
+  float jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  std::vector< float >::value_type *result = 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = (std::vector< float >::value_type *) &std_vector_Sl_float_Sg__getitem(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = *result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_setitem___(void * jarg1, int jarg2, float jarg3) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  float *arg3 = 0 ;
+  float temp3 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  temp3 = (float)jarg3; 
+  arg3 = &temp3; 
+  try {
+    std_vector_Sl_float_Sg__setitem(arg1,arg2,(float const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_AddRange___(void * jarg1, void * jarg2) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  std::vector< float > *arg2 = 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (std::vector< float > *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< float > const & is null", 0);
+    return ;
+  } 
+  std_vector_Sl_float_Sg__AddRange(arg1,(std::vector< float > const &)*arg2);
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_GetRange___(void * jarg1, int jarg2, int jarg3) {
+  void * jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  std::vector< float > *result = 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    result = (std::vector< float > *)std_vector_Sl_float_Sg__GetRange(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Insert___(void * jarg1, int jarg2, float jarg3) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  float *arg3 = 0 ;
+  float temp3 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  temp3 = (float)jarg3; 
+  arg3 = &temp3; 
+  try {
+    std_vector_Sl_float_Sg__Insert(arg1,arg2,(float const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_InsertRange___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  std::vector< float > *arg3 = 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::vector< float > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< float > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_float_Sg__InsertRange(arg1,arg2,(std::vector< float > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_RemoveAt___(void * jarg1, int jarg2) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    std_vector_Sl_float_Sg__RemoveAt(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_RemoveRange___(void * jarg1, int jarg2, int jarg3) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    std_vector_Sl_float_Sg__RemoveRange(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return ;
+  }
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Repeat___(float jarg1, int jarg2) {
+  void * jresult ;
+  float *arg1 = 0 ;
+  int arg2 ;
+  float temp1 ;
+  std::vector< float > *result = 0 ;
+  
+  temp1 = (float)jarg1; 
+  arg1 = &temp1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = (std::vector< float > *)std_vector_Sl_float_Sg__Repeat((float const &)*arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Reverse__SWIG_0___(void * jarg1) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  std_vector_Sl_float_Sg__Reverse__SWIG_0(arg1);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Reverse__SWIG_1___(void * jarg1, int jarg2, int jarg3) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    std_vector_Sl_float_Sg__Reverse__SWIG_1(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_SetRange___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  int arg2 ;
+  std::vector< float > *arg3 = 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::vector< float > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< float > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_float_Sg__SetRange(arg1,arg2,(std::vector< float > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Contains___(void * jarg1, float jarg2) {
+  unsigned int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  float *arg2 = 0 ;
+  float temp2 ;
+  bool result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  temp2 = (float)jarg2; 
+  arg2 = &temp2; 
+  result = (bool)std_vector_Sl_float_Sg__Contains(arg1,(float const &)*arg2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_IndexOf___(void * jarg1, float jarg2) {
+  int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  float *arg2 = 0 ;
+  float temp2 ;
+  int result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  temp2 = (float)jarg2; 
+  arg2 = &temp2; 
+  result = (int)std_vector_Sl_float_Sg__IndexOf(arg1,(float const &)*arg2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_LastIndexOf___(void * jarg1, float jarg2) {
+  int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  float *arg2 = 0 ;
+  float temp2 ;
+  int result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  temp2 = (float)jarg2; 
+  arg2 = &temp2; 
+  result = (int)std_vector_Sl_float_Sg__LastIndexOf(arg1,(float const &)*arg2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_FloatVector_Remove___(void * jarg1, float jarg2) {
+  unsigned int jresult ;
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  float *arg2 = 0 ;
+  float temp2 ;
+  bool result;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  temp2 = (float)jarg2; 
+  arg2 = &temp2; 
+  result = (bool)std_vector_Sl_float_Sg__Remove(arg1,(float const &)*arg2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_delete_FloatVector___(void * jarg1) {
+  std::vector< float > *arg1 = (std::vector< float > *) 0 ;
+  
+  arg1 = (std::vector< float > *)jarg1; 
+  delete arg1;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_MeasurementVector__SWIG_0___() {
+  void * jresult ;
+  std::vector< SpecUtils::Measurement > *result = 0 ;
+  
+  result = (std::vector< SpecUtils::Measurement > *)new std::vector< SpecUtils::Measurement >();
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_MeasurementVector__SWIG_1___(void * jarg1) {
+  void * jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = 0 ;
+  std::vector< SpecUtils::Measurement > *result = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1;
+  if (!arg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< SpecUtils::Measurement > const & is null", 0);
+    return 0;
+  } 
+  result = (std::vector< SpecUtils::Measurement > *)new std::vector< SpecUtils::Measurement >((std::vector< SpecUtils::Measurement > const &)*arg1);
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_Clear___(void * jarg1) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  (arg1)->clear();
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_Add___(void * jarg1, void * jarg2) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  SpecUtils::Measurement *arg2 = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (SpecUtils::Measurement *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "SpecUtils::Measurement const & is null", 0);
+    return ;
+  } 
+  (arg1)->push_back((SpecUtils::Measurement const &)*arg2);
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_size___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  std::vector< SpecUtils::Measurement >::size_type result;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  result = ((std::vector< SpecUtils::Measurement > const *)arg1)->size();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_empty___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  bool result;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  result = (bool)((std::vector< SpecUtils::Measurement > const *)arg1)->empty();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_capacity___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  std::vector< SpecUtils::Measurement >::size_type result;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  result = ((std::vector< SpecUtils::Measurement > const *)arg1)->capacity();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_reserve___(void * jarg1, unsigned int jarg2) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  std::vector< SpecUtils::Measurement >::size_type arg2 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (std::vector< SpecUtils::Measurement >::size_type)jarg2; 
+  (arg1)->reserve(SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_MeasurementVector__SWIG_2___(int jarg1) {
+  void * jresult ;
+  int arg1 ;
+  std::vector< SpecUtils::Measurement > *result = 0 ;
+  
+  arg1 = (int)jarg1; 
+  try {
+    result = (std::vector< SpecUtils::Measurement > *)new_std_vector_Sl_SpecUtils_Measurement_Sg___SWIG_2(arg1);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_getitemcopy___(void * jarg1, int jarg2) {
+  void * jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  SpecUtils::Measurement result;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = std_vector_Sl_SpecUtils_Measurement_Sg__getitemcopy(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = new SpecUtils::Measurement(result); 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_getitem___(void * jarg1, int jarg2) {
+  void * jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  std::vector< SpecUtils::Measurement >::value_type *result = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = (std::vector< SpecUtils::Measurement >::value_type *) &std_vector_Sl_SpecUtils_Measurement_Sg__getitem(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_setitem___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  SpecUtils::Measurement *arg3 = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (SpecUtils::Measurement *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "SpecUtils::Measurement const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__setitem(arg1,arg2,(SpecUtils::Measurement const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_AddRange___(void * jarg1, void * jarg2) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  std::vector< SpecUtils::Measurement > *arg2 = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (std::vector< SpecUtils::Measurement > *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< SpecUtils::Measurement > const & is null", 0);
+    return ;
+  } 
+  std_vector_Sl_SpecUtils_Measurement_Sg__AddRange(arg1,(std::vector< SpecUtils::Measurement > const &)*arg2);
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_GetRange___(void * jarg1, int jarg2, int jarg3) {
+  void * jresult ;
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  std::vector< SpecUtils::Measurement > *result = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    result = (std::vector< SpecUtils::Measurement > *)std_vector_Sl_SpecUtils_Measurement_Sg__GetRange(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_Insert___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  SpecUtils::Measurement *arg3 = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (SpecUtils::Measurement *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "SpecUtils::Measurement const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__Insert(arg1,arg2,(SpecUtils::Measurement const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_InsertRange___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  std::vector< SpecUtils::Measurement > *arg3 = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::vector< SpecUtils::Measurement > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< SpecUtils::Measurement > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__InsertRange(arg1,arg2,(std::vector< SpecUtils::Measurement > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_RemoveAt___(void * jarg1, int jarg2) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__RemoveAt(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_RemoveRange___(void * jarg1, int jarg2, int jarg3) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__RemoveRange(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return ;
+  }
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_Repeat___(void * jarg1, int jarg2) {
+  void * jresult ;
+  SpecUtils::Measurement *arg1 = 0 ;
+  int arg2 ;
+  std::vector< SpecUtils::Measurement > *result = 0 ;
+  
+  arg1 = (SpecUtils::Measurement *)jarg1;
+  if (!arg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "SpecUtils::Measurement const & is null", 0);
+    return 0;
+  } 
+  arg2 = (int)jarg2; 
+  try {
+    result = (std::vector< SpecUtils::Measurement > *)std_vector_Sl_SpecUtils_Measurement_Sg__Repeat((SpecUtils::Measurement const &)*arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_Reverse__SWIG_0___(void * jarg1) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  std_vector_Sl_SpecUtils_Measurement_Sg__Reverse__SWIG_0(arg1);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_Reverse__SWIG_1___(void * jarg1, int jarg2, int jarg3) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__Reverse__SWIG_1(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_MeasurementVector_SetRange___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  int arg2 ;
+  std::vector< SpecUtils::Measurement > *arg3 = 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::vector< SpecUtils::Measurement > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< SpecUtils::Measurement > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_SpecUtils_Measurement_Sg__SetRange(arg1,arg2,(std::vector< SpecUtils::Measurement > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_delete_MeasurementVector___(void * jarg1) {
+  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  
+  arg1 = (std::vector< SpecUtils::Measurement > *)jarg1; 
+  delete arg1;
+}
+
 
 SWIGEXPORT int SWIGSTDCALL CSharp_SandiafSpecUtils_spectrumTypeFromDescription___(char * jarg1) {
   int jresult ;
@@ -1302,6 +2396,21 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_gamma_counts__
 }
 
 
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_gamma_counts_copy___(void * jarg1) {
+  void * jresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement const > *smartarg1 = 0 ;
+  std::vector< float > result;
+  
+  
+  smartarg1 = (std::shared_ptr< const SpecUtils::Measurement > *)jarg1;
+  arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
+  result = ((SpecUtils::Measurement const *)arg1)->gamma_counts_copy();
+  jresult = new std::vector< float >(result); 
+  return jresult;
+}
+
+
 SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_neutron_counts___(void * jarg1) {
   void * jresult ;
   SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
@@ -1491,6 +2600,65 @@ SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_set_detector_num
   arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
   arg2 = (int)jarg2; 
   (arg1)->set_detector_number(arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_set_gamma_counts__SWIG_0___(void * jarg1, void * jarg2, float jarg3, float jarg4) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  SwigValueWrapper< std::shared_ptr< std::vector< float > const > > arg2 ;
+  float arg3 ;
+  float arg4 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 = 0 ;
+  std::shared_ptr< std::vector< float > const > *argp2 ;
+  
+  
+  smartarg1 = (std::shared_ptr<  SpecUtils::Measurement > *)jarg1;
+  arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
+  argp2 = (std::shared_ptr< std::vector< float > const > *)jarg2; 
+  if (!argp2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "Attempt to dereference null std::shared_ptr< std::vector< float > const >", 0);
+    return ;
+  }
+  arg2 = *argp2; 
+  arg3 = (float)jarg3; 
+  arg4 = (float)jarg4; 
+  (arg1)->set_gamma_counts(SWIG_STD_MOVE(arg2),arg3,arg4);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_set_gamma_counts__SWIG_1___(void * jarg1, void * jarg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  SwigValueWrapper< std::shared_ptr< std::vector< float > const > > arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 = 0 ;
+  std::shared_ptr< std::vector< float > const > *argp2 ;
+  
+  
+  smartarg1 = (std::shared_ptr<  SpecUtils::Measurement > *)jarg1;
+  arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
+  argp2 = (std::shared_ptr< std::vector< float > const > *)jarg2; 
+  if (!argp2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "Attempt to dereference null std::shared_ptr< std::vector< float > const >", 0);
+    return ;
+  }
+  arg2 = *argp2; 
+  (arg1)->set_gamma_counts(SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_set_gamma_counts__SWIG_2___(void * jarg1, void * jarg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  SpecUtils::FloatVec *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 = 0 ;
+  
+  
+  smartarg1 = (std::shared_ptr<  SpecUtils::Measurement > *)jarg1;
+  arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
+  arg2 = (SpecUtils::FloatVec *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "SpecUtils::FloatVec const & is null", 0);
+    return ;
+  } 
+  (arg1)->set_gamma_counts((SpecUtils::FloatVec const &)*arg2);
 }
 
 
@@ -1980,6 +3148,40 @@ SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_set_info_from_20
   arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
   arg2 = (rapidxml::xml_node< char > *)jarg2; 
   (arg1)->set_info_from_2006_N42_spectrum_node((rapidxml::xml_node< char > const *)arg2);
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_gamma_count_at_oned_based___(void * jarg1, int jarg2) {
+  float jresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  int arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 = 0 ;
+  float result;
+  
+  
+  smartarg1 = (std::shared_ptr<  SpecUtils::Measurement > *)jarg1;
+  arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
+  arg2 = (int)jarg2; 
+  result = (float)SpecUtils_Measurement_gamma_count_at_oned_based(arg1,arg2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_SandiafSpecUtils_Measurement_gamma_count_at___(void * jarg1, int jarg2) {
+  float jresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  int arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 = 0 ;
+  float result;
+  
+  
+  smartarg1 = (std::shared_ptr<  SpecUtils::Measurement > *)jarg1;
+  arg1 = (SpecUtils::Measurement *)(smartarg1 ? smartarg1->get() : 0); 
+  arg2 = (int)jarg2; 
+  result = (float)SpecUtils_Measurement_gamma_count_at(arg1,arg2);
+  jresult = result; 
+  return jresult;
 }
 
 
@@ -2758,6 +3960,28 @@ SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_SpecFile_set_instrument_id__
   std::string arg2_str(jarg2);
   arg2 = &arg2_str; 
   (arg1)->set_instrument_id((std::string const &)*arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_SpecFile_set_allow_overwrite___(void * jarg1, unsigned int jarg2) {
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  bool arg2 ;
+  
+  arg1 = (SpecUtils::SpecFile *)jarg1; 
+  arg2 = jarg2 ? true : false; 
+  (arg1)->set_allow_overwrite(arg2);
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_SpecFile_allow_overwrite___(void * jarg1) {
+  unsigned int jresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  bool result;
+  
+  arg1 = (SpecUtils::SpecFile *)jarg1; 
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->allow_overwrite();
+  jresult = result; 
+  return jresult;
 }
 
 
@@ -4928,6 +6152,20 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_SpecFile_mutex___(void * j
 }
 
 
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_SpecFile_measurement_at_one_based___(void * jarg1, int jarg2) {
+  void * jresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  int arg2 ;
+  std::shared_ptr< SpecUtils::Measurement const > result;
+  
+  arg1 = (SpecUtils::SpecFile *)jarg1; 
+  arg2 = (int)jarg2; 
+  result = SpecUtils_SpecFile_measurement_at_one_based(arg1,arg2);
+  jresult = result ? new std::shared_ptr< SpecUtils::Measurement const >(result) : 0; 
+  return jresult;
+}
+
+
 SWIGEXPORT int SWIGSTDCALL CSharp_SandiafSpecUtils_SpecFile_get_max_channel_count___(void * jarg1) {
   int jresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
@@ -5692,6 +6930,463 @@ SWIGEXPORT int SWIGSTDCALL CSharp_SandiafSpecUtils_pcf_det_name_to_dev_pair_inde
   result = (int)SpecUtils::pcf_det_name_to_dev_pair_index(SWIG_STD_MOVE(arg1),*arg2,*arg3,*arg4);
   jresult = result; 
   return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_DevPair__SWIG_0___() {
+  void * jresult ;
+  std::pair< float,float > *result = 0 ;
+  
+  result = (std::pair< float,float > *)new std::pair< float,float >();
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_DevPair__SWIG_1___(float jarg1, float jarg2) {
+  void * jresult ;
+  float arg1 ;
+  float arg2 ;
+  std::pair< float,float > *result = 0 ;
+  
+  arg1 = (float)jarg1; 
+  arg2 = (float)jarg2; 
+  result = (std::pair< float,float > *)new std::pair< float,float >(arg1,arg2);
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_DevPair__SWIG_2___(void * jarg1) {
+  void * jresult ;
+  std::pair< float,float > *arg1 = 0 ;
+  std::pair< float,float > *result = 0 ;
+  
+  arg1 = (std::pair< float,float > *)jarg1;
+  if (!arg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::pair< float,float > const & is null", 0);
+    return 0;
+  } 
+  result = (std::pair< float,float > *)new std::pair< float,float >((std::pair< float,float > const &)*arg1);
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DevPair_first_set___(void * jarg1, float jarg2) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float arg2 ;
+  
+  arg1 = (std::pair< float,float > *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->first = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_SandiafSpecUtils_DevPair_first_get___(void * jarg1) {
+  float jresult ;
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float result;
+  
+  arg1 = (std::pair< float,float > *)jarg1; 
+  result = (float) ((arg1)->first);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DevPair_second_set___(void * jarg1, float jarg2) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float arg2 ;
+  
+  arg1 = (std::pair< float,float > *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->second = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_SandiafSpecUtils_DevPair_second_get___(void * jarg1) {
+  float jresult ;
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  float result;
+  
+  arg1 = (std::pair< float,float > *)jarg1; 
+  result = (float) ((arg1)->second);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_delete_DevPair___(void * jarg1) {
+  std::pair< float,float > *arg1 = (std::pair< float,float > *) 0 ;
+  
+  arg1 = (std::pair< float,float > *)jarg1; 
+  delete arg1;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_DeviationPairs__SWIG_0___() {
+  void * jresult ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  result = (std::vector< std::pair< float,float > > *)new std::vector< std::pair< float,float > >();
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_DeviationPairs__SWIG_1___(void * jarg1) {
+  void * jresult ;
+  std::vector< std::pair< float,float > > *arg1 = 0 ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1;
+  if (!arg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< std::pair< float,float > > const & is null", 0);
+    return 0;
+  } 
+  result = (std::vector< std::pair< float,float > > *)new std::vector< std::pair< float,float > >((std::vector< std::pair< float,float > > const &)*arg1);
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_Clear___(void * jarg1) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  (arg1)->clear();
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_Add___(void * jarg1, void * jarg2) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  std::pair< float,float > *arg2 = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (std::pair< float,float > *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::pair< float,float > const & is null", 0);
+    return ;
+  } 
+  (arg1)->push_back((std::pair< float,float > const &)*arg2);
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_size___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  std::vector< std::pair< float,float > >::size_type result;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  result = ((std::vector< std::pair< float,float > > const *)arg1)->size();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_empty___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  bool result;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  result = (bool)((std::vector< std::pair< float,float > > const *)arg1)->empty();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_capacity___(void * jarg1) {
+  unsigned int jresult ;
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  std::vector< std::pair< float,float > >::size_type result;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  result = ((std::vector< std::pair< float,float > > const *)arg1)->capacity();
+  jresult = (unsigned int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_reserve___(void * jarg1, unsigned int jarg2) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  std::vector< std::pair< float,float > >::size_type arg2 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (std::vector< std::pair< float,float > >::size_type)jarg2; 
+  (arg1)->reserve(SWIG_STD_MOVE(arg2));
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_new_DeviationPairs__SWIG_2___(int jarg1) {
+  void * jresult ;
+  int arg1 ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  arg1 = (int)jarg1; 
+  try {
+    result = (std::vector< std::pair< float,float > > *)new_std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg___SWIG_2(arg1);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_getitemcopy___(void * jarg1, int jarg2) {
+  void * jresult ;
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  std::pair< float,float > result;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__getitemcopy(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = new std::pair< float,float >(result); 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_getitem___(void * jarg1, int jarg2) {
+  void * jresult ;
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  std::vector< std::pair< float,float > >::value_type *result = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    result = (std::vector< std::pair< float,float > >::value_type *) &std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__getitem(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_setitem___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  std::pair< float,float > *arg3 = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::pair< float,float > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::pair< float,float > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__setitem(arg1,arg2,(std::pair< float,float > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_AddRange___(void * jarg1, void * jarg2) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  std::vector< std::pair< float,float > > *arg2 = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (std::vector< std::pair< float,float > > *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< std::pair< float,float > > const & is null", 0);
+    return ;
+  } 
+  std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__AddRange(arg1,(std::vector< std::pair< float,float > > const &)*arg2);
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_GetRange___(void * jarg1, int jarg2, int jarg3) {
+  void * jresult ;
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    result = (std::vector< std::pair< float,float > > *)std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__GetRange(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_Insert___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  std::pair< float,float > *arg3 = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::pair< float,float > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::pair< float,float > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Insert(arg1,arg2,(std::pair< float,float > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_InsertRange___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::vector< std::pair< float,float > > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< std::pair< float,float > > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__InsertRange(arg1,arg2,(std::vector< std::pair< float,float > > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_RemoveAt___(void * jarg1, int jarg2) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__RemoveAt(arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_RemoveRange___(void * jarg1, int jarg2, int jarg3) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__RemoveRange(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return ;
+  }
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_Repeat___(void * jarg1, int jarg2) {
+  void * jresult ;
+  std::pair< float,float > *arg1 = 0 ;
+  int arg2 ;
+  std::vector< std::pair< float,float > > *result = 0 ;
+  
+  arg1 = (std::pair< float,float > *)jarg1;
+  if (!arg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::pair< float,float > const & is null", 0);
+    return 0;
+  } 
+  arg2 = (int)jarg2; 
+  try {
+    result = (std::vector< std::pair< float,float > > *)std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Repeat((std::pair< float,float > const &)*arg1,arg2);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return 0;
+  }
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_Reverse__SWIG_0___(void * jarg1) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Reverse__SWIG_0(arg1);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_Reverse__SWIG_1___(void * jarg1, int jarg2, int jarg3) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  int arg3 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (int)jarg3; 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__Reverse__SWIG_1(arg1,arg2,arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  } catch(std::invalid_argument &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentException, (&_e)->what(), "");
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_DeviationPairs_SetRange___(void * jarg1, int jarg2, void * jarg3) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  int arg2 ;
+  std::vector< std::pair< float,float > > *arg3 = 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (std::vector< std::pair< float,float > > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< std::pair< float,float > > const & is null", 0);
+    return ;
+  } 
+  try {
+    std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__SetRange(arg1,arg2,(std::vector< std::pair< float,float > > const &)*arg3);
+  } catch(std::out_of_range &_e) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentOutOfRangeException, 0, (&_e)->what());
+    return ;
+  }
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_SandiafSpecUtils_delete_DeviationPairs___(void * jarg1) {
+  std::vector< std::pair< float,float > > *arg1 = (std::vector< std::pair< float,float > > *) 0 ;
+  
+  arg1 = (std::vector< std::pair< float,float > > *)jarg1; 
+  delete arg1;
 }
 
 

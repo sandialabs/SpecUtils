@@ -8,7 +8,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils VERSION 2025.1.0 )
+project( SpecUtils VERSION 2025.3.2 )
 enable_testing()  # Enable here to allow running `ctest` from top-most build dir
 
 # Add this line to specify the architectures for MacOS
@@ -406,11 +406,11 @@ endif( SpecUtils_JAVA_SWIG )
 
 if( SpecUtils_FORTRAN_SWIG )
   add_subdirectory(bindings/swig/fortran)
-endif( SpecUtils_FORTRAN_SWIG )
+endif()
 
 if( SpecUtils_CSharp )
   add_subdirectory(bindings/swig/csharp)
-endif( )
+endif()
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )

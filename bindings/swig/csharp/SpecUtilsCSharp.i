@@ -11,13 +11,13 @@
 
 
 %include "stl.i"
-// //%include "std_vector.i"
+//%include "std_vector.i"
 
-// namespace std {
-//     %template(FloatVector)  vector<float>;
-//     %template(MeasurementVector)  vector<SpecUtils::Measurement>;
+namespace std {
+    %template(FloatVector)  vector<float>;
+    %template(MeasurementVector)  vector<SpecUtils::Measurement>;
     
-// }
+}
 
 %include "std_shared_ptr.i"
 %shared_ptr(vector<SpecUtils::Measurement>)
@@ -35,7 +35,7 @@
 %ignore truncate_gamma_channels; 
 %ignore descriptionText;
 %ignore operator=;
-%ignore set_gamma_counts;
+// %ignore set_gamma_counts;
 
 %include <typemaps.i>
 
@@ -45,6 +45,19 @@
 
 %extend SpecUtils::Measurement
 {
+    /// Return the count at a given index.
+    /// @param index is 1-based 
+    float gamma_count_at_oned_based(int index) 
+    {
+        return $self->gamma_counts()->at(index-1);
+    }
+
+    /// Return the count at a given index.
+    /// @param index is zero-based 
+    float gamma_count_at(int index) 
+    {
+        return $self->gamma_counts()->at(index);
+    }
 
     size_t get_num_channels()
     {
@@ -82,6 +95,13 @@
 
 %extend SpecUtils::SpecFile
 {
+    /// Return the measurement at a given index.
+    /// @param index is 1-based 
+    std::shared_ptr<const SpecUtils::Measurement> measurement_at_one_based(int index)
+    {
+        auto newIndex = static_cast<size_t>(index-1);
+        return $self->measurement(newIndex);
+    }
 
     int get_max_channel_count()
     {
@@ -99,10 +119,10 @@
     }
 }
 
-// %include "std_pair.i"
+%include "std_pair.i"
 
-// %template(DevPair) std::pair<float, float>;
-// %template(DeviationPairs) std::vector<std::pair<float, float>>;
+%template(DevPair) std::pair<float, float>;
+%template(DeviationPairs) std::vector<std::pair<float, float>>;
 
 %ignore set_lower_channel_energy; 
 %ignore energy_cal_from_CALp_file;

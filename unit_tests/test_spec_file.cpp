@@ -275,6 +275,15 @@ TEST_CASE("Round Trip")
             specfile.set_allow_overwrite(true);
             specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
         }
+
+        SUBCASE("Call delete all measurements")
+        {
+            specfile.remove_all_measurements();
+
+            // todo mutable measurements??
+
+            CHECK(specfile.num_measurements() == 0);
+        }
     }
 }
 

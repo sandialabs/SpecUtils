@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.25)
-project (SpecUtilsCSharp VERSION 2025.1.0 LANGUAGES CSharp CXX)
+project (SpecUtilsCSharp VERSION ${CMAKE_PROJECT_VERSION} LANGUAGES CSharp CXX)
 
 INCLUDE(CSharpUtilities)
 
@@ -24,6 +24,7 @@ target_link_libraries(SpecUtilsWrap PUBLIC SpecUtils)
 
 set (csharp_outdir "csharp_out")
 
+# You have to re-configure cmake to get this to regenerate
 CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/AssemblyInfo.cs.template" "${CMAKE_CURRENT_SOURCE_DIR}/${csharp_outdir}/AssemblyInfo.cs")
 
 file(GLOB CSHARP_SRC ${csharp_outdir}/*.cs)
@@ -48,23 +49,11 @@ SET_TARGET_PROPERTIES(test_app PROPERTIES
 )
 
 set(CPACK_NUGET_PACKAGE_TFMS "net46;.NETFramework4.6")
-#set(CPACK_NUGET_PACKAGE_DEPENDENCIES_net46 "SpecUtilsCSharp")
-#set(CPACK_NUGET_DEPENDENCIES "cmake0.0;NETFramework4.6")
 set (RID win11-64)
 
-# Install the SpecUtilsCSharp library
-install(TARGETS SpecUtilsCSharp 
-    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/net46
-    # LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
-    # ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
-)
+install(TARGETS SpecUtilsCSharp RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/net46 )
 
-install(TARGETS SpecUtilsWrap 
-#RUNTIME DESTINATION  ${CMAKE_INSTALL_LIBDIR}/${RID}
-RUNTIME DESTINATION  ${CMAKE_INSTALL_LIBDIR}/../build
-    # LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For shared libraries on UNIX-like systems
-    # ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # For static libraries and import libraries on Windows
-)
+install(TARGETS SpecUtilsWrap RUNTIME DESTINATION  ${CMAKE_INSTALL_LIBDIR}/../build )
 
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils.targets DESTINATION ${CMAKE_INSTALL_LIBDIR}/../build )
 

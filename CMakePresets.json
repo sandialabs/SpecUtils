@@ -36,6 +36,9 @@
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
+                "SpecUtils_CSharp" : "ON",
+                "SpecUtils_FORTRAN_SWIG": "ON",
+                "SpecUtils_BUILD_UNIT_TESTS": "OFF",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
             },
             "vendor": {
@@ -93,6 +96,9 @@
         {
             "name": "nuget",
             "configurePreset": "msvc",
+            "description": "SpecUtils is a library for opening, manipulating, and exporting spectrum files produced by RadioIsotope Identification Devices (RIIDs), Radiation Portal Monitors (RPMs), radiation search systems, Personal Radiation Detectors (PRDs), and many laboratory detection systems.",
+            "packageVersion": "2025.3.6",
+            "vendorName": "Sandia",
             "generators": [
                 "NuGet"
             ]
