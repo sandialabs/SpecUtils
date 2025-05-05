@@ -121,7 +121,7 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
     
     lineinfo = getAmptekMcaLineInfo( filedata, "DESCRIPTION - " );
     if( !lineinfo.empty() )
-      remarks_.push_back( "Description: " + lineinfo );
+      meas->measurement_description_ = lineinfo;
     
     float energy_gain = 0.0f;
     lineinfo = getAmptekMcaLineInfo( filedata, "GAIN - " );

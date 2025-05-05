@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Add any dependencies here, e.g.,
+# find_dependency(SomeOtherLibrary)
+
+include("${CMAKE_CURRENT_LIST_DIR}/SpecUtilsTargets.cmake")
+
+set(SpecUtils_INCLUDE_DIRS "@PACKAGE_INCLUDE_INSTALL_DIR@")
+set(SpecUtils_LIBRARIES SpecUtils)

@@ -140,37 +140,56 @@ namespace SpecUtils
   }//to_common_string
   
   
-  std::string to_vax_string( const SpecUtils::time_point_t &t )
+  std::string to_vax_string( SpecUtils::time_point_t t )
   {
     //Ex. "19-Sep-2014 14:12:01.62"
     if( is_special(t) )
       return "";
     
-    const auto t_as_days = date::floor<date::days>(t);
-    const date::year_month_day t_ymd = date::year_month_day{t_as_days};
-    const date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    auto t_as_days = date::floor<date::days>(t);
+    date::year_month_day t_ymd = date::year_month_day{t_as_days};
+    date::hh_mm_ss<time_point_t::duration> time_of_day = date::make_time(t - t_as_days);
+    
+    auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
+    // We'll round to nearest hundredth; not really sure if rounding, or truncating is the proper thing to do.
+    int hundreth = static_cast<int>( std::round( microsecs.count() / 10000.0 ) ); //round to nearest hundredth of a second
+    
+    // If `microsecs` is 999995 or larger, then `hundreth` will round up to 100, which we dont want,
+    //  so we'll add some microseconds, and recompute things, to get the rounding correct
+    assert( (hundreth <= 100) && (hundreth >= 0) );
+    if( hundreth >= 100 )
+    {
+      t += chrono::microseconds(5000);
+      t_as_days = date::floor<date::days>(t);
+      t_ymd = date::year_month_day{t_as_days};
+      time_of_day = date::make_time(t - t_as_days);
+      microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
+      hundreth = static_cast<int>( std::round( microsecs.count() / 10000.0 ) );
+    }
+    assert( (hundreth <= 99) && (hundreth >= 0) );
+    
     
     const int year = static_cast<int>( t_ymd.year() );
     const int day = static_cast<int>( static_cast<unsigned>( t_ymd.day() ) );
-    int hour = static_cast<int>( time_of_day.hours().count() );
+    const int hour = static_cast<int>( time_of_day.hours().count() );
     const int mins = static_cast<int>( time_of_day.minutes().count() );
     const int secs = static_cast<int>( time_of_day.seconds().count() );
     const char * const month = month_number_to_Str( static_cast<unsigned>(t_ymd.month()) );
-    const auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
-    // We'll round to nearest hundredth; not really sure if rounding, or truncating is the proper thing to do.
-    const int hundreth = static_cast<int>( std::round( microsecs.count() / 10000.0 ) ); //round to nearest hundredth of a second
     
-    char buffer[32];
+    char buffer[32] = { '\0' };
     snprintf( buffer, sizeof(buffer), "%02i-%s-%04i %02i:%02i:%02i.%02i",
              day, month, year, hour, mins, secs, hundreth );
     
-    
-    // For development, check if we can get the same answer using the date library
-    string answer = date::format("%d-%b-%Y %H:%M:%S", date::floor<chrono::seconds>(t));
-    char fractional[32];
-    snprintf(fractional, sizeof(fractional), ".%02i", hundreth);
-    answer += fractional;
-    assert( answer == buffer );
+#ifndef NDEBUG
+    {// Begin check if we can get the same answer using the date library
+      //  Note though that `t` has been adjusted if it rounds to 100 hundreths of a seconds
+      string answer = date::format("%d-%b-%Y %H:%M:%S", date::floor<chrono::seconds>(t));
+      char fractional[32];
+      snprintf(fractional, sizeof(fractional), ".%02i", hundreth);
+      answer += fractional;
+      assert( answer == buffer );
+    }// End check if we can get the same answer using the date library
+#endif
     
 #if(PERFORM_DEVELOPER_CHECKS)
     if( strlen(buffer) != 23 )
