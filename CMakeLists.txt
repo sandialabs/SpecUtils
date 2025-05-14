@@ -253,7 +253,7 @@ else( SpecUtils_SHARED_LIB )
   set( SpecUtils_LIB_TYPE STATIC )
 endif( SpecUtils_SHARED_LIB )
 
-add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
+add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES}  "SpecUtils/CAMIO.h" "src/CAMIO.cpp")
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
 set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched

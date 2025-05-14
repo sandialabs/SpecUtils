@@ -43,282 +43,334 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/CAMIO.h"
 
 using namespace std;
 
-namespace
-{
-
-    typedef unsigned char byte_type;
-
-    template< typename T > std::array< byte_type, sizeof(T) >  to_bytes(const T& object)
-    {
-        std::array< byte_type, sizeof(T) > bytes;
-
-        const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(object));
-        const byte_type* end = begin + sizeof(T);
-        std::copy(begin, end, std::begin(bytes));
-
-        return bytes;
-    }
-
-/** Datatypes for the CAM format.
- */
-    enum class cam_type
-    {
-        cam_float,     //any float
-        cam_double,    //any double
-        cam_byte,      //a byte
-        cam_word,      //int16
-        cam_longword,  //int
-        cam_quadword,  //int64
-        cam_datetime ,   //date time
-        cam_duration,   //time duration 
-        cam_string,
-    };
-
-    //Convert data to CAM data formats
-
-    template <class T>
-    //IEEE-754 variables to CAM float (PDP-11)
-    std::array< byte_type, sizeof(int32_t) > convert_to_CAM_float(const T& input)
-    {
-
-        //pdp-11 is a wordswaped float/4
-        float temp_f = static_cast<float>(input * 4);
-        const auto temp = to_bytes(temp_f);
-        const size_t word_size = 2;
-        std::array< byte_type, sizeof(int32_t) > output = { 0x00 };
-        //perform a word swap
-        for (size_t i = 0; i < word_size; i++)
-        {
-            output[i] = temp[i + word_size];
-            output[i + word_size] = temp[i];
-        }
-        return output;
-    }
-
-    template <class T>
-    //IEEE variables to CAM double (PDP-11)
-    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_double(const T& input)
-    {
-
-        //pdp-11 is a word swaped Double/4
-        double temp_d = static_cast<double>(input * 4.0) ;
-        const auto temp = to_bytes(temp_d);
-        const size_t word_size = 2;
-        std::array< byte_type, sizeof(int64_t) > output = { 0x00 };
-        //perform a word swap
-        for (size_t i = 0; i < word_size; i++)
-        {
-            output[i + 3 * word_size] = temp[i];				//IEEE fourth is PDP-11 first
-            output[i + 2 * word_size] = temp[i + word_size];  //IEEE third is PDP-11 second
-            output[i + word_size] = temp[i + 2 * word_size];//IEEE second is PDP-11 third
-            output[i] = temp[i + 3 * word_size];            //IEEE first is PDP-11 fouth
-        }
-        return output;
-    }
-
-    //boost ptime to CAM DateTime
-    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_datetime(const SpecUtils::time_point_t& date_time)
-    {
-        //error checking
-        if( SpecUtils::is_special(date_time) )
-            throw std::range_error("The input date time is not a valid date time");
-
-        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
-        //get the total seconds between the input time and the epoch
-        const date::year_month_day epoch( date::year(1970), date::month(1u), date::day(1u) );
-        const date::sys_days epoch_days = epoch;
-        assert( epoch_days.time_since_epoch().count() == 0 ); //true if using unix epoch, lets see on the various systems
-      
-        const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epoch_days);
-        const int64_t sec_from_epoch = time_from_epoch.count();
-
-        //covert to modified julian in usec
-        uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
-        bytes = to_bytes(j_sec);
-        return bytes;
-    }
-
-    SpecUtils::time_point_t convert_from_CAM_datetime( uint64_t time_raw )
-    {
-      if( !time_raw )
-        return SpecUtils::time_point_t{};
-      
-      const date::sys_days epoch_days = date::year_month_day( date::year(1970), date::month(1u), date::day(1u) );
-      SpecUtils::time_point_t answer{epoch_days};
-
-      const int64_t secs = time_raw / 10000000L;
-      const int64_t sec_from_epoch = secs - 3506716800L;
-      
-      answer += std::chrono::seconds(sec_from_epoch);
-      answer += std::chrono::microseconds( secs % 10000000L );
-      
-      return answer;
-    }//convert_from_CAM_datetime(...)
-
-
-    //float sec to CAM duration
-    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
-    {
-        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
-        //duration in usec is larger than a int64: covert to years
-        if ( (static_cast<double>(duration) * 10000000.0) > static_cast<double>(INT64_MAX) )
-        {
-            double t_duration = duration / 31557600;
-            //duration in years is larger than an int32, divide by a million years
-            if ( (duration / 31557600.0) > static_cast<double>(INT32_MAX) )
-            {
-                int32_t y_duration = SpecUtils::float_to_integral<int32_t>(t_duration / 1e6);
-                const auto y_bytes = to_bytes(y_duration);
-                std::copy(begin(y_bytes), end(y_bytes), begin(bytes));
-                //set the flags
-                bytes[7] = 0x80;
-                bytes[4] = 0x01;
-                return bytes;
-
-            }
-            //duration can be represented in years
-            else
-            {
-                int32_t y_duration = static_cast<int32_t>(t_duration);
-                const auto y_bytes = to_bytes(y_duration);
-                std::copy(begin(y_bytes), end(y_bytes), begin(bytes));
-                //set the flag
-                bytes[7] = 0x80;
-                return bytes;
-            }
-        }
-        //duration is able to be represented in usec
-        else
-        {
-            //cam time span is in usec and a negatve int64
-            int64_t t_duration = static_cast<int64_t>((double)duration * -10000000);
-            bytes = to_bytes(t_duration);
-            return bytes;
-        }
-
-    }
-    //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
-    void enter_CAM_value(const T& input, vector<byte_type>& destination, const size_t& location, const cam_type& type)
-    {
-        switch (type) {
-        case cam_type::cam_float:
-        {
-            const auto bytes = convert_to_CAM_float(input);
-          
-          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-            throw std::runtime_error( "enter_CAM_value(cam_float) invalid write location" );
-          
-            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
-        }
-        break;
-        case cam_type::cam_double:
-        {
-            const auto bytes = convert_to_CAM_double(input);
-          
-          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-            throw std::runtime_error( "enter_CAM_value(cam_double) invalid write location" );
-          
-            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
-        }
-        break;
-        case cam_type::cam_duration:
-        {
-            const auto bytes = convert_to_CAM_duration(input);
-          
-          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-            throw std::runtime_error( "enter_CAM_value(cam_duration) invalid write location" );
-          
-            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
-        }
-        break;
-        case cam_type::cam_quadword:
-        {
-            int64_t t_quadword = static_cast<int64_t>(input);
-            const auto bytes = to_bytes(t_quadword);
-          
-          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-            throw std::runtime_error( "enter_CAM_value(cam_quadword) invalid write location" );
-          
-            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
-        }
-        break;
-        case cam_type::cam_longword:
-        {
-          // TODO: it appears we actually want to use a uint32_t here, and not a int32_t, but because of the static_cast here, things work out, but if we are to "clamp" values, then we need to switch to using unsigned integers
-          int32_t t_longword = static_cast<int32_t>(input);
-          
-            const auto bytes = to_bytes(t_longword);
-          
-          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-            throw std::runtime_error( "enter_CAM_value(cam_longword) invalid write location" );
-          
-            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
-        }
-        break;
-        case cam_type::cam_word:
-        {
-            int16_t t_word = static_cast<int16_t>(input);
-            const auto bytes = to_bytes(t_word);
-          
-          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-            throw std::runtime_error( "enter_CAM_value(cam_word) invalid write location" );
-          
-            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
-        }
-        break;
-        case cam_type::cam_byte:
-        {
-          byte_type t_byte = static_cast<byte_type>(input);
-            destination.at(location) = t_byte;
-            //const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(t_byte));
-            //const byte_type* end = begin + sizeof(byte_type);
-            //std::copy(begin, end, destination.begin() + location);
-        break;
-        }
-        default:
-            string message = "error - Invalid converstion from: ";
-            message.append(typeid(T).name());
-            message.append(" to athermetic type");
-
-            throw std::invalid_argument(message);
-            break;
-        }//end switch
-    }
-    //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const SpecUtils::time_point_t& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
-    {
-        if (type != cam_type::cam_datetime)
-        {
-            throw std::invalid_argument("error - Invalid conversion from time_point");
-        }
-
-        const auto bytes = convert_to_CAM_datetime(input);
-      
-      if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
-        throw std::runtime_error( "enter_CAM_value(ptime) invalid write location" );
-       
-      std::copy(begin(bytes), end(bytes) , destination.begin() + location);
-    }
-    //enter the input to the cam desition vector of bytes at the location, with a given datatype
-    void enter_CAM_value(const string& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
-    {
-        if (type != cam_type::cam_string)
-        {
-            throw std::invalid_argument("error - Invalid converstion from: char*[]");
-        }
-      
-      if( (std::begin(destination) + location + (std::end(input) - std::begin(input))) > std::end(destination) )
-        throw std::runtime_error( "enter_CAM_value(string) invalid write location" );
-      
-        std::copy(input.begin(), input.end(), destination.begin() + location);
-    }
-
-}//namespace
-
+//namespace
+//{
+//
+//    typedef unsigned char byte_type;
+//
+//    template< typename T > std::array< byte_type, sizeof(T) >  to_bytes(const T& object)
+//    {
+//        std::array< byte_type, sizeof(T) > bytes;
+//
+//        const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(object));
+//        const byte_type* end = begin + sizeof(T);
+//        std::copy(begin, end, std::begin(bytes));
+//
+//        return bytes;
+//    }
+//
+///** Datatypes for the CAM format.
+// */
+//    enum class cam_type
+//    {
+//        cam_float,     //any float
+//        cam_double,    //any double
+//        cam_byte,      //a byte
+//        cam_word,      //int16
+//        cam_longword,  //int
+//        cam_quadword,  //int64
+//        cam_datetime ,   //date time
+//        cam_duration,   //time duration 
+//        cam_string,
+//    };
+//
+//    //Convert data to CAM data formats
+//
+//    template <class T>
+//    //IEEE-754 variables to CAM float (PDP-11)
+//    std::array< byte_type, sizeof(int32_t) > convert_to_CAM_float(const T& input)
+//    {
+//
+//        //pdp-11 is a wordswaped float/4
+//        float temp_f = static_cast<float>(input * 4);
+//        const auto temp = to_bytes(temp_f);
+//        const size_t word_size = 2;
+//        std::array< byte_type, sizeof(int32_t) > output = { 0x00 };
+//        //perform a word swap
+//        for (size_t i = 0; i < word_size; i++)
+//        {
+//            output[i] = temp[i + word_size];
+//            output[i + word_size] = temp[i];
+//        }
+//        return output;
+//    }
+//
+//    template <class T>
+//    //IEEE variables to CAM double (PDP-11)
+//    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_double(const T& input)
+//    {
+//
+//        //pdp-11 is a word swaped Double/4
+//        double temp_d = static_cast<double>(input * 4.0) ;
+//        const auto temp = to_bytes(temp_d);
+//        const size_t word_size = 2;
+//        std::array< byte_type, sizeof(int64_t) > output = { 0x00 };
+//        //perform a word swap
+//        for (size_t i = 0; i < word_size; i++)
+//        {
+//            output[i + 3 * word_size] = temp[i];				//IEEE fourth is PDP-11 first
+//            output[i + 2 * word_size] = temp[i + word_size];  //IEEE third is PDP-11 second
+//            output[i + word_size] = temp[i + 2 * word_size];//IEEE second is PDP-11 third
+//            output[i] = temp[i + 3 * word_size];            //IEEE first is PDP-11 fouth
+//        }
+//        return output;
+//    }
+//
+//    //time_point to CAM DateTime
+//    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_datetime(const SpecUtils::time_point_t& date_time)
+//    {
+//        //error checking
+//        if( SpecUtils::is_special(date_time) )
+//            throw std::range_error("The input date time is not a valid date time");
+//
+//        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
+//        //get the total seconds between the input time and the epoch
+//        const date::year_month_day epoch( date::year(1970), date::month(1u), date::day(1u) );
+//        const date::sys_days epoch_days = epoch;
+//        assert( epoch_days.time_since_epoch().count() == 0 ); //true if using unix epoch, lets see on the various systems
+//      
+//        const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epoch_days);
+//        const int64_t sec_from_epoch = time_from_epoch.count();
+//
+//        //covert to modified julian in usec
+//        uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
+//        bytes = to_bytes(j_sec);
+//        return bytes;
+//    }
+//
+//    //float sec to CAM duration
+//    std::array< byte_type, sizeof(int64_t) > convert_to_CAM_duration(const float& duration)
+//    {
+//        std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
+//        //duration in usec is larger than a int64: covert to years
+//        if ( (static_cast<double>(duration) * 10000000.0) > static_cast<double>(INT64_MAX) )
+//        {
+//            double t_duration = duration / 31557600;
+//            //duration in years is larger than an int32, divide by a million years
+//            if ( (duration / 31557600.0) > static_cast<double>(INT32_MAX) )
+//            {
+//                int32_t y_duration = SpecUtils::float_to_integral<int32_t>(t_duration / 1e6);
+//                const auto y_bytes = to_bytes(y_duration);
+//                std::copy(begin(y_bytes), end(y_bytes), begin(bytes));
+//                //set the flags
+//                bytes[7] = 0x80;
+//                bytes[4] = 0x01;
+//                return bytes;
+//
+//            }
+//            //duration can be represented in years
+//            else
+//            {
+//                int32_t y_duration = static_cast<int32_t>(t_duration);
+//                const auto y_bytes = to_bytes(y_duration);
+//                std::copy(begin(y_bytes), end(y_bytes), begin(bytes));
+//                //set the flag
+//                bytes[7] = 0x80;
+//                return bytes;
+//            }
+//        }
+//        //duration is able to be represented in usec
+//        else
+//        {
+//            //cam time span is in usec and a negatve int64
+//            int64_t t_duration = static_cast<int64_t>((double)duration * -10000000);
+//            bytes = to_bytes(t_duration);
+//            return bytes;
+//        }
+//
+//    }
+//
+//    // CAM double to double
+//    double convert_from_CAM_double(const std::vector<uint8_t>& data, size_t pos)
+//    {
+//        const size_t word_size = 2;
+//        std::array<uint8_t, sizeof(double_t)> temp = { 0x00 };
+//        //std::memcpy(&temp, &data[pos], sizeof(double_t));
+//
+//        // Perform word swap
+//        for (size_t i = 0; i < word_size; i++)
+//        {
+//            size_t j = i + pos;
+//            temp[i] = data[j + 3 * word_size];             // PDP-11 fourth is IEEE first
+//            temp[i + word_size] = data[j + 2 * word_size]; // PDP-11 third is IEEE second
+//            temp[i + 2 * word_size] = data[j + word_size]; // PDP-11 second is IEEE third
+//            temp[i + 3 * word_size] = data[j];             // PDP-11 first is IEEE forth
+//        }
+//
+//        // Convert bytes back to double
+//        double temp_d;
+//        std::memcpy(&temp_d, temp.data(), sizeof(double_t)); // Safely copy the bytes into a double
+//
+//        // scale to the double value
+//        return temp_d / 4.0;
+//    }
+//
+//    // CAM float to float
+//    float convert_from_CAM_float(const std::vector<uint8_t>& data, size_t pos) {
+//        if (data.size() < 4) {
+//            throw std::invalid_argument("The data input array is not long enough");
+//        }
+//        if (data.size() < pos + 4) {
+//            throw std::out_of_range("The provided index exceeds the length of the array");
+//        }
+//        uint8_t word1[2], word2[2];
+//
+//        std::memcpy(word1, &data[pos + 0x2], sizeof(word1));
+//        std::memcpy(word2, &data[pos], sizeof(word2));
+//
+//        uint8_t bytearr[4];
+//        // Copy the words from the data array
+//        // Assuming the input data is in a format that needs to be swapped
+//        std::memcpy(bytearr, word1, sizeof(word1)); // Copy word1 to the beginning
+//        std::memcpy(bytearr + 2, word2, sizeof(word2)); // Copy word2 to the end
+//
+//        float val = *reinterpret_cast<float*>(bytearr);
+//
+//        return val / 4;
+//    }
+//    
+//    //CAM DateTime to time_point
+//    SpecUtils::time_point_t convert_from_CAM_datetime( uint64_t time_raw )
+//    {
+//      if( !time_raw )
+//        return SpecUtils::time_point_t{};
+//      
+//      const date::sys_days epoch_days = date::year_month_day( date::year(1970), date::month(1u), date::day(1u) );
+//      SpecUtils::time_point_t answer{epoch_days};
+//
+//      const int64_t secs = time_raw / 10000000L;
+//      const int64_t sec_from_epoch = secs - 3506716800L;
+//      
+//      answer += std::chrono::seconds(sec_from_epoch);
+//      answer += std::chrono::microseconds( secs % 10000000L );
+//      
+//      return answer;
+//    }//convert_from_CAM_datetime(...)
+//
+//
+//    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+//    template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
+//    void enter_CAM_value(const T& input, vector<byte_type>& destination, const size_t& location, const cam_type& type)
+//    {
+//        switch (type) {
+//        case cam_type::cam_float:
+//        {
+//            const auto bytes = convert_to_CAM_float(input);
+//          
+//          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//            throw std::runtime_error( "enter_CAM_value(cam_float) invalid write location" );
+//          
+//            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
+//        }
+//        break;
+//        case cam_type::cam_double:
+//        {
+//            const auto bytes = convert_to_CAM_double(input);
+//          
+//          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//            throw std::runtime_error( "enter_CAM_value(cam_double) invalid write location" );
+//          
+//            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
+//        }
+//        break;
+//        case cam_type::cam_duration:
+//        {
+//            const auto bytes = convert_to_CAM_duration(input);
+//          
+//          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//            throw std::runtime_error( "enter_CAM_value(cam_duration) invalid write location" );
+//          
+//            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
+//        }
+//        break;
+//        case cam_type::cam_quadword:
+//        {
+//            int64_t t_quadword = static_cast<int64_t>(input);
+//            const auto bytes = to_bytes(t_quadword);
+//          
+//          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//            throw std::runtime_error( "enter_CAM_value(cam_quadword) invalid write location" );
+//          
+//            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
+//        }
+//        break;
+//        case cam_type::cam_longword:
+//        {
+//          // TODO: it appears we actually want to use a uint32_t here, and not a int32_t, but because of the static_cast here, things work out, but if we are to "clamp" values, then we need to switch to using unsigned integers
+//          int32_t t_longword = static_cast<int32_t>(input);
+//          
+//            const auto bytes = to_bytes(t_longword);
+//          
+//          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//            throw std::runtime_error( "enter_CAM_value(cam_longword) invalid write location" );
+//          
+//            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
+//        }
+//        break;
+//        case cam_type::cam_word:
+//        {
+//            int16_t t_word = static_cast<int16_t>(input);
+//            const auto bytes = to_bytes(t_word);
+//          
+//          if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//            throw std::runtime_error( "enter_CAM_value(cam_word) invalid write location" );
+//          
+//            std::copy(std::begin(bytes), std::end(bytes), destination.begin() + location);
+//        }
+//        break;
+//        case cam_type::cam_byte:
+//        {
+//          byte_type t_byte = static_cast<byte_type>(input);
+//            destination.at(location) = t_byte;
+//            //const byte_type* begin = reinterpret_cast<const byte_type*>(std::addressof(t_byte));
+//            //const byte_type* end = begin + sizeof(byte_type);
+//            //std::copy(begin, end, destination.begin() + location);
+//        break;
+//        }
+//        default:
+//            string message = "error - Invalid converstion from: ";
+//            message.append(typeid(T).name());
+//            message.append(" to athermetic type");
+//
+//            throw std::invalid_argument(message);
+//            break;
+//        }//end switch
+//    }
+//    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+//    void enter_CAM_value(const SpecUtils::time_point_t& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_datetime)
+//    {
+//        if (type != cam_type::cam_datetime)
+//        {
+//            throw std::invalid_argument("error - Invalid conversion from time_point");
+//        }
+//
+//        const auto bytes = convert_to_CAM_datetime(input);
+//      
+//      if( (std::begin(destination) + location + (std::end(bytes) - std::begin(bytes))) > std::end(destination) )
+//        throw std::runtime_error( "enter_CAM_value(ptime) invalid write location" );
+//       
+//      std::copy(begin(bytes), end(bytes) , destination.begin() + location);
+//    }
+//    //enter the input to the cam desition vector of bytes at the location, with a given datatype
+//    void enter_CAM_value(const string& input, vector<byte_type>& destination, const size_t& location, const cam_type& type=cam_type::cam_string)
+//    {
+//        if (type != cam_type::cam_string)
+//        {
+//            throw std::invalid_argument("error - Invalid converstion from: char*[]");
+//        }
+//      
+//      if( (std::begin(destination) + location + (std::end(input) - std::begin(input))) > std::end(destination) )
+//        throw std::runtime_error( "enter_CAM_value(string) invalid write location" );
+//      
+//        std::copy(input.begin(), input.end(), destination.begin() + location);
+//    }
+//
+//}//namespace
+//
 
 namespace SpecUtils
 {
@@ -825,6 +877,8 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
   if( det_nums.empty() )
     det_names = detector_names_;
   
+
+  // TODO Transfer this code to CAMIO
   try
   {
     std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, det_names, nullptr);
@@ -832,6 +886,9 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     if( !summed || !summed->gamma_counts() || summed->gamma_counts()->empty() )
       return false;
 
+    //call CAMIO here
+    CAMInputOutput::CAMIO* cam = new CAMInputOutput::CAMIO();
+    cam->CreateFile(summed);
     //At this point we have the one spectrum (called summed) that we will write
     //  to the CNF file.  If the input file only had a single spectrum, this is
     //  now held in 'summed', otherwise the specified samples and detectors have
