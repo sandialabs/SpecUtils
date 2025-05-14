@@ -11,13 +11,13 @@
 
 #include "specUtils/CAMIO.h"
 #include "SpecUtils/DateTime.h"
-#include <SpecUtils/ParseUtils.h>
-#include <SpecUtils/SpecFile.h>
+#include "SpecUtils/ParseUtils.h"
+#include "SpecUtils/SpecFile.h"
 
 
 // Default byte arrays
 namespace {
-    const std::array<uint8_t, 0x060> fileHeader = {
+const std::array<byte_type, 0x060> fileHeader = {
         0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0xA4, 0x00, 0x00, 0x00, 0x00,
         0x30, 0x00, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -26,7 +26,7 @@ namespace {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
 
-    const std::array<uint8_t, 0xA00> acqpCommon = {
+const std::array<byte_type, 0xA00> acqpCommon = {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -189,7 +189,7 @@ namespace {
             0x75, 0x43, 0x69, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20
     };
 
-    const std::array<uint8_t, 0x401> nuclCommon = {
+const std::array<byte_type, 0x401> nuclCommon = {
          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -257,14 +257,12 @@ namespace {
          0x00
     };
 
-    const std::array<uint8_t, 0x018> nlineCommon = {
+const std::array<byte_type, 0x018> nlineCommon = {
         0x6B, 0x65, 0x56, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
         0x20, 0x20, 0x20, 0x20, 0x80, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
 
-    const std::array<uint8_t, 0x7D0> procCommon = { 0 }; // Initialize with zeros
-
-
+const std::array<byte_type, 0x7D0> procCommon = { 0 }; // Initialize with zeros
 
 
 // Helper function to convert half-life units
@@ -310,7 +308,6 @@ static std::vector<std::string> DecomposeIsotopeName(const std::string& name)
     return result;
 }
 
-typedef unsigned char byte_type;
 
 template< typename T > std::array< byte_type, sizeof(T) >  to_bytes(const T& object)
 {
@@ -853,14 +850,14 @@ void CAMIO::ReadBlock(CAMBlock block) {
 }
 
 // Helper function to read a uint16_t from the data buffer
-static uint16_t ReadUInt16(const std::vector<uint8_t>& data, size_t offset) {
+static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
     uint16_t value;
     std::memcpy(&value, &data[offset], sizeof(uint16_t));
     return value;
 }
 
 // Helper function to read a uint32_t from the data buffer
-static uint32_t ReadUInt32(const std::vector<uint8_t>& data, size_t offset) {
+static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
     uint32_t value;
     std::memcpy(&value, &data[offset], sizeof(uint32_t));
     return value;
@@ -1443,13 +1440,7 @@ void CAMIO::CreateFile(const std::string& filePath) {
     nucs.clear();
 }
 
-// create a cnf file from a specUtils measurement
-void CAMInputOutput::CAMIO::CreateFile(std::shared_ptr<SpecUtils::Measurement> summed)
-{
-}
-
-
-std::vector<uint8_t> CAMIO::GenerateFile(const std::vector<std::vector<uint8_t>>& blocks) {
+std::vector<uint8_t> CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
     // Calculate total file size
     size_t fileLength = 0x800;  // Initial header size
     for (const auto& block : blocks) {
@@ -1607,7 +1598,7 @@ void CAMIO::AddLineAndNuclide(const float energy, const float yield,
 }
 
 // generate a nuclide record
-std::vector<uint8_t> CAMIO::GenerateNuclide(const std::string& name, float halfLife,
+std::vector<byte_type> CAMIO::GenerateNuclide(const std::string& name, float halfLife,
                                            float halfLifeUnc, const std::string& halfLifeUnit,
                                            const std::vector<uint16_t>& lineNums) {
     uint32_t numLines = static_cast<uint32_t>(lineNums.size());
@@ -1651,8 +1642,8 @@ std::vector<uint8_t> CAMIO::GenerateNuclide(const std::string& name, float halfL
 }
 
 // add lines to an existing nuclide
-std::vector<uint8_t> CAMIO::AddLinesToNuclide(const std::vector<uint8_t>& nuc,
-                                             const std::vector<uint8_t>& lineNums) {
+std::vector<byte_type> CAMIO::AddLinesToNuclide(const std::vector<byte_type>& nuc,
+                                             const std::vector<byte_type>& lineNums) {
     uint32_t numLines = static_cast<uint32_t>(lineNums.size());
 
     // Set the number of line parameter
@@ -1676,7 +1667,7 @@ std::vector<uint8_t> CAMIO::AddLinesToNuclide(const std::vector<uint8_t>& nuc,
 }
 
 // generate line record
-std::vector<uint8_t> CAMIO::GenerateLine(float energy, float enUnc, float yield,
+std::vector<byte_type> CAMIO::GenerateLine(float energy, float enUnc, float yield,
                                         float yieldUnc, bool key, uint8_t nucNo, bool noWgtMn) {
     std::vector<uint8_t> line(static_cast<size_t>(static_cast<uint16_t>(RecordSize::NLINES)));
     
@@ -1731,8 +1722,8 @@ std::vector<EfficiencyPoint> CAMIO::GetEfficiencyPoints() {
 }
 
 // generate a block
-std::vector<uint8_t> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
-                                         const std::vector<std::vector<uint8_t>>& records,
+std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
+                                         const std::vector<std::vector<byte_type>>& records,
                                          uint16_t blockNo, bool hasCommon) {
     // Return just the default for ACQP with the header
     if (block == CAMBlock::ACQP) {
@@ -1802,7 +1793,7 @@ std::vector<uint8_t> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
 }
 
 // generate a block header
-std::vector<uint8_t> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, uint16_t numRec,
+std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, uint16_t numRec,
                                                uint16_t numLines, uint16_t blockNum, bool hasCommon) {
     if (block != CAMBlock::ACQP && block != CAMBlock::NUCL && 
         block != CAMBlock::NLINES && block != CAMBlock::PROC) {
@@ -1915,7 +1906,7 @@ std::vector<uint8_t> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, uint
 }
 
 // get the numbers of lines in a file
-uint16_t CAMIO::GetNumLines(const std::vector<uint8_t>& nuclRecord) {
+uint16_t CAMIO::GetNumLines(const std::vector<byte_type>& nuclRecord) {
     // Check if the record is large enough to contain at least the base NUCL record
     if (nuclRecord.size() < static_cast<size_t>(RecordSize::NUCL)) {
         throw std::out_of_range("There are no Lines associated with this record");

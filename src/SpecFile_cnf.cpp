@@ -888,7 +888,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
 
     //call CAMIO here
     CAMInputOutput::CAMIO* cam = new CAMInputOutput::CAMIO();
-    cam->CreateFile(summed);
+
     //At this point we have the one spectrum (called summed) that we will write
     //  to the CNF file.  If the input file only had a single spectrum, this is
     //  now held in 'summed', otherwise the specified samples and detectors have

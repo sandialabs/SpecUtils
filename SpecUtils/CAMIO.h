@@ -7,7 +7,13 @@
 #include <memory>
 #include <chrono>
 
-namespace CAMInputOutput {
+namespace 
+{
+    typedef unsigned char byte_type;
+}
+
+namespace CAMInputOutput 
+{
 
 // Structs
 struct EfficiencyPoint {
@@ -149,9 +155,9 @@ public:
 
 private:
     std::multimap<CAMBlock, uint32_t> blockAddresses;
-    std::vector<uint8_t> readData;
-    std::vector<std::vector<uint8_t>> lines;
-    std::vector<std::vector<uint8_t>> nucs;
+    std::vector<byte_type> readData;
+    std::vector<std::vector<byte_type>> lines;
+    std::vector<std::vector<byte_type>> nucs;
     std::vector<Nuclide> writeNuclides; 
     std::vector<Line> fileLines;
     std::vector<Nuclide> fileNuclides;
@@ -167,6 +173,8 @@ private:
 public:
     CAMIO();
     void ReadFile(const std::string& fileName);
+
+    // get data from a file
     std::vector<Line> GetLines();
     std::vector<Nuclide> GetNuclides();
     std::vector<Peak> GetPeaks();
@@ -178,8 +186,8 @@ public:
     std::vector<float> GetShapeCalibration();
     std::vector<float> GetEnergyCalibration();
     std::vector<uint32_t> GetSpectrum();
-    void CreateFile(const std::string& filePath);
-    void CreateFile(std::shared_ptr<SpecUtils::Measurement> summed);
+
+    // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 
         const float halfLifeUnc, const std::string& halfLifeUnit, const int nucNo = -1);
     void AddNuclide(const Nuclide& nuc);
@@ -189,6 +197,18 @@ public:
     void AddLineAndNuclide(const float energy,  const float yield, const std::string& name, 
         const float halfLife, const std::string& halfLifeUnit, const bool noWeightMean = false,
         const float enUnc = -1, const float yieldUnc = -1, const float halfLifeUnc = -1 );
+    void AddEnergyCalibration(const std::vector<float> coefficients);
+    void AddDetectorType(const std::string& detector_type);
+    void AddAcquitionTime(const SpecUtils::time_point_t& start_time);
+    void AddRealTime(const float real_time);
+    void AddLiveTime(const float live_time);
+    void AddSampleTitle();
+    void AddGPSData(const double latitude, const double longitude,
+        const float speed, const SpecUtils::time_point_t& position_time);
+    void AddSpectrum(const std::vector<uint32_t> channel_counts);
+
+    // create a file with the data added
+    void CreateFile(const std::string& filePath);
 
     inline void SetKeyLineInerferenceLimit(const float limit) { key_line_intf_limit = limit; };
     float GetKeyLineInerferenceLimit() const { return key_line_intf_limit; }
