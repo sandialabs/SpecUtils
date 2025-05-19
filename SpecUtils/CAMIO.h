@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <chrono>
+#include "DateTime.h"
 
 namespace 
 {
@@ -94,16 +95,17 @@ public:
     };
 
     enum class RecordSize : uint16_t {
-        ACQP = 0x051C,
+        ACQP = 0x0440,
         NUCL = 0x023B,
         NLINES = 0x0085
     };
 
     enum class BlockSize : uint16_t {
-        ACQP = 0xA00U,
+        ACQP = 0x800,
         PROC = 0x800,
-        NUCL = 0x4800U,
-        NLINES = 0x4200U
+        NUCL = 0x4800,
+        NLINES = 0x4200,
+        SAMP = 0x0A00
     };
 
     enum class PeakParameterLocation : uint8_t {
@@ -158,6 +160,7 @@ private:
     std::vector<byte_type> readData;
     std::vector<std::vector<byte_type>> lines;
     std::vector<std::vector<byte_type>> nucs;
+    std::vector<byte_type> specData;
     std::vector<Nuclide> writeNuclides; 
     std::vector<Line> fileLines;
     std::vector<Nuclide> fileNuclides;
@@ -167,8 +170,13 @@ private:
     static constexpr uint16_t header_size = 0x800;
     static constexpr uint16_t block_header_size = 0x30;
     static constexpr uint8_t  nuclide_line_size = 0x03;
+    static constexpr size_t file_header_length = 0x800;
+    static constexpr size_t sec_header_length = 0x30;
+    static constexpr uint16_t acqp_rec_tab_loc = 0x01FB;
 
     float key_line_intf_limit = 2.0; //keV
+    bool sampBlock = false;
+    bool specBlock = false;
 
 public:
     CAMIO();
@@ -205,10 +213,10 @@ public:
     void AddSampleTitle();
     void AddGPSData(const double latitude, const double longitude,
         const float speed, const SpecUtils::time_point_t& position_time);
-    void AddSpectrum(const std::vector<uint32_t> channel_counts);
+    void AddSpectrum(const std::vector<uint32_t>& channel_counts);
 
     // create a file with the data added
-    void CreateFile(const std::string& filePath);
+    std::vector<byte_type> CreateFile(const std::string& filePath);
 
     inline void SetKeyLineInerferenceLimit(const float limit) { key_line_intf_limit = limit; };
     float GetKeyLineInerferenceLimit() const { return key_line_intf_limit; }
