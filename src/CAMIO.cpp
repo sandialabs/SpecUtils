@@ -588,21 +588,11 @@ CAMIO::CAMIO() {
 }
 
 // read a file given the file name 
-void CAMIO::ReadFile(const std::string& fileName) {
-    if (!std::filesystem::exists(fileName)) {
-        throw std::runtime_error("File not found: " + fileName);
-    }
 
-    // Read the file data
-    std::ifstream file(fileName, std::ios::binary);
-    file.seekg(0, std::ios::end);
-    size_t fileSize = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    readData.resize(fileSize);
-    file.read(reinterpret_cast<char*>(readData.data()), fileSize);
-    file.close();
-
+void CAMIO::ReadFile(const std::vector<byte_type>& fileData) {
+    
+    // set the readData pointer to point to the file data
+    readData = std::make_shared<std::vector<byte_type>>(fileData);
     // Read the header
     blockAddresses = ReadHeader();
 
@@ -613,7 +603,7 @@ void CAMIO::ReadFile(const std::string& fileName) {
 
 // read the overall file header
 std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
-    if (readData.empty()) {
+    if (readData->empty()) {
         return std::multimap<CAMBlock, uint32_t>();
     }
 
@@ -623,13 +613,13 @@ std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
     for (size_t i = 0; i < 28; i++) {
         size_t headOff = 0x70 + i * 0x30;
 
-        if (headOff + 0x20 > readData.size()) {
+        if (headOff + 0x20 > readData->size()) {
             return std::multimap<CAMBlock, uint32_t>();
         }
 
         // Section ID
         uint32_t secId;
-        std::memcpy(&secId, &readData[headOff], sizeof(uint32_t));
+        std::memcpy(&secId, &(*readData)[headOff], sizeof(uint32_t));
 
         // Don't read a blank header (0x00000000)
         if (secId == 0x00000000) {
@@ -638,7 +628,7 @@ std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
 
         // Get the addresses of the info
         size_t loc;
-        std::memcpy(&loc, &readData[headOff + 0x0a], sizeof(uint32_t));
+        std::memcpy(&loc, &(*readData)[headOff + 0x0a], sizeof(uint32_t));
 
         blockInfo.insert({static_cast<CAMBlock>(secId), loc});
     }
@@ -651,7 +641,7 @@ void CAMIO::ReadBlock(CAMBlock block) {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -661,14 +651,14 @@ void CAMIO::ReadBlock(CAMBlock block) {
 
         // Verify block ID
         uint32_t blockId;
-        std::memcpy(&blockId, &readData[pos], sizeof(uint32_t));
+        std::memcpy(&blockId, &(*readData)[pos], sizeof(uint32_t));
         if (blockId != static_cast<uint32_t>(block)) {
             continue;
         }
 
         // Read number of records
         uint16_t records;
-        std::memcpy(&records, &readData[pos + 0x1e], sizeof(uint16_t));
+        std::memcpy(&records, &(*readData)[pos + 0x1e], sizeof(uint16_t));
 
         // Process block based on type
         switch (block) {
@@ -706,12 +696,12 @@ static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
 // read the geometry block
 void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     // Get record offset and entry offset
-    uint16_t commonFlag = ReadUInt16(readData, pos + 0x04);
-    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(readData, pos + 0x22);
-    uint16_t entOffset = ReadUInt16(readData, pos + 0x28);
-    uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-    uint16_t entSize = ReadUInt16(readData, pos + 0x2a);
-    uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+    uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t entOffset = ReadUInt16(*readData, pos + 0x28);
+    uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+    uint16_t entSize = ReadUInt16(*readData, pos + 0x2a);
+    uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
     std::vector<EfficiencyPoint> points;
 
@@ -721,12 +711,12 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
 
         // Loop through the entries
         // Each entry starts with a byte that matches the record number (1-based)
-        while (loc < readData.size() && readData[loc] == static_cast<uint8_t>(i + 1)) {
+        while (loc < readData->size() && (*readData)[loc] == static_cast<uint8_t>(i + 1)) {
             EfficiencyPoint point{};
             point.Index = static_cast<int>(i);
-            point.Energy = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Energy));
-            point.Efficiency = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Efficiency));
-            point.EfficiencyUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty));
+            point.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Energy));
+            point.Efficiency = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Efficiency));
+            point.EfficiencyUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty));
 
             points.push_back(point);
             loc += entSize;
@@ -741,10 +731,10 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
 // read the lines block
 void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
     // Get record offset and size
-    uint16_t commonFlag = ReadUInt16(readData, pos + 0x04);
-    uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(readData, pos + 0x22);
-    uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-    uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+    uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+    uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+    uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
     std::vector<std::vector<uint8_t>> tempLines;
 
@@ -753,7 +743,7 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
         
         // Create a copy of the line record
         std::vector<uint8_t> line(recSize);
-        std::copy(readData.begin() + loc, readData.begin() + loc + recSize, line.begin());
+        std::copy(readData->begin() + loc, readData->begin() + loc + recSize, line.begin());
         
         // Insert in sorted order based on energy
         auto it = std::lower_bound(tempLines.begin(), tempLines.end(), line, LineComparer());
@@ -767,10 +757,10 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
 // read the nuclides block
 void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
     // Get record offset
-    uint16_t commonFlag = ReadUInt16(readData, pos + 0x04);
-    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(readData, pos + 0x22);
-    uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-    uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+    uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+    uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
     uint32_t lineListOffset = 0;
 
     std::vector<std::vector<uint8_t>> tempNucs;
@@ -779,13 +769,13 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
         size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
 
         // Calculate the size of this nuclide record including its lines
-        uint32_t numLines = ((ReadUInt16(readData, loc) - 
+        uint32_t numLines = ((ReadUInt16(*readData, loc) - 
             (static_cast<uint16_t>(recSize) + nuclide_line_size)) / nuclide_line_size) + 1;
         uint32_t totalSize = static_cast<uint32_t>(recSize) + numLines * 3;
 
         // Create a copy of the nuclide record with its lines
         std::vector<uint8_t> nuc(totalSize);
-        std::copy(readData.begin() + loc, readData.begin() + loc + totalSize, nuc.begin());
+        std::copy(readData->begin() + loc, readData->begin() + loc + totalSize, nuc.begin());
 
         tempNucs.push_back(nuc);
         lineListOffset += totalSize;
@@ -798,10 +788,10 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
 // read the peaks block
 void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
     // Get record offset and size
-    uint16_t commonFlag = ReadUInt16(readData, pos + 0x04);
-    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(readData, pos + 0x22);
-    uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-    uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+    uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+    uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
     std::vector<Peak> tempPeaks;
 
@@ -809,17 +799,17 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
         size_t loc = pos + headSize + recOffset + 0x01 + (i * recSize);
 
         Peak peak{};
-        peak.Energy = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
-        peak.Centroid = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Centroid));
-        peak.CentroidUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CentroidUncertainty));
-        peak.Continuum = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Continuum));
-        peak.CriticalLevel = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel));
-        peak.Area = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Area));
-        peak.AreaUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::AreaUncertainty));
-        peak.CountRate = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRate));
-        peak.CountRateUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRateUncertainty));
-        peak.FullWidthAtHalfMaximum = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
-        peak.LowTail = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
+        peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
+        peak.Centroid = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Centroid));
+        peak.CentroidUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CentroidUncertainty));
+        peak.Continuum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Continuum));
+        peak.CriticalLevel = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel));
+        peak.Area = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Area));
+        peak.AreaUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::AreaUncertainty));
+        peak.CountRate = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRate));
+        peak.CountRateUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRateUncertainty));
+        peak.FullWidthAtHalfMaximum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
+        peak.LowTail = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
 
         tempPeaks.push_back(peak);
     }
@@ -833,7 +823,7 @@ std::vector<Line> CAMIO::GetLines() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -842,39 +832,36 @@ std::vector<Line> CAMIO::GetLines() {
         throw std::runtime_error("There is no nuclide line data in the loaded file");
     }
 
-    std::vector<Line> tempLines;
-
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
         // Get record offset and size
-        uint16_t commonFlag = ReadUInt16(readData, pos + 0x04);
-        uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(readData, pos + 0x22);
-        uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-        uint16_t numRec = ReadUInt16(readData, pos + 0x1E);
-        uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+        uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+        uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
+        uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+        uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
         for (size_t i = 0; i < numRec; i++) {
             size_t loc = pos + headSize + recOffset + (i * recSize);
             
             Line line{};
-            line.Energy = convert_from_CAM_float(readData, loc + static_cast<size_t>(LineParameterLocation::Energy));
-            line.EnergyUncertainty = convert_from_CAM_float(readData, loc + static_cast<size_t>(LineParameterLocation::EnergyUncertainty));
-            line.Abundance = convert_from_CAM_float(readData, loc + static_cast<size_t>(LineParameterLocation::Abundance));
-            line.AbundanceUncertainty = convert_from_CAM_float(readData, loc + static_cast<size_t>(LineParameterLocation::AbundanceUncertainty));
-            line.IsKeyLine = readData[loc + static_cast<size_t>(LineParameterLocation::IsKeyLine)] == 0x04;
-            line.NuclideIndex = readData[loc + static_cast<size_t>(LineParameterLocation::NuclideIndex)];
-            line.NoWeightMean = readData[loc + static_cast<size_t>(LineParameterLocation::NoWeightMean)] == 0x02;
+            line.Energy = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::Energy));
+            line.EnergyUncertainty = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::EnergyUncertainty));
+            line.Abundance = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::Abundance));
+            line.AbundanceUncertainty = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::AbundanceUncertainty));
+            line.IsKeyLine = (*readData)[loc + static_cast<size_t>(LineParameterLocation::IsKeyLine)] == 0x04;
+            line.NuclideIndex = (*readData)[loc + static_cast<size_t>(LineParameterLocation::NuclideIndex)];
+            line.NoWeightMean = (*readData)[loc + static_cast<size_t>(LineParameterLocation::NoWeightMean)] == 0x02;
 
-            tempLines.push_back(line);
+            fileLines.push_back(line);
         }
     }
 
     // Sort lines by energy
-    std::sort(tempLines.begin(), tempLines.end(), 
+    std::sort(fileLines.begin(), fileLines.end(),
               [](const Line& a, const Line& b) { return a.Energy < b.Energy; });
 
-    fileLines = tempLines;
     return fileLines;
 }
 
@@ -883,7 +870,7 @@ std::vector<Nuclide> CAMIO::GetNuclides() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -906,10 +893,10 @@ std::vector<Nuclide> CAMIO::GetNuclides() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
-        uint16_t recOffset = ReadUInt16(readData, pos + 0x04) == 0x700 ? 0 : ReadUInt16(readData, pos + 0x22);
-        uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-        uint16_t numRec = ReadUInt16(readData, pos + 0x1E);
-        uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+        uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+        uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
         uint32_t lineListOffset = 0x0;
         uint16_t lineListLoc = recSize;
 
@@ -917,36 +904,36 @@ std::vector<Nuclide> CAMIO::GetNuclides() {
             size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
 
             Nuclide nuc;
-            nuc.HalfLife = convert_from_CAM_duration(readData, loc + 0x1b);
-            nuc.HalfLifeUncertainty = convert_from_CAM_duration(readData, loc + 0x89);
+            nuc.HalfLife = convert_from_CAM_duration(*readData, loc + 0x1b);
+            nuc.HalfLifeUncertainty = convert_from_CAM_duration(*readData, loc + 0x89);
 
             // Read name (8 characters)
             char nameBuf[9] = {0};
-            std::memcpy(nameBuf, &readData[loc + NuclideParameterLocation::Name], 8);
+            std::memcpy(nameBuf, &(*readData)[loc + NuclideParameterLocation::Name], 8);
             nuc.Name = std::string(nameBuf);
 
             // Read half-life unit (2 characters)
             char unitBuf[3] = {0};
-            std::memcpy(unitBuf, &readData[loc + NuclideParameterLocation::HalfLifeUnit], 2);
+            std::memcpy(unitBuf, &(*readData)[loc + NuclideParameterLocation::HalfLifeUnit], 2);
             nuc.HalfLifeUnit = std::string(unitBuf);
 
             // Convert half-life to appropriate units
             ConvertHalfLife(nuc);
 
             // Get first line index
-            size_t lineIndex = static_cast<size_t>(ReadUInt16(readData, loc + lineListLoc + 0x01));
+            size_t lineIndex = static_cast<size_t>(ReadUInt16(*readData, loc + lineListLoc + 0x01));
             nuc.Index = fileLines[lineIndex - 1].NuclideIndex;
 
             fileNuclides.push_back(nuc);
 
-            uint32_t numLines = ((ReadUInt16(readData, loc) - (static_cast<uint16_t>(recSize))) / 0x03);
+            uint32_t numLines = ((ReadUInt16(*readData, loc) - (static_cast<uint16_t>(recSize))) / 0x03);
             lineListOffset += numLines * nuclide_line_size;
 
            // for (int j = 0; j < recSize; j++)
             //{
-                double d_MDA = convert_from_CAM_double(readData, loc + 0x27);
-                double d_NCLWTMEAN = convert_from_CAM_double(readData, loc + 0x57);
-                double d_NCLWTMERR = convert_from_CAM_double(readData, loc + 0x69);
+                double d_MDA = convert_from_CAM_double(*readData, loc + 0x27);
+                double d_NCLWTMEAN = convert_from_CAM_double(*readData, loc + 0x57);
+                double d_NCLWTMERR = convert_from_CAM_double(*readData, loc + 0x69);
 
                 int temp = 0;
             //}
@@ -961,7 +948,7 @@ std::vector<Peak> CAMIO::GetPeaks() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -976,27 +963,27 @@ std::vector<Peak> CAMIO::GetPeaks() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
-        uint16_t recOffset = ReadUInt16(readData, pos + 0x04) == 0x700 || secondBlock ? 
-                            0 : ReadUInt16(readData, pos + 0x22);
-        uint16_t recSize = ReadUInt16(readData, pos + 0x20);
-        uint16_t numRec = ReadUInt16(readData, pos + 0x1E);
-        uint16_t headSize = ReadUInt16(readData, pos + 0x10);
+        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ? 
+                            0 : ReadUInt16(*readData, pos + 0x22);
+        uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+        uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
         for (size_t i = 0; i < numRec; i++) {
             size_t loc = pos + headSize + recOffset + 0x01 + (i * recSize);
 
             Peak peak{};
-            peak.Energy = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
-            peak.Centroid = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Centroid));
-            peak.CentroidUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CentroidUncertainty));
-            peak.Continuum = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Continuum));
-            peak.CriticalLevel = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel));
-            peak.Area = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::Area));
-            peak.AreaUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::AreaUncertainty));
-            peak.CountRate = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRate));
-            peak.CountRateUncertainty = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRateUncertainty));
-            peak.FullWidthAtHalfMaximum = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
-            peak.LowTail = convert_from_CAM_float(readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
+            peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
+            peak.Centroid = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Centroid));
+            peak.CentroidUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CentroidUncertainty));
+            peak.Continuum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Continuum));
+            peak.CriticalLevel = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel));
+            peak.Area = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Area));
+            peak.AreaUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::AreaUncertainty));
+            peak.CountRate = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRate));
+            peak.CountRateUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRateUncertainty));
+            peak.FullWidthAtHalfMaximum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
+            peak.LowTail = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
 
             filePeaks.push_back(peak);
         }
@@ -1011,7 +998,7 @@ std::vector<uint32_t> CAMIO::GetSpectrum() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1026,9 +1013,9 @@ std::vector<uint32_t> CAMIO::GetSpectrum() {
         size_t pos = it->second;
 
         // Get number of channels
-        uint16_t channels = ReadUInt16(readData, pos + 0x2A);
-        uint16_t headerOffset = ReadUInt16(readData, pos + 0x10);
-        uint16_t dataOffset = ReadUInt16(readData, pos + 0x28);
+        uint16_t channels = ReadUInt16(*readData, pos + 0x2A);
+        uint16_t headerOffset = ReadUInt16(*readData, pos + 0x10);
+        uint16_t dataOffset = ReadUInt16(*readData, pos + 0x28);
 
         // Resize spectrum vector to accommodate all channels
         spectrum.resize(channels);
@@ -1036,7 +1023,7 @@ std::vector<uint32_t> CAMIO::GetSpectrum() {
         // Read channel data
         for (size_t i = 0; i < channels; i++) {
             uint32_t value;
-            std::memcpy(&value, &readData[pos + dataOffset + headerOffset + i * 4], sizeof(uint32_t));
+            std::memcpy(&value, &(*readData)[pos + dataOffset + headerOffset + i * 4], sizeof(uint32_t));
             spectrum[i] = value;
         }
     }
@@ -1049,7 +1036,7 @@ SpecUtils::time_point_t CAMIO::GetSampleTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1060,8 +1047,8 @@ SpecUtils::time_point_t CAMIO::GetSampleTime() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t headSize = ReadUInt16(readData, pos + 0x10);
-        return convert_from_CAM_datetime(readData, pos + headSize + 0xb4);
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
+        return convert_from_CAM_datetime(*readData, pos + headSize + 0xb4);
     }
 
     return SpecUtils::time_point_t{}; // Should never reach here
@@ -1072,7 +1059,7 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1083,9 +1070,9 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t headSize = ReadUInt16(readData, pos + 0x10);
-        uint16_t timeOffset = ReadUInt16(readData, pos + 0x24);
-        return convert_from_CAM_datetime(readData, pos + headSize + timeOffset + 0x01);
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
+        uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
+        return convert_from_CAM_datetime(*readData, pos + headSize + timeOffset + 0x01);
     }
 
     return SpecUtils::time_point_t{}; // Should never reach here
@@ -1096,7 +1083,7 @@ float CAMIO::GetLiveTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1107,8 +1094,8 @@ float CAMIO::GetLiveTime() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t timeOffset = ReadUInt16(readData, pos + 0x24);
-        return convert_from_CAM_duration(readData, pos + 0x30 + timeOffset + 0x11);
+        uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
+        return convert_from_CAM_duration(*readData, pos + 0x30 + timeOffset + 0x11);
     }
 
     return 0.0; // Should never reach here
@@ -1119,7 +1106,7 @@ float CAMIO::GetRealTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1130,8 +1117,8 @@ float CAMIO::GetRealTime() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t timeOffset = ReadUInt16(readData, pos + 0x24);
-        return convert_from_CAM_duration(readData, pos + 0x30 + timeOffset + 0x09);
+        uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
+        return convert_from_CAM_duration(*readData, pos + 0x30 + timeOffset + 0x09);
     }
 
     return 0.0; // Should never reach here
@@ -1142,7 +1129,7 @@ std::vector<float> CAMIO::GetShapeCalibration() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1155,10 +1142,10 @@ std::vector<float> CAMIO::GetShapeCalibration() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t eCalOffset = 0x30 + ReadUInt16(readData, pos + 0x22) + 0xDC;
+        uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0xDC;
 
         for (size_t i = 0; i < calibration.size(); i++) {
-            calibration[i] = convert_from_CAM_float(readData, pos + eCalOffset + i * 4);
+            calibration[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
         }
     }
 
@@ -1170,7 +1157,7 @@ std::vector<float> CAMIO::GetEnergyCalibration() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1183,10 +1170,10 @@ std::vector<float> CAMIO::GetEnergyCalibration() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t eCalOffset = 0x30 + ReadUInt16(readData, pos + 0x22) + 0x44;
+        uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0x44;
 
         for (size_t i = 0; i < calibration.size(); i++) {
-            calibration[i] = convert_from_CAM_float(readData, pos + eCalOffset + i * 4);
+            calibration[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
         }
     }
 
@@ -1194,10 +1181,7 @@ std::vector<float> CAMIO::GetEnergyCalibration() {
 }
 
 // create a file from added data
-std::vector<byte_type> CAMIO::CreateFile(const std::string& filePath) {
-    if (!std::filesystem::exists(std::filesystem::path(filePath).parent_path())) {
-        throw std::runtime_error("The directory does not exist");
-    }
+std::vector<byte_type> CAMIO::CreateFile() {
 
     for (size_t i = 0; i < writeNuclides.size(); i++)
     {
@@ -1497,28 +1481,46 @@ void CAMIO::AddLiveTime(const float live_time)
 {
     enter_CAM_value(live_time, acqpCommon, acqp_rec_tab_loc + 0x11, cam_type::cam_duration);
 }
-
 // Add the sample title
-void CAMIO::AddSampleTitle()
+void CAMIO::AddSampleTitle(const std::string& title)
 {
     sampBlock = true;
     enter_CAM_value(1.0, sampCommon, 0x90, cam_type::cam_float);
+    enter_CAM_value(title, sampCommon, 0x0);
 }
 
 // Add GPS data
 void CAMIO::AddGPSData(const double latitude, const double longitude, const float speed, const SpecUtils::time_point_t& position_time)
 {
-    enter_CAM_value(latitude, sampCommon, 0x8D0, cam_type::cam_double);
-    enter_CAM_value(longitude, sampCommon, 0x928, cam_type::cam_double);
-    enter_CAM_value(speed, sampCommon,  0x938, cam_type::cam_double);
+    AddGPSData(latitude, longitude, speed);
 
     enter_CAM_value(position_time, sampCommon, 0x940, cam_type::cam_datetime);
+}
+
+void CAMIO::AddGPSData(const double latitude, const double longitude, const float speed)
+{
+    enter_CAM_value(latitude, sampCommon, 0x8D0, cam_type::cam_double);
+    enter_CAM_value(longitude, sampCommon, 0x928, cam_type::cam_double);
+    enter_CAM_value(speed, sampCommon, 0x938, cam_type::cam_double);
 }
 
 // Add a spectrum
 void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
 {
+    size_t data_loc = 0x30;
+    // put the spectral data in
+    for (size_t i = 0; i < specData.size(); i++)
+    {
+        enter_CAM_value(channel_counts[i], specData, data_loc + 0x4 * i, cam_type::cam_longword);
+    }
+    
     specBlock = true;
+    //a samp block is needed if there is a spectrum
+    sampBlock = true;
+}
+
+void CAMIO::AddSpectrum(const std::vector<float>& channel_counts)
+{   
     size_t data_loc = 0x30;
     // put the spectral data in
     for (size_t i = 0; i < specData.size(); i++)
@@ -1526,6 +1528,9 @@ void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
         const uint32_t counts = SpecUtils::float_to_integral<uint32_t>(channel_counts[i]);
         enter_CAM_value(counts, specData, data_loc + 0x4 * i, cam_type::cam_longword);
     }
+    specBlock = true;
+    //a samp block is needed if there is a spectrum
+    sampBlock = true;
 }
 
 // generate a nuclide record
@@ -1630,7 +1635,7 @@ std::vector<EfficiencyPoint> CAMIO::GetEfficiencyPoints() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
-    if (readData.empty()) {
+    if (readData->empty()) {
         throw std::runtime_error("The file contains no data");
     }
 
@@ -1645,7 +1650,7 @@ std::vector<EfficiencyPoint> CAMIO::GetEfficiencyPoints() {
     // Read the geometry block which will populate efficiencyPoints
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t records = ReadUInt16(readData, pos + 0x1E);
+        uint16_t records = ReadUInt16(*readData, pos + 0x1E);
         ReadGeometryBlock(pos, records);
     }
 

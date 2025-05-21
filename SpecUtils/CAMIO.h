@@ -157,7 +157,7 @@ public:
 
 private:
     std::multimap<CAMBlock, uint32_t> blockAddresses;
-    std::vector<byte_type> readData;
+    std::shared_ptr<std::vector<byte_type>> readData;
     std::vector<std::vector<byte_type>> lines;
     std::vector<std::vector<byte_type>> nucs;
     std::vector<byte_type> specData;
@@ -180,20 +180,22 @@ private:
 
 public:
     CAMIO();
-    void ReadFile(const std::string& fileName);
+    void ReadFile(const std::vector<byte_type>& fileData);
 
     // get data from a file
-    std::vector<Line> GetLines();
-    std::vector<Nuclide> GetNuclides();
-    std::vector<Peak> GetPeaks();
-    std::vector<EfficiencyPoint> GetEfficiencyPoints();
-    SpecUtils::time_point_t GetSampleTime();
-    SpecUtils::time_point_t GetAquisitionTime();
+    std::vector<Line>& GetLines();
+    std::vector<Nuclide>& GetNuclides();
+    std::vector<Peak>& GetPeaks();
+    std::vector<EfficiencyPoint>& GetEfficiencyPoints();
+    SpecUtils::time_point_t& GetSampleTime();
+    SpecUtils::time_point_t& GetAquisitionTime();
     float GetLiveTime();
     float GetRealTime();
-    std::vector<float> GetShapeCalibration();
-    std::vector<float> GetEnergyCalibration();
-    std::vector<uint32_t> GetSpectrum();
+    std::vector<float>& GetShapeCalibration();
+    std::vector<float>& GetEnergyCalibration();
+    std::vector<uint32_t>& GetSpectrum();
+    std::string& GetSampleTitle();
+    std::string& GetDetectorType();
 
     // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 
@@ -210,13 +212,14 @@ public:
     void AddAcquitionTime(const SpecUtils::time_point_t& start_time);
     void AddRealTime(const float real_time);
     void AddLiveTime(const float live_time);
-    void AddSampleTitle();
+    void AddSampleTitle(const std::string& title);
     void AddGPSData(const double latitude, const double longitude,
         const float speed, const SpecUtils::time_point_t& position_time);
+    void AddGPSData(const double latitude, const double longitude, const float speed);
     void AddSpectrum(const std::vector<uint32_t>& channel_counts);
-
+    void AddSpectrum(const std::vector<float>& channel_counts);
     // create a file with the data added
-    std::vector<byte_type> CreateFile(const std::string& filePath);
+    std::vector<byte_type> CreateFile();
 
     inline void SetKeyLineInerferenceLimit(const float limit) { key_line_intf_limit = limit; };
     float GetKeyLineInerferenceLimit() const { return key_line_intf_limit; }

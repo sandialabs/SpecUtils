@@ -435,212 +435,228 @@ bool SpecFile::load_from_cnf( std::istream &input )
   if( !input.good() )
     return false;
   
-  const istream::pos_type orig_pos = input.tellg();
   
   try
   {
+    const istream::pos_type orig_pos = input.tellg();
     input.seekg( 0, ios::end );
     const istream::pos_type eof_pos = input.tellg();
     input.seekg( 0, ios::beg );
     
     const size_t size = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    if( size < 512*4 )
-      throw runtime_error( "Too small to be CNF" );
+    std::vector<char> file_bits(size);
+    input.read(reinterpret_cast<char*>(file_bits.data()), size);
+
+    CAMInputOutput::CAMIO* cam = new CAMInputOutput::CAMIO();
+    cam->ReadFile(reinterpret_cast<const std::vector<byte_type>&>(file_bits));
+    //if( size < 512*4 )
+    //  throw runtime_error( "Too small to be CNF" );
     
-    input.seekg( 0, ios::beg );
+    //input.seekg( 0, ios::beg );
     
     // A buffer we will use to read textual information from the file into.
-    char buff[65];
+    //char buff[65];
     
     // Currently (20231025) we locate information by looking for section IDs; however
     //  we could use the listed offsets in the file header.  For development purposes,
     //  we'll grab these listed offsets, and use some asserts to check they match what
     //  we would otherwise get; we may upgrade things in the future.
-    uint32_t pars_offset = 0, sample_info_offset = 0;
-    uint32_t eff_offset = 0, channel_data_offset = 0, nuc_id_offset = 0;
+    //uint32_t pars_offset = 0, sample_info_offset = 0;
+    //uint32_t eff_offset = 0, channel_data_offset = 0, nuc_id_offset = 0;
     
     // Instead of starting at 0 + 112, we could look for section ID 0x00, but this looks
     //  to always be the start of the file
-    for( size_t listing_pos = 112; listing_pos < 512; listing_pos += 48 )
-    {
-      if( !input.seekg( listing_pos, std::ios::beg ) )
-        throw runtime_error( "Error seeking" );
-      
-      uint32_t header_val;
-      read_binary_data( input, header_val );
-      
-      input.read( buff, 6 );// Advance 6 bytes
-      
-      uint32_t offset_val;
-      read_binary_data( input, offset_val );
-      
-      if( header_val == 0x0 )
-        break;
-      
-      switch( header_val )
-      {
-        case 0x00012000:  // Times, energy cal, number of channels
-          pars_offset = offset_val;
-          break;
-          
-        case 0x12001:     // Title and sample ID
-          sample_info_offset = offset_val;
-          break;
-          
-        case 0x00012002:  // Efficiencies
-          eff_offset = offset_val;
-          break;
-          
-        case 0x00012005: // Channel data
-          channel_data_offset = offset_val;
-          break;
-        
-        case 0x00012013: // Energy cal
-        case 0x0001200D:
-          // Havent explored at all yet
-          break;
-          
-        case 0x0001202C: //Nuclide ID
-          nuc_id_offset = offset_val;
-          break;
-          
-        case 0x12010:
-        case 0x12003:
-        case 0x12004:
-        default:
-          //cout << "Found unidentified header type "
-          //     << hex << header_val << " at offset " << hex << offset_val << endl;
-          break;
-      }//switch( header_val )
-    }//switch( header_val )
-    
-    // We will use "segment_search_start" to mark _where_ to start searching for a particular
-    //  segment from.  We will pass this value to the lambda findCnfSegment(...) defined above to
-    //  tell it where to start looking.
-    size_t segment_search_start = 0;
-    
-    // We will use "segment_position" to mark start of the segment we are currently extracting
-    //  information from; this value will be set from the lambda findCnfSegment(...) defined above.
-    size_t segment_position = 0;
+    //for( size_t listing_pos = 112; listing_pos < 512; listing_pos += 48 )
+    //{
+    //  if( !input.seekg( listing_pos, std::ios::beg ) )
+    //    throw runtime_error( "Error seeking" );
+    //  
+    //  uint32_t header_val;
+    //  read_binary_data( input, header_val );
+    //  
+    //  input.read( buff, 6 );// Advance 6 bytes
+    //  
+    //  uint32_t offset_val;
+    //  read_binary_data( input, offset_val );
+    //  
+    //  if( header_val == 0x0 )
+    //    break;
+    //  
+    //  switch( header_val )
+    //  {
+    //    case 0x00012000:  // Times, energy cal, number of channels
+    //      pars_offset = offset_val;
+    //      break;
+    //      
+    //    case 0x12001:     // Title and sample ID
+    //      sample_info_offset = offset_val;
+    //      break;
+    //      
+    //    case 0x00012002:  // Efficiencies
+    //      eff_offset = offset_val;
+    //      break;
+    //      
+    //    case 0x00012005: // Channel data
+    //      channel_data_offset = offset_val;
+    //      break;
+    //    
+    //    case 0x00012013: // Energy cal
+    //    case 0x0001200D:
+    //      // Havent explored at all yet
+    //      break;
+    //      
+    //    case 0x0001202C: //Nuclide ID
+    //      nuc_id_offset = offset_val;
+    //      break;
+    //      
+    //    case 0x12010:
+    //    case 0x12003:
+    //    case 0x12004:
+    //    default:
+    //      //cout << "Found unidentified header type "
+    //      //     << hex << header_val << " at offset " << hex << offset_val << endl;
+    //      break;
+    //  }//switch( header_val )
+    //}//switch( header_val )
+    //
+    //// We will use "segment_search_start" to mark _where_ to start searching for a particular
+    ////  segment from.  We will pass this value to the lambda findCnfSegment(...) defined above to
+    ////  tell it where to start looking.
+    //size_t segment_search_start = 0;
+    //
+    //// We will use "segment_position" to mark start of the segment we are currently extracting
+    ////  information from; this value will be set from the lambda findCnfSegment(...) defined above.
+    //size_t segment_position = 0;
     
     // The Measurement we will place all information into.
     auto meas = std::make_shared<Measurement>();
     
-    if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
-    {
-      assert( !sample_info_offset || (sample_info_offset == segment_position) );
-      
-      input.seekg( segment_position + 32 + 16, std::ios::beg );
-      input.read( buff, 64 );
-      string title( buff, buff+64 );
-      input.read( buff, 16 );
-      string sampleid( buff, buff+16 );
-      trim( title );
-      trim( sampleid );
-      
-      meas->title_ = title;
-      
-      if( sampleid.size() )
+    string sampleid= cam->GetSampleTitle();
+    meas->title_ = sampleid;
+    if( sampleid.size() )
         meas->remarks_.push_back( "Sample ID: " + sampleid );
-    }//if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
+
+ /*   if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
+    {*/
+    //  assert( !sample_info_offset || (sample_info_offset == segment_position) );
+    //  
+    //  input.seekg( segment_position + 32 + 16, std::ios::beg );
+    //  input.read( buff, 64 );
+    //  string title( buff, buff+64 );
+    //  input.read( buff, 16 );
+    //  string sampleid( buff, buff+16 );
+    //  trim( title );
+    //  trim( sampleid );
+    //  
+
+    //  
+    //}//if( findCnfSegment(0x1, segment_search_start, segment_position, input, size) )
+    //
+    //if( !findCnfSegment(0x0, segment_search_start, segment_position, input, size) )
+    //  throw runtime_error( "Couldnt find record data" );
+    //
+    //// segment_position will be a multiple of 512, ex 2048
+    //assert( !pars_offset || (pars_offset == segment_position) );
+    //
+    //uint16_t w34, w36;
+    //if( !input.seekg( segment_position+34, std::ios::beg ) )
+    //  throw runtime_error( "Failed seek to record offsets" );
+    //
+    //read_binary_data( input, w34 );
+    //read_binary_data( input, w36 );
+    //
+    //const size_t num_channel_offset       = segment_position + 48 + 137;
+    //const size_t record_offset            = segment_position + w36 + 48 + 1;
+    //const size_t energy_type_offset       = segment_position + 48 + 251;
+    //const size_t energy_calib_offset      = segment_position + w34 + 48 + 68;
+    //const size_t fwhm_calib_offset        = segment_position + w34 + 48 + 220;
+    //const size_t mca_type_offset          = segment_position + w34 + 48 + 156;
+    //const size_t instrument_offset        = segment_position + w34 + 48 + 1;
+    //const size_t generic_detector_offset  = segment_position + w34 + 48 + 732;
+    //const size_t specific_detector_offset = segment_position + w34 + 48 + 26;
+    //const size_t serial_num_offset        = segment_position + w34 + 48 + 940;
+    //
+    //
+    //if( (record_offset+24) > size
+    //   || (energy_calib_offset+12) > size
+    //   || (num_channel_offset+4) > size
+    //   || (mca_type_offset+8) > size
+    //   || (instrument_offset+31) > size
+    //   || (generic_detector_offset+8) > size
+    //   || (specific_detector_offset+16) > size
+    //   || (serial_num_offset+12) > size
+    //   )
+    //{
+    //  throw runtime_error( "Invalid record offset" );
+    //}
     
-    if( !findCnfSegment(0x0, segment_search_start, segment_position, input, size) )
-      throw runtime_error( "Couldnt find record data" );
+    //if( !input.seekg( record_offset, std::ios::beg ) )
+    //  throw std::runtime_error( "Failed seek CNF record start" );
+    //
+    //uint64_t time_raw;
+    //read_binary_data( input, time_raw );
+    meas->start_time_ = cam->GetAquisitionTime();
+    //meas->start_time_ = convert_from_CAM_datetime( time_raw );
+
     
-    // segment_position will be a multiple of 512, ex 2048
-    assert( !pars_offset || (pars_offset == segment_position) );
+    //uint32_t I, J;
+    //read_binary_data( input, I );
+    //read_binary_data( input, J );
+    //I = 0xFFFFFFFF - I;
+    //J = 0xFFFFFFFF - J;
+    //meas->real_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
+    meas->real_time_ = cam->GetRealTime();
+
+    //read_binary_data( input, I );
+    //read_binary_data( input, J );
+    //I = 0xFFFFFFFF - I;
+    //J = 0xFFFFFFFF - J;
+    //meas->live_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
+    meas->live_time_ = cam->GetLiveTime();
+
+    //if( !input.seekg( num_channel_offset, std::ios::beg ) )
+    //  throw std::runtime_error( "Failed seek for num channels" );
     
-    uint16_t w34, w36;
-    if( !input.seekg( segment_position+34, std::ios::beg ) )
-      throw runtime_error( "Failed seek to record offsets" );
+    //uint32_t num_channels;
+    //read_binary_data( input, num_channels );
     
-    read_binary_data( input, w34 );
-    read_binary_data( input, w36 );
+    //const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
+    //if( !isPowerOfTwo || (num_channels < 16) || (num_channels > (65536 + 8)) )
+    //  throw runtime_error( "Invalid number of channels" );
     
-    const size_t num_channel_offset       = segment_position + 48 + 137;
-    const size_t record_offset            = segment_position + w36 + 48 + 1;
-    const size_t energy_type_offset       = segment_position + 48 + 251;
-    const size_t energy_calib_offset      = segment_position + w34 + 48 + 68;
-    const size_t fwhm_calib_offset        = segment_position + w34 + 48 + 220;
-    const size_t mca_type_offset          = segment_position + w34 + 48 + 156;
-    const size_t instrument_offset        = segment_position + w34 + 48 + 1;
-    const size_t generic_detector_offset  = segment_position + w34 + 48 + 732;
-    const size_t specific_detector_offset = segment_position + w34 + 48 + 26;
-    const size_t serial_num_offset        = segment_position + w34 + 48 + 940;
+    //vector<float> calib_params(3);
+    //if( !input.seekg( energy_calib_offset, std::ios::beg ) )
+    //  throw std::runtime_error( "Failed seek for energy calibration" );
     
+    //vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f, 0.0f };
+    //cal_coefs[0] = readCnfFloat( input );
+    //cal_coefs[1] = readCnfFloat( input );
+    //cal_coefs[2] = readCnfFloat( input );
+    //cal_coefs[3] = readCnfFloat( input );
     
-    if( (record_offset+24) > size
-       || (energy_calib_offset+12) > size
-       || (num_channel_offset+4) > size
-       || (mca_type_offset+8) > size
-       || (instrument_offset+31) > size
-       || (generic_detector_offset+8) > size
-       || (specific_detector_offset+16) > size
-       || (serial_num_offset+12) > size
-       )
-    {
-      throw runtime_error( "Invalid record offset" );
-    }
+    vector<float> cal_coefs = cam->GetEnergyCalibration();
     
-    if( !input.seekg( record_offset, std::ios::beg ) )
-      throw std::runtime_error( "Failed seek CNF record start" );
+
+    // TODO get Energy Cal units
+    //input.read( buff, 8 );// Advance 8 bytes
+    //input.read( buff, 3 );
+    //string energy_cal_units( buff, buff+3 );
+    //trim( energy_cal_units );
+    //assert( energy_cal_units.empty() || (energy_cal_units == "keV") || (energy_cal_units == "MeV") ); // but doesnt appear to matter?
     
-    uint64_t time_raw;
-    read_binary_data( input, time_raw );
-    meas->start_time_ = convert_from_CAM_datetime( time_raw );
-    
-    uint32_t I, J;
-    read_binary_data( input, I );
-    read_binary_data( input, J );
-    I = 0xFFFFFFFF - I;
-    J = 0xFFFFFFFF - J;
-    meas->real_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
-    
-    read_binary_data( input, I );
-    read_binary_data( input, J );
-    I = 0xFFFFFFFF - I;
-    J = 0xFFFFFFFF - J;
-    meas->live_time_ = static_cast<float>(J*429.4967296 + I/1.0E7);
-    
-    if( !input.seekg( num_channel_offset, std::ios::beg ) )
-      throw std::runtime_error( "Failed seek for num channels" );
-    
-    uint32_t num_channels;
-    read_binary_data( input, num_channels );
-    
-    const bool isPowerOfTwo = ((num_channels != 0) && !(num_channels & (num_channels - 1)));
-    if( !isPowerOfTwo || (num_channels < 16) || (num_channels > (65536 + 8)) )
-      throw runtime_error( "Invalid number of channels" );
-    
-    vector<float> calib_params(3);
-    if( !input.seekg( energy_calib_offset, std::ios::beg ) )
-      throw std::runtime_error( "Failed seek for energy calibration" );
-    
-    vector<float> cal_coefs = { 0.0f, 0.0f, 0.0f, 0.0f };
-    cal_coefs[0] = readCnfFloat( input );
-    cal_coefs[1] = readCnfFloat( input );
-    cal_coefs[2] = readCnfFloat( input );
-    cal_coefs[3] = readCnfFloat( input );
-    
-    
-    input.read( buff, 8 );// Advance 8 bytes
-    input.read( buff, 3 );
-    string energy_cal_units( buff, buff+3 );
-    trim( energy_cal_units );
-    assert( energy_cal_units.empty() || (energy_cal_units == "keV") || (energy_cal_units == "MeV") ); // but doesnt appear to matter?
-    
-    if( input.seekg(energy_type_offset, std::ios::beg) )
-    {
-      input.read( buff, 8 );
-      string cal_type( buff, buff+8 );
-      trim( cal_type );
-      assert( cal_type.empty() || (cal_type == "POLY") );
-    }//if( input.seekg( energy_type_offset, std::ios::beg ) )
-    
+    //if( input.seekg(energy_type_offset, std::ios::beg) )
+    //{
+    //  input.read( buff, 8 );
+    //  string cal_type( buff, buff+8 );
+    //  trim( cal_type );
+    //  assert( cal_type.empty() || (cal_type == "POLY") );
+    //}//if( input.seekg( energy_type_offset, std::ios::beg ) )
+    auto spec = cam->GetSpectrum();
+    size_t num_chnanels = spec.size();
     try
     {
       auto newcal = make_shared<EnergyCalibration>();
-      newcal->set_polynomial( num_channels, cal_coefs, {} );
+      newcal->set_polynomial( num_chnanels, cal_coefs, {} );
       meas->energy_calibration_ = newcal;
     }catch( std::exception & )
     {
@@ -784,13 +800,13 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //       cerr << i << "\t" << serial_num[i] << "\t" << int( *(uint8_t *)&(serial_num[i]) ) << endl;
     
     
-    segment_search_start = 0;
-    if( !findCnfSegment(0x5, segment_search_start, segment_position, input, size) )
-      throw runtime_error( "Couldnt locate channel data portion of file" );
-    
-    assert( !channel_data_offset || (channel_data_offset == segment_position) );
-    
-    segment_position += 512;
+    //segment_search_start = 0;
+    //if( !findCnfSegment(0x5, segment_search_start, segment_position, input, size) )
+    //  throw runtime_error( "Couldnt locate channel data portion of file" );
+    //
+    //assert( !channel_data_offset || (channel_data_offset == segment_position) );
+    //
+    //segment_position += 512;
     // NOTE: Previous to 20210315 I looked for a second 0x5 segment, and if found, used it.
     //  However, none of the CNF files I have around need this, and at least one file will be
     //  messed up if this search is done.
@@ -806,17 +822,17 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //}
     
     
-    input.seekg( segment_position, std::ios::beg );
+    //input.seekg( segment_position, std::ios::beg );
     
-    if( (segment_position + 4*num_channels) > size )
-      throw runtime_error( "Invalid file size for num channels" );
-    
-    vector<uint32_t> channeldata( num_channels );
-    if( !input.read( (char *)&channeldata[0], 4*num_channels ) )
-      throw std::runtime_error( "Error reading channel data" );
+    //if( (segment_position + 4*num_channels) > size )
+    //  throw runtime_error( "Invalid file size for num channels" );
+    //
+    //vector<uint32_t> channeldata( num_channels );
+    //if( !input.read( (char *)&channeldata[0], 4*num_channels ) )
+    //  throw std::runtime_error( "Error reading channel data" );
     
     //Get rid of live time and real time that may be in the first two channels
-    channeldata[0] = channeldata[1] = 0;
+    //channeldata[0] = channeldata[1] = 0;
     
     auto channel_data = make_shared<vector<float>>( num_channels );
     for( size_t i = 0; i < num_channels; ++i )
@@ -877,8 +893,6 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
   if( det_nums.empty() )
     det_names = detector_names_;
   
-
-  // TODO Transfer this code to CAMIO
   try
   {
     std::shared_ptr<Measurement> summed = sum_measurements(sample_nums, det_names, nullptr);
@@ -965,214 +979,228 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     //  just need to write to the output stream.
     //  ex., output.write( (const char *)my_data, 10 );
 
-        //create a containter for the file header
-        const size_t file_header_length = 0x800;
-        const size_t sec_header_length = 0x30;
+        ////create a containter for the file header
+        //const size_t file_header_length = 0x800;
+        //const size_t sec_header_length = 0x30;
 
-        //create the aquisition parameters (acqp) header
-        size_t acqp_header[] = { 0x0100, 0x0800, 0x0000, 0x0800,              //has common data, size of block, size of header
-                                   0x0000, 0x0000,  sec_header_length,        //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
-                                   0x0000, 0x0001, 0x0440, 0x02EA, 0x01FB,    //number of records, size of record block, address of records in block, address of common tabular
-                                   0x0019, 0x03E6, 0X0009, 0x0000, 0x0000 };  //Always 0x19, address of entries in block,
-        acqp_header[21] = acqp_header[6] + acqp_header[14] + acqp_header[15];
+        ////create the aquisition parameters (acqp) header
+        //size_t acqp_header[] = { 0x0100, 0x0800, 0x0000, 0x0800,              //has common data, size of block, size of header
+        //                           0x0000, 0x0000,  sec_header_length,        //block locaton is acually a int32 but break it up for this
+        //                           0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+        //                           0x0000, 0x0001, 0x0440, 0x02EA, 0x01FB,    //number of records, size of record block, address of records in block, address of common tabular
+        //                           0x0019, 0x03E6, 0X0009, 0x0000, 0x0000 };  //Always 0x19, address of entries in block,
+        //acqp_header[21] = acqp_header[6] + acqp_header[14] + acqp_header[15];
 
-        //create the sample header (SAMP)
-        size_t samp_header[] = { 0x0500, 0x0A00, 0x0000, 0x1000,              //has common data, size of header
-                                   0x0000, 0x0000,   sec_header_length,       //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
-                                   0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,    //size of data item, address of the common tabular
-                                   0x0000, 0x7FFF, 0x0000, 0x0000, 0x0A00 };  //address of entires in block
+        ////create the sample header (SAMP)
+        //size_t samp_header[] = { 0x0500, 0x0A00, 0x0000, 0x1000,              //has common data, size of header
+        //                           0x0000, 0x0000,   sec_header_length,       //block locaton is acually a int32 but break it up for this
+        //                           0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+        //                           0x0000, 0x0000, 0x0000, 0x7FFF, 0x7FFF,    //size of data item, address of the common tabular
+        //                           0x0000, 0x7FFF, 0x0000, 0x0000, 0x0A00 };  //address of entires in block
 
-        //create the spectrum header (DATA)
-        size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x1A00,              //has common data, size of header
-                                   0x0000, 0x0000, sec_header_length,         //block locaton is acually a int32 but break it up for this
-                                   0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
-                                   0x0000, 0x0000, 0x0004, 0x0000, 0x0000,    //size of data item
-                                   0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };  //address of entires in block, always 1
+        ////create the spectrum header (DATA)
+        //size_t data_header[] = { 0x0500, 0x0000, 0x0000, 0x1A00,              //has common data, size of header
+        //                           0x0000, 0x0000, sec_header_length,         //block locaton is acually a int32 but break it up for this
+        //                           0x0000, 0x0000, 0x0000, 0x0000, 0x003C,    //always 0x3C
+        //                           0x0000, 0x0000, 0x0004, 0x0000, 0x0000,    //size of data item
+        //                           0x0000, 0x01D0, 0x0000, 0x0000, 0x0001 };  //address of entires in block, always 1
 
-        //compute the number of channels and the size of the block
-        //data_header[19] = summed->num_gamma_channels();
-        //CAM file is required to hvae one of fixed (0x400 - 0x10000) channel numbers
-        size_t num_channels = summed->num_gamma_channels();
-        if (num_channels <= 0x200)
-        {
-            data_header[19] = 0x200;
-        }
-        if (num_channels > 0x200 && num_channels <= 0x400)
-        {
-            data_header[19] = 0x400;
-        }
-        else if (num_channels > 0x400 && num_channels <= 0x800)
-        {
-            data_header[19] = 0x800;
-        }
-        else if (num_channels > 0x800 && num_channels <= 0x1000)
-        {
-            data_header[19] = 0x1000;
-        }
-        else if (num_channels > 0x1000 && num_channels <= 0x2000)
-        {
-            data_header[19] = 0x2000;
-        }
-        else if (num_channels > 0x2000 && num_channels <= 0x4000)
-        {
-            data_header[19] = 0x4000;
-        }
-        else if (num_channels > 0x4000 && num_channels <= 0x8000)
-        {
-            data_header[19] = 0x8000;
-        }
-        else if (num_channels > 0x8000 && num_channels <= 0x10000)
-        {
-            data_header[19] = 0x10000;
-        }
-        else
-        {
-            data_header[19] = num_channels;
-        }
+        ////compute the number of channels and the size of the block
+        ////data_header[19] = summed->num_gamma_channels();
+        ////CAM file is required to hvae one of fixed (0x400 - 0x10000) channel numbers
+        //size_t num_channels = summed->num_gamma_channels();
+        //if (num_channels <= 0x200)
+        //{
+        //    data_header[19] = 0x200;
+        //}
+        //if (num_channels > 0x200 && num_channels <= 0x400)
+        //{
+        //    data_header[19] = 0x400;
+        //}
+        //else if (num_channels > 0x400 && num_channels <= 0x800)
+        //{
+        //    data_header[19] = 0x800;
+        //}
+        //else if (num_channels > 0x800 && num_channels <= 0x1000)
+        //{
+        //    data_header[19] = 0x1000;
+        //}
+        //else if (num_channels > 0x1000 && num_channels <= 0x2000)
+        //{
+        //    data_header[19] = 0x2000;
+        //}
+        //else if (num_channels > 0x2000 && num_channels <= 0x4000)
+        //{
+        //    data_header[19] = 0x4000;
+        //}
+        //else if (num_channels > 0x4000 && num_channels <= 0x8000)
+        //{
+        //    data_header[19] = 0x8000;
+        //}
+        //else if (num_channels > 0x8000 && num_channels <= 0x10000)
+        //{
+        //    data_header[19] = 0x10000;
+        //}
+        //else
+        //{
+        //    data_header[19] = num_channels;
+        //}
 
-        data_header[1] = data_header[6] + data_header[18] + data_header[19] * data_header[14];
-        if (data_header[19] == 0x4000) 
-        {
-            data_header[2] = 0x01;
-        }
+        //data_header[1] = data_header[6] + data_header[18] + data_header[19] * data_header[14];
+        //if (data_header[19] == 0x4000) 
+        //{
+        //    data_header[2] = 0x01;
+        //}
 
-        const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + data_header[1];
+        //const size_t file_length = file_header_length + acqp_header[1] +samp_header[1] + data_header[1];
         //create a vector to store all the bytes
-        std::vector<byte_type> cnf_file(file_length, 0x00);
+        //std::vector<byte_type> cnf_file(file_length, 0x00);
 
 
         //enter the file header
-        enter_CAM_value(0x400, cnf_file, 0x0, cam_type::cam_word);
+        //enter_CAM_value(0x400, cnf_file, 0x0, cam_type::cam_word);
         //enter_CAM_value(0x4, cnf_file, 0x5, cam_type::cam_byte);
-        enter_CAM_value(file_header_length, cnf_file, 0x6, cam_type::cam_word);
-        enter_CAM_value(file_length, cnf_file, 0xa, cam_type::cam_longword);
-        enter_CAM_value(sec_header_length, cnf_file, 0x10, cam_type::cam_word);
-        enter_CAM_value(0x29, cnf_file, 0x12, cam_type::cam_word); //Maximum number of headers
+        //enter_CAM_value(file_header_length, cnf_file, 0x6, cam_type::cam_word);
+        //enter_CAM_value(file_length, cnf_file, 0xa, cam_type::cam_longword);
+        //enter_CAM_value(sec_header_length, cnf_file, 0x10, cam_type::cam_word);
+       // enter_CAM_value(0x29, cnf_file, 0x12, cam_type::cam_word); //Maximum number of headers
 
         //enter the acqp header
-        size_t acqp_loc = acqp_header[3];
-        enter_CAM_value(0x12000, cnf_file, 0x70, cam_type::cam_longword);       //block identifier
-        enter_CAM_value(0x12000, cnf_file, acqp_loc, cam_type::cam_longword);   //block identifier in block
+        //size_t acqp_loc = acqp_header[3];
+        //enter_CAM_value(0x12000, cnf_file, 0x70, cam_type::cam_longword);       //block identifier
+        //enter_CAM_value(0x12000, cnf_file, acqp_loc, cam_type::cam_longword);   //block identifier in block
         //put in array of data
-        for (size_t i = 0; i < 22; i++)
-        {
-            size_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(acqp_header[i], cnf_file, 0x70 + pos, cam_type::cam_word);
-            enter_CAM_value(acqp_header[i], cnf_file, acqp_loc + pos, cam_type::cam_word);
-        }
-        acqp_loc += 0x30;
+        //for (size_t i = 0; i < 22; i++)
+        //{
+        //    size_t pos = 0x4 + i * 0x2;
+        //    enter_CAM_value(acqp_header[i], cnf_file, 0x70 + pos, cam_type::cam_word);
+        //    enter_CAM_value(acqp_header[i], cnf_file, acqp_loc + pos, cam_type::cam_word);
+        //}
+        //acqp_loc += 0x30;
 
         //enter the aqcp data
-        enter_CAM_value("PHA ", cnf_file, acqp_loc + 0x80, cam_type::cam_string);
-        enter_CAM_value(0x04, cnf_file, acqp_loc + 0x88, cam_type::cam_word);         //BITES
-        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x8D, cam_type::cam_word);         //ROWS
-        enter_CAM_value(0x01, cnf_file, acqp_loc + 0x91, cam_type::cam_word);         //GROUPS
-        enter_CAM_value(0x4, cnf_file, acqp_loc + 0x55, cam_type::cam_word);          //BACKGNDCHNS
-        enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_type::cam_longword);//Channels
+        //enter_CAM_value("PHA ", cnf_file, acqp_loc + 0x80, cam_type::cam_string);
+        //enter_CAM_value(0x04, cnf_file, acqp_loc + 0x88, cam_type::cam_word);         //BITES
+        //enter_CAM_value(0x01, cnf_file, acqp_loc + 0x8D, cam_type::cam_word);         //ROWS
+        //enter_CAM_value(0x01, cnf_file, acqp_loc + 0x91, cam_type::cam_word);         //GROUPS
+        //enter_CAM_value(0x4, cnf_file, acqp_loc + 0x55, cam_type::cam_word);          //BACKGNDCHNS
+        //enter_CAM_value(data_header[19], cnf_file, acqp_loc + 0x89, cam_type::cam_longword);//Channels
         //enter_CAM_value(8192, cnf_file, acqp_loc + 0x89, cam_type::cam_longword);
         string title = summed->title(); //CTITLE
         if (!title.empty()) 
         {
             std::string expectsString(title.begin(), title.end());
             expectsString.resize( 0x20, '\0');
-            enter_CAM_value(expectsString, cnf_file, acqp_loc);
+            //enter_CAM_value(expectsString, cnf_file, acqp_loc);
+            cam->AddSampleTitle(expectsString);
         }
         
  //TODO: implement converted shape calibration information into CNF files 
         //shape calibration, just use the default values for NaI detectors if the type cotains any NaI, if not use Ge defaults
         const string& detector_type = summed->detector_type();
-        enter_CAM_value("SQRT", cnf_file, acqp_loc + 0x464, cam_type::cam_string);
-        if(detector_type.find("NaI") == 0 || detector_type.find("nai") == 0 || detector_type.find("NAI") == 0)
-        {
-            enter_CAM_value(-7.0, cnf_file, acqp_loc + 0x3C6, cam_type::cam_float); //FWHMOFF
-            enter_CAM_value(2.0, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);  //FWHMSLOPE
-        }
-        else //use the Ge defualts
-        {
-            enter_CAM_value(1.0, cnf_file, acqp_loc + 0x3C6, cam_type::cam_float);
-            enter_CAM_value(0.035, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
-        }
+        cam->AddDetectorType(detector_type);
+        //enter_CAM_value("SQRT", cnf_file, acqp_loc + 0x464, cam_type::cam_string);
+        //if(detector_type.find("NaI") == 0 || detector_type.find("nai") == 0 || detector_type.find("NAI") == 0)
+        //{
+        //    enter_CAM_value(-7.0, cnf_file, acqp_loc + 0x3C6, cam_type::cam_float); //FWHMOFF
+        //    enter_CAM_value(2.0, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);  //FWHMSLOPE
+        //}
+        //else //use the Ge defualts
+        //{
+        //    enter_CAM_value(1.0, cnf_file, acqp_loc + 0x3C6, cam_type::cam_float);
+        //    enter_CAM_value(0.035, cnf_file, acqp_loc + 0x3CA, cam_type::cam_float);
+        //}
 
         //energy calibration
-        enter_CAM_value("POLY", cnf_file, acqp_loc + 0x5E, cam_type::cam_string);
-        enter_CAM_value("POLY", cnf_file, acqp_loc + 0xFB, cam_type::cam_string);
-        enter_CAM_value("keV", cnf_file, acqp_loc + 0x346, cam_type::cam_string);
-        enter_CAM_value(1.0, cnf_file, acqp_loc + 0x312, cam_type::cam_float);
-        //check if there is energy calibration infomation
-        if (!energy_cal_coeffs.empty()) {
-            enter_CAM_value(energy_cal_coeffs.size(), cnf_file, acqp_loc + 0x46C, cam_type::cam_word);
-            for (size_t i = 0; i < energy_cal_coeffs.size(); i++)
-            {
-                enter_CAM_value(energy_cal_coeffs[i], cnf_file, acqp_loc + 0x32E + i * 0x4, cam_type::cam_float);
-            }
-            enter_CAM_value(03, cnf_file, acqp_loc + 0x32A, cam_type::cam_longword); //ECALFLAGS set to energy and shape calibration
-        }
-        else 
-        {
-            enter_CAM_value(02, cnf_file, acqp_loc + 0x32A, cam_type::cam_longword); //ECALFLAGS set to just shape calibration
-        }
+        cam->AddEnergyCalibration(energy_cal_coeffs);
+        //enter_CAM_value("POLY", cnf_file, acqp_loc + 0x5E, cam_type::cam_string);
+        //enter_CAM_value("POLY", cnf_file, acqp_loc + 0xFB, cam_type::cam_string);
+        //enter_CAM_value("keV", cnf_file, acqp_loc + 0x346, cam_type::cam_string);
+        //enter_CAM_value(1.0, cnf_file, acqp_loc + 0x312, cam_type::cam_float);
+        ////check if there is energy calibration infomation
+        //if (!energy_cal_coeffs.empty()) {
+        //    enter_CAM_value(energy_cal_coeffs.size(), cnf_file, acqp_loc + 0x46C, cam_type::cam_word);
+        //    for (size_t i = 0; i < energy_cal_coeffs.size(); i++)
+        //    {
+        //        enter_CAM_value(energy_cal_coeffs[i], cnf_file, acqp_loc + 0x32E + i * 0x4, cam_type::cam_float);
+        //    }
+        //    enter_CAM_value(03, cnf_file, acqp_loc + 0x32A, cam_type::cam_longword); //ECALFLAGS set to energy and shape calibration
+        //}
+        //else 
+        //{
+        //    enter_CAM_value(02, cnf_file, acqp_loc + 0x32A, cam_type::cam_longword); //ECALFLAGS set to just shape calibration
+        //}
 
         //times
         if (!SpecUtils::is_special(start_time)) {
-            enter_CAM_value(0x01, cnf_file, acqp_loc + acqp_header[16], cam_type::cam_byte);
-            enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_type::cam_datetime);
+            cam->AddAcquitionTime(start_time);
+            /*enter_CAM_value(0x01, cnf_file, acqp_loc + acqp_header[16], cam_type::cam_byte);
+            enter_CAM_value(start_time, cnf_file, acqp_loc + acqp_header[16] + 0x01, cam_type::cam_datetime);*/
         }
-        enter_CAM_value(real_time, cnf_file, acqp_loc + acqp_header[16] + 0x09, cam_type::cam_duration);
-        enter_CAM_value(live_time, cnf_file, acqp_loc + acqp_header[16] + 0x11, cam_type::cam_duration);
+        cam->AddLiveTime(live_time);
+        cam->AddRealTime(real_time);
+        //enter_CAM_value(real_time, cnf_file, acqp_loc + acqp_header[16] + 0x09, cam_type::cam_duration);
+        //enter_CAM_value(live_time, cnf_file, acqp_loc + acqp_header[16] + 0x11, cam_type::cam_duration);
 
         //enter the samp header
-        size_t samp_loc = samp_header[3];
-        enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_type::cam_longword); //block identifier
-        enter_CAM_value(0x12001, cnf_file, samp_loc, cam_type::cam_longword);   //block identifier in block
-        //put in array of data
-        for (size_t i = 0; i < 22; i++)
-        {
-            size_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(samp_header[i], cnf_file, 0x70 + 0x30 + pos, cam_type::cam_word);
-            enter_CAM_value(samp_header[i], cnf_file, samp_loc + pos, cam_type::cam_word);
-        }
-        samp_loc += 0x30;
+        //size_t samp_loc = samp_header[3];
+        //enter_CAM_value(0x12001, cnf_file, 0x70 + 0x30, cam_type::cam_longword); //block identifier
+        //enter_CAM_value(0x12001, cnf_file, samp_loc, cam_type::cam_longword);   //block identifier in block
+        ////put in array of data
+        //for (size_t i = 0; i < 22; i++)
+        //{
+        //    size_t pos = 0x4 + i * 0x2;
+        //    enter_CAM_value(samp_header[i], cnf_file, 0x70 + 0x30 + pos, cam_type::cam_word);
+        //    enter_CAM_value(samp_header[i], cnf_file, samp_loc + pos, cam_type::cam_word);
+        //}
+        //samp_loc += 0x30;
 
         //if there is a sample ID of some sort
         /*if (!sample_ID.empty()) {
             enter_CAM_value(sample_ID.erase(sample_ID.begin() + 0x10, sample_ID.end()), cnf_file, samp_loc + 0x40, cam_string);
         }*/
         //sample quanity cannot be zero
-        enter_CAM_value(1.0, cnf_file, samp_loc + 0x90, cam_type::cam_float);
+        //enter_CAM_value(1.0, cnf_file, samp_loc + 0x90, cam_type::cam_float);
         //set the sample time to the aqusition start time
-        if (!SpecUtils::is_special(start_time)) {
-            enter_CAM_value(start_time, cnf_file, samp_loc + 0xB4, cam_type::cam_datetime);
-        }
+        //if (!SpecUtils::is_special(start_time)) {
+        //    enter_CAM_value(start_time, cnf_file, samp_loc + 0xB4, cam_type::cam_datetime);
+        //}
         if (summed->has_gps_info()) 
         {
-            enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_type::cam_double);
-            enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_type::cam_double);
-            enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_type::cam_double);
+            //cam->AddGPSData(summed->latitude(), summed->longitude(), summed->speed(), summed->position_time());
+            //enter_CAM_value(summed->latitude(), cnf_file, samp_loc + 0x8D0, cam_type::cam_double);
+            //enter_CAM_value(summed->longitude(), cnf_file, samp_loc + 0x928, cam_type::cam_double);
+            //enter_CAM_value(summed->speed(), cnf_file, samp_loc + 0x938, cam_type::cam_double);
+            
             if(!SpecUtils::is_special(summed->position_time()))
-                enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_type::cam_datetime);
+                cam->AddGPSData(summed->latitude(), summed->longitude(), summed->speed(), summed->position_time());
+            else
+                cam->AddGPSData(summed->latitude(), summed->longitude(), summed->speed());
+            //    enter_CAM_value(summed->position_time(), cnf_file, samp_loc + 0x940, cam_type::cam_datetime);
         }
         //enter the data header
-        size_t data_loc = data_header[3];
-        enter_CAM_value(0x12005, cnf_file, 0x70 + 2*0x30, cam_type::cam_longword); //block identifier
-        enter_CAM_value(0x12005, cnf_file, data_loc, cam_type::cam_longword);   //block identifier in block
-        //put in array of data
-        for (size_t i = 0; i < 22; i++)
-        {
-            size_t pos = 0x4 + i * 0x2;
-            enter_CAM_value(data_header[i], cnf_file, 0x70 + 2* 0x30 + pos, cam_type::cam_word);
-            enter_CAM_value(data_header[i], cnf_file, data_loc + pos, cam_type::cam_word);
-        }
-        data_loc += 0x30 + data_header[18];
-        //put the data in
-        for (size_t i = 0; i < gamma_channel_counts.size(); i++)
-        {
-          //enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
-          
-          const uint32_t counts = float_to_integral<uint32_t>( gamma_channel_counts[i] );
-          enter_CAM_value(counts, cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
-        }
+        cam->AddSpectrum(gamma_channel_counts);
+        //size_t data_loc = data_header[3];
+        //enter_CAM_value(0x12005, cnf_file, 0x70 + 2*0x30, cam_type::cam_longword); //block identifier
+        //enter_CAM_value(0x12005, cnf_file, data_loc, cam_type::cam_longword);   //block identifier in block
+        ////put in array of data
+        //for (size_t i = 0; i < 22; i++)
+        //{
+        //    size_t pos = 0x4 + i * 0x2;
+        //    enter_CAM_value(data_header[i], cnf_file, 0x70 + 2* 0x30 + pos, cam_type::cam_word);
+        //    enter_CAM_value(data_header[i], cnf_file, data_loc + pos, cam_type::cam_word);
+        //}
+        //data_loc += 0x30 + data_header[18];
+        ////put the data in
+        //for (size_t i = 0; i < gamma_channel_counts.size(); i++)
+        //{
+        //  //enter_CAM_value(gamma_channel_counts[i], cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
+        //  
+        //  const uint32_t counts = float_to_integral<uint32_t>( gamma_channel_counts[i] );
+        //  enter_CAM_value(counts, cnf_file, data_loc + 0x4 * i, cam_type::cam_longword);
+        //}
+        // 
+        auto cnf_file = cam->CreateFile();
         //write the file
         output.write((char* )cnf_file.data(), cnf_file.size());
     }catch( std::exception &e )
