@@ -397,45 +397,43 @@ bool SpecFile::load_cnf_file( const std::string &filename )
 bool SpecFile::load_from_cnf( std::istream &input )
 {
   //Function to find a specific block (e.g., 512kb) of information in a CNF file.
-  auto findCnfSegment = []( const uint8_t B, const size_t SBeg, size_t &pos,
-                         std::istream &input, const size_t streamsize ) -> bool {
-    for( pos = SBeg; (pos+512) < streamsize; pos += 512 )
-    {
-      input.seekg( pos, std::ios::beg );
-      uint8_t bytes[2];
-      input.read( (char *)bytes, 2 );
-      if( (bytes[0] == B) && (bytes[1] == 0x20) )
-        return true;
-    }
-    return false;
-  };//findCnfSegment(...)
+  //auto findCnfSegment = []( const uint8_t B, const size_t SBeg, size_t &pos,
+  //                       std::istream &input, const size_t streamsize ) -> bool {
+  //  for( pos = SBeg; (pos+512) < streamsize; pos += 512 )
+  //  {
+  //    input.seekg( pos, std::ios::beg );
+  //    uint8_t bytes[2];
+  //    input.read( (char *)bytes, 2 );
+  //    if( (bytes[0] == B) && (bytes[1] == 0x20) )
+  //      return true;
+  //  }
+  //  return false;
+  //};//findCnfSegment(...)
   
   
   //Function to read a 32bit float (i.e., energy calibration coefficient) from a
   //  CNF file in PDP-11 format to IEEE
-  auto readCnfFloat = []( std::istream &input ) -> float {
-    float val;
-    uint8_t Buf[4], TmpBuf[4];
-    input.read( (char *)Buf, 4 );
-    TmpBuf[0] = Buf[2];
-    TmpBuf[1] = Buf[3];
-    TmpBuf[2] = Buf[0];
-    TmpBuf[3] = Buf[1];
-    
-    memcpy( &val, TmpBuf, sizeof(val) );
-    
-    return 0.25f*val;
-  };//float readCnfFloat( std::istream &input )
-  
+  //auto readCnfFloat = []( std::istream &input ) -> float {
+  //  float val;
+  //  uint8_t Buf[4], TmpBuf[4];
+  //  input.read( (char *)Buf, 4 );
+  //  TmpBuf[0] = Buf[2];
+  //  TmpBuf[1] = Buf[3];
+  //  TmpBuf[2] = Buf[0];
+  //  TmpBuf[3] = Buf[1];
+  //  
+  //  memcpy( &val, TmpBuf, sizeof(val) );
+  //  
+  //  return 0.25f*val;
+  //};//float readCnfFloat( std::istream &input )
   
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
-  
   reset();
-  
+
   if( !input.good() )
     return false;
-  
-  
+
+  // read the file
   try
   {
     const istream::pos_type orig_pos = input.tellg();
@@ -447,7 +445,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     std::vector<char> file_bits(size);
     input.read(reinterpret_cast<char*>(file_bits.data()), size);
 
-    CAMInputOutput::CAMIO* cam = new CAMInputOutput::CAMIO();
+    auto cam = std::make_shared<CAMInputOutput::CAMIO>();
     cam->ReadFile(reinterpret_cast<const std::vector<byte_type>&>(file_bits));
     //if( size < 512*4 )
     //  throw runtime_error( "Too small to be CNF" );
@@ -597,7 +595,6 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //read_binary_data( input, time_raw );
     meas->start_time_ = cam->GetAquisitionTime();
     //meas->start_time_ = convert_from_CAM_datetime( time_raw );
-
     
     //uint32_t I, J;
     //read_binary_data( input, I );
@@ -651,14 +648,15 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //  trim( cal_type );
     //  assert( cal_type.empty() || (cal_type == "POLY") );
     //}//if( input.seekg( energy_type_offset, std::ios::beg ) )
-    auto spec = cam->GetSpectrum();
+    auto & spec = cam->GetSpectrum();
     size_t num_chnanels = spec.size();
     try
     {
       auto newcal = make_shared<EnergyCalibration>();
       newcal->set_polynomial( num_chnanels, cal_coefs, {} );
       meas->energy_calibration_ = newcal;
-    }catch( std::exception & )
+    }
+    catch( std::exception & )
     {
       bool allZeros = true;
       for( const float v : cal_coefs )
@@ -833,14 +831,14 @@ bool SpecFile::load_from_cnf( std::istream &input )
     
     //Get rid of live time and real time that may be in the first two channels
     //channeldata[0] = channeldata[1] = 0;
-    
-    auto channel_data = make_shared<vector<float>>( num_channels );
-    for( size_t i = 0; i < num_channels; ++i )
+
+    auto channel_data = make_shared<vector<float>>(num_chnanels);
+    for( size_t i = 0; i < num_chnanels; ++i )
     {
       
-      const float val = static_cast<float>( channeldata[i] );
+      const float val = static_cast<float>( spec[i] );
       meas->gamma_count_sum_ += val;
-      (*channel_data)[i] = val;
+      spec[i] = val;
     }//set gamma channel data
     
     meas->gamma_counts_ = channel_data;

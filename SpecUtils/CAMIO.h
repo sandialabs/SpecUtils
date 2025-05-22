@@ -196,6 +196,7 @@ public:
     std::vector<uint32_t>& GetSpectrum();
     std::string& GetSampleTitle();
     std::string& GetDetectorType();
+    std::string& CAMIO::GetMCAType();
 
     // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 

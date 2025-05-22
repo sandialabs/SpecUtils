@@ -819,7 +819,7 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
 }
 
 // get all the nuclide lines
-std::vector<Line> CAMIO::GetLines() {
+std::vector<Line>& CAMIO::GetLines() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -866,7 +866,7 @@ std::vector<Line> CAMIO::GetLines() {
 }
 
 // get all the nuclides
-std::vector<Nuclide> CAMIO::GetNuclides() {
+std::vector<Nuclide>& CAMIO::GetNuclides() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -944,7 +944,7 @@ std::vector<Nuclide> CAMIO::GetNuclides() {
 }
 
 // get the peaks
-std::vector<Peak> CAMIO::GetPeaks() {
+std::vector<Peak>& CAMIO::GetPeaks() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -994,7 +994,7 @@ std::vector<Peak> CAMIO::GetPeaks() {
 }
 
 // get the spectrum
-std::vector<uint32_t> CAMIO::GetSpectrum() {
+std::vector<uint32_t>& CAMIO::GetSpectrum() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1031,8 +1031,8 @@ std::vector<uint32_t> CAMIO::GetSpectrum() {
     return spectrum;
 }
 
-// get the sampling time
-SpecUtils::time_point_t CAMIO::GetSampleTime() {
+std::string& CAMIO::GetSampleTitle()
+{
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1042,7 +1042,84 @@ SpecUtils::time_point_t CAMIO::GetSampleTime() {
 
     auto range = blockAddresses.equal_range(CAMBlock::SAMP);
     if (range.first == range.second) {
+        throw std::runtime_error("There is no sample data in the loaded file");
+    }
+
+    for (auto& it = range.first; it != range.second; ++it) {
+        size_t pos = it->second;
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
+        char nameBuf[0x40] = { 0 };
+        std::memcpy(nameBuf, &(*readData)[pos + headSize], sizeof(nameBuf));
+        return std::string(nameBuf);
+    }
+
+    return std::string(); // Should never reach here
+    
+}
+
+std::string& CAMIO::GetDetectorType()
+{
+    if (blockAddresses.empty()) {
+        throw std::runtime_error("The header format could not be read");
+    }
+    if (readData->empty()) {
+        throw std::runtime_error("The file contains no data");
+    }
+
+    auto range = blockAddresses.equal_range(CAMBlock::GEOM);
+    if (range.first == range.second) {
+        throw std::runtime_error("There is no aqusition data in the loaded file");
+    }
+
+    for (auto& it = range.first; it != range.second; ++it) {
+        size_t pos = it->second;
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
+        char nameBuf[8] = { 0 };
+        // TODO find the CAM_T_DETYPE in geometry parameters 
+        std::memcpy(nameBuf, &(*readData)[pos + headSize + ], sizeof(nameBuf));
+        return std::string(nameBuf);
+    }
+
+    return std::string(); // Should never reach here
+}
+
+// get MCA type
+std::string& CAMIO::GetMCAType() {
+    if (blockAddresses.empty()) {
+        throw std::runtime_error("The header format could not be read");
+    }
+    if (readData->empty()) {
+        throw std::runtime_error("The file contains no data");
+    }
+
+    auto range = blockAddresses.equal_range(CAMBlock::ACQP);
+    if (range.first == range.second) {
         throw std::runtime_error("There is no temporal data in the loaded file");
+    }
+
+    for (auto& it = range.first; it != range.second; ++it) {
+        size_t pos = it->second;
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
+        char nameBuf[0x18] = { 0 };
+        std::memcpy(nameBuf, &(*readData)[pos + headSize + 0x9C6], sizeof(nameBuf));
+        return std::string(nameBuf);
+
+    }
+
+    return std::string(); // Should never reach here
+}
+// get the sampling time
+SpecUtils::time_point_t& CAMIO::GetSampleTime() {
+    if (blockAddresses.empty()) {
+        throw std::runtime_error("The header format could not be read");
+    }
+    if (readData->empty()) {
+        throw std::runtime_error("The file contains no data");
+    }
+
+    auto range = blockAddresses.equal_range(CAMBlock::SAMP);
+    if (range.first == range.second) {
+        throw std::runtime_error("There is no sample data in the loaded file");
     }
 
     for (auto& it = range.first; it != range.second; ++it) {
@@ -1055,7 +1132,7 @@ SpecUtils::time_point_t CAMIO::GetSampleTime() {
 }
 
 // get the aqusition start time
-SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
+SpecUtils::time_point_t& CAMIO::GetAquisitionTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1125,7 +1202,7 @@ float CAMIO::GetRealTime() {
 }
 
 // get the shape calibration coefficients
-std::vector<float> CAMIO::GetShapeCalibration() {
+std::vector<float>& CAMIO::GetShapeCalibration() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1153,7 +1230,7 @@ std::vector<float> CAMIO::GetShapeCalibration() {
 }
 
 // get the energy calibration coefficients
-std::vector<float> CAMIO::GetEnergyCalibration() {
+std::vector<float>& CAMIO::GetEnergyCalibration() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1188,9 +1265,9 @@ std::vector<byte_type> CAMIO::CreateFile() {
         AddNuclide(writeNuclides[i]);
     }
 
-    if (lines.empty() || nucs.empty()) {
-        throw std::runtime_error("Both Lines and Nuclides must not be null");
-    }
+    //if (lines.empty() || nucs.empty()) {
+    //    throw std::runtime_error("Both Lines and Nuclides must not be null");
+    //}
 
     AssignKeyLines();
     
@@ -1205,7 +1282,7 @@ std::vector<byte_type> CAMIO::CreateFile() {
     loc += static_cast<size_t>(BlockSize::PROC);
 
     if (sampBlock) {
-        enter_CAM_value(1.0, sampCommon, 0x90, cam_type::cam_float);
+
         blockList.push_back(GenerateBlock(CAMBlock::SAMP, header_size));
         loc += static_cast<size_t>(BlockSize::SAMP);
     }
@@ -1486,7 +1563,9 @@ void CAMIO::AddSampleTitle(const std::string& title)
 {
     sampBlock = true;
     enter_CAM_value(1.0, sampCommon, 0x90, cam_type::cam_float);
-    enter_CAM_value(title, sampCommon, 0x0);
+    std::string temp = title;
+    temp.resize(0x40);
+    enter_CAM_value(temp, sampCommon, 0x0);
 }
 
 // Add GPS data
@@ -1631,7 +1710,7 @@ std::vector<byte_type> CAMIO::GenerateLine(float energy, float enUnc, float yiel
 }
 
 // get the efficiency points used for curve fitting (energy, eff., eff unc.)
-std::vector<EfficiencyPoint> CAMIO::GetEfficiencyPoints() {
+std::vector<EfficiencyPoint>& CAMIO::GetEfficiencyPoints() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1653,7 +1732,7 @@ std::vector<EfficiencyPoint> CAMIO::GetEfficiencyPoints() {
         uint16_t records = ReadUInt16(*readData, pos + 0x1E);
         ReadGeometryBlock(pos, records);
     }
-
+    // TODO EFFTYPE (8) characters located at 0x187 in GEOM
     return efficiencyPoints;
 }
 
@@ -1665,13 +1744,13 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
     // Return just the default for ACQP with the header
     if (block == CAMBlock::ACQP) {
         auto acqpHead = GenerateBlockHeader(block, loc);
+
+        enter_CAM_value("PHA ", acqpHead, 0x80, cam_type::cam_string);
+        enter_CAM_value(0x04, acqpHead, 0x88, cam_type::cam_word); //BITES
+        enter_CAM_value(0x01, acqpHead, 0x8D, cam_type::cam_word); //ROWS
+        enter_CAM_value(0x01, acqpHead, 0x91, cam_type::cam_word); //GROUPS
+        enter_CAM_value(0x04, acqpHead, 0x55, cam_type::cam_word); //BACKGNDCHNS
         acqpHead.insert(acqpHead.end(), acqpCommon.begin(), acqpCommon.end());
-        size_t acqp_loc = 0x30;
-        enter_CAM_value("PHA ", acqpHead, acqp_loc + 0x80, cam_type::cam_string);
-        enter_CAM_value(0x04, acqpHead, acqp_loc + 0x88, cam_type::cam_word); //BITES
-        enter_CAM_value(0x01, acqpHead, acqp_loc + 0x8D, cam_type::cam_word); //ROWS
-        enter_CAM_value(0x01, acqpHead, acqp_loc + 0x91, cam_type::cam_word); //GROUPS
-        enter_CAM_value(0x04, acqpHead, acqp_loc + 0x55, cam_type::cam_word); //BACKGNDCHNS
         // channels added in the generate header data section
         return acqpHead;
     }
@@ -1680,14 +1759,21 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
         procHead.insert(procHead.end(), procCommon.begin(), procCommon.end());
         return procHead;
     }
+    if (block == CAMBlock::SAMP)
+    {
+        auto sampHead = GenerateBlockHeader(block, loc);
+        enter_CAM_value(1.0, sampCommon, 0x90, cam_type::cam_float);
+        sampHead.insert(sampHead.end(), sampHead.begin(), sampCommon.end());
+        return sampHead;
+    }
 
     // Check for valid entries
-    if (block != CAMBlock::NUCL && block != CAMBlock::NLINES) {
-        throw std::runtime_error("Only blocks ACQP, PROC, NUCL and NLINES are supported");
-    }
-    if (records.empty()) {
-        throw std::runtime_error("Records parameter cannot be null or empty");
-    }
+    //if (block != CAMBlock::NUCL && block != CAMBlock::NLINES) {
+    //    throw std::runtime_error("Only blocks ACQP, PROC, NUCL and NLINES are supported");
+    //}
+    //if (records.empty()) {
+    //    throw std::runtime_error("Records parameter cannot be null or empty");
+    //}
 
     // Get the size of the block
     uint32_t blockSize = static_cast<uint32_t>(block == CAMBlock::NUCL ? 
@@ -1739,10 +1825,10 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
 // generate a block header
 std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, uint16_t numRec,
                                                uint16_t numLines, uint16_t blockNum, bool hasCommon) {
-    if (block != CAMBlock::ACQP && block != CAMBlock::NUCL && 
-        block != CAMBlock::NLINES && block != CAMBlock::PROC) {
-        throw std::runtime_error("Only blocks ACQP, NUCL and NLINES are supported");
-    }
+    //if (block != CAMBlock::ACQP && block != CAMBlock::NUCL && 
+    //    block != CAMBlock::NLINES && block != CAMBlock::PROC) {
+    //    throw std::runtime_error("Only blocks ACQP, NUCL and NLINES are supported");
+    //}
 
     std::vector<uint8_t> header(0x30, 0);
 
