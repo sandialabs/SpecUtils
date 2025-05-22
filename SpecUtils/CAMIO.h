@@ -79,6 +79,17 @@ struct Line {
          int nucNo, bool key = false, bool noWgtMean = false);
 };
 
+struct DetInfo 
+{
+    std::string Type; //DETTYPE
+    std::string Name;  //DETNAME
+    std::string SerialNo; //MCAID
+    std::string MCAType; // MCATYPE
+
+    DetInfo() = default;
+    DetInfo(std::string type, std::string name, std::string serial_no, std::string mca_type);
+};
+
 // Main CAMIO class
 class CAMIO {
 public:
@@ -164,8 +175,16 @@ private:
     std::vector<Nuclide> writeNuclides; 
     std::vector<Line> fileLines;
     std::vector<Nuclide> fileNuclides;
+    std::vector<Peak> filePeaks;
+    std::vector<uint32_t> fileSpectrum;
+    std::vector<float> fileEneCal;
+    std::vector<float> fileShapeCal;
+
     std::vector<EfficiencyPoint> efficiencyPoints;
     std::vector<Peak> peaks;
+
+    DetInfo det_info;
+
 
     static constexpr uint16_t header_size = 0x800;
     static constexpr uint16_t block_header_size = 0x30;
@@ -187,16 +206,15 @@ public:
     std::vector<Nuclide>& GetNuclides();
     std::vector<Peak>& GetPeaks();
     std::vector<EfficiencyPoint>& GetEfficiencyPoints();
-    SpecUtils::time_point_t& GetSampleTime();
-    SpecUtils::time_point_t& GetAquisitionTime();
+    SpecUtils::time_point_t GetSampleTime();
+    SpecUtils::time_point_t GetAquisitionTime();
     float GetLiveTime();
     float GetRealTime();
     std::vector<float>& GetShapeCalibration();
     std::vector<float>& GetEnergyCalibration();
     std::vector<uint32_t>& GetSpectrum();
-    std::string& GetSampleTitle();
-    std::string& GetDetectorType();
-    std::string& CAMIO::GetMCAType();
+    std::string GetSampleTitle();
+    DetInfo& GetDetectorInfo();
 
     // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 

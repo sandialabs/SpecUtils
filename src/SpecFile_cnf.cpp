@@ -750,37 +750,38 @@ bool SpecFile::load_from_cnf( std::istream &input )
       }
     }//if( eff_offset )
     */
+    //
+    //input.seekg( mca_type_offset, std::ios::beg );
+    //input.read( buff, 8 );
     
-    input.seekg( mca_type_offset, std::ios::beg );
-    input.read( buff, 8 );
+    CAMInputOutput::DetInfo det_info = cam->GetDetectorInfo();
+    //trim( mca_type );
+
+    if( det_info.MCAType.size() )
+      remarks_.push_back( "MCA Type: " + det_info.MCAType);
     
-    string mca_type( buff, buff+8 );
-    trim( mca_type );
-    if( mca_type.size() )
-      remarks_.push_back( "MCA Type: " + mca_type );
+    //input.seekg( instrument_offset, std::ios::beg );
+    //input.read( buff, 31 );
+    //string instrument_name( buff, buff + 31 );
+    //trim( instrument_name );
+    if( det_info.Name.size() )
+      meas->detector_name_ = det_info.Name;
     
-    input.seekg( instrument_offset, std::ios::beg );
-    input.read( buff, 31 );
-    string instrument_name( buff, buff + 31 );
-    trim( instrument_name );
-    if( instrument_name.size() )
-      meas->detector_name_ = instrument_name;
+    //input.seekg( generic_detector_offset, std::ios::beg );
+    //input.read( buff, 8 );
+    //string generic_detector( buff, buff+8 );
+    //trim( generic_detector );
     
-    input.seekg( generic_detector_offset, std::ios::beg );
-    input.read( buff, 8 );
-    string generic_detector( buff, buff+8 );
-    trim( generic_detector );
-    
-    if( mca_type == "I2K" && generic_detector == "Ge" )
-    {
-      //This assumption is based on inspecting files from a only two
-      //  Falcon 5000 detectors
-      //  (also instrument_name=="Instrument Name")
-      detector_type_ = DetectorType::Falcon5000;
-      instrument_type_ = "Spectrometer";
-      manufacturer_ = "Canberra";
-      instrument_model_ = "Falcon 5000";
-    }//if we think this is a Falcon 5000
+    //if( mca_type == "I2K" && generic_detector == "Ge" )
+    //{
+    //  //This assumption is based on inspecting files from a only two
+    //  //  Falcon 5000 detectors
+    //  //  (also instrument_name=="Instrument Name")
+    //  detector_type_ = DetectorType::Falcon5000;
+    //  instrument_type_ = "Spectrometer";
+    //  manufacturer_ = "Canberra";
+    //  instrument_model_ = "Falcon 5000";
+    //}//if we think this is a Falcon 5000
     
     //    input.seekg( specific_detector_offset, std::ios::beg );
     //    input.read( buff, 16 );
@@ -854,7 +855,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
   }catch ( std::exception & )
   {
     input.clear();
-    input.seekg( orig_pos, ios::beg );
+    //input.seekg( orig_pos, ios::beg );
     
     reset();
     return false;

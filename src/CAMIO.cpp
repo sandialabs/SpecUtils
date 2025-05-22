@@ -465,7 +465,7 @@ static void enter_CAM_value(const T& input, std::vector<byte_type>& destination,
         break;
     }
     default:
-        string message = "error - Invalid converstion from: ";
+        std::string message = "error - Invalid converstion from: ";
         message.append(typeid(T).name());
         message.append(" to athermetic type");
 
@@ -581,6 +581,9 @@ Line::Line(double energy, double energyUnc, double abundance, double abundanceUn
       AbundanceUncertainty(abundanceUnc), IsKeyLine(key), NuclideIndex(nucNo), 
     NoWeightMean(noWgtMean) {}
 
+DetInfo::DetInfo(std::string type, std::string name, std::string serial_no, 
+    std::string mca_type)
+    : Type(type), Name(name), SerialNo(serial_no), MCAType(mca_type){}
 
 // CAMIO constructor
 CAMIO::CAMIO() {
@@ -630,7 +633,7 @@ std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
         size_t loc;
         std::memcpy(&loc, &(*readData)[headOff + 0x0a], sizeof(uint32_t));
 
-        blockInfo.insert({static_cast<CAMBlock>(secId), loc});
+        blockInfo.insert({static_cast<CAMBlock>(secId),  static_cast<uint32_t>(loc)});
     }
 
     return blockInfo;
@@ -703,7 +706,7 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     uint16_t entSize = ReadUInt16(*readData, pos + 0x2a);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
-    std::vector<EfficiencyPoint> points;
+    //std::vector<EfficiencyPoint> points;
 
     // Loop through the records
     for (size_t i = 0; i < records; i++) {
@@ -718,14 +721,10 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
             point.Efficiency = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Efficiency));
             point.EfficiencyUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty));
 
-            points.push_back(point);
+            efficiencyPoints.push_back(point);
             loc += entSize;
         }
     }
-
-    // Store the points in a member variable or process them as needed
-    // In this case, we'll assume they're being used by GetEfficiencyPoints()
-    efficiencyPoints = std::move(points);
 }
 
 // read the lines block
@@ -736,7 +735,7 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
     uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
-    std::vector<std::vector<uint8_t>> tempLines;
+    //std::vector<std::vector<uint8_t>> tempLines;
 
     for (size_t i = 0; i < records; i++) {
         size_t loc = pos + headSize + recOffset + (i * recSize);
@@ -746,12 +745,9 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
         std::copy(readData->begin() + loc, readData->begin() + loc + recSize, line.begin());
         
         // Insert in sorted order based on energy
-        auto it = std::lower_bound(tempLines.begin(), tempLines.end(), line, LineComparer());
-        tempLines.insert(it, line);
+        auto it = std::lower_bound(lines.begin(), lines.end(), line, LineComparer());
+        lines.insert(it, line);
     }
-
-    // Store the lines
-    lines = std::move(tempLines);
 }
 
 // read the nuclides block
@@ -763,7 +759,7 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
     uint32_t lineListOffset = 0;
 
-    std::vector<std::vector<uint8_t>> tempNucs;
+    //std::vector<std::vector<uint8_t>> tempNucs;
 
     for (size_t i = 0; i < records; i++) {
         size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
@@ -775,14 +771,12 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
 
         // Create a copy of the nuclide record with its lines
         std::vector<uint8_t> nuc(totalSize);
-        std::copy(readData->begin() + loc, readData->begin() + loc + totalSize, nuc.begin());
+        std::copy(nucs.begin() + loc, nucs.begin() + loc + totalSize, nucs.begin());
 
-        tempNucs.push_back(nuc);
+        nucs.push_back(nuc);
         lineListOffset += totalSize;
     }
 
-    // Store the nuclides
-    nucs = std::move(tempNucs);
 }
 
 // read the peaks block
@@ -957,7 +951,6 @@ std::vector<Peak>& CAMIO::GetPeaks() {
         throw std::runtime_error("There is no peak data in the loaded file");
     }
 
-    std::vector<Peak> filePeaks;
     bool secondBlock = false;
 
     for (auto& it = range.first; it != range.second; ++it) {
@@ -1007,8 +1000,6 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
         throw std::runtime_error("There is no spectral data in the loaded file");
     }
 
-    std::vector<uint32_t> spectrum;
-
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
@@ -1018,20 +1009,20 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
         uint16_t dataOffset = ReadUInt16(*readData, pos + 0x28);
 
         // Resize spectrum vector to accommodate all channels
-        spectrum.resize(channels);
+        fileSpectrum.resize(channels);
 
         // Read channel data
         for (size_t i = 0; i < channels; i++) {
             uint32_t value;
             std::memcpy(&value, &(*readData)[pos + dataOffset + headerOffset + i * 4], sizeof(uint32_t));
-            spectrum[i] = value;
+            fileSpectrum[i] = value;
         }
     }
 
-    return spectrum;
+    return fileSpectrum;
 }
 
-std::string& CAMIO::GetSampleTitle()
+std::string CAMIO::GetSampleTitle()
 {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
@@ -1057,7 +1048,7 @@ std::string& CAMIO::GetSampleTitle()
     
 }
 
-std::string& CAMIO::GetDetectorType()
+DetInfo& CAMIO::GetDetectorInfo()
 {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
@@ -1074,42 +1065,34 @@ std::string& CAMIO::GetDetectorType()
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
-        char nameBuf[8] = { 0 };
-        // TODO find the CAM_T_DETYPE in geometry parameters 
-        std::memcpy(nameBuf, &(*readData)[pos + headSize + ], sizeof(nameBuf));
-        return std::string(nameBuf);
+
+
+        // these are actually record parameters but we don't deal with multpule specturm in a single file
+        char type_Buf[8] = { 0 };
+        std::memcpy(type_Buf, &(*readData)[pos + headSize + 0x7CF], sizeof(type_Buf));
+        det_info.Type = std::string(type_Buf);
+
+        char mca_type_buf[0x18] = { 0 };
+        std::memcpy(mca_type_buf, &(*readData)[pos + headSize + 0x9C6], sizeof(mca_type_buf));
+        det_info.MCAType = std::string(mca_type_buf);
+
+        char nameBuf[0x10] = { 0 };
+        std::memcpy(nameBuf, &(*readData)[pos + headSize + 0x5FB], sizeof(nameBuf));
+        det_info.Name = std::string(nameBuf);
+
+        char sn_buf[0x8] = { 0 };
+        std::memcpy(sn_buf, &(*readData)[pos + headSize + 0x5B3], sizeof(sn_buf));
+        det_info.SerialNo = std::string(sn_buf);
+
+        return det_info;
+
     }
 
-    return std::string(); // Should never reach here
+    return det_info; // Should never reach here
 }
 
-// get MCA type
-std::string& CAMIO::GetMCAType() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
-    auto range = blockAddresses.equal_range(CAMBlock::ACQP);
-    if (range.first == range.second) {
-        throw std::runtime_error("There is no temporal data in the loaded file");
-    }
-
-    for (auto& it = range.first; it != range.second; ++it) {
-        size_t pos = it->second;
-        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
-        char nameBuf[0x18] = { 0 };
-        std::memcpy(nameBuf, &(*readData)[pos + headSize + 0x9C6], sizeof(nameBuf));
-        return std::string(nameBuf);
-
-    }
-
-    return std::string(); // Should never reach here
-}
 // get the sampling time
-SpecUtils::time_point_t& CAMIO::GetSampleTime() {
+SpecUtils::time_point_t CAMIO::GetSampleTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1132,7 +1115,7 @@ SpecUtils::time_point_t& CAMIO::GetSampleTime() {
 }
 
 // get the aqusition start time
-SpecUtils::time_point_t& CAMIO::GetAquisitionTime() {
+SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1215,18 +1198,18 @@ std::vector<float>& CAMIO::GetShapeCalibration() {
         throw std::runtime_error("There is no calibration data in the loaded file");
     }
 
-    std::vector<float> calibration(4);
+    fileShapeCal.resize(4);
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0xDC;
 
-        for (size_t i = 0; i < calibration.size(); i++) {
-            calibration[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
+        for (size_t i = 0; i < fileShapeCal.size(); i++) {
+            fileShapeCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
         }
     }
 
-    return calibration;
+    return fileShapeCal;
 }
 
 // get the energy calibration coefficients
@@ -1243,18 +1226,18 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
         throw std::runtime_error("There is no calibration data in the loaded file");
     }
 
-    std::vector<float> calibration(4);
+    fileEneCal.resize(4);
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0x44;
 
-        for (size_t i = 0; i < calibration.size(); i++) {
-            calibration[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
+        for (size_t i = 0; i < fileEneCal.size(); i++) {
+            fileEneCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
         }
     }
 
-    return calibration;
+    return fileEneCal;
 }
 
 // create a file from added data
@@ -1836,7 +1819,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
 
     // Default values for ACQP
     std::array<uint16_t, 20> values = {
-        0x0100,                                          // 0x04  0 Has Common block (1 =?, 5 = yes, 7 = no)
+        uint16_t(0x0100),                                          // 0x04  0 Has Common block (1 =?, 5 = yes, 7 = no)
         static_cast<uint16_t>(BlockSize::ACQP),          // 0x06  1 Block size
         0x0000,                                          // 0x08  2
         0x0000,                                          // 0x0E  3
@@ -1855,7 +1838,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
         0x03E6,                                          // 0x28  16 Addresss of entries in block
         0x0009,                                          // 0x2A  17 Always 9
         0x0000,                                          // 0x2C  18
-        values[4] + values[11] * values[12] + values[17] // 0x2E  19 Computed size of block
+        static_cast<uint16_t>(values[4] + values[11] * values[12] + values[17]) // 0x2E  19 Computed size of block
     }; 
     // Modify values based on block type
     switch (block) {
