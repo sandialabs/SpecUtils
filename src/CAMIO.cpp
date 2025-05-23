@@ -18,7 +18,7 @@
 // Default byte arrays
 namespace {
 const std::array<byte_type, 0x060> fileHeader = {
-        0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0xA4, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0xA4, 0x00, 0x00, 0x00, 0x00,
         0x30, 0x00, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1261,15 +1261,15 @@ std::vector<byte_type> CAMIO::CreateFile() {
     // Add ACQP and PROC blocks
     blockList.push_back(GenerateBlock(CAMBlock::ACQP, loc));
     loc += static_cast<size_t>(BlockSize::ACQP);
-
-    blockList.push_back(GenerateBlock(CAMBlock::PROC, loc));
-    loc += static_cast<size_t>(BlockSize::PROC);
-
     if (sampBlock) {
 
         blockList.push_back(GenerateBlock(CAMBlock::SAMP, loc));
         loc += static_cast<size_t>(BlockSize::SAMP);
     }
+
+    /*blockList.push_back(GenerateBlock(CAMBlock::PROC, loc));
+    loc += static_cast<size_t>(BlockSize::PROC);*/
+
 
     if (specBlock) 
     {
@@ -1580,7 +1580,8 @@ void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
     {
         enter_CAM_value(channel_counts[i], specData, sizeof(uint32_t) * i, cam_type::cam_longword);
     }
-    
+    // add the channel numbers to the acqp data
+    enter_CAM_value(num_channels, acqpCommon, 0x89, cam_type::cam_longword);
     specBlock = true;
     //a samp block is needed if there is a spectrum
     sampBlock = true;
@@ -1597,6 +1598,8 @@ void CAMIO::AddSpectrum(const std::vector<float>& channel_counts)
         const uint32_t counts = SpecUtils::float_to_integral<uint32_t>(channel_counts[i]);
         enter_CAM_value(counts, specData, sizeof(uint32_t) * i, cam_type::cam_longword);
     }
+    // add the channel numbers to the acqp data
+    enter_CAM_value(num_channels, acqpCommon, 0x89, cam_type::cam_longword);
     specBlock = true;
     //a samp block is needed if there is a spectrum
     sampBlock = true;
@@ -1854,8 +1857,9 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
         0x03E6,                                          // 0x28  16 Addresss of entries in block
         0x0009,                                          // 0x2A  17 Always 9
         0x0000,                                          // 0x2C  18
-        static_cast<uint16_t>(values[4] + values[11] * values[12] + values[17]) // 0x2E  19 Computed size of block
+        static_cast<uint16_t>(values[4] + values[11] * values[12] + values[13]) // 0x2E  19 Computed size of block
     }; 
+    std::vector<uint16_t> temp = { values[4] , values[11] , values[12] , values[13] , values[17]};
     // Modify values based on block type
     switch (block) {
         case CAMBlock::PROC:
@@ -1912,7 +1916,6 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
         case CAMBlock::SAMP:
             values[0] = 0x0500;
             values[1] = static_cast<uint16_t>(BlockSize::SAMP);
-            values[3] = 0x1000;
             values[11] = 0x0000;
             values[12] = 0x0000;
             values[13] = 0x7FFF;
@@ -1920,13 +1923,12 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             values[15] = 0x0000;
             values[16] = 0x7FFF;
             values[17] = 0x0000;
-            values[19] = values[4] + values[11] * values[12] + values[17];
+            values[19] = 0x0A00;
             break;
 
         case CAMBlock::SPEC:
             values[0] = 0x0500;
             values[1] = 0x0000;
-            values[3] = 0x1A00;
             values[12] = 0x0004;
             values[11] = 0x0000;
             values[13] = 0x0000;
@@ -1934,7 +1936,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             values[15] = 0x0000;
             values[16] = 0x01D0;
             values[17] = 0x0000;
-            values[19] = 0x0000;
+            values[19] = 0x0001;
             //size_t num_chans = specData.size();
             if (num_channels <= 0x200)
             {
@@ -1972,17 +1974,13 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             {
                 values[17] = num_channels;
             }
-            std::vector<uint16_t> temp = { values[4] , values[16] , values[17] , values[12] };
+            std::vector<uint16_t> temp = { values[4] ,values[6] , values[12] , values[15], values[16] , values[17] };
             values[1] = values[4] + values[16] + values[17] * values[12];
-
 
             if (values[17] == 0x4000)
             {
                 values[2] = 0x01;
             }
-
-            // add the channel numbers to the acqp data
-            enter_CAM_value(values[17], acqpCommon, 0x89, cam_type::cam_longword);
             break;
 
             
