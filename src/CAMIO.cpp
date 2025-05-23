@@ -1267,8 +1267,8 @@ std::vector<byte_type> CAMIO::CreateFile() {
         loc += static_cast<size_t>(BlockSize::SAMP);
     }
 
-    /*blockList.push_back(GenerateBlock(CAMBlock::PROC, loc));
-    loc += static_cast<size_t>(BlockSize::PROC);*/
+    blockList.push_back(GenerateBlock(CAMBlock::PROC, loc));
+    loc += static_cast<size_t>(BlockSize::PROC);
 
 
     if (specBlock) 
