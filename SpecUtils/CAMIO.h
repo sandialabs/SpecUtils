@@ -184,7 +184,7 @@ private:
     std::vector<Peak> peaks;
 
     DetInfo det_info;
-
+    uint32_t num_channels =0;
 
     static constexpr uint16_t header_size = 0x800;
     static constexpr uint16_t block_header_size = 0x30;
@@ -250,7 +250,7 @@ protected:
                                      const std::vector<std::vector<uint8_t>>& records = std::vector<std::vector<uint8_t>>(),
                                      uint16_t blockNo = 0, bool hasCommon = true);
     std::vector<uint8_t> GenerateBlockHeader(CAMBlock block, size_t loc, uint16_t numRec = 1,
-                                           uint16_t numLines = 1, uint16_t blockNum = 0, bool hasCommon = false);
+                                           uint16_t numLines = 1, uint16_t blockNum = 0, bool hasCommon = false) const;
     uint16_t GetNumLines(const std::vector<uint8_t>& nuclRecord);
     std::vector<uint8_t> GenerateNuclide(const std::string& name, float halfLife, 
                                         float halfLifeUnc, const std::string& halfLifeUnit,

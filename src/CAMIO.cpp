@@ -27,10 +27,10 @@ const std::array<byte_type, 0x060> fileHeader = {
     };
 
 std::vector<byte_type>
-acqpCommon(static_cast<size_t>(CAMInputOutput::CAMIO::BlockSize::ACQP)); // Initialize with zeros
+acqpCommon(static_cast<size_t>(CAMInputOutput::CAMIO::BlockSize::ACQP) - 0x30); // Initialize with zeros
 
 std::vector<byte_type>
-sampCommon(static_cast<size_t>(CAMInputOutput::CAMIO::BlockSize::SAMP));
+sampCommon(static_cast<size_t>(CAMInputOutput::CAMIO::BlockSize::SAMP ) - 0x30);
 
 const std::array<byte_type, 0x401> nuclCommon = {
          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -529,6 +529,7 @@ bool NuclideComparer::operator()(const std::vector<uint8_t>& x, const std::vecto
 
 
         //// TODO consider moving this to a struct for a Nuclide
+        // Nuclides are sorted by A then Z the iosmeric state. 
         //// match the atomic number
         //std::regex pattern(R"((?<![a-zA-Z])(\d+)(?![a-zA-Z]))");
         //std::smatch a_x, a_y;
@@ -1266,10 +1267,16 @@ std::vector<byte_type> CAMIO::CreateFile() {
 
     if (sampBlock) {
 
-        blockList.push_back(GenerateBlock(CAMBlock::SAMP, header_size));
+        blockList.push_back(GenerateBlock(CAMBlock::SAMP, loc));
         loc += static_cast<size_t>(BlockSize::SAMP);
     }
 
+    if (specBlock) 
+    {
+        auto specBlock = GenerateBlock(CAMBlock::SPEC, loc);
+        blockList.push_back(specBlock);
+        loc += static_cast<size_t>(num_channels + 0x30);
+    }
     size_t startRecord = 0;
     size_t numRecords = 125;
     uint16_t blockNo = 0;
@@ -1305,10 +1312,6 @@ std::vector<byte_type> CAMIO::CreateFile() {
         loc += static_cast<uint32_t>(BlockSize::NUCL);
     }
 
-    if (specBlock) 
-    {
-        blockList.push_back(GenerateBlock(CAMBlock::SPEC, loc));
-    }
 
     // Generate the file by combining blocks
     std::vector<uint8_t> fileBytes = GenerateFile(blockList);
@@ -1330,8 +1333,8 @@ std::vector<uint8_t> CAMIO::GenerateFile(const std::vector<std::vector<byte_type
     // Calculate total file size
     size_t fileLength = 0x800;  // Initial header size
     for (const auto& block : blocks) {
-        auto blockType = static_cast<CAMBlock>(ReadUInt32(block, 0x00));
-        fileLength += static_cast<size_t>(static_cast<uint32_t>(blockType));  // Use appropriate block size
+        //auto blockType = static_cast<CAMBlock>(ReadUInt32(block, 0x00));
+        fileLength += block.size();  // Use appropriate block size
     }
 
     // Create the container
@@ -1341,7 +1344,7 @@ std::vector<uint8_t> CAMIO::GenerateFile(const std::vector<std::vector<byte_type
     // Copy the blocks into the file
     size_t i = 0;
     for (const auto& block : blocks) {
-        // Copy the header
+        // Copy block header into the file header
         std::copy(block.begin(), block.begin() + 0x30, file.begin() + 0x70 + i * 0x30);
 
         // Copy the block
@@ -1569,11 +1572,13 @@ void CAMIO::AddGPSData(const double latitude, const double longitude, const floa
 // Add a spectrum
 void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
 {
-    size_t data_loc = 0x30;
+    //size_t data_loc = 0x30;
+    num_channels = channel_counts.size();
+    specData.resize(num_channels);
     // put the spectral data in
-    for (size_t i = 0; i < specData.size(); i++)
+    for (size_t i = 0; i < num_channels; i++)
     {
-        enter_CAM_value(channel_counts[i], specData, data_loc + 0x4 * i, cam_type::cam_longword);
+        enter_CAM_value(channel_counts[i], specData, sizeof(uint32_t) * i, cam_type::cam_longword);
     }
     
     specBlock = true;
@@ -1583,12 +1588,14 @@ void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
 
 void CAMIO::AddSpectrum(const std::vector<float>& channel_counts)
 {   
-    size_t data_loc = 0x30;
+    //size_t data_loc = 0x30;
+    num_channels = channel_counts.size();
+    specData.resize(num_channels * sizeof(uint32_t));
     // put the spectral data in
-    for (size_t i = 0; i < specData.size(); i++)
+    for (size_t i = 0; i < num_channels; i++)
     {
         const uint32_t counts = SpecUtils::float_to_integral<uint32_t>(channel_counts[i]);
-        enter_CAM_value(counts, specData, data_loc + 0x4 * i, cam_type::cam_longword);
+        enter_CAM_value(counts, specData, sizeof(uint32_t) * i, cam_type::cam_longword);
     }
     specBlock = true;
     //a samp block is needed if there is a spectrum
@@ -1728,11 +1735,11 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
     if (block == CAMBlock::ACQP) {
         auto acqpHead = GenerateBlockHeader(block, loc);
 
-        enter_CAM_value("PHA ", acqpHead, 0x80, cam_type::cam_string);
-        enter_CAM_value(0x04, acqpHead, 0x88, cam_type::cam_word); //BITES
-        enter_CAM_value(0x01, acqpHead, 0x8D, cam_type::cam_word); //ROWS
-        enter_CAM_value(0x01, acqpHead, 0x91, cam_type::cam_word); //GROUPS
-        enter_CAM_value(0x04, acqpHead, 0x55, cam_type::cam_word); //BACKGNDCHNS
+        enter_CAM_value("PHA ", acqpCommon, 0x80, cam_type::cam_string);
+        enter_CAM_value(0x04, acqpCommon, 0x88, cam_type::cam_word); //BITES
+        enter_CAM_value(0x01, acqpCommon, 0x8D, cam_type::cam_word); //ROWS
+        enter_CAM_value(0x01, acqpCommon, 0x91, cam_type::cam_word); //GROUPS
+        enter_CAM_value(0x04, acqpCommon, 0x55, cam_type::cam_word); //BACKGNDCHNS
         acqpHead.insert(acqpHead.end(), acqpCommon.begin(), acqpCommon.end());
         // channels added in the generate header data section
         return acqpHead;
@@ -1746,8 +1753,17 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
     {
         auto sampHead = GenerateBlockHeader(block, loc);
         enter_CAM_value(1.0, sampCommon, 0x90, cam_type::cam_float);
-        sampHead.insert(sampHead.end(), sampHead.begin(), sampCommon.end());
+        sampHead.insert(sampHead.end(), sampCommon.begin(), sampCommon.end());
         return sampHead;
+    }
+    if (block == CAMBlock::SPEC)
+    {
+        auto dataHead = GenerateBlockHeader(block, loc);
+        uint16_t offset = ReadUInt16(dataHead, 0x28);
+        dataHead.insert(dataHead.end(), offset, 0);
+        //TODO padd with zeros from 0x28 of the header
+        dataHead.insert(dataHead.end(), specData.begin(), specData.end());
+        return dataHead;
     }
 
     // Check for valid entries
@@ -1807,7 +1823,7 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
 
 // generate a block header
 std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, uint16_t numRec,
-                                               uint16_t numLines, uint16_t blockNum, bool hasCommon) {
+                                               uint16_t numLines, uint16_t blockNum, bool hasCommon) const {
     //if (block != CAMBlock::ACQP && block != CAMBlock::NUCL && 
     //    block != CAMBlock::NLINES && block != CAMBlock::PROC) {
     //    throw std::runtime_error("Only blocks ACQP, NUCL and NLINES are supported");
@@ -1909,7 +1925,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
 
         case CAMBlock::SPEC:
             values[0] = 0x0500;
-            values[1] = 0x000;
+            values[1] = 0x0000;
             values[3] = 0x1A00;
             values[12] = 0x0004;
             values[11] = 0x0000;
@@ -1918,8 +1934,8 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             values[15] = 0x0000;
             values[16] = 0x01D0;
             values[17] = 0x0000;
-            values[19] = 0.0000;
-            size_t num_channels = specData.size();
+            values[19] = 0x0000;
+            //size_t num_chans = specData.size();
             if (num_channels <= 0x200)
             {
                 values[17] = 0x200;
@@ -1956,8 +1972,9 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             {
                 values[17] = num_channels;
             }
-
+            std::vector<uint16_t> temp = { values[4] , values[16] , values[17] , values[12] };
             values[1] = values[4] + values[16] + values[17] * values[12];
+
 
             if (values[17] == 0x4000)
             {
