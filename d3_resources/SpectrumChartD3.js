@@ -60,7 +60,7 @@ SpectrumChartD3 = function(elem, options) {
   if( (typeof this.options.compactXAxis) !== 'boolean' ) this.options.compactXAxis = false;
   if( (typeof this.options.adjustYAxisPadding) !== 'boolean' ) this.options.adjustYAxisPadding = true;
   if( (typeof this.options.wheelScrollYAxis) !== 'boolean' ) this.options.wheelScrollYAxis = true;
-  
+  if( (typeof this.options.noYAxisNumbers) !== 'boolean' ) this.options.noYAxisNumbers = false;
   
   if(typeof options.animationDuration !== 'number' || options.animationDuration < 0) this.options.animationDuration = 1000;
   this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
@@ -106,8 +106,7 @@ SpectrumChartD3 = function(elem, options) {
   this.options.backgroundSubtract = (typeof options.backgroundSubtract == 'boolean') ? options.backgroundSubtract : false;
   this.options.allowDragRoiExtent = (typeof options.allowDragRoiExtent == 'boolean') ? options.allowDragRoiExtent : true;
   this.options.showSliderCloseBtn = (typeof options.showSliderCloseBtn == 'boolean') ? options.showSliderCloseBtn : false;
-  
-  
+
   
   self.options.spectrumLineWidth = (typeof options.spectrumLineWidth == 'number' && options.spectrumLineWidth>0 && options.spectrumLineWidth < 15) ? options.spectrumLineWidth : 1.0;
   
@@ -135,8 +134,7 @@ SpectrumChartD3 = function(elem, options) {
   //  A value of 0 is horizontal, a value of -90 is vertical (i.e. up-and-down).  Only tested [0,-90]
   self.options.peakLabelRotation = (typeof options.peakLabelRotation == 'number') ? options.peakLabelRotation : 0;
   self.options.logYAxisMin = ((typeof options.logYAxisMin == 'number') && (options.logYAxisMin > 0)) ? options.logYAxisMin : 0.1;
-  
-  
+
   self.setLocalizations( {}, true );//Set default localization strings
 
   this.padding = {
@@ -427,7 +425,14 @@ SpectrumChartD3 = function(elem, options) {
      })
     .on("mouseout",  function() { 
       d3.select(this).selectAll('text').style("font-weight", null);
-     });
+     })
+    .on("dblclick", function(){ //toggle between linear and log when user double-clicks axis
+      d3.event.preventDefault();
+      d3.event.stopPropagation();
+      const ytype = (self.options.yscale === "log") ? "lin" : "log";
+      self.setYAxisType( (self.options.yscale === "log") ? "lin" : "log" );
+      self.WtEmit(self.chart.id, {name: 'yAxisTypeChanged'}, ytype );
+    });
 
   this.xAxis = d3.svg.axis().scale(this.xScale)
    .orient("bottom")
@@ -4972,6 +4977,8 @@ SpectrumChartD3.prototype.yticks = function() {
         .forEach(function(e){ticks.push({value:e,major:true,text:formatYNumber(e)});});
   }
 
+  if( this.options.noYAxisNumbers )
+    ticks.forEach( function(obj){obj["text"] = null; } );
 
   return ticks;
 }
@@ -5051,9 +5058,29 @@ SpectrumChartD3.prototype.setAdjustYAxisPadding = function( adjust, pad ) {
   this.handleResize( false );
 }
 
+
+SpectrumChartD3.prototype.setNoYAxisNumbers = function(d) {
+  if( typeof d === "boolean" )
+    this.options.noYAxisNumbers = d;
+  this.handleResize( false );
+}
+
 SpectrumChartD3.prototype.setWheelScrollYAxis = function(d) {
   this.options.wheelScrollYAxis = d;
 }
+
+SpectrumChartD3.prototype.setChartPadding = function(d) {
+  if( !d )
+    return;
+  const allowed_keys = [ "top", "right", "bottom", "left", "titlePad", "xTitlePad", "labelPad", "label", "sliderChart" ];
+  for( const key in d )
+  {
+    if( Object.hasOwnProperty.call(d, key) && allowed_keys.includes(key) && (typeof d[key] === "number") )
+      this.padding[key] = d[key];
+  }
+  this.handleResize( false );
+}
+
 
 
 /**
@@ -10247,15 +10274,19 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   const areaUncert = peak.Amplitude[1].toFixed(1);
 
   let nuc = null;
-  if( peak.nuclide && peak.nuclide.name ){
-    //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", energy: 1408.01}
-    nuc = peak.nuclide.name + " (";
-    if( peak.nuclide.decayParent !== peak.nuclide.name )
-      nuc = nuc + peak.nuclide.decayParent + ", ";
-    if( peak.nuclide.energy )
-      nuc = nuc + peak.nuclide.energy.toFixed(2) + " keV";
-    if( peak.nuclide.type )
-      nuc = nuc + " " + peak.nuclide.type;
+  //nuclide: {name: "Eu152", decayParent: "Eu152", decayChild: "Sm152", energy: 1408.01}
+  //xray: {name: "Uranium", energy: 114.8440 }
+  //reaction: {name: "Fe(n,g)", energy: 4996.23, type: "D.E."}
+  let nucinfo = peak.nuclide ? peak.nuclide : (peak.xray ? peak.xray : (peak.reaction ? peak.reaction : null));
+  
+  if( nucinfo && nucinfo.name ){
+    nuc = nucinfo.name + " (";
+    if( nucinfo.decayParent && (nucinfo.decayParent !== nucinfo.name) )
+      nuc = nuc + nucinfo.decayParent + ", ";
+    if( nucinfo.energy )
+      nuc = nuc + nucinfo.energy.toFixed(2) + " keV";
+    if( nucinfo.type )
+      nuc = nuc + " " + nucinfo.type;
     nuc = nuc + ")";
   }
   

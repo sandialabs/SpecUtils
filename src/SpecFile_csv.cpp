@@ -117,22 +117,15 @@ bool SpecFile::load_txt_or_csv_file( const std::string &filename )
       // I *think* input should now be UTF-8???
     }
     */
-   
-    
-    for( size_t i = (is_utf8 ? 3 : 0); i < (sizeof(first_bytes) - 1); ++i )
-    {
-      if( first_bytes[i] > 127 )
+  
+    {// Begin check if UTF-8 string
+      const size_t start_offset = (is_utf8 ? 3 : 0);
+      const char *start_str = (const char *)first_bytes + start_offset;
+      const size_t start_str_len = sizeof(first_bytes) - start_offset - 1; //minus 1 for null-term
+      
+      if( !valid_utf8( start_str, start_str_len ) )
         return false;
-    }
-   
-    
-    //while( input->good() )
-    //{
-    //  const int c = input->get();
-    //  if( input->good() && c>127 )
-    //    return false;
-    //}//while( input.good() )
-    
+    }// End check if valid UTF-8 string
     
     //we have an ascii file if we've made it here
     input->clear();
@@ -1026,7 +1019,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         }
         
         int channel = 0;
-        float energy = 0.0f, count = 0.0f; //, count2 = 0.0f;
+        float energy = 0.0f, count = 0.0f;
         for( size_t col = 0; col < fields.size(); ++col )
         {
           if( column_map.count(col) )
@@ -1036,7 +1029,6 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
               case kChannel:       channel = atoi(fields[col].c_str()); break;
               case kEnergy:        energy  = static_cast<float>(atof(fields[col].c_str())); break;
               case kCounts:        count   = static_cast<float>(atof(fields[col].c_str())); break;
-              //case kCounts + 1:    count2  = static_cast<float>(atof(fields[col].c_str())); break;
               default:
                 // \TODO: Ignoring past the first record...
                 assert( column_map[col] > kCounts );
@@ -1047,11 +1039,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         
         if( IsNan(energy) || IsInf(energy) )
           continue;
-        if( IsNan(count) || IsInf(count) /*|| IsNan(count2) || IsInf(count2)*/ )
+        if( IsNan(count) || IsInf(count) )
           continue;
-        
-        //        if( errno )
-        //          throw runtime_error( "Error converting to float" );
         
         energy *= energy_units;
         
@@ -1069,11 +1058,11 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       }while( SpecUtils::safe_get_line( istr, line, maxlen ) );
       
       if( counts->empty() )
-        throw runtime_error( "Didnt find and channel counts" );
+        throw runtime_error( "Didnt find any channel counts" );
       
       gamma_counts_ = counts;
       
-      if( (energies->size() >= counts->size()) && (energies->back()!=0.0f) )
+      if( (energies->size() >= counts->size()) && (energies->back() != 0.0f) )
       {
         try
         {
@@ -1089,11 +1078,20 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       
       break;
     }else if( column_map.empty()
-             && (  istarts_with( fields[0], "channel" )
+             && (
+                 //Let counts header be "Channel", "Counts", "Ch", or similar non-English varients
+                 istarts_with( fields[0], "channel" )
                  || istarts_with( fields[0], "counts" )
-                 || istarts_with( fields[0], "data" )
-                 || istarts_with( fields[0], "energy" )
                  || istarts_with( fields[0], "Ch" )
+                 || istarts_with( fields[0], "Канал" )
+                 //For a single column data
+                 || istarts_with( fields[0], "data" )
+                 //energy header can be like "Energy", "Energy (keV)", "En", or similar, but we dont
+                 //  want to mistake something like "Energy Calibration, ..." as a column header
+                 || istarts_with( fields[0], "energy (" )
+                 || iequals_ascii(fields[0], "energy" )
+                 || iequals_ascii(fields[0], "en" )
+                 || iequals_ascii(fields[0], "en (" )
                  || fields[0]=="##" ) )
     {
       ++nlines_used;
@@ -1102,6 +1100,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       {
         if( starts_with( fields[i], "channel" )
            || starts_with( fields[i], "ch" )
+           || starts_with( fields[i], "Канал" )
            || fields[i]=="##" )
         {
           column_map[i] = kChannel;
@@ -1123,7 +1122,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
             if( istarts_with(restofline, "count")
                || istarts_with(restofline, "data")
                || istarts_with(restofline, "signal")
-               || istarts_with(restofline, "detector") )
+               || istarts_with(restofline, "detector")
+               || istarts_with(restofline, "Отсчеты") )
             {
               column_map[i+1] = kCounts;
             }
@@ -1244,7 +1244,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       
       start_time_ = time_from_string( timestr.c_str() );
     }else if( istarts_with( fields[0], "LiveTime" )
-             || istarts_with( fields[0], "live time" ) )
+             || istarts_with( fields[0], "live time" )
+             || istarts_with( fields[0], "Живое время" ) )
     {
       ++nlines_used;
       
@@ -1265,7 +1266,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       }
     }else if( istarts_with( fields[0], "realtime" )
              || istarts_with( fields[0], "Real time" )
-             || istarts_with( fields[0], "Total time") )
+             || istarts_with( fields[0], "Total time")
+             || istarts_with( fields[0], "Реальное время") )
     {
       ++nlines_used;
       
@@ -1347,11 +1349,38 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       
       if( c > 0 || b > 0 )
         poly_calib_coeff = { d, c, b, a };
+    }else if( poly_calib_coeff.empty()
+             && starts_with( fields[0], "energy calibration" )
+             && (fields.size() >= 3)
+             && starts_with( fields[1], "offset:" )
+             && starts_with( fields[2], "slope:" ) )
+    {
+      // Canberra Lynx CSV files get here
+      //fields == {"energy calibration", "offset: -2.69", "slope: 0.37", "quadratic: -2.89e-7"}
+      //Note: because lower channel energies are also provided, this polynomial calibration we are
+      //      parsing out here, wont be used.
+      map<string,float> vals_map{ {"offset", 0.0f}, {"slope", 0.0f}, {"quadratic", 0.0f} };
+        
+      for( size_t i = 1; i < fields.size(); ++i )
+      {
+        float val;
+        vector<string> parts;
+        SpecUtils::split( parts, fields[i], ": \t" );
+        
+        if( (parts.size() >= 2) && SpecUtils::parse_float(parts[1].c_str(), parts[1].size(), val) )
+          vals_map[parts[0]] = val;
+      }
+        
+      poly_calib_coeff = vector<float>{ vals_map["offset"], vals_map["slope"], vals_map["quadratic"] };
+      while( !poly_calib_coeff.empty() && (poly_calib_coeff.back() == 0.0) )
+        poly_calib_coeff.resize( poly_calib_coeff.size() - 1 );
+    }else
+    {
+      // unidentified line
     }
-    
   }//while( getline( istr, line ) )
   
-  if( nlines_total < 10 || nlines_used < static_cast<size_t>( ceil(0.25*nlines_total) ))
+  if( (nlines_total < 10) || (nlines_used < static_cast<size_t>( ceil(0.25*nlines_total) )) )
   {
     reset();
     istr.seekg( orig_pos, ios::beg );
@@ -1359,9 +1388,14 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     throw runtime_error( "Not enough (useful) lines in the file." );
   }//
   
+  // If we have polynomial energy calibration terms, we will only use them if we dont already
+  //  have another energy calibration - this includes when lower channel energies are specified
+  //  (perhaps we should check if polynomial and lower channel energies are about the same, and
+  //   if so, go with the polynomial)
   const size_t nchannel = gamma_counts_ ? gamma_counts_->size() : size_t(0);
-  if( nchannel>=2 && !poly_calib_coeff.empty()
-      && (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
+  if( (nchannel >= 2)
+     && (poly_calib_coeff.size() >= 2)
+     && (energy_calibration_->type() == EnergyCalType::InvalidEquationType) )
   {
     try
     {

@@ -224,7 +224,11 @@ namespace  SpecUtils
   size_t utf8_str_size_limit( const char * const str,
                              size_t num_in_bytes, const size_t max_bytes );
   
-  
+  /** Returns if the passed-in string is valid UTF-8.
+   @param str The string to evaluate.
+   @param num_in_bytes The length of the string - must not include (optional) null-terminator.
+   */
+  bool valid_utf8( const char * const str, const size_t num_in_bytes );
   
   
   /** \brief parses a string of ascii characters to their floating point value.

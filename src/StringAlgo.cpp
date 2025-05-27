@@ -24,6 +24,7 @@
 #include <string>
 #include <cstring>
 #include <sstream>
+#include <stdint.h>
 #include <algorithm>
 
 
@@ -1088,6 +1089,42 @@ namespace SpecUtils
     
     return 0;
   }
+  
+  
+  bool valid_utf8( const char * const str, const size_t num_in_bytes )
+  {
+    int bytesToProcess = 0;
+    
+    for( size_t i = 0; i < num_in_bytes; ++i )
+    {
+      const uint8_t c = reinterpret_cast<const uint8_t &>( str[i] );
+      if( bytesToProcess == 0 )
+      {
+        // Determine how many bytes to expect
+        if( (c & 0x80) == 0 )
+          continue;            // 1-byte character (ASCII)
+        else if( (c & 0xE0) == 0xC0 )
+          bytesToProcess = 1;  // 2-byte character
+        else if( (c & 0xF0) == 0xE0 )
+          bytesToProcess = 2;  // 3-byte character
+        else if( (c & 0xF8) == 0xF0 )
+          bytesToProcess = 3;  // 4-byte character
+        else
+          return false; // Invalid leading byte
+      }else
+      {
+        // Expecting continuation byte
+        if( (c & 0xC0) != 0x80 )
+          return false; // Not a valid continuation byte
+        bytesToProcess--;
+        assert( bytesToProcess >= 0 );
+      }
+    }//for( size_t i = 0; i < num_in_bytes; ++i )
+    
+    assert( bytesToProcess >= 0 );
+    
+    return (bytesToProcess == 0);
+  }//bool valid_utf8( const char * const str, size_t num_in_bytes )
   
   
   template <class T>
