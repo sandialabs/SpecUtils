@@ -1,3 +1,22 @@
+/**
+ SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
+ Copyright (C) 2016 William Johnson
+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
@@ -556,18 +575,20 @@ bool NuclideComparer::operator()(const std::vector<uint8_t>& x, const std::vecto
     }
 
 // Struct implementations
-Peak::Peak(double energy, double centrd, double centrdUnc, double fwhm, double lowTail,
-           double area, double areaUnc, double continuum, double critialLevel,
-           double cntRate, double cntRateUnc)
+Peak::Peak(float energy, float centrd, float centrdUnc, float fwhm, float lowTail,
+    float area, float areaUnc, float continuum, float critialLevel,
+    float cntRate, float cntRateUnc)
     : Energy(energy), Centroid(centrd), CentroidUncertainty(centrdUnc),
       FullWidthAtHalfMaximum(fwhm), LowTail(lowTail), Area(area),
       AreaUncertainty(areaUnc), Continuum(continuum), CriticalLevel(critialLevel),
       CountRate(cntRate), CountRateUncertainty(cntRateUnc) {}
 
-Nuclide::Nuclide(const std::string& name, double halfLife, double halfLifeUnc,
-    const std::string& halfLifeUnit, int nucNo)
+Nuclide::Nuclide(const std::string& name, float halfLife, float halfLifeUnc,
+    const std::string& halfLifeUnit, int nucNo, double activity = 0., 
+    double activityUnc = 0., double mda = 0.)
     : Name(name), HalfLife(halfLife), HalfLifeUncertainty(halfLifeUnc),
-    HalfLifeUnit(halfLifeUnit), Index(nucNo)
+    HalfLifeUnit(halfLifeUnit), Index(nucNo), Activity(activity), 
+    ActivityUnc(activityUnc), MDA(mda)
 {
     auto deName = DecomposeIsotopeName(name);
     AtomicNumber = std::stoi(deName[1]);
@@ -576,11 +597,14 @@ Nuclide::Nuclide(const std::string& name, double halfLife, double halfLifeUnc,
 }
 
 
-Line::Line(double energy, double energyUnc, double abundance, double abundanceUnc,
-           int nucNo, bool key, bool noWgtMean)
+CAMInputOutput::Line::Line(float energy, float energyUnc, float abundance, float abundanceUnc, 
+    int nucNo, bool key, bool noWgtMean, 
+    double lineAct, double lineActUnc, float lineEff, float lineEffUnc, double lineMDA)
     : Energy(energy), EnergyUncertainty(energyUnc), Abundance(abundance),
       AbundanceUncertainty(abundanceUnc), IsKeyLine(key), NuclideIndex(nucNo), 
-    NoWeightMean(noWgtMean) {}
+    NoWeightMean(noWgtMean), LineActivity(lineAct), LineActivityUnceratinty(lineActUnc),
+    LineEfficiency(lineEff),LineEfficiencyUncertainty(lineEffUnc), LineMDA(lineMDA)
+{}
 
 DetInfo::DetInfo(std::string type, std::string name, std::string serial_no, 
     std::string mca_type)
@@ -905,11 +929,13 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
             // Read name (8 characters)
             char nameBuf[9] = {0};
             std::memcpy(nameBuf, &(*readData)[loc + NuclideParameterLocation::Name], 8);
+            nameBuf[8] = '\0';
             nuc.Name = std::string(nameBuf);
 
             // Read half-life unit (2 characters)
-            char unitBuf[3] = {0};
-            std::memcpy(unitBuf, &(*readData)[loc + NuclideParameterLocation::HalfLifeUnit], 2);
+            char unitBuf[4] = {0};
+            std::memcpy(unitBuf, &(*readData)[loc + NuclideParameterLocation::HalfLifeUnit], 3);
+            unitBuf[3] = '\0';
             nuc.HalfLifeUnit = std::string(unitBuf);
 
             // Convert half-life to appropriate units
@@ -919,19 +945,16 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
             size_t lineIndex = static_cast<size_t>(ReadUInt16(*readData, loc + lineListLoc + 0x01));
             nuc.Index = fileLines[lineIndex - 1].NuclideIndex;
 
-            fileNuclides.push_back(nuc);
 
             uint32_t numLines = ((ReadUInt16(*readData, loc) - (static_cast<uint16_t>(recSize))) / 0x03);
             lineListOffset += numLines * nuclide_line_size;
 
-           // for (int j = 0; j < recSize; j++)
-            //{
-                double d_MDA = convert_from_CAM_double(*readData, loc + 0x27);
-                double d_NCLWTMEAN = convert_from_CAM_double(*readData, loc + 0x57);
-                double d_NCLWTMERR = convert_from_CAM_double(*readData, loc + 0x69);
 
-                int temp = 0;
-            //}
+            nuc.Activity = convert_from_CAM_double(*readData, loc + NuclideParameterLocation::MeanActivity);
+            nuc.ActivityUnc = convert_from_CAM_double(*readData, loc + NuclideParameterLocation::MeanActivityUnceratinty);
+            nuc.MDA = convert_from_CAM_double(*readData, loc + NuclideParameterLocation::NuclideMDA);
+
+            fileNuclides.push_back(nuc);
         }
     }
 
@@ -1040,8 +1063,9 @@ std::string CAMIO::GetSampleTitle()
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
-        char nameBuf[0x40] = { 0 };
-        std::memcpy(nameBuf, &(*readData)[pos + headSize], sizeof(nameBuf));
+        char nameBuf[65] = { 0 };
+        std::memcpy(nameBuf, &(*readData)[pos + headSize], sizeof(nameBuf)-1);
+        nameBuf[64] = '\0';
         return std::string(nameBuf);
     }
 
@@ -1058,7 +1082,7 @@ DetInfo& CAMIO::GetDetectorInfo()
         throw std::runtime_error("The file contains no data");
     }
 
-    auto range = blockAddresses.equal_range(CAMBlock::GEOM);
+    auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no aqusition data in the loaded file");
     }
@@ -1069,20 +1093,24 @@ DetInfo& CAMIO::GetDetectorInfo()
 
 
         // these are actually record parameters but we don't deal with multpule specturm in a single file
-        char type_Buf[8] = { 0 };
-        std::memcpy(type_Buf, &(*readData)[pos + headSize + 0x7CF], sizeof(type_Buf));
-        det_info.Type = std::string(type_Buf);
+        char type_buf[9] = { 0 };
+        std::memcpy(type_buf, &(*readData)[pos + headSize + 0x7CF], sizeof(type_buf)-1);
+        type_buf[8] = '\0';
+        det_info.Type = std::string(type_buf);
 
-        char mca_type_buf[0x18] = { 0 };
-        std::memcpy(mca_type_buf, &(*readData)[pos + headSize + 0x9C6], sizeof(mca_type_buf));
+        char mca_type_buf[25] = { 0 };
+        std::memcpy(mca_type_buf, &(*readData)[pos + headSize + 0x58F], sizeof(mca_type_buf)-1);
+        mca_type_buf[24] = '\0';
         det_info.MCAType = std::string(mca_type_buf);
 
-        char nameBuf[0x10] = { 0 };
-        std::memcpy(nameBuf, &(*readData)[pos + headSize + 0x5FB], sizeof(nameBuf));
-        det_info.Name = std::string(nameBuf);
+        char name_buf[17] = { 0 };
+        std::memcpy(name_buf, &(*readData)[pos + headSize + 0x5FB], sizeof(name_buf)-1);
+        name_buf[16] = '\0';
+        det_info.Name = std::string(name_buf);
 
-        char sn_buf[0x8] = { 0 };
-        std::memcpy(sn_buf, &(*readData)[pos + headSize + 0x5B3], sizeof(sn_buf));
+        char sn_buf[0x9] = { 0 };
+        std::memcpy(sn_buf, &(*readData)[pos + headSize + 0x6BE], sizeof(sn_buf)-1);
+        sn_buf[8] = '\0';
         det_info.SerialNo = std::string(sn_buf);
 
         return det_info;
@@ -1409,7 +1437,7 @@ void CAMIO::AddNuclide(const Nuclide& nuc) {
 
     std::sort(lineNums.begin(), lineNums.end());
 
-    std::vector<uint8_t> nucBytes = GenerateNuclide(nuc.Name, halfLife, halfLifeUnc, unit, lineNums);
+    std::vector<uint8_t> nucBytes = GenerateNuclide(nuc, lineNums);
     nucs.push_back(nucBytes);
 
 }
@@ -1436,10 +1464,7 @@ void CAMIO::AddLine(const Line& line)
     }
 
     // Generate the line bytes
-    auto lineBytes = GenerateLine(line.Energy, line.EnergyUncertainty,
-                                line.Abundance, line.AbundanceUncertainty,
-                                line.IsKeyLine, static_cast<uint8_t>(nucNo),
-                                line.NoWeightMean);
+    auto lineBytes = GenerateLine(line);
 
     // Find insertion point using binary search
     auto it = std::lower_bound(lines.begin(), lines.end(), lineBytes,
@@ -1528,7 +1553,7 @@ void CAMIO::AddDetectorType(const std::string& detector_type)
 void CAMIO::AddAcquitionTime(const SpecUtils::time_point_t& start_time)
 {
     enter_CAM_value(0x01, acqpCommon, acqp_rec_tab_loc, cam_type::cam_byte);
-    enter_CAM_value(start_time, acqpCommon, acqp_rec_tab_loc + 0x01, cam_type::cam_datetime);
+    enter_CAM_value(start_time, acqpCommon, static_cast<size_t>(acqp_rec_tab_loc + uint16_t(0x01)), cam_type::cam_datetime);
 
     //set the sampling time to the aqusition start time
     enter_CAM_value(start_time, sampCommon, 0xB4, cam_type::cam_datetime);
@@ -1536,13 +1561,13 @@ void CAMIO::AddAcquitionTime(const SpecUtils::time_point_t& start_time)
 // Add the real time
 void CAMIO::AddRealTime(const float real_time)
 {
-    enter_CAM_value(real_time, acqpCommon, acqp_rec_tab_loc + 0x09, cam_type::cam_duration);
+    enter_CAM_value(real_time, acqpCommon, static_cast<size_t>(acqp_rec_tab_loc + uint16_t(0x09)), cam_type::cam_duration);
 }
 
 // Add the live time
 void CAMIO::AddLiveTime(const float live_time)
 {
-    enter_CAM_value(live_time, acqpCommon, acqp_rec_tab_loc + 0x11, cam_type::cam_duration);
+    enter_CAM_value(live_time, acqpCommon, static_cast<size_t>(acqp_rec_tab_loc + uint16_t(0x11)), cam_type::cam_duration);
 }
 // Add the sample title
 void CAMIO::AddSampleTitle(const std::string& title)
@@ -1606,8 +1631,7 @@ void CAMIO::AddSpectrum(const std::vector<float>& channel_counts)
 }
 
 // generate a nuclide record
-std::vector<byte_type> CAMIO::GenerateNuclide(const std::string& name, float halfLife,
-                                           float halfLifeUnc, const std::string& halfLifeUnit,
+std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
                                            const std::vector<uint16_t>& lineNums) {
     uint32_t numLines = static_cast<uint32_t>(lineNums.size());
     std::vector<uint8_t> nuc(static_cast<size_t>(static_cast<uint32_t>(RecordSize::NUCL) + numLines * 3));
@@ -1622,15 +1646,23 @@ std::vector<byte_type> CAMIO::GenerateNuclide(const std::string& name, float hal
 
     // Set the time spans
     // TODO check if this half-life needs to be converted
-    auto halfLifeBytes = convert_to_CAM_duration(halfLife);
-    auto halfLifeUncBytes = convert_to_CAM_duration(halfLifeUnc);
+    auto halfLifeBytes = convert_to_CAM_duration(nuclide.HalfLife);
+    auto halfLifeUncBytes = convert_to_CAM_duration(nuclide.HalfLifeUncertainty);
     std::copy(halfLifeBytes.begin(), halfLifeBytes.end(), nuc.begin() + NuclideParameterLocation::HalfLife);
     std::copy(halfLifeUncBytes.begin(), halfLifeUncBytes.end(), nuc.begin() + NuclideParameterLocation::HalfLifeUncertainty);
 
+    // do the activites
+    auto activityBytes = convert_to_CAM_double(nuclide.Activity);
+    auto actUncBytes = convert_to_CAM_double(nuclide.ActivityUnc);
+    auto mdaBytes = convert_to_CAM_double(nuclide.MDA);
+    std::copy(activityBytes.begin(), activityBytes.end(), nuc.begin() + NuclideParameterLocation::MeanActivity);
+    std::copy(actUncBytes.begin(), actUncBytes.end(), nuc.begin() + NuclideParameterLocation::MeanActivityUnceratinty);
+    std::copy(mdaBytes.begin(), mdaBytes.end(), nuc.begin() + NuclideParameterLocation::NuclideMDA);
+
     // Set the strings
-    std::string paddedName = name;
+    std::string paddedName = nuclide.Name;
     paddedName.resize(8, ' ');
-    std::string paddedUnit = halfLifeUnit;
+    std::string paddedUnit = nuclide.HalfLifeUnit;
     // Ensure the unit is always uppercase
     std::transform(paddedUnit.begin(), paddedUnit.end(), paddedUnit.begin(), ::toupper);
     paddedUnit.resize(2, ' ');
@@ -1675,29 +1707,40 @@ std::vector<byte_type> CAMIO::AddLinesToNuclide(const std::vector<byte_type>& nu
 }
 
 // generate line record
-std::vector<byte_type> CAMIO::GenerateLine(float energy, float enUnc, float yield,
-                                        float yieldUnc, bool key, uint8_t nucNo, bool noWgtMn) {
+std::vector<byte_type> CAMIO::GenerateLine(const Line t_line) {
     std::vector<uint8_t> line(static_cast<size_t>(static_cast<uint16_t>(RecordSize::NLINES)));
     
     line[0] = 0x01;
     
-    auto energyBytes = convert_to_CAM_float(energy);
-    auto enUncBytes = convert_to_CAM_float(enUnc);
-    auto yieldBytes = convert_to_CAM_float(yield);
-    auto yieldUncBytes = convert_to_CAM_float(yieldUnc);
+    auto energyBytes = convert_to_CAM_float(t_line.Energy);
+    auto enUncBytes = convert_to_CAM_float(t_line.EnergyUncertainty);
+    auto yieldBytes = convert_to_CAM_float(t_line.Abundance);
+    auto yieldUncBytes = convert_to_CAM_float(t_line.AbundanceUncertainty);
+
+    auto activityBytes = convert_to_CAM_double(t_line.LineActivity);
+    auto actUncBytes = convert_to_CAM_double(t_line.LineActivityUnceratinty);
+    auto lineEff = convert_to_CAM_float(t_line.LineEfficiency);
+    auto lnEffUnc = convert_to_CAM_float(t_line.LineEfficiencyUncertainty);
+    auto lineMDA = convert_to_CAM_double(t_line.LineMDA);
 
     std::copy(energyBytes.begin(), energyBytes.end(), line.begin() + LineParameterLocation::Energy);
     std::copy(enUncBytes.begin(), enUncBytes.end(), line.begin() + LineParameterLocation::EnergyUncertainty);
     std::copy(yieldBytes.begin(), yieldBytes.end(), line.begin() + LineParameterLocation::Abundance);
     std::copy(yieldUncBytes.begin(), yieldUncBytes.end(), line.begin() + LineParameterLocation::AbundanceUncertainty);
+    
+    std::copy(activityBytes.begin(), activityBytes.end(), line.begin() + LineParameterLocation::LineActivity);
+    std::copy(actUncBytes.begin(), actUncBytes.end(), line.begin() + LineParameterLocation::LineActivityUnceratinty);
+    std::copy(lineEff.begin(), lineEff.end(), line.begin() + LineParameterLocation::LineEfficiency);
+    std::copy(lnEffUnc.begin(), lnEffUnc.end(), line.begin() + LineParameterLocation::LineEfficiencyUncertainty);
+    std::copy(lineMDA.begin(), lineMDA.end(), line.begin() + LineParameterLocation::LineMDA);
 
     // Set if it is the key line
-    line[LineParameterLocation::IsKeyLine] = key ? 0x04 : 0x00;
+    line[LineParameterLocation::IsKeyLine] = t_line.IsKeyLine ? 0x04 : 0x00;
     
     // Set the nuclide number
-    line[LineParameterLocation::NuclideIndex] = nucNo;
+    line[LineParameterLocation::NuclideIndex] = static_cast<uint8_t>(t_line.NuclideIndex);
 
-    line[LineParameterLocation::NoWeightMean] = noWgtMn ? 0x02 : 0x00;
+    line[LineParameterLocation::NoWeightMean] = t_line.NoWeightMean ? 0x02 : 0x00;
 
     return line;
 }
@@ -2051,7 +2094,7 @@ float CAMInputOutput::CAMIO::ComputeUncertainty(float value)
 
     // If index is 0, there is no precision; use 0.5
     if (index == 0) {
-        index = power < 0 ? 1 : power + 1;
+        index = static_cast<size_t>(power) < 0 ? 1 : static_cast<size_t>(power) + 1;
     }
 
     // Calculate the uncertainty

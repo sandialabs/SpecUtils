@@ -1,5 +1,24 @@
 #pragma once
 
+/**
+ SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
+ Copyright (C) 2016 William Johnson
+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -19,43 +38,50 @@ namespace CAMInputOutput
 // Structs
 struct EfficiencyPoint {
     int Index;
-    double Energy;
-    double Efficiency;
-    double EfficiencyUncertainty;
+    float Energy;
+    float Efficiency;
+    float EfficiencyUncertainty;
 };
 
 struct Peak {
-    double Energy;
-    double Centroid;
-    double CentroidUncertainty;
-    double FullWidthAtHalfMaximum;
-    double LowTail;
-    double Area;
-    double AreaUncertainty;
-    double Continuum;
-    double CriticalLevel;
-    double CountRate;
-    double CountRateUncertainty;
+    float Energy;
+    float Centroid;
+    float CentroidUncertainty;
+    float FullWidthAtHalfMaximum;
+    float LowTail;
+    float Area;
+    float AreaUncertainty;
+    float Continuum;
+    float CriticalLevel;
+    float CountRate;
+    float CountRateUncertainty;
 
     Peak() = default;
-    Peak(double energy, double centrd, double centrdUnc, double fwhm, double lowTail, 
-         double area, double areaUnc, double continuum, double critialLevel, 
-         double cntRate, double cntRateUnc);
+    Peak(float energy, float centrd, float centrdUnc, float fwhm, float lowTail,
+        float area, float areaUnc, float continuum, float critialLevel,
+        float cntRate, float cntRateUnc);
 };
 
 struct Nuclide {
     std::string Name;
-    double HalfLife = 0.;
-    double HalfLifeUncertainty = 0.;
+    float HalfLife = 0.;
+    float HalfLifeUncertainty = 0.;
     std::string HalfLifeUnit;
     int Index = -1;
     int AtomicNumber = 0;
     std::string ElementSymbol;
     std::string Metastable;
 
+    // all in uCi, default Genie unit
+    double Activity = 0.;
+    double ActivityUnc = 0.;
+    double MDA = 0.;
+    
+
     Nuclide() = default;
-    Nuclide(const std::string& name, double halfLife, double halfLifeUnc, 
-            const std::string& halfLifeUnit, int nucNo);
+    Nuclide(const std::string& name, float halfLife, float halfLifeUnc,
+        const std::string& halfLifeUnit, int nucNo,
+        double  activity, double activityUnc, double mda);
 
     inline bool operator==(const Nuclide & other) const
     {
@@ -66,17 +92,24 @@ struct Nuclide {
 };
 
 struct Line {
-    double Energy;
-    double EnergyUncertainty;
-    double Abundance;
-    double AbundanceUncertainty;
-    bool IsKeyLine;
-    int NuclideIndex;
-    bool NoWeightMean;
+    float Energy = 0.;
+    float EnergyUncertainty = 0.;
+    float Abundance = 0.;
+    float AbundanceUncertainty = 0.;
+    bool IsKeyLine = false;
+    int NuclideIndex = -1;
+    bool NoWeightMean = false;
+
+    double LineActivity = 0.;
+    double LineActivityUnceratinty = 0.;
+    float LineEfficiency = 0. ;
+    float LineEfficiencyUncertainty = 0.;
+    double LineMDA = 0.;
 
     Line() = default;
-    Line(double energy, double energyUnc, double abundance, double abundanceUnc, 
-         int nucNo, bool key = false, bool noWgtMean = false);
+    Line(float energy, float energyUnc, float abundance, float abundanceUnc,
+        int nucNo, bool key = false, bool noWgtMean = false, double lineAct = 0.,
+        double lineActUnc = 0., float lineEff = 0., float lineEffUnc = 0., double lineMDA = 0.);
 };
 
 struct DetInfo 
@@ -252,13 +285,11 @@ protected:
     std::vector<uint8_t> GenerateBlockHeader(CAMBlock block, size_t loc, uint16_t numRec = 1,
                                            uint16_t numLines = 1, uint16_t blockNum = 0, bool hasCommon = false) const;
     uint16_t GetNumLines(const std::vector<uint8_t>& nuclRecord);
-    std::vector<uint8_t> GenerateNuclide(const std::string& name, float halfLife, 
-                                        float halfLifeUnc, const std::string& halfLifeUnit,
+    std::vector<uint8_t> GenerateNuclide(const Nuclide nuc,
                                         const std::vector<uint16_t>& lineNums);
     std::vector<uint8_t> AddLinesToNuclide(const std::vector<uint8_t>& nuc, 
                                           const std::vector<uint8_t>& lineNums);
-    std::vector<uint8_t> GenerateLine(float energy, float enUnc, float yield,
-                                     float yieldUnc, bool key, uint8_t nucNo, bool noWgtMn);
+    std::vector<uint8_t> GenerateLine(const Line line);
     void AssignKeyLines(); 
 
 protected:
