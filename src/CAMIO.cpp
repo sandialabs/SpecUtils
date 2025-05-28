@@ -1270,7 +1270,7 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
 }
 
 // create a file from added data
-std::vector<byte_type> CAMIO::CreateFile() {
+std::vector<byte_type>& CAMIO::CreateFile() {
 
     for (size_t i = 0; i < writeNuclides.size(); i++)
     {
@@ -1342,11 +1342,11 @@ std::vector<byte_type> CAMIO::CreateFile() {
 
 
     // Generate the file by combining blocks
-    std::vector<uint8_t> fileBytes = GenerateFile(blockList);
+    GenerateFile(blockList);
 
     // Put the file size in the file header
-    uint32_t fileSize = static_cast<uint32_t>(fileBytes.size());
-    std::memcpy(&fileBytes[0x0A], &fileSize, sizeof(uint32_t));
+    uint32_t fileSize = static_cast<uint32_t>(writebytes.size());
+    std::memcpy(&writebytes[0x0A], &fileSize, sizeof(uint32_t));
     
     // Clear the temporary data
     lines.clear();
@@ -1354,10 +1354,10 @@ std::vector<byte_type> CAMIO::CreateFile() {
     specData.clear();
     writeNuclides.clear();
 
-    return fileBytes;
+    return writebytes;
 }
 
-std::vector<uint8_t> CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
+void CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
     // Calculate total file size
     size_t fileLength = 0x800;  // Initial header size
     for (const auto& block : blocks) {
@@ -1366,24 +1366,25 @@ std::vector<uint8_t> CAMIO::GenerateFile(const std::vector<std::vector<byte_type
     }
 
     // Create the container
-    std::vector<uint8_t> file(fileLength);
-    std::copy(fileHeader.begin(), fileHeader.end(), file.begin());
+    //std::vector<uint8_t> file(fileLength);
+    writebytes.resize(fileLength);
+    std::copy(fileHeader.begin(), fileHeader.end(), writebytes.begin());
 
     // Copy the blocks into the file
     size_t i = 0;
     for (const auto& block : blocks) {
         // Copy block header into the file header
-        std::copy(block.begin(), block.begin() + 0x30, file.begin() + 0x70 + i * 0x30);
+        std::copy(block.begin(), block.begin() + 0x30, writebytes.begin() + 0x70 + i * 0x30);
 
         // Copy the block
         uint32_t blockLoc = ReadUInt32(block, 0x0a);
         uint16_t blockSize = ReadUInt16(block, 0x06);
-        std::copy(block.begin(), block.begin() + blockSize, file.begin() + blockLoc);
+        std::copy(block.begin(), block.begin() + blockSize, writebytes.begin() + blockLoc);
         
         i++;
     }
 
-    return file;
+
 }
 
 // add nuclide by values

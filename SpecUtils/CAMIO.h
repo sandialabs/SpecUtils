@@ -202,6 +202,7 @@ public:
 private:
     std::multimap<CAMBlock, uint32_t> blockAddresses;
     std::shared_ptr<std::vector<byte_type>> readData;
+    std::vector<byte_type> writebytes;
     std::vector<std::vector<byte_type>> lines;
     std::vector<std::vector<byte_type>> nucs;
     std::vector<byte_type> specData;
@@ -271,7 +272,7 @@ public:
     void AddSpectrum(const std::vector<uint32_t>& channel_counts);
     void AddSpectrum(const std::vector<float>& channel_counts);
     // create a file with the data added
-    std::vector<byte_type> CreateFile();
+    std::vector<byte_type>& CreateFile();
 
     inline void SetKeyLineInerferenceLimit(const float limit) { key_line_intf_limit = limit; };
     float GetKeyLineInerferenceLimit() const { return key_line_intf_limit; }
@@ -300,7 +301,7 @@ protected:
     void ReadPeaksBlock(size_t pos, uint16_t records);
 
     // Add GenerateFile declaration
-    std::vector<uint8_t> GenerateFile(const std::vector<std::vector<uint8_t>>& blocks);
+    void GenerateFile(const std::vector<std::vector<uint8_t>>& blocks);
 
     float ComputeUncertainty(float value);
 };

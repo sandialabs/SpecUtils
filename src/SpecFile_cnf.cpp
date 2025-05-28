@@ -369,9 +369,9 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         //enter the data 
         cam->AddSpectrum(gamma_channel_counts);
 
-        auto cnf_file = cam->CreateFile();
+        auto& cnf_file = cam->CreateFile();
         //write the file
-        output.write((char* )cnf_file.data(), cnf_file.size());
+         output.write((char* )cnf_file.data(), cnf_file.size());
     }catch( std::exception &e )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
