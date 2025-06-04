@@ -6503,7 +6503,8 @@ void SpecFile::set_detector_type_from_other_info()
   
   
   //Lets try to figure out if we can fill out detector_type_
-  if( iequals_ascii( manufacturer_,"ORTEC" ) )
+  const bool manufacturer_is_ortec = icontains( manufacturer_, "ORTEC" );
+  if( manufacturer_is_ortec || (manufacturer_.empty() && icontains(instrument_model_,"Det")) )
   {
     if( iequals_ascii(instrument_model_,"OSASP") )
       detector_type_ = DetectorType::DetectiveEx200;
@@ -6527,8 +6528,14 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::DetectiveX;
     else if( icontains(instrument_model_,"Detective") )
       detector_type_ = DetectorType::DetectiveUnknown;
-    
-    return;
+
+    if( manufacturer_is_ortec
+       || ((detector_type_ != DetectorType::Unknown) && (detector_type_ != DetectorType::IdentiFinderUnknown)) )
+    {
+      if( manufacturer_.empty() )
+        manufacturer_ = "ORTEC";
+      return;
+    }
   }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
   
   
