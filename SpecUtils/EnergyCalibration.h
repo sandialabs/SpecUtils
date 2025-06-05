@@ -41,6 +41,9 @@
  */
 namespace SpecUtils
 {
+              
+  using DevPair = std::pair<float,float>;             
+  using DeviationPairs = std::vector<DevPair>; 
   /** The energy (or FWHM) calibration type that the calibration coefficients
    should be interpreted as.
    
@@ -288,8 +291,7 @@ namespace SpecUtils
      \sa set_polynomial, EnergyCalCheckType::Normal
      */
     static const float sm_polynomial_offset_limit;
-    
-  protected:
+
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
      increasing values).
      
@@ -297,6 +299,10 @@ namespace SpecUtils
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
     
+    DeviationPairs & mutable_deviation_pairs()
+    {
+       return m_deviation_pairs;
+    }
     EnergyCalType m_type;
     std::vector<float> m_coefficients;
     std::vector<std::pair<float,float>> m_deviation_pairs;

@@ -513,17 +513,14 @@ double gamma_integral( const std::shared_ptr<const Measurement> &hist,
 //  InterSpec is using to represent detector response functions on disk.
 const std::string &detectorTypeToString( const DetectorType type );
 
-
-
-
- 
-  
-  
+using FloatVec = std::vector<float>;
+using FloatVecPtr = std::shared_ptr<FloatVec>;    
   
 class Measurement
 {
 public:
   Measurement();
+  virtual ~Measurement() {} // Virtual destructor to enable RTTI
   
   //operator=: operates as expected for most member variables.  Smart pointer
   //  to const objects (channel data and channel energies) are shallow copied.
@@ -538,9 +535,19 @@ public:
   
   //live_time(): returned in units of seconds.  Will be 0 if not known.
   float live_time() const;
+
+  void set_live_time(float time)
+  {
+    live_time_ = time;
+  }
   
   //real_time(): returned in units of seconds.  Will be 0 if not known.
   float real_time() const;
+
+  void set_real_time(float time)
+  {
+    real_time_ = time;
+  }
   
   //contained_neutron(): returns whether or not the measurement is thought to
   //  contain the possibility to detect neutrons (e.g. if a neutron detector was
@@ -620,6 +627,25 @@ public:
    */
   char pcf_tag() const;
   
+  /** Returns the source description.
+   
+   This is free-form text to describe the source, and may be used in an application specific manor.
+   For example, GADRAS-DRF will use strings such as: "Am241,10uC", "Am241,10uC{an=26,ad=10}",
+    "60CO_123456" (where 123456 is the Co60 source serial number), or
+    "PotassiumInSoil,1.80 Ci{24.9,2.2}+ThoriumInSoil,7.63 Ci{24.9,2.2}+UraniumInSoil,2.76 Ci{24.9,2.2}"
+   
+   This field corresponds roughly to the information that would be put into a N42 RadItemInformation element, or a PCF
+   spectrum source list.
+   */
+  const std::string &source_description() const;
+  
+  /** Returns the measurement description.
+   
+   This is a free-form text field, primarily meant to correspond to PCF records spectrum description field.
+   */
+  const std::string &measurement_description() const;
+  
+  
   //position_time(): returns the (local, or detector) time of the GPS fix, if
   //  known.  Returns time_point_t{} otherwise.
   const time_point_t position_time() const;
@@ -628,6 +654,9 @@ public:
   //  May be empty string for single detector systems, or otherwise.
   //  ex: Aa1, Ba1, etc.
   const std::string &detector_name() const;
+
+  /// @brief PCFs store the detector name in the title so add the abiltity set update the detector name 
+  void update_detector_name_from_title();
   
   //detector_number(): returns the detector number of the detector within the
   //  detection system.  Will have a 1 to 1 coorespondence with detector_name().
@@ -652,6 +681,11 @@ public:
   //  that pertain to this record specifically.  See also
   //  SpecFile::remarks().
   const std::vector<std::string> &remarks() const;
+
+  std::vector<std::string> &mutable_remarks()
+  {
+    return remarks_;
+  }
   
   /** Warnings from parsing that apply to this measurement.
    */
@@ -694,6 +728,11 @@ public:
   
   /** Returns the energy calibration. Will not be null. */
   std::shared_ptr<const EnergyCalibration> energy_calibration() const;
+
+  std::shared_ptr<const EnergyCalibration> mutable_energy_calibration()
+  {
+    return energy_calibration_;
+  }
   
   //channel_energies(): returns a vector containing the starting (lower) energy
   //  of the gamma channels, calculated using the energy calibration
@@ -798,7 +837,17 @@ public:
    */
   void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts,
                                 const float livetime, const float realtime );
-  
+
+  void set_gamma_counts( std::shared_ptr<const std::vector<float>> counts );
+
+  /// @brief Make a copy of a spectrum
+  /// @param spectrum 'naked' vector of counts
+  void set_gamma_counts(const FloatVec& spectrum)
+  {
+    auto counts = std::make_shared<FloatVec>(spectrum);
+      
+    set_gamma_counts(counts);
+  }
   /** Sets the neutron counts, and also updates
    #Measurement::neutron_counts_sum_ and #Measurement::contained_neutron_ .
    
@@ -814,13 +863,29 @@ public:
    
    If `neutron_live_time` is less than or equal to zero, the gamma real time will be used.
    */
-  void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time );
+  void set_neutron_counts( const std::vector<float> &counts, const float neutron_live_time=-1.0F );
   
   //To set real and live times, see SpecFile::set_live_time(...)
   
   /** Sets the application specific "tag" character, used by the PCF file format. */
   void set_pcf_tag( const char tag_char );
   
+  /** Sets the source description for this measurement.
+   
+   This is a free-form text field, but a convention that may be used is that of GADRAS-DRF, such as
+    "Am241,10uC", "Am241,10uC{an=26,ad=10}", "60CO_123456" (where 123456 is the Co60 source serial number), etc
+   
+   This field corresponds roughly to the information that would be put into a N42 RadItemInformation element, or a PCF
+   spectrum source list.
+   */
+  void set_source_description( const std::string &description );
+  
+  /** Set the measurements description.
+   
+   This is a free-form text field, primarily meant to correspond to PCF records spectrum description field.
+   */
+  void set_measurement_description( const std::string &description );
+    
   /** returns the number of channels in #gamma_counts_.
    Note: energy calibration could still be invalid and not have channel energies defined, even
    when this returns a non-zero value.
@@ -942,6 +1007,21 @@ public:
   uint32_t derived_data_properties() const;
   
   
+  /** For data from a RPM the detector name provides the location of this detector within the portal; the function returns
+   the panel number.
+   
+   @returns The panel number, as interpreted from the detector name.  Will return -1 if the name does not conform to
+            the N42-2006 convention of e.g., "Aa1", "Bc4", etc.  If a valid name, will return a value of 0, 1, 2, or 3.
+   
+   This is a convenience function for calling `pcf_det_name_to_dev_pair_index(...)`
+   */
+  int rpm_panel_number() const;
+  
+  /** Similar to `rpm_panel_number()`, but returns panel number (-1 on invalid detector name, or otherwise values [0,7]. */
+  int rpm_column_number() const;
+  
+  /** Similar to `rpm_panel_number()`, but returns mca number (-1 on invalid detector name, or otherwise values [0,7]. */
+  int rpm_mca_number() const;
   
   //Functions to write this Measurement object out to external formats
   
@@ -1014,6 +1094,12 @@ public:
    from a file.
    */
   void set_energy_calibration( const std::shared_ptr<const EnergyCalibration> &cal );
+
+  /// @brief Used for testing
+  void set_ecal( const std::shared_ptr<const EnergyCalibration> &cal )
+  {
+    energy_calibration_ = cal;
+  }
   
   
 
@@ -1154,6 +1240,23 @@ protected:
    */
   char pcf_tag_;
   
+  /** Free-form text description of the source, for example "Am241,10uC", "Am241,10uC{an=26,ad=10}",
+    "60CO_123456" (where 123456 is the Co60 source serial number), etc.
+   
+   This field corresponds roughly to the information that would be put into a N42 RadItemInformation element, or a PCF
+   spectrum source list.
+   
+   TODO: Update to use a structure similar to RadItemInformation
+   */
+  std::string source_description_;
+  
+  /** Corresponds to a PCF records spectrum description field.
+   */
+  std::string measurement_description_;
+  
+  //void set_description(const std::string &description)
+  //  void set_source(const std::string &source)
+  
   /** The #LocationState indicates the position, speed, and/or orientation of the instrument,
    detector, or item being measured.  At the moment, only one of these quantities are recorded,
    primarily to reduce complexity since the author hasnt encountered any files that actually
@@ -1177,7 +1280,7 @@ protected:
   std::shared_ptr<const SpecUtils::LocationState> location_;
   
   friend class ::SpecMeas;
-  friend class SpecFile;
+  friend class SpecFile; // bruh...
   friend struct N42DecodeHelper2006;
   friend struct N42DecodeHelper2012;
   friend struct GrossCountNodeDecodeWorker;
@@ -1494,7 +1597,7 @@ public:
   //  number available if that detector does not already have that one or else
   //  its assigned to be one larger sample number - this by no means captures
   //  all use cases, but good enough for now.
-  void add_measurement( std::shared_ptr<Measurement> meas, const bool doCleanup );
+  void add_measurement( std::shared_ptr<Measurement> meas, const bool doCleanup=true );
   
   //remove_measurement(...): removes the measurement from this SpecFile
   //  object and if 'doCleanup' is specified, then all sums will be
@@ -2365,7 +2468,7 @@ protected:
   //measurement(...): converts a const Measurement ptr to a non-const Measurement
   // ptr, as well as checking that the Measurement actually belong to this
   //  SpecFile object. Returns empty pointer on error.
-  std::shared_ptr<Measurement> measurement( std::shared_ptr<const Measurement> meas );
+  std::shared_ptr<Measurement> unconstify_measurement( std::shared_ptr<const Measurement> meas );
   
   //find_detector_names(): looks through measurements_ to find all detector
   //  names.
@@ -2449,7 +2552,7 @@ protected:
   void set_n42_2006_measurement_location_information(
                     const rapidxml::xml_node<char> *measured_item_info_node,
                     std::vector<std::shared_ptr<Measurement>> measurements_applicable );
-
+  
   /** If this SpecFile is calibrated by lower channel energy, then this
    function will write a record (and it should be the first record) to the
    output with title "Energy" and channel counts equal to the energies of the
@@ -2683,6 +2786,12 @@ protected:
 protected:
   /** This mutex protects all member variables. ... keep documenting locking model the retest with fb infer add mutext to Measurement, and a CMake option to turn-off thread safety (and also defaults to off) ... will need to convert return by refernces to return by value for thread safe functions. */
   mutable std::recursive_mutex mutex_;
+
+  /// @brief Allow subclasses to customize measurement class
+  virtual std::shared_ptr<Measurement> make_measurement()
+  {
+      return std::make_shared<Measurement>();
+  }
   
   
 public:
@@ -2904,5 +3013,7 @@ struct MultimediaData
 #endif
 };//struct MultimediaData
 
+  /** Temporary include function for fortran tests to pass. */
+  int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca);
 }//namespace SpecUtils
 #endif  //SpecUtils_SpecFile_h
