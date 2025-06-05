@@ -73,13 +73,23 @@ namespace D3SpectrumExport
   //Legacy function for the moment... makes an entire HTML page for the provided Measurement
   bool write_d3_html( std::ostream &ostr,
                       const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
-                      const D3SpectrumChartOptions &options );
-  
+                      const D3SpectrumChartOptions &options
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                     /// @param base_dir The location of where the JS and CSS files are stored.  You may be able to use D3_SCRIPT_RUNTIME_DIR defined in D3SpectrumExportResources.h
+                      , const std::string &base_dir
+#endif
+                     );
+
   /** Writes the HTML page header (</head> is the last thing written), including
       all JSS and CSS necassary for SpectrumChartD3.
    */
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
   bool write_html_page_header( std::ostream &ostr, const std::string &page_title );
-  
+#else
+  /// @param base_dir The location of where the JS and CSS files are stored.  You may be able to use D3_SCRIPT_RUNTIME_DIR defined in D3SpectrumExportResources.h
+  bool write_html_page_header( std::ostream &ostr, const std::string &page_title, const std::string &base_dir );
+#endif
+
   
   /** Write the javascript for a SpectrumChartD3 that should be displayed in a 
       <div> with id specified by div_name.

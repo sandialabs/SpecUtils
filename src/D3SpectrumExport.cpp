@@ -395,7 +395,11 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
 }
 
 
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
   bool write_html_page_header( std::ostream &ostr, const std::string &title )
+#else
+  bool write_html_page_header( std::ostream &ostr, const std::string &title, const std::string &basdir )
+#endif
   {
     const char *endline = "\r\n";
     
@@ -423,7 +427,6 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
     //could also:
     //ostr << "include(\"" << D3_MIN_JS_FILENAME << "\");" << endline;
     using SpecUtils::append_path;
-    const std::string basdir = D3_SCRIPT_RUNTIME_DIR;
     
     ostr << "<script>" << file_to_string( append_path(basdir, D3_MIN_JS_FILENAME) ) << "</script>" << endline;
     
@@ -682,12 +685,20 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
   
   bool write_d3_html( std::ostream &ostr,
                       const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
-                      const D3SpectrumChartOptions &options )
+                      const D3SpectrumChartOptions &options
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                      , const std::string &base_dir
+#endif
+)
   {
     const char *endline = "\r\n";
-    
+
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
     write_html_page_header( ostr, options.m_title );
-    
+#else
+    write_html_page_header( ostr, options.m_title, base_dir );
+#endif
+
     const string div_id = "chart1";
     
     ostr << "<body><div id=\"" << div_id << "\" class=\"chart\" oncontextmenu=\"return false;\"></div>" << endline;  // Adding the main chart div

@@ -2287,7 +2287,12 @@ public:
   bool write_d3_html( std::ostream &output,
                       const D3SpectrumExport::D3SpectrumChartOptions &options,
                       std::set<int> sample_nums,
-                      std::vector<std::string> det_names ) const;
+                      std::vector<std::string> det_names
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                     /// @param base_dir The location of where the JS and CSS files are stored.  You may be able to use D3_SCRIPT_RUNTIME_DIR defined in D3SpectrumExportResources.h
+                      , const std::string &base_dir
+#endif
+                     ) const;
 #endif
   
 #if( SpecUtils_INJA_TEMPLATES )
