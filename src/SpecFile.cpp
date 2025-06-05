@@ -492,7 +492,7 @@ size_t SpecFile::num_measurements() const
 }//size_t num_measurements() const
 
 
-std::shared_ptr<const Measurement> SpecFile::measurement(
+std::shared_ptr<const Measurement> SpecFile::measurement_at_index(
                                                          size_t num ) const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
@@ -504,6 +504,10 @@ std::shared_ptr<const Measurement> SpecFile::measurement(
   return measurements_[num];
 }
 
+std::shared_ptr<const Measurement> SpecFile::measurement( size_t num ) const
+{
+  return measurement_at_index( num );
+}
 
 DetectorType SpecFile::detector_type() const
 {

@@ -1369,6 +1369,10 @@ public:
   const std::string &instrument_model() const;
   const std::string &instrument_id() const;
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
+  std::shared_ptr<const Measurement> measurement_at_index( size_t num ) const;
+#if __cplusplus >= 201402L
+  [[deprecated( "Replaced by measurement_at_index to remove ambigiuty of calling" )]]
+#endif
   std::shared_ptr<const Measurement> measurement( size_t num ) const;
   std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   const std::vector<std::shared_ptr<const MultimediaData>> &multimedia_data() const;
