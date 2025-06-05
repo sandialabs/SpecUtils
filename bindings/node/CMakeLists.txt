@@ -22,7 +22,9 @@ ENDIF(WIN32)
 
 
 include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
-add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
+endif()
 
 include_directories(${CMAKE_JS_INC})
 set( SOURCE_FILES example.js SpecUtilsJS.h SpecUtilsJS.cpp )
