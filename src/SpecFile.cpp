@@ -69,6 +69,9 @@
 
 #if( SpecUtils_ENABLE_D3_CHART )
 #include "SpecUtils/D3SpectrumExport.h"
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+#include "D3SpectrumExportResources.h"
+#endif
 #endif
 
 #if( SpecUtils_ENABLE_URI_SPECTRA )
@@ -489,7 +492,7 @@ size_t SpecFile::num_measurements() const
 }//size_t num_measurements() const
 
 
-std::shared_ptr<const Measurement> SpecFile::measurement(
+std::shared_ptr<const Measurement> SpecFile::measurement_at_index(
                                                          size_t num ) const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
@@ -501,6 +504,10 @@ std::shared_ptr<const Measurement> SpecFile::measurement(
   return measurements_[num];
 }
 
+std::shared_ptr<const Measurement> SpecFile::measurement( size_t num ) const
+{
+  return measurement_at_index( num );
+}
 
 DetectorType SpecFile::detector_type() const
 {
@@ -7109,7 +7116,11 @@ std::string SpecFile::generate_psuedo_uuid() const
 bool SpecFile::write_d3_html( ostream &ostr,
                               const D3SpectrumExport::D3SpectrumChartOptions &options,
                               std::set<int> sample_nums,
-                              std::vector<std::string> det_names ) const
+                              std::vector<std::string> det_names
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                              , const std::string &base_dir
+#endif
+) const
 {
   try
   {
@@ -7130,8 +7141,12 @@ bool SpecFile::write_d3_html( ostream &ostr,
     vector< pair<const Measurement *,D3SpectrumExport::D3SpectrumOptions> > measurements;
     D3SpectrumExport::D3SpectrumOptions spec_options;
     measurements.push_back( pair<const Measurement *,::D3SpectrumExport::D3SpectrumOptions>(summed.get(),spec_options) );
-    
+
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
     return D3SpectrumExport::write_d3_html( ostr, measurements, options );
+#else
+    return D3SpectrumExport::write_d3_html( ostr, measurements, options, base_dir );
+#endif
   }catch( std::exception & )
   {
      return false;
@@ -8951,7 +8966,12 @@ void SpecFile::write( std::ostream &strm,
     case SaveSpectrumAsType::HtmlD3:
     {
       D3SpectrumExport::D3SpectrumChartOptions options;
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
       success = info.write_d3_html( strm, options, samples, info.detector_names_ );
+#else
+      // TODO: we should probably fix defaulting to `D3_SCRIPT_RUNTIME_DIR` to specify the JS/CSS source dir
+      success = info.write_d3_html( strm, options, samples, info.detector_names_, D3_SCRIPT_RUNTIME_DIR );
+#endif
       break;
     }
 #endif

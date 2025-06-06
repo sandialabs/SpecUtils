@@ -1369,6 +1369,10 @@ public:
   const std::string &instrument_model() const;
   const std::string &instrument_id() const;
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
+  std::shared_ptr<const Measurement> measurement_at_index( size_t num ) const;
+#if __cplusplus >= 201402L
+  [[deprecated( "Replaced by measurement_at_index to remove ambigiuty of calling" )]]
+#endif
   std::shared_ptr<const Measurement> measurement( size_t num ) const;
   std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   const std::vector<std::shared_ptr<const MultimediaData>> &multimedia_data() const;
@@ -2287,7 +2291,12 @@ public:
   bool write_d3_html( std::ostream &output,
                       const D3SpectrumExport::D3SpectrumChartOptions &options,
                       std::set<int> sample_nums,
-                      std::vector<std::string> det_names ) const;
+                      std::vector<std::string> det_names
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                     /// @param base_dir The location of where the JS and CSS files are stored.  You may be able to use D3_SCRIPT_RUNTIME_DIR defined in D3SpectrumExportResources.h
+                      , const std::string &base_dir
+#endif
+                     ) const;
 #endif
   
 #if( SpecUtils_INJA_TEMPLATES )
