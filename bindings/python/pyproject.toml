@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "SandiaSpecUtils"
-version = "0.0.5"
+version = "0.0.6"
 description = "Python bindings for SpecUtils using nanobind and scikit-build"
 readme = "README.md"
 requires-python = ">=3.9"
