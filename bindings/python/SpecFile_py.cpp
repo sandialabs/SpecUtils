@@ -1466,6 +1466,15 @@ py::enum_<SpecUtils::EnergyCalType>(m, "EnergyCalType")
     .value("UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial)
     .export_values();
 
+  py::enum_<SpecUtils::Measurement::DerivedDataProperties>(m, "DerivedDataProperties")
+    .value("IsDerived", SpecUtils::Measurement::DerivedDataProperties::IsDerived)
+    .value("ItemOfInterestSum", SpecUtils::Measurement::DerivedDataProperties::ItemOfInterestSum)
+    .value("UsedForAnalysis", SpecUtils::Measurement::DerivedDataProperties::UsedForAnalysis)
+    .value("ProcessedFurther", SpecUtils::Measurement::DerivedDataProperties::ProcessedFurther)
+    .value("BackgroundSubtracted", SpecUtils::Measurement::DerivedDataProperties::BackgroundSubtracted)
+    .value("IsBackground", SpecUtils::Measurement::DerivedDataProperties::IsBackground)
+    .export_values();
+
 
 //disambiguate the set_lower_channel_energy function, from its overload
 void (SpecUtils::EnergyCalibration::*set_lower_channel_energy_fcn_ptr)( const size_t, const std::vector<float> & ) = &SpecUtils::EnergyCalibration::set_lower_channel_energy;
@@ -1597,6 +1606,7 @@ m.def("polynomialCoefToFullRangeFraction",
     .def( "gammaChannelCounts", &gamma_counts_wrapper )
     .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
     .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
+    .def( "derivedDataProperties", &SpecUtils::Measurement::derived_data_properties )
     
     // Functionst to create new Measurment objects
     .def( "clone", &makeCopy_wrapper )
