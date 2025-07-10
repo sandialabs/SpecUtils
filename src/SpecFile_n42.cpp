@@ -575,14 +575,19 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       
     case SpecUtils::DetectorType::MicroRaider:
     case SpecUtils::DetectorType::Interceptor:
+    case SpecUtils::DetectorType::KromekGR1:
       det_kind = "CZT";
       break;
       
     case SpecUtils::DetectorType::KromekD3S:
     case SpecUtils::DetectorType::RadiaCode:
+    case SpecUtils::DetectorType::Raysid:
       det_kind = "CsI";
       break;
-      
+
+    case SpecUtils::DetectorType::KromekD5:
+      det_kind = "CLLBC";
+
     case SpecUtils::DetectorType::Unknown:
     {
       const string &manufacturer = sf.manufacturer();

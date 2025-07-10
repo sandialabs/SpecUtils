@@ -1422,6 +1422,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
   static const string sm_KromekD3S                    = "Kromek D3S";
+  static const string sm_KromekGR1                    = "Kromek GR1";
+  static const string sm_KromekD5                     = "Kromek D5";
+  static const string sm_Raysid                       = "Raysid";
   static const string sm_Fulcrum                      = "Fulcrum";
   static const string sm_Fulcrum40h                   = "Fulcrum-40h";
   static const string sm_Sam950                       = "Sam-950";
@@ -1519,6 +1522,12 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderLaBr;
     case DetectorType::KromekD3S:
       return sm_KromekD3S;
+    case DetectorType::KromekD5:
+      return sm_KromekD5;
+    case DetectorType::KromekGR1:
+      return sm_KromekGR1;
+    case DetectorType::Raysid:
+      return sm_Raysid;
     case DetectorType::Fulcrum:
       return sm_Fulcrum;
     case DetectorType::Fulcrum40h:
@@ -6546,21 +6555,39 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
   
   
-  if( icontains( manufacturer_,"Kromek" ) )
+  if( icontains(manufacturer_, "Kromek") || icontains(model, "Kromek") )
   {
     // I've seen manufacturer name be either "Kromek" or "Kromek Ltd"
     
-    if( istarts_with(instrument_model_,"D3") || iequals_ascii(instrument_model_,"D3S") )
+    if( icontains(model,"D3") || icontains(model,"D3S") )
     {
       //Have seen model strings: "D3", "D3S", "D3S 2.02"
       detector_type_ = DetectorType::KromekD3S;
       return;
     }
-    
+
+    if( icontains(model,"D5") )
+    {
+      detector_type_ = DetectorType::KromekD5;
+      return;
+    }
+
+    if( icontains(model,"GR1") )
+    {
+      detector_type_ = DetectorType::KromekGR1;
+      return;
+    }
+
     //Other Kromek instrument models I've seem: "MultiSpect/KSpect"
   }//if( icontains( manufacturer_,"Kromek" ) )
-  
-  
+
+
+  if( icontains(instrument_model_,"Raysid") )
+  {
+    detector_type_ = DetectorType::Raysid;
+    return;
+  }
+
   if( iequals_ascii(instrument_type_,"PVT Portal") && iequals_ascii(manufacturer_,"SAIC") )
   {
     detector_type_ = DetectorType::SAIC8;

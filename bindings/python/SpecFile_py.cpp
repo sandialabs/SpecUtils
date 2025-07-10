@@ -1401,6 +1401,9 @@ py::enum_<SpecUtils::DetectorType>(m, "DetectorType")
   .value("Fulcrum", SpecUtils::DetectorType::Fulcrum)
   .value("Fulcrum40h", SpecUtils::DetectorType::Fulcrum40h)
   .value("Sam950", SpecUtils::DetectorType::Sam950)
+  .value("Raysid", SpecUtils::DetectorType::Raysid)
+  .value("KromekGR1", SpecUtils::DetectorType::KromekGR1)
+  .value("KromekD5", SpecUtils::DetectorType::KromekD5)
   .value("Unknown", SpecUtils::DetectorType::Unknown);
 
 

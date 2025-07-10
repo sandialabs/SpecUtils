@@ -343,6 +343,10 @@ enum class DetectorType : int
   MicroRaider,
   /** Scan-Electronics RadiaCode-10x detector with CsI(Tl) scintillator */
   RadiaCode,
+
+  /** Raysid 5cm³ CsI/Tl detector */
+  Raysid,
+
   Interceptor,
   RadHunterNaI,
   RadHunterLaBr3,
@@ -375,7 +379,13 @@ enum class DetectorType : int
   
   /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
   KromekD3S,
-  
+
+  /** The Kromek D5 detector with 1.5x1.5 CLLBC detector */
+  KromekD5,
+
+  /** The Kromek GR1 detector with 1cm3 CZT detector */
+  KromekGR1,
+
   /** PHDS Fulcrum; HPGe 12% efficient (rel. to 3x3 NaI)  handheld detector. */
   Fulcrum,
   
@@ -385,7 +395,7 @@ enum class DetectorType : int
   /** BNC SAM-950 detector.  There are 1.5x1.5, 2x2, 3x3 NaI variants, as well as LaBr3 2x2, and CeBr3 2x2, but
    these are not currently differentiated because I havent seen example files of them.
    
-   Also not: The BNC SAMpack may erroneously claim to be a SAM-950 detector, so will get this DetectorType ID applied.
+   Also note: The BNC SAMpack may erroneously claim to be a SAM-950 detector, so will get this DetectorType ID applied.
    */
   Sam950,
   
