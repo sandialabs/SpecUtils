@@ -6848,6 +6848,22 @@ void SpecFile::set_detector_type_from_other_info()
     return;
   }//if( icontains(instrument_model_, "Fulcrum") )
   
+  if( icontains(instrument_model_, "RadiaCode") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    return;
+  }
+  
+  if( icontains(instrument_model_, "Raysid") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "IN-NEW";
+    detector_type_ = SpecUtils::DetectorType::Raysid;
+    return;
+  }
+  
   
   if( manufacturer_.size() || instrument_model_.size() )
   {
@@ -6866,7 +6882,6 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
        && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
        && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
-       && !(manufacturer_=="Scan-Electronics" && instrument_model_=="RadiaCode-102")
        && !(manufacturer_=="Unknown" && instrument_model_=="Unknown")
        && !icontains( manufacturer_, "RIDs R Us")
        && !icontains( manufacturer_, "SRPMs R Us")
