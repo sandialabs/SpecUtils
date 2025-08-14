@@ -1400,7 +1400,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_UnknownDetectorStr           = "Unknown";
   static const string sm_MicroDetectiveDetectorStr    = "MicroDetective";
   static const string sm_MicroRaiderDetectorStr       = "MicroRaider";
-  static const string sm_RadiaCodeDetectorStr         = "RadiaCode-102";
+  static const string sm_RadiaCodeDetectorStr         = "RadiaCode-10X";
   static const string sm_InterceptorStr               = "Interceptor";
   static const string sm_Sam940DetectorStr            = "SAM940";
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
@@ -1432,7 +1432,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
-//  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger, RadiaCode-102
+//  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger, RadiaCode-10X
 //  MicroDetective, FieldSpec, IdentiFINDER-NG, SAM-935, NaI 3x3, SAM-Eagle-LaBr3
 
   switch( type )
@@ -1478,7 +1478,7 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_MicroDetectiveDetectorStr;
     case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
-    case DetectorType::RadiaCode:
+    case DetectorType::RadiaCodeCsI10:
       return sm_RadiaCodeDetectorStr;
     case DetectorType::Interceptor:
       return sm_InterceptorStr;
@@ -5619,7 +5619,7 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
          && meas->real_time() > 0.00000001
          && !meas->derived_data_properties()  //make sure not derived data
          && ((meas->real_time() < 15.0)   //20181108: some search systems will take one spectra every like ~10 seconds
-             || ((detector_type_ == SpecUtils::DetectorType::RadiaCode) // Radiacode detectors can take like 30 second spectra
+             || ((detector_type_ == SpecUtils::DetectorType::RadiaCodeCsI10) // Radiacode detectors can take like 30 second spectra
                  && (meas->real_time() < 125.0)) ) )
       {
         ++pt_num_items;
@@ -6852,7 +6852,7 @@ void SpecFile::set_detector_type_from_other_info()
   {
     if( manufacturer_.empty() )
       manufacturer_ = "Scan-Electronics";
-    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
     return;
   }
   

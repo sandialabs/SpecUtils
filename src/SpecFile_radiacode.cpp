@@ -443,7 +443,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
     {
       instrument_type_ = "Spectroscopic Personal Radiation Detector";
       manufacturer_ = "Scan-Electronics";
-      detector_type_ = SpecUtils::DetectorType::RadiaCode;
+      detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
     }else
     {
       // File probably made with BecqMoni
@@ -726,7 +726,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     
     instrument_type_ = "Spectroscopic Personal Radiation Detector";
     manufacturer_ = "Scan-Electronics";
-    detector_type_ = SpecUtils::DetectorType::RadiaCode;
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
     
     cleanup_after_load();
   }catch( std::exception & )

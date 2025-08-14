@@ -580,7 +580,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       break;
       
     case SpecUtils::DetectorType::KromekD3S:
-    case SpecUtils::DetectorType::RadiaCode:
+    case SpecUtils::DetectorType::RadiaCodeCsI10:
     case SpecUtils::DetectorType::Raysid:
       det_kind = "CsI";
       break;

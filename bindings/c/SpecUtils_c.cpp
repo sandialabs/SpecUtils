@@ -221,8 +221,8 @@ static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_MicroDetec
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_MicroRaider) 
               == static_cast<int>(SpecUtils::DetectorType::MicroRaider),
               "SpecUtils_DetectorType needs updating" );
-static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_RadiaCode) 
-              == static_cast<int>(SpecUtils::DetectorType::RadiaCode),
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_RadiaCodeCsI10)
+              == static_cast<int>(SpecUtils::DetectorType::RadiaCodeCsI10),
               "SpecUtils_DetectorType needs updating" );
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Interceptor) 
               == static_cast<int>(SpecUtils::DetectorType::Interceptor),

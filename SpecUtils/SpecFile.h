@@ -342,7 +342,7 @@ enum class DetectorType : int
   MicroDetective,
   MicroRaider,
   /** Scan-Electronics RadiaCode-10x detector with CsI(Tl) scintillator */
-  RadiaCode,
+  RadiaCodeCsI10,
 
   /** Raysid 5cm³ CsI/Tl detector */
   Raysid,
