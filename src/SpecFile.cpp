@@ -1400,7 +1400,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_UnknownDetectorStr           = "Unknown";
   static const string sm_MicroDetectiveDetectorStr    = "MicroDetective";
   static const string sm_MicroRaiderDetectorStr       = "MicroRaider";
-  static const string sm_RadiaCodeDetectorStr         = "RadiaCode-10X";
+  static const string sm_RadiaCode10XDetectorStr      = "RadiaCode-10X";
+  static const string sm_RadiaCode110DetectorStr      = "RadiaCode-110";
+  static const string sm_RadiaCode103GDetectorStr     = "RadiaCode-103G";
   static const string sm_InterceptorStr               = "Interceptor";
   static const string sm_Sam940DetectorStr            = "SAM940";
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
@@ -1479,7 +1481,11 @@ const std::string &detectorTypeToString( const DetectorType type )
     case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
     case DetectorType::RadiaCodeCsI10:
-      return sm_RadiaCodeDetectorStr;
+      return sm_RadiaCode10XDetectorStr;
+    case DetectorType::RadiaCodeCsI14:
+      return sm_RadiaCode103GDetectorStr;
+    case DetectorType::RadiaCodeGAGG10:
+      return sm_RadiaCode10XDetectorStr;
     case DetectorType::Interceptor:
       return sm_InterceptorStr;
     case DetectorType::Sam940:
@@ -5619,7 +5625,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
          && meas->real_time() > 0.00000001
          && !meas->derived_data_properties()  //make sure not derived data
          && ((meas->real_time() < 15.0)   //20181108: some search systems will take one spectra every like ~10 seconds
-             || ((detector_type_ == SpecUtils::DetectorType::RadiaCodeCsI10) // Radiacode detectors can take like 30 second spectra
+             // Radiacode detectors can take spectra over many seconds or minutes
+             || (((detector_type_ == SpecUtils::DetectorType::RadiaCodeCsI10)
+             || (detector_type_ == SpecUtils::DetectorType::RadiaCodeCsI10)
+             || (detector_type_ == SpecUtils::DetectorType::RadiaCodeGAGG10))
                  && (meas->real_time() < 125.0)) ) )
       {
         ++pt_num_items;
@@ -6847,7 +6856,23 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::Fulcrum;
     return;
   }//if( icontains(instrument_model_, "Fulcrum") )
-  
+
+  if( icontains(instrument_model_, "RadiaCode-103G") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeGAGG10;
+    return;
+  }
+
+  if( icontains(instrument_model_, "RadiaCode-110") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI14;
+    return;
+  }
+
   if( icontains(instrument_model_, "RadiaCode") )
   {
     if( manufacturer_.empty() )

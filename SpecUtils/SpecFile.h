@@ -341,8 +341,12 @@ enum class DetectorType : int
   Falcon5000,
   MicroDetective,
   MicroRaider,
-  /** Scan-Electronics RadiaCode-10x detector with CsI(Tl) scintillator */
+  /** Scan-Electronics RadiaCode-10x detector with 10x10x10mm CsI(Tl) scintillator */
   RadiaCodeCsI10,
+  /** Scan-Electronics RadiaCode-110 detector with 14x14x14mm CsI(Tl) scintillator */
+  RadiaCodeCsI14,
+  /** Scan-Electronics RadiaCode-103G detector with 10x10x10mm GAGG scintillator */
+  RadiaCodeGAGG10,
 
   /** Raysid 5cm³ CsI/Tl detector */
   Raysid,
@@ -1771,6 +1775,7 @@ public:
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
   bool load_radiacode_file( const std::string &filename );
+  bool guess_detector_from_radiacode_model( void );
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
   bool load_caen_gxml_file(const std::string& filename);

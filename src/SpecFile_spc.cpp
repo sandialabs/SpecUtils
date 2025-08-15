@@ -1389,6 +1389,8 @@ bool SpecFile::write_binary_spc( std::ostream &output,
     case DetectorType::KromekGR1:
     case DetectorType::KromekD5:
     case DetectorType::RadiaCodeCsI10:
+    case DetectorType::RadiaCodeCsI14:
+    case DetectorType::RadiaCodeGAGG10:
     case DetectorType::Fulcrum:
     case DetectorType::Fulcrum40h:
     case DetectorType::Sam950:

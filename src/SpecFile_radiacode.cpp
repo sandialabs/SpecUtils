@@ -67,6 +67,28 @@ namespace
 
 namespace SpecUtils {
 
+// there are at least two places where this logic is done, make it a function
+bool SpecFile::guess_detector_from_radiacode_model(void){
+    if( icontains( instrument_model_, "RadiaCode-103G" ) ) {
+      instrument_type_ = "Spectroscopic Personal Radiation Detector";
+      manufacturer_ = "Scan-Electronics";
+      detector_type_ = SpecUtils::DetectorType::RadiaCodeGAGG10;
+      return true;
+    } else if( icontains( instrument_model_, "RadiaCode-110" ) ) {
+      instrument_type_ = "Spectroscopic Personal Radiation Detector";
+      manufacturer_ = "Scan-Electronics";
+      detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI14;
+      return true;
+    } else if( icontains( instrument_model_, "RadiaCode-" ) ) {
+      instrument_type_ = "Spectroscopic Personal Radiation Detector";
+      manufacturer_ = "Scan-Electronics";
+      detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
+      return true;
+    } else {
+      return false;
+    }
+} // bool SpecFile::guess_detector_from_radiacode_model(void)
+
 bool SpecFile::load_radiacode_file(const std::string& filename) {
 #ifdef _WIN32
   ifstream input(convert_from_utf8_to_utf16(filename).c_str(),
@@ -438,17 +460,9 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
         }
       }//if( background_node )
     }//XML_FOREACH_CHILD( n_root, data_list_node, "ResultData" )
-    
-    if( icontains( instrument_model_, "RadiaCode-" ) )
-    {
-      instrument_type_ = "Spectroscopic Personal Radiation Detector";
-      manufacturer_ = "Scan-Electronics";
-      detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
-    }else
-    {
-      // File probably made with BecqMoni
-    }
-    
+
+    guess_detector_from_radiacode_model();
+
     cleanup_after_load();
   }catch( std::exception & )
   {
@@ -558,7 +572,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     uint64_t last_timestamp = timestamp;
     size_t skipped_lines = 0, total_lines = 0;
     string line;
-	bool line_warning = true;
+	  bool line_warning = true;
     while( safe_get_line(input, line, 64*1024) )
     {
       total_lines += 1;
@@ -724,9 +738,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     if( !comment.empty() )
       remarks_.push_back( "Comment: " + comment );
     
-    instrument_type_ = "Spectroscopic Personal Radiation Detector";
-    manufacturer_ = "Scan-Electronics";
-    detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
+    guess_detector_from_radiacode_model();
     
     cleanup_after_load();
   }catch( std::exception & )
