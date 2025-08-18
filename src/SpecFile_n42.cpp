@@ -580,9 +580,15 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
       break;
       
     case SpecUtils::DetectorType::KromekD3S:
-    case SpecUtils::DetectorType::RadiaCode:
+    case SpecUtils::DetectorType::RadiaCodeCsI10:
+    case SpecUtils::DetectorType::RadiaCodeCsI14:
     case SpecUtils::DetectorType::Raysid:
       det_kind = "CsI";
+      break;
+
+    // GAGG (gadolinium aluminum gallium garnet) is not defined in my copy of N42, but neither is CLLBC
+    case SpecUtils::DetectorType::RadiaCodeGAGG10:
+      det_kind = "GAGG";
       break;
 
     case SpecUtils::DetectorType::KromekD5:
