@@ -6,7 +6,7 @@ project( SpecUtilsJS )
 # cmake-js --CDSpecUtils_FLT_PARSE_METHOD="strtod" --CDCMAKE_BUILD_TYPE="Release"
 # cmake-js build --target install
 
-cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5.0 FATAL_ERROR)
 
 set( CMAKE_CXX_STANDARD 11 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
@@ -22,9 +22,7 @@ ENDIF(WIN32)
 
 
 include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
-if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-  add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
-endif()
+add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
 
 include_directories(${CMAKE_JS_INC})
 set( SOURCE_FILES example.js SpecUtilsJS.h SpecUtilsJS.cpp )

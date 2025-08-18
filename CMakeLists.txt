@@ -19,14 +19,12 @@ option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
 option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
-option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
-option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
-option( SpecUtils_NODE_BINDINGS "Creates node bindings to the node code" OFF )
+option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 
 
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
@@ -94,21 +92,6 @@ endif( MSVC AND SpecUtils_BUILD_UNIT_TESTS )
 if( SpecUtils_BUILD_EXAMPLE )
   add_subdirectory( examples )
 endif( SpecUtils_BUILD_EXAMPLE )
-
-if( SpecUtils_JAVA_SWIG )
-  FIND_PACKAGE( SWIG REQUIRED )
-  FIND_PACKAGE( JNI REQUIRED )
-  INCLUDE( ${SWIG_USE_FILE} )
-  INCLUDE_DIRECTORIES( ${JAVA_INCLUDE_PATH} )
-  INCLUDE_DIRECTORIES( ${JAVA_INCLUDE_PATH}/linux )
-  INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR}/bindings/swig )
-  SET( CMAKE_SWIG_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR} -DSpecUtils_JAVA_SWIG=1 -package gov.sandia.specutils )
-  SET( CMAKE_SWIG_OUTDIR gov/sandia/specutils )
-  SET_SOURCE_FILES_PROPERTIES(bindings/swig/SpecUtils.i PROPERTIES CPLUSPLUS ON)
-  SET_SOURCE_FILES_PROPERTIES(bindings/swig/SpecUtils.i PROPERTIES SWIG_FLAGS "")
-  SWIG_ADD_MODULE( SpecUtilsJni java bindings/swig/SpecUtils.i )
-  SWIG_LINK_LIBRARIES( SpecUtilsJni ${JAVA_LIBRARIES} SpecUtils )
-endif( SpecUtils_JAVA_SWIG )
 
 
 set( THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty" )
@@ -239,9 +222,7 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
   find_package( ZLIB REQUIRED )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
-if( SpecUtils_JAVA_SWIG )
-  list( APPEND sources bindings/swig/SpecUtils.i )
-endif( SpecUtils_JAVA_SWIG )
+
 
 if( SpecUtils_C_BINDINGS )
   list( APPEND headers bindings/c/SpecUtils_c.h )
@@ -254,15 +235,14 @@ else( SpecUtils_SHARED_LIB )
   set( SpecUtils_LIB_TYPE STATIC )
 endif( SpecUtils_SHARED_LIB )
 
-if ( NOT SpecUtils_SHARED_LIB )
-  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-endif()
 
 add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
+set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
+
 set( SpecUtils_USE_FAST_FLOAT OFF )   # Uses https://github.com/fastfloat/fast_float .  If fast_float.h isnt found, will be fetched
-set( SpecUtils_USE_FROM_CHARS OFF )   # Supported by MSVC >= 2019, and gcc >= 12.  Not supported by Apple clang. In MSVC, about 50% slower than boost::spirit
+set( SpecUtils_USE_FROM_CHARS OFF )   # Supported by MSVC >= 2019, and gcc >= 12.  Only supported by Apple if targeting macOS 10.15 or newer. In MSVC, about 50% slower than boost::spirit
 set( SpecUtils_USE_BOOST_SPIRIT OFF ) # Uses boost::spirit, and fasted method (maybe a hair faster than fastfloat)
 set( SpecUtils_USE_STRTOD OFF )       # Slowest method, but works
 
@@ -337,7 +317,7 @@ endif( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS )
 
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
-    # MSVC >=2019 supports floating point from_chars, while Xcode 14 still doesnt (havent checked Android Studio)
+    # MSVC >=2019 supports floating point from_chars, while for macOS you need to target macOS 10.15 or later
     message("Please double check your compiler does actually support std::from_chars for parsing floats")
   endif()
 
@@ -384,10 +364,6 @@ if( SpecUtils_ENABLE_URI_SPECTRA )
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
 
-if( SpecUtils_JAVA_SWIG )
-  target_link_libraries( SpecUtils PUBLIC ${JAVA_LIBRARIES} )
-endif( SpecUtils_JAVA_SWIG )
-
 
 if( MINGW )
   target_link_libraries( SpecUtils PUBLIC -static-libgcc -static libshlwapi.a libpthread.a libstdc++.a libwinpthread.a libmsvcrt.a )
@@ -397,17 +373,6 @@ elseif( WIN32 )
   #target_link_libraries( SpecUtils PUBLIC "Pathcch.lib" "Shlwapi.lib" )
   target_link_libraries( SpecUtils PUBLIC "Shlwapi.lib" )
 endif( MINGW )
-
-if( SpecUtils_NODE_BINDINGS )
-  add_custom_target (
-          npm-install
-          ALL
-          COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/bindings/node && npm install node-addon-api && npm install cmake-js
-  )
-  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bindings/node/node_modules/node-addon-api/external-napi)
-  link_directories(${CMAKE_CURRENT_BINARY_DIR})
-  add_subdirectory( bindings/node )
-endif()
 
 target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
                             PRIVATE ${THIRD_PARTY_DIR} )

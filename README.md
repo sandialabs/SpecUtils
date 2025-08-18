@@ -48,9 +48,21 @@ int main() {
 ### Relevant CMake Build options
 * **SpecUtils_ENABLE_D3_CHART** [default ON]: Enabling this feature allows exporting specta to a [D3.js](https://d3js.org/) based plotting that allows viewing and interacting with the spectra in a web browser.  An example can be seen [here](examples/d3_chart_example/self_contained_example.html).
 	* **SpecUtils_D3_SUPPORT_FILE_STATIC** [default ON]: Only relevant if *SpecUtils_ENABLE_D3_CHART* is *ON*.  This option determines if all the JavaScript (including D3.js, SpectrumChartD3.js, etc) and CSS should be compiled into the library, or remain as seperate files accessed at runtime.
-* **SpecUtils_PYTHON_BINDINGS** [default OFF]: Determines if the Python bindings should be built.  [Boost.Python](https://www.boost.org/doc/libs/1_69_0/libs/python/doc/html/index.html) is used to generate the bindings.  Have a look in [test_python.py](bindings/python/test_python.py) for example use of **SpecUtils** from python.
-* **SpecUtils_JAVA_SWIG** [default OFF]:  Determines if the Java bindings should be built.  [SWIG](https://www.swig.org/) is used to generate the bindings, and an example application using them is in [bindings/swig/java_example/](bindings/swig/java_example/) directory.
-* **PERFORM_DEVELOPER_CHECKS** [default OFF]: Performs additional tests during program execution, with failed tests being output to a log file.
+* **SpecUtils_ENABLE_URI_SPECTRA** [default OFF]: Adds support for [URI-based-spectra](https://sandialabs.github.io/InterSpec/tutorials/references/spectrum_in_a_qr_code_uur_latest.pdf), such as you might find in QR-codes.  Requires linking against zlib.
+* **SpecUtils_FLT_PARSE_METHOD** : How to parse floating point numbers from text files; options are `FastFloat`, `FromChars`, `boost`, `strtod`.  `Boost` is the fastest method (but requires having boost installed), with `strtod` the slowest but most widely supported.
+* **PERFORM_DEVELOPER_CHECKS** [default OFF]: Performs additional tests during program execution, with failed tests being output to a log file; you normally want these off because they can be slow.  Turning this option on also requires linking to `boost`.
+* **SpecUtils_SHARED_LIB** [default OFF]: Whether to compile a shared library, or static library.
+
+## Bindings to other languages
+`SpecUtils` has explicit bindings to `Python`, `Java`, `Node`, and `C`, with the `C` known to be used from `C`, `Fortran`, and `Rust`.  
+
+To one of these bindings:
+* `Python`: The [nanobind](https://github.com/wjakob/nanobind) library is used to create these binding.  To use a pre-compiled version via `pip`, see https://pypi.org/project/SandiaSpecUtils/ . If you would like to compile the bindings yourself, see [bindings/python/README.md](bindings/python/README.md). Some example uses are available in [bindings/python/examples](bindings/python/examples).
+* `Node`: The [node-addon-api](https://www.npmjs.com/package/node-addon-api) and [cmake-js](https://www.npmjs.com/package/cmake-js) packages are used to create these bindings; see [bindings/node/README.md](bindings/node/README.md) for instructions on compiling.  An example use is in [example.js](bindings/node/example.js).
+* `Java`: The [SWIG](https://www.swig.org) package is used to create these bindings, and could likely be used for other languages. See [bindings/swig/README.md](bindings/swig/README.md) for compilation instructions.  An example use of `SpecUtils` from java is included in the bindings directory.
+* `C`: These bindings are hand-written, and can be included when building `SpecUtils` by specifying the `SpecUtils_C_BINDINGS` CMake option to `ON`.  There is an example use of C interface in [examples/c_interface_example.c](c_interface_example.c).
+
+
 
 ## Features
 * Parses &gt;100 spectrum file format variants.
@@ -64,12 +76,13 @@ int main() {
 * Tools to help rebin, re-calibrate, truncate, and combine spectra.
 * And more!
 
+
 ## Testing
 This library uses a few methods to test the code, but unfortunately still likely contains bugs or issues, especially related to specific file format variants.
 
 The testing methods are:
 * Peppered throughout the code there are `#if( PERFORM_DEVELOPER_CHECKS )` statements that perform additional tests at runtime that make sure the correct answer was computed or action taken.  Most of these blocks of code will either recompute a quantity using an independent implementation, or in someway perform additional sanity checks, and when issues are found, they are logged to a file for fixing in the future.  This seems to work well as the primary developer of this library uses the library heavily.
-* An assortment of unit tests have been created and are occasionally run, but by no means offer anywhere near 100% coverage.  Since many of the test contain proprietary data, they are not all distributed with the library.
+* An assortment of unit tests are avaiable in [unit_tests](unit_tests) and are ran as part of the CI/CD, but do not offer 100% coverage.
 * As the primary developer of this library comes across new file formats, or new variants of file formats, they get added to a library after manually verifying they are parsed sufficiently well.  Then [regression_test/regression_test.cpp](regression_test/regression_test.cpp) is used to ensure the files continue to be parsed exactly the same as when they were manually verified.  Any changes to the information extracted from these files will then be manually verified to be an improvement to the parsing (like adding the ability to extract GPS coordinates from a format), or the issue will be corrected.  This helps keep regressions from occurring.  A keystone piece to this testing is that all information extracted from any file format can be written out to a N42-2012 file; when this N42-2012 file is read back in, the exact same information is available as from the original file (this property is of course also tested for).
 * [Fuzz testing](fuzz_test/) is periodically performed.
 * Near daily use to parse a wide variety of formats by the primary developer, as well as use by users of the applications built against SpecUtils.
