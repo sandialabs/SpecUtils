@@ -63,9 +63,36 @@ namespace
     
     return static_cast<float>(live_time);
   };//float estimate_radiacode102_live_time( const float real_time, const double total_counts )
+
+
+  bool guess_detector_from_radiacode_model( const std::string &instrument_model,
+                                                     std::string &instrument_type,
+                                                     std::string &manufacturer,
+                                                     SpecUtils::DetectorType &detector_type )
+  {
+    if( SpecUtils::icontains( instrument_model, "RadiaCode-103G" ) ) {
+      instrument_type = "Spectroscopic Personal Radiation Detector";
+      manufacturer = "Scan-Electronics";
+      detector_type = SpecUtils::DetectorType::RadiaCodeGAGG10;
+      return true;
+    } else if( SpecUtils::icontains( instrument_model, "RadiaCode-110" ) ) {
+      instrument_type = "Spectroscopic Personal Radiation Detector";
+      manufacturer = "Scan-Electronics";
+      detector_type = SpecUtils::DetectorType::RadiaCodeCsI14;
+      return true;
+    } else if( SpecUtils::icontains( instrument_model, "RadiaCode-" ) ) {
+      instrument_type = "Spectroscopic Personal Radiation Detector";
+      manufacturer = "Scan-Electronics";
+      detector_type = SpecUtils::DetectorType::RadiaCodeCsI10;
+      return true;
+    }
+
+    return false;
+} // bool SpecFile::guess_detector_from_radiacode_model(...)
 }//namespace
 
-namespace SpecUtils {
+namespace SpecUtils
+{
 
 bool SpecFile::load_radiacode_file(const std::string& filename) {
 #ifdef _WIN32
@@ -438,17 +465,9 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
         }
       }//if( background_node )
     }//XML_FOREACH_CHILD( n_root, data_list_node, "ResultData" )
-    
-    if( icontains( instrument_model_, "RadiaCode-" ) )
-    {
-      instrument_type_ = "Spectroscopic Personal Radiation Detector";
-      manufacturer_ = "Scan-Electronics";
-      detector_type_ = SpecUtils::DetectorType::RadiaCode;
-    }else
-    {
-      // File probably made with BecqMoni
-    }
-    
+
+    guess_detector_from_radiacode_model( instrument_model_, instrument_type_, manufacturer_, detector_type_ );
+
     cleanup_after_load();
   }catch( std::exception & )
   {
@@ -558,7 +577,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     uint64_t last_timestamp = timestamp;
     size_t skipped_lines = 0, total_lines = 0;
     string line;
-	bool line_warning = true;
+	  bool line_warning = true;
     while( safe_get_line(input, line, 64*1024) )
     {
       total_lines += 1;
@@ -724,10 +743,8 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
     if( !comment.empty() )
       remarks_.push_back( "Comment: " + comment );
     
-    instrument_type_ = "Spectroscopic Personal Radiation Detector";
-    manufacturer_ = "Scan-Electronics";
-    detector_type_ = SpecUtils::DetectorType::RadiaCode;
-    
+    guess_detector_from_radiacode_model( instrument_model_, instrument_type_, manufacturer_, detector_type_ );
+
     cleanup_after_load();
   }catch( std::exception & )
   {

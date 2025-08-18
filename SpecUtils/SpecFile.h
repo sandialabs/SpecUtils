@@ -341,8 +341,12 @@ enum class DetectorType : int
   Falcon5000,
   MicroDetective,
   MicroRaider,
-  /** Scan-Electronics RadiaCode-10x detector with CsI(Tl) scintillator */
-  RadiaCode,
+  /** Scan-Electronics RadiaCode-10x detector with 10x10x10mm CsI(Tl) scintillator */
+  RadiaCodeCsI10,
+  /** Scan-Electronics RadiaCode-110 detector with 14x14x14mm CsI(Tl) scintillator */
+  RadiaCodeCsI14,
+  /** Scan-Electronics RadiaCode-103G detector with 10x10x10mm GAGG scintillator */
+  RadiaCodeGAGG10,
 
   /** Raysid 5cm³ CsI/Tl detector */
   Raysid,
