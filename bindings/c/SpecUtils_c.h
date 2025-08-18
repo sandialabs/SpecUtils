@@ -459,6 +459,8 @@ enum SpecUtils_DetectorType
   SpecUtils_Det_DetectiveEx, SpecUtils_Det_DetectiveEx100, SpecUtils_Det_DetectiveEx200,
   SpecUtils_Det_DetectiveX, SpecUtils_Det_SAIC8, SpecUtils_Det_Falcon5000,
   SpecUtils_Det_MicroDetective, SpecUtils_Det_MicroRaider,
+  SpecUtils_Det_RadiaCodeCsI10, SpecUtils_Det_RadiaCodeCsI14, SpecUtils_Det_RadiaCodeGAGG10,
+  SpecUtils_Det_Raysid,
   SpecUtils_Det_Interceptor, SpecUtils_Det_RadHunterNaI,
   SpecUtils_Det_RadHunterLaBr3, SpecUtils_Det_Rsi701, SpecUtils_Det_Rsi705,
   SpecUtils_Det_AvidRsi, SpecUtils_Det_OrtecRadEagleNai, SpecUtils_Det_OrtecRadEagleCeBr2Inch,
@@ -466,8 +468,8 @@ enum SpecUtils_DetectorType
   SpecUtils_Det_Sam940, SpecUtils_Det_Sam945, SpecUtils_Det_Srpm210,
   SpecUtils_Det_RIIDEyeNaI, SpecUtils_Det_RIIDEyeLaBr, SpecUtils_Det_RadSeekerNaI,
   SpecUtils_Det_RadSeekerLaBr, SpecUtils_Det_VerifinderNaI, SpecUtils_Det_VerifinderLaBr,
-  SpecUtils_Det_KromekD3S, SpecUtils_Det_Fulcrum, SpecUtils_Det_Fulcrum40h, SpecUtils_Det_Sam950,
-  SpecUtils_Det_RadiaCodeCsI10, SpecUtils_Det_RadiaCodeCsI14, SpecUtils_Det_RadiaCodeGAGG10,
+  SpecUtils_Det_KromekD3S, SpecUtils_Det_KromekD5, SpecUtils_Det_KromekGR1,
+  SpecUtils_Det_Fulcrum, SpecUtils_Det_Fulcrum40h, SpecUtils_Det_Sam950,
   SpecUtils_Det_Unknown
 };//enum SpecUtils_DetectorType
   

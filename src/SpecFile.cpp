@@ -1483,9 +1483,9 @@ const std::string &detectorTypeToString( const DetectorType type )
     case DetectorType::RadiaCodeCsI10:
       return sm_RadiaCode10XDetectorStr;
     case DetectorType::RadiaCodeCsI14:
-      return sm_RadiaCode103GDetectorStr;
+      return sm_RadiaCode110DetectorStr;
     case DetectorType::RadiaCodeGAGG10:
-      return sm_RadiaCode10XDetectorStr;
+      return sm_RadiaCode103GDetectorStr;
     case DetectorType::Interceptor:
       return sm_InterceptorStr;
     case DetectorType::Sam940:

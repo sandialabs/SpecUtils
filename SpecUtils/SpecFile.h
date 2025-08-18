@@ -1775,7 +1775,6 @@ public:
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
   bool load_radiacode_file( const std::string &filename );
-  bool guess_detector_from_radiacode_model( void );
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
   bool load_caen_gxml_file(const std::string& filename);
