@@ -377,8 +377,6 @@ SpectrumChartD3 = function(elem, options) {
     .on("*.zoom", null)
     .on(".zoom",  null )
     ;
-    
-
   /// @TODO triggering the cancel events on document.body and window is probably a bit agressive; could probably do this for just this.vis + on leave events
   d3.select(document.body)
     .on("mouseup", self.handleCancelAllMouseEvents() )
@@ -538,6 +536,13 @@ SpectrumChartD3 = function(elem, options) {
   
   if( this.options.gridy )
     this.setGridY(this.options.gridy,true);
+
+  this.vis.on("mouseout", function(){
+    if( self.currentKineticRefLine ){
+      self.currentKineticRefLine = null;
+      self.drawRefGammaLines();
+    }
+  });
 }
 
 registerKeyboardHandler = function(callback) {
@@ -1283,8 +1288,7 @@ SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
           .node().getBBox().height;
     this.options.txt.title = title;
   }
-  this.handleResize( dontRedraw ); 
-  this.refreshRefGammaLines();
+  this.handleResize( dontRedraw );
 }
 
 SpectrumChartD3.prototype.hasCompactXAxis = function() {
@@ -1730,14 +1734,15 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
       /* Right Click Dragging: pans the chart left and right */
       self.handlePanChart();
-    } else if( self.options.allowDragRoiExtent
-               && self.rawData.spectra && self.rawData.spectra.length > 0
+    } else if( self.rawData.spectra && self.rawData.spectra.length > 0
                && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width
                && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey
                && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
       // If we are here, the mouse button is not down, and the user isnt holding control, shift, etc
-      
-      if( self.roiDragBoxes && self.showDragLineWhileInRoi && !self.roiIsBeingDragged ){
+      if( self.kineticRefLines )
+        self.handleUpdateKineticRefLineUpdate();
+
+      if( self.options.allowDragRoiExtent && self.roiDragBoxes && self.showDragLineWhileInRoi && !self.roiIsBeingDragged ){
         // If we're here, the user clicked on a peak to show the ROIS drag box/line, but the user
         //  hasnt moved mouse out of ROI, or clicked down, or hit esc or anything
         const dx = (self.showDragLineWhileInRoi ? 1 : 0.5) * self.options.roiDragWidth;
@@ -1751,7 +1756,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         
         if( !within_x )
           self.handleCancelRoiDrag();
-      }else if( !self.roiIsBeingDragged ) {
+      }else if( self.options.allowDragRoiExtent && !self.roiIsBeingDragged ) {
       
         //Also check if we are between ymin and ymax of ROI....
         const drawn_roi = self.getDrawnRoiForCoordinate( m, true );
@@ -1812,15 +1817,17 @@ SpectrumChartD3.prototype.getMousePos = function(){
   }
     
   if( this.lastMouseMovePos ){
-    console.log( 'getMousePos returning lastMouseMovePos (', lastMouseMovePos, ")" )
+    console.log( 'getMousePos returning lastMouseMovePos (', this.lastMouseMovePos, ")" )
     return this.lastMouseMovePos;
   }
-  
-  console.assert( this.lastTapEvent, "Failed to find mouse position!" );
   
   if( this.lastTapEvent )
     return this.lastTapEvent.visCoordinates;
   
+  //We can fail to get mouse position if a mouse/finger hasnt been over the chart yet
+  //console.assert( this.lastTapEvent, "Failed to find mouse position!" );
+  console.warn( "Failed to find mouse position!" );
+
   // I dont think we ever get here..., but I guess we'll just return _something_
   return [0, 0, pad_left, pad_top];
 }//getMousePos(...)
@@ -2226,6 +2233,11 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
       }
 
       self.updateFeatureMarkers(-1);
+      
+      if( self.currentKineticRefLine ){
+        self.currentKineticRefLine = null;
+        self.drawRefGammaLines();
+      }
 
       self.mousedOverRefLine = null;
       self.refLineInfo.style("display", "none");
@@ -3994,7 +4006,8 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   /*Drawing of the reference lines is super duper un-optimized!!! */
   const self = this;
 
-  if( !self.refLines || !self.refLines.length || !self.refLines[0].lines  || !self.refLines[0].lines.length ) {
+  if( (!self.refLines || !self.refLines.length || !self.refLines[0].lines  || !self.refLines[0].lines.length)
+      && (!self.currentKineticRefLine || !self.currentKineticRefLine.lines || !self.currentKineticRefLine.lines.length ) ) {
     self.vis.selectAll("g.ref").remove();
     return;
   }
@@ -4006,14 +4019,20 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     return lines.slice(lindex,rindex).filter(function(d){return d.h > 1E-16;});
   }
 
-  var lowerx = this.xScale.domain()[0], upperx = this.xScale.domain()[1];
+  let reflines = [];
+  if( self.refLines ){
+    self.refLines.forEach( function(input) {
+      const lines = getLinesInRange(self.xScale.domain(),input.lines);
+      input.maxVisibleAmp = d3.max(lines, function(d){return d.h;});  /*same as lines[0].parent.maxVisibleAmp = ... */
+      reflines = reflines.concat( lines );
+    });
+  }
 
-  var reflines = [];
-  self.refLines.forEach( function(input) {
-    var lines = getLinesInRange(self.xScale.domain(),input.lines);
-    input.maxVisibleAmp = d3.max(lines, function(d){return d.h;});  /*same as lines[0].parent.maxVisibleAmp = ... */
+  if( self.currentKineticRefLine ){
+    const lines = getLinesInRange(self.xScale.domain(),self.currentKineticRefLine.lines);
+    self.currentKineticRefLine.maxVisibleAmp = d3.max(lines, function(d){return d.h;});
     reflines = reflines.concat( lines );
-  });
+  }
 
   reflines.sort( function(l,r){ return ((l.e < r.e) ? -1 : (l.e===r.e ? 0 : 1)); } );
 
@@ -4022,10 +4041,6 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
             .data( reflines, function(d){return d.id;} )
             .attr("transform", tx)
             .attr("stroke-width", self.options.refLineWidth );
-
-  var gye = gy.enter().insert("g", "a")
-    .attr("class", "ref")
-    .attr("transform", tx);
 
   function stroke(d){ return d.color ? d.color : d.parent.color; };
 
@@ -4037,21 +4052,23 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     return (index > -1) ? dash[index] : null;
   };
 
-  var h = self.size.height;
-  var m = Math.min(h,self.options.refLineTopPad); // leave 20px margin at top of chart
+  const h = self.size.height;
+  const m = Math.min(h,self.options.refLineTopPad); // leave 20px margin at top of chart
 
-  gye.append("line")
+  gy.enter().insert("g", "a")
+    .attr("class", "ref")
+    .attr("transform", tx)
+    .append("line")
     .style("stroke-dasharray", dashfunc )
     .attr("stroke", stroke )
     .attr("y1", h )
-    .attr("dx", "-0.5" )
-     ;
+    .attr("dx", "-0.5" );
 
   gy.exit().remove();  // Remove old elements as needed.
   
-  /* Now update the height of all the lines.  If we did this in the gye.append("line") */
-  /*  line above then the values for existing lines wouldnt be updated (only */
-  /*  the new lines would have correct height) */
+  /* Now update the height of all the lines.  If we did this in the gy.enter().append("line")
+  line above then the values for existing lines wouldnt be updated (only
+  the new lines would have correct height) */
   const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2); };
   
   /*
@@ -4071,19 +4088,6 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("y1", h );  //needed for initial load sometimes
 }
 
-SpectrumChartD3.prototype.refreshRefGammaLines = function() {
-  var self = this;
-
-  // No need to clear, we don't have any data
-  if (!self.refLines)
-    return;
-
-  // Erase all the reference lines
-  self.vis.selectAll("g.ref").remove();
-
-  // Redraw the reference gamma lines
-  self.drawRefGammaLines();
-}
 
 SpectrumChartD3.prototype.clearReferenceLines = function() {
   var self = this;
@@ -4102,7 +4106,6 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
  
   var default_colors = ["#0000FF","#006600", "#006666", "#0099FF","#9933FF", "#FF66FF", "#CC3333", "#FF6633","#FFFF99", "#CCFFCC", "#0000CC", "#666666", "#003333"];
 
-  var index = 0;
   if( !data ){
     this.refLines = null;
   } else {
@@ -4110,30 +4113,31 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
       if( !Array.isArray(data) )
         throw "Input is not an array of reference lines";
 
-      data.forEach( function(a,i){
-         if( !a.color )
-           a.color = default_colors[i%default_colors.length];
-         if( !a.lines || !Array.isArray(a.lines) )
-           throw "Reference lines does not contain an array of lines";
-         a.lines.forEach( function(d){
-           d.id = ++index;  //We need to assign an ID to use as D3 data, that is unique (energy may not be unique)
-           
-           /*{e:30.27,h:6.22e-05,particle:'xray',decay:'xray',el:'barium'} */
-           /*particle in ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture"]; */
-           if( (typeof d.e !== "number") || (typeof d.h !== "number") || (typeof d.particle !== "string") )
-             throw "Reference line is invalid (" + JSON.stringify(d) + ")";
-         });
-       });
+      /*this.refLines = JSON.parse(JSON.stringify(data));  //creates deep copy, but then also have to go through and */
+      //
+      this.refLines = data;
+      let index = 0;
+      this.refLines.forEach( function(a,i){ 
+        if( !a.color )
+          a.color = default_colors[i%default_colors.length];
+        if( !a.lines || !Array.isArray(a.lines) )
+          throw "Reference lines does not contain an array of lines";
 
-    /*this.refLines = JSON.parse(JSON.stringify(data));  /*creates deep copy, but then also have to go through and */
-    this.refLines = data;
-    this.refLines.forEach( function(a,i){ a.lines.forEach( function(d){ d.parent = a; } ) } );
-  }catch(e){
-    this.refLines = null;
-    console.log( "invalid input to setReferenceLines" );
-  }
-    this.refLines = data;
-  }
+        a.lines.forEach( function(d){ 
+          d.parent = a; 
+          d.id = ++index;  //We need to assign an ID to use as D3 data, that is unique (energy may not be unique)
+
+          /*{e:30.27,h:6.22e-05,particle:'xray',decay:'xray',el:'barium'} */
+          /*particle in ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture"]; */
+          if( (typeof d.e !== "number") || (typeof d.h !== "number") || (typeof d.particle !== "string") )
+            throw "Reference line is invalid (" + JSON.stringify(d) + ")";
+        } );
+      } );
+    }catch(e){
+      this.refLines = null;
+      console.log( "invalid input to setReferenceLines" );
+    }
+  }//if( !data ) / else
 
   this.redraw()();
 }
@@ -4145,6 +4149,71 @@ SpectrumChartD3.prototype.setShowRefLineInfoForMouseOver = function( show ) {
   self.redraw()();
 }
 
+SpectrumChartD3.prototype.setKineticReferenceLines = function( data ) {
+  // data looks like: { fwhm_fcn: function(e){...}, ref_lines: [{weight: 1, src_lines:{color: "red", parent: "Eu152", age: "2.5 HL", lines: [{e: 39.1, h: 0.000135, particle: "xray", desc_ind: 0, parent: Object},....], desc_strs: ["Eu152 to Sm152 via Electron Capture",...]},{...}] }
+  // TODO: Need to validate format of `data`  
+  
+  if( data ){
+    let index = 1000000;
+    data.ref_lines.forEach( function(a){
+      a.src_lines.lines.forEach( function(d){
+        d.id = ++index;
+        d.parent = a.src_lines;  
+      } );  
+    } );
+  }//if( data )
+  //console.log( "setKineticReferenceLines:", data );
+
+  this.kineticRefLines = data;
+
+  this.handleUpdateKineticRefLineUpdate();
+}//SpectrumChartD3.prototype.setKineticReferenceLines
+
+
+SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
+  const m = this.getMousePos(); // Get current mouse position for energy calculation
+  if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || ((m[0] == 0) && (m[1] == 0)) ){
+    if( this.currentKineticRefLine ){
+      this.currentKineticRefLine = null;
+      this.drawRefGammaLines();
+    }
+    return;
+  }//if( we dont need to draw the lines )
+
+  const energy = this.xScale.invert(m[0]);
+  const peak_sigma = (this.kineticRefLines.fwhm_fcn ? this.kineticRefLines.fwhm_fcn(energy) : 2.35482) / 2.35482;
+
+  // Find the line with the lowest weight across all reference line groups
+  let minWeight = Number.MAX_VALUE;
+  let bestRefLine = null;
+  
+  for( const refLineGroup of this.kineticRefLines.ref_lines ) {
+    if( !refLineGroup.src_lines || !refLineGroup.src_lines.lines || !refLineGroup.src_lines.lines.length ) continue;
+    
+    const src_weight = refLineGroup.weight || 1.0;
+    for( const line of refLineGroup.src_lines.lines ) {
+      if( line.h <= 0.0 ) continue;
+      const delta_energy = Math.abs(energy - line.e);
+      const weight = ((0.25 * peak_sigma + delta_energy) / line.h) / src_weight;
+      if( (weight < minWeight) && (delta_energy < 5*peak_sigma)  ) {
+        minWeight = weight;
+        bestRefLine = refLineGroup.src_lines;
+      }
+    }
+  }
+  
+  if( bestRefLine && this.refLines && this.refLines.some( input => bestRefLine.parent == input.parent ) ){
+    bestRefLine = null;
+  }
+  
+  // If the this.kineticRefLines.ref_lines[i].src_lines that contains the lowest weight is 
+  // not equal to this.currentKineticRefLine, then set this.currentKineticRefLine, and call this.drawRefGammaLines()
+  if( bestRefLine !== this.currentKineticRefLine ) {
+    this.currentKineticRefLine = bestRefLine;
+    this.drawRefGammaLines();
+  }
+
+}//SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate
 
 /**
  * -------------- Grid Lines Functions --------------
