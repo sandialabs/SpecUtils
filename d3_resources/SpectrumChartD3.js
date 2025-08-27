@@ -2605,7 +2605,13 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.mouseDownRoi = null;
           }
           
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count);
+          let ref_line = "";
+          if( self.mousedOverRefLine && self.mousedOverRefLine.__data__ && self.mousedOverRefLine.__data__.parent )
+          {
+            ref_line = self.mousedOverRefLine.__data__.parent.parent;
+            console.log( "self.mousedOverRefLine:", self.mousedOverRefLine, ", data:", self.mousedOverRefLine.__data__, ", parent:", self.mousedOverRefLine.__data__.parent );
+          }
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, ref_line);
         } else {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
@@ -3449,10 +3455,6 @@ SpectrumChartD3.prototype.mousemove = function () {
   return function() {
     /*This function is called whenever a mouse movement occurs */
     var p = d3.mouse(self.vis[0][0]);
-    //var t = d3.event.changedTouches;
-
-    var energy = self.xScale.invert(p[0]),
-        mousey = self.yScale.invert(p[1]);
 
     self.updateFeatureMarkers(-1);
     self.updateMouseCoordText();
@@ -3482,8 +3484,6 @@ SpectrumChartD3.prototype.mousemove = function () {
 
     if (self.dragged) {
       /*We make it here if a data point is dragged (which is not allowed) */
-
-      /*self.dragged.y = self.yScale.invert(Math.max(0, Math.min(self.size.height, p[1]))); */
       self.update(false); /* boolean set to false to indicate no animation needed */
     };
     
@@ -4016,7 +4016,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     var bisector = d3.bisector(function(d){return d.e;});
     var lindex = bisector.left( lines, xrange[0] );
     var rindex = bisector.right( lines, xrange[1] );
-    return lines.slice(lindex,rindex).filter(function(d){return d.h > 1E-16;});
+    return lines.slice(lindex,rindex).filter(function(d){return d.h > 1E-32;});
   }
 
   let reflines = [];
@@ -4211,8 +4211,8 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
   if( bestRefLine !== this.currentKineticRefLine ) {
     this.currentKineticRefLine = bestRefLine;
     this.drawRefGammaLines();
+    this.updateMouseCoordText();
   }
-
 }//SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate
 
 /**
