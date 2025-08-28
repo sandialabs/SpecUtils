@@ -2525,7 +2525,7 @@ SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, 
     
     // Emit the tap signal, unhighlight any peaks that are highlighted
     console.log( "Emit TAP/click signal! - coords:", coords );
-    self.WtEmit(self.chart.id, {name: 'leftclicked'}, coords[4], coords[5], coords[2], coords[3]);
+    self.WtEmit(self.chart.id, {name: 'leftclicked'}, coords[4], coords[5], coords[2], coords[3], self.currentRefLineInfoStr() );
     
     if( self.options.allowDragRoiExtent && self.mouseDownRoi && !modKeyDown ){
       self.showRoiDragOption(self.mouseDownRoi, [coords[0],coords[1]], true);
@@ -2538,6 +2538,12 @@ SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, 
   };
 };//handleSingleFingerUp
 
+SpectrumChartD3.prototype.currentRefLineInfoStr = function () {
+  let ref_line = "";
+  if( this.mousedOverRefLine && this.mousedOverRefLine.__data__ && this.mousedOverRefLine.__data__.parent )
+    ref_line = this.mousedOverRefLine.__data__.parent.parent;
+  return ref_line;
+}
 
 
 SpectrumChartD3.prototype.handleVisMouseUp = function () {
@@ -2579,7 +2585,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
         console.log("Should alter context menu for the highlighted peak" );  
       }
       
-      self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY);
+      self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY, self.currentRefLineInfoStr());
       self.handleCancelAllMouseEvents()();
       
       return;
@@ -2605,13 +2611,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.mouseDownRoi = null;
           }
           
-          let ref_line = "";
-          if( self.mousedOverRefLine && self.mousedOverRefLine.__data__ && self.mousedOverRefLine.__data__.parent )
-          {
-            ref_line = self.mousedOverRefLine.__data__.parent.parent;
-            console.log( "self.mousedOverRefLine:", self.mousedOverRefLine, ", data:", self.mousedOverRefLine.__data__, ", parent:", self.mousedOverRefLine.__data__.parent );
-          }
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, ref_line);
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr() );
         } else {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
@@ -3008,7 +3008,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         // Emit the tap signal, unhighlight any peaks that are highlighted
         if ( dx <= 15 || dy <= 15 ) {
           console.log( "Emit TAP HOLD (RIGHT TAP) signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", origTouch.pageX, ", y = ", origTouch.pageY );
-          self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, origTouch.pageX, origTouch.pageY);
+          self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, origTouch.pageX, origTouch.pageY, self.currentRefLineInfoStr() );
           self.handleCancelAllMouseEvents()();
           self.unhighlightPeak(null);
           self.touchHoldEmitted = true;
@@ -3383,8 +3383,9 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
             && self.dist([self.lastTapEvent.changedTouches[0].pageX, self.lastTapEvent.changedTouches[0].pageY], [pageX, pageY]) < tapRadius) {
 
           // Emit the double-tap signal, clear any touch lines/highlighted peaks in chart
-          console.log( "Emit TAP doubleclicked signal! energy=", energy, ', count=', count );
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count);
+          //console.log( "Emit TAP doubleclicked signal! energy=", energy, ', count=', count );
+
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr());
           deleteTouchLine();
           self.unhighlightPeak(null);
         } else {
