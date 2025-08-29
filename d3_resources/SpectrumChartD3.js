@@ -84,10 +84,11 @@ SpectrumChartD3 = function(elem, options) {
 
   if( (typeof this.options.doubleClickDelay) !== 'number' ) this.options.doubleClickDelay = 500;
   
+  if( (typeof this.options.refLineWidth) !== 'number' ) this.options.refLineWidth = 1;
+  if( (typeof this.options.refLineWidthHover) !== 'number' ) this.options.refLineWidthHover = 2;
+  if( (typeof this.options.featureLineWidth) !== 'number' ) this.options.featureLineWidth = 2;
+
   this.options.refLineTopPad = 30;
-  this.options.refLineWidth = 1;
-  this.options.refLineWidthHover = 2;
-  this.options.featureLineWidth = 2;
   
   self.options.logYFracTop = 0.05;
   self.options.logYFracBottom = 0.025;
@@ -4062,6 +4063,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .append("line")
     .style("stroke-dasharray", dashfunc )
     .attr("stroke", stroke )
+    .attr("stroke-width", self.options.refLineWidth )
     .attr("y1", h )
     .attr("dx", "-0.5" );
 
@@ -4148,6 +4150,12 @@ SpectrumChartD3.prototype.setShowRefLineInfoForMouseOver = function( show ) {
 
   self.options.showRefLineInfoForMouseOver = show;
   self.redraw()();
+}
+
+SpectrumChartD3.prototype.setRefLineWidths = function( width, hoverWidth ) {
+  this.options.refLineWidth = width;
+  this.options.refLineWidthHover = hoverWidth;
+  this.drawRefGammaLines();
 }
 
 SpectrumChartD3.prototype.setKineticReferenceLines = function( data ) {
@@ -4306,7 +4314,6 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     return;
 
   var p = d3.mouse(self.vis[0][0]);
-  /* console.log("fix mouse text"); */
 
   if( !p ){
     p = d3.touch(self.vis[0][0]);
