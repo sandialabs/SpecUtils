@@ -40,7 +40,6 @@ Feature TODO list (created 20160220):
   - Move to using D3 v6 with modules to minimize code sizes and such.
   - For peak labels, make a border around text (maybe add some padding, maybe make border same color as peak), make background translucent so you can read the text even if in a cluttered area.
   - Make sure that d3 selections are iterated over using each(...), rather than forEach(...)
-  - lots of other issues
 */
 
 SpectrumChartD3 = function(elem, options) {
@@ -86,6 +85,7 @@ SpectrumChartD3 = function(elem, options) {
   
   if( (typeof this.options.refLineWidth) !== 'number' ) this.options.refLineWidth = 1;
   if( (typeof this.options.refLineWidthHover) !== 'number' ) this.options.refLineWidthHover = 2;
+  if( (typeof this.options.refLineVerbosity) !== 'number' ) this.options.refLineVerbosity = 0;
   if( (typeof this.options.featureLineWidth) !== 'number' ) this.options.featureLineWidth = 2;
 
   this.options.refLineTopPad = 30;
@@ -401,6 +401,9 @@ SpectrumChartD3 = function(elem, options) {
     .on("touchstart", self.handleChartTouchStart())
     .on("touchend", self.handleChartTouchEnd())
     ;
+  
+  // Handle window blur (alt-tab away) to clean up mouse interactions
+  d3.select(window).on("blur.chart" + this.chart.id, self.handleChartMouseLeave());
 
   /*
   To allow markers to be updated while mouse is outside of the chart, but still inside the visual.
@@ -482,13 +485,6 @@ SpectrumChartD3 = function(elem, options) {
    .attr("x", 0)
    .attr("dy", "1em");
 
-  /*Add a small red circle on the x axis to help indicate which line the info is */
-  /*  currently showing for. */
-  self.refLineInfo.append("circle")
-    .attr("cx", 0)
-    .attr("cy", self.size.height)
-    .attr("r", 2)
-    .style("fill","red");
 
   this.chartBody = this.vis.append("g")
     .attr("clip-path", "url(#clip" + this.chart.id + ")");
@@ -1460,7 +1456,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
 
   this.yAxisBody.attr("height", this.size.height );
   
-  this.refLineInfo.select("circle").attr("cy", this.size.height);
   this.mouseInfo.attr("transform","translate(" + this.size.width + "," + this.size.height + ")");
 
   if( this.xGrid ) {
@@ -2243,6 +2238,15 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
       self.mousedOverRefLine = null;
       self.refLineInfo.style("display", "none");
       self.mouseInfo.style("display", "none");
+      
+      const ref = self.vis.selectAll("g.ref");
+      ref.select("line.temp-extension").remove();
+      ref.select("circle.ref-hover-indicator").remove();
+      ref.selectAll("line")
+        .attr("stroke-width", self.options.refLineWidth );
+      ref.select(".major-extension")
+        .style("opacity", 0.5)
+        .style("stroke-width", self.options.refLineWidth);
   }
 }
 
@@ -4057,13 +4061,13 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   const h = self.size.height;
   const m = Math.min(h,self.options.refLineTopPad); // leave 20px margin at top of chart
 
-  gy.enter().insert("g", "a")
+  gy.enter()
+    .insert("g", "a")
     .attr("class", "ref")
     .attr("transform", tx)
     .append("line")
     .style("stroke-dasharray", dashfunc )
     .attr("stroke", stroke )
-    .attr("stroke-width", self.options.refLineWidth )
     .attr("y1", h )
     .attr("dx", "-0.5" );
 
@@ -4086,9 +4090,34 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   */
   
   gy.select("line")
+    .attr("stroke-width", self.options.refLineWidth )
     .attr("y2", y2Lin )
     //.attr("y2", y2Log )
     .attr("y1", h );  //needed for initial load sometimes
+
+  // Add dotted extension lines for major reference lines (only if refLineVerbosity >= 2)
+  if( self.options.refLineVerbosity >= 2 ) {
+    const majorLines = gy.filter(function(d) { return d.major; });
+    
+    // Remove any existing major line extensions
+    gy.select("line.major-extension").remove();
+    
+    // Add dotted extension lines for major lines
+    const extension_dash = "" + self.options.refLineWidthHover + "," + 2*self.options.refLineWidthHover;
+    majorLines.append("line")
+      .attr("class", "major-extension")
+      .style("stroke-dasharray", extension_dash)
+      .style("opacity", 0.5)
+      .attr("stroke", stroke)
+      .attr("stroke-width", self.options.refLineWidth)
+      .attr("y1", function(d) { return y2Lin(d); })
+      .attr("y2", self.options.refLineTopPad)
+      .attr("x1", 0)
+      .attr("x2", 0);
+  } else {
+    // Remove any existing major line extensions if verbosity < 2
+    gy.select("line.major-extension").remove();
+  }
 }
 
 
@@ -4155,6 +4184,12 @@ SpectrumChartD3.prototype.setShowRefLineInfoForMouseOver = function( show ) {
 SpectrumChartD3.prototype.setRefLineWidths = function( width, hoverWidth ) {
   this.options.refLineWidth = width;
   this.options.refLineWidthHover = hoverWidth;
+  this.drawRefGammaLines();
+  this.updateMouseCoordText();
+}
+
+SpectrumChartD3.prototype.setRefLineVerbosity = function( verbosity ) {
+  this.options.refLineVerbosity = verbosity;
   this.drawRefGammaLines();
 }
 
@@ -4412,7 +4447,26 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     /*  but with out it sometimes lines will stay fat that arent supposed to. */
     /* Also, I think setting attr values is expensive, so only doing if necassary. */
     if( d.__data__.mousedover && d !== self.mousedOverRefLine ){
-      d3.select(d).attr("stroke-width",1).attr("dx", "-0.5" );
+      const dSelection = d3.select(d);
+      dSelection
+        .attr("stroke-width",self.options.refLineWidth)
+        .attr("dx", -0.5*self.options.refLineWidth );
+      // Handle extension line cleanup for this line
+      if( self.options.refLineVerbosity >= 1 ) {
+        const dLinedata = d.__data__;
+        
+        if( dLinedata.major && self.options.refLineVerbosity >= 2 ) {
+          // For major lines with verbosity >= 2, reset the existing extension line
+          dSelection.select("line.major-extension")
+            .attr("stroke-width", self.options.refLineWidth)
+            .style("opacity", 0.5);
+        } else {
+          // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
+          dSelection.select("line.temp-extension").remove();
+        }
+      }
+      // Remove hover indicator circle
+      dSelection.select("circle.ref-hover-indicator").remove();
       d.__data__.mousedover = null;
     }
 
@@ -4426,7 +4480,27 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
 
   if( nearestpx > 10 ) {
     if( self.mousedOverRefLine ){
-      d3.select(self.mousedOverRefLine).attr("stroke-width",1).attr("dx", "-0.5" );
+      const prevLineSelection = d3.select(self.mousedOverRefLine);
+      prevLineSelection
+      .select("line")
+      .attr("dx", -0.5*self.options.refLineWidth )
+      .attr("stroke-width",self.options.refLineWidth);
+      // Handle extension line cleanup for previously hovered line
+      if( self.options.refLineVerbosity >= 1 ) {
+        const prevLinedata = self.mousedOverRefLine.__data__;
+        
+        if( prevLinedata.major && self.options.refLineVerbosity >= 2 ) {
+          // For major lines with verbosity >= 2, reset the existing extension line
+          prevLineSelection.select("line.major-extension")
+            .attr("stroke-width", self.options.refLineWidth)
+            .style("opacity", 0.5);
+        } else {
+          // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
+          prevLineSelection.select("line.temp-extension").remove();
+        }
+      }
+      // Remove hover indicator circle
+      prevLineSelection.select("circle.ref-hover-indicator").remove();
       self.mousedOverRefLine.__data__.mousedover = null;
     }
     self.mousedOverRefLine = null;
@@ -4438,7 +4512,27 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     return;
 
   if( self.mousedOverRefLine ){
-    d3.select(self.mousedOverRefLine).attr("stroke-width",1).attr("dx", "-0.5" );
+    const prevLineSelection = d3.select(self.mousedOverRefLine);
+    prevLineSelection
+    .select("line")
+    .attr("dx", -0.5*self.options.refLineWidth )
+    .attr("stroke-width",self.options.refLineWidth);
+    // Handle extension line cleanup for previously hovered line  
+    if( self.options.refLineVerbosity >= 1 ) {
+      const prevLinedata = self.mousedOverRefLine.__data__;
+      
+      if( prevLinedata.major && self.options.refLineVerbosity >= 2 ) {
+        // For major lines with verbosity >= 2, reset the existing extension line
+        prevLineSelection.select("line.major-extension")
+          .attr("stroke-width", self.options.refLineWidth)
+          .style("opacity", 0.5);
+      } else {
+        // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
+        prevLineSelection.select("line.temp-extension").remove();
+      }
+    }
+    // Remove hover indicator circle
+    prevLineSelection.select("circle.ref-hover-indicator").remove();
     self.mousedOverRefLine.__data__.mousedover = null;
   }
 
@@ -4478,6 +4572,11 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   }
 
   self.refLineInfo.style("display", null).attr("transform", "translate("+linepx+",0)" );
+  
+  // Add circle to the hovered reference line
+  const lineSelection = d3.select(nearestline);
+  const nearLineEl = lineSelection.select("line");
+  
   var svgtxt = self.refLineInfoTxt.select("text")
                    .attr("dy", "1em")
                    .attr("fill", linedata.parent.color);
@@ -4498,10 +4597,43 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     self.refLineInfoTxt.attr("transform", tx );
   }
 
-  d3.select(nearestline)
+  nearLineEl
     .attr("stroke-width",self.options.refLineWidthHover)
-    .select("line")
-    .attr("dx", "-1" );
+    .attr("dx", -0.5*self.options.refLineWidthHover );
+
+  // Handle extension line for hovered reference line (only if refLineVerbosity >= 1)
+  if( self.options.refLineVerbosity >= 1 ) {
+    const hoveredLinedata = nearestline.__data__;
+    const nearestlineSelection = d3.select(nearestline);
+    
+    if( hoveredLinedata.major && self.options.refLineVerbosity >= 2 ) {
+      // For major lines with verbosity >= 2, just modify the existing extension line
+      nearestlineSelection.select("line.major-extension")
+        .attr("stroke-width", self.options.refLineWidthHover)
+        .style("opacity", 1.0);
+    } else {
+      // For non-major lines or major lines with verbosity == 1, add a temporary extension line
+      const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2); };
+      nearestlineSelection.append("line")
+        .attr("class", "temp-extension")
+        .style("stroke-dasharray", "2,2")
+        .attr("stroke", hoveredLinedata.color ? hoveredLinedata.color : hoveredLinedata.parent.color)
+        .attr("stroke-width", self.options.refLineWidthHover)
+        .attr("y1", y2Lin(hoveredLinedata))
+        .attr("y2", self.options.refLineTopPad)
+        .attr("x1", 0)
+        .attr("x2", 0);
+    }
+  }
+
+  lineSelection.select("circle.ref-hover-indicator").remove(); // Remove any existing circle
+  const circleY = self.options.refLineVerbosity >= 1 ? nearLineEl.attr("y2") : self.size.height;
+  lineSelection.append("circle")
+    .attr("class", "ref-hover-indicator")
+    .attr("cx", 0)
+    .attr("cy", circleY)
+    .attr("r", 2)
+    .style("fill", "red");
 }
 
 SpectrumChartD3.prototype.setShowMouseStats = function(d) {
