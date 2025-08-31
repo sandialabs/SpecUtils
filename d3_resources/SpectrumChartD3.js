@@ -4583,9 +4583,10 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     } else {
       // For non-major lines or major lines with verbosity == 1, add a temporary extension line
       const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2); };
+      const extension_dash = "" + self.options.refLineWidthHover + "," + 2*self.options.refLineWidthHover;
       nearestlineSelection.append("line")
         .attr("class", "temp-extension")
-        .style("stroke-dasharray", "2,2")
+        .style("stroke-dasharray", extension_dash) 
         .attr("stroke", hoveredLinedata.color ? hoveredLinedata.color : hoveredLinedata.parent.color)
         .attr("stroke-width", self.options.refLineWidthHover)
         .attr("y1", y2Lin(hoveredLinedata))
