@@ -163,7 +163,7 @@ svg.SpectrumChartD3 {
 .SpectrumChartD3 .mouseLineText {
   font-size: 0.8em;
   font-family: Helvetica, Arial;
-  font-weight: bold
+  font-weight: bold;
   fill: var(--d3spec-text-color, black);
 }
 
@@ -187,6 +187,11 @@ svg.SpectrumChartD3 {
 .refLineInfo{ font-size: 0.8em; }
 .mouseInfo{ font-size: 0.85em;  }
 .mouseInfoBox{ fill: white; fill-opacity: 0.85; }
+
+/* Allow clicks to pass through the reference lines to the visualization beneath */
+g.ref, g.ref line {
+    pointer-events: none;
+}
 
 .peakInfo{
   font-size: 0.85em;
@@ -235,7 +240,7 @@ svg.SpectrumChartD3 {
 .peakText {
   font-size: 0.8em;
   font-family: Helvetica, Arial;
-  font-weight: bold
+  font-weight: bold;
   fill: var(--d3spec-text-color, black);
 }
 .contEstLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey;  }
