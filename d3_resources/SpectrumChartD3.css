@@ -190,14 +190,23 @@ svg.SpectrumChartD3 {
 
 .refLineCandidatesText {
   font-size: 0.8em;
-  fill: var(--d3spec-text-color, black);
+  /* Not setting fill, so defaults to black - should be same behaviour as legend. */
+  /* fill: var(--d3spec-text-color, black); */
 }
 
+/* This is the box that gives the other kinetic reference candidates */
 .refLineCandidatesBackground {
+  /* It would be great to use colors defined by global variables, but for the moment we'll 
+  just use the same colors as the legend, since they are okay in both light and dark theme.
+  */
+  /*
   fill: var(--d3spec-chart-area-color, white);
-  fill-opacity: 0.8;
+  fill-opacity: 0.75;
   stroke: var(--d3spec-axis-color, black);
   stroke-width: 1px;
+  */
+  fill: rgba(245,245,245,0.8); 
+  stroke: rgba(185,185,185,0.9);
 }
 
 /* Allow clicks to pass through the reference lines to the visualization beneath */

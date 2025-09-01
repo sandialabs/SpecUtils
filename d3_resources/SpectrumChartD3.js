@@ -49,40 +49,32 @@ SpectrumChartD3 = function(elem, options) {
 
   this.options = options || {}; 
   
-  /* Consolidated option validation system - all validation logic in one place */
-  var validateOptionsFromConfig = function(config) {
+  /* Validates a option is the correct type, and if not, or its not specified, will use default */
+  let validateOptionsFromConfig = function(config) {
     for (var i = 0; i < config.length; i++) {
       var opt = config[i];
       var val = self.options[opt.name];
       
       switch(opt.type) {
         case 'boolean':
-          if (typeof val !== 'boolean') {
+          if (typeof val !== 'boolean')
             self.options[opt.name] = opt.default;
-          }
           break;
           
         case 'number':
-          if (typeof val !== 'number' || 
-              (typeof opt.min !== 'undefined' && val < opt.min) || 
-              (typeof opt.max !== 'undefined' && val > opt.max) ||
-              (opt.noNaN && isNaN(val))) {
+          if (typeof val !== 'number'
+              || (typeof opt.min !== 'undefined' && val < opt.min) || (typeof opt.max !== 'undefined' && val > opt.max) || (opt.noNaN && isNaN(val)))
             self.options[opt.name] = opt.default;
-          }
           break;
           
         case 'string':
-          if ((opt.default !== null && typeof val !== 'string') || 
-              (opt.allowed && opt.allowed.indexOf(val) < 0)) {
+          if ((opt.default !== null && typeof val !== 'string') ||  (opt.allowed && opt.allowed.indexOf(val) < 0))
             self.options[opt.name] = opt.default;
-          }
           break;
           
-        case 'custom':
-          // For complex validation logic that can't be standardized
-          if (opt.validator && !opt.validator(val)) {
+        case 'custom': // For complex validation logic that can't be standardized
+          if (opt.validator && !opt.validator(val))
             self.options[opt.name] = opt.default;
-          }
           break;
       }
     }
@@ -486,23 +478,6 @@ SpectrumChartD3 = function(elem, options) {
 
   self.addMouseInfoBox();
 
-  /*Make a <g> element to draw everything we want that follows the mouse around */
-  /*  when we're displaying reference photopeaks.  If the mouse isnt close enough */
-  /*  to a reference line, then this whole <g> will be hidden */
-  self.refLineInfo = this.vis.append("g")
-    .attr("class", "refLineInfo")
-    .style("display", "none");
-
-  /*Put the reference photopeak line text in its own <g> element so */
-  /*  we can call getBBox() on it to get its extent to to decide where to */
-  /*  position the text relative to the selected phtotopeak. */
-  self.refLineInfoTxt = self.refLineInfo.append("g");
-
-  /*Add the text to the <g>.  We will use tspan's to append each line of information */
-  self.refLineInfoTxt.append("text")
-   .attr("x", 0)
-   .attr("dy", "1em");
-
 
   this.chartBody = this.vis.append("g")
     .attr("clip-path", "url(#clip" + this.chart.id + ")");
@@ -544,6 +519,23 @@ SpectrumChartD3 = function(elem, options) {
     .text( "" )
     .style("text-anchor","middle");
   
+  /*Make a <g> element to draw everything we want that follows the mouse around */
+  /*  when we're displaying reference photopeaks.  If the mouse isnt close enough */
+  /*  to a reference line, then this whole <g> will be hidden */
+  self.refLineInfo = this.vis.append("g")
+    .attr("class", "refLineInfo")
+    .style("display", "none");
+
+  /*Put the reference photopeak line text in its own <g> element so */
+  /*  we can call getBBox() on it to get its extent to to decide where to */
+  /*  position the text relative to the selected phtotopeak. */
+  self.refLineInfoTxt = self.refLineInfo.append("g");
+
+  /*Add the text to the <g>.  We will use tspan's to append each line of information */
+  self.refLineInfoTxt.append("text")
+   .attr("x", 0)
+   .attr("dy", "1em");
+
   this.updateYAxisTitleText();
   
   if( this.options.gridx )
@@ -712,9 +704,6 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     
     if( this.sliderClose )
       this.sliderClose.style("display", "none");
-
-    //if( this.showXAxisSliderBtn )
-    //  this.showXAxisSliderBtn.style("display", "none");
     
     if( this.peakInfo )
       this.peakInfo.style("display", "none");
@@ -731,8 +720,6 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       this.peakInfo.style("display", null);
     if( this.sliderClose )
       this.sliderClose.style("display", null);
-    //if( this.showXAxisSliderBtn )
-    //  this.showXAxisSliderBtn.style("display", null);
     return svgMarkup;
   }catch(e){
     throw 'Error creating SVG spectrum: ' + e;
@@ -1052,10 +1039,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     /*check that x is same length or one longer than y. */
     /*Check that all specified y's are the same length */
   }catch(e){
-    //if(e) console.log(e);
-
-    // Christian [05122018]: Added other necessary display render methods to ensure consistency even when chart has no data
-    //this.options.scaleBackgroundSecondary = false;
     this.updateLegend();
    
     this.redraw()();
@@ -1510,56 +1493,8 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
 
   if( this.options.showXAxisSliderChart ){ 
     self.drawXAxisSliderChart(); 
-    /*
-    if( self.showXAxisSliderBtn ){
-      self.showXAxisSliderBtn.remove();
-      self.showXAxisSliderBtn = null; 
-    }
-     */
   } else {
     self.cancelXAxisSliderChart(); 
-    
-    /*
-     // I think I decided I didnt like this little button in the lower-right corner, now that we can click on the title to toggle it - so we'll comment it out for now, but if you search for "showSliderCloseBtn" and uncomment everything, it should still work.
-    if( self.options.showSliderCloseBtn ){
-      if( !self.showXAxisSliderBtn ){
-        self.showXAxisSliderBtn = self.svg.append("g")
-          .attr("class", "slider-open")
-          .on("click", function(){
-            self.setShowXAxisSliderChart(true);
-            self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, true );
-          } )
-          .on("touchstart.drag", function(){ // I think this event gets cancelled somewhere, so it wont be converted to a "click" automatically
-            if( d3.event.touches && (d3.event.touches.length < 2) ){
-              self.setShowXAxisSliderChart(true);
-              self.WtEmit(self.chart.id, {name: 'sliderChartDisplayed'}, true );
-          }
-        } )
-     ;
-
-        // Add two rectangles to self.showXAxisSliderBtn
-        self.showXAxisSliderBtn.append("rect")
-          .attr("class", "slider-open-plot")
-          .attr("width", 12)
-          .attr("height", 8)
-          .attr("x", -15)
-          .attr("y", -9)
-          .attr("stroke-width", 0);
-
-        self.showXAxisSliderBtn.append("rect")
-          .attr("class", "slider-open-box")
-          .attr("width", 6)
-          .attr("height", 6)
-          .attr("x", -12)
-          .attr("y", -8)
-          .attr("stroke-width", 0);
-
-          // We could add some little 1-pixel dots that are kinda like handle
-      }
-      
-      self.showXAxisSliderBtn.attr("transform", "translate(" + self.cx  + "," + self.cy + ")" );
-    }
-    */
   }
   
   this.xScale.range([0, this.size.width]);
@@ -1641,7 +1576,6 @@ SpectrumChartD3.prototype.handlePanChart = function () {
 
   /* New mouse position set to current moue position */
   self.rightClickDown = docMouse;
-  //console.log( 'handlePanChart, setting rightClickDown = docMouse');
 }
 
 
@@ -2212,29 +2146,11 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
           || d3.event.toElement.nodeName === "HTML"
           || d3.event.toElement.nodeName === "DIV"
           || d3.event.toElement.offsetParent === document.body) {
-
-        /* For debugging where the mouse is specifically out of */
-        /* if (!d3.select(d3.event.toElement)[0].parentNode) */
-        /*   console.log("mouse out of the window"); */
-        /* else */
-        /*   console.log("mouse out of the chart"); */
-
-        /* Cancel erasing peaks */
         self.handleCancelMouseDeletePeak();
-
-        /* Cancel the right-click-drag action */
         self.handleCancelMouseRecalibration();
-
-        /* Cancel the left-click-drag zoom action */
         self.handleCancelMouseZoomInX();
-
-        /* Cancel the left-click-drag zooming in y axis action */
         self.handleCancelMouseZoomY();
-
-        /* Cancel count gammas */
         self.handleCancelMouseCountGammas();
-
-        /* Cancel any ROI extent dragging going on */
         self.handleCancelRoiDrag();
       }
 
@@ -4182,7 +4098,7 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
       this.currentKineticRefLine = null;
       this.candidateKineticRefLines = [];
       this.currentKineticRefLineIndex = 0;
-          this.stopKineticRefLineCycling();
+      this.stopKineticRefLineCycling();
       this.drawRefGammaLines();
     }
     return;
@@ -4194,6 +4110,12 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
   // Arrays to collect ref_lines within 10px and their weights for debugging
   const refLineMinWeights = [];
  
+  // Get current visible energy range
+  const domain = this.xScale.domain();
+  
+  // Create bisector for efficient range finding (lines are sorted by energy)
+  const energyBisector = d3.bisector(function(d) { return d.e; }).left;
+
   // Find the line with the lowest weight across all reference line groups
   let minWeight = Number.MAX_VALUE;
   let bestRefLine = null;
@@ -4205,10 +4127,23 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
     let minGroupWeight = Number.MAX_VALUE;
     let bestLineInGroup = null;
     
-    for( const line of refLineGroup.src_lines.lines ) {
-      if( line.h <= 0.0 ) continue;
+    const lines = refLineGroup.src_lines.lines;
+    
+    // Find the range of lines in the visible energy range using bisector
+    const startIndex = energyBisector(lines, domain[0]);
+    const endIndex = energyBisector(lines, domain[1]);
+    
+    let maxVisibleH = 0.0;
+    for( let i = startIndex; i <= endIndex && i < lines.length; i++ )
+      maxVisibleH = Math.max(maxVisibleH, lines[i].h);
+    if( maxVisibleH < 1E-32 )
+      continue;
+
+    // Only iterate over lines in the visible energy range
+    for( let i = startIndex; i <= endIndex && i < lines.length; i++ ) {
+      const line = lines[i];
       const delta_energy = Math.abs(energy - line.e);
-      const weight = ((0.25 * peak_sigma + delta_energy) / line.h) / src_weight;
+      const weight = ((0.25 * peak_sigma + delta_energy) / (Math.max(line.h,1E-32) / maxVisibleH)) / src_weight;
       
       if( weight < minGroupWeight && delta_energy < 5*peak_sigma ) {
         minGroupWeight = weight;
@@ -4374,23 +4309,31 @@ SpectrumChartD3.prototype.updateKineticRefLineCandidateDisplay = function(){
   
   // Add separator line
   candidatesText.append('svg:tspan')
-    .attr('x', 0)
+    .attr('x', -3)
     .attr('dy', "1.4em")
     .style('font-size', '0.8em')
-    .text( "Candidates:" );
+    .text( self.options.txt.candidates );
   
   // Display all candidate reference lines
   self.candidateKineticRefLines.forEach(function(candidate, index) {
     const isCurrent = (index === self.currentKineticRefLineIndex);
-    const displayText = candidate.lines.parent + " (" + candidate.weight.toFixed(2) + ")";
+    const w = 1/(candidate.weight / self.candidateKineticRefLines[0].weight);
+    const displayText = candidate.lines.parent + " (w: " + w.toFixed(2) + ")";
     
-    const tspan = candidatesText.append('svg:tspan')
+    candidatesText.append('svg:tspan')
       .attr('x', 0)
       .attr('dy', "1.1em")
       .style('font-size', '0.8em')
       .style('font-weight', isCurrent ? 'bold' : 'normal')
       .text( displayText );
   });
+
+  candidatesText.append('svg:tspan')
+    .attr('x', -4)
+    .attr('dy', "1.2em")
+    .style('font-size', '0.7em')
+    .style('font-style', 'italic')
+    .text( self.options.txt.useArrowsToSelect );
   
   // Size and position the background rectangle
   const bbox = candidatesText.node().getBBox();
@@ -4520,6 +4463,9 @@ SpectrumChartD3.prototype.applyRefLineHoverStyling = function( nearestline, skip
   if( nearestline ) {
     const linedata = nearestline.__data__;
     self.applyLineStyling(nearestline, linedata, true);
+    self.mousedOverRefLine = nearestline;
+  } else {
+    self.mousedOverRefLine = null;
   }
 }//SpectrumChartD3.prototype.applyRefLineHoverStyling
 
@@ -4688,13 +4634,14 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   }
 
   // If we are zooming - we dont want to display any of the ref-line info
-  if( self.dragging_plot || self.zooming_plot || self.leftMouseDown || self.rightClickDown || self.zoomAnimationID ){
+  if( self.dragging_plot || self.zooming_plot /*|| self.leftMouseDown || self.rightClickDown*/ || self.zoomAnimationID ){
     if( self.mousedOverRefLine ){ //Remove the info if we are showing it
       const line = d3.select(self.mousedOverRefLine);
       line.select("line.temp-extension").remove();
       line.select("circle").remove();
       line.selectAll("line").attr("stroke-width", self.options.refLineWidth);
       line.select("line.major-extension").style("opacity", 0.5);
+      self.mousedOverRefLine.__data__.mousedover = null;
       self.mousedOverRefLine = null;
       self.refLineInfo.style("display", "none");
     }
@@ -4710,9 +4657,33 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
 
   var reflines = self.vis.selectAll("g.ref");
 
+  // Helper function to cleanup reference line hover state
+  function cleanupRefLineHover(groupSelection, lineData) {
+    const lineSelection = groupSelection.select("line");
+    lineSelection
+      .attr("stroke-width", self.options.refLineWidth)
+      .attr("dx", -0.5*self.options.refLineWidth);
+    
+    // Handle extension line cleanup
+    if( self.options.refLineVerbosity >= 1 ) {
+      if( lineData.major && self.options.refLineVerbosity >= 2 ) {
+        // For major lines with verbosity >= 2, reset the existing extension line
+        groupSelection.select("line.major-extension")
+          .attr("stroke-width", self.options.refLineWidth)
+          .style("opacity", 0.5);
+      } else {
+        // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
+        groupSelection.select("line.temp-extension").remove();
+      }
+    }
+    
+    // Remove hover indicator circle
+    groupSelection.select("circle.ref-hover-indicator").remove();
+    lineData.mousedover = null;
+  }
+
   reflines[0].forEach( function(d,i){
     var yh = d.childNodes[0].y1.baseVal.value - d.childNodes[0].y2.baseVal.value;
-    /*var xpx = d.transform.baseVal[0].matrix.e; */
     var xpx = self.xScale(d.__data__.e);
     var dpx = Math.abs(xpx - p[0]);
 
@@ -4720,27 +4691,7 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     /*  but with out it sometimes lines will stay fat that arent supposed to. */
     /* Also, I think setting attr values is expensive, so only doing if necassary. */
     if( d.__data__.mousedover && d !== self.mousedOverRefLine ){
-      const dSelection = d3.select(d);
-      dSelection
-        .attr("stroke-width",self.options.refLineWidth)
-        .attr("dx", -0.5*self.options.refLineWidth );
-      // Handle extension line cleanup for this line
-      if( self.options.refLineVerbosity >= 1 ) {
-        const dLinedata = d.__data__;
-        
-        if( dLinedata.major && self.options.refLineVerbosity >= 2 ) {
-          // For major lines with verbosity >= 2, reset the existing extension line
-          dSelection.select("line.major-extension")
-            .attr("stroke-width", self.options.refLineWidth)
-            .style("opacity", 0.5);
-        } else {
-          // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
-          dSelection.select("line.temp-extension").remove();
-        }
-      }
-      // Remove hover indicator circle
-      dSelection.select("circle.ref-hover-indicator").remove();
-      d.__data__.mousedover = null;
+      cleanupRefLineHover(d3.select(d), d.__data__);
     }
 
     var dist = dpx + dpx/(yh/visy);
@@ -4753,28 +4704,7 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
 
   if( nearestpx > 10 ) {
     if( self.mousedOverRefLine ){
-      const prevLineSelection = d3.select(self.mousedOverRefLine);
-      prevLineSelection
-      .select("line")
-      .attr("dx", -0.5*self.options.refLineWidth )
-      .attr("stroke-width",self.options.refLineWidth);
-      // Handle extension line cleanup for previously hovered line
-      if( self.options.refLineVerbosity >= 1 ) {
-        const prevLinedata = self.mousedOverRefLine.__data__;
-        
-        if( prevLinedata.major && self.options.refLineVerbosity >= 2 ) {
-          // For major lines with verbosity >= 2, reset the existing extension line
-          prevLineSelection.select("line.major-extension")
-            .attr("stroke-width", self.options.refLineWidth)
-            .style("opacity", 0.5);
-        } else {
-          // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
-          prevLineSelection.select("line.temp-extension").remove();
-        }
-      }
-      // Remove hover indicator circle
-      prevLineSelection.select("circle.ref-hover-indicator").remove();
-      self.mousedOverRefLine.__data__.mousedover = null;
+      cleanupRefLineHover(d3.select(self.mousedOverRefLine), self.mousedOverRefLine.__data__);
     }
     self.mousedOverRefLine = null;
     self.refLineInfo.style("display", "none");
@@ -4785,31 +4715,8 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
     return;
 
   if( self.mousedOverRefLine ){
-    const prevLineSelection = d3.select(self.mousedOverRefLine);
-    prevLineSelection
-    .select("line")
-    .attr("dx", -0.5*self.options.refLineWidth )
-    .attr("stroke-width",self.options.refLineWidth);
-    // Handle extension line cleanup for previously hovered line  
-    if( self.options.refLineVerbosity >= 1 ) {
-      const prevLinedata = self.mousedOverRefLine.__data__;
-      
-      if( prevLinedata.major && self.options.refLineVerbosity >= 2 ) {
-        // For major lines with verbosity >= 2, reset the existing extension line
-        prevLineSelection.select("line.major-extension")
-          .attr("stroke-width", self.options.refLineWidth)
-          .style("opacity", 0.5);
-      } else {
-        // For non-major lines or major lines with verbosity == 1, remove the temporary extension line
-        prevLineSelection.select("line.temp-extension").remove();
-      }
-    }
-    // Remove hover indicator circle
-    prevLineSelection.select("circle.ref-hover-indicator").remove();
-    self.mousedOverRefLine.__data__.mousedover = null;
+    cleanupRefLineHover(d3.select(self.mousedOverRefLine), self.mousedOverRefLine.__data__);
   }
-
-  self.mousedOverRefLine = nearestline;
 
   var linedata = nearestline.__data__;
   linedata.mousedover = true;
