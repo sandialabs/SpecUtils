@@ -188,6 +188,18 @@ svg.SpectrumChartD3 {
 .mouseInfo{ font-size: 0.85em;  }
 .mouseInfoBox{ fill: white; fill-opacity: 0.85; }
 
+.refLineCandidatesText {
+  font-size: 0.8em;
+  fill: var(--d3spec-text-color, black);
+}
+
+.refLineCandidatesBackground {
+  fill: var(--d3spec-chart-area-color, white);
+  fill-opacity: 0.8;
+  stroke: var(--d3spec-axis-color, black);
+  stroke-width: 1px;
+}
+
 /* Allow clicks to pass through the reference lines to the visualization beneath */
 g.ref, g.ref line {
     pointer-events: none;

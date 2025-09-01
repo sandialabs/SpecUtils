@@ -555,15 +555,22 @@ SpectrumChartD3 = function(elem, options) {
   this.vis.on("mouseout", function(){
     if( self.currentKineticRefLine ){
       self.currentKineticRefLine = null;
+      self.candidateKineticRefLines = [];
+      self.currentKineticRefLineIndex = 0;
+      self.stopKineticRefLineCycling();
       self.drawRefGammaLines();
     }
   });
+  
+  // Initialize kinetic reference line cycling properties
+  this.candidateKineticRefLines = [];
+  this.currentKineticRefLineIndex = 0;
+  this.kineticRefLineCycleTimer = null;
+  
+  // Register global keyboard handler
+  d3.select(window).on("keydown", this.keydown());
 }
 
-registerKeyboardHandler = function(callback) {
-  var callback = callback;
-  d3.select(window).on("keydown", callback);
-}
 
 
 /**
@@ -738,7 +745,6 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
 SpectrumChartD3.prototype.dataPointDrag = function() {
   var self = this;
   return function(d) {
-    registerKeyboardHandler(self.keydown());
     document.onselectstart = function() { return false; };
     self.selected = self.dragged = d;
     self.update(false); /* boolean set to false to indicate no animation needed */
@@ -2394,8 +2400,6 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
     self.mousedowntime = new Date();
     self.lastMouseMovePos = self.mousedownpos = m;
 
-    registerKeyboardHandler(self.keydown());
-
     if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
       return;
     
@@ -3588,6 +3592,22 @@ SpectrumChartD3.prototype.keydown = function () {
         self.redraw()();
       }
       
+      case 38: { /* up arrow */
+        if( self.candidateKineticRefLines && self.candidateKineticRefLines.length > 1 ) {
+          self.cycleKineticRefLine(-1);
+          d3.event.preventDefault();
+        }
+        break;
+      }
+      
+      case 40: { /* down arrow */
+        if( self.candidateKineticRefLines && self.candidateKineticRefLines.length > 1 ) {
+          self.cycleKineticRefLine(1);
+          d3.event.preventDefault();
+        }
+        break;
+      }
+      
       case 8: /* backspace */
       case 46: { /* delete */
         break;
@@ -4160,6 +4180,9 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
   if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || ((m[0] == 0) && (m[1] == 0)) ){
     if( this.currentKineticRefLine ){
       this.currentKineticRefLine = null;
+      this.candidateKineticRefLines = [];
+      this.currentKineticRefLineIndex = 0;
+          this.stopKineticRefLineCycling();
       this.drawRefGammaLines();
     }
     return;
@@ -4180,22 +4203,31 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
     
     const src_weight = refLineGroup.weight || 1.0;
     let minGroupWeight = Number.MAX_VALUE;
+    let bestLineInGroup = null;
     
     for( const line of refLineGroup.src_lines.lines ) {
       if( line.h <= 0.0 ) continue;
       const delta_energy = Math.abs(energy - line.e);
       const weight = ((0.25 * peak_sigma + delta_energy) / line.h) / src_weight;
       
-      minGroupWeight = Math.min(minGroupWeight, weight);
+      if( weight < minGroupWeight && delta_energy < 5*peak_sigma ) {
+        minGroupWeight = weight;
+        bestLineInGroup = line;
+      }
+      
       if( (weight < minWeight) && (delta_energy < 5*peak_sigma)  ) {
         minWeight = weight;
         bestRefLine = refLineGroup.src_lines;
       }
     }
     
-    // Store min weight for this ref line group
+    // Store min weight for this ref line group with best line
     if( minGroupWeight < Number.MAX_VALUE )
-      refLineMinWeights.push({ minWeight: minGroupWeight, lines: refLineGroup } );
+      refLineMinWeights.push({ 
+        minWeight: minGroupWeight, 
+        lines: refLineGroup, 
+        bestLine: bestLineInGroup 
+      });
   }
   
   // Sort by ascending weights, filter (8x min weight), and limit to 5 elements
@@ -4203,21 +4235,293 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
     .splice(0, refLineMinWeights.length, ...refLineMinWeights
     .sort((a, b) => a.minWeight - b.minWeight)
     .filter((item, i) => i < 5 && item.minWeight <= (refLineMinWeights[0]?.minWeight || 1) * 8.0));
-  //console.log( "Blah blah blah Other kin opts:", refLineMinWeights );
-  // TODO: implement allowing the user select between top candidates.
   
   if( bestRefLine && this.refLines && this.refLines.some( input => bestRefLine.parent == input.parent ) ){
     bestRefLine = null;
   }
   
-  // If the this.kineticRefLines.ref_lines[i].src_lines that contains the lowest weight is 
-  // not equal to this.currentKineticRefLine, then set this.currentKineticRefLine, and call this.drawRefGammaLines()
-  if( bestRefLine !== this.currentKineticRefLine ) {
-    this.currentKineticRefLine = bestRefLine;
+  // Store candidate lines for cycling with their weights and best lines
+  const newCandidates = refLineMinWeights
+    .filter(item => !this.refLines || !this.refLines.some( input => item.lines.src_lines.parent == input.parent ))
+    .map(item => ({ 
+      lines: item.lines.src_lines, 
+      weight: item.minWeight,
+      bestLine: item.bestLine
+    }));
+  
+  // Check if candidate lines (parents) changed, not just weights
+  const candidateParentsChanged = !this.candidateKineticRefLines 
+    || this.candidateKineticRefLines.length !== newCandidates.length 
+    || !this.candidateKineticRefLines.every((candidate, i) => candidate.lines.parent === newCandidates[i].lines.parent);
+    
+  if( candidateParentsChanged ) {
+    // Lines actually changed - reset everything including cycling
+    this.candidateKineticRefLines = newCandidates;
+    this.currentKineticRefLineIndex = 0;
+    this.currentKineticRefLine = newCandidates.length > 0 ? newCandidates[0].lines : null;
+    this.drawRefGammaLines();
+    this.updateMouseCoordText();
+    
+    // Only restart auto-cycling if candidates actually changed
+    if( this.candidateKineticRefLines.length > 1 ) {
+      this.startKineticRefLineCycling();
+    } else {
+      this.stopKineticRefLineCycling();
+    }
+  } else if( this.candidateKineticRefLines ) {
+    // Same candidate lines, just update weights but preserve user selection
+    this.candidateKineticRefLines.forEach((candidate, i) => {
+      if( i < newCandidates.length ) {
+        candidate.weight = newCandidates[i].weight;
+        candidate.bestLine = newCandidates[i].bestLine;
+      }
+    });
+    
+    // Ensure current index is still valid
+    if( this.currentKineticRefLineIndex >= this.candidateKineticRefLines.length ) {
+      this.currentKineticRefLineIndex = 0;
+    }
+    
+    // Update current line reference and display
+    this.currentKineticRefLine = this.candidateKineticRefLines.length > 0 ? this.candidateKineticRefLines[this.currentKineticRefLineIndex].lines : null;
     this.drawRefGammaLines();
     this.updateMouseCoordText();
   }
 }//SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate
+
+SpectrumChartD3.prototype.startKineticRefLineCycling = function(){
+  const self = this;
+  
+  this.stopKineticRefLineCycling();
+  
+  if( this.candidateKineticRefLines.length <= 1 ) {
+    return;
+  }
+  
+  this.kineticRefLineCycleTimer = setInterval(function(){
+    if( self.kineticRefLineCycleTimer && self.candidateKineticRefLines.length > 1 ) {
+      self.cycleKineticRefLine(1, true);
+    }
+  }, 2000);
+}//SpectrumChartD3.prototype.startKineticRefLineCycling
+
+SpectrumChartD3.prototype.stopKineticRefLineCycling = function(){
+  if( this.kineticRefLineCycleTimer ) {
+    clearInterval(this.kineticRefLineCycleTimer);
+    this.kineticRefLineCycleTimer = null;
+  }
+}//SpectrumChartD3.prototype.stopKineticRefLineCycling
+
+SpectrumChartD3.prototype.updateCurrentKineticDisplay = function(){
+  const currentCandidate = this.candidateKineticRefLines[this.currentKineticRefLineIndex];
+  if( currentCandidate && currentCandidate.bestLine ) {
+    this.updateRefLineDisplay(currentCandidate.bestLine, currentCandidate.lines);
+    
+    // Find the DOM element for the best line in current kinetic reference and apply styling
+    const targetElement = this.vis.selectAll("g.ref").filter(function(d) { 
+      return d === currentCandidate.bestLine; 
+    }).node();
+    if( targetElement )
+      this.applyRefLineHoverStyling(targetElement, false);
+  }
+  this.updateKineticRefLineCandidateDisplay();
+}//SpectrumChartD3.prototype.updateCurrentKineticDisplay
+
+SpectrumChartD3.prototype.cycleKineticRefLine = function( direction, isAutomatic ){
+  if( !this.candidateKineticRefLines || this.candidateKineticRefLines.length <= 1 ) {
+    return;
+  }
+  
+  // Disable auto-cycling when user manually navigates (but not when called automatically)
+  if( !isAutomatic ) {
+    this.stopKineticRefLineCycling();
+  }
+  
+  if( direction > 0 ) {
+    this.currentKineticRefLineIndex = (this.currentKineticRefLineIndex + 1) % this.candidateKineticRefLines.length;
+  } else {
+    this.currentKineticRefLineIndex = (this.currentKineticRefLineIndex - 1 + this.candidateKineticRefLines.length) % this.candidateKineticRefLines.length;
+  }
+  
+  this.currentKineticRefLine = this.candidateKineticRefLines[this.currentKineticRefLineIndex].lines;
+  this.drawRefGammaLines();
+  this.updateCurrentKineticDisplay();
+}//SpectrumChartD3.prototype.cycleKineticRefLine
+
+SpectrumChartD3.prototype.updateKineticRefLineCandidateDisplay = function(){
+  const self = this;
+  
+  if( !self.refLineInfo || !self.candidateKineticRefLines || self.candidateKineticRefLines.length <= 1 ) {
+    if( self.refLineCandidates ) {
+      self.refLineCandidates.remove();
+      self.refLineCandidates = null;
+    }
+    return;
+  }
+  
+  // Create candidates element if it doesn't exist
+  if( !self.refLineCandidates ) {
+    self.refLineCandidates = self.refLineInfo.append("g").attr("class", "refLineCandidates");
+    self.refLineCandidates.append("rect").attr("class", "refLineCandidatesBackground");
+    self.refLineCandidates.append("text").attr("class", "refLineCandidatesText").attr("x", 0).attr("dy", "1em");
+  }
+  
+  const candidatesText = self.refLineCandidates.select("text");
+  const candidatesRect = self.refLineCandidates.select("rect");
+  
+  // Clear existing content
+  candidatesText.selectAll("tspan").remove();
+  
+  // Add separator line
+  candidatesText.append('svg:tspan')
+    .attr('x', 0)
+    .attr('dy', "1.4em")
+    .style('font-size', '0.8em')
+    .text( "Candidates:" );
+  
+  // Display all candidate reference lines
+  self.candidateKineticRefLines.forEach(function(candidate, index) {
+    const isCurrent = (index === self.currentKineticRefLineIndex);
+    const displayText = candidate.lines.parent + " (" + candidate.weight.toFixed(2) + ")";
+    
+    const tspan = candidatesText.append('svg:tspan')
+      .attr('x', 0)
+      .attr('dy', "1.1em")
+      .style('font-size', '0.8em')
+      .style('font-weight', isCurrent ? 'bold' : 'normal')
+      .text( displayText );
+  });
+  
+  // Size and position the background rectangle
+  const bbox = candidatesText.node().getBBox();
+  const extraPadding = 4;
+  candidatesRect
+    .attr("x", bbox.x - 3 - extraPadding)
+    .attr("y", bbox.y - 2)
+    .attr("width", bbox.width + 6 + 2*extraPadding)
+    .attr("height", bbox.height + 4);
+  
+  // Position candidates (left if space, otherwise right)
+  const candidatesWidth = bbox.width + 6 + 2*extraPadding;
+  const currentTransform = self.refLineInfo.attr("transform");
+  const refLineX = currentTransform ? parseFloat(currentTransform.match(/translate\(([^,]+),/)?.[1] || 0) : 0;
+  const xOffset = (refLineX - candidatesWidth - 2 < 0) ? 
+    self.refLineInfoTxt.select("text").node().getBBox().width + 15 : 
+    -candidatesWidth - 2;
+  
+  self.refLineCandidates.attr("transform", "translate(" + xOffset + ",0)");
+}//SpectrumChartD3.prototype.updateKineticRefLineCandidateDisplay
+
+SpectrumChartD3.prototype.updateRefLineDisplay = function( linedata, refLineSource ){
+  const self = this;
+  
+  if( !self.refLineInfoTxt || !linedata || !refLineSource ) {
+    return;
+  }
+  
+  const e = linedata.e;
+  const sf = linedata.h;
+  const detector = refLineSource.detector;
+  const shielding = refLineSource.shielding;
+  const shieldingThickness = refLineSource.shieldingThickness;
+  const nearestLineParent = refLineSource.parent;
+  
+  const textdescrip = (linedata.src_label ? (linedata.src_label + ', ') : (nearestLineParent ? (nearestLineParent + ', ') : "") )
+                    +  e + ' keV'
+                    + (linedata.particle ? ' ' + linedata.particle : "")
+                    + ', rel. amp. ' + sf;
+  
+  let txt = "";
+  if( (typeof linedata.desc_ind === "number") && (linedata.desc_ind >= 0) && (linedata.desc_ind < refLineSource.desc_strs.length) )
+    txt = refLineSource.desc_strs[linedata.desc_ind];
+  
+  let attTxt = "";
+  if( linedata.particle === 'gamma' || linedata.particle === 'xray' ) {
+    if( shielding ) {
+      if( shieldingThickness )
+        attTxt = shieldingThickness + ' of ';
+      attTxt += shielding;
+    }
+    if( detector )
+      attTxt = (attTxt ? (attTxt + ' with a ' + detector) : 'Assuming a ' + detector);
+  }
+  
+  const svgtxt = self.refLineInfoTxt.select("text")
+                   .attr("dy", "1em")
+                   .attr("fill", refLineSource.color || "#000");
+  
+  // Remove existing main text spans (but keep any candidate spans)
+  svgtxt.selectAll("tspan:not(.candidate)").remove();
+  
+  if ( self.options.showRefLineInfoForMouseOver ) {
+    svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( textdescrip );
+    if( txt )
+      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( txt );
+    if( attTxt )
+      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( attTxt );
+  }
+}//SpectrumChartD3.prototype.updateRefLineDisplay
+
+SpectrumChartD3.prototype.applyLineStyling = function( lineElement, linedata, isHovered ) {
+  const self = this;
+  const lineSelection = d3.select(lineElement);
+  const strokeWidth = isHovered ? self.options.refLineWidthHover : self.options.refLineWidth;
+  
+  // Apply main line styling
+  lineSelection.select("line")
+    .attr("stroke-width", strokeWidth)
+    .attr("dx", -0.5*strokeWidth);
+  
+  // Handle extension lines
+  if( self.options.refLineVerbosity >= 1 ) {
+    const hasMajorExtension = linedata.major && self.options.refLineVerbosity >= 2;
+    
+    if( hasMajorExtension ) {
+      lineSelection.select("line.major-extension")
+        .attr("stroke-width", strokeWidth)
+        .style("opacity", isHovered ? 1.0 : 0.5);
+    }
+    
+    if( isHovered && !hasMajorExtension ) {
+      // Add temporary extension line for hover (same positioning as major-extension)
+      const h = self.size.height;
+      const m = self.options.refLineTopPad;
+      const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp, h-2); };
+      const extension_dash = "" + self.options.refLineWidthHover + "," + 2*self.options.refLineWidthHover;
+      
+      lineSelection.selectAll("line.temp-extension").remove();
+      lineSelection.append("line")
+        .attr("class", "temp-extension")
+        .style("stroke-dasharray", extension_dash) 
+        .attr("stroke", linedata.color ? linedata.color : linedata.parent.color)
+        .attr("stroke-width", self.options.refLineWidthHover)
+        .attr("y1", y2Lin(linedata))
+        .attr("y2", self.options.refLineTopPad)
+        .attr("x1", 0)
+        .attr("x2", 0);
+    } else if( !isHovered ) {
+      lineSelection.selectAll("line.temp-extension").remove();
+    }
+  }
+}//SpectrumChartD3.prototype.applyLineStyling
+
+SpectrumChartD3.prototype.applyRefLineHoverStyling = function( nearestline, skipPreviousReset ){
+  const self = this;
+  
+  // Reset previous kinetic reference line styling if cycling
+  if( !skipPreviousReset && self.candidateKineticRefLines && self.candidateKineticRefLines.length > 1 ) {
+    self.candidateKineticRefLines.forEach(function(candidate) {
+      const refLineElement = self.vis.selectAll("g.ref").filter(function(d) { return d === candidate.bestLine; }).node();
+      if( refLineElement )
+        self.applyLineStyling(refLineElement, candidate.bestLine, false);
+    });
+  }
+  
+  if( nearestline ) {
+    const linedata = nearestline.__data__;
+    self.applyLineStyling(nearestline, linedata, true);
+  }
+}//SpectrumChartD3.prototype.applyRefLineHoverStyling
 
 /**
  * -------------- Grid Lines Functions --------------
@@ -4513,88 +4817,28 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   const sf = linedata.h;
   const linepx = self.xScale(e);
 
-  var txt, textdescrip, attTxt;
-  var detector = linedata.parent.detector
-  var shielding = linedata.parent.shielding;
-  var shieldingThickness = linedata.parent.shieldingThickness;
-  var nearestLineParent = linedata.parent.parent;
-
-  //linedata.src_label is only defined for ReferenceLineInfo::SourceType::NuclideMixture; it gives you the parent nuclide(s) within the mixture
-  
-  textdescrip = (linedata.src_label ? (linedata.src_label + ', ') : (nearestLineParent ? (nearestLineParent + ', ') : "") )
-                +  e + ' keV'
-                + (linedata.particle ? ' ' + linedata.particle : "")
-                + ', rel. amp. ' + sf;
-  
-  if( (typeof linedata.desc_ind === "number") && (linedata.desc_ind >= 0) && (linedata.desc_ind < linedata.parent.desc_strs.length) )
-    txt = linedata.parent.desc_strs[linedata.desc_ind];
-
-  if( linedata.particle === 'gamma' || linedata.particle === 'xray' ) {
-    if( shielding )
-    {
-      if( shieldingThickness )
-        attTxt = shieldingThickness + ' of ';
-      attTxt += shielding;
-    }
-    if( detector )
-      attTxt = (attTxt ? (attTxt + ' with a ' + detector) : 'Assuming a ' + detector);
-  }
-
   self.refLineInfo.style("display", null).attr("transform", "translate("+linepx+",0)" );
   
   // Add circle to the hovered reference line
   const lineSelection = d3.select(nearestline);
   const nearLineEl = lineSelection.select("line");
   
-  var svgtxt = self.refLineInfoTxt.select("text")
-                   .attr("dy", "1em")
-                   .attr("fill", linedata.parent.color);
-  svgtxt.selectAll("tspan").remove();
-  if ( self.options.showRefLineInfoForMouseOver ) {
-    svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( textdescrip );
-    if( txt )
-      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( txt );
-    if( attTxt )
-      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( attTxt );
+  // Update the main reference line text display
+  self.updateRefLineDisplay(linedata, linedata.parent);
+  
+  // Update candidate display
+  self.updateKineticRefLineCandidateDisplay();
 
-    /*Now detect if svgtxt is running off the right side of the chart, and if so */
-    /*  put to the left of the line */
-    var tx = function(d) {
-      var w = this.getBBox().width;
-      return ((linepx+5+w)>self.size.width) ? ("translate("+(-5-w)+",0)") : "translate(5,0)";
-    };
-    self.refLineInfoTxt.attr("transform", tx );
-  }
+  /*Now detect if text is running off the right side of the chart, and if so */
+  /*  put to the left of the line */
+  var tx = function(d) {
+    var w = this.getBBox().width;
+    return ((linepx+5+w)>self.size.width) ? ("translate("+(-5-w)+",0)") : "translate(5,0)";
+  };
+  self.refLineInfoTxt.attr("transform", tx );
 
-  nearLineEl
-    .attr("stroke-width",self.options.refLineWidthHover)
-    .attr("dx", -0.5*self.options.refLineWidthHover );
-
-  // Handle extension line for hovered reference line (only if refLineVerbosity >= 1)
-  if( self.options.refLineVerbosity >= 1 ) {
-    const hoveredLinedata = nearestline.__data__;
-    const nearestlineSelection = d3.select(nearestline);
-    
-    if( hoveredLinedata.major && self.options.refLineVerbosity >= 2 ) {
-      // For major lines with verbosity >= 2, just modify the existing extension line
-      nearestlineSelection.select("line.major-extension")
-        .attr("stroke-width", self.options.refLineWidthHover)
-        .style("opacity", 1.0);
-    } else {
-      // For non-major lines or major lines with verbosity == 1, add a temporary extension line
-      const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2); };
-      const extension_dash = "" + self.options.refLineWidthHover + "," + 2*self.options.refLineWidthHover;
-      nearestlineSelection.append("line")
-        .attr("class", "temp-extension")
-        .style("stroke-dasharray", extension_dash) 
-        .attr("stroke", hoveredLinedata.color ? hoveredLinedata.color : hoveredLinedata.parent.color)
-        .attr("stroke-width", self.options.refLineWidthHover)
-        .attr("y1", y2Lin(hoveredLinedata))
-        .attr("y2", self.options.refLineTopPad)
-        .attr("x1", 0)
-        .attr("x2", 0);
-    }
-  }
+  // Apply hover styling to the nearest line
+  self.applyRefLineHoverStyling(nearestline, true);
 
   lineSelection.select("circle.ref-hover-indicator").remove(); // Remove any existing circle
   const circleY = self.options.refLineVerbosity >= 1 ? nearLineEl.attr("y2") : self.size.height;
@@ -6560,7 +6804,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .style("cursor", "pointer")
         .on("mousedown", function(){
           self.handleMouseMoveScaleFactorSlider();
-          registerKeyboardHandler(self.keydown());
           spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.startingYScaleFactor = spectrum.yScaleFactor;
@@ -6573,7 +6816,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .on("mouseup", self.endYAxisScalingAction() )
         .on("touchstart", function(){
           self.handleMouseMoveScaleFactorSlider();
-          registerKeyboardHandler(self.keydown());
           spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.startingYScaleFactor = spectrum.yScaleFactor;
