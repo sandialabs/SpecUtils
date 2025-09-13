@@ -2536,7 +2536,15 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
             self.updateFeatureMarkers( energy );
-          
+
+          // If showing dynamic reference lines
+          if( self.candidateKineticRefLines && (self.candidateKineticRefLines.length > 1) ){
+            if( self.kineticRefLineCycleTimer )
+              self.stopKineticRefLineCycling();
+            else
+              self.cycleKineticRefLine(1);
+          }//if( self.candidateKineticRefLines && (self.candidateKineticRefLines.length > 1) )
+
           self.mousewait = window.setTimeout(
             self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],modKeyPressed),
             self.options.doubleClickDelay
