@@ -69,6 +69,118 @@ bool SpecFile::load_cnf_file( const std::string &filename )
 }//bool load_cnf_file( const std::string &filename );
   
   
+void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
+{
+  // The Measurement we will place all information into.
+  auto meas = std::make_shared<Measurement>();
+  
+  // get the sample ID
+  string sampleid= reader.GetSampleTitle();
+  meas->title_ = sampleid;
+  if( sampleid.size() )
+    meas->remarks_.push_back( "Sample ID: " + sampleid );
+  
+  // get the times
+  meas->start_time_ = reader.GetAquisitionTime();
+  float real_time = reader.GetRealTime();
+  meas->real_time_ = real_time;
+  meas->live_time_ = reader.GetLiveTime();
+  
+  // set the energy calibration
+  vector<float> cal_coefs = reader.GetEnergyCalibration();
+  
+  // get the spectrum
+  auto & spec = reader.GetSpectrum();
+  size_t num_chnanels = spec.size();
+  
+  // set the energy calibration
+  try
+  {
+    auto newcal = make_shared<EnergyCalibration>();
+    newcal->set_polynomial( num_chnanels, cal_coefs, {} );
+    meas->energy_calibration_ = newcal;
+  }
+  catch( std::exception & )
+  {
+    bool allZeros = true;
+    for( const float v : cal_coefs )
+      allZeros = allZeros && (v == 0.0f);
+    
+    // We could check if this is a alpha spectra or not...
+    /*
+     bool is_alpha_spec = false;
+     if( !allZeros )
+     {
+     //From only a single file, Alpha spec files have: "Alpha Efcor", "Alpha Encal".  Segment 11, has just "Alpha"
+     const uint8_t headers_with_alpha[] = { 2, 6, 11, 13, 19 };
+     string buffer( 513, '\0' );
+     for( uint8_t i : headers_with_alpha )
+     {
+     size_t segment_position = 0;
+     if( findCnfSegment(i, 0, segment_position, input, size) )
+     {
+     input.seekg( segment_position, std::ios::beg );
+     if( input.read( &(buffer[0]), 512 ) && (buffer.find("Alpha") != string::npos) )
+     {
+     is_alpha_spec = true;
+     break;
+     }//if( we found the segment, and it had "Alpha" in it )
+     }//if( find segment )
+     }//for( loop over potential segments that might have "Alpha" in them )
+     }//if( !allZeros )
+     */
+    
+    if( !allZeros )
+      throw runtime_error( "Calibration parameters were invalid" );
+  }//try /catch set calibration
+  
+  // get the detector info
+  CAMInputOutput::DetInfo det_info = reader.GetDetectorInfo();
+  
+  if( det_info.MCAType.size() )
+    remarks_.push_back( "MCA Type: " + det_info.MCAType);
+  
+  
+  if( det_info.Name.size() )
+    meas->detector_name_ = det_info.Name;
+  
+  // convert the int32 counts to floats
+  auto channel_data = make_shared<vector<float>>(num_chnanels);
+  for( size_t i = 0; i < num_chnanels; ++i )
+  {
+    
+    const float val = static_cast<float>( spec[i] );
+    meas->gamma_count_sum_ += val;
+    (*channel_data)[i] = val;
+  }//set gamma channel data
+  
+  meas->gamma_counts_ = channel_data;
+  
+  // fill in any resuls if they exist
+  auto& cam_results = reader.GetNuclides();
+  if (cam_results.size()) {
+    auto new_det_ana = make_shared<DetectorAnalysis>();
+    for (size_t i = 0; i < cam_results.size(); i++)
+    {
+      DetectorAnalysisResult result;
+      float activity = cam_results[i].Activity * 37000; // convert from uCi the CNF default
+      
+      //skip over non-detects genie stores the hole nuclide library
+      if (activity > 1e-6) {
+        result.activity_ = activity;
+        result.nuclide_ = cam_results[i].Name;
+        result.real_time_ = real_time;
+        result.detector_ = det_info.Name;
+        
+        new_det_ana->results_.push_back(result);
+      }
+    }
+    detectors_analysis_ = new_det_ana;
+  }
+  measurements_.push_back( meas );
+}//void load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
+  
+  
 bool SpecFile::load_from_cnf( std::istream &input )
 {
   
@@ -91,116 +203,10 @@ bool SpecFile::load_from_cnf( std::istream &input )
     input.read(reinterpret_cast<char*>(file_bits.data()), size);
 
     //create tge camio object and send it the bits
-    auto cam = std::make_shared<CAMInputOutput::CAMIO>();
-    cam->ReadFile(reinterpret_cast<const std::vector<byte_type>&>(file_bits));
+    CAMInputOutput::CAMIO cam;
+    cam.ReadFile(reinterpret_cast<const std::vector<byte_type>&>(file_bits));
     
-    // The Measurement we will place all information into.
-    auto meas = std::make_shared<Measurement>();
-    
-    // get the sample ID
-    string sampleid= cam->GetSampleTitle();
-    meas->title_ = sampleid;
-    if( sampleid.size() )
-        meas->remarks_.push_back( "Sample ID: " + sampleid );
-
-    // get the times
-    meas->start_time_ = cam->GetAquisitionTime();
-    float real_time = cam->GetRealTime();
-    meas->real_time_ = real_time;
-    meas->live_time_ = cam->GetLiveTime();
-
-    // set the energy calibration
-    vector<float> cal_coefs = cam->GetEnergyCalibration();
-
-    // get the spectrum
-    auto & spec = cam->GetSpectrum();
-    size_t num_chnanels = spec.size();
-
-    // set the energy calibration
-    try
-    {
-      auto newcal = make_shared<EnergyCalibration>();
-      newcal->set_polynomial( num_chnanels, cal_coefs, {} );
-      meas->energy_calibration_ = newcal;
-    }
-    catch( std::exception & )
-    {
-      bool allZeros = true;
-      for( const float v : cal_coefs )
-        allZeros = allZeros && (v == 0.0f);
-      
-      // We could check if this is a alpha spectra or not...
-      /*
-      bool is_alpha_spec = false;
-      if( !allZeros )
-      {
-        //From only a single file, Alpha spec files have: "Alpha Efcor", "Alpha Encal".  Segment 11, has just "Alpha"
-        const uint8_t headers_with_alpha[] = { 2, 6, 11, 13, 19 };
-        string buffer( 513, '\0' );
-        for( uint8_t i : headers_with_alpha )
-        {
-          size_t segment_position = 0;
-          if( findCnfSegment(i, 0, segment_position, input, size) )
-          {
-            input.seekg( segment_position, std::ios::beg );
-            if( input.read( &(buffer[0]), 512 ) && (buffer.find("Alpha") != string::npos) )
-            {
-              is_alpha_spec = true;
-              break;
-            }//if( we found the segment, and it had "Alpha" in it )
-          }//if( find segment )
-        }//for( loop over potential segments that might have "Alpha" in them )
-      }//if( !allZeros )
-      */
-      
-      if( !allZeros )
-        throw runtime_error( "Calibration parameters were invalid" );
-    }//try /catch set calibration
-
-    // get the detector info 
-    CAMInputOutput::DetInfo det_info = cam->GetDetectorInfo();
-
-    if( det_info.MCAType.size() )
-      remarks_.push_back( "MCA Type: " + det_info.MCAType);
-    
-
-    if( det_info.Name.size() )
-      meas->detector_name_ = det_info.Name;
-
-    // convert the int32 counts to floats 
-    auto channel_data = make_shared<vector<float>>(num_chnanels);
-    for( size_t i = 0; i < num_chnanels; ++i )
-    {
-      
-      const float val = static_cast<float>( spec[i] );
-      meas->gamma_count_sum_ += val;
-      (*channel_data)[i] = val;
-    }//set gamma channel data
-    
-    meas->gamma_counts_ = channel_data;
-
-    // fill in any resuls if they exist
-    auto& cam_results = cam->GetNuclides();
-    if (cam_results.size()) {
-        auto new_det_ana = make_shared<DetectorAnalysis>();
-        for (size_t i = 0; i < cam_results.size(); i++)
-        {
-            DetectorAnalysisResult result;
-            float activity = cam_results[i].Activity * 37000; // convert from uCi the CNF default
-
-            //skip over non-detects genie stores the hole nuclide library
-            if (activity > 1e-6) {
-                result.activity_ = activity;
-                result.nuclide_ = cam_results[i].Name;
-                result.real_time_ = real_time;
-                result.detector_ = det_info.Name;
-
-                new_det_ana->results_.push_back(result);
-            }
-        }
-        detectors_analysis_ = new_det_ana;
-    }
-    measurements_.push_back( meas );
+    load_cnf_using_reader( cam );
     
     cleanup_after_load();
   }catch ( std::exception & )

@@ -98,6 +98,7 @@ namespace SpecUtils
 namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 #endif
 
+namespace CAMInputOutput{ class CAMIO; }
 
 
 namespace SpecUtils
@@ -1905,9 +1906,21 @@ public:
   //bool load_from_chn(...): Load information from ORTECs binary CHN file.
   bool load_from_chn( std::istream &input );
   
-  //bool load_from_cnf(...): loads info from CNF files.  Not
-  //  particularly well tested, but seems to work okay
+  /** Creates a `CAMInputOutput::CAMIO` reader from the input stream, and calls `load_cnf_using_reader`
+   to do the actual work.
+   @returns If reading the CNF was successful.
+   */
   bool load_from_cnf( std::istream &input );
+  
+  /** Uses the given CAMIO reader to crea a single Measurement entry, grab nuclides, and some other
+   information, and then returns sucess status.  Does not call `cleanup_after_load(...)`.
+   In decendant classes, you can over-ride this function to extract more information (e.g., detector efficiency curve)
+   on load.
+   
+   Throws exception on error.
+   */
+  virtual void load_cnf_using_reader( CAMInputOutput::CAMIO &reader );
+  
   bool load_from_tracs_mps( std::istream &input );
   
   bool load_from_aram( std::istream &input );

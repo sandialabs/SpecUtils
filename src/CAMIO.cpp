@@ -17,6 +17,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <iomanip>
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
@@ -28,7 +29,7 @@
 
 #include "3rdparty/date/include/date/date.h"
 
-#include "specUtils/CAMIO.h"
+#include "SpecUtils/CAMIO.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/SpecFile.h"

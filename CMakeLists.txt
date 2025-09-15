@@ -18,7 +18,7 @@ option( SpecUtils_USING_NO_THREADING "Whether to disable multithreading" OFF )
 option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
 option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interactive regression test" OFF )
-option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" ON )
+option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
 option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
 option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
@@ -131,6 +131,7 @@ set( sources
      src/DateTime.cpp
      src/ParseUtils.cpp
      src/SpecFile_location.cpp
+     src/CAMIO.cpp
      README.md
 )
 
@@ -147,6 +148,7 @@ set( headers
      SpecUtils/ParseUtils.h
      SpecUtils/SpecFile_location.h
      SpecUtils/RapidXmlUtils.hpp
+     SpecUtils/CAMIO.h
 )
 
 if( SpecUtils_INJA_TEMPLATES )
@@ -238,7 +240,7 @@ else( SpecUtils_SHARED_LIB )
 endif( SpecUtils_SHARED_LIB )
 
 
-add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES}  "SpecUtils/CAMIO.h" "src/CAMIO.cpp")
+add_library( SpecUtils ${SpecUtils_LIB_TYPE} ${sources} ${headers} ${OTHER_SUPPORT_FILES} )
 set_target_properties( SpecUtils PROPERTIES PREFIX "lib" OUTPUT_NAME "SpecUtils" )
 
 set_property( TARGET SpecUtils PROPERTY POSITION_INDEPENDENT_CODE ON )
