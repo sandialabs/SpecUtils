@@ -69,6 +69,9 @@
 
 #if( SpecUtils_ENABLE_D3_CHART )
 #include "SpecUtils/D3SpectrumExport.h"
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+#include "D3SpectrumExportResources.h"
+#endif
 #endif
 
 #if( SpecUtils_ENABLE_URI_SPECTRA )
@@ -489,7 +492,7 @@ size_t SpecFile::num_measurements() const
 }//size_t num_measurements() const
 
 
-std::shared_ptr<const Measurement> SpecFile::measurement(
+std::shared_ptr<const Measurement> SpecFile::measurement_at_index(
                                                          size_t num ) const
 {
   std::unique_lock<std::recursive_mutex> lock( mutex_ );
@@ -501,6 +504,10 @@ std::shared_ptr<const Measurement> SpecFile::measurement(
   return measurements_[num];
 }
 
+std::shared_ptr<const Measurement> SpecFile::measurement( size_t num ) const
+{
+  return measurement_at_index( num );
+}
 
 DetectorType SpecFile::detector_type() const
 {
@@ -1393,7 +1400,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_UnknownDetectorStr           = "Unknown";
   static const string sm_MicroDetectiveDetectorStr    = "MicroDetective";
   static const string sm_MicroRaiderDetectorStr       = "MicroRaider";
-  static const string sm_RadiaCodeDetectorStr         = "RadiaCode-102";
+  static const string sm_RadiaCode10XDetectorStr      = "RadiaCode-10X";
+  static const string sm_RadiaCode110DetectorStr      = "RadiaCode-110";
+  static const string sm_RadiaCode103GDetectorStr     = "RadiaCode-103G";
   static const string sm_InterceptorStr               = "Interceptor";
   static const string sm_Sam940DetectorStr            = "SAM940";
   static const string sm_Sam940Labr3DetectorStr       = "SAM940LaBr3";
@@ -1415,6 +1424,9 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
   static const string sm_KromekD3S                    = "Kromek D3S";
+  static const string sm_KromekGR1                    = "Kromek GR1";
+  static const string sm_KromekD5                     = "Kromek D5";
+  static const string sm_Raysid                       = "Raysid";
   static const string sm_Fulcrum                      = "Fulcrum";
   static const string sm_Fulcrum40h                   = "Fulcrum-40h";
   static const string sm_Sam950                       = "Sam-950";
@@ -1422,7 +1434,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   
 //  GN3, InSpector 1000 LaBr3, Pager-S, SAM-Eagle-LaBr, GR130, SAM-Eagle-NaI-3x3
 //  InSpector 1000 NaI, RadPack, SpiR-ID LaBr3, Interceptor, Radseeker, SpiR-ID NaI
-//  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger, RadiaCode-102
+//  GR135Plus, LRM, Raider, HRM, LaBr3PNNL, Transpec, Falcon 5000, Ranger, RadiaCode-10X
 //  MicroDetective, FieldSpec, IdentiFINDER-NG, SAM-935, NaI 3x3, SAM-Eagle-LaBr3
 
   switch( type )
@@ -1468,8 +1480,12 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_MicroDetectiveDetectorStr;
     case DetectorType::MicroRaider:
       return sm_MicroRaiderDetectorStr;
-    case DetectorType::RadiaCode:
-      return sm_RadiaCodeDetectorStr;
+    case DetectorType::RadiaCodeCsI10:
+      return sm_RadiaCode10XDetectorStr;
+    case DetectorType::RadiaCodeCsI14:
+      return sm_RadiaCode110DetectorStr;
+    case DetectorType::RadiaCodeGAGG10:
+      return sm_RadiaCode103GDetectorStr;
     case DetectorType::Interceptor:
       return sm_InterceptorStr;
     case DetectorType::Sam940:
@@ -1512,6 +1528,12 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderLaBr;
     case DetectorType::KromekD3S:
       return sm_KromekD3S;
+    case DetectorType::KromekD5:
+      return sm_KromekD5;
+    case DetectorType::KromekGR1:
+      return sm_KromekGR1;
+    case DetectorType::Raysid:
+      return sm_Raysid;
     case DetectorType::Fulcrum:
       return sm_Fulcrum;
     case DetectorType::Fulcrum40h:
@@ -5603,7 +5625,10 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
          && meas->real_time() > 0.00000001
          && !meas->derived_data_properties()  //make sure not derived data
          && ((meas->real_time() < 15.0)   //20181108: some search systems will take one spectra every like ~10 seconds
-             || ((detector_type_ == SpecUtils::DetectorType::RadiaCode) // Radiacode detectors can take like 30 second spectra
+             // Radiacode detectors can take spectra over many seconds or minutes
+             || (((detector_type_ == SpecUtils::DetectorType::RadiaCodeCsI10)
+             || (detector_type_ == SpecUtils::DetectorType::RadiaCodeCsI10)
+             || (detector_type_ == SpecUtils::DetectorType::RadiaCodeGAGG10))
                  && (meas->real_time() < 125.0)) ) )
       {
         ++pt_num_items;
@@ -6539,21 +6564,39 @@ void SpecFile::set_detector_type_from_other_info()
   }//if( iequals_ascii( manufacturer_,"ORTEC" ) )
   
   
-  if( icontains( manufacturer_,"Kromek" ) )
+  if( icontains(manufacturer_, "Kromek") || icontains(model, "Kromek") )
   {
     // I've seen manufacturer name be either "Kromek" or "Kromek Ltd"
     
-    if( istarts_with(instrument_model_,"D3") || iequals_ascii(instrument_model_,"D3S") )
+    if( icontains(model,"D3") || icontains(model,"D3S") )
     {
       //Have seen model strings: "D3", "D3S", "D3S 2.02"
       detector_type_ = DetectorType::KromekD3S;
       return;
     }
-    
+
+    if( icontains(model,"D5") )
+    {
+      detector_type_ = DetectorType::KromekD5;
+      return;
+    }
+
+    if( icontains(model,"GR1") )
+    {
+      detector_type_ = DetectorType::KromekGR1;
+      return;
+    }
+
     //Other Kromek instrument models I've seem: "MultiSpect/KSpect"
   }//if( icontains( manufacturer_,"Kromek" ) )
-  
-  
+
+
+  if( icontains(instrument_model_,"Raysid") )
+  {
+    detector_type_ = DetectorType::Raysid;
+    return;
+  }
+
   if( iequals_ascii(instrument_type_,"PVT Portal") && iequals_ascii(manufacturer_,"SAIC") )
   {
     detector_type_ = DetectorType::SAIC8;
@@ -6813,6 +6856,38 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::Fulcrum;
     return;
   }//if( icontains(instrument_model_, "Fulcrum") )
+
+  if( icontains(instrument_model_, "RadiaCode-103G") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeGAGG10;
+    return;
+  }
+
+  if( icontains(instrument_model_, "RadiaCode-110") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI14;
+    return;
+  }
+
+  if( icontains(instrument_model_, "RadiaCode") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "Scan-Electronics";
+    detector_type_ = SpecUtils::DetectorType::RadiaCodeCsI10;
+    return;
+  }
+  
+  if( icontains(instrument_model_, "Raysid") )
+  {
+    if( manufacturer_.empty() )
+      manufacturer_ = "IN-NEW";
+    detector_type_ = SpecUtils::DetectorType::Raysid;
+    return;
+  }
   
   
   if( manufacturer_.size() || instrument_model_.size() )
@@ -6832,7 +6907,6 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="" && instrument_model_=="3x3x12 inch NaI Side Ortec Digibase MCA")
        && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
        && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
-       && !(manufacturer_=="Scan-Electronics" && instrument_model_=="RadiaCode-102")
        && !(manufacturer_=="Unknown" && instrument_model_=="Unknown")
        && !icontains( manufacturer_, "RIDs R Us")
        && !icontains( manufacturer_, "SRPMs R Us")
@@ -7109,7 +7183,11 @@ std::string SpecFile::generate_psuedo_uuid() const
 bool SpecFile::write_d3_html( ostream &ostr,
                               const D3SpectrumExport::D3SpectrumChartOptions &options,
                               std::set<int> sample_nums,
-                              std::vector<std::string> det_names ) const
+                              std::vector<std::string> det_names
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                              , const std::string &base_dir
+#endif
+) const
 {
   try
   {
@@ -7130,8 +7208,12 @@ bool SpecFile::write_d3_html( ostream &ostr,
     vector< pair<const Measurement *,D3SpectrumExport::D3SpectrumOptions> > measurements;
     D3SpectrumExport::D3SpectrumOptions spec_options;
     measurements.push_back( pair<const Measurement *,::D3SpectrumExport::D3SpectrumOptions>(summed.get(),spec_options) );
-    
+
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
     return D3SpectrumExport::write_d3_html( ostr, measurements, options );
+#else
+    return D3SpectrumExport::write_d3_html( ostr, measurements, options, base_dir );
+#endif
   }catch( std::exception & )
   {
      return false;
@@ -8951,7 +9033,12 @@ void SpecFile::write( std::ostream &strm,
     case SaveSpectrumAsType::HtmlD3:
     {
       D3SpectrumExport::D3SpectrumChartOptions options;
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
       success = info.write_d3_html( strm, options, samples, info.detector_names_ );
+#else
+      // TODO: we should probably fix defaulting to `D3_SCRIPT_RUNTIME_DIR` to specify the JS/CSS source dir
+      success = info.write_d3_html( strm, options, samples, info.detector_names_, D3_SCRIPT_RUNTIME_DIR );
+#endif
       break;
     }
 #endif

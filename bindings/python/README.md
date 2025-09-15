@@ -76,7 +76,7 @@ python3 -m venv my_venv
 source my_venv/bin/activate  # Windows PowerShell: .\my_venv\Scripts\Activate.ps1
 
 # Compile and install the bindings
-pip install SpecUtils/bindings/python
+pip install --use-feature=in-tree-build SpecUtils/bindings/python
 
 # Use the package
 python

@@ -7,16 +7,10 @@ In order to use **SpecUtils** from **node.js**, we need to compile the C++ into 
 To create the add-on we use [cmake-js](https://www.npmjs.com/package/cmake-js) to build the [SpecUtils](https://github.com/sandialabs/SpecUtils) library as well as some [node-addon-api](https://www.npmjs.com/package/node-addon-api) interface code to allow accessing the C++ functions from JavaScript.  Once the module is built, it should work with any **node.js** versions >=6.14.2 thanks to the ABI stability offered by [n-api](https://nodejs.org/api/n-api.html).
 
 ## Prerequisites
-You will need a reasonable recent version of [CMake](https://cmake.org/) (version >=3.1) installed, a C++ compiler that can handle C++11, and the [boost](https://www.boost.org/) libraries (developed against 1.65.1 version shouldn't matter much) to link against.   You will of course also need [node.js](https://nodejs.org/en/) installed.
-- **Windows**: You will need the CMake and node executables in your **PATH** variable.  When installing node.js there may be an option to install the MSVC command line tools through Chocolatey, otherwise you will need to have MSVS-2012 or newer installed (development done with MSVS-2017). Other compilers (clang, [MingGW](https://nuwen.net/mingw.html)) *should* work, but have not been tested.  This project links against the static runtime libraries (e.g., uses the '/MT' flag), and statically links to boost, so the resulting module is self contained.  When executing the steps below to compile the code you will need to open the 'x64 Native Tools Command Prompt' provided by MSVS, or execute the appropriate *vcvarsall.bat*.
-  - Instructions for building boost can be found [here](https://www.boost.org/doc/libs/1_65_1/more/getting_started/windows.html), but basically you want to do something like: 
-    ```bash
-       cd Path\To\boost_1_65_1
-       boostrap.bat
-       b2.exe -j4 runtime-link=static link=static threading=multi address-model=64 --prefix=C:\install\msvc2017\x64\boost_1_65_1 install
-    ```
-- **macOS**: You will need the Xcode command line tools installed, which can be done by running `xcode-select --install`.  CMake, node, and boost can all be installed using [MacPorts](https://www.macports.org/), [HomeBrew](https://brew.sh/), or manually installed.  Keep in mind it is best to statically link to boost (e.g., have the ".a" libraries availble).
-- **Linux**: You can use your package manager to install node.js, CMake, and the C++ compiler and related tools (usually with something like `apt-get install build-essential`).  However, for boost some care may be needed.  The `SpecUtils` module is really a shared library that node.js loads.  To avoid dependencies we will statically link to the boost libraries (e.g., copy the needed boost code into the resulting SpecUtils.module file), meaning you need the `-fPIC` C/C++ compiler flag enabled not just for building `SpecUtils` code, but for all of the static libraries you link it against, namely, boost - which isn't the default when compiling static libraries.  Therefore when building boost you may need to add `-fPIC -std=c++11` to the compile flags.
+You will need a reasonable recent version of [CMake](https://cmake.org/) (version >=3.5) installed, a C++ compiler that can handle C++11.   You will of course also need [node.js](https://nodejs.org/en/) installed.
+- **Windows**: You will need the CMake and node executables in your **PATH** variable.  When installing node.js there may be an option to install the MSVC command line tools through Chocolatey, otherwise you will need to have MSVS-2012 or newer installed (development done with MSVS-2017). Other compilers (clang, [MingGW](https://nuwen.net/mingw.html)) *should* work, but have not been tested.  This project links against the static runtime libraries (e.g., uses the '/MT' flag) so the resulting module is self contained.  When executing the steps below to compile the code you will need to open the 'x64 Native Tools Command Prompt' provided by MSVS, or execute the appropriate *vcvarsall.bat*.
+- **macOS**: You will need the Xcode command line tools installed, which can be done by running `xcode-select --install`.  CMake, and node, which can be installed using [MacPorts](https://www.macports.org/), [HomeBrew](https://brew.sh/), or manually.
+- **Linux**: You can use your package manager to install node.js, CMake, and the C++ compiler and related tools (usually with something like `apt-get install build-essential`).  However, for boost some care may be needed.  The `SpecUtils` module is really a shared library that node.js loads. 
 
 # Build Instructions
 From bash or the Windows Command Prompt, run:
@@ -25,14 +19,14 @@ From bash or the Windows Command Prompt, run:
 npm install -g cmake-js 
 
 # For macOS only, you may want to define a deployment target
-export MACOSX_DEPLOYMENT_TARGET=10.10
+export MACOSX_DEPLOYMENT_TARGET=10.15
 
 cd /path/to/SpecUtils/bindings/node/
 
 # Install dependency for compiling a node.js add-on
 npm install --save-dev node-addon-api
 
-# If boost is in a standard location, you can just run
+# To build int the "build" directory, with default 
 cmake-js --CDSpecUtils_FLT_PARSE_METHOD="strtod"
 
 # Note that the 'SpecUtils_FLT_PARSE_METHOD' options are "FastFloat", "FromChars", 

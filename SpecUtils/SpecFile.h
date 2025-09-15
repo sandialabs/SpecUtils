@@ -341,8 +341,16 @@ enum class DetectorType : int
   Falcon5000,
   MicroDetective,
   MicroRaider,
-  /** Scan-Electronics RadiaCode-10x detector with CsI(Tl) scintillator */
-  RadiaCode,
+  /** Scan-Electronics RadiaCode-10x detector with 10x10x10mm CsI(Tl) scintillator */
+  RadiaCodeCsI10,
+  /** Scan-Electronics RadiaCode-110 detector with 14x14x14mm CsI(Tl) scintillator */
+  RadiaCodeCsI14,
+  /** Scan-Electronics RadiaCode-103G detector with 10x10x10mm GAGG scintillator */
+  RadiaCodeGAGG10,
+
+  /** Raysid 5cm³ CsI/Tl detector */
+  Raysid,
+
   Interceptor,
   RadHunterNaI,
   RadHunterLaBr3,
@@ -375,7 +383,13 @@ enum class DetectorType : int
   
   /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
   KromekD3S,
-  
+
+  /** The Kromek D5 detector with 1.5x1.5 CLLBC detector */
+  KromekD5,
+
+  /** The Kromek GR1 detector with 1cm3 CZT detector */
+  KromekGR1,
+
   /** PHDS Fulcrum; HPGe 12% efficient (rel. to 3x3 NaI)  handheld detector. */
   Fulcrum,
   
@@ -385,7 +399,7 @@ enum class DetectorType : int
   /** BNC SAM-950 detector.  There are 1.5x1.5, 2x2, 3x3 NaI variants, as well as LaBr3 2x2, and CeBr3 2x2, but
    these are not currently differentiated because I havent seen example files of them.
    
-   Also not: The BNC SAMpack may erroneously claim to be a SAM-950 detector, so will get this DetectorType ID applied.
+   Also note: The BNC SAMpack may erroneously claim to be a SAM-950 detector, so will get this DetectorType ID applied.
    */
   Sam950,
   
@@ -1369,6 +1383,10 @@ public:
   const std::string &instrument_model() const;
   const std::string &instrument_id() const;
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
+  std::shared_ptr<const Measurement> measurement_at_index( size_t num ) const;
+#if __cplusplus >= 201402L
+  [[deprecated( "Replaced by measurement_at_index to remove ambigiuty of calling" )]]
+#endif
   std::shared_ptr<const Measurement> measurement( size_t num ) const;
   std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   const std::vector<std::shared_ptr<const MultimediaData>> &multimedia_data() const;
@@ -2287,7 +2305,12 @@ public:
   bool write_d3_html( std::ostream &output,
                       const D3SpectrumExport::D3SpectrumChartOptions &options,
                       std::set<int> sample_nums,
-                      std::vector<std::string> det_names ) const;
+                      std::vector<std::string> det_names
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                     /// @param base_dir The location of where the JS and CSS files are stored.  You may be able to use D3_SCRIPT_RUNTIME_DIR defined in D3SpectrumExportResources.h
+                      , const std::string &base_dir
+#endif
+                     ) const;
 #endif
   
 #if( SpecUtils_INJA_TEMPLATES )

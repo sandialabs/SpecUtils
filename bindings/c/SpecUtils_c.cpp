@@ -221,10 +221,13 @@ static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_MicroDetec
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_MicroRaider) 
               == static_cast<int>(SpecUtils::DetectorType::MicroRaider),
               "SpecUtils_DetectorType needs updating" );
-static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_RadiaCode) 
-              == static_cast<int>(SpecUtils::DetectorType::RadiaCode),
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_RadiaCodeCsI10)
+              == static_cast<int>(SpecUtils::DetectorType::RadiaCodeCsI10),
               "SpecUtils_DetectorType needs updating" );
-static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Interceptor) 
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Raysid)
+              == static_cast<int>(SpecUtils::DetectorType::Raysid),
+              "SpecUtils_DetectorType needs updating" );
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Interceptor)
               == static_cast<int>(SpecUtils::DetectorType::Interceptor),
               "SpecUtils_DetectorType needs updating" );
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_RadHunterNaI) 
@@ -286,6 +289,12 @@ static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Verifinder
               "SpecUtils_DetectorType needs updating" );
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_KromekD3S)
               == static_cast<int>(SpecUtils::DetectorType::KromekD3S),
+              "SpecUtils_DetectorType needs updating" );
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_KromekD5)
+              == static_cast<int>(SpecUtils::DetectorType::KromekD5),
+              "SpecUtils_DetectorType needs updating" );
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_KromekGR1)
+              == static_cast<int>(SpecUtils::DetectorType::KromekGR1),
               "SpecUtils_DetectorType needs updating" );
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Fulcrum)
               == static_cast<int>(SpecUtils::DetectorType::Fulcrum),
@@ -1353,6 +1362,8 @@ bool SpecUtils_SpecFile_set_measurement_source_type( SpecUtils_SpecFile *instanc
   
   const SpecUtils::SourceType st = SpecUtils::SourceType( static_cast<int>(type) );
   specfile->set_source_type( st, m );
+
+  return true;
 }
 
 
@@ -1371,6 +1382,8 @@ bool SpecUtils_SpecFile_set_measurement_position( SpecUtils_SpecFile *instance,
   tp += chrono::microseconds( microseconds_since_unix_epoch );
   
   specfile->set_position( longitude, latitude, tp, m );
+
+  return true;
 }
   
 

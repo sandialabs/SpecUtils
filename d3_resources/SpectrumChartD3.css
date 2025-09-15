@@ -22,6 +22,14 @@ CSS variables InterSpec will define for colors, and line widths:
 --d3spec-second-line-color
 */
 
+/* Text selection control class - replaces global document.onselectstart */
+.spectrum-chart-no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
 /*******************/
 svg.SpectrumChartD3 {
   /* This is the <svg> element. */
@@ -163,7 +171,7 @@ svg.SpectrumChartD3 {
 .SpectrumChartD3 .mouseLineText {
   font-size: 0.8em;
   font-family: Helvetica, Arial;
-  font-weight: bold
+  font-weight: bold;
   fill: var(--d3spec-text-color, black);
 }
 
@@ -187,6 +195,32 @@ svg.SpectrumChartD3 {
 .refLineInfo{ font-size: 0.8em; }
 .mouseInfo{ font-size: 0.85em;  }
 .mouseInfoBox{ fill: white; fill-opacity: 0.85; }
+
+.refLineCandidatesText {
+  font-size: 0.8em;
+  /* Not setting fill, so defaults to black - should be same behaviour as legend. */
+  /* fill: var(--d3spec-text-color, black); */
+}
+
+/* This is the box that gives the other dynamic reference candidates */
+.refLineCandidatesBackground {
+  /* It would be great to use colors defined by global variables, but for the moment we'll 
+  just use the same colors as the legend, since they are okay in both light and dark theme.
+  */
+  /*
+  fill: var(--d3spec-chart-area-color, white);
+  fill-opacity: 0.75;
+  stroke: var(--d3spec-axis-color, black);
+  stroke-width: 1px;
+  */
+  fill: rgba(245,245,245,0.8); 
+  stroke: rgba(185,185,185,0.9);
+}
+
+/* Allow clicks to pass through the reference lines to the visualization beneath */
+g.ref, g.ref line {
+    pointer-events: none;
+}
 
 .peakInfo{
   font-size: 0.85em;
@@ -235,7 +269,7 @@ svg.SpectrumChartD3 {
 .peakText {
   font-size: 0.8em;
   font-family: Helvetica, Arial;
-  font-weight: bold
+  font-weight: bold;
   fill: var(--d3spec-text-color, black);
 }
 .contEstLineText {  font-size: 0.8em; font-family: Helvetica, Arial;  stroke:grey;  }

@@ -1364,6 +1364,8 @@ py::enum_<SpecUtils::DetectorType>(m, "DetectorType")
   .value("IdentiFinderNG", SpecUtils::DetectorType::IdentiFinderNG)
   .value("IdentiFinderLaBr3", SpecUtils::DetectorType::IdentiFinderLaBr3)
   .value("IdentiFinderTungsten", SpecUtils::DetectorType::IdentiFinderTungsten)
+  .value("IdentiFinderR425NaI", SpecUtils::DetectorType::IdentiFinderR425NaI)
+  .value("IdentiFinderR425LaBr", SpecUtils::DetectorType::IdentiFinderR425LaBr)
   .value("IdentiFinderR500NaI", SpecUtils::DetectorType::IdentiFinderR500NaI)
   .value("IdentiFinderR500LaBr", SpecUtils::DetectorType::IdentiFinderR500LaBr)
   .value("IdentiFinderUnknown", SpecUtils::DetectorType::IdentiFinderUnknown)
@@ -1376,7 +1378,9 @@ py::enum_<SpecUtils::DetectorType>(m, "DetectorType")
   .value("Falcon5000", SpecUtils::DetectorType::Falcon5000)
   .value("MicroDetective", SpecUtils::DetectorType::MicroDetective)
   .value("MicroRaider", SpecUtils::DetectorType::MicroRaider)
-  .value("RadiaCode", SpecUtils::DetectorType::RadiaCode)
+  .value("RadiaCodeCsI10", SpecUtils::DetectorType::RadiaCodeCsI10)
+  .value("RadiaCodeCsI14", SpecUtils::DetectorType::RadiaCodeCsI14)
+  .value("RadiaCodeGAGG10", SpecUtils::DetectorType::RadiaCodeGAGG10)
   .value("Interceptor", SpecUtils::DetectorType::Interceptor)
   .value("RadHunterNaI", SpecUtils::DetectorType::RadHunterNaI)
   .value("RadHunterLaBr3", SpecUtils::DetectorType::RadHunterLaBr3)
@@ -1401,9 +1405,11 @@ py::enum_<SpecUtils::DetectorType>(m, "DetectorType")
   .value("Fulcrum", SpecUtils::DetectorType::Fulcrum)
   .value("Fulcrum40h", SpecUtils::DetectorType::Fulcrum40h)
   .value("Sam950", SpecUtils::DetectorType::Sam950)
+  .value("Raysid", SpecUtils::DetectorType::Raysid)
+  .value("KromekGR1", SpecUtils::DetectorType::KromekGR1)
+  .value("KromekD5", SpecUtils::DetectorType::KromekD5)
   .value("Unknown", SpecUtils::DetectorType::Unknown);
-
-
+  
 
   py::enum_<SpecUtils::SpectrumType>(m, "SpectrumType")
     .value("Foreground", SpecUtils::SpectrumType::Foreground)
@@ -1464,6 +1470,15 @@ py::enum_<SpecUtils::EnergyCalType>(m, "EnergyCalType")
     .value("LowerChannelEdge", SpecUtils::EnergyCalType::LowerChannelEdge)
     .value("InvalidEquationType", SpecUtils::EnergyCalType::InvalidEquationType)
     .value("UnspecifiedUsingDefaultPolynomial", SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial)
+    .export_values();
+
+  py::enum_<SpecUtils::Measurement::DerivedDataProperties>(m, "DerivedDataProperties")
+    .value("IsDerived", SpecUtils::Measurement::DerivedDataProperties::IsDerived)
+    .value("ItemOfInterestSum", SpecUtils::Measurement::DerivedDataProperties::ItemOfInterestSum)
+    .value("UsedForAnalysis", SpecUtils::Measurement::DerivedDataProperties::UsedForAnalysis)
+    .value("ProcessedFurther", SpecUtils::Measurement::DerivedDataProperties::ProcessedFurther)
+    .value("BackgroundSubtracted", SpecUtils::Measurement::DerivedDataProperties::BackgroundSubtracted)
+    .value("IsBackground", SpecUtils::Measurement::DerivedDataProperties::IsBackground)
     .export_values();
 
 
@@ -1597,6 +1612,7 @@ m.def("polynomialCoefToFullRangeFraction",
     .def( "gammaChannelCounts", &gamma_counts_wrapper )
     .def( "gammaEnergyMin", &SpecUtils::Measurement::gamma_energy_min )
     .def( "gammaEnergyMax", &SpecUtils::Measurement::gamma_energy_max )
+    .def( "derivedDataProperties", &SpecUtils::Measurement::derived_data_properties )
     
     // Functionst to create new Measurment objects
     .def( "clone", &makeCopy_wrapper )
