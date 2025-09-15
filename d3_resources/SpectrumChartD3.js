@@ -44,6 +44,9 @@ SpectrumChartD3 = function(elem, options) {
 
   this.chart = typeof elem === 'string' ? document.getElementById(elem) : elem; 
 
+  // Apply no-select class to prevent text selection during chart interactions
+  d3.select(this.chart).classed("spectrum-chart-no-select", true);
+
   this.cx = this.chart.clientWidth;
   this.cy = this.chart.clientHeight;
 
@@ -390,10 +393,10 @@ SpectrumChartD3 = function(elem, options) {
     ;
   /// @TODO triggering the cancel events on document.body and window is probably a bit agressive; could probably do this for just this.vis + on leave events
   d3.select(document.body)
-    .on("mouseup", self.handleCancelAllMouseEvents() )
+    .on("mouseup.chart" + this.chart.id, self.handleCancelAllMouseEvents() )
   d3.select(window)
-    .on("mouseup", self.handleCancelAllMouseEvents())
-    .on("mousemove", function() {
+    .on("mouseup.chart" + this.chart.id, self.handleCancelAllMouseEvents())
+    .on("mousemove.chart" + this.chart.id, function() {
         if( d3.event && (self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown || self.currentlyAdjustingSpectrumScale) ) {
           //d3.event.preventDefault();
           //d3.event.stopPropagation();
@@ -560,8 +563,31 @@ SpectrumChartD3 = function(elem, options) {
   this.kineticRefLineCycleTimer = null;
   
   // Register global keyboard handler
-  d3.select(window).on("keydown", this.keydown());
+  d3.select(window).on("keydown.chart" + this.chart.id, this.keydown());
 }
+
+/** Destructor method to properly clean up global event handlers. Call this before removing/destroying a chart. */
+SpectrumChartD3.prototype.destroy = function() {
+  // Remove global event handlers using the namespaced IDs
+  d3.select(window).on("keydown.chart" + this.chart.id, null);
+  d3.select(window).on("mouseup.chart" + this.chart.id, null);
+  d3.select(window).on("mousemove.chart" + this.chart.id, null);
+  d3.select(window).on("blur.chart" + this.chart.id, null);
+  d3.select(document.body).on("mouseup.chart" + this.chart.id, null);
+  
+  // Clear any active timers - we probably dont actually have to do this, probabilistically, but we will JIC
+  window.clearTimeout(this.mousewait);
+  window.clearTimeout(this.touchHold);
+  window.clearTimeout(this.wheeltimer);
+  window.clearTimeout(this.roiDragRequestTimeout);
+  window.clearTimeout(this.kineticRefLineCycleTimer);
+  window.cancelAnimationFrame(this.zoomAnimationID);
+  this.mousewait = this.touchHold = this.wheeltimer = this.roiDragRequestTimeout = this.kineticRefLineCycleTimer = this.zoomAnimationID = null;
+  
+  d3.select(document.body).style("cursor", "default"); // Reset global cursor style
+  
+  console.log("SpectrumChartD3 instance destroyed: " + this.chart.id);
+};
 
 
 
@@ -732,7 +758,6 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
 SpectrumChartD3.prototype.dataPointDrag = function() {
   var self = this;
   return function(d) {
-    document.onselectstart = function() { return false; };
     self.selected = self.dragged = d;
     self.update(false); /* boolean set to false to indicate no animation needed */
 
@@ -3463,7 +3488,6 @@ SpectrumChartD3.prototype.mousemove = function () {
 SpectrumChartD3.prototype.mouseup = function () {
   var self = this;
   return function() {
-    document.onselectstart = function() { return true; };
     d3.select('body').style("cursor", "auto");
     d3.select('body').style("cursor", "auto");
     if( self.xaxisdown ) {
@@ -5327,7 +5351,6 @@ SpectrumChartD3.prototype.yaxisDrag = function(d) {
   var self = this;
   return function(d) {
     console.log('yaxisDrag work');
-    document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
     self.yaxisdown = self.yScale.invert(p[1]);
   }
@@ -5618,7 +5641,6 @@ SpectrumChartD3.prototype.xaxisDrag = function() {
     /*This function is called once when you click on an x-axis label (which you can then start dragging it) */
     /*  And NOT when you click on the chart and drag it to pan */
 
-    document.onselectstart = function() { return false; };
     var p = d3.mouse(self.vis[0][0]);
 
     if (self.xScale.invert(p[0]) > 0){           /* set self.xaxisdown equal to value of your mouse pos */
@@ -8270,7 +8292,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     /* If mouse edge could has been deleted, do not update the mouse edge */
     if (deleteMouseEdge())
       return;
-
+console.log( "updateMouseEdge" );
     /* Update the mouse edge and corresponding text position  */
     if ( self.mouseEdge ) {
         self.mouseEdge
