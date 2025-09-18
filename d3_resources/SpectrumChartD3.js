@@ -1735,6 +1735,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         if( drawn_roi
           && drawn_roi.xRangePx
           && ((drawn_roi.xRangePx[1] - drawn_roi.xRangePx[0]) >= 10)
+          //&& (self.rawData.spectra[drawn_roi.spectrumIndex].type === self.spectrumTypes.FOREGROUND) //would only allow dragging forground ROIs
           && ((Math.abs(drawn_roi.xRangePx[0] - x) <= dx) || (Math.abs(drawn_roi.xRangePx[1] - x) <= dx) ) ){
           self.showRoiDragOption(drawn_roi, m, false);
         }else if( self.roiDragBoxes && !self.roiIsBeingDragged ){
@@ -1815,7 +1816,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
   const dwidth = self.options.roiDragWidth;
   const mouse_x_px = mouse_px[0];
 
-  self.roiBeingDragged = { roi: roi, yRangePx: info.yRangePx, xRangePx: info.xRangePx, color: (info.color ? info.color : 'black') };
+  self.roiBeingDragged = { roi: roi, yRangePx: info.yRangePx, xRangePx: info.xRangePx, color: (info.color ? info.color : 'black'), spectrumIndex: info.spectrumIndex };
   
   if( !self.roiDragBoxes ){
     //self.roiDragBoxes will hold the vertical line and little box and stuff
@@ -1980,6 +1981,8 @@ SpectrumChartD3.prototype.handleRoiDrag = function(m){
   let energy = self.xScale.invert(xcenter);
   let counts = self.yScale.invert(y);
   let lowerEdgeDrag = mdx[3];
+  const spectrum_type = self.rawData.spectra[roiinfo.spectrumIndex].type;
+  
         
   self.roiDragLastCoord = [x,y,energy,counts];
   
@@ -2013,7 +2016,7 @@ SpectrumChartD3.prototype.handleRoiDrag = function(m){
     let new_lower_px = lowerEdgeDrag ? xcenter : self.xScale(roi.lowerEnergy);
     let new_upper_px = lowerEdgeDrag ? self.xScale(roi.upperEnergy) : xcenter;
     
-    self.WtEmit(self.chart.id, {name: 'roiDrag'}, new_lower_energy, new_upper_energy, new_lower_px, new_upper_px, roi.lowerEnergy, false );
+    self.WtEmit(self.chart.id, {name: 'roiDrag'}, new_lower_energy, new_upper_energy, (new_upper_px - new_lower_px), roi.lowerEnergy, spectrum_type, false );
   };
 
   let timenow = new Date();
@@ -2116,9 +2119,12 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function( m ){
   const roi = self.roiBeingDragged.roi;
   const x = m[0], y = m[1];
   
+  console.log( "ROI:", self.roiBeingDragged );
+  
   const mdx = self.roiDragMouseDown; // [m[0], roiPx, energy, isLowerEdge];
   const xcenter = x + mdx[1] - mdx[0];
   const energy = self.xScale.invert(xcenter);
+  const spectrum_type = self.rawData.spectra[self.roiBeingDragged.spectrumIndex].type;
 
   const lowerEdgeDrag = mdx[3];
   const new_lower_energy = lowerEdgeDrag ? energy : roi.lowerEnergy;
@@ -2127,8 +2133,8 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function( m ){
   const new_upper_px = lowerEdgeDrag ? self.xScale(roi.upperEnergy) : xcenter;
 
   self.WtEmit( self.chart.id, {name: 'roiDrag'},
-               new_lower_energy, new_upper_energy, new_lower_px, new_upper_px,
-              roi.lowerEnergy, true );
+               new_lower_energy, new_upper_energy, (new_upper_px - new_lower_px),
+              roi.lowerEnergy, spectrum_type, true );
 
   self.handleCancelRoiDrag();
 };//SpectrumChartD3.prototype.handleMouseUpDraggingRoi
@@ -2291,27 +2297,27 @@ SpectrumChartD3.prototype.getDrawnRoiForCoordinate = function( coordinates ){
   let paths = null;
   const x = coordinates[0];
   const dx = 0.5 * this.options.roiDragWidth;
-    
+  let min_dist = 9.999E12;
+  
   // TODO: use a bisect method to find ROI (speed things up when we have tons and tons of peaks)
-    
+  
+  
   for( let j = 0; j < this.peakPaths.length; ++j ){
     const info = this.peakPaths[j];
     if( !info.isOutline || !info.xRangePx )
       continue;
     
-    const lpx = info.xRangePx[0];
-    const upx = info.xRangePx[1];
-    let is_in_roi = ((x >= lpx) && (x <= upx));
-      
-    if( is_in_roi )
-      return info;
-      
-    is_in_roi = ((x >= (lpx-dx)) && (x <= (upx+dx)));
-      
-    if( is_in_roi )
-      paths = info;
-    else if( paths )
-      return paths; //assumes peakPaths are sorted
+    const lpx = info.xRangePx[0], upx = info.xRangePx[1];
+    if( ((x >= (lpx-dx)) && (x <= (upx+dx))) )
+    {
+      if( info.path[0][0] === this.highlightedPeak ) //Return highlighted peak preferable
+        return info;
+      const dist = Math.abs(x - 0.5*(lpx + upx));
+      if( dist < min_dist ){
+        paths = info;
+        min_dist = dist;
+      }
+    }
   }//for( loop over self.peakPaths )
     
   return paths;
@@ -7481,7 +7487,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         color: peakColor,
         isOutline: isOutline,
         isFill: isFill,
-        peak: peak
+        peak: peak,
+        spectrumIndex: specindex
       };
       
       self.peakPaths.push( info );
@@ -7503,7 +7510,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
       
       if( isOutline ){
-        path.on("mouseover", function(){ self.handleMouseOverPeak(this); } )
+        path.on("mouseover", function(){ self.highlightPeak(this,true); } )
             .on("mousemove", self.handleMouseMovePeak())
             .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, peak, pathsAndRange.paths); } )
              ;
@@ -7516,8 +7523,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     const p0 = (pathsAndRange.paths.length && roi.peaks.length) ? pathsAndRange.paths[0] : null;
     console.assert( !p0 || p0.startsWith("M"), "Got p0 path not starting with 'M': " + p0 );
     
-    if( p0 && !p0.endsWith("L") && p0.startsWith("M") ){ //protect against single channel paths we didnt complete above; TODO: fix this
-      //Draw the continuum line for multiple peak ROIs
+    if( p0 && !p0.endsWith("L") && p0.startsWith("M") && (spectrum.type === self.spectrumTypes.FOREGROUND) ){ //protect against single channel paths we didnt complete above; TODO: fix this
+      //Draw the continuum line for multiple peak ROIs - for the foreground only, right now
       const path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );
       path.attr("stroke-width",1)
           .attr("fill-opacity",0)
@@ -10392,11 +10399,6 @@ SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
 
 
 /** -------------- Peak Info and Display Functions -------------- */
-SpectrumChartD3.prototype.handleMouseOverPeak = function( peakElem ) {
-  this.highlightPeak(peakElem,true);
-  // self.displayPeakInfo(info, d3.event.x);
-}
-
 SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, highlightedPeak, paths) {
   /* Returns true if a node is a descendant (or is) of a parent node. */
   function isElementDescendantOf(parent, node) {
@@ -10510,21 +10512,27 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
 }
 
 SpectrumChartD3.prototype.updatePeakInfo = function() {
-  var self = this;
-
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+  const self = this;
+  
+  if (!this.rawData || !this.rawData.spectra || !this.rawData.spectra.length)
     return;
-
-  const x = d3.mouse(self.vis.node())[0];
-  const energy = self.xScale.invert(x);
-  let resultROI;
-  let spectrumIndex;
+  
+  const energy = this.xScale.invert( this.getMousePos()[0] );
+  let resultROI, spectrumIndex;
+  
+  // If a peak is highlighted by the mouse, we will choose that peak to display infor for
+  if( this.highlightedPeak && this.peakPaths ){
+    for( let i = 0; !resultROI && (i < this.peakPaths.length); ++i ){
+      if( this.peakPaths[i].path[0][0] === this.highlightedPeak ){
+        resultROI = this.peakPaths[i].roi;
+        spectrumIndex = this.peakPaths[i].spectrumIndex;
+      }
+    }
+  }//if( this.highlightedPeak && this.peakPaths )
 
   // Find a peak that our mouse energy point is overlapping with
-  self.rawData.spectra.forEach(function(spectrum, i) {
-    if (resultROI) // we found a peak already, skip the rest
-      return;
-    if (!self.options.drawPeaksFor[spectrum.type])
+  this.rawData.spectra.forEach(function(spectrum, i) {
+    if( resultROI || !self.options.drawPeaksFor[spectrum.type] ) // we found a peak already, or we didnt draw these peaks, skip the rest
       return;
 
     spectrum.peaks.forEach(function(peak, j) {
@@ -10535,14 +10543,12 @@ SpectrumChartD3.prototype.updatePeakInfo = function() {
     });
   });
   
-  // No peak found, so hide the info box
-  if (!resultROI) {
-    self.hidePeakInfo();
-    return;
-  } 
-  
-  const info = self.getPeakInfoObject(resultROI, energy, spectrumIndex);
-  self.displayPeakInfo(info);
+  if( !resultROI ) {
+    this.hidePeakInfo();// No peak found, so hide the info box
+  }else{
+    const info = this.getPeakInfoObject(resultROI, energy, spectrumIndex);
+    this.displayPeakInfo(info);
+  }
 }
 
 SpectrumChartD3.prototype.displayPeakInfo = function(info) {
