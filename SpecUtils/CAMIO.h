@@ -55,11 +55,13 @@ struct Peak {
     float CriticalLevel;
     float CountRate;
     float CountRateUncertainty;
+    int LeftChannel;
+    int RightChannel;
 
     Peak() = default;
     Peak(float energy, float centrd, float centrdUnc, float fwhm, float lowTail,
         float area, float areaUnc, float continuum, float critialLevel,
-        float cntRate, float cntRateUnc);
+        float cntRate, float cntRateUnc, int leftChan, int rightChan);
 };
 
 struct Nuclide {
@@ -155,7 +157,7 @@ public:
     enum class PeakParameterLocation : uint8_t {
         Energy = 0x0,
         Centroid = 0x40,
-        CentroidUncertainty = 0x40,
+        CentroidUncertainty = 0x44,
         FullWidthAtHalfMaximum = 0x10,
         LowTail = 0x50,
         Area = 0x34,
@@ -163,7 +165,9 @@ public:
         Continuum = 0x0C,
         CriticalLevel = 0x0D1,
         CountRate = 0x18,
-        CountRateUncertainty = 0x1C
+        CountRateUncertainty = 0x1C,
+        LeftChannel = 0x06,
+        Width = 0x0A
     };
 
     enum class EfficiencyPointParameterLocation : uint8_t {
