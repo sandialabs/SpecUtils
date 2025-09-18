@@ -155,7 +155,10 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   }//set gamma channel data
   
   meas->gamma_counts_ = channel_data;
+
+  //get any peaks
   auto& peaks = reader.GetPeaks();
+
   // fill in any resuls if they exist
   auto& cam_results = reader.GetNuclides();
   if (cam_results.size()) {
