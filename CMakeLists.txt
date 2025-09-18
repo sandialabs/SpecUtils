@@ -332,7 +332,7 @@ if( SpecUtils_USE_FROM_CHARS )
   )
 else(SpecUtils_USE_FROM_CHARS)
   set_target_properties( SpecUtils PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
   )

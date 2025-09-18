@@ -75,22 +75,29 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   auto meas = std::make_shared<Measurement>();
   
   // get the sample ID
-  string sampleid= reader.GetSampleTitle();
-  meas->title_ = sampleid;
-  if( sampleid.size() )
-    meas->remarks_.push_back( "Sample ID: " + sampleid );
-  
+  try
+  {
+    string sampleid= reader.GetSampleTitle();
+    meas->title_ = sampleid;
+    if( sampleid.size() )
+      meas->remarks_.push_back( "Sample ID: " + sampleid );
+  }catch( std::exception &e )
+  {
+    // Will get here if no sample title
+  }
+
   // get the times
   meas->start_time_ = reader.GetAquisitionTime();
   float real_time = reader.GetRealTime();
   meas->real_time_ = real_time;
   meas->live_time_ = reader.GetLiveTime();
-  
+  meas->sample_number_ = 1;
+
   // set the energy calibration
   vector<float> cal_coefs = reader.GetEnergyCalibration();
   
   // get the spectrum
-  auto & spec = reader.GetSpectrum();
+  std::vector<uint32_t> &spec = reader.GetSpectrum(); //Will throw exception if no data
   size_t num_chnanels = spec.size();
   
   // set the energy calibration
@@ -99,8 +106,7 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     auto newcal = make_shared<EnergyCalibration>();
     newcal->set_polynomial( num_chnanels, cal_coefs, {} );
     meas->energy_calibration_ = newcal;
-  }
-  catch( std::exception & )
+  }catch( std::exception & )
   {
     bool allZeros = true;
     for( const float v : cal_coefs )
@@ -134,16 +140,30 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
       throw runtime_error( "Calibration parameters were invalid" );
   }//try /catch set calibration
   
-  // get the detector info
-  CAMInputOutput::DetInfo det_info = reader.GetDetectorInfo();
-  
-  if( det_info.MCAType.size() )
-    remarks_.push_back( "MCA Type: " + det_info.MCAType);
-  
-  
-  if( det_info.Name.size() )
-    meas->detector_name_ = det_info.Name;
-  
+  // Try to get the detector info
+  string det_name;
+  try
+  {
+    const CAMInputOutput::DetInfo &det_info = reader.GetDetectorInfo();
+
+    if( det_info.MCAType.size() )
+      remarks_.push_back( "MCA Type: " + det_info.MCAType);
+
+    if( det_info.Type.size() )
+      remarks_.push_back( "Detector Type: " + det_info.MCAType);
+
+    if( !det_info.SerialNo.empty() )
+      instrument_id_ = det_info.SerialNo;
+
+    det_name = det_info.Name;
+    if( !det_name.empty() )
+      meas->detector_name_ = det_name;
+  }catch( std::exception & )
+  {
+    //Will get here if no detector info
+  }//try/catch to get detector info
+
+
   // convert the int32 counts to floats
   auto channel_data = make_shared<vector<float>>(num_chnanels);
   for( size_t i = 0; i < num_chnanels; ++i )
@@ -156,27 +176,36 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   
   meas->gamma_counts_ = channel_data;
   
-  // fill in any resuls if they exist
-  auto& cam_results = reader.GetNuclides();
-  if (cam_results.size()) {
-    auto new_det_ana = make_shared<DetectorAnalysis>();
-    for (size_t i = 0; i < cam_results.size(); i++)
+  // fill in any results if they exist
+  try
+  {
+    const vector<CAMInputOutput::Nuclide> &cam_results = reader.GetNuclides();
+    if( !cam_results.empty() )
     {
-      DetectorAnalysisResult result;
-      float activity = cam_results[i].Activity * 37000; // convert from uCi the CNF default
-      
-      //skip over non-detects genie stores the hole nuclide library
-      if (activity > 1e-6) {
-        result.activity_ = activity;
-        result.nuclide_ = cam_results[i].Name;
-        result.real_time_ = real_time;
-        result.detector_ = det_info.Name;
-        
-        new_det_ana->results_.push_back(result);
-      }
-    }
-    detectors_analysis_ = new_det_ana;
-  }
+      auto new_det_ana = make_shared<DetectorAnalysis>();
+      for (size_t i = 0; i < cam_results.size(); i++)
+      {
+        DetectorAnalysisResult result;
+        float activity = cam_results[i].Activity * 37000; // convert from uCi the CNF default
+
+        //skip over non-detects genie stores the hole nuclide library
+        if (activity > 1e-6) {
+          result.activity_ = activity;
+          result.nuclide_ = cam_results[i].Name;
+          result.real_time_ = real_time;
+          result.detector_ = det_name;
+
+          new_det_ana->results_.push_back(result);
+        }
+      }//
+
+      detectors_analysis_ = new_det_ana;
+    }//if( !cam_results.empty() )
+  }catch( std::exception & )
+  {
+
+  }//try / catch to fill in any results if they exist
+
   measurements_.push_back( meas );
 }//void load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   
@@ -209,8 +238,9 @@ bool SpecFile::load_from_cnf( std::istream &input )
     load_cnf_using_reader( cam );
     
     cleanup_after_load();
-  }catch ( std::exception & )
+  }catch ( std::exception &e )
   {
+    cerr << "Failed CNF: " << e.what() << endl;
     input.clear();
     //input.seekg( orig_pos, ios::beg );
     

@@ -45,6 +45,7 @@ struct EfficiencyPoint {
 
 struct Peak {
     float Energy;
+    /** The channel number of the peak. */
     float Centroid;
     float CentroidUncertainty;
     float FullWidthAtHalfMaximum;
