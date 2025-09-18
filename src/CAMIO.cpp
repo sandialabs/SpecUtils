@@ -578,11 +578,12 @@ bool NuclideComparer::operator()(const std::vector<uint8_t>& x, const std::vecto
 // Struct implementations
 Peak::Peak(float energy, float centrd, float centrdUnc, float fwhm, float lowTail,
     float area, float areaUnc, float continuum, float critialLevel,
-    float cntRate, float cntRateUnc)
+    float cntRate, float cntRateUnc, int leftChan, int rightChan)
     : Energy(energy), Centroid(centrd), CentroidUncertainty(centrdUnc),
       FullWidthAtHalfMaximum(fwhm), LowTail(lowTail), Area(area),
       AreaUncertainty(areaUnc), Continuum(continuum), CriticalLevel(critialLevel),
-      CountRate(cntRate), CountRateUncertainty(cntRateUnc) {}
+      CountRate(cntRate), CountRateUncertainty(cntRateUnc), 
+    LeftChannel(leftChan), RightChannel(rightChan) {}
 
 Nuclide::Nuclide(const std::string& name, float halfLife, float halfLifeUnc,
     const std::string& halfLifeUnit, int nucNo, double activity = 0., 
@@ -830,6 +831,8 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
         peak.CountRateUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRateUncertainty));
         peak.FullWidthAtHalfMaximum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
         peak.LowTail = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
+        peak.LeftChannel = ReadUInt32(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LeftChannel));
+        peak.RightChannel = peak.LeftChannel + ReadUInt32(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Width)) - 1;
 
         tempPeaks.push_back(peak);
     }
@@ -1002,6 +1005,8 @@ std::vector<Peak>& CAMIO::GetPeaks() {
             peak.CountRateUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::CountRateUncertainty));
             peak.FullWidthAtHalfMaximum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
             peak.LowTail = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
+            peak.LeftChannel = ReadUInt32(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LeftChannel));
+            peak.RightChannel = peak.LeftChannel + ReadUInt16(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Width)) - 1;
 
             filePeaks.push_back(peak);
         }

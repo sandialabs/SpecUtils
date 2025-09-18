@@ -189,15 +189,16 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
         float activity = cam_results[i].Activity * 37000; // convert from uCi the CNF default
 
         //skip over non-detects genie stores the hole nuclide library
-        if (activity > 1e-6) {
+        if (activity > 1e-6) 
+        {
           result.activity_ = activity;
           result.nuclide_ = cam_results[i].Name;
           result.real_time_ = real_time;
           result.detector_ = det_name;
 
           new_det_ana->results_.push_back(result);
-        }
-      }//
+        }//for (size_t i = 0; i < cam_results.size(); i++)
+      }//for (size_t i = 0; i < cam_results.size(); i++)
 
       detectors_analysis_ = new_det_ana;
     }//if( !cam_results.empty() )
