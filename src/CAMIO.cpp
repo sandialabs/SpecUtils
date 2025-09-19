@@ -1093,31 +1093,40 @@ DetInfo& CAMIO::GetDetectorInfo()
         throw std::runtime_error("There is no aqusition data in the loaded file");
     }
 
+    bool secondBlock = false;
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
+        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ?
+            0 : ReadUInt16(*readData, pos + 0x22);
+        uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
+        //uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
+        uint16_t numRec = 1;
+        uint16_t headSize = ReadUInt16(*readData, pos + 0x10);;
 
-        // these are actually record parameters but we don't deal with multpule specturm in a single file
-        char type_buf[9] = { 0 };
-        std::memcpy(type_buf, &(*readData)[pos + headSize + 0x7CF], sizeof(type_buf)-1);
-        type_buf[8] = '\0';
-        det_info.Type = std::string(type_buf);
+        for (size_t i = 0; i < numRec; i++) {
+            size_t loc = pos + headSize + recOffset + (i * recSize);
+            // these are actually record parameters but we don't deal with multpule specturm in a single file
+            char type_buf[9] = { 0 };
+            std::memcpy(type_buf, &(*readData)[loc + 0x2DC], sizeof(type_buf) - 1);
+            type_buf[8] = '\0';
+            det_info.Type = std::string(type_buf);
 
-        char mca_type_buf[25] = { 0 };
-        std::memcpy(mca_type_buf, &(*readData)[pos + headSize + 0x58F], sizeof(mca_type_buf)-1);
-        mca_type_buf[24] = '\0';
-        det_info.MCAType = std::string(mca_type_buf);
+            char mca_type_buf[25] = { 0 };
+            std::memcpy(mca_type_buf, &(*readData)[loc + 0x9C], sizeof(mca_type_buf) - 1);
+            mca_type_buf[24] = '\0';
+            det_info.MCAType = std::string(mca_type_buf);
 
-        char name_buf[17] = { 0 };
-        std::memcpy(name_buf, &(*readData)[pos + headSize + 0x5FB], sizeof(name_buf)-1);
-        name_buf[16] = '\0';
-        det_info.Name = std::string(name_buf);
+            char name_buf[17] = { 0 };
+            std::memcpy(name_buf, &(*readData)[loc + 0x108], sizeof(name_buf) - 1);
+            name_buf[16] = '\0';
+            det_info.Name = std::string(name_buf);
 
-        char sn_buf[0x9] = { 0 };
-        std::memcpy(sn_buf, &(*readData)[pos + headSize + 0x6BE], sizeof(sn_buf)-1);
-        sn_buf[8] = '\0';
-        det_info.SerialNo = std::string(sn_buf);
+            char sn_buf[0x9] = { 0 };
+            std::memcpy(sn_buf, &(*readData)[loc + 0x1CB], sizeof(sn_buf) - 1);
+            sn_buf[8] = '\0';
+            det_info.SerialNo = std::string(sn_buf);
+        }
 
         return det_info;
 
