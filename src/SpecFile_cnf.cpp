@@ -147,10 +147,10 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     const CAMInputOutput::DetInfo &det_info = reader.GetDetectorInfo();
 
     if( det_info.MCAType.size() )
-      remarks_.push_back( "MCA Type: " + det_info.MCAType);
+      remarks_.push_back( "MCA Type: " + det_info.MCAType );
 
     if( det_info.Type.size() )
-      remarks_.push_back( "Detector Type: " + det_info.MCAType);
+      remarks_.push_back( "Detector Type: " + det_info.Type );
 
     if( !det_info.SerialNo.empty() )
       instrument_id_ = det_info.SerialNo;

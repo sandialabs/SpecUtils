@@ -431,7 +431,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         if( have_d )
           d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
         
-        if( have_a && have_b && have_c && have_d
+        if( have_c && have_d
             && (a!=0.0 || b!=0.0 || c!=0.0 ) )
         {
           calibcoeff_poly = {d,c,b,a};
