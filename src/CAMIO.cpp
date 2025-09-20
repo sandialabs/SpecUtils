@@ -19,6 +19,7 @@
 
 #include <iomanip>
 #include <fstream>
+#include <iostream>
 #include <filesystem>
 #include <stdexcept>
 #include <algorithm>
@@ -615,6 +616,8 @@ DetInfo::DetInfo(std::string type, std::string name, std::string serial_no,
 // CAMIO constructor
 CAMIO::CAMIO() {
     // Initialize any necessary members
+  //fwhmType = FwhmType::NotReadin;
+  efficiencyModel = EfficiencyModel::NotReadin;
 }
 
 // read a file given the file name 
@@ -704,7 +707,14 @@ void CAMIO::ReadBlock(CAMBlock block) {
             case CAMBlock::PEAK:
                 ReadPeaksBlock(pos, records);
                 break;
+
+          case CAMBlock::ACQP:
+          case CAMBlock::SAMP:
+          case CAMBlock::PROC:
+          case CAMBlock::DISP:
+          case CAMBlock::SPEC:
             // Add other block types as needed
+            break;
         }
     }
 }
@@ -733,7 +743,26 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     uint16_t entSize = ReadUInt16(*readData, pos + 0x2a);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
-    //std::vector<EfficiencyPoint> points;
+    if( (pos + recOffset + 222 + 8) < readData->size() )
+    {
+      std::string type_str( 9, '\0');
+      std::memcpy(&(type_str[0]), &(*readData)[pos + recOffset + 222], 8);
+      if( type_str.find( "SPLINE" ) != std::string::npos )
+        efficiencyModel = EfficiencyModel::SPLINE;
+      else if( type_str.find( "EMPIRICAL" ) != std::string::npos )
+        efficiencyModel = EfficiencyModel::EMPIRICAL;
+      else if( type_str.find( "AVERAGE" ) != std::string::npos )
+        efficiencyModel = EfficiencyModel::AVERAGE;
+      else if( type_str.find( "DUAL" ) != std::string::npos )
+        efficiencyModel = EfficiencyModel::DUAL;
+      else if( type_str.find( "LINEAR" ) != std::string::npos )
+        efficiencyModel = EfficiencyModel::LINEAR;
+      else
+        efficiencyModel = EfficiencyModel::Unknown;
+    }else
+    {
+      efficiencyModel = EfficiencyModel::Unknown;
+    }//if( (pos + recOffset + 222 + 8) < readData->size() )
 
     // Loop through the records
     for (size_t i = 0; i < records; i++) {
@@ -1221,6 +1250,9 @@ float CAMIO::GetRealTime() {
 
 // get the shape calibration coefficients
 std::vector<float>& CAMIO::GetShapeCalibration() {
+  if( !fileShapeCal.empty() )
+    return fileShapeCal;
+
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1233,11 +1265,17 @@ std::vector<float>& CAMIO::GetShapeCalibration() {
         throw std::runtime_error("There is no calibration data in the loaded file");
     }
 
+
     fileShapeCal.resize(4);
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0xDC;
+
+      //CONSTANT or SQRT
+      //std::string type_str( eCalOffset + 100 + 1, '\0');
+      //std::memcpy(&(type_str[0]), &(*readData)[pos], eCalOffset + 100);
+      //std::cout << "FWHM_type: '" << type_str << "'" << std::endl;
 
         for (size_t i = 0; i < fileShapeCal.size(); i++) {
             fileShapeCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
@@ -1249,6 +1287,9 @@ std::vector<float>& CAMIO::GetShapeCalibration() {
 
 // get the energy calibration coefficients
 std::vector<float>& CAMIO::GetEnergyCalibration() {
+  if( !fileEneCal.empty() )
+    return fileEneCal;
+
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1754,6 +1795,9 @@ std::vector<byte_type> CAMIO::GenerateLine(const Line t_line) {
 
 // get the efficiency points used for curve fitting (energy, eff., eff unc.)
 std::vector<EfficiencyPoint>& CAMIO::GetEfficiencyPoints() {
+  if( !efficiencyPoints.empty() )
+    return efficiencyPoints;
+
     if (blockAddresses.empty()) {
         throw std::runtime_error("The header format could not be read");
     }
@@ -1775,8 +1819,13 @@ std::vector<EfficiencyPoint>& CAMIO::GetEfficiencyPoints() {
         uint16_t records = ReadUInt16(*readData, pos + 0x1E);
         ReadGeometryBlock(pos, records);
     }
-    // TODO EFFTYPE (8) characters located at 0x187 in GEOM
+
     return efficiencyPoints;
+}
+
+CAMIO::EfficiencyModel CAMIO::GetEfficiencyModel() const
+{
+  return efficiencyModel;
 }
 
 // generate a block

@@ -204,6 +204,16 @@ public:
         LineMDA = 0x25, 
     };
 
+    enum class EfficiencyModel : uint8_t
+    {
+      SPLINE, EMPIRICAL, AVERAGE, DUAL, LINEAR, Unknown, NotReadin
+    };
+
+    //enum class FwhmType : uint8_t
+    //{
+    //  CONSTANT, SQRT, Unknown, NotReadin
+    //};
+
 private:
     std::multimap<CAMBlock, uint32_t> blockAddresses;
     std::shared_ptr<std::vector<byte_type>> readData;
@@ -217,8 +227,11 @@ private:
     std::vector<Peak> filePeaks;
     std::vector<uint32_t> fileSpectrum;
     std::vector<float> fileEneCal;
+
+    //FwhmType fwhmType;
     std::vector<float> fileShapeCal;
 
+    EfficiencyModel efficiencyModel; //Defaults to EfficiencyModel::Unknown;
     std::vector<EfficiencyPoint> efficiencyPoints;
     std::vector<Peak> peaks;
 
@@ -245,6 +258,8 @@ public:
     std::vector<Nuclide>& GetNuclides();
     std::vector<Peak>& GetPeaks();
     std::vector<EfficiencyPoint>& GetEfficiencyPoints();
+    /** Only valid after `GetEfficiencyPoints()` has been called (will be `EfficiencyModel::NotReadin` in this case) */
+    EfficiencyModel GetEfficiencyModel() const;
     SpecUtils::time_point_t GetSampleTime();
     SpecUtils::time_point_t GetAquisitionTime();
     float GetLiveTime();
