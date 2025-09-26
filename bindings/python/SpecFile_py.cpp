@@ -1354,6 +1354,9 @@ NB_MODULE(SpecUtils, m) {
   .value("ScanDataXml", SpecUtils::ParserType::ScanDataXml)
   .value("Json", SpecUtils::ParserType::Json)
   .value("CaenHexagonGXml", SpecUtils::ParserType::CaenHexagonGXml)
+  #if( SpecUtils_ENABLE_URI_SPECTRA )
+  .value("Uri", SpecUtils::ParserType::Uri)
+#endif
   .value("Auto", SpecUtils::ParserType::Auto);
 
 
