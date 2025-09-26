@@ -2054,8 +2054,33 @@ m.def("polynomialCoefToFullRangeFraction",
         "Changes the name of a given detector.\n"
         "Throws exception if 'OriginalName' did not exist." )
 
-//size_t combine_gamma_channels( const size_t ncombine, const size_t nchannels );
-//size_t truncate_gamma_channels( ...)
+  .def( "truncateGammaChannels", 
+        static_cast<size_t (SpecUtils::SpecFile::*)(const size_t, const size_t, const size_t, const bool)>(&SpecUtils::SpecFile::truncate_gamma_channels),
+        "KeepFirstChannel"_a, "KeepLastChannel"_a, "NChannels"_a, "KeepUnderOverFlow"_a,
+        "Removes all channels below 'KeepFirstChannel' and above 'KeepLastChannel', "
+        "for every measurement that has 'NChannels' channels.\n"
+        "If 'KeepUnderOverFlow' is true, then removed channel counts will be added to the first/last channel.\n"
+        "Returns the number of modified measurements.\n"
+        "Throws exception if KeepLastChannel>=NChannels, or if KeepFirstChannel>=KeepLastChannel." )
+  .def( "truncateGammaChannels", 
+        static_cast<void (SpecUtils::SpecFile::*)(const size_t, const size_t, const bool, const std::shared_ptr<const SpecUtils::Measurement> &)>(&SpecUtils::SpecFile::truncate_gamma_channels),
+        "KeepFirstChannel"_a, "KeepLastChannel"_a, "KeepUnderOverFlow"_a, "Measurement"_a,
+        "Removes all channels below 'KeepFirstChannel' and above 'KeepLastChannel' for the specified measurement.\n"
+        "If 'KeepUnderOverFlow' is true, then removed channel counts will be added to the first/last channel.\n"
+        "Throws exception if invalid Measurement, or if KeepLastChannel>=measurement.num_gamma_channels(), "
+        "or if KeepFirstChannel>=KeepLastChannel." )
+  .def( "combineGammaChannels", 
+        static_cast<size_t (SpecUtils::SpecFile::*)(const size_t, const size_t)>(&SpecUtils::SpecFile::combine_gamma_channels),
+        "NCombine"_a, "NChannels"_a,
+        "Combines every 'NCombine' adjacent channels into a single channel for every measurement "
+        "that has 'NChannels' channels.\n"
+        "Returns the number of modified measurements.\n"
+        "Throws exception if (NChannels % NCombine) != 0." )
+  .def( "combineGammaChannels", 
+        static_cast<void (SpecUtils::SpecFile::*)(const size_t, const std::shared_ptr<const SpecUtils::Measurement> &)>(&SpecUtils::SpecFile::combine_gamma_channels),
+        "NCombine"_a, "Measurement"_a,
+        "Combines every 'NCombine' adjacent channels into a single channel for the specified measurement.\n"
+        "Throws exception if measurement is not owned by this SpecFile." )
 
   // Begin functions that set Measurement quantities, through thier SpecFile owner
   .def( "setLiveTime", &SpecUtils::SpecFile::set_live_time, 
