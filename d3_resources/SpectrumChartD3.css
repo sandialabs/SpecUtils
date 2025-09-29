@@ -197,7 +197,7 @@ svg.SpectrumChartD3 {
 .mouseInfoBox{ fill: white; fill-opacity: 0.85; }
 
 .refLineCandidatesText {
-  font-size: 0.8em;
+  font-size: 1.2em;
   /* Not setting fill, so defaults to black - should be same behaviour as legend. */
   /* fill: var(--d3spec-text-color, black); */
 }

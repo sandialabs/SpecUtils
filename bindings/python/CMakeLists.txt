@@ -6,12 +6,18 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set( SpecUtils_ENABLE_D3_CHART ON CACHE BOOL "" )
 set( SpecUtils_D3_SUPPORT_FILE_STATIC ON CACHE BOOL "" )
-set( SpecUtils_ENABLE_URI_SPECTRA OFF CACHE BOOL "" )  #Lets not worry about linking to zlib right now
 set( SpecUtils_PYTHON_BINDINGS ON CACHE BOOL "Build the python bindings" )
 set( SpecUtils_ENABLE_EQUALITY_CHECKS OFF CACHE BOOL "" )
 set( PERFORM_DEVELOPER_CHECKS OFF CACHE BOOL "" )
 set( SpecUtils_SHARED_LIB OFF CACHE BOOL "" )  #we'll statically link SpecUtils into the lib we create here
 set( SpecUtils_FLT_PARSE_METHOD "strtod" CACHE STRING "Float parsing method" )
+
+# Enable URI spectra for macOS and Linux (since we are already linking to zlib), but not Windows
+if(WIN32)
+  set( SpecUtils_ENABLE_URI_SPECTRA OFF CACHE BOOL "" )
+else()
+  set( SpecUtils_ENABLE_URI_SPECTRA ON CACHE BOOL "" )
+endif()
 
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/LibSpecUtils )
 

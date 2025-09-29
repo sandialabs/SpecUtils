@@ -4121,7 +4121,6 @@ SpectrumChartD3.prototype.setKineticReferenceLines = function( data ) {
       } );  
     } );
   }//if( data )
-  //console.log( "setKineticReferenceLines:", data );
 
   this.kineticRefLines = data;
 
@@ -4138,6 +4137,7 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
       this.currentKineticRefLineIndex = 0;
       this.stopKineticRefLineCycling();
       this.drawRefGammaLines();
+      this.updateKineticRefLineCandidateDisplay();
     }
     return;
   }//if( we dont need to draw the lines )
@@ -4266,10 +4266,12 @@ SpectrumChartD3.prototype.startKineticRefLineCycling = function(){
   const self = this;
   
   this.stopKineticRefLineCycling();
-  
-  if( this.candidateKineticRefLines.length <= 1 ) {
+  if( this.candidateKineticRefLines.length <= 1 )
     return;
-  }
+  
+  // If an element has active focus, then the arrow keys may not get through
+  if (document.activeElement instanceof HTMLElement)
+    document.activeElement.blur();
   
   this.kineticRefLineCycleTimer = setInterval(function(){
     if( self.kineticRefLineCycleTimer && self.candidateKineticRefLines.length > 1 ) {
