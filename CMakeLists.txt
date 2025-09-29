@@ -19,6 +19,8 @@ option( SpecUtils_BUILD_UNIT_TESTS "Builds unit tests" OFF )
 option( SpecUtils_BUILD_FUZZING_TESTS "Builds fuzzing tests, requires clang" OFF )
 option( SpecUtils_BUILD_REGRESSION_TEST "Creates executable to perform interactive regression test" OFF )
 option( SpecUtils_BUILD_EXAMPLE "Builds example SpecUtil applications" OFF )
+option( SpecUtils_JAVA_SWIG "Creates swig/java bindings to the c++ code" OFF )
+option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 option( SpecUtils_INJA_TEMPLATES "Creates inja template interface" OFF )
 option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and very alpha, and extremely minimally used" OFF )
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
@@ -129,6 +131,7 @@ set( sources
      src/DateTime.cpp
      src/ParseUtils.cpp
      src/SpecFile_location.cpp
+     src/CAMIO.cpp
      README.md
 )
 
@@ -145,6 +148,7 @@ set( headers
      SpecUtils/ParseUtils.h
      SpecUtils/SpecFile_location.h
      SpecUtils/RapidXmlUtils.hpp
+     SpecUtils/CAMIO.h
 )
 
 if( SpecUtils_INJA_TEMPLATES )
@@ -328,7 +332,7 @@ if( SpecUtils_USE_FROM_CHARS )
   )
 else(SpecUtils_USE_FROM_CHARS)
   set_target_properties( SpecUtils PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
   )

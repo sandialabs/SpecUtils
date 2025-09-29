@@ -1,26 +1,61 @@
-# Niave Fuzzing of File Parsing Code
+# Naive Fuzzing of File Parsing Code
 
-## Compiling on macOS
-The default Apple compiler doesnt seem to dome with the clang fuzzing library, so you need to install `llvm` and use it to compile the code.  The commands to do this that work for me are:
+## Prerequisites
+- macOS with Homebrew installed
+- Boost library compiled and installed (see main SpecUtils README for Boost setup)
+- Wt library (optional, for URI spectra support)
 
+## Compiling on macOS (ARM64/Intel)
+The default Apple compiler doesn't support the clang fuzzing library, so you need to install LLVM via Homebrew and use specific linking flags to resolve ARM64 compatibility issues.
+
+### Step 1: Install LLVM via Homebrew
 ```bash
 brew install llvm
+```
 
+### Step 2: Set up environment variables
+```bash
 unset CMAKE_OSX_DEPLOYMENT_TARGET
 
 # Since Big Sur v11.1, we need to fix up the LIBRARY_PATH variable
-export LIBRARY_PATH="$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"  
+export LIBRARY_PATH="$LIBRARY_PATH:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
 
-export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"       #maybe not necassary
-export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"  #maybe not necassary
+# Required for ARM64 fuzzer linking
+export LDFLAGS="-L/opt/homebrew/opt/llvm/lib/c++ -lc++abi"
+```
 
+### Step 3: Create build directory and configure
+```bash
 cd /path/to/SpecUtils
-mkdir build_fuzz
+mkdir build_fuzzing
+cd build_fuzzing
 
-cmake -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm;/path/to/compiled/boost/" -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/opt/homebrew/opt/llvm/include/c++/v1" -DSpecUtils_BUILD_FUZZING_TESTS=ON ..
+# Replace /path/to/your/boost/install with your actual Boost installation path
+cmake -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
+      -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" \
+      -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm;/path/to/your/boost/install" \
+      -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
+      -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
+      -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+      -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -L/opt/homebrew/opt/llvm/lib/c++ -lc++abi" \
+      -DSpecUtils_BUILD_FUZZING_TESTS=ON \
+      -DSpecUtils_BUILD_REGRESSION_TEST=OFF \
+      -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON \
+      -DSpecUtils_ENABLE_URI_SPECTRA=ON \
+      -DSpecUtils_FLT_PARSE_METHOD=boost \
+      ..
+```
 
+### Step 4: Build the project
+```bash
 cmake --build . --config RelWithDebInfo -j8
 ```
+
+### Troubleshooting
+If you encounter linking errors with `std::__1::__hash_memory` symbols, ensure you have:
+1. LLVM installed via Homebrew (not just Xcode command line tools)
+2. The correct LDFLAGS and CMAKE_EXE_LINKER_FLAGS set as shown above
+3. Both `-stdlib=libc++` and `-lc++abi` linking flags specified
 
 You then need to create a `CORPUS_DIR` that contains a wide variety of sample spectrum files.  
 Once you do this, you can run a fuzz job, use a command like:

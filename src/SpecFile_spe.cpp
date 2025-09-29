@@ -678,7 +678,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             break;
           }//if( we have overrun the data section )
         }
-      }else if( starts_with(line,"$MCA_CAL:") )
+      }else if( starts_with(line,"$MCA_CAL:")
+               || starts_with(line,"$NONLIN_ENER_FIT:") )
       {
         try
         {
