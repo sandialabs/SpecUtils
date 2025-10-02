@@ -752,6 +752,21 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         const string valuestr = remove_label( line );
         if( !parse_float( valuestr.c_str(), valuestr.size(), cal_coeffs[2] ) )
           throw runtime_error( "NCF: Failed to parse quadratic." );
+      }else if( starts_with(line,"$SPEC_CAL:") )
+      {
+        if( !SpecUtils::safe_get_line( istr, line ) )
+          throw runtime_error("Error reading SPEC_CAL section of IAEA file");
+        trim(line);
+
+        if( starts_with(line,"$") )
+        {
+          skip_getline = true;
+          break;
+        }//if( we have overrun the data section )
+
+        vector<float> parts;
+        if( SpecUtils::split_to_floats(line.c_str(), line.size(), parts) && (parts.size() >= 2) )
+          cal_coeffs = parts;
       }else if( is_ncf && starts_with(line,"$RLTIME:") )
       {
         const string valuestr = remove_label( line );
