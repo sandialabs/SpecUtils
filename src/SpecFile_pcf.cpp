@@ -1808,8 +1808,24 @@ bool SpecFile::load_from_pcf( std::istream &input )
     
     if( measurements_.empty() )
       throw runtime_error( "Didnt read in any Measurements" );
-    
-    
+
+    // With GADRAS inject, the non-background records will often times have a detector name (from
+    //  the title) like Aa1, but the background record wont have this - the title will just be "Background".
+    //  The inject also likely have the same start time, so to avoid a changing of record order, and to
+    //  be reasonable, we'll set the background detector name like the rest.
+    //  But note that this logic below will catch other cases - but this behaviour is still probably reasonable.
+    if( (detector_names.size() == 2) && detector_names.count("") )
+    {
+      detector_names.erase("");
+      const string det_name = *begin(detector_names);
+      for( auto &p : measurements_ )
+      {
+        if( p->detector_name_.empty() )
+          p->detector_name_ = det_name;
+      }
+    }//if( (detector_names.size() == 2) && detector_names.count("") )
+
+
     if( !allSamplesHaveNumbers )
     {
       if( someSamplesHaveNumbers )
