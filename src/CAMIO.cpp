@@ -306,6 +306,10 @@ static std::array< byte_type, sizeof(int64_t) > convert_to_CAM_duration(const fl
 // CAM double to double
 static double convert_from_CAM_double(const std::vector<uint8_t>& data, size_t pos)
 {
+    if( (pos + 8) > data.size() ) {
+        throw std::out_of_range("The provided index exceeds the length of the array");
+    }
+
     const size_t word_size = 2;
     std::array<uint8_t, sizeof(double_t)> temp = { 0x00 };
     //std::memcpy(&temp, &data[pos], sizeof(double_t));
@@ -330,12 +334,10 @@ static double convert_from_CAM_double(const std::vector<uint8_t>& data, size_t p
 
 // CAM float to float
 static float convert_from_CAM_float(const std::vector<uint8_t>& data, size_t pos) {
-    if (data.size() < 4) {
-        throw std::invalid_argument("The data input array is not long enough");
-    }
     if (data.size() < pos + 4) {
         throw std::out_of_range("The provided index exceeds the length of the array");
     }
+  
     uint8_t word1[2], word2[2];
 
     std::memcpy(word1, &data[pos + 0x2], sizeof(word1));
@@ -355,6 +357,9 @@ static float convert_from_CAM_float(const std::vector<uint8_t>& data, size_t pos
 //CAM DateTime to time_point
 static SpecUtils::time_point_t convert_from_CAM_datetime(const std::vector<uint8_t>& data, size_t pos)
 {
+    if( (pos + 8) > data.size() )
+        throw std::runtime_error( "CAM datetime past end of data" );
+
     uint64_t time_raw;
     //std::array<uint8_t, sizeof(uint64_t)> time_raw = { 0 };
     std::memcpy(&time_raw, &data[pos], sizeof(uint64_t));
@@ -377,10 +382,7 @@ static SpecUtils::time_point_t convert_from_CAM_datetime(const std::vector<uint8
 // CAM duration to float sec
 static float convert_from_CAM_duration(std::vector<uint8_t>& data, size_t pos) 
 {
-    if (data.size() < 8) {
-        throw std::invalid_argument("The data input array is not long enough");
-    }
-    if (data.size() < pos + 8) {
+    if (data.size() < (pos + 8)) {
         throw std::out_of_range("The provided index exceeds the length of the array");
     }
     
@@ -682,6 +684,9 @@ void CAMIO::ReadBlock(CAMBlock block) {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
+        if( (pos + 0x1e + 2) > readData->size() )
+            throw std::runtime_error( "File data did not contain full block" );
+
         // Verify block ID
         uint32_t blockId;
         std::memcpy(&blockId, &(*readData)[pos], sizeof(uint32_t));
@@ -721,6 +726,9 @@ void CAMIO::ReadBlock(CAMBlock block) {
 
 // Helper function to read a uint16_t from the data buffer
 static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
+    if( (offset + 2) > data.size() )
+        throw std::runtime_error( "ReadUInt16 past end of data" );
+
     uint16_t value;
     std::memcpy(&value, &data[offset], sizeof(uint16_t));
     return value;
@@ -728,6 +736,9 @@ static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
 
 // Helper function to read a uint32_t from the data buffer
 static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
+    if( (offset + 4) > data.size() )
+        throw std::runtime_error( "ReadUInt32 past end of data" );
+
     uint32_t value;
     std::memcpy(&value, &data[offset], sizeof(uint32_t));
     return value;
@@ -735,6 +746,9 @@ static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
 
 // read the geometry block
 void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x28 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than geometry block" );
+
     // Get record offset and entry offset
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -770,7 +784,8 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
 
         // Loop through the entries
         // Each entry starts with a byte that matches the record number (1-based)
-        while (loc < readData->size() && (*readData)[loc] == static_cast<uint8_t>(i + 1)) {
+        while ( ((loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty) + 4) < readData->size())
+               && ((*readData)[loc] == static_cast<uint8_t>(i + 1))) {
             EfficiencyPoint point{};
             point.Index = static_cast<int>(i);
             point.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Energy));
@@ -785,6 +800,9 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
 
 // read the lines block
 void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x22 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than lines block" );
+
     // Get record offset and size
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -795,7 +813,10 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
 
     for (size_t i = 0; i < records; i++) {
         size_t loc = pos + headSize + recOffset + (i * recSize);
-        
+
+        if( (loc + recSize) > readData->size() )
+            throw std::runtime_error( "Data smaller than lines info" );
+
         // Create a copy of the line record
         std::vector<uint8_t> line(recSize);
         std::copy(readData->begin() + loc, readData->begin() + loc + recSize, line.begin());
@@ -808,6 +829,9 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
 
 // read the nuclides block
 void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x22 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than nuclides block" );
+
     // Get record offset
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -820,10 +844,16 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
     for (size_t i = 0; i < records; i++) {
         size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
 
+        if( (loc + 2) > readData->size() )
+            throw std::runtime_error( "Data smaller than nuclide record" );
+
         // Calculate the size of this nuclide record including its lines
         uint32_t numLines = ((ReadUInt16(*readData, loc) - 
             (static_cast<uint16_t>(recSize) + nuclide_line_size)) / nuclide_line_size) + 1;
         uint32_t totalSize = static_cast<uint32_t>(recSize) + numLines * 3;
+
+        if( (loc + totalSize) > readData->size() )
+            throw std::runtime_error( "Data smaller than nuclide record size" );
 
         // Create a copy of the nuclide record with its lines
         std::vector<uint8_t> nuc(totalSize);
@@ -837,6 +867,9 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
 
 // read the peaks block
 void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x22 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than peaks block" );
+
     // Get record offset and size
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -847,6 +880,9 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
 
     for (size_t i = 0; i < records; i++) {
         size_t loc = pos + headSize + recOffset + 0x01 + (i * recSize);
+
+        if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
+            throw std::runtime_error( "Data smaller than peaks record" );
 
         Peak peak{};
         peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
@@ -887,6 +923,9 @@ std::vector<Line>& CAMIO::GetLines() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
+        if( (pos + 0x22 + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than lines pos" );
+
         // Get record offset and size
         uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
         uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -896,7 +935,10 @@ std::vector<Line>& CAMIO::GetLines() {
 
         for (size_t i = 0; i < numRec; i++) {
             size_t loc = pos + headSize + recOffset + (i * recSize);
-            
+
+            if( (pos + static_cast<uint32_t>(LineParameterLocation::AbundanceUncertainty) + 4) > readData->size() )
+                throw std::runtime_error( "Data smaller than lines record" );
+
             Line line{};
             line.Energy = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::Energy));
             line.EnergyUncertainty = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::EnergyUncertainty));
@@ -945,6 +987,9 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
+        if( (pos + 0x22 + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than nuclides pos" );
+
         uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
@@ -953,11 +998,14 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
         uint16_t lineListLoc = recSize;
 
         for (size_t i = 0; i < numRec; i++) {
-            size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
+            const size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
+
+            if( (pos + static_cast<uint32_t>(NuclideParameterLocation::HalfLifeUncertainty) + 8) > readData->size() )
+                throw std::runtime_error( "Data smaller than lines record" );
 
             Nuclide nuc;
             nuc.HalfLife = convert_from_CAM_duration(*readData, loc + 0x1b);
-            nuc.HalfLifeUncertainty = convert_from_CAM_duration(*readData, loc + 0x89);
+            nuc.HalfLifeUncertainty = convert_from_CAM_duration(*readData, loc + static_cast<uint32_t>(NuclideParameterLocation::HalfLifeUncertainty) );
 
             // Read name (8 characters)
             char nameBuf[9] = {0};
@@ -1013,7 +1061,10 @@ std::vector<Peak>& CAMIO::GetPeaks() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
-        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ? 
+        if( (pos + 0x22 + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than peaks pos" );
+
+        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ?
                             0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
@@ -1021,6 +1072,9 @@ std::vector<Peak>& CAMIO::GetPeaks() {
 
         for (size_t i = 0; i < numRec; i++) {
             size_t loc = pos + headSize + recOffset + 0x01 + (i * recSize);
+
+            if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
+              throw std::runtime_error( "Data smaller than peaks record" );
 
             Peak peak{};
             peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
@@ -1062,6 +1116,9 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
+        if( (pos + 0x2A + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than spectrum pos" );
+
         // Get number of channels
         uint16_t channels = ReadUInt16(*readData, pos + 0x2A);
         uint16_t headerOffset = ReadUInt16(*readData, pos + 0x10);
@@ -1069,6 +1126,9 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
 
         // Resize spectrum vector to accommodate all channels
         fileSpectrum.resize(channels);
+
+        if( (pos + dataOffset + headerOffset + channels*4) > readData->size() )
+          throw std::runtime_error( "Data smaller than spectrum data" );
 
         // Read channel data
         for (size_t i = 0; i < channels; i++) {
@@ -1097,10 +1157,17 @@ std::string CAMIO::GetSampleTitle()
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
-        char nameBuf[65] = { 0 };
-        std::memcpy(nameBuf, &(*readData)[pos + headSize], sizeof(nameBuf)-1);
-        nameBuf[64] = '\0';
+
+        const size_t name_field_length = 64;
+
+        if( (pos + headSize + name_field_length) > readData->size() )
+          throw std::runtime_error("Sample title would go beyond data");
+
+        char nameBuf[name_field_length + 1] = { 0 };
+        std::memcpy(nameBuf, &(*readData)[pos + headSize], name_field_length);
+        nameBuf[name_field_length] = '\0'; //jic
         return std::string(nameBuf);
     }
 
@@ -1135,6 +1202,10 @@ DetInfo& CAMIO::GetDetectorInfo()
 
         for (size_t i = 0; i < numRec; i++) {
             size_t loc = pos + headSize + recOffset + (i * recSize);
+
+            if( (loc + 0x2DC + 8) > readData->size() )
+                throw std::runtime_error("Sample title record past end");
+
             // these are actually record parameters but we don't deal with multpule specturm in a single file
             char type_buf[9] = { 0 };
             std::memcpy(type_buf, &(*readData)[loc + 0x2DC], sizeof(type_buf) - 1);
@@ -1203,6 +1274,7 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+      
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
         uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
         return convert_from_CAM_datetime(*readData, pos + headSize + timeOffset + 0x01);
@@ -1547,7 +1619,7 @@ void CAMIO::AddLineAndNuclide(const float energy, const float yield,
     float t12Unc = (halfLifeUnc < size_t(0)) ? ComputeUncertainty(halfLife) : halfLifeUnc;
 
 
-    int nucNo = writeNuclides.size() + 1;
+    int nucNo = static_cast<int>( writeNuclides.size() + 1 );
     // TODO try this out without this helper vector
     Nuclide nuc(name, halfLife, t12Unc, halfLifeUnit, nucNo );
 
