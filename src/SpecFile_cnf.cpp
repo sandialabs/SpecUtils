@@ -81,16 +81,23 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     meas->title_ = sampleid;
     if( sampleid.size() )
       meas->remarks_.push_back( "Sample ID: " + sampleid );
-  }catch( std::exception &e )
+  }catch( std::exception & )
   {
     // Will get here if no sample title
   }
 
-  // get the times
-  meas->start_time_ = reader.GetAquisitionTime();
-  float real_time = reader.GetRealTime();
-  meas->real_time_ = real_time;
-  meas->live_time_ = reader.GetLiveTime();
+
+  try
+  {
+    // Get the times - they are all in the same datablock, so if one throws, they will all throw.
+    meas->start_time_ = reader.GetAquisitionTime();
+    meas->real_time_ = reader.GetRealTime();
+    meas->live_time_ = reader.GetLiveTime();
+  }catch( std::exception &e )
+  {
+    // Will get here if no time block
+  }
+
   meas->sample_number_ = 1;
 
   // set the energy calibration
@@ -193,7 +200,7 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
         {
           result.activity_ = activity;
           result.nuclide_ = cam_results[i].Name;
-          result.real_time_ = real_time;
+          result.real_time_ = meas->real_time_;
           result.detector_ = det_name;
 
           new_det_ana->results_.push_back(result);
@@ -241,7 +248,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     cleanup_after_load();
   }catch ( std::exception &e )
   {
-    cerr << "Failed CNF: " << e.what() << endl;
+    //cerr << "Failed CNF: " << e.what() << endl;
     input.clear();
     //input.seekg( orig_pos, ios::beg );
     

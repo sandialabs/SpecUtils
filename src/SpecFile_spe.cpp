@@ -269,17 +269,20 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       //  gracious and check if maybe this is the case.
       
       istr.seekg( 0, ios::end );
-      const istream::pos_type eof_pos = istr.tellg();
+      const istream::pos_type eof_pos = istr.tellg(); //orig_pos may be -1
+      //if( !istr || (eof_pos < 0) )
+      //  throw runtime_error( "Error reading file" );
+
       istr.seekg( orig_pos, ios::beg );
-      
-      const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-      
+      const size_t filesize = static_cast<size_t>( 0 + std::max(eof_pos,istream::pos_type(0)) - std::max(orig_pos,istream::pos_type(0)) );
+      const size_t headerdata_size = std::min( size_t(2048), filesize + 1 );
+
       string headerdata;
-      headerdata.resize( std::min( size_t(2048), filesize + 1 ) );
+      headerdata.resize( headerdata_size );
       istr.read( &(headerdata[0]), headerdata.size() - 1 );
       istr.seekg( 0, ios::beg );
       headerdata.back() = '\0'; //JIC
-      
+
       is_ncf = ((headerdata.find("EXPTID:") != string::npos)
                 && (headerdata.find("SAMPID:") != string::npos)
                 && (headerdata.find("DATA:") != string::npos));
