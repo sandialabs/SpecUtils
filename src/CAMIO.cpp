@@ -193,9 +193,19 @@ enum class cam_type
     cam_longword,  //int
     cam_quadword,  //int64
     cam_datetime,   //date time
-    cam_duration,   //time duration 
+    cam_duration,   //time duration
     cam_string,
 };
+
+// Helper function to validate that we can safely read 'size' bytes starting at 'pos' from 'data'
+static void validate_bounds( const std::vector<uint8_t>& data, const size_t pos, const size_t size, const char* context )
+{
+  if( pos > data.size() )
+    throw std::out_of_range( std::string(context) + ": position " + std::to_string(pos) + " exceeds data size " + std::to_string(data.size()) );
+
+  if( size > (data.size() - pos) )
+    throw std::out_of_range( std::string(context) + ": attempting to read " + std::to_string(size) + " bytes at position " + std::to_string(pos) + " but only " + std::to_string(data.size() - pos) + " bytes available" );
+}
 
 // Convert data to CAM data formats
 
@@ -306,13 +316,10 @@ static std::array< byte_type, sizeof(int64_t) > convert_to_CAM_duration(const fl
 // CAM double to double
 static double convert_from_CAM_double(const std::vector<uint8_t>& data, size_t pos)
 {
-    if( (pos + 8) > data.size() ) {
-        throw std::out_of_range("The provided index exceeds the length of the array");
-    }
+    validate_bounds( data, pos, sizeof(double_t), "convert_from_CAM_double" );
 
     const size_t word_size = 2;
     std::array<uint8_t, sizeof(double_t)> temp = { 0x00 };
-    //std::memcpy(&temp, &data[pos], sizeof(double_t));
 
     // Perform word swap
     for (size_t i = 0; i < word_size; i++)
@@ -334,10 +341,8 @@ static double convert_from_CAM_double(const std::vector<uint8_t>& data, size_t p
 
 // CAM float to float
 static float convert_from_CAM_float(const std::vector<uint8_t>& data, size_t pos) {
-    if (data.size() < pos + 4) {
-        throw std::out_of_range("The provided index exceeds the length of the array");
-    }
-  
+    validate_bounds( data, pos, 4, "convert_from_CAM_float" );
+
     uint8_t word1[2], word2[2];
 
     std::memcpy(word1, &data[pos + 0x2], sizeof(word1));
@@ -357,11 +362,9 @@ static float convert_from_CAM_float(const std::vector<uint8_t>& data, size_t pos
 //CAM DateTime to time_point
 static SpecUtils::time_point_t convert_from_CAM_datetime(const std::vector<uint8_t>& data, size_t pos)
 {
-    if( (pos + 8) > data.size() )
-        throw std::runtime_error( "CAM datetime past end of data" );
+    validate_bounds( data, pos, sizeof(uint64_t), "convert_from_CAM_datetime" );
 
     uint64_t time_raw;
-    //std::array<uint8_t, sizeof(uint64_t)> time_raw = { 0 };
     std::memcpy(&time_raw, &data[pos], sizeof(uint64_t));
 
     if (!time_raw)
@@ -380,12 +383,10 @@ static SpecUtils::time_point_t convert_from_CAM_datetime(const std::vector<uint8
 }//convert_from_CAM_datetime(...)
 
 // CAM duration to float sec
-static float convert_from_CAM_duration(std::vector<uint8_t>& data, size_t pos) 
+static float convert_from_CAM_duration(std::vector<uint8_t>& data, size_t pos)
 {
-    if (data.size() < (pos + 8)) {
-        throw std::out_of_range("The provided index exceeds the length of the array");
-    }
-    
+    validate_bounds( data, pos, 8, "convert_from_CAM_duration" );
+
     double span;
     //the duration is in usec
     if (data[pos + 7] != 0x80) {
@@ -403,7 +404,7 @@ static float convert_from_CAM_duration(std::vector<uint8_t>& data, size_t pos)
         //convert to seconds
         span *= 3157600.0;
     }
-    
+
     return span;
 }
 
@@ -652,6 +653,9 @@ std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
             return std::multimap<CAMBlock, uint32_t>();
         }
 
+        // Validate bounds before reading section ID
+        validate_bounds( *readData, headOff, sizeof(uint32_t), "ReadHeader: reading section ID" );
+
         // Section ID
         uint32_t secId;
         std::memcpy(&secId, &(*readData)[headOff], sizeof(uint32_t));
@@ -660,6 +664,9 @@ std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
         if (secId == 0x00000000) {
             continue;
         }
+
+        // Validate bounds before reading block address
+        validate_bounds( *readData, headOff + 0x0a, sizeof(uint32_t), "ReadHeader: reading block address" );
 
         // Get the addresses of the info
         size_t loc;
@@ -684,8 +691,8 @@ void CAMIO::ReadBlock(CAMBlock block) {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
-        if( (pos + 0x1e + 2) > readData->size() )
-            throw std::runtime_error( "File data did not contain full block" );
+        // Validate bounds before reading block ID
+        validate_bounds( *readData, pos, sizeof(uint32_t), "ReadBlock: reading block ID" );
 
         // Verify block ID
         uint32_t blockId;
@@ -693,6 +700,9 @@ void CAMIO::ReadBlock(CAMBlock block) {
         if (blockId != static_cast<uint32_t>(block)) {
             continue;
         }
+
+        // Validate bounds before reading record count
+        validate_bounds( *readData, pos + 0x1e, sizeof(uint16_t), "ReadBlock: reading record count" );
 
         // Read number of records
         uint16_t records;
@@ -726,8 +736,8 @@ void CAMIO::ReadBlock(CAMBlock block) {
 
 // Helper function to read a uint16_t from the data buffer
 static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
-    if( (offset + 2) > data.size() )
-        throw std::runtime_error( "ReadUInt16 past end of data" );
+    if( (offset + sizeof(uint16_t)) > data.size() )
+      throw std::out_of_range( "ReadUInt16: offset " + std::to_string(offset) + " out of range (data size: " + std::to_string(data.size()) + ")" );
 
     uint16_t value;
     std::memcpy(&value, &data[offset], sizeof(uint16_t));
@@ -736,8 +746,8 @@ static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
 
 // Helper function to read a uint32_t from the data buffer
 static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
-    if( (offset + 4) > data.size() )
-        throw std::runtime_error( "ReadUInt32 past end of data" );
+    if( offset + sizeof(uint32_t) > data.size() )
+      throw std::out_of_range( "ReadUInt32: offset " + std::to_string(offset) + " out of range (data size: " + std::to_string(data.size()) + ")" );
 
     uint32_t value;
     std::memcpy(&value, &data[offset], sizeof(uint32_t));
@@ -757,7 +767,7 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     uint16_t entSize = ReadUInt16(*readData, pos + 0x2a);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
-    if( (pos + recOffset + 222 + 8) < readData->size() )
+    if( (pos + recOffset + 222 + 8) <= readData->size() )
     {
       std::string type_str( 9, '\0');
       std::memcpy(&(type_str[0]), &(*readData)[pos + recOffset + 222], 8);
@@ -776,16 +786,33 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     }else
     {
       efficiencyModel = EfficiencyModel::Unknown;
-    }//if( (pos + recOffset + 222 + 8) < readData->size() )
+    }//if( (pos + recOffset + 222 + 8) <= readData->size() )
 
     // Loop through the records
     for (size_t i = 0; i < records; i++) {
-        size_t loc = pos + headSize + recOffset + entOffset + (i * recSize);
+        // Check for potential overflow in i * recSize calculation
+        if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+          throw std::out_of_range( "ReadGeometryBlock: record index * recSize would overflow" );
+
+        // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+        size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
+                     static_cast<size_t>(entOffset) + (i * static_cast<size_t>(recSize));
+
+        // Validate that loc is within bounds before entering loop
+        if( loc >= readData->size() )
+          break;
 
         // Loop through the entries
         // Each entry starts with a byte that matches the record number (1-based)
-        while ( ((loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty) + 4) < readData->size())
-               && ((*readData)[loc] == static_cast<uint8_t>(i + 1))) {
+        while (loc < readData->size() && (*readData)[loc] == static_cast<uint8_t>(i + 1)) {
+            // Validate bounds before calling convert functions
+            const size_t maxParamOffset = std::max({
+                static_cast<size_t>(EfficiencyPointParameterLocation::Energy) + 4,
+                static_cast<size_t>(EfficiencyPointParameterLocation::Efficiency) + 4,
+                static_cast<size_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty) + 4
+            });
+            validate_bounds( *readData, loc, maxParamOffset, "ReadGeometryBlock: reading efficiency point" );
+
             EfficiencyPoint point{};
             point.Index = static_cast<int>(i);
             point.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::Energy));
@@ -809,18 +836,22 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
     uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
-    //std::vector<std::vector<uint8_t>> tempLines;
-
     for (size_t i = 0; i < records; i++) {
-        size_t loc = pos + headSize + recOffset + (i * recSize);
+        // Check for potential overflow in i * recSize calculation
+        if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+          throw std::out_of_range( "ReadLinesBlock: record index * recSize would overflow" );
 
-        if( (loc + recSize) > readData->size() )
-            throw std::runtime_error( "Data smaller than lines info" );
+        // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+        const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
+                           (i * static_cast<size_t>(recSize));
+
+        // Validate bounds before copying
+        validate_bounds( *readData, loc, recSize, "ReadLinesBlock: reading line record" );
 
         // Create a copy of the line record
         std::vector<uint8_t> line(recSize);
         std::copy(readData->begin() + loc, readData->begin() + loc + recSize, line.begin());
-        
+
         // Insert in sorted order based on energy
         auto it = std::lower_bound(lines.begin(), lines.end(), line, LineComparer());
         lines.insert(it, line);
@@ -839,28 +870,55 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
     uint32_t lineListOffset = 0;
 
-    //std::vector<std::vector<uint8_t>> tempNucs;
-
     for (size_t i = 0; i < records; i++) {
-        size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
+        // Check for potential overflow in i * recSize calculation
+        if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+          throw std::out_of_range( "ReadNuclidesBlock: record index * recSize would overflow" );
+
+        // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+        const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
+                           static_cast<size_t>(lineListOffset) + (i * static_cast<size_t>(recSize));
+
+        // Validate we can read the size field
+        validate_bounds( *readData, loc, 2, "ReadNuclidesBlock: reading numLines size field" );
 
         if( (loc + 2) > readData->size() )
             throw std::runtime_error( "Data smaller than nuclide record" );
 
         // Calculate the size of this nuclide record including its lines
-        uint32_t numLines = ((ReadUInt16(*readData, loc) - 
-            (static_cast<uint16_t>(recSize) + nuclide_line_size)) / nuclide_line_size) + 1;
-        uint32_t totalSize = static_cast<uint32_t>(recSize) + numLines * 3;
+        // Validate that the size field is reasonable before subtracting
+        const uint16_t sizeField = ReadUInt16(*readData, loc);
+        const uint16_t minSize = static_cast<uint16_t>(recSize) + nuclide_line_size;
+        if( sizeField < minSize )
+          throw std::out_of_range( "ReadNuclidesBlock: invalid nuclide size field (too small)" );
 
-        if( (loc + totalSize) > readData->size() )
-            throw std::runtime_error( "Data smaller than nuclide record size" );
+        uint32_t numLines = ((sizeField - minSize) / nuclide_line_size) + 1;
 
-        // Create a copy of the nuclide record with its lines
+        // Check for overflow in totalSize calculation
+        if( numLines > ((std::numeric_limits<uint32_t>::max() - recSize) / 3) )
+          throw std::out_of_range( "ReadNuclidesBlock: numLines would cause totalSize overflow" );
+
+        uint32_t totalSize = static_cast<uint32_t>(recSize) + (numLines * 3);
+
+        // Validate we can read the entire nuclide record
+        validate_bounds( *readData, loc, totalSize, "ReadNuclidesBlock: reading nuclide record" );
+
+        // Create a copy of the nuclide record with its lines - FIXED: was copying from nucs, should be readData
         std::vector<uint8_t> nuc(totalSize);
-        std::copy(nucs.begin() + loc, nucs.begin() + loc + totalSize, nucs.begin());
+        std::copy(readData->begin() + loc, readData->begin() + loc + totalSize, nuc.begin());
 
         nucs.push_back(nuc);
+
+        // Check for overflow in lineListOffset accumulation
+        if( lineListOffset > (std::numeric_limits<uint32_t>::max() - totalSize) )
+          throw std::out_of_range( "ReadNuclidesBlock: lineListOffset accumulation overflow" );
+
         lineListOffset += totalSize;
+
+        // Also validate that the accumulated offset doesn't exceed data bounds
+        const size_t nextLoc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) + static_cast<size_t>(lineListOffset);
+        if( nextLoc > readData->size() )
+          throw std::out_of_range( "ReadNuclidesBlock: accumulated lineListOffset exceeds data size" );
     }
 
 }
@@ -879,7 +937,32 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
     std::vector<Peak> tempPeaks;
 
     for (size_t i = 0; i < records; i++) {
-        size_t loc = pos + headSize + recOffset + 0x01 + (i * recSize);
+        // Check for potential overflow in i * recSize calculation
+        if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+          throw std::out_of_range( "ReadPeaksBlock: record index * recSize would overflow" );
+
+        // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+        const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) + 0x01 +
+                           (i * static_cast<size_t>(recSize));
+
+        // Validate we can read the entire peak record
+        // Find the maximum offset we'll access (Width is the last field accessed)
+        const size_t maxOffset = std::max({
+            static_cast<size_t>(PeakParameterLocation::Energy) + 4,
+            static_cast<size_t>(PeakParameterLocation::Centroid) + 4,
+            static_cast<size_t>(PeakParameterLocation::CentroidUncertainty) + 4,
+            static_cast<size_t>(PeakParameterLocation::Continuum) + 4,
+            static_cast<size_t>(PeakParameterLocation::CriticalLevel) + 4,
+            static_cast<size_t>(PeakParameterLocation::Area) + 4,
+            static_cast<size_t>(PeakParameterLocation::AreaUncertainty) + 4,
+            static_cast<size_t>(PeakParameterLocation::CountRate) + 4,
+            static_cast<size_t>(PeakParameterLocation::CountRateUncertainty) + 4,
+            static_cast<size_t>(PeakParameterLocation::FullWidthAtHalfMaximum) + 4,
+            static_cast<size_t>(PeakParameterLocation::LowTail) + 4,
+            static_cast<size_t>(PeakParameterLocation::LeftChannel) + 4,
+            static_cast<size_t>(PeakParameterLocation::Width) + 4
+        });
+        validate_bounds( *readData, loc, maxOffset, "ReadPeaksBlock: reading peak record" );
 
         if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
             throw std::runtime_error( "Data smaller than peaks record" );
@@ -934,10 +1017,25 @@ std::vector<Line>& CAMIO::GetLines() {
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
         for (size_t i = 0; i < numRec; i++) {
-            size_t loc = pos + headSize + recOffset + (i * recSize);
+            // Check for potential overflow in i * recSize calculation
+            if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+              throw std::out_of_range( "GetLines: record index * recSize would overflow" );
 
-            if( (pos + static_cast<uint32_t>(LineParameterLocation::AbundanceUncertainty) + 4) > readData->size() )
-                throw std::runtime_error( "Data smaller than lines record" );
+            // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+            const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
+                               (i * static_cast<size_t>(recSize));
+
+            // Validate bounds before accessing line data
+            const size_t maxOffset = std::max({
+                static_cast<size_t>(LineParameterLocation::Energy) + 4,
+                static_cast<size_t>(LineParameterLocation::EnergyUncertainty) + 4,
+                static_cast<size_t>(LineParameterLocation::Abundance) + 4,
+                static_cast<size_t>(LineParameterLocation::AbundanceUncertainty) + 4,
+                static_cast<size_t>(LineParameterLocation::IsKeyLine) + 1,
+                static_cast<size_t>(LineParameterLocation::NuclideIndex) + 1,
+                static_cast<size_t>(LineParameterLocation::NoWeightMean) + 1
+            });
+            validate_bounds( *readData, loc, maxOffset, "GetLines: reading line data" );
 
             Line line{};
             line.Energy = convert_from_CAM_float(*readData, loc + static_cast<size_t>(LineParameterLocation::Energy));
@@ -998,10 +1096,37 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
         uint16_t lineListLoc = recSize;
 
         for (size_t i = 0; i < numRec; i++) {
-            const size_t loc = pos + headSize + recOffset + lineListOffset + (i * recSize);
+            // Check for potential overflow in i * recSize calculation
+            if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+              throw std::out_of_range( "GetNuclides: record index * recSize would overflow" );
 
-            if( (pos + static_cast<uint32_t>(NuclideParameterLocation::HalfLifeUncertainty) + 8) > readData->size() )
-                throw std::runtime_error( "Data smaller than lines record" );
+            // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+            const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
+                               static_cast<size_t>(lineListOffset) + (i * static_cast<size_t>(recSize));
+
+            // Validate we can read the nuclide size field (first 2 bytes)
+            validate_bounds( *readData, loc, 2, "GetNuclides: reading nuclide size field" );
+
+            // Calculate numLines with validation to prevent underflow
+            const uint16_t sizeField = ReadUInt16(*readData, loc);
+            const uint16_t minSize = static_cast<uint16_t>(recSize);
+            if( sizeField < minSize )
+              throw std::out_of_range( "GetNuclides: invalid nuclide size field (too small)" );
+
+            uint32_t numLines = ((sizeField - minSize) / 0x03);
+
+            // Validate we can read all nuclide data including activities and line list
+            const size_t maxOffset = std::max({
+                size_t(0x1b + 8),  // HalfLife location + size
+                size_t(0x89 + 8),  // HalfLifeUncertainty location + size
+                static_cast<size_t>(NuclideParameterLocation::Name) + size_t(8),
+                static_cast<size_t>(NuclideParameterLocation::HalfLifeUnit) + size_t(3),
+                static_cast<size_t>(NuclideParameterLocation::MeanActivity) + size_t(8),
+                static_cast<size_t>(NuclideParameterLocation::MeanActivityUnceratinty) + size_t(8),
+                static_cast<size_t>(NuclideParameterLocation::NuclideMDA) + size_t(8),
+                size_t(lineListLoc) + size_t(0x01 + 2)  // line index location + size
+            });
+            validate_bounds( *readData, loc, maxOffset, "GetNuclides: reading nuclide data" );
 
             Nuclide nuc;
             nuc.HalfLife = convert_from_CAM_duration(*readData, loc + 0x1b);
@@ -1022,14 +1147,27 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
             // Convert half-life to appropriate units
             ConvertHalfLife(nuc);
 
-            // Get first line index
+            // Get first line index - validate it's within bounds
             size_t lineIndex = static_cast<size_t>(ReadUInt16(*readData, loc + lineListLoc + 0x01));
+            if( (lineIndex == 0) || (lineIndex > fileLines.size()) )
+              throw std::out_of_range( "GetNuclides: lineIndex " + std::to_string(lineIndex) + " is out of range (fileLines size: " + std::to_string(fileLines.size()) + ")" );
+
             nuc.Index = fileLines[lineIndex - 1].NuclideIndex;
 
+            // Check for overflow in lineListOffset accumulation
+            if( numLines > (std::numeric_limits<uint32_t>::max() / nuclide_line_size) )
+              throw std::out_of_range( "GetNuclides: numLines * nuclide_line_size would overflow" );
 
-            uint32_t numLines = ((ReadUInt16(*readData, loc) - (static_cast<uint16_t>(recSize))) / 0x03);
-            lineListOffset += numLines * nuclide_line_size;
+            const uint32_t linesSize = numLines * nuclide_line_size;
+            if( lineListOffset > (std::numeric_limits<uint32_t>::max() - linesSize) )
+              throw std::out_of_range( "GetNuclides: lineListOffset accumulation overflow" );
 
+            lineListOffset += linesSize;
+
+            // Validate that the accumulated offset doesn't exceed data bounds
+            const size_t nextLoc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) + static_cast<size_t>(lineListOffset);
+            if( nextLoc > readData->size() )
+              throw std::out_of_range( "GetNuclides: accumulated lineListOffset exceeds data size" );
 
             nuc.Activity = convert_from_CAM_double(*readData, loc + NuclideParameterLocation::MeanActivity);
             nuc.ActivityUnc = convert_from_CAM_double(*readData, loc + NuclideParameterLocation::MeanActivityUnceratinty);
@@ -1071,7 +1209,31 @@ std::vector<Peak>& CAMIO::GetPeaks() {
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
         for (size_t i = 0; i < numRec; i++) {
-            size_t loc = pos + headSize + recOffset + 0x01 + (i * recSize);
+            // Check for potential overflow in i * recSize calculation
+            if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+              throw std::out_of_range( "GetPeaks: record index * recSize would overflow" );
+
+            // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+            const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) + 0x01 +
+                               (i * static_cast<size_t>(recSize));
+
+            // Validate we can read the entire peak record
+            const size_t maxOffset = std::max({
+                static_cast<size_t>(PeakParameterLocation::Energy) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::Centroid) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::CentroidUncertainty) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::Continuum) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::CriticalLevel) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::Area) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::AreaUncertainty) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::CountRate) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::CountRateUncertainty) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::FullWidthAtHalfMaximum) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::LowTail) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::LeftChannel) + size_t(4),
+                static_cast<size_t>(PeakParameterLocation::Width) + size_t(2)
+            });
+            validate_bounds( *readData, loc, maxOffset, "GetPeaks: reading peak record" );
 
             if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
               throw std::runtime_error( "Data smaller than peaks record" );
@@ -1124,6 +1286,12 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
         uint16_t headerOffset = ReadUInt16(*readData, pos + 0x10);
         uint16_t dataOffset = ReadUInt16(*readData, pos + 0x28);
 
+        // Validate that we can read all the spectrum data
+        const size_t dataStart = pos + dataOffset + headerOffset;
+        const size_t totalDataSize = static_cast<size_t>(channels) * sizeof(uint32_t);
+
+        validate_bounds( *readData, dataStart, totalDataSize, "GetSpectrum: reading spectrum data" );
+
         // Resize spectrum vector to accommodate all channels
         fileSpectrum.resize(channels);
 
@@ -1160,14 +1328,12 @@ std::string CAMIO::GetSampleTitle()
 
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
-        const size_t name_field_length = 64;
+        // Validate we can read the sample title (64 bytes)
+        validate_bounds( *readData, pos + headSize, 64, "GetSampleTitle: reading sample title" );
 
-        if( (pos + headSize + name_field_length) > readData->size() )
-          throw std::runtime_error("Sample title would go beyond data");
-
-        char nameBuf[name_field_length + 1] = { 0 };
-        std::memcpy(nameBuf, &(*readData)[pos + headSize], name_field_length);
-        nameBuf[name_field_length] = '\0'; //jic
+        char nameBuf[65] = { 0 };
+        std::memcpy(nameBuf, &(*readData)[pos + headSize], sizeof(nameBuf)-1);
+        nameBuf[64] = '\0';
         return std::string(nameBuf);
     }
 
@@ -1201,10 +1367,22 @@ DetInfo& CAMIO::GetDetectorInfo()
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);;
 
         for (size_t i = 0; i < numRec; i++) {
-            size_t loc = pos + headSize + recOffset + (i * recSize);
+            // Check for potential overflow in i * recSize calculation
+            if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
+              throw std::out_of_range( "GetDetectorInfo: record index * recSize would overflow" );
 
-            if( (loc + 0x2DC + 8) > readData->size() )
-                throw std::runtime_error("Sample title record past end");
+            // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
+            const size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
+                               (i * static_cast<size_t>(recSize));
+
+            // Validate we can read all detector info fields
+            const size_t maxOffset = std::max({
+                size_t(0x2DC + 8),   // Type field
+                size_t(0x9C + 24),   // MCAType field
+                size_t(0x108 + 16),  // Name field
+                size_t(0x1CB + 8)    // SerialNo field
+            });
+            validate_bounds( *readData, loc, maxOffset, "GetDetectorInfo: reading detector info fields" );
 
             // these are actually record parameters but we don't deal with multpule specturm in a single file
             char type_buf[9] = { 0 };
@@ -1252,6 +1430,10 @@ SpecUtils::time_point_t CAMIO::GetSampleTime() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
+
+        // Validate bounds before calling convert_from_CAM_datetime (which also validates, but this is clearer)
+        validate_bounds( *readData, pos + headSize + 0xb4, sizeof(uint64_t), "GetSampleTime: reading sample time" );
+
         return convert_from_CAM_datetime(*readData, pos + headSize + 0xb4);
     }
 
@@ -1277,7 +1459,11 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
       
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
         uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
-        return convert_from_CAM_datetime(*readData, pos + headSize + timeOffset + 0x01);
+
+        // Check for potential overflow in offset calculation (timeOffset is file-controlled)
+        const size_t timePos = pos + static_cast<size_t>(headSize) + static_cast<size_t>(timeOffset) + 0x01;
+
+        return convert_from_CAM_datetime(*readData, timePos);
     }
 
     return SpecUtils::time_point_t{}; // Should never reach here
@@ -1300,7 +1486,11 @@ float CAMIO::GetLiveTime() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
-        return convert_from_CAM_duration(*readData, pos + 0x30 + timeOffset + 0x11);
+
+        // Check for overflow in offset calculation (timeOffset is file-controlled)
+        const size_t liveTimePos = pos + 0x30 + static_cast<size_t>(timeOffset) + 0x11;
+
+        return convert_from_CAM_duration(*readData, liveTimePos);
     }
 
     return 0.0; // Should never reach here
@@ -1323,7 +1513,11 @@ float CAMIO::GetRealTime() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
         uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
-        return convert_from_CAM_duration(*readData, pos + 0x30 + timeOffset + 0x09);
+
+        // Check for overflow in offset calculation (timeOffset is file-controlled)
+        const size_t realTimePos = pos + 0x30 + static_cast<size_t>(timeOffset) + 0x09;
+
+        return convert_from_CAM_duration(*readData, realTimePos);
     }
 
     return 0.0; // Should never reach here
@@ -1351,12 +1545,18 @@ std::vector<float>& CAMIO::GetShapeCalibration() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0xDC;
+        // Use size_t to avoid uint16_t overflow in offset calculation
+        const size_t eCalOffset = 0x30 + static_cast<size_t>(ReadUInt16(*readData, pos + 0x22)) + 0xDC;
 
       //CONSTANT or SQRT
       //std::string type_str( eCalOffset + 100 + 1, '\0');
       //std::memcpy(&(type_str[0]), &(*readData)[pos], eCalOffset + 100);
       //std::cout << "FWHM_type: '" << type_str << "'" << std::endl;
+
+        // Validate bounds before reading calibration coefficients
+        const size_t calibStart = pos + eCalOffset;
+        const size_t calibSize = fileShapeCal.size() * 4;
+        validate_bounds( *readData, calibStart, calibSize, "GetShapeCalibration: reading coefficients" );
 
         for (size_t i = 0; i < fileShapeCal.size(); i++) {
             fileShapeCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
@@ -1387,7 +1587,14 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
-        uint16_t eCalOffset = 0x30 + ReadUInt16(*readData, pos + 0x22) + 0x44;
+        // Use size_t to avoid uint16_t overflow in offset calculation
+        const size_t eCalOffset = 0x30 + static_cast<size_t>(ReadUInt16(*readData, pos + 0x22)) + 0x44;
+
+        // Validate we can read all energy calibration coefficients (4 floats = 16 bytes)
+        // eCalOffset is partially file-controlled via ReadUInt16
+        const size_t calibStart = pos + eCalOffset;
+        const size_t calibSize = fileEneCal.size() * 4;
+        validate_bounds( *readData, calibStart, calibSize, "GetEnergyCalibration: reading calibration coefficients" );
 
         for (size_t i = 0; i < fileEneCal.size(); i++) {
             fileEneCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
@@ -1438,7 +1645,7 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     uint16_t blockNo = 0;
 
     while (startRecord < lines.size()) {
-        blockNo = startRecord + numRecords > lines.size() ? 0 : blockNo + 1;
+        blockNo = ((startRecord + numRecords) > lines.size()) ? 0 : blockNo + 1;
         
         std::vector<std::vector<uint8_t>> lineSubset(lines.begin() + startRecord, lines.end());
         auto block = GenerateBlock(CAMBlock::NLINES, loc, lineSubset, blockNo, startRecord == 0);
@@ -1496,19 +1703,46 @@ void CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
     // Create the container
     //std::vector<uint8_t> file(fileLength);
     writebytes.resize(fileLength);
+
+    // fileHeader is a fixed-size array of 0x060 bytes, and writebytes is at least 0x800 bytes,
+    // so this copy is always safe
+    static_assert( fileHeader.size() <= 0x800, "fileHeader must fit in minimum writebytes size" );
     std::copy(fileHeader.begin(), fileHeader.end(), writebytes.begin());
 
     // Copy the blocks into the file
     size_t i = 0;
     for (const auto& block : blocks) {
+        // Validate source bounds - block must have at least 0x30 bytes for header
+        if( block.size() < 0x30 )
+          throw std::out_of_range( "GenerateFile: block size (" + std::to_string(block.size()) + ") is smaller than header size (0x30)" );
+
+        // Check for potential overflow in i * 0x30 calculation
+        if( (i > 0) && (i > (std::numeric_limits<size_t>::max() / 0x30)) )
+          throw std::out_of_range( "GenerateFile: block index * 0x30 would overflow" );
+
+        // Validate destination bounds before copying block header
+        const size_t headerDestStart = 0x70 + i * 0x30;
+        const size_t headerDestEnd = headerDestStart + 0x30;
+        if( headerDestEnd > writebytes.size() )
+          throw std::out_of_range( "GenerateFile: block header destination (" + std::to_string(headerDestStart) + " + 0x30) exceeds writebytes size (" + std::to_string(writebytes.size()) + ")" );
+
         // Copy block header into the file header
-        std::copy(block.begin(), block.begin() + 0x30, writebytes.begin() + 0x70 + i * 0x30);
+        std::copy(block.begin(), block.begin() + 0x30, writebytes.begin() + headerDestStart);
 
         // Copy the block
         uint32_t blockLoc = ReadUInt32(block, 0x0a);
         uint16_t blockSize = ReadUInt16(block, 0x06);
+
+        // Validate source bounds - block must have at least blockSize bytes
+        if( block.size() < blockSize )
+          throw std::out_of_range( "GenerateFile: block size (" + std::to_string(block.size()) + ") is smaller than blockSize field (" + std::to_string(blockSize) + ")" );
+
+        // Validate destination bounds before copying block data
+        if( (blockLoc > (std::numeric_limits<size_t>::max() - blockSize)) || ((blockLoc + blockSize) > writebytes.size()) )
+          throw std::out_of_range( "GenerateFile: block destination (" + std::to_string(blockLoc) + " + " + std::to_string(blockSize) + ") exceeds writebytes size (" + std::to_string(writebytes.size()) + ")" );
+
         std::copy(block.begin(), block.begin() + blockSize, writebytes.begin() + blockLoc);
-        
+
         i++;
     }
 
@@ -1767,7 +2001,7 @@ std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
 
     // Set the number of line parameter
     nuc[0] = static_cast<uint8_t>((numLines - 1) * 3 + static_cast<uint16_t>(RecordSize::NUCL) + 0x03);
-    
+
     // Set the spacer
     nuc[1] = 0x02;
     nuc[2] = 0x01;
@@ -1777,6 +2011,13 @@ std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
     // TODO check if this half-life needs to be converted
     auto halfLifeBytes = convert_to_CAM_duration(nuclide.HalfLife);
     auto halfLifeUncBytes = convert_to_CAM_duration(nuclide.HalfLifeUncertainty);
+
+    // Validate destination bounds before copying (all CAM durations/doubles are 8 bytes)
+    if( (NuclideParameterLocation::HalfLife + halfLifeBytes.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: HalfLife destination out of bounds" );
+    if( (NuclideParameterLocation::HalfLifeUncertainty + halfLifeUncBytes.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: HalfLifeUncertainty destination out of bounds" );
+
     std::copy(halfLifeBytes.begin(), halfLifeBytes.end(), nuc.begin() + NuclideParameterLocation::HalfLife);
     std::copy(halfLifeUncBytes.begin(), halfLifeUncBytes.end(), nuc.begin() + NuclideParameterLocation::HalfLifeUncertainty);
 
@@ -1784,6 +2025,15 @@ std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
     auto activityBytes = convert_to_CAM_double(nuclide.Activity);
     auto actUncBytes = convert_to_CAM_double(nuclide.ActivityUnc);
     auto mdaBytes = convert_to_CAM_double(nuclide.MDA);
+
+    // Validate destination bounds before copying
+    if( (NuclideParameterLocation::MeanActivity + activityBytes.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: MeanActivity destination out of bounds" );
+    if( (NuclideParameterLocation::MeanActivityUnceratinty + actUncBytes.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: MeanActivityUnceratinty destination out of bounds" );
+    if( (NuclideParameterLocation::NuclideMDA + mdaBytes.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: NuclideMDA destination out of bounds" );
+
     std::copy(activityBytes.begin(), activityBytes.end(), nuc.begin() + NuclideParameterLocation::MeanActivity);
     std::copy(actUncBytes.begin(), actUncBytes.end(), nuc.begin() + NuclideParameterLocation::MeanActivityUnceratinty);
     std::copy(mdaBytes.begin(), mdaBytes.end(), nuc.begin() + NuclideParameterLocation::NuclideMDA);
@@ -1795,13 +2045,24 @@ std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
     // Ensure the unit is always uppercase
     std::transform(paddedUnit.begin(), paddedUnit.end(), paddedUnit.begin(), ::toupper);
     paddedUnit.resize(2, ' ');
-    
+
+    // Validate destination bounds before copying strings
+    if( (0x03 + paddedName.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: Name destination out of bounds" );
+    if( (0x61 + paddedUnit.size()) > nuc.size() )
+      throw std::out_of_range( "GenerateNuclide: HalfLifeUnit destination out of bounds" );
+
     std::copy(paddedName.begin(), paddedName.end(), nuc.begin() + 0x03);
     std::copy(paddedUnit.begin(), paddedUnit.end(), nuc.begin() + 0x61);
 
     // Add the lines
     for (size_t i = 0; i < lineNums.size(); i++) {
         size_t offset = static_cast<size_t>(RecordSize::NUCL) + i * nuclide_line_size;
+
+        // Validate destination bounds before memcpy
+        if( (offset + 1 + sizeof(uint16_t)) > nuc.size() )
+          throw std::out_of_range( "GenerateNuclide: line number destination out of bounds at index " + std::to_string(i) );
+
         nuc[offset] = 0x01;
         uint16_t lineNum = lineNums[i];
         std::memcpy(&nuc[offset + 1], &lineNum, sizeof(uint16_t));
@@ -1838,9 +2099,9 @@ std::vector<byte_type> CAMIO::AddLinesToNuclide(const std::vector<byte_type>& nu
 // generate line record
 std::vector<byte_type> CAMIO::GenerateLine(const Line t_line) {
     std::vector<uint8_t> line(static_cast<size_t>(static_cast<uint16_t>(RecordSize::NLINES)));
-    
+
     line[0] = 0x01;
-    
+
     auto energyBytes = convert_to_CAM_float(t_line.Energy);
     auto enUncBytes = convert_to_CAM_float(t_line.EnergyUncertainty);
     auto yieldBytes = convert_to_CAM_float(t_line.Abundance);
@@ -1852,11 +2113,31 @@ std::vector<byte_type> CAMIO::GenerateLine(const Line t_line) {
     auto lnEffUnc = convert_to_CAM_float(t_line.LineEfficiencyUncertainty);
     auto lineMDA = convert_to_CAM_double(t_line.LineMDA);
 
+    // Validate destination bounds before copying (floats are 4 bytes, doubles are 8 bytes)
+    if( (LineParameterLocation::Energy + energyBytes.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: Energy destination out of bounds" );
+    if( (LineParameterLocation::EnergyUncertainty + enUncBytes.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: EnergyUncertainty destination out of bounds" );
+    if( (LineParameterLocation::Abundance + yieldBytes.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: Abundance destination out of bounds" );
+    if( (LineParameterLocation::AbundanceUncertainty + yieldUncBytes.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: AbundanceUncertainty destination out of bounds" );
+    if( (LineParameterLocation::LineActivity + activityBytes.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: LineActivity destination out of bounds" );
+    if( (LineParameterLocation::LineActivityUnceratinty + actUncBytes.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: LineActivityUnceratinty destination out of bounds" );
+    if( (LineParameterLocation::LineEfficiency + lineEff.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: LineEfficiency destination out of bounds" );
+    if( (LineParameterLocation::LineEfficiencyUncertainty + lnEffUnc.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: LineEfficiencyUncertainty destination out of bounds" );
+    if( (LineParameterLocation::LineMDA + lineMDA.size()) > line.size() )
+      throw std::out_of_range( "GenerateLine: LineMDA destination out of bounds" );
+
     std::copy(energyBytes.begin(), energyBytes.end(), line.begin() + LineParameterLocation::Energy);
     std::copy(enUncBytes.begin(), enUncBytes.end(), line.begin() + LineParameterLocation::EnergyUncertainty);
     std::copy(yieldBytes.begin(), yieldBytes.end(), line.begin() + LineParameterLocation::Abundance);
     std::copy(yieldUncBytes.begin(), yieldUncBytes.end(), line.begin() + LineParameterLocation::AbundanceUncertainty);
-    
+
     std::copy(activityBytes.begin(), activityBytes.end(), line.begin() + LineParameterLocation::LineActivity);
     std::copy(actUncBytes.begin(), actUncBytes.end(), line.begin() + LineParameterLocation::LineActivityUnceratinty);
     std::copy(lineEff.begin(), lineEff.end(), line.begin() + LineParameterLocation::LineEfficiency);
@@ -1865,7 +2146,7 @@ std::vector<byte_type> CAMIO::GenerateLine(const Line t_line) {
 
     // Set if it is the key line
     line[LineParameterLocation::IsKeyLine] = t_line.IsKeyLine ? 0x04 : 0x00;
-    
+
     // Set the nuclide number
     line[LineParameterLocation::NuclideIndex] = static_cast<uint8_t>(t_line.NuclideIndex);
 
@@ -1968,11 +2249,19 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
     size_t destIndex = block_header_size;
     if (hasCommon) {
         if (block == CAMBlock::NUCL) {
-            std::copy(nuclCommon.begin(), nuclCommon.end(), 
+            // Validate destination bounds before copying
+            if( (block_header_size + nuclCommon.size()) > blockBytes.size() )
+              throw std::out_of_range( "GenerateBlock: nuclCommon destination out of bounds" );
+
+            std::copy(nuclCommon.begin(), nuclCommon.end(),
                      blockBytes.begin() + block_header_size);
             destIndex += nuclCommon.size();
         } else if (block == CAMBlock::NLINES) {
-            std::copy(nlineCommon.begin(), nlineCommon.end(), 
+            // Validate destination bounds before copying
+            if( (block_header_size + nlineCommon.size()) > blockBytes.size() )
+              throw std::out_of_range( "GenerateBlock: nlineCommon destination out of bounds" );
+
+            std::copy(nlineCommon.begin(), nlineCommon.end(),
                      blockBytes.begin() + block_header_size);
             destIndex += nlineCommon.size();
         }
@@ -1984,6 +2273,10 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
 
     auto it = records.begin();
     while (it != records.end() && destIndex + it->size() < blockSize) {
+
+        // Validate destination bounds before copying (checking <= instead of < to be safe)
+        if( (destIndex + it->size()) > blockBytes.size() )
+          throw std::out_of_range( "GenerateBlock: record destination out of bounds" );
 
         std::copy(it->begin(), it->end(), blockBytes.begin() + destIndex);
         destIndex += it->size();
@@ -1997,6 +2290,10 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
 
     // Get the header
     auto header = GenerateBlockHeader(block, loc, totalRec, totRecLines, blockNo, hasCommon);
+
+    // Validate destination bounds before copying header
+    if( header.size() > blockBytes.size() )
+      throw std::out_of_range( "GenerateBlock: header destination out of bounds" );
 
     // Copy the header to byte array
     std::copy(header.begin(), header.end(), blockBytes.begin());
@@ -2168,6 +2465,13 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
 
     // Copy in the block code
     uint32_t blockCode = static_cast<uint32_t>(block);
+
+    // Validate destination bounds before memcpy (header is fixed size 0x30)
+    if( sizeof(uint32_t) > header.size() )
+      throw std::out_of_range( "GenerateBlockHeader: block code destination out of bounds" );
+    if( (0x0A + sizeof(uint32_t)) > header.size() )
+      throw std::out_of_range( "GenerateBlockHeader: location destination out of bounds" );
+
     std::memcpy(header.data(), &blockCode, sizeof(uint32_t));
 
     // Copy in the location
@@ -2180,6 +2484,10 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
         if (headerIndex == 0x0A) {
             headerIndex += 0x04;
         }
+
+        // Validate destination bounds before memcpy
+        if( (headerIndex + sizeof(uint16_t)) > header.size() )
+          throw std::out_of_range( "GenerateBlockHeader: value destination out of bounds at index " + std::to_string(i) + " (headerIndex=" + std::to_string(headerIndex) + ")" );
 
         std::memcpy(header.data() + headerIndex, &values[i], sizeof(uint16_t));
         headerIndex += 0x02;
