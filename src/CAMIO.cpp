@@ -2334,11 +2334,18 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
         0x03E6,                                          // 0x28  16 Addresss of entries in block
         0x0009,                                          // 0x2A  17 Always 9
         0x0000,                                          // 0x2C  18
-        static_cast<uint16_t>(values[4] + values[11] * values[12] + values[13]) // 0x2E  19 Computed size of block
-    }; 
+        static_cast<uint16_t>(sec_header_length + numRec * static_cast<uint16_t>(RecordSize::ACQP) + 0x02EA) // 0x2E  19 Computed size of block
+    };
     std::vector<uint16_t> temp = { values[4] , values[11] , values[12] , values[13] , values[17]};
     // Modify values based on block type
     switch (block) {
+      case CAMBlock::ACQP:
+      case CAMBlock::GEOM:
+      case CAMBlock::DISP:
+      case CAMBlock::PEAK:
+        // No action
+        break;
+
         case CAMBlock::PROC:
             values[0] = 0x0100;
             values[1] = static_cast<uint16_t>(BlockSize::PROC);
@@ -2460,7 +2467,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             }
             break;
 
-            
+
     }
 
     // Copy in the block code
