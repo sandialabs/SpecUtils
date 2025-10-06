@@ -2517,9 +2517,9 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
       return;
     }
     
-    const modKeyPressed = (d3.event.altKey || d3.event.ctrlKey || d3.event.metaKey
-                           || d3.event.shiftKey || self.escapeKeyPressed);
-    
+    const modifiers = (d3.event.shiftKey ? 0x01 : 0) | (d3.event.ctrlKey ? 0x02 : 0) | (d3.event.altKey ? 0x04 : 0) | (d3.event.metaKey ? 0x08 : 0);
+    const modKeyPressed = ((modifiers != 0) || self.escapeKeyPressed);
+                           
     /* Figure out clicks and double clicks */
     const nowtime = new Date();
 
@@ -2537,7 +2537,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.mouseDownRoi = null;
           }
           
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr() );
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), modifiers );
         } else {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
