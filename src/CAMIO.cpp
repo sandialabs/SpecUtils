@@ -973,13 +973,6 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
 
 // get all the nuclide lines
 std::vector<Line>& CAMIO::GetLines() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::NLINES);
     if (range.first == range.second) {
         throw std::runtime_error("There is no nuclide line data in the loaded file");
@@ -1038,13 +1031,6 @@ std::vector<Line>& CAMIO::GetLines() {
 
 // get all the nuclides
 std::vector<Nuclide>& CAMIO::GetNuclides() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::NUCL);
     if (range.first == range.second) {
         throw std::runtime_error("There is no nuclide data in the loaded file");
@@ -1158,13 +1144,6 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
 
 // get the peaks
 std::vector<Peak>& CAMIO::GetPeaks() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::PEAK);
     if (range.first == range.second) {
         throw std::runtime_error("There is no peak data in the loaded file");
@@ -1233,13 +1212,6 @@ std::vector<Peak>& CAMIO::GetPeaks() {
 
 // get the spectrum
 std::vector<uint32_t>& CAMIO::GetSpectrum() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::SPEC);
     if (range.first == range.second) {
         throw std::runtime_error("There is no spectral data in the loaded file");
@@ -1275,13 +1247,6 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
 
 std::string CAMIO::GetSampleTitle()
 {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::SAMP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no sample data in the loaded file");
@@ -1306,13 +1271,6 @@ std::string CAMIO::GetSampleTitle()
 
 DetInfo& CAMIO::GetDetectorInfo()
 {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no aqusition data in the loaded file");
@@ -1378,13 +1336,6 @@ DetInfo& CAMIO::GetDetectorInfo()
 
 // get the sampling time
 SpecUtils::time_point_t CAMIO::GetSampleTime() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::SAMP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no sample data in the loaded file");
@@ -1405,13 +1356,6 @@ SpecUtils::time_point_t CAMIO::GetSampleTime() {
 
 // get the aqusition start time
 SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no temporal data in the loaded file");
@@ -1433,13 +1377,6 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
 
 // gets the live time in float seconds
 float CAMIO::GetLiveTime() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no temporal data in the loaded file");
@@ -1460,13 +1397,6 @@ float CAMIO::GetLiveTime() {
 
 // gets the read time in float seconds
 float CAMIO::GetRealTime() {
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
-
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
         throw std::runtime_error("There is no temporal data in the loaded file");
@@ -1489,13 +1419,6 @@ float CAMIO::GetRealTime() {
 std::vector<float>& CAMIO::GetShapeCalibration() {
   if( !fileShapeCal.empty() )
     return fileShapeCal;
-
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
 
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
@@ -1532,13 +1455,6 @@ std::vector<float>& CAMIO::GetShapeCalibration() {
 std::vector<float>& CAMIO::GetEnergyCalibration() {
   if( !fileEneCal.empty() )
     return fileEneCal;
-
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
 
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
@@ -2121,13 +2037,6 @@ std::vector<byte_type> CAMIO::GenerateLine(const Line t_line) {
 std::vector<EfficiencyPoint>& CAMIO::GetEfficiencyPoints() {
   if( !efficiencyPoints.empty() )
     return efficiencyPoints;
-
-    if (blockAddresses.empty()) {
-        throw std::runtime_error("The header format could not be read");
-    }
-    if (readData->empty()) {
-        throw std::runtime_error("The file contains no data");
-    }
 
     auto range = blockAddresses.equal_range(CAMBlock::GEOM);
     if (range.first == range.second) {
