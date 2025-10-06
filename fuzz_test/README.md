@@ -33,7 +33,7 @@ cd build_fuzzing
 # Replace /path/to/your/boost/install with your actual Boost installation path
 cmake -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
       -DCMAKE_IGNORE_PATH="/Applications/Xcode.app" \
-      -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm;/path/to/your/boost/install" \
+      -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/llvm" \
       -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
       -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
       -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
@@ -41,10 +41,19 @@ cmake -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
       -DSpecUtils_BUILD_FUZZING_TESTS=ON \
       -DSpecUtils_BUILD_REGRESSION_TEST=OFF \
       -DSpecUtils_ENABLE_EQUALITY_CHECKS=ON \
-      -DSpecUtils_ENABLE_URI_SPECTRA=ON \
-      -DSpecUtils_FLT_PARSE_METHOD=boost \
+      -DSpecUtils_ENABLE_URI_SPECTRA=OFF \
+      -DSpecUtils_FLT_PARSE_METHOD=FastFloat \
+      -DSpecUtils_FETCH_FAST_FLOAT=ON \
+      -DSpecUtils_USING_NO_THREADING=ON \
       ..
 ```
+
+If you want to to anable URI spectra, on macOS, you need to not use the system `zlib`, as 
+bringing that in brings in the system include path, but we need to keep the system includes
+to all be from brews install of llvm/clang.  
+(compiling and installing from code at https://github.com/madler/zlib is pretty simple)
+Also, the using threading was causing some issues when linking for me on macOS, so I just disabled.
+
 
 ### Step 4: Build the project
 ```bash

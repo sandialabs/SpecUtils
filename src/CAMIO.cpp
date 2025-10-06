@@ -736,7 +736,7 @@ void CAMIO::ReadBlock(CAMBlock block) {
 
 // Helper function to read a uint16_t from the data buffer
 static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
-    if( offset + sizeof(uint16_t) > data.size() )
+    if( (offset + sizeof(uint16_t)) > data.size() )
       throw std::out_of_range( "ReadUInt16: offset " + std::to_string(offset) + " out of range (data size: " + std::to_string(data.size()) + ")" );
 
     uint16_t value;
@@ -756,6 +756,9 @@ static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
 
 // read the geometry block
 void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x28 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than geometry block" );
+
     // Get record offset and entry offset
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -824,6 +827,9 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
 
 // read the lines block
 void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x22 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than lines block" );
+
     // Get record offset and size
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -854,6 +860,9 @@ void CAMIO::ReadLinesBlock(size_t pos, uint16_t records) {
 
 // read the nuclides block
 void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x22 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than nuclides block" );
+
     // Get record offset
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -872,6 +881,9 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
 
         // Validate we can read the size field
         validate_bounds( *readData, loc, 2, "ReadNuclidesBlock: reading numLines size field" );
+
+        if( (loc + 2) > readData->size() )
+            throw std::runtime_error( "Data smaller than nuclide record" );
 
         // Calculate the size of this nuclide record including its lines
         // Validate that the size field is reasonable before subtracting
@@ -913,6 +925,9 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
 
 // read the peaks block
 void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
+    if( (pos + 0x22 + 2) > readData->size() )
+        throw std::runtime_error( "Data smaller than peaks block" );
+
     // Get record offset and size
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
     uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
@@ -949,6 +964,9 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
         });
         validate_bounds( *readData, loc, maxOffset, "ReadPeaksBlock: reading peak record" );
 
+        if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
+            throw std::runtime_error( "Data smaller than peaks record" );
+
         Peak peak{};
         peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
         peak.Centroid = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Centroid));
@@ -980,6 +998,9 @@ std::vector<Line>& CAMIO::GetLines() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+
+        if( (pos + 0x22 + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than lines pos" );
 
         // Get record offset and size
         uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
@@ -1050,6 +1071,9 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
+        if( (pos + 0x22 + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than nuclides pos" );
+
         uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
@@ -1092,7 +1116,7 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
 
             Nuclide nuc;
             nuc.HalfLife = convert_from_CAM_duration(*readData, loc + 0x1b);
-            nuc.HalfLifeUncertainty = convert_from_CAM_duration(*readData, loc + 0x89);
+            nuc.HalfLifeUncertainty = convert_from_CAM_duration(*readData, loc + static_cast<uint32_t>(NuclideParameterLocation::HalfLifeUncertainty) );
 
             // Read name (8 characters)
             char nameBuf[9] = {0};
@@ -1154,7 +1178,10 @@ std::vector<Peak>& CAMIO::GetPeaks() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
-        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ? 
+        if( (pos + 0x22 + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than peaks pos" );
+
+        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ?
                             0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
@@ -1186,6 +1213,9 @@ std::vector<Peak>& CAMIO::GetPeaks() {
                 static_cast<size_t>(PeakParameterLocation::Width) + size_t(2)
             });
             validate_bounds( *readData, loc, maxOffset, "GetPeaks: reading peak record" );
+
+            if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
+              throw std::runtime_error( "Data smaller than peaks record" );
 
             Peak peak{};
             peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
@@ -1220,6 +1250,9 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
+        if( (pos + 0x2A + 2) > readData->size() )
+          throw std::runtime_error( "Data smaller than spectrum pos" );
+
         // Get number of channels
         uint16_t channels = ReadUInt16(*readData, pos + 0x2A);
         uint16_t headerOffset = ReadUInt16(*readData, pos + 0x10);
@@ -1233,6 +1266,9 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
 
         // Resize spectrum vector to accommodate all channels
         fileSpectrum.resize(channels);
+
+        if( (pos + dataOffset + headerOffset + channels*4) > readData->size() )
+          throw std::runtime_error( "Data smaller than spectrum data" );
 
         // Read channel data
         for (size_t i = 0; i < channels; i++) {
@@ -1254,6 +1290,7 @@ std::string CAMIO::GetSampleTitle()
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
         // Validate we can read the sample title (64 bytes)
@@ -1363,6 +1400,7 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+      
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
         uint16_t timeOffset = ReadUInt16(*readData, pos + 0x24);
 
@@ -1731,7 +1769,7 @@ void CAMIO::AddLineAndNuclide(const float energy, const float yield,
     float t12Unc = (halfLifeUnc < size_t(0)) ? ComputeUncertainty(halfLife) : halfLifeUnc;
 
 
-    int nucNo = writeNuclides.size() + 1;
+    int nucNo = static_cast<int>( writeNuclides.size() + 1 );
     // TODO try this out without this helper vector
     Nuclide nuc(name, halfLife, t12Unc, halfLifeUnit, nucNo );
 
@@ -2205,11 +2243,18 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
         0x03E6,                                          // 0x28  16 Addresss of entries in block
         0x0009,                                          // 0x2A  17 Always 9
         0x0000,                                          // 0x2C  18
-        static_cast<uint16_t>(values[4] + values[11] * values[12] + values[13]) // 0x2E  19 Computed size of block
-    }; 
+        static_cast<uint16_t>(sec_header_length + numRec * static_cast<uint16_t>(RecordSize::ACQP) + 0x02EA) // 0x2E  19 Computed size of block
+    };
     std::vector<uint16_t> temp = { values[4] , values[11] , values[12] , values[13] , values[17]};
     // Modify values based on block type
     switch (block) {
+      case CAMBlock::ACQP:
+      case CAMBlock::GEOM:
+      case CAMBlock::DISP:
+      case CAMBlock::PEAK:
+        // No action
+        break;
+
         case CAMBlock::PROC:
             values[0] = 0x0100;
             values[1] = static_cast<uint16_t>(BlockSize::PROC);
@@ -2331,7 +2376,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             }
             break;
 
-            
+
     }
 
     // Copy in the block code
