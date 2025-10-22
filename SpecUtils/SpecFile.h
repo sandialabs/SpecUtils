@@ -500,8 +500,16 @@ bool is_candidate_n42_file( const char * const data, const char * const data_end
  @TODO move this function, and similar ones to a N42 utils header/source
  */
 char *convert_n42_utf16_xml_to_utf8( char * data, char * const data_end );
-  
-  
+
+/** Function converts XML files that look like
+ `<MessageEnvelope... <n42:RadInstrumentData>...</n42:RadInstrumentData></MessageEnvelope>`
+ to
+ `<RadInstrumentData>...<RadInstrumentData>`
+ So they can be parsed as N42 files.
+ */
+bool rsi_portal_xml_to_n42_hack( char* &data, char* &data_end );
+
+
 /** @TODO move this function, and similar ones to a N42 utils header/source
  
  */

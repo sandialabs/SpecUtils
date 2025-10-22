@@ -4714,7 +4714,111 @@ namespace SpecUtils
     
     return new_data_end;
   }//convert_n42_utf16_xml_to_utf8
-  
+
+
+  bool rsi_portal_xml_to_n42_hack( char* &data, char* &data_end )
+  {
+    assert( data <= data_end );
+    if( data_end < data )
+      throw logic_error( "Invalid start-end of data" ); //shouldnt ever happen
+
+    const size_t orig_len = (data_end - data);
+    if( orig_len < 1024 )
+      return false;
+
+    // If '<MessageEnvelope' is not found within the first 512 characters, then return false
+    // if '<n42:RadInstrumentData>' is not found within the first 8192 characters, return false.
+    // Go through and replace all instances of "<n42:" with "    <"
+    // Go through and replace all instances of "</n42:" with "    </"
+    // Make `data` point at the first instance of "<RadInstrumentData>"
+    // Make `data_end` point one position past the first following "</RadInstrumentData>"
+
+    // Define string literals
+    const char message_envelope[] = "<MessageEnvelope";
+    const size_t message_envelope_len = (sizeof(message_envelope) / sizeof(message_envelope[0])) - 1;
+
+    const char rad_instrument_data[] = "<n42:RadInstrumentData>";
+    const size_t rad_instrument_data_len = (sizeof(rad_instrument_data) / sizeof(rad_instrument_data[0])) - 1;
+
+    const char rad_instrument_data_start[] = "<RadInstrumentData>";
+    const size_t rad_instrument_data_start_len = (sizeof(rad_instrument_data_start) / sizeof(rad_instrument_data_start[0])) - 1;
+
+    const char rad_instrument_data_end[] = "</RadInstrumentData>";
+    const size_t rad_instrument_data_end_len = (sizeof(rad_instrument_data_end) / sizeof(rad_instrument_data_end[0])) - 1;
+
+    const char n42_open[] = "<n42:";
+    const size_t n42_open_len = (sizeof(n42_open) / sizeof(n42_open[0])) - 1;
+    const char n42_close[] = "</n42:";
+    const size_t n42_close_len = (sizeof(n42_close) / sizeof(n42_close[0])) - 1;
+    const char replacement_open[] = "    <";
+    const size_t replacement_open_len = (sizeof(replacement_open) / sizeof(replacement_open[0])) - 1;
+    const char replacement_close[] = "    </";
+    const size_t replacement_close_len = (sizeof(replacement_close) / sizeof(replacement_close[0])) - 1;
+
+    static_assert( sizeof(n42_open) == sizeof(replacement_open), "Mismatch on n42 open str len" );
+    static_assert( sizeof(n42_close) == sizeof(replacement_close), "Mismatch on n42 open str len" );
+
+    // Check for '<MessageEnvelope' within the first 512 characters
+    const size_t envelope_search_len = std::min(size_t(512), orig_len);
+    char * const message_envelope_pos = std::search( data, data + envelope_search_len,
+                                                    message_envelope, message_envelope + message_envelope_len);
+    if( message_envelope_pos == (data + envelope_search_len) )
+      return false;
+
+    // Check for '<n42:RadInstrumentData>' within the first 8192 characters
+    const size_t rad_instrument_search_len = std::min(size_t(8192), orig_len);
+    char *rad_instrument_pos = std::search(data, data + rad_instrument_search_len,
+                                           rad_instrument_data, rad_instrument_data + rad_instrument_data_len);
+    if( rad_instrument_pos == (data + rad_instrument_search_len) )
+      return false;
+
+    // If we are here, we are probably in the target rsi portal file
+
+    // Replace all instances of "<n42:" with "    <"
+    char *pos = data;
+    while( pos < (data_end - n42_open_len) )
+    {
+      pos = std::search(pos, data_end, n42_open, n42_open + n42_open_len);
+      if( pos == data_end )
+        break; // No more occurrences
+      std::memcpy(pos, replacement_open, replacement_open_len);
+      pos += n42_open_len; // Move past the replaced substring
+    }
+
+
+    // Replace all instances of "</n42:" with "     <"
+    pos = data;
+    while( pos < (data_end - n42_close_len) )
+    {
+      pos = std::search(pos, data_end, n42_close, n42_close + n42_close_len);
+      if( pos == data_end )
+        break; // No more occurrences
+      std::memcpy(pos, replacement_close, replacement_close_len);
+      pos += n42_close_len; // Move past the replaced substring
+    }
+
+    // Make `data` point at the first instance of "<RadInstrumentData>"
+    char *rad_data_start = std::search(data, data_end,
+                                       rad_instrument_data_start, rad_instrument_data_start + rad_instrument_data_start_len);
+    assert( rad_data_start < data_end );
+
+    if( rad_data_start == data_end )
+      return false; // "<RadInstrumentData>" not found
+
+    data = rad_data_start;
+
+    // Make `data_end` point one position past the first following "</RadInstrumentData>"
+    char *rad_data_end = std::search(rad_data_start, data_end,
+                                     rad_instrument_data_end, rad_instrument_data_end + rad_instrument_data_end_len);
+    if( rad_data_end == data_end )
+      return false; // "</RadInstrumentData>" not found
+
+    data_end = rad_data_end + rad_instrument_data_end_len;
+
+    return true;
+  }//bool rsi_portal_xml_to_n42_hack( char* &data, char* &data_end )
+
+
   bool SpecFile::load_from_N42( std::istream &input )
   {
     std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
@@ -8867,10 +8971,11 @@ namespace SpecUtils
       reset(); 
       
       data_end = convert_n42_utf16_xml_to_utf8( data, data_end );
+      rsi_portal_xml_to_n42_hack( data, data_end );
 
       // Some times a bunch of null characters can get appended to the end
       //  of the file - lets remove them, or rapidxml::parse will fail.
-      //  TODO: bet yet, we should look for the last '>' character, or even better, the last valid closing tag
+      //  TODO: better yet, we should look for the last '>' character, or even better, the last valid closing tag
       while( ((data_end - data) > 2) && ((*(data_end - 1)) == '\0') )
         --data_end;
       
