@@ -679,15 +679,15 @@ namespace SpecUtils
   
   
   /** Writes the given energy calibration object as a CALp file.
-   
+
    If a spectrum file has multiple detectors, you may write out each calibration, with the detectors name, to a single file
-   
+
    @param output The stream to write the output to.
    @param The energy calibration to write.
    @param detector_name The name of the detector - an InterSpec/SpecUtils specific extension of the CALp file format.  If blank,
           wont be written.
    @returns if CALp file was successfully written.
-   
+
    Note, if the energy calibration is Full Range Fraction, then it will be converted to polynomial, and those coefficients written out, but also
    the original FRF coefficients will be written out after the other content - this is a InterSpec/SpecUtils specific extension of CALp file
    format.
@@ -695,6 +695,43 @@ namespace SpecUtils
   bool write_CALp_file( std::ostream &output,
                         const std::shared_ptr<const EnergyCalibration> &cal,
                         const std::string &detector_name );
+
+
+  /** Fits polynomial energy calibration coefficients from channel-energy pairs using unweighted least squares.
+
+   Uses simple/unstable solution methods (Gaussian elimination with partial pivoting, not SVD-style fitting).
+   All data points are treated with equal weight (unweighted fit).
+
+   This function solves the normal equations for polynomial fitting:
+   Energy = c0 + c1*channel + c2*channel^2 + ... + c(n-1)*channel^(n-1)
+
+   where n is the number of coefficients (max_orders).
+
+   @param channel_energy_pairs Vector of (channel, energy) pairs to fit.  The channel values may be fractional.
+   @param max_orders Maximum number of polynomial coefficients to fit (e.g., 2 for linear with offset, 3 for quadratic).
+          Must be >= 1 and <= number of data points.
+
+   @returns Vector of polynomial coefficients [c0, c1, c2, ...] ordered from constant term to highest order term.
+           For max_orders=1, returns just the gain coefficient (offset assumed to be 0).
+           For max_orders>=2, returns offset, gain, and higher order terms.
+
+   @throws std::runtime_error if:
+           - channel_energy_pairs is empty
+           - max_orders is 0 or greater than the number of data points
+           - The system of equations is singular or nearly singular (determinant < 1e-10)
+           - Any resulting coefficient is NaN or Inf
+
+   Example usage:
+   \code
+   std::vector<std::pair<float,float>> pairs = {{0.0f, 0.0f}, {100.0f, 300.0f}, {200.0f, 600.0f}};
+   std::vector<float> coeffs = fit_poly_energy_cal_from_points( pairs, 2 ); // Linear fit
+   // coeffs[0] = offset, coeffs[1] = gain
+   \endcode
+
+   Note: For best numerical stability, consider normalizing channel numbers before fitting if they span a very large range.
+   */
+  std::vector<float> fit_poly_energy_cal_from_points( const std::vector<std::pair<float,float>> &channel_energy_pairs,
+                                                       const size_t max_orders );
 }//namespace SpecUtils
 
 #endif

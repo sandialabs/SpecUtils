@@ -380,3 +380,185 @@ Gain (keV / Chan)      :  -3.00000e+00
   //       could/should also add tests for other calibration types
 
 }//TEST_CASE( testCALpFile )
+
+
+TEST_CASE( "fit_poly_energy_cal_from_points" )
+{
+  using namespace std;
+  using namespace SpecUtils;
+
+  SUBCASE( "Empty input throws" )
+  {
+    vector<pair<float,float>> empty_pairs;
+    CHECK_THROWS_AS( fit_poly_energy_cal_from_points( empty_pairs, 2 ), std::exception );
+  }
+
+  SUBCASE( "Zero max_orders throws" )
+  {
+    vector<pair<float,float>> pairs = {{0.0f, 0.0f}, {100.0f, 300.0f}};
+    CHECK_THROWS_AS( fit_poly_energy_cal_from_points( pairs, 0 ), std::exception );
+  }
+
+  SUBCASE( "max_orders exceeds number of points throws" )
+  {
+    vector<pair<float,float>> pairs = {{0.0f, 0.0f}, {100.0f, 300.0f}};
+    CHECK_THROWS_AS( fit_poly_energy_cal_from_points( pairs, 3 ), std::exception );
+  }
+
+  SUBCASE( "Single point fit (linear through origin)" )
+  {
+    // Single point: channel=100, energy=300 keV
+    // Should return [offset=0, gain=3.0]
+    vector<pair<float,float>> pairs = {{100.0f, 300.0f}};
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 1 ) );
+
+    REQUIRE_EQ( coeffs.size(), 2 );
+    CHECK_EQ( coeffs[0], doctest::Approx(0.0f).epsilon(0.0001) );  // offset
+    CHECK_EQ( coeffs[1], doctest::Approx(3.0f).epsilon(0.0001) );  // gain
+  }
+
+  SUBCASE( "Two point linear fit" )
+  {
+    // Two points: (0, 10) and (100, 310)
+    // Should fit: E = 10 + 3*ch
+    vector<pair<float,float>> pairs = {{0.0f, 10.0f}, {100.0f, 310.0f}};
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 2 ) );
+
+    REQUIRE_EQ( coeffs.size(), 2 );
+    CHECK_EQ( coeffs[0], doctest::Approx(10.0f).epsilon(0.001) );  // offset
+    CHECK_EQ( coeffs[1], doctest::Approx(3.0f).epsilon(0.001) );   // gain
+  }
+
+  SUBCASE( "Three point linear fit (overdetermined)" )
+  {
+    // Three points on a line: E = 5 + 2*ch
+    vector<pair<float,float>> pairs = {
+      {0.0f, 5.0f},
+      {50.0f, 105.0f},
+      {100.0f, 205.0f}
+    };
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 2 ) );
+
+    REQUIRE_EQ( coeffs.size(), 2 );
+    CHECK_EQ( coeffs[0], doctest::Approx(5.0f).epsilon(0.001) );   // offset
+    CHECK_EQ( coeffs[1], doctest::Approx(2.0f).epsilon(0.001) );   // gain
+  }
+
+  SUBCASE( "Three point quadratic fit (exact)" )
+  {
+    // Three points on parabola: E = 1 + 2*ch + 0.01*ch^2
+    // At ch=0: E=1, ch=50: E=126, ch=100: E=301
+    vector<pair<float,float>> pairs = {
+      {0.0f, 1.0f},
+      {50.0f, 126.0f},
+      {100.0f, 301.0f}
+    };
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 3 ) );
+
+    REQUIRE_EQ( coeffs.size(), 3 );
+    CHECK_EQ( coeffs[0], doctest::Approx(1.0f).epsilon(0.001) );    // offset
+    CHECK_EQ( coeffs[1], doctest::Approx(2.0f).epsilon(0.001) );    // linear
+    CHECK_EQ( coeffs[2], doctest::Approx(0.01f).epsilon(0.001) );   // quadratic
+  }
+
+  SUBCASE( "Five point quadratic fit (overdetermined)" )
+  {
+    // Five points approximately on: E = 10 + 3*ch + 0.001*ch^2
+    vector<pair<float,float>> pairs = {
+      {0.0f, 10.0f},
+      {100.0f, 320.0f},
+      {200.0f, 650.0f},
+      {300.0f, 1000.0f},
+      {400.0f, 1370.0f}
+    };
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 3 ) );
+
+    REQUIRE_EQ( coeffs.size(), 3 );
+    CHECK_EQ( coeffs[0], doctest::Approx(10.0f).epsilon(0.01) );    // offset
+    CHECK_EQ( coeffs[1], doctest::Approx(3.0f).epsilon(0.01) );     // linear
+    CHECK_EQ( coeffs[2], doctest::Approx(0.001f).epsilon(0.0001) ); // quadratic
+  }
+
+  SUBCASE( "Typical detector calibration" )
+  {
+    // Realistic gamma calibration points from common peaks
+    // Ba-133 @ 81 keV, Co-60 @ 1173 and 1333 keV
+    vector<pair<float,float>> pairs = {
+      {26.8f, 81.0f},      // Ba-133 81 keV
+      {388.5f, 1173.5f},   // Co-60 1173 keV
+      {441.5f, 1332.5f}    // Co-60 1333 keV
+    };
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 2 ) );
+
+    REQUIRE_EQ( coeffs.size(), 2 );
+
+    // Verify calibration is reasonable for a typical NaI detector
+    CHECK( coeffs[0] > -10.0f );   // offset around 0 keV
+    CHECK( coeffs[0] < 10.0f );
+    CHECK( coeffs[1] > 2.5f );     // gain around 3 keV/channel
+    CHECK( coeffs[1] < 3.5f );
+
+    // Verify the fit reproduces the input points reasonably
+    for( const auto &pair : pairs )
+    {
+      const float ch = pair.first;
+      const float energy_expected = pair.second;
+      const float energy_fitted = coeffs[0] + coeffs[1] * ch;
+      CHECK_EQ( energy_fitted, doctest::Approx(energy_expected).epsilon(0.01) );
+    }
+  }
+
+  SUBCASE( "Fractional channel numbers" )
+  {
+    // Test with non-integer channel numbers (as might come from peak fitting)
+    vector<pair<float,float>> pairs = {
+      {10.5f, 31.5f},
+      {50.25f, 150.75f},
+      {100.75f, 302.25f}
+    };
+
+    vector<float> coeffs;
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 2 ) );
+
+    REQUIRE_EQ( coeffs.size(), 2 );
+    CHECK_EQ( coeffs[1], doctest::Approx(3.0f).epsilon(0.01) );  // gain = 3
+  }
+
+  SUBCASE( "All zeros throws (singular matrix)" )
+  {
+    vector<pair<float,float>> pairs = {
+      {0.0f, 0.0f},
+      {0.0f, 0.0f},
+      {0.0f, 0.0f}
+    };
+
+    CHECK_THROWS_AS( fit_poly_energy_cal_from_points( pairs, 2 ), std::exception );
+  }
+
+  SUBCASE( "Negative gain detection" )
+  {
+    // Points that would result in negative gain
+    vector<pair<float,float>> pairs = {
+      {0.0f, 300.0f},
+      {100.0f, 0.0f}
+    };
+
+    vector<float> coeffs;
+    // Function should not throw, but PHD parser validation will catch negative gain
+    CHECK_NOTHROW( coeffs = fit_poly_energy_cal_from_points( pairs, 2 ) );
+    REQUIRE_EQ( coeffs.size(), 2 );
+    CHECK( coeffs[1] < 0.0f );  // Verify we got negative gain
+  }
+}//TEST_CASE( "fit_poly_energy_cal_from_points" )
