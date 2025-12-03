@@ -286,8 +286,8 @@ Integral float_to_integral( float d )
     if( exp <= max_exp )
       return static_cast<Integral>( d );
   
-    static constexpr Integral min_int_val = std::numeric_limits<Integral>::min();
-    static constexpr Integral max_int_val = std::numeric_limits<Integral>::max();
+    static constexpr Integral min_int_val = (std::numeric_limits<Integral>::min)();
+    static constexpr Integral max_int_val = (std::numeric_limits<Integral>::max)();
     return std::signbit(d) ? min_int_val : max_int_val;
   }//float_to_integral
 }//namespace SpecUtils
