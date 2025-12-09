@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <chrono>
 
 /*
 Shortcommings that wcjohns should address:
