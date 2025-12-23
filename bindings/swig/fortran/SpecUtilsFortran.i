@@ -16,7 +16,6 @@
 namespace std {
     %template(FloatVector)  vector<float>;
     %template(MeasurementVector)  vector<SpecUtils::Measurement>;
-    
 }
 
 %include "std_shared_ptr.i"
@@ -25,7 +24,7 @@ namespace std {
 %shared_ptr(SpecUtils::MeasurementExt)
 %shared_ptr(SpecUtils::EnergyCalibration)
 %shared_ptr(SpecUtils::EnergyCalibrationExt)
-//%shared_ptr(std::vector<float>) // this caused me problems -hugh
+//%shared_ptr(const std::vector<float>) // this caused me problems -hugh
 
 %include "std_string.i"
 %apply std::string { std::string& }
@@ -40,8 +39,6 @@ namespace std {
 %include <typemaps.i>
 
 %apply int { size_t }
-
-%apply SWIGTYPE ARRAY[ANY][ANY][ANY][ANY][ANY] { float[ANY][ANY][ANY][ANY][ANY] };
 
 %ignore SpecUtils::SpecFile::set_energy_calibration;
 
@@ -108,6 +105,26 @@ namespace std {
         {
             spectrum[i] = counts.at(i);
         }        
+    }
+
+    size_t get_num_channel_energies()
+    {
+        auto ecal = $self->energy_calibration();
+        auto channel_energies = ecal->channel_energies();
+        return channel_energies->size();
+    }
+
+    %apply (SWIGTYPE *DATA, size_t SIZE) { (float* energies, size_t num_bounds) };
+    void get_channel_energies(float* energies, size_t num_bounds)
+    {
+        auto ecal = $self->energy_calibration();
+        auto channel_energies = ecal->channel_energies();
+        auto count = channel_energies->size();
+        for (size_t i = 0; i < count; i++)
+        {
+            auto e = channel_energies->at(i);
+            energies[i] = e;
+        }
     }
 
 }

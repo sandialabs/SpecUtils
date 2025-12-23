@@ -31,12 +31,19 @@
             }
         },
         {
-            "name": "windows",
-            "hidden": true,
+            "name": "msvc",
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "toolset": "fortran=ifx",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_Fortran_COMPILER": "C:\\Program Files (x86)\\Intel\\oneAPI\\compiler\\2024.0\\bin\\ifx.exe",
+                "SpecUtils_ENABLE_D3_CHART": "OFF",
+                "SpecUtils_BUILD_UNIT_TESTS": "ON",
+                "SpecUtils_USING_NO_THREADING": "ON",
+                "SpecUtils_FLT_PARSE_METHOD": "FastFloat",
+                "SpecUtils_FETCH_FAST_FLOAT": "ON",
+                "SpecUtils_FORTRAN_SWIG": "ON"
             },
             "vendor": {
                 "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -48,10 +55,6 @@
             "architecture": {
                 "value": "x64"
             }
-        },
-        {
-            "name": "msvc",
-            "inherits": "windows"
         }
     ],
     "buildPresets": [
@@ -87,7 +90,8 @@
             "name": "default",
             "configurePreset": "GCC-Release",
             "generators": [
-                "TGZ", "TZ"
+                "TGZ",
+                "TZ"
             ]
         },
         {

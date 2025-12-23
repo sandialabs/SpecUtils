@@ -28,8 +28,8 @@ target_link_libraries(specutils_fortran PRIVATE specutils_fortran_wrap)
 
 if( SpecUtils_BUILD_UNIT_TESTS )
   add_library(test_drive testdrive.F90)
-  add_executable(test_specutils_fortran test_specutils_fortran.f90 )
-  target_link_libraries(test_specutils_fortran test_drive specutils_fortran )
+  add_executable(test_specutils_fortran test_specutils_fortran.f90 ${SWIG_FORTRAN_WRAPPER} )
+  target_link_libraries(test_specutils_fortran test_drive specutils_fortran_wrap )
   add_test(NAME test_specutils_fortran COMMAND test_specutils_fortran)
 endif()
 
