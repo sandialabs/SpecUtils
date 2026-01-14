@@ -7254,6 +7254,45 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         if( t > -skew )
           return norm*Math.exp( -0.5*t*t );
         return norm*Math.exp( 0.5*skew*skew + skew*t );
+      }else if( peak.skewType === 'VoigtExp' )
+      {
+        const gamma_lor = peak.Skew0[0], tail_ratio = peak.Skew1[0], tau = peak.Skew2[0];
+        
+        // Thompson-Cox-Hastings pseudo-Voigt parameters
+        const sqrt2 = 1.41421356237, sqrt2ln2 = 1.17741002251;
+        const fG = 2 * sigma * sqrt2ln2, fL = 2 * gamma_lor;
+        const fG2 = fG * fG, fG3 = fG2 * fG, fG4 = fG3 * fG, fG5 = fG4 * fG;
+        const fL2 = fL * fL, fL3 = fL2 * fL, fL4 = fL3 * fL, fL5 = fL4 * fL;
+        const fV = Math.pow(fG5 + 2.69269*fG4*fL + 2.42843*fG3*fL2 + 4.47163*fG2*fL3 + 0.07842*fG*fL4 + fL5, 0.2);
+        const r = fL / fV;
+        const eta = Math.max(0, Math.min(1, 1.36603*r - 0.47719*r*r + 0.11116*r*r*r));
+        const sigma_p = fV / (2 * sqrt2ln2), gamma_p = fV / 2;
+        
+        // Pseudo-Voigt CDF (mixture of Gaussian and Lorentzian CDFs)
+        const voigt_cdf = (x) => {
+          const z = (x - mean) / (sigma_p * sqrt2);
+          const gauss_cdf = 0.5 * (1 + erf(z));
+          const lorentz_cdf = 0.5 + Math.atan((x - mean) / gamma_p) / Math.PI;
+          return Math.max(0, Math.min(1, eta * lorentz_cdf + (1 - eta) * gauss_cdf));
+        };
+        
+        // Exponentially-modified Gaussian CDF (tail component)
+        const gaussexp_cdf = (x) => {
+          if( tau <= 0 ) return 0.5 * (1 + erf((x - mean) / (sigma * sqrt2)));
+          const lambda = 1 / tau, lambda_sigma = lambda * sigma;
+          const a = (mean - x) / sigma;
+          const phi_a = 0.5 * (1 + erf(a / sqrt2));
+          const phi_shift = 0.5 * (1 + erf((a - lambda_sigma) / sqrt2));
+          const exp_arg = -lambda * (mean - x) + 0.5 * lambda_sigma * lambda_sigma;
+          if( exp_arg > 700 ) return 1;
+          if( exp_arg < -700 ) return Math.max(0, 1 - phi_a);
+          return Math.max(0, Math.min(1, 1 - phi_a + Math.exp(exp_arg) * phi_shift));
+        };
+        
+        // Integral via CDF differences
+        const cdf1 = (1 - tail_ratio) * voigt_cdf(x1) + tail_ratio * gaussexp_cdf(x1);
+        const cdf0 = (1 - tail_ratio) * voigt_cdf(x0) + tail_ratio * gaussexp_cdf(x0);
+        return amp * (cdf1 - cdf0);
       }else
       {
         console.log( 'Need to implement peak skew type ' + peak.skewType );
