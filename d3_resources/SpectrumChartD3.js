@@ -7107,7 +7107,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     
     function erfc( z ){
       // Adapted from boost erf implementation - same as used in InterSpecs C++, see Boost Software License - Version 1.0
-      // The Bortel distribution requires a higher precision erfc, than just 1-erf, or even simpler approximations of erfc
+      // The Exp*Gauss (Bortel) distribution requires a higher precision erfc, than just 1-erf, or even simpler approximations of erfc
       if( z < 0 )
         return (z < -0.5) ? (2 - erfc( -z )) : (1 + erf( -z ));
 
@@ -7165,7 +7165,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     function photopeak_integral( peak, x0, x1 ) {
       const mean = peak.Centroid[0], sigma = peak.Width[0], amp = peak.Amplitude[0];
       const sqrt2 = 1.414213562373095;
-      
+
       // For the skew distributions, using PDF, rather than CDF (like we do for pure Gaussian), to
       //  save computation time (if using skew, bins are narrow enough that we'll never notice)
       if( !peak.skewType || (peak.skewType === '') || (peak.skewType === 'NoSkew') )
@@ -7174,7 +7174,22 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         const t1 = (x1-mean)/(sqrt2*sigma);
         return amp * 0.5 * (erf(t1) - erf(t0));
       }
-      
+
+      // Common helper functions for CDF-based distributions
+      const gauss_cdf = (x) => 0.5 * (1 + erf((x - mean) / (sigma * sqrt2)));
+
+      const exgauss_cdf = (x, tau) => {
+        if( tau <= 0 ) return gauss_cdf(x);
+        const lambda = 1 / tau, lambda_sigma = lambda * sigma;
+        const a = (mean - x) / sigma;
+        const phi_a = 0.5 * (1 + erf(a / sqrt2));
+        const phi_shift = 0.5 * (1 + erf((a - lambda_sigma) / sqrt2));
+        const exp_arg = -lambda * (mean - x) + 0.5 * lambda_sigma * lambda_sigma;
+        if( exp_arg > 700 ) return 1;
+        if( exp_arg < -700 ) return Math.max(0, 1 - phi_a);
+        return Math.max(0, Math.min(1, 1 - phi_a + Math.exp(exp_arg) * phi_shift));
+      };
+
       const x = 0.5*(x1+x0);
       const t = (x-mean)/sigma;
       const norm = (x1-x0) * amp * (peak.DistNorm ? peak.DistNorm : 1);
@@ -7254,12 +7269,14 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         if( t > -skew )
           return norm*Math.exp( -0.5*t*t );
         return norm*Math.exp( 0.5*skew*skew + skew*t );
-      }else if( peak.skewType === 'VoigtExp' )
+      }else if( (peak.skewType === 'VoigtBortel') || (peak.skewType === 'VoigtPlusExGauss') )
       {
-        const gamma_lor = peak.Skew0[0], tail_ratio = peak.Skew1[0], tau = peak.Skew2[0];
-        
+        // VoigtPlusBortel / VoigtPlusExGauss: weighted mixture of Voigt and Exp*Gauss distributions
+        // Parameters: gamma_lor (Lorentzian HWHM), R (mixing ratio), tau (Exp*Gauss skew)
+        const gamma_lor = peak.Skew0[0], R = peak.Skew1[0], tau = peak.Skew2[0];
+
         // Thompson-Cox-Hastings pseudo-Voigt parameters
-        const sqrt2 = 1.41421356237, sqrt2ln2 = 1.17741002251;
+        const sqrt2ln2 = 1.17741002251;
         const fG = 2 * sigma * sqrt2ln2, fL = 2 * gamma_lor;
         const fG2 = fG * fG, fG3 = fG2 * fG, fG4 = fG3 * fG, fG5 = fG4 * fG;
         const fL2 = fL * fL, fL3 = fL2 * fL, fL4 = fL3 * fL, fL5 = fL4 * fL;
@@ -7267,31 +7284,40 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         const r = fL / fV;
         const eta = Math.max(0, Math.min(1, 1.36603*r - 0.47719*r*r + 0.11116*r*r*r));
         const sigma_p = fV / (2 * sqrt2ln2), gamma_p = fV / 2;
-        
+
         // Pseudo-Voigt CDF (mixture of Gaussian and Lorentzian CDFs)
         const voigt_cdf = (x) => {
           const z = (x - mean) / (sigma_p * sqrt2);
-          const gauss_cdf = 0.5 * (1 + erf(z));
+          const voigt_gauss_cdf = 0.5 * (1 + erf(z));
           const lorentz_cdf = 0.5 + Math.atan((x - mean) / gamma_p) / Math.PI;
-          return Math.max(0, Math.min(1, eta * lorentz_cdf + (1 - eta) * gauss_cdf));
+          return Math.max(0, Math.min(1, eta * lorentz_cdf + (1 - eta) * voigt_gauss_cdf));
         };
-        
-        // Exponentially-modified Gaussian CDF (tail component)
-        const gaussexp_cdf = (x) => {
-          if( tau <= 0 ) return 0.5 * (1 + erf((x - mean) / (sigma * sqrt2)));
-          const lambda = 1 / tau, lambda_sigma = lambda * sigma;
-          const a = (mean - x) / sigma;
-          const phi_a = 0.5 * (1 + erf(a / sqrt2));
-          const phi_shift = 0.5 * (1 + erf((a - lambda_sigma) / sqrt2));
-          const exp_arg = -lambda * (mean - x) + 0.5 * lambda_sigma * lambda_sigma;
-          if( exp_arg > 700 ) return 1;
-          if( exp_arg < -700 ) return Math.max(0, 1 - phi_a);
-          return Math.max(0, Math.min(1, 1 - phi_a + Math.exp(exp_arg) * phi_shift));
-        };
-        
-        // Integral via CDF differences
-        const cdf1 = (1 - tail_ratio) * voigt_cdf(x1) + tail_ratio * gaussexp_cdf(x1);
-        const cdf0 = (1 - tail_ratio) * voigt_cdf(x0) + tail_ratio * gaussexp_cdf(x0);
+
+        // Integral via CDF differences: (1-R)*Voigt + R*Exp*Gauss
+        const cdf1 = (1 - R) * voigt_cdf(x1) + R * exgauss_cdf(x1, tau);
+        const cdf0 = (1 - R) * voigt_cdf(x0) + R * exgauss_cdf(x0, tau);
+        return amp * (cdf1 - cdf0);
+      }else if( (peak.skewType === 'GaussBortel') || (peak.skewType === 'GaussPlusExGauss') )
+      {
+        // GaussPlusBortel / GaussPlusExGauss: weighted mixture of Gaussian and Exp*Gauss distributions
+        // Parameters: R (mixing ratio, 0=Gaussian, 1=Exp*Gauss), tau (Exp*Gauss skew)
+        const R = peak.Skew0[0], tau = peak.Skew1[0];
+
+        // Integral via CDF differences: (1-R)*Gaussian + R*Exp*Gauss
+        const cdf1 = (1 - R) * gauss_cdf(x1) + R * exgauss_cdf(x1, tau);
+        const cdf0 = (1 - R) * gauss_cdf(x0) + R * exgauss_cdf(x0, tau);
+        return amp * (cdf1 - cdf0);
+      }else if( (peak.skewType === 'DoubleBortel') || (peak.skewType === 'DoubleExGauss') )
+      {
+        // DoubleBortel / DoubleExGauss from Bortels & Collaers 1987:
+        // Weighted sum of two Exp*Gauss distributions with different tau values
+        // Parameters: tau1, tau2_delta (tau2 = tau1 + tau2_delta), eta (weight of second Exp*Gauss)
+        const tau1 = peak.Skew0[0], tau2_delta = peak.Skew1[0], eta = peak.Skew2[0];
+        const tau2 = tau1 + tau2_delta;
+
+        // Integral via CDF differences: (1-eta)*Exp*Gauss(tau1) + eta*Exp*Gauss(tau2)
+        const cdf1 = (1 - eta) * exgauss_cdf(x1, tau1) + eta * exgauss_cdf(x1, tau2);
+        const cdf0 = (1 - eta) * exgauss_cdf(x0, tau1) + eta * exgauss_cdf(x0, tau2);
         return amp * (cdf1 - cdf0);
       }else
       {
