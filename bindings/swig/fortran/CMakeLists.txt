@@ -21,6 +21,11 @@ endif()
 
 add_library(specutils_fortran_wrap ${SWIG_CPP_WRAPPER} )
 set_property(TARGET specutils_fortran_wrap PROPERTY POSITION_INDEPENDENT_CODE ON )
+target_compile_options(specutils_fortran_wrap PRIVATE
+  $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/EHsc>
+  $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/EHsc>
+)
+
 add_library(specutils_fortran SHARED ${SWIG_FORTRAN_WRAPPER} )
 target_link_libraries(specutils_fortran_wrap PUBLIC SpecUtils)
 target_compile_options(specutils_fortran PUBLIC -ffree-line-length-none -ffixed-line-length-150)

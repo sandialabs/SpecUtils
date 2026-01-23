@@ -32,7 +32,7 @@
         },
         {
             "name": "NMake-Release",
-            "generator": "NMake Makefiles",
+            "generator": "Ninja",
             "inherits": "GCC-Debug",
             "hidden": false,
             "cacheVariables": {
@@ -44,7 +44,6 @@
         },
         {
             "name": "NMake-Debug",
-            "generator": "NMake Makefiles",
             "inherits": "NMake-Release",
             "hidden": false,
             "cacheVariables": {

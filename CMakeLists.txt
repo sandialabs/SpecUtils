@@ -8,7 +8,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils VERSION 2025.1.0 )
+project( SpecUtils VERSION 2026.1.0 )
 enable_testing()  # Enable here to allow running `ctest` from top-most build dir
 
 # Add this line to specify the architectures for MacOS
@@ -501,18 +501,17 @@ if( NOT hasParent  )
     set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
   endif( SpecUtils_SHARED_LIB )
 
-  if( DEFINED ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
-    if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
-      set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
-    else()
-      set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
-    endif()
+  if( ${PROJECT_NAME}_USE_MSVC_MultiThreadDLL )
+    message("Using MSVC MultiThreadDLL runtime  ")
+    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
+  else()
+    set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-StaticRuntime" )
   endif()
 
   # Lets just use the MAJOR.MINOR version of the compiler in the name.
   string(REGEX MATCH "^[0-9]+\\.[0-9]+" COMPILER_VERSION_SHORT "${CMAKE_CXX_COMPILER_VERSION}")
 
-  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}")
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID}-${COMPILER_VERSION_SHORT}-${SpecUtils_PACKAGE_POSTFIX}-${CMAKE_BUILD_TYPE}")
   set(CPACK_GENERATOR "ZIP")
   include(CPack)
 endif( NOT hasParent )
