@@ -31,12 +31,34 @@
             }
         },
         {
-            "name": "windows",
-            "hidden": true,
+            "name": "NMake-Release",
+            "generator": "NMake Makefiles",
+            "inherits": "GCC-Debug",
+            "hidden": false,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "SpecUtils_FORTRAN_SWIG": "OFF",
+                "SpecUtils_FORTRAN_SWIG_GEN": "OFF",
+                "SpecUtils_USE_MSVC_MultiThreadDLL" : "ON"
+            }
+        },
+        {
+            "name": "NMake-Debug",
+            "generator": "NMake Makefiles",
+            "inherits": "NMake-Release",
+            "hidden": false,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "msvc",
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "SpecUtils_USE_MSVC_MultiThreadDLL" : "ON"
+
             },
             "vendor": {
                 "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -48,24 +70,22 @@
             "architecture": {
                 "value": "x64"
             }
-        },
-        {
-            "name": "msvc",
-            "inherits": "windows"
         }
     ],
     "buildPresets": [
         {
             "name": "win-x64-debug",
             "description": "You can install like this: cmake --install out/build/msvc --prefix out/install/win-x64-debug --config Debug  ",
-            "configurePreset": "msvc",
+            "configurePreset": "NMake-Debug",
+            "jobs": 20,
             "configuration": "Debug",
             "resolvePackageReferences": "on"
         },
         {
             "name": "win-x64-release",
             "description": "To install this run: cmake --install out/build/msvc --prefix out/install/win-x64-release --config Release",
-            "configurePreset": "msvc",
+            "configurePreset": "NMake-Release",
+            "jobs": 20,
             "configuration": "Release",
             "resolvePackageReferences": "on"
         },
@@ -82,6 +102,26 @@
             "jobs": 20
         }
     ],
+    "testPresets": [
+        {
+            "name": "run-tests-debug",
+            "hidden": false,
+            "configurePreset": "NMake-Debug",
+            "configuration": "Debug",
+
+            "output": {
+                "verbosity": "verbose"
+            }
+        },
+        {
+            "name": "run-tests-release",
+            "hidden": false,
+            "configurePreset": "NMake-Release",
+            "output": {
+                "verbosity": "verbose"
+            }
+        }
+    ],
     "packagePresets": [
         {
             "name": "default",
@@ -91,10 +131,72 @@
             ]
         },
         {
+            "name": "zip-file-release",
+            "configurePreset": "NMake-Release",
+            "packageVersion": "2026.1",
+            "configurations": ["Release"],
+            "generators": [
+                "ZIP"
+            ]
+        },
+        {
+            "name": "zip-file-debug",
+            "configurePreset": "NMake-Debug",
+            "packageVersion": "2026.1",
+            "configurations": ["Debug"],
+            "generators": [
+                "ZIP"
+            ]
+        },
+        {
             "name": "nuget",
             "configurePreset": "msvc",
             "generators": [
                 "NuGet"
+            ]
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "all-debug",
+            "description": "you can run like this: cmake --workflow --preset all-debug",
+            "steps" : [
+                
+                {
+                    "type": "configure",
+                    "name": "NMake-Debug"
+                },
+                {
+                    "type": "build",
+                    "name": "win-x64-debug"
+                },
+                {
+                    "type": "package",
+                    "name": "zip-file-debug"
+                }                                    
+            ]
+        },
+        {
+            "name": "all-release",
+            "description": "you can run like this: cmake --workflow --preset all-debug",
+            "steps" : [
+                
+                {
+                    "type": "configure",
+                    "name": "NMake-Release"
+                },
+                {
+                    "type": "build",
+                    "name": "win-x64-release"
+                },
+                {
+                    "type": "test",
+                    "name": "run-tests-release"
+                },
+                {
+                    "type": "package",
+                    "name": "zip-file-release"
+                }                                    
             ]
         }
     ]
