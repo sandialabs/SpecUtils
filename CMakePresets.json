@@ -31,7 +31,6 @@
             }
         },
         {
-            "name": "msvc",
             "name": "NMake-Release",
             "generator": "Ninja",
             "inherits": "GCC-Debug",
