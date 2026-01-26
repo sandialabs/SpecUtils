@@ -2166,7 +2166,165 @@ bool write_CALp_file( std::ostream &output, const shared_ptr<const EnergyCalibra
   }//if( cal->type() == FullRangeFraction )
   
   output << "#END" << eol_char << eol_char;
-  
+
   return output.good();
 }//void write_CALp_file(...)
+
+
+std::vector<float> fit_poly_energy_cal_from_points( const std::vector<std::pair<float,float>> &channel_energy_pairs,
+                                                     const size_t max_orders )
+{
+  using namespace std;
+
+  // Validate input
+  if( channel_energy_pairs.empty() )
+    throw runtime_error( "fit_poly_energy_cal_from_points: No data points provided" );
+
+  if( max_orders == 0 )
+    throw runtime_error( "fit_poly_energy_cal_from_points: max_orders must be at least 1" );
+
+  if( max_orders > channel_energy_pairs.size() )
+    throw runtime_error( "fit_poly_energy_cal_from_points: max_orders cannot exceed number of data points" );
+
+  // Validate that all input channel and energy values are finite
+  for( size_t i = 0; i < channel_energy_pairs.size(); ++i )
+  {
+    const float ch = channel_energy_pairs[i].first;
+    const float en = channel_energy_pairs[i].second;
+
+    if( isnan( ch ) || isinf( ch ) )
+      throw runtime_error( "fit_poly_energy_cal_from_points: Channel value is NaN or Inf at index " + std::to_string(i) );
+
+    if( isnan( en ) || isinf( en ) )
+      throw runtime_error( "fit_poly_energy_cal_from_points: Energy value is NaN or Inf at index " + std::to_string(i) );
+  }
+
+  const size_t n = channel_energy_pairs.size();
+  const int num_coefficients = static_cast<int>( max_orders );
+
+  vector<float> coeffs;
+
+  if( num_coefficients == 1 )
+  {
+    // Single coefficient: fit only gain (no offset)
+    // E = 0 + gain * channel
+    // Solve: gain = sum(channel_i * energy_i) / sum(channel_i^2)
+
+    double sum_ch_e = 0.0;
+    double sum_ch2 = 0.0;
+
+    for( const auto &pair : channel_energy_pairs )
+    {
+      const double ch = pair.first;
+      const double en = pair.second;
+      sum_ch_e += ch * en;
+      sum_ch2 += ch * ch;
+    }
+
+    if( sum_ch2 < 1e-10 )
+      throw runtime_error( "fit_poly_energy_cal_from_points: All channel values are zero or near-zero" );
+
+    const float gain = static_cast<float>( sum_ch_e / sum_ch2 );
+
+    if( isnan( gain ) || isinf( gain ) )
+      throw runtime_error( "fit_poly_energy_cal_from_points: Computed gain is NaN or Inf" );
+
+    // Return [offset=0, gain] to match polynomial format
+    coeffs.push_back( 0.0f );  // offset
+    coeffs.push_back( gain );  // gain
+  }
+  else
+  {
+    // Multiple coefficients: use least squares fitting
+    // Solve normal equations for polynomial: E = c0 + c1*ch + c2*ch^2 + ...
+
+    // Build normal equations matrix: (X^T * X) * coefs = X^T * Y
+    // For unweighted least squares
+    vector<vector<double>> matrix( num_coefficients, vector<double>( num_coefficients, 0.0 ) );
+    vector<double> rhs( num_coefficients, 0.0 );
+
+    for( size_t i = 0; i < n; ++i )
+    {
+      const double ch = channel_energy_pairs[i].first;
+      const double en = channel_energy_pairs[i].second;
+
+      // Build X^T * X and X^T * Y
+      for( int row = 0; row < num_coefficients; ++row )
+      {
+        const double ch_pow_row = pow( ch, row );
+
+        // Right hand side: X^T * Y
+        rhs[row] += ch_pow_row * en;
+
+        // Matrix: X^T * X
+        for( int col = 0; col < num_coefficients; ++col )
+        {
+          const double ch_pow_col = pow( ch, col );
+          matrix[row][col] += ch_pow_row * ch_pow_col;
+        }
+      }
+    }
+
+    // Solve using Gaussian elimination with partial pivoting
+    for( int k = 0; k < num_coefficients; ++k )
+    {
+      // Find pivot
+      int pivot_row = k;
+      double max_val = fabs( matrix[k][k] );
+      for( int i = k + 1; i < num_coefficients; ++i )
+      {
+        if( fabs( matrix[i][k] ) > max_val )
+        {
+          max_val = fabs( matrix[i][k] );
+          pivot_row = i;
+        }
+      }
+
+      if( max_val < 1e-10 )
+        throw runtime_error( "fit_poly_energy_cal_from_points: Singular matrix (determinant near zero)" );
+
+      // Swap rows if needed
+      if( pivot_row != k )
+      {
+        swap( matrix[k], matrix[pivot_row] );
+        swap( rhs[k], rhs[pivot_row] );
+      }
+
+      // Eliminate column
+      for( int i = k + 1; i < num_coefficients; ++i )
+      {
+        const double factor = matrix[i][k] / matrix[k][k];
+        for( int j = k; j < num_coefficients; ++j )
+          matrix[i][j] -= factor * matrix[k][j];
+        rhs[i] -= factor * rhs[k];
+      }
+    }
+
+    // Back substitution
+    coeffs.resize( num_coefficients );
+    for( int i = num_coefficients - 1; i >= 0; --i )
+    {
+      double sum = rhs[i];
+      for( int j = i + 1; j < num_coefficients; ++j )
+        sum -= matrix[i][j] * coeffs[j];
+      coeffs[i] = static_cast<float>( sum / matrix[i][i] );
+    }
+
+    // Validate coefficients
+    for( size_t i = 0; i < coeffs.size(); ++i )
+    {
+      if( isnan( coeffs[i] ) || isinf( coeffs[i] ) )
+        throw runtime_error( "fit_poly_energy_cal_from_points: Computed coefficient is NaN or Inf at index " + std::to_string(i) );
+    }
+  }
+
+  // Final validation of all coefficients before returning
+  for( size_t i = 0; i < coeffs.size(); ++i )
+  {
+    if( isnan( coeffs[i] ) || isinf( coeffs[i] ) )
+      throw runtime_error( "fit_poly_energy_cal_from_points: Final coefficient is NaN or Inf at index " + std::to_string(i) );
+  }
+
+  return coeffs;
+}//fit_poly_energy_cal_from_points(...)
 }//namespace SpecUtils

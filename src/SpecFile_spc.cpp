@@ -801,11 +801,14 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         if( SpecUtils::istarts_with(line, "TSA,") )
           throw runtime_error( "This is probably a TSA file, not a Ascii Spc" );
         
+        if( SpecUtils::istarts_with(line, "RADDATA://G0/") )
+          throw runtime_error( "This is probably a URI file, not a Ascii Spc" );
+        
         ++nnotrecognized;
         if( nnotrecognized > 15 && nnotrecognized >= linenum )
           throw runtime_error( "To many unregognized begining lines" );
         
-#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS && !SpecUtils_BUILD_UNIT_TESTS )
         cerr << "Warning: SpecFile::load_from_iaea_spc(...):  I didnt recognize line: '"
         << line << "'" << endl;
 #endif

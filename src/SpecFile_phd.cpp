@@ -240,6 +240,108 @@ bool SpecFile::load_from_phd( std::istream &input )
         //165.860          491.7100         0.02968
         //...
         //1836.060         5448.4400        0.02968
+
+        try
+        {
+          vector<pair<float,float>> channel_energy_pairs;
+
+          // Read energy-channel data lines until next section or STOP
+          while( SpecUtils::safe_get_line( input, line ) )
+          {
+            trim( line );
+            if( line.empty() )
+              continue;
+
+            // Stop at next section marker or STOP keyword
+            if( istarts_with( line, "#" ) || iequals_ascii( line, "STOP" ) )
+              break;
+
+            // Parse the three columns: energy, channel, uncertainty
+            vector<float> fields;
+            const bool split_success = SpecUtils::split_to_floats( line.c_str(), line.size(), fields );
+
+            if( !split_success || fields.size() < 2 )
+              continue;  // Skip malformed lines
+
+            const float energy = fields[0];
+            const float channel = fields[1];
+            // fields[2] is uncertainty - ignoring for now
+
+            // Basic sanity check
+            if( energy > 0.0f && channel >= 0.0f )
+              channel_energy_pairs.push_back( make_pair( channel, energy ) );
+          }//while( reading energy-channel pairs )
+
+          // Check if we got usable data
+          if( channel_energy_pairs.empty() )
+            throw runtime_error( "No valid energy-channel pairs found" );
+
+          // Determine polynomial order based on number of points
+          size_t num_coefficients = 2;  // Default: linear with offset
+
+          if( channel_energy_pairs.size() == 1 )
+          {
+            // Single point: linear through origin if energy > 100 keV
+            if( channel_energy_pairs[0].second <= 100.0f )
+              throw runtime_error( "Single calibration point with energy <= 100 keV" );
+            num_coefficients = 1;  // Just gain, no offset
+          }else if( channel_energy_pairs.size() >= 5 )
+          {
+            num_coefficients = 3;  // Quadratic
+          }
+          // else 2-4 points: use 2 coefficients (linear with offset)
+
+          // Fit polynomial coefficients using the utility function
+          vector<float> coeffs = SpecUtils::fit_poly_energy_cal_from_points( channel_energy_pairs, num_coefficients );
+
+          // Validate coefficients are reasonable
+          if( coeffs.size() < 2 )
+            throw runtime_error( "Failed to compute calibration coefficients" );
+
+          // Check gain is positive
+          if( coeffs.size() >= 2 && coeffs[1] <= 0.0f )
+            throw runtime_error( "Negative or zero gain in energy calibration" );
+
+          // Create energy calibration and validate energy range
+          if( !meas->gamma_counts_ || meas->gamma_counts_->empty() )
+            throw runtime_error( "No gamma spectrum data available for energy calibration" );
+
+          const size_t num_channels = meas->gamma_counts_->size();
+          auto newcal = make_shared<EnergyCalibration>();
+          newcal->set_polynomial( num_channels, coeffs, {} );
+
+          const float lower_energy = newcal->lower_energy();
+          const float upper_energy_cal = newcal->upper_energy();
+
+          // Reject if energy range is unreasonable
+          if( upper_energy_cal < 300.0f )
+            throw runtime_error( "Upper energy < 300 keV" );
+
+          if( upper_energy_cal > 15000.0f )
+            throw runtime_error( "Upper energy > 15 MeV" );
+
+          // If we already have a calibration from the simpler method (lines 213-226),
+          // check that this one is roughly compatible before replacing it
+          if( meas->energy_calibration_ && meas->energy_calibration_->valid() )
+          {
+            const float existing_upper = meas->energy_calibration_->upper_energy();
+            const float diff_percent = fabs( upper_energy_cal - existing_upper ) / existing_upper * 100.0f;
+
+            // Allow up to 10% difference
+            if( diff_percent > 10.0f )
+            {
+              meas->parse_warnings_.push_back( "Energy calibration from #g_Energy section differs significantly from upper energy value" );
+            }
+          }
+
+          // Set the new calibration
+          meas->energy_calibration_ = newcal;
+
+        }catch( std::exception &e )
+        {
+          // Failed to parse or create energy calibration - just continue without it
+          meas->parse_warnings_.push_back( "Failed to parse #g_Energy section: " + string(e.what()) );
+        }
       }//if( "#g_Energy" )
       
       if( SpecUtils::istarts_with( line, "#g_Resolution") )
