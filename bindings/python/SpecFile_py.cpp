@@ -68,6 +68,16 @@ namespace
 {
   //Begin structs to help convert between c++ and python
   
+  inline bool is_stack_unwinding() {
+#if __cplusplus >= 201703L
+    // C++17 and later (plural, counts exceptions)
+    return std::uncaught_exceptions() > 0;
+#else
+    // C++11 / C++14 (singular, boolean)
+    return std::uncaught_exception();
+#endif
+  }
+
   /** Class to wrap a output python stream, so that we can use it as a c++ streambuf
    */
   class OutputStreambuf : public std::streambuf {
@@ -87,7 +97,14 @@ namespace
     }
 
     ~OutputStreambuf() override {
-      sync();
+      // We use a try-catch here to ensure no exceptions escape the destructor
+        try {
+            sync();
+        } catch (...) {
+            // If we are already unwinding, we must not throw.
+            // If we are not unwinding, swallowing the exception is still safer 
+            // than crashing, though logging it to stderr would be ideal.
+        }
     }
 
     int overflow(int c) override {
@@ -104,15 +121,61 @@ namespace
     }
 
     int sync() override {
-        const std::ptrdiff_t n = pptr() - pbase();
-        if (n > 0) {
-            py::bytes data(pbase(), n);
-            python_stream.attr("write")(data);
-            python_stream.attr("flush")();
-            setp(pbase(), epptr());  // Reset put pointer
+      const std::ptrdiff_t n = pptr() - pbase();
+      if( n <= 0 )
+       return 0;
+            
+      py::bytes data(pbase(), n);
+
+      try {
+        // Try writing bytes directly (for Binary Streams)
+        python_stream.attr("write")(data);
+      }catch( const py::python_error &e ) {
+        // Catch generic python_error and check if it is a TypeError
+        // (which happens if writing bytes to a text stream)
+        if (e.matches(PyExc_TypeError)) {            
+                    // Note: nanobind's python_error constructor fetches/clears 
+                    // the Python error state, so we are clear to try again.
+          try {
+            // Attempt to decode as UTF-8 for text streams.
+            // If 'data' is actual binary (non-UTF8), this throws UnicodeDecodeError
+            py::object text_data = data.attr("decode")("utf-8");
+            python_stream.attr("write")(text_data);
+          }catch (const py::python_error &inner_e) {
+            // Check if it was a decoding error (Binary data -> Text Stream mismatch)
+            if (inner_e.matches(PyExc_UnicodeDecodeError)) {
+                            
+              if (is_stack_unwinding()) {
+                // We are already crashing. Don't throw another exception.
+                // Log to stderr so the developer sees the root cause.
+                std::cerr << "\n[SpecUtils Error] Attempted to write binary data to a text stream during stack unwinding." << std::endl;
+              } else {
+                // Normal execution: Throw a helpful C++ exception 
+                throw std::runtime_error("Stream is in text mode, but data is binary (non-UTF-8). Please open the file in binary mode (e.g., 'wb').");
+              }
+            } else {
+              // Some other error occurred (e.g. disk full), re-throw it
+              throw;
+            }
+          }//try { to write UTF-8 data }catch(){ throw error if we can }
+        } else {
+          // Not a TypeError, so re-throw the original error
+          throw;
         }
-        return 0;
-    }
+      }//try{ write to binary stream } catch(){ try write to text stream }
+        
+      // Flush the stream
+      try {
+        python_stream.attr("flush")();
+      } catch (...) {
+        if (!is_stack_unwinding()) 
+          throw;
+      }
+            
+      setp(pbase(), epptr());  // Reset put pointer
+        
+      return 0;
+    }//int sync() override
 
     py::object python_stream;
     static const size_t buffer_size = 4096;  // Adjust buffer size as needed
