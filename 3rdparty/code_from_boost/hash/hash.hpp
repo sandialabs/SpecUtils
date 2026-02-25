@@ -285,7 +285,7 @@ namespace boost_hash
       return mulx( h + w, k );
     }
     
-    std::uint64_t mul32( std::uint32_t x, std::uint32_t y )
+    inline std::uint64_t mul32( std::uint32_t x, std::uint32_t y )
     {
         return static_cast<std::uint64_t>( x ) * y;
     }
@@ -361,7 +361,7 @@ namespace boost_hash
     return hash_detail::hash_integral_impl<T>::fn( v );
   }
   
-  std::size_t hash_value( const std::string &v )
+  inline std::size_t hash_value( const std::string &v )
   {
     const char *start = v.data();
     const char *end = v.data() + v.size();
