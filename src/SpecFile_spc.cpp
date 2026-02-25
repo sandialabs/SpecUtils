@@ -225,9 +225,26 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       }//if( !tested_first_line )
       
       
-      const size_t colonpos = line.find(':');
-      const size_t info_pos = line.find_first_not_of(": ", colonpos);
-      
+      size_t colonpos = line.find(':');
+      size_t info_pos = line.find_first_not_of(": ", colonpos);
+
+      // Look for lines like: `realtime=609.475`
+      // We will require a letter on left of equal sign, a number on right, and only alphanumeric
+      //  (this is to help so we dont accidentally mis-interpret things)
+      if( (colonpos == string::npos) && (info_pos == string::npos) )
+      {
+        const size_t equalpos = line.find('=');
+        if( (equalpos != string::npos) && (equalpos > 0) && ((equalpos + 1) < line.size())
+           && ( ((line[equalpos-1] >= 'a') && (line[equalpos-1] <= 'z'))
+               || ((line[equalpos-1] >= 'A') && (line[equalpos-1] <= 'Z')) )
+           && ((line[equalpos+1] >= '0') && (line[equalpos+1] <= '9'))
+           && (([&line]()->bool{ for( const char c : line ){ if(!std::isalnum(c) && c != '+' && c != '-' && c != '=' && c != '.') return false; } return true; })()) )
+        {
+          colonpos = equalpos;
+          info_pos = equalpos + 1;
+        }
+      }
+
       bool is_remark = false;
       //Check if its a remark field
       for( const char * const label : ns_iaea_comment_labels )

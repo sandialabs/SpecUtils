@@ -115,36 +115,28 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     meas->energy_calibration_ = newcal;
   }catch( std::exception & )
   {
-    bool allZeros = true;
-    for( const float v : cal_coefs )
-      allZeros = allZeros && (v == 0.0f);
-    
+    size_t last_non_zero = 0;
+    bool allZeros = true, valid_floats = true;
+    for( size_t i = 0; i < cal_coefs.size(); ++i )
+    {
+      const float v = cal_coefs[i];
+      allZeros = (allZeros && (v == 0.0f));
+      valid_floats = (valid_floats && (v > -10000.0f) && (v < 1.0E9f));
+      last_non_zero = (v == 0.0f) ? last_non_zero : i;
+    }
+
     // We could check if this is a alpha spectra or not...
-    /*
-     bool is_alpha_spec = false;
-     if( !allZeros )
-     {
-     //From only a single file, Alpha spec files have: "Alpha Efcor", "Alpha Encal".  Segment 11, has just "Alpha"
-     const uint8_t headers_with_alpha[] = { 2, 6, 11, 13, 19 };
-     string buffer( 513, '\0' );
-     for( uint8_t i : headers_with_alpha )
-     {
-     size_t segment_position = 0;
-     if( findCnfSegment(i, 0, segment_position, input, size) )
-     {
-     input.seekg( segment_position, std::ios::beg );
-     if( input.read( &(buffer[0]), 512 ) && (buffer.find("Alpha") != string::npos) )
-     {
-     is_alpha_spec = true;
-     break;
-     }//if( we found the segment, and it had "Alpha" in it )
-     }//if( find segment )
-     }//for( loop over potential segments that might have "Alpha" in them )
-     }//if( !allZeros )
-     */
-    
-    if( !allZeros )
+
+    if( !allZeros && !valid_floats )
       throw runtime_error( "Calibration parameters were invalid" );
+
+    if( valid_floats )
+    {
+      std::string cal;
+      for( size_t i = 0; i < (std::min)(last_non_zero + 1, cal_coefs.size()); ++i )
+        cal += string(i ? ", " : "") + SpecUtils::printCompact(cal_coefs[i], 5);
+      parse_warnings_.push_back( "Energy calibration given in the file is unreasonable: " + cal );
+    }
   }//try /catch set calibration
   
   // Try to get the detector info
@@ -220,17 +212,18 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   
 bool SpecFile::load_from_cnf( std::istream &input )
 {
-  
   std::unique_lock<std::recursive_mutex> scoped_lock( mutex_ );
   reset();
 
   if( !input.good() )
     return false;
 
+  istream::pos_type orig_pos;
+
   // read the file
   try
   {
-    const istream::pos_type orig_pos = input.tellg();
+    orig_pos = input.tellg();
     input.seekg( 0, ios::end );
     const istream::pos_type eof_pos = input.tellg();
     input.seekg( 0, ios::beg );
@@ -248,9 +241,9 @@ bool SpecFile::load_from_cnf( std::istream &input )
     cleanup_after_load();
   }catch ( std::exception &e )
   {
-    //cerr << "Failed CNF: " << e.what() << endl;
+    cerr << "Failed CNF: " << e.what() << endl;
     input.clear();
-    //input.seekg( orig_pos, ios::beg );
+    input.seekg( orig_pos, ios::beg );
     
     reset();
     return false;
