@@ -6921,12 +6921,7 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
   if( roi.type === 'NoOffset' || x0===x1 )
     return 0.0;
   
-  if( (roi.type === 'External') || (roi.type === 'FlatStep') || (roi.type === 'LinearStep')|| (roi.type === 'BiLinearStep') ){
-    //console.log( roi );
-
-    //let doDebug = false;
-    //if( doDebug ) console.log( 'x0=' + x0 + ', x1=' + x1 );
-    
+  if( (roi.type === 'External') || roi.type.includes('FlatStep') || roi.type.includes('LinearStep') ){
     let energies = roi.continuumEnergies;
     let counts = roi.continuumCounts;
 
@@ -6959,16 +6954,6 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
     let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
     let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
     
-    //if( doDebug )
-    //{
-    //  console.log( 'frac_first=' + frac_first + ', frac_last=' + frac_last );
-    //  for( var i = cstartind; i <= cendind; i++ )
-    //  {
-    //    console.log( 'index=' + i + ', energy={' + energies[i] + ',' + energies[i+1] + '}' );
-    //  }
-    //}
-    //console.log( 'x1=' + x1 + ', cendind=' + cendind + ', energy={' + energies[cendind] + ',' + energies[cendind+1] + '}, frac_last=' + frac_last);
-
     let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
     for( let i = cstartind+1; i < cendind; ++i )
       sum += counts[i];
@@ -7482,9 +7467,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
         && roi.type !== 'Linear' && roi.type !== 'Quadratic'
         && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
-        && roi.type !== 'Cubic' && roi.type !== 'FlatStep'
-        && roi.type !== 'LinearStep' && roi.type !== 'BiLinearStep'
-        && roi.type !== 'External' ){
+        && roi.type !== 'Cubic' && roi.type !== 'External'
+        && !roi.type.includes('FlatStep') && !roi.type.includes('LinearStep') ){
       console.log( 'unrecognized roi.type: ' + roi.type );
       return;
     }
