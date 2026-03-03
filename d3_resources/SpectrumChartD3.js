@@ -2715,9 +2715,10 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
       self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height, true);
     };
 
-    //
-    if ((currentdomain[0] <= (mindatax+0.00001) && currentdomain[1] >= (maxdatax-0.00001) && e.deltaX > 0)
-        || (currentdomain[1] >= (maxdatax-0.00001) && currentdomain[0] <= (maxdatax+0.00001) && e.deltaX < 0)) {
+    // If we are at a panning boundary and the user is scrolling further in that direction,
+    //  reset the scroll state and return early, so that reversing direction reacts immediately.
+    if ((currentdomain[1] >= (maxdatax-0.00001) && e.deltaX > 0)
+        || (currentdomain[0] <= (mindatax+0.00001) && e.deltaX < 0)) {
       //console.log( 'Skipping dealing with mouse wheel - outside data range' );
 
       //If user has scrolled farther than allowed in either direction, cancel scrolling so that
