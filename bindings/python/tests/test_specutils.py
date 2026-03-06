@@ -2,6 +2,7 @@ import unittest
 import SpecUtils
 from datetime import datetime
 
+import io
 import os
 from pathlib import Path
 
@@ -15,6 +16,37 @@ class TestSpecUtilsBasic(unittest.TestCase):
         file_path = os.path.join(script_dir, "..", "examples", "passthrough.n42")
         self.spec.loadFile(file_path, SpecUtils.ParserType.Auto)
         self.assertTrue(self.spec.numMeasurements() > 0)
+
+    def test_load_file_from_stream_auto(self):
+        script_dir = Path(__file__).parent.resolve()
+        file_path = os.path.join(script_dir, "..", "examples", "passthrough.n42")
+
+        with open(file_path, "rb") as f:
+            data = f.read()
+
+        buf = io.BytesIO(data)
+        spec1 = SpecUtils.SpecFile()
+        spec1.loadFileFromStream(buf, "passthrough.n42")
+        self.assertTrue(spec1.numMeasurements() > 0)
+
+        with open(file_path, "rb") as f:
+            spec2 = SpecUtils.SpecFile()
+            spec2.loadFileFromStream(f, "passthrough.n42")
+            self.assertTrue(spec2.numMeasurements() > 0)
+
+        class NonSeekable:
+            def __init__(self, b):
+                self._b = b
+                self._i = 0
+            def read(self, n=-1):
+                if n is None or n < 0:
+                    n = len(self._b) - self._i
+                out = self._b[self._i:self._i+n]
+                self._i += len(out)
+                return out
+
+        with self.assertRaises(RuntimeError):
+            SpecUtils.SpecFile().loadFileFromStream(NonSeekable(data), "passthrough.n42")
 
     def test_load_save_file(self):
         script_dir = Path(__file__).parent.resolve()

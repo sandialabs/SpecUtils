@@ -50,6 +50,8 @@ static_assert( SpecUtils_D3_SUPPORT_FILE_STATIC,
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <sstream>
+#include <cctype>
 
 #include <nanobind/nanobind.h>
 
@@ -245,7 +247,6 @@ protected:
     size_t size = bytes_data.size();
     
     if ( !size ){
-      cerr << "PythonInputStreambuf::underflow: size is 0" << endl;
       return traits_type::eof();
     }
 
@@ -261,11 +262,9 @@ protected:
 
   // Support for seeking
   std::streampos seekpos(std::streampos pos, std::ios_base::openmode which) override {
-    cerr << "PythonInputStreambuf::seekpos: 0" << endl;
     if (which & std::ios_base::in) {
       py::object pyseek = python_stream_.attr("seek");
       if (!pyseek.is_none()) {
-        cerr << "PythonInputStreambuf::seekpos: " << pos  << " which: " << which << endl;
         pyseek(pos, 0);
         
         // Reset our buffer
@@ -273,11 +272,7 @@ protected:
         setg(base, base, base);
         
         return pos;
-      }else{
-        cerr << "Python stream has no attribute 'seek'" << endl;
       }
-    }else{
-      cerr << "Python stream is not input" << endl;
     }
     return -1;
   }
@@ -291,13 +286,11 @@ protected:
 
       py::object pyseek = python_stream_.attr("seek");
       if (pyseek.is_none()) {
-        cerr << "PythonInputStreambuf::seekoff: pyseek is none" << endl;
         return -1;
       }
 
       py::object pytell = python_stream_.attr("tell");
       if( pytell.is_none() ) {
-        cerr << "PythonInputStreambuf::seekoff: pytell is none" << endl;
         return -1;
       }
 
@@ -326,11 +319,9 @@ protected:
             // Casting to a std::streamoff causes an exception, so we cast to int64_t instead.
             python_pos = py::cast<int64_t>(pytell());
           } catch (const std::exception &e) {
-            cerr << "PythonInputStreambuf::seekoff: error in pytell: " << e.what() << endl;
             return -1;
           }catch( ... )
           {
-            cerr << "PythonInputStreambuf::seekoff: error in pytell - unspecified exception" << endl;
             return -1;
           }
           
@@ -369,7 +360,6 @@ protected:
         pos = py::cast<int64_t>(pytell());
       }catch( ... )
       {
-        cerr << "PythonInputStreambuf::seekoff: error in pytell - error converting python pos to int64_t" << endl;
         if( whence == 0 )
           return off; //assume the call to pyseek was successful
         else
@@ -377,8 +367,6 @@ protected:
       }
           
       return pos;
-    }else{
-      cerr << "Python stream is not input" << endl;
     }
     return -1;
   }
@@ -487,6 +475,384 @@ private:
       throw std::runtime_error( filename + " couldnt be parsed as a " + type + " file." );
     }//if( !success )
   }//loadFile(...)
+
+
+  inline std::string to_lower_ascii_copy( std::string s )
+  {
+    for( char &c : s )
+      c = static_cast<char>( std::tolower(static_cast<unsigned char>(c)) );
+    return s;
+  }
+
+  inline bool istarts_with_ascii( const std::string &s, const std::string &prefix )
+  {
+    if( s.size() < prefix.size() )
+      return false;
+    for( size_t i = 0; i < prefix.size(); ++i )
+    {
+      const char a = static_cast<char>( std::tolower(static_cast<unsigned char>(s[i])) );
+      const char b = static_cast<char>( std::tolower(static_cast<unsigned char>(prefix[i])) );
+      if( a != b )
+        return false;
+    }
+    return true;
+  }
+
+
+  bool try_load_micro_raider_from_stream( SpecUtils::SpecFile *info, PythonInputStream &input )
+  {
+    // The MicroRaider parser is "from data" only, so we must buffer.
+    info->reset();
+
+    std::ostringstream oss;
+    oss << input.rdbuf();
+    std::string data = oss.str();
+    if( data.empty() )
+      return false;
+
+    // Ensure null termination even if the stream contains embedded NULs.
+    data.push_back('\0');
+    const bool success = info->load_from_micro_raider_from_data( data.c_str() );
+    if( !success )
+      info->reset();
+    return success;
+  }
+
+
+  void loadFileFromStream( SpecUtils::SpecFile *info,
+                           py::object pystream,
+                           const std::string &pseudo_filename,
+                           std::string file_ending_hint = "" )
+  {
+    // This is a stream-based variant of `loadFile` specialized to `ParserType::Auto`.
+    // The stream must be seekable so we can reset between attempted parsers.
+    if( !py::hasattr(pystream, "read") )
+      throw std::runtime_error( "Python stream has no 'read' method" );
+    if( !py::hasattr(pystream, "seek") || !py::hasattr(pystream, "tell") )
+      throw std::runtime_error( "Python stream must be seekable (requires 'seek' and 'tell')" );
+
+    PythonInputStream input(pystream);
+
+    // Fail fast if the stream can't report a position.
+    std::streamoff start_off = 0;
+    try
+    {
+      start_off = static_cast<std::streamoff>( py::cast<int64_t>(pystream.attr("tell")()) );
+    }catch( const std::exception &e )
+    {
+      throw std::runtime_error( std::string("Python stream must support tell/seek: ") + e.what() );
+    }
+
+    auto reset_stream = [&]() {
+      input.clear();
+      input.seekg( start_off, std::ios_base::beg );
+    };
+
+    // Mirror `SpecFile::load_file(..., ParserType::Auto, file_ending_hint)` heuristics,
+    // using `pseudo_filename`/`file_ending_hint` only to influence parser ordering.
+    bool success = false;
+    bool triedPcf = false, triedSpc = false,
+         triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
+         triedChn = false, triedIaea = false, triedLsrmSpe = false,
+         triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
+         triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
+         triedTka = false, triedMultiAct = false, triedPhd = false,
+         triedLzs = false, triedXmlScanData = false, triedJson = false,
+         tried_gxml = false, triedRadiaCode = false, tried_uri = false;
+
+    auto try_spc = [&]() -> bool {
+      // Match `load_spc_file`: choose parser based on the first byte.
+      reset_stream();
+      unsigned char firstbyte = 0;
+      input.read( reinterpret_cast<char*>(&firstbyte), 1 );
+      if( !input.good() )
+        return false;
+      reset_stream();
+      const bool isbinary = (firstbyte == 0x1);
+      if( !isbinary && !std::isalpha(firstbyte) )
+        return false;
+      if( isbinary )
+        return info->load_from_binary_spc( input );
+      return info->load_from_iaea_spc( input );
+    };
+
+    auto try_parser = [&]( auto &&fn ) -> bool {
+      reset_stream();
+      info->reset();
+      const bool ok = fn();
+      if( !ok )
+        info->reset();
+      return ok;
+    };
+
+    std::string orig_file_ending = std::move(file_ending_hint);
+    if( orig_file_ending.empty() )
+      orig_file_ending = pseudo_filename;
+
+    if( !orig_file_ending.empty() )
+    {
+      const size_t period_pos = orig_file_ending.find_last_of( '.' );
+      if( period_pos != string::npos )
+        orig_file_ending = orig_file_ending.substr( period_pos+1 );
+      orig_file_ending = to_lower_ascii_copy( orig_file_ending );
+
+      if( orig_file_ending=="pcf")
+      {
+        triedPcf = true;
+        success = try_parser( [&]() { return info->load_from_pcf( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="dat")
+      {
+        triedGR135 = true;
+        success = try_parser( [&]() { return info->load_from_binary_exploranium( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="spc")
+      {
+        triedSpc = true;
+        success = try_parser( [&]() { return try_spc(); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="n42" || orig_file_ending=="xml"
+          || orig_file_ending=="icd1" || orig_file_ending=="icd")
+      {
+        triedNativeIcd1 = true;
+        success = try_parser( [&]() { return info->load_from_N42( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="chn" )
+      {
+        triedChn = true;
+        success = try_parser( [&]() { return info->load_from_chn( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="spe" )
+      {
+        triedIaea = true;
+        success = try_parser( [&]() { return info->load_from_iaea( input ); } );
+        if( success ) goto done;
+
+        triedLsrmSpe = true;
+        success = try_parser( [&]() { return info->load_from_lsrm_spe( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="tka" || orig_file_ending=="jac" )
+      {
+        triedTka = true;
+        success = try_parser( [&]() { return info->load_from_tka( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="spm" )
+      {
+        triedMultiAct = true;
+        success = try_parser( [&]() { return info->load_from_multiact( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="txt" )
+      {
+        triedSPM = true;
+        success = try_parser( [&]() { return info->load_from_spectroscopic_daily_file( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="txt" || orig_file_ending=="csv" )
+      {
+        triedTxt = true;
+        success = try_parser( [&]() { return info->load_from_txt_or_csv( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="cnf" )
+      {
+        triedCnf = true;
+        success = try_parser( [&]() { return info->load_from_cnf( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="mps" )
+      {
+        triedMps = true;
+        success = try_parser( [&]() { return info->load_from_tracs_mps( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="gam" /* || orig_file_ending=="neu" */ )
+      {
+        triedAram = true;
+        success = try_parser( [&]() { return info->load_from_aram( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="mca" )
+      {
+        triedMCA = true;
+        success = try_parser( [&]() { return info->load_from_amptek_mca( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="lis" )
+      {
+        triedOrtecLM = true;
+        success = try_parser( [&]() { return info->load_from_ortec_listmode( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="phd" )
+      {
+        triedPhd = true;
+        success = try_parser( [&]() { return info->load_from_phd( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="lzs" )
+      {
+        triedLzs = true;
+        success = try_parser( [&]() { return info->load_from_lzs( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="xml" )
+      {
+        triedMicroRaider = true;
+        reset_stream();
+        info->reset();
+        success = try_load_micro_raider_from_stream( info, input );
+        if( success ) goto done;
+
+        triedXmlScanData = true;
+        success = try_parser( [&]() { return info->load_from_xml_scan_data( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending=="xml" || orig_file_ending=="rco")
+      {
+        triedRadiaCode = true;
+        success = try_parser( [&]() { return info->load_from_radiacode( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending == "json" )
+      {
+        triedJson = true;
+        success = try_parser( [&]() { return info->load_from_json( input ); } );
+        if( success ) goto done;
+      }
+
+      if( orig_file_ending == "gxml" )
+      {
+        tried_gxml = true;
+        success = try_parser( [&]() { return info->load_from_caen_gxml( input ); } );
+        if( success ) goto done;
+      }
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+      if( istarts_with_ascii(pseudo_filename, "raddata://") || (orig_file_ending == "uri") )
+      {
+        tried_uri = true;
+        success = try_parser( [&]() { return info->load_from_uri( input ); } );
+        if( success ) goto done;
+      }
+#endif
+    }
+
+    if( !success && !triedSpc )
+      success = try_parser( [&]() { return try_spc(); } );
+
+    if( !success && !triedGR135 )
+      success = try_parser( [&]() { return info->load_from_binary_exploranium( input ); } );
+
+    if( !success && !triedNativeIcd1 )
+      success = try_parser( [&]() { return info->load_from_N42( input ); } );
+
+    if( !success && !triedPcf )
+      success = try_parser( [&]() { return info->load_from_pcf( input ); } );
+
+    if( !success && !triedChn )
+      success = try_parser( [&]() { return info->load_from_chn( input ); } );
+
+    if( !success && !triedIaea )
+      success = try_parser( [&]() { return info->load_from_iaea( input ); } );
+
+    if( !success && !triedSPM )
+      success = try_parser( [&]() { return info->load_from_spectroscopic_daily_file( input ); } );
+
+    if( !success && !triedTxt )
+      success = try_parser( [&]() { return info->load_from_txt_or_csv( input ); } );
+
+    if( !success && !triedCnf )
+      success = try_parser( [&]() { return info->load_from_cnf( input ); } );
+
+    if( !success && !triedMps )
+      success = try_parser( [&]() { return info->load_from_tracs_mps( input ); } );
+
+    if( !success && !triedMCA )
+      success = try_parser( [&]() { return info->load_from_amptek_mca( input ); } );
+
+    if( !success && !triedMicroRaider )
+    {
+      triedMicroRaider = true;
+      reset_stream();
+      info->reset();
+      success = try_load_micro_raider_from_stream( info, input );
+    }
+
+    if( !success && !triedAram )
+      success = try_parser( [&]() { return info->load_from_aram( input ); } );
+
+    if( !success && !triedLsrmSpe )
+      success = try_parser( [&]() { return info->load_from_lsrm_spe( input ); } );
+
+    if( !success && !triedTka )
+      success = try_parser( [&]() { return info->load_from_tka( input ); } );
+
+    if( !success && !triedMultiAct )
+      success = try_parser( [&]() { return info->load_from_multiact( input ); } );
+
+    if( !success && !triedPhd )
+      success = try_parser( [&]() { return info->load_from_phd( input ); } );
+
+    if( !success && !triedLzs )
+      success = try_parser( [&]() { return info->load_from_lzs( input ); } );
+
+    if( !success && !triedOrtecLM )
+      success = try_parser( [&]() { return info->load_from_ortec_listmode( input ); } );
+
+    if( !success && !triedXmlScanData )
+      success = try_parser( [&]() { return info->load_from_xml_scan_data( input ); } );
+
+    if( !success && !triedJson )
+      success = try_parser( [&]() { return info->load_from_json( input ); } );
+
+    if( !success && !tried_gxml )
+      success = try_parser( [&]() { return info->load_from_caen_gxml( input ); } );
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    if( !success && !tried_uri )
+      success = try_parser( [&]() { return info->load_from_uri( input ); } );
+#endif
+
+    if( !success && !triedRadiaCode )
+      success = try_parser( [&]() { return info->load_from_radiacode( input ); } );
+
+done:
+    if( success && info->num_measurements() )
+    {
+      info->set_filename( pseudo_filename );
+      return;
+    }
+
+    info->reset();
+    throw std::runtime_error( "Couldnt parse stream " + pseudo_filename );
+  }//loadFileFromStream(...)
   
 
 /* All these load*_wrapper functions are because I couldnt get nanbind to 
@@ -1780,6 +2146,13 @@ m.def("polynomialCoefToFullRangeFraction",
         "values for this might be: \"n24\", \"pcf\", \"chn\", etc. The entire filename\n"
         "can be passed in since only the letters after the last period are used.\n"
         "Throws RuntimeError if the file can not be opened or parsed." ) 
+    .def( "loadFileFromStream", &loadFileFromStream,
+          "input"_a, "pseudo_filename"_a, "file_ending_hint"_a = "",
+          "Loads spectrum data from a Python binary stream using the Auto parser selection.\n"
+          "The stream must be seekable (supports tell/seek) so multiple parsers can be tried.\n"
+          "The pseudo_filename (or file_ending_hint) is used only to influence parser ordering,\n"
+          "matching the heuristics of SpecFile.loadFile(..., ParserType.Auto, ...).\n"
+          "Throws RuntimeError if the stream can not be parsed." )
     .def("loadFromN42", &loadFromN42_wrapper, "input"_a,
          "Load N42 format data from input stream")
     .def("loadFromIaeaSpc", &loadFromIaeaSpc_wrapper, "input"_a,

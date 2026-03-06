@@ -2,6 +2,7 @@
 .svn
 .vscode
 .idea
+.venv
 .DS_Store
 .cproject
 .project
