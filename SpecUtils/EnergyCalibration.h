@@ -576,6 +576,8 @@ namespace SpecUtils
    binary search is performed to find the bin that comes within the specified
    accuracy.
    
+   If energy is above or below the valid range of energies, only the gain will be used to extrapolate above/below the valid range.
+   
    \TODO: Use #correction_due_to_dev_pairs to make it so algabraic approach can
           always be used.
   */

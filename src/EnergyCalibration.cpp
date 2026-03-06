@@ -1335,6 +1335,22 @@ double find_fullrangefraction_channel( const double energy,
   if( ncoefs < 2  )
     throw runtime_error( "find_fullrangefraction_channel: must pass in at least two coefficients" );
   
+  
+  const double lower_energy = fullrangefraction_energy( 0, coeffs, nbin, devpair );
+  if( energy <= lower_energy )
+  {
+    // Extrapolate below the lowest valid energy using just the gain.
+    // FRF: E = C_0 + C_1*(ch/nbin) + ...  -->  ch = (E - E_0) * nbin / C_1
+    return (energy - lower_energy) * nbin / coeffs[1];
+  }
+  
+  const double upper_energy = fullrangefraction_energy( nbin, coeffs, nbin, devpair );
+  if( energy >= upper_energy )
+  {
+    // Extrapolate above the highest valid energy using just the gain.
+    return nbin + (energy - upper_energy) * nbin / coeffs[1];
+  }
+  
   if( ncoefs < 4 && devpair.empty() )
   {
     if( ncoefs == 2  )

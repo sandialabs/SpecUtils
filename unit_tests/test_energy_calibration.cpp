@@ -192,11 +192,66 @@ TEST_CASE( "testFullRangeFractionFindEnergy" )
                            << binenergy << " keV" );
   }//for( size_t i = 0; i < nenergies; ++i )
   
-  //...
+
 
 }//TEST_CASE( testFullRangeFractionFindEnergy )
 
 
+TEST_CASE( "testFullRangeFractionFindEnergyFiveCoeffs" )
+{
+  // Test case from a real-world issue: coefficients with 5 terms including the low-energy term.
+  // With 5 FRF coefficients, the 5th term is C_4/(1+60*x) where x = channel/nbin.
+  // This term adds energy at low channels (31.1 keV when x=0), making the minimum energy at
+  // channel 0 equal to about 8.3 keV for this calibration.
+  //
+  // When searching for an energy below the valid range, the function now extrapolates
+  // using just the gain term, returning a negative channel number.
+  using namespace SpecUtils;
+
+  const size_t nbin = 1024;
+  const vector<float> fwf_coefs = { -22.7999992f, 3013.77002f, 828.0f, -173.0f, 31.1f };
+  const vector<pair<float,float>> dev_pairs;
+  const float accuracy = 0.001f;
+
+  // Verify the energy range of this calibration
+  const double energy_at_channel_0 = fullrangefraction_energy( 0.0, fwf_coefs, nbin, dev_pairs );
+  const double energy_at_channel_nbin = fullrangefraction_energy( static_cast<double>(nbin), fwf_coefs, nbin, dev_pairs );
+
+  // Energy at channel 0 should be about 8.3 keV (= -22.8 + 31.1 from the 5th coef term)
+  CHECK( energy_at_channel_0 > 8.0 );
+  CHECK( energy_at_channel_0 < 9.0 );
+  
+  // The search energy is below the minimum valid energy
+  const double search_energy = 5.7976100417681184;
+  CHECK( search_energy < energy_at_channel_0 );
+  
+  // The function should now return a negative channel (extrapolated using gain)
+  // instead of throwing an exception
+  double channel = 0;
+  CHECK_NOTHROW( channel = find_fullrangefraction_channel( search_energy, fwf_coefs, nbin, dev_pairs, accuracy ) );
+  
+  // The returned channel should be negative (below channel 0)
+  CHECK( channel < 0.0 );
+  
+  // The extrapolation uses: channel = (energy - energy_at_0) * nbin / C_1
+  const double expected_channel = (search_energy - energy_at_channel_0) * nbin / fwf_coefs[1];
+  CHECK( fabs(channel - expected_channel) < 0.001 );
+  
+  // Test searching for a valid energy (within the calibration range)
+  const double valid_energy = 100.0;
+  CHECK_NOTHROW( channel = find_fullrangefraction_channel( valid_energy, fwf_coefs, nbin, dev_pairs, accuracy ) );
+  const double found_energy = fullrangefraction_energy( channel, fwf_coefs, nbin, dev_pairs );
+  CHECK( fabs(found_energy - valid_energy) < 0.1 );
+  
+  // Test searching for an energy above the valid range
+  const double high_energy = energy_at_channel_nbin + 100.0;
+  CHECK_NOTHROW( channel = find_fullrangefraction_channel( high_energy, fwf_coefs, nbin, dev_pairs, accuracy ) );
+  CHECK( channel > nbin ); // Should be above the last channel
+  
+  // The extrapolation uses: channel = nbin + (energy - energy_at_nbin) * nbin / C_1
+  const double expected_high_channel = nbin + (high_energy - energy_at_channel_nbin) * nbin / fwf_coefs[1];
+  CHECK( fabs(channel - expected_high_channel) < 0.001 );
+}//TEST_CASE( testFullRangeFractionFindEnergyFiveCoeffs )
 
 
 TEST_CASE( "testPolynomialFindEnergy" )
