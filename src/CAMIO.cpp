@@ -1468,21 +1468,38 @@ std::vector<float>& CAMIO::GetShapeCalibration() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+        
+        // Check common flag - when 0x700 or 0x300, the record offset should be 0
+        const uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+        const uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) 
+                                   ? 0 : ReadUInt16(*readData, pos + 0x22);
+        
         // Use size_t to avoid uint16_t overflow in offset calculation
-        const size_t eCalOffset = 0x30 + static_cast<size_t>(ReadUInt16(*readData, pos + 0x22)) + 0xDC;
+        const size_t shapeCalOffset = 0x30 + static_cast<size_t>(recOffset) + 0xDC;
 
       //CONSTANT or SQRT
-      //std::string type_str( eCalOffset + 100 + 1, '\0');
-      //std::memcpy(&(type_str[0]), &(*readData)[pos], eCalOffset + 100);
+      //std::string type_str( shapeCalOffset + 100 + 1, '\0');
+      //std::memcpy(&(type_str[0]), &(*readData)[pos], shapeCalOffset + 100);
       //std::cout << "FWHM_type: '" << type_str << "'" << std::endl;
 
         // Validate bounds before reading calibration coefficients
-        const size_t calibStart = pos + eCalOffset;
+        const size_t calibStart = pos + shapeCalOffset;
         const size_t calibSize = fileShapeCal.size() * 4;
         validate_bounds( *readData, calibStart, calibSize, "GetShapeCalibration: reading coefficients" );
 
-        for (size_t i = 0; i < fileShapeCal.size(); i++) {
-            fileShapeCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
+        // Only update if we find non-zero calibration (first block with data wins)
+        bool allZeros = true;
+        std::vector<float> tempCal(fileShapeCal.size());
+        for (size_t i = 0; i < tempCal.size(); i++) {
+            tempCal[i] = convert_from_CAM_float(*readData, pos + shapeCalOffset + i * 4);
+            if (tempCal[i] != 0.0f)
+                allZeros = false;
+        }
+        
+        // Only use this block's calibration if it has non-zero values
+        // (prevents later empty blocks from overwriting valid calibration)
+        if (!allZeros) {
+            fileShapeCal = std::move(tempCal);
         }
     }
 
@@ -1503,8 +1520,14 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
+        
+        // Check common flag - when 0x700 or 0x300, the record offset should be 0
+        const uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+        const uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) 
+                                   ? 0 : ReadUInt16(*readData, pos + 0x22);
+        
         // Use size_t to avoid uint16_t overflow in offset calculation
-        const size_t eCalOffset = 0x30 + static_cast<size_t>(ReadUInt16(*readData, pos + 0x22)) + 0x44;
+        const size_t eCalOffset = 0x30 + static_cast<size_t>(recOffset) + 0x44;
 
         // Validate we can read all energy calibration coefficients (4 floats = 16 bytes)
         // eCalOffset is partially file-controlled via ReadUInt16
@@ -1512,8 +1535,19 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
         const size_t calibSize = fileEneCal.size() * 4;
         validate_bounds( *readData, calibStart, calibSize, "GetEnergyCalibration: reading calibration coefficients" );
 
-        for (size_t i = 0; i < fileEneCal.size(); i++) {
-            fileEneCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
+        // Only update if we find non-zero calibration (first block with data wins)
+        bool allZeros = true;
+        std::vector<float> tempCal(fileEneCal.size());
+        for (size_t i = 0; i < tempCal.size(); i++) {
+            tempCal[i] = convert_from_CAM_float(*readData, pos + eCalOffset + i * 4);
+            if (tempCal[i] != 0.0f)
+                allZeros = false;
+        }
+        
+        // Only use this block's calibration if it has non-zero values
+        // (prevents later empty blocks from overwriting valid calibration)
+        if (!allZeros) {
+            fileEneCal = std::move(tempCal);
         }
     }
 
