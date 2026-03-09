@@ -760,8 +760,9 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
         throw std::runtime_error( "Data smaller than geometry block" );
 
     // Get record offset and entry offset
+    // When common flag is 0x700 or 0x300, the record offset should be treated as 0
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
-    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
     uint16_t entOffset = ReadUInt16(*readData, pos + 0x28);
     uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
     uint16_t entSize = ReadUInt16(*readData, pos + 0x2a);
@@ -864,8 +865,9 @@ void CAMIO::ReadNuclidesBlock(size_t pos, uint16_t records) {
         throw std::runtime_error( "Data smaller than nuclides block" );
 
     // Get record offset
+    // When common flag is 0x700 or 0x300, the record offset should be treated as 0
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
-    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
     uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
     uint32_t lineListOffset = 0;
@@ -929,8 +931,9 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
         throw std::runtime_error( "Data smaller than peaks block" );
 
     // Get record offset and size
+    // When common flag is 0x700 or 0x300, the record offset should be treated as 0
     uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
-    uint16_t recOffset = commonFlag == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+    uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
     uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
@@ -1074,7 +1077,9 @@ std::vector<Nuclide>& CAMIO::GetNuclides() {
         if( (pos + 0x22 + 2) > readData->size() )
           throw std::runtime_error( "Data smaller than nuclides pos" );
 
-        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 ? 0 : ReadUInt16(*readData, pos + 0x22);
+        // When common flag is 0x700 or 0x300, the record offset should be treated as 0
+        const uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+        uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
@@ -1173,16 +1178,15 @@ std::vector<Peak>& CAMIO::GetPeaks() {
         throw std::runtime_error("There is no peak data in the loaded file");
     }
 
-    bool secondBlock = false;
-
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
         if( (pos + 0x22 + 2) > readData->size() )
           throw std::runtime_error( "Data smaller than peaks pos" );
 
-        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ?
-                            0 : ReadUInt16(*readData, pos + 0x22);
+        // When common flag is 0x700 or 0x300, the record offset should be treated as 0
+        const uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+        uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
         uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
@@ -1234,7 +1238,6 @@ std::vector<Peak>& CAMIO::GetPeaks() {
 
             filePeaks.push_back(peak);
         }
-        secondBlock = true;
     }
 
     return filePeaks;
@@ -1313,12 +1316,12 @@ DetInfo& CAMIO::GetDetectorInfo()
         throw std::runtime_error("There is no aqusition data in the loaded file");
     }
 
-    bool secondBlock = false;
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
-        uint16_t recOffset = ReadUInt16(*readData, pos + 0x04) == 0x700 || secondBlock ?
-            0 : ReadUInt16(*readData, pos + 0x22);
+        // When common flag is 0x700 or 0x300, the record offset should be treated as 0
+        const uint16_t commonFlag = ReadUInt16(*readData, pos + 0x04);
+        uint16_t recOffset = (commonFlag == 0x700 || commonFlag == 0x300) ? 0 : ReadUInt16(*readData, pos + 0x22);
         uint16_t recSize = ReadUInt16(*readData, pos + 0x20);
         //uint16_t numRec = ReadUInt16(*readData, pos + 0x1E);
         uint16_t numRec = 1;
@@ -1342,33 +1345,45 @@ DetInfo& CAMIO::GetDetectorInfo()
             });
             validate_bounds( *readData, loc, maxOffset, "GetDetectorInfo: reading detector info fields" );
 
-            // these are actually record parameters but we don't deal with multpule specturm in a single file
+            // these are actually record parameters but we don't deal with multiple spectrum in a single file
             char type_buf[9] = { 0 };
             std::memcpy(type_buf, &(*readData)[loc + 0x2DC], sizeof(type_buf) - 1);
             type_buf[8] = '\0';
-            det_info.Type = std::string(type_buf);
-
+            
             char mca_type_buf[25] = { 0 };
             std::memcpy(mca_type_buf, &(*readData)[loc + 0x9C], sizeof(mca_type_buf) - 1);
             mca_type_buf[24] = '\0';
-            det_info.MCAType = std::string(mca_type_buf);
-
+            
             char name_buf[17] = { 0 };
             std::memcpy(name_buf, &(*readData)[loc + 0x108], sizeof(name_buf) - 1);
             name_buf[16] = '\0';
-            det_info.Name = std::string(name_buf);
-
+            
             char sn_buf[0x9] = { 0 };
             std::memcpy(sn_buf, &(*readData)[loc + 0x1CB], sizeof(sn_buf) - 1);
             sn_buf[8] = '\0';
-            det_info.SerialNo = std::string(sn_buf);
+            
+            // Only update det_info if we found non-empty data
+            // (prevents later empty blocks from overwriting valid info)
+            const std::string type_str(type_buf);
+            const std::string mca_type_str(mca_type_buf);
+            const std::string name_str(name_buf);
+            const std::string sn_str(sn_buf);
+            
+            const bool hasData = !type_str.empty() || !mca_type_str.empty() || 
+                                 !name_str.empty() || !sn_str.empty();
+            
+            if( hasData )
+            {
+                det_info.Type = type_str;
+                det_info.MCAType = mca_type_str;
+                det_info.Name = name_str;
+                det_info.SerialNo = sn_str;
+                return det_info;
+            }
         }
-
-        return det_info;
-
     }
 
-    return det_info; // Should never reach here
+    return det_info;
 }
 
 // get the sampling time
@@ -1398,6 +1413,8 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
         throw std::runtime_error("There is no temporal data in the loaded file");
     }
 
+    SpecUtils::time_point_t result{};
+
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
       
@@ -1407,10 +1424,14 @@ SpecUtils::time_point_t CAMIO::GetAquisitionTime() {
         // Check for potential overflow in offset calculation (timeOffset is file-controlled)
         const size_t timePos = pos + static_cast<size_t>(headSize) + static_cast<size_t>(timeOffset) + 0x01;
 
-        return convert_from_CAM_datetime(*readData, timePos);
+        const SpecUtils::time_point_t blockTime = convert_from_CAM_datetime(*readData, timePos);
+        
+        // Only update if we found a valid (non-special) time
+        if( !SpecUtils::is_special(blockTime) )
+          return blockTime;
     }
 
-    return SpecUtils::time_point_t{}; // Should never reach here
+    return result;
 }
 
 // gets the live time in float seconds
@@ -1427,13 +1448,17 @@ float CAMIO::GetLiveTime() {
         // Check for overflow in offset calculation (timeOffset is file-controlled)
         const size_t liveTimePos = pos + 0x30 + static_cast<size_t>(timeOffset) + 0x11;
 
-        return convert_from_CAM_duration(*readData, liveTimePos);
+        const float liveTime = convert_from_CAM_duration(*readData, liveTimePos);
+        
+        // Only return if we found a valid (non-zero) live time
+        if( liveTime > 0.0f )
+          return liveTime;
     }
 
-    return 0.0; // Should never reach here
+    return 0.0f;
 }
 
-// gets the read time in float seconds
+// gets the real time in float seconds
 float CAMIO::GetRealTime() {
     auto range = blockAddresses.equal_range(CAMBlock::ACQP);
     if (range.first == range.second) {
@@ -1447,10 +1472,14 @@ float CAMIO::GetRealTime() {
         // Check for overflow in offset calculation (timeOffset is file-controlled)
         const size_t realTimePos = pos + 0x30 + static_cast<size_t>(timeOffset) + 0x09;
 
-        return convert_from_CAM_duration(*readData, realTimePos);
+        const float realTime = convert_from_CAM_duration(*readData, realTimePos);
+        
+        // Only return if we found a valid (non-zero) real time
+        if( realTime > 0.0f )
+          return realTime;
     }
 
-    return 0.0; // Should never reach here
+    return 0.0f;
 }
 
 // get the shape calibration coefficients
