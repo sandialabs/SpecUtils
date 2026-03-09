@@ -16,6 +16,11 @@ spec = SpecUtils.SpecFile()
 # Load a spectrum file
 spec.loadFile("spectrum_file.n42", SpecUtils.ParserType.Auto)
 
+# Or: load from a Python binary stream (uses Auto parser selection).
+# The pseudo-filename is used to prioritize parsers (e.g., by extension).
+with open("spectrum_file.n42", "rb") as f:
+    spec.loadFileFromStream(f, "spectrum_file.n42")
+
 # Get list of all individual records in the spectrum file
 meass = spec.measurements() 
 print( "There are", len(meass), "spectrum records." )

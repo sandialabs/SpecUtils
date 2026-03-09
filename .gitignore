@@ -2,6 +2,10 @@
 .svn
 .vscode
 .idea
+.venv
+__pycache__/
+*.py[cod]
+bindings/python/passthrough_saved.*
 .DS_Store
 .cproject
 .project
