@@ -2,7 +2,9 @@ import unittest
 import SpecUtils
 from datetime import datetime
 
+import io
 import os
+import tempfile
 from pathlib import Path
 
 
@@ -16,6 +18,37 @@ class TestSpecUtilsBasic(unittest.TestCase):
         self.spec.loadFile(file_path, SpecUtils.ParserType.Auto)
         self.assertTrue(self.spec.numMeasurements() > 0)
 
+    def test_load_file_from_stream_auto(self):
+        script_dir = Path(__file__).parent.resolve()
+        file_path = os.path.join(script_dir, "..", "examples", "passthrough.n42")
+
+        with open(file_path, "rb") as f:
+            data = f.read()
+
+        buf = io.BytesIO(data)
+        spec1 = SpecUtils.SpecFile()
+        spec1.loadFileFromStream(buf, "passthrough.n42")
+        self.assertTrue(spec1.numMeasurements() > 0)
+
+        with open(file_path, "rb") as f:
+            spec2 = SpecUtils.SpecFile()
+            spec2.loadFileFromStream(f, "passthrough.n42")
+            self.assertTrue(spec2.numMeasurements() > 0)
+
+        class NonSeekable:
+            def __init__(self, b):
+                self._b = b
+                self._i = 0
+            def read(self, n=-1):
+                if n is None or n < 0:
+                    n = len(self._b) - self._i
+                out = self._b[self._i:self._i+n]
+                self._i += len(out)
+                return out
+
+        with self.assertRaises(RuntimeError):
+            SpecUtils.SpecFile().loadFileFromStream(NonSeekable(data), "passthrough.n42")
+
     def test_load_save_file(self):
         script_dir = Path(__file__).parent.resolve()
         file_path = os.path.join(script_dir, "..", "examples", "passthrough.n42")
@@ -24,29 +57,38 @@ class TestSpecUtilsBasic(unittest.TestCase):
         orig.loadFile(file_path, SpecUtils.ParserType.Auto)
         self.assertTrue(orig.numMeasurements() > 0)
 
-        pcffile = open("passthrough_saved.pcf", "wb")
-        orig.writeToStream(pcffile, orig.sampleNumbers(), orig.detectorNames(), SpecUtils.SaveSpectrumAsType.Pcf )
-        pcffile.close()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pcf_path = os.path.join(temp_dir, "passthrough_saved.pcf")
+            with open(pcf_path, "wb") as pcffile:
+                orig.writeToStream(
+                    pcffile,
+                    orig.sampleNumbers(),
+                    orig.detectorNames(),
+                    SpecUtils.SaveSpectrumAsType.Pcf,
+                )
 
-        pcfreread = SpecUtils.SpecFile()
-        pcfreread.loadFile("passthrough_saved.pcf", SpecUtils.ParserType.Pcf)
-        self.assertEqual(pcfreread.numMeasurements(), orig.numMeasurements())
+            pcfreread = SpecUtils.SpecFile()
+            pcfreread.loadFile(pcf_path, SpecUtils.ParserType.Pcf)
+            self.assertEqual(pcfreread.numMeasurements(), orig.numMeasurements())
 
-        pcfinfile = open("passthrough_saved.pcf", "rb")
-        pcfreread2 = SpecUtils.SpecFile()
-        pcfreread2.loadFromPcf(pcfinfile)
-        self.assertEqual(pcfreread2.numMeasurements(), orig.numMeasurements())
-        pcfinfile.close()
+            with open(pcf_path, "rb") as pcfinfile:
+                pcfreread2 = SpecUtils.SpecFile()
+                pcfreread2.loadFromPcf(pcfinfile)
+                self.assertEqual(pcfreread2.numMeasurements(), orig.numMeasurements())
 
-        n42outfile = open("passthrough_saved.n42", "wb")
-        orig.writeToStream(n42outfile, orig.sampleNumbers(), orig.detectorNames(), SpecUtils.SaveSpectrumAsType.N42_2012 )
-        n42outfile.close()
+            n42_path = os.path.join(temp_dir, "passthrough_saved.n42")
+            with open(n42_path, "wb") as n42outfile:
+                orig.writeToStream(
+                    n42outfile,
+                    orig.sampleNumbers(),
+                    orig.detectorNames(),
+                    SpecUtils.SaveSpectrumAsType.N42_2012,
+                )
 
-        n42infile = open("passthrough_saved.n42", "rb")
-        n42reread = SpecUtils.SpecFile()
-        n42reread.loadFromN42( n42infile )
-        self.assertEqual(n42reread.numMeasurements(), orig.numMeasurements())
-        n42infile.close()
+            with open(n42_path, "rb") as n42infile:
+                n42reread = SpecUtils.SpecFile()
+                n42reread.loadFromN42(n42infile)
+                self.assertEqual(n42reread.numMeasurements(), orig.numMeasurements())
 
     def test_create_measurement(self):
         # Create and configure a new measurement
