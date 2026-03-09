@@ -2526,7 +2526,98 @@ float CAMInputOutput::CAMIO::ComputeUncertainty(float value)
     return uncertainty;
 }
 
-// assign key the line for a nuclide 
+KEdgeInfo CAMIO::GetKEdgeInfo()
+{
+    KEdgeInfo info;
+
+    // Read K-edge parameters from SAMP block
+    auto sampRange = blockAddresses.equal_range(CAMBlock::SAMP);
+    if( sampRange.first != sampRange.second )
+    {
+        for( auto it = sampRange.first; it != sampRange.second; ++it )
+        {
+            const size_t pos = it->second;
+            
+            // Validate we can read the header size field
+            if( (pos + 0x12) > readData->size() )
+                continue;
+            
+            const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
+            const size_t dataStart = pos + static_cast<size_t>(headSize);
+
+            // Temperature at offset 0x22a (CAM_F_STEMP)
+            const size_t tempOffset = dataStart + 0x22a;
+            if( (tempOffset + 4) <= readData->size() )
+            {
+                const float temp = convert_from_CAM_float( *readData, tempOffset );
+                // Sanity check: temperature should be in a reasonable range (-50 to +100 C)
+                if( (temp > -50.0f) && (temp < 100.0f) && (temp != 0.0f) )
+                {
+                    info.temperature = temp;
+                    info.hasInfo = true;
+                }
+            }
+
+            // U-235 enrichment at offset 0xd3b (CAM_F_PRKEDDCL235)
+            const size_t u235Offset = dataStart + 0xd3b;
+            if( (u235Offset + 4) <= readData->size() )
+            {
+                const float u235 = convert_from_CAM_float( *readData, u235Offset );
+                // Sanity check: enrichment should be 0-100%
+                if( (u235 > 0.0f) && (u235 <= 100.0f) )
+                {
+                    info.u235Enrichment = u235;
+                    info.hasInfo = true;
+                }
+            }
+
+            // Pu atomic weight at offset 0xd3f (CAM_F_PRKEDDPUAWT)
+            const size_t puOffset = dataStart + 0xd3f;
+            if( (puOffset + 4) <= readData->size() )
+            {
+                const float puAwt = convert_from_CAM_float( *readData, puOffset );
+                // Sanity check: Pu atomic weight should be reasonable (238-244 g/mol)
+                if( (puAwt >= 238.0f) && (puAwt <= 244.0f) )
+                {
+                    info.puAtomicWeight = puAwt;
+                    info.hasInfo = true;
+                }
+            }
+        }
+    }
+
+    // Read path length from block 0x00012024 at offset 0x60 (CAM_F_KCPATHLEN)
+    auto pathRange = blockAddresses.equal_range( CAMBlock::K_EDGE_CONFIG );
+    if( pathRange.first != pathRange.second )
+    {
+        for( auto it = pathRange.first; it != pathRange.second; ++it )
+        {
+            const size_t pos = it->second;
+            
+            // Validate we can read the header size field
+            if( (pos + 0x12) > readData->size() )
+                continue;
+            
+            const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
+            const size_t pathOffset = pos + static_cast<size_t>(headSize) + 0x60;
+
+            if( (pathOffset + 4) <= readData->size() )
+            {
+                const float pathLen = convert_from_CAM_float( *readData, pathOffset );
+                // Sanity check: path length should be positive and reasonable (0 to 100 cm)
+                if( (pathLen > 0.0f) && (pathLen < 100.0f) )
+                {
+                    info.pathLength = pathLen;
+                    info.hasInfo = true;
+                }
+            }
+        }
+    }
+
+    return info;
+}
+
+// assign key the line for a nuclide
 void CAMInputOutput::CAMIO::AssignKeyLines()
 {
     // Loop through the nucludies
