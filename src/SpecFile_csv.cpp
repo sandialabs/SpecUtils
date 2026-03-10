@@ -1064,6 +1064,14 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       
       if( (energies->size() >= counts->size()) && (energies->back() != 0.0f) )
       {
+        //Lets check if energy is specified in eV, and not keV - we'll assume if the energy starts at 20 MeV,
+        //  its actually eV.
+        if( (energies->size() > 2) && ((*energies)[1] > 20000.0f) )
+        {
+          for( float &val : (*energies) )
+            val *= 0.001f;
+        }
+
         try
         {
           auto newcal = make_shared<EnergyCalibration>();
@@ -1110,7 +1118,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           column_map[i] = kEnergy;
           if( SpecUtils::contains( fields[i], "mev" ) )
             energy_units = 1000.0f;
-          
+          else if( SpecUtils::contains( fields[i], "(ev)" ) )
+            energy_units = 0.001f;
+
           const auto kevpos = fields[i].find( "(kev)" );
           if( kevpos != string::npos && ((fields[i].size() - kevpos) > 3) )
           {
