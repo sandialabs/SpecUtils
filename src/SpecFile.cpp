@@ -8831,10 +8831,7 @@ void SpecFile::write_to_file( const std::string name,
                    const std::set<int> sample_nums,
                    const std::set<int> det_nums,
                    const SaveSpectrumAsType format ) const
-{
-  if( SpecUtils::is_file(name) || SpecUtils::is_directory(name) )
-    throw runtime_error( "File (" + name + ") already exists, not overwriting" );
-  
+{ 
 #ifdef _WIN32
   std::ofstream output( convert_from_utf8_to_utf16(name).c_str(), ios::out | ios::binary );
 #else
