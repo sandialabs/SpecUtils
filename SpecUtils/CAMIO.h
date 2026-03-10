@@ -126,6 +126,31 @@ struct DetInfo
     DetInfo(std::string type, std::string name, std::string serial_no, std::string mca_type);
 };
 
+/** K-edge densitometry (HKED) information stored in CNF files.
+
+ These parameters are used in Hybrid K-Edge Densitometry (HKED) measurements
+ for safeguards applications.
+ */
+struct KEdgeInfo
+{
+    /** Sample temperature in degrees Celsius (CAM_F_STEMP) */
+    float temperature = 0.0f;
+
+    /** Path length/diameter of sample container in cm (CAM_F_KCPATHLEN) */
+    float pathLength = 0.0f;
+
+    /** Default declared U-235 enrichment in percent (CAM_F_PRKEDDCL235) */
+    float u235Enrichment = 0.0f;
+
+    /** Default declared Pu atomic weight in grams/mole (CAM_F_PRKEDDPUAWT) */
+    float puAtomicWeight = 0.0f;
+
+    /** Whether K-edge info was found in the file */
+    bool hasInfo = false;
+
+    KEdgeInfo() = default;
+};
+
 // Main CAMIO class
 class CAMIO {
 public:
@@ -138,7 +163,8 @@ public:
         SPEC = 0x00012005, //also known as DATA
         PEAK = 0x00012006,
         NUCL = 0x00012007,
-        NLINES = 0x00012008
+        NLINES = 0x00012008,
+        K_EDGE_CONFIG = 0x00012024  // K-edge configuration block
     };
 
     enum class RecordSize : uint16_t {
@@ -269,6 +295,17 @@ public:
     std::vector<uint32_t>& GetSpectrum();
     std::string GetSampleTitle();
     DetInfo& GetDetectorInfo();
+    
+    /** Gets K-edge densitometry (HKED) information if present in the file.
+     
+     Reads K-edge related parameters from the SAMP block and block 0x00012024:
+     - Temperature (CAM_F_STEMP) from SAMP block offset 0x25a
+     - Path length (CAM_F_KCPATHLEN) from block 0x00012024 offset 0x90
+     
+     @return KEdgeInfo struct with the K-edge parameters. Check hasInfo member
+             to determine if valid K-edge info was found.
+     */
+    KEdgeInfo GetKEdgeInfo();
 
     // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 

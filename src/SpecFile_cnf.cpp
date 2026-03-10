@@ -162,6 +162,25 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     //Will get here if no detector info
   }//try/catch to get detector info
 
+  // Try to get K-edge densitometry info (for HKED safeguards applications)
+  try
+  {
+    const CAMInputOutput::KEdgeInfo kedge_info = reader.GetKEdgeInfo();
+    if( kedge_info.hasInfo )
+    {
+      if( kedge_info.temperature != 0.0f )
+        remarks_.push_back( "K-edge Sample Temperature: " + SpecUtils::printCompact(kedge_info.temperature, 4) + " deg C" );
+      if( kedge_info.pathLength != 0.0f )
+        remarks_.push_back( "K-edge Path Length: " + SpecUtils::printCompact(kedge_info.pathLength, 4) + " cm" );
+      if( kedge_info.u235Enrichment != 0.0f )
+        remarks_.push_back( "K-edge Declared U-235 Enrichment: " + SpecUtils::printCompact(kedge_info.u235Enrichment, 4) + " %" );
+      if( kedge_info.puAtomicWeight != 0.0f )
+        remarks_.push_back( "K-edge Declared Pu Atomic Weight: " + SpecUtils::printCompact(kedge_info.puAtomicWeight, 5) + " g/mol" );
+    }
+  }catch( std::exception & )
+  {
+    //Will get here if error reading K-edge info
+  }//try/catch to get K-edge info
 
   // convert the int32 counts to floats
   auto channel_data = make_shared<vector<float>>(num_chnanels);
