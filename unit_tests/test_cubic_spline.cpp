@@ -21,6 +21,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <cmath>
 #include <string>
 #include <vector>
 #include <iostream>
@@ -188,8 +189,70 @@ TEST_CASE( "Cubic-Spline From Gadras" ) {
 }
 
 
+TEST_CASE( "correction_due_to_dev_pairs steep spline convergence" )
+{
+  // Regression test: correction_due_to_dev_pairs previously used a direct fixed-point iteration
+  // a_{n+1} = S(E - a_n) that oscillated and failed to converge when the spline had steep
+  // gradients (|S'| close to or greater than 1). The fix uses an averaged iteration
+  // a_{n+1} = (a_n + S(E - a_n)) / 2, which converges much faster in these cases.
 
+  // Deviation pairs that produce a steep, oscillatory spline with large offsets (up to ~55 keV)
+  // These are representative of a challenging real-world energy calibration adjustment.
+  const vector<pair<float,float>> steep_dev_pairs = {
+    {29.14f, 1.86f}, {60.0f, 0.0f}, {236.78f, 2.22f},
+    {330.0f, 1.74f}, {370.0f, 7.95f}, {431.0f, -6.51f},
+    {440.0f, -3.93f}, {477.0f, 2.57f}, {507.0f, 1.16f},
+    {565.0f, -0.06f}, {608.0f, -0.02f}, {652.0f, -1.05f},
+    {709.0f, -12.09f}, {745.0f, 0.93f}, {807.0f, -13.0f},
+    {853.0f, -6.45f}, {892.0f, 0.60f}, {950.0f, -9.42f},
+    {988.0f, 2.04f}, {1029.0f, 9.92f}, {1076.0f, 11.26f},
+    {1137.0f, -0.82f}, {1173.0f, 12.95f}, {1234.0f, 2.81f},
+    {1283.0f, 0.28f}, {1331.0f, 0.79f}, {1381.0f, 0.07f},
+    {1429.0f, 0.87f}, {1485.0f, -6.22f}, {1515.0f, 18.55f},
+    {1555.0f, 27.48f}, {1610.0f, 20.53f}, {1640.0f, 41.66f},
+    {1691.0f, 32.54f}, {1720.0f, 50.21f}, {1782.0f, 38.67f},
+    {1815.0f, 54.65f}, {1879.0f, 40.06f}, {1914.0f, 53.63f},
+    {1973.0f, 50.07f}, {2018.0f, 47.28f}, {2070.0f, 44.28f},
+    {2124.0f, 39.65f}, {2178.0f, 34.58f}, {2232.0f, 29.29f},
+    {2286.0f, 24.01f}, {2340.0f, 18.98f}, {2394.0f, 14.39f},
+    {2462.0f, -4.40f}, {2515.0f, -7.50f}, {2567.0f, -9.59f},
+    {2617.0f, -10.55f}, {2667.0f, -10.60f}, {2716.0f, -10.60f},
+    {2751.0f, 4.24f}, {2815.0f, -10.60f}, {2850.0f, 4.24f},
+    {2899.0f, 4.24f}, {2963.0f, -10.60f}, {2998.0f, 4.24f},
+    {3055.0f, -3.18f}
+  };
 
+  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( steep_dev_pairs );
+
+  SUBCASE( "convergence near 1640 keV" )
+  {
+    // This energy previously caused the direct fixed-point iteration to fail
+    const double true_energy = 1640.4;
+    const double correction = correction_due_to_dev_pairs( true_energy, steep_dev_pairs );
+    const double check = eval_cubic_spline( true_energy - correction, spline );
+    CHECK( fabs( correction - check ) < 0.001 );  // 1 eV tolerance
+  }
+
+  SUBCASE( "convergence near 1360 keV" )
+  {
+    const double true_energy = 1360.2;
+    const double correction = correction_due_to_dev_pairs( true_energy, steep_dev_pairs );
+    const double check = eval_cubic_spline( true_energy - correction, spline );
+    CHECK( fabs( correction - check ) < 0.001 );
+  }
+
+  SUBCASE( "convergence across full steep range" )
+  {
+    // Sweep the entire range where offsets are large and rapidly changing
+    for( double energy = 1300.0; energy <= 2000.0; energy += 10.0 )
+    {
+      const double correction = correction_due_to_dev_pairs( energy, steep_dev_pairs );
+      const double check = eval_cubic_spline( energy - correction, spline );
+      CHECK_MESSAGE( fabs( correction - check ) < 0.001,
+        "Failed at energy=" << energy << " keV, diff=" << fabs( correction - check ) );
+    }
+  }
+}
 
 
 

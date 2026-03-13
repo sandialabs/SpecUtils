@@ -940,69 +940,101 @@ double correction_due_to_dev_pairs( const double true_energy,
 {
   if( dev_pairs.empty() )
     return 0.0;
-  
+
   const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( dev_pairs );
   const vector<CubicSplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( dev_pairs );
-  
-  const double initial_answer = eval_cubic_spline( true_energy, inv_spline );
-  
-  //I would think once the going forward/backward with the spline is sorted out,
-  //  'initial_answer' would always be right, but currently it can be off by up
-  //  to a few keV in some cases... not exactly sure of the cause yet, so we'll
-  //  hack it for the moment.
-  //  Best guess is something to do with boundary conditions at each node or something
-  
-  const double initial_check = eval_cubic_spline( true_energy - initial_answer, spline );
-  const double initial_diff = initial_answer - initial_check;
-  const double tolerance  = 0.0001;
-  
-  //cout << "For " << true_energy << ", correction_due_to_dev_pairs was off by "
-  //     << fabs(initial_answer - initial_check) << " keV" << endl;
-  
-  if( fabs(initial_diff) < tolerance )
-    return initial_answer;
-  
-  int niters = 0;
-  
-  double answer = initial_answer;
-  double check = initial_check;
+
+  double answer = eval_cubic_spline( true_energy, inv_spline );
+  double check = eval_cubic_spline( true_energy - answer, spline );
   double diff = answer - check;
-  
-  // This loop seems to almost converge within 4 or 5 iterations, usually after just 2 or 3 for
-  //  a tolerance of 0.0001
-  while( fabs(diff) > tolerance )
+
+  const double tolerance = 0.0001;
+
+  if( fabs(diff) < tolerance )
+    return answer;
+
+  // Use averaged fixed-point iteration: a_{n+1} = (a_n + S(E - a_n)) / 2
+  // This is much more robust than the direct iteration a_{n+1} = S(E - a_n), which oscillates
+  //  and can fail to converge when |S'(E-a)| is close to or greater than 1.
+  // The averaged iteration has convergence rate 0.5*|1 - S'(E-a*)|, which is typically much
+  //  smaller (e.g., 0.07 vs 0.86 for a typical steep spline).
+  const int max_avg_iters = 25;
+  int niters = 0;
+
+  while( fabs(diff) > tolerance && niters < max_avg_iters )
   {
-    answer -= diff;
+    answer = 0.5 * (answer + check);
     check = eval_cubic_spline( true_energy - answer, spline );
     diff = answer - check;
+    ++niters;
+  }
 
-    // Make sure we wont get stuck oscilating around for some reason.
-    // I havent actually seen this happen, but JIC.
-    if( ++niters > 15 )
-    {
-      const bool initial_is_closer = (fabs(initial_diff) < fabs(diff));
-      const double final_answer = initial_is_closer ? initial_answer : answer;
-      
+  if( fabs(diff) <= tolerance )
+    return answer;
+
+  // Averaged iteration did not converge (can happen if S' < -1, giving a fold in the
+  //  energy mapping); fall back to bisection.
+  double y_min = spline[0].y, y_max = spline[0].y;
+  for( size_t i = 1; i < spline.size(); ++i )
+  {
+    y_min = std::min( y_min, spline[i].y );
+    y_max = std::max( y_max, spline[i].y );
+  }
+
+  const double margin = std::max( (y_max - y_min) * 0.5, 10.0 );
+  double a_lo = y_min - margin;
+  double a_hi = y_max + margin;
+
+  auto f_scalar = [&]( double a ) -> double {
+    return a - eval_cubic_spline( true_energy - a, spline );
+  };
+
+  double f_lo = f_scalar( a_lo );
+  double f_hi = f_scalar( a_hi );
+
+  for( int i = 0; i < 10 && f_lo * f_hi > 0.0; ++i )
+  {
+    const double width = a_hi - a_lo;
+    a_lo -= width;
+    a_hi += width;
+    f_lo = f_scalar( a_lo );
+    f_hi = f_scalar( a_hi );
+  }
+
+  if( f_lo * f_hi > 0.0 )
+  {
 #if( PERFORM_DEVELOPER_CHECKS )
-      stringstream msg;
-      msg << "correction_due_to_dev_pairs( " << true_energy << " keV ): Failed to converge on an answer"
-          << " (current diff=" << diff << "), so returning with "
-          << "(" << (initial_is_closer ? "initial" : "current") << ") diff of " << final_answer << endl;
-      cout << msg.str() << endl;
-      log_developer_error( __func__, msg.str().c_str() );
+    stringstream msg;
+    msg << "correction_due_to_dev_pairs( " << true_energy
+        << " keV ): Could not bracket the root for bisection, diff=" << diff;
+    log_developer_error( __func__, msg.str().c_str() );
 #endif
+    return answer;
+  }
 
-      return final_answer;
-    }//if( niters > 10 )
-  }//while( fabs(diff) > tolerance )
-  
-  //cout << "correction_due_to_dev_pairs: Final answer after " << std::dec << niters
-  //     << " iterations is accruate within " << diff << " keV; for true energy " << true_energy
-  //     << " with result "
-  //     << ((true_energy - answer) + eval_cubic_spline( true_energy - answer, spline ))
-  //     << endl;
-  
-  return answer;
+  // Bisection: 60 iterations gives ~1e-18 relative precision
+  double a_scalar = 0.5 * (a_lo + a_hi);
+  for( int i = 0; i < 60; ++i )
+  {
+    a_scalar = 0.5 * (a_lo + a_hi);
+    const double f_mid = f_scalar( a_scalar );
+
+    if( fabs( f_mid ) < tolerance * 0.01 )
+      break;
+
+    if( f_mid * f_lo < 0.0 )
+    {
+      a_hi = a_scalar;
+      f_hi = f_mid;
+    }
+    else
+    {
+      a_lo = a_scalar;
+      f_lo = f_mid;
+    }
+  }
+
+  return 0.5 * (a_lo + a_hi);
 }//correction_due_to_dev_pairs
   
 
@@ -1334,22 +1366,6 @@ double find_fullrangefraction_channel( const double energy,
   
   if( ncoefs < 2  )
     throw runtime_error( "find_fullrangefraction_channel: must pass in at least two coefficients" );
-  
-  
-  const double lower_energy = fullrangefraction_energy( 0, coeffs, nbin, devpair );
-  if( energy <= lower_energy )
-  {
-    // Extrapolate below the lowest valid energy using just the gain.
-    // FRF: E = C_0 + C_1*(ch/nbin) + ...  -->  ch = (E - E_0) * nbin / C_1
-    return (energy - lower_energy) * nbin / coeffs[1];
-  }
-  
-  const double upper_energy = fullrangefraction_energy( nbin, coeffs, nbin, devpair );
-  if( energy >= upper_energy )
-  {
-    // Extrapolate above the highest valid energy using just the gain.
-    return nbin + (energy - upper_energy) * nbin / coeffs[1];
-  }
   
   if( ncoefs < 4 && devpair.empty() )
   {
