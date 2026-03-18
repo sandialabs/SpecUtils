@@ -22,18 +22,26 @@ endif()
 add_library(specutils_fortran_wrap ${SWIG_CPP_WRAPPER} )
 set_property(TARGET specutils_fortran_wrap PROPERTY POSITION_INDEPENDENT_CODE ON )
 target_compile_options(specutils_fortran_wrap PRIVATE
+  # Alternatively, remove the line‑length limit completely:
+  # $<$<FORTRAN_COMPILER_ID:GNU>:-ffree-line-length-none>
   $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/EHsc>
   $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/EHsc>
 )
 
 add_library(specutils_fortran SHARED ${SWIG_FORTRAN_WRAPPER} )
+target_compile_options(specutils_fortran PUBLIC
+  # gfortran (GNU) – keep warning but don’t treat it as an error
+  -ffree-line-length-none 
+  -ffixed-line-length-200
+  -Wno-error=line-truncation
+)
 target_link_libraries(specutils_fortran_wrap PUBLIC SpecUtils)
 target_link_libraries(specutils_fortran PRIVATE specutils_fortran_wrap)
 
 if( SpecUtils_BUILD_UNIT_TESTS )
   add_library(test_drive testdrive.F90)
-  add_executable(test_specutils_fortran test_specutils_fortran.f90 ${SWIG_FORTRAN_WRAPPER} )
-  target_link_libraries(test_specutils_fortran test_drive specutils_fortran_wrap )
+  add_executable(test_specutils_fortran test_specutils_fortran.f90 )
+  target_link_libraries(test_specutils_fortran PRIVATE test_drive specutils_fortran )
   add_test(NAME test_specutils_fortran COMMAND test_specutils_fortran)
 endif()
 

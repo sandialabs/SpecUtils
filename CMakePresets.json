@@ -63,7 +63,8 @@
                 "SpecUtils_USING_NO_THREADING": "ON",
                 "SpecUtils_FLT_PARSE_METHOD": "FastFloat",
                 "SpecUtils_FETCH_FAST_FLOAT": "ON",
-                "SpecUtils_FORTRAN_SWIG": "ON"
+                "SpecUtils_FORTRAN_SWIG": "ON",
+                "SpecUtils_USE_MSVC_MultiThreadDLL" : "ON"
             },
             "vendor": {
                 "microsoft.com/VisualStudioSettings/CMake/1.0": {
