@@ -266,9 +266,9 @@ TEST_CASE("Round Trip")
             }
         }
 
-        SUBCASE("Writing over existing file fails")
+        SUBCASE("Writing over existing file succeeds")
         {
-            CHECK_THROWS(specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf));
+            specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
         }
     }
 }
@@ -331,4 +331,30 @@ TEST_CASE("Find Source String")
 
         CHECK(actual == expected);
     }
+}
+
+TEST_CASE("Save empty spec-file is OK!")
+{
+    auto fname = "empty.pcf";
+    {
+        SpecUtils::SpecFile specfile;
+        specfile.write_to_file(fname, SpecUtils::SaveSpectrumAsType::Pcf);
+       
+    }
+    SUBCASE("Reading an empty file will fail")
+    {
+        SpecUtils::SpecFile specfile;
+        // line below will emit: caught: First line of PHD file must start with 'BEGIN'
+        auto success = specfile.load_file(fname, SpecUtils::ParserType::Auto);
+        CHECK(!success);
+    }
+
+}
+
+TEST_CASE("Detecor, panel, mca should be valid if not set")
+{
+    SpecUtils::Measurement m;
+    CHECK(m.rpm_panel_number() == 0);
+    CHECK(m.rpm_column_number() == 0);
+    CHECK(m.rpm_mca_number() == 0);
 }
