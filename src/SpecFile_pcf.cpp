@@ -111,7 +111,7 @@ namespace
    */
   int pcf_det_name_to_dev_pair_index(std::string name, int &col, int &panel, int &mca)
   {
-    col = panel = mca = -1;
+    col = panel = mca = 0;
 
     //Note: PCF file specification uses the following definition
       // loop over columns (2 uncompressed, or 4 compressed)  //col 1 is Aa1, col two is Ba1
@@ -664,8 +664,8 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
     assert( (nchannel_file % 64) == 0 );
 #endif
     
-    if( !nchannel_file )
-      throw runtime_error( "No measurements to write to PCF." );
+    //if( !nchannel_file )
+    //  throw runtime_error( "No measurements to write to PCF." );
     
     //We want to put the detector name in the "Title" of the PCF, but only if
     //  there is more than one detector.
@@ -1157,8 +1157,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
     input.seekg( orig_pos, ios::beg );
     const size_t filelen = static_cast<size_t>( 0 + eof_pos - orig_pos );
     
-    if( filelen && (filelen < 512) )
-      throw runtime_error( "File to small" );
+    //if( filelen && (filelen < 512) )
+    //  throw runtime_error( "File to small" );
     
     string fileid, header;
     fileid.resize( 256 );
