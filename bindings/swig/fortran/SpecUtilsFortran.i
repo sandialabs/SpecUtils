@@ -10,17 +10,17 @@
 %}
 
 
-%include "stl.i"
-//%include "std_vector.i"
+%include "std_vector.i"
 
 namespace std {
     %template(FloatVector)  vector<float>;
-    %template(MeasurementVector)  vector<SpecUtils::Measurement>;
 }
 
 %include "std_shared_ptr.i"
-%shared_ptr(vector<SpecUtils::Measurement>)
+
 %shared_ptr(SpecUtils::Measurement)
+%template(MeasurementPtrVector) std::vector<std::shared_ptr<SpecUtils::Measurement>>;  
+
 %shared_ptr(SpecUtils::MeasurementExt)
 %shared_ptr(SpecUtils::EnergyCalibration)
 %shared_ptr(SpecUtils::EnergyCalibrationExt)

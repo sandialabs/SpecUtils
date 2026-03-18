@@ -1472,6 +1472,11 @@ public:
   const std::string &instrument_model() const;
   const std::string &instrument_id() const;
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
+  std::vector< std::shared_ptr<Measurement> > measurements_mutable()
+  {
+    return measurements_;
+  }
+  
   std::shared_ptr<const Measurement> measurement( size_t num ) const;
   std::shared_ptr<const DetectorAnalysis> detectors_analysis() const;
   const std::vector<std::shared_ptr<const MultimediaData>> &multimedia_data() const;

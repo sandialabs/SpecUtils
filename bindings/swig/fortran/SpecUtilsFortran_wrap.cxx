@@ -187,11 +187,9 @@ enum AssignmentType {
 #define SWIG_VERSION 0x040101
 #define SWIGFORTRAN
 #define SWIGPOLICY_std_vector_Sl_float_Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_vector_Sl_SpecUtils_Measurement_Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_shared_ptr_Sl_vector_Sl_SpecUtils_Measurement_Sg__Sg_ swig::ASSIGNMENT_DEFAULT
-#define SWIGPOLICY_std_shared_ptr_Sl_vector_Sl_SpecUtils_Measurement_Sg_const_Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl_SpecUtils_Measurement_Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl_SpecUtils_Measurement_SS_const_Sg_ swig::ASSIGNMENT_DEFAULT
+#define SWIGPOLICY_std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl_SpecUtils_MeasurementExt_Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl_SpecUtils_MeasurementExt_SS_const_Sg_ swig::ASSIGNMENT_DEFAULT
 #define SWIGPOLICY_std_shared_ptr_Sl_SpecUtils_EnergyCalibration_Sg_ swig::ASSIGNMENT_DEFAULT
@@ -277,15 +275,6 @@ template <typename T> T SwigValueInit() {
 #include <SpecUtils/DateTime.h>
 #include <SpecUtils/StringAlgo.h>
 #include <SpecUtils/Filesystem.h>
-
-
-#include <utility>
-
-
-#include <set>
-
-
-#include <string>
 
 
 #include <vector>
@@ -466,53 +455,56 @@ SWIGINTERN void SWIG_free_rvalue(SwigClassWrapper other) {
 }
 
 
-SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__set(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement >::size_type index,SpecUtils::Measurement const &v){
+
+#include <memory>
+
+SWIGINTERN void std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__set(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type index,std::shared_ptr< SpecUtils::Measurement > const &v){
         SWIG_check_range(index, self->size(),
-                         "std::vector<""SpecUtils::Measurement" ">::set",
+                         "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::set",
                          return);
         (*self)[index] = v;
       }
-SWIGINTERN SpecUtils::Measurement const &std_vector_Sl_SpecUtils_Measurement_Sg__get(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement >::size_type index){
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement > const &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__get(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type index){
         SWIG_check_range(index, self->size(),
-                         "std::vector<""SpecUtils::Measurement" ">::get",
+                         "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::get",
                          return self->front());
         return (*self)[index];
       }
-SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__insert(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement >::size_type index,SpecUtils::Measurement const &v){
+SWIGINTERN void std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__insert(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type index,std::shared_ptr< SpecUtils::Measurement > const &v){
         SWIG_check_range(index, self->size() + 1,
-                         "std::vector<""SpecUtils::Measurement" ">::insert",
+                         "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::insert",
                          return);
         self->insert(self->begin() + index, v);
       }
-SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__erase__SWIG_0(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement >::size_type index){
+SWIGINTERN void std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__erase__SWIG_0(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type index){
         SWIG_check_range(index, self->size(),
-                         "std::vector<""SpecUtils::Measurement" ">::remove",
+                         "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::remove",
                          return);
         self->erase(self->begin() + index);
       }
-SWIGINTERN void std_vector_Sl_SpecUtils_Measurement_Sg__erase__SWIG_1(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement >::size_type start_index,std::vector< SpecUtils::Measurement >::size_type stop_index){
+SWIGINTERN void std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__erase__SWIG_1(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type start_index,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type stop_index){
         SWIG_check_range(start_index, stop_index + 1,
-                         "std::vector<""SpecUtils::Measurement" ">::remove_range",
+                         "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::remove_range",
                          return);
         SWIG_check_range(stop_index, self->size() + 1,
-                         "std::vector<""SpecUtils::Measurement" ">::remove_range",
+                         "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::remove_range",
                          return);
         self->erase(self->begin() + start_index, self->begin() + stop_index);
       }
-SWIGINTERN SpecUtils::Measurement &std_vector_Sl_SpecUtils_Measurement_Sg__front_ref(std::vector< SpecUtils::Measurement > *self){
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement > &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__front_ref(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self){
       return (*self).front();
     }
-SWIGINTERN SpecUtils::Measurement &std_vector_Sl_SpecUtils_Measurement_Sg__back_ref(std::vector< SpecUtils::Measurement > *self){
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement > &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__back_ref(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self){
       return (*self).back();
     }
-SWIGINTERN SpecUtils::Measurement &std_vector_Sl_SpecUtils_Measurement_Sg__get_ref(std::vector< SpecUtils::Measurement > *self,std::vector< SpecUtils::Measurement >::size_type index){
+SWIGINTERN std::shared_ptr< SpecUtils::Measurement > &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__get_ref(std::vector< std::shared_ptr< SpecUtils::Measurement > > *self,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type index){
       SWIG_check_range(index, self->size(),
-                       "std::vector<""SpecUtils::Measurement" ">::get_ref",
+                       "std::vector<""std::shared_ptr< SpecUtils::Measurement >" ">::get_ref",
                        return self->front());
       return (*self)[index];
     }
 
-#include <memory>
+#include <string>
 
 
 #include <stdlib.h>
@@ -625,6 +617,9 @@ SWIGINTERN int SpecUtils_SpecFile_get_max_channel_count(SpecUtils::SpecFile *sel
 
         return maxCount;            
     }
+
+#include <utility>
+
 SWIGINTERN void std_vector_Sl_std_pair_Sl_float_Sc_float_Sg__Sg__set(std::vector< std::pair< float,float > > *self,std::vector< std::pair< float,float > >::size_type index,std::pair< float,float > const &v){
         SWIG_check_range(index, self->size(),
                          "std::vector<""std::pair< float,float >" ">::set",
@@ -988,320 +983,320 @@ SWIGEXPORT void _wrap_FloatVector_op_assign__(SwigClassWrapper *farg1, SwigClass
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementVector__SWIG_0() {
+SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementPtrVector__SWIG_0() {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *result = 0 ;
   
-  result = (std::vector< SpecUtils::Measurement > *)new std::vector< SpecUtils::Measurement >();
+  result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)new std::vector< std::shared_ptr< SpecUtils::Measurement > >();
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementVector__SWIG_1(SwigClassWrapper *farg1) {
+SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementPtrVector__SWIG_1(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = 0 ;
-  std::vector< SpecUtils::Measurement > *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > const &", "MeasurementVector", "std::vector< SpecUtils::Measurement >::vector(std::vector< SpecUtils::Measurement > const &)", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = (std::vector< SpecUtils::Measurement > *)new std::vector< SpecUtils::Measurement >((std::vector< SpecUtils::Measurement > const &)*arg1);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > const &", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::vector(std::vector< std::shared_ptr< SpecUtils::Measurement > > const &)", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)new std::vector< std::shared_ptr< SpecUtils::Measurement > >((std::vector< std::shared_ptr< SpecUtils::Measurement > > const &)*arg1);
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementVector__SWIG_2(size_t const *farg1) {
+SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementPtrVector__SWIG_2(size_t const *farg1) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement >::size_type arg1 ;
-  std::vector< SpecUtils::Measurement > *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg1 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *result = 0 ;
   
-  arg1 = (std::vector< SpecUtils::Measurement >::size_type)(*farg1);
-  result = (std::vector< SpecUtils::Measurement > *)new std::vector< SpecUtils::Measurement >(arg1);
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(*farg1);
+  result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)new std::vector< std::shared_ptr< SpecUtils::Measurement > >(arg1);
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementVector__SWIG_3(size_t const *farg1, SwigClassWrapper *farg2) {
+SWIGEXPORT SwigClassWrapper _wrap_new_MeasurementPtrVector__SWIG_3(size_t const *farg1, SwigClassWrapper const *farg2) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement >::size_type arg1 ;
-  SpecUtils::Measurement *arg2 = 0 ;
-  std::vector< SpecUtils::Measurement > *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg1 ;
+  std::shared_ptr< SpecUtils::Measurement > *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > tempnull2 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *result = 0 ;
   
-  arg1 = (std::vector< SpecUtils::Measurement >::size_type)(*farg1);
-  SWIG_check_nonnull(farg2->cptr, "SpecUtils::Measurement const &", "Measurement", "std::vector< SpecUtils::Measurement >::vector(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return SwigClassWrapper_uninitialized());
-  arg2 = (SpecUtils::Measurement *)farg2->cptr;
-  result = (std::vector< SpecUtils::Measurement > *)new std::vector< SpecUtils::Measurement >(arg1,(SpecUtils::Measurement const &)*arg2);
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(*farg1);
+  arg2 = farg2->cptr ? static_cast<std::shared_ptr< SpecUtils::Measurement > * >(farg2->cptr) : &tempnull2;
+  result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)new std::vector< std::shared_ptr< SpecUtils::Measurement > >(arg1,(std::shared_ptr< SpecUtils::Measurement > const &)*arg2);
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (1 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 
 
-SWIGEXPORT size_t _wrap_MeasurementVector_size(SwigClassWrapper *farg1) {
+SWIGEXPORT size_t _wrap_MeasurementPtrVector_size(SwigClassWrapper *farg1) {
   size_t fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type result;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type result;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > const *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::size() const", return 0);
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = ((std::vector< SpecUtils::Measurement > const *)arg1)->size();
-  fresult = (std::vector< SpecUtils::Measurement >::size_type)(result);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > const *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::size() const", return 0);
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = ((std::vector< std::shared_ptr< SpecUtils::Measurement > > const *)arg1)->size();
+  fresult = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(result);
   return fresult;
 }
 
 
-SWIGEXPORT size_t _wrap_MeasurementVector_capacity(SwigClassWrapper *farg1) {
+SWIGEXPORT size_t _wrap_MeasurementPtrVector_capacity(SwigClassWrapper *farg1) {
   size_t fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type result;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type result;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > const *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::capacity() const", return 0);
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = ((std::vector< SpecUtils::Measurement > const *)arg1)->capacity();
-  fresult = (std::vector< SpecUtils::Measurement >::size_type)(result);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > const *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::capacity() const", return 0);
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = ((std::vector< std::shared_ptr< SpecUtils::Measurement > > const *)arg1)->capacity();
+  fresult = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(result);
   return fresult;
 }
 
 
-SWIGEXPORT int _wrap_MeasurementVector_empty(SwigClassWrapper *farg1) {
+SWIGEXPORT int _wrap_MeasurementPtrVector_empty(SwigClassWrapper *farg1) {
   int fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > const *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::empty() const", return 0);
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = (bool)((std::vector< SpecUtils::Measurement > const *)arg1)->empty();
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > const *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::empty() const", return 0);
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = (bool)((std::vector< std::shared_ptr< SpecUtils::Measurement > > const *)arg1)->empty();
   fresult = (result ? 1 : 0);
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_MeasurementVector_front(SwigClassWrapper *farg1) {
+SWIGEXPORT SwigClassWrapper _wrap_MeasurementPtrVector_front(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  SpecUtils::Measurement *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > const *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::front() const", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = (SpecUtils::Measurement *) &((std::vector< SpecUtils::Measurement > const *)arg1)->front();
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > const *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::front() const", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = (std::shared_ptr< SpecUtils::Measurement > *) &((std::vector< std::shared_ptr< SpecUtils::Measurement > > const *)arg1)->front();
+  fresult.cptr = *result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_MeasurementVector_back(SwigClassWrapper *farg1) {
+SWIGEXPORT SwigClassWrapper _wrap_MeasurementPtrVector_back(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  SpecUtils::Measurement *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > const *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::back() const", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = (SpecUtils::Measurement *) &((std::vector< SpecUtils::Measurement > const *)arg1)->back();
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > const *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::back() const", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = (std::shared_ptr< SpecUtils::Measurement > *) &((std::vector< std::shared_ptr< SpecUtils::Measurement > > const *)arg1)->back();
+  fresult.cptr = *result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_reserve(SwigClassWrapper *farg1, size_t const *farg2) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_reserve(SwigClassWrapper *farg1, size_t const *farg2) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::reserve(std::vector< SpecUtils::Measurement >::size_type)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  arg2 = (std::vector< SpecUtils::Measurement >::size_type)(*farg2);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::reserve(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  arg2 = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(*farg2);
   (arg1)->reserve(arg2);
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_resize__SWIG_0(SwigClassWrapper *farg1, size_t const *farg2) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_resize__SWIG_0(SwigClassWrapper *farg1, size_t const *farg2) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::resize(std::vector< SpecUtils::Measurement >::size_type)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  arg2 = (std::vector< SpecUtils::Measurement >::size_type)(*farg2);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::resize(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  arg2 = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(*farg2);
   (arg1)->resize(arg2);
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_resize__SWIG_1(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
-  SpecUtils::Measurement *arg3 = 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_resize__SWIG_1(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper const *farg3) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *arg3 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > tempnull3 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::resize(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  arg2 = (std::vector< SpecUtils::Measurement >::size_type)(*farg2);
-  SWIG_check_nonnull(farg3->cptr, "SpecUtils::Measurement const &", "Measurement", "std::vector< SpecUtils::Measurement >::resize(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return );
-  arg3 = (SpecUtils::Measurement *)farg3->cptr;
-  (arg1)->resize(arg2,(SpecUtils::Measurement const &)*arg3);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::resize(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type,std::shared_ptr< SpecUtils::Measurement > const &)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  arg2 = (std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)(*farg2);
+  arg3 = farg3->cptr ? static_cast<std::shared_ptr< SpecUtils::Measurement > * >(farg3->cptr) : &tempnull3;
+  (arg1)->resize(arg2,(std::shared_ptr< SpecUtils::Measurement > const &)*arg3);
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_push_back(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  SpecUtils::Measurement *arg2 = 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_push_back(SwigClassWrapper *farg1, SwigClassWrapper const *farg2) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *arg2 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > tempnull2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::push_back(SpecUtils::Measurement const &)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "SpecUtils::Measurement const &", "Measurement", "std::vector< SpecUtils::Measurement >::push_back(SpecUtils::Measurement const &)", return );
-  arg2 = (SpecUtils::Measurement *)farg2->cptr;
-  (arg1)->push_back((SpecUtils::Measurement const &)*arg2);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::push_back(std::shared_ptr< SpecUtils::Measurement > const &)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  arg2 = farg2->cptr ? static_cast<std::shared_ptr< SpecUtils::Measurement > * >(farg2->cptr) : &tempnull2;
+  (arg1)->push_back((std::shared_ptr< SpecUtils::Measurement > const &)*arg2);
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_pop_back(SwigClassWrapper *farg1) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_pop_back(SwigClassWrapper *farg1) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::pop_back()", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::pop_back()", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   (arg1)->pop_back();
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_clear(SwigClassWrapper *farg1) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_clear(SwigClassWrapper *farg1) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::clear()", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::clear()", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   (arg1)->clear();
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_set(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
-  SpecUtils::Measurement *arg3 = 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_set(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper const *farg3) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *arg3 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > tempnull3 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::set(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::set(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type,std::shared_ptr< SpecUtils::Measurement > const &)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   arg2 = *farg2 - 1;
-  SWIG_check_nonnull(farg3->cptr, "SpecUtils::Measurement const &", "Measurement", "std::vector< SpecUtils::Measurement >::set(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return );
-  arg3 = (SpecUtils::Measurement *)farg3->cptr;
-  std_vector_Sl_SpecUtils_Measurement_Sg__set(arg1,SWIG_STD_MOVE(arg2),(SpecUtils::Measurement const &)*arg3);
+  arg3 = farg3->cptr ? static_cast<std::shared_ptr< SpecUtils::Measurement > * >(farg3->cptr) : &tempnull3;
+  std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__set(arg1,SWIG_STD_MOVE(arg2),(std::shared_ptr< SpecUtils::Measurement > const &)*arg3);
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_MeasurementVector_get(SwigClassWrapper *farg1, size_t const *farg2) {
+SWIGEXPORT SwigClassWrapper _wrap_MeasurementPtrVector_get(SwigClassWrapper *farg1, size_t const *farg2) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
-  SpecUtils::Measurement *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::get(std::vector< SpecUtils::Measurement >::size_type)", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::get(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   arg2 = *farg2 - 1;
-  result = (SpecUtils::Measurement *) &std_vector_Sl_SpecUtils_Measurement_Sg__get(arg1,SWIG_STD_MOVE(arg2));
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  result = (std::shared_ptr< SpecUtils::Measurement > *) &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__get(arg1,SWIG_STD_MOVE(arg2));
+  fresult.cptr = *result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_insert(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper *farg3) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
-  SpecUtils::Measurement *arg3 = 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_insert(SwigClassWrapper *farg1, size_t const *farg2, SwigClassWrapper const *farg3) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *arg3 = 0 ;
+  std::shared_ptr< SpecUtils::Measurement > tempnull3 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::insert(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::insert(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type,std::shared_ptr< SpecUtils::Measurement > const &)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   arg2 = *farg2 - 1;
-  SWIG_check_nonnull(farg3->cptr, "SpecUtils::Measurement const &", "Measurement", "std::vector< SpecUtils::Measurement >::insert(std::vector< SpecUtils::Measurement >::size_type,SpecUtils::Measurement const &)", return );
-  arg3 = (SpecUtils::Measurement *)farg3->cptr;
-  std_vector_Sl_SpecUtils_Measurement_Sg__insert(arg1,SWIG_STD_MOVE(arg2),(SpecUtils::Measurement const &)*arg3);
+  arg3 = farg3->cptr ? static_cast<std::shared_ptr< SpecUtils::Measurement > * >(farg3->cptr) : &tempnull3;
+  std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__insert(arg1,SWIG_STD_MOVE(arg2),(std::shared_ptr< SpecUtils::Measurement > const &)*arg3);
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_erase__SWIG_0(SwigClassWrapper *farg1, size_t const *farg2) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_erase__SWIG_0(SwigClassWrapper *farg1, size_t const *farg2) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::erase(std::vector< SpecUtils::Measurement >::size_type)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::erase(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   arg2 = *farg2 - 1;
-  std_vector_Sl_SpecUtils_Measurement_Sg__erase__SWIG_0(arg1,SWIG_STD_MOVE(arg2));
+  std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__erase__SWIG_0(arg1,SWIG_STD_MOVE(arg2));
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_erase__SWIG_1(SwigClassWrapper *farg1, size_t const *farg2, size_t const *farg3) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
-  std::vector< SpecUtils::Measurement >::size_type arg3 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_erase__SWIG_1(SwigClassWrapper *farg1, size_t const *farg2, size_t const *farg3) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg3 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::erase(std::vector< SpecUtils::Measurement >::size_type,std::vector< SpecUtils::Measurement >::size_type)", return );
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::erase(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type,std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)", return );
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   arg2 = *farg2 - 1;
   arg3 = *farg3 - 1;
-  std_vector_Sl_SpecUtils_Measurement_Sg__erase__SWIG_1(arg1,SWIG_STD_MOVE(arg2),SWIG_STD_MOVE(arg3));
+  std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__erase__SWIG_1(arg1,SWIG_STD_MOVE(arg2),SWIG_STD_MOVE(arg3));
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_MeasurementVector_front_ref(SwigClassWrapper *farg1) {
+SWIGEXPORT SwigClassWrapper _wrap_MeasurementPtrVector_front_ref(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  SpecUtils::Measurement *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::front_ref()", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = (SpecUtils::Measurement *) &std_vector_Sl_SpecUtils_Measurement_Sg__front_ref(arg1);
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::front_ref()", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = (std::shared_ptr< SpecUtils::Measurement > *) &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__front_ref(arg1);
+  fresult.cptr = *result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_MeasurementVector_back_ref(SwigClassWrapper *farg1) {
+SWIGEXPORT SwigClassWrapper _wrap_MeasurementPtrVector_back_ref(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  SpecUtils::Measurement *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::back_ref()", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
-  result = (SpecUtils::Measurement *) &std_vector_Sl_SpecUtils_Measurement_Sg__back_ref(arg1);
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::back_ref()", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
+  result = (std::shared_ptr< SpecUtils::Measurement > *) &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__back_ref(arg1);
+  fresult.cptr = *result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
-SWIGEXPORT SwigClassWrapper _wrap_MeasurementVector_get_ref(SwigClassWrapper *farg1, size_t const *farg2) {
+SWIGEXPORT SwigClassWrapper _wrap_MeasurementPtrVector_get_ref(SwigClassWrapper *farg1, size_t const *farg2) {
   SwigClassWrapper fresult ;
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement >::size_type arg2 ;
-  SpecUtils::Measurement *result = 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *result = 0 ;
   
-  SWIG_check_nonnull(farg1->cptr, "std::vector< SpecUtils::Measurement > *", "MeasurementVector", "std::vector< SpecUtils::Measurement >::get_ref(std::vector< SpecUtils::Measurement >::size_type)", return SwigClassWrapper_uninitialized());
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  SWIG_check_nonnull(farg1->cptr, "std::vector< std::shared_ptr< SpecUtils::Measurement > > *", "MeasurementPtrVector", "std::vector< std::shared_ptr< SpecUtils::Measurement > >::get_ref(std::vector< std::shared_ptr< SpecUtils::Measurement > >::size_type)", return SwigClassWrapper_uninitialized());
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   arg2 = *farg2 - 1;
-  result = (SpecUtils::Measurement *) &std_vector_Sl_SpecUtils_Measurement_Sg__get_ref(arg1,SWIG_STD_MOVE(arg2));
-  fresult.cptr = (void*)result;
-  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  result = (std::shared_ptr< SpecUtils::Measurement > *) &std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg__get_ref(arg1,SWIG_STD_MOVE(arg2));
+  fresult.cptr = *result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(*result))) : NULL;
+  fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
 }
 
 
-SWIGEXPORT void _wrap_delete_MeasurementVector(SwigClassWrapper *farg1) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
+SWIGEXPORT void _wrap_delete_MeasurementPtrVector(SwigClassWrapper *farg1) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
   
-  arg1 = (std::vector< SpecUtils::Measurement > *)farg1->cptr;
+  arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *)farg1->cptr;
   delete arg1;
 }
 
 
-SWIGEXPORT void _wrap_MeasurementVector_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
-  std::vector< SpecUtils::Measurement > *arg1 = (std::vector< SpecUtils::Measurement > *) 0 ;
-  std::vector< SpecUtils::Measurement > *arg2 = 0 ;
+SWIGEXPORT void _wrap_MeasurementPtrVector_op_assign__(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg1 = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *arg2 = 0 ;
   
   (void)sizeof(arg1);
   (void)sizeof(arg2);
-  SWIG_assign<std::vector< SpecUtils::Measurement >, SWIGPOLICY_std_vector_Sl_SpecUtils_Measurement_Sg_>(farg1, *farg2);
+  SWIG_assign<std::vector< std::shared_ptr< SpecUtils::Measurement > >, SWIGPOLICY_std_vector_Sl_std_shared_ptr_Sl_SpecUtils_Measurement_Sg__Sg_>(farg1, *farg2);
   
 }
 
@@ -3212,11 +3207,11 @@ SWIGEXPORT SwigArrayWrapper _wrap_SpecFile_measurement_operator(SwigClassWrapper
 SWIGEXPORT SwigClassWrapper _wrap_SpecFile_sample_numbers(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::set< int,std::less< int >,std::allocator< int > > *result = 0 ;
+  std::set< int > *result = 0 ;
   
   SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::sample_numbers() const", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  result = (std::set< int,std::less< int >,std::allocator< int > > *) &((SpecUtils::SpecFile const *)arg1)->sample_numbers();
+  result = (std::set< int > *) &((SpecUtils::SpecFile const *)arg1)->sample_numbers();
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
   return fresult;
@@ -3334,6 +3329,20 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurements(SwigClassWrapper *farg1)
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   result = ((SpecUtils::SpecFile const *)arg1)->measurements();
   fresult.cptr = new (std::vector< std::shared_ptr< SpecUtils::Measurement const > >)(result);
+  fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurements_mutable(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::measurements_mutable()", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  result = (arg1)->measurements_mutable();
+  fresult.cptr = new (std::vector< std::shared_ptr< SpecUtils::Measurement > >)(result);
   fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
   return fresult;
 }
@@ -3934,17 +3943,17 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurement__SWIG_2(SwigClassWrapper 
 SWIGEXPORT SwigClassWrapper _wrap_SpecFile_suggested_sum_energy_calibration(SwigClassWrapper *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg2 = 0 ;
+  std::set< int > *arg2 = 0 ;
   std::vector< std::string > *arg3 = 0 ;
   std::shared_ptr< SpecUtils::EnergyCalibration const > result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::suggested_sum_energy_calibration(std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::suggested_sum_energy_calibration(std::set< int > const &,std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::suggested_sum_energy_calibration(std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
-  arg2 = (std::set< int,std::less< int >,std::allocator< int > > *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::suggested_sum_energy_calibration(std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
+  SWIG_check_nonnull(farg2->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::suggested_sum_energy_calibration(std::set< int > const &,std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
+  arg2 = (std::set< int > *)farg2->cptr;
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::suggested_sum_energy_calibration(std::set< int > const &,std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
   arg3 = (std::vector< std::string > *)farg3->cptr;
-  result = ((SpecUtils::SpecFile const *)arg1)->suggested_sum_energy_calibration((std::set< int,std::less< int >,std::allocator< int > > const &)*arg2,(std::vector< std::string > const &)*arg3);
+  result = ((SpecUtils::SpecFile const *)arg1)->suggested_sum_energy_calibration((std::set< int > const &)*arg2,(std::vector< std::string > const &)*arg3);
   fresult.cptr = result ? (new std::shared_ptr<const SpecUtils::EnergyCalibration >(static_cast< const std::shared_ptr<const SpecUtils::EnergyCalibration >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
@@ -3954,19 +3963,19 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_suggested_sum_energy_calibration(Swig
 SWIGEXPORT SwigClassWrapper _wrap_SpecFile_sum_measurements(SwigClassWrapper *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper const *farg4) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg2 = 0 ;
+  std::set< int > *arg2 = 0 ;
   std::vector< std::string > *arg3 = 0 ;
   std::shared_ptr< SpecUtils::EnergyCalibration const > arg4 ;
   std::shared_ptr< SpecUtils::Measurement > result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::sum_measurements(std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &,std::shared_ptr< SpecUtils::EnergyCalibration const >) const", return SwigClassWrapper_uninitialized());
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::sum_measurements(std::set< int > const &,std::vector< std::string > const &,std::shared_ptr< SpecUtils::EnergyCalibration const >) const", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::sum_measurements(std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &,std::shared_ptr< SpecUtils::EnergyCalibration const >) const", return SwigClassWrapper_uninitialized());
-  arg2 = (std::set< int,std::less< int >,std::allocator< int > > *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::sum_measurements(std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &,std::shared_ptr< SpecUtils::EnergyCalibration const >) const", return SwigClassWrapper_uninitialized());
+  SWIG_check_nonnull(farg2->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::sum_measurements(std::set< int > const &,std::vector< std::string > const &,std::shared_ptr< SpecUtils::EnergyCalibration const >) const", return SwigClassWrapper_uninitialized());
+  arg2 = (std::set< int > *)farg2->cptr;
+  SWIG_check_nonnull(farg3->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::sum_measurements(std::set< int > const &,std::vector< std::string > const &,std::shared_ptr< SpecUtils::EnergyCalibration const >) const", return SwigClassWrapper_uninitialized());
   arg3 = (std::vector< std::string > *)farg3->cptr;
   if (farg4->cptr) arg4 = *static_cast<std::shared_ptr<const SpecUtils::EnergyCalibration >*>(farg4->cptr);
-  result = ((SpecUtils::SpecFile const *)arg1)->sum_measurements((std::set< int,std::less< int >,std::allocator< int > > const &)*arg2,(std::vector< std::string > const &)*arg3,arg4);
+  result = ((SpecUtils::SpecFile const *)arg1)->sum_measurements((std::set< int > const &)*arg2,(std::vector< std::string > const &)*arg3,arg4);
   fresult.cptr = result ? (new std::shared_ptr< SpecUtils::Measurement >(static_cast< const std::shared_ptr< SpecUtils::Measurement >& >(result))) : NULL;
   fresult.cmemflags = SWIG_MEM_OWN | SWIG_MEM_RVALUE;
   return fresult;
@@ -3989,12 +3998,12 @@ SWIGEXPORT int _wrap_SpecFile_memmorysize(SwigClassWrapper *farg1) {
 SWIGEXPORT SwigClassWrapper _wrap_SpecFile_gamma_channel_counts(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  SwigValueWrapper< std::set< size_t,std::less< size_t >,std::allocator< size_t > > > result;
+  std::set< size_t > result;
   
   SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::gamma_channel_counts() const", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   result = ((SpecUtils::SpecFile const *)arg1)->gamma_channel_counts();
-  fresult.cptr = new (std::set< size_t,std::less< size_t >,std::allocator< size_t > >)(result);
+  fresult.cptr = new (std::set< size_t >)(result);
   fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
   return fresult;
 }
@@ -4044,12 +4053,12 @@ SWIGEXPORT int _wrap_SpecFile_contained_neutron(SwigClassWrapper *farg1) {
 SWIGEXPORT SwigClassWrapper _wrap_SpecFile_energy_cal_variants(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  SwigValueWrapper< std::set< std::string,std::less< std::string >,std::allocator< std::string > > > result;
+  SwigValueWrapper< std::set< std::string > > result;
   
   SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::energy_cal_variants() const", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   result = ((SpecUtils::SpecFile const *)arg1)->energy_cal_variants();
-  fresult.cptr = new (std::set< std::string,std::less< std::string >,std::allocator< std::string > >)(result);
+  fresult.cptr = new (std::set< std::string >)(result);
   fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
   return fresult;
 }
@@ -4058,14 +4067,14 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_energy_cal_variants(SwigClassWrapper 
 SWIGEXPORT int _wrap_SpecFile_keep_energy_cal_variants(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::set< std::string,std::less< std::string >,std::allocator< std::string > > *arg2 = 0 ;
+  std::set< std::string > *arg2 = 0 ;
   size_t result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::keep_energy_cal_variants(std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &)", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::keep_energy_cal_variants(std::set< std::string > const &)", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &", "SWIGTYPE_p_std__setT_std__string_std__lessT_std__string_t1Q4VKZ", "SpecUtils::SpecFile::keep_energy_cal_variants(std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &)", return 0);
-  arg2 = (std::set< std::string,std::less< std::string >,std::allocator< std::string > > *)farg2->cptr;
-  result = (arg1)->keep_energy_cal_variants((std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &)*arg2);
+  SWIG_check_nonnull(farg2->cptr, "std::set< std::string > const &", "SWIGTYPE_p_std__setT_std__string_t", "SpecUtils::SpecFile::keep_energy_cal_variants(std::set< std::string > const &)", return 0);
+  arg2 = (std::set< std::string > *)farg2->cptr;
+  result = (arg1)->keep_energy_cal_variants((std::set< std::string > const &)*arg2);
   fresult = (size_t)(result);
   return fresult;
 }
@@ -4089,14 +4098,14 @@ SWIGEXPORT int _wrap_SpecFile_keep_derived_data_variant(SwigClassWrapper *farg1,
 SWIGEXPORT int _wrap_SpecFile_remove_detectors_data(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::set< std::string,std::less< std::string >,std::allocator< std::string > > *arg2 = 0 ;
+  std::set< std::string > *arg2 = 0 ;
   size_t result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::remove_detectors_data(std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &)", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::remove_detectors_data(std::set< std::string > const &)", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &", "SWIGTYPE_p_std__setT_std__string_std__lessT_std__string_t1Q4VKZ", "SpecUtils::SpecFile::remove_detectors_data(std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &)", return 0);
-  arg2 = (std::set< std::string,std::less< std::string >,std::allocator< std::string > > *)farg2->cptr;
-  result = (arg1)->remove_detectors_data((std::set< std::string,std::less< std::string >,std::allocator< std::string > > const &)*arg2);
+  SWIG_check_nonnull(farg2->cptr, "std::set< std::string > const &", "SWIGTYPE_p_std__setT_std__string_t", "SpecUtils::SpecFile::remove_detectors_data(std::set< std::string > const &)", return 0);
+  arg2 = (std::set< std::string > *)farg2->cptr;
+  result = (arg1)->remove_detectors_data((std::set< std::string > const &)*arg2);
   fresult = (size_t)(result);
   return fresult;
 }
@@ -5130,14 +5139,14 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_detector_names_to_numbers(SwigClassWr
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::vector< std::string > *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > result;
+  std::set< int > result;
   
   SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::detector_names_to_numbers(std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   SWIG_check_nonnull(farg2->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::detector_names_to_numbers(std::vector< std::string > const &) const", return SwigClassWrapper_uninitialized());
   arg2 = (std::vector< std::string > *)farg2->cptr;
   result = ((SpecUtils::SpecFile const *)arg1)->detector_names_to_numbers((std::vector< std::string > const &)*arg2);
-  fresult.cptr = new (std::set< int,std::less< int >,std::allocator< int > >)(result);
+  fresult.cptr = new (std::set< int >)(result);
   fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
   return fresult;
 }
@@ -5159,17 +5168,17 @@ SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_0(SwigClassWrapper *farg1, Sw
 SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_1(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string arg2 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg4 ;
+  std::set< int > arg3 ;
+  std::set< int > arg4 ;
   SpecUtils::SaveSpectrumAsType arg5 ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_to_file(std::string const,std::set< int,std::less< int >,std::allocator< int > > const,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_to_file(std::string const,std::set< int > const,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   (&arg2)->assign(static_cast<char *>(farg2->data), farg2->size);
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_to_file(std::string const,std::set< int,std::less< int >,std::allocator< int > > const,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_to_file(std::string const,std::set< int,std::less< int >,std::allocator< int > > const,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
-  arg4 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg4->cptr));
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_to_file(std::string const,std::set< int > const,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_to_file(std::string const,std::set< int > const,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  arg4 = *((std::set< int > *)(farg4->cptr));
   arg5 = (SpecUtils::SaveSpectrumAsType)(*farg5);
   ((SpecUtils::SpecFile const *)arg1)->write_to_file(arg2,arg3,arg4,arg5);
 }
@@ -5197,39 +5206,39 @@ SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_2(SwigClassWrapper *farg1, Sw
 SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_3(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string *arg2 = 0 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg3 = 0 ;
+  std::set< int > *arg3 = 0 ;
   std::vector< std::string > *arg4 = 0 ;
   SpecUtils::SaveSpectrumAsType arg5 ;
   std::string tempstr2 ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_to_file(std::string const &,std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_to_file(std::string const &,std::set< int > const &,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
   arg2 = &tempstr2;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_to_file(std::string const &,std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
-  arg3 = (std::set< int,std::less< int >,std::allocator< int > > *)farg3->cptr;
-  SWIG_check_nonnull(farg4->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::write_to_file(std::string const &,std::set< int,std::less< int >,std::allocator< int > > const &,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg3->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_to_file(std::string const &,std::set< int > const &,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  arg3 = (std::set< int > *)farg3->cptr;
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::write_to_file(std::string const &,std::set< int > const &,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
   arg4 = (std::vector< std::string > *)farg4->cptr;
   arg5 = (SpecUtils::SaveSpectrumAsType)(*farg5);
-  ((SpecUtils::SpecFile const *)arg1)->write_to_file((std::string const &)*arg2,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg3,(std::vector< std::string > const &)*arg4,arg5);
+  ((SpecUtils::SpecFile const *)arg1)->write_to_file((std::string const &)*arg2,(std::set< int > const &)*arg3,(std::vector< std::string > const &)*arg4,arg5);
 }
 
 
 SWIGEXPORT void _wrap_SpecFile_write__SWIG_0(SwigClassWrapper *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg4 ;
+  std::set< int > arg3 ;
+  std::set< int > arg4 ;
   SpecUtils::SaveSpectrumAsType arg5 ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const,SpecUtils::SaveSpectrumAsType const) const", return );
-  arg4 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg4->cptr));
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::set< int > const,SpecUtils::SaveSpectrumAsType const) const", return );
+  arg4 = *((std::set< int > *)(farg4->cptr));
   arg5 = (SpecUtils::SaveSpectrumAsType)(*farg5);
   ((SpecUtils::SpecFile const *)arg1)->write(*arg2,arg3,arg4,arg5);
 }
@@ -5238,17 +5247,17 @@ SWIGEXPORT void _wrap_SpecFile_write__SWIG_0(SwigClassWrapper *farg1, SwigClassW
 SWIGEXPORT void _wrap_SpecFile_write__SWIG_1(SwigClassWrapper *farg1, SwigClassWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
+  std::set< int > arg3 ;
   std::vector< std::string > *arg4 = 0 ;
   SpecUtils::SaveSpectrumAsType arg5 ;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::write(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::write(std::ostream &,std::set< int >,std::vector< std::string > const &,SpecUtils::SaveSpectrumAsType const) const", return );
   arg4 = (std::vector< std::string > *)farg4->cptr;
   arg5 = (SpecUtils::SaveSpectrumAsType)(*farg5);
   ((SpecUtils::SpecFile const *)arg1)->write(*arg2,arg3,(std::vector< std::string > const &)*arg4,arg5);
@@ -5323,19 +5332,19 @@ SWIGEXPORT int _wrap_SpecFile_write_integer_chn__SWIG_0(SwigClassWrapper *farg1,
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg4 = 0 ;
+  std::set< int > arg3 ;
+  std::set< int > *arg4 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg4 = (std::set< int,std::less< int >,std::allocator< int > > *)farg4->cptr;
-  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_integer_chn(*arg2,arg3,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg4);
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg4 = (std::set< int > *)farg4->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_integer_chn(*arg2,arg3,(std::set< int > const &)*arg4);
   fresult = (result ? 1 : 0);
   return fresult;
 }
@@ -5345,17 +5354,17 @@ SWIGEXPORT int _wrap_SpecFile_write_integer_chn__SWIG_1(SwigClassWrapper *farg1,
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
+  std::set< int > arg3 ;
   std::vector< std::string > *arg4 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::vector< std::string > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::vector< std::string > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &) const", return 0);
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::vector< std::string > const &) const", return 0);
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::vector< std::string > const &) const", return 0);
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::vector< std::string > const &", "SWIGTYPE_p_std__vectorT_std__string_t", "SpecUtils::SpecFile::write_integer_chn(std::ostream &,std::set< int >,std::vector< std::string > const &) const", return 0);
   arg4 = (std::vector< std::string > *)farg4->cptr;
   result = (bool)((SpecUtils::SpecFile const *)arg1)->write_integer_chn(*arg2,arg3,(std::vector< std::string > const &)*arg4);
   fresult = (result ? 1 : 0);
@@ -5368,20 +5377,20 @@ SWIGEXPORT int _wrap_SpecFile_write_binary_spc(SwigClassWrapper *farg1, SwigClas
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
   SpecUtils::SpecFile::SpcBinaryType arg3 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg4 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg5 = 0 ;
+  std::set< int > arg4 ;
+  std::set< int > *arg5 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int >,std::set< int > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int >,std::set< int > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
   arg3 = (SpecUtils::SpecFile::SpcBinaryType)(*farg3);
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg4 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg4->cptr));
-  SWIG_check_nonnull(farg5->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg5 = (std::set< int,std::less< int >,std::allocator< int > > *)farg5->cptr;
-  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_binary_spc(*arg2,arg3,arg4,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg5);
+  SWIG_check_nonnull(farg4->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int >,std::set< int > const &) const", return 0);
+  arg4 = *((std::set< int > *)(farg4->cptr));
+  SWIG_check_nonnull(farg5->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_binary_spc(std::ostream &,SpecUtils::SpecFile::SpcBinaryType const,std::set< int >,std::set< int > const &) const", return 0);
+  arg5 = (std::set< int > *)farg5->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_binary_spc(*arg2,arg3,arg4,(std::set< int > const &)*arg5);
   fresult = (result ? 1 : 0);
   return fresult;
 }
@@ -5391,19 +5400,19 @@ SWIGEXPORT int _wrap_SpecFile_write_ascii_spc(SwigClassWrapper *farg1, SwigClass
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg4 = 0 ;
+  std::set< int > arg3 ;
+  std::set< int > *arg4 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg4 = (std::set< int,std::less< int >,std::allocator< int > > *)farg4->cptr;
-  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_ascii_spc(*arg2,arg3,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg4);
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_ascii_spc(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg4 = (std::set< int > *)farg4->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_ascii_spc(*arg2,arg3,(std::set< int > const &)*arg4);
   fresult = (result ? 1 : 0);
   return fresult;
 }
@@ -5445,19 +5454,19 @@ SWIGEXPORT int _wrap_SpecFile_write_iaea_spe(SwigClassWrapper *farg1, SwigClassW
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg4 = 0 ;
+  std::set< int > arg3 ;
+  std::set< int > *arg4 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg4 = (std::set< int,std::less< int >,std::allocator< int > > *)farg4->cptr;
-  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_iaea_spe(*arg2,arg3,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg4);
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_iaea_spe(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg4 = (std::set< int > *)farg4->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_iaea_spe(*arg2,arg3,(std::set< int > const &)*arg4);
   fresult = (result ? 1 : 0);
   return fresult;
 }
@@ -5467,19 +5476,19 @@ SWIGEXPORT int _wrap_SpecFile_write_cnf(SwigClassWrapper *farg1, SwigClassWrappe
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg4 = 0 ;
+  std::set< int > arg3 ;
+  std::set< int > *arg4 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg4 = (std::set< int,std::less< int >,std::allocator< int > > *)farg4->cptr;
-  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_cnf(*arg2,arg3,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg4);
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_cnf(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg4 = (std::set< int > *)farg4->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_cnf(*arg2,arg3,(std::set< int > const &)*arg4);
   fresult = (result ? 1 : 0);
   return fresult;
 }
@@ -5489,19 +5498,19 @@ SWIGEXPORT int _wrap_SpecFile_write_tka(SwigClassWrapper *farg1, SwigClassWrappe
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::ostream *arg2 = 0 ;
-  SwigValueWrapper< std::set< int,std::less< int >,std::allocator< int > > > arg3 ;
-  std::set< int,std::less< int >,std::allocator< int > > *arg4 = 0 ;
+  std::set< int > arg3 ;
+  std::set< int > *arg4 = 0 ;
   bool result;
   
-  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile const *", "SpecFile", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
+  SWIG_check_nonnull(farg2->cptr, "std::ostream &", "SWIGTYPE_p_std__ostream", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
   arg2 = (std::ostream *)farg2->cptr;
-  SWIG_check_nonnull(farg3->cptr, "std::set< int,std::less< int >,std::allocator< int > >", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg3 = *((std::set< int,std::less< int >,std::allocator< int > > *)(farg3->cptr));
-  SWIG_check_nonnull(farg4->cptr, "std::set< int,std::less< int >,std::allocator< int > > const &", "SWIGTYPE_p_std__setT_int_std__lessT_int_t_std__allocatorT10FDJ2", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int,std::less< int >,std::allocator< int > >,std::set< int,std::less< int >,std::allocator< int > > const &) const", return 0);
-  arg4 = (std::set< int,std::less< int >,std::allocator< int > > *)farg4->cptr;
-  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_tka(*arg2,arg3,(std::set< int,std::less< int >,std::allocator< int > > const &)*arg4);
+  SWIG_check_nonnull(farg3->cptr, "std::set< int >", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg3 = *((std::set< int > *)(farg3->cptr));
+  SWIG_check_nonnull(farg4->cptr, "std::set< int > const &", "SWIGTYPE_p_std__setT_int_t", "SpecUtils::SpecFile::write_tka(std::ostream &,std::set< int >,std::set< int > const &) const", return 0);
+  arg4 = (std::set< int > *)farg4->cptr;
+  result = (bool)((SpecUtils::SpecFile const *)arg1)->write_tka(*arg2,arg3,(std::set< int > const &)*arg4);
   fresult = (result ? 1 : 0);
   return fresult;
 }
