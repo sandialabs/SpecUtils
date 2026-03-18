@@ -1472,7 +1472,7 @@ public:
   const std::string &instrument_model() const;
   const std::string &instrument_id() const;
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
-  std::vector< std::shared_ptr<Measurement> > measurements_mutable()
+  std::vector< std::shared_ptr<Measurement> >& measurements_mutable()
   {
     return measurements_;
   }

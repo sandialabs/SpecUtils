@@ -3337,13 +3337,13 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurements(SwigClassWrapper *farg1)
 SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurements_mutable(SwigClassWrapper *farg1) {
   SwigClassWrapper fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
-  std::vector< std::shared_ptr< SpecUtils::Measurement > > result;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *result = 0 ;
   
   SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::measurements_mutable()", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
-  result = (arg1)->measurements_mutable();
-  fresult.cptr = new (std::vector< std::shared_ptr< SpecUtils::Measurement > >)(result);
-  fresult.cmemflags = SWIG_MEM_RVALUE | SWIG_MEM_OWN;
+  result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) &(arg1)->measurements_mutable();
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
   return fresult;
 }
 
