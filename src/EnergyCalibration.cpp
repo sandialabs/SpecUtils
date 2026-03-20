@@ -46,6 +46,16 @@ using namespace std;
 
 namespace SpecUtils
 {
+// Forward declarations for spline-accepting overloads (internal to this file)
+double deviation_pair_correction( const double energy, const std::vector<CubicSplineNode> &spline );
+double polynomial_energy( const double channel_number, const std::vector<float> &coeffs,
+                          const std::vector<CubicSplineNode> &fwd_spline );
+double fullrangefraction_energy( const double bin_number, const std::vector<float> &coeffs,
+                                 const size_t nbin, const std::vector<CubicSplineNode> &fwd_spline );
+double correction_due_to_dev_pairs( const double true_energy,
+                                    const std::vector<CubicSplineNode> &fwd_spline,
+                                    const std::vector<CubicSplineNode> &inv_spline );
+
 const size_t EnergyCalibration::sm_min_channels = 1;
 const size_t EnergyCalibration::sm_max_channels = 131072; //65536 + 8;
 
@@ -56,6 +66,20 @@ EnergyCalibration::EnergyCalibration()
   : m_type( EnergyCalType::InvalidEquationType )
 {
 }
+
+
+void EnergyCalibration::recompute_deviation_pair_splines()
+{
+  if( m_deviation_pairs.empty() )
+  {
+    m_deviation_pair_spline.clear();
+    m_deviation_pair_inverse_spline.clear();
+  }else
+  {
+    m_deviation_pair_spline = create_cubic_spline_for_dev_pairs( m_deviation_pairs );
+    m_deviation_pair_inverse_spline = create_inverse_dev_pairs_cubic_spline( m_deviation_pairs );
+  }
+}//void recompute_deviation_pair_splines()
 
 
 EnergyCalType EnergyCalibration::type() const
@@ -158,6 +182,7 @@ void EnergyCalibration::set_polynomial( const size_t num_channels,
   m_type = EnergyCalType::Polynomial;
   m_coefficients.swap( finalcoefs );
   m_deviation_pairs = dev_pairs;
+  recompute_deviation_pair_splines();
 }//set_polynomial(...)
   
   
@@ -201,6 +226,7 @@ void EnergyCalibration::set_full_range_fraction( const size_t num_channels,
   m_type = EnergyCalType::FullRangeFraction;
   m_coefficients.swap( finalcoefs );
   m_deviation_pairs = dev_pairs;
+  recompute_deviation_pair_splines();
 }//set_full_range_fraction(...)
   
 
@@ -253,6 +279,8 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
   
   m_coefficients.clear();
   m_deviation_pairs.clear();
+  m_deviation_pair_spline.clear();
+  m_deviation_pair_inverse_spline.clear();
   m_type = EnergyCalType::LowerChannelEdge;
   m_channel_energies = energies;
 }//set_lower_channel_energy(...)
@@ -281,6 +309,8 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
   
   m_coefficients.clear();
   m_deviation_pairs.clear();
+  m_deviation_pair_spline.clear();
+  m_deviation_pair_inverse_spline.clear();
   m_type = EnergyCalType::LowerChannelEdge;
   m_channel_energies = energies;
 }//set_lower_channel_energy(...)
@@ -291,6 +321,8 @@ size_t EnergyCalibration::memmorysize() const
   size_t nbytes = sizeof(EnergyCalibration);
   nbytes += m_coefficients.capacity() * sizeof(float);
   nbytes += m_deviation_pairs.capacity() * sizeof(std::pair<float,float>);
+  nbytes += m_deviation_pair_spline.capacity() * sizeof(CubicSplineNode);
+  nbytes += m_deviation_pair_inverse_spline.capacity() * sizeof(CubicSplineNode);
   if( m_channel_energies )
     nbytes += sizeof(std::vector<float>) + (m_channel_energies->capacity() * sizeof(float));
   return nbytes;
@@ -307,11 +339,11 @@ double EnergyCalibration::channel_for_energy( const double energy ) const
     case EnergyCalType::Polynomial:
     case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
       return find_polynomial_channel( energy, m_coefficients, num_channels(),
-                                      m_deviation_pairs, 0.001 );
-      
+                                      m_deviation_pair_spline, m_deviation_pair_inverse_spline, 0.001 );
+
     case EnergyCalType::FullRangeFraction:
       return find_fullrangefraction_channel( energy, m_coefficients, num_channels(),
-                                             m_deviation_pairs, 0.001 );
+                                             m_deviation_pair_spline, m_deviation_pair_inverse_spline, 0.001 );
       
     case EnergyCalType::LowerChannelEdge:
     {
@@ -371,10 +403,10 @@ double EnergyCalibration::energy_for_channel( const double channel ) const
     
     case EnergyCalType::Polynomial:
     case EnergyCalType::UnspecifiedUsingDefaultPolynomial:
-      return polynomial_energy( channel, m_coefficients, m_deviation_pairs );
-      
+      return polynomial_energy( channel, m_coefficients, m_deviation_pair_spline );
+
     case EnergyCalType::FullRangeFraction:
-      return fullrangefraction_energy( channel, m_coefficients, num_channels(), m_deviation_pairs );
+      return fullrangefraction_energy( channel, m_coefficients, num_channels(), m_deviation_pair_spline );
       
     case EnergyCalType::LowerChannelEdge:
     {
@@ -835,7 +867,7 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
 double fullrangefraction_energy( const double bin_number,
                                  const std::vector<float> &coeffs,
                                  const size_t nbin,
-                                 const std::vector<std::pair<float,float>> &deviation_pairs )
+                                 const std::vector<CubicSplineNode> &fwd_spline )
 {
   const double x = bin_number / nbin;
   const size_t ncoeffs = std::min( coeffs.size(), size_t(4) );
@@ -843,22 +875,64 @@ double fullrangefraction_energy( const double bin_number,
   double val = 0.0;
   for( size_t c = 0; c < ncoeffs; ++c )
     val += coeffs[c] * pow( x, static_cast<double>(c) );
-  
+
   if( coeffs.size() > 4 )
     val += coeffs[4] / (1.0 + 60.0*x);
-  
-  return val + deviation_pair_correction( val, deviation_pairs );
+
+  return val + deviation_pair_correction( val, fwd_spline );
+}//fullrangefraction_energy( spline overload )
+
+
+double fullrangefraction_energy( const double bin_number,
+                                 const std::vector<float> &coeffs,
+                                 const size_t nbin,
+                                 const std::vector<std::pair<float,float>> &deviation_pairs )
+{
+  if( deviation_pairs.empty() )
+  {
+    const double x = bin_number / nbin;
+    const size_t ncoeffs = std::min( coeffs.size(), size_t(4) );
+
+    double val = 0.0;
+    for( size_t c = 0; c < ncoeffs; ++c )
+      val += coeffs[c] * pow( x, static_cast<double>(c) );
+
+    if( coeffs.size() > 4 )
+      val += coeffs[4] / (1.0 + 60.0*x);
+
+    return val;
+  }
+
+  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( deviation_pairs );
+  return fullrangefraction_energy( bin_number, coeffs, nbin, spline );
 }//double fullrangefraction_energy(...)
+
+
+double polynomial_energy( const double channel_number,
+                          const std::vector<float> &coeffs,
+                          const std::vector<CubicSplineNode> &fwd_spline )
+{
+  double val = 0.0;
+  for( size_t i = 0; i < coeffs.size(); ++i )
+    val += coeffs[i] * pow( static_cast<double>(channel_number), static_cast<double>(i) );
+  return val + deviation_pair_correction( val, fwd_spline );
+}//polynomial_energy( spline overload )
 
 
 double polynomial_energy( const double channel_number,
                          const std::vector<float> &coeffs,
                          const std::vector<std::pair<float,float>> &deviation_pairs )
 {
-  double val = 0.0;
-  for( size_t i = 0; i < coeffs.size(); ++i )
-    val += coeffs[i] * pow( static_cast<double>(channel_number), static_cast<double>(i) );
-  return val + deviation_pair_correction( static_cast<float>(val), deviation_pairs );
+  if( deviation_pairs.empty() )
+  {
+    double val = 0.0;
+    for( size_t i = 0; i < coeffs.size(); ++i )
+      val += coeffs[i] * pow( static_cast<double>(channel_number), static_cast<double>(i) );
+    return val;
+  }
+
+  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( deviation_pairs );
+  return polynomial_energy( channel_number, coeffs, spline );
 }//polynomial_energy(...)
 
   
@@ -924,28 +998,35 @@ shared_ptr<const vector<float>> apply_deviation_pair( const vector<float> &binni
 }//std::vector<float> apply_deviation_pair(...)
 
 
+double deviation_pair_correction( const double energy, const vector<CubicSplineNode> &spline )
+{
+  if( spline.empty() )
+    return 0.0;
+
+  return eval_cubic_spline( energy, spline );
+}//deviation_pair_correction( spline overload )
+
+
 double deviation_pair_correction( const double energy, const std::vector<std::pair<float,float>> &dps )
 {
   if( dps.empty() )
     return 0.0;
-  
+
   const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( dps );
-  
-  return eval_cubic_spline( energy, spline );
+
+  return deviation_pair_correction( energy, spline );
 }//float deviation_pair_correction(...)
 
   
 double correction_due_to_dev_pairs( const double true_energy,
-                                    const std::vector<std::pair<float,float>> &dev_pairs )
+                                    const vector<CubicSplineNode> &fwd_spline,
+                                    const vector<CubicSplineNode> &inv_spline )
 {
-  if( dev_pairs.empty() )
+  if( fwd_spline.empty() )
     return 0.0;
 
-  const vector<CubicSplineNode> spline = create_cubic_spline_for_dev_pairs( dev_pairs );
-  const vector<CubicSplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( dev_pairs );
-
   double answer = eval_cubic_spline( true_energy, inv_spline );
-  double check = eval_cubic_spline( true_energy - answer, spline );
+  double check = eval_cubic_spline( true_energy - answer, fwd_spline );
   double diff = answer - check;
 
   const double tolerance = 0.0001;
@@ -964,7 +1045,7 @@ double correction_due_to_dev_pairs( const double true_energy,
   while( fabs(diff) > tolerance && niters < max_avg_iters )
   {
     answer = 0.5 * (answer + check);
-    check = eval_cubic_spline( true_energy - answer, spline );
+    check = eval_cubic_spline( true_energy - answer, fwd_spline );
     diff = answer - check;
     ++niters;
   }
@@ -974,11 +1055,11 @@ double correction_due_to_dev_pairs( const double true_energy,
 
   // Averaged iteration did not converge (can happen if S' < -1, giving a fold in the
   //  energy mapping); fall back to bisection.
-  double y_min = spline[0].y, y_max = spline[0].y;
-  for( size_t i = 1; i < spline.size(); ++i )
+  double y_min = fwd_spline[0].y, y_max = fwd_spline[0].y;
+  for( size_t i = 1; i < fwd_spline.size(); ++i )
   {
-    y_min = std::min( y_min, spline[i].y );
-    y_max = std::max( y_max, spline[i].y );
+    y_min = std::min( y_min, fwd_spline[i].y );
+    y_max = std::max( y_max, fwd_spline[i].y );
   }
 
   const double margin = std::max( (y_max - y_min) * 0.5, 10.0 );
@@ -986,7 +1067,7 @@ double correction_due_to_dev_pairs( const double true_energy,
   double a_hi = y_max + margin;
 
   auto f_scalar = [&]( double a ) -> double {
-    return a - eval_cubic_spline( true_energy - a, spline );
+    return a - eval_cubic_spline( true_energy - a, fwd_spline );
   };
 
   double f_lo = f_scalar( a_lo );
@@ -1035,6 +1116,19 @@ double correction_due_to_dev_pairs( const double true_energy,
   }
 
   return 0.5 * (a_lo + a_hi);
+}//correction_due_to_dev_pairs( spline overload )
+
+
+double correction_due_to_dev_pairs( const double true_energy,
+                                    const std::vector<std::pair<float,float>> &dev_pairs )
+{
+  if( dev_pairs.empty() )
+    return 0.0;
+
+  const vector<CubicSplineNode> fwd_spline = create_cubic_spline_for_dev_pairs( dev_pairs );
+  const vector<CubicSplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( dev_pairs );
+
+  return correction_due_to_dev_pairs( true_energy, fwd_spline, inv_spline );
 }//correction_due_to_dev_pairs
   
 
@@ -1351,51 +1445,51 @@ std::vector<float> polynomial_cal_remove_first_channels( const int nchannel,
   
   
 double find_fullrangefraction_channel( const double energy,
-                                   const std::vector<float> &coeffs,
-                                   const size_t nbin,
-                                   const std::vector<std::pair<float,float>> &devpair,
-                                   const double accuracy )
+                                       const std::vector<float> &coeffs,
+                                       const size_t nbin,
+                                       const std::vector<CubicSplineNode> &fwd_spline,
+                                       const std::vector<CubicSplineNode> &inv_spline,
+                                       const double accuracy )
 {
   size_t ncoefs = 0; //Will be the index+1 of last non-zero coefficient
   for( size_t i = 0; i < coeffs.size(); ++i )
     if( fabs(coeffs[i]) > std::numeric_limits<float>::min() )
       ncoefs = i+1;
-  
+
   if( nbin < 2 )
     throw runtime_error( "find_fullrangefraction_channel: must have at least 2 channels" );
-  
-  if( ncoefs < 2  )
+
+  if( ncoefs < 2 )
     throw runtime_error( "find_fullrangefraction_channel: must pass in at least two coefficients" );
-  
-  if( ncoefs < 4 && devpair.empty() )
+
+  if( ncoefs < 4 && fwd_spline.empty() )
   {
-    if( ncoefs == 2  )
+    if( ncoefs == 2 )
     {
       //  energy =  coeffs[0] + coeffs[1]*(bin/nbins)
       return nbin * (energy - coeffs[0]) / coeffs[1];
-    }//if( coeffs.size() == 2  )
-    
+    }//if( coeffs.size() == 2 )
+
     //Note purposeful use of double precision
-    
     const double a = static_cast<double>(coeffs[0]) - static_cast<double>(energy);
     const double b = coeffs[1];
     const double c = coeffs[2];
-    
+
     //energy = coeffs[0] + coeffs[1]*(bin/nbin) + coeffs[2]*(bin/nbin)*(bin/nbin)
     //--> 0 = a + b*(bin/nbin) + c*(bin/nbin)*(bin/nbin)
     //roots at (-b +- sqrt(b*b-4*a*c))/(2c)
-    
-    const double sqrtarg = b*b-4.0*a*c;
-    
+
+    const double sqrtarg = b*b - 4.0*a*c;
+
     if( sqrtarg >= 0.0 )
     {
       const double root_1 = (-b + sqrt(sqrtarg))/(2.0f*c);
       const double root_2 = (-b - sqrt(sqrtarg))/(2.0f*c);
-      
+
       // Check of one of the answers is in the expected range.
       const bool root_1_valid = (root_1 >= 0.0 && root_1 <= static_cast<double>(nbin + 1));
       const bool root_2_valid = (root_2 >= 0.0 && root_2 <= static_cast<double>(nbin + 1));
-      
+
       // Preffer to return the answer within the defined bin range if only one of them is
       if( root_1_valid != root_2_valid )
         return nbin * (root_1_valid ? root_1 : root_2);
@@ -1403,54 +1497,69 @@ double find_fullrangefraction_channel( const double energy,
       // If both answers are positive, or both negative, return the one with smaller absolute value
       if( (root_1 >= 0.0 && root_2 >= 0.0) || (root_1 <= 0.0 && root_2 <= 0.0) )
         return nbin * ((fabs(root_1) < fabs(root_2)) ? root_1 : root_2);
-      
-      //  \TODO: determine upper valid bin (e.g., last channel were quadratic term doesnt overpower
-      //         linear term) and return the bin below that, and if that doesnt work, throw
-      //         exception.
+
       const double linanswer = (energy - coeffs[0]) / coeffs[1];
       const double d1 = fabs(root_1 - linanswer);
       const double d2 = fabs(root_2 - linanswer);
       return nbin * ((d1 < d2) ? root_1 : root_2);
     }//if( sqrtarg >= 0.0f )
-  }//if( ncoefs < 4 && devpair.empty() )
-  
+  }//if( ncoefs < 4 && fwd_spline.empty() )
+
   if( accuracy <= 0.0 )
     throw runtime_error( "find_fullrangefraction_channel: accuracy must be greater than zero" );
-  
+
+  // Check if the energy is outside the valid range (channel 0 to channel nbin).
+  // For FRF with a 5th coefficient (C_4/(1+60*x)), the energy function has a singularity
+  // at x = -1/60 (channel ≈ -nbin/60), so the binary search cannot safely extend to
+  // negative channels. Instead, extrapolate linearly for out-of-range energies.
+  const double e_at_0 = fullrangefraction_energy( 0.0, coeffs, nbin, fwd_spline );
+  const double e_at_nbin = fullrangefraction_energy( static_cast<double>(nbin), coeffs, nbin, fwd_spline );
+  const double e_min = std::min( e_at_0, e_at_nbin );
+  const double e_max = std::max( e_at_0, e_at_nbin );
+
+  if( energy < e_min )
+  {
+    const double gain = static_cast<double>(coeffs[1]) / nbin;
+    return (energy - e_at_0) / gain;
+  }
+
+  if( energy > e_max )
+  {
+    const double gain = static_cast<double>(coeffs[1]) / nbin;
+    return static_cast<double>(nbin) + (energy - e_at_nbin) / gain;
+  }
+
   const size_t max_iterations = 1000;
   size_t iteration = 0;
-  
+
   double lowbin = 0.0;
   double highbin = static_cast<double>( nbin );
-  double testenergy = fullrangefraction_energy( highbin, coeffs, nbin, devpair );
+  double testenergy = fullrangefraction_energy( highbin, coeffs, nbin, fwd_spline );
   while( (testenergy < energy) && (iteration < max_iterations) )
   {
-    // At too high of channels the calibration can become invalid so we will only increase by
-    //  1/8 the spectrum at a time.  Worst case sceneriou this could take a while to get to
-    //  (if ncoefs < 3, then could double highbin safely)
-    highbin += std::max(0.125*nbin,2.0);
-    testenergy = fullrangefraction_energy( highbin, coeffs, nbin, devpair );
+    highbin += std::max( 0.125*nbin, 2.0 );
+    testenergy = fullrangefraction_energy( highbin, coeffs, nbin, fwd_spline );
     ++iteration;
-  }//while( testenergy < energy )
-  
+  }
+
   if( iteration >= max_iterations )
     throw runtime_error( "find_fullrangefraction_channel: failed to find channel high-enough" );
-  
-  testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, devpair );
+
+  testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, fwd_spline );
   while( (testenergy > energy) && (iteration < max_iterations) )
   {
-    lowbin -= std::max(0.125*nbin,2.0);
-    testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, devpair );
+    lowbin -= std::max( 0.125*nbin, 2.0 );
+    testenergy = fullrangefraction_energy( lowbin, coeffs, nbin, fwd_spline );
     ++iteration;
-  }//while( testenergy < energy )
-  
+  }
+
   if( iteration >= max_iterations )
     throw runtime_error( "find_fullrangefraction_channel: failed to find channel low-enough" );
-  
-  double bin = lowbin + ((highbin-lowbin)/2.0);
-  testenergy = fullrangefraction_energy( bin, coeffs, nbin, devpair );
+
+  double bin = lowbin + ((highbin - lowbin) / 2.0);
+  testenergy = fullrangefraction_energy( bin, coeffs, nbin, fwd_spline );
   double dx = fabs( testenergy - energy );
-  
+
   while( (dx > accuracy) && (iteration < max_iterations) )
   {
     if( highbin == lowbin )
@@ -1461,137 +1570,150 @@ double find_fullrangefraction_channel( const double energy,
       throw runtime_error( "find_fullrangefraction_channel(...): error finding bin coorespongin to"
                            " desired energy (this shouldnt happen)" );
     }
-    
+
     if( testenergy == energy )
       return bin;
     if( testenergy > energy )
       highbin = bin;
     else
       lowbin = bin;
-    
-    bin = lowbin + ((highbin-lowbin)/2.0);
-    testenergy = fullrangefraction_energy( bin, coeffs, nbin, devpair );
+
+    bin = lowbin + ((highbin - lowbin) / 2.0);
+    testenergy = fullrangefraction_energy( bin, coeffs, nbin, fwd_spline );
     dx = fabs( testenergy - energy );
     ++iteration;
-  }//while( dx > accuracy )
-  
+  }
+
   if( iteration >= max_iterations )
     throw runtime_error( "find_fullrangefraction_channel: failed to converge" );
-  
+
   return bin;
+}//find_fullrangefraction_channel( spline overload )
+
+
+double find_fullrangefraction_channel( const double energy,
+                                       const std::vector<float> &coeffs,
+                                       const size_t nbin,
+                                       const std::vector<std::pair<float,float>> &devpair,
+                                       const double accuracy )
+{
+  if( devpair.empty() )
+  {
+    const vector<CubicSplineNode> empty_spline;
+    return find_fullrangefraction_channel( energy, coeffs, nbin, empty_spline, empty_spline, accuracy );
+  }
+
+  const vector<CubicSplineNode> fwd_spline = create_cubic_spline_for_dev_pairs( devpair );
+  const vector<CubicSplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( devpair );
+  return find_fullrangefraction_channel( energy, coeffs, nbin, fwd_spline, inv_spline, accuracy );
 }//double find_fullrangefraction_channel(...)
   
 
-double find_polynomial_channel( const double energy, const vector<float> &coeffs,
-                               const size_t nchannel,
-                               const vector<pair<float,float>> &devpair,
-                               const double accuracy )
+double find_polynomial_channel( const double energy,
+                                const vector<float> &coeffs,
+                                const size_t nchannel,
+                                const vector<CubicSplineNode> &fwd_spline,
+                                const vector<CubicSplineNode> &inv_spline,
+                                const double accuracy )
 {
   size_t ncoefs = 0; //Will be the index+1 of last non-zero coefficient
   for( size_t i = 0; i < coeffs.size(); ++i )
     if( fabs(coeffs[i]) > std::numeric_limits<float>::min() )
       ncoefs = i+1;
-  
+
   assert( coeffs.size() >= ncoefs );
-  
-  if( ncoefs < 2  )
+
+  if( ncoefs < 2 )
     throw std::runtime_error( "find_polynomial_channel: must pass in at least two coefficients" );
-  
-  if( ncoefs < 4  )
+
+  if( ncoefs < 4 )
   {
     double polyenergy = energy;
-    if( !devpair.empty() )
-     polyenergy -= correction_due_to_dev_pairs(energy,devpair);
-    
-    if( ncoefs == 2  )
+    if( !fwd_spline.empty() )
+      polyenergy -= correction_due_to_dev_pairs( energy, fwd_spline, inv_spline );
+
+    if( ncoefs == 2 )
     {
       //  energy =  coeffs[0] + coeffs[1]*channel
       return ((polyenergy - coeffs[0]) / coeffs[1]);
-    }//if( coeffs.size() == 2  )
-    
+    }//if( coeffs.size() == 2 )
+
     //Note purposeful use of double precision
     const double a = static_cast<double>(coeffs[0]) - static_cast<double>(polyenergy);
     const double b = coeffs[1];
     const double c = coeffs[2];
-    
+
     //polyenergy = coeffs[0] + coeffs[1]*bin + coeffs[2]*bin*bin
     //--> 0 = a + b*bin + c*bin*bin
     //roots at (-b +- sqrt(b*b-4*a*c))/(2c)
-    
+
     const double sqrtarg = b*b - 4.0*a*c;
-    
+
     if( sqrtarg >= 0.0 )
     {
       const double root_1 = (-b + sqrt(sqrtarg))/(2.0f*c);
       const double root_2 = (-b - sqrt(sqrtarg))/(2.0f*c);
-      
+
       // Check of one of the answers is in the expected range.
       const bool root_1_valid = (root_1 >= 0.0 && root_1 <= static_cast<double>(nchannel + 1));
       const bool root_2_valid = (root_2 >= 0.0 && root_2 <= static_cast<double>(nchannel + 1));
-      
+
       // Preffer to return the answer within the defined bin range if only one of them is
       if( root_1_valid != root_2_valid )
         return ( root_1_valid ? root_1 : root_2 );
-      
+
       // If both answers are positive, or both negative, return the one with smaller absolute value
       if( (root_1 >= 0.0 && root_2 >= 0.0) || (root_1 <= 0.0 && root_2 <= 0.0) )
         return ( (fabs(root_1) < fabs(root_2)) ? root_1 : root_2 );
-      
+
       // If one answer is positive, and one negative, return the one closest to what the linearly
       //  truncated equation would give.
-      //  \TODO: determine upper valid bin (e.g., last channel were quadratic term doesnt overpower
-      //         linear term) and return the bin below that, and if that doesnt work, throw
-      //         exception.
-      //  Examples for Poly ceffs {-1.926107, 2.9493925, -0.00000831},
-      //                  polyenergy=-10: linanswer=-2.73748, root_1=-2.73746, root_2=354640
-      //                  polyenergy=60000: linanswer=20343.8, root_1=21667.7, root_2=332970
       const double linanswer = ((polyenergy - coeffs[0]) / coeffs[1]);
-      
-      //cout << "For polyenergy=" << polyenergy << " linanswer=" << linanswer << ", root_1=" << root_1 << ", root_2=" << root_2 << endl;
+
       const double d1 = fabs(root_1 - linanswer);
       const double d2 = fabs(root_2 - linanswer);
       return ( (d1 < d2) ? root_1 : root_2 );
     }//if( sqrtarg >= 0.0f )
-  }//if( ncoefs < 4 && devpair.empty() )
-  
+  }//if( ncoefs < 4 )
+
   if( nchannel < 2 )
     throw runtime_error( "find_polynomial_channel: accuracy must be greater than zero" );
-  
+
   if( accuracy <= 0.0 )
     throw runtime_error( "find_polynomial_channel: accuracy must be greater than zero" );
-  
+
   const size_t max_iterations = 1000;
   size_t iteration = 0;
-  
+
   double lowbin = 0.0;
   double highbin = nchannel;
-  double testenergy = polynomial_energy( highbin, coeffs, devpair );
+  double testenergy = polynomial_energy( highbin, coeffs, fwd_spline );
   while( (testenergy < energy) && (iteration < max_iterations) )
   {
-    highbin += std::max(0.125*nchannel,2.0);
-    testenergy = polynomial_energy( highbin, coeffs, devpair );
+    highbin += std::max( 0.125*nchannel, 2.0 );
+    testenergy = polynomial_energy( highbin, coeffs, fwd_spline );
     ++iteration;
-  }//while( testenergy < energy )
-  
+  }
+
   if( iteration >= max_iterations )
     throw runtime_error( "find_polynomial_channel: failed to find channel high-enough" );
-  
+
   iteration = 0;
-  testenergy = polynomial_energy( lowbin, coeffs, devpair );
-  while( testenergy > energy && (iteration < max_iterations)  )
+  testenergy = polynomial_energy( lowbin, coeffs, fwd_spline );
+  while( testenergy > energy && (iteration < max_iterations) )
   {
-    lowbin -= std::max(0.125*nchannel,2.0);
-    testenergy = polynomial_energy( lowbin, coeffs, devpair );
+    lowbin -= std::max( 0.125*nchannel, 2.0 );
+    testenergy = polynomial_energy( lowbin, coeffs, fwd_spline );
     ++iteration;
-  }//while( testenergy < energy )
-  
+  }
+
   if( iteration >= max_iterations )
     throw runtime_error( "find_polynomial_channel: failed to find channel low-enough" );
-  
-  double bin = lowbin + ((highbin-lowbin)/2.0);
-  testenergy = polynomial_energy( bin, coeffs, devpair );
+
+  double bin = lowbin + ((highbin - lowbin) / 2.0);
+  testenergy = polynomial_energy( bin, coeffs, fwd_spline );
   double dx = fabs( testenergy - energy );
-  
+
   iteration = 0;
   while( (dx > accuracy) && (iteration < max_iterations) )
   {
@@ -1603,24 +1725,41 @@ double find_polynomial_channel( const double energy, const vector<float> &coeffs
       throw runtime_error( "find_polynomial_channel(...): error finding bin coorespongin to"
                           " desired energy (this shouldnt happen)" );
     }
-    
+
     if( testenergy == energy )
       return bin;
     if( testenergy > energy )
       highbin = bin;
     else
       lowbin = bin;
-    
-    bin = lowbin + ((highbin-lowbin)/2.0);
-    testenergy = polynomial_energy( bin, coeffs, devpair );
+
+    bin = lowbin + ((highbin - lowbin) / 2.0);
+    testenergy = polynomial_energy( bin, coeffs, fwd_spline );
     dx = fabs( testenergy - energy );
     ++iteration;
-  }//while( dx > accuracy )
-  
+  }
+
   if( iteration >= max_iterations )
     throw runtime_error( "find_polynomial_channel: failed to converge" );
-  
+
   return bin;
+}//find_polynomial_channel( spline overload )
+
+
+double find_polynomial_channel( const double energy, const vector<float> &coeffs,
+                                const size_t nchannel,
+                                const vector<pair<float,float>> &devpair,
+                                const double accuracy )
+{
+  if( devpair.empty() )
+  {
+    const vector<CubicSplineNode> empty_spline;
+    return find_polynomial_channel( energy, coeffs, nchannel, empty_spline, empty_spline, accuracy );
+  }
+
+  const vector<CubicSplineNode> fwd_spline = create_cubic_spline_for_dev_pairs( devpair );
+  const vector<CubicSplineNode> inv_spline = create_inverse_dev_pairs_cubic_spline( devpair );
+  return find_polynomial_channel( energy, coeffs, nchannel, fwd_spline, inv_spline, accuracy );
 }//find_polynomial_channel
   
   

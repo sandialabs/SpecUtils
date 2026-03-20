@@ -29,6 +29,8 @@
 #include <memory>
 #include <utility>
 
+#include "SpecUtils/CubicSpline.h"
+
 /**
  
  
@@ -292,15 +294,32 @@ namespace SpecUtils
   protected:
     /** Checks the channel energies is acceptable (e.g., enough channels, and monotonically
      increasing values).
-     
+
      Throws exception if error is found.
      */
     void check_lower_energies( const size_t nchannels, const std::vector<float> &energies );
-    
+
+    /** Recomputes the cached cubic splines from the current deviation pairs.
+     Must be called after every modification of m_deviation_pairs.
+     */
+    void recompute_deviation_pair_splines();
+
     EnergyCalType m_type;
     std::vector<float> m_coefficients;
     std::vector<std::pair<float,float>> m_deviation_pairs;
     std::shared_ptr<const std::vector<float>> m_channel_energies;
+
+    /** Cached forward cubic spline for deviation pairs (energy -> offset).
+     Built from m_deviation_pairs via create_cubic_spline_for_dev_pairs().
+     Used by deviation_pair_correction() and polynomial_energy()/fullrangefraction_energy().
+     */
+    std::vector<CubicSplineNode> m_deviation_pair_spline;
+
+    /** Cached inverse cubic spline for deviation pairs.
+     Built from m_deviation_pairs via create_inverse_dev_pairs_cubic_spline().
+     Used by correction_due_to_dev_pairs() for the inverse mapping.
+     */
+    std::vector<CubicSplineNode> m_deviation_pair_inverse_spline;
   };//struct EnergyCalibration
 
   /** Returns an energy calibration with the specified number of channels combined.
@@ -381,6 +400,11 @@ namespace SpecUtils
    
    Doesnt perform a check that the coefficients or deviation pairs are actually valid.
    Throws exception if deviation pairs are not sorted.
+
+   Note: when deviation pairs are non-empty, this function rebuilds the cubic spline from them
+   on each call. If calling multiple times with the same deviation pairs, prefer using
+   #EnergyCalibration::energy_for_channel or building the spline once with
+   #create_cubic_spline_for_dev_pairs and using the spline-accepting overloads internally.
    */
   double fullrangefraction_energy( const double channel_number,
                                  const std::vector<float> &coeffs,
@@ -400,8 +424,13 @@ namespace SpecUtils
    Note: doesnt perform a check that the coefficients or deviation pairs are actually valid.
    Note: doesnt check that channel_number passed in is valid for given coefficients (e.g.,
          quadratic term is overpowering linear term, etc).
-   
+
    Throws exception if deviation pairs are not sorted.
+
+   Note: when deviation pairs are non-empty, this function rebuilds the cubic spline from them
+   on each call. If calling multiple times with the same deviation pairs, prefer using
+   #EnergyCalibration::energy_for_channel or building the spline once with
+   #create_cubic_spline_for_dev_pairs and using the spline-accepting overloads internally.
    */
   double polynomial_energy( const double channel_number,
                            const std::vector<float> &coeffs,
@@ -429,10 +458,11 @@ namespace SpecUtils
             (in keV), and dev_pairs[i].second is offset.
      @returns energy adjusted for deviation pairs.
    
-   Note: this function re-computes the cubic spline each time it is called, so
-     if you plan to call for multiple energies, it may be more efficient to
-     but them in a vector, and call #apply_deviation_pair with it.
-   
+   Note: this function re-computes the cubic spline each time it is called. If calling
+     multiple times with the same deviation pairs, it is more efficient to build the spline
+     once using #create_cubic_spline_for_dev_pairs and call the spline-accepting overload,
+     or put the energies in a vector and call #apply_deviation_pair with it.
+
    An example for using deviation pairs:
    - Determine offset and gain using the 239 keV and 2614 keV peaks of Th232
    - If the k-40 1460 keV peak is now at 1450 keV, a deviation of 10 keV should
@@ -457,6 +487,11 @@ namespace SpecUtils
    \TODO: Currently will return answer accurate within about 0.0001 keV, but in the
          future this should be able to be made exactly accuate (within numerical
          limits anyway).
+
+   Note: this function rebuilds both forward and inverse cubic splines from the deviation pairs
+   on each call. If calling multiple times with the same deviation pairs, it is more efficient
+   to build the splines once using #create_cubic_spline_for_dev_pairs and
+   #create_inverse_dev_pairs_cubic_spline, and use the spline-accepting overload.
    */
   double correction_due_to_dev_pairs( const double true_energy,
                                      const std::vector<std::pair<float,float>> &dev_pairs );
@@ -580,12 +615,28 @@ namespace SpecUtils
    
    \TODO: Use #correction_due_to_dev_pairs to make it so algabraic approach can
           always be used.
+
+   Note: when deviation pairs are non-empty, this function rebuilds the cubic splines on each
+   call. If calling multiple times with the same deviation pairs, prefer using the overload
+   that accepts pre-computed CubicSplineNode splines, or #EnergyCalibration::channel_for_energy
+   which uses cached splines.
   */
   double find_fullrangefraction_channel( const double energy,
                                    const std::vector<float> &coeffs,
                                    const size_t nchannel,
                                    const std::vector<std::pair<float,float>> &deviation_pairs,
                                    const double accuracy = 0.001 );
+
+  /** Overload that uses pre-computed forward and inverse deviation pair splines,
+   avoiding the cost of rebuilding them. Use #create_cubic_spline_for_dev_pairs to build
+   fwd_spline and #create_inverse_dev_pairs_cubic_spline to build inv_spline.
+   */
+  double find_fullrangefraction_channel( const double energy,
+                                         const std::vector<float> &coeffs,
+                                         const size_t nchannel,
+                                         const std::vector<CubicSplineNode> &fwd_spline,
+                                         const std::vector<CubicSplineNode> &inv_spline,
+                                         const double accuracy = 0.001 );
   
   /** Gives the channel (including fractional portion) corresponding to the
      specified energy.
@@ -609,12 +660,28 @@ namespace SpecUtils
    
      Note: that #correction_due_to_dev_pairs is used to correct for deviation pairs when using the,
      algebraic appoach, and currently (20200820) may be correct to only 0.01 keV.
+
+     Note: when deviation pairs are non-empty, this function rebuilds the cubic splines on each
+     call. If calling multiple times with the same deviation pairs, prefer using the overload
+     that accepts pre-computed CubicSplineNode splines, or #EnergyCalibration::channel_for_energy
+     which uses cached splines.
   */
   double find_polynomial_channel( const double energy,
                                  const std::vector<float> &coeffs,
                                  const size_t nchannel,
                                  const std::vector<std::pair<float,float>> &deviation_pairs,
                                  const double accuracy = 0.001 );
+
+  /** Overload that uses pre-computed forward and inverse deviation pair splines,
+   avoiding the cost of rebuilding them. Use #create_cubic_spline_for_dev_pairs to build
+   fwd_spline and #create_inverse_dev_pairs_cubic_spline to build inv_spline.
+   */
+  double find_polynomial_channel( const double energy,
+                                  const std::vector<float> &coeffs,
+                                  const size_t nchannel,
+                                  const std::vector<CubicSplineNode> &fwd_spline,
+                                  const std::vector<CubicSplineNode> &inv_spline,
+                                  const double accuracy = 0.001 );
 
 
   

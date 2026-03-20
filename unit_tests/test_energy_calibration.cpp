@@ -617,3 +617,156 @@ TEST_CASE( "fit_poly_energy_cal_from_points" )
     CHECK( coeffs[1] < 0.0f );  // Verify we got negative gain
   }
 }//TEST_CASE( "fit_poly_energy_cal_from_points" )
+
+
+TEST_CASE( "testCachedDeviationPairSplines" )
+{
+  // Verify that channel_for_energy and energy_for_channel produce correct roundtrip results
+  // when deviation pairs are present, and that the cached-spline member functions give the
+  // same results as the free functions that build splines on the fly.
+  using namespace SpecUtils;
+
+  const size_t nbin = 1024;
+  const vector<float> poly_coefs = { -1.926107f, 2.9493925f, -0.00000831663990020752f };
+  const vector<pair<float,float>> dev_pairs = { {0.0f, 0.0f}, {1460.0f, -10.0f}, {2614.0f, 0.0f} };
+  const float accuracy = 0.001f;
+
+  EnergyCalibration cal;
+  cal.set_polynomial( nbin, poly_coefs, dev_pairs );
+
+  // Test roundtrip: energy -> channel -> energy should be close to original
+  const vector<double> test_energies = { 10.0, 100.0, 500.0, 1000.0, 1460.0, 2000.0, 2600.0 };
+
+  for( const double energy : test_energies )
+  {
+    const double channel = cal.channel_for_energy( energy );
+    const double roundtrip_energy = cal.energy_for_channel( channel );
+    CHECK_MESSAGE( fabs( roundtrip_energy - energy ) < 0.01,
+      "Roundtrip failed for energy " << energy << " keV: got " << roundtrip_energy );
+  }
+
+  // Compare cached member function results against free function results
+  for( const double energy : test_energies )
+  {
+    const double cached_channel = cal.channel_for_energy( energy );
+    const double free_channel = find_polynomial_channel( energy, poly_coefs, nbin, dev_pairs, accuracy );
+    CHECK_MESSAGE( fabs( cached_channel - free_channel ) < 1.0e-6,
+      "channel_for_energy mismatch at " << energy << " keV: cached=" << cached_channel
+      << " free=" << free_channel );
+  }
+
+  // Compare energy_for_channel: cached vs free function
+  const vector<double> test_channels = { 0.0, 100.0, 500.0, 800.0, 1023.0 };
+  for( const double channel : test_channels )
+  {
+    const double cached_energy = cal.energy_for_channel( channel );
+    const double free_energy = polynomial_energy( channel, poly_coefs, dev_pairs );
+    CHECK_MESSAGE( fabs( cached_energy - free_energy ) < 1.0e-6,
+      "energy_for_channel mismatch at channel " << channel << ": cached=" << cached_energy
+      << " free=" << free_energy );
+  }
+}//TEST_CASE( "testCachedDeviationPairSplines" )
+
+
+TEST_CASE( "testCachedSplineUpdateOnSetPolynomial" )
+{
+  // Verify that cached splines are properly updated when setting new calibrations.
+  using namespace SpecUtils;
+
+  const size_t nbin = 1024;
+  EnergyCalibration cal;
+
+  // Set polynomial with deviation pairs
+  const vector<float> coefs1 = { 0.0f, 3.0f };
+  const vector<pair<float,float>> dev1 = { {0.0f, 0.0f}, {1500.0f, 5.0f}, {3000.0f, 0.0f} };
+  cal.set_polynomial( nbin, coefs1, dev1 );
+
+  const double ch1 = cal.channel_for_energy( 1500.0 );
+  const double e1 = cal.energy_for_channel( 500.0 );
+
+  // Set new polynomial with different deviation pairs
+  const vector<float> coefs2 = { 0.0f, 3.0f };
+  const vector<pair<float,float>> dev2 = { {0.0f, 0.0f}, {1500.0f, -5.0f}, {3000.0f, 0.0f} };
+  cal.set_polynomial( nbin, coefs2, dev2 );
+
+  const double ch2 = cal.channel_for_energy( 1500.0 );
+  const double e2 = cal.energy_for_channel( 500.0 );
+
+  // Results should differ since deviation pairs changed
+  CHECK( fabs( ch1 - ch2 ) > 0.1 );
+  CHECK( fabs( e1 - e2 ) > 0.1 );
+
+  // Set polynomial with empty deviation pairs
+  const vector<pair<float,float>> no_dev;
+  cal.set_polynomial( nbin, coefs2, no_dev );
+
+  const double ch3 = cal.channel_for_energy( 1500.0 );
+  const double e3 = cal.energy_for_channel( 500.0 );
+
+  // Without deviation pairs, energy_for_channel should be a simple polynomial
+  CHECK( fabs( e3 - 1500.0 ) < 0.001 ); // 0.0 + 3.0*500 = 1500
+  CHECK( fabs( ch3 - 500.0 ) < 0.001 ); // inverse: (1500 - 0) / 3.0 = 500
+}//TEST_CASE( "testCachedSplineUpdateOnSetPolynomial" )
+
+
+TEST_CASE( "testCachedSplinesFRF" )
+{
+  // Test the same caching behavior with Full Range Fraction calibration.
+  using namespace SpecUtils;
+
+  const size_t nbin = 1024;
+  const vector<float> frf_coefs = { 0.0f, 3072.0f }; // gives 0 to 3072 keV
+  const vector<pair<float,float>> dev_pairs = { {0.0f, 0.0f}, {1500.0f, 8.0f}, {3000.0f, 0.0f} };
+
+  EnergyCalibration cal;
+  cal.set_full_range_fraction( nbin, frf_coefs, dev_pairs );
+
+  // Roundtrip test
+  const vector<double> test_energies = { 50.0, 500.0, 1000.0, 1500.0, 2500.0, 3000.0 };
+  for( const double energy : test_energies )
+  {
+    const double channel = cal.channel_for_energy( energy );
+    const double roundtrip = cal.energy_for_channel( channel );
+    CHECK_MESSAGE( fabs( roundtrip - energy ) < 0.01,
+      "FRF roundtrip failed at " << energy << " keV: got " << roundtrip );
+  }
+
+  // Compare cached vs free function
+  for( const double energy : test_energies )
+  {
+    const double cached = cal.channel_for_energy( energy );
+    const double free_fn = find_fullrangefraction_channel( energy, frf_coefs, nbin, dev_pairs, 0.001 );
+    CHECK_MESSAGE( fabs( cached - free_fn ) < 1.0e-6,
+      "FRF channel_for_energy mismatch at " << energy << " keV" );
+  }
+}//TEST_CASE( "testCachedSplinesFRF" )
+
+
+TEST_CASE( "testCachedSplinesLowerChannelEdge" )
+{
+  // Verify that set_lower_channel_energy clears splines and works correctly.
+  using namespace SpecUtils;
+
+  EnergyCalibration cal;
+
+  // First set polynomial with deviation pairs
+  const size_t nbin = 128;
+  const vector<float> coefs = { 0.0f, 3.0f };
+  const vector<pair<float,float>> dev_pairs = { {0.0f, 0.0f}, {200.0f, 5.0f}, {400.0f, 0.0f} };
+  cal.set_polynomial( nbin, coefs, dev_pairs );
+
+  // Now set lower channel edge (should clear deviation pair splines)
+  vector<float> energies( nbin + 1 );
+  for( size_t i = 0; i <= nbin; ++i )
+    energies[i] = static_cast<float>( i * 3.0 );
+  cal.set_lower_channel_energy( nbin, energies );
+
+  CHECK( cal.type() == EnergyCalType::LowerChannelEdge );
+
+  // channel_for_energy and energy_for_channel should work without issues
+  const double ch = cal.channel_for_energy( 150.0 );
+  CHECK( fabs( ch - 50.0 ) < 0.001 ); // 150 / 3.0 = 50
+
+  const double e = cal.energy_for_channel( 50.0 );
+  CHECK( fabs( e - 150.0 ) < 0.001 );
+}//TEST_CASE( "testCachedSplinesLowerChannelEdge" )
