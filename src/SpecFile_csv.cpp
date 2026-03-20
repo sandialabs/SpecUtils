@@ -1094,9 +1094,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
                  || istarts_with( fields[0], "Канал" )
                  //For a single column data
                  || istarts_with( fields[0], "data" )
-                 //energy header can be like "Energy", "Energy (keV)", "En", or similar, but we dont
-                 //  want to mistake something like "Energy Calibration, ..." as a column header
+                 //energy header can be like "Energy", "Energy (keV)", "Energy[keV]", "En", or
+                 //  similar, but we dont want to mistake something like
+                 //  "Energy Calibration, ..." as a column header
                  || istarts_with( fields[0], "energy (" )
+                 || istarts_with( fields[0], "energy(" )
+                 || istarts_with( fields[0], "energy[" )
+                 || istarts_with( fields[0], "energy_" )
                  || iequals_ascii(fields[0], "energy" )
                  || iequals_ascii(fields[0], "en" )
                  || iequals_ascii(fields[0], "en (" )
@@ -1118,10 +1122,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           column_map[i] = kEnergy;
           if( SpecUtils::contains( fields[i], "mev" ) )
             energy_units = 1000.0f;
-          else if( SpecUtils::contains( fields[i], "(ev)" ) )
+          else if( SpecUtils::contains( fields[i], "(ev)" )
+                  || SpecUtils::contains( fields[i], "[ev]" ) )
             energy_units = 0.001f;
 
-          const auto kevpos = fields[i].find( "(kev)" );
+          auto kevpos = fields[i].find( "(kev)" );
+          if( kevpos == string::npos )
+            kevpos = fields[i].find( "[kev]" );
           if( kevpos != string::npos && ((fields[i].size() - kevpos) > 3) )
           {
             //Theramino produces a header like "Energy(KeV)    Counts    "
@@ -1156,7 +1163,28 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           column_map[i] = kCounts + numRecords;
         }
       }//for( size_t i = 0; i < nfields; ++i )
-      
+
+      // If we found an "Energy" column but no "Counts" column, and any of the header fields
+      //  suggest this is an efficiency file (e.g., "Eff", "Efficiency"), then reject it as a
+      //  spectrum file, so it can be handled as an efficiency CSV by the application.
+      bool has_energy_col = false, has_counts_col = false;
+      for( const auto &entry : column_map )
+      {
+        if( entry.second == kEnergy )
+          has_energy_col = true;
+        if( entry.second >= kCounts )
+          has_counts_col = true;
+      }
+
+      if( has_energy_col && !has_counts_col )
+      {
+        for( size_t i = 0; i < nfields; ++i )
+        {
+          if( starts_with( fields[i], "eff" ) )
+            throw runtime_error( "File appears to be an efficiency CSV, not a spectrum file." );
+        }
+      }//if( energy header but no counts header )
+
     }else if( starts_with( fields[0], "remark" ) )
     {
       ++nlines_used;
@@ -1386,7 +1414,25 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         poly_calib_coeff.resize( poly_calib_coeff.size() - 1 );
     }else
     {
-      // unidentified line
+      // unidentified line - check if it looks like an efficiency CSV header (has energy-like and
+      //  efficiency-like columns, but no counts-like column); if so, reject as spectrum file.
+      if( column_map.empty() && (nfields >= 2) )
+      {
+        bool has_energy = false, has_eff = false, has_counts = false;
+        for( size_t i = 0; i < nfields; ++i )
+        {
+          if( starts_with( fields[i], "en" ) )
+            has_energy = true;
+          if( starts_with( fields[i], "eff" ) )
+            has_eff = true;
+          if( starts_with( fields[i], "count" ) || starts_with( fields[i], "data" )
+             || starts_with( fields[i], "signal" ) || starts_with( fields[i], "detector" ) )
+            has_counts = true;
+        }
+
+        if( has_energy && has_eff && !has_counts )
+          throw runtime_error( "File appears to be an efficiency CSV, not a spectrum file." );
+      }//if( unrecognized header with multiple columns )
     }
   }//while( getline( istr, line ) )
   
