@@ -36,7 +36,7 @@
             "inherits": "GCC-Debug",
             "hidden": false,
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "SpecUtils_FORTRAN_SWIG": "OFF",
                 "SpecUtils_FORTRAN_SWIG_GEN": "OFF",
                 "SpecUtils_USE_MSVC_MultiThreadDLL" : "ON"
@@ -126,12 +126,22 @@
             "output": {
                 "verbosity": "verbose"
             }
+        },
+        {
+            "name": "run-tests-gcc-release",
+            "hidden": false,
+            "configurePreset": "GCC-Release",
+            "execution": {"jobs": 10},
+            "output": {
+
+            }
         }
     ],
     "packagePresets": [
         {
-            "name": "default",
+            "name": "package-gcc-release",
             "configurePreset": "GCC-Release",
+            "packageVersion": "2026.1",
             "generators": [
                 "TGZ",
                 "TZ"
@@ -203,6 +213,29 @@
                 {
                     "type": "package",
                     "name": "zip-file-release"
+                }                                    
+            ]
+        },
+        {
+            "name": "all-gcc-release",
+            "description": "you can run like this: cmake --workflow --preset all-gcc-release",
+            "steps" : [
+                
+                {
+                    "type": "configure",
+                    "name": "GCC-Release"
+                },
+                {
+                    "type": "build",
+                    "name": "GCC-Release"
+                },
+                {
+                    "type": "test",
+                    "name": "run-tests-gcc-release"
+                },
+                {
+                    "type": "package",
+                    "name": "package-gcc-release"
                 }                                    
             ]
         }
