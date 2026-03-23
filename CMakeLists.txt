@@ -501,7 +501,7 @@ if( NOT hasParent  )
     set( SpecUtils_PACKAGE_POSTFIX "StaticLib" )
   endif( SpecUtils_SHARED_LIB )
 
-  if (NIN32)
+  if (WIN32)
     if( SpecUtils_USE_MSVC_MultiThreadDLL )
       message("Using MSVC MultiThreadDLL runtime  ")
       set( SpecUtils_PACKAGE_POSTFIX "${SpecUtils_PACKAGE_POSTFIX}-SharedRuntime" )
