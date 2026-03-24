@@ -23,3 +23,9 @@ set_target_properties( file_parse_fuzz PROPERTIES CXX_STANDARD 14 CXX_STANDARD_R
 add_executable( fuzz_str_utils fuzz_str_utils.cpp )
 target_link_libraries( fuzz_str_utils PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Clang>:-fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )
 set_target_properties( fuzz_str_utils PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+
+if( SpecUtils_ENABLE_URI_SPECTRA )
+  add_executable( fuzz_uri_spectrum fuzz_uri_spectrum.cpp )
+  target_link_libraries( fuzz_uri_spectrum PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Clang>:-fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )
+  set_target_properties( fuzz_uri_spectrum PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+endif( SpecUtils_ENABLE_URI_SPECTRA )

@@ -6061,3 +6061,539 @@ TEST_CASE( "StreamVByte" )
   CHECK( test_20_dec == test_20_chan_cnts );
   
 }//TEST_CASE( StreamVByte )
+
+
+// ============================================================================
+// Lossy wavelet compression tests
+// ============================================================================
+
+#include "SpecUtils/UriLossySpectrum.h"
+
+// Helper: create a synthetic HPGe-like spectrum with peaks
+static UrlSpectrum make_test_hpge_spectrum()
+{
+  UrlSpectrum spec;
+  spec.m_source_type = SpecUtils::SourceType::Foreground;
+  spec.m_energy_cal_coeffs.push_back( 0.0f );
+  spec.m_energy_cal_coeffs.push_back( 0.5f );
+  spec.m_model = "TestHPGe";
+  spec.m_title = "Test Spectrum";
+  spec.m_live_time = 300.0f;
+  spec.m_real_time = 301.0f;
+  spec.m_neut_sum = 5;
+
+  // 16384 channel spectrum with background + peaks
+  const size_t nchan = 16384;
+  spec.m_channel_data.resize( nchan, 0 );
+
+  std::mt19937 rng( 42 );
+  for( size_t i = 0; i < nchan; ++i )
+  {
+    // Exponential background
+    double bg = 50.0 * exp( -static_cast<double>(i) / 2000.0 );
+    // Peaks at channels 1320 (662 keV), 2640 (1332 keV)
+    double pk1 = 5000.0 * exp( -0.5 * pow((static_cast<double>(i) - 1320.0) / 3.0, 2) );
+    double pk2 = 2000.0 * exp( -0.5 * pow((static_cast<double>(i) - 2640.0) / 4.0, 2) );
+    double mean = bg + pk1 + pk2;
+
+    std::poisson_distribution<uint32_t> poisson( std::max(mean, 0.01) );
+    spec.m_channel_data[i] = poisson( rng );
+  }
+
+  return spec;
+}
+
+
+// Helper: create a smaller NaI-like spectrum
+static UrlSpectrum make_test_nai_spectrum()
+{
+  UrlSpectrum spec;
+  spec.m_source_type = SpecUtils::SourceType::Foreground;
+  spec.m_energy_cal_coeffs.push_back( 0.0f );
+  spec.m_energy_cal_coeffs.push_back( 3.0f );
+  spec.m_model = "TestNaI";
+  spec.m_title = "NaI Test";
+  spec.m_live_time = 60.0f;
+  spec.m_real_time = 60.5f;
+  spec.m_neut_sum = 2;
+
+  const size_t nchan = 1024;
+  spec.m_channel_data.resize( nchan, 0 );
+
+  std::mt19937 rng( 123 );
+  for( size_t i = 0; i < nchan; ++i )
+  {
+    double bg = 100.0 * exp( -static_cast<double>(i) / 200.0 );
+    double pk = 3000.0 * exp( -0.5 * pow((static_cast<double>(i) - 220.0) / 10.0, 2) );
+    double mean = bg + pk;
+
+    std::poisson_distribution<uint32_t> poisson( std::max(mean, 0.01) );
+    spec.m_channel_data[i] = poisson( rng );
+  }
+
+  return spec;
+}
+
+
+TEST_CASE( "LossyDwtVerify" )
+{
+  // Verify wavedec/waverec round-trip with known pywt reference values
+  // (test vector from numpy seed=42, 64 samples)
+  const double sig64[] = {
+    0.3745401188473625, 0.9507143064099162, 0.7319939418114051, 0.5986584841970366,
+    0.15601864044243652, 0.15599452033620265, 0.05808361216819946, 0.8661761457749352,
+    0.6011150117432088, 0.7080725777960455, 0.020584494295802447, 0.9699098521619943,
+    0.8324426408004217, 0.21233911067827616, 0.18182496720710062, 0.18340450985343382,
+    0.3042422429595377, 0.5247564316322378, 0.43194501864211576, 0.2912291401980419,
+    0.6118528947223795, 0.13949386065204183, 0.29214464853521815, 0.3663618432936917,
+    0.45606998421703593, 0.7851759613930136, 0.19967378215835974, 0.5142344384136116,
+    0.5924145688620425, 0.046450412719997725, 0.6075448519014384, 0.17052412368729153,
+    0.06505159298527952, 0.9488855372533332, 0.9656320330745594, 0.8083973481164611,
+    0.3046137691733707, 0.09767211400638387, 0.6842330265121569, 0.4401524937396013,
+    0.12203823484477883, 0.4951769101112702, 0.034388521115218396, 0.9093204020787821,
+    0.2587799816000169, 0.662522284353982, 0.31171107608941095, 0.5200680211778108,
+    0.5467102793432796, 0.18485445552552704, 0.9695846277645586, 0.7751328233611146,
+    0.9394989415641891, 0.8948273504276488, 0.5978999788110851, 0.9218742350231168,
+    0.0884925020519195, 0.1959828624191452, 0.045227288910538066, 0.32533033076326434,
+    0.388677289689482, 0.2713490317738959, 0.8287375091519293, 0.3567533266935893
+  };
+
+  std::vector<double> signal( sig64, sig64 + 64 );
+
+  SpecUtils::WaveletDecomp decomp = SpecUtils::wavedec( signal );
+
+  // Expected from pywt: 2 levels, subband lengths [27, 27, 39]
+  CHECK( decomp.num_levels == 2 );
+  REQUIRE( decomp.level_lengths.size() == 3 );
+  CHECK( decomp.level_lengths[0] == 27 );
+  CHECK( decomp.level_lengths[1] == 27 );
+  CHECK( decomp.level_lengths[2] == 39 );
+  CHECK( decomp.coeffs.size() == 93 );
+
+  // Check first coefficient matches pywt
+  CHECK( fabs( decomp.coeffs[0] - 0.7274821250909369 ) < 1e-12 );
+
+  // Reconstruction round-trip
+  std::vector<double> recon = SpecUtils::waverec( decomp );
+  REQUIRE( recon.size() == 64 );
+
+  double max_err = 0;
+  for( size_t i = 0; i < 64; ++i )
+  {
+    double err = fabs( signal[i] - recon[i] );
+    if( err > max_err ) max_err = err;
+  }
+  CHECK( max_err < 1e-10 );
+}//TEST_CASE( LossyDwtVerify )
+
+
+TEST_CASE( "LossySerializeRoundtrip" )
+{
+  UrlSpectrum spec = make_test_nai_spectrum();
+
+  SpecUtils::CompressedSpectrum comp = SpecUtils::compress_spectrum( spec.m_channel_data, 153 );
+  CHECK( comp.indices.size() == 153 );
+  CHECK( comp.original_num_channels == 1024 );
+
+  // Serialize -> deserialize round-trip
+  std::vector<uint8_t> blob = SpecUtils::serialize_compressed( comp );
+  CHECK( blob.size() > 0 );
+
+  SpecUtils::CompressedSpectrum comp2 = SpecUtils::deserialize_compressed( blob );
+  CHECK( comp2.indices.size() == comp.indices.size() );
+  CHECK( comp2.original_num_channels == comp.original_num_channels );
+  CHECK( comp2.decomp_level == comp.decomp_level );
+
+  // Decompress and check no NaN
+  std::vector<float> recon = SpecUtils::decompress_spectrum( comp2 );
+  REQUIRE( recon.size() == 1024 );
+
+  bool has_nan = false;
+  for( size_t i = 0; i < recon.size(); ++i )
+  {
+    if( !std::isfinite(recon[i]) )
+    {
+      has_nan = true;
+      break;
+    }
+  }
+  CHECK( !has_nan );
+
+  // RMSE should be reasonable and deterministic for fixed seed + coefficient count
+  double sum_sq = 0;
+  for( size_t i = 0; i < spec.m_channel_data.size(); ++i )
+  {
+    double diff = static_cast<double>(spec.m_channel_data[i]) - static_cast<double>(recon[i]);
+    sum_sq += diff * diff;
+  }
+  double rmse = sqrt( sum_sq / spec.m_channel_data.size() );
+  CHECK( rmse > 0.0 );
+  CHECK( rmse < (6.410727 + 0.001) );
+}//TEST_CASE( LossySerializeRoundtrip )
+
+
+TEST_CASE( "LossySingleSpectrumEncode" )
+{
+  UrlSpectrum spec = make_test_hpge_spectrum();
+
+  // Encode to a single URI with 4296 char limit (QR v40 LOW)
+  std::vector<UrlSpectrum> measurements;
+  measurements.push_back( spec );
+
+  SpecUtils::LossyEncodeResult result;
+  REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+
+  CHECK( result.m_urls.size() == 1 );
+  CHECK( result.m_urls[0].size() <= 4296 );
+  CHECK( result.m_rmse > 0.0 );
+  CHECK( result.m_rmse < (2.107140 + 0.001) );
+  CHECK( result.m_num_coefficients > 100 );
+
+  // Decode back with decode_spectrum_urls
+  std::vector<UrlSpectrum> decoded;
+  REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+  REQUIRE( decoded.size() == 1 );
+
+  CHECK( decoded[0].m_channel_data.size() == spec.m_channel_data.size() );
+  CHECK( decoded[0].m_model == spec.m_model );
+  CHECK_FRACTIONALLY_NEAR( decoded[0].m_live_time, spec.m_live_time, 0.01 );
+  CHECK_FRACTIONALLY_NEAR( decoded[0].m_real_time, spec.m_real_time, 0.01 );
+  CHECK( decoded[0].m_neut_sum == spec.m_neut_sum );
+
+  // Re-encode with same parameters and verify identical channel data
+  SpecUtils::LossyEncodeResult result2;
+  REQUIRE_NOTHROW( result2 = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+  std::vector<UrlSpectrum> decoded2;
+  REQUIRE_NOTHROW( decoded2 = decode_spectrum_urls( { url_decode( result2.m_urls[0] ) } ) );
+  REQUIRE( decoded2.size() == 1 );
+  CHECK( decoded[0].m_channel_data == decoded2[0].m_channel_data );
+}//TEST_CASE( LossySingleSpectrumEncode )
+
+
+TEST_CASE( "LossyMultiPartSpectrum" )
+{
+  UrlSpectrum spec = make_test_hpge_spectrum();
+  std::vector<UrlSpectrum> measurements;
+  measurements.push_back( spec );
+
+  // Encode to 3 parts, each max 3000 chars
+  SpecUtils::LossyEncodeResult result;
+  REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 3, 3000 ) );
+
+  REQUIRE( result.m_urls.size() == 3 );
+  for( size_t i = 0; i < result.m_urls.size(); ++i )
+    CHECK( result.m_urls[i].size() <= 3000 );
+
+  CHECK( result.m_rmse > 0.0 );
+  CHECK( result.m_rmse < (1.418710 + 0.001) );
+  CHECK( result.m_num_coefficients > 50 );
+
+  // Decode all parts back
+  std::vector<std::string> decoded_urls;
+  for( size_t i = 0; i < result.m_urls.size(); ++i )
+    decoded_urls.push_back( url_decode( result.m_urls[i] ) );
+
+  std::vector<UrlSpectrum> decoded;
+  REQUIRE_NOTHROW( decoded = decode_spectrum_urls( decoded_urls ) );
+  REQUIRE( decoded.size() == 1 );
+
+  CHECK( decoded[0].m_channel_data.size() == spec.m_channel_data.size() );
+  CHECK( decoded[0].m_model == spec.m_model );
+  CHECK_FRACTIONALLY_NEAR( decoded[0].m_live_time, spec.m_live_time, 0.01 );
+
+  // Re-encode with same parameters and verify identical channel data (deterministic)
+  SpecUtils::LossyEncodeResult result2;
+  REQUIRE_NOTHROW( result2 = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 3, 3000 ) );
+  std::vector<std::string> decoded_urls2;
+  for( size_t i = 0; i < result2.m_urls.size(); ++i )
+    decoded_urls2.push_back( url_decode( result2.m_urls[i] ) );
+  std::vector<UrlSpectrum> decoded2;
+  REQUIRE_NOTHROW( decoded2 = decode_spectrum_urls( decoded_urls2 ) );
+  REQUIRE( decoded2.size() == 1 );
+  CHECK( decoded[0].m_channel_data == decoded2[0].m_channel_data );
+
+  // Also encode to a single part with comparable total capacity
+  SpecUtils::LossyEncodeResult result_single;
+  REQUIRE_NOTHROW( result_single = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 6000 ) );
+
+  std::vector<UrlSpectrum> decoded_single;
+  REQUIRE_NOTHROW( decoded_single = decode_spectrum_urls( { url_decode( result_single.m_urls[0] ) } ) );
+  REQUIRE( decoded_single.size() == 1 );
+  CHECK( decoded_single[0].m_channel_data.size() == spec.m_channel_data.size() );
+}//TEST_CASE( LossyMultiPartSpectrum )
+
+
+TEST_CASE( "LossyMultiSpectrumEncode" )
+{
+  UrlSpectrum fore = make_test_hpge_spectrum();
+  fore.m_source_type = SpecUtils::SourceType::Foreground;
+
+  UrlSpectrum back = make_test_nai_spectrum();
+  back.m_source_type = SpecUtils::SourceType::Background;
+  // Give background same energy cal as foreground for the skip-optimization path
+  back.m_energy_cal_coeffs = fore.m_energy_cal_coeffs;
+  back.m_model = fore.m_model;
+  // Resize to match foreground channel count (multi-spectrum requires same channel count for shared energy cal)
+  back.m_channel_data.resize( fore.m_channel_data.size(), 0 );
+
+  std::vector<UrlSpectrum> measurements;
+  measurements.push_back( fore );
+  measurements.push_back( back );
+
+  SpecUtils::LossyEncodeResult result;
+  REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+
+  CHECK( result.m_urls.size() == 1 );
+  CHECK( result.m_urls[0].size() <= 4296 );
+  CHECK( result.m_rmse > 0.0 );
+  CHECK( result.m_rmse < (1.779242 + 0.001) );
+
+  // Decode back
+  std::vector<UrlSpectrum> decoded;
+  REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+  REQUIRE( decoded.size() == 2 );
+
+  CHECK( decoded[0].m_source_type == SpecUtils::SourceType::Foreground );
+  CHECK( decoded[1].m_source_type == SpecUtils::SourceType::Background );
+  CHECK( decoded[0].m_channel_data.size() == fore.m_channel_data.size() );
+  CHECK( decoded[1].m_channel_data.size() == back.m_channel_data.size() );
+  CHECK_FRACTIONALLY_NEAR( decoded[0].m_live_time, fore.m_live_time, 0.01 );
+  CHECK_FRACTIONALLY_NEAR( decoded[1].m_live_time, back.m_live_time, 0.01 );
+
+  // Re-encode and verify identical channel data (deterministic)
+  SpecUtils::LossyEncodeResult result2;
+  REQUIRE_NOTHROW( result2 = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+  std::vector<UrlSpectrum> decoded2;
+  REQUIRE_NOTHROW( decoded2 = decode_spectrum_urls( { url_decode( result2.m_urls[0] ) } ) );
+  REQUIRE( decoded2.size() == 2 );
+  CHECK( decoded[0].m_channel_data == decoded2[0].m_channel_data );
+  CHECK( decoded[1].m_channel_data == decoded2[1].m_channel_data );
+}//TEST_CASE( LossyMultiSpectrumEncode )
+
+
+TEST_CASE( "LossyDecodeTransparency" )
+{
+  // Verify decode_spectrum_urls handles both lossless and wavelet URIs
+  UrlSpectrum spec;
+  spec.m_source_type = SpecUtils::SourceType::Foreground;
+  spec.m_energy_cal_coeffs.push_back( 0.0f );
+  spec.m_energy_cal_coeffs.push_back( 3.0f );
+  spec.m_model = "TestDet";
+  spec.m_live_time = 100.0f;
+  spec.m_real_time = 100.5f;
+  spec.m_channel_data.resize( 128 );
+
+  std::mt19937 rng( 99 );
+  for( size_t i = 0; i < 128; ++i )
+  {
+    std::poisson_distribution<uint32_t> poisson( 50.0 );
+    spec.m_channel_data[i] = poisson( rng );
+  }
+
+  // Encode lossless
+  std::vector<UrlSpectrum> measurements;
+  measurements.push_back( spec );
+
+  vector<string> lossless;
+  REQUIRE_NOTHROW( lossless = url_encode_spectra( measurements, 0x00, 1 ) );
+  REQUIRE( lossless.size() == 1 );
+
+  // Encode lossy
+  SpecUtils::LossyEncodeResult lossy;
+  REQUIRE_NOTHROW( lossy = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+  REQUIRE( lossy.m_urls.size() == 1 );
+
+  // Decode both with the same function
+  std::vector<UrlSpectrum> dec_lossless;
+  REQUIRE_NOTHROW( dec_lossless = decode_spectrum_urls( { url_decode( lossless[0] ) } ) );
+  REQUIRE( dec_lossless.size() == 1 );
+
+  std::vector<UrlSpectrum> dec_lossy;
+  REQUIRE_NOTHROW( dec_lossy = decode_spectrum_urls( { url_decode( lossy.m_urls[0] ) } ) );
+  REQUIRE( dec_lossy.size() == 1 );
+
+  // Both should have the same metadata
+  CHECK( dec_lossless[0].m_model == spec.m_model );
+  CHECK( dec_lossy[0].m_model == spec.m_model );
+  CHECK( dec_lossless[0].m_channel_data.size() == spec.m_channel_data.size() );
+  CHECK( dec_lossy[0].m_channel_data.size() == spec.m_channel_data.size() );
+
+  // Lossless should be exact
+  CHECK( dec_lossless[0].m_channel_data == spec.m_channel_data );
+
+  // Lossy should be close but not exact
+  double rmse = 0;
+  for( size_t i = 0; i < spec.m_channel_data.size(); ++i )
+  {
+    double diff = static_cast<double>(spec.m_channel_data[i])
+                - static_cast<double>(dec_lossy[0].m_channel_data[i]);
+    rmse += diff * diff;
+  }
+  rmse = sqrt( rmse / spec.m_channel_data.size() );
+  CHECK( rmse > 0.0 );
+  CHECK( rmse < (34.090298 + 0.001) );
+
+  // Re-encode and verify identical lossy channel data (deterministic)
+  SpecUtils::LossyEncodeResult lossy2;
+  REQUIRE_NOTHROW( lossy2 = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+  std::vector<UrlSpectrum> dec_lossy2;
+  REQUIRE_NOTHROW( dec_lossy2 = decode_spectrum_urls( { url_decode( lossy2.m_urls[0] ) } ) );
+  REQUIRE( dec_lossy2.size() == 1 );
+  CHECK( dec_lossy[0].m_channel_data == dec_lossy2[0].m_channel_data );
+}//TEST_CASE( LossyDecodeTransparency )
+
+
+TEST_CASE( "LossyEncodeOptions" )
+{
+  UrlSpectrum spec = make_test_hpge_spectrum();
+  std::vector<UrlSpectrum> measurements;
+  measurements.push_back( spec );
+
+  // --- UseUrlSafeBase64 ---
+  {
+    SpecUtils::LossyEncodeResult result;
+    REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy(
+      measurements, EncodeOptions::UseUrlSafeBase64, 1, 4296 ) );
+    CHECK( result.m_urls.size() == 1 );
+    CHECK( result.m_urls[0].size() <= 4296 );
+    CHECK( result.m_rmse > 0.0 );
+    CHECK( result.m_rmse < (1.810459 + 0.001) );
+
+    std::vector<UrlSpectrum> decoded;
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+    REQUIRE( decoded.size() == 1 );
+    CHECK( decoded[0].m_channel_data.size() == spec.m_channel_data.size() );
+    CHECK( decoded[0].m_model == spec.m_model );
+
+    // Re-encode to verify deterministic
+    SpecUtils::LossyEncodeResult result2;
+    REQUIRE_NOTHROW( result2 = SpecUtils::url_encode_spectra_lossy(
+      measurements, EncodeOptions::UseUrlSafeBase64, 1, 4296 ) );
+    std::vector<UrlSpectrum> decoded2;
+    REQUIRE_NOTHROW( decoded2 = decode_spectrum_urls( { url_decode( result2.m_urls[0] ) } ) );
+    CHECK( decoded[0].m_channel_data == decoded2[0].m_channel_data );
+  }
+
+  // --- NoDeflate ---
+  {
+    SpecUtils::LossyEncodeResult result;
+    REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy(
+      measurements, EncodeOptions::NoDeflate, 1, 8000 ) );
+    CHECK( result.m_urls.size() == 1 );
+    CHECK( result.m_urls[0].size() <= 8000 );
+    CHECK( result.m_rmse > 0.0 );
+    CHECK( result.m_rmse < (2.070083 + 0.001) );
+
+    std::vector<UrlSpectrum> decoded;
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+    REQUIRE( decoded.size() == 1 );
+    CHECK( decoded[0].m_channel_data.size() == spec.m_channel_data.size() );
+  }
+
+  // --- NoDeflate + UseUrlSafeBase64 ---
+  {
+    SpecUtils::LossyEncodeResult result;
+    REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy(
+      measurements, EncodeOptions::NoDeflate | EncodeOptions::UseUrlSafeBase64, 1, 8000 ) );
+    CHECK( result.m_urls.size() == 1 );
+    CHECK( result.m_urls[0].size() <= 8000 );
+    CHECK( result.m_rmse > 0.0 );
+    CHECK( result.m_rmse < (1.777396 + 0.001) );
+
+    std::vector<UrlSpectrum> decoded;
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+    REQUIRE( decoded.size() == 1 );
+    CHECK( decoded[0].m_channel_data.size() == spec.m_channel_data.size() );
+  }
+}//TEST_CASE( LossyEncodeOptions )
+
+
+TEST_CASE( "LossyEdgeCases" )
+{
+  // --- Minimum spectrum size (32 channels) ---
+  {
+    UrlSpectrum spec;
+    spec.m_source_type = SpecUtils::SourceType::Foreground;
+    spec.m_energy_cal_coeffs.push_back( 0.0f );
+    spec.m_energy_cal_coeffs.push_back( 100.0f );
+    spec.m_model = "Small";
+    spec.m_live_time = 10.0f;
+    spec.m_real_time = 10.0f;
+    spec.m_channel_data.resize( 32 );
+    std::mt19937 rng( 77 );
+    for( size_t i = 0; i < 32; ++i )
+    {
+      std::poisson_distribution<uint32_t> poisson( 20.0 );
+      spec.m_channel_data[i] = poisson( rng );
+    }
+
+    std::vector<UrlSpectrum> measurements;
+    measurements.push_back( spec );
+    SpecUtils::LossyEncodeResult result;
+    REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+    CHECK( result.m_rmse < (7.192565 + 0.001) );
+
+    std::vector<UrlSpectrum> decoded;
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+    REQUIRE( decoded.size() == 1 );
+    CHECK( decoded[0].m_channel_data.size() == 32 );
+
+    // Deterministic
+    SpecUtils::LossyEncodeResult result2;
+    REQUIRE_NOTHROW( result2 = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+    std::vector<UrlSpectrum> decoded2;
+    REQUIRE_NOTHROW( decoded2 = decode_spectrum_urls( { url_decode( result2.m_urls[0] ) } ) );
+    CHECK( decoded[0].m_channel_data == decoded2[0].m_channel_data );
+  }
+
+  // --- All-zeros spectrum ---
+  {
+    UrlSpectrum spec;
+    spec.m_source_type = SpecUtils::SourceType::Foreground;
+    spec.m_energy_cal_coeffs.push_back( 0.0f );
+    spec.m_energy_cal_coeffs.push_back( 3.0f );
+    spec.m_model = "Zero";
+    spec.m_live_time = 1.0f;
+    spec.m_real_time = 1.0f;
+    spec.m_channel_data.resize( 1024, 0 );
+
+    std::vector<UrlSpectrum> measurements;
+    measurements.push_back( spec );
+    SpecUtils::LossyEncodeResult result;
+    REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+    CHECK( result.m_rmse < (0.0 + 0.001) );
+
+    std::vector<UrlSpectrum> decoded;
+    REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
+    REQUIRE( decoded.size() == 1 );
+    CHECK( decoded[0].m_channel_data.size() == 1024 );
+
+    // All channels should be zero
+    bool all_zero = true;
+    for( size_t i = 0; i < decoded[0].m_channel_data.size(); ++i )
+    {
+      if( decoded[0].m_channel_data[i] != 0 )
+      {
+        all_zero = false;
+        break;
+      }
+    }
+    CHECK( all_zero );
+  }
+
+  // --- Spectrum too small (should throw) ---
+  {
+    UrlSpectrum spec;
+    spec.m_source_type = SpecUtils::SourceType::Foreground;
+    spec.m_energy_cal_coeffs.push_back( 0.0f );
+    spec.m_energy_cal_coeffs.push_back( 100.0f );
+    spec.m_model = "TooSmall";
+    spec.m_live_time = 1.0f;
+    spec.m_real_time = 1.0f;
+    spec.m_channel_data.resize( 16, 10 ); // 16 channels, below 32 minimum
+
+    std::vector<UrlSpectrum> measurements;
+    measurements.push_back( spec );
+    CHECK_THROWS( SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
+  }
+}//TEST_CASE( LossyEdgeCases )

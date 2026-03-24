@@ -118,6 +118,22 @@ namespace SpecUtils
      options are added, consider skipping this bit.
      */
     AsMailToUri = 0x20,
+
+    /** If specified, the spectrum channel data is wavelet-compressed (lossy).
+
+     Instead of lossless zero-compression + streamvbyte encoding, the channel data
+     is represented by a sparse set of wavelet coefficients quantized to 12 bits.
+     This enables high-channel-count spectra (e.g., 16384-channel HPGe) to fit in
+     a single QR code at the cost of some reconstruction error (typically RMSE ~2-5
+     counts for typical spectra).
+
+     This option is set automatically by #url_encode_spectra_lossy and detected
+     automatically by #decode_spectrum_urls.  It is incompatible with
+     #CsvChannelData and #NoZeroCompressCounts (which are irrelevant for wavelet data).
+
+     @sa url_encode_spectra_lossy, UriLossySpectrum.h
+     */
+    WaveletCompressed = 0x40,
   };//enum EncodeOptions
 
 

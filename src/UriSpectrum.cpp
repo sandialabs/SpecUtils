@@ -45,6 +45,7 @@ extern "C"{
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/UriSpectrum.h"
+#include "SpecUtils/UriLossySpectrum.h"
 #include "SpecUtils/EnergyCalibration.h"
 
 
@@ -1486,7 +1487,8 @@ EncodedSpectraInfo get_spectrum_url_info( std::string url )
     //  shouldnt have been - so we will ignore this bit
     const uint8_t allowed_bits = (EncodeOptions::NoDeflate | EncodeOptions::NoBaseXEncoding
                                   | EncodeOptions::CsvChannelData | EncodeOptions::NoZeroCompressCounts
-                                  | EncodeOptions::UseUrlSafeBase64 | EncodeOptions::AsMailToUri);
+                                  | EncodeOptions::UseUrlSafeBase64 | EncodeOptions::AsMailToUri
+                                  | EncodeOptions::WaveletCompressed);
     const uint8_t non_allowed_bits = ~allowed_bits;
     if( answer.m_encode_options & non_allowed_bits )
     {
@@ -1779,7 +1781,52 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
 
   //UrlSpectrum
   string next_spec_info;
-  if( info.m_encode_options & EncodeOptions::CsvChannelData )
+  if( info.m_encode_options & EncodeOptions::WaveletCompressed )
+  {
+    // Wavelet-compressed lossy channel data: the data after S: is a serialized
+    // CompressedSpectrum blob, possibly followed by ":0A:" and more spectra.
+
+    // For multi-spectrum, look for ":0A:" delimiter in the binary data
+    const size_t delim_pos = counts_str.find( ":0A:" );
+    string wavelet_data;
+    if( delim_pos != string::npos )
+    {
+      wavelet_data = counts_str.substr( 0, delim_pos );
+      next_spec_info = counts_str.substr( delim_pos + 4 );
+    }
+    else
+    {
+      wavelet_data = counts_str;
+    }
+
+    if( info.m_number_urls > 1 )
+    {
+      // Multi-part: this is only the first chunk of the serialized blob.
+      // Store the raw bytes in m_channel_data (one byte per uint32_t entry)
+      // so decode_spectrum_urls can concatenate chunks from all parts and
+      // then deserialize+decompress the combined blob.
+      spec.m_channel_data.resize( wavelet_data.size() );
+      for( size_t i = 0; i < wavelet_data.size(); ++i )
+        spec.m_channel_data[i] = static_cast<uint32_t>( static_cast<uint8_t>(wavelet_data[i]) );
+    }
+    else
+    {
+      // Single-part: deserialize and decompress immediately
+      const uint8_t *blob = reinterpret_cast<const uint8_t *>( wavelet_data.data() );
+      const size_t blob_len = wavelet_data.size();
+
+      CompressedSpectrum comp = deserialize_compressed( blob, blob_len );
+      std::vector<float> recon = decompress_spectrum( comp );
+
+      spec.m_channel_data.resize( recon.size() );
+      for( size_t i = 0; i < recon.size(); ++i )
+      {
+        float v = recon[i];
+        spec.m_channel_data[i] = static_cast<uint32_t>( (v < 0.0f) ? 0.0f : (v + 0.5f) );
+      }
+    }
+  }
+  else if( info.m_encode_options & EncodeOptions::CsvChannelData )
   {
     //if( info.m_num_spectra
     const size_t end_pos = counts_str.find(":0A:");
@@ -1836,6 +1883,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
   
   
   if( !(info.m_encode_options & EncodeOptions::NoZeroCompressCounts)
+     && !(info.m_encode_options & EncodeOptions::WaveletCompressed)
      && (info.m_number_urls == 1) )
   {
     spec.m_channel_data = zero_compress_expand( spec.m_channel_data );
@@ -1886,13 +1934,22 @@ std::vector<uint32_t> spectrum_decode_not_first_url( std::string url )
     throw runtime_error( "spectrum_decode_not_first_url: data too short" );
   
   vector<uint32_t> answer;
-  if( info.m_encode_options & EncodeOptions::CsvChannelData )
+  if( info.m_encode_options & EncodeOptions::WaveletCompressed )
+  {
+    // Wavelet multi-part: data is a raw byte chunk of the serialized blob.
+    // Store each byte as a uint32_t so it can be concatenated with other parts'
+    // data in decode_spectrum_urls, then deserialized as a combined blob.
+    answer.resize( info.m_data.size() );
+    for( size_t i = 0; i < info.m_data.size(); ++i )
+      answer[i] = static_cast<uint32_t>( static_cast<uint8_t>(info.m_data[i]) );
+  }
+  else if( info.m_encode_options & EncodeOptions::CsvChannelData )
   {
     SpecUtils::ireplace_all( info.m_data, "$", "," );
     vector<long long> cd_ll;
     if( !SpecUtils::split_to_long_longs( info.m_data.data(), info.m_data.size(), cd_ll ) )
        throw runtime_error( "spectrum_decode_not_first_url: error splitting into integer channel counts" );
-    
+
     answer.resize( cd_ll.size() );
     for( size_t i = 0; i < cd_ll.size(); ++i )
       answer[i] = ((cd_ll[i] >= 0) ? static_cast<uint32_t>( cd_ll[i] ) : uint32_t(0));
@@ -1900,7 +1957,7 @@ std::vector<uint32_t> spectrum_decode_not_first_url( std::string url )
   {
     const size_t nread = decode_stream_vbyte( info.m_data.data(), info.m_data.size(), answer );
     assert( nread == info.m_data.size() );
-    
+
     if( nread != info.m_data.size() )
       throw runtime_error( "spectrum_decode_not_first_url: Extra unrecognized information in not-first-url" );
   }//if( CSV ) / else
@@ -1951,6 +2008,32 @@ std::vector<UrlSpectrum> decode_spectrum_urls( vector<string> urls )
       if( SpecUtils::valid_longitude(first_spec.m_longitude) && !SpecUtils::valid_longitude(spec.m_longitude) )
         spec.m_longitude = first_spec.m_longitude;
     }//for( size_t i = 1; i < spec_infos.size(); ++i )
+  }else if( info.m_encode_options & EncodeOptions::WaveletCompressed )
+  {
+    // Wavelet multi-part: each part was independently deflated+base45-encoded.
+    // Part 0's m_channel_data holds its blob bytes (one byte per uint32_t).
+    // Concatenate blob bytes from all parts, then deserialize+decompress.
+    UrlSpectrum &spec = spec_infos[0];
+    for( size_t i = 1; i < urls.size(); ++i )
+    {
+      const vector<uint32_t> more_bytes = spectrum_decode_not_first_url( urls[i] );
+      spec.m_channel_data.insert( end(spec.m_channel_data), begin(more_bytes), end(more_bytes) );
+    }
+
+    // Reconstruct the serialized wavelet blob from the uint32_t byte storage
+    vector<uint8_t> blob( spec.m_channel_data.size() );
+    for( size_t i = 0; i < spec.m_channel_data.size(); ++i )
+      blob[i] = static_cast<uint8_t>( spec.m_channel_data[i] & 0xFF );
+
+    CompressedSpectrum comp = deserialize_compressed( blob.data(), blob.size() );
+    std::vector<float> recon = decompress_spectrum( comp );
+
+    spec.m_channel_data.resize( recon.size() );
+    for( size_t i = 0; i < recon.size(); ++i )
+    {
+      float v = recon[i];
+      spec.m_channel_data[i] = static_cast<uint32_t>( (v < 0.0f) ? 0.0f : (v + 0.5f) );
+    }
   }else
   {
     UrlSpectrum &spec = spec_infos[0];
@@ -1959,7 +2042,7 @@ std::vector<UrlSpectrum> decode_spectrum_urls( vector<string> urls )
       const vector<uint32_t> more_counts = spectrum_decode_not_first_url( urls[i] );
       spec.m_channel_data.insert( end(spec.m_channel_data), begin(more_counts), end(more_counts) );
     }
-    
+
     if( !(info.m_encode_options & EncodeOptions::NoZeroCompressCounts) )
       spec.m_channel_data = zero_compress_expand( spec.m_channel_data );
   }//if( urls.size() == 1 ) / else
