@@ -333,6 +333,11 @@ std::vector<double> waverec( const WaveletDecomp &decomp )
 
   const int n_levels = decomp.num_levels;
 
+  if( decomp.level_lengths.size() < static_cast<size_t>(n_levels + 1) )
+    throw std::runtime_error( "waverec: level_lengths has "
+      + std::to_string(decomp.level_lengths.size()) + " entries but need at least "
+      + std::to_string(n_levels + 1) + " for " + std::to_string(n_levels) + " decomposition levels" );
+
   // Extract subbands from flattened array
   // level_lengths[0] = cA_n, level_lengths[1] = cD_n, ..., level_lengths[n_levels] = cD_1
   std::vector<std::vector<double>> subbands;
@@ -740,6 +745,11 @@ CompressedSpectrum deserialize_compressed( const uint8_t *data, size_t len )
   // read num_levels
   if( pos >= len ) throw std::runtime_error("deserialize: unexpected end");
   uint8_t num_levels = data[pos++];
+  if( num_levels < (result.decomp_level + 1) )
+    throw std::runtime_error( "deserialize_compressed: num_levels ("
+      + std::to_string(num_levels) + ") inconsistent with decomp_level ("
+      + std::to_string(result.decomp_level) + "); need at least decomp_level + 1 entries" );
+
   result.level_lengths.resize( num_levels );
   for( uint8_t i = 0; i < num_levels; ++i )
   {

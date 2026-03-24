@@ -984,7 +984,22 @@ vector<string> url_encode_spectrum( const UrlSpectrum &m,
       first_url += "M:" + det_model + " ";
     }
   }//if( !skip_model )
-  
+
+  if( !skip_model && !m.m_serial_number.empty() )
+  {
+    string serial = remove_field_delimiters( m.m_serial_number );
+    if( serial.size() > 30 )
+      serial = serial.substr(0,30);
+
+    SpecUtils::trim( serial );
+    if( !serial.empty() )
+    {
+      if( !use_deflate && !use_baseX_encoding && !use_url_safe_base64 && !use_bin_chan_data )
+        serial = url_encode_non_base45( serial );
+      first_url += "E:" + serial + " ";
+    }
+  }//if( serial number )
+
   if( !SpecUtils::is_special(m.m_start_time) )
   {
     // TODO: ISO string takes up 15 characters - could represent as a double, a la Microsoft time
@@ -1605,7 +1620,8 @@ EncodedSpectraInfo get_spectrum_url_info( std::string url )
       }//while( !b45_decoded && !url.empty() )
     }//if( base64url_encoded ) / else
 
-    assert( !raw.empty() );
+    if( raw.empty() )
+      throw runtime_error( "get_spectrum_url_info: base-X decoding produced empty result" );
     url.resize( raw.size() );
     memcpy( &(url[0]), &(raw[0]), raw.size() );
   }//if( use_baseX_encoding )
@@ -1720,6 +1736,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
   
   
   spec.m_model = get_str_field( 'M' );
+  spec.m_serial_number = get_str_field( 'E' );
   spec.m_title = get_str_field( 'O' );
   
   if( (info.m_encode_options & EncodeOptions::NoDeflate)
@@ -1727,6 +1744,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
      && (info.m_encode_options & EncodeOptions::CsvChannelData) )
   {
     spec.m_model = url_decode( spec.m_model );
+    spec.m_serial_number = url_decode( spec.m_serial_number );
     spec.m_title = url_decode( spec.m_title );
   }
   
@@ -2157,6 +2175,8 @@ std::shared_ptr<SpecFile> to_spec_file( const std::vector<UrlSpectrum> &spec_inf
   
   auto specfile = make_shared<SpecFile>();
   specfile->set_instrument_model( spec_infos[0].m_model );
+  if( !spec_infos[0].m_serial_number.empty() )
+    specfile->set_instrument_id( spec_infos[0].m_serial_number );
   
   shared_ptr<SpecUtils::EnergyCalibration> first_cal;
   vector< shared_ptr<SpecUtils::Measurement> > measurements;

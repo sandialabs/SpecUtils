@@ -278,7 +278,11 @@ bool SpecFile::write_uri( std::ostream &output, const size_t num_uris,
   }//if( num_uris == 1 || (measurements_.size() == 1) ) / else
   
   vector<UrlSpectrum> spectra = to_url_spectra( specs, detector_model );
-  
+
+  // Set serial number on all spectra from the instrument_id
+  for( size_t i = 0; i < spectra.size(); ++i )
+    spectra[i].m_serial_number = instrument_id_;
+
   vector<string> uris = url_encode_spectra( spectra, encode_options, num_uris );
   
   for( size_t i = 0; i < uris.size(); ++i )

@@ -145,9 +145,8 @@ namespace SpecUtils
     std::vector<std::pair<float,float>> m_dev_pairs;
     
     std::string m_model;
+    std::string m_serial_number;
     std::string m_title;
-    
-    // Maybe add serial number?
     
     // Use same time definition as SpecUtils, e.g. `SpecUtils::time_point_t`, and default to 0.
     std::chrono::time_point<std::chrono::system_clock,std::chrono::microseconds> m_start_time
