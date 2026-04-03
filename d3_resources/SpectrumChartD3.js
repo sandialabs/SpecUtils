@@ -6134,9 +6134,22 @@ SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
 
     /* Initially set the escape key flag false */
     /* ToDo: record initial range so if escape is pressed, can reset to it */
-    self.escapeKeyPressed = false;    
+    self.escapeKeyPressed = false;
 
     d3.select(document.body).style("cursor", "move");
+
+    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
+    d3.select(document).on("mouseup.sliderdrag", function() {
+      self.sliderBoxDown = false;
+      self.leftDragRegionDown = false;
+      self.rightDragRegionDown = false;
+      self.sliderChartMouse = null;
+      self.savedSliderMouse = null;
+      d3.select(document.body).style("cursor", "default");
+      d3.select(document).on("mouseup.sliderdrag", null);
+      d3.select(document).on("mousemove.sliderdrag", null);
+    });
+    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
   }
 }
 
@@ -6218,7 +6231,20 @@ SpectrumChartD3.prototype.handleMouseDownLeftSliderDrag = function() {
     self.leftDragRegionDown = true;
 
     /* Initially set the escape key flag false */
-    self.escapeKeyPressed = false;    
+    self.escapeKeyPressed = false;
+
+    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
+    d3.select(document).on("mouseup.sliderdrag", function() {
+      self.sliderBoxDown = false;
+      self.leftDragRegionDown = false;
+      self.rightDragRegionDown = false;
+      self.sliderChartMouse = null;
+      self.savedSliderMouse = null;
+      d3.select(document.body).style("cursor", "default");
+      d3.select(document).on("mouseup.sliderdrag", null);
+      d3.select(document).on("mousemove.sliderdrag", null);
+    });
+    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
   }
 }
 
@@ -6287,7 +6313,20 @@ SpectrumChartD3.prototype.handleMouseDownRightSliderDrag = function() {
     self.rightDragRegionDown = true;
 
     /* Initially set the escape key flag false */
-    self.escapeKeyPressed = false;    
+    self.escapeKeyPressed = false;
+
+    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
+    d3.select(document).on("mouseup.sliderdrag", function() {
+      self.sliderBoxDown = false;
+      self.leftDragRegionDown = false;
+      self.rightDragRegionDown = false;
+      self.sliderChartMouse = null;
+      self.savedSliderMouse = null;
+      d3.select(document.body).style("cursor", "default");
+      d3.select(document).on("mouseup.sliderdrag", null);
+      d3.select(document).on("mousemove.sliderdrag", null);
+    });
+    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
   }
 }
 
