@@ -1757,15 +1757,23 @@ SpectrumChartD3.prototype.getMousePos = function(){
   
   if( d3.event )
   {
-    const m = d3.mouse(this.vis[0][0]);
-    if( m )
-      return [m[0], m[1], m[0] + pad_left, m[1] + pad_top];
-      
+    try {
+      const m = d3.mouse(this.vis[0][0]);
+      if( m )
+        return [m[0], m[1], m[0] + pad_left, m[1] + pad_top];
+    } catch(e) {
+      // d3.mouse() can throw if event has non-finite coordinates (e.g., window losing focus)
+    }
+
     const t = d3.event.changedTouches;
     if( t && t.length ){
-      const vt = d3.touches(this.vis[0][0], t);
-      if( vt && vt.length )
-        return [vt[0][0], vt[0][1], vt[0][0] + pad_left, vt[0][1] + pad_top];
+      try {
+        const vt = d3.touches(this.vis[0][0], t);
+        if( vt && vt.length )
+          return [vt[0][0], vt[0][1], vt[0][0] + pad_left, vt[0][1] + pad_top];
+      } catch(e) {
+        // d3.touches() can similarly throw with non-finite coordinates
+      }
     }
   }//if( d3.event )
 
@@ -2383,8 +2391,9 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.recalibrationStartEnergy = [ self.xScale.invert(m[0]), self.xScale.invert(m[1]) ];
       self.isRecalibrating = false;
 
-      /* We are fitting peaks (if alt-key held) */
-      self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey && d3.event.keyCode !== 27;
+      /* We are fitting peaks (if ctrl-key held and dragging, but not if this is the second click of a double-click) */
+      var mightBeDoubleClick = self.lastClickEvent && ((new Date() - self.lastClickEvent) < self.options.doubleClickDelay);
+      self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey && d3.event.keyCode !== 27 && !mightBeDoubleClick;
       //self.forcedFitRoiNumPeaks = -1;
       
       self.setMouseDownRoi( m );
@@ -2534,7 +2543,14 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.mouseDownRoi = null;
           }
           
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), modifiers );
+          // On Windows, the Alt key may not reach JavaScript reliably in WebView2/Edge,
+          // so we also accept Ctrl + double-click as the equivalent of Alt/Option + double-click
+          // (for fitting peaks in the background spectrum).
+          var dblclickMods = modifiers;
+          if( self.isWindows() && (modifiers & 0x02) && !(modifiers & 0x04) ) {
+            dblclickMods = (modifiers & ~0x02) | 0x04; // Replace CtrlModifier with AltModifier
+          }
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), dblclickMods );
         } else {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
