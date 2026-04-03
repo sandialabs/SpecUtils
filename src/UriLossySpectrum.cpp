@@ -951,7 +951,7 @@ LossyEncodeResult url_encode_spectra_lossy(
       const size_t max_data_chars = max_chars_per_url - prefix_len;
 
       int lo = 20;
-      int hi = static_cast<int>( std::min( n_channels * 15 / static_cast<size_t>(100),
+      int hi = static_cast<int>( std::min( n_channels * 50 / static_cast<size_t>(100),
                                             static_cast<size_t>(5000) ) );
       if( hi < lo ) hi = lo;
 
