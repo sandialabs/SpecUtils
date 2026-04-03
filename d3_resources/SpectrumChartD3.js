@@ -1657,8 +1657,6 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     if ((d3.event.button === 0 && self.leftMouseDown)) {        /* If left click being held down (left-click and drag) */
       //console.log( "handleChartMouseMove: left down" );
 
-      const isWindows = self.isWindows();
-      
       d3.select(document.body).attr("cursor", "move");
 
       /* Holding the Shift-key and left-click dragging --> Delete Peaks Mode */
@@ -1668,14 +1666,13 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       self.isCountingGammas = d3.event.altKey && d3.event.shiftKey && !d3.event.ctrlKey && !d3.event.metaKey && !self.fittingPeak && !self.escapeKeyPressed;
 
       /* Holding the Alt+Ctrl-key + Left-click Dragging --> Recalibration Mode */
-      self.isRecalibrating = d3.event.altKey && d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed; 
+      self.isRecalibrating = d3.event.altKey && d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
 
-      /* Holding the Command-key + Left-click dragging --> Zoom-in Y Mode */
-      // For Windows, you can zoom-in on the y-axis using Alt + Left-drag
-      self.isZoomingInYAxis = (isWindows ? d3.event.altKey : d3.event.metaKey) && !(isWindows ? d3.event.metaKey : d3.event.altKey) && !d3.event.ctrlKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
+      /* Holding the Command-key (or Windows-key) + Left-click dragging --> Zoom-in Y Mode */
+      self.isZoomingInYAxis = d3.event.metaKey && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
 
-      /* Holding the Alt-key + Left-click dragging ---> Undefined, maybe a future implementation? */
-      self.isUndefinedMouseAction = (isWindows ? d3.event.metaKey : d3.event.altKey) && !d3.event.ctrlKey && !(isWindows ? d3.event.altKey : d3.event.metaKey) && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
+      /* Holding the Alt-key + Left-click dragging ---> Undefined (Alt + double-click is used for background peak fitting) */
+      self.isUndefinedMouseAction = d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
 
       var isZoomingInXAxis = !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed && !self.roiIsBeingDragged;
 
