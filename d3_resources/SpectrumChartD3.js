@@ -2391,9 +2391,8 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.recalibrationStartEnergy = [ self.xScale.invert(m[0]), self.xScale.invert(m[1]) ];
       self.isRecalibrating = false;
 
-      /* We are fitting peaks (if ctrl-key held and dragging, but not if this is the second click of a double-click) */
-      var mightBeDoubleClick = self.lastClickEvent && ((new Date() - self.lastClickEvent) < self.options.doubleClickDelay);
-      self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey && d3.event.keyCode !== 27 && !mightBeDoubleClick;
+      /* We are fitting peaks (if ctrl-key held) */
+      self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey && d3.event.keyCode !== 27;
       //self.forcedFitRoiNumPeaks = -1;
       
       self.setMouseDownRoi( m );
@@ -2543,14 +2542,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.mouseDownRoi = null;
           }
           
-          // On Windows, the Alt key may not reach JavaScript reliably in WebView2/Edge,
-          // so we also accept Ctrl + double-click as the equivalent of Alt/Option + double-click
-          // (for fitting peaks in the background spectrum).
-          var dblclickMods = modifiers;
-          if( self.isWindows() && (modifiers & 0x02) && !(modifiers & 0x04) ) {
-            dblclickMods = (modifiers & ~0x02) | 0x04; // Replace CtrlModifier with AltModifier
-          }
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), dblclickMods );
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), modifiers );
         } else {
           // This is the first click - maybe there will be another click, maybe not
           if( !modKeyPressed )
