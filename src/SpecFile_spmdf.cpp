@@ -134,7 +134,7 @@ namespace
     
     info.detTypeStr = s1fields[1];  //NaI or HPGe
     info.appTypeStr = s1fields[2];  //SPM, RDSC, MRDIS
-    info.nchannels = atoi( s1fields[3].c_str() );  //typically 512 or 4096
+    SpecUtils::parse_int( s1fields[3].c_str(), s1fields[3].size(), info.nchannels );  //typically 512 or 4096
     info.algorithmVersion = s1fields[4];
     
     if( (info.nchannels <= 0) || (info.nchannels > 131072) )
@@ -200,8 +200,9 @@ namespace
       
       if( isdigit(field[0]) )
       {
-        const float energy = static_cast<float>( atof( field.c_str() ) );
-        const float offset = static_cast<float>( atof( nextfield.c_str() ) );
+        float energy = 0.0f, offset = 0.0f;
+        SpecUtils::parse_float( field.c_str(), field.size(), energy );
+        SpecUtils::parse_float( nextfield.c_str(), nextfield.size(), offset );
         answer[detname].push_back( pair<float,float>(energy,offset) );
         i += 2;
       }else
@@ -227,13 +228,17 @@ namespace
     }
     
     info.alarmColor = fields[1];
-    info.occupancyNumber = atoi( fields[2].c_str() );
+    SpecUtils::parse_int( fields[2].c_str(), fields[2].size(), info.occupancyNumber );
     info.lastStartTime = SpecUtils::time_from_string( fields[3].c_str() );
     
     //    cout << "'" << fields[3] << "'--->" << info.lastStartTime << endl;
     info.icd1FileName = fields[4];
-    info.entrySpeed = (fields.size()>5) ? static_cast<float>(atof(fields[5].c_str())) : 0.0f;
-    info.exitSpeed = (fields.size()>6) ? static_cast<float>(atof(fields[6].c_str())) : info.entrySpeed;
+    if( fields.size() > 5 )
+      SpecUtils::parse_float( fields[5].c_str(), fields[5].size(), info.entrySpeed );
+    if( fields.size() > 6 )
+      SpecUtils::parse_float( fields[6].c_str(), fields[6].size(), info.exitSpeed );
+    else
+      info.exitSpeed = info.entrySpeed;
     
     info.success = true;
   }//bool parse_end_record(...)
@@ -280,9 +285,9 @@ namespace
     }
     
     pos1 = pos2;
-    info.realTime = static_cast<float>( atof( line.c_str() + pos1 + 1 ) );
+    SpecUtils::parse_float( line.c_str() + pos1 + 1, line.size() - pos1 - 1, info.realTime );
     pos1 = line.find( ',', pos1+1 );
-    
+
     if( pos1 == string::npos )
     {
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
@@ -296,7 +301,8 @@ namespace
     
     if( info.type == DailyFileAnalyzedBackground::Neutrons )
     {
-      const float nneut = static_cast<float>( atof( line.c_str() + pos1 + 1 ) );
+      float nneut = 0.0f;
+      SpecUtils::parse_float( line.c_str() + pos1 + 1, line.size() - pos1 - 1, nneut );
       info.spectrum->resize( 1, nneut );
     }else
     {
@@ -388,7 +394,7 @@ namespace
       return;
     }
     
-    info.timeChunkNumber = static_cast<int>( atoi( line.c_str() + pos1 + 1 ) );
+    SpecUtils::parse_int( line.c_str() + pos1 + 1, line.size() - pos1 - 1, info.timeChunkNumber );
     info.spectrum.reset( new vector<float>() );
     
     vector<float> vals;
@@ -464,8 +470,8 @@ namespace
       return;
     }
     
-    info.realTime = static_cast<float>( atof( line.c_str() + pos1 + 1 ) );
-    
+    SpecUtils::parse_float( line.c_str() + pos1 + 1, line.size() - pos1 - 1, info.realTime );
+
     const char *start = line.c_str() + pos2 + 1;
     const size_t len = line.size() - pos2 - 1;
     
@@ -697,7 +703,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #if( DO_SDF_MULTITHREAD )
   while( pos < filelength )
 #else
-    while( SpecUtils::safe_get_line( input, line ) )
+    while( SpecUtils::safe_get_line( input, line, 64*1024 ) )
 #endif
     {
       
@@ -1283,7 +1289,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
        }//if( gammas.size() )
        */
       
-      if( neutback && !neutback->spectrum )
+      if( neutback && neutback->spectrum )
       {
         meas->neutron_counts_ = *neutback->spectrum;
         meas->neutron_counts_sum_ = 0.0;

@@ -36,12 +36,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
 }//namespace
 
 
@@ -128,11 +122,14 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     
     meas->start_time_ = SpecUtils::time_from_string( startdate.c_str() );
     
-    if( !toFloat( getval("TLIVE="), meas->live_time_ ) )
-      meas->live_time_ = 0.0f;
-    
-    if( !toFloat( getval("TREAL="), meas->real_time_ ) )
-      meas->real_time_ = 0.0f;
+    {
+      const string tlive = getval("TLIVE=");
+      if( !SpecUtils::parse_float( tlive.c_str(), tlive.size(), meas->live_time_ ) )
+        meas->live_time_ = 0.0f;
+      const string treal = getval("TREAL=");
+      if( !SpecUtils::parse_float( treal.c_str(), treal.size(), meas->real_time_ ) )
+        meas->real_time_ = 0.0f;
+    }
     
     instrument_id_ = getval( "DETECTOR=" );
     

@@ -154,7 +154,15 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
     
     if( !is_candidate_scan_data(input) )
       throw runtime_error( "Not ScanData XML file candidate." );
-    
+
+    // Check file size to prevent DoS from huge files
+    const istream::pos_type cur_pos = input.tellg();
+    input.seekg( 0, ios::end );
+    const size_t file_size = static_cast<size_t>( input.tellg() - start_pos );
+    input.seekg( cur_pos, ios::beg );
+    if( file_size > 100*1024*1024 )
+      throw runtime_error( "ScanData XML file too large." );
+
     rapidxml::file<char> input_file( input );
     
     std::unique_ptr<rapidxml::xml_document<char>> doc( new rapidxml::xml_document<char>() );
@@ -530,6 +538,14 @@ bool SpecFile::load_from_caen_gxml(std::istream& input)
 
     if (!is_candidate_gxml(input))
       throw runtime_error("Not GXML file candidate.");
+
+    // Check file size to prevent DoS from huge files
+    const istream::pos_type cur_pos = input.tellg();
+    input.seekg( 0, ios::end );
+    const size_t gxml_file_size = static_cast<size_t>( input.tellg() - start_pos );
+    input.seekg( cur_pos, ios::beg );
+    if( gxml_file_size > 10*1024*1024 )
+      throw runtime_error( "GXML file too large." );
 
     rapidxml::file<char> input_file(input);
 

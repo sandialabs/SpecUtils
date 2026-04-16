@@ -49,11 +49,6 @@ using namespace std;
 
 namespace
 {
-  bool toDouble( const std::string &str, double &f )
-  {
-    const int nconvert = sscanf( str.c_str(), "%lf", &f );
-    return (nconvert == 1);
-  }
   
   //During parsing we abuse the remarks to hold PCF specific information, so
   //  lets extract that back out now - soryy for this horriblness.
@@ -691,7 +686,9 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
     
     fileid.resize( 238, '\0' ); //2-byte signed integer of Item to detector distance
     string item_dist_str = findPcfRemark("ItemToDetectorDistance",remarks_);
-    int16_t itemdistance = static_cast<int16_t>( atoi( item_dist_str.c_str() ) );
+    int itemdist_val = 0;
+    SpecUtils::parse_int( item_dist_str.c_str(), item_dist_str.size(), itemdist_val );
+    int16_t itemdistance = static_cast<int16_t>( itemdist_val );
     memcpy( &(fileid[236]), &itemdistance, 2 );
     
     fileid.resize( 240, '\0' ); //2-byte signed integer of Occupancy number
@@ -1269,8 +1266,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
         //ortecLatOrLongStrToFlt()
         double latitude = -999.9, longitude = -999.9;
         
-        if( !toDouble( meas_coords_components[0], latitude )
-           || !toDouble( meas_coords_components[0], longitude )
+        if( !SpecUtils::parse_double( meas_coords_components[0].c_str(), meas_coords_components[0].size(), latitude )
+           || !SpecUtils::parse_double( meas_coords_components[1].c_str(), meas_coords_components[1].size(), longitude )
            || !SpecUtils::valid_latitude(latitude)
            || !SpecUtils::valid_longitude(longitude) )
         {

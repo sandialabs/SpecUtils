@@ -826,6 +826,9 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
                                                          const vector<pair<float,float>> &dev_pairs,
                                                         const bool include_upper_energy )
 {
+  if( nbin == 0 )
+    throw std::runtime_error( "fullrangefraction_binning: nbin cannot be zero" );
+
   // \TODO: implement apply_deviation_pair(...) in this function so it can operate on double values
   //        instead of floats to be consistent with other methods
   const size_t nentries = nbin + (include_upper_energy ? 1 : 0);
@@ -869,6 +872,9 @@ double fullrangefraction_energy( const double bin_number,
                                  const size_t nbin,
                                  const std::vector<CubicSplineNode> &fwd_spline )
 {
+  if( nbin == 0 )
+    throw std::runtime_error( "fullrangefraction_energy: nbin cannot be zero" );
+
   const double x = bin_number / nbin;
   const size_t ncoeffs = std::min( coeffs.size(), size_t(4) );
 
@@ -888,6 +894,9 @@ double fullrangefraction_energy( const double bin_number,
                                  const size_t nbin,
                                  const std::vector<std::pair<float,float>> &deviation_pairs )
 {
+  if( nbin == 0 )
+    throw std::runtime_error( "fullrangefraction_energy: nbin cannot be zero" );
+
   if( deviation_pairs.empty() )
   {
     const double x = bin_number / nbin;
@@ -1805,7 +1814,7 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
                             : 2.0*original_energies[num_orig_energies-1]-original_energies[num_orig_energies-2];
   const double new_right = (num_orig_energies > num_orig_counts)
                            ? new_energies.back()
-                           : 2.0f*new_energies[new_energies.size()-1] - new_energies[new_energies.size()-2];
+                           : 2.0*new_energies[new_energies.size()-1] - new_energies[new_energies.size()-2];
   
   resulting_counts.resize( new_nbin, 0.0f );
   size_t newbinnum = 0;
@@ -1918,13 +1927,15 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   if( original_energies[0] < new_energies[0] )
   {
     size_t i = 0;
-    while( (original_energies[i+1]<new_energies[0]) && (i<(num_orig_counts-1)) )
+    while( (i<(num_orig_counts-1)) && (original_energies[i+1]<new_energies[0]) )
       resulting_counts[0] += original_counts[i++];
     
     //original_energies[i] is now >= new_energies[0]
     
-    if( i < num_orig_counts )
+    if( (i < num_orig_counts) && ((i + 1) < num_orig_energies) )
       resulting_counts[0] += static_cast<float>( original_counts[i]*(double(new_energies[0])-double(original_energies[i]))/(double(original_energies[i+1])-original_energies[i]) );
+    else if( i < num_orig_counts )
+      resulting_counts[0] += original_counts[i];  // No upper edge available; add full remaining bin
   }//if( original_energies[0] < new_energies[0] )
   
   //Now capture the case where the old binning extends further than new binning

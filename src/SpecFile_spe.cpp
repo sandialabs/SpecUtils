@@ -48,19 +48,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
-  
-  bool toInt( const std::string &str, int &f )
-  {
-    const int nconvert = sscanf( str.c_str(), "%i", &f );
-    return (nconvert == 1);
-  }
-  
   string remove_label( const string &line )
   {
     const string::size_type pos = line.find( ":" );
@@ -200,7 +187,7 @@ bool SpecFile::load_iaea_file( const std::string &filename )
         wchar_t lower_byte = is_utf16_little_endian ? raw_data[i] : raw_data[i+1];
         wchar_t upper_byte = is_utf16_little_endian ? raw_data[i+1] : raw_data[i];
         wchar_t &val = wide_contents[i/2];
-        val = (lower_byte | (upper_byte << 1));
+        val = (lower_byte | (upper_byte << 8));
       }
       
       file_contents_utf8 = stringstream( convert_from_utf16_to_utf8(wide_contents) );
@@ -239,16 +226,18 @@ bool SpecFile::load_from_iaea( std::istream& istr )
   // and "carriage return" (0Ah), but for now I'm just using safe_get_line(...),
   // just to be safe.
   bool skip_getline = false;
-  
+
+  const size_t maxline = 64*1024; // Max line length to prevent DoS from huge single-line files
+
   try
   {
     string line;
-    while( SpecUtils::safe_get_line( istr, line ) )
+    while( SpecUtils::safe_get_line( istr, line, maxline ) )
     {
       trim(line);
       if( !line.empty() )
         break;
-    }//while( SpecUtils::safe_get_line( istr, line ) )
+    }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
     
     // ".ncf" files are a format used in a counting facility, that is pretty close
     //  to ".spe" files, so we'll just kludge things a little here to allow reading
@@ -426,7 +415,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     
     // Create a lambda to skip all lines in the current section
     auto burn_through_section = [&istr, &line, &skip_getline](){
-      while( SpecUtils::safe_get_line( istr, line ) )
+      while( SpecUtils::safe_get_line( istr, line, maxline ) )
       {
         trim(line);
         if( starts_with(line,"$") )
@@ -434,7 +423,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           skip_getline = true;
           return;
         }//if( we have overrun the data section )
-      }//while( SpecUtils::safe_get_line( istr, line ) )
+      }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
     };//burn_through_section lambda
     
     
@@ -456,7 +445,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         
         if( !is_ncf )
         {
-          if( !SpecUtils::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line, maxline ) )
             throw runtime_error( "Error reading DATA section of IAEA file" );
           
           trim(line);
@@ -487,7 +476,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         
         //TODO: for some reason I think this next test condition is a little fragile...
         int num_cd_error = 0, num_cd_error_current = 0;
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           
@@ -547,14 +536,14 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         meas->gamma_count_sum_ = sum;
       }else if( starts_with(line,"$MEAS_TIM:") )
       {
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error( "Error reading MEAS_TIM section of IAEA file" );
         vector<string> fields;
         split( fields, line, " \t," );
         if( fields.size() == 2 )
         {
-          meas->live_time_ = static_cast<float>( atof( fields[0].c_str() ) );
-          meas->real_time_ = static_cast<float>( atof( fields[1].c_str() ) );
+          SpecUtils::parse_float( fields[0].c_str(), fields[0].size(), meas->live_time_ );
+          SpecUtils::parse_float( fields[1].c_str(), fields[1].size(), meas->real_time_ );
           if( meas->real_time_ <= std::numeric_limits<float>::epsilon() )
             meas->real_time_ = meas->live_time_;
         }else
@@ -564,7 +553,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }//if( firstlineparts.size() == 2 )
       }else if( starts_with(line,"$DATE_MEA:") )
       {
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error( "Error reading MEAS_TIM section of IAEA file" );
         
         trim(line);
@@ -588,7 +577,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         //  some detector specific information.  If it is multiple lines, we will stuff it in
         //  a (file-level) remark.
         size_t num_unlabeled_spec_id_lines = 0;
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -656,7 +645,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             num_unlabeled_spec_id_lines += !line.empty();
             remark += (!remark.empty() ? " " : "") + line;
           }
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         if( num_unlabeled_spec_id_lines == 1 )
           meas->title_ += remark;
@@ -667,14 +656,14 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       {
         if( !starts_with(line,"$GAIN_OFFSET_XIA:") || cal_coeffs.empty() )
         {
-          if( !SpecUtils::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line, maxline ) )
             throw runtime_error( "Error reading ENER_FIT section of IAEA file" );
           trim(line);
           if( !SpecUtils::split_to_floats( line.c_str(), line.size(), cal_coeffs ) )
             cal_coeffs.clear();
         }else
         {
-          SpecUtils::safe_get_line( istr, line );
+          SpecUtils::safe_get_line( istr, line, maxline );
           if( starts_with(line,"$") )
           {
             skip_getline = true;
@@ -686,16 +675,17 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       {
         try
         {
-          if( !SpecUtils::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line, maxline ) )
             throw runtime_error("Error reading MCA_CAL section of IAEA file");
           trim(line);
           
-          const int npar = atoi( line.c_str() );
-          
+          int npar = 0;
+          SpecUtils::parse_int( line.c_str(), line.size(), npar );
+
           if( line.empty() || npar < 1 )
             throw runtime_error("Invalid number of parameters");
           
-          if( !SpecUtils::safe_get_line( istr, line ) )
+          if( !SpecUtils::safe_get_line( istr, line, maxline ) )
             throw runtime_error("Error reading MCA_CAL section of IAEA file");
           trim(line);
           
@@ -757,7 +747,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           throw runtime_error( "NCF: Failed to parse quadratic." );
       }else if( starts_with(line,"$SPEC_CAL:") )
       {
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error("Error reading SPEC_CAL section of IAEA file");
         trim(line);
 
@@ -810,7 +800,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         float speed = numeric_limits<float>::quiet_NaN();
         double longitude = numeric_limits<double>::quiet_NaN(), latitude = numeric_limits<double>::quiet_NaN();
         
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -839,7 +829,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               speed = numeric_limits<float>::quiet_NaN();
           }else if( !line.empty() )
             remarks_.push_back( line ); //also can be Alt=, Dir=, Valid=
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         if( !IsNan(speed) || (valid_longitude(longitude) && valid_latitude(latitude)) )
         {
@@ -860,15 +850,15 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }//if( we read in something that will go in LocationState )
       }else if( starts_with(line,"$GPS_COORDINATES:") )
       {
-        if( SpecUtils::safe_get_line( istr, line ) )
+        if( SpecUtils::safe_get_line( istr, line, maxline ) )
           remarks_.push_back( "GPS Coordinates: " + line );
       }else if( starts_with(line,"$NEUTRONS:") )
       { //ex "0.000000  (total)"
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error("Error reading NEUTRONS section of IAEA file");
         trim( line );
         float val;
-        if( toFloat(line,val) )
+        if( SpecUtils::parse_float(line.c_str(), line.size(), val) )
         {
           meas->neutron_counts_.push_back( val );
           meas->neutron_counts_sum_ += val;
@@ -877,17 +867,17 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           parse_warnings_.push_back( "Error parsing neutron counts from line: " + line );
       }else if( starts_with(line,"$NEUTRONS_LIVETIME:") )
       { //ex "267706.437500  (sec)"
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error("Error reading NEUTRONS_LIVETIME section of IAEA file");
         trim( line );
         meas->remarks_.push_back( "Neutron Live Time: " + line );
       }else if( starts_with(line,"$NEUTRON_CPS:") )
       { //found in RadEagle SPE files
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error("Error reading NEUTRON_CPS section of IAEA file");
         trim( line );
         float val;
-        if( toFloat(line,val) )
+        if( SpecUtils::parse_float(line.c_str(), line.size(), val) )
         {
           neutrons_were_cps = true;
           meas->neutron_counts_.push_back( val );
@@ -910,7 +900,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }
       }else if( starts_with(line,"$SPEC_REM:") || starts_with(line,"$COMMENT:")  )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -920,10 +910,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           if( !line.empty() )
             meas->remarks_.push_back( line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$ROI:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -933,10 +923,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           //          if( !line.empty() )
           //            meas->remarks_.push_back( line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$ROI_INFO:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -971,15 +961,15 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               meas->remarks_.push_back( buffer );
             }//if( parts.size() > 7 )
           }
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$ENER_DATA:")
                 || starts_with(line,"$MCA_CAL_DATA:")
                 || starts_with(line,"$ENER_TABLE:") )
       {
-        if( SpecUtils::safe_get_line( istr, line ) )
+        if( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           const size_t num = static_cast<size_t>( atol( line.c_str() ) );
-          while( SpecUtils::safe_get_line( istr, line ) )
+          while( SpecUtils::safe_get_line( istr, line, maxline ) )
           {
             trim(line);
             if( starts_with(line,"$") )
@@ -1001,12 +991,12 @@ bool SpecFile::load_from_iaea( std::istream& istr )
                   bin_to_energy.emplace_back( bin, parts[1] );
               }
             }
-          }//while( SpecUtils::safe_get_line( istr, line ) )
+          }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         }//if( file says how many entries to expect )
       }else if( starts_with(line,"$SHAPE_CAL:") )
       {
         //I think this is FWHM calibration parameters - skipping this for now
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1014,17 +1004,17 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         /*
-         if( !SpecUtils::safe_get_line( istr, line ) )
+         if( !SpecUtils::safe_get_line( istr, line, maxline ) )
          throw runtime_error("Error reading SHAPE_CA section of IAEA file");
          trim(line);
          unsigned int npar;
          if( !(stringstream(line) >> npar ) )
          throw runtime_error( "Invalid number of parameter: " + line );
          
-         if( !SpecUtils::safe_get_line( istr, line ) )
+         if( !SpecUtils::safe_get_line( istr, line, maxline ) )
          throw runtime_error("Error reading SHAPE_CA section of IAEA file");
          trim(line);
          
@@ -1052,7 +1042,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         //XXX - it would be nice to keep the peak lables, or at least search for
         //      these peaks and assign the isotopes..., but for now we'll ignore
         //      them :(
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1060,10 +1050,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$CAMBIO:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1071,10 +1061,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             skip_getline = true;
             break;
           }//if( we have overrun the data section )
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$APPLICATION_ID:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1086,10 +1076,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           //line something like "identiFINDER 2 NG, Application: 2.37, Operating System: 1.2.040"
           if( line.size() )
             remarks_.push_back( line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$DEVICE_ID:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1135,10 +1125,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               instrument_id_ = line;
           }else
             remarks_.push_back( line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_DATASET_NUMBER:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1150,10 +1140,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           //line something like "identiFINDER 2 NG, Application: 2.37, Operating System: 1.2.040"
           if( line.size() )
             remarks_.push_back( "FLIR DATSET NUMBER: " + line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_GAMMA_DETECTOR_INFORMATION:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1164,12 +1154,12 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "GAMMA DETECTOR INFORMATION: " + line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_NEUTRON_DETECTOR_INFORMATION:") )
       {
         meas->contained_neutron_ = true;
         
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1180,10 +1170,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "NEUTRON DETECTOR INFORMATION: " + line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_SPECTRUM_TYPE:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1196,10 +1186,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
             meas->source_type_ = SourceType::IntrinsicActivity;
           else if( SpecUtils::icontains( line, "Measurement" ) )
             meas->source_type_ = SourceType::Foreground;
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_REACHBACK:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1210,12 +1200,12 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "Reachback url: " + line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_DOSE_RATE_SWMM:") )
       {
         //I dont understand the structure of this... so just putting in remarks.
         string remark;
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1226,14 +1216,14 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remark += (remark.size()?", ":"") + line;
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         if( remark.size() )
           remarks_.push_back( "Dose information: " + remark );
       }else if( starts_with(line,"$FLIR_ANALYSIS_RESULTS:") )
       {
         vector<string> analines;
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1243,16 +1233,16 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           if( !line.empty() )
             analines.push_back( line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         if( analines.empty() )
           continue;
         
         int numresults = 0;
-        if( !toInt(analines[0], numresults) || (numresults <= 0) )
+        if( !SpecUtils::parse_int(analines[0].c_str(), analines[0].size(), numresults) || (numresults <= 0) )
           continue;
         
-        if( (analines.size()-1) != (4*static_cast<size_t>(numresults)) )
+        if( analines.size() != (1 + 4*static_cast<size_t>(numresults)) )
         {
           string remark;
           for( size_t i = 0; i < analines.size(); ++i )
@@ -1276,14 +1266,14 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         }//for( int ananum = 0; ananum < numresults; ++ananum )
       }else if( starts_with(line,"$DOSE_RATE:") )
       {  //Dose rate in uSv.  Seen in RadEagle
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           throw runtime_error( "Error reading DOSE_RATE section of IAEA file" );
         
         trim(line);
         skip_getline = starts_with(line,"$");
         
         float dose_rate = 0.0f;
-        if( !toFloat(line, dose_rate) )
+        if( !SpecUtils::parse_float(line.c_str(), line.size(), dose_rate) )
         {
           parse_warnings_.push_back( "Error reading DOSE_RATE, line: " + line );
         }else
@@ -1293,7 +1283,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
       }else if( starts_with(line,"$RADIONUCLIDES:") )
       { //Have only seen one file with this , and it only had a single nuclide
         //Cs137*[9.58755]
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1321,10 +1311,10 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               anaresult = std::make_shared<DetectorAnalysis>();
             anaresult->results_.push_back( result );
           }//if( nuc_end != string::npos )
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$SPEC_INTEGRAL:") )
       {
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1335,12 +1325,12 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( line.size() )
             remarks_.push_back( "SPEC_INTEGRAL: " + line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$IDENTIFY_PARAMETER:") )
       {
         vector<float> calibcoefs;
         vector< pair<float,float> > fwhms;
-        while( !skip_getline && SpecUtils::safe_get_line( istr, line ) )
+        while( !skip_getline && SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1354,7 +1344,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           const bool quad = SpecUtils::icontains( line, "Energieeichung_Quadrat");
           if( slope || offset || quad )
           {
-            if( SpecUtils::safe_get_line( istr, line ) )
+            if( SpecUtils::safe_get_line( istr, line, maxline ) )
             {
               trim(line);
               if( starts_with(line,"$") )
@@ -1367,22 +1357,22 @@ bool SpecFile::load_from_iaea( std::istream& istr )
               {
                 if( calibcoefs.size() < 2 )
                   calibcoefs.resize( 2, 0.0f );
-                if( !toFloat( line, calibcoefs[1] ) )
+                if( !SpecUtils::parse_float( line.c_str(), line.size(), calibcoefs[1] ) )
                   throw runtime_error( "Couldnt convert to cal slope to flt: " + line );
               }else if( offset )
               {
                 if( calibcoefs.size() < 1 )
                   calibcoefs.resize( 1, 0.0f );
-                if( !toFloat( line, calibcoefs[0] ) )
+                if( !SpecUtils::parse_float( line.c_str(), line.size(), calibcoefs[0] ) )
                   throw runtime_error( "Couldnt convert to cal offset to flt: " + line );
               }else if( quad )
               {
                 if( calibcoefs.size() < 3 )
                   calibcoefs.resize( 3, 0.0f );
-                if( !toFloat( line, calibcoefs[2] ) )
+                if( !SpecUtils::parse_float( line.c_str(), line.size(), calibcoefs[2] ) )
                   throw runtime_error( "Couldnt convert to cal quad to flt: " + line );
               }
-            }//if( SpecUtils::safe_get_line( istr, line ) )
+            }//if( SpecUtils::safe_get_line( istr, line, maxline ) )
           }//if( SpecUtils::icontains( line, "Energieeichung_Steigung") )
           
           /*
@@ -1397,23 +1387,25 @@ bool SpecFile::load_from_iaea( std::istream& istr )
            Detektortyp:
            2
            */
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         if( calibcoefs.size() && !cal_coeffs.size() )
           cal_coeffs = calibcoefs;
       }else if( starts_with(line,"$NON_LINEAR_DEVIATIONS:") )
       {
-        SpecUtils::safe_get_line( istr, line );
+        SpecUtils::safe_get_line( istr, line, maxline );
         trim(line);
         
-        const size_t npairs = static_cast<size_t>( atoi(line.c_str()) );
-        
+        int npairs_int = 0;
+        SpecUtils::parse_int( line.c_str(), line.size(), npairs_int );
+        const size_t npairs = (npairs_int > 0) ? static_cast<size_t>(npairs_int) : 0;
+
         if( line.empty() || npairs < 1 )
           continue;
         
         std::vector<std::pair<float,float>> pairs;
         
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1430,7 +1422,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           }//if( !(stringstream(line) >> energy >> deviation ) )
           
           pairs.push_back( pair<float,float>(energy,deviation) );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
         if( pairs.size() == npairs )
         {
@@ -1464,7 +1456,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
                )
       {
         //Burn off things we dont care about
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1475,7 +1467,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           
           if( line == "Live Time" )
           {
-            if( SpecUtils::safe_get_line( istr, line ) )
+            if( SpecUtils::safe_get_line( istr, line, maxline ) )
             {
               if( starts_with(line,"$") )
               {
@@ -1483,11 +1475,11 @@ bool SpecFile::load_from_iaea( std::istream& istr )
                 break;
               }//if( we have overrun the data section )
               remarks_.push_back( "A preset live time of " + line + " was used" );
-            }//if( SpecUtils::safe_get_line( istr, line ) )
+            }//if( SpecUtils::safe_get_line( istr, line, maxline ) )
           }//if( line == "Live Time" )
           //          if( line.size() )
           //            cout << "Got Something" << endl;
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
       }else if( starts_with(line,"$FLIR_NEUTRON_SWMM:") )
       {
         // The next lines are:
@@ -1495,7 +1487,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         //  - neutron counts
         //  - Looks to always be: "0.000"
         //  - Looks to always be: "1.000"
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           break;
           
         trim(line);
@@ -1511,7 +1503,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           continue;
         }
         
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           break;
           
         trim(line);
@@ -1527,7 +1519,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           continue;
         }
         
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           break;
           
         trim(line);
@@ -1539,7 +1531,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         if( line != "0.000" )
           parse_warnings_.push_back( "Unexpected third line value in neutron section: '" + line + "', expected '0.000'." );
         
-        if( !SpecUtils::safe_get_line( istr, line ) )
+        if( !SpecUtils::safe_get_line( istr, line, maxline ) )
           break;
           
         trim(line);
@@ -1594,7 +1586,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
         // These files will have one line like "LLD:" followed by another line with its actual value
         //  We'll grab some of this info, and stuff others in a comment
         vector<string> kromek_lines;
-        while( SpecUtils::safe_get_line( istr, line ) )
+        while( SpecUtils::safe_get_line( istr, line, maxline ) )
         {
           trim(line);
           if( starts_with(line,"$") )
@@ -1604,7 +1596,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
           }//if( we have overrun the data section )
           
           kromek_lines.push_back( line );
-        }//while( SpecUtils::safe_get_line( istr, line ) )
+        }//while( SpecUtils::safe_get_line( istr, line, maxline ) )
         
 
         for( size_t index = 0; (index + 1) < kromek_lines.size(); ++index )

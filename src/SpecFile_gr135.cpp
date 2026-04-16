@@ -47,12 +47,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
 }//namespace
 
 
@@ -133,7 +127,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
       if( !liveTimeStr.empty() )
       {
         float val;
-        if( !toFloat( liveTimeStr, val ) )
+        if( !SpecUtils::parse_float( liveTimeStr.c_str(), liveTimeStr.size(), val ) )
           throw runtime_error( "Error converting live time to float" );
         meas->live_time_ = static_cast<float>( val );
       }//if( !liveTimeStr.empty() )
@@ -147,7 +141,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
         if( !neutronStr.empty() )
         {
           float val;
-          if( !toFloat( neutronStr, val ) )
+          if( !SpecUtils::parse_float( neutronStr.c_str(), neutronStr.size(), val ) )
             throw runtime_error( "Error converting neutron counts to float" );
           meas->neutron_counts_.resize( 1, val );
           meas->neutron_counts_sum_ = val;
@@ -293,7 +287,10 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
   
   if( size < 513 )
     return false;
-  
+
+  if( size > 20*1024*1024 )
+    return false;
+
   try
   {
     char charbuff[128];
@@ -409,7 +406,8 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
                                   ? (size - recordstarts[j])
                                   : (recordstarts[j+1] - recordstarts[j]));
       
-      // The GR-130 record size looks to be 560 bytes
+      // The GR-130 record size looks to be 560 bytes.
+      // Min of 512 ensures all hardcoded memcpy offsets are in-bounds (max used: data+79).
       if( (record_size < 512) || (record_size > 5*1024) )
         throw runtime_error( "Invalid record_size" );
         

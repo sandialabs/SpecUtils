@@ -83,6 +83,28 @@ namespace
   const std::string s_unnamed_det_placeholder = "unamed";  //TODO: fix this spelling to "unnamed"
   
   static const char * const s_energy_cal_not_available_remark = "Energy calibration not available.";
+
+  /** Escape a string for safe inclusion in XML content or attribute values.
+   Replaces &, <, >, ", and ' with their XML entity equivalents.
+   */
+  std::string xml_escape( const std::string &input )
+  {
+    std::string result;
+    result.reserve( input.size() );
+    for( const char c : input )
+    {
+      switch( c )
+      {
+        case '&':  result += "&amp;";  break;
+        case '<':  result += "&lt;";   break;
+        case '>':  result += "&gt;";   break;
+        case '"':  result += "&quot;"; break;
+        case '\'': result += "&apos;"; break;
+        default:   result += c;        break;
+      }
+    }
+    return result;
+  }//xml_escape
   
   static const std::string s_frf_to_poly_remark = "Energy calibration was originally specified as full-range-fraction.";
 
@@ -100,11 +122,6 @@ namespace
     return (lhs.first < rhs.first);
   }
   
-  bool toInt( const std::string &str, int &f )
-  {
-    const int nconvert = sscanf( str.c_str(), "%i", &f );
-    return (nconvert == 1);
-  }
   
   bool xml_value_to_flt( const rapidxml::xml_base<char> *node, float &val )
   {
@@ -593,6 +610,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
 
     case SpecUtils::DetectorType::KromekD5:
       det_kind = "CLLBC";
+      break;
 
     case SpecUtils::DetectorType::Unknown:
     {
@@ -2698,7 +2716,7 @@ struct N42DecodeHelper2006
       const string strvalue = xml_value_str( sample_num_att );
         
       int samplenum = -1;
-      if( toInt( strvalue, samplenum ) )
+      if( SpecUtils::parse_int( strvalue.c_str(), strvalue.size(), samplenum ) )
       {
         if( meas.sample_number_ >= 2 )
         {
@@ -3770,13 +3788,20 @@ public:
           {
             const char *char_data = channel_data_node->value();
             const size_t char_data_len = channel_data_node->value_size();
-            SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts );
-            
             rapidxml::xml_attribute<char> *comp_att = XML_FIRST_IATTRIB(channel_data_node, "compressionCode");
             if( !comp_att )
               comp_att = XML_FIRST_IATTRIB(channel_data_node, "Compression");
-            
-            if( comp_att && icontains( xml_value_str(comp_att), "Counted") )  //"CountedZeroes" or at least one file has "CountedZeros"
+
+            const bool compressed_zeros = (comp_att && icontains( xml_value_str(comp_att), "Counted"));
+
+            // Limit raw parsed floats to prevent DoS from huge channel data, consistent with N42-2006 path.
+            const size_t max_raw_floats = compressed_zeros
+                                        ? (2 * EnergyCalibration::sm_max_channels)
+                                        : EnergyCalibration::sm_max_channels;
+
+            SpecUtils::split_to_floats( char_data, char_data_len, *gamma_counts, max_raw_floats );
+
+            if( compressed_zeros )  //"CountedZeroes" or at least one file has "CountedZeros"
               expand_counted_zeros( *gamma_counts, *gamma_counts );
           }//if( channel_data_node && channel_data_node->value() )
           
@@ -6126,7 +6151,8 @@ namespace SpecUtils
             if( ray_size )
             {
               int value = 0;
-              if( toInt(xml_value_str(ray_size), value) && value>0 )
+              const string ray_size_str = xml_value_str(ray_size);
+              if( SpecUtils::parse_int(ray_size_str.c_str(), ray_size_str.size(), value) && value>0 )
                 num_lower_bins = static_cast<size_t>(value);
             }
             
@@ -9439,7 +9465,7 @@ namespace SpecUtils
     
     ostr << "    <Spectrum Type=\"PHA\"";
     
-    ostr << " Detector=\"" << detname << "\"";
+    ostr << " Detector=\"" << xml_escape(detname) << "\"";
     if( sample_number_ > 0 )
       ostr << " SampleNumber=\"" << sample_number_ << "\"";
     
@@ -9515,7 +9541,7 @@ namespace SpecUtils
       {
         if( i )
           ostr << endline;
-        ostr << remarks[i];
+        ostr << xml_escape(remarks[i]);
       }
       
       ostr << "</Remark>";
@@ -9628,7 +9654,7 @@ namespace SpecUtils
     << "xsi:schemaLocation=\"http://physics.nist.gov/Divisions/Div846/Gp4/ANSIN4242/2005/ANSIN4242" << endline
     << "http://physics.nist.gov/Divisions/Div846/Gp4/ANSIN4242/2005/ANSIN4242.xsd\">" << endline;
     
-    ostr << "<Measurement UUID=\"" << uuid_ << "\">" << endline;
+    ostr << "<Measurement UUID=\"" << xml_escape(uuid_) << "\">" << endline;
     
     ostr << "  <InstrumentInformation>" << endline;
     
@@ -9639,7 +9665,7 @@ namespace SpecUtils
          || instrument_type_ == "SurveyMeter" || instrument_type_ == "Spectrometer"
          || instrument_type_ == "Other" )
       {
-        ostr << "    <InstrumentType>" << instrument_type_ << "</InstrumentType>" << endline;
+        ostr << "    <InstrumentType>" << xml_escape(instrument_type_) << "</InstrumentType>" << endline;
       }else if( instrument_type_ == "Portal Monitor" )
         ostr << "    <InstrumentType>PortalMonitor</InstrumentType>" << endline;
       else if( instrument_type_ == "Radionuclide Identifier" )
@@ -9655,20 +9681,20 @@ namespace SpecUtils
       else if( instrument_type_ == "Gamma Handheld" )
         ostr << "    <InstrumentType>Spectrometer</InstrumentType>" << endline;
       else
-        ostr << "<!-- <InstrumentType>" << instrument_type_ << "</InstrumentType> -->" << endline;
+        ostr << "<!-- <InstrumentType>" << xml_escape(instrument_type_) << "</InstrumentType> -->" << endline;
     }//if( instrument_type_.size() )
     
     if(!manufacturer_.empty())
-      ostr << "    <Manufacturer>" << manufacturer_ << "</Manufacturer>" << endline;
+      ostr << "    <Manufacturer>" << xml_escape(manufacturer_) << "</Manufacturer>" << endline;
     if(!instrument_model_.empty())
-      ostr << "    <InstrumentModel>" << instrument_model_ << "</InstrumentModel>" << endline;
+      ostr << "    <InstrumentModel>" << xml_escape(instrument_model_) << "</InstrumentModel>" << endline;
     if(!instrument_id_.empty())
-      ostr << "    <InstrumentID>" << instrument_id_ << "</InstrumentID>" << endline;
+      ostr << "    <InstrumentID>" << xml_escape(instrument_id_) << "</InstrumentID>" << endline;
     
     for( const string &detname : detector_names_ )
     {
       ostr << "    <dndons:DetectorStatus Detector=\""
-      << (detname.empty() ? s_unnamed_det_placeholder : detname)
+      << xml_escape(detname.empty() ? s_unnamed_det_placeholder : detname)
       << "\" Operational=\"true\"/>" << endline;
     }
     
@@ -9696,7 +9722,7 @@ namespace SpecUtils
       const auto &dev_pairs = meas->energy_calibration_->deviation_pairs();
       if( dev_pairs.size() )
       {
-        ostr << "    <dndons:NonlinearityCorrection Detector=\"" << name << "\">" << endline;
+        ostr << "    <dndons:NonlinearityCorrection Detector=\"" << xml_escape(name) << "\">" << endline;
         for( size_t j = 0; j < dev_pairs.size(); ++j )
         {
           ostr << "      <dndons:Deviation>" << dev_pairs[j].first
@@ -9712,17 +9738,17 @@ namespace SpecUtils
     {
       ostr << "    <MeasuredItemInformation>" << endline;
       if( measurement_location_name_.size() )
-        ostr << "      <MeasurementLocationName>" << measurement_location_name_ << "</MeasurementLocationName>" << endline;
+        ostr << "      <MeasurementLocationName>" << xml_escape(measurement_location_name_) << "</MeasurementLocationName>" << endline;
       //<Coordinates>40.12 10.67</Coordinates>
       if( measurement_operator_.size() )
-        ostr << "      <MeasurementOperator>" << measurement_operator_ << "</MeasurementOperator>" << endline;
+        ostr << "      <MeasurementOperator>" << xml_escape(measurement_operator_) << "</MeasurementOperator>" << endline;
       ostr << "    </MeasuredItemInformation>" << endline;
     }
     
     ostr << "  </InstrumentInformation>" << endline;
     
     if( inspection_.size() )
-      ostr << "  <dndons:Inspection>" << inspection_ << "</dndons:Inspection>" << endline;
+      ostr << "  <dndons:Inspection>" << xml_escape(inspection_) << "</dndons:Inspection>" << endline;
     
     
     for( const int samplenum : sample_numbers_ )
@@ -9776,7 +9802,7 @@ namespace SpecUtils
       if( detsysname.empty() )
         detsysname = "detector";
       
-      ostr << "    <DetectorMeasurement Detector=\"" << detsysname << "\" DetectorType=\"Other\">" << endline;
+      ostr << "    <DetectorMeasurement Detector=\"" << xml_escape(detsysname) << "\" DetectorType=\"Other\">" << endline;
       ostr << "      <SpectrumMeasurement>" << endline;
       ostr << "        <SpectrumAvailable>1</SpectrumAvailable>" << endline;
       

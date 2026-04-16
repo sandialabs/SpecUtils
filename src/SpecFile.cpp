@@ -151,11 +151,6 @@ using SpecUtils::time_from_string;
 
 namespace
 {
-  bool toInt( const std::string &str, int &f )
-  {
-    const int nconvert = sscanf( str.c_str(), "%i", &f );
-    return (nconvert == 1);
-  }
   
   
   /** Adds the vector of 'input' float vectors, to results.
@@ -2678,7 +2673,7 @@ int SpecFile::occupancy_number_from_remarks() const
     {
       const string valstr = str.substr( 19 );
       int val;
-      if( toInt(valstr,val) )
+      if( SpecUtils::parse_int(valstr.c_str(), valstr.size(), val) )
         return val;
     }else if( istarts_with( str, "OccupancyNumber" ) )
     {
@@ -2688,7 +2683,7 @@ int SpecFile::occupancy_number_from_remarks() const
       {
         valstr = valstr.substr( pos );
         int val;
-        if( toInt(valstr,val) )
+        if( SpecUtils::parse_int(valstr.c_str(), valstr.size(), val) )
           return val;
       }
     }
@@ -5727,20 +5722,23 @@ void SpecFile::cleanup_after_load( const unsigned int flags )
         
         try
         {
+          if( nbin < 2 )
+            throw runtime_error( "Too few bins to rebin" );
+
           const size_t nbinShift = nbin - 1;
           const float channel_width = (max_energy - min_energy) / nbinShift;
           auto new_cal = make_shared<EnergyCalibration>();
           new_cal->set_polynomial( nbin, {min_energy,channel_width}, {} );
-          
+
           for( const auto &meas : measurements_ )
           {
-            if( meas->gamma_counts_->size() > 4 )
+            if( meas->gamma_counts_ && meas->gamma_counts_->size() > 4 )
             {
               rebin_all_measurements( new_cal );
               properties_flags_ |= kHasCommonBinning;
               properties_flags_ |= kRebinnedToCommonBinning;
               break;
-            }//if( meas->gamma_counts_->size() > 16 )
+            }//if( meas->gamma_counts_->size() > 4 )
           }//for( const auto &meas : measurements_ )
         }catch( std::exception &e )
         {

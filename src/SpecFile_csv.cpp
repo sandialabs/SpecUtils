@@ -1028,9 +1028,9 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
           {
             switch( column_map[col] )
             {
-              case kChannel:       channel = atoi(fields[col].c_str()); break;
-              case kEnergy:        energy  = static_cast<float>(atof(fields[col].c_str())); break;
-              case kCounts:        count   = static_cast<float>(atof(fields[col].c_str())); break;
+              case kChannel:       SpecUtils::parse_int(fields[col].c_str(), fields[col].size(), channel); break;
+              case kEnergy:        SpecUtils::parse_float(fields[col].c_str(), fields[col].size(), energy); break;
+              case kCounts:        SpecUtils::parse_float(fields[col].c_str(), fields[col].size(), count); break;
               default:
                 // \TODO: Ignoring past the first record...
                 assert( column_map[col] > kCounts );
@@ -1381,13 +1381,13 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       const size_t cpos = line.find( "c=" );
       const size_t dpos = line.find( "d=" );
       if( apos < (line.size()-2) )
-        a = static_cast<float>( atof( line.c_str() + apos + 2 ) );
+        SpecUtils::parse_float( line.c_str() + apos + 2, line.size() - apos - 2, a );
       if( bpos < (line.size()-2) )
-        b = static_cast<float>( atof( line.c_str() + bpos + 2 ) );
+        SpecUtils::parse_float( line.c_str() + bpos + 2, line.size() - bpos - 2, b );
       if( cpos < (line.size()-2) )
-        c = static_cast<float>( atof( line.c_str() + cpos + 2 ) );
+        SpecUtils::parse_float( line.c_str() + cpos + 2, line.size() - cpos - 2, c );
       if( dpos < (line.size()-2) )
-        d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
+        SpecUtils::parse_float( line.c_str() + dpos + 2, line.size() - dpos - 2, d );
       
       if( c > 0 || b > 0 )
         poly_calib_coeff = { d, c, b, a };
@@ -1545,7 +1545,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
   try
   {
     string line;
-    if( !SpecUtils::safe_get_line(istr, line) )
+    if( !SpecUtils::safe_get_line(istr, line, 64*1024) )
       throw runtime_error(""); //"Failed getting first line"
     
     if( line.size() < 8 || line.size() > 100 )
@@ -1572,7 +1572,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     if( realtime < -FLT_EPSILON )
       throw runtime_error( "" ); //"First coefficient not real time"
     
-    if( !safe_get_line(istr, line) )
+    if( !safe_get_line(istr, line, 64*1024) )
       throw runtime_error(""); //"Failed getting second line"
     
     if( !split_to_floats(line, fline) )
@@ -1587,7 +1587,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
     if( fline.size() >= 127 )
     {
       //Second line is CSV of channel counts
-      if( SpecUtils::safe_get_line(istr, line) && line.size() )
+      if( SpecUtils::safe_get_line(istr, line, 64*1024) && line.size() )
         throw runtime_error(""); //"Only expected two lines"
       
       counts->swap( fline );
@@ -1606,9 +1606,9 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
       
       channelnum = channelnum - 1.0f;
       istr.seekg( orig_pos, ios::beg );
-      SpecUtils::safe_get_line( istr, line );
-      
-      while( safe_get_line( istr, line ) )
+      SpecUtils::safe_get_line( istr, line, 64*1024 );
+
+      while( safe_get_line( istr, line, 64*1024 ) )
       {
         trim( line );
         if( line.empty() ) //Sometimes file will have a newline at the end of the file
@@ -1655,7 +1655,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
   try
   {
     string line;
-    if( !SpecUtils::safe_get_line(input, line) )
+    if( !SpecUtils::safe_get_line(input, line, 64*1024) )
       return false;
     
     if( line.find("Fields, RSP 1, RSP 2") == string::npos )
@@ -1700,7 +1700,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
     vector<float> real_times, live_times;
     vector<vector<float>> gamma_counts, neutron_counts;
     
-    while( SpecUtils::safe_get_line(input, line) )
+    while( SpecUtils::safe_get_line(input, line, 64*1024) )
     {
       SpecUtils::trim( line );
       if( line.empty() )
@@ -1776,7 +1776,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
         log_developer_error( __func__, ("Unrecognized line type in SRPM file: '" + key + "'").c_str() );
 #endif
       }//if( key is specific value ) / else
-    }//while( SpecUtils::safe_get_line(input, line) )
+    }//while( SpecUtils::safe_get_line(input, line, 64*1024) )
     
     if( gamma_counts.empty() )
       return false;

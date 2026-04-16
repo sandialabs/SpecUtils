@@ -36,13 +36,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
-  
 }//namespace
 
 namespace SpecUtils
@@ -119,6 +112,11 @@ std::istream &safe_get_line( std::istream &is, std::string &t, const size_t maxl
   return is;
 }//safe_get_line(...)
 
+// Note: callers may pass the same vector for both `data` and `return_answer` (self-aliasing).
+//  This is safe because we build the result in a local `answer` vector and only assign it to
+//  `return_answer` at the end, so `data` is fully read before `return_answer` is modified.
+//  If you refactor this function to write directly into `return_answer`, you must account for
+//  this aliasing or update the call sites.
 void expand_counted_zeros( const vector<float> &data, vector<float> &return_answer )
 {
   vector<float> answer;
@@ -367,7 +365,7 @@ float speed_from_remark( std::string remark )
   const string speedstr = remark.substr( pos );
   
   float speed = 0.0;
-  if( !toFloat( speedstr, speed) )
+  if( !SpecUtils::parse_float( speedstr.c_str(), speedstr.size(), speed) )
   {
 #if( PERFORM_DEVELOPER_CHECKS )
     string msg = "speed_from_remark(...): couldn conver to number: '" + speedstr + "' to float";
@@ -479,7 +477,7 @@ float pos_from_remark_helper( std::string &remark, const string &label )
   const string dxstr = remark.substr(pos);
   
   float dx = 0.0;
-  if (!toFloat(dxstr, dx))
+  if (!SpecUtils::parse_float(dxstr.c_str(), dxstr.size(), dx))
   {
 #if( PERFORM_DEVELOPER_CHECKS )
     string msg = "dx_from_remark(...): couldnt convert to number: '" + dxstr + "' to float";

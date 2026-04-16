@@ -36,13 +36,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
-  
   
   string getAmptekMcaLineInfo( const string &data, const string &heading )
   {
@@ -127,17 +120,17 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
     lineinfo = getAmptekMcaLineInfo( filedata, "GAIN - " );
     if( !lineinfo.empty() )
     {
-      if( !toFloat(lineinfo,energy_gain) )
+      if( !SpecUtils::parse_float(lineinfo.c_str(), lineinfo.size(), energy_gain) )
         energy_gain = 0.0f;
     }//if( !lineinfo.empty() )
     
     lineinfo = getAmptekMcaLineInfo( filedata, "LIVE_TIME - " );
     if( !lineinfo.empty() )
-      meas->live_time_ = static_cast<float>( atof( lineinfo.c_str() ) );
+      SpecUtils::parse_float( lineinfo.c_str(), lineinfo.size(), meas->live_time_ );
     
     lineinfo = getAmptekMcaLineInfo( filedata, "REAL_TIME - " );
     if( !lineinfo.empty() )
-      meas->real_time_ = static_cast<float>( atof( lineinfo.c_str() ) );
+      SpecUtils::parse_float( lineinfo.c_str(), lineinfo.size(), meas->real_time_ );
     
     lineinfo = getAmptekMcaLineInfo( filedata, "START_TIME - " );
     if( !lineinfo.empty() )

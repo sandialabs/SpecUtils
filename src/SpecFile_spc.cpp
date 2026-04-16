@@ -378,12 +378,12 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       }else if( istarts_with( line, "Length" ) )
       {//Length       : 1024
         if( info_pos != string::npos )
-          Length = atoi( line.c_str() + info_pos );
+          SpecUtils::parse_int( line.c_str() + info_pos, line.size() - info_pos, Length );
       }else if( istarts_with( line, "SubSpcNum" ) )
       {//SubSpcNum    : 1
         int SubSpcNum = 1;
         if( info_pos != string::npos )
-          SubSpcNum = atoi( line.c_str() + info_pos );
+          SpecUtils::parse_int( line.c_str() + info_pos, line.size() - info_pos, SubSpcNum );
         if( SubSpcNum > 1 )
         {
           const string msg = "SpecFile::load_from_iaea_spc(istream &)\n\tASCII Spc files only support "
@@ -397,13 +397,13 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       }else if( istarts_with( line, "Realtime" ) )
       {//Realtime     : 300.000
         if( info_pos != string::npos )
-          meas->real_time_ = static_cast<float>( atof( line.c_str() + info_pos ) );
+          SpecUtils::parse_float( line.c_str() + info_pos, line.size() - info_pos, meas->real_time_ );
       }else if( istarts_with( line, "Livetime" )
                || istarts_with( line, "Liveime" )
                || istarts_with( line, "Lifetime" ) )
       {//Livetime     : 300.000
         if( info_pos != string::npos )
-          meas->live_time_ = static_cast<float>( atof( line.c_str() + info_pos ) );
+          SpecUtils::parse_float( line.c_str() + info_pos, line.size() - info_pos, meas->live_time_ );
       }else if( istarts_with( line, "Deadtime" ) )
       {//Deadtime     : 0.000
       }else if( istarts_with( line, "FastChannel" ) )
@@ -419,7 +419,9 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       }else if( istarts_with( line, "NeutronCounts" )
                || istarts_with( line, "SumNeutrons" ) )
       {//NeutronCounts         : 0
-        const float num_neut = static_cast<float>( atof( line.substr( info_pos ).c_str() ) );
+        float num_neut = 0.0f;
+        if( info_pos != string::npos )
+          SpecUtils::parse_float( line.c_str() + info_pos, line.size() - info_pos, num_neut );
         if( info_pos != string::npos && meas->neutron_counts_.empty() )
           meas->neutron_counts_.push_back( num_neut );
         else if( info_pos != string::npos )
@@ -440,13 +442,13 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         const bool have_c = cpos < (line.size()-2);
         const bool have_d = dpos < (line.size()-2);
         if( have_a )
-          a = static_cast<float>( atof( line.c_str() + apos + 2 ) );
+          SpecUtils::parse_float( line.c_str() + apos + 2, line.size() - apos - 2, a );
         if( have_b )
-          b = static_cast<float>( atof( line.c_str() + bpos + 2 ) );
+          SpecUtils::parse_float( line.c_str() + bpos + 2, line.size() - bpos - 2, b );
         if( have_c )
-          c = static_cast<float>( atof( line.c_str() + cpos + 2 ) );
+          SpecUtils::parse_float( line.c_str() + cpos + 2, line.size() - cpos - 2, c );
         if( have_d )
-          d = static_cast<float>( atof( line.c_str() + dpos + 2 ) );
+          SpecUtils::parse_float( line.c_str() + dpos + 2, line.size() - dpos - 2, d );
         
         if( have_c && have_d
             && (a!=0.0 || b!=0.0 || c!=0.0 ) )
@@ -2031,6 +2033,9 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     read_binary_data( input, wSPCRCN ); // number of records in sp
     read_binary_data( input, n_channel ); // Number of Channels;
     
+    if( wSPCRCN <= 0 )
+      throw runtime_error( "Invalid spectrum record count" );
+
     if( (32u*static_cast<uint32_t>(wSPCRCN)) < n_channel )
       throw runtime_error( "Not enough records for claimed number of channels" );
     
@@ -2420,7 +2425,8 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
               positer = std::search( datastr.begin(), datastr.end(),
                                     term.begin(), term.end() );
               foundNeutronDet = true;
-              total_neutrons = atof( &(*(positer+term.size())) );
+              const char *nptr = &(*(positer+term.size()));
+              SpecUtils::parse_double( nptr, datastr.c_str() + datastr.size() - nptr, total_neutrons );
             }else
             {
               term = "neutron counts";
@@ -2429,19 +2435,20 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
               if( positer != datastr.end() )
               {
                 foundNeutronDet = true;
-                //                positer += 17;
-                total_neutrons = atof( &(*(positer+term.size())) ); //atof( &(*positer) );
+                const char *nptr = &(*(positer+term.size()));
+                SpecUtils::parse_double( nptr, datastr.c_str() + datastr.size() - nptr, total_neutrons );
               }
             }
-            
-            
+
+
             term = "total neutron count time = ";
             positer = std::search( datastr.begin(), datastr.end(),
                                   term.begin(), term.end() );
             if( positer != datastr.end() )
             {
               foundNeutronDet = true;
-              total_neutron_count_time = static_cast<float>( atof( &(*positer) + 27 ) );
+              const char *tptr = &(*positer) + term.size();
+              SpecUtils::parse_float( tptr, datastr.c_str() + datastr.size() - tptr, total_neutron_count_time );
             }
           }//end codeblock to look for neutrons
           

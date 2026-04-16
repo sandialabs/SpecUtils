@@ -43,12 +43,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
 }//namespace
 
 
@@ -211,7 +205,7 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
       meas->neutron_counts_.resize( 1, 0.0f );
       
       float neutrons = 0.0f;
-      if( toFloat(neutroncountstr,neutrons) )
+      if( SpecUtils::parse_float(neutroncountstr.c_str(), neutroncountstr.size(), neutrons) )
       {
         if( meas->real_time_ > 0.0f )
           neutrons *= meas->real_time_;

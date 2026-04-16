@@ -1684,7 +1684,9 @@ namespace SpecUtils
         }//if( begin != end )
         
         const float a = static_cast<float>( value );
-        const float b = (float) atof( string(start_pos, end).c_str() );
+        float b = 0.0f;
+        const string bstr( start_pos, end );
+        parse_float( bstr.c_str(), bstr.size(), b );
         if( fabs(a-b) > 0.000001f*((std::max)(fabs(a),fabs(b)) ))
         {
           char errormsg[1024];
@@ -1978,7 +1980,8 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
     if( !power.empty() )
     {
       power = power.substr(1);
-      int intpow = atoi( power.c_str() );
+      int intpow = 0;
+      parse_int( power.c_str(), power.size(), intpow );
       
       if( (decimal.find('.') == string::npos) && (decimal.size() >= 2) )
       {

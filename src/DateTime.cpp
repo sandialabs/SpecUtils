@@ -52,13 +52,6 @@ using namespace std;
 
 namespace
 {
-  bool toFloat( const std::string &str, float &f )
-  {
-    //ToDO: should probably use SpecUtils::parse_float(...) for consistency/speed
-    const int nconvert = sscanf( str.c_str(), "%f", &f );
-    return (nconvert == 1);
-  }
-  
   const char *month_number_to_Str( const int month )
   {
     switch( month )
@@ -675,7 +668,7 @@ namespace SpecUtils
       
       float num_val = 0.0;
       const string numberstr( num_start, num_end );
-      if( toFloat( numberstr, num_val ) )
+      if( SpecUtils::parse_float( numberstr.c_str(), numberstr.size(), num_val ) )
       {
         durration += num_val * unit;
       }else

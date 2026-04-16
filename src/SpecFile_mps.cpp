@@ -157,9 +157,13 @@ bool SpecFile::load_from_tracs_mps( std::istream &input )
   input.seekg( orig_pos, ios::beg );
   
   const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
+
+  if( filesize > 10*1024*1024 )
+    return false;
+
   const size_t numsamples = filesize / samplesize;
   const size_t leftoverbytes = (filesize % samplesize);
-  
+
   if( leftoverbytes )
     return false;
   
