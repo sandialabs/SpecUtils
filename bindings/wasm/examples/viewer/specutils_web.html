@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpecUtils Web Viewer</title>
+
+  <!-- CHART_CSS placeholder: SpectrumChartD3.css -->
+  <!-- CHART_CSS -->
+
+  <style>
+    /* App-specific styles (not the chart CSS) */
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0; padding: 0; background: #fafafa; color: #333;
+    }
+
+    .app-header {
+      background: #2c3e50; color: white; padding: 10px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .app-header h1 { font-size: 1.2em; font-weight: 500; }
+    .app-header .file-info { font-size: 0.85em; color: #bdc3c7; }
+
+    .toolbar {
+      background: #ecf0f1; padding: 8px 20px; border-bottom: 1px solid #ddd;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .toolbar label { font-size: 0.85em; white-space: nowrap; }
+
+    .upload-bar {
+      padding: 10px 20px; background: #fff; border-bottom: 1px solid #ddd;
+      display: flex; align-items: center; gap: 15px;
+    }
+    .upload-bar input[type="file"] { font-size: 0.9em; }
+    .upload-bar .filename { font-weight: 600; }
+
+    .controls-panel {
+      padding: 8px 20px; background: #fff; border-bottom: 1px solid #ddd;
+      display: none;
+    }
+    .controls-panel.visible { display: block; }
+
+    .control-row {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      margin: 4px 0; font-size: 0.85em;
+    }
+    .control-row .label { font-weight: 600; min-width: 80px; color: #555; }
+    .control-row .items { display: flex; flex-wrap: wrap; gap: 4px; max-height: 80px; overflow-y: auto; flex: 1; }
+    .control-row .actions { display: flex; gap: 4px; margin-left: 8px; }
+
+    .cb-item { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border: 1px solid #ddd; border-radius: 3px; background: #f8f8f8; cursor: pointer; user-select: none; }
+    .cb-item:hover { background: #e8e8e8; }
+    .cb-item input { margin: 0; }
+
+    .btn-sm { padding: 2px 8px; font-size: 0.8em; border: 1px solid #bbb; border-radius: 3px; background: #f0f0f0; cursor: pointer; }
+    .btn-sm:hover { background: #ddd; }
+
+    #chart-container {
+      width: 100%; min-height: 200px; background: white;
+    }
+
+    .bottom-bar {
+      padding: 8px 20px; background: #fff; border-top: 1px solid #ddd;
+      display: flex; flex-wrap: wrap; gap: 15px; align-items: center;
+      display: none; font-size: 0.85em;
+    }
+    .bottom-bar.visible { display: flex; }
+
+    .bottom-bar select, .bottom-bar button { padding: 4px 10px; font-size: 0.85em; }
+    .bottom-bar button { background: #4a90d9; color: white; border: none; border-radius: 3px; cursor: pointer; }
+    .bottom-bar button:hover { background: #357abd; }
+
+    #status-msg {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      padding: 8px 20px; border-radius: 6px; font-size: 0.9em;
+      display: none; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    #status-msg.error { display: block; background: #e74c3c; color: white; }
+    #status-msg.loading { display: block; background: #3498db; color: white; }
+    #status-msg.success { display: block; background: #27ae60; color: white; }
+
+    /* Drop overlay */
+    .drop-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(52,152,219,0.15); z-index: 999;
+      border: 4px dashed #3498db;
+      justify-content: center; align-items: center;
+      font-size: 1.5em; color: #3498db; font-weight: 600;
+    }
+    .drop-overlay.visible { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="drop-overlay" id="drop-overlay">Drop spectrum file here</div>
+
+  <div class="app-header">
+    <h1>SpecUtils Web Viewer</h1>
+    <div class="file-info" id="header-info"></div>
+  </div>
+
+  <div class="upload-bar">
+    <input type="file" id="file-input">
+    <span class="filename" id="filename-display"></span>
+    <span id="load-status" style="color:#888; font-size:0.85em;"></span>
+  </div>
+
+  <div class="controls-panel" id="controls-panel">
+    <div class="control-row" id="sample-controls" style="display:none;">
+      <span class="label">Samples:</span>
+      <input type="text" id="sample-input" placeholder="e.g. 1-3,5,10-20" style="width:250px; padding:3px 8px; font-size:0.85em; border:1px solid #ccc; border-radius:3px;">
+      <span id="sample-hint" style="color:#888; font-size:0.8em; margin-left:8px;"></span>
+      <span id="sample-parsed" style="color:#555; font-size:0.8em; margin-left:8px;"></span>
+    </div>
+    <div class="control-row" id="detector-controls" style="display:none;">
+      <span class="label">Detectors:</span>
+      <div class="items" id="detector-items"></div>
+      <div class="actions">
+        <button class="btn-sm" id="detectors-all">All</button>
+        <button class="btn-sm" id="detectors-none">None</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chart-container" oncontextmenu="return false;"></div>
+
+  <div class="toolbar" id="chart-toolbar" style="display:none;">
+    <label>Y Scale:
+      <select id="yscale-select">
+        <option value="lin">Linear</option>
+        <option value="log" selected>Log</option>
+        <option value="sqrt">Sqrt</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="grid-x"> Grid X</label>
+    <label><input type="checkbox" id="grid-y"> Grid Y</label>
+    <label><input type="checkbox" id="show-legend" checked> Legend</label>
+    <label><input type="checkbox" id="show-slider"> Slider</label>
+    <label><input type="checkbox" id="mouse-stats" checked> Mouse Stats</label>
+  </div>
+
+  <div class="bottom-bar" id="bottom-bar">
+    <span>Export:</span>
+    <select id="export-format"></select>
+    <button id="export-btn">Download</button>
+    <span style="flex:1;"></span>
+    <span id="file-summary" style="color:#888;"></span>
+  </div>
+
+  <div id="status-msg"></div>
+
+  <!-- D3_JS placeholder: d3.v3.min.js -->
+  <!-- D3_JS -->
+
+  <!-- CHART_JS placeholder: SpectrumChartD3.js -->
+  <!-- CHART_JS -->
+
+  <!-- WASM_JS placeholder: Emscripten JS with embedded WASM -->
+  <!-- WASM_JS -->
+
+  <!-- APP_JS placeholder: specutils_web.js -->
+  <!-- APP_JS -->
+
+  <script>
+    // ---- App state ----
+    var api = null;
+    var chart = null;
+    var fileInfo = null;
+    var currentFilename = '';
+    var statusTimer = null;
+
+    // ---- Init WASM ----
+    SpecUtilsModule().then(function(Module) {
+      api = new SpecUtilsAPI(Module);
+
+      // Populate export formats
+      var select = document.getElementById('export-format');
+      var formats = api.getExportFormats();
+      for (var i = 0; i < formats.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = formats[i].index;
+        opt.textContent = formats[i].name;
+        if (formats[i].name === 'N42-2012') opt.selected = true;
+        select.appendChild(opt);
+      }
+
+      showStatus('Ready - upload a spectrum file', 'success', 3000);
+    }).catch(function(err) {
+      showStatus('Failed to load WASM: ' + err.message, 'error');
+    });
+
+    // ---- Chart setup ----
+    function initChart() {
+      if (chart) return;
+      chart = new SpectrumChartD3('chart-container', {
+        xlabel: 'Energy (keV)',
+        ylabel: 'Counts',
+        yscale: 'log',
+        showLegend: true,
+        adjustYAxisPadding: true,
+        wheelScrollYAxis: true,
+        showXAxisSliderChart: false,
+        compactXAxis: false
+      });
+      chart.setLogY();
+    }
+
+    function resizeChart() {
+      if (!chart) return;
+      var container = document.getElementById('chart-container');
+      var w = window.innerWidth;
+      var h = Math.max(200, Math.min(0.45 * w, 0.65 * window.innerHeight));
+      container.style.height = h + 'px';
+      chart.handleResize();
+    }
+
+    window.addEventListener('resize', resizeChart);
+
+    // ---- File handling ----
+    var fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', function(e) {
+      if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+
+    // Drag and drop
+    var dropOverlay = document.getElementById('drop-overlay');
+    var dragCounter = 0;
+    document.addEventListener('dragenter', function(e) { e.preventDefault(); dragCounter++; dropOverlay.classList.add('visible'); });
+    document.addEventListener('dragleave', function(e) { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove('visible'); } });
+    document.addEventListener('dragover', function(e) { e.preventDefault(); });
+    document.addEventListener('drop', function(e) {
+      e.preventDefault(); dragCounter = 0; dropOverlay.classList.remove('visible');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!api) { showStatus('WASM not yet loaded', 'error'); return; }
+      currentFilename = file.name;
+      document.getElementById('filename-display').textContent = file.name;
+      document.getElementById('load-status').textContent = 'Parsing...';
+
+      var reader = new FileReader();
+      reader.onload = function() {
+        try {
+          var bytes = new Uint8Array(reader.result);
+          fileInfo = api.loadFile(bytes, file.name);
+          onFileLoaded(fileInfo);
+          document.getElementById('load-status').textContent = '';
+        } catch (err) {
+          showStatus('Error: ' + err.message, 'error');
+          document.getElementById('load-status').textContent = 'Parse failed';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function onFileLoaded(info) {
+      // Show controls
+      document.getElementById('controls-panel').classList.add('visible');
+      document.getElementById('chart-toolbar').style.display = '';
+      document.getElementById('bottom-bar').classList.add('visible');
+
+      // Header info
+      var meta = info.metadata;
+      var headerParts = [];
+      if (meta.manufacturer) headerParts.push(meta.manufacturer);
+      if (meta.instrumentModel) headerParts.push(meta.instrumentModel);
+      document.getElementById('header-info').textContent = headerParts.join(' ');
+
+      // File summary
+      document.getElementById('file-summary').textContent =
+        info.gammaDetectors.length + ' detector(s), ' +
+        info.samples.length + ' sample(s), ' +
+        info.maxGammaChannels + ' ch, ' +
+        info.gammaCountSum.toLocaleString() + ' total counts';
+
+      // Sample controls: show only if more than one sample
+      var sampleRow = document.getElementById('sample-controls');
+      if (info.samples.length > 1) {
+        sampleRow.style.display = '';
+        var minS = info.samples[0], maxS = info.samples[info.samples.length - 1];
+        document.getElementById('sample-hint').textContent =
+          'File has samples ' + minS + ' through ' + maxS + ' (' + info.samples.length + ' total)';
+        // Default: all samples selected
+        var sampleInput = document.getElementById('sample-input');
+        sampleInput.value = formatSampleRange(info.samples);
+        updateSampleParsed();
+      } else {
+        sampleRow.style.display = 'none';
+      }
+
+      // Detector controls: show only if more than one gamma detector
+      var detRow = document.getElementById('detector-controls');
+      if (info.gammaDetectors.length > 1) {
+        detRow.style.display = '';
+        populateDetectorCheckboxes(info.gammaDetectors);
+      } else {
+        detRow.style.display = 'none';
+      }
+
+      // Init and update chart
+      initChart();
+      resizeChart();
+      updateChart();
+
+      showStatus('Loaded ' + currentFilename, 'success', 2000);
+    }
+
+    function populateDetectorCheckboxes(detectors) {
+      var container = document.getElementById('detector-items');
+      container.innerHTML = '';
+      for (var i = 0; i < detectors.length; i++) {
+        var label = document.createElement('label');
+        label.className = 'cb-item';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.value = detectors[i];
+        cb.name = 'detector';
+        cb.addEventListener('change', updateChart);
+        var span = document.createElement('span');
+        span.textContent = detectors[i];
+        label.appendChild(cb);
+        label.appendChild(span);
+        container.appendChild(label);
+      }
+    }
+
+    function getSelectedDetectors() {
+      if (!fileInfo) return [];
+      if (fileInfo.gammaDetectors.length <= 1) return fileInfo.gammaDetectors;
+      var cbs = document.querySelectorAll('input[name="detector"]:checked');
+      var vals = [];
+      for (var i = 0; i < cbs.length; i++) vals.push(cbs[i].value);
+      return vals;
+    }
+
+    function getSelectedSamples() {
+      if (!fileInfo) return [];
+      if (fileInfo.samples.length <= 1) return fileInfo.samples;
+      var rangeStr = document.getElementById('sample-input').value;
+      return parseSampleRange(rangeStr, fileInfo.samples);
+    }
+
+    function updateSampleParsed() {
+      if (!fileInfo || fileInfo.samples.length <= 1) return;
+      var selected = getSelectedSamples();
+      var el = document.getElementById('sample-parsed');
+      if (selected.length === 0) {
+        el.textContent = '(no samples selected)';
+      } else {
+        el.textContent = selected.length + ' sample(s): ' + formatSampleRange(selected);
+      }
+    }
+
+    function setAllDetectorCheckboxes(checked) {
+      var cbs = document.querySelectorAll('input[name="detector"]');
+      for (var i = 0; i < cbs.length; i++) cbs[i].checked = checked;
+      updateChart();
+    }
+
+    // Sample input: update on typing (with debounce)
+    var sampleDebounce = null;
+    document.getElementById('sample-input').addEventListener('input', function() {
+      updateSampleParsed();
+      if (sampleDebounce) clearTimeout(sampleDebounce);
+      sampleDebounce = setTimeout(updateChart, 300);
+    });
+
+    // Detector all/none buttons
+    document.getElementById('detectors-all').addEventListener('click', function() { setAllDetectorCheckboxes(true); });
+    document.getElementById('detectors-none').addEventListener('click', function() { setAllDetectorCheckboxes(false); });
+
+    // ---- Chart update ----
+    function updateChart() {
+      if (!api || !chart || !fileInfo) return;
+
+      var samples = getSelectedSamples();
+      var detectors = getSelectedDetectors();
+
+      if (samples.length === 0 || detectors.length === 0) {
+        chart.setData(null, true);
+        return;
+      }
+
+      try {
+        var chartData = api.getChartData(samples, detectors);
+        chart.setData(chartData, true);
+      } catch (err) {
+        showStatus('Chart error: ' + err.message, 'error');
+      }
+    }
+
+    // ---- Chart controls ----
+    document.getElementById('yscale-select').addEventListener('change', function(e) {
+      if (!chart) return;
+      var v = e.target.value;
+      if (v === 'lin') chart.setLinearY();
+      else if (v === 'log') chart.setLogY();
+      else if (v === 'sqrt') chart.setSqrtY();
+    });
+
+    document.getElementById('grid-x').addEventListener('change', function(e) { if (chart) chart.setGridX(e.target.checked); });
+    document.getElementById('grid-y').addEventListener('change', function(e) { if (chart) chart.setGridY(e.target.checked); });
+    document.getElementById('show-legend').addEventListener('change', function(e) { if (chart) chart.setShowLegend(e.target.checked); });
+    document.getElementById('show-slider').addEventListener('change', function(e) { if (chart) chart.setShowXAxisSliderChart(e.target.checked); });
+    document.getElementById('mouse-stats').addEventListener('change', function(e) { if (chart) chart.setShowMouseStats(e.target.checked); });
+
+    // ---- Export ----
+    document.getElementById('export-btn').addEventListener('click', function() {
+      if (!api) return;
+      try {
+        var formatIdx = parseInt(document.getElementById('export-format').value);
+        var data = api.exportFile(formatIdx);
+        var ext = getExportExtension(formatIdx);
+        var outName = replaceExtension(currentFilename, ext);
+        downloadFile(data, outName);
+        showStatus('Exported ' + outName, 'success', 2000);
+      } catch (err) {
+        showStatus('Export error: ' + err.message, 'error');
+      }
+    });
+
+    // ---- Status messages ----
+    function showStatus(msg, type, autoDismissMs) {
+      var el = document.getElementById('status-msg');
+      el.textContent = msg;
+      el.className = type;
+      if (statusTimer) clearTimeout(statusTimer);
+      if (autoDismissMs) {
+        statusTimer = setTimeout(function() { el.className = ''; el.style.display = 'none'; }, autoDismissMs);
+      }
+    }
+  </script>
+</body>
+</html>

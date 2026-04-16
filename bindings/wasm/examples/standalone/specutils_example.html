@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpecUtils Example</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; color: #333; max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.4em; margin-bottom: 15px; }
+    h2 { font-size: 1.1em; margin: 15px 0 8px; color: #555; }
+
+    .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 20px; cursor: pointer; transition: border-color 0.2s; }
+    .upload-area:hover, .upload-area.dragover { border-color: #666; background: #f9f9f9; }
+    .upload-area input[type="file"] { display: none; }
+    .upload-area label { cursor: pointer; }
+
+    #status { margin: 10px 0; padding: 8px 12px; border-radius: 4px; display: none; }
+    #status.error { display: block; background: #fdd; color: #c00; }
+    #status.loading { display: block; background: #eef; color: #338; }
+    #status.success { display: block; background: #dfd; color: #060; }
+
+    #file-info { display: none; }
+    table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    th, td { text-align: left; padding: 5px 12px; border-bottom: 1px solid #eee; }
+    th { color: #666; font-weight: 600; width: 200px; }
+
+    .export-row { margin: 15px 0; display: flex; gap: 10px; align-items: center; }
+    select, button { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; }
+    button { background: #4a90d9; color: white; border: none; cursor: pointer; }
+    button:hover { background: #357abd; }
+
+    .meas-table { max-height: 300px; overflow-y: auto; margin: 8px 0; }
+    .meas-table table { font-size: 0.85em; }
+    .meas-table th { position: sticky; top: 0; background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1>SpecUtils Example</h1>
+  <p style="margin-bottom:15px; color:#666;">
+    This example loads <code>specutils_wasm.js</code> and <code>specutils_web.js</code>
+    as separate files via <code>&lt;script src&gt;</code> tags.
+    Serve this directory over HTTP (e.g., <code>python3 -m http.server</code>) to use.
+  </p>
+
+  <div class="upload-area" id="drop-area">
+    <label for="file-input">
+      <strong>Click to choose a spectrum file</strong> or drag and drop
+    </label>
+    <input type="file" id="file-input">
+  </div>
+
+  <div id="status"></div>
+
+  <div id="file-info">
+    <h2>File Information</h2>
+    <table id="info-table"><tbody></tbody></table>
+
+    <h2>Measurements</h2>
+    <div class="meas-table">
+      <table id="meas-table">
+        <thead>
+          <tr><th>Sample</th><th>Detector</th><th>Channels</th><th>Live Time</th><th>Real Time</th><th>Gamma Sum</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2>Export</h2>
+    <div class="export-row">
+      <select id="export-format"></select>
+      <button id="export-btn">Download</button>
+    </div>
+  </div>
+
+  <!--
+    Include the two library files as separate scripts.
+    These are the same files available in the specutils-wasm-lib CI artifact.
+    specutils_wasm.js:  Emscripten module (WASM embedded, exports SpecUtilsModule)
+    specutils_web.js:   JS API wrapper (SpecUtilsAPI class, helper functions)
+  -->
+  <script src="specutils_wasm.js"></script>
+  <script src="specutils_web.js"></script>
+
+  <script>
+    var api = null;
+    var currentFilename = '';
+
+    // Initialize WASM module
+    SpecUtilsModule().then(function(Module) {
+      api = new SpecUtilsAPI(Module);
+      console.log('SpecUtils WASM module loaded');
+
+      // Populate export format dropdown
+      var select = document.getElementById('export-format');
+      var formats = api.getExportFormats();
+      for (var i = 0; i < formats.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = formats[i].index;
+        opt.textContent = formats[i].name;
+        if (formats[i].name === 'N42-2012') opt.selected = true;
+        select.appendChild(opt);
+      }
+    }).catch(function(err) {
+      showStatus('Failed to load WASM module: ' + err.message, 'error');
+    });
+
+    // File upload handling
+    var dropArea = document.getElementById('drop-area');
+    var fileInput = document.getElementById('file-input');
+
+    dropArea.addEventListener('click', function() { fileInput.click(); });
+    fileInput.addEventListener('change', function(e) {
+      if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+
+    dropArea.addEventListener('dragover', function(e) { e.preventDefault(); dropArea.classList.add('dragover'); });
+    dropArea.addEventListener('dragleave', function() { dropArea.classList.remove('dragover'); });
+    dropArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!api) { showStatus('WASM module not yet loaded', 'error'); return; }
+      currentFilename = file.name;
+      showStatus('Parsing ' + file.name + '...', 'loading');
+
+      var reader = new FileReader();
+      reader.onload = function() {
+        try {
+          var bytes = new Uint8Array(reader.result);
+          var info = api.loadFile(bytes, file.name);
+          showFileInfo(info);
+          showStatus('Loaded ' + file.name + ' (' + info.numMeasurements + ' measurements)', 'success');
+        } catch (err) {
+          showStatus('Error: ' + err.message, 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function showStatus(msg, type) {
+      var el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = type;
+    }
+
+    function showFileInfo(info) {
+      document.getElementById('file-info').style.display = 'block';
+
+      var rows = [
+        ['Filename', info.metadata.filename || currentFilename],
+        ['Manufacturer', info.metadata.manufacturer || '(unknown)'],
+        ['Model', info.metadata.instrumentModel || '(unknown)'],
+        ['Instrument Type', info.metadata.instrumentType || '(unknown)'],
+        ['UUID', info.metadata.uuid || '(none)'],
+        ['Samples', info.samples.length],
+        ['Detectors', info.detectors.join(', ')],
+        ['Max Gamma Channels', info.maxGammaChannels],
+        ['Total Live Time', info.sumGammaLiveTime.toFixed(2) + ' s'],
+        ['Total Real Time', info.sumGammaRealTime.toFixed(2) + ' s'],
+        ['Gamma Count Sum', info.gammaCountSum.toLocaleString()],
+        ['Neutron Count Sum', info.neutronCountsSum.toLocaleString()]
+      ];
+
+      var tbody = document.querySelector('#info-table tbody');
+      tbody.innerHTML = '';
+      for (var i = 0; i < rows.length; i++) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<th>' + rows[i][0] + '</th><td>' + rows[i][1] + '</td>';
+        tbody.appendChild(tr);
+      }
+
+      // Measurements table
+      var measBody = document.querySelector('#meas-table tbody');
+      measBody.innerHTML = '';
+      for (var si = 0; si < info.samples.length; si++) {
+        for (var di = 0; di < info.gammaDetectors.length; di++) {
+          var minfo = api.getMeasurementInfo(info.samples[si], info.gammaDetectors[di]);
+          if (!minfo || minfo.numChannels === 0) continue;
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + minfo.sampleNumber + '</td>' +
+            '<td>' + minfo.detectorName + '</td>' +
+            '<td>' + minfo.numChannels + '</td>' +
+            '<td>' + minfo.liveTime.toFixed(2) + ' s</td>' +
+            '<td>' + minfo.realTime.toFixed(2) + ' s</td>' +
+            '<td>' + minfo.gammaCountSum.toLocaleString() + '</td>';
+          measBody.appendChild(tr);
+        }
+      }
+    }
+
+    // Export
+    document.getElementById('export-btn').addEventListener('click', function() {
+      if (!api) return;
+      try {
+        var formatIdx = parseInt(document.getElementById('export-format').value);
+        var data = api.exportFile(formatIdx);
+        var ext = getExportExtension(formatIdx);
+        var outName = replaceExtension(currentFilename, ext);
+        downloadFile(data, outName);
+      } catch (err) {
+        showStatus('Export error: ' + err.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>
