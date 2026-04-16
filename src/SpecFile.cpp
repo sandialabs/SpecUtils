@@ -6512,10 +6512,65 @@ void SpecFile::set_detector_type_from_other_info()
       detector_type_ = DetectorType::OrtecRadEagleLaBr;
     }else
     {
+      for( const pair<string,string> &val : component_versions_ )
+      {
+        if( !iequals_ascii(val.first, "Model") )
+          continue;
+
+        if( SpecUtils::icontains(val.second,"3SG") )
+        {
+          detector_type_ = DetectorType::OrtecRadEagleNai;
+          return;
+        }
+
+        if( SpecUtils::icontains(val.second,"2CG") )
+        {
+          detector_type_ = DetectorType::OrtecRadEagleNai;
+          return;
+        }
+
+        if( SpecUtils::icontains(val.second,"3CG") )
+        {
+          detector_type_ = DetectorType::OrtecRadEagleCeBr2Inch;
+          return;
+        }
+
+        if( SpecUtils::icontains(val.second,"2LG") )
+        {
+          detector_type_ = DetectorType::OrtecRadEagleLaBr;
+          return;
+        }
+      }//for( const pair<string,string> &val : component_versions_ )
+
+      for( size_t i = 0; (i < 3) && (i < measurements_.size()); ++i )
+      {
+        const string &desc = measurements_[i]->detector_description_;
+
+        if( icontains(desc, "NaI") ) //"PMT Type: R106001 / NaI(Tl) 2x1"
+        {
+          detector_type_ = DetectorType::OrtecRadEagleNai;
+          return;
+        }
+
+        // CeBr and LaBr unverified if correct
+        if( icontains(desc, "Ce") && icontains(desc, "Br") )
+        {
+          detector_type_ = DetectorType::OrtecRadEagleCeBr2Inch;
+          return;
+        }
+
+        if( icontains(desc, "La") && icontains(desc, "Br") )
+        {
+          detector_type_ = DetectorType::OrtecRadEagleLaBr;
+          return;
+        }
+      }//for( size_t i = 0; (i < 3) && (i < measurements_.size()); ++i )
+      
+
 #if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
       log_developer_error( __func__, ("Unrecognized RadEagle Model: " + model).c_str() );
 #endif
-    }
+    }//if( SpecUtils::icontains(model,"...") ) / else if / else if / else
     
     //Make the modle human readable
     if( istarts_with(model, "RE ") )
