@@ -261,7 +261,7 @@ namespace SpecUtils
 
 		env.add_callback("pow", 2, [](Arguments& args) {
 			float value1 = args.at(0)->get<float>();
-			float value2 = args.at(0)->get<float>();
+			float value2 = args.at(1)->get<float>();
 			return pow(value1, value2);
 			});
 

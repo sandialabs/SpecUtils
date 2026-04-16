@@ -1657,8 +1657,6 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     if ((d3.event.button === 0 && self.leftMouseDown)) {        /* If left click being held down (left-click and drag) */
       //console.log( "handleChartMouseMove: left down" );
 
-      const isWindows = self.isWindows();
-      
       d3.select(document.body).attr("cursor", "move");
 
       /* Holding the Shift-key and left-click dragging --> Delete Peaks Mode */
@@ -1668,14 +1666,13 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       self.isCountingGammas = d3.event.altKey && d3.event.shiftKey && !d3.event.ctrlKey && !d3.event.metaKey && !self.fittingPeak && !self.escapeKeyPressed;
 
       /* Holding the Alt+Ctrl-key + Left-click Dragging --> Recalibration Mode */
-      self.isRecalibrating = d3.event.altKey && d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed; 
+      self.isRecalibrating = d3.event.altKey && d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
 
-      /* Holding the Command-key + Left-click dragging --> Zoom-in Y Mode */
-      // For Windows, you can zoom-in on the y-axis using Alt + Left-drag
-      self.isZoomingInYAxis = (isWindows ? d3.event.altKey : d3.event.metaKey) && !(isWindows ? d3.event.metaKey : d3.event.altKey) && !d3.event.ctrlKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
+      /* Holding the Command-key (or Windows-key) + Left-click dragging --> Zoom-in Y Mode */
+      self.isZoomingInYAxis = d3.event.metaKey && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
 
-      /* Holding the Alt-key + Left-click dragging ---> Undefined, maybe a future implementation? */
-      self.isUndefinedMouseAction = (isWindows ? d3.event.metaKey : d3.event.altKey) && !d3.event.ctrlKey && !(isWindows ? d3.event.altKey : d3.event.metaKey) && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
+      /* Holding the Alt-key + Left-click dragging ---> Undefined (Alt + double-click is used for background peak fitting) */
+      self.isUndefinedMouseAction = d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
 
       var isZoomingInXAxis = !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed && !self.roiIsBeingDragged;
 
@@ -1760,15 +1757,23 @@ SpectrumChartD3.prototype.getMousePos = function(){
   
   if( d3.event )
   {
-    const m = d3.mouse(this.vis[0][0]);
-    if( m )
-      return [m[0], m[1], m[0] + pad_left, m[1] + pad_top];
-      
+    try {
+      const m = d3.mouse(this.vis[0][0]);
+      if( m )
+        return [m[0], m[1], m[0] + pad_left, m[1] + pad_top];
+    } catch(e) {
+      // d3.mouse() can throw if event has non-finite coordinates (e.g., window losing focus)
+    }
+
     const t = d3.event.changedTouches;
     if( t && t.length ){
-      const vt = d3.touches(this.vis[0][0], t);
-      if( vt && vt.length )
-        return [vt[0][0], vt[0][1], vt[0][0] + pad_left, vt[0][1] + pad_top];
+      try {
+        const vt = d3.touches(this.vis[0][0], t);
+        if( vt && vt.length )
+          return [vt[0][0], vt[0][1], vt[0][0] + pad_left, vt[0][1] + pad_top];
+      } catch(e) {
+        // d3.touches() can similarly throw with non-finite coordinates
+      }
     }
   }//if( d3.event )
 
@@ -2386,7 +2391,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.recalibrationStartEnergy = [ self.xScale.invert(m[0]), self.xScale.invert(m[1]) ];
       self.isRecalibrating = false;
 
-      /* We are fitting peaks (if alt-key held) */
+      /* We are fitting peaks (if ctrl-key held) */
       self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey && d3.event.keyCode !== 27;
       //self.forcedFitRoiNumPeaks = -1;
       
@@ -6134,9 +6139,22 @@ SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
 
     /* Initially set the escape key flag false */
     /* ToDo: record initial range so if escape is pressed, can reset to it */
-    self.escapeKeyPressed = false;    
+    self.escapeKeyPressed = false;
 
     d3.select(document.body).style("cursor", "move");
+
+    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
+    d3.select(document).on("mouseup.sliderdrag", function() {
+      self.sliderBoxDown = false;
+      self.leftDragRegionDown = false;
+      self.rightDragRegionDown = false;
+      self.sliderChartMouse = null;
+      self.savedSliderMouse = null;
+      d3.select(document.body).style("cursor", "default");
+      d3.select(document).on("mouseup.sliderdrag", null);
+      d3.select(document).on("mousemove.sliderdrag", null);
+    });
+    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
   }
 }
 
@@ -6218,7 +6236,20 @@ SpectrumChartD3.prototype.handleMouseDownLeftSliderDrag = function() {
     self.leftDragRegionDown = true;
 
     /* Initially set the escape key flag false */
-    self.escapeKeyPressed = false;    
+    self.escapeKeyPressed = false;
+
+    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
+    d3.select(document).on("mouseup.sliderdrag", function() {
+      self.sliderBoxDown = false;
+      self.leftDragRegionDown = false;
+      self.rightDragRegionDown = false;
+      self.sliderChartMouse = null;
+      self.savedSliderMouse = null;
+      d3.select(document.body).style("cursor", "default");
+      d3.select(document).on("mouseup.sliderdrag", null);
+      d3.select(document).on("mousemove.sliderdrag", null);
+    });
+    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
   }
 }
 
@@ -6287,7 +6318,20 @@ SpectrumChartD3.prototype.handleMouseDownRightSliderDrag = function() {
     self.rightDragRegionDown = true;
 
     /* Initially set the escape key flag false */
-    self.escapeKeyPressed = false;    
+    self.escapeKeyPressed = false;
+
+    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
+    d3.select(document).on("mouseup.sliderdrag", function() {
+      self.sliderBoxDown = false;
+      self.leftDragRegionDown = false;
+      self.rightDragRegionDown = false;
+      self.sliderChartMouse = null;
+      self.savedSliderMouse = null;
+      d3.select(document.body).style("cursor", "default");
+      d3.select(document).on("mouseup.sliderdrag", null);
+      d3.select(document).on("mousemove.sliderdrag", null);
+    });
+    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
   }
 }
 

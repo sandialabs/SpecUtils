@@ -526,10 +526,12 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       auto channel_counts = make_shared<vector<float>>( nchannel, 0.0f );
       const size_t end_bin = std::min( static_cast<size_t>(bin_last_index),
                                        std::min( bin_start_index + nchannel, fields.size() ) );
-      for( size_t i = bin_start_index; i < fields.size(); ++i )
+      for( size_t i = bin_start_index; i < end_bin; ++i )
       {
         const size_t channel_num = i - bin_start_index;
         assert( channel_num < channel_counts->size() );
+        if( channel_num >= channel_counts->size() )
+          break;
         float &channel = (*channel_counts)[channel_num];
         if( parse_float( fields[i].c_str(), fields[i].size(), channel ) )
         {
@@ -538,7 +540,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         {
           failed_any_parse = true;
         }
-      }//for( size_t i = bin_start_index; i < fields.size(); ++i )
+      }//for( size_t i = bin_start_index; i < end_bin; ++i )
       
       if( gamma_sum <= 0 )
         return nullptr;
@@ -1293,6 +1295,8 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
       }else
       {
         assert( fields[0].size() >= 8 );
+        if( fields[0].size() < 8 )
+          continue;
         string restofline = fields[0].substr( std::min( fields[0].size()-1, size_t(8) ) );
         const auto semipos = restofline.find_first_of(" :\t");
         if( semipos != string::npos && (semipos+2) < fields[0].size() )
@@ -1688,7 +1692,7 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
     }//for( auto &field : header )
     
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-    if( header_names_check.size() != header_names_check.size() )
+    if( header_names_check.size() != header.size() )
       log_developer_error( __func__, ("There was a duplicate detector name in SRPM CSV file: '" + line + "' - who knows what will happen").c_str() );
 #endif
     
@@ -1794,9 +1798,9 @@ bool SpecFile::load_from_srpm210_csv( std::istream &input )
       
       //JIC something is whack getting time, hack it! (shouldnt happen that I'm aware of)
       if( livetime==0.0f && realtime!=0.0f )
-        realtime = livetime;
-      if( realtime==0.0f && livetime!=0.0f )
         livetime = realtime;
+      if( realtime==0.0f && livetime!=0.0f )
+        realtime = livetime;
       
       auto m = std::make_shared<Measurement>();
       

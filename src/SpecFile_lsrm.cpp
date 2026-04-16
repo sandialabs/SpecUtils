@@ -132,7 +132,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
       meas->live_time_ = 0.0f;
     
     if( !toFloat( getval("TREAL="), meas->real_time_ ) )
-      meas->live_time_ = 0.0f;
+      meas->real_time_ = 0.0f;
     
     instrument_id_ = getval( "DETECTOR=" );
     

@@ -2389,12 +2389,14 @@ bool SpecUtils_EnergyCal_set_polynomial( SpecUtils_EnergyCal * instance,
     
     const vector<float> coeffsvec( coeffs, coeffs + number_coeffs );
     vector<pair<float,float>> dev_pairs_vec( number_dev_pairs );
+    if( number_dev_pairs && !dev_pairs )
+      throw runtime_error( "dev_pairs is NULL but number_dev_pairs > 0" );
     for( uint32_t i = 0; i < number_dev_pairs; ++i )
     {
       dev_pairs_vec[i].first = dev_pairs[2*i];
       dev_pairs_vec[i].second = dev_pairs[2*i + 1];
     }
-    
+
     ptr->set_polynomial( num_channels, coeffsvec, dev_pairs_vec );
   }catch( std::exception &e )
   {
@@ -2422,12 +2424,14 @@ bool SpecUtils_EnergyCal_set_full_range_fraction( SpecUtils_EnergyCal * instance
     
     const vector<float> coeffs_vec( coeffs, coeffs + num_coeffs );
     vector<pair<float,float>> dev_pairs_vec( number_dev_pairs );
+    if( number_dev_pairs && !dev_pairs )
+      throw runtime_error( "dev_pairs is NULL but number_dev_pairs > 0" );
     for( uint32_t i = 0; i < number_dev_pairs; ++i )
     {
       dev_pairs_vec[i].first = dev_pairs[2*i];
       dev_pairs_vec[i].second = dev_pairs[2*i + 1];
     }
-    
+
     ptr->set_full_range_fraction( num_channels, coeffs_vec, dev_pairs_vec );
   }catch( std::exception &e )
   {

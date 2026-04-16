@@ -75,13 +75,13 @@ namespace
   
   string parse_pcf_field( const string &header, size_t offset, size_t len )
   {
-#if(PERFORM_DEVELOPER_CHECKS)
     if( offset+len > header.size() )
     {
+#if(PERFORM_DEVELOPER_CHECKS)
       log_developer_error( __func__, "Logic error in parse_pcf_field" );
+#endif
       throw runtime_error( "Logic error in parse_pcf_field" );
     }
-#endif
     string field( header.begin() + offset, header.begin() + offset + len );
     const size_t zeropos = field.find_first_of( '\0' );
     if( zeropos != string::npos )

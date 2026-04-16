@@ -191,11 +191,15 @@ bool SpecFile::load_from_xml_scan_data( std::istream &input )
           };// edges
           
           assert( edges.size() == 10 );
-          
+          if( edges.size() != 10 )
+            throw runtime_error( "Unexpected number of edges for ScanData 9-channel calibration" );
+
           cal->set_lower_channel_energy( 9, std::move(edges) );
         }else if( nchannel >= EnergyCalibration::sm_min_channels )
         {
           assert( nchannel < EnergyCalibration::sm_max_channels ); // set_default_polynomial will throw if this isnt the case anyway
+          if( nchannel >= EnergyCalibration::sm_max_channels )
+            throw runtime_error( "Too many channels in ScanData XML" );
           cal->set_default_polynomial( nchannel, {0.0f, 3000.0f/nchannel}, {} );
         }else
         {
