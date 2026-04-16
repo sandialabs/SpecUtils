@@ -137,7 +137,7 @@ namespace
     info.nchannels = atoi( s1fields[3].c_str() );  //typically 512 or 4096
     info.algorithmVersion = s1fields[4];
     
-    if( info.nchannels <= 0 )
+    if( (info.nchannels <= 0) || (info.nchannels > 131072) )
     {
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       log_developer_error( __func__, "parse_s1_info(): Invalid claimed number of channels" );
@@ -300,6 +300,15 @@ namespace
       info.spectrum->resize( 1, nneut );
     }else
     {
+      if( line.size() < (pos1 + 3) )
+      {
+#if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
+        log_developer_error( __func__, "parse_analyzed_background: line too short for spectrum data" );
+#endif
+        info.success = false;
+        return;
+      }
+
       const char *start = line.c_str() + pos1 + 1;
       const size_t len = line.size() - pos1 - 2;
       const bool success
@@ -1405,7 +1414,8 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
       {
         meas->live_time_ = meas->real_time_ = 0.1f*neut->numTimeSlicesAgregated;
         
-        if( meas->detector_number_ < static_cast<int>(neut->counts.size()) )
+        if( (meas->detector_number_ >= 0)
+           && (meas->detector_number_ < static_cast<int>(neut->counts.size())) )
         {
           meas->neutron_counts_sum_ = neut->counts[meas->detector_number_];
           meas->neutron_counts_.resize( 1 );
@@ -1583,7 +1593,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
         
         meas->live_time_ = meas->real_time_ = neutbackground.realTime;
         const int nneutdet = static_cast<int>( neutbackground.counts.size() );
-        if( meas->detector_number_ < nneutdet )
+        if( (meas->detector_number_ >= 0) && (meas->detector_number_ < nneutdet) )
         {
           const float counts = neutbackground.counts[meas->detector_number_];
           meas->neutron_counts_.resize( 1 );

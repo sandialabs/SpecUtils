@@ -73,13 +73,7 @@ static_assert( (SpecUtils_USE_FAST_FLOAT + SpecUtils_USE_FROM_CHARS + SpecUtils_
 #elif( SpecUtils_USE_BOOST_SPIRIT )
   #include <boost/version.hpp>
 
-  #if( BOOST_VERSION < 104500 )
-    #include <boost/config/warning_disable.hpp>
-    #include <boost/spirit/include/qi.hpp>
-    #include <boost/spirit/include/phoenix_core.hpp>
-    #include <boost/spirit/include/phoenix_operator.hpp>
-    #include <boost/spirit/include/phoenix_stl.hpp>
-  #endif
+  static_assert( BOOST_VERSION >= 104500, "SpecUtils requires Boost >= 1.45.0" );
 
   #include <boost/fusion/adapted.hpp>
   #include <boost/spirit/include/qi.hpp>
@@ -167,43 +161,46 @@ namespace
   }
   
 #if( SpecUtils_USE_STRTOD )
-  bool split_to_floats_strtod( const char *input, const size_t length, 
+  bool split_to_floats_strtod( const char *input, const size_t length,
                               const char * const delims,
                               const bool cambio_fix,
-                              vector<float> &results )
+                              vector<float> &results,
+                              const size_t max_results = 0 )
   {
     const char * const end = input + length;
-    
+
     const char *pos = next_word( input, end, delims );
-    
+
     while( pos < end )
     {
-      const char d = *pos;
+      const unsigned char d = static_cast<unsigned char>(*pos);
       if( !isdigit(d) && (d != '+') && (d != '-') && (d != '.') )
         return false;
-      
+
       const char * const word_end = end_of_word( pos, end, delims );
-      
+
       try
       {
         double dvalue = stod( string(pos, (word_end - pos)) );
-        
+
         if( cambio_fix && (dvalue == 0.0) && ((pos + 1) < word_end) )
         {
           const char nextchar[2] = { *(pos+1), '\0' };
           if( !strstr(delims, nextchar) )  //If the next char is a delimiter, then we dont want to apply the fix, otherwise apply the fix
             dvalue = std::numeric_limits<float>::min();
         }//if( value == 0.0 )
-        
+
         results.push_back( static_cast<float>(dvalue) );
+        if( max_results && (results.size() >= max_results) )
+          return true;
       }catch( std::exception & )
       {
         return false;
       }
-      
+
       pos = next_word( word_end, end, delims );
     }//while( pos < end )
-    
+
     return true;
   }//split_to_floats_strtod(...)
 #endif //SpecUtils_USE_STRTOD
@@ -503,7 +500,7 @@ namespace SpecUtils
 #if( defined(_WIN32) && _DEBUG )
     s.erase( s.begin(), std::find_if( s.begin(), s.end(), &not_whitespace ) );
 #else
-    s.erase( s.begin(), std::find_if( s.begin(), s.end(), [](int val)->bool { return !std::isspace(val); } ) );
+    s.erase( s.begin(), std::find_if( s.begin(), s.end(), [](char ch)->bool { return !std::isspace(static_cast<unsigned char>(ch)); } ) );
 #endif
     
     if( s.size() )
@@ -524,7 +521,7 @@ namespace SpecUtils
 #if( defined(_WIN32) && _DEBUG )
     s.erase( std::find_if( s.rbegin(), s.rend(), &not_whitespace ).base(), s.end() );
 #else
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](int val)->bool { return !std::isspace(val); } ).base(), s.end());
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](char ch)->bool { return !std::isspace(static_cast<unsigned char>(ch)); } ).base(), s.end());
 #endif
     //remove null terminating characters.  Boost doesn't do this, but is
     //  necessary when reading fixed width binary data.
@@ -749,7 +746,7 @@ namespace SpecUtils
     //  input[i] = std::tolower( input[i], loc );
     
     for( size_t i = 0; i < input.size(); ++i )
-      input[i] = static_cast<char>( tolower(input[i]) );
+      input[i] = static_cast<char>( tolower(static_cast<unsigned char>(input[i])) );
     
 #if(PERFORM_DEVELOPER_CHECKS)
     if( strcopy != input )
@@ -777,7 +774,7 @@ namespace SpecUtils
 #endif
     
     for( size_t i = 0; i < input.size(); ++i )
-      input[i] = static_cast<char>( toupper(input[i]) );
+      input[i] = static_cast<char>( toupper(static_cast<unsigned char>(input[i])) );
     
 #if(PERFORM_DEVELOPER_CHECKS)
     if( strcopy != input )
@@ -822,11 +819,12 @@ namespace SpecUtils
     const size_t replacment_len = strlen(replacement);
     bool found = true;
     const char *start = input.c_str(), *end = input.c_str() + input.size();
-    
+    const std::locale loc;
+
     while( found )
     {
       const char * const it = std::search( start, end, pattern, pattern+paternlen,
-                                          char_iequal<char>(std::locale()) );
+                                          char_iequal<char>(loc) );
       found = (it != end);
       if( found )
       {
@@ -1008,14 +1006,14 @@ namespace SpecUtils
       return 0;
 
     unsigned char c;
-    size_t res = 0;
-    for( ; *it; ++it, ++res)
+    size_t res = 1;
+    for( ++it; *it; ++it, ++res)
     {
       c = *it;
       if( !(c & 0x80) || ((c & 0xC0) == 0xC0))
         break;
     }
-    
+
     return res;
   }//size_t utf8_iterate( IterType& it )
   
@@ -1094,7 +1092,9 @@ namespace SpecUtils
   bool valid_utf8( const char * const str, const size_t num_in_bytes )
   {
     int bytesToProcess = 0;
-    
+    uint32_t codepoint = 0;
+    uint8_t first_byte = 0;
+
     for( size_t i = 0; i < num_in_bytes; ++i )
     {
       const uint8_t c = reinterpret_cast<const uint8_t &>( str[i] );
@@ -1102,27 +1102,56 @@ namespace SpecUtils
       {
         // Determine how many bytes to expect
         if( (c & 0x80) == 0 )
+        {
           continue;            // 1-byte character (ASCII)
-        else if( (c & 0xE0) == 0xC0 )
+        }else if( (c & 0xE0) == 0xC0 )
+        {
           bytesToProcess = 1;  // 2-byte character
-        else if( (c & 0xF0) == 0xE0 )
+          codepoint = c & 0x1F;
+        }else if( (c & 0xF0) == 0xE0 )
+        {
           bytesToProcess = 2;  // 3-byte character
-        else if( (c & 0xF8) == 0xF0 )
+          codepoint = c & 0x0F;
+        }else if( (c & 0xF8) == 0xF0 )
+        {
           bytesToProcess = 3;  // 4-byte character
-        else
+          codepoint = c & 0x07;
+        }else
+        {
           return false; // Invalid leading byte
+        }
+        first_byte = c;
       }else
       {
         // Expecting continuation byte
         if( (c & 0xC0) != 0x80 )
           return false; // Not a valid continuation byte
+
+        codepoint = (codepoint << 6) | (c & 0x3F);
         bytesToProcess--;
         assert( bytesToProcess >= 0 );
+
+        if( bytesToProcess == 0 )
+        {
+          // Reject overlong encodings: the codepoint must require this many bytes
+          if( (first_byte & 0xE0) == 0xC0 && codepoint < 0x80 )
+            return false;   // 2-byte overlong (e.g., C0 AF encoding '/')
+          if( (first_byte & 0xF0) == 0xE0 && codepoint < 0x800 )
+            return false;   // 3-byte overlong
+          if( (first_byte & 0xF8) == 0xF0 && codepoint < 0x10000 )
+            return false;   // 4-byte overlong
+
+          // Reject surrogate halves (U+D800..U+DFFF) and codepoints above U+10FFFF
+          if( codepoint >= 0xD800 && codepoint <= 0xDFFF )
+            return false;
+          if( codepoint > 0x10FFFF )
+            return false;
+        }
       }
     }//for( size_t i = 0; i < num_in_bytes; ++i )
-    
+
     assert( bytesToProcess >= 0 );
-    
+
     return (bytesToProcess == 0);
   }//bool valid_utf8( const char * const str, size_t num_in_bytes )
   
@@ -1220,7 +1249,7 @@ namespace SpecUtils
     
     return ok;
 #else
-    // SpecUtils_USE_STRTOD or (BOOST_VERSION < 104500)
+    // SpecUtils_USE_STRTOD
     //  (terribly inefficient, but probably not really used)
     
     const char * const delims = " \t\n\r,";
@@ -1230,7 +1259,7 @@ namespace SpecUtils
     
     while( pos < end )
     {
-      const char d = *pos;
+      const unsigned char d = static_cast<unsigned char>(*pos);
       if( !isdigit(d) && (d != '+') && (d != '-') )
         return false;
       
@@ -1276,13 +1305,16 @@ namespace SpecUtils
     return split_to_floats( input.c_str(), input.length(), results );
   }
   
-  bool split_to_floats( const char *input, const size_t length, vector<float> &results )
+  bool split_to_floats( const char *input, const size_t length, vector<float> &results,
+                       const size_t max_results )
   {
     results.clear();
-    
+
     // This initial guess almost always over-predicts (when checked on a representative dataset)
     //  but not by too much, and it reduces total time by about 20%
-    const size_t num_float_guess = (std::max)( size_t(1), (std::min)(length / 2, size_t(32768)) );
+    size_t num_float_guess = (std::max)( size_t(1), (std::min)(length / 2, size_t(32768)) );
+    if( max_results && (num_float_guess > max_results) )
+      num_float_guess = max_results;
     results.reserve(num_float_guess);
     
 #if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
@@ -1306,6 +1338,8 @@ namespace SpecUtils
        {
          //cout << "Result: " << result << ", (ptr-start) -> " << (status.ptr-start) << endl;
          results.push_back( result );
+         if( max_results && (results.size() >= max_results) )
+           return true;
        }else
        {
          //cout << "Error reading '" << string(start,end) << "' isn't a number." << endl;
@@ -1354,32 +1388,16 @@ namespace SpecUtils
     //  number and then choose the parser expression to use...
     //Not sure difference between qi::space and qi::blank from testing various
     //  strings
-#if( BOOST_VERSION < 104500 )
-    // namespace ascii = boost::spirit::ascii;
-    // namespace phoenix = boost::phoenix;
-    
-    //const bool ok = qi::phrase_parse( begin, end,
-    //  (
-    //      qi::float_[phoenix::push_back(phoenix::ref(results), qi::_1)]
-    //          >> *(qi::lit(",")|qi::space >> qi::float_[phoenix::push_back(phoenix::ref(results), qi::_1)])
-    // )
-    //, qi::lit(",")|qi::space|qi::eol );
-    char *hack_input = const_cast<char *>(input);
-    const char orig_char = hack_input[length];
-    hack_input[length] = '\0';
-    const bool ok = split_to_floats( hack_input, results, " \t\n\r,", false );
-    hack_input[length] = orig_char;
-    return ok;
-#else
     const bool ok = qi::phrase_parse( begin, end, (*qi::float_) % qi::eol, qi::lit(",")|qi::space, results );
-    
+
+    if( max_results && (results.size() > max_results) )
+      results.resize( max_results );
+
     // Note that strings like "661.7,-0.1.7,9.3", will parse into 4 numbers {661.6,-0.1,0.7,9.3}
-    
-#endif
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
     if( !ok )
     {
-      if( *input && isdigit(*input) )
+      if( *input && isdigit(static_cast<unsigned char>(*input)) )
       {
         char errormsg[1024];
         snprintf( errormsg, sizeof(errormsg), "Parsing failed: '%s'",
@@ -1395,8 +1413,8 @@ namespace SpecUtils
                  string(begin,end).c_str() );
         log_developer_error( __func__, errormsg );
       }//if( begin != end )
-      
-      
+
+
       vector<float> checked_result;
       string datacopy( input, input+length );
       trim( datacopy );
@@ -1443,7 +1461,7 @@ namespace SpecUtils
     
     return ok;
 #elif( SpecUtils_USE_STRTOD )
-    return split_to_floats_strtod( input, length, " \t\n\r,", false, results );
+    return split_to_floats_strtod( input, length, " \t\n\r,", false, results, max_results );
 #else
     static_assert( 0, "No float parsing method defined???" );
 #endif //SpecUtils_USE_FROM_CHARS / else
@@ -1453,7 +1471,10 @@ namespace SpecUtils
   bool parse_double( const char *input, const size_t length, double &result )
   {
     result = 0.0;
-    
+
+    if( !input || !length )
+      return false;
+
 #if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
     const char *begin = next_word( input, input + length, " \t\n\r,+" ); // Fast forward through whitespace and '+'
     const char *end = input + length;
@@ -1493,7 +1514,10 @@ namespace SpecUtils
   bool parse_float( const char *input, const size_t length, float &result )
   {
     result = 0.0f;
-    
+
+    if( !input || !length )
+      return false;
+
 #if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
     const char *begin = next_word( input, input + length, " \t\n\r,+" ); // Fast forward through whitespace and '+'
     const char *end = input + length;
@@ -1530,6 +1554,11 @@ namespace SpecUtils
 
   bool parse_int( const char *input, const size_t length, int &result )
   {
+    result = 0;
+
+    if( !input || !length )
+      return false;
+
 #if( SpecUtils_USE_FROM_CHARS || SpecUtils_USE_FAST_FLOAT )
     const char *begin = next_word( input, input + length, " \t\n\r,+" ); // Fast forward through whitespace and '+'
     const char *end = input + length;
@@ -1548,8 +1577,7 @@ namespace SpecUtils
     
     const char *begin = input;
     const char *end = begin + length;
-    
-    result = 0;
+
     const bool ok = qi::phrase_parse( begin, end, qi::int_, qi::space, result );
     //  if( ok && (begin != end) )
     //    return false;
@@ -1570,7 +1598,8 @@ namespace SpecUtils
 
   bool split_to_floats( const char *input, vector<float> &contents,
                        const char * const delims,
-                       const bool cambio_zero_compress_fix )
+                       const bool cambio_zero_compress_fix,
+                       const size_t max_results )
   {
 #if(PERFORM_DEVELOPER_CHECKS)
     if( string(delims).find_first_of( ".0123456789+-.eE" ) != string::npos )
@@ -1637,7 +1666,7 @@ namespace SpecUtils
 #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
       if( !ok )
       {
-        if( input && isdigit(*input) )
+        if( input && isdigit(static_cast<unsigned char>(*input)) )
         {
           char errormsg[1024];
           snprintf( errormsg, sizeof(errormsg), "Parsing failed: '%s'",
@@ -1681,12 +1710,14 @@ namespace SpecUtils
       }//if( value == 0.0 )
       
       contents.push_back( static_cast<float>(value) );
+      if( max_results && (contents.size() >= max_results) )
+        return true;
     }//while( *pos )
-    
+
     return !(*pos);
 #elif( SpecUtils_USE_STRTOD )
     const size_t length = strlen( input );
-    return split_to_floats_strtod( input, length, delims, cambio_zero_compress_fix, contents );
+    return split_to_floats_strtod( input, length, delims, cambio_zero_compress_fix, contents, max_results );
 #endif
   }//vector<float> split_to_floats( ... )
   
@@ -1834,11 +1865,14 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
       }else
       {
         input = input.substr( 0, pos );
-        
-        const bool is_negative = (input[0] == '-');
+
+        const bool is_negative = (!input.empty() && input[0] == '-');
         if( is_negative )
           input = input.substr( 1 );
-        
+
+        if( input.empty() )
+          return is_negative ? "-0" : "0";
+
         for( size_t index = input.size() - 1; index > 0; --index )
         {
           if( input[index] != '.' )
@@ -2065,11 +2099,11 @@ std::wstring convert_from_utf8_to_utf16( const std::string &input )
     
     for( size_t i = 1; i <= n; i++)
     {
-      const string::value_type s_i = std::toupper( source[i-1] );
-      
+      const string::value_type s_i = static_cast<char>( std::toupper( static_cast<unsigned char>(source[i-1]) ) );
+
       for( size_t j = 1; j <= m; j++)
       {
-        const string::value_type t_j = std::toupper( target[j-1] );
+        const string::value_type t_j = static_cast<char>( std::toupper( static_cast<unsigned char>(target[j-1]) ) );
         
         size_t cost = (s_i == t_j) ? 0 : 1;
         

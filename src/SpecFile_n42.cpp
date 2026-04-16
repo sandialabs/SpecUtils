@@ -2821,9 +2821,6 @@ struct N42DecodeHelper2006
       
       
     const bool compressed_zeros = icontains(compress_type, "Counted"); //"CountedZeroes", at least one file has "CountedZeros"
-      
-    //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
-    SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
 
     // Limit raw parsed floats to a reasonable maximum to prevent DoS from huge channel data.
     // For compressed zeros, each zero-run uses 2 values, so 2*sm_max_channels is a safe upper bound.
@@ -2831,6 +2828,10 @@ struct N42DecodeHelper2006
     const size_t max_raw_floats = compressed_zeros
                                 ? (2 * EnergyCalibration::sm_max_channels)
                                 : EnergyCalibration::sm_max_channels;
+
+    //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
+    SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros, max_raw_floats );
+
     if( contents->size() > max_raw_floats )
       throw runtime_error( "Error, max number of channels exceeded" );
 

@@ -248,12 +248,15 @@ bool SpecFile::load_from_cnf( std::istream &input )
     input.seekg( 0, ios::beg );
     
     const size_t size = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    std::vector<char> file_bits(size);
+    if( size > 8*1024*1024 )
+      throw runtime_error( "File too large to be a CNF file" );
+
+    std::vector<byte_type> file_bits(size);
     input.read(reinterpret_cast<char*>(file_bits.data()), size);
 
-    //create tge camio object and send it the bits
+    //create the camio object and send it the bits
     CAMInputOutput::CAMIO cam;
-    cam.ReadFile(reinterpret_cast<const std::vector<byte_type>&>(file_bits));
+    cam.ReadFile(file_bits);
     
     load_cnf_using_reader( cam );
     
@@ -307,7 +310,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
       return false;
 
     //call CAMIO here
-    CAMInputOutput::CAMIO* cam = new CAMInputOutput::CAMIO();
+    CAMInputOutput::CAMIO cam_obj;
 
     //At this point we have the one spectrum (called summed) that we will write
     //  to the CNF file.  If the input file only had a single spectrum, this is
@@ -382,7 +385,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
     //      nuc.Name = nucres.nuclide_;
     //      nuc.Activity = nucres.activity_ * 1 / 37000; //convert to uCi
     //  
-    //      cam->AddNuclide(nuc);
+    //      cam_obj.AddNuclide(nuc);
     //  }//for( loop over nuclides identified )
     // 
     //}//if( we have riid results from input file )
@@ -395,37 +398,37 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             std::string expectsString(title.begin(), title.end());
             expectsString.resize( 0x20, '\0');
             //enter_CAM_value(expectsString, cnf_file, acqp_loc);
-            cam->AddSampleTitle(expectsString);
+            cam_obj.AddSampleTitle(expectsString);
         }
         
  //TODO: implement converted shape calibration information into CNF files 
         //shape calibration, just use the default values for NaI detectors if the type cotains any NaI, if not use Ge defaults
         const string& detector_type = summed->detector_type();
-        cam->AddDetectorType(detector_type);
+        cam_obj.AddDetectorType(detector_type);
 
         //energy calibration
-        cam->AddEnergyCalibration(energy_cal_coeffs);
+        cam_obj.AddEnergyCalibration(energy_cal_coeffs);
 
         //times
         if (!SpecUtils::is_special(start_time)) {
-            cam->AddAcquitionTime(start_time);
+            cam_obj.AddAcquitionTime(start_time);
 
         }
-        cam->AddLiveTime(live_time);
-        cam->AddRealTime(real_time);
+        cam_obj.AddLiveTime(live_time);
+        cam_obj.AddRealTime(real_time);
 
         // add the gps info
         if (summed->has_gps_info()) 
         {
             if(!SpecUtils::is_special(summed->position_time()))
-                cam->AddGPSData(summed->latitude(), summed->longitude(), summed->speed(), summed->position_time());
+                cam_obj.AddGPSData(summed->latitude(), summed->longitude(), summed->speed(), summed->position_time());
             else
-                cam->AddGPSData(summed->latitude(), summed->longitude(), summed->speed()); // if there is no position time stamp
+                cam_obj.AddGPSData(summed->latitude(), summed->longitude(), summed->speed()); // if there is no position time stamp
         }
         //enter the data 
-        cam->AddSpectrum(gamma_channel_counts);
+        cam_obj.AddSpectrum(gamma_channel_counts);
 
-        auto& cnf_file = cam->CreateFile();
+        auto& cnf_file = cam_obj.CreateFile();
         //write the file
          output.write((char* )cnf_file.data(), cnf_file.size());
     }catch( std::exception &e )

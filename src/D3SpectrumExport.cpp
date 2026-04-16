@@ -240,6 +240,8 @@ namespace
       copy_check_utf8<char>(c, b);
       assert( c <= (text.c_str() + text.size()) );
       assert( (b - buf) <= 4 );
+      if( (b - buf) > 4 || (b - buf) < 0 )
+        break;  // Malformed UTF-8; dont write past buf
       for (char *i = buf; i < b; ++i)
         sout << *i;
     }

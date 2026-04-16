@@ -38,8 +38,17 @@ using namespace std;
 
 void check_str( const std::string str, const size_t ncharacters )
 {
+  // Test the (const char*, size_t) overload
   const size_t ncounted = SpecUtils::utf8_str_len( str.c_str(), str.size() );
-  CHECK_MESSAGE( ncharacters == ncounted, "Failed on string '" << str << "' with getting " << ncounted << " but expected " << ncharacters );
+  CHECK_MESSAGE( ncharacters == ncounted,
+    "utf8_str_len(ptr,size) failed on string '" << str << "' with getting "
+    << ncounted << " but expected " << ncharacters );
+
+  // Test the (const char*) null-terminated overload
+  const size_t ncounted_nt = SpecUtils::utf8_str_len( str.c_str() );
+  CHECK_MESSAGE( ncharacters == ncounted_nt,
+    "utf8_str_len(ptr) failed on string '" << str << "' with getting "
+    << ncounted_nt << " but expected " << ncharacters );
 }
 
 TEST_CASE( "Testing utf8 strlen" )

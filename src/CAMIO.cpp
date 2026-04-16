@@ -354,7 +354,8 @@ static float convert_from_CAM_float(const std::vector<uint8_t>& data, size_t pos
     std::memcpy(bytearr, word1, sizeof(word1)); // Copy word1 to the beginning
     std::memcpy(bytearr + 2, word2, sizeof(word2)); // Copy word2 to the end
 
-    float val = *reinterpret_cast<float*>(bytearr);
+    float val;
+    std::memcpy(&val, bytearr, sizeof(float));
 
     return val / 4;
 }
@@ -669,7 +670,7 @@ std::multimap<CAMIO::CAMBlock, uint32_t> CAMIO::ReadHeader() {
         validate_bounds( *readData, headOff + 0x0a, sizeof(uint32_t), "ReadHeader: reading block address" );
 
         // Get the addresses of the info
-        size_t loc;
+        uint32_t loc;
         std::memcpy(&loc, &(*readData)[headOff + 0x0a], sizeof(uint32_t));
 
         blockInfo.insert({static_cast<CAMBlock>(secId),  static_cast<uint32_t>(loc)});

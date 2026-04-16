@@ -307,7 +307,8 @@ namespace  SpecUtils
   bool split_to_floats( const char *input,
                        std::vector<float> &contents,
                        const char * const delims, // = " ,\r\n\t",
-                       const bool cambio_zero_compress_fix );
+                       const bool cambio_zero_compress_fix,
+                       const size_t max_results = 0 );
   
   
   /** \brief Parses a string of ascii floats separated by a fixed set of
@@ -340,7 +341,8 @@ namespace  SpecUtils
      - https://github.com/simdjson/simdjson/blob/master/src/generic/stage2/numberparsing.h
    */
   bool split_to_floats( const char *input, const size_t length,
-                       std::vector<float> &results );
+                       std::vector<float> &results,
+                       const size_t max_results = 0 );
   
   /* \brief A convenience function. */
   bool split_to_floats( const std::string &input, std::vector<float> &results );

@@ -191,7 +191,7 @@ namespace  SpecUtils
    @returns the number of bytes written.
    */
   template <class T>
-  size_t write_binary_data( std::ostream &input, const T &val );
+  size_t write_binary_data( std::ostream &output, const T &val );
 
 
   /** Converts from a float value, to the nearest representable integer value.
@@ -221,6 +221,8 @@ namespace SpecUtils
   template <class T>
   std::istream &read_binary_data( std::istream &input, T &val )
   {
+    static_assert( std::is_trivially_copyable<T>::value,
+                   "read_binary_data requires a trivially copyable type" );
     input.read( (char *)&val, sizeof(T) );
     return input;
   }
@@ -231,9 +233,11 @@ namespace SpecUtils
       @TODO make sure T doest resolve to a reference type or anything
    */
   template <class T>
-  size_t write_binary_data( std::ostream &input, const T &val )
+  size_t write_binary_data( std::ostream &output, const T &val )
   {
-    input.write( (const char *)&val, sizeof(T) );
+    static_assert( std::is_trivially_copyable<T>::value,
+                   "write_binary_data requires a trivially copyable type" );
+    output.write( (const char *)&val, sizeof(T) );
     return sizeof(T);
   }
 

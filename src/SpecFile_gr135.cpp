@@ -668,13 +668,13 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
          && (record_size > 1024*2)    //Require record size to be at least 2048 bytes
          && (record_size < 5*1024) )  //
       {
-        for( size_t i = 0; i < (record_size - 1024*2); ++i )
+        for( size_t i = 0; (i + 12) <= (record_size - 1024*2); ++i )
         {
           vector<float> cal = {0.0f, 0.0f, 0.0f};
-          memcpy( &(cal[0]), data+1, 12 );
-          
+          memcpy( &(cal[0]), data + 1 + i, 12 );
+
           set_energy_cal( nchannels, cal, meas );
-          
+
           if( meas->energy_calibration_->type() != EnergyCalType::InvalidEquationType )
           {
             string msg = "Irregular GR energy calibration apparently found.";
@@ -685,7 +685,7 @@ bool SpecFile::load_from_binary_exploranium( std::istream &input )
               parse_warnings_.emplace_back( std::move(msg) );
             break;
           }//if( valid )
-        }//for( size_t i = 0; i < (record_size - 1024*2); ++i )
+        }//for( loop over possible cal offsets )
       }//if( is135v1 && (meas->energy_calibration_ != polynomial) )
       
       if( meas->energy_calibration_->type() != EnergyCalType::Polynomial )

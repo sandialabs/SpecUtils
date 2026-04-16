@@ -2056,7 +2056,16 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     if( !input.good() )
       throw runtime_error( "Error reading header data" );
-    
+
+    // Validate that a record pointer (int16_t from file) points within file bounds
+    auto validate_record_ptr = [&]( int16_t ptr, const char *name ) {
+      if( ptr <= 0 )
+        throw runtime_error( string("Invalid ") + name + " record pointer" );
+      const size_t offset = size_t(ptr - 1) * 128 + size_t(orig_pos);
+      if( (offset + 128) > size_t(eof_pos) )
+        throw runtime_error( string(name) + " record pointer past end of file" );
+    };
+
     /*
      cout << "wINFTYP=" <<wINFTYP << endl;
      cout << "wINFTYP=" <<wINFTYP << endl;
@@ -2095,7 +2104,8 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     vector<float> calib_coefs;
     if( wCALRP1 > 0 )
     {
-      input.seekg( (wCALRP1-1)*128 + orig_pos, ios::beg );
+      validate_record_ptr( wCALRP1, "wCALRP1" );
+      input.seekg( size_t(wCALRP1-1)*128 + size_t(orig_pos), ios::beg );
       int16_t wAFIT; // 2 Above knee efficiency calibration type
       int16_t wBFIT; // 4 Below knee efficiency calibration type
       int16_t wEFFPRS; // 6 Number of efficiency pairs
@@ -2238,7 +2248,8 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       //Not working correctly - f-it for right now
       if( wACQIRP > 0 )
       {
-        input.seekg( 128*(wACQIRP-1) + orig_pos, ios::beg );
+        validate_record_ptr( wACQIRP, "wACQIRP" );
+        input.seekg( size_t(wACQIRP-1)*128 + size_t(orig_pos), ios::beg );
         input.read( namedata, 16 );
         input.read( datedata, 9 );
         input.read( datedata+10, 3 );  //just burning off 3 bytes
@@ -2277,7 +2288,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       
       if( wACQIRP > 0 )
       {
-        input.seekg( 128*(wACQIRP-1) + orig_pos + 90, ios::beg );
+        input.seekg( size_t(wACQIRP-1)*128 + size_t(orig_pos) + 90, ios::beg );
         char start_date_of_sample_collection[11] = { '\0' };
         char start_time_of_sample_collection[9] = { '\0' };
         char stop_date_of_sample_collection[11] = { '\0' };
@@ -2309,15 +2320,16 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     //  Cold-Tip Temperature^@OK
     //  HV Bias^@-3509 V
     
-    if( expansionHeader )
+    if( expansionHeader > 0 )
     {
-      input.seekg( 128*(expansionHeader-1) + orig_pos, ios::beg );
+      validate_record_ptr( expansionHeader, "expansionHeader" );
+      input.seekg( size_t(expansionHeader-1)*128 + size_t(orig_pos), ios::beg );
       
       if( !input.good() )
       {
         stringstream msg;
         msg << "Unable to read expansion header in file, possible pointer "
-        << expansionHeader << " (location " << 128*(expansionHeader-1)
+        << expansionHeader << " (location " << size_t(expansionHeader-1)*128
         << " of size=" << size << ")" << endl;
         throw runtime_error( msg.str() );
       }//if( !input.good() )
@@ -2360,24 +2372,25 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
       
       if( firstReportPtr > 0 )
       {
-        const auto curr_pos = 128*static_cast<int>(firstReportPtr-1) + orig_pos;
-        
+        validate_record_ptr( firstReportPtr, "firstReportPtr" );
+        const size_t curr_pos = size_t(firstReportPtr-1)*128 + size_t(orig_pos);
+
         input.seekg( curr_pos, ios::beg );
         if( !input.good() )
         {
           stringstream msg;
           msg << "Unable to read report in file, possible bad report pointer "
-          << firstReportPtr << " (location " << 128*(firstReportPtr-1)
+          << firstReportPtr << " (location " << size_t(firstReportPtr-1)*128
           << " of size=" << size << ")" << endl;
           throw runtime_error( msg.str() );
         }//if( !input.good() )
-        
+
         uint16_t ntxtbytes, sourcecode;
         read_binary_data( input, ntxtbytes );
         read_binary_data( input, sourcecode );
-        
-        if( (static_cast<istream::pos_type>(size) > (curr_pos+4)) && (static_cast<int>(ntxtbytes) > (size - curr_pos - 4)) )
-          ntxtbytes = (size - curr_pos - 4);
+
+        if( (curr_pos + 4 + ntxtbytes) > size )
+          ntxtbytes = (curr_pos + 4 < size) ? static_cast<uint16_t>(size - curr_pos - 4) : 0;
         
         if( ntxtbytes > 2048 )  //20190604: is 2048 a randomly picked number, or the expansion header max size
           ntxtbytes = 0;
@@ -2603,7 +2616,8 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     if( wSAMDRP > 0 )
     {
-      input.seekg( 128*(wSAMDRP-1) + orig_pos, ios::beg );
+      validate_record_ptr( wSAMDRP, "wSAMDRP" );
+      input.seekg( size_t(wSAMDRP-1)*128 + size_t(orig_pos), ios::beg );
       vector<char> data(128);
       input.read( &data[0], 128 );
       
@@ -2615,9 +2629,10 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         remarks_.push_back( "Sample Description: " + remark );
     }//if( wSAMDRP )
     
-    if( wDETDRP > 0 && input.seekg(128*(wDETDRP-1) + orig_pos, ios::beg) )
+    if( wDETDRP > 0 )
     {
-      input.seekg( 128*(wDETDRP-1) + orig_pos, ios::beg );
+      validate_record_ptr( wDETDRP, "wDETDRP" );
+      input.seekg( size_t(wDETDRP-1)*128 + size_t(orig_pos), ios::beg );
       vector<char> data( 128, '\0' );
       input.read( &data[0], 128 );
       data.erase(std::remove_if(data.begin(), data.end(), not_alpha_numeric), data.end());
@@ -2742,12 +2757,15 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     
     //read in channel data
     vector<float> &counts_ref = *channel_data;
-    input.seekg( 128*(wSPCTRP-1) + orig_pos, ios::beg );
-    
+    validate_record_ptr( wSPCTRP, "wSPCTRP" );
+    input.seekg( size_t(wSPCTRP-1)*128 + size_t(orig_pos), ios::beg );
+
     if( !input.good() )
       throw runtime_error( "Unable to read channel data" );
-    
-    const size_t last_expected = static_cast<size_t>( 4*n_channel + 128*(wSPCTRP-1) + orig_pos );
+
+    const size_t last_expected = size_t(4) * size_t(n_channel)
+                               + size_t(wSPCTRP - 1) * 128
+                               + size_t(orig_pos);
     if( last_expected > size_t(12+eof_pos) )  //12 is a just in case...
       throw runtime_error( "File not expected size" );
     

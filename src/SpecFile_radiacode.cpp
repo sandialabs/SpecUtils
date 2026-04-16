@@ -299,6 +299,8 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
       
       XML_FOREACH_CHILD( x, channel_count_node, "DataPoint" )
       {
+        if( channel_counts->size() > 65536 )
+          throw runtime_error( "Too many DataPoint entries" );
         int value = 0;
         error_with_cc |= !parse_int( x->value(), x->value_size(), value );
         channel_counts->push_back( value );
