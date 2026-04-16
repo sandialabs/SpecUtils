@@ -1976,11 +1976,18 @@ void CAMIO::AddSpectrum(const std::vector<float>& channel_counts)
 // generate a nuclide record
 std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
                                            const std::vector<uint16_t>& lineNums) {
-    uint32_t numLines = static_cast<uint32_t>(lineNums.size());
-    std::vector<uint8_t> nuc(static_cast<size_t>(static_cast<uint32_t>(RecordSize::NUCL) + numLines * 3));
+    if( lineNums.empty() )
+      throw std::invalid_argument( "GenerateNuclide: lineNums must not be empty" );
+
+    if( lineNums.size() > 100000 )
+      throw std::invalid_argument( "GenerateNuclide: too many lines" );
+
+    const size_t numLines = lineNums.size();
+    const size_t nucRecSize = static_cast<size_t>( RecordSize::NUCL );
+    std::vector<uint8_t> nuc( nucRecSize + numLines * 3 );
 
     // Set the number of line parameter
-    nuc[0] = static_cast<uint8_t>((numLines - 1) * 3 + static_cast<uint16_t>(RecordSize::NUCL) + 0x03);
+    nuc[0] = static_cast<uint8_t>( (numLines - 1) * 3 + nucRecSize + 0x03 );
 
     // Set the spacer
     nuc[1] = 0x02;
