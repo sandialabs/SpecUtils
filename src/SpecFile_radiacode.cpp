@@ -454,7 +454,7 @@ bool SpecFile::load_from_radiacode(std::istream& input) {
           bg_meas->source_type_ = SourceType::Background;
           if( !bg_meas->energy_calibration_ || !bg_meas->energy_calibration_->valid() )
           {
-            if( bg_meas->gamma_counts_->size() == bg_meas->gamma_counts_->size() )
+            if( bg_meas->gamma_counts_->size() == fg_meas->gamma_counts_->size() )
               bg_meas->energy_calibration_ = fg_meas->energy_calibration_;
           }
           

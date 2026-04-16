@@ -116,8 +116,9 @@ bool SpecFile::load_from_multiact( std::istream &input )
     for( size_t i = 128; i < (data.size()-21); i += 3 )
     {
       //ToDo: make sure channel counts are reasonable...
-      uint32_t threebyte = 0;
-      memcpy( &threebyte, (&(data[i])), 3 );
+      const uint32_t threebyte = static_cast<uint32_t>(static_cast<uint8_t>(data[i]))
+                              | (static_cast<uint32_t>(static_cast<uint8_t>(data[i+1])) << 8)
+                              | (static_cast<uint32_t>(static_cast<uint8_t>(data[i+2])) << 16);
       channel_counts->push_back( static_cast<float>(threebyte) );
       countssum += threebyte;
     }

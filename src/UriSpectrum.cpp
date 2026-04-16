@@ -26,6 +26,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <fstream>
 #include <iomanip>
 #include <numeric>
@@ -397,6 +398,8 @@ void deflate_decompress_internal( void *in_data, size_t in_data_size, T &out_dat
     throw(std::runtime_error("deflate_decompress: error from inflateInit while de-compressing."));
   
   zs.next_in = (Bytef*)in_data;
+  if( in_data_size > static_cast<size_t>(std::numeric_limits<unsigned int>::max()) )
+    throw std::runtime_error( "deflate_decompress: input data size exceeds unsigned int max" );
   zs.avail_in = static_cast<unsigned int>( in_data_size );
   
   int ret = Z_OK;

@@ -426,7 +426,7 @@ void add_calibration_to_2012_N42_xml( const SpecUtils::EnergyCalibration &energy
         valuestrm << (j?" ":"") << b[j];
       
       //According to N42 2012 standard, we must give energy of upper channel
-      if( b.size() && b.size()<= num_gamma_channel )
+      if( b.size() >= 2 && b.size()<= num_gamma_channel )
         valuestrm << " " << ((2.0f*b[b.size()-1])-b[b.size()-2]);
       
       break;
@@ -2824,7 +2824,16 @@ struct N42DecodeHelper2006
       
     //XXX - this next call to split_to_floats(...) is not safe for non-destructively parsed XML!!!  Should fix.
     SpecUtils::split_to_floats( channel_data_node->value(), *contents, " ,\r\n\t", compressed_zeros );
-      
+
+    // Limit raw parsed floats to a reasonable maximum to prevent DoS from huge channel data.
+    // For compressed zeros, each zero-run uses 2 values, so 2*sm_max_channels is a safe upper bound.
+    // For uncompressed data, sm_max_channels is the max.
+    const size_t max_raw_floats = compressed_zeros
+                                ? (2 * EnergyCalibration::sm_max_channels)
+                                : EnergyCalibration::sm_max_channels;
+    if( contents->size() > max_raw_floats )
+      throw runtime_error( "Error, max number of channels exceeded" );
+
     if( compressed_zeros )
     {
       expand_counted_zeros( *contents, *contents );

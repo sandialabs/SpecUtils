@@ -188,7 +188,7 @@ namespace
       {
         double dvalue = stod( string(pos, (word_end - pos)) );
         
-        if( cambio_fix && (dvalue == 0.0) )
+        if( cambio_fix && (dvalue == 0.0) && ((pos + 1) < word_end) )
         {
           const char nextchar[2] = { *(pos+1), '\0' };
           if( !strstr(delims, nextchar) )  //If the next char is a delimiter, then we dont want to apply the fix, otherwise apply the fix
@@ -1675,7 +1675,7 @@ namespace SpecUtils
       
       //If the next char is a delimiter, then we dont want to apply the fix, otherwise apply the fix
       if( cambio_zero_compress_fix && (value == 0.0)
-         && !is_in( *(start_pos+1), delims ) )
+         && ((start_pos + 1) < end) && !is_in( *(start_pos+1), delims ) )
       {
         value = std::numeric_limits<float>::min();
       }//if( value == 0.0 )

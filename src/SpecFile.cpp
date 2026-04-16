@@ -5177,7 +5177,7 @@ void SpecFile::ensure_unique_sample_numbers()
   if( first_sample_val != (*first_val) )
   {
     const int old_first_sample = *first_val;
-    for( size_t i = 0; (measurements_[i]->sample_number_!=second_sample_val) && (i < measurements_.size()); ++i )
+    for( size_t i = 0; (i < measurements_.size()) && (measurements_[i]->sample_number_!=second_sample_val); ++i )
       if( measurements_[i]->sample_number_ == old_first_sample )
         measurements_[i]->sample_number_ = first_sample_val;
   }

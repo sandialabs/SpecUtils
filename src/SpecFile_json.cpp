@@ -344,6 +344,8 @@ bool SpecFile::load_from_json( std::istream &input )
     rawdata.resize(file_size + 1);
 
     assert(file_size > 64);
+    if( file_size <= 64 )
+      throw runtime_error( "JSON file too small" );
     input.read(&(rawdata[64]), static_cast<streamsize>(file_size - 64));
     rawdata[file_size] = 0; //jic.
 

@@ -159,6 +159,9 @@ void expand_counted_zeros( const vector<float> &data, vector<float> &return_answ
       for( size_t k = 0; k < nZeroes; ++k )
         answer.push_back( 0.0f );
     }//if( at a non-zero value, the last value, or the next value is zero) / else
+
+    if( answer.size() > 131072 ) //Same limit as EnergyCalibration::sm_max_channels
+      throw runtime_error( "Too many total elements when expanding zeros" );
   }//for( iterate over data, iter )
   
   answer.swap( return_answer );
