@@ -281,4 +281,189 @@ TEST_CASE( "Identity rebin preserves counts exactly" )
   }
 }
 
+TEST_CASE( "No upper edge with upper spill" )
+{
+  // num_orig_energies == num_orig_counts (no explicit upper edge).
+  // old_right is extrapolated as 2*energies[N-1] - energies[N-2].
+  // New range ends shorter so old_right > new_right triggers upper spill.
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  std::vector<float> original_counts  {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+  // same size: no upper edge. old_right = 2*9 - 8 = 10
+
+  // New energies also no upper edge (same count), but ending earlier.
+  // new_right = 2*7 - 6 = 8
+  std::vector<float> new_energies{0, 1, 2, 3, 4, 5, 6, 7};
+  // 8 energies, 8 counts expected (no upper edge convention matches original)
+
+  // But wait - the function uses has_upper from ORIGINAL data.
+  // num_orig_energies == num_orig_counts => has_upper = false => new_nbin = new_energies.size() = 8
+  // new_right = 2*7 - 6 = 8.  old_right = 2*9 - 8 = 10.  old_right > new_right => upper spill fires.
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  REQUIRE( result.size() == new_energies.size() );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.1,
+    "No-upper-edge upper spill: expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+}
+
+TEST_CASE( "New binning extends above old binning" )
+{
+  // Exercises the oldbinhigh == num_orig_counts early-exit path (line ~1889),
+  // where the new bin's upper edge goes past all old bins.
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<float> original_counts  {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+  // New range extends well past old: old ends at 10, new ends at 15
+  std::vector<float> new_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.01,
+    "New extends above old: expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+
+  // Bins beyond old range should be zero
+  for( size_t i = 10; i < result.size(); ++i )
+  {
+    CHECK_MESSAGE( result[i] == 0.0f,
+      "Bin " << i << " beyond old range should be 0, got " << result[i] );
+  }
+}
+
+TEST_CASE( "Exact fractional splits - halves, quarters, double, triple" )
+{
+  // Original: 10 uniform bins of width 1, with upper edge
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<float> original_counts  {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
+
+  // New bins: halves, quarters, a double-wide, a 1.5-wide, a half, quarters, a triple-wide
+  std::vector<float> new_energies{
+    0.0f, 0.5f, 1.0f,                      // two halves of bin 0
+    1.25f, 1.5f, 1.75f, 2.0f,              // four quarters of bin 1
+    4.0f,                                    // one double-wide spanning bins 2+3
+    5.5f,                                    // 1.5-wide spanning bin 4 + half of bin 5
+    6.0f,                                    // half of bin 5
+    6.25f, 6.5f, 6.75f, 7.0f,              // four quarters of bin 6
+    10.0f                                    // triple-wide spanning bins 7+8+9
+  };
+  // 16 edges, has_upper=true, so 15 result bins
+
+  const float expected[] = {
+    50,    // [0, 0.5):    0.5 * 100
+    50,    // [0.5, 1.0):  0.5 * 100
+    50,    // [1.0, 1.25): 0.25 * 200
+    50,    // [1.25, 1.5): 0.25 * 200
+    50,    // [1.5, 1.75): 0.25 * 200
+    50,    // [1.75, 2.0): 0.25 * 200
+    700,   // [2.0, 4.0):  300 + 400
+    800,   // [4.0, 5.5):  500 + 0.5*600
+    300,   // [5.5, 6.0):  0.5 * 600
+    175,   // [6.0, 6.25): 0.25 * 700
+    175,   // [6.25, 6.5): 0.25 * 700
+    175,   // [6.5, 6.75): 0.25 * 700
+    175,   // [6.75, 7.0): 0.25 * 700
+    2700,  // [7.0, 10.0): 800 + 900 + 1000
+  };
+  const size_t n_expected = sizeof(expected) / sizeof(expected[0]);
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  REQUIRE( result.size() == n_expected );
+
+  for( size_t i = 0; i < n_expected; ++i )
+  {
+    CHECK_MESSAGE( fabs(result[i] - expected[i]) < 0.01f,
+      "Bin " << i << ": expected " << expected[i] << " got " << result[i] );
+  }
+}
+
+TEST_CASE( "Offset thirds with lower and upper spill" )
+{
+  // Original: 5 bins of width 3, with upper edge
+  std::vector<float> original_energies{0, 3, 6, 9, 12, 15};
+  std::vector<float> original_counts  {120, 240, 360, 480, 600};
+
+  // New bin edges at 1/3 boundaries, starting above old start (lower spill)
+  // and ending below old end (upper spill)
+  std::vector<float> new_energies{1, 2, 4, 5, 7, 8, 10, 11, 13, 14};
+  // 10 edges, has_upper=true, 9 result bins. new_right=14, old_right=15.
+
+  // Bin 0 [1,2):  1/3 of 120 = 40, plus lower spill [0,1) = 1/3 of 120 = 40 => 80
+  // Bin 1 [2,4):  1/3 of 120 ([2,3)) + 1/3 of 240 ([3,4)) = 40 + 80 = 120
+  // Bin 2 [4,5):  1/3 of 240 = 80
+  // Bin 3 [5,7):  1/3 of 240 ([5,6)) + 1/3 of 360 ([6,7)) = 80 + 120 = 200
+  // Bin 4 [7,8):  1/3 of 360 = 120
+  // Bin 5 [8,10): 1/3 of 360 ([8,9)) + 1/3 of 480 ([9,10)) = 120 + 160 = 280
+  // Bin 6 [10,11):1/3 of 480 = 160
+  // Bin 7 [11,13):1/3 of 480 ([11,12)) + 1/3 of 600 ([12,13)) = 160 + 200 = 360
+  // Bin 8 [13,14):1/3 of 600 = 200, plus upper spill 1/3 of 600 ([14,15)) = 200 => 400
+  const float expected[] = { 80, 120, 80, 200, 120, 280, 160, 360, 400 };
+  const size_t n_expected = sizeof(expected) / sizeof(expected[0]);
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  REQUIRE( result.size() == n_expected );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.1,
+    "Thirds total: expected " << origsum << " got " << newsum );
+
+  for( size_t i = 0; i < n_expected; ++i )
+  {
+    CHECK_MESSAGE( fabs(result[i] - expected[i]) < 0.5f,
+      "Bin " << i << ": expected " << expected[i] << " got " << result[i] );
+  }
+}
+
+TEST_CASE( "Pre-loop spanning 3+ old bins then halves" )
+{
+  // New binning starts below old. First overlapping new bin spans 3.5 old bins,
+  // exercising the rewritten pre-loop general loop.
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8};
+  std::vector<float> original_counts  {80, 160, 240, 320, 400, 480, 560, 640};
+
+  // Bin 0 [-1, 3.5): starts below old range, spans old bins 0-2 fully + half of 3
+  // Then half-width and full-width bins
+  std::vector<float> new_energies{-1.0f, 3.5f, 4.0f, 4.5f, 5.0f, 6.0f, 7.0f, 8.0f};
+  // 8 edges, has_upper=true, 7 result bins
+
+  // Bin 0 [-1, 3.5): old bins 0,1,2 fully + 0.5*bin3 = 80+160+240+160 = 640
+  // Bin 1 [3.5, 4.0): 0.5 * 320 = 160
+  // Bin 2 [4.0, 4.5): 0.5 * 400 = 200
+  // Bin 3 [4.5, 5.0): 0.5 * 400 = 200
+  // Bin 4 [5.0, 6.0): 480
+  // Bin 5 [6.0, 7.0): 560
+  // Bin 6 [7.0, 8.0): 640
+  const float expected[] = { 640, 160, 200, 200, 480, 560, 640 };
+  const size_t n_expected = sizeof(expected) / sizeof(expected[0]);
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  REQUIRE( result.size() == n_expected );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.01,
+    "Pre-loop 3+ bins total: expected " << origsum << " got " << newsum );
+
+  for( size_t i = 0; i < n_expected; ++i )
+  {
+    CHECK_MESSAGE( fabs(result[i] - expected[i]) < 0.01f,
+      "Bin " << i << ": expected " << expected[i] << " got " << result[i] );
+  }
+}
 
