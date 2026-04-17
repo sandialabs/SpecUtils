@@ -23,8 +23,9 @@
 
 #include "SpecUtils_config.h"
 
-#include "SpecUtils/UriLossySpectrum.h"
 #include "SpecUtils/UriSpectrum.h"
+#include "SpecUtils/UriLossySpectrum.h"
+#include "SpecUtils/EnergyCalibration.h"
 
 #include <cmath>
 #include <cassert>
