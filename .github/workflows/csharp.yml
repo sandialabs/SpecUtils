@@ -1,0 +1,114 @@
+name: C# Bindings
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-test:
+    name: C# on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            flt-parse-method: FromChars
+          - os: macos-latest
+            flt-parse-method: FastFloat
+          - os: windows-latest
+            flt-parse-method: FromChars
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v2.0.2
+      with:
+        cmake-version: '3.25'
+
+    - name: Set up .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Create build directory
+      run: mkdir build
+
+    - name: Configure CMake
+      run: >
+        cmake -S ${{ github.workspace }} -B build
+        -DSpecUtils_SHARED_LIB=ON
+        -DSpecUtils_C_BINDINGS=ON
+        -DSpecUtils_ENABLE_URI_SPECTRA=OFF
+        -DSpecUtils_ENABLE_D3_CHART=ON
+        -DSpecUtils_D3_SUPPORT_FILE_STATIC=ON
+        -DSpecUtils_FLT_PARSE_METHOD=${{ matrix.flt-parse-method }}
+        -DSpecUtils_FETCH_FAST_FLOAT=ON
+        -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build native library
+      run: cmake --build build --config Release
+
+    - name: Set native library path (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        echo "SPECUTILS_NATIVE_LIB_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=${{ github.workspace }}/build:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+
+    - name: Set native library path (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        echo "SPECUTILS_NATIVE_LIB_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
+        echo "DYLD_LIBRARY_PATH=${{ github.workspace }}/build:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+
+    - name: Set native library path (Windows)
+      if: runner.os == 'Windows'
+      run: echo "SPECUTILS_NATIVE_LIB_DIR=${{ github.workspace }}\build\Release" >> $env:GITHUB_ENV
+
+    - name: Build C# projects
+      run: dotnet build bindings/csharp/SpecUtils.sln -c Release
+
+    - name: Run C# tests
+      run: dotnet test bindings/csharp/SpecUtils.sln -c Release --logger "console;verbosity=detailed"
+
+    - name: Run example (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: >
+        dotnet run --project bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
+        -c Release -- bindings/python/examples/passthrough.n42
+
+    - name: Run example (Windows)
+      if: runner.os == 'Windows'
+      run: >
+        dotnet run --project bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
+        -c Release -- bindings\python\examples\passthrough.n42
+
+    - name: Publish example app
+      run: >
+        dotnet publish bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
+        -c Release -o publish/${{ matrix.os }}
+
+    - name: Collect artifacts (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        mkdir -p artifacts
+        cp build/libSpecUtils.* artifacts/ 2>/dev/null || true
+        cp publish/${{ matrix.os }}/* artifacts/ 2>/dev/null || true
+
+    - name: Collect artifacts (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        mkdir artifacts
+        Copy-Item build\Release\libSpecUtils.* artifacts\ -ErrorAction SilentlyContinue
+        Copy-Item publish\${{ matrix.os }}\* artifacts\ -ErrorAction SilentlyContinue
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: csharp-bindings-${{ matrix.os }}
+        path: artifacts/

@@ -28,3 +28,5 @@ cmake_install.cmake
 install_manifest.txt
 .vs/
 out/
+bin/
+obj/
