@@ -21,7 +21,9 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <cmath>
 #include <vector>
+#include <numeric>
 #include <iostream>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
@@ -123,10 +125,160 @@ TEST_CASE( "Test Rebin" )
   }
 }
 
-//int main( int argc, char **argv )
-//{
-//  test_rebin();
-//  return 0; // ctest will say this test fails if you return a non-zero exit code
-//}
+TEST_CASE( "Old range extends beyond new range - upper spill" )
+{
+  // Bug 1: When old_right > new_right and the new upper edge falls in the LAST
+  // old bin, the else-branch used to double-count the last bin's counts.
+
+  // 10 bins with upper edge: 11 energies, 10 counts
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<float> original_counts{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+  // New range ends at 9.5, inside the last old bin [9,10)
+  // 10 bins with upper edge: 11 energies, 10 counts expected
+  std::vector<float> new_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9.5f};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.01,
+    "Upper spill (last bin): expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+}
+
+TEST_CASE( "Old range extends beyond new range - upper spill, not last bin" )
+{
+  // When old_right > new_right and the new upper edge falls in a non-last old bin
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<float> original_counts{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+  // New range ends at 7.5, inside old bin [7,8)
+  std::vector<float> new_energies{0, 1, 2, 3, 4, 5, 6, 7, 7.5f};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.01,
+    "Upper spill (mid bin): expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+}
+
+TEST_CASE( "Wide new bins spanning 3+ old bins at low end" )
+{
+  // Bug 3: Pre-loop only handled 2 old bins. Here the first overlapping new bin
+  // spans from below original_energies[0] past original_energies[3].
+  std::vector<float> original_energies{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  std::vector<float> original_counts{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+  // First new bin spans from 0 to 6, covering old bins 0-3 fully and part of bin 4
+  std::vector<float> new_energies{0, 6, 7, 8, 9, 10, 11, 12};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.01,
+    "Wide pre-loop bin: expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+
+  // First new bin [0,6) should contain old bins 0-3 fully (10+20+30+40=100)
+  // plus 0/1 of bin 4 (since old bin 4 is [6,7), and right edge is 6.0 exactly).
+  CHECK_MESSAGE( fabs(result[0] - 100.0f) < 0.1f,
+    "First bin should have ~100, got " << result[0] );
+}
+
+TEST_CASE( "Equal-size energy/count vectors (no upper edge)" )
+{
+  // Tests the 2.0 (was 2.0f) path in new_right computation
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  std::vector<float> original_counts{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+  // same size: no explicit upper edge
+
+  std::vector<float> new_energies{0.5f, 1.5f, 2.5f, 3.5f, 4.5f, 5.5f, 6.5f, 7.5f, 8.5f, 9.5f};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.1,
+    "No upper edge: expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+}
+
+TEST_CASE( "Old range both starts and ends beyond new range" )
+{
+  // Both lower and upper spill fire simultaneously
+  std::vector<float> original_energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<float> original_counts{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+  // New range is [2, 8] — old extends below (0-2) and above (8-10)
+  std::vector<float> new_energies{2, 3, 4, 5, 6, 7, 8};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.01,
+    "Both spills: expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+}
+
+TEST_CASE( "High-energy float precision stress test" )
+{
+  // Exercises float precision at high energies (~3000 keV with 0.2 keV bins)
+  const size_t nbins = 100;
+  std::vector<float> original_energies( nbins + 1 );
+  std::vector<float> original_counts( nbins );
+
+  for( size_t i = 0; i <= nbins; ++i )
+    original_energies[i] = 3000.0f + 0.2f * static_cast<float>(i);
+  for( size_t i = 0; i < nbins; ++i )
+    original_counts[i] = 50.0f + static_cast<float>(i % 7) * 10.0f;
+
+  // New binning: shifted by 0.05 keV, ends 2 bins shorter
+  const size_t new_nbins = nbins - 2;
+  std::vector<float> new_energies( new_nbins + 1 );
+  for( size_t i = 0; i <= new_nbins; ++i )
+    new_energies[i] = 3000.05f + 0.2f * static_cast<float>(i);
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+
+  const double origsum = std::accumulate( original_counts.begin(), original_counts.end(), 0.0 );
+  const double newsum = std::accumulate( result.begin(), result.end(), 0.0 );
+
+  CHECK_MESSAGE( fabs(newsum - origsum) < 0.1,
+    "High-energy precision: expected " << origsum << " got " << newsum
+    << " diff=" << (newsum - origsum) );
+}
+
+TEST_CASE( "Identity rebin preserves counts exactly" )
+{
+  // Rebinning to the same energy edges should produce identical counts
+  std::vector<float> energies{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<float> counts{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( energies, counts, energies, result );
+
+  REQUIRE( result.size() == counts.size() );
+  for( size_t i = 0; i < counts.size(); ++i )
+  {
+    CHECK_MESSAGE( fabs(result[i] - counts[i]) < 0.001f,
+      "Bin " << i << ": expected " << counts[i] << " got " << result[i] );
+  }
+}
 
 
