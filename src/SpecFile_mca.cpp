@@ -106,7 +106,8 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
     
     string filedata;
     filedata.resize( filesize );
-    input.read( &filedata[0], filesize );
+    if( !input.read( &filedata[0], filesize ) )
+      throw runtime_error( "Failed to read file data" );
     
     string lineinfo = getAmptekMcaLineInfo( filedata, "TAG - " );
     if( !lineinfo.empty() )

@@ -968,9 +968,6 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
         });
         validate_bounds( *readData, loc, maxOffset, "ReadPeaksBlock: reading peak record" );
 
-        if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
-            throw std::runtime_error( "Data smaller than peaks record" );
-
         Peak peak{};
         peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
         peak.Centroid = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Centroid));
@@ -1218,9 +1215,6 @@ std::vector<Peak>& CAMIO::GetPeaks() {
                 static_cast<size_t>(PeakParameterLocation::Width) + size_t(2)
             });
             validate_bounds( *readData, loc, maxOffset, "GetPeaks: reading peak record" );
-
-            if( (pos + static_cast<uint32_t>(PeakParameterLocation::CriticalLevel) + 4) > readData->size() )
-              throw std::runtime_error( "Data smaller than peaks record" );
 
             Peak peak{};
             peak.Energy = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Energy));
@@ -1942,7 +1936,7 @@ void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
 {
     //size_t data_loc = 0x30;
     num_channels = channel_counts.size();
-    specData.resize(num_channels);
+    specData.resize(num_channels * sizeof(uint32_t));
     // put the spectral data in
     for (size_t i = 0; i < num_channels; i++)
     {

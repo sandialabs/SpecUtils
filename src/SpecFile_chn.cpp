@@ -120,6 +120,8 @@ bool SpecFile::load_from_chn( std::istream &input )
     //  so we filter out some non-CHN files.
     if( numchannels == 0 )
     {
+      if( size < (header_size + 512) )
+        throw runtime_error( "CHN file too small to determine number of channels" );
       numchannels = (size - header_size - 512) / 4;
       const bool isPowerOfTwo = !(numchannels & (numchannels - 1));
       if( !isPowerOfTwo || numchannels < 128 || numchannels > 32768 )
@@ -468,7 +470,8 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   ostr.write( (const char *)&firstchannel, 2 );
   //index=30
   
-  const uint16_t numchannels = static_cast<uint16_t>( fgammacounts->size() );
+  const size_t nchan = std::min( fgammacounts->size(), static_cast<size_t>(std::numeric_limits<uint16_t>::max()) );
+  const uint16_t numchannels = static_cast<uint16_t>( nchan );
   ostr.write( (const char *)&numchannels, 2 );
   //index=32
   

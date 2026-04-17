@@ -1074,7 +1074,7 @@ bool SpecFile::write_ascii_spc( std::ostream &output,
     if(!instrument_id_.empty() && istarts_with( uuid, (instrument_id_+"/") ) )
       uuid = uuid.substr(instrument_id_.size()+1);
     if(!uuid.empty())
-      output << pad_iaea_prefix( "UUID" ) << uuid.substr(instrument_id_.size()+1) << "\r\n";
+      output << pad_iaea_prefix( "UUID" ) << uuid << "\r\n";
     
     if(!manufacturer_.empty())
       output << pad_iaea_prefix( "Manufacturer" ) << manufacturer_ << "\r\n";
@@ -2257,7 +2257,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
         input.seekg( size_t(wACQIRP-1)*128 + size_t(orig_pos), ios::beg );
         input.read( namedata, 16 );
         input.read( datedata, 9 );
-        input.read( datedata+10, 3 );  //just burning off 3 bytes
+        input.seekg( 3, ios::cur );  //skip 3 bytes
         input.read( datedata+10, 8 );
         
         if( !input.good() )
@@ -2425,7 +2425,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
               positer = std::search( datastr.begin(), datastr.end(),
                                     term.begin(), term.end() );
               foundNeutronDet = true;
-              const char *nptr = &(*(positer+term.size()));
+              const char *nptr = datastr.c_str() + (positer - datastr.begin()) + term.size();
               SpecUtils::parse_double( nptr, datastr.c_str() + datastr.size() - nptr, total_neutrons );
             }else
             {
@@ -2435,7 +2435,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
               if( positer != datastr.end() )
               {
                 foundNeutronDet = true;
-                const char *nptr = &(*(positer+term.size()));
+                const char *nptr = datastr.c_str() + (positer - datastr.begin()) + term.size();
                 SpecUtils::parse_double( nptr, datastr.c_str() + datastr.size() - nptr, total_neutrons );
               }
             }
@@ -2447,7 +2447,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
             if( positer != datastr.end() )
             {
               foundNeutronDet = true;
-              const char *tptr = &(*positer) + term.size();
+              const char *tptr = datastr.c_str() + (positer - datastr.begin()) + term.size();
               SpecUtils::parse_float( tptr, datastr.c_str() + datastr.size() - tptr, total_neutron_count_time );
             }
           }//end codeblock to look for neutrons
@@ -2780,12 +2780,18 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
     {
       vector<uint32_t> int_channel_data( n_channel );
       input.read( (char *)&int_channel_data[0], 4*n_channel );
-      
+
+      if( !input )
+        throw runtime_error( "Failed to read integer channel data" );
+
       for( size_t i = 0; i < n_channel; ++i )
         counts_ref[i] = static_cast<float>( int_channel_data[i] );
     }else //if( wFILTYP == 5 )
     {
       input.read( (char *) &(counts_ref[0]), 4*n_channel );
+
+      if( !input )
+        throw runtime_error( "Failed to read float channel data" );
       
       for( float &f : counts_ref )
       {

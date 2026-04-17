@@ -268,7 +268,8 @@ bool SpecFile::load_from_iaea( std::istream& istr )
 
       string headerdata;
       headerdata.resize( headerdata_size );
-      istr.read( &(headerdata[0]), headerdata.size() - 1 );
+      if( !istr.read( &(headerdata[0]), headerdata.size() - 1 ) )
+        throw runtime_error( "Failed to read header data" );
       istr.seekg( 0, ios::beg );
       headerdata.back() = '\0'; //JIC
 
