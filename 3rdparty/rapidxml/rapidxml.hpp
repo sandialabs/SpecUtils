@@ -2764,8 +2764,9 @@ namespace rapidxml
 #endif
       
         // Parse element node
+        //wcjohns added `depth` 20260417 to limit recursion on extraordinarily nested XML
         template<int Flags>
-        xml_node<Ch> *parse_element(Ch *&text)
+        xml_node<Ch> *parse_element(Ch *&text, size_t depth = 0)
         {
             // Create element node
             xml_node<Ch> *element = this->allocate_node(node_element);
@@ -2776,7 +2777,7 @@ namespace rapidxml
             if (text == name)
                 RAPIDXML_PARSE_ERROR("expected element name", text);
             element->name(name, text - name);
-            
+
             // Skip whitespace between element name and attributes or >
             skip<whitespace_pred, Flags>(text);
 
@@ -2787,7 +2788,7 @@ namespace rapidxml
             if (*text == Ch('>'))
             {
                 ++text;
-                parse_node_contents<Flags>(text, element);
+                parse_node_contents<Flags>(text, element, depth + 1);
             }
             else if (*text == Ch('/'))
             {
@@ -2818,8 +2819,9 @@ namespace rapidxml
 
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
+      //wcjohns added `depth` 20260417 to limit recursion on extraordinarily nested XML
       template<int Flags>
-      xml_node<Ch> *parse_element(Ch *&text, Ch * const text_end, xml_node<Ch> *parent )
+      xml_node<Ch> *parse_element(Ch *&text, Ch * const text_end, xml_node<Ch> *parent, size_t depth = 0 )
       {
         //assert( text[-1]=='<' );
         // Extract element name
@@ -2898,7 +2900,7 @@ namespace rapidxml
           }
           
           assert( text < text_end );
-          parse_node_contents<Flags>(text, element, text_end, parent);
+          parse_node_contents<Flags>(text, element, text_end, parent, depth + 1);
         }
         else if (*text == Ch('/'))
         {
@@ -2947,7 +2949,7 @@ namespace rapidxml
               //  (should have been: <Spectrum>...<ChannelData><Data>3 1 0 2 1 0 3 1 1 ...</Data></ChannelData></Spectrum> )
               //Lets live dangerously and try to parse it anyway....
               assert( text < text_end );
-              parse_node_contents<Flags>(text, element, text_end, parent);
+              parse_node_contents<Flags>(text, element, text_end, parent, depth + 1);
             }
           }else  //no sloppy parse
           {
@@ -2974,17 +2976,18 @@ namespace rapidxml
 #endif
       
         // Determine node type, and parse it
+        //wcjohns added `depth` 20260417 to limit recursion on extraordinarily nested XML
         template<int Flags>
-        xml_node<Ch> *parse_node(Ch *&text)
+        xml_node<Ch> *parse_node(Ch *&text, size_t depth = 0)
         {
             // Parse proper node type
             switch (text[0])
             {
 
             // <...
-            default: 
+            default:
                 // Parse and append element node
-                return parse_element<Flags>(text);
+                return parse_element<Flags>(text, depth);
 
             // <?...
             case Ch('?'): 
@@ -3062,22 +3065,23 @@ namespace rapidxml
       
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
+      //wcjohns added `depth` 20260417 to limit recursion on extraordinarily nested XML
       template<int Flags>
-      xml_node<Ch> *parse_node(Ch *&text, Ch * const text_end, xml_node<Ch> *parent )
+      xml_node<Ch> *parse_node(Ch *&text, Ch * const text_end, xml_node<Ch> *parent, size_t depth = 0 )
       {
         //assert( text[-1] == '<' );
         assert( text < text_end );
-        
+
         if( ((text+1) >= text_end) )
           return 0;
-        
+
         // Parse proper node type
         switch (text[0])
         {
             // <...
           default:
             // Parse and append element node
-            return parse_element<Flags>(text,text_end,parent);
+            return parse_element<Flags>(text,text_end,parent,depth);
             
           case Ch('/'):
           {
@@ -3200,9 +3204,13 @@ namespace rapidxml
 #endif
       
         // Parse contents of the node - children, data etc.
+        //wcjohns added `depth` 20260417 to limit recursion on extraordinarily nested XML
         template<int Flags>
-        void parse_node_contents(Ch *&text, xml_node<Ch> *node)
+        void parse_node_contents(Ch *&text, xml_node<Ch> *node, size_t depth = 0)
         {
+            if (depth > 2048)
+                RAPIDXML_PARSE_ERROR("maximum element nesting depth exceeded", text);
+
             // For all children and text
             while (1)
             {
@@ -3215,12 +3223,12 @@ namespace rapidxml
             // This is because zero termination inside parse_and_append_data() function
             // would wreak havoc with the above code.
             // Also, skipping whitespace after data nodes is unnecessary.
-            after_data_node:    
-                
+            after_data_node:
+
                 // Determine what comes next: node closing, child node, data node, or 0?
                 switch (next_char)
                 {
-                
+
                 // Node closing or child node
                 case Ch('<'):
                     if (text[1] == Ch('/'))
@@ -3251,12 +3259,12 @@ namespace rapidxml
                     {
                         // Child node
                         ++text;     // Skip '<'
-                      
+
                       //
                       //if( (*text)==Ch('<') || whitespace_pred::test(*text) )
                       //  ++text;
-                      
-                        if (xml_node<Ch> *child = parse_node<Flags>(text))
+
+                        if (xml_node<Ch> *child = parse_node<Flags>(text, depth))
                             node->append_node(child);
                     }
                     break;
@@ -3281,9 +3289,12 @@ namespace rapidxml
       
 #if( RAPIDXML_USE_SIZED_INPUT_WCJOHNS )
       //wcjohns added 20190213 for non-null terminated txt
+      //wcjohns added `depth` 20260417 to limit recursion on extraordinarily nested XML
       template<int Flags>
-      void parse_node_contents(Ch *&text, xml_node<Ch> *node, Ch * const text_end, const xml_node<Ch> * const parent )
+      void parse_node_contents(Ch *&text, xml_node<Ch> *node, Ch * const text_end, const xml_node<Ch> * const parent, size_t depth = 0 )
       {
+        if (depth > 2048)
+            RAPIDXML_PARSE_ERROR("maximum element nesting depth exceeded", text);
         assert( text < text_end );
         
         // For all children and text
@@ -3515,7 +3526,7 @@ namespace rapidxml
                 
                 assert( text < text_end );
                 
-                if (xml_node<Ch> *child = parse_node<Flags>(text, text_end, node))
+                if (xml_node<Ch> *child = parse_node<Flags>(text, text_end, node, depth))
                   node->append_node(child);
                 
                 assert( text < text_end );
