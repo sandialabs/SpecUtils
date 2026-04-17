@@ -65,7 +65,7 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
   try
   {
     string line;
-    if( !SpecUtils::safe_get_line( input, line ) )
+    if( !SpecUtils::safe_get_line( input, line, 64*1024 ) )
       return false;
     
     vector<string> headers;
@@ -176,21 +176,21 @@ bool SpecFile::load_from_Gr135_txt( std::istream &input )
     
     std::vector<float> counts;
     
-    while( SpecUtils::safe_get_line( input, line ) )
+    while( SpecUtils::safe_get_line( input, line, 64*1024 ) )
     {
       if( line.empty() )
         continue;
-      
+
       SpecUtils::split_to_floats( line.c_str(), line.size(), counts );
       if( counts.size() != measurements.size() )
         throw runtime_error( "Unexpected number of channel counts" );
-      
+
       for( size_t i = 0; i < counts.size(); ++i )
       {
         gammacounts.at(i)->push_back( counts[i] );
         measurements[i]->gamma_count_sum_ += counts[i];
       }
-    }//while( SpecUtils::safe_get_line( input, line ) )
+    }//while( SpecUtils::safe_get_line( input, line, 64*1024 ) )
     
     const uint32_t len = static_cast<uint32_t>( gammacounts[0]->size() );
     const bool isPowerOfTwo = ((len != 0) && !(len & (len - 1)));

@@ -930,10 +930,12 @@ void Measurement::set_gamma_counts( std::shared_ptr<const std::vector<float>> co
   const size_t newnchan = gamma_counts_->size();
   const size_t calnchan = cal.num_channels();
   
-  if( (newnchan != calnchan) && (cal.type() != EnergyCalType::LowerChannelEdge) )
+  if( newnchan != calnchan )
   {
     //We could preserve the old coefficients for Polynomial and FRF, and just create a new
     //  calibration... it isnt clear if we should do that, or just clear out the calibration...
+    //  For LowerChannelEdge the number of channel energies must be num_channels+1, so we must
+    //  also clear calibration in that case to avoid mismatched sizes in downstream code.
     energy_calibration_ = std::make_shared<const SpecUtils::EnergyCalibration>();
   }
 }//set_gamma_counts
@@ -980,17 +982,17 @@ size_t Measurement::find_gamma_channel( const float x ) const
 {
   assert( energy_calibration_ );
   const shared_ptr<const vector<float>> &energies = energy_calibration_->channel_energies();
-  if( !energies || (energies->size() < 2) || !gamma_counts_ )
+  if( !energies || (energies->size() < 2) || !gamma_counts_ || gamma_counts_->empty() )
     throw std::runtime_error( "find_gamma_channel: channel energies not defined" );
-  
+
   assert( (gamma_counts_->size()+1) == energies->size() );
-  
+
   //Using upper_bound instead of lower_bound to properly handle the case
   //  where x == bin lower energy.
   const auto pos_iter = std::upper_bound( energies->begin(), energies->end(), x );
   if( pos_iter == begin(*energies) )
     return 0;
-  
+
   const size_t last_channel = gamma_counts_->size() - 1;
   const size_t pos_index = (pos_iter - begin(*energies)) - 1;
   

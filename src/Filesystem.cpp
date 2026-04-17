@@ -1556,9 +1556,18 @@ void load_file_data( const char * const filename, std::vector<char> &data )
   
   // Determine stream size
   stream.seekg(0, ios::end);
-  size_t size = static_cast<size_t>( stream.tellg() );
+  const auto tellg_result = stream.tellg();
+  if( tellg_result < 0 )
+    throw runtime_error( string("cannot determine size of file ") + filename );
+
+  const size_t size = static_cast<size_t>( tellg_result );
+
+  // Sanity cap to prevent absurd allocations (512 MB)
+  if( size > (size_t(512) * 1024 * 1024) )
+    throw runtime_error( string("file too large: ") + filename );
+
   stream.seekg(0);
-  
+
   // Load data and add terminating 0
   data.resize(size + 1);
   stream.read(&data.front(), static_cast<streamsize>(size));

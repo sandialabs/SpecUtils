@@ -1950,7 +1950,7 @@ void N42CalibrationCache2006::parse_dev_pairs_from_xml( const rapidxml::xml_node
         if( dev_node->value_size() )
         {
           vector<float> devpair;
-          const bool success = SpecUtils::split_to_floats( dev_node->value(), dev_node->value_size(), devpair );
+          const bool success = SpecUtils::split_to_floats( dev_node->value(), dev_node->value_size(), devpair, 4 );
             
           if( success && devpair.size()==2 )
           {
@@ -2131,13 +2131,15 @@ bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<c
     
     if( coeff_node->value_size() )
     {
-      SpecUtils::split_to_floats( coeff_node->value(), coeff_node->value_size(), coefs );
+      SpecUtils::split_to_floats( coeff_node->value(), coeff_node->value_size(), coefs,
+                                 SpecUtils::EnergyCalibration::sm_max_channels + 1 );
     }else
     {
       //SmithsNaI HPRDS
       const auto subeqn = XML_FIRST_ATTRIB(coeff_node,"Subequation");
       if( subeqn && subeqn->value_size() )
-        SpecUtils::split_to_floats( subeqn->value(), subeqn->value_size(), coefs );
+        SpecUtils::split_to_floats( subeqn->value(), subeqn->value_size(), coefs,
+                                   SpecUtils::EnergyCalibration::sm_max_channels + 1 );
     }//if( coeff_node->value_size() ) / else
            
     while( coefs.size() && coefs.back()==0.0f )
@@ -4194,7 +4196,7 @@ public:
           {
             SpecUtils::split_to_floats( count_data_node->value(),
                                        count_data_node->value_size(),
-                                       meas->neutron_counts_ );
+                                       meas->neutron_counts_, 4096 );
           }//if( data is in cps ) / else
           
           for( size_t i = 0; i < meas->neutron_counts_.size(); ++i )
@@ -5401,7 +5403,7 @@ namespace SpecUtils
     if( node )
     {
       // These nodes dont seem to give neutron live/real time for these nodes, so we'll rely on "SampleRealTime"
-      if( SpecUtils::split_to_floats( node->value(), node->value_size(), m->neutron_counts_ ) )
+      if( SpecUtils::split_to_floats( node->value(), node->value_size(), m->neutron_counts_, 4096 ) )
         m->neutron_counts_sum_ = std::accumulate( m->neutron_counts_.begin(), m->neutron_counts_.end(), 0.0f, std::plus<float>() );
       else
         m->neutron_counts_sum_ = 0.0;
@@ -8094,7 +8096,7 @@ namespace SpecUtils
         info.equation_type = SpecUtils::EnergyCalType::Polynomial;
         const char *data = coef_val_node->value();
         const size_t len = coef_val_node->value_size();
-        if( !SpecUtils::split_to_floats( data, len, info.coefficients ) )
+        if( !SpecUtils::split_to_floats( data, len, info.coefficients, 20 ) )
           throw runtime_error( "Invalid calibration value: " + xml_value_str(coef_val_node) );
         
         //Technically there must be exactly 3 polynomial coefficients, but we wont enforce this
@@ -8146,10 +8148,12 @@ namespace SpecUtils
             const char *devstrs = energy_deviation_node->value();
             const size_t devstrsize = energy_deviation_node->value_size();
             
-            if( !SpecUtils::split_to_floats( energiesstr, energystrsize, energies ) )
+            if( !SpecUtils::split_to_floats( energiesstr, energystrsize, energies,
+                                           EnergyCalibration::sm_max_channels + 1 ) )
               throw runtime_error( "" );
-            
-            if( !SpecUtils::split_to_floats( devstrs, devstrsize, deviations ) )
+
+            if( !SpecUtils::split_to_floats( devstrs, devstrsize, deviations,
+                                           EnergyCalibration::sm_max_channels + 1 ) )
               throw runtime_error( "" );
             
             if( energies.size() != deviations.size() )
@@ -8174,7 +8178,8 @@ namespace SpecUtils
         const char *data = energy_boundry_node->value();
         const size_t len = energy_boundry_node->value_size();
         
-        if( !SpecUtils::split_to_floats( data, len, info.coefficients ) )
+        if( !SpecUtils::split_to_floats( data, len, info.coefficients,
+                                       EnergyCalibration::sm_max_channels + 1 ) )
           throw runtime_error( "Failed to parse lower channel energies" );
       }else
       {

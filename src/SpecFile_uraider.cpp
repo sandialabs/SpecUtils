@@ -126,7 +126,8 @@ bool SpecFile::load_from_micro_raider_from_data( const char *data )
     
     const bool validchannel
     = SpecUtils::split_to_floats( Spectrum->value(),
-                                 Spectrum->value_size(), *channel_counts );
+                                 Spectrum->value_size(), *channel_counts,
+                                 EnergyCalibration::sm_max_channels + 1 );
     if( !validchannel || channel_counts->empty() )
       throw runtime_error( "Couldnt parse channel counts" );
     

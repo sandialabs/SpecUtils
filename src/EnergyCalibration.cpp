@@ -465,11 +465,28 @@ bool EnergyCalibration::operator==( const EnergyCalibration &rhs ) const
   
   if( (!m_channel_energies) != (!rhs.m_channel_energies) )
     return false;
-  
+
   if( !m_channel_energies )
     return true;
-  
-  return (m_channel_energies->size() == rhs.m_channel_energies->size());
+
+  if( m_channel_energies->size() != rhs.m_channel_energies->size() )
+    return false;
+
+  // For LowerChannelEdge, the actual energies matter (coefficients are stored in the energies
+  //  vector), so compare element-wise with a tolerance.
+  if( m_type == EnergyCalType::LowerChannelEdge )
+  {
+    for( size_t i = 0; i < m_channel_energies->size(); ++i )
+    {
+      const float lhs_val = (*m_channel_energies)[i];
+      const float rhs_val = (*rhs.m_channel_energies)[i];
+      const float maxval = std::max( fabs(lhs_val), fabs(rhs_val) );
+      if( fabs(lhs_val - rhs_val) > std::max( 1.0E-5f * maxval, 1.0E-6f ) )
+        return false;
+    }
+  }//if( LowerChannelEdge )
+
+  return true;
 }//operator==
 
 
@@ -2174,7 +2191,7 @@ shared_ptr<EnergyCalibration> energy_cal_from_CALp_file( std::istream &input,
       {
         cerr << "Unrecognized line in CALp file: '" << line << "'" << endl;
       }
-    }//while( SpecUtils::safe_get_line( istr, line ) )
+    }//while( SpecUtils::safe_get_line( istr, line, 2*1024 ) )
     
     
     if( exact_energies.size() )

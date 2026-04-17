@@ -250,13 +250,14 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
           
           if( amplitude >= histogram->size() )
           {
-            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude)/log(2)) );
+            // Need at least amplitude+1 bins; round up to next power of two.
+            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude + 1)/log(2)) );
             const size_t next_power_of_two = static_cast<size_t>( std::pow( 2u, powexp ) );
             histogram->resize( next_power_of_two, 0.0f );
           }
-          
+
           ++((*histogram)[amplitude]);
-          
+
           firsttimestamp = (firsttimestamp ? firsttimestamp : timestamp);
           lasttimestamp = timestamp;
           
@@ -360,11 +361,12 @@ bool SpecFile::load_from_ortec_listmode( std::istream &input )
           
           if( amplitude >= histogram->size() )
           {
-            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude)/log(2.0)) );
+            // Need at least amplitude+1 bins; round up to next power of two.
+            const uint32_t powexp = static_cast<uint32_t>( std::ceil(log(amplitude + 1)/log(2.0)) );
             const size_t next_power_of_two = static_cast<size_t>( std::pow( 2u, powexp ) );
             histogram->resize( next_power_of_two, 0.0f );
           }
-          
+
           ++((*histogram)[amplitude]);
         }else if( (event & 0x80000000) == 0x80000000 )
         {

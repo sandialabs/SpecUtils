@@ -404,18 +404,28 @@ void deflate_decompress_internal( void *in_data, size_t in_data_size, T &out_dat
   
   int ret = Z_OK;
   typename T::value_type buffer[1024*16];
-  
+
+  // Cap max output to prevent zip-bomb DoS (e.g., 256 MB)
+  const size_t max_out_size = 256u * 1024u * 1024u;
+
   T result;
-  
+
   do
   {
     zs.next_out = reinterpret_cast<Bytef *>(buffer);
     zs.avail_out = sizeof(buffer);
-    
+
     ret = inflate( &zs, 0 );
-    
+
     if( result.size() < zs.total_out )
       result.insert( end(result), buffer, buffer + (zs.total_out - result.size()) );
+
+    if( result.size() > max_out_size )
+    {
+      inflateEnd( &zs );
+      throw runtime_error( "deflate_decompress: decompressed size exceeds maximum allowed ("
+                          + std::to_string(max_out_size) + " bytes)" );
+    }
   }while( ret == Z_OK );
   
   inflateEnd( &zs );

@@ -187,6 +187,8 @@ create_cubic_spline( const std::vector<std::pair<float,float>> &data,
   
   //solve Rx=y
   std::vector<double> b( A_matrix.size() );
+  if( A_matrix.back()[1] == 0.0 )
+    throw std::runtime_error( "CubicSpline: zero pivot in back-substitution" );
   b.back() = y.back() / A_matrix.back()[1];
   for( size_t i = A_matrix.size()-1; i != 0; --i )
     b[i-1] = (y[i-1] - A_matrix[i-1][2]*b[i]) / A_matrix[i-1][1];

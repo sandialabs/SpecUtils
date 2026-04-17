@@ -1445,7 +1445,12 @@ bool SpecFile::load_from_pcf( std::istream &input )
                  "Invalid number of channels: %i", int(num_channel) );
         throw runtime_error( buffer );
       }//if( num_channel < 0 || num_channel>65536 )
-      
+
+      const size_t data_bytes_needed = static_cast<size_t>(num_channel) * 4;
+      const size_t current_pos = static_cast<size_t>( input.tellg() );
+      if( filelen && ((current_pos + data_bytes_needed) > filelen) )
+        throw runtime_error( "Channel data extends past end of file" );
+
       std::shared_ptr< vector<float> > channel_data = std::make_shared<vector<float> >( num_channel );
       input.read( (char *)&(channel_data->operator[](0)), 4*num_channel );
       

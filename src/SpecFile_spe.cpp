@@ -1700,7 +1700,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
        $WINSPEC_AUTOMATION:
        $WINSPEC_INFO:
        */
-    }while( skip_getline || SpecUtils::safe_get_line( istr, line) );
+    }while( skip_getline || SpecUtils::safe_get_line( istr, line, 64*1024) );
     //  while( getline( istr, line ) )
     
     cleanup_current_meas();

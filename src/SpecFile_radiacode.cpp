@@ -604,11 +604,12 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
       // 16 .. : counts per channel (uint32[1024])
 
       string pfx = "Spectrum: ";  // the space is intentional
-      if ((string::npos != line.find(pfx)) && (1 == total_lines) && (line.length() >= 57)) {
+      const size_t pfx_pos = line.find(pfx);
+      if ((string::npos != pfx_pos) && (1 == total_lines) && (line.length() >= (pfx_pos + pfx.length() + 47))) {
         try {
           uint8_t raw_bytes[16];
           vector<float> cal_coefs;
-          const size_t ds = pfx.length();
+          const size_t ds = pfx_pos + pfx.length();
 
           // "unhexlify"
           for (size_t i = 0; i < sizeof(raw_bytes); i++) {

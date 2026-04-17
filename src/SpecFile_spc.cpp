@@ -732,15 +732,15 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
                   input.seekg( pos, ios::beg );
                   break;
                 }
-              }while( SpecUtils::safe_get_line( input, line ) );
+              }while( SpecUtils::safe_get_line( input, line, 64*1024 ) );
             }//if( not at the end of the file )
-            
+
             break;
           }//if( we hit an empty line, and weve read the expected number of channels )
-          
+
           if(!line.empty() && (line[0]<'0' || line[0]>'9') )
             break;
-          
+
           vector<float> linefloats;
           SpecUtils::split_to_floats( line.c_str(), line.length(), linefloats );
           for( float &f : linefloats )  //could probably use vector instructions here...
@@ -748,7 +748,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
             if( IsInf(f) || IsNan(f) )
               f = 0.0f;
           }
-          
+
           if( !channel_counts )
           {
             channel_counts = make_shared<vector<float>>( std::move(linefloats) );
@@ -756,14 +756,14 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           {
             channel_counts->insert( channel_counts->end(), begin(linefloats), end(linefloats) );
           }
-          
+
           assert( channel_counts );
           if( channel_counts->size() > (64*1024 + 1) )
           {
             meas->parse_warnings_.push_back( "Exceeded max of 64k channels for IAEA SPC file; skipping further channels" );
             break;
           }
-        }//while( SpecUtils::safe_get_line( input, line ) )
+        }//while( SpecUtils::safe_get_line( input, line, 64*1024 ) )
         
         if( (Length > 1) && channel_counts && (size_t(Length) != channel_counts->size()) )
         {
@@ -2591,9 +2591,10 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
             //               if( dose_rate )
             //               cerr << "Found dose rate: " << dose_rate << endl << endl;
             
-            if( (data.end() - (linesiter+lines_term.size())) > 0 )
+            if( (linesiter != data.end())
+               && (static_cast<size_t>(data.end() - linesiter) > lines_term.size()) )
             {
-              string toplines( linesiter+10, data.end() );
+              string toplines( linesiter + lines_term.size(), data.end() );
               vector<string> lines;
               split( lines, toplines, "\r\n" );
               

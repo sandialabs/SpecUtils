@@ -570,7 +570,8 @@ bool SpecFile::load_from_caen_gxml(std::istream& input)
 
     vector<string> warnings, remarks;
     auto counts = make_shared<vector<float>>();
-    if (!SpecUtils::split_to_floats(data_node->value(), data_node->value_size(), *counts))
+    if (!SpecUtils::split_to_floats(data_node->value(), data_node->value_size(), *counts,
+                                   EnergyCalibration::sm_max_channels + 1))
       warnings.push_back("May not have read in all channel counts.");
 
     if (counts->size() < 16)

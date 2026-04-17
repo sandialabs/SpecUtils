@@ -1092,7 +1092,7 @@ bool SpecFile::load_from_spectroscopic_daily_file( std::istream &input )
 #endif
         }//if( !line.empty() )
       }//if / else (determine what this line means)
-    }//while( SpecUtils::safe_get_line( input, line ) )
+    }//while( SpecUtils::safe_get_line( input, line, 64*1024 ) )
   
 #if( DO_SDF_MULTITHREAD )
   pool.join();

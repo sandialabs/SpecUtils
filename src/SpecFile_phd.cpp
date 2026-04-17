@@ -162,7 +162,7 @@ bool SpecFile::load_from_phd( std::istream &input )
         
         const float upper_energy = (fields.size()>1 && fields[1]>500.0f && fields[1]<13000.0f) ? fields[1] : 0.0f;
         const size_t nchannel = static_cast<size_t>( fields[0] );
-        if( (nchannel < 1) || (nchannel > 1024*65536) )
+        if( (nchannel < 1) || (nchannel > EnergyCalibration::sm_max_channels) )
           throw runtime_error( "Invalid number of channels (" + std::to_string(nchannel) + ")" );
         
         auto counts = std::make_shared< vector<float> >(nchannel,0.0f);
@@ -246,7 +246,7 @@ bool SpecFile::load_from_phd( std::istream &input )
           vector<pair<float,float>> channel_energy_pairs;
 
           // Read energy-channel data lines until next section or STOP
-          while( SpecUtils::safe_get_line( input, line ) )
+          while( SpecUtils::safe_get_line( input, line, 64*1024 ) )
           {
             trim( line );
             if( line.empty() )

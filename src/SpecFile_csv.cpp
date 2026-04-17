@@ -1622,7 +1622,7 @@ void Measurement::set_info_from_avid_mobile_txt( std::istream &istr )
         
         channelnum = fline[0];
         counts->push_back( fline[1] );
-      }//while( SpecUtils::safe_get_line( istr, line ) )
+      }//while( SpecUtils::safe_get_line( istr, line, 64*1024 ) )
     }//if( fline.size() >= 127 )
     
     const size_t nchannel = counts->size();

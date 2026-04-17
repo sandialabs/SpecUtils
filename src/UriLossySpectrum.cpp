@@ -545,6 +545,9 @@ std::vector<float> decompress_spectrum( const CompressedSpectrum &comp )
   for( size_t i = 0; i < decomp.level_lengths.size(); ++i )
     total += decomp.level_lengths[i];
 
+  if( total > SpecUtils::EnergyCalibration::sm_max_channels )
+    throw std::runtime_error( "decompress_spectrum: total wavelet coefficients exceeds max channels" );
+
   decomp.coeffs.assign( total, 0.0 );
 
   // Dequantize 12-bit values: map [0, 4095] -> [coeff_min, coeff_max]

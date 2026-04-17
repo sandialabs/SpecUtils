@@ -223,7 +223,7 @@ namespace SerialToDetectorModel
         info.file_locations = fields[3];
 #endif
       newdata->push_back( info );
-    }//while( SpecUtils::safe_get_line(input, line) )
+    }//while( SpecUtils::safe_get_line(input, line, 16384) )
     
     if( newdata->size() < 2 )  //2 is arbitrary, kindaof
       return nullptr;
