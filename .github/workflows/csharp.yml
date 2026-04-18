@@ -13,6 +13,7 @@ jobs:
     name: C# on ${{ matrix.os }} (${{ matrix.dotnet-label }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -126,8 +127,11 @@ jobs:
       if: runner.os == 'Windows'
       run: echo "SPECUTILS_NATIVE_LIB_DIR=${{ github.workspace }}\build\Release" >> $env:GITHUB_ENV
 
+    - name: Restore NuGet packages
+      run: dotnet restore bindings/csharp/SpecUtils.sln ${{ matrix.build-framework-arg }}
+
     - name: Build C# projects
-      run: dotnet build bindings/csharp/SpecUtils.sln -c Release ${{ matrix.build-framework-arg }}
+      run: dotnet build bindings/csharp/SpecUtils.sln -c Release --no-restore ${{ matrix.build-framework-arg }}
 
     - name: Run C# tests
       run: dotnet test bindings/csharp/SpecUtils.sln -c Release ${{ matrix.build-framework-arg }} --logger "console;verbosity=detailed"
