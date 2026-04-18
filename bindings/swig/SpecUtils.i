@@ -30,41 +30,38 @@ namespace std {
 
 
 
-%{ 
-#include <string>  
-#include <iostream> 
-#include <sstream> 
+%{
+#include <string>
+#include <iostream>
+#include <sstream>
 #include <fstream>
 #include <memory>
-using namespace std; 
-%} 
-%inline %{ 
-std::ostream* openFile(const char* filename) { 
+using namespace std;
+%}
+%inline %{
+std::ostream* openFile(const char* filename) {
   ofstream *filePtr = new ofstream(filename);
   return(filePtr);
-} 
-void closeFile(std::ostream *stream) { 
+}
+void closeFile(std::ostream *stream) {
   stream->flush();
   delete(stream);
 }
 
-std::ostream* createStringStream() { 
+std::ostream* createStringStream() {
   std::stringstream *sPtr = new std::stringstream();
   return(sPtr);
 }
 
-std::string stringStreamToString(std::ostream *stream) { 
+std::string stringStreamToString(std::ostream *stream) {
   return dynamic_cast<std::stringstream *>(stream)->str();
 }
 
-void cleanupStringString(std::ostream *stream) { 
+void cleanupStringString(std::ostream *stream) {
   delete(stream);
 }
 
-%} 
-
-
-
+%}
 
 
 %{
@@ -80,9 +77,20 @@ void cleanupStringString(std::ostream *stream) {
 #include "SpecUtils/SpecFile.h"
 %}
 
-
-
 %include "SpecUtils/SpecFile.h"
+
+
+// Include CubicSpline.h so SWIG knows about the CubicSplineNode type
+%{
+#include "SpecUtils/CubicSpline.h"
+%}
+%include "SpecUtils/CubicSpline.h"
+
+// Ignore the overloads of find_fullrangefraction_channel and find_polynomial_channel
+// that take CubicSplineNode vectors - these are internal helpers.
+// Keep the simpler overloads that are more useful from Java.
+%ignore SpecUtils::find_fullrangefraction_channel(const double, const std::vector<float> &, const size_t, const std::vector<CubicSplineNode> &, const std::vector<CubicSplineNode> &, const size_t);
+%ignore SpecUtils::find_polynomial_channel(const double, const std::vector<float> &, const size_t, const std::vector<CubicSplineNode> &, const std::vector<CubicSplineNode> &, const double);
 
 %{
 #include "SpecUtils/EnergyCalibration.h"

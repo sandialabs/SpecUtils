@@ -1,0 +1,176 @@
+name: Java SWIG Bindings
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-java-linux:
+    name: Java on Linux (manylinux)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install build tools
+      run: |
+        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel
+        echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
+
+    - name: Configure CMake
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release -j$(nproc)
+
+    - name: Run Java test
+      working-directory: build
+      run: |
+        cp ../bindings/swig/java_test/TestSpecUtils.java .
+        javac -classpath .:SpecUtils.jar TestSpecUtils.java
+        java -Djava.library.path=. -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
+
+    - name: Build CLI example
+      working-directory: build
+      run: |
+        cp ../bindings/swig/java_test/SpecUtilsCli.java .
+        javac -classpath .:SpecUtils.jar SpecUtilsCli.java
+        java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
+
+    - name: Prepare artifacts
+      working-directory: build
+      run: |
+        mkdir -p artifacts
+        cp SpecUtils.jar artifacts/
+        cp libSpecUtilsJni.so artifacts/
+        cp SpecUtilsCli.class artifacts/
+        cp ../LICENSE.txt artifacts/
+        cp ../bindings/swig/java_test/README_linux.md artifacts/README.md
+        printf '#!/usr/bin/env bash\n# SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
+        chmod +x artifacts/SpecUtilsCli.sh
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: specutils-java-linux-x86_64
+        path: build/artifacts/
+
+  build-java:
+    name: Java on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            lib-name: libSpecUtilsJni.jnilib
+            artifact-name: specutils-java-macos-arm64
+          - os: windows-latest
+            lib-name: SpecUtilsJni.dll
+            artifact-name: specutils-java-windows-x86_64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v2.0.2
+      with:
+        cmake-version: '3.25'
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install SWIG (macOS)
+      if: runner.os == 'macOS'
+      run: brew install swig
+
+    - name: Install SWIG (Windows)
+      if: runner.os == 'Windows'
+      run: choco install swig -y
+
+    - name: Configure CMake
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Run Java test (macOS)
+      if: runner.os == 'macOS'
+      working-directory: build
+      run: |
+        cp ../bindings/swig/java_test/TestSpecUtils.java .
+        javac -classpath .:SpecUtils.jar TestSpecUtils.java
+        java -Djava.library.path=. --enable-native-access=ALL-UNNAMED -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
+
+    - name: Run Java test (Windows)
+      if: runner.os == 'Windows'
+      working-directory: build
+      shell: cmd
+      run: |
+        copy ..\bindings\swig\java_test\TestSpecUtils.java .
+        javac -classpath ".;SpecUtils.jar" TestSpecUtils.java
+        java -Djava.library.path="Release;." --enable-native-access=ALL-UNNAMED -classpath ".;SpecUtils.jar" TestSpecUtils ..\bindings\python\examples\passthrough.n42
+
+    - name: Build and test CLI example (macOS)
+      if: runner.os == 'macOS'
+      working-directory: build
+      run: |
+        cp ../bindings/swig/java_test/SpecUtilsCli.java .
+        javac -classpath .:SpecUtils.jar SpecUtilsCli.java
+        java -Djava.library.path=. --enable-native-access=ALL-UNNAMED -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
+
+    - name: Build and test CLI example (Windows)
+      if: runner.os == 'Windows'
+      working-directory: build
+      shell: cmd
+      run: |
+        copy ..\bindings\swig\java_test\SpecUtilsCli.java .
+        javac -classpath ".;SpecUtils.jar" SpecUtilsCli.java
+        java -Djava.library.path="Release;." --enable-native-access=ALL-UNNAMED -classpath ".;SpecUtils.jar" SpecUtilsCli ..\bindings\python\examples\passthrough.n42
+
+    - name: Prepare artifacts (macOS)
+      if: runner.os == 'macOS'
+      working-directory: build
+      run: |
+        mkdir -p artifacts
+        cp SpecUtils.jar artifacts/
+        cp ${{ matrix.lib-name }} artifacts/
+        cp SpecUtilsCli.class artifacts/
+        cp ../LICENSE.txt artifacts/
+        cp ../bindings/swig/java_test/README_macos.md artifacts/README.md
+        printf '#!/usr/bin/env bash\n# SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
+        chmod +x artifacts/SpecUtilsCli.sh
+
+    - name: Prepare artifacts (Windows)
+      if: runner.os == 'Windows'
+      working-directory: build
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        cp SpecUtils.jar artifacts/
+        # DLL may be in Release/ subdirectory with MSVC multi-config
+        if [ -f "Release/${{ matrix.lib-name }}" ]; then
+          cp "Release/${{ matrix.lib-name }}" artifacts/
+        elif [ -f "${{ matrix.lib-name }}" ]; then
+          cp "${{ matrix.lib-name }}" artifacts/
+        fi
+        cp SpecUtilsCli.class artifacts/
+        cp ../LICENSE.txt artifacts/
+        cp ../bindings/swig/java_test/README_windows.md artifacts/README.md
+        printf '@echo off\r\nREM SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\r\nREM Usage: SpecUtilsCli.bat <input_file> [output.n42]\r\njava -Djava.library.path="%%~dp0" -classpath "%%~dp0;%%~dp0\\SpecUtils.jar" SpecUtilsCli %%*\r\n' > artifacts/SpecUtilsCli.bat
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact-name }}
+        path: build/artifacts/
