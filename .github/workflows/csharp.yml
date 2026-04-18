@@ -10,17 +10,35 @@ on:
 
 jobs:
   build-and-test:
-    name: C# on ${{ matrix.os }}
+    name: C# on ${{ matrix.os }} (${{ matrix.dotnet-label }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             flt-parse-method: FromChars
+            dotnet-version: '10.0.x'
+            dotnet-label: dotnet10
+            target-framework: net10.0
+            platform-label: linux-x86_64
           - os: macos-latest
             flt-parse-method: FastFloat
+            dotnet-version: '10.0.x'
+            dotnet-label: dotnet10
+            target-framework: net10.0
+            platform-label: macos-arm64
           - os: windows-latest
             flt-parse-method: FromChars
+            dotnet-version: '10.0.x'
+            dotnet-label: dotnet10
+            target-framework: net10.0
+            platform-label: windows-x86_64
+          - os: windows-latest
+            flt-parse-method: FromChars
+            dotnet-version: '7.0.x'
+            dotnet-label: dotnet7
+            target-framework: net7.0
+            platform-label: windows-x86_64
 
     steps:
     - name: Checkout code
@@ -34,7 +52,7 @@ jobs:
     - name: Set up .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '10.0.x'
+        dotnet-version: '${{ matrix.dotnet-version }}'
 
     - name: Install zlib (Windows)
       if: runner.os == 'Windows'
@@ -105,46 +123,68 @@ jobs:
       run: echo "SPECUTILS_NATIVE_LIB_DIR=${{ github.workspace }}\build\Release" >> $env:GITHUB_ENV
 
     - name: Build C# projects
-      run: dotnet build bindings/csharp/SpecUtils.sln -c Release
+      run: dotnet build bindings/csharp/SpecUtils.sln -c Release -p:TargetFramework=${{ matrix.target-framework }}
 
     - name: Run C# tests
-      run: dotnet test bindings/csharp/SpecUtils.sln -c Release --logger "console;verbosity=detailed"
+      run: dotnet test bindings/csharp/SpecUtils.sln -c Release -p:TargetFramework=${{ matrix.target-framework }} --logger "console;verbosity=detailed"
 
     - name: Run example (Linux/macOS)
       if: runner.os != 'Windows'
       run: >
         dotnet run --project bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
-        -c Release -- bindings/python/examples/passthrough.n42
+        -c Release -f ${{ matrix.target-framework }} -- bindings/python/examples/passthrough.n42
 
     - name: Run example (Windows)
       if: runner.os == 'Windows'
       run: >
         dotnet run --project bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
-        -c Release -- bindings\python\examples\passthrough.n42
+        -c Release -f ${{ matrix.target-framework }} -- bindings\python\examples\passthrough.n42
 
     - name: Publish example app
       run: >
         dotnet publish bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
-        -c Release -o publish/${{ matrix.os }}
+        -c Release -p:TargetFramework=${{ matrix.target-framework }} -o publish/${{ matrix.os }}-${{ matrix.dotnet-label }}
 
     - name: Collect artifacts (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
         mkdir -p artifacts
         cp build/libSpecUtils.* artifacts/ 2>/dev/null || true
-        cp publish/${{ matrix.os }}/* artifacts/ 2>/dev/null || true
+        cp publish/${{ matrix.os }}-${{ matrix.dotnet-label }}/* artifacts/ 2>/dev/null || true
 
     - name: Collect artifacts (Windows)
       if: runner.os == 'Windows'
       run: |
         mkdir artifacts
         Copy-Item build\Release\libSpecUtils.* artifacts\ -ErrorAction SilentlyContinue
-        Copy-Item publish\${{ matrix.os }}\* artifacts\ -ErrorAction SilentlyContinue
+        Copy-Item publish\${{ matrix.os }}-${{ matrix.dotnet-label }}\* artifacts\ -ErrorAction SilentlyContinue
+
+    - name: Generate version.txt (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        cat > artifacts/version.txt << EOF
+        CI/CD development build
+        Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        Commit: ${{ github.sha }}
+        .NET: ${{ matrix.dotnet-label }}
+        Platform: ${{ matrix.platform-label }}
+        EOF
+
+    - name: Generate version.txt (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        @"
+        CI/CD development build
+        Build date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC
+        Commit: ${{ github.sha }}
+        .NET: ${{ matrix.dotnet-label }}
+        Platform: ${{ matrix.platform-label }}
+        "@ | Out-File -FilePath artifacts\version.txt -Encoding utf8
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: csharp-bindings-${{ matrix.os }}
+        name: csharp-bindings-${{ matrix.dotnet-label }}-${{ matrix.os }}
         path: artifacts/
 
   update-bleeding-edge:
@@ -154,9 +194,10 @@ jobs:
     with:
       artifacts: |
         [
-          {"artifact-name": "csharp-bindings-ubuntu-latest", "release-asset-name": "specutils-csharp-linux-x86_64.zip"},
-          {"artifact-name": "csharp-bindings-macos-latest", "release-asset-name": "specutils-csharp-macos-arm64.zip"},
-          {"artifact-name": "csharp-bindings-windows-latest", "release-asset-name": "specutils-csharp-windows-x86_64.zip"}
+          {"artifact-name": "csharp-bindings-dotnet10-ubuntu-latest", "release-asset-name": "specutils-csharp_dotnet10-linux-x86_64.zip"},
+          {"artifact-name": "csharp-bindings-dotnet10-macos-latest", "release-asset-name": "specutils-csharp_dotnet10-macos-arm64.zip"},
+          {"artifact-name": "csharp-bindings-dotnet10-windows-latest", "release-asset-name": "specutils-csharp_dotnet10-windows-x86_64.zip"},
+          {"artifact-name": "csharp-bindings-dotnet7-windows-latest", "release-asset-name": "specutils-csharp_dotnet7-windows-x86_64.zip"}
         ]
     permissions:
       contents: write

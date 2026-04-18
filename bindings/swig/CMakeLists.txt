@@ -51,13 +51,21 @@ target_link_libraries(SpecUtilsJni PRIVATE SpecUtils)
 set(SWIG_JAVA_PACKAGE "gov.sandia.specutils")
 set_property(TARGET SpecUtilsJni PROPERTY SWIG_COMPILE_OPTIONS -package ${SWIG_JAVA_PACKAGE})
 
+# Use --release 8 to target Java 8 bytecode when building with JDK 9+.
+# JDK 8 natively produces class version 52 and doesn't support the --release flag.
+if(Java_VERSION_MAJOR GREATER 8)
+  set(JAVAC_RELEASE_FLAG "--release 8")
+else()
+  set(JAVAC_RELEASE_FLAG "")
+endif()
+
 # Create a CMake script to compile Java sources into a JAR after SWIG generates them.
 # We use a script because the glob needs to run at build time (not configure time),
 # and because cmd.exe on Windows does not expand *.java globs.
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/build_jar.cmake" "
 file(GLOB JAVA_SOURCES \"${CMAKE_CURRENT_BINARY_DIR}/gov/sandia/specutils/*.java\")
 execute_process(
-  COMMAND \${JAVAC} -d \"${CMAKE_CURRENT_BINARY_DIR}/classes\" --release 8 \${JAVA_SOURCES}
+  COMMAND \${JAVAC} -d \"${CMAKE_CURRENT_BINARY_DIR}/classes\" ${JAVAC_RELEASE_FLAG} \${JAVA_SOURCES}
   RESULT_VARIABLE JAVAC_RESULT
 )
 if(NOT JAVAC_RESULT EQUAL 0)

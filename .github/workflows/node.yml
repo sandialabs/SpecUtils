@@ -18,13 +18,16 @@ jobs:
         include:
           - os: ubuntu-latest
             flt-parse-method: FromChars
-            artifact-name: specutils-node-linux-x86_64
+            artifact-name: specutils-node_node20-linux-x86_64
+            platform-label: linux-x86_64
           - os: macos-latest
             flt-parse-method: FastFloat
-            artifact-name: specutils-node-macos-arm64
+            artifact-name: specutils-node_node20-macos-arm64
+            platform-label: macos-arm64
           - os: windows-latest
             flt-parse-method: FromChars
-            artifact-name: specutils-node-windows-x86_64
+            artifact-name: specutils-node_node20-windows-x86_64
+            platform-label: windows-x86_64
 
     steps:
     - name: Checkout code
@@ -121,6 +124,18 @@ jobs:
         cp README.md artifacts/
         cp ../../LICENSE.txt artifacts/
 
+    - name: Generate version.txt
+      working-directory: bindings/node
+      shell: bash
+      run: |
+        cat > artifacts/version.txt << EOF
+        CI/CD development build
+        Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        Commit: ${{ github.sha }}
+        Node.js: 20
+        Platform: ${{ matrix.platform-label }}
+        EOF
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -134,9 +149,9 @@ jobs:
     with:
       artifacts: |
         [
-          {"artifact-name": "specutils-node-linux-x86_64", "release-asset-name": "specutils-node-linux-x86_64.zip"},
-          {"artifact-name": "specutils-node-macos-arm64", "release-asset-name": "specutils-node-macos-arm64.zip"},
-          {"artifact-name": "specutils-node-windows-x86_64", "release-asset-name": "specutils-node-windows-x86_64.zip"}
+          {"artifact-name": "specutils-node_node20-linux-x86_64", "release-asset-name": "specutils-node_node20-linux-x86_64.zip"},
+          {"artifact-name": "specutils-node_node20-macos-arm64", "release-asset-name": "specutils-node_node20-macos-arm64.zip"},
+          {"artifact-name": "specutils-node_node20-windows-x86_64", "release-asset-name": "specutils-node_node20-windows-x86_64.zip"}
         ]
     permissions:
       contents: write

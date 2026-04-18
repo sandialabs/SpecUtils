@@ -20,8 +20,8 @@ jobs:
 
     - name: Install build tools
       run: |
-        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel zlib-devel
-        echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
+        dnf install -y cmake swig java-1.8.0-openjdk java-1.8.0-openjdk-devel zlib-devel
+        echo "JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk" >> $GITHUB_ENV
 
     - name: Configure CMake
       run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release
@@ -55,10 +55,21 @@ jobs:
         printf '#!/usr/bin/env bash\n# SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
         chmod +x artifacts/SpecUtilsCli.sh
 
+    - name: Generate version.txt
+      working-directory: build
+      run: |
+        cat > artifacts/version.txt << EOF
+        CI/CD development build
+        Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        Commit: ${{ github.sha }}
+        Java: 8 (OpenJDK)
+        Platform: linux-x86_64
+        EOF
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: specutils-java-linux-x86_64
+        name: specutils-java_java8-linux-x86_64
         path: build/artifacts/
 
   build-java:
@@ -70,10 +81,12 @@ jobs:
         include:
           - os: macos-latest
             lib-name: libSpecUtilsJni.jnilib
-            artifact-name: specutils-java-macos-arm64
+            artifact-name: specutils-java_java8-macos-arm64
+            platform-label: macos-arm64
           - os: windows-latest
             lib-name: SpecUtilsJni.dll
-            artifact-name: specutils-java-windows-x86_64
+            artifact-name: specutils-java_java8-windows-x86_64
+            platform-label: windows-x86_64
 
     steps:
     - name: Checkout code
@@ -88,7 +101,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '8'
 
     - name: Install SWIG (macOS)
       if: runner.os == 'macOS'
@@ -119,7 +132,7 @@ jobs:
       run: |
         cp ../bindings/swig/java_test/TestSpecUtils.java .
         javac -classpath .:SpecUtils.jar TestSpecUtils.java
-        java -Djava.library.path=. --enable-native-access=ALL-UNNAMED -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
+        java -Djava.library.path=. -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
 
     - name: Run Java test (Windows)
       if: runner.os == 'Windows'
@@ -128,7 +141,7 @@ jobs:
       run: |
         copy ..\bindings\swig\java_test\TestSpecUtils.java .
         javac -classpath ".;SpecUtils.jar" TestSpecUtils.java
-        java -Djava.library.path="Release;." --enable-native-access=ALL-UNNAMED -classpath ".;SpecUtils.jar" TestSpecUtils ..\bindings\python\examples\passthrough.n42
+        java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" TestSpecUtils ..\bindings\python\examples\passthrough.n42
 
     - name: Build and test CLI example (macOS)
       if: runner.os == 'macOS'
@@ -136,7 +149,7 @@ jobs:
       run: |
         cp ../bindings/swig/java_test/SpecUtilsCli.java .
         javac -classpath .:SpecUtils.jar SpecUtilsCli.java
-        java -Djava.library.path=. --enable-native-access=ALL-UNNAMED -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
+        java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
 
     - name: Build and test CLI example (Windows)
       if: runner.os == 'Windows'
@@ -145,7 +158,7 @@ jobs:
       run: |
         copy ..\bindings\swig\java_test\SpecUtilsCli.java .
         javac -classpath ".;SpecUtils.jar" SpecUtilsCli.java
-        java -Djava.library.path="Release;." --enable-native-access=ALL-UNNAMED -classpath ".;SpecUtils.jar" SpecUtilsCli ..\bindings\python\examples\passthrough.n42
+        java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" SpecUtilsCli ..\bindings\python\examples\passthrough.n42
 
     - name: Prepare artifacts (macOS)
       if: runner.os == 'macOS'
@@ -178,6 +191,18 @@ jobs:
         cp ../bindings/swig/java_test/README_windows.md artifacts/README.md
         printf '@echo off\r\nREM SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\r\nREM Usage: SpecUtilsCli.bat <input_file> [output.n42]\r\njava -Djava.library.path="%%~dp0" -classpath "%%~dp0;%%~dp0\\SpecUtils.jar" SpecUtilsCli %%*\r\n' > artifacts/SpecUtilsCli.bat
 
+    - name: Generate version.txt
+      working-directory: build
+      shell: bash
+      run: |
+        cat > artifacts/version.txt << EOF
+        CI/CD development build
+        Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        Commit: ${{ github.sha }}
+        Java: 8 (Temurin)
+        Platform: ${{ matrix.platform-label }}
+        EOF
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -191,9 +216,9 @@ jobs:
     with:
       artifacts: |
         [
-          {"artifact-name": "specutils-java-linux-x86_64", "release-asset-name": "specutils-java-linux-x86_64.zip"},
-          {"artifact-name": "specutils-java-macos-arm64", "release-asset-name": "specutils-java-macos-arm64.zip"},
-          {"artifact-name": "specutils-java-windows-x86_64", "release-asset-name": "specutils-java-windows-x86_64.zip"}
+          {"artifact-name": "specutils-java_java8-linux-x86_64", "release-asset-name": "specutils-java_java8-linux-x86_64.zip"},
+          {"artifact-name": "specutils-java_java8-macos-arm64", "release-asset-name": "specutils-java_java8-macos-arm64.zip"},
+          {"artifact-name": "specutils-java_java8-windows-x86_64", "release-asset-name": "specutils-java_java8-windows-x86_64.zip"}
         ]
     permissions:
       contents: write
