@@ -1,0 +1,83 @@
+name: WebAssembly
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  emscripten-build:
+    name: Emscripten Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.51'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure
+        run: emcmake cmake -S bindings/wasm -B build_wasm -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build_wasm
+
+      - name: Verify HTML output
+        run: |
+          test -f build_wasm/SpecUtilsWebViewer.html
+
+          viewer_size=$(stat -c%s build_wasm/SpecUtilsWebViewer.html)
+          echo "SpecUtilsWebViewer.html: $viewer_size bytes"
+
+          # Sanity check: file should be between 500KB and 20MB
+          [ "$viewer_size" -gt 500000 ] && [ "$viewer_size" -lt 20000000 ]
+
+      - name: Verify CLI tool
+        run: |
+          test -f build_wasm/specutils_cli.js
+          echo "CLI tool built successfully"
+
+          # Test help output
+          node build_wasm/specutils_cli.js 2>&1 | grep -q "Usage:"
+
+      - name: Test CLI conversion
+        run: |
+          # Test with the example N42 file from node bindings
+          node build_wasm/specutils_cli.js bindings/node/example.n42 /tmp/test_output.n42
+          test -f /tmp/test_output.n42
+
+          # Verify output is valid N42-2012 XML
+          head -2 /tmp/test_output.n42 | grep -q "RadInstrumentData"
+
+      - name: Upload HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpecUtilsWebViewer
+          path: build_wasm/SpecUtilsWebViewer.html
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: specutils-cli
+          path: build_wasm/specutils_cli.js
+
+      - name: Prepare library artifact
+        run: |
+          mkdir -p build_wasm/lib
+          cp build_wasm/specutils_wasm.js build_wasm/lib/
+          cp bindings/wasm/specutils_web.js build_wasm/lib/
+          cp bindings/wasm/examples/standalone/specutils_example.html build_wasm/lib/
+
+      - name: Upload reusable WASM library
+        uses: actions/upload-artifact@v4
+        with:
+          name: specutils-wasm-lib
+          path: build_wasm/lib/
