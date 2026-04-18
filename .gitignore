@@ -29,3 +29,5 @@ install_manifest.txt
 .vs/
 out/
 node_modules/
+bin/
+obj/
