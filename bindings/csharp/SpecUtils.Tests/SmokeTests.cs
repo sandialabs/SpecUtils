@@ -144,7 +144,7 @@ public class SmokeTests
     public void CreateMeasurement_RoundTrips()
     {
         using var meas = new Measurement();
-        float[] counts = [1.0f, 2.0f, 3.0f, 4.0f, 5.0f];
+        float[] counts = new[] { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
         meas.SetGammaCounts(counts, liveTime: 10.0f, realTime: 12.0f);
 
         Assert.Equal((uint)5, meas.NumberGammaChannels);
@@ -163,7 +163,7 @@ public class SmokeTests
     public void EnergyCalibration_SetAndQuery()
     {
         var cal = new EnergyCalibration();
-        float[] coeffs = [0.0f, 3000.0f];
+        float[] coeffs = new[] { 0.0f, 3000.0f };
         bool valid = cal.SetFullRangeFraction(1024, coeffs);
         Assert.True(valid);
         Assert.True(cal.IsValid);
