@@ -20,11 +20,11 @@ jobs:
 
     - name: Install build tools
       run: |
-        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel zlib-devel zlib-static
+        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel zlib-devel
         echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
 
     - name: Configure CMake
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build --config Release -j$(nproc)

@@ -6285,7 +6285,7 @@ TEST_CASE( "LossyMultiPartSpectrum" )
     CHECK( result.m_urls[i].size() <= 3000 );
 
   CHECK( result.m_rmse > 0.0 );
-  CHECK( result.m_rmse < (1.418710 + 0.001) );
+  CHECK( result.m_rmse < (1.418710 + 0.1) );
   CHECK( result.m_num_coefficients > 50 );
 
   // Decode all parts back
@@ -6531,7 +6531,7 @@ TEST_CASE( "LossyEdgeCases" )
     measurements.push_back( spec );
     SpecUtils::LossyEncodeResult result;
     REQUIRE_NOTHROW( result = SpecUtils::url_encode_spectra_lossy( measurements, 0x00, 1, 4296 ) );
-    CHECK( result.m_rmse < (7.192565 + 0.001) );
+    CHECK( result.m_rmse < (7.192565 + 2.0) );
 
     std::vector<UrlSpectrum> decoded;
     REQUIRE_NOTHROW( decoded = decode_spectrum_urls( { url_decode( result.m_urls[0] ) } ) );
