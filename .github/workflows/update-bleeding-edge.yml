@@ -76,6 +76,8 @@ jobs:
 
           **Warning:** These are development builds intended for testing. For production use, please use a tagged release.
 
+          macOS binaries are unsigned. See the included README files for instructions on removing the quarantine flag so they can be used.
+
           Each binding is built independently; artifacts may briefly be from different commits during updates.
 
           Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') from commit $(git rev-parse --short HEAD)"

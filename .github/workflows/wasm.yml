@@ -51,7 +51,7 @@ jobs:
       - name: Test CLI conversion
         run: |
           # Test with the example N42 file from node bindings
-          node build_wasm/specutils_cli.js bindings/node/example.n42 /tmp/test_output.n42
+          node build_wasm/specutils_cli.js unit_tests/test_data/spectra/Mn56_DetX_Shielded.n42 /tmp/test_output.n42
           test -f /tmp/test_output.n42
 
           # Verify output is valid N42-2012 XML

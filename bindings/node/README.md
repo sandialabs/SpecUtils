@@ -1,6 +1,13 @@
 # Overview
 In order to use **SpecUtils** from **node.js**, we need to compile the C++ into a node module, but once this is done, you can then parse spectrum files, access all spectral and meta data, and convert the file to a different format within JavaScript. 
 
+## macOS Gatekeeper
+
+Pre-built macOS binaries are unsigned. macOS will quarantine downloaded files and block the native module from loading. To fix this, run the following from the extracted directory:
+
+```bash
+xattr -r -d com.apple.quarantine .
+```
 
 # Building the Node Module
 
@@ -54,7 +61,10 @@ cmake --build build_dir --target install --config Release
 
 # These commands will copy 'SpecUtilsJS.node' and 'example.js' 
 # to 'node_release/' in your build directory, so you can run like:
-node build_dir/node_release/example.js
+node build_dir/node_release/example.js spectrum.n42
+
+# Optionally convert to N42-2012 (will not overwrite an existing file)
+node build_dir/node_release/example.js input.spc output.n42
 ```
 
 # Example Use In JavaScript
@@ -62,7 +72,7 @@ node build_dir/node_release/example.js
 const specutils = require('./SpecUtilsJS.node');
 
 // Open and parse spectrum file
-let spec = new specutils.SpecFile( "example.n42" );
+let spec = new specutils.SpecFile( "spectrum.n42" );
 
 // Print out a little info about detection system
 console.log( "Manufacturer = " + spec.manufacturer() );
@@ -84,8 +94,8 @@ for( let i = 0; i < records.length; ++i){
 let summed = spec.sumRecords(null,null,["Foreground", "UnknownSourceType"]);
 console.log( "Channel Counts = '" + summed.gammaChannelContents() + "'" );
 
-// Write the file to a different format.
-// You could also filter which records get saved with extra arguments
+// Write the file to a different format (will not overwrite existing files by default).
+// You could also filter which records get saved with extra arguments.
 spec.writeToFile( "output.pcf", "PCF" );
 ```
 

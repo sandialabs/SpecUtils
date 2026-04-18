@@ -19,6 +19,14 @@ Built for Apple Silicon (arm64). Requires macOS 11+ (Big Sur or newer).
 
 - Java 8 or newer (JRE to run, JDK to compile your own code)
 
+## macOS Gatekeeper
+
+These binaries are unsigned. macOS will quarantine downloaded files and block the native library from loading. To fix this, run the following from the extracted directory:
+
+```bash
+xattr -r -d com.apple.quarantine .
+```
+
 ## Quick Start — CLI Example
 
 The included CLI tool prints info about a spectrum file, and can optionally convert it to N42-2012:

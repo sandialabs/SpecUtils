@@ -93,16 +93,12 @@ jobs:
     - name: Test example (Linux/macOS)
       if: runner.os != 'Windows'
       working-directory: bindings/node/build_dir/node_release
-      run: |
-        cp ../../example.n42 .
-        node example.js
+      run: node example.js ../../../../unit_tests/test_data/spectra/Mn56_DetX_Shielded.n42
 
     - name: Test example (Windows)
       if: runner.os == 'Windows'
       working-directory: bindings/node/build_dir/node_release
-      run: |
-        copy ..\..\example.n42 .
-        node example.js
+      run: node example.js ..\..\..\..\unit_tests\test_data\spectra\Mn56_DetX_Shielded.n42
 
     - name: Collect artifacts (Linux/macOS)
       if: runner.os != 'Windows'

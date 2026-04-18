@@ -14,6 +14,14 @@ The key classes are:
 
 SpecUtils supports reading ~25 spectrum file formats and writing ~14 formats, including N42-2012, PCF, CHN, SPC, and more.
 
+## macOS Gatekeeper
+
+Pre-built macOS binaries are unsigned. macOS will quarantine downloaded files and block the native library from loading. To fix this, run the following from the extracted directory:
+
+```bash
+xattr -r -d com.apple.quarantine .
+```
+
 ## Building
 
 ### 1. Build the native library

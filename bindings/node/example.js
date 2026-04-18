@@ -1,13 +1,29 @@
 const specutils = require('./SpecUtilsJS.node');
+const fs = require('fs');
 
 /* This script demonstrates parsing a spectrum file, printing out information about
  the file, then looping over all records in the file and printing out information
  about them.
+
+ Usage:
+   node example.js <input_spectrum_file> [output.n42]
+
+ If an output path is given and the file does not already exist, writes an N42-2012 file.
  */
 
-const inputfile = "example.n42";
-const outputfile = "./temp.pcf";
-const outputformat = "PCF";  //Other possible formats: "TXT", "CSV", "CNF", "TKA", "PCF", "N42-2006", N42-2012", "CHN", "SPC-int", "SPC" (or equiv "SPC-float"), "SPC-ascii", "GR130v0", "GR135v2", "SPE" (or equiv "IAEA"), "HTML".
+const args = process.argv.slice(2);
+if (args.length < 1) {
+  console.error("Usage: node example.js <input_spectrum_file> [output.n42]");
+  process.exit(1);
+}
+
+const inputfile = args[0];
+const outputPath = args.length >= 2 ? args[1] : null;
+
+if (!fs.existsSync(inputfile)) {
+  console.error("Error: File not found: " + inputfile);
+  process.exit(1);
+}
 
 let spec;
 try
@@ -17,7 +33,7 @@ try
 {
   //If the file couldnt be parsed as a spectrum file will always throw exception.
   console.error( "Couldnt open file '" + inputfile + "' as a spectrum file." );
-  return;
+  process.exit(1);
 }
 
 console.log( "Opened '" + spec.filename() + "' as a spectrum file." );
@@ -44,12 +60,12 @@ else
 console.log( "Num Gamma Channels = " + spec.numGammaChannels() );
 
 /* The instrument type as infered from the spectrum file format and meta-information.
- 
+
    This is the first function you should use to determine detector type, as it is
    generally the most reliable, at least for the detectors the SpecUtils library
    knows about (that is to say the models wcjohns has bothered to explicitly
    identify so far)
- 
+
  Currently this function returns one of a fixed number of strings, but in the
  future would like to make it an enum. Current possible strings:
  [ "Unknown", "GR135", "IdentiFINDER", "IdentiFINDER-NG", "IdentiFINDER-LaBr3",
@@ -117,47 +133,47 @@ else
 let ana = spec.riidAnalysis();
 if( ana ){
   console.log( "RIID Analysis Results Info:" );
-  
+
   /* String giving algorithm name, or null if not provided in file. */
   let algoName = ana.algorithmName();
   if( algoName )
     console.log( "\tAlgorthm Name: " + algoName );
-  
+
   /* Creator of analysis algorithm. Null if not provided in the file. */
   let creator = ana.algorithmCreator();
   if( creator )
     console.log( "\tAlgorithm Creator: " + creator );
-  
+
   /* Algorithm description (as String) if provided in file, null otherwise. */
   let algoDescrip = ana.algorithmDescription();
   if( algoDescrip )
     console.log( "\tAlgorthm Description: " + algoDescrip );
-  
+
   /** Result description (as String) if provided in file, null otherwise. */
   let resultDescrip = ana.algorithmResultDescription();
   if( resultDescrip )
     console.log( "\tResult Description: " + resultDescrip );
-  
+
   /* Array of Strings representing remarks about RIID analysis given in spectrum
    file, or null if none are provided.
    */
   let remarks = ana.remarks();
   if( remarks )
     console.log( "\tRemarks: " + remarks );
-  
-  
+
+
   /* Returns array of RiidAnaResult objects contained in this analysis. */
   let nuclides = ana.results();
   for( let i = 0; i < nuclides.length; ++i)
   {
     /* Get the i'th RiidAnaResult */
     let result = nuclides[i];
-    
+
     /* Get nuclide (as String); may be null if not provided in the file (ex. if
      dose rate is provided instead)
     */
     let nuc = result.nuclide();
-    
+
     /* Get String giving type of nuclide, usually somethign like "Industrial",
      "Medical", etc.  Will be null when not provided in the spectrum file.
      */
@@ -168,18 +184,18 @@ if( ana ){
      provided in file
      */
     let id_conf = result.idConfidence();
-    
+
     /* String giving remark, or null if one was not provided in spectrum file. */
     let remark = result.remark();
-    
+
     /* Returns Number giving dose rate in micro-sievert, or null if not avaialble. */
     let doseRate = result.doseRate();
-    
+
     /* Get the name (as a String) of the detector this result corresponds to.
      If null or blank then you should assum it is for all detectors in the file.
      */
     let detName = result.detector();
-    
+
     console.log( "\t\tResult " + i + ":"
                  + " nuc=" + (nuc ? nuc : "NotSpecified")
                  + ", nuc_type=" + (nuc_type ? nuc_type : "NotSpecified")
@@ -189,7 +205,7 @@ if( ana ){
                  + (detName ? ", Detector="+detName : "")
                  );
   }//for( let i = 0; i < nuclides.length; ++i)
-  
+
 }else{
   console.log( "No RIID analysis results given in file." );
 }
@@ -219,7 +235,7 @@ for( let i = 0; i < records.length; ++i)
      If a gamma and neutron detector are unambigously grouped together, the record may contain both gamma spectrum and neutron counts.
    */
   let record = records[i];
-  
+
   console.log( "\tRecord " + i + " (SampleNumber " + record.sampleNumber() + " DetectorName '" + record.detectorName() + "'):" );
   /* sourceType() will be one of the following strings: ["IntrinsicActivity",
        "Calibration", "Background", "Foreground", "UnknownSourceType"]
@@ -229,7 +245,7 @@ for( let i = 0; i < records.length; ++i)
        (Defined by static members of the OccupancyStatus class)
    */
   console.log( "\t\tSource Type=" + record.sourceType() + ", OccStatus=" + record.occupied() );
-  
+
   /* The sample number together with either the detector name or number is a unique combination
    that identifies this record within the spectrum file.
    All records with the same sample number represent data from the same time period.
@@ -237,18 +253,18 @@ for( let i = 0; i < records.length; ++i)
    */
   console.log( "\t\tDetName=" + record.detectorName() + ", DetNum=" + record.detectorNumber() + ", SampleNum=" + record.sampleNumber() );
   console.log( "\t\tLT=" + record.liveTime() + " s, RT=" + record.realTime() + ", StartTime=" + (new Date(record.startTime())) );
-  
+
   console.log( "\t\tHasNeutron=" + record.containedNeutron() + ", SumNeutrons=" + record.neutronCountsSum() );
   if( record.hasGpsInfo()  )
     console.log( "\t\tLatitude=" + record.latitude() + ", Longitude=" + record.longitude() + ", fix at " + (new Date(record.positionTime())) );
-  
+
   /* If you care about the underlying energy calibration, you can access the
    info given in the file using:
    */
   console.log( "\t\tEnergy calibration of type " + record.energyCalibrationModel()
                + " with coefficients: " + record.energyCalibrationCoeffs()
                + " and deviation pairs: " + record.deviationPairs() );
-  
+
   /* If you only care about the actual energies of the gamma channels, you can
      instead get an array of Numbers giving the lower energies for each channel.
     Will return null if record does not have gamma data (e.g., only neutron)
@@ -293,7 +309,7 @@ if( spec.isSearchMode() ){
    */
   let backgroundSampleNums = spec.sampleNumbers('Background');
   let foregroundSampleNums = spec.sampleNumbers(['Foreground','UnknownSourceType']);
-  
+
   try{
     let sumFore = spec.sumRecords(null,foregroundSampleNums);
     console.log( 'Would plot search-mode data as all foreground spectra plotted together');
@@ -301,7 +317,7 @@ if( spec.isSearchMode() ){
   }catch(e){
     console.log( 'Would not plot search-mode datas foreground - this probably shouldnt happen' );
   }
-  
+
   try{
     let sumBack = spec.sumRecords(null,backgroundSampleNums);
     console.log( 'Would plot search-mode data background summed together');
@@ -309,7 +325,7 @@ if( spec.isSearchMode() ){
   }catch(e){
     console.log( 'Would not plot search-mode datas background - maybe file didnt specify this.' );
   }
-  
+
 } else {
   //If we are here, we may have:
   //  - File contained a single spectrum.
@@ -320,18 +336,24 @@ if( spec.isSearchMode() ){
   let backgroundSampleNums = spec.sampleNumbers('Background');
   console.log( 'Would give user option to scroll through ' + foregroundSampleNums.length
                + ' foreground spectra, and would sum ' + backgroundSampleNums.length + ' spectra for the background' );
-  
+
 }
 
 
+// Write N42-2012 if an output path was provided
+if( outputPath ){
+  if( fs.existsSync(outputPath) ){
+    console.error( "\nOutput file already exists, not overwriting: " + outputPath );
+    process.exit(1);
+  }
 
-//Finally write the file to a different format.
-try
-{
-  /* You can add argumenst similar to records() to filter what records gets saved to file. */
-  spec.writeToFile( outputfile, outputformat );
-  console.log( "Wrote input file to '" + outputfile + "', format " + outputformat );
-}catch( err )
-{
-  console.error( "" + err );
+  try
+  {
+    spec.writeToFile( outputPath, "N42-2012" );
+    console.log( "\nWrote N42-2012: " + outputPath );
+  }catch( err )
+  {
+    console.error( "\nError writing N42 file: " + err );
+    process.exit(1);
+  }
 }
