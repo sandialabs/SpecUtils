@@ -1,0 +1,132 @@
+name: Node.js Bindings
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-test:
+    name: Node.js on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            flt-parse-method: FromChars
+            artifact-name: specutils-node-linux-x86_64
+          - os: macos-latest
+            flt-parse-method: FastFloat
+            artifact-name: specutils-node-macos-arm64
+          - os: windows-latest
+            flt-parse-method: FromChars
+            artifact-name: specutils-node-windows-x86_64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v2.0.2
+      with:
+        cmake-version: '3.25'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install zlib (Windows)
+      if: runner.os == 'Windows'
+      run: vcpkg install zlib:x64-windows-static
+
+    - name: Install cmake-js
+      run: npm install -g cmake-js
+
+    - name: Install node-addon-api
+      working-directory: bindings/node
+      run: npm install --save-dev node-addon-api
+
+    - name: Build (Linux)
+      if: runner.os == 'Linux'
+      working-directory: bindings/node
+      run: >
+        cmake-js build --out=build_dir --target install
+        --CDSpecUtils_FLT_PARSE_METHOD="${{ matrix.flt-parse-method }}"
+        --CDCMAKE_BUILD_TYPE="Release"
+        --CDSpecUtils_FETCH_FAST_FLOAT=ON
+        --CDSpecUtils_ENABLE_URI_SPECTRA=OFF
+        --CDSpecUtils_ENABLE_D3_CHART=ON
+        --CDSpecUtils_D3_SUPPORT_FILE_STATIC=ON
+
+    - name: Build (macOS)
+      if: runner.os == 'macOS'
+      working-directory: bindings/node
+      run: >
+        cmake-js build --out=build_dir --target install
+        --CDSpecUtils_FLT_PARSE_METHOD="${{ matrix.flt-parse-method }}"
+        --CDCMAKE_BUILD_TYPE="Release"
+        --CDSpecUtils_FETCH_FAST_FLOAT=ON
+        --CDSpecUtils_ENABLE_URI_SPECTRA=ON
+        --CDSpecUtils_ENABLE_D3_CHART=ON
+        --CDSpecUtils_D3_SUPPORT_FILE_STATIC=ON
+
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      working-directory: bindings/node
+      run: >
+        cmake-js build --out=build_dir --target install
+        --CDSpecUtils_FLT_PARSE_METHOD="${{ matrix.flt-parse-method }}"
+        --CDCMAKE_BUILD_TYPE="Release"
+        --CDSpecUtils_FETCH_FAST_FLOAT=ON
+        --CDSpecUtils_ENABLE_URI_SPECTRA=ON
+        --CDSpecUtils_ENABLE_D3_CHART=ON
+        --CDSpecUtils_D3_SUPPORT_FILE_STATIC=ON
+        --CDZLIB_USE_STATIC_LIBS=ON
+        --CDVCPKG_TARGET_TRIPLET=x64-windows-static
+        --CDCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+    - name: Test example (Linux/macOS)
+      if: runner.os != 'Windows'
+      working-directory: bindings/node/build_dir/node_release
+      run: |
+        cp ../../example.n42 .
+        node example.js
+
+    - name: Test example (Windows)
+      if: runner.os == 'Windows'
+      working-directory: bindings/node/build_dir/node_release
+      run: |
+        copy ..\..\example.n42 .
+        node example.js
+
+    - name: Collect artifacts (Linux/macOS)
+      if: runner.os != 'Windows'
+      working-directory: bindings/node
+      run: |
+        mkdir -p artifacts
+        cp build_dir/node_release/SpecUtilsJS.node artifacts/
+        cp build_dir/node_release/example.js artifacts/
+        cp README.md artifacts/
+        cp ../../LICENSE.txt artifacts/
+
+    - name: Collect artifacts (Windows)
+      if: runner.os == 'Windows'
+      working-directory: bindings/node
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        cp build_dir/node_release/SpecUtilsJS.node artifacts/ 2>/dev/null || cp build_dir/node_release/Release/SpecUtilsJS.node artifacts/
+        cp build_dir/node_release/example.js artifacts/
+        cp README.md artifacts/
+        cp ../../LICENSE.txt artifacts/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact-name }}
+        path: bindings/node/artifacts/

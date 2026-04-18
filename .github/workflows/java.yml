@@ -90,9 +90,9 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install SWIG and zlib (macOS)
+    - name: Install SWIG (macOS)
       if: runner.os == 'macOS'
-      run: brew install swig zlib
+      run: brew install swig
 
     - name: Install SWIG (Windows)
       if: runner.os == 'Windows'
@@ -104,7 +104,7 @@ jobs:
 
     - name: Configure CMake (macOS)
       if: runner.os == 'macOS'
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$(brew --prefix zlib)
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release
 
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
