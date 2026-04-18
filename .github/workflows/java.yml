@@ -20,7 +20,7 @@ jobs:
 
     - name: Install build tools
       run: |
-        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel zlib-devel
+        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel zlib-devel zlib-static
         echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
 
     - name: Configure CMake
@@ -90,9 +90,9 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install SWIG (macOS)
+    - name: Install SWIG and zlib (macOS)
       if: runner.os == 'macOS'
-      run: brew install swig
+      run: brew install swig zlib
 
     - name: Install SWIG (Windows)
       if: runner.os == 'Windows'
@@ -104,7 +104,7 @@ jobs:
 
     - name: Configure CMake (macOS)
       if: runner.os == 'macOS'
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$(brew --prefix zlib)
 
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
