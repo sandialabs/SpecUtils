@@ -19,25 +19,29 @@ jobs:
             flt-parse-method: FromChars
             dotnet-version: '10.0.x'
             dotnet-label: dotnet10
-            target-framework: net10.0
+            build-framework-arg: ''
+            run-framework-arg: ''
             platform-label: linux-x86_64
           - os: macos-latest
             flt-parse-method: FastFloat
             dotnet-version: '10.0.x'
             dotnet-label: dotnet10
-            target-framework: net10.0
+            build-framework-arg: ''
+            run-framework-arg: ''
             platform-label: macos-arm64
           - os: windows-latest
             flt-parse-method: FromChars
             dotnet-version: '10.0.x'
             dotnet-label: dotnet10
-            target-framework: net10.0
+            build-framework-arg: ''
+            run-framework-arg: ''
             platform-label: windows-x86_64
           - os: windows-latest
             flt-parse-method: FromChars
             dotnet-version: '7.0.x'
             dotnet-label: dotnet7
-            target-framework: net7.0
+            build-framework-arg: '-p:TargetFramework=net7.0'
+            run-framework-arg: '-f net7.0'
             platform-label: windows-x86_64
 
     steps:
@@ -123,27 +127,27 @@ jobs:
       run: echo "SPECUTILS_NATIVE_LIB_DIR=${{ github.workspace }}\build\Release" >> $env:GITHUB_ENV
 
     - name: Build C# projects
-      run: dotnet build bindings/csharp/SpecUtils.sln -c Release -p:TargetFramework=${{ matrix.target-framework }}
+      run: dotnet build bindings/csharp/SpecUtils.sln -c Release ${{ matrix.build-framework-arg }}
 
     - name: Run C# tests
-      run: dotnet test bindings/csharp/SpecUtils.sln -c Release -p:TargetFramework=${{ matrix.target-framework }} --logger "console;verbosity=detailed"
+      run: dotnet test bindings/csharp/SpecUtils.sln -c Release ${{ matrix.build-framework-arg }} --logger "console;verbosity=detailed"
 
     - name: Run example (Linux/macOS)
       if: runner.os != 'Windows'
       run: >
         dotnet run --project bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
-        -c Release -f ${{ matrix.target-framework }} -- bindings/python/examples/passthrough.n42
+        -c Release ${{ matrix.run-framework-arg }} -- bindings/python/examples/passthrough.n42
 
     - name: Run example (Windows)
       if: runner.os == 'Windows'
       run: >
         dotnet run --project bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
-        -c Release -f ${{ matrix.target-framework }} -- bindings\python\examples\passthrough.n42
+        -c Release ${{ matrix.run-framework-arg }} -- bindings\python\examples\passthrough.n42
 
     - name: Publish example app
       run: >
         dotnet publish bindings/csharp/SpecUtils.Example/SpecUtils.Example.csproj
-        -c Release -p:TargetFramework=${{ matrix.target-framework }} -o publish/${{ matrix.os }}-${{ matrix.dotnet-label }}
+        -c Release ${{ matrix.build-framework-arg }} -o publish/${{ matrix.os }}-${{ matrix.dotnet-label }}
 
     - name: Collect artifacts (Linux/macOS)
       if: runner.os != 'Windows'

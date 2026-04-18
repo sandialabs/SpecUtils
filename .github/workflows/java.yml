@@ -81,12 +81,18 @@ jobs:
         include:
           - os: macos-latest
             lib-name: libSpecUtilsJni.jnilib
-            artifact-name: specutils-java_java8-macos-arm64
+            artifact-name: specutils-java_java17-macos-arm64
             platform-label: macos-arm64
+            java-version: '17'
+            java-label: java17
+            java-extra-flags: '--enable-native-access=ALL-UNNAMED'
           - os: windows-latest
             lib-name: SpecUtilsJni.dll
             artifact-name: specutils-java_java8-windows-x86_64
             platform-label: windows-x86_64
+            java-version: '8'
+            java-label: java8
+            java-extra-flags: ''
 
     steps:
     - name: Checkout code
@@ -101,7 +107,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '8'
+        java-version: '${{ matrix.java-version }}'
 
     - name: Install SWIG (macOS)
       if: runner.os == 'macOS'
@@ -132,7 +138,7 @@ jobs:
       run: |
         cp ../bindings/swig/java_test/TestSpecUtils.java .
         javac -classpath .:SpecUtils.jar TestSpecUtils.java
-        java -Djava.library.path=. -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
+        java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
 
     - name: Run Java test (Windows)
       if: runner.os == 'Windows'
@@ -149,7 +155,7 @@ jobs:
       run: |
         cp ../bindings/swig/java_test/SpecUtilsCli.java .
         javac -classpath .:SpecUtils.jar SpecUtilsCli.java
-        java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
+        java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
 
     - name: Build and test CLI example (Windows)
       if: runner.os == 'Windows'
@@ -199,7 +205,7 @@ jobs:
         CI/CD development build
         Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
         Commit: ${{ github.sha }}
-        Java: 8 (Temurin)
+        Java: ${{ matrix.java-version }} (Temurin)
         Platform: ${{ matrix.platform-label }}
         EOF
 
@@ -217,7 +223,7 @@ jobs:
       artifacts: |
         [
           {"artifact-name": "specutils-java_java8-linux-x86_64", "release-asset-name": "specutils-java_java8-linux-x86_64.zip"},
-          {"artifact-name": "specutils-java_java8-macos-arm64", "release-asset-name": "specutils-java_java8-macos-arm64.zip"},
+          {"artifact-name": "specutils-java_java17-macos-arm64", "release-asset-name": "specutils-java_java17-macos-arm64.zip"},
           {"artifact-name": "specutils-java_java8-windows-x86_64", "release-asset-name": "specutils-java_java8-windows-x86_64.zip"}
         ]
     permissions:
