@@ -118,3 +118,17 @@ jobs:
       with:
         name: ${{ matrix.artifact-name }}
         path: artifacts/
+
+  update-bleeding-edge:
+    needs: [build]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    uses: ./.github/workflows/update-bleeding-edge.yml
+    with:
+      artifacts: |
+        [
+          {"artifact-name": "specutils-c-linux-x86_64", "release-asset-name": "specutils-c-linux-x86_64.zip"},
+          {"artifact-name": "specutils-c-macos-arm64", "release-asset-name": "specutils-c-macos-arm64.zip"},
+          {"artifact-name": "specutils-c-windows-x86_64", "release-asset-name": "specutils-c-windows-x86_64.zip"}
+        ]
+    permissions:
+      contents: write

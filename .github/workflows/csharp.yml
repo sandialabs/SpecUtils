@@ -146,3 +146,17 @@ jobs:
       with:
         name: csharp-bindings-${{ matrix.os }}
         path: artifacts/
+
+  update-bleeding-edge:
+    needs: [build-and-test]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    uses: ./.github/workflows/update-bleeding-edge.yml
+    with:
+      artifacts: |
+        [
+          {"artifact-name": "csharp-bindings-ubuntu-latest", "release-asset-name": "specutils-csharp-linux-x86_64.zip"},
+          {"artifact-name": "csharp-bindings-macos-latest", "release-asset-name": "specutils-csharp-macos-arm64.zip"},
+          {"artifact-name": "csharp-bindings-windows-latest", "release-asset-name": "specutils-csharp-windows-x86_64.zip"}
+        ]
+    permissions:
+      contents: write

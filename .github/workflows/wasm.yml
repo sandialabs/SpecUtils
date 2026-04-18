@@ -81,3 +81,17 @@ jobs:
         with:
           name: specutils-wasm-lib
           path: build_wasm/lib/
+
+  update-bleeding-edge:
+    needs: [emscripten-build]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    uses: ./.github/workflows/update-bleeding-edge.yml
+    with:
+      artifacts: |
+        [
+          {"artifact-name": "SpecUtilsWebViewer", "release-asset-name": "specutils-web-viewer.zip"},
+          {"artifact-name": "specutils-cli", "release-asset-name": "specutils-cli-wasm.zip"},
+          {"artifact-name": "specutils-wasm-lib", "release-asset-name": "specutils-wasm-lib.zip"}
+        ]
+    permissions:
+      contents: write

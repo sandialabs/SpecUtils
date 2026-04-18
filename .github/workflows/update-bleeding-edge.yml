@@ -1,0 +1,81 @@
+name: Update Bleeding Edge Release
+
+on:
+  workflow_call:
+    inputs:
+      artifacts:
+        description: 'JSON array of {artifact-name, release-asset-name} objects'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-release:
+    name: Update Bleeding Edge
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+
+      - name: Create release assets
+        run: |
+          mkdir -p release-assets
+          echo '${{ inputs.artifacts }}' | jq -c '.[]' | while read item; do
+            artifact_name=$(echo "$item" | jq -r '.["artifact-name"]')
+            asset_name=$(echo "$item" | jq -r '.["release-asset-name"]')
+
+            if [ -d "all-artifacts/$artifact_name" ]; then
+              cd "all-artifacts/$artifact_name"
+              zip -r "../../release-assets/$asset_name" .
+              cd ../..
+            else
+              echo "Warning: artifact '$artifact_name' not found, skipping"
+            fi
+          done
+          echo "Release assets:"
+          ls -la release-assets/
+
+      - name: Move bleeding-edge tag
+        run: |
+          git tag -f bleeding-edge HEAD
+          git push -f origin bleeding-edge
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Create release if it doesn't exist (with retry for race conditions)
+          for i in 1 2 3; do
+            if gh release view bleeding-edge &>/dev/null; then
+              break
+            fi
+            gh release create bleeding-edge \
+              --title "Bleeding Edge (Development Build)" \
+              --prerelease \
+              --target master \
+              --notes "Automated development builds from the latest master branch." 2>/dev/null && break
+            sleep 5
+          done
+
+          # Upload assets, overwriting any existing ones with the same name
+          for asset in release-assets/*; do
+            [ -f "$asset" ] && gh release upload bleeding-edge "$asset" --clobber
+          done
+
+          # Update the release notes with the latest timestamp and commit
+          gh release edit bleeding-edge \
+            --notes "Automated development builds from the latest \`master\` branch.
+
+          **Warning:** These are development builds intended for testing. For production use, please use a tagged release.
+
+          Each binding is built independently; artifacts may briefly be from different commits during updates.
+
+          Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') from commit $(git rev-parse --short HEAD)"

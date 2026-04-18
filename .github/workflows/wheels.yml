@@ -113,3 +113,18 @@ jobs:
     - uses: pypa/gh-action-pypi-publish@release/v1
       with:
         packages-dir: dist
+
+  update-bleeding-edge:
+    needs: [build_wheels, build_sdist]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    uses: ./.github/workflows/update-bleeding-edge.yml
+    with:
+      artifacts: |
+        [
+          {"artifact-name": "dist-sdist", "release-asset-name": "specutils-python-sdist.zip"},
+          {"artifact-name": "dist-ubuntu-latest", "release-asset-name": "specutils-python-wheels-linux-x86_64.zip"},
+          {"artifact-name": "dist-macos-14", "release-asset-name": "specutils-python-wheels-macos-universal2.zip"},
+          {"artifact-name": "dist-windows-latest", "release-asset-name": "specutils-python-wheels-windows-x86_64.zip"}
+        ]
+    permissions:
+      contents: write

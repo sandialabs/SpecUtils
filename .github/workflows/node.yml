@@ -130,3 +130,17 @@ jobs:
       with:
         name: ${{ matrix.artifact-name }}
         path: bindings/node/artifacts/
+
+  update-bleeding-edge:
+    needs: [build-and-test]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    uses: ./.github/workflows/update-bleeding-edge.yml
+    with:
+      artifacts: |
+        [
+          {"artifact-name": "specutils-node-linux-x86_64", "release-asset-name": "specutils-node-linux-x86_64.zip"},
+          {"artifact-name": "specutils-node-macos-arm64", "release-asset-name": "specutils-node-macos-arm64.zip"},
+          {"artifact-name": "specutils-node-windows-x86_64", "release-asset-name": "specutils-node-windows-x86_64.zip"}
+        ]
+    permissions:
+      contents: write
