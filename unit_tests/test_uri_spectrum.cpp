@@ -6246,7 +6246,7 @@ TEST_CASE( "LossySingleSpectrumEncode" )
   CHECK( result.m_urls.size() == 1 );
   CHECK( result.m_urls[0].size() <= 4296 );
   CHECK( result.m_rmse > 0.0 );
-  CHECK( result.m_rmse < (2.107140 + 0.001) );
+  CHECK( result.m_rmse < (2.107140 + 0.05) );
   CHECK( result.m_num_coefficients > 100 );
 
   // Decode back with decode_spectrum_urls

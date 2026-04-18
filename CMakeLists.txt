@@ -222,8 +222,20 @@ endif( SpecUtils_ENABLE_D3_CHART )
 if( SpecUtils_ENABLE_URI_SPECTRA )
   list( APPEND headers SpecUtils/UriSpectrum.h SpecUtils/UriLossySpectrum.h )
   list( APPEND sources src/UriSpectrum.cpp src/UriLossySpectrum.cpp src/SpecFile_uri.cpp )
-  #set( ZLIB_USE_STATIC_LIBS "ON" )
+  if( ZLIB_USE_STATIC_LIBS )
+    set( _orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES} )
+    if( WIN32 )
+      set( CMAKE_FIND_LIBRARY_SUFFIXES .lib .a )
+    else()
+      set( CMAKE_FIND_LIBRARY_SUFFIXES .a )
+    endif()
+  endif()
+
   find_package( ZLIB REQUIRED )
+
+  if( ZLIB_USE_STATIC_LIBS )
+    set( CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes} )
+  endif()
 endif( SpecUtils_ENABLE_URI_SPECTRA )
 
 

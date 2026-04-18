@@ -20,11 +20,11 @@ jobs:
 
     - name: Install build tools
       run: |
-        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel
+        dnf install -y cmake swig java-17-openjdk java-17-openjdk-devel zlib-devel
         echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk" >> $GITHUB_ENV
 
     - name: Configure CMake
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build --config Release -j$(nproc)
@@ -98,8 +98,17 @@ jobs:
       if: runner.os == 'Windows'
       run: choco install swig -y
 
-    - name: Configure CMake
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DCMAKE_BUILD_TYPE=Release
+    - name: Install zlib (Windows)
+      if: runner.os == 'Windows'
+      run: vcpkg install zlib:x64-windows-static
+
+    - name: Configure CMake (macOS)
+      if: runner.os == 'macOS'
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 
     - name: Build
       run: cmake --build build --config Release
