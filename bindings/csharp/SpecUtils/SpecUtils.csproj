@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net7.0;net10.0</TargetFrameworks>
     <RootNamespace>SpecUtils</RootNamespace>
     <AssemblyName>SpecUtils</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

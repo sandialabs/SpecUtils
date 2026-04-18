@@ -59,11 +59,11 @@ internal static class NativeLibraryResolver
 
         string[] candidateNames;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            candidateNames = ["libSpecUtils.dll", "SpecUtils.dll"];
+            candidateNames = new[] { "libSpecUtils.dll", "SpecUtils.dll" };
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            candidateNames = ["libSpecUtils.dylib"];
+            candidateNames = new[] { "libSpecUtils.dylib" };
         else
-            candidateNames = ["libSpecUtils.so"];
+            candidateNames = new[] { "libSpecUtils.so" };
 
         foreach (string name in candidateNames)
         {
