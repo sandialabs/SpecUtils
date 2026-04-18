@@ -415,7 +415,7 @@ bool SpecFile::load_from_iaea( std::istream& istr )
     
     
     // Create a lambda to skip all lines in the current section
-    auto burn_through_section = [&istr, &line, &skip_getline](){
+    auto burn_through_section = [&istr, &line, &skip_getline, maxline](){
       while( SpecUtils::safe_get_line( istr, line, maxline ) )
       {
         trim(line);
