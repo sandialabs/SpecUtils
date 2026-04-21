@@ -425,7 +425,7 @@ bool SpecFile::write_integer_chn( ostream &ostr, set<int> sample_nums,
   
   if( is_special(starttime) )
   {
-    strcpy( buffer, "00   0000000" );
+    memcpy( buffer, "00   0000000", 13 );
   }else
   {
     const char *monthstr = "   ";

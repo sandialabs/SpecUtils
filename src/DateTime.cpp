@@ -199,7 +199,7 @@ namespace SpecUtils
     const auto microsecs = date::round<chrono::microseconds>( time_of_day.subseconds() );
     const double frac = 1.0E-6*microsecs.count();
     
-    char buffer[256];
+    char buffer[64];
     if( extended ) //"2014-04-14T14:12:01.621543"
       snprintf( buffer, sizeof(buffer),
                "%.4i-%.2i-%.2iT%.2i:%.2i:%09.6f",

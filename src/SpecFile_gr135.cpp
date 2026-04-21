@@ -975,11 +975,11 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       
       //Lets write to a buffer before writing to the stream to make things a
       //  little easier in terms of keeping track of position.
-      uint8_t buffer[76+2*noutchannel] = { '\0' };
-      memset( buffer, 0, sizeof(buffer) );
+      const size_t buffer_size = 76 + 2 * static_cast<size_t>(noutchannel);
+      std::vector<uint8_t> buffer( buffer_size, 0 );
       
-      memcpy( buffer + 0, "ZZZZ", 4 );
-      memcpy( buffer + 4, "1350", 4 );
+      memcpy( buffer.data() + 0, "ZZZZ", 4 );
+      memcpy( buffer.data() + 4, "1350", 4 );
       
       const bool is_czt = SpecUtils::icontains(meas.detector_name_, "CZT");
       buffer[8] = (is_czt ? 'C' : 'A');
@@ -988,7 +988,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       //10-13    unsigned long    sequence number  number of spectra ever measured
       //  *this is not true to the input file*
       const uint32_t samplnum = meas.sample_number_;
-      memcpy( buffer + 9, &samplnum, sizeof(samplnum) );
+      memcpy( buffer.data() + 9, &samplnum, sizeof(samplnum) );
       
       if( !is_special(meas.start_time_) )
       {
@@ -1018,13 +1018,13 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
         }//if( (year > 2000) && (year < 2254) )
       }//if( !is_special(meas.start_time_) )
       
-      memcpy( buffer + 19, &noutchannel, sizeof(noutchannel) );
+      memcpy( buffer.data() + 19, &noutchannel, sizeof(noutchannel) );
       
       double rt_f = std::round( 1000 * std::max(meas.real_time_, 0.0f) );
       rt_f = std::min( rt_f, static_cast<double>(std::numeric_limits<uint32_t>::max()) );
       
       const uint32_t real_time_thousanths = static_cast<uint32_t>( rt_f );
-      memcpy( buffer + 21, &real_time_thousanths, 4 );
+      memcpy( buffer.data() + 21, &real_time_thousanths, 4 );
       
       //26,27    unsigned int    gain      gain ( 0 - 1023)
       //28,29    unsigned int    Peak      stab. peak position in channels * 10
@@ -1036,17 +1036,17 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       neutcount = std::min( neutcount, static_cast<double>(numeric_limits<uint16_t>::max()) );
       
       const uint16_t nneutron = static_cast<uint16_t>( neutcount );
-      memcpy( buffer + 36, &nneutron, 2 );
+      memcpy( buffer.data() + 36, &nneutron, 2 );
       
       //39,40    unsigned int    pileup      pileup pulses
       
       uint16_t serialint;
       if( !(stringstream(instrument_id_) >> serialint) )
         serialint = 0;
-      memcpy( buffer + 40, &serialint, 2 );
+      memcpy( buffer.data() + 40, &serialint, 2 );
       
       uint16_t softwareversion = 201;
-      memcpy( buffer + 42, &softwareversion, 2 );
+      memcpy( buffer.data() + 42, &softwareversion, 2 );
       
       vector<float> calcoeffs;
       assert( meas.energy_calibration_ );
@@ -1066,7 +1066,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       }//switch( meas.energy_calibration_->type() )
       
       if( calcoeffs.size() )
-        memcpy( buffer + 44, &(calcoeffs[0]), 4*std::min(calcoeffs.size(),size_t(3)) );
+        memcpy( buffer.data() + 44, &(calcoeffs[0]), 4*std::min(calcoeffs.size(),size_t(3)) );
       
       //57    char      temp[0]      display temperature
       //58    char      temp[1]      battery temperature
@@ -1083,7 +1083,7 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
         live_time_thousanths = static_cast<uint32_t>( lt );
       }
       
-      memcpy( buffer + 75, &live_time_thousanths, sizeof(uint32_t) ); // live time in mSec (channels 1,2)
+      memcpy( buffer.data() + 75, &live_time_thousanths, sizeof(uint32_t) ); // live time in mSec (channels 1,2)
       
       const vector<float> &counts = *meas.gamma_counts_;
       vector<uint16_t> channelcounts( counts.size(), 0 );
@@ -1097,14 +1097,14 @@ bool SpecFile::write_binary_exploranium_gr135v2( std::ostream &output ) const
       if( channelcounts.size() > 2 )
       {
         if( counts.size() <= noutchannel )
-          memcpy( buffer + 79, &channelcounts[2], 2*counts.size() - 4 );
+          memcpy( buffer.data() + 79, &channelcounts[2], 2*counts.size() - 4 );
         else
-          memcpy( buffer + 79, &channelcounts[2], 2*(noutchannel-2) );
+          memcpy( buffer.data() + 79, &channelcounts[2], 2*(noutchannel-2) );
       }//if( channelcounts.size() > 2 )
       
       //2*nch+76  unsigned char    CHSUM    check sum
       
-      output.write( (const char *)buffer, 76+2*noutchannel );
+      output.write( reinterpret_cast<const char *>(buffer.data()), 76+2*noutchannel );
       
       ++nwrote;
     }//for( size_t measn = 0; measn < nmeas; ++measn )

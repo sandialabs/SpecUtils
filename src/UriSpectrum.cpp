@@ -146,7 +146,7 @@ namespace
       
       default:
         throw std::runtime_error( "Invalid base-45 character with decimal value "
-                               + std::to_string( (int)reinterpret_cast<const uint8_t &>(i) ) );
+                               + std::to_string( static_cast<int>(static_cast<uint8_t>(i)) ) );
     }//switch( i )
   
     assert( 0 );
@@ -266,8 +266,8 @@ std::string base45_encode_bytes( const T &input )
     {
       // We will process two bytes, storing them into three base-45 letters
       // n = c + (d * 45) + (e * 45 * 45)
-      const uint16_t val_0 = reinterpret_cast<const uint8_t &>( input[i] );
-      const uint16_t val_1 = reinterpret_cast<const uint8_t &>( input[i+1] );
+      const uint16_t val_0 = static_cast<uint8_t>( input[i] );
+      const uint16_t val_1 = static_cast<uint8_t>( input[i+1] );
       
       uint16_t n = (val_0 << 8) + val_1;
       
@@ -282,23 +282,23 @@ std::string base45_encode_bytes( const T &input )
       assert( c < sizeof(sm_base45_chars) );
       assert( d < sizeof(sm_base45_chars) );
       
-      answer[out_pos++] = reinterpret_cast<const typename T::value_type &>( sm_base45_chars[c] );
-      answer[out_pos++] = reinterpret_cast<const typename T::value_type &>( sm_base45_chars[d] );
-      answer[out_pos++] = reinterpret_cast<const typename T::value_type &>( sm_base45_chars[e] );
+      answer[out_pos++] = static_cast<typename T::value_type>( sm_base45_chars[c] );
+      answer[out_pos++] = static_cast<typename T::value_type>( sm_base45_chars[d] );
+      answer[out_pos++] = static_cast<typename T::value_type>( sm_base45_chars[e] );
       assert( out_pos <= dest_bytes );
     }else
     {
       // We have one last dangling byte
       // a = c + (45 * d)
-      const uint8_t a = reinterpret_cast<const uint8_t &>( input[i] );
+      const uint8_t a = static_cast<uint8_t>( input[i] );
       const uint8_t d = a / 45;
       const uint8_t c = a % 45;
       
       assert( c < sizeof(sm_base45_chars) );
       assert( d < sizeof(sm_base45_chars) );
       
-      answer[out_pos++] = reinterpret_cast<const typename T::value_type &>( sm_base45_chars[c] );
-      answer[out_pos++] = reinterpret_cast<const typename T::value_type &>( sm_base45_chars[d] );
+      answer[out_pos++] = static_cast<typename T::value_type>( sm_base45_chars[c] );
+      answer[out_pos++] = static_cast<typename T::value_type>( sm_base45_chars[d] );
       assert( out_pos <= dest_bytes );
     }
   }//for( size_t i = 0; i < input_size; i += 2 )
@@ -828,9 +828,9 @@ size_t decode_stream_vbyte( const T * const input_begin, const size_t nbytes, ve
   if( nbytes < 2 )
     throw runtime_error( "decode_stream_vbyte: input isnt long enough to give num integers." );
   
-  size_t nints = reinterpret_cast<const uint8_t &>( input_begin[1] );
+  size_t nints = static_cast<uint8_t>( input_begin[1] );
   nints = nints << 8;
-  nints += reinterpret_cast<const uint8_t &>( input_begin[0] );
+  nints += static_cast<uint8_t>( input_begin[0] );
   
   answer.resize( nints );
   
@@ -2538,7 +2538,7 @@ uint16_t calc_CRC16_ARC( const string &input )
 
   for( const char &c : input )
   {
-    const unsigned char val = reinterpret_cast<const unsigned char &>( c );
+    const unsigned char val = static_cast<unsigned char>( c );
     crc ^= val;
     for( int i = 0; i < 8; ++i )
       crc = (crc & 0x0001) ? ((crc >> 1) ^ 0xA001) : (crc >> 1);

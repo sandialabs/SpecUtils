@@ -260,33 +260,36 @@ namespace
     //Get rid of spaces and newlines on either side of txt
     SpecUtils::trim( answer );
     
-    // Now keep html or JS content from being injected into legend titles.
-    //  Note that this is probable a incomplete list of things to replace, and is also pretty
-    //  inefficient - it also misses things like escaped quotes and stuff you may want to go through
-    const vector<pair<char,const char *>> replacements = {
-      { '&', "&amp;" },
-      { '<', "&lt;" },
-      { '>', "&gt;" },
-      //{ '\'', "\\'" },
-      //{ '\"', "\\\"" },
-      { '\"', "&#34;" },
-      { '\'', "&#39;" },
-      //{ '\n', "<br />" },
-      { '\n', " " },
-      { '\r', " " },
-      { '\t', " " },
-      { '\\', "\\\\" },
-      //{ '\n', "\\n" },
-      //{ '\r', "\\r" },
-      //{ '\t', "\\t" }
-    };//replacements
-    
-    
-    for( const auto &p : replacements )
+    // Escape for safe insertion into HTML/JSON string contexts.
+    //  We'll use a whitelist approach: only allow printable ASCII that is safe, and
+    //  HTML-entity-encode everything else that could be used for injection.
+    string escaped;
+    escaped.reserve( answer.size() );
+    for( const char c : answer )
     {
-      char pattern[2] = { p.first, '\0' };
-      SpecUtils::ireplace_all( answer, pattern, p.second );
-    }
+      switch( c )
+      {
+        case '&':  escaped += "&amp;";  break;
+        case '<':  escaped += "&lt;";   break;
+        case '>':  escaped += "&gt;";   break;
+        case '"':  escaped += "&#34;";  break;
+        case '\'': escaped += "&#39;";  break;
+        case '\\': escaped += "&#92;";  break;
+        case '/':  escaped += "&#47;";  break;  // prevent closing script tags
+        case '`':  escaped += "&#96;";  break;  // prevent template literals
+        case '\n': escaped += " ";      break;
+        case '\r': escaped += " ";      break;
+        case '\t': escaped += " ";      break;
+        default:
+          // Allow printable ASCII (space through tilde), encode control chars
+          if( c >= 0x20 && c <= 0x7E )
+            escaped += c;
+          else
+            escaped += "&#" + std::to_string(static_cast<unsigned char>(c)) + ";";
+          break;
+      }//switch( c )
+    }//for( const char c : answer )
+    answer = escaped;
     
     return answer;
   }
