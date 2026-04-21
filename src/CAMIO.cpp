@@ -2394,43 +2394,15 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             values[16] = 0x01D0;
             values[17] = 0x0000;
             values[19] = 0x0001;
-            //size_t num_chans = specData.size();
-            if (num_channels <= 0x200)
-            {
-                values[17] = 0x200;
-            }
-            if (num_channels > 0x200 && num_channels <= 0x400)
-            {
-                values[17] = 0x400;
-            }
-            else if (num_channels > 0x400 && num_channels <= 0x800)
-            {
-                values[17] = 0x800;
-            }
-            else if (num_channels > 0x800 && num_channels <= 0x1000)
-            {
-                values[17] = 0x1000;
-            }
-            else if (num_channels > 0x1000 && num_channels <= 0x2000)
-            {
-                values[17] = 0x2000;
-            }
-            else if (num_channels > 0x2000 && num_channels <= 0x4000)
-            {
-                values[17] = 0x4000;
-            }
-            else if (num_channels > 0x4000 && num_channels <= 0x8000)
-            {
-                values[17] = 0x8000;
-            }
-            else if (num_channels > 0x8000 && num_channels <= 0x10000)
-            {
-                values[17] = 0x10000;
-            }
-            else
-            {
-                values[17] = num_channels;
-            }
+
+            // Round num_channels up to the next power-of-two that the CAM format uses.
+            // Note: num_channels is uint32_t but values[17] is uint16_t.
+            uint32_t rounded = 0x200;
+            while( rounded < num_channels && rounded < 0x8000 )
+              rounded <<= 1;
+            if( rounded < num_channels )
+              rounded = num_channels;
+            values[17] = static_cast<uint16_t>( rounded & 0xFFFF );
             // The block size at file offsets 0x06-0x09 is a uint32_t in the CAM format.
             // Compute in uint32_t to avoid overflow, then split across values[1] and values[2].
             {
@@ -2619,6 +2591,185 @@ KEdgeInfo CAMIO::GetKEdgeInfo()
 
     return info;
 }
+
+
+bool CAMIO::GetGPSData( double &latitude, double &longitude,
+                        double &speed, SpecUtils::time_point_t &position_time )
+{
+  // EXPERIMENTAL: These offsets match what AddGPSData writes, but have NOT been
+  //  validated against files produced by Canberra/Mirion Genie 2000.
+  //
+  // AddGPSData writes to sampCommon at:
+  //   0x8D0: latitude  (cam_double, 8 bytes)
+  //   0x928: longitude (cam_double, 8 bytes)
+  //   0x938: speed     (cam_double, 8 bytes)
+  //   0x940: position_time (cam_datetime, 8 bytes) - optional
+
+  latitude = 0.0;
+  longitude = 0.0;
+  speed = 0.0;
+  position_time = SpecUtils::time_point_t{};
+
+  auto range = blockAddresses.equal_range( CAMBlock::SAMP );
+  if( range.first == range.second )
+    return false;
+
+  for( auto it = range.first; it != range.second; ++it )
+  {
+    const size_t pos = it->second;
+
+    if( (pos + 0x12) > readData->size() )
+      continue;
+
+    const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
+    const size_t dataStart = pos + static_cast<size_t>(headSize);
+
+    // Check we can read latitude and longitude (the minimum for valid GPS)
+    if( (dataStart + 0x8D0 + 8) > readData->size() )
+      continue;
+    if( (dataStart + 0x928 + 8) > readData->size() )
+      continue;
+
+    const double lat = convert_from_CAM_double( *readData, dataStart + 0x8D0 );
+    const double lon = convert_from_CAM_double( *readData, dataStart + 0x928 );
+
+    // Check if we actually have GPS data (both lat and lon should be non-zero)
+    if( lat == 0.0 && lon == 0.0 )
+      continue;
+
+    // Basic sanity check on coordinates
+    if( lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 )
+      continue;
+
+    latitude = lat;
+    longitude = lon;
+
+    // Read speed if available
+    if( (dataStart + 0x938 + 8) <= readData->size() )
+      speed = convert_from_CAM_double( *readData, dataStart + 0x938 );
+
+    // Read position time if available
+    if( (dataStart + 0x940 + 8) <= readData->size() )
+    {
+      try
+      {
+        position_time = convert_from_CAM_datetime( *readData, dataStart + 0x940 );
+      }catch( std::exception & )
+      {
+      }
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+
+uint32_t CAMIO::GetNumChannelsFromAcqp()
+{
+  auto range = blockAddresses.equal_range( CAMBlock::ACQP );
+  if( range.first == range.second )
+    return 0;
+
+  for( auto it = range.first; it != range.second; ++it )
+  {
+    const size_t pos = it->second;
+    const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
+    const size_t dataStart = pos + static_cast<size_t>(headSize);
+
+    // Channel count is stored as a uint32 (cam_longword) at acqpCommon offset 0x89.
+    // The Python CNFreader reads the byte at 0x8A (which is the second byte of this uint32)
+    // and multiplies by 256, which is equivalent for channel counts that are multiples of 256.
+    if( (dataStart + 0x89 + 4) > readData->size() )
+      continue;
+
+    uint32_t nchan = 0;
+    std::memcpy( &nchan, &(*readData)[dataStart + 0x89], sizeof(uint32_t) );
+
+    if( nchan > 0 && nchan <= 1000000 )
+      return nchan;
+  }
+
+  return 0;
+}
+
+
+// Helper to read a null-terminated/padded string from the data buffer.
+// Returns empty string if the region is all null/whitespace.
+static std::string read_padded_string( const std::vector<byte_type> &data,
+                                       size_t offset, size_t max_len )
+{
+  if( (offset + max_len) > data.size() )
+    return std::string();
+
+  // Find the actual string length (stop at first null)
+  size_t len = 0;
+  while( len < max_len && data[offset + len] != 0 )
+    ++len;
+
+  std::string result( reinterpret_cast<const char *>(&data[offset]), len );
+
+  // Trim trailing whitespace
+  while( !result.empty() && (result.back() == ' ' || result.back() == '\t') )
+    result.pop_back();
+
+  // Trim leading whitespace
+  size_t start = 0;
+  while( start < result.size() && (result[start] == ' ' || result[start] == '\t') )
+    ++start;
+  if( start > 0 )
+    result.erase( 0, start );
+
+  return result;
+}
+
+
+bool CAMIO::GetSampleStrings( std::string &sample_id,
+                              std::string &sample_type,
+                              std::string &sample_units,
+                              std::string &sample_geometry,
+                              std::string &user_name,
+                              std::string &sample_desc )
+{
+  sample_id.clear();
+  sample_type.clear();
+  sample_units.clear();
+  sample_geometry.clear();
+  user_name.clear();
+  sample_desc.clear();
+
+  auto range = blockAddresses.equal_range( CAMBlock::SAMP );
+  if( range.first == range.second )
+    return false;
+
+  for( auto it = range.first; it != range.second; ++it )
+  {
+    const size_t pos = it->second;
+
+    if( (pos + 0x12) > readData->size() )
+      continue;
+
+    const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
+    const size_t dataStart = pos + static_cast<size_t>(headSize);
+
+    // Offsets derived from the Python CNFreader (which documents the format
+    //  as observed in Genie 2000 files).
+    // All offsets are relative to the start of the SAMP data area (after the 0x30 header).
+    // Sample title at 0x00 is already read by GetSampleTitle().
+    sample_id       = read_padded_string( *readData, dataStart + 0x40, 16 );
+    sample_type     = read_padded_string( *readData, dataStart + 0x80, 16 );
+    sample_units    = read_padded_string( *readData, dataStart + 0x94, 16 );
+    sample_geometry = read_padded_string( *readData, dataStart + 0xA4, 16 );
+    user_name       = read_padded_string( *readData, dataStart + 0x2A6, 24 );
+    sample_desc     = read_padded_string( *readData, dataStart + 0x33E, 256 );
+
+    return true;
+  }
+
+  return false;
+}
+
 
 // assign key the line for a nuclide
 void CAMInputOutput::CAMIO::AssignKeyLines()

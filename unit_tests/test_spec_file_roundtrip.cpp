@@ -167,7 +167,7 @@ static vector<FormatInfo> get_formats()
 
   formats.push_back( {
     SaveSpectrumAsType::Cnf, "Cnf",
-    true, true, true, false, false, true, true, 0.01f,
+    true, true, true, false, true, true, true, 0.01f,
     []( SpecFile &sf, istream &is ) { return sf.load_from_cnf( is ); }
   } );
 
@@ -363,13 +363,35 @@ static void run_roundtrip_for_file( const string &filepath, const string &filena
   {
     SUBCASE( fmt.name )
     {
+      // For single-spectrum formats with multiple measurements, pre-sum into a single
+      //  spectrum since some formats (e.g., URI) can only represent a limited number of spectra.
+      const SpecFile *write_src = &original;
+      SpecFile summed;
+      set<int> write_sample_nums = sample_nums;
+      set<int> write_det_nums = det_nums;
+
+      if( fmt.is_single_spectrum && (original.num_measurements() > 1) )
+      {
+        auto sum_meas = original.sum_measurements( sample_nums, original.detector_names(), nullptr );
+        if( !sum_meas )
+        {
+          CHECK_MESSAGE( false, fmt.name << ": failed to create summed measurement" );
+          continue;
+        }
+        summed.add_measurement( sum_meas, true );
+        write_src = &summed;
+        write_sample_nums = summed.sample_numbers();
+        const vector<int> &sdn = summed.detector_numbers();
+        write_det_nums = set<int>( sdn.begin(), sdn.end() );
+      }//if( single-spectrum format with multiple measurements )
+
       // Step 1: Write to stringstream
       stringstream ss( ios::in | ios::out | ios::binary );
 
       bool write_ok = false;
       try
       {
-        original.write( ss, sample_nums, det_nums, fmt.format );
+        write_src->write( ss, write_sample_nums, write_det_nums, fmt.format );
         write_ok = true;
       }
       catch( const exception &e )
@@ -404,7 +426,7 @@ static void run_roundtrip_for_file( const string &filepath, const string &filena
         continue;
 
       // Step 3: Compare
-      compare_roundtrip( original, reloaded, fmt );
+      compare_roundtrip( *write_src, reloaded, fmt );
     }//SUBCASE( fmt.name )
   }//for( each format )
 }//run_roundtrip_for_file(...)

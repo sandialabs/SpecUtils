@@ -43,6 +43,7 @@
 #include "SpecUtils/ParseUtils.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
+#include "SpecUtils/SpecFile_location.h"
 #include "SpecUtils/CAMIO.h"
 
 using namespace std;
@@ -106,6 +107,22 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   // get the spectrum
   std::vector<uint32_t> &spec = reader.GetSpectrum(); //Will throw exception if no data
   size_t num_chnanels = spec.size();
+
+#if( PERFORM_DEVELOPER_CHECKS )
+  // Cross-check channel count: the SPEC block header stores channels as uint16 (which our
+  //  GetSpectrum uses), but the ACQP section stores the authoritative count as a uint32 at
+  //  offset 0x89.  If these disagree, it may indicate a file with >32768 channels where the
+  //  SPEC header overflowed, or a corrupt file.
+  {
+    const uint32_t acqp_nchan = reader.GetNumChannelsFromAcqp();
+    if( acqp_nchan > 0 && acqp_nchan != static_cast<uint32_t>(num_chnanels) )
+    {
+      const string msg = "CNF channel count mismatch: SPEC header says "
+        + to_string(num_chnanels) + ", ACQP says " + to_string(acqp_nchan);
+      log_developer_error( __func__, msg.c_str() );
+    }
+  }
+#endif
   
   // set the energy calibration
   try
@@ -182,6 +199,30 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     //Will get here if error reading K-edge info
   }//try/catch to get K-edge info
 
+  // Try to read additional string fields from the SAMP block.
+  try
+  {
+    string sample_id, sample_type, sample_units, sample_geometry, user_name, sample_desc;
+    if( reader.GetSampleStrings( sample_id, sample_type, sample_units,
+                                  sample_geometry, user_name, sample_desc ) )
+    {
+      if( !sample_id.empty() )
+        meas->remarks_.push_back( "Sample Type: " + sample_id );
+      if( !sample_type.empty() )
+        meas->remarks_.push_back( "Sample Preparation: " + sample_type );
+      if( !sample_units.empty() )
+        meas->remarks_.push_back( "Sample Units: " + sample_units );
+      if( !sample_geometry.empty() )
+        meas->remarks_.push_back( "Sample Geometry: " + sample_geometry );
+      if( !user_name.empty() )
+        measurement_operator_ = user_name;
+      if( !sample_desc.empty() )
+        meas->remarks_.push_back( "Sample Description: " + sample_desc );
+    }
+  }catch( std::exception & )
+  {
+  }
+
   // convert the int32 counts to floats
   auto channel_data = make_shared<vector<float>>(num_chnanels);
   for( size_t i = 0; i < num_chnanels; ++i )
@@ -224,6 +265,28 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   {
 
   }//try / catch to fill in any results if they exist
+
+  // Try to read GPS data.
+  // EXPERIMENTAL: The GPS field offsets have only been tested with files written by
+  //  SpecUtils, and NOT validated against files from Canberra/Mirion Genie 2000.
+  try
+  {
+    double latitude = 0, longitude = 0, gps_speed = 0;
+    time_point_t pos_time{};
+    if( reader.GetGPSData( latitude, longitude, gps_speed, pos_time ) )
+    {
+      meas->set_position( longitude, latitude, pos_time );
+
+      if( gps_speed > 0 && meas->location_state() )
+      {
+        auto loc = make_shared<LocationState>( *meas->location_state() );
+        loc->speed_ = static_cast<float>( gps_speed );
+        meas->location_ = loc;
+      }
+    }
+  }catch( std::exception & )
+  {
+  }
 
   measurements_.push_back( meas );
 }//void load_cnf_using_reader( CAMInputOutput::CAMIO &reader )

@@ -256,6 +256,9 @@ bool SpecFile::write_uri( std::ostream &output, const size_t num_uris,
   if( num_uris == 1 || (measurements_.size() == 1) )
   {
     // If 1, then all spectra in the `SpecFile` will be be written into a single URI
+    if( measurements_.size() > 9 )
+      return false;
+
     specs.insert( end(specs), begin(measurements_), end(measurements_) );
   }else
   {

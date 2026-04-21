@@ -295,6 +295,31 @@ public:
     std::vector<uint32_t>& GetSpectrum();
     std::string GetSampleTitle();
     DetInfo& GetDetectorInfo();
+
+    /** Returns the number of channels stored in the ACQP parameter section.
+     This is the authoritative channel count (stored as uint32 at acqpCommon offset 0x89).
+     Returns 0 if not available.
+     */
+    uint32_t GetNumChannelsFromAcqp();
+
+    /** Reads additional string fields from the SAMP block.
+     These fields are at fixed offsets in the SAMP data area.
+     Strings that are empty or all-null in the file will be returned as empty strings.
+
+     @param[out] sample_id        Sample ID (16 chars at offset 0x40)
+     @param[out] sample_type      Sample type (16 chars at offset 0x80)
+     @param[out] sample_units     Sample quantity units (16 chars at offset 0x94)
+     @param[out] sample_geometry  Geometry description (16 chars at offset 0xA4)
+     @param[out] user_name        Operator/user name (24 chars at offset 0x2A6)
+     @param[out] sample_desc      Sample description (256 chars at offset 0x33E)
+     @return true if a SAMP block was found and read
+     */
+    bool GetSampleStrings( std::string &sample_id,
+                           std::string &sample_type,
+                           std::string &sample_units,
+                           std::string &sample_geometry,
+                           std::string &user_name,
+                           std::string &sample_desc );
     
     /** Gets K-edge densitometry (HKED) information if present in the file.
      
@@ -306,6 +331,21 @@ public:
              to determine if valid K-edge info was found.
      */
     KEdgeInfo GetKEdgeInfo();
+
+    /** Reads GPS data from the SAMP block if present.
+
+     EXPERIMENTAL: The GPS offsets used here (latitude at 0x8D0, longitude at 0x928,
+     speed at 0x938, position time at 0x940) match what we write in AddGPSData, but have
+     NOT been validated against files produced by Canberra/Mirion Genie 2000.
+
+     @param[out] latitude  GPS latitude in degrees
+     @param[out] longitude GPS longitude in degrees
+     @param[out] speed     Speed value
+     @param[out] position_time  Time of the GPS fix (may be epoch/invalid if not stored)
+     @return true if GPS data was found and appears valid (non-zero lat/lon)
+     */
+    bool GetGPSData( double &latitude, double &longitude,
+                     double &speed, SpecUtils::time_point_t &position_time );
 
     // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 
