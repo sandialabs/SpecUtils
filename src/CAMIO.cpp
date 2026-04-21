@@ -1608,11 +1608,11 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     loc += static_cast<size_t>(BlockSize::PROC);
 
 
-    if (specBlock) 
+    if (specBlock)
     {
-        auto specBlock = GenerateBlock(CAMBlock::SPEC, loc);
-        blockList.push_back(specBlock);
-        loc += static_cast<size_t>(num_channels + 0x30);
+        auto specBlockData = GenerateBlock(CAMBlock::SPEC, loc);
+        blockList.push_back(specBlockData);
+        loc += specBlockData.size();
     }
     size_t startRecord = 0;
     size_t numRecords = 125;
@@ -1703,19 +1703,18 @@ void CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
         // Copy block header into the file header
         std::copy(block.begin(), block.begin() + 0x30, writebytes.begin() + headerDestStart);
 
-        // Copy the block
+        // Copy the block to its location in the file.
+        // Note: we use block.size() rather than the uint16_t block-size field at offset 0x06,
+        //  because for SPEC blocks with many channels, the actual size can exceed 65535 bytes,
+        //  overflowing the uint16_t field.
         uint32_t blockLoc = ReadUInt32(block, 0x0a);
-        uint16_t blockSize = ReadUInt16(block, 0x06);
-
-        // Validate source bounds - block must have at least blockSize bytes
-        if( block.size() < blockSize )
-          throw std::out_of_range( "GenerateFile: block size (" + std::to_string(block.size()) + ") is smaller than blockSize field (" + std::to_string(blockSize) + ")" );
+        const size_t blockSize = block.size();
 
         // Validate destination bounds before copying block data
         if( (blockLoc > (std::numeric_limits<size_t>::max() - blockSize)) || ((blockLoc + blockSize) > writebytes.size()) )
           throw std::out_of_range( "GenerateFile: block destination (" + std::to_string(blockLoc) + " + " + std::to_string(blockSize) + ") exceeds writebytes size (" + std::to_string(writebytes.size()) + ")" );
 
-        std::copy(block.begin(), block.begin() + blockSize, writebytes.begin() + blockLoc);
+        std::copy(block.begin(), block.end(), writebytes.begin() + blockLoc);
 
         i++;
     }
@@ -2432,12 +2431,14 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             {
                 values[17] = num_channels;
             }
-            std::vector<uint16_t> temp = { values[4] ,values[6] , values[12] , values[15], values[16] , values[17] };
-            values[1] = values[4] + values[16] + values[17] * values[12];
-
-            if (values[17] == 0x4000)
+            // The block size at file offsets 0x06-0x09 is a uint32_t in the CAM format.
+            // Compute in uint32_t to avoid overflow, then split across values[1] and values[2].
             {
-                values[2] = 0x01;
+              const uint32_t spec_block_size = static_cast<uint32_t>(values[4])
+                + static_cast<uint32_t>(values[16])
+                + static_cast<uint32_t>(values[17]) * static_cast<uint32_t>(values[12]);
+              values[1] = static_cast<uint16_t>(spec_block_size & 0xFFFF);
+              values[2] = static_cast<uint16_t>((spec_block_size >> 16) & 0xFFFF);
             }
             break;
 

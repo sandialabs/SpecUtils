@@ -197,6 +197,15 @@ add_test(
   COMMAND $<TARGET_FILE:test_rebin_by_lower_energy> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
 )
 
+add_executable( test_spec_file_roundtrip test_spec_file_roundtrip.cpp )
+target_link_libraries( test_spec_file_roundtrip PRIVATE SpecUtils )
+set_target_properties( test_spec_file_roundtrip PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
+add_test(
+  NAME TestSpecFileRoundtrip
+  COMMAND $<TARGET_FILE:test_spec_file_roundtrip> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS}
+  WORKING_DIRECTORY ${test_data_dir}
+)
+
 if( SpecUtils_ENABLE_URI_SPECTRA )
   add_executable( test_uri_spectrum test_uri_spectrum.cpp )
   target_link_libraries( test_uri_spectrum PRIVATE SpecUtils )
