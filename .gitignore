@@ -13,6 +13,7 @@ bindings/python/passthrough_saved.*
 XcodeFiles
 build
 build_*
+build-*
 documentation
 testing
 README.txt

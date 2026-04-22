@@ -1,4 +1,9 @@
-name: Java SWIG Bindings
+name: Java JNI Bindings
+
+# Hand-written JNI-based Java bindings (as opposed to the SWIG-generated
+# ones tested by java.yml). The generated SpecUtils.jar targets Java 8
+# bytecode via `javac --release 8` so it runs on any JRE 8+, but building
+# requires JDK 11+ because we use `javac -h` to emit JNI headers.
 
 on:
   push:
@@ -10,7 +15,7 @@ on:
 
 jobs:
   build-java-linux:
-    name: Java on Linux (manylinux)
+    name: Java JNI on Linux (manylinux)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux_2_28_x86_64
 
@@ -20,11 +25,11 @@ jobs:
 
     - name: Install build tools
       run: |
-        dnf install -y cmake swig java-1.8.0-openjdk java-1.8.0-openjdk-devel zlib-devel
-        echo "JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk" >> $GITHUB_ENV
+        dnf install -y cmake java-11-openjdk java-11-openjdk-devel zlib-devel
+        echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk" >> $GITHUB_ENV
 
     - name: Configure CMake
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S bindings/java -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=OFF -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build --config Release -j$(nproc)
@@ -32,14 +37,18 @@ jobs:
     - name: Run Java test
       working-directory: build
       run: |
-        cp ../bindings/swig/java_test/TestSpecUtils.java .
-        javac -classpath .:SpecUtils.jar TestSpecUtils.java
-        java -Djava.library.path=. -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
+        cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsTest.java .
+        # Compile against the built jar; test class lives in default package
+        # so we drop the `package` line via sed.
+        sed -i '/^package /d' SpecUtilsTest.java
+        javac -classpath .:SpecUtils.jar SpecUtilsTest.java
+        java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsTest ../bindings/python/examples/passthrough.n42
 
     - name: Build CLI example
       working-directory: build
       run: |
-        cp ../bindings/swig/java_test/SpecUtilsCli.java .
+        cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsCli.java .
+        sed -i '/^package /d' SpecUtilsCli.java
         javac -classpath .:SpecUtils.jar SpecUtilsCli.java
         java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
 
@@ -48,50 +57,50 @@ jobs:
       run: |
         mkdir -p artifacts
         cp SpecUtils.jar artifacts/
-        cp libSpecUtilsJni.so artifacts/
+        cp libSpecUtilsJava.so artifacts/
         cp SpecUtilsCli.class artifacts/
         cp ../LICENSE.txt artifacts/
-        cp ../bindings/swig/java_test/README_linux.md artifacts/README.md
-        printf '#!/usr/bin/env bash\n# SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
+        cp ../bindings/java/README.md artifacts/README.md
+        printf '#!/usr/bin/env bash\n# SpecUtils CLI (JNI binding) - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
         chmod +x artifacts/SpecUtilsCli.sh
 
     - name: Generate version.txt
       working-directory: build
       run: |
         cat > artifacts/version.txt << EOF
-        CI/CD development build
+        CI/CD development build (hand-written JNI binding)
         Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
         Commit: ${{ github.sha }}
-        Java: 8 (OpenJDK)
+        Java build: 11 (OpenJDK); runtime target: Java 8+
         Platform: linux-x86_64
         EOF
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: swig_java_java8-linux-x86_64
+        name: jni_java_java8-linux-x86_64
         path: build/artifacts/
 
   build-java:
-    name: Java on ${{ matrix.os }}
+    name: Java JNI on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-latest
-            lib-name: libSpecUtilsJni.jnilib
-            artifact-name: swig_java_java17-macos-arm64
+            lib-name: libSpecUtilsJava.jnilib
+            artifact-name: jni_java_java17-macos-arm64
             platform-label: macos-arm64
             java-version: '17'
             java-label: java17
             java-extra-flags: '--enable-native-access=ALL-UNNAMED'
           - os: windows-latest
-            lib-name: SpecUtilsJni.dll
-            artifact-name: swig_java_java8-windows-x86_64
+            lib-name: SpecUtilsJava.dll
+            artifact-name: jni_java_java11-windows-x86_64
             platform-label: windows-x86_64
-            java-version: '8'
-            java-label: java8
+            java-version: '11'
+            java-label: java11
             java-extra-flags: ''
 
     steps:
@@ -109,25 +118,17 @@ jobs:
         distribution: 'temurin'
         java-version: '${{ matrix.java-version }}'
 
-    - name: Install SWIG (macOS)
-      if: runner.os == 'macOS'
-      run: brew install swig
-
-    - name: Install SWIG (Windows)
-      if: runner.os == 'Windows'
-      run: choco install swig -y
-
     - name: Install zlib (Windows)
       if: runner.os == 'Windows'
       run: vcpkg install zlib:x64-windows-static
 
     - name: Configure CMake (macOS)
       if: runner.os == 'macOS'
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S bindings/java -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DCMAKE_BUILD_TYPE=Release
 
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
-      run: cmake -S bindings/swig -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+      run: cmake -S bindings/java -B build -DSpecUtils_FLT_PARSE_METHOD=strtod -DSpecUtils_ENABLE_URI_SPECTRA=ON -DZLIB_USE_STATIC_LIBS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 
     - name: Build
       run: cmake --build build --config Release
@@ -136,24 +137,27 @@ jobs:
       if: runner.os == 'macOS'
       working-directory: build
       run: |
-        cp ../bindings/swig/java_test/TestSpecUtils.java .
-        javac -classpath .:SpecUtils.jar TestSpecUtils.java
-        java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar TestSpecUtils ../bindings/python/examples/passthrough.n42
+        cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsTest.java .
+        sed -i '' '/^package /d' SpecUtilsTest.java
+        javac -classpath .:SpecUtils.jar SpecUtilsTest.java
+        java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar SpecUtilsTest ../bindings/python/examples/passthrough.n42
 
     - name: Run Java test (Windows)
       if: runner.os == 'Windows'
       working-directory: build
       shell: cmd
       run: |
-        copy ..\bindings\swig\java_test\TestSpecUtils.java .
-        javac -classpath ".;SpecUtils.jar" TestSpecUtils.java
-        java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" TestSpecUtils ..\bindings\python\examples\passthrough.n42
+        copy ..\bindings\java\src\test\java\gov\sandia\specutils\SpecUtilsTest.java .
+        powershell -Command "(Get-Content SpecUtilsTest.java) | Where-Object { $_ -notmatch '^package ' } | Set-Content SpecUtilsTest.java"
+        javac -classpath ".;SpecUtils.jar" SpecUtilsTest.java
+        java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" SpecUtilsTest ..\bindings\python\examples\passthrough.n42
 
     - name: Build and test CLI example (macOS)
       if: runner.os == 'macOS'
       working-directory: build
       run: |
-        cp ../bindings/swig/java_test/SpecUtilsCli.java .
+        cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsCli.java .
+        sed -i '' '/^package /d' SpecUtilsCli.java
         javac -classpath .:SpecUtils.jar SpecUtilsCli.java
         java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
 
@@ -162,7 +166,8 @@ jobs:
       working-directory: build
       shell: cmd
       run: |
-        copy ..\bindings\swig\java_test\SpecUtilsCli.java .
+        copy ..\bindings\java\src\test\java\gov\sandia\specutils\SpecUtilsCli.java .
+        powershell -Command "(Get-Content SpecUtilsCli.java) | Where-Object { $_ -notmatch '^package ' } | Set-Content SpecUtilsCli.java"
         javac -classpath ".;SpecUtils.jar" SpecUtilsCli.java
         java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" SpecUtilsCli ..\bindings\python\examples\passthrough.n42
 
@@ -175,8 +180,8 @@ jobs:
         cp ${{ matrix.lib-name }} artifacts/
         cp SpecUtilsCli.class artifacts/
         cp ../LICENSE.txt artifacts/
-        cp ../bindings/swig/java_test/README_macos.md artifacts/README.md
-        printf '#!/usr/bin/env bash\n# SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
+        cp ../bindings/java/README.md artifacts/README.md
+        printf '#!/usr/bin/env bash\n# SpecUtils CLI (JNI binding) - inspect gamma spectrum files and convert to N42-2012\n# Usage: ./SpecUtilsCli.sh <input_file> [output.n42]\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\njava -Djava.library.path="$SCRIPT_DIR" -classpath "$SCRIPT_DIR:$SCRIPT_DIR/SpecUtils.jar" SpecUtilsCli "$@"\n' > artifacts/SpecUtilsCli.sh
         chmod +x artifacts/SpecUtilsCli.sh
 
     - name: Prepare artifacts (Windows)
@@ -186,7 +191,6 @@ jobs:
       run: |
         mkdir -p artifacts
         cp SpecUtils.jar artifacts/
-        # DLL may be in Release/ subdirectory with MSVC multi-config
         if [ -f "Release/${{ matrix.lib-name }}" ]; then
           cp "Release/${{ matrix.lib-name }}" artifacts/
         elif [ -f "${{ matrix.lib-name }}" ]; then
@@ -194,18 +198,18 @@ jobs:
         fi
         cp SpecUtilsCli.class artifacts/
         cp ../LICENSE.txt artifacts/
-        cp ../bindings/swig/java_test/README_windows.md artifacts/README.md
-        printf '@echo off\r\nREM SpecUtils CLI - inspect gamma spectrum files and convert to N42-2012\r\nREM Usage: SpecUtilsCli.bat <input_file> [output.n42]\r\njava -Djava.library.path="%%~dp0" -classpath "%%~dp0;%%~dp0\\SpecUtils.jar" SpecUtilsCli %%*\r\n' > artifacts/SpecUtilsCli.bat
+        cp ../bindings/java/README.md artifacts/README.md
+        printf '@echo off\r\nREM SpecUtils CLI (JNI binding) - inspect gamma spectrum files and convert to N42-2012\r\nREM Usage: SpecUtilsCli.bat <input_file> [output.n42]\r\njava -Djava.library.path="%%~dp0" -classpath "%%~dp0;%%~dp0\\SpecUtils.jar" SpecUtilsCli %%*\r\n' > artifacts/SpecUtilsCli.bat
 
     - name: Generate version.txt
       working-directory: build
       shell: bash
       run: |
         cat > artifacts/version.txt << EOF
-        CI/CD development build
+        CI/CD development build (hand-written JNI binding)
         Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
         Commit: ${{ github.sha }}
-        Java: ${{ matrix.java-version }} (Temurin)
+        Java build: ${{ matrix.java-version }} (Temurin); runtime target: Java 8+
         Platform: ${{ matrix.platform-label }}
         EOF
 
@@ -222,9 +226,9 @@ jobs:
     with:
       artifacts: |
         [
-          {"artifact-name": "swig_java_java8-linux-x86_64", "release-asset-name": "swig_java_java8-linux-x86_64.zip"},
-          {"artifact-name": "swig_java_java17-macos-arm64", "release-asset-name": "swig_java_java17-macos-arm64.zip"},
-          {"artifact-name": "swig_java_java8-windows-x86_64", "release-asset-name": "swig_java_java8-windows-x86_64.zip"}
+          {"artifact-name": "jni_java_java8-linux-x86_64", "release-asset-name": "jni_java_java8-linux-x86_64.zip"},
+          {"artifact-name": "jni_java_java17-macos-arm64", "release-asset-name": "jni_java_java17-macos-arm64.zip"},
+          {"artifact-name": "jni_java_java11-windows-x86_64", "release-asset-name": "jni_java_java11-windows-x86_64.zip"}
         ]
     permissions:
       contents: write

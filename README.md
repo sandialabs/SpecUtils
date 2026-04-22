@@ -59,7 +59,7 @@ int main() {
 To build one of these bindings:
 * `Python`: The [nanobind](https://github.com/wjakob/nanobind) library is used to create these binding.  To use a pre-compiled version via `pip`, see https://pypi.org/project/SandiaSpecUtils/ . If you would like to compile the bindings yourself, see [bindings/python/README.md](bindings/python/README.md). Some example uses are available in [bindings/python/examples](bindings/python/examples).
 * `Node`: The [node-addon-api](https://www.npmjs.com/package/node-addon-api) and [cmake-js](https://www.npmjs.com/package/cmake-js) packages are used to create these bindings; see [bindings/node/README.md](bindings/node/README.md) for instructions on compiling.  An example use is in [example.js](bindings/node/example.js).
-* `Java`: The [SWIG](https://www.swig.org) package is used to create these bindings, and could likely be used for other languages. See [bindings/swig/README.md](bindings/swig/README.md) for compilation instructions.  An example use of `SpecUtils` from java is included in the bindings directory.
+* `Java`: Two bindings are available. The newer **hand-written JNI binding** sits on top of the C bindings and avoids SWIG's fragility across differing Java runtimes; see [bindings/java/README.md](bindings/java/README.md). The older **SWIG binding** is retained for existing users; see [bindings/swig/README.md](bindings/swig/README.md). Pre-built CI artifacts are published as `jni_java_*.zip` and `swig_java_*.zip` respectively.
 * `C`: These bindings are hand-written, and can be included when building `SpecUtils` by specifying the `SpecUtils_C_BINDINGS` CMake option to `ON`.  There is an example use of C interface in [c_interface_example.c](examples/c_interface_example.c).
 
 
