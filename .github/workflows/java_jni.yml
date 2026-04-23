@@ -41,7 +41,7 @@ jobs:
         # Compile against the built jar; test class lives in default package
         # so we drop the `package` line via sed.
         sed -i '/^package /d' SpecUtilsTest.java
-        javac -classpath .:SpecUtils.jar SpecUtilsTest.java
+        javac --release 8 -classpath .:SpecUtils.jar SpecUtilsTest.java
         java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsTest ../bindings/python/examples/passthrough.n42
 
     - name: Build CLI example
@@ -49,7 +49,7 @@ jobs:
       run: |
         cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsCli.java .
         sed -i '/^package /d' SpecUtilsCli.java
-        javac -classpath .:SpecUtils.jar SpecUtilsCli.java
+        javac --release 8 -classpath .:SpecUtils.jar SpecUtilsCli.java
         java -Djava.library.path=. -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
 
     - name: Prepare artifacts
@@ -139,7 +139,7 @@ jobs:
       run: |
         cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsTest.java .
         sed -i '' '/^package /d' SpecUtilsTest.java
-        javac -classpath .:SpecUtils.jar SpecUtilsTest.java
+        javac --release 8 -classpath .:SpecUtils.jar SpecUtilsTest.java
         java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar SpecUtilsTest ../bindings/python/examples/passthrough.n42
 
     - name: Run Java test (Windows)
@@ -149,7 +149,7 @@ jobs:
       run: |
         copy ..\bindings\java\src\test\java\gov\sandia\specutils\SpecUtilsTest.java .
         powershell -Command "(Get-Content SpecUtilsTest.java) | Where-Object { $_ -notmatch '^package ' } | Set-Content SpecUtilsTest.java"
-        javac -classpath ".;SpecUtils.jar" SpecUtilsTest.java
+        javac --release 8 -classpath ".;SpecUtils.jar" SpecUtilsTest.java
         java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" SpecUtilsTest ..\bindings\python\examples\passthrough.n42
 
     - name: Build and test CLI example (macOS)
@@ -158,7 +158,7 @@ jobs:
       run: |
         cp ../bindings/java/src/test/java/gov/sandia/specutils/SpecUtilsCli.java .
         sed -i '' '/^package /d' SpecUtilsCli.java
-        javac -classpath .:SpecUtils.jar SpecUtilsCli.java
+        javac --release 8 -classpath .:SpecUtils.jar SpecUtilsCli.java
         java -Djava.library.path=. ${{ matrix.java-extra-flags }} -classpath .:SpecUtils.jar SpecUtilsCli ../bindings/python/examples/passthrough.n42
 
     - name: Build and test CLI example (Windows)
@@ -168,7 +168,7 @@ jobs:
       run: |
         copy ..\bindings\java\src\test\java\gov\sandia\specutils\SpecUtilsCli.java .
         powershell -Command "(Get-Content SpecUtilsCli.java) | Where-Object { $_ -notmatch '^package ' } | Set-Content SpecUtilsCli.java"
-        javac -classpath ".;SpecUtils.jar" SpecUtilsCli.java
+        javac --release 8 -classpath ".;SpecUtils.jar" SpecUtilsCli.java
         java -Djava.library.path="Release;." -classpath ".;SpecUtils.jar" SpecUtilsCli ..\bindings\python\examples\passthrough.n42
 
     - name: Prepare artifacts (macOS)
