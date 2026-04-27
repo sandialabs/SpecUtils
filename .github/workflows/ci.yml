@@ -36,9 +36,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up CMake
-      uses: jwlawson/actions-setup-cmake@v2.0.2
+      uses: jwlawson/actions-setup-cmake@v2.2.0
       with:
-        cmake-version: '3.25'
+        cmake-version: '4.10'
 
     # For linux, we will perform developer checks, so we need boost
     - name: Set up dependencies
