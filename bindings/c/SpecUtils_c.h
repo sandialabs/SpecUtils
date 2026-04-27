@@ -468,6 +468,7 @@ enum SpecUtils_DetectorType
   SpecUtils_Det_Sam940, SpecUtils_Det_Sam945, SpecUtils_Det_Srpm210,
   SpecUtils_Det_RIIDEyeNaI, SpecUtils_Det_RIIDEyeLaBr, SpecUtils_Det_RadSeekerNaI,
   SpecUtils_Det_RadSeekerLaBr, SpecUtils_Det_VerifinderNaI, SpecUtils_Det_VerifinderLaBr,
+  SpecUtils_Det_H3D400,
   SpecUtils_Det_KromekD3S, SpecUtils_Det_KromekD5, SpecUtils_Det_KromekGR1,
   SpecUtils_Det_Fulcrum, SpecUtils_Det_Fulcrum40h, SpecUtils_Det_Sam950,
   SpecUtils_Det_Unknown

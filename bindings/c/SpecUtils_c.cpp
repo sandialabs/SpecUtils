@@ -287,6 +287,9 @@ static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_Verifinder
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_VerifinderLaBr)
               == static_cast<int>(SpecUtils::DetectorType::VerifinderLaBr),
               "SpecUtils_DetectorType needs updating" );
+static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_H3D400)
+              == static_cast<int>(SpecUtils::DetectorType::H3D400),
+              "SpecUtils_DetectorType needs updating" );
 static_assert( static_cast<int>(SpecUtils_DetectorType::SpecUtils_Det_KromekD3S)
               == static_cast<int>(SpecUtils::DetectorType::KromekD3S),
               "SpecUtils_DetectorType needs updating" );
