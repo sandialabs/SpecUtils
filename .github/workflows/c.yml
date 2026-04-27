@@ -33,7 +33,7 @@ jobs:
     - name: Set up CMake
       uses: jwlawson/actions-setup-cmake@v2.2.0
       with:
-        cmake-version: '4.10'
+        cmake-version: '3.31'
 
     - name: Install zlib (Windows)
       if: runner.os == 'Windows'
