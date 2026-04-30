@@ -163,6 +163,10 @@ enum class ParserType : int
   MicroRaider,
   /**  RadiaCode/BecqMoni XML format. */
   RadiaCode,
+  /** SpectraLine (LSRM, Russia) family: .spe (extended LSRM ASCII), .spex
+   (UTF-16LE LSRM), .spef (multi-section foreground+background), .sps
+   (GreenStar binary), .iec (IEC 61455 ASCII). */
+  SpectraLine,
   /** ORTEC list mode (.lis) from at least digiBASE(-E) detectors. */
   OrtecListMode,
   /** LSRM text based format. */
@@ -1784,6 +1788,13 @@ public:
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
   bool load_radiacode_file( const std::string &filename );
+  /** Load any of the SpectraLine (LSRM, Russia) spectrum file formats.
+   Auto-detects between .spe (Windows-1251 LSRM ASCII + binary spectrum),
+   .spex (UTF-16LE LSRM), .spef (multi-section foreground + background),
+   .sps (GreenStar binary), and .iec (IEC 61455 ASCII).  Falls back to
+   content sniffing if the extension is unknown.
+   */
+  bool load_spectraline_file( const std::string &filename );
   bool load_xml_scan_data_file( const std::string &filename );
   bool load_json_file( const std::string &filename );
   bool load_caen_gxml_file(const std::string& filename);
@@ -1864,7 +1875,21 @@ public:
   
   /** Load LSRM SPE file. */
   bool load_from_lsrm_spe( std::istream &input );
-  
+
+  /** Load SpectraLine .spe (extended LSRM Windows-1251 ASCII + raw int32-LE
+   spectrum) from a stream. */
+  bool load_from_spectraline_spe( std::istream &input );
+  /** Load SpectraLine .spex (UTF-16LE LSRM) from a stream. */
+  bool load_from_spectraline_spex( std::istream &input );
+  /** Load SpectraLine .spef (multi-section processing data) from a stream.
+   Captures the foreground and (optional) background spectra as separate
+   Measurements with corresponding SourceType values. */
+  bool load_from_spectraline_spef( std::istream &input );
+  /** Load SpectraLine .sps (GreenStar binary) from a stream. */
+  bool load_from_spectraline_sps( std::istream &input );
+  /** Load SpectraLine .iec (IEC 61455 ASCII) from a stream. */
+  bool load_from_spectraline_iec( std::istream &input );
+
   /** Load TKA file */
   bool load_from_tka( std::istream &input );
   

@@ -4560,6 +4560,10 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_radiacode_file( filename );
     break;
 
+    case ParserType::SpectraLine:
+      success = load_spectraline_file( filename );
+    break;
+
     case ParserType::Auto:
     {
       bool triedPcf = false, triedSpc = false,
@@ -4569,7 +4573,8 @@ bool SpecFile::load_file( const std::string &filename,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
           triedLzs = false, triedXmlScanData = false, triedJson = false,
-          tried_gxml = false, triedRadiaCode = false, tried_uri = false;
+          tried_gxml = false, triedRadiaCode = false, tried_uri = false,
+          triedSpectraLine = false;
       
       if( orig_file_ending.empty() )
         orig_file_ending = filename;
@@ -4622,12 +4627,24 @@ bool SpecFile::load_file( const std::string &filename,
           triedIaea = true;
           success = load_iaea_file( filename );
           if( success ) break;
-          
+
+          triedSpectraLine = true;
+          success = load_spectraline_file( filename );
+          if( success ) break;
+
           triedLsrmSpe = true;
           success = load_lsrm_spe_file( filename );
           if( success ) break;
-        }//if( orig_file_ending=="chn" )
-        
+        }//if( orig_file_ending=="spe" )
+
+        if( orig_file_ending=="spex" || orig_file_ending=="spef"
+            || orig_file_ending=="sps" || orig_file_ending=="iec" )
+        {
+          triedSpectraLine = true;
+          success = load_spectraline_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending in {spex, spef, sps, iec} )
+
         if( orig_file_ending=="tka" || orig_file_ending=="jac" )
         {
           triedTka = true;
@@ -4791,9 +4808,12 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedAram )
         success = load_aram_file( filename );
       
+      if( !success && !triedSpectraLine )
+        success = load_spectraline_file( filename );
+
       if( !success && !triedLsrmSpe )
         success = load_lsrm_spe_file( filename );
-      
+
       if( !success && !triedTka )
         success = load_tka_file( filename );
       

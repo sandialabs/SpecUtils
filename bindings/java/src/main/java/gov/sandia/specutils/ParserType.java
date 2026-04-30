@@ -25,6 +25,7 @@ public enum ParserType {
     AmptekMca,
     MicroRaider,
     RadiaCode,
+    SpectraLine,
     OrtecListMode,
     LsrmSpe,
     Tka,

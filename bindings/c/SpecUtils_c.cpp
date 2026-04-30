@@ -69,6 +69,8 @@ static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_MicroRaid
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_RadiaCode) == static_cast<int>(SpecUtils::ParserType::RadiaCode),
               "SpecUtils_ParserType needs updating" );
+static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_SpectraLine) == static_cast<int>(SpecUtils::ParserType::SpectraLine),
+              "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_OrtecListMode) == static_cast<int>(SpecUtils::ParserType::OrtecListMode),
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_LsrmSpe) == static_cast<int>(SpecUtils::ParserType::LsrmSpe),

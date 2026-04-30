@@ -459,6 +459,7 @@ private:
         case SpecUtils::ParserType::AmptekMca: type = "Amptek MCA"; break;
         case SpecUtils::ParserType::MicroRaider: type = "Micro Raider"; break;
         case SpecUtils::ParserType::RadiaCode: type = "RadiaCode"; break;
+        case SpecUtils::ParserType::SpectraLine: type = "SpectraLine"; break;
         case SpecUtils::ParserType::Aram: type = "Aram"; break;
         case SpecUtils::ParserType::OrtecListMode: type = "Ortec Listmode"; break;
         case SpecUtils::ParserType::LsrmSpe: type = "LSRM"; break;
