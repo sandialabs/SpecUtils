@@ -593,6 +593,7 @@ std::string determine_gamma_detector_kind_code( const SpecUtils::SpecFile &sf )
     case SpecUtils::DetectorType::MicroRaider:
     case SpecUtils::DetectorType::Interceptor:
     case SpecUtils::DetectorType::KromekGR1:
+    case SpecUtils::DetectorType::H3D400:
       det_kind = "CZT";
       break;
       

@@ -385,7 +385,12 @@ enum class DetectorType : int
   /** Symetrica Verifinder. Only tested from N42-2012 spectrum files, that all seem report model number "SN20", or "SN23-N" */
   VerifinderNaI,
   VerifinderLaBr,
-  
+
+  /** H3D handheld imagers (M400, A400, H400, S400) - 4 CZT detection elements,
+   each 2.2 cm x 2.2 cm x 1.5 cm depth.  Detected via manufacturer containing
+   "H3D" and model containing "400". */
+  H3D400,
+
   /** The Kromek D3 and D3S detector with Csl(TI) crystal volume of 1 cubic inch */
   KromekD3S,
 

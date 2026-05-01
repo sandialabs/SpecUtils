@@ -48,6 +48,7 @@ public enum DetectorType {
     RadSeekerLaBr,
     VerifinderNaI,
     VerifinderLaBr,
+    H3D400,
     KromekD3S,
     KromekD5,
     KromekGR1,

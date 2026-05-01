@@ -1420,6 +1420,7 @@ const std::string &detectorTypeToString( const DetectorType type )
   static const string sm_RadSeekerLaBrStr             = "RadSeeker-CL";
   static const string sm_VerifinderNaI                = "Verifinder-NaI";
   static const string sm_VerifinderLaBr               = "Verifinder-LaBr";
+  static const string sm_H3D400                       = "H3D-400";
   static const string sm_KromekD3S                    = "Kromek D3S";
   static const string sm_KromekGR1                    = "Kromek GR1";
   static const string sm_KromekD5                     = "Kromek D5";
@@ -1523,6 +1524,8 @@ const std::string &detectorTypeToString( const DetectorType type )
       return sm_VerifinderNaI;
     case DetectorType::VerifinderLaBr:
       return sm_VerifinderLaBr;
+    case DetectorType::H3D400:
+      return sm_H3D400;
     case DetectorType::KromekD3S:
       return sm_KromekD3S;
     case DetectorType::KromekD5:
@@ -6915,8 +6918,18 @@ void SpecFile::set_detector_type_from_other_info()
       return;
     }//if( isVerifinder )
   }//if( icontains(manufacturer_, "Symetrica") )
-    
-  
+
+
+  if( SpecUtils::icontains(manufacturer_, "H3D")
+     && SpecUtils::icontains(model, "400") )
+  {
+    // Covers the H3D M400, A400, H400, and S400 detectors, all of which use
+    //  4 CZT elements, each 2.2 cm x 2.2 cm x 1.5 cm deep.
+    detector_type_ = DetectorType::H3D400;
+    return;
+  }
+
+
   if( icontains(manufacturer_,"Canberra Industries, Inc.") )
   {
     //Check to see if detectors like "Aa1N+Aa2N", or "Aa1N+Aa2N+Ba1N+Ba2N+Ca1N+Ca2N+Da1N+Da2N"
