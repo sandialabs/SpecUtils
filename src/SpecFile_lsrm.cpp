@@ -139,13 +139,23 @@ namespace
       const uint16_t u = read_u16le( bytes + i );
       i += 2;
       uint32_t cp = u;
-      if( u >= 0xD800 && u <= 0xDBFF && (i + 2) <= nbytes )
+      if( u >= 0xD800 && u <= 0xDBFF )
       {
-        const uint16_t low = read_u16le( bytes + i );
-        if( low >= 0xDC00 && low <= 0xDFFF )
+        // High surrogate; pair with a following low surrogate.  Lone or
+        // unpaired surrogates (including a high surrogate at end-of-buffer
+        // with no room for its low surrogate) become U+FFFD so we never
+        // emit invalid UTF-8.
+        if( (i + 2) <= nbytes )
         {
-          cp = 0x10000 + ((static_cast<uint32_t>(u - 0xD800) << 10) | (low - 0xDC00));
-          i += 2;
+          const uint16_t low = read_u16le( bytes + i );
+          if( low >= 0xDC00 && low <= 0xDFFF )
+          {
+            cp = 0x10000 + ((static_cast<uint32_t>(u - 0xD800) << 10) | (low - 0xDC00));
+            i += 2;
+          }else
+          {
+            cp = 0xFFFD;
+          }
         }else
         {
           cp = 0xFFFD;
@@ -233,41 +243,6 @@ namespace
     if( it == kv.end() || it->second.empty() )
       return;
     remarks.push_back( label + ": " + cp1251_to_utf8(it->second) );
-  }
-
-  // Split a comma-separated list of floats into a vector.
-  bool split_csv_floats( const std::string &s, std::vector<float> &out )
-  {
-    out.clear();
-    std::string token;
-    token.reserve( s.size() );
-    for( char c : s )
-    {
-      if( c == ',' )
-      {
-        SpecUtils::trim( token );
-        if( !token.empty() )
-        {
-          float v = 0.0f;
-          if( !SpecUtils::parse_float( token.c_str(), token.size(), v ) )
-            return false;
-          out.push_back( v );
-        }
-        token.clear();
-      }else
-      {
-        token.push_back( c );
-      }
-    }
-    SpecUtils::trim( token );
-    if( !token.empty() )
-    {
-      float v = 0.0f;
-      if( !SpecUtils::parse_float( token.c_str(), token.size(), v ) )
-        return false;
-      out.push_back( v );
-    }
-    return true;
   }
 
   // Result of parsing the KV header.  The actual writes to Measurement /
@@ -365,7 +340,7 @@ namespace
       if( !energy.empty() )
       {
         std::vector<float> coeffs;
-        if( split_csv_floats( energy, coeffs ) && coeffs.size() >= 2 )
+        if( SpecUtils::split_to_floats( energy, coeffs ) && coeffs.size() >= 2 )
         {
           // First value is polynomial order; remaining values are coefficients.
           p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
@@ -896,8 +871,7 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
 //            Header layout is not documented in the available PDF spec; we
 //            decode the spectrum and known date / detector-name fields and
 //            mark the rest with a TODO.
-//    .iec  - SpectraLine emission of the IEC 61455 international format.  Not
-//            documented in the PDF; parsed empirically.
+//    .iec  - SpectraLine emission of the IEC 61455 international format.
 //
 //  All readers are endian-independent: multi-byte values go through the
 //  read_u16le / read_i32le helpers above.
@@ -1542,12 +1516,58 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
     auto meas = std::make_shared<Measurement>();
     std::vector<std::string> meas_remarks;
     std::vector<std::string> meas_parse_warnings;
+    std::string instrument_id_local, instrument_model_local;
+    int digital_offset = 0;
 
-    // Line 1: free-text identifier (cp1251).
-    if( !lines[0].empty() )
-      meas->set_title( cp1251_to_utf8( lines[0] ) );
+    auto rstrip = []( std::string s ) -> std::string {
+      while( !s.empty() && s.back() == ' ' ) s.pop_back();
+      return s;
+    };
 
-    // Line 2: live, real, nchannels.
+    // Record 1 (IEC 1455 §4.1-4.5) is fixed-width:
+    //   bytes  0-7 : System identification (8 chars; leading spaces NOT zeros)
+    //   bytes  8-15: Sub-system identification (8 chars; leading spaces NOT zeros)
+    //   bytes 16-19: ADC number (4 chars; leading spaces ARE zeros)
+    //   bytes 20-23: Segment number (4 chars; leading spaces ARE zeros)
+    //   bytes 24-29: Digital offset (6 chars; leading spaces ARE zeros)
+    {
+      const std::string &r1 = lines[0];
+      auto field = [&r1]( size_t off, size_t len ) -> std::string {
+        if( off >= r1.size() ) return "";
+        return r1.substr( off, std::min(len, r1.size() - off) );
+      };
+      const std::string sys_id    = rstrip( cp1251_to_utf8( field(0, 8) ) );
+      const std::string subsys_id = rstrip( cp1251_to_utf8( field(8, 8) ) );
+      // SpecUtils::trim works on the numeric fields (they may be all spaces).
+      std::string adc_str = field(16, 4);  SpecUtils::trim( adc_str );
+      std::string seg_str = field(20, 4);  SpecUtils::trim( seg_str );
+      std::string off_str = field(24, 6);  SpecUtils::trim( off_str );
+
+      if( !sys_id.empty() )
+        instrument_model_local = sys_id;
+      if( !subsys_id.empty() )
+        instrument_id_local = subsys_id;
+      if( !sys_id.empty() || !subsys_id.empty() )
+      {
+        const std::string title = sys_id
+          + (subsys_id.empty() ? "" : (sys_id.empty() ? "" : " ") + subsys_id);
+        meas->set_title( title );
+      }
+
+      int adc = 0, seg = 0;
+      if( !adc_str.empty()
+          && SpecUtils::parse_int( adc_str.c_str(), adc_str.size(), adc ) && adc != 0 )
+        meas_remarks.push_back( "ADC number: " + std::to_string(adc) );
+      if( !seg_str.empty()
+          && SpecUtils::parse_int( seg_str.c_str(), seg_str.size(), seg ) && seg != 0 )
+        meas_remarks.push_back( "Segment number: " + std::to_string(seg) );
+      if( !off_str.empty() )
+        SpecUtils::parse_int( off_str.c_str(), off_str.size(), digital_offset );
+    }
+
+    // Record 2 (IEC 1455 §4.6-4.8): live time (14 chars), real time (14 chars),
+    // number of channels (6 chars).  The fields are fixed-width but
+    // whitespace-separable, so split_to_floats is sufficient.
     float live_time_val = 0.0f, real_time_val = 0.0f;
     size_t declared_nchannels = 0;
     {
@@ -1594,17 +1614,56 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
       // The line carries coefficients directly (c0, c1, c2, c3).
     }
 
-    // Line 5: 5 floats - FWHM polynomial coefficients (recorded as remark only).
+    // Record 5 (IEC 1455 §4.12): FWHM polynomial coefficients P,Q,R,W and
+    // the exponent I (typically 0.5 for sqrt or 1.0 for linear dependence).
     if( lines.size() >= 5 && !lines[4].empty() )
       meas_remarks.push_back( "FWHM polynomial coefficients: " + lines[4] );
 
-    // Lines 6..58 are blank or SPARE / zero placeholders; lines 59+ carry the
-    // spectrum, 5 channel counts per line preceded by the starting channel
-    // index (i.e. exactly 6 numeric tokens per line).  We accept only those
-    // lines as spectrum rows; everything else (SPARE blocks of 4 zeros,
-    // blank lines, free-text "SPARE" markers) is skipped.
+    // Records 6-9 (IEC 1455 §4.13): four 64-char sample description lines.
+    // Spec says they are filled with spaces if not used; capture non-empty
+    // ones as remarks (cp1251-decoded for parity with record 1).
+    for( size_t rec = 6; rec <= 9 && rec - 1 < lines.size(); ++rec )
+    {
+      const std::string desc = rstrip( cp1251_to_utf8( lines[rec - 1] ) );
+      if( !desc.empty() )
+        meas_remarks.push_back( "Sample description " + std::to_string(rec - 5) + ": " + desc );
+    }
+
+    // Records 47-58 (IEC 1455 §4.18): twelve 64-char user-defined text lines.
+    for( size_t rec = 47; rec <= 58 && rec - 1 < lines.size(); ++rec )
+    {
+      const std::string ud = rstrip( cp1251_to_utf8( lines[rec - 1] ) );
+      // Skip the spec's filler text "USER RECORDS" (or "ENREGISTREMENTS POUR
+      // UTILISATEURS") which is not actual data.
+      if( ud.empty() || ud == "USER RECORDS" || ud == "ENREGISTREMENTS POUR UTILISATEURS" )
+        continue;
+      meas_remarks.push_back( "User record " + std::to_string(rec - 46) + ": " + ud );
+    }
+
+    if( digital_offset != 0 )
+    {
+      // Per spec §4.5, the digital offset is added to each stored channel
+      // index to obtain the ADC channel number, so the energy polynomial in
+      // record 4 is in terms of (stored_ch + digital_offset).  We don't
+      // currently transform the polynomial; flag this for the caller.
+      meas_parse_warnings.push_back(
+        "IEC 1455 digital_offset=" + std::to_string(digital_offset)
+        + " is non-zero; energy calibration polynomial coefficients are in"
+        " the ADC channel frame and may not match stored channel indices." );
+    }
+
+    // Records 11-46 are calibration pairs (energy/channel, energy/resolution,
+    // energy/efficiency) per IEC 1455 §4.15-4.17.  We don't decode these
+    // (they're typically zero-filled in SpectraLine output, and the polynomial
+    // calibration in record 4 takes precedence anyway).
+
+    // Records 59 onward (IEC 1455 §4.19): spectrum data, 5 counts per record
+    // preceded by the starting channel number (6 numeric tokens per row).
+    // Per spec the *last* record may have blank fields for channels in excess
+    // of `declared_nchannels`, so accept partial last lines (2-6 tokens).
     auto channel_counts = std::make_shared<std::vector<float>>();
-    channel_counts->reserve( 1024 );
+    if( declared_nchannels > 0 )
+      channel_counts->reserve( declared_nchannels );
     int last_seen_channel = -1;
     for( size_t i = 5; i < lines.size(); ++i )
     {
@@ -1613,18 +1672,28 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
       std::vector<float> vals;
       if( !SpecUtils::split_to_floats( ln, vals ) )
         continue;
-      if( vals.size() != 6 ) continue;
-      // Validate the leading channel index: should be a non-negative integer
-      // that monotonically increases by exactly 5 per line.  Bound the value
-      // before the cast so a wildly out-of-range float doesn't trigger UB.
+      if( vals.size() < 2 || vals.size() > 6 ) continue;
+      // Validate the leading channel index: non-negative integer, bounded
+      // before the cast so out-of-range floats can't trigger UB.
       if( !std::isfinite(vals[0]) || vals[0] < 0.0f
           || vals[0] >= static_cast<float>(EnergyCalibration::sm_max_channels) )
         continue;
       const int ch = static_cast<int>( vals[0] );
+      const size_t ncounts = vals.size() - 1;
+      const bool full_row    = (vals.size() == 6);
+      // Partial rows (1-4 counts) are only legal at the end of the spectrum
+      // (last record per IEC 1455 §4.8).  Otherwise reject — this also
+      // filters out the calibration-pair records (records 11-46) which have
+      // 4 numeric tokens and would otherwise spoof a channel-0 partial row.
+      const bool reaches_end = (declared_nchannels > 0)
+        && (static_cast<size_t>(ch) + ncounts >= declared_nchannels);
+      if( !full_row && !reaches_end ) continue;
       if( last_seen_channel >= 0 && ch != last_seen_channel + 5 ) continue;
       last_seen_channel = ch;
       for( size_t j = 1; j < vals.size(); ++j )
         channel_counts->push_back( vals[j] );
+      if( reaches_end )
+        break;
     }
 
     if( channel_counts->size() < 64 )
@@ -1661,8 +1730,13 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
 
     if( manufacturer_.empty() )
       set_manufacturer( "LSRM" );
+    // Prefer record-1 SYS_ID / SUBSYS_ID over the generic "SpectraLine"
+    // fallback when they were present.
+    if( instrument_id_.empty() && !instrument_id_local.empty() )
+      set_instrument_id( instrument_id_local );
     if( instrument_model_.empty() )
-      set_instrument_model( "SpectraLine" );
+      set_instrument_model( instrument_model_local.empty() ? "SpectraLine"
+                                                           : instrument_model_local );
 
     measurements_.push_back( meas );
     cleanup_after_load();
