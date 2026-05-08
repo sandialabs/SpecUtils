@@ -1301,13 +1301,17 @@ SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
     this.options.txt.title = null;
     this.svg.select('.title').remove();
   } else {
-    if( !(this.options.txt.title && (this.options.txt.title.length > 0)) )
+    var existing = this.svg.select('.title');
+    if( existing.empty() ) {
       this.svg.append("text")
           .attr("class", "title")
           .text(title)
           .attr("x", this.cx/2)
           .attr("dy", this.padding.title)
           .style("text-anchor","middle");
+    } else {
+      existing.text(title);
+    }
     this.options.txt.title = title;
   }
   this.handleResize( dontRedraw );
