@@ -1,7 +1,6 @@
+cmake_minimum_required(VERSION 3.15...4.3)
 cmake_policy(SET CMP0048 NEW)
 project(SpecUtilsTests VERSION 1)
-
-cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
 
 enable_testing()
 

@@ -1,7 +1,7 @@
-project( SpecUtilsFuzz VERSION 1 )
-cmake_minimum_required( VERSION VERSION 3.11 FATAL_ERROR )
+cmake_minimum_required(VERSION 3.15...4.3)
 cmake_policy(SET CMP0048 NEW)
 cmake_policy(SET CMP0079 NEW) #allow altering SpecUtils linking from this file
+project( SpecUtilsFuzz VERSION 1 )
 
 add_executable( file_parse_fuzz file_parse_fuzz.cpp fuzz_interface.h fuzz_interface.cpp )
 
