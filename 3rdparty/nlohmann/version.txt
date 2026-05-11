@@ -1,0 +1,1 @@
+Version 3.12.0 (Apr 11, 2025) of https://github.com/nlohmann/json.
