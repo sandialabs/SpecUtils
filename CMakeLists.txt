@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 3.15...4.3)
 
 cmake_policy(SET CMP0091 NEW)  # Use CMAKE_MSVC_RUNTIME_LIBRARY
 
+# When built standalone, pick a sensible default C++ standard.  When consumed
+# as a subdirectory (e.g. inside InterSpec) the parent project's setting is
+# inherited so the whole build uses a single, consistent standard.  The real
+# minimum SpecUtils needs is declared per-target via target_compile_features
+# below (C++11, raised to C++17 when SpecUtils_USE_FROM_CHARS is enabled).
+if( NOT DEFINED CMAKE_CXX_STANDARD )
+  set( CMAKE_CXX_STANDARD 11 )
+  set( CMAKE_CXX_STANDARD_REQUIRED ON )
+endif()
+
 project( SpecUtils VERSION 1.0.0 )
 
 option( SpecUtils_ENABLE_D3_CHART "Enables exporting of the D3 chart format" ON )
@@ -325,29 +335,23 @@ if( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS )
   endif( DEFINED boost_SOURCE_DIR )
 endif( SpecUtils_USE_BOOST_SPIRIT OR PERFORM_DEVELOPER_CHECKS )
 
+# Declare the minimum C++ standard SpecUtils requires.  PUBLIC means the
+# requirement propagates to anything that links against SpecUtils, and lets a
+# parent project compile with a newer standard (e.g. C++20) without us
+# overriding it.  The library itself only needs C++11; the from_chars option
+# bumps the floor to C++17 because std::from_chars for floats requires it.
 if( SpecUtils_USE_FROM_CHARS )
   if( NOT (MSVC AND (MSVC_VERSION GREATER_EQUAL 1920)) )
     # MSVC >=2019 supports floating point from_chars, while for macOS you need to target macOS 10.15 or later
     message("Please double check your compiler does actually support std::from_chars for parsing floats")
   endif()
 
-  set_target_properties( SpecUtils PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED YES
-    CXX_EXTENSIONS NO
-  )
-else(SpecUtils_USE_FROM_CHARS)
-  set_target_properties( SpecUtils PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED YES
-    CXX_EXTENSIONS NO
-  )
+  target_compile_features( SpecUtils PUBLIC cxx_std_17 )
+else( SpecUtils_USE_FROM_CHARS )
+  target_compile_features( SpecUtils PUBLIC cxx_std_11 )
+endif( SpecUtils_USE_FROM_CHARS )
 
-  #For CMake 3.8+, will specify following so it will be propagated to down-line targets
-  # This seems duplicate, but needed when compiling with SWIG
-  target_compile_features(SpecUtils PUBLIC cxx_std_11)
-  set_target_properties(SpecUtils PROPERTIES CXX_EXTENSIONS OFF)
-endif(SpecUtils_USE_FROM_CHARS)
+set_target_properties( SpecUtils PROPERTIES CXX_EXTENSIONS OFF )
 
 
 if( SpecUtils_USE_WT_THREADPOOL )

@@ -6,11 +6,7 @@ target_link_libraries( convert_to_n42 PUBLIC SpecUtils )
 
 add_executable( convert_to_cnf convert_to_cnf.cpp )
 target_link_libraries( convert_to_cnf PUBLIC SpecUtils )
-set_target_properties( convert_to_n42 convert_to_cnf PROPERTIES
-  CXX_STANDARD 11
-  CXX_STANDARD_REQUIRED YES
-  CXX_EXTENSIONS NO
-)
+# C++ standard floor (cxx_std_11) is inherited via PUBLIC linkage to SpecUtils.
 
 
 if( SpecUtils_C_BINDINGS )

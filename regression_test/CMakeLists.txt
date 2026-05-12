@@ -10,6 +10,4 @@ add_executable( regression_test regression_test.cpp )
 
 target_link_libraries( regression_test PUBLIC SpecUtils )
 
-set_target_properties( regression_test PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO )
-
 
