@@ -1,0 +1,10 @@
+node_modules/
+work/
+output/
+package-lock.json
+
+# Override SpecUtils root .gitignore which would otherwise silently skip these
+# committed source files (`build_*` matches build_d3_slim.sh, `*.json` matches
+# package.json).
+!build_d3_slim.sh
+!package.json

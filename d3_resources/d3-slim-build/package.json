@@ -1,0 +1,10 @@
+{
+  "name": "d3-slim-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build inputs for producing a feature-minimized d3 v3 bundle for InterSpec.",
+  "dependencies": {
+    "smash": "0.0.15",
+    "uglify-js": "2.6.2"
+  }
+}
