@@ -458,7 +458,33 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         {
           calibcoeff_poly = {b,c};
         }
-      }else if( istarts_with( line, "NuclideID1" )
+      }
+      else if( starts_with(line, "caloff=")
+              || starts_with(line, "calfact=")
+              || starts_with(line, "calfact2=")
+              || starts_with(line, "calfact3=") )
+      {
+        const size_t equal_pos = line.find( "=" );
+        assert( equal_pos != string::npos );
+        size_t coef_order = 0; //"caloff="
+        if( starts_with(line, "calfact=") )
+          coef_order = 1;
+        else if( starts_with(line, "calfact2=") )
+          coef_order = 2;
+        else if( starts_with(line, "calfact3=") )
+          coef_order = 3;
+
+        const string val_str = trim_copy( line.substr(equal_pos + 1) );
+        float val;
+        if( SpecUtils::parse_float(val_str.c_str(), val_str.size(), val) )
+        {
+          if( calibcoeff_poly.size() <= coef_order )
+            calibcoeff_poly.resize( coef_order + 1, 0.0f );
+          if( calibcoeff_poly[coef_order] == 0.0f )
+            calibcoeff_poly[coef_order] = val;
+        }
+      }
+      else if( istarts_with( line, "NuclideID1" )
                || istarts_with( line, "NuclideID2" )
                || istarts_with( line, "NuclideID3" )
                || istarts_with( line, "NuclideID4" ) )
@@ -846,7 +872,13 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       //         << endl;
       return false;
     }//if( meas->gamma_counts_->empty() )
-    
+
+    if( (meas->real_time_ > 0.0f) && ((meas->live_time_ <= 0.0f) || IsInf(meas->live_time_) || IsNan(meas->live_time_)) )
+      meas->live_time_ = meas->real_time_;
+
+    if( (meas->live_time_ > 0.0f) && ((meas->real_time_ <= 0.0f) || IsInf(meas->real_time_) || IsNan(meas->real_time_)) )
+      meas->real_time_ = meas->live_time_;
+
     if( detector_type_ == DetectorType::IdentiFinderUnknown )
     {
       if( (icontains(det_length, "51") && icontains(det_diameter, "35"))
