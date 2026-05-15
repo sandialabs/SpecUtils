@@ -1,0 +1,1 @@
+Version 3.5 (Oct 18, 2025) of https://github.com/pantor/inja
