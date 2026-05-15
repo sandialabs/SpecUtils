@@ -2239,7 +2239,12 @@ SpectrumChartD3.prototype.handleChartMouseUp = function() {
     self.drawRefGammaLines();
 
     self.lastMouseMovePos = null;
-    self.sliderChartMouse = null;
+    /* Originally this site cleared only `sliderChartMouse`. After Phase B's mouse/touch
+       state unification, `sliderChartPointer` holds either kind of pointer, so clearing
+       here also clears any touch-derived value. Gating flags (sliderBoxDown, etc.) are
+       not touched here, so behavior is observable only if a hybrid touch+mouse session
+       were ever in flight — vanishingly rare in practice. */
+    self.sliderChartPointer = null;
   }
 }
 
@@ -2290,8 +2295,8 @@ console.log( 'handleChartTouchEnd, self.touchesOnChart=' + (self.touchesOnChart 
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
-    self.sliderChartTouch = null;
-    self.savedSliderTouch = null;
+    self.sliderChartPointer = null;
+    self.savedSliderPointer = null;
   }
 }
 
@@ -2643,8 +2648,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
-    self.sliderChartMouse = null;
-    self.savedSliderMouse = null;
+    self.sliderChartPointer = null;
+    self.savedSliderPointer = null;
   }
 }
 
@@ -3029,8 +3034,9 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     || !isFinite(t2.startY) || !isFinite(t2.pageY) )
       return false;
 
-    var startdx = t1.startX - t2.startX;
-        nowdx = t1.pageX - t2.pageX;
+    // Was a bug: nowdx and yavrg were missing declarators and became globals (no `var`).
+    var startdx = t1.startX - t2.startX,
+        nowdx = t1.pageX - t2.pageX,
         yavrg = 0.5*(t1.startY+t2.startY);
 
     if( Math.abs(yavrg-t1.pageY) > 20 || 
@@ -3348,8 +3354,8 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
-    self.sliderChartTouch = null;
-    self.savedSliderTouch = null;
+    self.sliderChartPointer = null;
+    self.savedSliderPointer = null;
 
     if (visTouches.length === 0) {
       self.handleCancelAllMouseEvents()();
@@ -3526,8 +3532,8 @@ SpectrumChartD3.prototype.mouseup = function () {
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
-    self.sliderChartMouse = null;
-    self.savedSliderMouse = null;
+    self.sliderChartPointer = null;
+    self.savedSliderPointer = null;
     self.currentlyAdjustingSpectrumScale = null;
   }
 }
@@ -3554,8 +3560,9 @@ SpectrumChartD3.prototype.keydown = function () {
         self.handleCancelAnimationZoom();
         self.handleCancelRoiDrag();
         self.redraw()();
+        break; // Was a bug: missing break; Esc fell through to up-arrow and cycled kinetic ref lines.
       }
-      
+
       case 38: { /* up arrow */
         if( self.candidateKineticRefLines && self.candidateKineticRefLines.length > 1 ) {
           self.cycleKineticRefLine(-1);
@@ -6113,9 +6120,9 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   self.sliderBoxDown = false;
   self.leftDragRegionDown = false;
   self.rightDragRegionDown = false;
-  self.sliderChartMouse = null;
-  self.savedSliderMouse = null;
-  
+  self.sliderChartPointer = null;
+  self.savedSliderPointer = null;
+
   this.handleResize( false );
 }
 
@@ -6128,6 +6135,138 @@ SpectrumChartD3.prototype.setShowXAxisSliderChart = function(d) {
   this.drawXAxisSliderChart();
   this.handleResize( false );
 }
+
+/* Install document-level mouseup/mousemove listeners (namespaced "sliderdrag") so a
+   slider chart drag continues tracking and ends cleanly even if the cursor leaves the
+   slider element. Shared by all three slider mousedown handlers (box, left handle, right
+   handle), which previously inlined identical 11-line blocks. */
+SpectrumChartD3.prototype.installSliderDragListeners = function() {
+  var self = this;
+  d3.select(document).on("mouseup.sliderdrag", function() {
+    self.sliderBoxDown = false;
+    self.leftDragRegionDown = false;
+    self.rightDragRegionDown = false;
+    self.sliderChartPointer = null;
+    self.savedSliderPointer = null;
+    d3.select(document.body).style("cursor", "default");
+    d3.select(document).on("mouseup.sliderdrag", null);
+    d3.select(document).on("mousemove.sliderdrag", null);
+  });
+  d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
+};
+
+/*
+ * -------------- Slider chart pointer helpers --------------
+ * The mouse and touch move-handlers below (6 in total) used to duplicate ~300 lines of
+ * essentially identical drag logic that only differed in:
+ *   - reading the pointer via d3.mouse vs d3.touches (with a multi-touch bail), and
+ *   - which state field (sliderChart{Mouse,Touch} / savedSlider{Mouse,Touch}) was used.
+ * The state is now a single unified pair (sliderChartPointer / savedSliderPointer) — a
+ * drag uses either mouse or touch but never both at once, and all cleanup sites have been
+ * updated. Each *Move handler is now a thin (~8 line) wrapper that reads the pointer in
+ * the right way for its event type, then dispatches to a shared body.
+ */
+
+/* Move the slider box so it tracks the pointer; updates xScale + triggers redraw. */
+SpectrumChartD3.prototype._sliderBoxMove = function(p) {
+  var self = this;
+  d3.select(document.body).style("cursor", "move");
+  var origdomain = self.xScale.domain();
+  var origdomainrange = self.xScale.range();
+  var bounds = self.min_max_x_values();
+  var maxX = bounds[1];
+  var minX = bounds[0];
+
+  if (!self.sliderChartPointer)
+    self.sliderChartPointer = p;
+
+  var sliderBoxX = Number(self.sliderBox.attr("x"));
+  var sliderBoxWidth = Number(self.sliderBox.attr("width"));
+  var sliderDragRegionWidth = 3;
+  var x = Math.min( self.size.sliderChartWidth - sliderBoxWidth, Math.max(0, sliderBoxX + (p[0] - self.sliderChartPointer[0])) );
+
+  if ((sliderBoxX == 0 || sliderBoxX + sliderBoxWidth == self.size.sliderChartWidth)) {
+    if (!self.savedSliderPointer)
+      self.savedSliderPointer = p;
+  }
+
+  if (self.savedSliderPointer && p[0] != self.savedSliderPointer[0]) {
+    if (sliderBoxX == 0 && p[0] < self.savedSliderPointer[0]) return;
+    else if (sliderBoxX + sliderBoxWidth == self.size.sliderChartWidth && p[0] > self.savedSliderPointer[0]) return;
+    else self.savedSliderPointer = null;
+  }
+
+  self.xScale.domain([minX, maxX]);
+  self.xScale.range([0, self.size.sliderChartWidth]);
+  self.sliderBox.attr("x", x);
+  self.sliderDragLeft.attr("x", x);
+  self.sliderDragRight.attr("x", x + sliderBoxWidth - sliderDragRegionWidth);
+
+  origdomain = [ self.xScale.invert(x), self.xScale.invert(x + sliderBoxWidth) ];
+  self.setXAxisRange(origdomain[0], origdomain[1], true, true);
+  self.xScale.range(origdomainrange);
+  self.redraw()();
+
+  self.sliderChartPointer = p;
+};
+
+/* Drag the left handle of the slider box to the pointer (clamped to not cross right). */
+SpectrumChartD3.prototype._sliderLeftHandleMove = function(p) {
+  var self = this;
+  var origdomain = self.xScale.domain();
+  var origdomainrange = self.xScale.range();
+  var bounds = self.min_max_x_values();
+  var maxX = bounds[1];
+  var minX = bounds[0];
+  var x = Math.max(p[0], 0);
+  var sliderDragPadding = 1;
+
+  self.xScale.domain([minX, maxX]);
+  self.xScale.range([0, self.size.sliderChartWidth]);
+
+  if (p[0] > Number(self.sliderDragRight.attr("x") - sliderDragPadding)) {
+    self.xScale.domain(origdomain);
+    return;
+  }
+
+  self.sliderBox.attr("x", x);
+  self.sliderDragLeft.attr("x", x);
+  origdomain[0] = self.xScale.invert(x);
+
+  self.setXAxisRange(origdomain[0], origdomain[1], true, true);
+  self.xScale.range(origdomainrange);
+  self.redraw()();
+};
+
+/* Drag the right handle of the slider box to the pointer (clamped to not cross left). */
+SpectrumChartD3.prototype._sliderRightHandleMove = function(p) {
+  var self = this;
+  var origdomain = self.xScale.domain();
+  var origdomainrange = self.xScale.range();
+  var bounds = self.min_max_x_values();
+  var maxX = bounds[1];
+  var minX = bounds[0];
+  var x = Math.min(p[0], self.size.sliderChartWidth);
+  var sliderDragRegionWidth = 3;
+
+  self.xScale.domain([minX, maxX]);
+  self.xScale.range([0, self.size.sliderChartWidth]);
+
+  if (p[0] - sliderDragRegionWidth < Number(self.sliderDragLeft.attr("x")) + Number(self.sliderDragLeft.attr("width"))) {
+    self.xScale.domain(origdomain);
+    self.xScale.range(origdomainrange);
+    return;
+  }
+
+  self.sliderBox.attr("width", Math.abs(x - Number(self.sliderDragRight.attr("x"))));
+  self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
+  origdomain[1] = self.xScale.invert(x);
+
+  self.setXAxisRange(origdomain[0], origdomain[1], true, true);
+  self.xScale.range(origdomainrange);
+  self.redraw()();
+};
+
 
 SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
   var self = this;
@@ -6147,86 +6286,21 @@ SpectrumChartD3.prototype.handleMouseDownSliderBox = function() {
 
     d3.select(document.body).style("cursor", "move");
 
-    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
-    d3.select(document).on("mouseup.sliderdrag", function() {
-      self.sliderBoxDown = false;
-      self.leftDragRegionDown = false;
-      self.rightDragRegionDown = false;
-      self.sliderChartMouse = null;
-      self.savedSliderMouse = null;
-      d3.select(document.body).style("cursor", "default");
-      d3.select(document).on("mouseup.sliderdrag", null);
-      d3.select(document).on("mousemove.sliderdrag", null);
-    });
-    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
+    self.installSliderDragListeners();
   }
 }
 
 SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
   var self = this;
-
   return function() {
-    
     if (self.leftDragRegionDown || self.rightDragRegionDown || self.sliderBoxDown) {
       d3.event.preventDefault();
       d3.event.stopPropagation();
     }
-    
-    /* console.log("sliderboxdown = ", self.sliderBoxDown); */
-    /* console.log("leftDragRegionDown = ", self.leftDragRegionDown); */
-    /* console.log("rightDragRegionDown = ", self.rightDragRegionDown); */
-
-    if (self.leftDragRegionDown) {
-      return self.handleMouseMoveLeftSliderDrag(true)();
-    }
-
-    if (self.rightDragRegionDown) {
-      return self.handleMouseMoveRightSliderDrag(true)();
-    }
-
-    if (self.sliderBoxDown) {
-      d3.select(document.body).style("cursor", "move");
-      var m = d3.mouse(self.sliderChart[0][0]);
-      var origdomain = self.xScale.domain();
-      var origdomainrange = self.xScale.range();
-      var bounds = self.min_max_x_values();
-      var maxX = bounds[1];
-      var minX = bounds[0];
-
-      if (!self.sliderChartMouse) {
-        self.sliderChartMouse = m;
-      }
-
-      var sliderBoxX = Number(self.sliderBox.attr("x"));
-      var sliderBoxWidth = Number(self.sliderBox.attr("width"));
-      var sliderDragRegionWidth = 3;
-      var x = Math.min( self.size.sliderChartWidth - sliderBoxWidth, Math.max(0, sliderBoxX + (m[0] - self.sliderChartMouse[0])) );
-
-      if ((sliderBoxX == 0 || sliderBoxX + sliderBoxWidth == self.size.sliderChartWidth)) {
-        if (!self.savedSliderMouse)
-          self.savedSliderMouse = m;
-      }
-
-      if (self.savedSliderMouse && m[0] != self.savedSliderMouse[0]) {
-        if (sliderBoxX == 0 && m[0] < self.savedSliderMouse[0]) return;
-        else if (sliderBoxX + sliderBoxWidth == self.size.sliderChartWidth && m[0] > self.savedSliderMouse[0]) return;
-        else self.savedSliderMouse = null;
-      }
-
-      self.xScale.domain([minX, maxX]);
-      self.xScale.range([0, self.size.sliderChartWidth]);
-      self.sliderBox.attr("x", x);
-      self.sliderDragLeft.attr("x", x);
-      self.sliderDragRight.attr("x", x + sliderBoxWidth - sliderDragRegionWidth);
-
-      origdomain = [ self.xScale.invert(x), self.xScale.invert(x + sliderBoxWidth) ];
-      self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-      self.xScale.range(origdomainrange);
-      self.redraw()();
-
-      self.sliderChartMouse = m;
-    }
-  }
+    if (self.leftDragRegionDown)  return self.handleMouseMoveLeftSliderDrag(true)();
+    if (self.rightDragRegionDown) return self.handleMouseMoveRightSliderDrag(true)();
+    if (self.sliderBoxDown) self._sliderBoxMove( d3.mouse(self.sliderChart[0][0]) );
+  };
 }
 
 SpectrumChartD3.prototype.handleMouseDownLeftSliderDrag = function() {
@@ -6242,63 +6316,25 @@ SpectrumChartD3.prototype.handleMouseDownLeftSliderDrag = function() {
     /* Initially set the escape key flag false */
     self.escapeKeyPressed = false;
 
-    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
-    d3.select(document).on("mouseup.sliderdrag", function() {
-      self.sliderBoxDown = false;
-      self.leftDragRegionDown = false;
-      self.rightDragRegionDown = false;
-      self.sliderChartMouse = null;
-      self.savedSliderMouse = null;
-      d3.select(document.body).style("cursor", "default");
-      d3.select(document).on("mouseup.sliderdrag", null);
-      d3.select(document).on("mousemove.sliderdrag", null);
-    });
-    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
+    self.installSliderDragListeners();
   }
 }
 
+/* Mouse-mousemove handler for the left drag handle. Note the asymmetry vs the touch
+   version: cursor switches to ew-resize on hover (before the !redraw early-return), and
+   `redraw=false` skips the actual drag. The slider-chart-level mousemove dispatcher passes
+   redraw=true for drag, while the handle's own mousemove registration passes redraw=false
+   to update cursor only. */
 SpectrumChartD3.prototype.handleMouseMoveLeftSliderDrag = function(redraw) {
   var self = this;
-
   return function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
-
-    if (self.sliderBoxDown) {
-      return; /*self.handleMouseMoveSliderChart()(); */
-    }
-
+    if (self.sliderBoxDown) return;
     d3.select(document.body).style("cursor", "ew-resize");
-    
-    if (!self.leftDragRegionDown || !redraw) {
-      return;
-    }
-
-    var m = d3.mouse(self.sliderChart[0][0]);
-    var origdomain = self.xScale.domain();
-    var origdomainrange = self.xScale.range();
-    var bounds = self.min_max_x_values();
-    var maxX = bounds[1];
-    var minX = bounds[0];
-    var x = Math.max(m[0], 0);
-    var sliderDragPadding = 1;
-
-    self.xScale.domain([minX, maxX]);
-    self.xScale.range([0, self.size.sliderChartWidth]);
-
-    if (m[0] > Number(self.sliderDragRight.attr("x") - sliderDragPadding)) {
-      self.xScale.domain(origdomain);
-      return;
-    }
-
-    self.sliderBox.attr("x", x);
-    self.sliderDragLeft.attr("x", x);
-    origdomain[0] = self.xScale.invert(x);
-
-    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-    self.xScale.range(origdomainrange);
-    self.redraw()();
-  }
+    if (!self.leftDragRegionDown || !redraw) return;
+    self._sliderLeftHandleMove( d3.mouse(self.sliderChart[0][0]) );
+  };
 }
 
 SpectrumChartD3.prototype.handleMouseOutLeftSliderDrag = function() {
@@ -6324,60 +6360,21 @@ SpectrumChartD3.prototype.handleMouseDownRightSliderDrag = function() {
     /* Initially set the escape key flag false */
     self.escapeKeyPressed = false;
 
-    /* Listen for mouseup on document so drag ends even if mouse is released outside chart */
-    d3.select(document).on("mouseup.sliderdrag", function() {
-      self.sliderBoxDown = false;
-      self.leftDragRegionDown = false;
-      self.rightDragRegionDown = false;
-      self.sliderChartMouse = null;
-      self.savedSliderMouse = null;
-      d3.select(document.body).style("cursor", "default");
-      d3.select(document).on("mouseup.sliderdrag", null);
-      d3.select(document).on("mousemove.sliderdrag", null);
-    });
-    d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
+    self.installSliderDragListeners();
   }
 }
 
+/* Mouse-mousemove handler for the right drag handle. Mirror of the left handler. */
 SpectrumChartD3.prototype.handleMouseMoveRightSliderDrag = function(redraw) {
   var self = this;
-
   return function() {
-    if (self.sliderBoxDown)
-      return;
-
+    if (self.sliderBoxDown) return;
     d3.event.preventDefault();
     d3.event.stopPropagation();
     d3.select('body').style("cursor", "ew-resize");
-
-    if (!self.rightDragRegionDown || !redraw )
-      return;
-
-    const m = d3.mouse(self.sliderChart[0][0]);
-    const origdomain = self.xScale.domain();
-    const origdomainrange = self.xScale.range();
-    const bounds = self.min_max_x_values();
-    const maxX = bounds[1], minX = bounds[0];
-    const x = Math.min(m[0], self.size.sliderChartWidth);
-    const sliderDragRegionWidth = 3;
-
-    self.xScale.domain([minX, maxX]);
-    self.xScale.range([0, self.size.sliderChartWidth]);
-
-    if (m[0] - sliderDragRegionWidth < Number(self.sliderDragLeft.attr("x")) + Number(self.sliderDragLeft.attr("width"))) {
-      self.xScale.domain(origdomain);
-      self.xScale.range(origdomainrange);
-      return;
-    }
-
-    self.sliderBox.attr("width", Math.abs(x - Number(self.sliderDragRight.attr("x"))));
-    self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
-    origdomain[1] = self.xScale.invert(x);
-
-    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-    self.xScale.range(origdomainrange);
-    self.redraw()();
-  }
+    if (!self.rightDragRegionDown || !redraw) return;
+    self._sliderRightHandleMove( d3.mouse(self.sliderChart[0][0]) );
+  };
 }
 
 SpectrumChartD3.prototype.handleMouseOutRightSliderDrag = function() {
@@ -6443,69 +6440,26 @@ SpectrumChartD3.prototype.handleTouchStartSliderChart = function() {
   }
 }
 
+/* Read a single-touch position on the slider chart. Returns the [x,y] coords or null
+   on multi-touch (caller should bail). */
+SpectrumChartD3.prototype._singleTouchOnSliderChart = function() {
+  var t = d3.touches(this.sliderChart[0][0]);
+  if (t.length !== 1) return null;
+  return t[0];
+};
+
 SpectrumChartD3.prototype.handleTouchMoveSliderChart = function() {
   var self = this;
-
   return function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
-
-    if (self.leftDragRegionDown) {
-      return self.handleTouchMoveLeftSliderDrag(true)();
-    }
-
-    if (self.rightDragRegionDown) {
-      return self.handleTouchMoveRightSliderDrag(true)();
-    }
-
+    if (self.leftDragRegionDown)  return self.handleTouchMoveLeftSliderDrag(true)();
+    if (self.rightDragRegionDown) return self.handleTouchMoveRightSliderDrag(true)();
     if (self.sliderBoxDown) {
-      d3.select(document.body).style("cursor", "move");
-      var t = d3.touches(self.sliderChart[0][0]);
-
-      if (t.length !== 1)
-        return;
-
-      t = t[0];
-      var origdomain = self.xScale.domain();
-      var origdomainrange = self.xScale.range();
-      var bounds = self.min_max_x_values();
-      var maxX = bounds[1];
-      var minX = bounds[0];
-
-      if (!self.sliderChartTouch) {
-        self.sliderChartTouch = t;
-      }
-
-      var sliderBoxX = Number(self.sliderBox.attr("x"));
-      var sliderBoxWidth = Number(self.sliderBox.attr("width"));
-      var sliderDragRegionWidth = 3;
-      var x = Math.min( self.size.sliderChartWidth - sliderBoxWidth, Math.max(0, sliderBoxX + (t[0] - self.sliderChartTouch[0])) );
-
-      if ((sliderBoxX == 0 || sliderBoxX + sliderBoxWidth == self.size.sliderChartWidth)) {
-        if (!self.savedSliderTouch)
-          self.savedSliderTouch = t;
-      }
-
-      if (self.savedSliderTouch && t[0] != self.savedSliderTouch[0]) {
-        if (sliderBoxX == 0 && t[0] < self.savedSliderTouch[0]) return;
-        else if (sliderBoxX + sliderBoxWidth == self.size.sliderChartWidth && t[0] > self.savedSliderTouch[0]) return;
-        else self.savedSliderTouch = null;
-      }
-
-      self.xScale.domain([minX, maxX]);
-      self.xScale.range([0, self.size.sliderChartWidth]);
-      self.sliderBox.attr("x", x);
-      self.sliderDragLeft.attr("x", x);
-      self.sliderDragRight.attr("x", x + sliderBoxWidth - sliderDragRegionWidth);
-
-      origdomain = [ self.xScale.invert(x), self.xScale.invert(x + sliderBoxWidth) ];
-      self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-      self.xScale.range(origdomainrange);
-      self.redraw()();
-
-      self.sliderChartTouch = t;
+      var p = self._singleTouchOnSliderChart();
+      if (p) self._sliderBoxMove(p);
     }
-  }
+  };
 }
 
 SpectrumChartD3.prototype.handleTouchStartLeftSliderDrag = function() {
@@ -6516,51 +6470,19 @@ SpectrumChartD3.prototype.handleTouchStartLeftSliderDrag = function() {
   }
 }
 
+/* Touch-touchmove handler for the left drag handle. Note: unlike the mouse version, this
+   does NOT short-circuit on `redraw=false` (the `redraw` parameter is unused in the touch
+   path — preserved behavior from before the refactor). */
 SpectrumChartD3.prototype.handleTouchMoveLeftSliderDrag = function(redraw) {
   var self = this;
-
   return function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
-
-    if (self.sliderBoxDown) {
-      return;
-    }
-
-    if (!self.leftDragRegionDown) {
-      return;
-    }
-
-    var t = d3.touches(self.sliderChart[0][0]);
-    if (t.length !== 1)
-      return;
-
-    t = t[0];
-    var origdomain = self.xScale.domain();
-    var origdomainrange = self.xScale.range();
-    var bounds = self.min_max_x_values();
-    var maxX = bounds[1];
-    var minX = bounds[0];
-    var x = Math.max(t[0], 0);
-
-    var sliderDragPadding = 1;
-
-    self.xScale.domain([minX, maxX]);
-    self.xScale.range([0, self.size.sliderChartWidth]);
-
-    if (t[0] > Number(self.sliderDragRight.attr("x") - sliderDragPadding)) {
-      self.xScale.domain(origdomain);
-      return;
-    }
-
-    self.sliderBox.attr("x", x);
-    self.sliderDragLeft.attr("x", x);
-    origdomain[0] = self.xScale.invert(x);
-
-    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-    self.xScale.range(origdomainrange);
-    self.redraw()();
-  }
+    if (self.sliderBoxDown) return;
+    if (!self.leftDragRegionDown) return;
+    var p = self._singleTouchOnSliderChart();
+    if (p) self._sliderLeftHandleMove(p);
+  };
 }
 
 SpectrumChartD3.prototype.handleTouchStartRightSliderDrag = function() {
@@ -6571,55 +6493,17 @@ SpectrumChartD3.prototype.handleTouchStartRightSliderDrag = function() {
   }
 }
 
+/* Touch-touchmove handler for the right drag handle. Mirror of the left touch handler. */
 SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
   var self = this;
-
   return function() {
-    if (self.sliderBoxDown) {
-      return;
-    }
-
+    if (self.sliderBoxDown) return;
     d3.event.preventDefault();
     d3.event.stopPropagation();
-
-    if (!self.rightDragRegionDown) {
-      return;
-    }
-
-    var t = d3.touches(self.sliderChart[0][0]);
-    if (t.length !== 1)
-      return;
-  
-    t = t[0];
-    var origdomain = self.xScale.domain();
-    var origdomainrange = self.xScale.range();
-    var bounds = self.min_max_x_values();
-    var maxX = bounds[1];
-    var minX = bounds[0];
-    var x = Math.min(t[0], self.size.sliderChartWidth);
-
-    var sliderBoxX = self.xScale(origdomain[0]);
-    var sliderBoxWidth = Number(self.sliderBox.attr("width"));
-    var sliderDragRegionWidth = 3;
-    var sliderDragPadding = 1;
-
-    self.xScale.domain([minX, maxX]);
-    self.xScale.range([0, self.size.sliderChartWidth]);
-
-    if (t[0] - sliderDragRegionWidth < Number(self.sliderDragLeft.attr("x")) + Number(self.sliderDragLeft.attr("width"))) {
-      self.xScale.domain(origdomain);
-      self.xScale.range(origdomainrange);
-      return;
-    }
-
-    self.sliderBox.attr("width", Math.abs(x - Number(self.sliderDragRight.attr("x"))));
-    self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
-    origdomain[1] = self.xScale.invert(x);
-
-    self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-    self.xScale.range(origdomainrange);
-    self.redraw()();
-  }
+    if (!self.rightDragRegionDown) return;
+    var p = self._singleTouchOnSliderChart();
+    if (p) self._sliderRightHandleMove(p);
+  };
 }
 
 
@@ -7064,6 +6948,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
     if( xstartind >= xendind )
       return { paths: paths };
    
+    // (`bisector` is declared above at the top of roiPath; redeclaration removed below.)
     /*The continuum values used for the first and last bin of the ROI are fudged */
     /*  for now...  To be fixed */
     let thisy = null, thisx = null, m, s, peak_area, cont_area;
@@ -7359,7 +7244,8 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       }
     };
 
-    var bisector = d3.bisector(function(d){return d.x;});
+    // Was a bug: a second `var bisector = ...` redeclared the bisector from the top
+    // of roiPath in the same function scope; harmless via var-hoisting but redundant.
 
     var peakamplitudes = [];  //The peak amplitudes for each bin
 
@@ -8397,7 +8283,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     /* If mouse edge could has been deleted, do not update the mouse edge */
     if (deleteMouseEdge())
       return;
-console.log( "updateMouseEdge" );
+    // Was a bug: stray `console.log("updateMouseEdge")` left over from debugging — removed.
     /* Update the mouse edge and corresponding text position  */
     if ( self.mouseEdge ) {
         self.mouseEdge
@@ -8431,20 +8317,16 @@ console.log( "updateMouseEdge" );
     /* Calculations for the escape peak markers */
     const singleEscapeEnergy = energy - 510.99891,
         singleEscapePix = self.xScale(singleEscapeEnergy),
-
         singleEscapeForwardEnergy = energy + 510.99891,
         singleEscapeForwardPix = self.xScale(singleEscapeForwardEnergy),
-
         doubleEscapeEnergy = energy - 1021.99782,
         doubleEscapePix = self.xScale(doubleEscapeEnergy),
-
         doubleEscapeForwardEnergy = energy + 1021.99782,
         doubleEscapeForwardPix = self.xScale(doubleEscapeForwardEnergy);
-        
 
     if (shouldDeleteMouseEdge())
       deleteMouseEdge(true);
-    
+
     if( !self.options.showEscapePeaks || cursorIsOutOfBounds || self.dragging_plot ) {
       deleteEscapePeakMarker('single');
       deleteEscapePeakMarker('double');
@@ -8460,7 +8342,6 @@ console.log( "updateMouseEdge" );
 
     if ( doubleEscapeOutOfBounds ) {
       deleteEscapePeakMarker('double');
-
       if ( singleEscapeOutOfBounds )
         deleteEscapePeakMarker('single');
     }
@@ -8473,181 +8354,147 @@ console.log( "updateMouseEdge" );
 
     updateMouseEdge();
 
-    if (!singleEscapeForwardOutOfBounds) {
-      if( !self.singleEscapeForward && singleEscapeForwardEnergy >= 0 ) {  
-        self.singleEscapeForward = self.vis.append("line")    /* create single forward escape line */
-        .attr("class", "escapeLineForward")
-        .attr("x1", singleEscapeForwardPix)
-        .attr("x2", singleEscapeForwardPix)
-        .attr("y1", 0)
-        .attr("y2", self.size.height);
-      self.singleEscapeForwardText = self.vis.append("text") /* create Single Forward Escape label beside line */
-            .attr("class", "peakText")
-            .attr( "x", singleEscapeForwardPix + xmax/200 )
-            .attr( "y", self.size.height/5.3)
-            .text( self.options.txt.singleEscape );
-      self.singleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
-            .attr("class", "peakText")
-            .attr( "x", singleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/5.3 + linehspace)
-            .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
-      } else {
-        if ( singleEscapeForwardEnergy < 0 && self.singleEscapeForward && self.singleEscapeForwardText && self.singleEscapeForwardMeas ) {
-          deleteEscapePeakMarker('singleForward');
-        } else if ( self.singleEscapeForward ) {      /* Move everything to where mouse is */
-          self.singleEscapeForward
-            .attr("y2", self.size.height)
-            .attr("x1", singleEscapeForwardPix)
-            .attr("x2", singleEscapeForwardPix);
-          self.singleEscapeForwardText
-            .attr( "y", self.size.height/5.3)
-            .attr( "x", singleEscapeForwardPix + xmax/200 );
-          self.singleEscapeForwardMeas
-            .attr( "y", self.size.height/5.3 + linehspace)
-            .attr( "x", singleEscapeForwardPix + xmax/125 )
-            .text( singleEscapeForwardEnergy.toFixed(1) + " keV" );
-        }
+    /* Create-or-update one of the four escape-peak markers (single/double, forward/back).
+       Originally inlined four times as ~30-line near-identical blocks. The marker is a
+       vertical line plus two text labels (the marker-type name and the keV value), all
+       three stored on `self` under `<keyPrefix>`, `<keyPrefix>Text`, `<keyPrefix>Meas`.
+       `strokeWidth` is optional; only the double-escape backward marker sets it (original
+       set it only on creation, not on update — preserved here). */
+    function createOrUpdateEscape(keyPrefix, energyVal, pix, label, lineClass, strokeWidth) {
+      var textKey = keyPrefix + 'Text';
+      var measKey = keyPrefix + 'Meas';
+
+      if (!self[keyPrefix] && energyVal >= 0) {
+        self[keyPrefix] = self.vis.append("line")
+          .attr("class", lineClass);
+        if (strokeWidth !== undefined && strokeWidth !== null)
+          self[keyPrefix].attr("stroke-width", strokeWidth);
+        self[keyPrefix]
+          .attr("x1", pix)
+          .attr("x2", pix)
+          .attr("y1", 0)
+          .attr("y2", self.size.height);
+        self[textKey] = self.vis.append("text")
+          .attr("class", "peakText")
+          .attr( "x", pix + xmax/200 )
+          .attr( "y", self.size.height/5.3)
+          .text( label );
+        self[measKey] = self.vis.append("text")
+          .attr("class", "peakText")
+          .attr( "x", pix + xmax/125 )
+          .attr( "y", self.size.height/5.3 + linehspace)
+          .text( energyVal.toFixed(1) + " keV" );
+      } else if (energyVal < 0 && self[keyPrefix] && self[textKey] && self[measKey]) {
+        self.deleteAndNullifyElements([
+          { element: keyPrefix },
+          { element: textKey },
+          { element: measKey }
+        ]);
+      } else if (self[keyPrefix]) {
+        /* Move everything to where mouse is. The original doubleEscape and
+           doubleEscapeForward update paths skipped re-setting `y` on Text/Meas.
+           Was a (latent) bug: if `self.size.height` changes between create and
+           update (window resize), the label `y` would become stale until the
+           marker is re-created on the next mousedown. We always reset y here so
+           labels track the current height. */
+        self[keyPrefix]
+          .attr("y2", self.size.height)
+          .attr("x1", pix)
+          .attr("x2", pix);
+        self[textKey]
+          .attr( "y", self.size.height/5.3)
+          .attr( "x", pix + xmax/200 );
+        self[measKey]
+          .attr( "y", self.size.height/5.3 + linehspace)
+          .attr( "x", pix + xmax/125 )
+          .text( energyVal.toFixed(1) + " keV" );
       }
     }
 
-    if (!doubleEscapeForwardOutOfBounds) {
-      if( !self.doubleEscapeForward && doubleEscapeForwardEnergy >= 0 ) {  
-        self.doubleEscapeForward = self.vis.append("line")    /* create double forward escape line */
-        .attr("class", "escapeLineForward")
-        .attr("x1", doubleEscapeForwardPix)
-        .attr("x2", doubleEscapeForwardPix)
-        .attr("y1", 0)
-        .attr("y2", self.size.height);
-      self.doubleEscapeForwardText = self.vis.append("text") /* create double Forward Escape label beside line */
-            .attr("class", "peakText")
-            .attr( "x", doubleEscapeForwardPix + xmax/200 )
-            .attr( "y", self.size.height/5.3)
-            .text( self.options.txt.doubleEscape );
-      self.doubleEscapeForwardMeas = self.vis.append("text") /* Create measurement label besides line, under double Escape label */
-            .attr("class", "peakText")
-            .attr( "x", doubleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/5.3 + linehspace)
-            .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
-      } else {
-        if ( doubleEscapeForwardEnergy < 0 && self.doubleEscapeForward && self.doubleEscapeForwardText && self.doubleEscapeForwardMeas ) {
-          deleteEscapePeakMarker('doubleForward');
-        } else if ( self.doubleEscapeForward ) {      /* Move everything to where mouse is */
-          self.doubleEscapeForward
-            .attr("y2", self.size.height)
-            .attr("x1", doubleEscapeForwardPix)
-            .attr("x2", doubleEscapeForwardPix);
-          self.doubleEscapeForwardText
-            .attr( "y", self.size.height/5.3)
-            .attr("x", doubleEscapeForwardPix + xmax/200 );
-          self.doubleEscapeForwardMeas
-            .attr( "x", doubleEscapeForwardPix + xmax/125 )
-            .attr( "y", self.size.height/5.3 + linehspace)
-            .text( doubleEscapeForwardEnergy.toFixed(1) + " keV" );
-        }
-      }
-    }
+    if (!singleEscapeForwardOutOfBounds)
+      createOrUpdateEscape('singleEscapeForward', singleEscapeForwardEnergy, singleEscapeForwardPix,
+                           self.options.txt.singleEscape, 'escapeLineForward', null);
 
-    if ( singleEscapeOutOfBounds ) 
+    if (!doubleEscapeForwardOutOfBounds)
+      createOrUpdateEscape('doubleEscapeForward', doubleEscapeForwardEnergy, doubleEscapeForwardPix,
+                           self.options.txt.doubleEscape, 'escapeLineForward', null);
+
+    if ( singleEscapeOutOfBounds )
       return;
 
-    /* Draw single escape peak if not present in the grapy */
-    if( !self.singleEscape && singleEscapeEnergy >= 0 ) {  
-      self.singleEscape = self.vis.append("line")    /* create single escape line */
-      .attr("class", "peakLine")
-      .attr("x1", singleEscapePix)
-      .attr("x2", singleEscapePix)
-      .attr("y1", 0)
-      .attr("y2", self.size.height);
-    self.singleEscapeText = self.vis.append("text") /* create Single Escape label beside line */
-          .attr("class", "peakText")
-          .attr( "x", singleEscapePix + xmax/200 )
-          .attr( "y", self.size.height/5.3)
-          .text( self.options.txt.singleEscape );
-    self.singleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Single Escape label */
-          .attr("class", "peakText")
-          .attr( "x", singleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
-          .text( singleEscapeEnergy.toFixed(1) + " keV" );
-    } else {
-      if ( singleEscapeEnergy < 0 && self.singleEscape && self.singleEscapeText && self.singleEscapeMeas ) {
-        self.singleEscape.remove();      /* Delete lines and labels if out of bounds */
-        self.singleEscape = null;
-        self.singleEscapeText.remove();
-        self.singleEscapeText = null;
-        self.singleEscapeMeas.remove();
-        self.singleEscapeMeas = null;
-
-      } else if ( self.singleEscape ) {      /* Move everything to where mouse is */
-        self.singleEscape
-          .attr("y2", self.size.height)
-          .attr("x1", singleEscapePix)
-          .attr("x2", singleEscapePix);
-        self.singleEscapeText
-          .attr( "y", self.size.height/5.3)
-          .attr( "x", singleEscapePix + xmax/200 );
-        self.singleEscapeMeas
-          .attr( "x", singleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
-          .text( singleEscapeEnergy.toFixed(1) + " keV" );
-      }
-    }
+    createOrUpdateEscape('singleEscape', singleEscapeEnergy, singleEscapePix,
+                         self.options.txt.singleEscape, 'peakLine', null);
 
     /* Do not update the double escape peak marker anymore */
-    if (doubleEscapeOutOfBounds) 
+    if (doubleEscapeOutOfBounds)
       return;
 
-      /* Draw double escape peak if not present in the grapy */
-    if( !self.doubleEscape && doubleEscapeEnergy >= 0 ) {
-      self.doubleEscape = self.vis.append("line")  /* create double escape line */
-      .attr("class", "peakLine")
-      .attr("stroke-width", self.options.featureLineWidth)
-      .attr("x1", doubleEscapePix)
-      .attr("x2", doubleEscapePix)
-      .attr("y1", 0)
-      .attr("y2", self.size.height);
-    self.doubleEscapeText = self.vis.append("text") /* create Double Escape label beside line */
-          .attr("class", "peakText")
-          .attr( "x", doubleEscapePix + xmax/200 )
-          .attr( "y", self.size.height/5.3)
-          .text( self.options.txt.doubleEscape );
-    self.doubleEscapeMeas = self.vis.append("text") /* Create measurement label besides line, under Double Escape label */
-          .attr("class", "peakText")
-          .attr( "x", doubleEscapePix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
-          .text( doubleEscapeEnergy.toFixed(1) + " keV" );
-    } else {
-      if ( (doubleEscapeEnergy < 0) && self.doubleEscape && self.doubleEscapeText && self.doubleEscapeMeas ) {
-        self.doubleEscape.remove();    /* Delete lines and labels if out of bounds */
-      self.doubleEscape = null;
-          self.doubleEscapeText.remove();
-          self.doubleEscapeText = null;
-          self.doubleEscapeMeas.remove();
-          self.doubleEscapeMeas = null;
+    createOrUpdateEscape('doubleEscape', doubleEscapeEnergy, doubleEscapePix,
+                         self.options.txt.doubleEscape, 'peakLine', self.options.featureLineWidth);
+  }
 
-      } else if ( self.doubleEscape ) {    /* Move everything to where mouse is */
+  /* Create (on first call) and update a feature marker = vertical line + 2 text labels.
+     Shared by Compton edge, Compton peak, left sum peak, sum peak (4 callers; previously
+     each block was ~18 lines of near-identical create-then-update code).
 
-        self.doubleEscape
-          .attr("y2", self.size.height)
-          .attr("x1", doubleEscapePix)
-          .attr("x2", doubleEscapePix);
-        self.doubleEscapeText
-          .attr("x", doubleEscapePix + xmax/200 );
-        self.doubleEscapeMeas
-          .attr( "x", doubleEscapePix + xmax/125 )
-          .text( doubleEscapeEnergy.toFixed(1) + " keV" );
-      }
+     opts fields:
+       textLabel       text for the upper <text> (the marker name)
+       measText        text for the lower <text> (typically the keV value)
+       textY           y-coord of the upper text (lower text is `textY + linehspace`)
+       textOnUpdate    if true, re-sets textLabel on every update (e.g. Compton peak's
+                       angle can change so its label needs refresh); default false
+       textXOffset     x-offset from `pix` for the upper text; default xmax/200
+       measXOffset     x-offset from `pix` for the lower text; default xmax/125
+
+     SVG output differs from the pre-refactor baseline in two ways, both observed as
+     attribute-ordering differences inside <line> and <text> tags for Compton peak
+     specifically (PNG renders are byte-identical, so visual behavior is unchanged):
+       (1) the baseline Compton-peak <line> set `y1=0` during creation and `x1`/`x2`/`y2`
+           on update; the helper sets all four together on update, so the textual
+           attribute order in the serialized SVG ends `..., x1, x2, y1, y2` instead of
+           the baseline's `..., y1, y2, x1, x2`.
+       (2) the baseline Compton-peak <text> set `y` during creation and `x` on update;
+           the helper sets both on every update, so serialized order is `class, x, y`
+           instead of `class, y, x`. Was also a (latent) bug: if the chart resizes
+           between create and update, the baseline's `y` would go stale until next
+           re-create, whereas the helper tracks the current `self.size.height/N`. */
+  function ensureLineMarker(keyPrefix, pix, opts) {
+    var textKey = keyPrefix + 'Text';
+    var measKey = keyPrefix + 'Meas';
+    var textXOffset = (opts.textXOffset !== undefined) ? opts.textXOffset : xmax/200;
+    var measXOffset = (opts.measXOffset !== undefined) ? opts.measXOffset : xmax/125;
+
+    if (!self[keyPrefix]) {
+      self[keyPrefix] = self.vis.append("line")
+        .attr("class", "peakLine")
+        .attr("stroke-width", self.options.featureLineWidth);
+      self[textKey] = self.vis.append("text").attr("class", "peakText");
+      self[measKey] = self.vis.append("text").attr("class", "peakText");
+      if (!opts.textOnUpdate) self[textKey].text(opts.textLabel);
     }
+
+    self[keyPrefix]
+      .attr("x1", pix).attr("x2", pix)
+      .attr("y1", 0).attr("y2", self.size.height);
+    self[textKey]
+      .attr("x", pix + textXOffset)
+      .attr("y", opts.textY);
+    if (opts.textOnUpdate) self[textKey].text(opts.textLabel);
+    self[measKey]
+      .attr("x", pix + measXOffset)
+      .attr("y", opts.textY + linehspace)
+      .text(opts.measText);
   }
 
   function updateComptonPeaks() {
 
-    var compAngleRad = self.options.comptonPeakAngle * (3.14159265/180.0)   /* calculate radians of compton peak angle */
-    var comptonPeakEnergy = energy / (1 + ((energy/510.99891)*(1-Math.cos(compAngleRad)))); /* get energy value from angle and current energy position */
+    var compAngleRad = self.options.comptonPeakAngle * (3.14159265/180.0);   /* radians of compton peak angle */
+    var comptonPeakEnergy = energy / (1 + ((energy/510.99891)*(1-Math.cos(compAngleRad)))); /* energy from angle and current cursor energy */
     var comptonPeakPix = self.xScale(comptonPeakEnergy);
 
     if (shouldDeleteMouseEdge())
       deleteMouseEdge(true);
-    
+
     var comptonPeakOutOfBounds = comptonPeakPix < 0 || comptonPeakPix > xmax;
 
     /* delete if compton peak option is turned off or cursor is out of the graph */
@@ -8657,33 +8504,13 @@ console.log( "updateMouseEdge" );
       return;
     }
 
-    if( !self.comptonPeak ) {
-      /* draw compton edge line here */
-      self.comptonPeak = self.vis.append("line")
-        .attr("class", "peakLine")
-        .attr("stroke-width", self.options.featureLineWidth)
-        .attr("y1", 0);
-      self.comptonPeakText = self.vis.append("text")
-        .attr("class", "peakText")
-        .attr( "y", self.size.height/10);
-      self.comptonPeakMeas = self.vis.append("text")
-        .attr("class", "peakText")
-        .attr( "y", self.size.height/10 + linehspace);
-    }
-    
-    self.comptonPeak
-        .attr("y2", self.size.height)
-        .attr("x1", comptonPeakPix)
-        .attr("x2", comptonPeakPix);
-      
-    self.comptonPeakText
-        .attr( "x", comptonPeakPix + xmax/200 )
-        .text( self.options.txt.comptonPeakAngle.replace("{1}", String(self.options.comptonPeakAngle)) );
-        
-    self.comptonPeakMeas
-        .attr( "x", comptonPeakPix + xmax/125 )
-        .text( comptonPeakEnergy.toFixed(1) + " keV" );
-    
+    ensureLineMarker('comptonPeak', comptonPeakPix, {
+      textLabel: self.options.txt.comptonPeakAngle.replace("{1}", String(self.options.comptonPeakAngle)),
+      measText: comptonPeakEnergy.toFixed(1) + " keV",
+      textY: self.size.height/10,
+      textOnUpdate: true
+    });
+
     updateMouseEdge();
   }
 
@@ -8691,56 +8518,29 @@ console.log( "updateMouseEdge" );
 
     var compedge = energy - (energy / (1 + (2*(energy/510.99891))));
     var compEdgePix = self.xScale(compedge);
-    
-    if ( shouldDeleteMouseEdge() ) 
+
+    if ( shouldDeleteMouseEdge() )
       deleteMouseEdge(true);
 
     var comptonEdgeOutOfBounds = compEdgePix < 0  || compEdgePix > xmax ;
 
-    /* delete if compton edge already if option is turned off or cursor is out of the graph */
+    /* delete if compton edge option is turned off or cursor is out of the graph */
     if( !self.options.showComptonEdge || cursorIsOutOfBounds || comptonEdgeOutOfBounds || self.dragging_plot ) {
-      if( self.comptonEdge ) {
-        self.comptonEdge.remove(); 
-        self.comptonEdge = null;
-      }
-      if ( self.comptonEdgeText ) {
-        self.comptonEdgeText.remove(); 
-        self.comptonEdgeText = null;
-      }
-      if ( self.comptonEdgeMeas ) {
-          self.comptonEdgeMeas.remove(); 
-          self.comptonEdgeMeas = null;
-      }
-
+      self.deleteAndNullifyElements([
+        { element: 'comptonEdge' },
+        { element: 'comptonEdgeText' },
+        { element: 'comptonEdgeMeas' }
+      ]);
       updateMouseEdge();
       return;
     }
-    
-    if( !self.comptonEdge ) {
-      /* draw compton edge line here */
-      self.comptonEdge = self.vis.append("line")
-        .attr("class", "peakLine")
-        .attr("stroke-width", self.options.featureLineWidth);
-      self.comptonEdgeText = self.vis.append("text")
-        .attr("class", "peakText")
-        .text( self.options.txt.comptonEdge );
-      self.comptonEdgeMeas = self.vis.append("text")
-        .attr("class", "peakText");
-    }
-    
-    self.comptonEdge
-        .attr("x1", compEdgePix)
-        .attr("x2", compEdgePix)
-        .attr("y1", 0)
-        .attr("y2", self.size.height);
-    self.comptonEdgeText
-        .attr("x", compEdgePix + xmax/200 )
-        .attr("y", self.size.height/22);
-    self.comptonEdgeMeas
-        .attr( "x", compEdgePix + xmax/125 )
-        .attr( "y", self.size.height/22 + linehspace)
-        .text( compedge.toFixed(1) + " keV" );
-    
+
+    ensureLineMarker('comptonEdge', compEdgePix, {
+      textLabel: self.options.txt.comptonEdge,
+      measText: compedge.toFixed(1) + " keV",
+      textY: self.size.height/22
+    });
+
     updateMouseEdge();
   }
 
@@ -8783,7 +8583,16 @@ console.log( "updateMouseEdge" );
         shouldUpdateLeftSumPeak = true;
 
     if ( self.savedClickEnergy == null && clickedEnergy == null ) {
-      shouldUpdateSumPeaks = shouldUpdateLeftSumPeak = shouldUpdateClickedSumPeak = false;
+      // The original code chained `shouldUpdateSumPeaks = shouldUpdateLeftSumPeak = ...`
+      // — a typo for the singular `shouldUpdateSumPeak`. The chained `shouldUpdateSumPeaks`
+      // leaked as a global, but the BEHAVIOR was load-bearing: keeping `shouldUpdateSumPeak`
+      // (the local, singular) untouched-at-`true` is what lets the function fall through
+      // past the early-return guard and render the "Click to set sum peak first energy"
+      // help text. Setting it to false here would hide that helpful prompt — confirmed via
+      // the test-harness snapshot diff (10-bg-subtract, 11-no-legend, etc. lost the
+      // "fill=red" sumPeakHelpText after the well-intentioned fix). So we leave the singular
+      // alone and just remove the dead global-creating assignment.
+      shouldUpdateLeftSumPeak = shouldUpdateClickedSumPeak = false;
     }
     else if ( self.savedClickEnergy != null && (clickedEnergy == null || clickedEnergy < 0) )
       clickedEnergy = self.savedClickEnergy;
@@ -8857,31 +8666,12 @@ console.log( "updateMouseEdge" );
           leftSumPix = self.xScale( leftSumEnergy  ),
           leftSumOutOfBounds = leftSumPix < 0 || leftSumPix > xmax;
 
-      if( !self.leftSumPeak ) {
-        /* draw left-sum peak line here */
-        self.leftSumPeak = self.vis.append("line")
-          .attr("class", "peakLine")
-          .attr("stroke-width", self.options.featureLineWidth);
-        self.leftSumPeakText = self.vis.append("text")
-          .attr("class", "peakText")
-          .text( self.options.txt.clickedPeak );
-        self.leftSumPeakMeas = self.vis.append("text")
-          .attr("class", "peakText");
-      }
-      
-      /* update the left sum peak line here */
-      self.leftSumPeak
-          .attr("x1", leftSumPix)
-          .attr("x2", leftSumPix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height); 
-      self.leftSumPeakText
-          .attr( "x", leftSumPix + xmax/125 )
-          .attr( "y", self.size.height/3.4);
-      self.leftSumPeakMeas
-          .attr( "x", leftSumPix + xmax/125 )
-          .attr( "y", self.size.height/3.4 + linehspace)
-          .text( energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV" );
+      ensureLineMarker('leftSumPeak', leftSumPix, {
+        textLabel: self.options.txt.clickedPeak,
+        measText: energy.toFixed(1) + "+" + leftSumEnergy.toFixed(1) + "=" + clickedEnergy.toFixed(1) + " keV",
+        textY: self.size.height/3.4,
+        textXOffset: xmax/125
+      });
 
       if( leftSumOutOfBounds )
         deleteLeftSumPeakMarker();
@@ -8903,39 +8693,20 @@ console.log( "updateMouseEdge" );
       if (!clickedEnergy)
         return;
 
-      if( !self.sumPeak ) {
-        /* draw sum peak line here */
-        self.sumPeak = self.vis.append("line")
-          .attr("class", "peakLine")
-          .attr("stroke-width", self.options.featureLineWidth);
-      self.sumPeakText = self.vis.append("text")
-          .attr("class", "peakText")
-          .text( self.options.txt.sumPeak );
-      }
-      
-      if( !self.sumPeakMeas )
-        self.sumPeakMeas = self.vis.append("text")
-                .attr("class", "peakText");
-
-      self.sumPeak
-          .attr("x1", sumPix)
-          .attr("x2", sumPix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height);
-      self.sumPeakText
-          .attr( "x", sumPix + xmax/125 )
-          .attr( "y", self.size.height/4);
-      self.sumPeakMeas
-          .attr( "x", sumPix + xmax/125 )
-          .attr( "y", self.size.height/4 +  + linehspace)
-          .text( clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV" );
+      ensureLineMarker('sumPeak', sumPix, {
+        textLabel: self.options.txt.sumPeak,
+        measText: clickedEnergy.toFixed(1) + "+" + energy.toFixed(1) + "=" + sumEnergy.toFixed(1) + " keV",
+        textY: self.size.height/4,
+        textXOffset: xmax/125
+      });
     }
   }
 
   updateEscapePeaks();
   updateComptonPeaks();
   updateComptonEdge();
-  updateSumPeaks( mouseDownEnergy, );
+  // Was a bug: stray trailing comma `updateSumPeaks( mouseDownEnergy, );` (harmless but invalid style).
+  updateSumPeaks( mouseDownEnergy );
 }
 
 SpectrumChartD3.prototype.setComptonEdge = function(d) {
@@ -9731,6 +9502,11 @@ SpectrumChartD3.prototype.handleTouchMoveZoomY = function() {
 
 
 SpectrumChartD3.prototype.handleTouchEndZoomY = function() {
+  // Was a bug: this function used `self.options.txt.zoomInY` / `self.options.txt.zoomOutY`
+  // without declaring `const self = this;` at top. In browsers `self` resolves to
+  // `window.self === window`, so `self.options` is `undefined` → TypeError thrown at runtime,
+  // breaking the entire touch-Y zoom-out code path (the zoom-in branch via `this` worked).
+  const self = this;
   const zoomInYTopLine = this.vis.select("#zoomInYTopLine");
   const zoomInYBottomLine = this.vis.select("#zoomInYBottomLine");
   const zoomInYText = this.vis.select("#zoomInYText");
@@ -9739,17 +9515,17 @@ SpectrumChartD3.prototype.handleTouchEndZoomY = function() {
     this.handleTouchCancelZoomY();
     return;
   }
-  
+
   /* Set the y-values for where zoom-in occurred */
   const ypix1 = Number(zoomInYTopLine.attr("y1"));
   const ypix2 = Number(zoomInYBottomLine.attr("y1"));
-  
+
   const y1 = this.yScale.invert(ypix1);
   const y2 = this.yScale.invert(ypix2);
-  
+
   // Remove the lines and such
   this.handleTouchCancelZoomY();
-  
+
   if( Math.abs(ypix2 - ypix1) > 10 ) {
     // we are zooming in or out
     if (zoomInYText.text() == self.options.txt.zoomInY ) {
@@ -9760,7 +9536,7 @@ SpectrumChartD3.prototype.handleTouchEndZoomY = function() {
   }else{
     // I think zoomInYText should be empty if we are here
   }
-  
+
 }//SpectrumChartD3.prototype.handleTouchEndZoomY
 
 
