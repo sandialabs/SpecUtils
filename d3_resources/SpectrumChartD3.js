@@ -15,8 +15,8 @@ This is part of Cambio 2.1 program (https://hekili.ca.sandia.gov/cambio) and is 
    License along with this library; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-   As of 20221123 this file is 10773 lines long!  It is not allowed to grow, and even with fixes
-   or feature additions, we must refactor and improve code to keep LOC this size or smaller
+   As of 20221123 this file is 10773 lines long!  Lets try really hard to not let it grow, even with fixes
+   or feature additions, we strongly should refactor and improve code to keep LOC this size or smaller
    (e.g., things are out of hand, lets keep it from getting worse).
 */
 
@@ -291,6 +291,20 @@ SpectrumChartD3 = function(elem, options) {
 
   /* drag y-axis logic */
   this.yaxisdown = Math.NaN;
+
+  /* Left-mouse-drag mode: captured ONCE at mousedown from the modifier-key state,
+     and treated as sticky for the entire gesture. Releasing modifier keys mid-drag
+     does NOT change the mode; ESC cancels by setting it back to 'none'. Touch
+     peak-fit also uses 'fitPeak' so cross-device readers have one source of truth.
+       'none'         — no left-drag in progress (or aborted)
+       'fitPeak'      — Ctrl-drag (mouse) or two-finger swipe (touch)
+       'deletePeaks'  — Shift-drag
+       'countGammas'  — Alt+Shift-drag
+       'recalibrate'  — Alt+Ctrl-drag
+       'zoomY'        — Meta/Cmd-drag (y-axis zoom)
+       'zoomX'        — no modifiers (default x-axis zoom)
+       'altOnly'      — Alt-only (reserved; same effect as 'none') */
+  this.leftDragMode = 'none';
 
   // this.vis will be a <g> element that almost everything else will be appended to
   this.vis = d3.select(this.chart).append("svg")
@@ -1605,40 +1619,20 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
       d3.select(document.body).attr("cursor", "move");
 
-      /* Holding the Shift-key and left-click dragging --> Delete Peaks Mode */
-      self.isDeletingPeaks = d3.event.shiftKey && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !self.fittingPeak && !self.escapeKeyPressed;
-
-      /* Holding the Alt+Shift-key and left-click dragging --> Count Gammas Mode */
-      self.isCountingGammas = d3.event.altKey && d3.event.shiftKey && !d3.event.ctrlKey && !d3.event.metaKey && !self.fittingPeak && !self.escapeKeyPressed;
-
-      /* Holding the Alt+Ctrl-key + Left-click Dragging --> Recalibration Mode */
-      self.isRecalibrating = d3.event.altKey && d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
-
-      /* Holding the Command-key (or Windows-key) + Left-click dragging --> Zoom-in Y Mode */
-      self.isZoomingInYAxis = d3.event.metaKey && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
-
-      /* Holding the Alt-key + Left-click dragging ---> Undefined (Alt + double-click is used for background peak fitting) */
-      self.isUndefinedMouseAction = d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed;
-
-      var isZoomingInXAxis = !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed && !self.roiIsBeingDragged;
-
-      /* If erasing peaks */
-      if( self.fittingPeak ) {          /* If fitting peaks */
-        self.handleMouseMovePeakFit();
-      } else if (self.isDeletingPeaks) {   /* If deleting peaks */
-        self.handleMouseMoveDeletePeak();
-      } else if (self.isCountingGammas) {   /* If counting gammas */
-        self.updateGammaSum();
-      } else if (self.isRecalibrating) {      /* If recalibrating the chart */
-        self.handleMouseMoveRecalibration();
-      } else if (self.isZoomingInYAxis) {        /* If zooming in y-axis */
-        self.handleMouseMoveZoomY();
-      } else if (self.isUndefinedMouseAction) {   /* If undefined mouse action */
-        self.handleCancelAllMouseEvents()();      /* Do nothing, save for future feature */
-      } else if (isZoomingInXAxis) {    /* If zooming in x-axis */
-        self.handleMouseMoveZoomX();
-      } else if( !self.roiIsBeingDragged ){
-        self.handleCancelAllMouseEvents()();
+      /* Mode was captured at mousedown (sticky). Modifier-key changes during the
+         drag do NOT change the mode; ESC cancels by clearing leftDragMode to 'none'
+         via handleCancelAllMouseEvents. ROI drag preempts mode dispatch. */
+      if( !self.roiIsBeingDragged ){
+        switch( self.leftDragMode ){
+          case 'fitPeak':     self.handleMouseMovePeakFit(); break;
+          case 'deletePeaks': self.handleMouseMoveDeletePeak(); break;
+          case 'countGammas': self.updateGammaSum(); break;
+          case 'recalibrate': self.handleMouseMoveRecalibration(); break;
+          case 'zoomY':       self.handleMouseMoveZoomY(); break;
+          case 'zoomX':       self.handleMouseMoveZoomX(); break;
+          /* 'altOnly' (reserved) or 'none' (no mode / ESC-cancelled) -> ensure visuals are torn down */
+          default:            self.handleCancelAllMouseEvents()(); break;
+        }
       }
 
       return;
@@ -1651,7 +1645,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     } else if( self.rawData.spectra && self.rawData.spectra.length > 0
                && (x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width
                && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey
-               && !d3.event.shiftKey && !self.fittingPeak && !self.escapeKeyPressed ) ) {
+               && !d3.event.shiftKey && (self.leftDragMode !== 'fitPeak') && !self.escapeKeyPressed ) ) {
       // If we are here, the mouse button is not down, and the user isnt holding control, shift, etc
       if( self.kineticRefLines )
         self.handleUpdateKineticRefLineUpdate();
@@ -2023,7 +2017,7 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(mouse_pos_px){
 
 SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
   let self = this;
-  if( !self.roiDragBoxes && !self.fittingPeak )
+  if( !self.roiDragBoxes && (self.leftDragMode !== 'fitPeak') )
     return;
     
   if( self.roiDragBoxes ){
@@ -2041,7 +2035,11 @@ SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
   self.roiDragRequestTime = null;
   self.roiBeingDrugUpdate = null;
   self.roiIsBeingDragged = false;
-  self.fittingPeak = null;
+  /* Only clear leftDragMode if the gesture was actually fit-peak (ctrl-drag-roi);
+     other modes (deletePeaks, zoomX, etc.) may have ROI handles incidentally
+     visible from a prior hover, and we mustn't clobber their sticky mode mid-drag. */
+  if( self.leftDragMode === 'fitPeak' )
+    self.leftDragMode = 'none';
   self.showDragLineWhileInRoi = false;
   window.clearTimeout(self.roiDragRequestTimeout);
   self.roiDragRequestTimeout = null;
@@ -2094,7 +2092,7 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function( m ){
 SpectrumChartD3.prototype.updateRoiBeingDragged = function( newroi ){
   let self = this;
   
-  if( !self.roiIsBeingDragged && !self.fittingPeak )
+  if( !self.roiIsBeingDragged && (self.leftDragMode !== 'fitPeak') )
     return;
 
   window.clearTimeout(self.roiDragRequestTimeout);
@@ -2327,16 +2325,25 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.zoominx0 = self.xScale.invert(m[0]);
 
       self.recalibrationStartEnergy = [ self.xScale.invert(m[0]), self.xScale.invert(m[1]) ];
-      self.isRecalibrating = false;
 
-      /* We are fitting peaks (if ctrl-key held) */
-      self.fittingPeak = d3.event.ctrlKey && !d3.event.altKey && !d3.event.metaKey && !d3.event.shiftKey;
+      /* Capture the drag mode ONCE from the current modifier-key state. Sticky for
+         the gesture lifetime — releasing modifier keys mid-drag has no effect. ESC
+         cancels by clearing this back to 'none'. */
+      const ek = d3.event;
+      if( ek.ctrlKey && !ek.altKey && !ek.metaKey && !ek.shiftKey )        self.leftDragMode = 'fitPeak';
+      else if( ek.shiftKey && ek.altKey && !ek.ctrlKey && !ek.metaKey )    self.leftDragMode = 'countGammas';
+      else if( ek.shiftKey && !ek.altKey && !ek.ctrlKey && !ek.metaKey )   self.leftDragMode = 'deletePeaks';
+      else if( ek.altKey && ek.ctrlKey && !ek.metaKey && !ek.shiftKey )    self.leftDragMode = 'recalibrate';
+      else if( ek.metaKey && !ek.altKey && !ek.ctrlKey && !ek.shiftKey )   self.leftDragMode = 'zoomY';
+      else if( ek.altKey && !ek.ctrlKey && !ek.metaKey && !ek.shiftKey )   self.leftDragMode = 'altOnly';
+      else if( !ek.altKey && !ek.ctrlKey && !ek.metaKey && !ek.shiftKey )  self.leftDragMode = 'zoomX';
+      else                                                                  self.leftDragMode = 'none';
 
       self.setMouseDownRoi( m );
-      
+
       if( !self.roiDragLines) {
         /* Create the initial zoom box if we are not fitting peaks */
-        if( !self.fittingPeak && !self.roiIsBeingDragged ) {
+        if( self.leftDragMode !== 'fitPeak' && !self.roiIsBeingDragged ) {
           var zoomInXBox = self.vis.select("#zoomInXBox")
               zoomInXText = self.vis.select("#zoomInXText");
 
@@ -2505,7 +2512,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
       return;
 
     /* Handle fitting peaks (if needed) */
-    if (self.fittingPeak)
+    if (self.leftDragMode === 'fitPeak')
       self.handleMouseUpPeakFit();
 
     /* Handle zooming in x-axis (if needed) */
@@ -2579,7 +2586,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     }  
 
     /*If we are doing any other actions with the chart, then to bad. */
-    if( self.dragging_plot || self.zoominbox || self.fittingPeak ){
+    if( self.dragging_plot || self.zoominbox || (self.leftDragMode === 'fitPeak') ){
       console.log( "Plot is being dragged, zoomed, or peak fit, ignoring mousewheel" );
       return;
     }
@@ -2901,7 +2908,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     if (!self.touchesOnChart)
       return false;
 
-    if( self.fittingPeak )
+    if( (self.leftDragMode === 'fitPeak') )
       return true;
       
     var keys = Object.keys(self.touchesOnChart);
@@ -3536,20 +3543,16 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
 
 
 /* Reset the transient pointer-interaction state shared by mouseup, cancel-all, and mouseleave.
-   Clears drag-start positions, derived mode flags, slider/right-button/legend drag state.
+   Clears drag-start position, leftDragMode, slider/right-button/legend drag state.
    Does NOT touch DOM (the handleCancelMouse* helpers own zoom-box / count-text / cursor cleanup)
    nor axis-drag / dragging_plot / recalibrationStartEnergy (callers clear those as needed). */
 SpectrumChartD3.prototype._resetTransientPointerState = function() {
   this.leftMouseDown = null;
   this.zoominbox = null;
   this.zoominx0 = null;
-  this.fittingPeak = null;
+  this.leftDragMode = 'none';
   this.escapeKeyPressed = false;
   this.origdomain = null;
-  this.isDeletingPeaks = false;
-  this.isCountingGammas = false;
-  this.isRecalibrating = false;
-  this.isZoomingInYAxis = false;
   this.rightClickDown = null;
   this.is_panning = false;
   this.zooming_plot = false;
@@ -7281,7 +7284,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       });
     }//if( this.rawData.spectra[i].peaks )
     
-    if( self.fittingPeak && self.roiBeingDrugUpdate && (this.rawData.spectra[i].type === self.spectrumTypes.FOREGROUND) )
+    if( (self.leftDragMode === 'fitPeak') && self.roiBeingDrugUpdate && (this.rawData.spectra[i].type === self.spectrumTypes.FOREGROUND) )
       draw_roi(self.roiBeingDrugUpdate,i,spectrum);
   }
   
@@ -7745,8 +7748,8 @@ SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
 
   rightTouch[0] = Math.min(rightTouch[0], self.xScale.range()[1]);
 
-  self.fittingPeak = true;
-  
+  self.leftDragMode = 'fitPeak';
+
   // Incase there was some jitter and a little zooming happened before we got into fit peak mode, restore to original x-domain
   if( self.origdomain ){
     const currX = self.xScale.domain(), prevX = self.origdomain;
@@ -7802,7 +7805,7 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
   const self = this;
   
   const touchStartLines = self.vis.selectAll("#createPeakTouchStartLine");
-  if( !self.fittingPeak && (touchStartLines.length === 0) )
+  if( (self.leftDragMode !== 'fitPeak') && (touchStartLines.length === 0) )
     return;
   
   self.handleMouseUpPeakFit();
@@ -7824,7 +7827,7 @@ SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
     d3.select(this).remove();
   });
 
-  self.fittingPeak = null;
+  self.leftDragMode = 'none';
 }
 
 /*Function called when use lets the mouse button up */
@@ -7832,10 +7835,10 @@ SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
   var self = this;
 
   const roi = self.roiBeingDrugUpdate;
-  if( !self.fittingPeak || !self.rawData || !self.rawData.spectra || !roi )
+  if( (self.leftDragMode !== 'fitPeak') || !self.rawData || !self.rawData.spectra || !roi )
     return;
 
-  self.fittingPeak = null;
+  self.leftDragMode = 'none';
   
   self.redraw()();
   self.handleCancelRoiDrag();
@@ -9398,7 +9401,7 @@ SpectrumChartD3.prototype.handleMouseUpRecalibration = function() {
   if (self.leftMouseDown) {
 
     /* Emit the signal here */
-    if (self.isRecalibrating) {
+    if (self.leftDragMode === 'recalibrate') {
       console.log("Emit RECALIBRATION SIGNAL from x0 = ", self.xScale(self.recalibrationStartEnergy[0]), 
         "(", self.recalibrationStartEnergy[0], " keV) to x1 = ", 
         self.lastMouseMovePos[0], "(", 
@@ -9410,7 +9413,7 @@ SpectrumChartD3.prototype.handleMouseUpRecalibration = function() {
   }
 
   /* User is no longer recalibrating; drop the drag-start position. */
-  if (self.isRecalibrating)
+  if (self.leftDragMode === 'recalibrate')
     self.leftMouseDown = null;
 }
 
@@ -9440,8 +9443,6 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
 
   /* Remove the right-click-and-drag mouse line */
   recalibrationMousePosLines.remove();
-
-  self.isRecalibrating = false;
 
   recalibrationG.remove();
 }
@@ -9554,9 +9555,6 @@ SpectrumChartD3.prototype.cancelDeletePeak = function() {
 
   /* Delete the erase peaks text since we are not erasing peaks anymore */
   deletePeaksText.remove();
-
-  /* We are not erasing peaks anymore */
-  self.isDeletingPeaks = false;
 };
 
 SpectrumChartD3.prototype.handleCancelMouseDeletePeak = function() {
@@ -9966,9 +9964,6 @@ SpectrumChartD3.prototype.handleCancelMouseCountGammas = function() {
 
   /* Delete the count gamma texts since we are not counting gammas anymore */
   self.vis.selectAll(".countGammasText").remove();
-
-  /* We are not erasing peaks anymore */
-  self.isCountingGammas = false;
 }
 
 
