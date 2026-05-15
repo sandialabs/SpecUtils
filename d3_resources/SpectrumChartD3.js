@@ -323,23 +323,39 @@ SpectrumChartD3 = function(elem, options) {
   this.svg = d3.select(self.chart).select('svg');
 
   /*
-  Chart vs. Vis vs. Document Body
-  ___________________________________________
-  | _______________________________________ |
-  ||  ___________________________________  ||
-  || |                                   | ||
-  || |        VIS <g> (SPECTRUM)         | ||
-  || |                                   | ||
-  || |___________________________________| ||
-  ||                                       ||
-  ||                  CHART <div>          ||
-  ||_______________________________________||
-  |                                         |
-  |                                         |
-  |                 <BODY>                  |
-  |                                         |
-  |                                         |
-  |_________________________________________|
+  DOM nesting, event listeners, and coordinate frames:
+
+   _________________________________________________
+  |                    <body>                       |
+  |   ___________________________________________   |
+  |  |             this.chart <div>              |  |
+  |  |   _____________________________________   |  |
+  |  |  |           this.svg <svg>            |  |  |
+  |  |  |   title / x-axis labels / y-axis    |  |  |
+  |  |  |   labels live in the gap between    |  |  |
+  |  |  |   svg edges and the vis g below.    |  |  |
+  |  |  |   _______________________________   |  |  |
+  |  |  |  |   this.vis <g>  (plot area)   |  |  |  |
+  |  |  |  |    this.plot rect + peaks +   |  |  |  |
+  |  |  |  |    ref-lines + drag visuals   |  |  |  |
+  |  |  |  |_______________________________|  |  |  |
+  |  |  |_____________________________________|  |  |
+  |  |___________________________________________|  |
+  |_________________________________________________|
+
+  this.vis is translated by (padding.leftComputed, padding.topComputed) inside
+  this.svg, which in turn fills this.chart.
+
+  Event listeners are attached at TWO levels — chart catches events outside the
+  inner plot area (e.g. on axis labels), vis catches events on the plot itself:
+    chart : mousemove, mouseleave, mouseup, wheel, touch{start,end}
+    vis   : mousedown,            mouseup, wheel, touch{start,move,end,cancel}
+  Plus window.blur is routed through handleChartMouseLeave for alt-tab cleanup.
+
+  Coordinate frames:
+    d3.mouse(document.body)  -> page coords (used by right-click drag tracking)
+    d3.mouse(this.vis[0][0]) -> vis frame; (0,0) at top-left of plot area
+    getMousePos() returns [x_vis, y_vis, x_svg, y_svg]
   */
 
 
