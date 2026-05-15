@@ -755,15 +755,6 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
 
 
 
-SpectrumChartD3.prototype.dataPointDrag = function() {
-  var self = this;
-  return function(d) {
-    self.selected = self.dragged = d;
-    self.update(false); /* boolean set to false to indicate no animation needed */
-
-  }
-}
-
 SpectrumChartD3.prototype.do_rebin = function() {
   var self = this;
 
@@ -1005,11 +996,6 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
 
   // Call primary function for setting data
   self.setData( self.rawData, resetdomain );
-}
-
-SpectrumChartD3.prototype.removeSpectrumData = function( resetdomain, spectrumType ) {
-  /* Temporary depreciated function. */
-  this.removeSpectrumDataByType( resetdomain, spectrumType );
 }
 
 /** Removes all spectra seen with the passed-in type in the raw data. */
@@ -6210,57 +6196,38 @@ SpectrumChartD3.prototype._sliderBoxMove = function(p) {
   self.sliderChartPointer = p;
 };
 
-/* Drag the left handle of the slider box to the pointer (clamped to not cross right). */
-SpectrumChartD3.prototype._sliderLeftHandleMove = function(p) {
+/* Drag a slider box handle to the pointer, clamped to not cross the opposite handle.
+   side is 'left' or 'right'. */
+SpectrumChartD3.prototype._sliderHandleMove = function(side, p) {
   var self = this;
   var origdomain = self.xScale.domain();
   var origdomainrange = self.xScale.range();
   var bounds = self.min_max_x_values();
-  var maxX = bounds[1];
-  var minX = bounds[0];
-  var x = Math.max(p[0], 0);
-  var sliderDragPadding = 1;
-
-  self.xScale.domain([minX, maxX]);
-  self.xScale.range([0, self.size.sliderChartWidth]);
-
-  if (p[0] > Number(self.sliderDragRight.attr("x") - sliderDragPadding)) {
-    self.xScale.domain(origdomain);
-    return;
-  }
-
-  self.sliderBox.attr("x", x);
-  self.sliderDragLeft.attr("x", x);
-  origdomain[0] = self.xScale.invert(x);
-
-  self.setXAxisRange(origdomain[0], origdomain[1], true, true);
-  self.xScale.range(origdomainrange);
-  self.redraw()();
-};
-
-/* Drag the right handle of the slider box to the pointer (clamped to not cross left). */
-SpectrumChartD3.prototype._sliderRightHandleMove = function(p) {
-  var self = this;
-  var origdomain = self.xScale.domain();
-  var origdomainrange = self.xScale.range();
-  var bounds = self.min_max_x_values();
-  var maxX = bounds[1];
-  var minX = bounds[0];
-  var x = Math.min(p[0], self.size.sliderChartWidth);
+  var isLeft = (side === 'left');
   var sliderDragRegionWidth = 3;
+  var x = isLeft ? Math.max(p[0], 0) : Math.min(p[0], self.size.sliderChartWidth);
 
-  self.xScale.domain([minX, maxX]);
+  self.xScale.domain([bounds[0], bounds[1]]);
   self.xScale.range([0, self.size.sliderChartWidth]);
 
-  if (p[0] - sliderDragRegionWidth < Number(self.sliderDragLeft.attr("x")) + Number(self.sliderDragLeft.attr("width"))) {
+  var crossed = isLeft
+    ? (p[0] > Number(self.sliderDragRight.attr("x") - 1))
+    : (p[0] - sliderDragRegionWidth < Number(self.sliderDragLeft.attr("x")) + Number(self.sliderDragLeft.attr("width")));
+  if (crossed) {
     self.xScale.domain(origdomain);
     self.xScale.range(origdomainrange);
     return;
   }
 
-  self.sliderBox.attr("width", Math.abs(x - Number(self.sliderDragRight.attr("x"))));
-  self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
-  origdomain[1] = self.xScale.invert(x);
+  if (isLeft) {
+    self.sliderBox.attr("x", x);
+    self.sliderDragLeft.attr("x", x);
+    origdomain[0] = self.xScale.invert(x);
+  } else {
+    self.sliderBox.attr("width", Math.abs(x - Number(self.sliderDragRight.attr("x"))));
+    self.sliderDragRight.attr("x", x - sliderDragRegionWidth);
+    origdomain[1] = self.xScale.invert(x);
+  }
 
   self.setXAxisRange(origdomain[0], origdomain[1], true, true);
   self.xScale.range(origdomainrange);
@@ -6303,88 +6270,67 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
   };
 }
 
-SpectrumChartD3.prototype.handleMouseDownLeftSliderDrag = function() {
+/* Factory shared by the left/right slider-drag mousedown handlers; flagName selects which
+   side flag to set. */
+SpectrumChartD3.prototype._makeSliderDragMouseDownHandler = function(flagName) {
   var self = this;
-
   return function() {
     /* In order to stop selection of text around chart when clicking down on slider box. */
     d3.event.preventDefault();
     d3.event.stopPropagation();
-
-    self.leftDragRegionDown = true;
-
-    /* Initially set the escape key flag false */
+    self[flagName] = true;
     self.escapeKeyPressed = false;
-
     self.installSliderDragListeners();
-  }
+  };
 }
 
-/* Mouse-mousemove handler for the left drag handle. Note the asymmetry vs the touch
-   version: cursor switches to ew-resize on hover (before the !redraw early-return), and
-   `redraw=false` skips the actual drag. The slider-chart-level mousemove dispatcher passes
-   redraw=true for drag, while the handle's own mousemove registration passes redraw=false
-   to update cursor only. */
-SpectrumChartD3.prototype.handleMouseMoveLeftSliderDrag = function(redraw) {
+SpectrumChartD3.prototype.handleMouseDownLeftSliderDrag = function() {
+  return this._makeSliderDragMouseDownHandler('leftDragRegionDown');
+}
+
+SpectrumChartD3.prototype.handleMouseDownRightSliderDrag = function() {
+  return this._makeSliderDragMouseDownHandler('rightDragRegionDown');
+}
+
+/* Mousemove handler factory for the slider drag handles. The slider-chart-level mousemove
+   dispatcher passes redraw=true to drive the actual drag; the handle's own mousemove
+   registration passes redraw=false to update the hover cursor only. When the slider box
+   itself is being dragged we bail without stopping propagation so the chart-level handler
+   keeps tracking. */
+SpectrumChartD3.prototype._makeSliderDragMouseMoveHandler = function(flagName, side, redraw) {
   var self = this;
   return function() {
+    if (self.sliderBoxDown) return;
     d3.event.preventDefault();
     d3.event.stopPropagation();
-    if (self.sliderBoxDown) return;
     d3.select(document.body).style("cursor", "ew-resize");
-    if (!self.leftDragRegionDown || !redraw) return;
-    self._sliderLeftHandleMove( d3.mouse(self.sliderChart[0][0]) );
+    if (!self[flagName] || !redraw) return;
+    self._sliderHandleMove(side, d3.mouse(self.sliderChart[0][0]));
+  };
+}
+
+SpectrumChartD3.prototype.handleMouseMoveLeftSliderDrag = function(redraw) {
+  return this._makeSliderDragMouseMoveHandler('leftDragRegionDown', 'left', redraw);
+}
+
+SpectrumChartD3.prototype.handleMouseMoveRightSliderDrag = function(redraw) {
+  return this._makeSliderDragMouseMoveHandler('rightDragRegionDown', 'right', redraw);
+}
+
+SpectrumChartD3.prototype._makeSliderDragMouseOutHandler = function(flagName) {
+  var self = this;
+  return function() {
+    if (!self[flagName])
+      d3.select(document.body).style("cursor", "default");
   };
 }
 
 SpectrumChartD3.prototype.handleMouseOutLeftSliderDrag = function() {
-  var self = this;
-
-  return function() {
-    if (!self.leftDragRegionDown) {
-      d3.select(document.body).style("cursor", "default");
-    }
-  }
-}
-
-SpectrumChartD3.prototype.handleMouseDownRightSliderDrag = function() {
-  var self = this;
-
-  return function() {
-    /* In order to stop selection of text around chart when clicking down on slider box. */
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
-
-    self.rightDragRegionDown = true;
-
-    /* Initially set the escape key flag false */
-    self.escapeKeyPressed = false;
-
-    self.installSliderDragListeners();
-  }
-}
-
-/* Mouse-mousemove handler for the right drag handle. Mirror of the left handler. */
-SpectrumChartD3.prototype.handleMouseMoveRightSliderDrag = function(redraw) {
-  var self = this;
-  return function() {
-    if (self.sliderBoxDown) return;
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
-    d3.select('body').style("cursor", "ew-resize");
-    if (!self.rightDragRegionDown || !redraw) return;
-    self._sliderRightHandleMove( d3.mouse(self.sliderChart[0][0]) );
-  };
+  return this._makeSliderDragMouseOutHandler('leftDragRegionDown');
 }
 
 SpectrumChartD3.prototype.handleMouseOutRightSliderDrag = function() {
-  var self = this;
-
-  return function() {
-    if (!self.rightDragRegionDown) {
-      d3.select(document.body).style("cursor", "default");
-    }
-  }
+  return this._makeSliderDragMouseOutHandler('rightDragRegionDown');
 }
 
 SpectrumChartD3.prototype.handleTouchStartSliderBox = function() {
@@ -6462,48 +6408,40 @@ SpectrumChartD3.prototype.handleTouchMoveSliderChart = function() {
   };
 }
 
-SpectrumChartD3.prototype.handleTouchStartLeftSliderDrag = function() {
+SpectrumChartD3.prototype._makeSliderDragTouchStartHandler = function(flagName) {
   var self = this;
-
-  return function() {
-    self.leftDragRegionDown = true;
-  }
+  return function() { self[flagName] = true; };
 }
 
-/* Touch-touchmove handler for the left drag handle. Note: unlike the mouse version, this
-   does NOT short-circuit on `redraw=false` (the `redraw` parameter is unused in the touch
-   path — preserved behavior from before the refactor). */
-SpectrumChartD3.prototype.handleTouchMoveLeftSliderDrag = function(redraw) {
-  var self = this;
-  return function() {
-    d3.event.preventDefault();
-    d3.event.stopPropagation();
-    if (self.sliderBoxDown) return;
-    if (!self.leftDragRegionDown) return;
-    var p = self._singleTouchOnSliderChart();
-    if (p) self._sliderLeftHandleMove(p);
-  };
+SpectrumChartD3.prototype.handleTouchStartLeftSliderDrag = function() {
+  return this._makeSliderDragTouchStartHandler('leftDragRegionDown');
 }
 
 SpectrumChartD3.prototype.handleTouchStartRightSliderDrag = function() {
-  var self = this;
-
-  return function() {
-    self.rightDragRegionDown = true;
-  }
+  return this._makeSliderDragTouchStartHandler('rightDragRegionDown');
 }
 
-/* Touch-touchmove handler for the right drag handle. Mirror of the left touch handler. */
-SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
+/* Touchmove handler factory for the slider drag handles. Unlike the mouse version, this
+   doesn't short-circuit on `redraw=false` — the `redraw` parameter is unused in the touch
+   path (preserved as a no-op for signature symmetry with the mouse handlers). */
+SpectrumChartD3.prototype._makeSliderDragTouchMoveHandler = function(flagName, side) {
   var self = this;
   return function() {
     if (self.sliderBoxDown) return;
     d3.event.preventDefault();
     d3.event.stopPropagation();
-    if (!self.rightDragRegionDown) return;
+    if (!self[flagName]) return;
     var p = self._singleTouchOnSliderChart();
-    if (p) self._sliderRightHandleMove(p);
+    if (p) self._sliderHandleMove(side, p);
   };
+}
+
+SpectrumChartD3.prototype.handleTouchMoveLeftSliderDrag = function(redraw) {
+  return this._makeSliderDragTouchMoveHandler('leftDragRegionDown', 'left');
+}
+
+SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
+  return this._makeSliderDragTouchMoveHandler('rightDragRegionDown', 'right');
 }
 
 
@@ -8121,12 +8059,6 @@ SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
                  roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
   }
 }
-
-/*Function called when you hit escape while fitting peak */
-SpectrumChartD3.prototype.handleCancelMousePeakFit = function() {
-  this.handleCancelRoiDrag();
-}
-
 
 /** Updates Escape/Sum/Compton feature markers.
  
@@ -10791,10 +10723,6 @@ SpectrumChartD3.prototype.isTouchDevice = function() {
       || (navigator && navigator.maxTouchPoints);       // works on IE10/11 and Surface
 }
 
-SpectrumChartD3.prototype.isWindows = function() {
-  return (navigator.platform && (navigator.platform.indexOf('Win') === 0)) || (navigator.userAgent.indexOf('Windows') !== -1);
-}
-
 /**
  */
 SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
@@ -10849,26 +10777,6 @@ SpectrumChartD3.prototype.getSpectrumTitles = function() {
   });
   return result;
 }
-
-
-/** Returns the number of counts for a specific energy value. */
-SpectrumChartD3.prototype.getCountsForEnergy = function(spectrum, energy) {
-  if (!this.rawData || !this.rawData.spectra || !spectrum || !spectrum.x)
-    return -1;
-
-  let lowerchanval, counts = null;
-  const spectrumIndex = this.rawData.spectra.indexOf(spectrum);
-
-  if (spectrumIndex < 0)
-    return -1;
-
-  if( spectrum.points && spectrum.points.length ){
-    lowerchanval = d3.bisector(function(d){return d.x;}).left(spectrum.points,energy,1) - 1;
-    counts = spectrum.points[lowerchanval].y;
-  }
-  return counts;
-}
-
 
 
 /* Returns the data y-range for the currently viewed x-range.  Third element of returned array gives smallest non-zero height in the range */
