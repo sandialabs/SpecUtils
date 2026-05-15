@@ -69,13 +69,35 @@ namespace D3SpectrumExport
                                const SpecUtils::Measurement &meas,
                                const D3SpectrumOptions &options,
                                const size_t specID, const int backgroundID );
-  
+
+  /** Writes a single template-histogram JSON object (a strict subset of the spectrum JSON:
+      `title`, `lineColor`, `xeqn` or `x`, `y`, `yScaleFactor`).
+      Templates are drawn as solid filled stacked areas under the data lines for visual
+      comparison (e.g., background + simulated nuclide A + simulated nuclide B vs. measured data).
+   */
+  bool write_template_data_js( std::ostream &ostr,
+                               const SpecUtils::Measurement &meas,
+                               const D3SpectrumOptions &options,
+                               const size_t templateID );
+
   //Legacy function for the moment... makes an entire HTML page for the provided Measurement
   bool write_d3_html( std::ostream &ostr,
                       const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
                       const D3SpectrumChartOptions &options
 #if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
                      /// @param base_dir The location of where the JS and CSS files are stored.  You may be able to use D3_SCRIPT_RUNTIME_DIR defined in D3SpectrumExportResources.h
+                      , const std::string &base_dir
+#endif
+                     );
+
+  /** Overload of write_d3_html that additionally writes stacked filled-color template
+      histograms beneath the spectrum lines.
+   */
+  bool write_d3_html( std::ostream &ostr,
+                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
+                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &templates,
+                      const D3SpectrumChartOptions &options
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
                       , const std::string &base_dir
 #endif
                      );
@@ -108,6 +130,17 @@ namespace D3SpectrumExport
   bool write_and_set_data_for_chart( std::ostream &ostr,
                                      const std::string &div_name,
                                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements );
+
+  /** Overload that additionally emits a "templates" array (stacked filled-area histograms
+      rendered under the spectrum lines).  Pass an empty templates vector to behave
+      identically to the 3-arg version.  Templates JSON only contains `title`, `lineColor`,
+      `xeqn` or `x`, `y`, and `yScaleFactor` — the chart fills each template with its
+      `lineColor` and stacks them bottom-to-top in array order.
+   */
+  bool write_and_set_data_for_chart( std::ostream &ostr,
+                                     const std::string &div_name,
+                                     const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
+                                     const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &templates );
   
   /** Sets the selected options to the chart dispayed in the div with id 
       specified by div_name.

@@ -468,18 +468,27 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
   bool write_and_set_data_for_chart( std::ostream &ostr, const std::string &div_name,
                             const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements )
   {
+    const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > no_templates;
+    return write_and_set_data_for_chart( ostr, div_name, measurements, no_templates );
+  }//write_and_set_data_for_chart (3-arg back-compat overload)
+
+
+  bool write_and_set_data_for_chart( std::ostream &ostr, const std::string &div_name,
+                            const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
+                            const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &templates )
+  {
     const char *endline = "\r\n";
-    
+
     ostr << endline << "var data_" << div_name << " = {" << endline;
-    
+
     // TODO: std::localtime is not necessarily thread safe; there is a localtime_s, but its not clear how widely available it is; should make this thread-safe
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
-    
+
     ostr << "\"updateTime\": \"" << std::put_time(std::localtime(&in_time_t), "%Y%m%dT%H%M%S") << "\"," << endline;
-    
+
     ostr << "\"spectra\": [" << endline;
-    
+
     // Christian [20180301]: Assign an ID to each spectrum, as well as a background ID to signify which background spectrum is associated with this one.
     //  Note that background spectra do not have a background ID property, since they are already a background spectrum.
     //  When a background spectrum is found, all foreground spectrums defined before it in the vector is assigned with that background
@@ -503,21 +512,40 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
         foregroundIDs.push(id);
       } //if (measurements[id].second.spectrum_type == SpecUtils::SpectrumType::Background)
     }//for( size_t i = 0; i < measurements.size(); ++i )
-    
+
+    bool wrote_first_spec = false;
     for( size_t i = 0; i < measurements.size(); ++i )
     {
       if( !measurements[i].first )
         continue;
-      if( i )
+      if( wrote_first_spec )
         ostr << "," << endline;
       write_spectrum_data_js( ostr, *measurements[i].first, measurements[i].second, i, backgroundIDs[i] );
+      wrote_first_spec = true;
     }//for( size_t i = 0; i < measurements.size(); ++i )
-    
-    ostr << endline << "]" << endline;
-    ostr << "};" << endline;
-    
+
+    ostr << endline << "]";
+
+    if( !templates.empty() )
+    {
+      ostr << "," << endline << "\"templates\": [" << endline;
+      bool wrote_first_template = false;
+      for( size_t i = 0; i < templates.size(); ++i )
+      {
+        if( !templates[i].first )
+          continue;
+        if( wrote_first_template )
+          ostr << "," << endline;
+        write_template_data_js( ostr, *templates[i].first, templates[i].second, i );
+        wrote_first_template = true;
+      }
+      ostr << endline << "]";
+    }//if( !templates.empty() )
+
+    ostr << endline << "};" << endline;
+
     ostr << "spec_chart_" << div_name << ".setData(data_" << div_name << ");" << endline;
-    
+
     return ostr.good();
   }//write_and_set_data_for_chart
   
@@ -696,6 +724,24 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
 #endif
 )
   {
+    const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > no_templates;
+#if( SpecUtils_D3_SUPPORT_FILE_STATIC )
+    return write_d3_html( ostr, measurements, no_templates, options );
+#else
+    return write_d3_html( ostr, measurements, no_templates, options, base_dir );
+#endif
+  }//write_d3_html (3/4-arg back-compat overload)
+
+
+  bool write_d3_html( std::ostream &ostr,
+                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &measurements,
+                      const std::vector< std::pair<const SpecUtils::Measurement *,D3SpectrumOptions> > &templates,
+                      const D3SpectrumChartOptions &options
+#if( !SpecUtils_D3_SUPPORT_FILE_STATIC )
+                      , const std::string &base_dir
+#endif
+)
+  {
     const char *endline = "\r\n";
 
 #if( SpecUtils_D3_SUPPORT_FILE_STATIC )
@@ -705,15 +751,15 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
 #endif
 
     const string div_id = "chart1";
-    
+
     ostr << "<body><div id=\"" << div_id << "\" class=\"chart\" oncontextmenu=\"return false;\"></div>" << endline;  // Adding the main chart div
-    
-    
+
+
     ostr << "<script>" << endline;
-    
+
     write_js_for_chart( ostr, div_id, options.m_dataTitle, options.m_xAxisTitle, options.m_yAxisTitle );
-    
-    write_and_set_data_for_chart( ostr, div_id, measurements );
+
+    write_and_set_data_for_chart( ostr, div_id, measurements, templates );
     
     ostr << R"delim(
     const resizeChart = function(){
@@ -884,14 +930,92 @@ D3SpectrumChartOptions::D3SpectrumChartOptions()
       sf = 1.0;
 
     ostr << "\n\t\t\t" << q << "yScaleFactor" << q << ":" << sf;
-    
+
     ostr << "\n\t\t}";
-    
+
     return !ostr.bad();
   }
-  
-  
-  
+
+
+  bool write_template_data_js( std::ostream &ostr,
+                               const SpecUtils::Measurement &meas,
+                               const D3SpectrumOptions &options,
+                               const size_t templateID )
+  {
+    // Template JSON is a strict subset of the spectrum JSON: title, lineColor (used as fill),
+    // xeqn|x, y, yScaleFactor.  No peaks/type/id/live-time/neutrons etc., since templates
+    // are stacked filled areas for visual comparison only.
+    const char *q = "\"";
+
+    ostr << "\n\t\t{\n\t\t\t" << q << "title" << q << ":";
+    if( options.title.size() )
+      ostr << q << escape_text( options.title ) << q << ",";
+    else if( meas.title().size() )
+      ostr << q << escape_text( meas.title() ) << q << ",";
+    else
+      ostr << "null,";
+
+    // Always emit a lineColor for templates (it drives the fill); fall back to a neutral grey.
+    ostr << "\n\t\t\t" << q << "lineColor" << q << ":" << q
+         << (options.line_color.size() ? options.line_color.c_str() : "#888888") << q << ",";
+
+    const auto oldprecision = ostr.precision();
+    ostr << std::setprecision(std::numeric_limits<float>::digits10 + 1);
+
+    const SpecUtils::EnergyCalType caltype = meas.energy_calibration_model();
+    if( (caltype == SpecUtils::EnergyCalType::Polynomial
+         || caltype == SpecUtils::EnergyCalType::FullRangeFraction
+         || caltype == SpecUtils::EnergyCalType::UnspecifiedUsingDefaultPolynomial )
+       && meas.deviation_pairs().empty() )
+    {
+      std::vector<float> calcoefs = meas.calibration_coeffs();
+      if( caltype == SpecUtils::EnergyCalType::FullRangeFraction )
+        calcoefs = SpecUtils::fullrangefraction_coef_to_polynomial( calcoefs, meas.num_gamma_channels() );
+
+      ostr << "\n\t" << q << "xeqn" << q << ": [";
+      for( size_t i = 0; i < calcoefs.size(); ++i )
+        ostr << (i ? "," : "") << calcoefs[i];
+      ostr << "],";
+    }else
+    {
+      ostr << "\n\t" << q << "x" << q << ": [";
+      if( meas.num_gamma_channels() && meas.channel_energies() )
+      {
+        ostr << std::setprecision( static_cast<std::streamsize>(std::numeric_limits<float>::digits10 + 1) );
+        const vector<float> &x = *meas.channel_energies();
+        for( size_t i = 0; i < x.size(); ++i )
+          ostr << (i ? "," : "") << x[i];
+      }
+      ostr << "],";
+    }
+
+    ostr << std::setprecision(static_cast<int>(oldprecision));
+
+    ostr << "\n\t\t\t" << q << "y" << q << ":[";
+    if( meas.num_gamma_channels() )
+    {
+      const vector<float> &y0 = *meas.gamma_channel_contents();
+      for( size_t i = 0; i < y0.size(); ++i )
+        ostr << (i ? "," : "") << ((IsNan(y0[i]) || IsInf(y0[i])) ? 0.0f : y0[i]);
+    }
+    ostr << "],";
+
+    double sf = options.display_scale_factor;
+    if( sf <= 0.0 || IsInf(sf) || IsNan(sf) )
+      sf = 1.0;
+    ostr << "\n\t\t\t" << q << "yScaleFactor" << q << ":" << sf;
+
+    // Reference templateID to keep parity with the spectrum writer (suppresses unused-param warning)
+    // and produce predictable, JSON-distinguishable entries when callers want a stable identity.
+    (void)templateID;
+
+    ostr << "\n\t\t}";
+
+    return !ostr.bad();
+  }//write_template_data_js
+
+
+
 }//namespace D3SpectrumExport
 
 

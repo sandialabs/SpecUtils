@@ -221,36 +221,56 @@ SpectrumChartD3 = function(elem, options) {
     return Math.sqrt(Math.pow(a[0]-b[0],2) + Math.pow(a[1]-b[1],2));
   };
 
+  // True when rawData has at least one normal spectrum OR one stacked template.
+  this.hasAnyData = function(){
+    const rd = self.rawData;
+    return !!rd && (((rd.spectra && rd.spectra.length))
+                   || (rd.templates && rd.templates.length));
+  };
+
   this.min_max_x_values = function() {
-    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    if( !self.hasAnyData() )
       return [-1,-1];
 
     var min = null, max = null;
-    self.rawData.spectra.forEach(function(spectrum) {
-      if (!spectrum.x)
-        return;
-
+    const update = function(spectrum){
+      if (!spectrum || !spectrum.x) return;
       if (min == null || spectrum.x[0] < min) min = spectrum.x[0];
       if (max == null || spectrum.x[spectrum.x.length-1] > max) max = spectrum.x[spectrum.x.length-1];
-    });
+    };
+    if( self.rawData.spectra )   self.rawData.spectra.forEach(update);
+    if( self.rawData.templates ) self.rawData.templates.forEach(update);
 
     return [min,max];
   };
 
+  // Default x source used when no spectrum is passed; falls back to first template if no spectra exist.
+  this.defaultXSource = function(){
+    if( self.rawData && self.rawData.spectra && self.rawData.spectra.length )
+      return self.rawData.spectra[0].x;
+    if( self.rawData && self.rawData.templates && self.rawData.templates.length )
+      return self.rawData.templates[0].x;
+    return null;
+  };
+
   this.displayed_raw_start = function(spectrum){
-    if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+    if( !self.hasAnyData() )
       return -1;
     const xstart = self.xScale.domain()[0];
     const bisector = d3.bisector(function(d, x) { return d - x; });
-    return bisector.left(spectrum ? spectrum.x : self.rawData.spectra[0].x, xstart); /* use foreground by default */
+    const src = spectrum ? spectrum.x : self.defaultXSource();
+    if( !src ) return -1;
+    return bisector.left(src, xstart);
   };
 
   this.displayed_raw_end = function(spectrum){
-    if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+    if( !self.hasAnyData() )
       return -1;
     const xend = self.xScale.domain()[1];
     const bisector = d3.bisector(function(d, x) { return d - x; });
-    return bisector.right(spectrum ? spectrum.x : self.rawData.spectra[0].x, xend);  /* use foreground by default */
+    const src = spectrum ? spectrum.x : self.defaultXSource();
+    if( !src ) return -1;
+    return bisector.right(src, xend);
   };
 
 
@@ -707,6 +727,7 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
     + (gridTickStroke ? '.xgrid > .tick, .ygrid > .tick { stroke: ' + gridTickStroke + ';}\n' : "" )
     + (minorGridStroke ? '.minorgrid{ stroke: ' + minorGridStroke + ';}\n' : "" )
     + '.speclinepath, .SpectrumLegendLine { fill: none; }'
+    + '.templatepath { stroke: none; }'
     + (foreStroke ? '.speclinepath.FOREGROUND, .SpectrumLegendLine.FOREGROUND { stroke: ' + foreStroke + '}' : "")
     + (backStroke ? '.speclinepath.BACKGROUND, .SpectrumLegendLine.BACKGROUND { stroke: ' + backStroke + '}' : "")
     + (secondStroke ? '.speclinepath.SECONDARY, .SpectrumLegendLine.SECONDARY { stroke: ' + secondStroke + '}' : "")
@@ -756,38 +777,41 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
 SpectrumChartD3.prototype.do_rebin = function() {
   var self = this;
 
-  if( !this.rawData || !self.rawData.spectra || !self.rawData.spectra.length ) {
+  if( !self.hasAnyData() )
     return;
-  }
 
   // We will choose the rebin factor based on spectrum with the least number of channels.  This is
   //  driven by case of comparing a HPGe spectrum (~16k channel) to a NaI spectrum (~1k channels),
   //  we dont want to lose the definition in the NaI spectrum by combining a bunch of channels.
   //  The side-effect of this is that the HPGe spectrum may have way more points than pixels...
+  // Templates are included in the calculation so stacked-area step widths visually match the data lines.
   let newRebin = 9999;
-  this.rawData.spectra.forEach(function(spectrum) {
+  const considerForRebinFactor = function(spectrum){
     const firstRaw = self.displayed_raw_start(spectrum);
     const lastRaw = self.displayed_raw_end(spectrum);
     const npoints = lastRaw - firstRaw;
-    
+
     if( npoints > 1 && self.size.width > 2 ){
       const thisrebin = Math.max( 1, Math.ceil(self.options.spectrumLineWidth * npoints / self.size.width) );
       newRebin = ((thisrebin > 0) && (thisrebin < newRebin)) ? thisrebin : newRebin;
     }
-  } );
-  
+  };
+  if( this.rawData.spectra )   this.rawData.spectra.forEach(considerForRebinFactor);
+  if( this.rawData.templates ) this.rawData.templates.forEach(considerForRebinFactor);
+
   if( newRebin === 9999 )
     newRebin = 1;
-  
+
   if( this.rebinFactor !== newRebin ){
     this.rebinFactor = newRebin;
     this.updateYAxisTitleText();
   }
-  
-  this.rawData.spectra.forEach(function(spectrum) {
+
+  // Per-spectrum/template rebin body, factored out so spectra and templates share one code path.
+  const rebinOne = function(spectrum){
     let firstRaw = self.displayed_raw_start(spectrum);
     let lastRaw = self.displayed_raw_end(spectrum);
-    
+
     if( newRebin != spectrum.rebinFactor || spectrum.firstRaw !== firstRaw || spectrum.lastRaw !== lastRaw ){
       spectrum.points = [];
 
@@ -803,14 +827,7 @@ SpectrumChartD3.prototype.do_rebin = function() {
       if( lastRaw > spectrum.x.length )
         lastRaw = spectrum.x.length;
 
-
-      /*could do some optimizations here where we actually do a slightly larger */
-      /*  range than displayed, so that next time we might not have to go back */
-      /*  through the data to recompute things (it isnt clear if D3 will plot */
-      /*  these datas, should check on this.) */
-      /*Also, could _maybe_ use energy range, rather than indexes to track if we */
-      /*  need to rebin the data or not... */
-
+      const sf = (typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor : 1.0;
       for( var i = firstRaw; i < lastRaw; i += newRebin ){
         let thisdata = { x: 0, y: 0 };
         if (i >= spectrum.x.length)
@@ -820,12 +837,15 @@ SpectrumChartD3.prototype.do_rebin = function() {
 
         for( let j = 0; (j < newRebin) && ((i+j) < spectrum.y.length); ++j )
           thisdata.y += spectrum.y[i+j];
-        thisdata.y *= spectrum.yScaleFactor;
+        thisdata.y *= sf;
 
         spectrum.points.push( thisdata );
       }
     }
-  });
+  };
+
+  if( this.rawData.spectra )   this.rawData.spectra.forEach(rebinOne);
+  if( this.rawData.templates ) this.rawData.templates.forEach(rebinOne);
 }
 
 SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumToBeAdjusted, linei) {
@@ -854,6 +874,7 @@ SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumT
   if( lastRaw > spectrumToBeAdjusted.x.length )
     lastRaw = spectrumToBeAdjusted.x.length;
 
+  const sf = (typeof spectrumToBeAdjusted.yScaleFactor === "number") ? spectrumToBeAdjusted.yScaleFactor : 1.0;
   let i = firstRaw;
   for( let pointi = 0; pointi < spectrumToBeAdjusted.points.length; pointi++ ){
     let thisdata = spectrumToBeAdjusted.points[pointi];
@@ -861,7 +882,7 @@ SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumT
     thisdata.y = 0;
     for( let j = 0; (j < rebinFactor) && ((i+j) < spectrumToBeAdjusted.y.length); ++j )
       thisdata.y += spectrumToBeAdjusted.y[i+j];
-    thisdata.y *= spectrumToBeAdjusted.yScaleFactor;
+    thisdata.y *= sf;
 
     i += rebinFactor;
   }
@@ -910,6 +931,7 @@ SpectrumChartD3.prototype.setLocalizations = function( input, isInitialDef ) {
     recalFromTo: "Recalibrate data from {1} to {2} keV",
     sumFromTo: "{1} to {2} keV",
     comptonPeakAngle: "{1}° Compton Peak",
+    templateDefaultTitle: "Template",
   };
 
   const notDefined = ( (typeof self.options.txt !== 'object') || (self.options.txt === null) || Array.isArray(self.options.txt) || (self.options.txt instanceof Function) );
@@ -990,6 +1012,18 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   self.setData( self.rawData, resetdomain );
 }
 
+/**
+ * Replaces the stacked template histograms.
+ * `data` is expected to be `{ templates: [...] }` (matching the shape passed to setData);
+ * passing null/undefined or an object with no templates array clears the templates.
+ * Re-runs the full setData path so creation, legend, rebin, and y-domain code all re-execute.
+ */
+SpectrumChartD3.prototype.setTemplates = function( data ){
+  if( !this.rawData ) this.rawData = { spectra: [] };
+  this.rawData.templates = (data && Array.isArray(data.templates)) ? data.templates : [];
+  this.setData( this.rawData, false );
+};
+
 /** Removes all spectra seen with the passed-in type in the raw data. */
 SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spectrumType ) {
   var self = this;
@@ -1022,9 +1056,10 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   /*  - No infs or nans. */
 
   const self = this;
-  
+
   //Remove all the lines for the current drawn histograms
   this.vis.selectAll(".speclinepath").remove();
+  this.vis.selectAll(".templatepath").remove();
 
   this.vis.selectAll('path.line').remove();
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove(); // Clear x-axis slider chart lines if present
@@ -1032,19 +1067,18 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   this.rawData = null;
   this.rebinFactor = -1; /*force rebin calc */
 
-  try
+  // Accept any of: a non-empty spectra array, a non-empty templates array, or both.
+  const hasSpectra   = !!(data && Array.isArray(data.spectra)   && data.spectra.length > 0);
+  const hasTemplates = !!(data && Array.isArray(data.templates) && data.templates.length > 0);
+  if( !hasSpectra && !hasTemplates )
   {
-    if( !data || !data.spectra ) throw null;
-    if( !Array.isArray(data.spectra) || data.spectra.length < 1 )
-      throw 'No spectrum-data specified';
-    /*check that x is same length or one longer than y. */
-    /*Check that all specified y's are the same length */
-  }catch(e){
     this.updateLegend();
-   
     this.redraw()();
     return;
   }
+
+  if( !data.spectra )   data.spectra   = [];
+  if( !data.templates ) data.templates = [];
 
   // Sort data so foreground is first, then secondary, then background (this is mostly so order of legend is reasonable)
   data.spectra.sort( function(lhs,rhs){
@@ -1053,15 +1087,15 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
     const rhs_pos = order.indexOf(rhs.type);
     return ((lhs_pos >= 0) ? lhs_pos : 4) - ((rhs_pos >= 0) ? rhs_pos : 4);
   });
-  
+
   this.rawData = data;
 
-  this.rawData.spectra.forEach( function(spectrum,i){
+  // Expand polynomial xeqn into per-channel x for both spectra and templates.
+  const expandXeqn = function(spectrum){
     if( !spectrum || !spectrum.y || !spectrum.y.length )
       return;
-    if( spectrum.xeqn && spectrum.xeqn.length>1 && !spectrum.x && spectrum.y && spectrum.y.length )
+    if( spectrum.xeqn && spectrum.xeqn.length>1 && !spectrum.x )
     {
-      /* A polynomial equation was specified, rather than lower channel energies */
       spectrum.x = [];
       for( var i = 0; i < spectrum.y.length; ++i )
       {
@@ -1070,11 +1104,13 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
           spectrum.x[i] += spectrum.xeqn[j] * Math.pow(i,j);
       }
     }
-  } );
-  
+  };
+  this.rawData.spectra.forEach(expandXeqn);
+  this.rawData.templates.forEach(expandXeqn);
+
   for (var i = 0; i < this.rawData.spectra.length; ++i)
     this['line'+i] = null;
-  
+
   this.do_rebin();  /*this doesnt appear to be necassay, but JIC */
 
   /*Make it so the x-axis shows all the data */
@@ -1086,6 +1122,21 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   var maxYScaleFactor = 0.1;
   for (var i = 0; i < this.rawData.spectra.length; ++i)
     this.rawData.spectra[i].dataSum = 0;
+
+  // Create stacked-template <path> elements first so they sit UNDER the spectrum lines in z-order
+  // (SVG paint order = DOM order). Filled with template.lineColor; stroke disabled.
+  this.rawData.templates.forEach( function(template,i){
+    template.dataSum = 0;
+    if( template.y && template.y.length ){
+      for( var j = 0; j < template.y.length; ++j ) template.dataSum += template.y[j];
+    }
+    const fill = (template.lineColor && template.lineColor.length) ? template.lineColor : "#888888";
+    self.chartBody.append("path")
+      .attr("id", "templatepath" + i)
+      .attr("class", "templatepath")
+      .attr("fill", fill)
+      .attr("stroke", "none");
+  } );
 
   /* Create the lines - draw background first, then secondary, then unknown types, then foreground */
   const typeDrawOrder = {
@@ -1115,7 +1166,7 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
         .x( function(d){ return self.xScale(d.x); })
         .y( function(d) {
           const y = self.yScale(d.y);
-          return isNaN(y) ? 0 : y;
+          return isFinite(y) ? y : 0;
         } );
 
       this.chartBody.append("path")
@@ -1181,29 +1232,94 @@ SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
 SpectrumChartD3.prototype.update = function() {
   const self = this;
 
-  if (!this.rawData || !this.rawData.spectra || !this.rawData.spectra.length)
+  if( !self.hasAnyData() )
     return;
-  
-  this.rawData.spectra.forEach(function(spectrum, i) {
-    const line = self.vis.select("#spectrumline"+i);
-  
-    if (spectrum.type === self.spectrumTypes.BACKGROUND) {
-      line.attr('visibility', self.options.backgroundSubtract ? 'hidden' : 'visible');
-      if (self.options.backgroundSubtract) return;
-    }
-  
-    // Figure out which set of points to use
-    //  Use background subtract if we're in that view mode, otherwise use the normal set of points
-    const key = self.options.backgroundSubtract && ('bgsubtractpoints' in self.rawData.spectra[i]) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
-    
-    line.attr("d", self['line'+i](self.rawData.spectra[i][key]));
-  });
+
+  if( this.rawData.spectra ){
+    this.rawData.spectra.forEach(function(spectrum, i) {
+      const line = self.vis.select("#spectrumline"+i);
+
+      if (spectrum.type === self.spectrumTypes.BACKGROUND) {
+        line.attr('visibility', self.options.backgroundSubtract ? 'hidden' : 'visible');
+        if (self.options.backgroundSubtract) return;
+      }
+
+      // Figure out which set of points to use
+      //  Use background subtract if we're in that view mode, otherwise use the normal set of points
+      const key = self.options.backgroundSubtract && ('bgsubtractpoints' in self.rawData.spectra[i]) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
+
+      line.attr("d", self['line'+i](self.rawData.spectra[i][key]));
+    });
+  }
 
   if (d3.event && d3.event.keyCode) {
     d3.event.preventDefault();
     d3.event.stopPropagation();
   }
 }
+
+/**
+ * Compute the step-after value of `points` at energy xVal.
+ * Step-after rendering means y is constant from points[k].x up to (but not including) points[k+1].x,
+ * so the value at xVal is the y of the rightmost point whose x is <= xVal.
+ */
+SpectrumChartD3.prototype._templateLookupStepAfter = function( points, xVal ){
+  if( !points || !points.length ) return 0;
+  let idx = d3.bisector(function(d){ return d.x; }).right(points, xVal) - 1;
+  if( idx < 0 ) return 0;
+  if( idx >= points.length ) idx = points.length - 1;
+  return points[idx].y;
+};
+
+/**
+ * Sum of step-after lookups across an array of layers at xVal.
+ */
+SpectrumChartD3.prototype._templateBaselineAt = function( belowLayers, xVal ){
+  let sum = 0;
+  for( let j = 0; j < belowLayers.length; ++j )
+    sum += this._templateLookupStepAfter(belowLayers[j].points, xVal);
+  return sum;
+};
+
+/**
+ * Update the `d` attribute on each #templatepath{i} so they render as a stacked filled area.
+ * Layer i's baseline at any x is the sum of all lower layers' step-after values at that x,
+ * so the layers may have arbitrary (and differing) binnings.
+ * Templates intentionally do NOT participate in background-subtract mode.
+ */
+SpectrumChartD3.prototype.drawTemplates = function() {
+  const self = this;
+  if( !self.rawData || !self.rawData.templates || !self.rawData.templates.length )
+    return;
+  const templates = self.rawData.templates;
+
+  // Cache per-point baseline so y0 and y1 share one lookup instead of doing it twice.
+  // Stored on each datum as `_tplBase`; we clear/rewrite it for every redraw so the value
+  // stays correct under x-zoom (which doesn't change `points`) and under changes to the layers below.
+  for( let i = 0; i < templates.length; ++i ){
+    const t = templates[i];
+    if( !t || !t.points || !t.points.length ){
+      self.vis.select("#templatepath" + i).attr("d", null);
+      continue;
+    }
+    const below = templates.slice(0, i);
+    for( let pi = 0; pi < t.points.length; ++pi )
+      t.points[pi]._tplBase = self._templateBaselineAt(below, t.points[pi].x);
+
+    const area = d3.svg.area()
+      .interpolate("step-after")
+      .x( function(d){ return self.xScale(d.x); } )
+      .y0( function(d){
+        const y = self.yScale(d._tplBase);
+        return isFinite(y) ? y : 0;
+      })
+      .y1( function(d){
+        const y = self.yScale(d._tplBase + d.y);
+        return isFinite(y) ? y : 0;
+      });
+    self.vis.select("#templatepath" + i).attr("d", area(t.points));
+  }
+};
 
 SpectrumChartD3.prototype.redraw = function() {
   const self = this;
@@ -1234,6 +1350,7 @@ SpectrumChartD3.prototype.redraw = function() {
     self.drawRefGammaLines();
     self.updateMouseCoordText();
 
+    self.drawTemplates();
     self.update();
 
     self.yAxisZoomedOutFully = true;
@@ -4698,7 +4815,7 @@ SpectrumChartD3.prototype.setShowMouseStats = function(d) {
 SpectrumChartD3.prototype.updateLegend = function() {
   var self = this;
   
-  if( !this.options.showLegend || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length ) {
+  if( !this.options.showLegend || !self.hasAnyData() ) {
     if( this.legend ) {
       this.legend.remove();
       this.legend = null;
@@ -4984,10 +5101,54 @@ SpectrumChartD3.prototype.updateLegend = function() {
       
     ypos += thisentry.node().getBBox().height + 5;
   });//spectra.forEach
-  
-                    
+
+  const templates = (self.rawData && self.rawData.templates) ? self.rawData.templates : [];
+  if( templates.length > 0 ){
+    templates.forEach( function(template,i){
+      if( !template || !template.y || !template.y.length )
+        return;
+
+      const sf = ((typeof template.yScaleFactor === "number") ? template.yScaleFactor : 1);
+      const nsum = sf * (template.dataSum || 0);
+      const defaultTitle = (self.options.txt.templateDefaultTitle || "Template");
+      const title = (template.title ? template.title : (defaultTitle + " " + (i+1)))
+                      + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)";
+
+      let thisentry = self.legBody.append("g")
+          .attr("transform","translate(0," + ypos + ")");
+
+      let thistxt = thisentry.append("text")
+          .attr("class", "legentry");
+
+      let titlenode = thistxt.append('svg:tspan')
+            .attr('x', "15")
+            .text( title );
+      const txtStart = 0.5*titlenode.node().getBBox().height;
+      titlenode.attr('y', txtStart);
+
+      // Filled rectangle swatch so it visually matches the stacked-area fill.
+      thisentry.append("rect")
+          .attr("class", "SpectrumLegendFill")
+          .attr("x", "0")
+          .attr("y", txtStart - 8)
+          .attr("width", "12")
+          .attr("height", "10")
+          .attr("fill", template.lineColor ? template.lineColor : "#888888")
+          .attr("stroke", "none");
+
+      if( sf != 1 )
+        thistxt.append('svg:tspan')
+          .attr('x', "20")
+          .attr('y', txtStart + thisentry.node().getBBox().height)
+          .text( self.options.txt.scaledBy + " " + sf.toPrecision(4) );
+
+      ypos += thisentry.node().getBBox().height + 5;
+    } );
+  }
+
+
   /*Resize the box to match the text size */
-  var w = this.legBody.node().getBBox().width + 15; 
+  var w = this.legBody.node().getBBox().width + 15;
   this.legendBox.attr('width', w );
   this.legendBox.attr('height', this.legBody.node().getBBox().height + 10 );
   this.legendHeaderClose.attr("transform","translate(" + (w-16) + ",4)");
@@ -8875,6 +9036,7 @@ SpectrumChartD3.prototype.redrawYAxis = function() {
     self.drawRefGammaLines();
     self.updateMouseCoordText();
 
+    self.drawTemplates();
     self.update();
 
     self.yAxisZoomedOutFully = false;
@@ -10568,42 +10730,64 @@ SpectrumChartD3.prototype.getSpectrumTitles = function() {
 /* Returns the data y-range for the currently viewed x-range.  Third element of returned array gives smallest non-zero height in the range */
 SpectrumChartD3.prototype.getYAxisDataDomain = function(){
   var self = this;
-  
-  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+
+  if( !self.hasAnyData() )
     return [0, 3000, self.options.logYAxisMin];
-  
-  var y0, y1, minNonZeroY0 = self.options.logYAxisMin;
-  var foreground = self.rawData.spectra[0];
-  var firstData = self.displayed_start(foreground);
-  var lastData = self.displayed_end(foreground);
-  
-  
-  if( firstData >= 0 ){
-    const forkey = self.options.backgroundSubtract && ('bgsubtractpoints' in foreground) ? 'bgsubtractpoints' : 'points';
-    y0 = y1 = foreground[forkey][firstData].y;
-    if( y0 > 0 ) minNonZeroY0 = y0;
-    
-    self.rawData.spectra.forEach(function(spectrum) {
-      // Don't consider background spectrum if we're viewing the Background Subtract
-      if (self.options.backgroundSubtract && spectrum.type === self.spectrumTypes.BACKGROUND) return;
-      firstData = self.displayed_start(spectrum);
-      lastData = self.displayed_end(spectrum);
-      var speckey = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
-      
-      for (var i = firstData; i < lastData; i++) {
-        if (spectrum[speckey][i]) {
-          const y = spectrum[speckey][i].y;
-          y0 = Math.min( y0, y );
-          y1 = Math.max( y1, y );
-          if( y > 0 ) minNonZeroY0 = Math.min( minNonZeroY0, y );
+
+  var y0 = null, y1 = null, minNonZeroY0 = self.options.logYAxisMin;
+  const hasSpectra = !!(self.rawData.spectra && self.rawData.spectra.length);
+
+  if( hasSpectra ){
+    var foreground = self.rawData.spectra[0];
+    var firstData = self.displayed_start(foreground);
+    var lastData = self.displayed_end(foreground);
+
+    if( firstData >= 0 ){
+      const forkey = self.options.backgroundSubtract && ('bgsubtractpoints' in foreground) ? 'bgsubtractpoints' : 'points';
+      y0 = y1 = foreground[forkey][firstData].y;
+      if( y0 > 0 ) minNonZeroY0 = y0;
+
+      self.rawData.spectra.forEach(function(spectrum) {
+        // Don't consider background spectrum if we're viewing the Background Subtract
+        if (self.options.backgroundSubtract && spectrum.type === self.spectrumTypes.BACKGROUND) return;
+        firstData = self.displayed_start(spectrum);
+        lastData = self.displayed_end(spectrum);
+        var speckey = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? 'bgsubtractpoints' : 'points';  // Figure out which set of points to use
+
+        for (var i = firstData; i < lastData; i++) {
+          if (spectrum[speckey][i]) {
+            const y = spectrum[speckey][i].y;
+            y0 = Math.min( y0, y );
+            y1 = Math.max( y1, y );
+            if( y > 0 ) minNonZeroY0 = Math.min( minNonZeroY0, y );
+          }
         }
-      }
-    });
-  }else {
-    y0 = 0;
-    y1 = 3000;
+      });
+    }
   }
-  
+
+  // Include the top of the template stack in y1 max so the y-axis grows to fit.
+  // Probe each template's own points (after rebin); template baselines are 0, so they only push y1 up.
+  const templates = (self.rawData && self.rawData.templates) ? self.rawData.templates : [];
+  if( templates.length > 0 ){
+    const xMin = self.xScale.domain()[0];
+    const xMax = self.xScale.domain()[1];
+    if( y0 === null ){ y0 = 0; y1 = 0; }
+
+    for( let ti = 0; ti < templates.length; ++ti ){
+      const t = templates[ti];
+      if( !t || !t.points || !t.points.length ) continue;
+      for( let pi = 0; pi < t.points.length; ++pi ){
+        const xv = t.points[pi].x;
+        if( xv < xMin || xv > xMax ) continue;
+        const stackTop = self._templateBaselineAt(templates, xv);
+        if( stackTop > y1 ) y1 = stackTop;
+        if( stackTop > 0 && stackTop < minNonZeroY0 ) minNonZeroY0 = stackTop;
+      }
+    }
+  }
+
+  if( y0 === null || y1 === null ){ y0 = 0; y1 = 3000; }
   if( y0 > y1 ) { y1 = [y0, y0 = y1][0]; }
   if( y0 == y1 ){ y0 -=1; y1 += 1; }
 
@@ -10616,7 +10800,7 @@ SpectrumChartD3.prototype.getYAxisDataDomain = function(){
 SpectrumChartD3.prototype.getYAxisDomain = function(){
   var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+  if( !self.hasAnyData() )
     return [3000,0];
     
   let yrange, y0, y1;
