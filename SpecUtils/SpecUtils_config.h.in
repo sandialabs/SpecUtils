@@ -46,7 +46,11 @@
 
 #include <cmath>
 
-#if( defined(_WIN32) && defined(_MSC_VER) )
+#if( defined(_WIN32) && defined(_MSC_VER) && _MSC_VER < 1800 )
+// VS 2013 (MSVC 1800) added C99 isnan/isinf in <cmath>; only define these
+// shims for older MSVC.  Leaving them in place for modern MSVC causes
+// header-only libraries that call std::isnan(...) (e.g. nlohmann::json) to
+// expand to std::_isnan(...), which does not exist.
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
