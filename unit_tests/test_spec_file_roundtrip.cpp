@@ -34,6 +34,7 @@
 #include "doctest.h"
 
 #include "SpecUtils/SpecFile.h"
+#include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
 
@@ -83,6 +84,8 @@ struct FormatInfo
   bool preserves_num_channels;  // false for Exploranium (may truncate channels)
   bool preserves_exact_counts;  // false for formats that may round/truncate counts
   float count_tolerance;        // relative tolerance for gamma count sum comparison
+  bool preserves_start_time;    // true if format stores a measurement start time
+  int start_time_tolerance_sec; // allowed round-trip drift; 1 for whole-second-precision formats
   function<bool( SpecFile &, istream & )> loader;
 };
 
@@ -95,42 +98,49 @@ static vector<FormatInfo> get_formats()
   formats.push_back( {
     SaveSpectrumAsType::N42_2012, "N42_2012",
     false, true, true, true, true, true, true, 0.001f,
+    true, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_N42( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::N42_2006, "N42_2006",
     false, true, true, true, true, true, true, 0.001f,
+    true, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_N42( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::Pcf, "Pcf",
     false, true, true, true, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_pcf( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::Txt, "Txt",
     false, true, true, false, false, true, true, 0.001f,
+    false, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_txt_or_csv( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::Csv, "Csv",
     false, false, false, false, false, true, true, 0.001f,
+    false, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_txt_or_csv( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::ExploraniumGr130v0, "ExploraniumGr130v0",
     false, false, false, false, false, false, false, 0.15f,
+    false, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_binary_exploranium( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::ExploraniumGr135v2, "ExploraniumGr135v2",
     false, false, false, false, false, false, false, 0.15f,
+    false, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_binary_exploranium( is ); }
   } );
 
@@ -138,42 +148,49 @@ static vector<FormatInfo> get_formats()
   formats.push_back( {
     SaveSpectrumAsType::Chn, "Chn",
     true, true, true, false, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_chn( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::SpcBinaryInt, "SpcBinaryInt",
     true, true, true, false, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_binary_spc( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::SpcBinaryFloat, "SpcBinaryFloat",
     true, true, true, false, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_binary_spc( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::SpcAscii, "SpcAscii",
     true, true, true, false, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_iaea_spc( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::SpeIaea, "SpeIaea",
     true, true, true, false, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_iaea( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::Cnf, "Cnf",
     true, true, true, false, true, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_cnf( is ); }
   } );
 
   formats.push_back( {
     SaveSpectrumAsType::Tka, "Tka",
     true, false, false, false, false, true, true, 0.01f,
+    false, 0,
     []( SpecFile &sf, istream &is ) { return sf.load_from_tka( is ); }
   } );
 
@@ -181,6 +198,7 @@ static vector<FormatInfo> get_formats()
   formats.push_back( {
     SaveSpectrumAsType::Uri, "Uri",
     true, true, true, true, false, true, true, 0.01f,
+    true, 1,
     []( SpecFile &sf, istream &is ) { return sf.load_from_uri( is ); }
   } );
 #endif
@@ -264,6 +282,22 @@ static void compare_roundtrip( const SpecFile &original,
         fmt.name << ": real time mismatch: original=" << orig_rt
         << " reloaded=" << reload_rt );
     }
+
+    // Compare start time
+    if( fmt.preserves_start_time
+        && !SpecUtils::is_special( summed->start_time() )
+        && !SpecUtils::is_special( reloaded_meas->start_time() ) )
+    {
+      const SpecUtils::time_point_t orig_st = summed->start_time();
+      const SpecUtils::time_point_t reload_st = reloaded_meas->start_time();
+      const auto signed_diff = orig_st - reload_st;
+      const auto diff = (signed_diff < signed_diff.zero()) ? -signed_diff : signed_diff;
+      const auto tolerance = std::chrono::seconds( fmt.start_time_tolerance_sec );
+      CHECK_MESSAGE( diff <= tolerance,
+        fmt.name << ": start time mismatch: original="
+        << SpecUtils::to_iso_string( orig_st )
+        << " reloaded=" << SpecUtils::to_iso_string( reload_st ) );
+    }
   }
   else
   {
@@ -336,6 +370,32 @@ static void compare_roundtrip( const SpecFile &original,
           fmt.name << ": latitude mismatch" );
         CHECK_MESSAGE( fabs( original.mean_longitude() - reloaded.mean_longitude() ) < 0.001,
           fmt.name << ": longitude mismatch" );
+      }
+    }
+
+    // Compare per-measurement start time on formats that preserve record structure.
+    if( fmt.preserves_start_time
+        && (fmt.format == SaveSpectrumAsType::N42_2012
+            || fmt.format == SaveSpectrumAsType::N42_2006
+            || fmt.format == SaveSpectrumAsType::Pcf)
+        && (reloaded.num_measurements() == original.num_measurements()) )
+    {
+      const auto tolerance = std::chrono::seconds( fmt.start_time_tolerance_sec );
+      for( size_t i = 0; i < original.num_measurements(); ++i )
+      {
+        const std::shared_ptr<const Measurement> orig_m = original.measurement_at_index( i );
+        const std::shared_ptr<const Measurement> reload_m = reloaded.measurement_at_index( i );
+        if( !orig_m || !reload_m )
+          continue;
+        if( SpecUtils::is_special( orig_m->start_time() )
+            || SpecUtils::is_special( reload_m->start_time() ) )
+          continue;
+        const auto signed_diff = orig_m->start_time() - reload_m->start_time();
+        const auto diff = (signed_diff < signed_diff.zero()) ? -signed_diff : signed_diff;
+        CHECK_MESSAGE( diff <= tolerance,
+          fmt.name << " meas " << i << ": start time mismatch: original="
+          << SpecUtils::to_iso_string( orig_m->start_time() )
+          << " reloaded=" << SpecUtils::to_iso_string( reload_m->start_time() ) );
       }
     }
   }//if single-spectrum / else multi-record
