@@ -7214,14 +7214,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       const exgauss_cdf = (x, tau) => {
         if( tau <= 0 ) return gauss_cdf(x);
-        const lambda = 1 / tau, lambda_sigma = lambda * sigma;
-        const a = (mean - x) / sigma;
-        const phi_a = 0.5 * (1 + erf(a / sqrt2));
-        const phi_shift = 0.5 * (1 + erf((a - lambda_sigma) / sqrt2));
-        const exp_arg = -lambda * (mean - x) + 0.5 * lambda_sigma * lambda_sigma;
-        if( exp_arg > 700 ) return 1;
-        if( exp_arg < -700 ) return Math.max(0, 1 - phi_a);
-        return Math.max(0, Math.min(1, 1 - phi_a + Math.exp(exp_arg) * phi_shift));
+        const one_div_root_two = 0.7071067812;
+        const t = (x - mean) / sigma;
+        const erf_arg  = one_div_root_two * t;
+        const exp_arg  = sigma * (2.0*tau*t + sigma) / (2.0*tau*tau);
+        const erfc_arg = one_div_root_two * (t + (sigma/tau));
+
+        if( (exp_arg > 87.0) || (erfc_arg > 10.0) )
+          return 0.5 * (1.0 + erf(erf_arg));
+
+        return 0.5 * (1.0 + erf(erf_arg) + Math.exp(exp_arg) * erfc(erfc_arg));
       };
 
       const x = 0.5*(x1+x0);
