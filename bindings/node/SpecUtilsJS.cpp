@@ -819,10 +819,15 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   Napi::HandleScope scope(env);
   
-  int length = info.Length();
-  
-  // Note: Napi's ThrowAsJavaScriptException() only schedules a JS exception; it does not stop
-  //  C++ execution, so we must `return` after each throw to avoid operating on invalid state.
+  const int length = info.Length();
+
+  // Always leave m_spec pointing at a valid (possibly empty) SpecFile.  The accessors below only
+  //  `assert( m_spec )` before dereferencing it, so if any of the JS exceptions scheduled below are
+  //  ignored (ThrowAsJavaScriptException only schedules a JS exception; it does not stop C++
+  //  execution), a method call must not dereference a null m_spec in a release build.
+  m_spec = std::make_shared<SpecUtils::SpecFile>();
+
+  // Note: because of the above, we still `return` after each throw to avoid further work.
   if (length != 1 || !info[0].IsString() ) {
     Napi::TypeError::New(env, "Expected String Path To File").ThrowAsJavaScriptException();
     return;
@@ -830,14 +835,10 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
 
   const std::string path = info[0].ToString().Utf8Value();
 
-  auto ptr = std::make_shared<SpecUtils::SpecFile>();
-  const bool loaded = ptr->load_file( path, SpecUtils::ParserType::Auto );
-  if( !loaded ){
+  if( !m_spec->load_file( path, SpecUtils::ParserType::Auto ) ){
     Napi::TypeError::New(env, "Could not decode as a spectrum file.").ThrowAsJavaScriptException();
     return;
   }
-
-  m_spec = ptr;
 }//SpecFile constructor
 
 SpecFile::~SpecFile()

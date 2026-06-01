@@ -301,6 +301,41 @@ Java_gov_sandia_specutils_internal_Native_specFileGetMeasurementBySampleDet
         handle_as<SpecUtils_SpecFile>(h), sampleNumber, det.c_str()));
 }
 
+// Reference-counted measurement handles: these keep the underlying measurement alive independent of
+// the SpecFile, so the wrapper cannot dangle if the file is later modified or destroyed.
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_specutils_internal_Native_specFileGetMeasurementRefByIndex
+  (JNIEnv *env, jclass, jlong h, jint index) {
+    if (check_handle(env, h, "specFileGetMeasurementRefByIndex")) return 0;
+    return to_handle(SpecUtils_SpecFile_get_measurement_ref_by_index(
+        handle_as<SpecUtils_SpecFile>(h), static_cast<uint32_t>(index)));
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_specutils_internal_Native_specFileGetMeasurementRefBySampleDet
+  (JNIEnv *env, jclass, jlong h, jint sampleNumber, jstring jdet) {
+    if (check_handle(env, h, "specFileGetMeasurementRefBySampleDet")) return 0;
+    JStringUtf8 det(env, jdet);
+    return to_handle(SpecUtils_SpecFile_get_measurement_ref_by_sample_det(
+        handle_as<SpecUtils_SpecFile>(h), sampleNumber, det.c_str()));
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_specutils_internal_Native_measurementPtrFromRef
+  (JNIEnv *env, jclass, jlong refHandle) {
+    if (check_handle(env, refHandle, "measurementPtrFromRef")) return 0;
+    return to_handle(SpecUtils_Measurement_ptr_from_ref(
+        handle_as<const SpecUtils_CountedRef_Measurement>(refHandle)));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_specutils_internal_Native_countedRefMeasurementDestroy
+  (JNIEnv *, jclass, jlong refHandle) {
+    if (refHandle != 0)
+        SpecUtils_CountedRef_Measurement_destroy(
+            handle_as<const SpecUtils_CountedRef_Measurement>(refHandle));
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_gov_sandia_specutils_internal_Native_specFileDetectorName
   (JNIEnv *env, jclass, jlong h, jint index) {

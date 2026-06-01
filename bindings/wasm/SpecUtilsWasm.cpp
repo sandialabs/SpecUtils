@@ -56,8 +56,12 @@ bool SpecUtils_load_from_buffer( SpecUtils_SpecFile *instance,
   if( !instance || !data || length == 0 )
     return false;
 
-  // Write data to a temp file in MEMFS so the existing file-based parsers can read it
-  const char *tmp_path = "/tmp/_specutils_wasm_input";
+  // Write data to a temp file in MEMFS so the existing file-based parsers can read it.  Use a
+  //  per-call unique name (WASM is single-threaded, so the static counter needs no locking) so a
+  //  re-entrant or interleaved call cannot clobber another call's temp file.
+  static unsigned s_input_counter = 0;
+  char tmp_path[64];
+  snprintf( tmp_path, sizeof(tmp_path), "/tmp/_specutils_wasm_input_%u", s_input_counter++ );
 
   FILE *f = fopen( tmp_path, "wb" );
   if( !f )
@@ -109,7 +113,10 @@ uint8_t *SpecUtils_export_to_buffer( SpecUtils_SpecFile *instance,
   const SpecUtils::SaveSpectrumAsType fmt =
     static_cast<SpecUtils::SaveSpectrumAsType>( format_int );
 
-  const char *tmp_path = "/tmp/_specutils_wasm_output";
+  // Per-call unique name; see note in SpecUtils_load_from_buffer.
+  static unsigned s_output_counter = 0;
+  char tmp_path[64];
+  snprintf( tmp_path, sizeof(tmp_path), "/tmp/_specutils_wasm_output_%u", s_output_counter++ );
 
   try
   {

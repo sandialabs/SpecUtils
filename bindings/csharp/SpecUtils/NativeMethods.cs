@@ -70,6 +70,24 @@ internal static partial class NativeMethods
         int sampleNumber,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string detName);
 
+    // Reference-counted measurement handles: keep the underlying measurement alive independent of
+    // the SpecFile, so the view pointer cannot dangle.  Caller must destroy the returned ref handle.
+    [DllImport(LibName, CallingConvention = CC)]
+    internal static extern IntPtr SpecUtils_SpecFile_get_measurement_ref_by_index(
+        IntPtr instance, uint index);
+
+    [DllImport(LibName, CallingConvention = CC)]
+    internal static extern IntPtr SpecUtils_SpecFile_get_measurement_ref_by_sample_det(
+        IntPtr instance,
+        int sampleNumber,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string detName);
+
+    [DllImport(LibName, CallingConvention = CC)]
+    internal static extern IntPtr SpecUtils_Measurement_ptr_from_ref(IntPtr refInstance);
+
+    [DllImport(LibName, CallingConvention = CC)]
+    internal static extern void SpecUtils_CountedRef_Measurement_destroy(IntPtr refInstance);
+
     [DllImport(LibName, CallingConvention = CC)]
     internal static extern uint SpecUtils_SpecFile_number_detectors(IntPtr instance);
 
@@ -172,6 +190,11 @@ internal static partial class NativeMethods
 
     // ---- SpecFile sum measurements ----
 
+    // NOTE: detectorNames maps to C `const char ** const`.  The default marshaller will NOT convert
+    //  a managed string[] here - the caller must hand-marshal each name to a native UTF-8 buffer
+    //  (e.g. Marshal.StringToCoTaskMemUTF8), pass the array of those IntPtrs, and free them
+    //  afterwards.  There is intentionally no public string[] wrapper yet; add one (that does the
+    //  marshalling) before exposing this, rather than passing managed strings directly.
     [DllImport(LibName, CallingConvention = CC)]
     internal static extern IntPtr SpecUtils_SpecFile_sum_measurements(
         IntPtr instance,

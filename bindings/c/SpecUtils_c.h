@@ -36,6 +36,16 @@ typedef struct SpecUtils_EnergyCal SpecUtils_EnergyCal;
  */
 typedef struct SpecUtils_CountedRef_EnergyCal SpecUtils_CountedRef_EnergyCal;
 
+/** A pointer to a `std::shared_ptr<const SpecUtils::Measurement>` object.
+
+ Holding one of these keeps the underlying `SpecUtils::Measurement` alive independent of the
+ `SpecUtils_SpecFile` it came from, so the `SpecUtils_Measurement` pointer obtained from it (via
+ `SpecUtils_Measurement_ptr_from_ref`) cannot dangle even if the file is later reset, cleaned up,
+ modified, or destroyed.  Prefer this over the raw `SpecUtils_SpecFile_get_measurement_by_*`
+ borrowed pointers when the measurement may outlive, or be used across mutations of, the file.
+ */
+typedef struct SpecUtils_CountedRef_Measurement SpecUtils_CountedRef_Measurement;
+
   
 /** Allocate and initialize a new empty `SpecUtils::SpecFile` object, returning a pointer to it.
  
@@ -210,7 +220,44 @@ DLLEXPORT const SpecUtils_Measurement* CALLINGCONVENTION
 SpecUtils_SpecFile_get_measurement_by_sample_det( const SpecUtils_SpecFile * const instance,
                                           const int sample_number,
                                           const char * const det_name );
-  
+
+/** Returns an owning, reference-counted handle to the measurement at the specified index.
+
+ Unlike `SpecUtils_SpecFile_get_measurement_by_index`, the returned handle keeps the underlying
+ measurement alive, so it remains valid even after the `SpecUtils_SpecFile` is modified or destroyed.
+
+ You OWN the returned handle and must call `SpecUtils_CountedRef_Measurement_destroy(...)` on it,
+ or else it will be a memory leak.  Use `SpecUtils_Measurement_ptr_from_ref(...)` to get a
+ `SpecUtils_Measurement` pointer (valid for the lifetime of the ref) to read the measurement.
+
+ @returns The reference-counted handle, or NULL if the index is too large.
+ */
+DLLEXPORT const SpecUtils_CountedRef_Measurement* CALLINGCONVENTION
+SpecUtils_SpecFile_get_measurement_ref_by_index( const SpecUtils_SpecFile * const instance,
+                                          const uint32_t index );
+
+/** Returns an owning, reference-counted handle to the measurement with the specified sample number
+ and detector name.  See `SpecUtils_SpecFile_get_measurement_ref_by_index` for ownership semantics.
+
+ @returns The reference-counted handle, or NULL if no such measurement exists.
+ */
+DLLEXPORT const SpecUtils_CountedRef_Measurement* CALLINGCONVENTION
+SpecUtils_SpecFile_get_measurement_ref_by_sample_det( const SpecUtils_SpecFile * const instance,
+                                          const int sample_number,
+                                          const char * const det_name );
+
+/** Returns the `SpecUtils_Measurement` pointer owned by a `SpecUtils_CountedRef_Measurement`.
+
+ Do NOT call `SpecUtils_Measurement_destroy(...)` on the returned pointer - its lifetime is managed
+ by the counted-ref handle you passed in (and it is valid only while that handle is alive).
+ */
+DLLEXPORT const SpecUtils_Measurement* CALLINGCONVENTION
+SpecUtils_Measurement_ptr_from_ref( const SpecUtils_CountedRef_Measurement * const instance );
+
+/** De-allocates a `SpecUtils_CountedRef_Measurement` (releasing one reference to the measurement). */
+DLLEXPORT void CALLINGCONVENTION
+SpecUtils_CountedRef_Measurement_destroy( const SpecUtils_CountedRef_Measurement *instance );
+
 /** Returns the number of detectors (both gamma and/or neutron) in the spectrum file.
  
  The data for each detector is referenced using the detectors name, and usually
