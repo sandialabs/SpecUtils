@@ -1872,27 +1872,32 @@ namespace rapidxml
         // Use translation skip
         Ch *src = text;
         Ch *dest = src;
-        while ((text_end-src)>6 && StopPred::test(*src))
+        // Scan up to the first stop character (markup), decoding entities as we go.  The loop is
+        //  bounded only by text_end; each fixed-length entity look-ahead is individually guarded by
+        //  `avail` (bytes remaining), so we both avoid reading past text_end AND no longer silently
+        //  drop the final few bytes of a value (the old `(text_end-src)>6` margin did the latter).
+        while (src < text_end && StopPred::test(*src))
         {
           // If entity translation is enabled
           if (!(Flags & parse_no_entity_translation))
           {
+            const std::ptrdiff_t avail = text_end - src;   // bytes remaining, >= 1
             // Test if replacement is needed
-            if (src[0] == Ch('&'))
+            if ((src[0] == Ch('&')) && (avail >= 2))
             {
               switch (src[1])
               {
-                  
+
                   // &amp; &apos;
                 case Ch('a'):
-                  if (src[2] == Ch('m') && src[3] == Ch('p') && src[4] == Ch(';'))
+                  if (avail >= 5 && src[2] == Ch('m') && src[3] == Ch('p') && src[4] == Ch(';'))
                   {
                     *dest = Ch('&');
                     ++dest;
                     src += 5;
                     continue;
                   }
-                  if (src[2] == Ch('p') && src[3] == Ch('o') && src[4] == Ch('s') && src[5] == Ch(';'))
+                  if (avail >= 6 && src[2] == Ch('p') && src[3] == Ch('o') && src[4] == Ch('s') && src[5] == Ch(';'))
                   {
                     *dest = Ch('\'');
                     ++dest;
@@ -1900,10 +1905,10 @@ namespace rapidxml
                     continue;
                   }
                   break;
-                  
+
                   // &quot;
                 case Ch('q'):
-                  if (src[2] == Ch('u') && src[3] == Ch('o') && src[4] == Ch('t') && src[5] == Ch(';'))
+                  if (avail >= 6 && src[2] == Ch('u') && src[3] == Ch('o') && src[4] == Ch('t') && src[5] == Ch(';'))
                   {
                     *dest = Ch('"');
                     ++dest;
@@ -1911,10 +1916,10 @@ namespace rapidxml
                     continue;
                   }
                   break;
-                  
+
                   // &gt;
                 case Ch('g'):
-                  if (src[2] == Ch('t') && src[3] == Ch(';'))
+                  if (avail >= 4 && src[2] == Ch('t') && src[3] == Ch(';'))
                   {
                     *dest = Ch('>');
                     ++dest;
@@ -1922,10 +1927,10 @@ namespace rapidxml
                     continue;
                   }
                   break;
-                  
+
                   // &lt;
                 case Ch('l'):
-                  if (src[2] == Ch('t') && src[3] == Ch(';'))
+                  if (avail >= 4 && src[2] == Ch('t') && src[3] == Ch(';'))
                   {
                     *dest = Ch('<');
                     ++dest;
@@ -1936,7 +1941,7 @@ namespace rapidxml
                   
                   // &#...; - assumes ASCII
                 case Ch('#'):
-                  if (src[2] == Ch('x'))
+                  if ((avail >= 3) && (src[2] == Ch('x')))
                   {
                     unsigned long code = 0;
                     src += 3;   // Skip &#x
@@ -1974,8 +1979,10 @@ namespace rapidxml
                   }
                   if (src < text_end && *src == Ch(';'))
                     ++src;
-                  else
+                  else if (!(Flags & allow_sloppy_parse))
                     RAPIDXML_PARSE_ERROR("expected ;", src);
+                  // sloppy: leave src as-is; the (partial) decoded char was already emitted and the
+                  //  outer loop / post-loop end-of-data handling continues from here.
                   continue;
                   
                   // Something else
@@ -1997,23 +2004,31 @@ namespace rapidxml
               *dest = Ch(' '); ++dest;    // Put single space in dest
               ++src;                      // Skip first whitespace char
               // Skip remaining whitespace chars
-              while ( (src != text_end) && ((src+1) != text_end) && whitespace_pred::test(*src))
+              while ( (src < text_end) && whitespace_pred::test(*src))
                 ++src;
               continue;
             }
           }//if (Flags & parse_normalize_whitespace)
-          
+
           // No replacement, only copy character
           *dest++ = *src++;
-          
-        }//while ((text_end-src)>6 && StopPred::test(*src))
-        
+
+        }//while (src < text_end && StopPred::test(*src))
+
         // Return new end
         text = src;
-        
-        assert( text < text_end );
-        assert( dest < text_end );
-        
+
+        // If we ran to the end of the buffer without hitting a stop (markup) character, the value
+        //  was not properly terminated.  In strict mode this is an error; in sloppy mode (used for
+        //  truncated/incomplete files) we simply stop here so the caller can keep what was parsed.
+        //  Stopping at text_end matters because the caller dereferences `text` and writes a
+        //  terminator at the value end - both of which must stay in-bounds.
+        if( (src >= text_end) && !(Flags & allow_sloppy_parse) )
+          RAPIDXML_PARSE_ERROR("unexpected end of data", src);
+
+        assert( text <= text_end );
+        assert( dest <= text_end );
+
         return dest;
         
       }
@@ -2617,9 +2632,11 @@ namespace rapidxml
           end = skip_and_expand_character_refs<text_pred, text_pure_with_ws_pred, Flags>(text, text_end, false);
         else
           end = skip_and_expand_character_refs<text_pred, text_pure_no_ws_pred, Flags>(text, text_end, false);
-        
-        assert( text < text_end );
-        
+
+        // In sloppy mode `text` may be == text_end here (a value that ran to the end of a truncated
+        //  buffer); strict mode guarantees text < text_end (the scan throws otherwise).
+        assert( text <= text_end );
+
         // Trim trailing whitespace if flag is set; leading was already trimmed by whitespace skip after >
         if (Flags & parse_trim_whitespace)
         {
@@ -2636,7 +2653,16 @@ namespace rapidxml
               --end;
           }
         }
-        
+
+        // In sloppy mode a value can run to the very end of a (truncated) buffer, leaving no room to
+        //  write the NUL terminator that callers using value() as a C-string rely on.  When string
+        //  terminators are enabled, drop the final character so the terminator fits in-bounds: losing
+        //  one byte of malformed/truncated input is preferable to handing back a non-terminated value.
+        //  This is done before the value length is recorded below so length and terminator stay
+        //  consistent.  (value < text_end on entry, so end > value here and this cannot underflow.)
+        if (!(Flags & parse_no_string_terminators) && (end >= text_end))
+          end = text_end - 1;
+
         // If characters are still left between end and value (this test is only necessary if normalization is enabled)
         // Create new data node
         if (!(Flags & parse_no_data_nodes))
@@ -2651,18 +2677,21 @@ namespace rapidxml
           if (*node->value() == Ch('\0'))
             node->value(value, end - value);
         
-        // Place zero terminator after value
+        // Place zero terminator after value.  `text` may be == text_end in sloppy mode, so guard the
+        //  read of `*text`; the `end` adjustment above guarantees `end < text_end` here, so the
+        //  terminator write is always in-bounds and the value is always NUL-terminated.
         if (!(Flags & parse_no_string_terminators))
         {
-          Ch ch = *text;
+          const Ch ch = (text < text_end) ? *text : Ch('\0');
+          assert( end < text_end );
           *end = Ch('\0');
           return ch;      // Return character that ends data; this is required because zero terminator overwritten it
         }
-        
-        assert( text < text_end );
-        
+
+        assert( text <= text_end );
+
         // Return character that ends data
-        return *text;
+        return (text < text_end) ? *text : Ch('\0');
       }
 #endif
       
@@ -2968,9 +2997,11 @@ namespace rapidxml
           }
         }
         
-        assert( text < text_end );
-        
-        
+        // In sloppy mode parse_node_contents can return with text == text_end (a child value that
+        //  ran to the end of a truncated buffer); the name-terminator code just below handles that.
+        assert( text <= text_end );
+
+
         // Place zero terminator after name
         if (!(Flags & parse_no_string_terminators))
         {
@@ -2979,7 +3010,7 @@ namespace rapidxml
           else
             element->name()[element->name_size()] = Ch('\0');
         }
-        
+
         // Return parsed element
         return element;
       }
@@ -3122,14 +3153,14 @@ namespace rapidxml
               text += 4;      // Skip 'xml '
               
               xml_node<Ch> *val = parse_xml_declaration<Flags>(text,text_end);
-              assert( text < text_end );
+              assert( text <= text_end );   // sloppy mode may stop at text_end on truncated input
               return val;
             }
             else
             {
               // Parse PI
               xml_node<Ch> *val = parse_pi<Flags>(text,text_end);
-              assert( text < text_end );
+              assert( text <= text_end );   // sloppy mode may stop at text_end on truncated input
               return val;
             }
             
@@ -3150,7 +3181,7 @@ namespace rapidxml
                   // '<!--' - xml comment
                   text += 3;     // Skip '!--'
                   xml_node<Ch> *val = parse_comment<Flags>(text,text_end);
-                  assert( text < text_end );
+                  assert( text <= text_end );   // sloppy mode may stop at text_end on truncated input
                   return val;
                 }
                 break;
@@ -3164,7 +3195,7 @@ namespace rapidxml
                   // '<![CDATA[' - cdata
                   text += 8;     // Skip '![CDATA['
                   xml_node<Ch> *val = parse_cdata<Flags>(text,text_end);
-                  assert( text < text_end );
+                  assert( text <= text_end );   // sloppy mode may stop at text_end on truncated input
                   return val;
                 }
                 break;
@@ -3179,7 +3210,7 @@ namespace rapidxml
                   // '<!DOCTYPE ' - doctype
                   text += 9;      // skip '!DOCTYPE '
                   xml_node<Ch> *val = parse_doctype<Flags>(text,text_end);
-                  assert( text < text_end );
+                  assert( text <= text_end );   // sloppy mode may stop at text_end on truncated input
                   return val;
                 }
                 
@@ -3538,8 +3569,10 @@ namespace rapidxml
                 
                 if (xml_node<Ch> *child = parse_node<Flags>(text, text_end, node, depth))
                   node->append_node(child);
-                
-                assert( text < text_end );
+
+                // sloppy mode: parse_node may return with text == text_end on truncated input; the
+                //  loop-top `(text+1) >= text_end` guard then stops parsing cleanly.
+                assert( text <= text_end );
               }
               break;  //case Ch('<'):
               
@@ -3553,7 +3586,9 @@ namespace rapidxml
               // Data node
             default:
               next_char = parse_and_append_data<Flags>(node, text, contents_start, text_end );
-              assert( text < text_end );
+              // In sloppy mode a value can run to the buffer end, leaving text == text_end; the
+              //  `(text+1) >= text_end` check at `after_data_node` then stops parsing cleanly.
+              assert( text <= text_end );
               goto after_data_node;   // Bypass regular processing after data nodes
               
           }
@@ -3839,12 +3874,14 @@ namespace rapidxml
             //printf( "Skipped ahead %i\n", static_cast<int>(text - start_text) );
             end = text;
           }
-          
-          assert( text < text_end );
-          
+
+          // In sloppy mode the value scan can stop at text_end (truncated/unterminated attribute);
+          //  the missing-end-quote handling just below already deals with text == text_end safely.
+          assert( text <= text_end );
+
           // Set attribute value
           attribute->value(value, end - value);
-          
+
           // Make sure that end quote is present
           if ( (quote==Ch('\"') || quote==Ch('\'')) && (((text+1) >= text_end) || (*text != quote)) )
           {
