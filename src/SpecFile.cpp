@@ -229,8 +229,11 @@ namespace
       if( datacal == wantedcal )  //|| (*datacal) == (*wantedcal) )
       {
         assert( results.size() == channel_counts->size() );
-        
-        for( size_t j = 0; j < nbin; ++j )
+
+        // Bound by the actual source size as well as nbin: should be equal (same calibration), but
+        //  don't read past channel_counts if a Measurement ever has fewer counts than num_channels().
+        const size_t nsum = std::min( nbin, channel_counts->size() );
+        for( size_t j = 0; j < nsum; ++j )
           results[j] += (*channel_counts)[j];
       }else if( channel_counts->size() > 3 )
       {
@@ -8156,20 +8159,24 @@ std::shared_ptr<Measurement> SpecFile::sum_measurements( const std::set<int> &sa
         if( results[i].size() )
         {
           const float *spec_array = &(results[i][0]);
-          
+
+          // Bound by the actual buffer length as well as spec_size (taken from the first spectrum):
+          //  they should be equal under the common-binning invariant, but never read past results[i].
+          const size_t nsum = std::min( spec_size, results[i].size() );
+
 #if( SpecUtils_USE_SIMD )
-          const size_t aligendN = spec_size - (spec_size % 4);
-          for( size_t i = 0; i < aligendN; i += 4 )
+          const size_t aligendN = nsum - (nsum % 4);
+          for( size_t j = 0; j < aligendN; j += 4 )
           {
-            _mm_storeu_ps( &(result_vec_ref[i]),
-                          _mm_add_ps( _mm_loadu_ps( &(result_vec_ref[i]) ),
-                                     _mm_loadu_ps( &(spec_array[i]) )));
+            _mm_storeu_ps( &(result_vec_ref[j]),
+                          _mm_add_ps( _mm_loadu_ps( &(result_vec_ref[j]) ),
+                                     _mm_loadu_ps( &(spec_array[j]) )));
           }
-          
-          for( size_t i = aligendN; i < spec_size; ++i )
-            result_vec_ref[i] += spec_array[i];
+
+          for( size_t j = aligendN; j < nsum; ++j )
+            result_vec_ref[j] += spec_array[j];
 #else
-          for( size_t bin = 0; bin < spec_size; ++bin )
+          for( size_t bin = 0; bin < nsum; ++bin )
             result_vec_ref[bin] += spec_array[bin];
 #endif
         }

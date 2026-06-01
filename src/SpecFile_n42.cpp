@@ -699,12 +699,12 @@ namespace
         if( len >= 2 )
         {
           const char c = name[1];
-          matches_convention |= (isdigit(c) || c=='a' || c=='b' || c=='c' || c=='d' );
+          matches_convention |= (isdigit(static_cast<unsigned char>(c)) || c=='a' || c=='b' || c=='c' || c=='d' );
         }
         if( len >= 3 )
         {
           const char c = name[2];
-          matches_convention |= (isdigit(c) || c=='n');
+          matches_convention |= (isdigit(static_cast<unsigned char>(c)) || c=='n');
         }
         
         if( matches_convention )
@@ -714,7 +714,7 @@ namespace
         {
           const char c = name[name.size()-1];
           is_nuetron = (c == 'n');
-          is_gamma = (isdigit(c) != 0);
+          is_gamma = (isdigit(static_cast<unsigned char>(c)) != 0);
         }//if( matches_convention )
       }//if( !is_nuetron && !is_gamma ) //try to match the name
     }//if( detector_attrib )

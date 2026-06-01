@@ -51,7 +51,7 @@ namespace
 {
   bool not_alpha_numeric(char c)
   {
-    return !(std::isalnum(c) || c==' ');
+    return !(std::isalnum(static_cast<unsigned char>(c)) || c==' ');
   }
   
   /* IAEA block labels that represent items to put into the remarks_ variable of
@@ -136,7 +136,7 @@ bool SpecFile::load_spc_file( const std::string &filename )
   const bool isbinary = (firstbyte == 0x1);
   //  const bool istext = (char(firstbyte) == 'S');
   
-  if( !isbinary && /*!istext*/ !isalpha(firstbyte) )
+  if( !isbinary && /*!istext*/ !isalpha(static_cast<unsigned char>(firstbyte)) )
   {
     //    cerr << "SPC file '" << filename << "'is not binary or text firstbyte="
     //         << (char)firstbyte << endl;
@@ -217,7 +217,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
       {
         tested_first_line = true;
         if( line.size() < 3
-           || !isalnum(line[0]) || !isalnum(line[1]) || !isalnum(line[2])
+           || !isalnum(static_cast<unsigned char>(line[0])) || !isalnum(static_cast<unsigned char>(line[1])) || !isalnum(static_cast<unsigned char>(line[2]))
            || !(line[0]!=line[1] || line[0]!=line[2] || line[2]!=line[3]) )
           throw runtime_error( "File failed constraint that first three charcters"
                               " on the first non-empty line must be alphanumeric"
@@ -238,7 +238,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
            && ( ((line[equalpos-1] >= 'a') && (line[equalpos-1] <= 'z'))
                || ((line[equalpos-1] >= 'A') && (line[equalpos-1] <= 'Z')) )
            && ((line[equalpos+1] >= '0') && (line[equalpos+1] <= '9'))
-           && (([&line]()->bool{ for( const char c : line ){ if(!std::isalnum(c) && c != '+' && c != '-' && c != '=' && c != '.') return false; } return true; })()) )
+           && (([&line]()->bool{ for( const char c : line ){ if(!std::isalnum(static_cast<unsigned char>(c)) && c != '+' && c != '-' && c != '=' && c != '.') return false; } return true; })()) )
         {
           colonpos = equalpos;
           info_pos = equalpos + 1;
@@ -502,7 +502,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           
           string info = line.substr(info_pos);
           string::size_type delim = info.find_first_of( ' ' );
-          if( delim == 1 && (std::isdigit(info[0]) || info[0]=='-') )
+          if( delim == 1 && (std::isdigit(static_cast<unsigned char>(info[0])) || info[0]=='-') )
           {
             result.id_confidence_ = info.substr(0,delim);
             info = info.substr(delim);
@@ -609,7 +609,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
         if( pos != string::npos )
         {
           for( size_t i = 0; i < line.size(); ++i )
-            if( !isalnum(line[i]) )
+            if( !isalnum(static_cast<unsigned char>(line[i])) )
               line[i] = ' ';
           
           const string latstr = trim_copy( line.substr(0,pos) );
@@ -727,7 +727,7 @@ bool SpecFile::load_from_iaea_spc( std::istream &input )
           result.remark_ = "Strength " + strengthline;
         
         analysis->results_.push_back( result );
-      }else if( line.length() && isdigit(line[0]) && ((linenum - nnotrecognized) > 1)  )
+      }else if( line.length() && isdigit(static_cast<unsigned char>(line[0])) && ((linenum - nnotrecognized) > 1)  )
       {
         if( channel_counts && !channel_counts->empty() )
         {
@@ -2507,7 +2507,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
           if( positer != data.end() )
           {
             positer += 8;
-            while( (positer!=data.end()) && !isdigit(*positer) )
+            while( (positer!=data.end()) && !isdigit(static_cast<unsigned char>(*positer)) )
               ++positer;
             enditer = positer;
             while( (enditer!=data.end()) && (*enditer)!='\n' )
@@ -2522,7 +2522,7 @@ bool SpecFile::load_from_binary_spc( std::istream &input )
           if( positer != data.end() )
           {
             positer += 9;
-            while( (positer!=data.end()) && !isdigit(*positer) )
+            while( (positer!=data.end()) && !isdigit(static_cast<unsigned char>(*positer)) )
               ++positer;
             enditer = positer;
             while( (enditer!=data.end()) && (*enditer)!='\n' )

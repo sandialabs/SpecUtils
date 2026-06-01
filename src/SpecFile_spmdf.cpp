@@ -200,7 +200,7 @@ namespace
         continue;
       }
       
-      if( isdigit(field[0]) )
+      if( isdigit(static_cast<unsigned char>(field[0])) )
       {
         float energy = 0.0f, offset = 0.0f;
         SpecUtils::parse_float( field.c_str(), field.size(), energy );

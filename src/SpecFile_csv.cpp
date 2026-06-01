@@ -349,7 +349,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         throw runtime_error( "No 'Bin Number' in first line before first comma." );
       
       
-      for( pos += 1; (pos < first_line.size()) && std::isspace(first_line[pos]); ++pos )
+      for( pos += 1; (pos < first_line.size()) && std::isspace(static_cast<unsigned char>(first_line[pos])); ++pos )
       {
       }
       
@@ -375,7 +375,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       if( !icontains(second_line.substr(0,pos), "Energy[keV]" ) )
         throw runtime_error( "No 'Energy[keV]' in second line before first comma." );
       
-      for( pos += 1; (pos < second_line.size()) && std::isspace(second_line[pos]); ++pos )
+      for( pos += 1; (pos < second_line.size()) && std::isspace(static_cast<unsigned char>(second_line[pos])); ++pos )
       {
       }
       

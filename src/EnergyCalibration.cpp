@@ -266,7 +266,7 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
   
   auto energies = std::make_shared<std::vector<float>>( num_channels + 1 );
   const size_t numsrc_channels = std::min( num_channels+1, channel_energies.size() );
-  memcpy( &((*energies)[0]), &(channel_energies[0]), 4*numsrc_channels );
+  memcpy( &((*energies)[0]), &(channel_energies[0]), sizeof(float)*numsrc_channels );
   
   if( numsrc_channels < (num_channels+1) )
   {
