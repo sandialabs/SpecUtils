@@ -2252,11 +2252,12 @@ bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<c
     type = SpecUtils::EnergyCalType::Polynomial;
     coefs = {0.0f, points[0].second*units };
     return true;
-  }if( npoints == 1 && (points[0].second*units > 100.0f) )
+  }else if( npoints == 1 && (points[0].second*units > 100.0f) )
   {
     //This is a guess - I havent encountered it
     type = SpecUtils::EnergyCalType::FullRangeFraction;
     coefs = {0.0f, points[0].second*units };
+    return true;  //without this the computed coefs/type fell through to the clear() below
   }else if( npoints > 6 ) //The files I've seen have (npoints==nchannel)
   {
     //We also need to make sure the 'x' values are monotonically increasing channel numbers

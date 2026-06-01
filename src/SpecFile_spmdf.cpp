@@ -163,6 +163,8 @@ namespace
           p.name = p.name.substr( 0, spacepos );
         }//if( equalpos != string::npos )
       }//if( spacepos != string::npos )
+
+      info.parameters.push_back( p );
     }//for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
     
     // It appears energy calibration parameters are not provided by the file.  It does however

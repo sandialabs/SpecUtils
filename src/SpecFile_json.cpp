@@ -337,8 +337,10 @@ bool SpecFile::load_from_json( std::istream &input )
     if (!input.read(&(rawdata[0]), 64))
       throw runtime_error("Failed to read first 64 bytes.");
 
+    // Throw (rather than `return false`) so the catch below restores the stream's exception mask,
+    //  position, and state; a bare return here leaked the goodbit exception setting to the caller.
     if (rawdata.find("{") > 8)
-      return false;
+      throw runtime_error("Does not look like JSON (no '{' near start).");
 
     // Now we'll read in the whole file
     rawdata.resize(file_size + 1);
