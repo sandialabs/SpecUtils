@@ -1736,7 +1736,7 @@ namespace rapidxml
                             break;
 
                         // &#...; - assumes ASCII
-                        case Ch('#'): 
+                        case Ch('#'):
                             if (src[2] == Ch('x'))
                             {
                                 unsigned long code = 0;
@@ -1747,6 +1747,8 @@ namespace rapidxml
                                     if (digit == 0xFF)
                                         break;
                                     code = code * 16 + digit;
+                                    if (code > 0x10FFFF)
+                                        code = 0x110000;  // Clamp so a long digit run cannot overflow
                                     ++src;
                                 }
                                 insert_coded_character<Flags>(dest, code);    // Put character in output
@@ -1761,6 +1763,8 @@ namespace rapidxml
                                     if (digit == 0xFF)
                                         break;
                                     code = code * 10 + digit;
+                                    if (code > 0x10FFFF)
+                                        code = 0x110000;  // Clamp so a long digit run cannot overflow
                                     ++src;
                                 }
                                 insert_coded_character<Flags>(dest, code);    // Put character in output
@@ -1936,12 +1940,16 @@ namespace rapidxml
                   {
                     unsigned long code = 0;
                     src += 3;   // Skip &#x
-                    while (1)
+                    // Bound the scan on text_end (the sized buffer is not guaranteed NUL terminated),
+                    //  and clamp `code` so a long digit run cannot overflow `unsigned long`.
+                    while (src < text_end)
                     {
                       unsigned char digit = internal::lookup_tables<0>::lookup_digits[static_cast<unsigned char>(*src)];
                       if (digit == 0xFF)
                         break;
                       code = code * 16 + digit;
+                      if (code > 0x10FFFF)
+                        code = 0x110000;  // Out of Unicode range; insert_coded_character will reject
                       ++src;
                     }
                     //printf( "Expanded character 1: %c,%c,%c,%c\n", src[2], src[3], src[4], src[5] );
@@ -1951,18 +1959,20 @@ namespace rapidxml
                   {
                     unsigned long code = 0;
                     src += 2;   // Skip &#
-                    while (1)
+                    while (src < text_end)
                     {
                       unsigned char digit = internal::lookup_tables<0>::lookup_digits[static_cast<unsigned char>(*src)];
                       if (digit == 0xFF)
                         break;
                       code = code * 10 + digit;
+                      if (code > 0x10FFFF)
+                        code = 0x110000;  // Out of Unicode range; insert_coded_character will reject
                       ++src;
                     }
                     //printf( "Expanded character 2: %c,%c,%c,%c\n", src[2], src[3], src[4], src[5] );
                     insert_coded_character<Flags>(dest, code);    // Put character in output
                   }
-                  if (*src == Ch(';'))
+                  if (src < text_end && *src == Ch(';'))
                     ++src;
                   else
                     RAPIDXML_PARSE_ERROR("expected ;", src);
