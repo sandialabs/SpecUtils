@@ -349,7 +349,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         throw runtime_error( "No 'Bin Number' in first line before first comma." );
       
       
-      for( pos += 1; (pos < first_line.size()) && std::isspace(first_line[pos]); ++pos )
+      for( pos += 1; (pos < first_line.size()) && std::isspace(static_cast<unsigned char>(first_line[pos])); ++pos )
       {
       }
       
@@ -375,7 +375,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       if( !icontains(second_line.substr(0,pos), "Energy[keV]" ) )
         throw runtime_error( "No 'Energy[keV]' in second line before first comma." );
       
-      for( pos += 1; (pos < second_line.size()) && std::isspace(second_line[pos]); ++pos )
+      for( pos += 1; (pos < second_line.size()) && std::isspace(static_cast<unsigned char>(second_line[pos])); ++pos )
       {
       }
       
@@ -524,7 +524,9 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       double gamma_sum = 0.0;
       const size_t nchannel = energy_cal->num_channels();
       auto channel_counts = make_shared<vector<float>>( nchannel, 0.0f );
-      const size_t end_bin = std::min( static_cast<size_t>(bin_last_index),
+      // bin_last_index is the index of the *last* Bin(...) field, so the exclusive upper bound is
+      //  one past it; without the +1 the final gamma channel was silently dropped.
+      const size_t end_bin = std::min( static_cast<size_t>(bin_last_index) + 1,
                                        std::min( bin_start_index + nchannel, fields.size() ) );
       for( size_t i = bin_start_index; i < end_bin; ++i )
       {

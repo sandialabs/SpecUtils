@@ -60,6 +60,26 @@ svg.SpectrumChartD3 {
   stroke-width: 1.5px;
 }
 
+/* "more..." button shown above the peak alongside the ROI drag handles -- a touch-discoverable
+   shortcut to the same context menu as a long-press.  Theme-aware: rect fill matches the
+   chart background (so it stays legible in dark mode); border uses axis color, text uses
+   label/text color. */
+.roiMoreButton { user-select: none; cursor: pointer; }
+.roiMoreButtonRect {
+  /* Dark theme leaves the chart SVG transparent (no --d3spec-background-color set), so we
+     chain to --interspec-background-color, which the dark theme does set to rgb(44,45,48). */
+  fill: var(--d3spec-background-color, var(--d3spec-chart-area-color, var(--interspec-background-color, white)));
+  fill-opacity: 0.92;
+  stroke: var(--d3spec-axis-color, black);
+  stroke-width: 1px;
+}
+.roiMoreButtonText {
+  fill: var(--d3spec-text-color, var(--interspec-text-color, black));
+  font-size: 11px;
+  font-family: sans-serif;
+  pointer-events: none;
+}
+
 /*******************/
 
 .chartarea{

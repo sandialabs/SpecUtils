@@ -257,17 +257,18 @@ static std::array< byte_type, sizeof(int64_t) > convert_to_CAM_datetime(const Sp
         throw std::range_error("The input date time is not a valid date time");
 
     std::array< byte_type, sizeof(int64_t) > bytes = { 0x00 };
-    //get the total seconds between the input time and the epoch
+    // CAM datetimes are 64-bit counts of 100-nanosecond ticks since the modified
+    //  Julian epoch (1858-11-17), which is 3506716800 seconds before the Unix epoch.
     const date::year_month_day epoch(date::year(1970), date::month(1u), date::day(1u));
     const date::sys_days epoch_days = epoch;
     assert(epoch_days.time_since_epoch().count() == 0); //true if using unix epoch, lets see on the various systems
 
-    const auto time_from_epoch = date::floor<std::chrono::seconds>(date_time - epoch_days);
-    const int64_t sec_from_epoch = time_from_epoch.count();
-
-    //covert to modified julian in usec
-    uint64_t j_sec = (sec_from_epoch + 3506716800UL) * 10000000UL;
-    bytes = to_bytes(j_sec);
+    using cam_ticks_t = std::chrono::duration<int64_t, std::ratio<1, 10000000>>;
+    const cam_ticks_t since_unix_epoch = std::chrono::duration_cast<cam_ticks_t>(date_time - epoch_days);
+    const cam_ticks_t cam_epoch_offset{ 3506716800LL * 10000000LL };
+    const int64_t cam_value = (since_unix_epoch + cam_epoch_offset).count();
+    assert(cam_value >= 0);
+    bytes = to_bytes(static_cast<uint64_t>(cam_value));
     return bytes;
 }
 
@@ -374,11 +375,15 @@ static SpecUtils::time_point_t convert_from_CAM_datetime(const std::vector<uint8
     const date::sys_days epoch_days = date::year_month_day(date::year(1970), date::month(1u), date::day(1u));
     SpecUtils::time_point_t answer{ epoch_days };
 
-    const int64_t secs = time_raw / 10000000L;
-    const int64_t sec_from_epoch = secs - 3506716800L;
+    // CAM datetimes are 64-bit counts of 100-nanosecond ticks since the modified
+    //  Julian epoch (1858-11-17), which is 3506716800 seconds before the Unix epoch.
+    using cam_ticks_t = std::chrono::duration<int64_t, std::ratio<1, 10000000>>;
+    const cam_ticks_t total_ticks{ static_cast<int64_t>(time_raw) };
+    const std::chrono::seconds whole_secs = date::floor<std::chrono::seconds>(total_ticks);
+    const cam_ticks_t sub_second_ticks = total_ticks - whole_secs;
 
-    answer += std::chrono::seconds(sec_from_epoch);
-    answer += std::chrono::microseconds(secs % 10000000L);
+    answer += (whole_secs - std::chrono::seconds(3506716800LL));
+    answer += std::chrono::duration_cast<std::chrono::microseconds>(sub_second_ticks);
 
     return answer;
 }//convert_from_CAM_datetime(...)
@@ -402,8 +407,8 @@ static float convert_from_CAM_duration(std::vector<uint8_t>& data, size_t pos)
         std::memcpy(&value, &data[pos], sizeof(int32_t));
         //if the flag is set, duration is in millions of years
         span = data[pos + 4] == 0x01 ? value * 1e6 : value;
-        //convert to seconds
-        span *= 3157600.0;
+        //convert to seconds (Julian year = 365.25 days)
+        span *= 31557600.0;
     }
 
     return span;

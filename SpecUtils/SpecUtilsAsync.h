@@ -215,8 +215,18 @@ namespace SpecUtilsAsync
 #include <algorithm>
 
 #if( defined(ThreadPool_USING_WT) )
+// Wt 4 uses `.h`-suffixed headers; Wt 3 used extensionless ones.
+// `__has_include` is standardized in C++17 but supported as an extension by
+// GCC 5+, Clang, and MSVC 19.11+. The `defined(__has_include)` guard makes
+// this safe in C++11/14 mode on compilers without that extension (which then
+// fall through to the Wt 3 layout).
+#if defined(__has_include) && __has_include(<Wt/WServer.h>)
+#include <Wt/WServer.h>
+#include <Wt/WIOService.h>
+#else
 #include <Wt/WServer>
 #include <Wt/WIOService>
+#endif
 #endif
 
 

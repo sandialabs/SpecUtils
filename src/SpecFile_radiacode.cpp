@@ -632,7 +632,7 @@ bool SpecFile::load_from_radiacode_spectrogram( std::istream& input )
         continue;
       }
 
-      if( !isdigit( (int)line.front() ) )
+      if( !isdigit( static_cast<unsigned char>(line.front()) ) )
       {
         skipped_lines += 1;
         continue;

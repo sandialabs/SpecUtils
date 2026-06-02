@@ -82,6 +82,21 @@ public final class Native {
     public static native long specFileGetMeasurementBySampleDet(long handle, int sampleNumber,
                                                                 String detName);
 
+    /** @return a reference-counted measurement handle (caller frees via countedRefMeasurementDestroy),
+     *  or 0 if index invalid.  Keeps the measurement alive independent of the SpecFile. */
+    public static native long specFileGetMeasurementRefByIndex(long handle, int index);
+
+    /** @return a reference-counted measurement handle (caller frees via countedRefMeasurementDestroy),
+     *  or 0 if not found.  Keeps the measurement alive independent of the SpecFile. */
+    public static native long specFileGetMeasurementRefBySampleDet(long handle, int sampleNumber,
+                                                                   String detName);
+
+    /** @return the (non-owning) measurement view handle held by a reference-counted handle, or 0. */
+    public static native long measurementPtrFromRef(long refHandle);
+
+    /** Releases a reference-counted measurement handle from specFileGetMeasurementRef*. */
+    public static native void countedRefMeasurementDestroy(long refHandle);
+
     public static native int specFileNumberDetectors(long handle);
     public static native String specFileDetectorName(long handle, int index);
     public static native int specFileNumberGammaDetectors(long handle);

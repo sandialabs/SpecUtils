@@ -32,4 +32,5 @@ out/
 node_modules/
 bin/
 obj/
+d3_resources/test-*
 d3_resources/test-baselines/

@@ -54,7 +54,10 @@ std::ostream* createStringStream() {
 }
 
 std::string stringStreamToString(std::ostream *stream) {
-  return dynamic_cast<std::stringstream *>(stream)->str();
+  // Guard the dynamic_cast: if `stream` is not actually a std::stringstream (e.g. the ofstream
+  //  from openFile()), the cast yields nullptr and dereferencing it would crash the host process.
+  std::stringstream * const ss = dynamic_cast<std::stringstream *>(stream);
+  return ss ? ss->str() : std::string();
 }
 
 void cleanupStringString(std::ostream *stream) {

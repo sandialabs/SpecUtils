@@ -424,6 +424,69 @@ SpectrumChartD3 = function(elem, options) {
         }
       });
 
+  // Safety net at window-capture: Android WebView sometimes drops touchend on the SVG chart (e.g. when the touch landed on a peak path with mouseover handlers), which would leave touchHold running, rightClickDown stale, and the user's tap unprocessed.  We mirror what handleCancelAllMouseEvents does on mouseup, and (deferred to next tick so handleVisTouchEnd has a chance to run normally) synthesize a single-tap if handleVisTouchEnd never ran.  touchHoldEmitted is preserved here and cleared in the deferred block, otherwise handleVisTouchEnd's tap-check (gated on !touchHoldEmitted) would emit a leftclicked that hides the right-click menu the long-press just opened.
+  function chartTouchEndSafety(ev) {
+    // Skip multi-finger end (e.g. one finger lifted mid-zoom): don't reset pan state for a still-active gesture.
+    const remainingTouches = (ev && ev.touches) ? ev.touches.length : 0;
+    if (ev && (ev.type === 'touchend' || ev.type === 'touchcancel') && remainingTouches > 0) {
+      return;
+    }
+    // PointerEvents don't expose other active pointers; use the captured touchStart count instead.
+    if (ev && (ev.type === 'pointerup' || ev.type === 'pointercancel')
+        && self.touchStart && self.touchStart.length > 1) {
+      return;
+    }
+
+    const wasLongPress = self.touchHoldEmitted;
+
+    if (self.touchHold) {
+      window.clearTimeout(self.touchHold);
+      self.touchHold = null;
+    }
+    self.rightClickDown = null;
+    self.is_panning = false;
+    self.dragging_plot = false;
+    self.zooming_plot = false;
+    self.leftMouseDown = null;
+    self.leftDragMode = 'none';   // feature-branch drag-mode enum: clear it too, else a dropped two-finger-fit touchend leaves a stuck 'fitPeak'
+
+    setTimeout(function () {
+      if (wasLongPress) {
+        self.touchHoldEmitted = false;
+        return;
+      }
+      if (self.mouseDownRoi && !self.mousewait && !self.touchHoldEmitted
+          && self.touchStart && self.touchStart.length === 1 && self.touchPageStart) {
+        try {
+          const x = self.touchStart[0][0], y = self.touchStart[0][1];
+          const pageX = self.touchPageStart[0], pageY = self.touchPageStart[1];
+          const energy = self.xScale.invert(x);
+          const count = self.yScale.invert(y);
+          const handler = self.getMouseUpOrSingleFingerUpHandler([x, y, pageX, pageY, energy, count], false, true);
+          handler();
+          self.touchStart = null;
+        } catch (e) {
+          console.warn("chartTouchEndSafety: synthesizing tap failed:", e);
+        }
+      }
+    }, 0);
+  }
+  // Android WebView drops touchend entirely when the touch landed on an SVG path that has a
+  // contextmenu handler (the peak paths do).  Pointer events still fire in that case, so we
+  // also bind pointerup/pointercancel filtered to pointerType==='touch'.  The touch filter
+  // keeps desktop mouse-button drag-pan unaffected (handleVisMouseUp's right-button check
+  // gates on !self.is_panning, which the safety net would otherwise clear too early).
+  function chartPointerUpSafety(ev) {
+    if (!ev || ev.pointerType !== 'touch') return;
+    chartTouchEndSafety(ev);
+  }
+  this._touchEndSafetyHandler = chartTouchEndSafety;
+  this._pointerUpSafetyHandler = chartPointerUpSafety;
+  window.addEventListener("touchend",     chartTouchEndSafety, { capture: true, passive: true });
+  window.addEventListener("touchcancel",  chartTouchEndSafety, { capture: true, passive: true });
+  window.addEventListener("pointerup",    chartPointerUpSafety, { capture: true, passive: true });
+  window.addEventListener("pointercancel",chartPointerUpSafety, { capture: true, passive: true });
+
 
 
   /*  Chart Interactions */
@@ -594,6 +657,18 @@ SpectrumChartD3.prototype.destroy = function() {
   d3.select(window).on("mousemove.chart" + this.chart.id, null);
   d3.select(window).on("blur.chart" + this.chart.id, null);
   d3.select(document.body).on("mouseup.chart" + this.chart.id, null);
+
+  // Window-capture touchend/touchcancel + pointerup/pointercancel safety nets (see constructor).
+  if( this._touchEndSafetyHandler ){
+    window.removeEventListener("touchend",    this._touchEndSafetyHandler, { capture: true });
+    window.removeEventListener("touchcancel", this._touchEndSafetyHandler, { capture: true });
+    this._touchEndSafetyHandler = null;
+  }
+  if( this._pointerUpSafetyHandler ){
+    window.removeEventListener("pointerup",    this._pointerUpSafetyHandler, { capture: true });
+    window.removeEventListener("pointercancel",this._pointerUpSafetyHandler, { capture: true });
+    this._pointerUpSafetyHandler = null;
+  }
   
   // Defensive timer cleanup.
   window.clearTimeout(this.mousewait);
@@ -1876,7 +1951,7 @@ SpectrumChartD3.prototype.getMousePos = function(){
 }//getMousePos(...)
 
 
-SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth ){
+SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth, showMoreButton ){
   const self = this;
 
   const roi = info.roi;
@@ -2025,7 +2100,69 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth 
     //  case, so we'll just hide the other line to keep the code simpler.
     self.roiDragBoxes[on_lower ? 1 : 0].style("visibility", "hidden");
   }
-  
+
+  // "more..." button: discoverable touch shortcut to the same context menu as a long-press.
+  // Only shown when both drag handles are visible (showBoth), i.e. the user explicitly tapped
+  // a peak/ROI -- not when the handles appeared from a passive mouse-hover.
+  if( showBoth && showMoreButton ){
+    // Compute the energy we'll emit when the button is tapped, snapshot it here so the
+    // tap handler doesn't depend on self.roiBeingDragged still being set (it can get
+    // cleared by handleCancelRoiDrag from a synthesized mouseup before the user taps).
+    const peak0 = (info.roi.peaks && info.roi.peaks[0]) ? info.roi.peaks[0] : null;
+    const triggerEnergy = (peak0 && peak0.Centroid) ? peak0.Centroid[0] : 0.5*(info.roi.lowerEnergy + info.roi.upperEnergy);
+
+    if( !self.roiMoreButton ){
+      const g = this.vis.append("g").attr("class", "roiMoreButton");
+      const rect = g.append("rect").attr("class", "roiMoreButtonRect").attr("rx", 3).attr("ry", 3);
+      const text = g.append("text").attr("class", "roiMoreButtonText")
+        .attr("text-anchor", "middle").attr("dominant-baseline", "central")
+        .text("more...");
+      const trigger = function (e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        // Compute page coordinates via the rect (which is a concrete drawn element with a
+        // reliable bounding rect) rather than the parent <g> (whose getBoundingClientRect
+        // can return 0,0,0,0 on some browsers).  Add the touch event coords as a fallback
+        // in case the rect's bbox is somehow still empty.
+        let pageX = 0, pageY = 0;
+        const rectBox = rect.node().getBoundingClientRect();
+        if (rectBox && rectBox.width > 0) {
+          pageX = rectBox.left + 0.5*rectBox.width;
+          pageY = rectBox.bottom + 4;  // a few px below the button so the menu doesn't cover it
+        } else if (e && e.changedTouches && e.changedTouches[0]) {
+          pageX = e.changedTouches[0].pageX;
+          pageY = e.changedTouches[0].pageY;
+        } else if (e && typeof e.pageX === 'number') {
+          pageX = e.pageX;
+          pageY = e.pageY;
+        }
+        const energy = self.roiMoreButton ? self.roiMoreButton.energy : triggerEnergy;
+        self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, 0, pageX, pageY, self.currentRefLineInfoStr());
+      };
+      const node = g.node();
+      node.addEventListener("click",      trigger, false);
+      node.addEventListener("touchend",   trigger, false);
+      // Swallow touchstart/mousedown so the chart doesn't treat the button-press as a
+      // new tap on the spectrum (which would close the drag handles).
+      node.addEventListener("touchstart", function(e){ e.preventDefault(); e.stopPropagation(); }, false);
+      node.addEventListener("mousedown",  function(e){ e.preventDefault(); e.stopPropagation(); }, false);
+      self.roiMoreButton = { g: g, rect: rect, text: text, energy: triggerEnergy };
+    } else {
+      // Re-use existing button -- update the snapshot energy in case the ROI moved.
+      self.roiMoreButton.energy = triggerEnergy;
+    }
+    const centerX = 0.5*(lpx + upx);
+    const tbox = self.roiMoreButton.text.node().getBBox();
+    self.roiMoreButton.rect
+      .attr("x", tbox.x - 8).attr("y", tbox.y - 4)
+      .attr("width", tbox.width + 16).attr("height", tbox.height + 8);
+    const buttonY = Math.max( 14, y1 - 14 );
+    self.roiMoreButton.g
+      .attr("transform", "translate(" + centerX + "," + buttonY + ")")
+      .style("visibility", "visible");
+  } else if( self.roiMoreButton ){
+    self.roiMoreButton.g.style("visibility", "hidden");
+  }
+
   self.showDragLineWhileInRoi = showBoth;
 };//showRoiDragOption()
 
@@ -2134,6 +2271,9 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(mouse_pos_px){
     }
   
   self.roiIsBeingDragged = true;
+  // Hide the "more..." shortcut while the user is resizing -- it'd just be in the way.
+  if( self.roiMoreButton )
+    self.roiMoreButton.g.style("visibility", "hidden");
   //self.showDragLineWhileInRoi = false;
   
   const roiinfo = self.roiBeingDragged;
@@ -2150,16 +2290,21 @@ SpectrumChartD3.prototype.handleStartDragRoi = function(mouse_pos_px){
 
 SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
   let self = this;
-  if( !self.roiDragBoxes && (self.leftDragMode !== 'fitPeak') )
+  if( !self.roiDragBoxes && (self.leftDragMode !== 'fitPeak') && !self.roiMoreButton )
     return;
-    
+
   if( self.roiDragBoxes ){
     self.roiDragBoxes[0].remove();
     self.roiDragBoxes[1].remove();
   }
-  
+
+  if( self.roiMoreButton ){
+    self.roiMoreButton.g.remove();
+    self.roiMoreButton = null;
+  }
+
   const wasBeingDrug = self.roiIsBeingDragged;
-  
+
   self.roiDragBoxes = null;
   self.roiDragLines = null;
   self.roiDragArea = null;
@@ -2420,16 +2565,16 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
     self.updateFeatureMarkers(null);
 
     const m = self.getMousePos();
-    
+
     self.mousedowntime = new Date();
     self.lastMouseMovePos = self.mousedownpos = m;
 
     if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
       return;
-    
+
     /* Cancel the default d3 event properties */
     d3.event.preventDefault();
-    d3.event.stopPropagation(); 
+    d3.event.stopPropagation();
 
     self.zoomInYMouse = d3.event.metaKey ? m : null;
     self.leftMouseDown = null;
@@ -2515,32 +2660,31 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 }
 
 
-SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, modKeyDown) {
+SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, modKeyDown, isTouch ) {
   const self = this;
-  
+
   // coords = [x,y,pageX,pageY,energy,count]
-  
+
   return function(){
-    
+
     // Don't emit the tap/click signal if there was a tap-hold
     if( self.touchHoldEmitted )
       return;
-    
+
     // Highlight peaks where tap/click position falls
     const roi = self.mouseDownRoi;
     if( roi && roi.peak && Array.isArray(roi.peak.Centroid) )
       self.highlightPeakAtEnergy( roi.peak.Centroid[0] );
-    
-    // Emit the tap signal, unhighlight any peaks that are highlighted
-    console.log( "Emit TAP/click signal! - coords:", coords );
+
     self.WtEmit(self.chart.id, {name: 'leftclicked'}, coords[4], coords[5], coords[2], coords[3], self.currentRefLineInfoStr() );
-    
+
     if( self.options.allowDragRoiExtent && self.mouseDownRoi && !modKeyDown ){
-      self.showRoiDragOption(self.mouseDownRoi, [coords[0],coords[1]], true);
+      // "more..." button is touch-only -- desktop users get the right-click menu instead.
+      self.showRoiDragOption(self.mouseDownRoi, [coords[0],coords[1]], true, !!isTouch);
     }else{
       self.unhighlightPeak(null);
     }
-    
+
     self.mousewait = null;
     self.mouseDownRoi = null;
   };
@@ -2589,12 +2733,12 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* Figure out right clicks */
     if (d3.event.button === 2 && !self.is_panning && !d3.event.ctrlKey) {
       if( self.highlightedPeak ){
-        console.log("Should alter context menu for the highlighted peak" );  
+        console.log("Should alter context menu for the highlighted peak" );
       }
-      
+
       self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY, self.currentRefLineInfoStr());
       self.handleCancelAllMouseEvents()();
-      
+
       return;
     }
     
@@ -2633,7 +2777,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
           }//if( self.candidateKineticRefLines && (self.candidateKineticRefLines.length > 1) )
 
           self.mousewait = window.setTimeout(
-            self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],modKeyPressed),
+            self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],modKeyPressed,false),
             self.options.doubleClickDelay
           );
         }
@@ -2917,8 +3061,9 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
     d3.event.stopPropagation();
 
     /* Get the touches on the screen */
+    // touchHoldTimeInterval (ms): stationary single-finger press becomes a `rightclicked` (long-press = right-mouse).
     var t = d3.touches(self.vis[0][0]),
-        touchHoldTimeInterval = 800,
+        touchHoldTimeInterval = 700,
         evTouches = d3.event.changedTouches;
     
     /* Represent where we initialized our touch start value */
@@ -2975,10 +3120,9 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         var touch = self.touchesOnChart[keys[0]];
         var dx = Math.abs(origTouch.pageX - touch.pageX);
         var dy = Math.abs(origTouch.pageY - touch.pageY);
-      
-        // Emit the tap signal, unhighlight any peaks that are highlighted
-        if ( dx <= 15 || dy <= 15 ) {
-          console.log( "Emit TAP HOLD (RIGHT TAP) signal!", "\nenergy = ", energy, ", count = ", count, ", x = ", origTouch.pageX, ", y = ", origTouch.pageY );
+
+        // 10px Euclidean ~ Material/iOS touch-slop; matches the touchmove cancel threshold below.
+        if ( (dx*dx + dy*dy) <= (10*10) ) {
           self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, origTouch.pageX, origTouch.pageY, self.currentRefLineInfoStr() );
           self.handleCancelAllMouseEvents()();
           self.unhighlightPeak(null);
@@ -3158,15 +3302,11 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
       self.handleTouchCancelZoomY();
     }
 
-    /* Clear the touch hold signal if:
-         - More than one touches on chart
-         - No touch positions on the page detected
-         - We moved our touches by > 5 pixels
-    */
+    /* Clear the touch-hold signal on multi-touch, missing touchPageStart, or movement > 10 px (Material/iOS slop). */
     let changedTouches = d3.event.changedTouches;
     if (self.touchHold) {
       if( t.length > 1 || !self.touchPageStart || (changedTouches.length !== 1)
-          || self.dist([changedTouches[0].pageX, changedTouches[0].pageY], self.touchPageStart) > 5 ) {
+          || self.dist([changedTouches[0].pageX, changedTouches[0].pageY], self.touchPageStart) > 10 ) {
         // Note that touchPageStart is from the current touch, so its ending position should be close to its start
         //  Not tested this condition works well
         
@@ -3254,7 +3394,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     /* Get the touches on the screen */
     const t = d3.event.changedTouches;
     const touchesT = d3.touches(self.vis[0][0],t);
-    
+
     const visTouches = d3.touches(self.vis[0][0]);
     if (visTouches.length === 0) {
       self.touchesOnChart = null;
@@ -3272,12 +3412,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
         self.rightClickDown = null;
     }
 
-    /* Clear the single-tap wait if it exists */
-    if (self.mousewait) {
-      window.clearTimeout(self.mousewait);
-      self.mousewait = null;
-    }
-
+    // Don't unconditionally clear self.mousewait here: Android WebView fires touchend twice for many taps, and the second call would otherwise cancel the timer the first call just scheduled.  Cleared instead inside the double-tap branch and when the timer fires.
     if( self.touchHold ){
       window.clearTimeout(self.touchHold);
       self.touchHold = null;
@@ -3321,15 +3456,23 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
           // Emit the double-tap signal, clear any touch lines/highlighted peaks in chart
 
+          // Cancel any pending single-tap timer; we're emitting doubleclicked instead.
+          if( self.mousewait ){
+            window.clearTimeout(self.mousewait);
+            self.mousewait = null;
+          }
+
           self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr());
           self.deleteTouchLine();
           self.unhighlightPeak(null);
         } else {
-          // Create the single-tap wait action in case there is no more taps within double tap time interval
-          self.mousewait = window.setTimeout(
-            self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],false),
-            self.options.doubleClickDelay
-          );
+          // Don't replace a still-pending mousewait: Android fires touchend twice for many taps and the second would cancel-and-replace the first's timer, losing the original tap coordinates.
+          if( !self.mousewait ){
+            self.mousewait = window.setTimeout(
+              self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],false,true),
+              self.options.doubleClickDelay
+            );
+          }
         }//if( we have last tap event ) / else
 
         /* Set last tap event to current one */
@@ -3717,6 +3860,13 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
     /* Items not in _resetTransientPointerState because they live longer than a pointer gesture. */
     self.dragging_plot = false;
     self.recalibrationStartEnergy = null;
+
+    // Cancel the long-press timer; Android sometimes drops touchend on SVG paths and the document-body mouseup is our backstop.
+    if( self.touchHold ){
+      window.clearTimeout(self.touchHold);
+      self.touchHold = null;
+    }
+    self.touchHoldEmitted = false;
 
     self._resetTransientPointerState();
 
@@ -7034,14 +7184,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       const exgauss_cdf = (x, tau) => {
         if( tau <= 0 ) return gauss_cdf(x);
-        const lambda = 1 / tau, lambda_sigma = lambda * sigma;
-        const a = (mean - x) / sigma;
-        const phi_a = 0.5 * (1 + erf(a / sqrt2));
-        const phi_shift = 0.5 * (1 + erf((a - lambda_sigma) / sqrt2));
-        const exp_arg = -lambda * (mean - x) + 0.5 * lambda_sigma * lambda_sigma;
-        if( exp_arg > 700 ) return 1;
-        if( exp_arg < -700 ) return Math.max(0, 1 - phi_a);
-        return Math.max(0, Math.min(1, 1 - phi_a + Math.exp(exp_arg) * phi_shift));
+        const one_div_root_two = 0.7071067812;
+        const t = (x - mean) / sigma;
+        const erf_arg  = one_div_root_two * t;
+        const exp_arg  = sigma * (2.0*tau*t + sigma) / (2.0*tau*tau);
+        const erfc_arg = one_div_root_two * (t + (sigma/tau));
+
+        if( (exp_arg > 87.0) || (erfc_arg > 10.0) )
+          return 0.5 * (1.0 + erf(erf_arg));
+
+        return 0.5 * (1.0 + erf(erf_arg) + Math.exp(exp_arg) * erfc(erfc_arg));
       };
 
       const x = 0.5*(x1+x0);
@@ -7375,7 +7527,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       var path = self.peakVis.append("path").attr("d", p );
 
       function onRightClickOnPeak() {
-        console.log("Should (but not hooked up) Emit RIGHT CLICK (ON PEAK) signal. (Peak roi = ", roi, ")");
+        // Suppress the WebView's native long-press menu on a peak path; our touchHold timer handles the rightclicked emit.
+        if (d3.event) {
+          d3.event.preventDefault();
+          d3.event.stopPropagation();
+        }
       }
 
       var peakind = (num-1) % roi.peaks.length;

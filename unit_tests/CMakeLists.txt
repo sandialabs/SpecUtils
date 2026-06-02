@@ -4,7 +4,9 @@ project(SpecUtilsTests VERSION 1)
 
 enable_testing()
 
-option( ADD_TEST_SPEC_DIR "Base Directory containing other directories that have valid spectrum files for test opening" "" )
+# A directory path, not a boolean - `option()` only accepts ON/OFF and treated the "" as a false
+#  default, so use a cache PATH variable instead.  Leave empty to skip the per-directory open tests.
+set( ADD_TEST_SPEC_DIR "" CACHE PATH "Base directory containing sub-directories of valid spectrum files for test opening (optional)" )
 set( testdir "${CMAKE_CURRENT_SOURCE_DIR}" )
 set( test_data_dir ${CMAKE_CURRENT_SOURCE_DIR}/test_data )
 
@@ -83,20 +85,24 @@ add_test( NAME TestEnergyCalibration
 
 add_executable( test_spec_file_open test_spec_file_open.cpp )
 target_link_libraries( test_spec_file_open PRIVATE SpecUtils )
-FILE(GLOB children RELATIVE ${ADD_TEST_SPEC_DIR} ${ADD_TEST_SPEC_DIR}/*)
-FOREACH(child ${children})
-  SET( filetestdir ${curdir}/${child} )
-  IF(IS_DIRECTORY ${filetestdir})
-    #uhg, if we dont get rid of spaces in the file name, it gets interprested as a
-    #  separate command line argument - even if we escape it with quotes
 
-    # HB - this isn't running for me. 
-    string(REPLACE " " "%20" filetestdir ${filetestdir} )
-    message( ${filetestdir} )
-    add_test( NAME "\"Test open ${child}\""
-              COMMAND $<TARGET_FILE:test_spec_file_open> ${COMMON_TEST_ARGS} -- ${DATA_DIR_ARGS} )
-  ENDIF()
-ENDFOREACH()
+# Optionally register one "open every file" test per sub-directory of ADD_TEST_SPEC_DIR.  Only do
+#  this when the user actually points ADD_TEST_SPEC_DIR at a directory: globbing an empty base path
+#  is malformed, and previously the loop used the never-set `${curdir}` and passed the fixed
+#  ${DATA_DIR_ARGS} instead of the discovered directory, so it registered no working tests.
+if( ADD_TEST_SPEC_DIR )
+  file( GLOB children RELATIVE "${ADD_TEST_SPEC_DIR}" "${ADD_TEST_SPEC_DIR}/*" )
+  foreach( child ${children} )
+    set( filetestdir "${ADD_TEST_SPEC_DIR}/${child}" )
+    if( IS_DIRECTORY "${filetestdir}" )
+      # Spaces in the path would be split into separate command-line arguments, so encode them as
+      #  %20; test_spec_file_open decodes %20 back to spaces and strips the surrounding quotes.
+      string( REPLACE " " "%20" filetestdir_arg "${filetestdir}" )
+      add_test( NAME "Test open ${child}"
+                COMMAND $<TARGET_FILE:test_spec_file_open> ${COMMON_TEST_ARGS} -- --indir=\\"${filetestdir_arg}\\" )
+    endif()
+  endforeach()
+endif()
 
 
 add_executable( test_iso_time_string test_iso_time_string.cpp )

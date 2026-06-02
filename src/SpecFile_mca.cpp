@@ -146,7 +146,7 @@ bool SpecFile::load_from_amptek_mca( std::istream &input )
       throw runtime_error( "File doesnt contain <<DATA>> section" );
     
     datastart += 8;
-    while( datastart < filedata.size() && !isdigit(filedata[datastart]) )
+    while( datastart < filedata.size() && !isdigit(static_cast<unsigned char>(filedata[datastart])) )
       ++datastart;
     
     const size_t dataend = filedata.find( "<<END>>", datastart );

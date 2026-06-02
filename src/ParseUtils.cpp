@@ -208,7 +208,7 @@ void compress_to_counted_zeros( const std::vector<float> &input, std::vector<flo
 double conventional_lat_or_long_str_to_flt( std::string input )
 {
   input.erase( std::remove_if(input.begin(), input.end(), [](char c) -> bool {
-    return !(std::isalnum(c) || c==' ');
+    return !(std::isalnum(static_cast<unsigned char>(c)) || c==' ');
   } ), input.end() );
   
   trim( input );
@@ -260,10 +260,10 @@ bool parse_deg_min_sec_lat_lon( const char *str, const size_t len,
   {
     string latstr(str,pos), lonstr(pos+1,end);
     for( size_t i = 0; i < latstr.size(); ++i )
-      if( !isalnum(latstr[i]) && latstr[i]!='.' )
+      if( !isalnum(static_cast<unsigned char>(latstr[i])) && latstr[i]!='.' )
         latstr[i] = ' ';
     for( size_t i = 0; i < lonstr.size(); ++i )
-      if( !isalnum(lonstr[i]) && lonstr[i]!='.' )
+      if( !isalnum(static_cast<unsigned char>(lonstr[i])) && lonstr[i]!='.' )
         lonstr[i] = ' ';
     
     ireplace_all( latstr, "degree", " " );
@@ -377,7 +377,7 @@ float speed_from_remark( std::string remark )
   
   for( size_t i = 0; i < speedstr.size(); ++i )
   {
-    if( (!isdigit(speedstr[i])) && (speedstr[i]!=' ') && (speedstr[i]!='\t') && (speedstr[i] != '.'))
+    if( (!isdigit(static_cast<unsigned char>(speedstr[i]))) && (speedstr[i]!=' ') && (speedstr[i]!='\t') && (speedstr[i] != '.'))
     {
       float convertion = 0.0f;
       
@@ -448,7 +448,7 @@ std::string detector_name_from_remark( const std::string &remark )
   
   for( const string &field : split_contents )
   {
-    if( (field.length() < 3) ||  !isdigit(field[field.size()-1])
+    if( (field.length() < 3) ||  !isdigit(static_cast<unsigned char>(field[field.size()-1]))
        || (field.length() > 4) ||  (field[1] != 'a') )
       continue;
     

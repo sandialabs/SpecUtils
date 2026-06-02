@@ -142,23 +142,28 @@ public final class SpecFile implements AutoCloseable {
     // ===== Measurement access =====
 
     /**
-     * Returns a borrowed wrapper around the measurement at the given index.
-     * The returned Measurement's lifetime follows this SpecFile —
-     * {@link Measurement#close()} is a no-op.
+     * Returns a reference-counted wrapper around the measurement at the given index.
+     * The returned Measurement keeps the underlying measurement alive, so it stays valid even after
+     * this SpecFile is modified or closed; {@link Measurement#close()} it when done.
      * @return null if {@code index} is out of range.
      */
     public Measurement measurement(int index) {
         throwIfClosed();
-        long mh = Native.specFileGetMeasurementByIndex(handle, index);
-        if (mh == 0L) return null;
-        return new Measurement(mh, false, this);
+        long ref = Native.specFileGetMeasurementRefByIndex(handle, index);
+        if (ref == 0L) return null;
+        return Measurement.fromRef(ref, this);
     }
 
+    /**
+     * Returns a reference-counted wrapper around the measurement with the given sample number and
+     * detector name (see {@link #measurement(int)}).
+     * @return null if no such measurement exists.
+     */
     public Measurement measurement(int sampleNumber, String detectorName) {
         throwIfClosed();
-        long mh = Native.specFileGetMeasurementBySampleDet(handle, sampleNumber, detectorName);
-        if (mh == 0L) return null;
-        return new Measurement(mh, false, this);
+        long ref = Native.specFileGetMeasurementRefBySampleDet(handle, sampleNumber, detectorName);
+        if (ref == 0L) return null;
+        return Measurement.fromRef(ref, this);
     }
 
     /**
