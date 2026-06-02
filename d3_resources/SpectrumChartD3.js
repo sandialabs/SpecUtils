@@ -9770,11 +9770,6 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
   /* Remove the peak vis */
   recalibrationPeakVis.remove();
 
-  /* Remove all the arrow defs created */
-  d3.selectAll("#recalibrationArrowDef").each(function(){
-    this.remove();
-  });
-
   /* Remove the right-click-and-drag mouse line */
   recalibrationMousePosLines.remove();
 
