@@ -52,12 +52,33 @@ namespace
 {
   bool simple_isdigit(const char d)
   {
-    // Debug versions of std::isdigit on MSVC will abort on negative 
+    // Debug versions of std::isdigit on MSVC will abort on negative
     //  character values, so well just use this function all the time
     //  (which is probably better anyway since it avoids locale, which
     //  is what we should probably do)
     return ((d >= '0') && (d <= '9'));
   }//simple_isdigit
+
+
+  /** Returns true if `s` starts a plausible number literal: a digit, or a leading sign / decimal
+   point that is followed by a digit. Used to identify CSV/TXT data rows whose first field is a
+   number (e.g. `-0.2463`) without falsely accepting comment lines starting with `-`.
+   */
+  bool starts_with_number(const std::string &s)
+  {
+    if( s.empty() )
+      return false;
+    if( simple_isdigit(s[0]) )
+      return true;
+    if( (s[0] == '-' || s[0] == '+' || s[0] == '.') && s.size() > 1 )
+    {
+      if( simple_isdigit(s[1]) )
+        return true;
+      if( s[0] != '.' && s[1] == '.' && s.size() > 2 && simple_isdigit(s[2]) )
+        return true;
+    }
+    return false;
+  }//starts_with_number
 }//namespace
 
 
@@ -828,7 +849,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if( simple_isdigit(fields[0][0]) )
+    if( starts_with_number(fields[0]) )
     {
       //Check if we have a valid column map defined yet, either because it is empty, or it has one
       //  entry that is not counts.  This can happen if there was a header that was only partially
@@ -1016,7 +1037,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( fields.empty() )
           continue;
         
-        if( !simple_isdigit( fields.at(0).at(0) ) )
+        if( !starts_with_number( fields.at(0) ) )
         {
           istr.seekg( position, ios::beg );
           break;
