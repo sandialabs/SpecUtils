@@ -2478,7 +2478,7 @@ SpectrumChartD3.prototype.handleChartWheel = function () {
     var m = d3.mouse(self.vis[0][0]);
 
     /* Handle y axis zooming if wheeling in y-axis */
-    if (m[0] < 0 && m[1] > 0 && m[0] < self.size.height && self.options.wheelScrollYAxis) {
+    if (m[0] < 0 && m[1] > 0 && m[1] < self.size.height && self.options.wheelScrollYAxis) {
       self.handleYAxisWheel();
       return;
     }
@@ -2548,7 +2548,7 @@ SpectrumChartD3.prototype.getDrawnRoiForCoordinate = function( coordinates ){
 
 
 SpectrumChartD3.prototype.setMouseDownRoi = function( coordinates ){
-  console.assert( coordinates || (coordinates.length < 2), 'setMouseDownRoi: coordinates null' );
+  console.assert( coordinates && (coordinates.length >= 2), 'setMouseDownRoi: coordinates null' );
   /* Note: for mouse events leading to here, `self.mousedownpos` should be equal to `coordinates`, need to check for touch events */
   this.mouseDownRoi = this.getDrawnRoiForCoordinate( coordinates, true );
 }
@@ -5671,11 +5671,7 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
     return;
     
   var m = d3.mouse(this.vis[0][0]);
-  var t = d3.touches(this.vis[0][0]);
 
-  if( m[0] > 0 && !t )
-    return false;
-  
   let wdelta = d3.event.deltaY ? d3.event.deltaY : d3.event.sourceEvent ? d3.event.sourceEvent.wheelDelta : 0;
 
   var mult = 0;
@@ -6766,7 +6762,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("fill-opacity", 0.7)
         .style("cursor", "pointer")
         .on("mousedown", function(){
-          self.handleMouseMoveScaleFactorSlider();
           spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.startingYScaleFactor = spectrum.yScaleFactor;
@@ -6778,7 +6773,6 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .on("mousemove", self.handleMouseMoveScaleFactorSlider())
         .on("mouseup", self.endYAxisScalingAction() )
         .on("touchstart", function(){
-          self.handleMouseMoveScaleFactorSlider();
           spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
           spectrum.startingYScaleFactor = spectrum.yScaleFactor;
@@ -8819,7 +8813,7 @@ SpectrumChartD3.prototype.setSearchWindows = function(ranges) {
     self.searchEnergyWindows = null;
   } else {
     self.searchEnergyWindows = ranges;
-    self.searchEnergyWindows.sort( function(l,r){ return l.energy < r.energy }  )
+    self.searchEnergyWindows.sort( function(l,r){ return l.energy - r.energy; }  )
   }
 
   self.redraw()();
@@ -8836,7 +8830,7 @@ SpectrumChartD3.prototype.setHighlightRegions = function(ranges) {
   } else {
     //ToDo add checking that regions have appropriate variables and lowerEnergy is less than upperEnergy
     self.highlightRegions = ranges;
-    self.highlightRegions.sort( function(l,r){ return l.lowerEnergy < r.lowerEnergy }  )
+    self.highlightRegions.sort( function(l,r){ return l.lowerEnergy - r.lowerEnergy; }  )
   }
   
   self.redraw()();
@@ -8865,7 +8859,7 @@ SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
     }
 
     /* Use fraction of time elapsed to calculate how far we will zoom in this frame */
-    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
+    var animationFractionTimeElapsed = Math.min( Math.max((Math.floor(Date.now()) - self.startAnimationZoomTime) / self.options.animationDuration, 0), 1 );
 
     if( animationFractionTimeElapsed >= 0.999 ){
       self.handleCancelAnimationZoom();
@@ -8906,7 +8900,7 @@ SpectrumChartD3.prototype.redrawZoomYAnimation = function(targetDomain) {
   return function() {
     /* Cancel the animation once reached desired target domain, or desired time has elapsed */
     const now = Math.floor( Date.now() );
-    const fractionTimeElapsed = Math.min( Math.max((now - self.startAnimationZoomTime) / self.options.animationDuration), 1 );
+    const fractionTimeElapsed = Math.min( Math.max((now - self.startAnimationZoomTime) / self.options.animationDuration, 0), 1 );
     
     if( ( fractionTimeElapsed >= 0.999 )
         || (self.currentDomain == null)
@@ -9859,7 +9853,7 @@ SpectrumChartD3.prototype.processDeletePeakRange = function() {
     self.WtEmit(self.chart.id, {name: 'shiftkeydragged'}, deletePeaksRange[0], deletePeaksRange[1]);
     return true;
 
-  } catch (TypeError) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of deletePeaksBox, doesn't affect overall functionality though */
+  } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of deletePeaksBox, doesn't affect overall functionality though */
     return false;
   }
 };
@@ -10033,7 +10027,7 @@ SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
     console.log("Emit COUNT GAMMAS SIGNAL FROM ", countGammasRange[0], "keV to ", countGammasRange[1], " keV" );
     self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
     
-  } catch (TypeError) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
+  } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
     return;
   }
   
@@ -10278,7 +10272,7 @@ SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
     }
 
     self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
-  } catch (TypeError) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
+  } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
     return;
   }
 
@@ -10338,10 +10332,6 @@ SpectrumChartD3.prototype.handleMouseMovePeak = function() {
     if (self.peakInfo) {
       const x = event.x;
       const box = self.peakInfoBox;
-      self.peakInfo.attr("transform")
-        .replace("translate(", "")
-        .replace(")","")
-        .split(',')[0];
 
       const shouldMovePeakInfoLeft = x >= box.x && x <= box.x + box.width;
 
@@ -10570,9 +10560,6 @@ SpectrumChartD3.prototype.highlightPeak = function( peakElem, highlightLabelTo )
     self.unhighlightPeak(null);
     
   var peak = d3.select(peakElem);
-  if( Array.isArray(peak[0][0]) )
-    peak = peakElem;
-
   if( peak )
     peak.attr("stroke-width",2);
   
