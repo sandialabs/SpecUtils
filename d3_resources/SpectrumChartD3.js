@@ -8932,7 +8932,7 @@ SpectrumChartD3.prototype.redrawZoomYAnimation = function(targetDomain) {
 
 SpectrumChartD3.prototype.setYAxisRangeAnimated = function( yrange ){
   if( !this.options.showAnimation ){
-    this.yScale.domain([y1, y2]);
+    this.yScale.domain( yrange ? yrange : this.getYAxisDomain() );
     this.redrawYAxis()();
     return;
   }
