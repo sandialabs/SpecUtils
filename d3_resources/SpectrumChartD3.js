@@ -1400,10 +1400,10 @@ SpectrumChartD3.prototype.redraw = function() {
   const self = this;
 
   return function() {
-    if( this.size && (this.size.nYScalers !== this.numYScalers()) ) {
-      this.handleResize( true );
+    if( self.size && (self.size.nYScalers !== self.numYScalers()) ) {
+      self.handleResize( true );
     }
-    
+
     self.do_rebin();
     self.rebinForBackgroundSubtract();  // Get the points for background subtract
     self.setYAxisDomain();
