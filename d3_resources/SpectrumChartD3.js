@@ -9128,15 +9128,15 @@ SpectrumChartD3.prototype.handleMouseUpZoomX = function () {
         var rawbi = d3.bisector(function(d){return d;}); 
         var lbin = rawbi.left(foreground.x, x0+(x1-x0));
         if( lbin > 1 && lbin < (foreground.x.length-1) && lbin === rawbi.left(foreground.x,x1+(x1-x0)) ) {
-          // TODO: this doesn't truly center on the bin; the zoom ends up slightly off-target.
+          // Sub-bin selection: show exactly that one bin, inset 1% on each edge.
           var corx0 = foreground.x[lbin-1];
           var corx1 = foreground.x[lbin];
           var p = 0.01*(corx1-corx0);
           corx0 += p;
           corx1 -= p;
-          
-          x0 = Math.max(corx0+(x1-x0), mindatax);
-          x1 = Math.min(corx1+(x1-x0), maxdatax);
+
+          x0 = Math.max(corx0, mindatax);
+          x1 = Math.min(corx1, maxdatax);
         }
         
         /* Draw zoom animations if option is checked */
