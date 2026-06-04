@@ -1900,7 +1900,11 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 SpectrumChartD3.prototype.getMousePos = function(){
   const pad_left = this.padding.leftComputed;
   const pad_top = this.padding.topComputed;
-  
+
+  // Cleared only on the defensive no-position fallback below, so callers can tell a real
+  // hover at the data origin [0,0] apart from "no mouse/finger has been over the chart yet."
+  this.mousePosIsValid = true;
+
   if( d3.event )
   {
     try {
@@ -1947,6 +1951,7 @@ SpectrumChartD3.prototype.getMousePos = function(){
   console.warn( "Failed to find mouse position!" );
 
   // Defensive fallback.
+  this.mousePosIsValid = false;
   return [0, 0, pad_left, pad_top];
 }//getMousePos(...)
 
@@ -4286,7 +4291,7 @@ SpectrumChartD3.prototype.setKineticReferenceLines = function( data ) {
 
 SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
   const m = this.getMousePos(); // Get current mouse position for energy calculation
-  if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || ((m[0] == 0) && (m[1] == 0)) ){
+  if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || !this.mousePosIsValid ){
     if( this.currentKineticRefLine ){
       this.currentKineticRefLine = null;
       this.candidateKineticRefLines = [];
