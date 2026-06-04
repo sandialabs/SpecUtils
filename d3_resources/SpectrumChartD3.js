@@ -8184,64 +8184,25 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     }
   };
   
-  /* Consolidated function to delete escape peak markers - replaces 4 duplicate functions */
-  function deleteEscapePeakMarker(peakType) {
-    var elementSuffix = '';
-    switch(peakType) {
-      case 'single':
-        elementSuffix = 'singleEscape';
-        break;
-      case 'double':
-        elementSuffix = 'doubleEscape';
-        break;
-      case 'singleForward':
-        elementSuffix = 'singleEscapeForward';
-        break;
-      case 'doubleForward':
-        elementSuffix = 'doubleEscapeForward';
-        break;
-      default:
-        return; // Invalid peakType
-    }
-    
-    self.deleteAndNullifyElements([
-      { element: elementSuffix },
-      { element: elementSuffix + 'Text' },
-      { element: elementSuffix + 'Meas' }
-    ]);
-  }
-  
-  
-  function deleteComptonPeakLine(){
-    self.deleteAndNullifyElements([
-      { element: 'comptonPeak' },
-      { element: 'comptonPeakText' },
-      { element: 'comptonPeakMeas' }
-    ]);
-  };//function deleteComptonPeakLine()
-  
-  function deleteClickedSumPeakMarker() {
-    self.deleteAndNullifyElements([
-      { element: 'clickedSumPeak' },
-      { element: 'clickedSumPeakMeas' }
-    ]);
+  /* Deletes a feature-marker's line + measurement label (+ optional text) by id prefix. */
+  function deleteMarker( prefix, hasText ) {
+    const els = [ { element: prefix }, { element: prefix + 'Meas' } ];
+    if( hasText )
+      els.push( { element: prefix + 'Text' } );
+    self.deleteAndNullifyElements( els );
   }
 
-  function deleteSumPeakMarker() {
-    self.deleteAndNullifyElements([
-      { element: 'sumPeak' },
-      { element: 'sumPeakMeas' },
-      { element: 'sumPeakText' }
-    ]);
+  const escapeMarkerSuffix = { single: 'singleEscape', double: 'doubleEscape',
+                               singleForward: 'singleEscapeForward', doubleForward: 'doubleEscapeForward' };
+  function deleteEscapePeakMarker( peakType ) {
+    if( escapeMarkerSuffix[peakType] )
+      deleteMarker( escapeMarkerSuffix[peakType], true );
   }
 
-  function deleteLeftSumPeakMarker() {
-    self.deleteAndNullifyElements([
-      { element: 'leftSumPeak' },
-      { element: 'leftSumPeakMeas' },
-      { element: 'leftSumPeakText' }
-    ]);
-  }
+  function deleteComptonPeakLine(){ deleteMarker( 'comptonPeak', true ); }
+  function deleteClickedSumPeakMarker(){ deleteMarker( 'clickedSumPeak', false ); }
+  function deleteSumPeakMarker(){ deleteMarker( 'sumPeak', true ); }
+  function deleteLeftSumPeakMarker(){ deleteMarker( 'leftSumPeak', true ); }
   
   if( !m )
   {
