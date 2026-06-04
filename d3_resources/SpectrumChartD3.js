@@ -506,9 +506,7 @@ SpectrumChartD3 = function(elem, options) {
     .on("dblclick", function(){ //toggle between linear and log when user double-clicks axis
       d3.event.preventDefault();
       d3.event.stopPropagation();
-      const ytype = (self.options.yscale === "log") ? "lin" : "log";
-      self.setYAxisType( (self.options.yscale === "log") ? "lin" : "log" );
-      self.WtEmit(self.chart.id, {name: 'yAxisTypeChanged'}, ytype );
+      self.toggleYAxisType();
     });
 
   this.xAxis = d3.svg.axis().scale(this.xScale)
@@ -568,9 +566,7 @@ SpectrumChartD3 = function(elem, options) {
   this.yAxisTitle = this.vis.append("g")
     .on("click", function(){ //toggle between linear and log when user clicks title text
       d3.event.stopPropagation();
-      const ytype = (self.options.yscale === "log") ? "lin" : "log";
-      self.setYAxisType( (self.options.yscale === "log") ? "lin" : "log" );
-      self.WtEmit(self.chart.id, {name: 'yAxisTypeChanged'}, ytype );
+      self.toggleYAxisType();
     })
     //Prevent it looking like a double-click on the chart, like fitting for a peak
     .on("mousedown", function(){ d3.event.stopPropagation(); } )
@@ -1082,19 +1078,7 @@ SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spec
   if (!spectrumType || !(spectrumType in self.spectrumTypes)) return;
   if (!self.rawData) self.rawData = { spectra: [] };
 
-  let spectra = self.rawData.spectra;
-
-  let havemore = true;
-  while( havemore && spectra.length > 0 ) {
-    havemore = false;
-    for (let i = 0; i < spectra.length; i++) {
-      if (spectra[i].type === spectrumType) {
-        havemore = true;
-        spectra.splice(i, 1);
-        break;
-      }
-    }
-  }
+  self.rawData.spectra = self.rawData.spectra.filter( function(s){ return s.type !== spectrumType; } );
 
   self.setData( self.rawData, resetdomain );
 }
@@ -5628,6 +5612,13 @@ SpectrumChartD3.prototype.setYAxisType = function( ytype ) {
 SpectrumChartD3.prototype.setLogY = function(){ this.setYAxisType("log"); }
 SpectrumChartD3.prototype.setLinearY = function(){ this.setYAxisType("lin"); }
 SpectrumChartD3.prototype.setSqrtY = function(){ this.setYAxisType("sqrt"); }
+
+/* Toggle the y-axis between log and linear (used by the axis dblclick and title click). */
+SpectrumChartD3.prototype.toggleYAxisType = function(){
+  const ytype = (this.options.yscale === "log") ? "lin" : "log";
+  this.setYAxisType( ytype );
+  this.WtEmit( this.chart.id, {name: 'yAxisTypeChanged'}, ytype );
+}
 
 SpectrumChartD3.prototype.handleYAxisWheel = function() {
   /*This function doesnt have the best behavior in the world, but its a start */
