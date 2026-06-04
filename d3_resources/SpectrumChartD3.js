@@ -681,7 +681,6 @@ SpectrumChartD3.prototype.destroy = function() {
   
   d3.select(document.body).style("cursor", "default"); // Reset global cursor style
   
-  console.log("SpectrumChartD3 instance destroyed: " + this.chart.id);
 };
 
 
@@ -1555,7 +1554,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   const parentRect = this.chart.getBoundingClientRect();
   if( !parentRect.width || !parentRect.height )
   {
-    console.log( 'SpectrumChartD3::handleResize: parent didnt have size; not doing anything.' );
     return;
   }
 
@@ -1940,7 +1938,6 @@ SpectrumChartD3.prototype.getMousePos = function(){
   }
     
   if( this.lastMouseMovePos ){
-    console.log( 'getMousePos returning lastMouseMovePos (', this.lastMouseMovePos, ")" )
     return this.lastMouseMovePos;
   }
   
@@ -2347,7 +2344,6 @@ SpectrumChartD3.prototype.handleMouseUpDraggingRoi = function( m ){
   const roi = self.roiBeingDragged.roi;
   const x = m[0], y = m[1];
   
-  console.log( "ROI:", self.roiBeingDragged );
   
   const mdx = self.roiDragMouseDown; // [m[0], roiPx, energy, isLowerEdge];
   const xcenter = x + mdx[1] - mdx[0];
@@ -2659,7 +2655,6 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.zooming_plot = false;
     } else{
 
-      console.log("Something else: d3.event.buttons=" + d3.event.buttons + ", d3.event.buttom=" + d3.event.button + ", m[0]=" + m[0] + ", self.size.width=" + self.size.width + ", m[1]=" + m[1] + ", self.size.height=" + self.size.height );
     }
   }
 }
@@ -2738,7 +2733,6 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* Figure out right clicks */
     if (d3.event.button === 2 && !self.is_panning && !d3.event.ctrlKey) {
       if( self.highlightedPeak ){
-        console.log("Should alter context menu for the highlighted peak" );
       }
 
       self.WtEmit(self.chart.id, {name: 'rightclicked'}, energy, count, pageX, pageY, self.currentRefLineInfoStr());
@@ -2842,9 +2836,6 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     /*If the user is doing anything else, return */
     /*Note that if you do a two finger pinch on a mac book pro, you get e.ctrlKey==true and e.composed==true  */
     if( !e || e.altKey || (e.ctrlKey && !e.composed) || e.shiftKey || e.metaKey || e.button != 0 /*|| e.buttons != 0*/ ) {
-     console.log( "Special condition with wheel, ignoring mousewheel e=" + e + ", e.altKey="
-                  + e.altKey + ", e.ctrlKey=" + e.ctrlKey + ", e.shiftKey=" + e.shiftKey
-                  + ", e.metaKey=" + e.metaKey + ", e.button=" + e.button + ", e.buttons=" + e.buttons );
      return;
     }
 
@@ -2860,19 +2851,16 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
         return;
       }
 
-      console.log( "Scroll outside of vis, ignoring mousewheel" );
       return;
     }  
 
     /*If we are doing any other actions with the chart, then to bad. */
     if( self.dragging_plot || self.zoominbox || (self.leftDragMode === 'fitPeak') ){
-      console.log( "Plot is being dragged, zoomed, or peak fit, ignoring mousewheel" );
       return;
     }
 
     /*Dont do anything if there is no data */
     if( !self.rawData || !self.rawData.spectra || self.rawData.spectra.length < 1 ){
-      console.log( "No data, ignoring mousewheel" );
       return;
     }
 
@@ -3643,7 +3631,6 @@ SpectrumChartD3.prototype.mousemove = function () {
         } else if( self.options.yscale == "lin" ) {
           let newfrac = (newYmax / y1) - 1.0;
           
-          console.log( 'newfrac=' + newfrac );
           if( !isNaN(newfrac) && isFinite(newfrac) && newfrac>=0 && newfrac<50 ){
             self.options.linYFracTop = newfrac;
           }
@@ -4129,7 +4116,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     const particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum", "S.E.",   "D.E." ];
     const dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6"),       ("4,1"),  ("4,1")];
     const index = particles.indexOf(d.particle);
-    if( index < 0 && (d.particle !== "gamma, xray") && (d.particle !== "sum-gamma")) { console.log( 'Invalid particle: ' + d.particle ); return null; } //We can get here when lines that shared an energy were combined, so d.particle might for example be "gamma, xray"
+    if( index < 0 && (d.particle !== "gamma, xray") && (d.particle !== "sum-gamma")) { return null; } //We can get here when lines that shared an energy were combined, so d.particle might for example be "gamma, xray"
     return (index > -1) ? dash[index] : null;
   };
 
@@ -4243,7 +4230,6 @@ SpectrumChartD3.prototype.setReferenceLines = function( data ) {
       } );
     }catch(e){
       this.refLines = null;
-      console.log( "invalid input to setReferenceLines" );
     }
   }//if( !data ) / else
 
@@ -5753,7 +5739,6 @@ SpectrumChartD3.prototype.xticks = function() {
   var msd = range / (n * nlabel);
 
   if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
-    console.log( "n=" + n + ", nlabel=" + nlabel + ", range=" + range );
     return ticks;
   }
 
@@ -6621,7 +6606,6 @@ SpectrumChartD3.prototype.cancelYAxisScalingAction = function() {
   if( !self.rawData || !self.rawData.spectra || self.currentlyAdjustingSpectrumScale === null )
     return;
   
-  console.log( 'cancelYAxisScalingAction');
   
   var scale = null;
   for (var i = 0; i < self.rawData.spectra.length; ++i) {
@@ -6645,7 +6629,6 @@ SpectrumChartD3.prototype.endYAxisScalingAction = function() {
       || !self.rawData || !self.rawData.spectra )
       return;
 
-    console.log( 'endYAxisScalingAction');
     
     var scale = null;
   
@@ -6669,9 +6652,7 @@ SpectrumChartD3.prototype.endYAxisScalingAction = function() {
   
     if( scale !== null ){
       self.WtEmit(self.chart.id, {name: 'yscaled'}, scale, self.currentlyAdjustingSpectrumScale );
-      console.log('Emmitted yscaled scale=' + scale + ', type=' + self.currentlyAdjustingSpectrumScale );
     } else {
-      console.log('Failed to find scale factor being adjusted');
     }
   
     self.currentlyAdjustingSpectrumScale = null;
@@ -7312,7 +7293,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         return amp * (cdf1 - cdf0);
       }else
       {
-        console.log( 'Need to implement peak skew type ' + peak.skewType );
       }
     };
 
@@ -7376,7 +7356,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
           leftMostLineValue[peakn] = {x : thisx, y: cont_area};
         } else {
-          console.log( 'Need to implement peak.type==' + peak.type );
           return;
         }
       });
@@ -7474,7 +7453,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
         && roi.type !== 'Cubic' && roi.type !== 'External'
         && !roi.type.includes('FlatStep') && !roi.type.includes('LinearStep') ){
-      console.log( 'unrecognized roi.type: ' + roi.type );
       return;
     }
 
@@ -7482,12 +7460,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       return;
 
     if (!spectrum) {
-      console.log("No spectrum specified to draw peaks");
       return;
     }
     
     if( self.yScale.domain()[0] === self.yScale.domain()[1] ){
-      console.log( 'Y-domain not valid; not drawing ROI' );
       return;
     }
 
@@ -7698,7 +7674,6 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     
     //This next check doesnt appear to be necessary anymore.
     if( peak_uy===null || Number.isNaN(peak_uy) || typeof(peak_uy)==='undefined' ){
-      console.log( 'Got peak_uy=' + peak_uy + ', for energy ' + info.energy, info );
       continue;
     }
     
@@ -7991,7 +7966,6 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
     rightpospx = (nowTouchs[0][0] > nowTouchs[1][0]) ? nowTouchs[0][0] : nowTouchs[1][0];
   } else {
     if( !self.leftMouseDown || !self.peakFitMouseMove ) {
-      console.log( 'Hit condition I didnt think would happen fitting roi as dragging.' );
       return;
     }
     
@@ -8911,7 +8885,6 @@ SpectrumChartD3.prototype.redrawZoomYAnimation = function(targetDomain) {
         || (self.currentDomain == null)
         || (roundTo3Dec(self.currentDomain[0]) == roundTo3Dec(targetDomain[0])
             && roundTo3Dec(self.currentDomain[1]) == roundTo3Dec(targetDomain[1]))) {
-      console.log("Time for animation = ", (now - self.startAnimationZoomTime), " ms");
       self.handleCancelAnimationZoom();
       self.yScale.domain( targetDomain );
       redraw();
@@ -9484,7 +9457,6 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInX = function() {
     self.updateFeatureMarkers(-1);
   }else
   {
-    console.log( "Got inf in handleTouchMoveZoomInX" );
   }
 }//handleTouchMoveZoomInX
 
@@ -9737,10 +9709,6 @@ SpectrumChartD3.prototype.handleMouseUpRecalibration = function() {
 
     /* Emit the signal here */
     if (self.leftDragMode === 'recalibrate') {
-      console.log("Emit RECALIBRATION SIGNAL from x0 = ", self.xScale(self.recalibrationStartEnergy[0]), 
-        "(", self.recalibrationStartEnergy[0], " keV) to x1 = ", 
-        self.lastMouseMovePos[0], "(", 
-        self.xScale.invert(self.lastMouseMovePos[0]), " keV)");
       self.WtEmit(self.chart.id, {name: 'rightmousedragged'}, self.recalibrationStartEnergy[0], self.xScale.invert(self.lastMouseMovePos[0]));
     }
 
@@ -9854,7 +9822,6 @@ SpectrumChartD3.prototype.processDeletePeakRange = function() {
       Math.max(self.xScale.invert(Number(deletePeaksBox.attr("x"))), self.xScale.invert(Number(deletePeaksBox.attr("x")) + Number(deletePeaksBox.attr("width")))) 
       ];
 
-    console.log("Emit ERASE PEAKS SIGNAL FROM ", deletePeaksRange[0], "keV to ", deletePeaksRange[1], " keV" );
     self.WtEmit(self.chart.id, {name: 'shiftkeydragged'}, deletePeaksRange[0], deletePeaksRange[1]);
     return true;
 
@@ -10029,7 +9996,6 @@ SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
     Math.max(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width"))))
     ];
     
-    console.log("Emit COUNT GAMMAS SIGNAL FROM ", countGammasRange[0], "keV to ", countGammasRange[1], " keV" );
     self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
     
   } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
@@ -10047,7 +10013,6 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
 
   const pos = self.getMousePos();
   if( !pos ){
-    console.log( "updateGammaSum: failed to get mouse/touch pos" );
     return;
   }
   
@@ -10271,9 +10236,7 @@ SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
       ];
 
     if (self.lastMouseMovePos[0] < self.leftMouseDown[0]) {
-      console.log("Emit REMOVE GAMMA COUNT SIGNAL FROM ", countGammasRange[0], "keV to ", countGammasRange[1], " keV" );
     } else {
-      console.log("Emit COUNT GAMMAS SIGNAL FROM ", countGammasRange[0], "keV to ", countGammasRange[1], " keV" );
     }
 
     self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
