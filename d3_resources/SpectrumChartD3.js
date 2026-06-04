@@ -2792,9 +2792,6 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     if (self.leftDragMode === 'fitPeak')
       self.handleMouseUpPeakFit();
 
-    /* Handle zooming in x-axis (if needed) */
-    self.handleMouseUpZoomX();
-
     /* Handle altering ROI mouse up. */
     self.handleMouseUpDraggingRoi(m);
 
@@ -2810,8 +2807,8 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     /* Handle zooming in x-axis (if needed); We'll require the mouse having been down for at least 75 ms - if its less than this its probably unintented. */
     if( (nowtime - self.mousedowntime) > 75 )
       self.handleMouseUpZoomX();
-    else if( self.zooming_plot ) // 20221029: temporary message to make sure working okay
-      console.log( 'dbg: Prevented zoom-in with dt:', (nowtime - self.mousedowntime) ); 
+    else
+      self.handleCancelMouseZoomInX(); // sub-75ms: suppress accidental zoom, but still tear down the zoom-in box
 
     /* HAndle counting gammas (if needed) */
     self.handleMouseUpCountGammas();
