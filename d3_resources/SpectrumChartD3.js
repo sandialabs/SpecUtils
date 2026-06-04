@@ -128,18 +128,14 @@ SpectrumChartD3 = function(elem, options) {
   // Special handling for showAnimation which depends on animationDuration
   this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
 
-  // Hard-coded options that don't need validation
-  this.options.allowPeakFit = false;
-  this.options.refLineTopPad = 30;
-  this.options.maxScaleFactor = 10;
-  
-  // Fixed option values
-  self.options.logYFracTop = 0.05;
-  self.options.logYFracBottom = 0.025;
-  self.options.linYFracTop = 0.1;
-  self.options.linYFracBottom = 0.1;
-  self.options.sqrtYFracTop = 0.1;
-  self.options.sqrtYFracBottom = 0.1;
+  // Hard-coded / fixed option values (not user-configurable, so no validation needed).
+  Object.assign( this.options, {
+    refLineTopPad: 30,
+    maxScaleFactor: 10,
+    logYFracTop: 0.05,  logYFracBottom: 0.025,
+    linYFracTop: 0.1,   linYFracBottom: 0.1,
+    sqrtYFracTop: 0.1,  sqrtYFracBottom: 0.1
+  } );
   
   // Set which spectrums to draw peaks for
   this.options.drawPeaksFor = {
@@ -214,8 +210,6 @@ SpectrumChartD3 = function(elem, options) {
   if( this.yGrid )
     this.yGrid.scale( this.yScale );
       
-  this.yaxisdown = Math.NaN;
-
   /* Finds distance between two points */
   this.dist = function (a, b) {
     return Math.sqrt(Math.pow(a[0]-b[0],2) + Math.pow(a[1]-b[1],2));
@@ -398,31 +392,15 @@ SpectrumChartD3 = function(elem, options) {
     .on("touchcancel", self.handleVisTouchCancel() )
     ;
 
-  /* Cancel the zooms for mouse events, we'll use our own implementation for these */
-  this.vis
-    .on("mousedown.zoom", null)
-    .on("mousemove.zoom", null)
-    .on("mouseup.zoom", null)
-    .on("mouseover.zoom", null)
-    .on("mouseout.zoom", null)
-    .on("wheel.zoom", null)
-    .on("click.zoom", null)
-    .on("dblclick.zoom", null)
-    .on("touchstart.zoom", null)
-    .on("touchmove.zoom", null)
-    .on("touchend.zoom", null)
-    .on("*.zoom", null)
-    .on(".zoom",  null )
-    ;
+  /* Cancel d3.behavior.zoom's listeners; we use our own implementation. The ".zoom"
+     namespace-only removal clears them all: d3.v3 selection.on regex-removes every
+     "<type>.zoom" listener (^__on([^.]+)\.zoom$). */
+  this.vis.on(".zoom", null);
   /// @TODO triggering the cancel events on document.body and window is probably a bit agressive; could probably do this for just this.vis + on leave events
   d3.select(document.body)
     .on("mouseup.chart" + this.chart.id, self.handleCancelAllMouseEvents() )
   d3.select(window)
-    .on("mouseup.chart" + this.chart.id, self.handleCancelAllMouseEvents())
-    .on("mousemove.chart" + this.chart.id, function() {
-        if( d3.event && (self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown || self.currentlyAdjustingSpectrumScale) ) {
-        }
-      });
+    .on("mouseup.chart" + this.chart.id, self.handleCancelAllMouseEvents());
 
   // Safety net at window-capture: Android WebView sometimes drops touchend on the SVG chart (e.g. when the touch landed on a peak path with mouseover handlers), which would leave touchHold running, rightClickDown stale, and the user's tap unprocessed.  We mirror what handleCancelAllMouseEvents does on mouseup, and (deferred to next tick so handleVisTouchEnd has a chance to run normally) synthesize a single-tap if handleVisTouchEnd never ran.  touchHoldEmitted is preserved here and cleared in the deferred block, otherwise handleVisTouchEnd's tap-check (gated on !touchHoldEmitted) would emit a leftclicked that hides the right-click menu the long-press just opened.
   function chartTouchEndSafety(ev) {
@@ -654,7 +632,6 @@ SpectrumChartD3.prototype.destroy = function() {
   // Remove global event handlers using the namespaced IDs
   d3.select(window).on("keydown.chart" + this.chart.id, null);
   d3.select(window).on("mouseup.chart" + this.chart.id, null);
-  d3.select(window).on("mousemove.chart" + this.chart.id, null);
   d3.select(window).on("blur.chart" + this.chart.id, null);
   d3.select(document.body).on("mouseup.chart" + this.chart.id, null);
 
@@ -1870,7 +1847,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
       }else if( self.options.allowDragRoiExtent && !self.roiIsBeingDragged ) {
       
         //Also check if we are between ymin and ymax of ROI....
-        const drawn_roi = self.getDrawnRoiForCoordinate( m, true );
+        const drawn_roi = self.getDrawnRoiForCoordinate( m );
         const dx = 0.5 * self.options.roiDragWidth;
         
         //Dont create handles for narrow ranges (make user zoom in a bit more), or if not on edge
@@ -2551,7 +2528,7 @@ SpectrumChartD3.prototype.getDrawnRoiForCoordinate = function( coordinates ){
 SpectrumChartD3.prototype.setMouseDownRoi = function( coordinates ){
   console.assert( coordinates && (coordinates.length >= 2), 'setMouseDownRoi: coordinates null' );
   /* Note: for mouse events leading to here, `self.mousedownpos` should be equal to `coordinates`, need to check for touch events */
-  this.mouseDownRoi = this.getDrawnRoiForCoordinate( coordinates, true );
+  this.mouseDownRoi = this.getDrawnRoiForCoordinate( coordinates );
 }
 
 
@@ -2855,7 +2832,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     }  
 
     /*If we are doing any other actions with the chart, then to bad. */
-    if( self.dragging_plot || self.zoominbox || (self.leftDragMode === 'fitPeak') ){
+    if( self.dragging_plot || (self.leftDragMode === 'fitPeak') ){
       return;
     }
 
@@ -3654,7 +3631,6 @@ SpectrumChartD3.prototype.mouseup = function () {
   var self = this;
   return function() {
     d3.select('body').style("cursor", "auto");
-    d3.select('body').style("cursor", "auto");
     if( self.xaxisdown ) {
       self.redraw()();
       self.xaxisdown = null;
@@ -3813,7 +3789,6 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
    nor axis-drag / dragging_plot / recalibrationStartEnergy (callers clear those as needed). */
 SpectrumChartD3.prototype._resetTransientPointerState = function() {
   this.leftMouseDown = null;
-  this.zoominbox = null;
   this.zoominx0 = null;
   this.leftDragMode = 'none';
   this.escapeKeyPressed = false;
@@ -7715,9 +7690,7 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
         .attr("alignment-baseline","baseline")
         .text(labelRows[i]);
     }
-    
-    d3.select(label).data( info );
-    
+
     // Add handlers to make text bold when you mouse over the label.
     label.on("mouseover", function(){ self.highlightLabel(this,false); } )
       .on("mouseout",  function(){ self.unHighlightLabel(true); } );
