@@ -5181,11 +5181,11 @@ SpectrumChartD3.prototype.updateLegend = function() {
               .attr('y', txtStart + thisentry.node().getBBox().height)
               .text( self.options.txt.Neutrons + ": " + toLegendRateStr(neut,3) + (isCps ? " " + self.options.txt.cps : ""));
       
-      //If we are displaying neutron CPS, and this is not a foreground, then lets add an easy way to compare this rate
-      //  to the foreground
+      //If we are displaying neutron CPS, for a foreground or secondary spectrum, add an easy way to
+      //  compare this rate to the background neutron rate (selected in the loop below).
       if( isCps
-          && (spectrum.type === self.spectrumTypes.FOREGROUND)
-          || (spectrum.type === self.spectrumTypes.SECONDARY) )
+          && ((spectrum.type === self.spectrumTypes.FOREGROUND)
+              || (spectrum.type === self.spectrumTypes.SECONDARY)) )
       {
         //Get the neutron info for the foreground; note uses first foreground
         let forNeut = null, forNeutLT = null;
