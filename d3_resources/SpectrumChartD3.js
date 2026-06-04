@@ -7335,8 +7335,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       cont_area = self.offset_integral( roi, x0, x1 ) * scaleFactor;
 
       // Background Subtract - Subtract the current y-value with the corresponding background point
-      if( useBackgroundSubtract ) 
-        cont_area -= background.points[bisector.left(background.points, x0)].y;
+      if( useBackgroundSubtract ) {
+        const bgi = bisector.left(background.points, x0);
+        cont_area -= background.points[bgi] ? background.points[bgi].y : 0;
+      }
 
       peakamplitudes[xindex][0] = cont_area;
       peakamplitudes[xindex][1] = thisx;
