@@ -8184,9 +8184,12 @@ SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
     self.WtEmit( self.chart.id, {name: 'fitRoiDrag'},
                  roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
   }else if( self.peakFitTouchMove ) {
-    const pageX = self.peakFitTouchMove[0][0];
-    const pageY = self.peakFitTouchMove[0][1];
-    
+    // C++ uses these as page coords to position the "keep peak?" menu; peakFitTouchMove holds
+    // vis-relative coords, so prefer the lifted finger's pageX/pageY from the touch event.
+    const ct = (d3.event && d3.event.changedTouches && d3.event.changedTouches.length) ? d3.event.changedTouches[0] : null;
+    const pageX = ct ? ct.pageX : self.peakFitTouchMove[0][0];
+    const pageY = ct ? ct.pageY : self.peakFitTouchMove[0][1];
+
     self.WtEmit( self.chart.id, {name: 'fitRoiDrag'},
                  roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
   }
