@@ -9847,13 +9847,8 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
 }
 
 SpectrumChartD3.prototype.handleTouchEndDeletePeak = function() {
-  var self = this;
-
-  if (!self.processDeletePeakRange()) {
-    return;
-  }
-
-  self.handleCancelTouchDeletePeak();
+  // Identical to the mouse path: emit the range, then tear down (cancelDeletePeak is shared).
+  return this.handleMouseUpDeletePeak();
 }
 
 SpectrumChartD3.prototype.handleCancelTouchDeletePeak = function() {
@@ -10196,13 +10191,8 @@ SpectrumChartD3.prototype.handleCancelMouseCountGammas = function() {
 
 
 SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
-  /* Delete the count gammas box since we are not counting gammas anymore */
-  this.vis.select("#countGammasBox").remove();
-
-  /* Delete the count gamma texts since we are not counting gammas anymore */
-  d3.selectAll(".countGammasText").each(function () {
-    d3.select(this).remove();
-  });
+  // Same teardown as the mouse path (vis-scoped, so it only clears this chart's labels).
+  this.handleCancelMouseCountGammas();
 }
 
 
