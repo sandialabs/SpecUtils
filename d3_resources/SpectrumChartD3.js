@@ -9662,9 +9662,6 @@ SpectrumChartD3.prototype.handleCancelMouseRecalibration = function() {
 SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   var self = this;
 
-  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
-      deletePeaksText = self.vis.select("#deletePeaksText");
-
   d3.event.preventDefault();
   d3.event.stopPropagation();
 
@@ -9681,7 +9678,7 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   self.handleCancelMouseCountGammas();
 
   self.handleCancelRoiDrag();
-  
+
 
   if (!self.leftMouseDown)
     return;
@@ -9689,35 +9686,10 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   /* Clamp the mouse move position to the bounds of the vis */
   self._clampMouseXToVis();
 
-  /* Create the erase-peaks range box and text  */
-  if (deletePeaksBox.empty()) {
-    deletePeaksBox = self.vis.append("rect")
-      .attr("id", "deletePeaksBox")
-      .attr("class","deletePeaksBox")
-      .attr("width", Math.abs( self.leftMouseDown[0] - self.lastMouseMovePos[0] ))
-      .attr("height", self.size.height)
-      .attr("y", 0);
-
-    deletePeaksText = self.vis.append("text")
-      .attr("id", "deletePeaksText")
-      .attr("class", "deletePeaksText")
-      .attr("y", Number(deletePeaksBox.attr("height"))/2)
-      .text( self.options.txt.eraseInRange );
-
-  } else {  /* Erase-peaks range box has already been created, update it */
-
-
-    /* Adjust the width of the erase peaks box */
-    deletePeaksBox.attr("width", Math.abs( self.leftMouseDown[0] - self.lastMouseMovePos[0] ));
-  }
-
-  deletePeaksBox.attr("x", self.lastMouseMovePos[0] < self.leftMouseDown[0] ? self.lastMouseMovePos[0] : self.leftMouseDown[0])
-
-  /* Move the erase peaks text in the middle of the erase peaks range box */
-  deletePeaksText.attr("x", Number(deletePeaksBox.attr("x")) + (Number(deletePeaksBox.attr("width"))/2) - 40 );
+  const left = self.leftMouseDown[0], right = self.lastMouseMovePos[0];
+  self._drawDeletePeakBox( Math.min(left,right), Math.abs(left-right), false, false );
 }
 
-/* Consolidated helper function for delete peak range calculation and emission */
 /* Returns [minEnergy, maxEnergy] spanned by a drag box (read from its x / width attrs). */
 SpectrumChartD3.prototype._boxEnergyRange = function( boxSel ){
   const x = Number( boxSel.attr("x") );
@@ -9775,6 +9747,34 @@ SpectrumChartD3.prototype.handleCancelMouseDeletePeak = function() {
   this.cancelDeletePeak();
 }
 
+/* Draws/updates the erase-peaks (delete) range box + label, shared by the mouse and touch
+   delete handlers. centerLabel: center the label on the box (touch) vs the fixed -40px mouse
+   offset; blankWhenEmpty: clear the label text when the box has zero width (touch). */
+SpectrumChartD3.prototype._drawDeletePeakBox = function( boxX, boxWidth, centerLabel, blankWhenEmpty ){
+  const self = this;
+  let box = self.vis.select("#deletePeaksBox"),
+      text = self.vis.select("#deletePeaksText");
+
+  if( box.empty() ){
+    box = self.vis.append("rect")
+      .attr("id", "deletePeaksBox")
+      .attr("class", "deletePeaksBox")
+      .attr("height", self.size.height)
+      .attr("y", 0);
+    text = self.vis.append("text")
+      .attr("id", "deletePeaksText")
+      .attr("class", "deletePeaksText")
+      .attr("y", Number(box.attr("height"))/2);
+  }
+
+  box.attr("x", boxX).attr("width", boxWidth);
+
+  text.text( (blankWhenEmpty && !(boxWidth > 0)) ? "" : self.options.txt.eraseInRange );
+
+  const labelOffset = centerLabel ? (Number(text[0][0].clientWidth)/2) : 40;
+  text.attr("x", Number(box.attr("x")) + (Number(box.attr("width"))/2) - labelOffset );
+};
+
 SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
   const self = this;
 
@@ -9792,41 +9792,14 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
   /* Cancel the zoom-in y mode */
   self.handleTouchCancelZoomY();
 
-  var deletePeaksBox = self.vis.select("#deletePeaksBox"),
-      deletePeaksText = self.vis.select("#deletePeaksText");
-
   var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
       rightTouch = leftTouch === t[0] ? t[1] : t[0];
 
   const leftTouchX = Math.min(leftTouch[0], self.xScale.range()[1]);
   const rightTouchX = Math.min(rightTouch[0], self.xScale.range()[1]);
-  const width = Math.abs( rightTouchX - leftTouchX );
 
-  // Note: we are not testing if touches are in our tagret - I think we can assume we are, if we are here.
-
-  /* Create the erase-peaks range box and text  */
-  if (deletePeaksBox.empty()) {
-    deletePeaksBox = self.vis.append("rect")
-      .attr("id", "deletePeaksBox")
-      .attr("class","deletePeaksBox")
-      .attr("height", self.size.height)
-      .attr("y", 0);
-
-    deletePeaksText = self.vis.append("text")
-      .attr("id", "deletePeaksText")
-      .attr("class", "deletePeaksText")
-      .attr("y", Number(deletePeaksBox.attr("height"))/2);
-
-  }
-
-  /* Adjust the positioning and width of the delete peaks box */
-  deletePeaksBox.attr("x", leftTouchX)
-    .attr("width", width);
-
-
-  /* Move the erase peaks text in the middle of the erase peaks range box */
-  deletePeaksText.text(width > 0 ? self.options.txt.eraseInRange : "");
-  deletePeaksText.attr("x", Number(deletePeaksBox.attr("x")) + (Number(deletePeaksBox.attr("width"))/2) - Number(deletePeaksText[0][0].clientWidth)/2 );
+  // Note: we are not testing if touches are in our target - assume we are if we got here.
+  self._drawDeletePeakBox( leftTouchX, Math.abs(rightTouchX - leftTouchX), true, true );
 }
 
 SpectrumChartD3.prototype.handleTouchEndDeletePeak = function() {
