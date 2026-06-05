@@ -9727,22 +9727,23 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
 }
 
 /* Consolidated helper function for delete peak range calculation and emission */
+/* Returns [minEnergy, maxEnergy] spanned by a drag box (read from its x / width attrs). */
+SpectrumChartD3.prototype._boxEnergyRange = function( boxSel ){
+  const x = Number( boxSel.attr("x") );
+  const w = Number( boxSel.attr("width") );
+  const e0 = this.xScale.invert( x ), e1 = this.xScale.invert( x + w );
+  return [ Math.min(e0,e1), Math.max(e0,e1) ];
+};
+
 SpectrumChartD3.prototype.processDeletePeakRange = function() {
   var self = this;
-  
-  var deletePeaksBox = self.vis.select("#deletePeaksBox");
-  var deletePeaksRange;
 
   try {
-    deletePeaksRange = [ 
-      Math.min(self.xScale.invert(Number(deletePeaksBox.attr("x"))), self.xScale.invert(Number(deletePeaksBox.attr("x")) + Number(deletePeaksBox.attr("width")))), 
-      Math.max(self.xScale.invert(Number(deletePeaksBox.attr("x"))), self.xScale.invert(Number(deletePeaksBox.attr("x")) + Number(deletePeaksBox.attr("width")))) 
-      ];
-
-    self.WtEmit(self.chart.id, {name: 'shiftkeydragged'}, deletePeaksRange[0], deletePeaksRange[1]);
+    // attr access can (seldom) throw; harmless, just skip the emit.
+    const r = self._boxEnergyRange( self.vis.select("#deletePeaksBox") );
+    self.WtEmit(self.chart.id, {name: 'shiftkeydragged'}, r[0], r[1]);
     return true;
-
-  } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of deletePeaksBox, doesn't affect overall functionality though */
+  } catch (e) {
     return false;
   }
 };
@@ -9896,25 +9897,8 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
 
 
 SpectrumChartD3.prototype.handleTouchEndCountGammas = function() {
-  const self = this;
-  
-  const countGammasBox = self.vis.select("#countGammasBox");
-  if( !countGammasBox )
-    return;
-  
-  try {
-    let countGammasRange = [
-    Math.min(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width")))),
-    Math.max(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width"))))
-    ];
-    
-    self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
-    
-  } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
-    return;
-  }
-  
-  self.handleCancelTouchCountGammas();
+  // Identical to the mouse path now (range -> emit -> vis-scoped teardown).
+  return this.handleMouseUpCountGammas();
 }
 
 /** Updates sum numbers as the the mouse or fingers move, while highlighting a region of data to sum
@@ -10139,20 +10123,11 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
 SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
   var self = this;
 
-  var countGammasBox = self.vis.select("#countGammasBox");
-
   try {
-    let countGammasRange = [ 
-      Math.min(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width")))), 
-      Math.max(self.xScale.invert(Number(countGammasBox.attr("x"))), self.xScale.invert(Number(countGammasBox.attr("x")) + Number(countGammasBox.attr("width")))) 
-      ];
-
-    if (self.lastMouseMovePos[0] < self.leftMouseDown[0]) {
-    } else {
-    }
-
-    self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, countGammasRange[0], countGammasRange[1]);
-  } catch (e) { /* For some reason, a type error is (seldom) returned when trying to access "x" attribute of countGammasBox, doesn't affect overall functionality though */
+    // attr access can (seldom) throw; harmless, just skip the emit.
+    const r = self._boxEnergyRange( self.vis.select("#countGammasBox") );
+    self.WtEmit(self.chart.id, {name: 'shiftaltkeydragged'}, r[0], r[1]);
+  } catch (e) {
     return;
   }
 
