@@ -5777,21 +5777,13 @@ SpectrumChartD3.prototype.setXAxisRange = function( minimum, maximum, doEmit, us
 }
 
 SpectrumChartD3.prototype.setXAxisMinimum = function( minimum ) {
-  var self = this;
-
-  const maximum = self.xScale.domain()[1];
-
-  self.xScale.domain([minimum, maximum]);
-  self.redraw()();
+  this.setXAxisRange( minimum, this.xScale.domain()[1] );
+  this.redraw()();
 }
 
 SpectrumChartD3.prototype.setXAxisMaximum = function( maximum ) {
-  var self = this;
-
-  const minimum = self.xScale.domain()[0];
-
-  self.xScale.domain([minimum, maximum]);
-  self.redraw()();
+  this.setXAxisRange( this.xScale.domain()[0], maximum );
+  this.redraw()();
 }
 
 SpectrumChartD3.prototype.setXRangeArrows = function(d) {
@@ -8950,22 +8942,18 @@ SpectrumChartD3.prototype.redrawYAxis = function() {
   }
 }
 
-SpectrumChartD3.prototype.setYAxisMinimum = function( minimum ) {
-  const maximum = this.yScale.domain()[0];
-  this.yScale.domain([maximum,minimum]);
-  this.redrawYAxis()();
-}
-
-SpectrumChartD3.prototype.setYAxisMaximum = function( maximum ) {
-  const minimum = this.yScale.domain()[1];
-  this.yScale.domain([maximum,minimum]);
-  this.redrawYAxis()();
-}
-
 // See also setYAxisRangeAnimated([min,max])
 SpectrumChartD3.prototype.setYAxisRange = function( minimum, maximum ) {
   this.yScale.domain([maximum,minimum]);
   this.redrawYAxis()();
+}
+
+SpectrumChartD3.prototype.setYAxisMinimum = function( minimum ) {
+  this.setYAxisRange( minimum, this.yScale.domain()[0] );
+}
+
+SpectrumChartD3.prototype.setYAxisMaximum = function( maximum ) {
+  this.setYAxisRange( this.yScale.domain()[1], maximum );
 }
 
 SpectrumChartD3.prototype.handleMouseMoveZoomY = function () {
