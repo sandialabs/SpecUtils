@@ -858,13 +858,17 @@ SpectrumChartD3.prototype.do_rebin = function() {
   const rebinOne = function(spectrum){
     let firstRaw = self.displayed_raw_start(spectrum);
     let lastRaw = self.displayed_raw_end(spectrum);
+    const sf = (typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor : 1.0;
 
-    if( newRebin != spectrum.rebinFactor || spectrum.firstRaw !== firstRaw || spectrum.lastRaw !== lastRaw ){
+    // Rebuild points when the rebin factor, displayed raw range, or applied scale factor (scaledBy)
+    // changes; the scaledBy term lets a pure scaler-slider change re-scale here (no separate pass).
+    if( newRebin != spectrum.rebinFactor || spectrum.firstRaw !== firstRaw || spectrum.lastRaw !== lastRaw || spectrum.scaledBy !== sf ){
       spectrum.points = [];
 
       spectrum.rebinFactor = newRebin;
       spectrum.firstRaw = firstRaw;
       spectrum.lastRaw = lastRaw;
+      spectrum.scaledBy = sf;
 
       /*Round firstRaw and lastRaw down and up to even multiples of newRebin */
       firstRaw -= (firstRaw % newRebin);
@@ -874,7 +878,6 @@ SpectrumChartD3.prototype.do_rebin = function() {
       if( lastRaw > spectrum.x.length )
         lastRaw = spectrum.x.length;
 
-      const sf = (typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor : 1.0;
       for( var i = firstRaw; i < lastRaw; i += newRebin ){
         let thisdata = { x: 0, y: 0 };
         if (i >= spectrum.x.length)
@@ -893,46 +896,6 @@ SpectrumChartD3.prototype.do_rebin = function() {
 
   if( this.rawData.spectra )   this.rawData.spectra.forEach(rebinOne);
   if( this.rawData.templates ) this.rawData.templates.forEach(rebinOne);
-}
-
-SpectrumChartD3.prototype.adjustYScaleOfDisplayedDataPoints = function(spectrumToBeAdjusted, linei) {
-  let self = this;
-
-  if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra.length ) 
-    return;
-
-  /* Check for the which corresponding spectrum line is the specified one to be rebinned */
-  if( linei == null || !spectrumToBeAdjusted )
-    return;
-    
-  let firstRaw = self.displayed_raw_start(spectrumToBeAdjusted);
-  let lastRaw = self.displayed_raw_end(spectrumToBeAdjusted);
-
-  const rebinFactor = spectrumToBeAdjusted.rebinFactor; //should be same as this.rebinFactor
-
-  spectrumToBeAdjusted.firstRaw = firstRaw;
-  spectrumToBeAdjusted.lastRaw = lastRaw;
-
-  /* Round firstRaw and lastRaw down and up to even multiples of rebinFactor */
-  firstRaw -= (firstRaw % rebinFactor);
-  lastRaw += rebinFactor - (lastRaw % rebinFactor);
-  if( firstRaw >= rebinFactor )
-    firstRaw -= rebinFactor;
-  if( lastRaw > spectrumToBeAdjusted.x.length )
-    lastRaw = spectrumToBeAdjusted.x.length;
-
-  const sf = (typeof spectrumToBeAdjusted.yScaleFactor === "number") ? spectrumToBeAdjusted.yScaleFactor : 1.0;
-  let i = firstRaw;
-  for( let pointi = 0; pointi < spectrumToBeAdjusted.points.length; pointi++ ){
-    let thisdata = spectrumToBeAdjusted.points[pointi];
-
-    thisdata.y = 0;
-    for( let j = 0; (j < rebinFactor) && ((i+j) < spectrumToBeAdjusted.y.length); ++j )
-      thisdata.y += spectrumToBeAdjusted.y[i+j];
-    thisdata.y *= sf;
-
-    i += rebinFactor;
-  }
 }
 
 /** Takes in an object like { yAxisTitle: 'Counts', realTime: 'Real Time',... } that maps 
@@ -6695,8 +6658,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
   */
   function scaleFactorChangeRedraw(spectrum, linei) {
     self.updateLegend();
-    self.adjustYScaleOfDisplayedDataPoints(spectrum, linei);
-    self.do_rebin();
+    self.do_rebin();  // re-scales the adjusted spectrum's points (do_rebin's scaledBy guard)
     self.rebinForBackgroundSubtract();
     self.setYAxisDomain();
     self.drawYTicks();
