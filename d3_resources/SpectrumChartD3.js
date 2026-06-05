@@ -5574,8 +5574,6 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
   
   if( !d3.event )
     return;
-    
-  var m = d3.mouse(this.vis[0][0]);
 
   let wdelta = d3.event.deltaY ? d3.event.deltaY : d3.event.sourceEvent ? d3.event.sourceEvent.wheelDelta : 0;
 
@@ -6665,6 +6663,9 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
 
     if( !spectrum )
       return;
+
+    // Index of the spectrum within rawData.spectra; used below for the "sliderLine"+linei lookup.
+    const linei = self.rawData.spectra.indexOf( spectrum );
 
     d3.select(document.body).style("cursor", "pointer");
 
