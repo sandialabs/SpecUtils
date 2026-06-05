@@ -6455,25 +6455,28 @@ SpectrumChartD3.prototype.numYScalers = function() {
 }
 
 
+/* Returns the spectrum currently being y-scaled by the scaler slider, or null. */
+SpectrumChartD3.prototype._adjustingSpectrum = function() {
+  if( !this.rawData || !this.rawData.spectra || this.currentlyAdjustingSpectrumScale === null )
+    return null;
+  for( let i = 0; i < this.rawData.spectra.length; ++i ){
+    if( this.rawData.spectra[i].type == this.currentlyAdjustingSpectrumScale )
+      return this.rawData.spectra[i];
+  }
+  return null;
+}
+
 SpectrumChartD3.prototype.cancelYAxisScalingAction = function() {
   var self = this;
-  
-  if( !self.rawData || !self.rawData.spectra || self.currentlyAdjustingSpectrumScale === null )
+
+  const spectrum = self._adjustingSpectrum();
+  if( !spectrum )
     return;
-  
-  
-  var scale = null;
-  for (var i = 0; i < self.rawData.spectra.length; ++i) {
-    let spectrum = self.rawData.spectra[i];
-    
-    if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
-      spectrum.yScaleFactor = spectrum.startingYScaleFactor;
-      spectrum.startingYScaleFactor = null;
-      self.endYAxisScalingAction()();
-      self.redraw()();
-      return;
-    }
-  }
+
+  spectrum.yScaleFactor = spectrum.startingYScaleFactor;
+  spectrum.startingYScaleFactor = null;
+  self.endYAxisScalingAction()();
+  self.redraw()();
 }
 
 SpectrumChartD3.prototype.endYAxisScalingAction = function() {
@@ -6485,31 +6488,21 @@ SpectrumChartD3.prototype.endYAxisScalingAction = function() {
       return;
 
     
-    var scale = null;
-  
-    for( var i = 0; i < self.rawData.spectra.length; ++i ) {
-    
-      let spectrum = self.rawData.spectra[i];
-    
-      if( spectrum.type == self.currentlyAdjustingSpectrumScale ) {
-        spectrum.sliderText.style( "display", "none" );
-        spectrum.sliderToggle.attr("cy", Number(spectrum.sliderRect.attr("y"))
-                                          + Number(spectrum.sliderRect.attr("height"))/2);
-                                          
-        spectrum.sliderRect.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.3);
-        spectrum.sliderToggle.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.7);
-                                          
-        spectrum.startingYScaleFactor = null;
-        scale = spectrum.yScaleFactor;
-        break;
-      }
+    let scale = null;
+    const spectrum = self._adjustingSpectrum();
+    if( spectrum ){
+      spectrum.sliderText.style( "display", "none" );
+      spectrum.sliderToggle.attr("cy", Number(spectrum.sliderRect.attr("y"))
+                                        + Number(spectrum.sliderRect.attr("height"))/2);
+      spectrum.sliderRect.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.3);
+      spectrum.sliderToggle.attr("stroke-opacity", 0.8).attr("fill-opacity", 0.7);
+      spectrum.startingYScaleFactor = null;
+      scale = spectrum.yScaleFactor;
     }
-  
-    if( scale !== null ){
+
+    if( scale !== null )
       self.WtEmit(self.chart.id, {name: 'yscaled'}, scale, self.currentlyAdjustingSpectrumScale );
-    } else {
-    }
-  
+
     self.currentlyAdjustingSpectrumScale = null;
   }
 }
@@ -6656,7 +6649,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
   /* Here is a modified, slightly more efficient version of redraw 
     specific to changing the scale factors for spectrums. 
   */
-  function scaleFactorChangeRedraw(spectrum, linei) {
+  function scaleFactorChangeRedraw() {
     self.updateLegend();
     self.do_rebin();  // re-scales the adjusted spectrum's points (do_rebin's scaledBy guard)
     self.rebinForBackgroundSubtract();
@@ -6672,21 +6665,13 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     if (!self.currentlyAdjustingSpectrumScale)
       return;
 
-    /* Check for the which corresponding spectrum line is the background */
-    var linei = null;
-    var spectrum = null;
-    for (var i = 0; i < self.rawData.spectra.length; ++i) {
-      if (self.rawData.spectra[i].type == self.currentlyAdjustingSpectrumScale) {
-        linei = i;
-        spectrum = self.rawData.spectra[i];
-        break;
-      }
-    }
+    /* Find the spectrum being scaled */
+    const spectrum = self._adjustingSpectrum();
 
     d3.event.preventDefault();
     d3.event.stopPropagation();
 
-    if (linei === null || spectrum === null)
+    if( !spectrum )
       return;
 
     d3.select(document.body).style("cursor", "pointer");
@@ -6730,7 +6715,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     
     // If we are using background subtract, we have to redraw the entire chart if we update the scale factors
     if (self.options.backgroundSubtract) self.redraw()();
-    else scaleFactorChangeRedraw(spectrum, linei);
+    else scaleFactorChangeRedraw();
 
 
     /* Update the slider chart if needed */
