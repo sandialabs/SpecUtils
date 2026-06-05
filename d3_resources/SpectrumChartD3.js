@@ -2180,34 +2180,44 @@ SpectrumChartD3.prototype.handleRoiDrag = function(m){
 
   //Emit current position, no more often than twice per second, or if there
   //  are no requests pending.
-  let emitFcn = function(){
-    self.roiDragRequestTime = new Date();
-    window.clearTimeout(self.roiDragRequestTimeout);
-    self.roiDragRequestTimeout = null;
-    self.roiDragRequestTimeoutFcn = null;
-
+  self._throttledDragEmit( 500, function(){
     let new_lower_energy = lowerEdgeDrag ? energy : roi.lowerEnergy;
     let new_upper_energy = lowerEdgeDrag ? roi.upperEnergy : energy;
     let new_lower_px = lowerEdgeDrag ? xcenter : self.xScale(roi.lowerEnergy);
     let new_upper_px = lowerEdgeDrag ? self.xScale(roi.upperEnergy) : xcenter;
-    
+
     self.WtEmit(self.chart.id, {name: 'roiDrag'}, new_lower_energy, new_upper_energy, (new_upper_px - new_lower_px), roi.lowerEnergy, spectrum_type, false );
+  });
+
+};//SpectrumChartD3.prototype.handleRoiDrag = ...
+
+
+/* Throttles drag-emit calls to at most one per intervalMs, trailing-edge scheduled.
+   emitFcn does only the WtEmit; the shared roiDragRequest* state lives here (and is
+   flushed/cleared by handleCancelRoiDrag and handleMouseUpDraggingRoi). */
+SpectrumChartD3.prototype._throttledDragEmit = function( intervalMs, emitFcn ){
+  const self = this;
+  const fire = function(){
+    self.roiDragRequestTime = new Date();
+    window.clearTimeout( self.roiDragRequestTimeout );
+    self.roiDragRequestTimeout = null;
+    self.roiDragRequestTimeoutFcn = null;
+    emitFcn();
   };
 
-  let timenow = new Date();
-  if( self.roiDragRequestTime === null || (timenow-self.roiDragRequestTime) > 500 ){
-    emitFcn();
+  const timenow = new Date();
+  if( self.roiDragRequestTime === null || (timenow - self.roiDragRequestTime) > intervalMs ){
+    fire();
   } else {
-    let dt = Math.min( 500, Math.max(0, 500 - (timenow - self.roiDragRequestTime)) );
+    const dt = Math.min( intervalMs, Math.max(0, intervalMs - (timenow - self.roiDragRequestTime)) );
     window.clearTimeout( self.roiDragRequestTimeout );
-    self.roiDragRequestTimeoutFcn = emitFcn;
-    self.roiDragRequestTimeout = window.setTimeout( function(){ 
-      if(self.roiDragRequestTimeoutFcn) 
+    self.roiDragRequestTimeoutFcn = fire;
+    self.roiDragRequestTimeout = window.setTimeout( function(){
+      if( self.roiDragRequestTimeoutFcn )
         self.roiDragRequestTimeoutFcn();
     }, dt );
   }
-
-};//SpectrumChartD3.prototype.handleRoiDrag = ...
+};//SpectrumChartD3.prototype._throttledDragEmit
 
 
 
@@ -7959,28 +7969,10 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   
   //Emit current position, no more often than every 2.5 seconds, or if there
   //  are no requests pending.
-  let emitFcn = function(){
-    self.roiDragRequestTime = new Date();
-    window.clearTimeout(self.roiDragRequestTimeout);
-    self.roiDragRequestTimeout = null;
-    self.roiDragRequestTimeoutFcn = null;
-    
+  self._throttledDragEmit( 2500, function(){
     self.WtEmit(self.chart.id, {name: 'fitRoiDrag'},
                 lowerEnergy, upperEnergy, -1, false, pageX, pageY );
-  };
-  
-  let timenow = new Date();
-  if( self.roiDragRequestTime === null || (timenow-self.roiDragRequestTime) > 2500 ){
-    emitFcn();
-  } else {
-    let dt = Math.min( 2500, Math.max(0, 2500 - (timenow - self.roiDragRequestTime)) );
-    window.clearTimeout( self.roiDragRequestTimeout );
-    self.roiDragRequestTimeoutFcn = emitFcn;
-    self.roiDragRequestTimeout = window.setTimeout( function(){
-      if(self.roiDragRequestTimeoutFcn)
-      self.roiDragRequestTimeoutFcn();
-    }, dt );
-  }
+  });
 }//handleMouseMovePeakFit
 
 
