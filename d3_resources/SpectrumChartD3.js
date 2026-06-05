@@ -5276,6 +5276,43 @@ SpectrumChartD3.prototype.setShowLegend = function( show ) {
 
 
 /** -------------- Y-axis Drawing -------------- */
+/* Shared "nice" linear tick generator for both axes. Returns [{value, major, text}].
+   rmin/rmax are the data-range ends, nlabel the approximate label count, iterCap a
+   loop safety bound, and formatFn(value)->string formats major-label text. */
+SpectrumChartD3.prototype._linearTicks = function( rmin, rmax, nlabel, iterCap, formatFn ){
+  const ticks = [];
+  const EPSILON = 1.0E-3;
+  const range = rmax - rmin;
+  const n = Math.pow(10, Math.floor(Math.log10(range/nlabel)));
+  const msd = range / (n * nlabel);
+
+  if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 )
+    return ticks;
+
+  let subdashes, renderInterval;
+  if( msd < 1.5 ){      subdashes = 2;  renderInterval = 0.5*n; }
+  else if( msd < 3.3 ){ subdashes = 5;  renderInterval = 0.5*n; }
+  else if( msd < 7 ){   subdashes = 5;  renderInterval = n; }
+  else {                subdashes = 10; renderInterval = n; }
+
+  const biginterval = subdashes * renderInterval;
+  let start = biginterval * Math.floor((rmin + 1.0E-15) / biginterval);
+  if( start < (rmin - EPSILON*renderInterval) )
+    start += biginterval;
+
+  for( let i = -Math.floor(Math.floor(start - rmin)/renderInterval); ; ++i ){
+    if( i > iterCap )  /*JIC*/
+      break;
+    const v = start + renderInterval * i;
+    if( (v - rmax) > EPSILON * renderInterval )
+      break;
+    const major = ((i % subdashes) == 0);
+    ticks.push( { value: v, major: major, text: ((i >= 0 && major) ? formatFn(v) : "") } );
+  }
+
+  return ticks;
+};
+
 SpectrumChartD3.prototype.yticks = function() {
   const self = this;
   var ticks = [];
@@ -5309,72 +5346,10 @@ SpectrumChartD3.prototype.yticks = function() {
       heightpx = this.size.height;
   var range = renderymax - renderymin;
 
-  if( this.options.yscale === "lin" )
-  {
-    /*px_per_div: pixels between major and/or minor labels. */
-    var px_per_div = 50;
-
-    /*nlabel: approx number of major + minor labels we would like to have. */
-    var nlabel = heightpx / px_per_div;
-
-    /*renderInterval: Inverse of how many large labels to place between powers */
-    /*  of 10 (1 is none, 0.5 is is one). */
-    var renderInterval;
-
-    /*n: approx how many labels will be used */
-    var n = Math.pow(10, Math.floor(Math.log10(range/nlabel)));
-
-    /*msd: approx how many sub dashes we would expect there to have to be */
-    /*     to satisfy the spacing of labels we want with the given range. */
-    var msd = range / nlabel / n;
-
-    if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
-      return ticks;
-    }
-      var subdashes = 0;
-
-      if( msd < 1.5 )
-      {
-        subdashes = 2;
-        renderInterval = 0.5*n;
-      }else if (msd < 3.3)
-      {
-        subdashes = 5;
-        renderInterval = 0.5*n;
-      }else if (msd < 7)
-      {
-        subdashes = 5;
-        renderInterval = n;
-      }else
-      {
-        subdashes = 10;
-        renderInterval = n;
-      }
-
-      var biginterval = subdashes * renderInterval;
-      var starty = biginterval * Math.floor((renderymin + 1.0E-15) / biginterval);
-
-      if( starty < (renderymin-EPSILON*renderInterval) )
-        starty += biginterval;
-
-      for( var i = -Math.floor(Math.floor(starty-renderymin)/renderInterval); ; ++i)
-      {
-        if( i > 500 )  /*JIC */
-          break;
-
-        var v = starty + renderInterval * i;
-
-        if( (v - renderymax) > EPSILON * renderInterval )
-          break;
-
-        var t = "";
-        if( i>=0 && ((i % subdashes) == 0) )
-          t += formatYNumber(v);
-        
-        var len = ((i % subdashes) == 0) ? true : false;
-
-        ticks.push( {value: v, major: len, text: t } );
-      }/*for( intervals to draw ticks for ) */
+    if( this.options.yscale === "lin" )
+    {
+      // nlabel = approx (height / pixels-per-label); 500 = loop safety cap.
+      ticks = self._linearTicks( renderymin, renderymax, heightpx / 50, 500, formatYNumber );
     }/*case Chart::LinearScale: */
 
     if( this.options.yscale === "log" )
@@ -5692,75 +5667,16 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
 /** -------------- X-axis Drawing --------------
  *  Tick layout, formatting, and label rendering for the main x-axis. */
 SpectrumChartD3.prototype.xticks = function() {
+  const rendermin = this.xScale.domain()[0];
+  const rendermax = this.xScale.domain()[1];
 
-  var ticks = [];
+  /* ndigstart widens the per-label pixel budget for larger numbers so labels (hopefully)
+     line up nicely (multiples of 5, 10, 25, 50, 100, ...) without overlapping. */
+  let ndigstart = rendermin > 0 ? Math.floor(Math.log10(rendermin)) : 1;
+  ndigstart = Math.max(1, Math.min(ndigstart, 5));
+  const nlabel = Math.floor( this.size.width / (50 + 15*(ndigstart-1)) );
 
-  /*it so */
-  /*  the x axis labels (hopefully) always line up nicely where we want them */
-  /*  e.g. kinda like multiple of 5, 10, 25, 50, 100, etc. */
-  var EPSILON = 1E-3;
-
-  var rendermin = this.xScale.domain()[0];
-  var rendermax = this.xScale.domain()[1];
-  var range = rendermax - rendermin;
-  
-  /*ndigstart makes up for larger numbers taking more pixels to render, so */
-  /* it keeps numbers from overlapping.  Below uses 15 to kinda rpresent the */
-  /*  width of numbers in pixels. */
-  var ndigstart = rendermin > 0 ? Math.floor(Math.log10(rendermin)) : 1;
-  ndigstart = Math.max(1,Math.min(ndigstart,5));
-  
-  var nlabel = Math.floor( this.size.width / (50 + 15*(ndigstart-1)) );
-  var n = Math.pow(10, Math.floor(Math.log10(range/nlabel)));
-  var msd = range / (n * nlabel);
-
-  if( isNaN(n) || !isFinite(n) || nlabel<=0 || n<=0.0 ) { /*JIC */
-    return ticks;
-  }
-
-  let subdashes, renderInterval;
-  if (msd < 1.5)
-  {
-    subdashes = 2;
-    renderInterval = 0.5*n;
-  }else if (msd < 3.3)
-  {
-    subdashes = 5;
-    renderInterval = 0.5*n;
-  }else if (msd < 7)
-  {
-    subdashes = 5;
-    renderInterval = n;
-  }else
-  {
-    subdashes = 10;
-    renderInterval = n;
-  }
-
-  var biginterval = subdashes * renderInterval;
-  var startEnergy = biginterval * Math.floor((rendermin + 1.0E-15) / biginterval);
-
-  if( startEnergy < (rendermin-EPSILON*renderInterval) )
-    startEnergy += biginterval;
-
-  for( var i = -Math.floor(Math.floor(startEnergy-rendermin)/renderInterval); ; ++i)
-  {
-    if( i > 5000 )  /*JIC */
-      break;
-
-    var v = startEnergy + renderInterval * i;
-
-    if( (v - rendermax) > EPSILON * renderInterval )
-      break;
-
-    var t = "";
-    if( i>=0 && (i % subdashes == 0) )
-      t += v;
-
-    ticks.push( {value: v, major: (i % subdashes == 0), text: t } );
-  }/*for( intervals to draw ticks for ) */
-
-  return ticks;
+  return this._linearTicks( rendermin, rendermax, nlabel, 5000, function(v){ return "" + v; } );
 }
 
 /* Sets x-axis drag for the chart. These are actions done by clicking and dragging one of the labels of the x-axis. */
