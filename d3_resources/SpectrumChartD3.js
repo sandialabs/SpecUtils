@@ -8881,11 +8881,8 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
   if( !self.leftMouseDown )
     return;
 
-  /* Adjust the mouse move position with respect to the bounds of the vis */
-  if (self.lastMouseMovePos[0] < 0)
-    self.lastMouseMovePos[0] = 0;
-  else if (self.lastMouseMovePos[0] > self.size.width)
-    self.lastMouseMovePos[0] = self.size.width;
+  /* Clamp the mouse move position to the bounds of the vis */
+  self._clampMouseXToVis();
 
   /* We are now zooming in */
   self.zooming_plot = true;
@@ -9514,11 +9511,8 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) 
     return;
 
-  /* Adjust the mouse move position with respect to the bounds of the vis */
-  if (self.lastMouseMovePos[0] < 0)
-    self.lastMouseMovePos[0] = 0;
-  else if (self.lastMouseMovePos[0] > self.size.width)
-    self.lastMouseMovePos[0] = self.size.width;
+  /* Clamp the mouse move position to the bounds of the vis */
+  self._clampMouseXToVis();
 
   /* Set the line objects to be referenced */
   var recalibrationStartLine = self.vis.select("#recalibrationStartLine"),
@@ -9692,11 +9686,8 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   if (!self.leftMouseDown)
     return;
 
-  /* Adjust the mouse move position with respect to the bounds of the vis */
-  if (self.lastMouseMovePos[0] < 0)
-    self.lastMouseMovePos[0] = 0;
-  else if (self.lastMouseMovePos[0] > self.size.width)
-    self.lastMouseMovePos[0] = self.size.width;
+  /* Clamp the mouse move position to the bounds of the vis */
+  self._clampMouseXToVis();
 
   /* Create the erase-peaks range box and text  */
   if (deletePeaksBox.empty()) {
@@ -9733,6 +9724,14 @@ SpectrumChartD3.prototype._boxEnergyRange = function( boxSel ){
   const w = Number( boxSel.attr("width") );
   const e0 = this.xScale.invert( x ), e1 = this.xScale.invert( x + w );
   return [ Math.min(e0,e1), Math.max(e0,e1) ];
+};
+
+/* Clamp the cached mouse x-position to the plot's x-range [0, size.width]. */
+SpectrumChartD3.prototype._clampMouseXToVis = function(){
+  if( this.lastMouseMovePos[0] < 0 )
+    this.lastMouseMovePos[0] = 0;
+  else if( this.lastMouseMovePos[0] > this.size.width )
+    this.lastMouseMovePos[0] = this.size.width;
 };
 
 SpectrumChartD3.prototype.processDeletePeakRange = function() {
