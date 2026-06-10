@@ -825,7 +825,10 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
   //  `assert( m_spec )` before dereferencing it, so if any of the JS exceptions scheduled below are
   //  ignored (ThrowAsJavaScriptException only schedules a JS exception; it does not stop C++
   //  execution), a method call must not dereference a null m_spec in a release build.
-  m_spec = std::make_shared<SpecUtils::SpecFile>();
+  // We load through a non-const local because `load_file` is non-const, but `m_spec` is a
+  //  `shared_ptr<const SpecFile>`; the assignment keeps `m_spec` valid at all times.
+  std::shared_ptr<SpecUtils::SpecFile> spec = std::make_shared<SpecUtils::SpecFile>();
+  m_spec = spec;
 
   // Note: because of the above, we still `return` after each throw to avoid further work.
   if (length != 1 || !info[0].IsString() ) {
@@ -835,7 +838,7 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
 
   const std::string path = info[0].ToString().Utf8Value();
 
-  if( !m_spec->load_file( path, SpecUtils::ParserType::Auto ) ){
+  if( !spec->load_file( path, SpecUtils::ParserType::Auto ) ){
     Napi::TypeError::New(env, "Could not decode as a spectrum file.").ThrowAsJavaScriptException();
     return;
   }
