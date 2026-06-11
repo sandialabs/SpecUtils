@@ -6875,8 +6875,9 @@ void SpecFile::set_detector_type_from_other_info()
     // \TODO: verify general form Verifinders will have in this element
     const bool isVerifinder = (SpecUtils::icontains(model, "SN2")
                                || SpecUtils::icontains(model, "VeriFinder")
-                               || SpecUtils::icontains(model, "SL2") );
-    
+                               || SpecUtils::icontains(model, "SL2")
+                               || SpecUtils::istarts_with(instrument_id_, "SG_") ); //"Dill_Complete" variant
+
     
     // model of "SN11" is the "Compact VeriFinder"
     // model of "SN33" is also possible - looks to be 3x3x3 NaI, so probably the backpack system
