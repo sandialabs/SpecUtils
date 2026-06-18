@@ -370,6 +370,10 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: set_energy_calibration => swigf_Measurement_set_energy_calibration
   procedure :: set_ecal => swigf_Measurement_set_ecal
   procedure :: set_info_from_2006_N42_spectrum_node => swigf_Measurement_set_info_from_2006_N42_spectrum_node
+  procedure :: set_spar1_ => swigf_Measurement_spar1__set
+  procedure :: get_spar1_ => swigf_Measurement_spar1__get
+  procedure :: set_spar2_ => swigf_Measurement_spar2__set
+  procedure :: get_spar2_ => swigf_Measurement_spar2__get
   procedure :: gamma_count_at => swigf_Measurement_gamma_count_at
   procedure :: get_num_channels => swigf_Measurement_get_num_channels
   procedure :: get_start_time_string => swigf_Measurement_get_start_time_string
@@ -449,6 +453,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: release => swigf_SpecFile_release
   procedure, private :: swigf_SpecFile_load_file__SWIG_0
   procedure, private :: swigf_SpecFile_load_file__SWIG_1
+  procedure, private :: swigf_SpecFile_load_file__SWIG_2
   procedure :: parse_warnings => swigf_SpecFile_parse_warnings
   procedure :: modified => swigf_SpecFile_modified
   procedure :: reset_modified => swigf_SpecFile_reset_modified
@@ -478,6 +483,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: instrument_id => swigf_SpecFile_instrument_id
   procedure :: measurements => swigf_SpecFile_measurements
   procedure :: measurements_mutable => swigf_SpecFile_measurements_mutable
+  procedure :: mutable_measurements => swigf_SpecFile_mutable_measurements
   procedure, private :: swigf_SpecFile_measurement__SWIG_0
   procedure :: detectors_analysis => swigf_SpecFile_detectors_analysis
   procedure :: multimedia_data => swigf_SpecFile_multimedia_data
@@ -603,6 +609,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure, private :: swigf_SpecFile_write_to_file__SWIG_1
   procedure, private :: swigf_SpecFile_write_to_file__SWIG_2
   procedure, private :: swigf_SpecFile_write_to_file__SWIG_3
+  procedure, private :: swigf_SpecFile_write_to_file__SWIG_4
   procedure, private :: swigf_SpecFile_write__SWIG_0
   procedure, private :: swigf_SpecFile_write__SWIG_1
   procedure :: write_pcf => swigf_SpecFile_write_pcf
@@ -633,9 +640,9 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   generic :: assignment(=) => swigf_SpecFile_op_assign__
   generic :: set_remarks => swigf_SpecFile_set_remarks__SWIG_0, swigf_SpecFile_set_remarks__SWIG_1
   generic :: load_N42_from_data => swigf_SpecFile_load_N42_from_data__SWIG_0, swigf_SpecFile_load_N42_from_data__SWIG_1
-  generic :: load_file => swigf_SpecFile_load_file__SWIG_0, swigf_SpecFile_load_file__SWIG_1
+  generic :: load_file => swigf_SpecFile_load_file__SWIG_0, swigf_SpecFile_load_file__SWIG_1, swigf_SpecFile_load_file__SWIG_2
   generic :: write_to_file => swigf_SpecFile_write_to_file__SWIG_0, swigf_SpecFile_write_to_file__SWIG_1, &
-    swigf_SpecFile_write_to_file__SWIG_2, swigf_SpecFile_write_to_file__SWIG_3
+    swigf_SpecFile_write_to_file__SWIG_2, swigf_SpecFile_write_to_file__SWIG_3, swigf_SpecFile_write_to_file__SWIG_4
  end type SpecFile
  ! class SpecUtils::DetectorAnalysisResult
  type, public :: DetectorAnalysisResult
@@ -2231,6 +2238,40 @@ type(SwigClassWrapper), intent(in) :: farg1
 type(SwigClassWrapper), intent(in) :: farg2
 end subroutine
 
+subroutine swigc_Measurement_spar1__set(farg1, farg2) &
+bind(C, name="_wrap_Measurement_spar1__set")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
+
+function swigc_Measurement_spar1__get(farg1) &
+bind(C, name="_wrap_Measurement_spar1__get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT) :: fresult
+end function
+
+subroutine swigc_Measurement_spar2__set(farg1, farg2) &
+bind(C, name="_wrap_Measurement_spar2__set")
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT), intent(in) :: farg2
+end subroutine
+
+function swigc_Measurement_spar2__get(farg1) &
+bind(C, name="_wrap_Measurement_spar2__get") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+real(C_FLOAT) :: fresult
+end function
+
 function swigc_Measurement_gamma_count_at(farg1, farg2) &
 bind(C, name="_wrap_Measurement_gamma_count_at") &
 result(fresult)
@@ -2354,8 +2395,19 @@ import :: swigclasswrapper
 type(SwigClassWrapper), intent(inout) :: farg1
 end subroutine
 
-function swigc_SpecFile_load_file__SWIG_0(farg1, farg2, farg3, farg4) &
+function swigc_SpecFile_load_file__SWIG_0(farg1, farg2) &
 bind(C, name="_wrap_SpecFile_load_file__SWIG_0") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+integer(C_INT) :: fresult
+end function
+
+function swigc_SpecFile_load_file__SWIG_1(farg1, farg2, farg3, farg4) &
+bind(C, name="_wrap_SpecFile_load_file__SWIG_1") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigarraywrapper
@@ -2367,8 +2419,8 @@ type(SwigArrayWrapper) :: farg4
 integer(C_INT) :: fresult
 end function
 
-function swigc_SpecFile_load_file__SWIG_1(farg1, farg2, farg3) &
-bind(C, name="_wrap_SpecFile_load_file__SWIG_1") &
+function swigc_SpecFile_load_file__SWIG_2(farg1, farg2, farg3) &
+bind(C, name="_wrap_SpecFile_load_file__SWIG_2") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigarraywrapper
@@ -2638,6 +2690,15 @@ end function
 
 function swigc_SpecFile_measurements_mutable(farg1) &
 bind(C, name="_wrap_SpecFile_measurements_mutable") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper) :: fresult
+end function
+
+function swigc_SpecFile_mutable_measurements(farg1) &
+bind(C, name="_wrap_SpecFile_mutable_measurements") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
@@ -3816,26 +3877,23 @@ type(SwigClassWrapper), intent(in) :: farg2
 type(SwigClassWrapper) :: fresult
 end function
 
-subroutine swigc_SpecFile_write_to_file__SWIG_0(farg1, farg2, farg3) &
+subroutine swigc_SpecFile_write_to_file__SWIG_0(farg1, farg2) &
 bind(C, name="_wrap_SpecFile_write_to_file__SWIG_0")
 use, intrinsic :: ISO_C_BINDING
 import :: swigarraywrapper
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigArrayWrapper) :: farg2
-integer(C_INT), intent(in) :: farg3
 end subroutine
 
-subroutine swigc_SpecFile_write_to_file__SWIG_1(farg1, farg2, farg3, farg4, farg5) &
+subroutine swigc_SpecFile_write_to_file__SWIG_1(farg1, farg2, farg3) &
 bind(C, name="_wrap_SpecFile_write_to_file__SWIG_1")
 use, intrinsic :: ISO_C_BINDING
 import :: swigarraywrapper
 import :: swigclasswrapper
 type(SwigClassWrapper), intent(in) :: farg1
 type(SwigArrayWrapper) :: farg2
-type(SwigClassWrapper), intent(in) :: farg3
-type(SwigClassWrapper), intent(in) :: farg4
-integer(C_INT), intent(in) :: farg5
+integer(C_INT), intent(in) :: farg3
 end subroutine
 
 subroutine swigc_SpecFile_write_to_file__SWIG_2(farg1, farg2, farg3, farg4, farg5) &
@@ -3852,6 +3910,18 @@ end subroutine
 
 subroutine swigc_SpecFile_write_to_file__SWIG_3(farg1, farg2, farg3, farg4, farg5) &
 bind(C, name="_wrap_SpecFile_write_to_file__SWIG_3")
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+type(SwigClassWrapper), intent(in) :: farg3
+type(SwigClassWrapper), intent(in) :: farg4
+integer(C_INT), intent(in) :: farg5
+end subroutine
+
+subroutine swigc_SpecFile_write_to_file__SWIG_4(farg1, farg2, farg3, farg4, farg5) &
+bind(C, name="_wrap_SpecFile_write_to_file__SWIG_4")
 use, intrinsic :: ISO_C_BINDING
 import :: swigarraywrapper
 import :: swigclasswrapper
@@ -7706,6 +7776,56 @@ farg2 = spectrum%swigdata
 call swigc_Measurement_set_info_from_2006_N42_spectrum_node(farg1, farg2)
 end subroutine
 
+subroutine swigf_Measurement_spar1__set(self, spar1_)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), intent(in) :: spar1_
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = spar1_
+call swigc_Measurement_spar1__set(farg1, farg2)
+end subroutine
+
+function swigf_Measurement_spar1__get(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(Measurement), intent(in) :: self
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_spar1__get(farg1)
+swig_result = fresult
+end function
+
+subroutine swigf_Measurement_spar2__set(self, spar2_)
+use, intrinsic :: ISO_C_BINDING
+class(Measurement), intent(in) :: self
+real(C_FLOAT), intent(in) :: spar2_
+type(SwigClassWrapper) :: farg1 
+real(C_FLOAT) :: farg2 
+
+farg1 = self%swigdata
+farg2 = spar2_
+call swigc_Measurement_spar2__set(farg1, farg2)
+end subroutine
+
+function swigf_Measurement_spar2__get(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+real(C_FLOAT) :: swig_result
+class(Measurement), intent(in) :: self
+real(C_FLOAT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_Measurement_spar2__get(farg1)
+swig_result = fresult
+end function
+
 function swigf_Measurement_gamma_count_at(self, index) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -7902,7 +8022,24 @@ farg1%cmemflags = 0
 self%swigdata = farg1
 end subroutine
 
-function swigf_SpecFile_load_file__SWIG_0(self, filename, parser_type, file_ending_hint) &
+function swigf_SpecFile_load_file__SWIG_0(self, filename) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(SpecFile), intent(in) :: self
+character(len=*), target :: filename
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg2_temp 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
+fresult = swigc_SpecFile_load_file__SWIG_0(farg1, farg2)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function swigf_SpecFile_load_file__SWIG_1(self, filename, parser_type, file_ending_hint) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
 logical :: swig_result
@@ -7922,11 +8059,11 @@ farg1 = self%swigdata
 call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
 farg3 = parser_type
 call SWIGTM_fin_char_Sm_(file_ending_hint, farg4, farg4_temp)
-fresult = swigc_SpecFile_load_file__SWIG_0(farg1, farg2, farg3, farg4)
+fresult = swigc_SpecFile_load_file__SWIG_1(farg1, farg2, farg3, farg4)
 call SWIGTM_fout_bool(fresult, swig_result)
 end function
 
-function swigf_SpecFile_load_file__SWIG_1(self, filename, parser_type) &
+function swigf_SpecFile_load_file__SWIG_2(self, filename, parser_type) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
 logical :: swig_result
@@ -7942,7 +8079,7 @@ integer(C_INT) :: farg3
 farg1 = self%swigdata
 call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
 farg3 = parser_type
-fresult = swigc_SpecFile_load_file__SWIG_1(farg1, farg2, farg3)
+fresult = swigc_SpecFile_load_file__SWIG_2(farg1, farg2, farg3)
 call SWIGTM_fout_bool(fresult, swig_result)
 end function
 
@@ -8321,6 +8458,19 @@ type(SwigClassWrapper) :: farg1
 
 farg1 = self%swigdata
 fresult = swigc_SpecFile_measurements_mutable(farg1)
+swig_result%swigdata = fresult
+end function
+
+function swigf_SpecFile_mutable_measurements(self) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+type(MeasurementPtrVector) :: swig_result
+class(SpecFile), intent(in) :: self
+type(SwigClassWrapper) :: fresult 
+type(SwigClassWrapper) :: farg1 
+
+farg1 = self%swigdata
+fresult = swigc_SpecFile_mutable_measurements(farg1)
 swig_result%swigdata = fresult
 end function
 
@@ -10157,7 +10307,20 @@ fresult = swigc_SpecFile_detector_names_to_numbers(farg1, farg2)
 swig_result%swigdata = fresult
 end function
 
-subroutine swigf_SpecFile_write_to_file__SWIG_0(self, filename, format)
+subroutine swigf_SpecFile_write_to_file__SWIG_0(self, filename)
+use, intrinsic :: ISO_C_BINDING
+class(SpecFile), intent(in) :: self
+character(len=*), target :: filename
+type(SwigClassWrapper) :: farg1 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg2_temp 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
+call swigc_SpecFile_write_to_file__SWIG_0(farg1, farg2)
+end subroutine
+
+subroutine swigf_SpecFile_write_to_file__SWIG_1(self, filename, format)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
 character(len=*), target :: filename
@@ -10170,10 +10333,10 @@ integer(C_INT) :: farg3
 farg1 = self%swigdata
 call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
 farg3 = format
-call swigc_SpecFile_write_to_file__SWIG_0(farg1, farg2, farg3)
+call swigc_SpecFile_write_to_file__SWIG_1(farg1, farg2, farg3)
 end subroutine
 
-subroutine swigf_SpecFile_write_to_file__SWIG_1(self, filename, sample_nums, det_nums, format)
+subroutine swigf_SpecFile_write_to_file__SWIG_2(self, filename, sample_nums, det_nums, format)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
 character(len=*), target :: filename
@@ -10192,10 +10355,10 @@ call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
 farg3 = sample_nums%swigdata
 farg4 = det_nums%swigdata
 farg5 = format
-call swigc_SpecFile_write_to_file__SWIG_1(farg1, farg2, farg3, farg4, farg5)
+call swigc_SpecFile_write_to_file__SWIG_2(farg1, farg2, farg3, farg4, farg5)
 end subroutine
 
-subroutine swigf_SpecFile_write_to_file__SWIG_2(self, filename, sample_nums, det_nums, format)
+subroutine swigf_SpecFile_write_to_file__SWIG_3(self, filename, sample_nums, det_nums, format)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
 character(len=*), target :: filename
@@ -10214,10 +10377,10 @@ call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
 farg3 = sample_nums%swigdata
 farg4 = det_nums%swigdata
 farg5 = format
-call swigc_SpecFile_write_to_file__SWIG_2(farg1, farg2, farg3, farg4, farg5)
+call swigc_SpecFile_write_to_file__SWIG_3(farg1, farg2, farg3, farg4, farg5)
 end subroutine
 
-subroutine swigf_SpecFile_write_to_file__SWIG_3(self, filename, sample_nums, det_names, format)
+subroutine swigf_SpecFile_write_to_file__SWIG_4(self, filename, sample_nums, det_names, format)
 use, intrinsic :: ISO_C_BINDING
 class(SpecFile), intent(in) :: self
 character(len=*), target :: filename
@@ -10236,7 +10399,7 @@ call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
 farg3 = sample_nums%swigdata
 farg4 = det_names%swigdata
 farg5 = format
-call swigc_SpecFile_write_to_file__SWIG_3(farg1, farg2, farg3, farg4, farg5)
+call swigc_SpecFile_write_to_file__SWIG_4(farg1, farg2, farg3, farg4, farg5)
 end subroutine
 
 subroutine swigf_SpecFile_write__SWIG_0(self, strm, sample_nums, det_nums, format)

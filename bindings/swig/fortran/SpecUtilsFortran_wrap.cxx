@@ -2686,6 +2686,58 @@ SWIGEXPORT void _wrap_Measurement_set_info_from_2006_N42_spectrum_node(SwigClass
 }
 
 
+SWIGEXPORT void _wrap_Measurement_spar1__set(SwigClassWrapper *farg1, float const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float)(*farg2);
+  if (arg1) (arg1)->spar1_ = arg2;
+}
+
+
+SWIGEXPORT float _wrap_Measurement_spar1__get(SwigClassWrapper *farg1) {
+  float fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  float result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = (float) ((arg1)->spar1_);
+  fresult = (float)(result);
+  return fresult;
+}
+
+
+SWIGEXPORT void _wrap_Measurement_spar2__set(SwigClassWrapper *farg1, float const *farg2) {
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  float arg2 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  arg2 = (float)(*farg2);
+  if (arg1) (arg1)->spar2_ = arg2;
+}
+
+
+SWIGEXPORT float _wrap_Measurement_spar2__get(SwigClassWrapper *farg1) {
+  float fresult ;
+  SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
+  std::shared_ptr< SpecUtils::Measurement > *smartarg1 ;
+  float result;
+  
+  smartarg1 = (std::shared_ptr< SpecUtils::Measurement >*)(farg1->cptr);
+  arg1 = smartarg1 ? (SpecUtils::Measurement*)(smartarg1->get()) : NULL;
+  result = (float) ((arg1)->spar2_);
+  fresult = (float)(result);
+  return fresult;
+}
+
+
 SWIGEXPORT float _wrap_Measurement_gamma_count_at(SwigClassWrapper *farg1, int const *farg2) {
   float fresult ;
   SpecUtils::Measurement *arg1 = (SpecUtils::Measurement *) 0 ;
@@ -2876,7 +2928,24 @@ SWIGEXPORT void _wrap_delete_SpecFile(SwigClassWrapper *farg1) {
 }
 
 
-SWIGEXPORT int _wrap_SpecFile_load_file__SWIG_0(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, int const *farg3, SwigArrayWrapper *farg4) {
+SWIGEXPORT int _wrap_SpecFile_load_file__SWIG_0(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  int fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::string *arg2 = 0 ;
+  std::string tempstr2 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::load_file(std::string const &)", return 0);
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
+  arg2 = &tempstr2;
+  result = (bool)(arg1)->load_file((std::string const &)*arg2);
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_SpecFile_load_file__SWIG_1(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, int const *farg3, SwigArrayWrapper *farg4) {
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string *arg2 = 0 ;
@@ -2897,7 +2966,7 @@ SWIGEXPORT int _wrap_SpecFile_load_file__SWIG_0(SwigClassWrapper *farg1, SwigArr
 }
 
 
-SWIGEXPORT int _wrap_SpecFile_load_file__SWIG_1(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, int const *farg3) {
+SWIGEXPORT int _wrap_SpecFile_load_file__SWIG_2(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, int const *farg3) {
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string *arg2 = 0 ;
@@ -3342,6 +3411,20 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_measurements_mutable(SwigClassWrapper
   SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::measurements_mutable()", return SwigClassWrapper_uninitialized());
   arg1 = (SpecUtils::SpecFile *)farg1->cptr;
   result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) &(arg1)->measurements_mutable();
+  fresult.cptr = (void*)result;
+  fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT SwigClassWrapper _wrap_SpecFile_mutable_measurements(SwigClassWrapper *farg1) {
+  SwigClassWrapper fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::vector< std::shared_ptr< SpecUtils::Measurement > > *result = 0 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::mutable_measurements()", return SwigClassWrapper_uninitialized());
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  result = (std::vector< std::shared_ptr< SpecUtils::Measurement > > *) &(arg1)->mutable_measurements();
   fresult.cptr = (void*)result;
   fresult.cmemflags = SWIG_MEM_RVALUE | (0 ? SWIG_MEM_OWN : 0);
   return fresult;
@@ -5152,7 +5235,18 @@ SWIGEXPORT SwigClassWrapper _wrap_SpecFile_detector_names_to_numbers(SwigClassWr
 }
 
 
-SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_0(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, int const *farg3) {
+SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_0(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::string arg2 ;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::write_to_file(std::string const)", return );
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  (&arg2)->assign(static_cast<char *>(farg2->data), farg2->size);
+  (arg1)->write_to_file(arg2);
+}
+
+
+SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_1(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, int const *farg3) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string arg2 ;
   SpecUtils::SaveSpectrumAsType arg3 ;
@@ -5165,7 +5259,7 @@ SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_0(SwigClassWrapper *farg1, Sw
 }
 
 
-SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_1(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
+SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_2(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string arg2 ;
   std::set< int > arg3 ;
@@ -5184,7 +5278,7 @@ SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_1(SwigClassWrapper *farg1, Sw
 }
 
 
-SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_2(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
+SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_3(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string arg2 ;
   SwigValueWrapper< std::vector< int > > arg3 ;
@@ -5203,7 +5297,7 @@ SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_2(SwigClassWrapper *farg1, Sw
 }
 
 
-SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_3(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
+SWIGEXPORT void _wrap_SpecFile_write_to_file__SWIG_4(SwigClassWrapper *farg1, SwigArrayWrapper *farg2, SwigClassWrapper *farg3, SwigClassWrapper *farg4, int const *farg5) {
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
   std::string *arg2 = 0 ;
   std::set< int > *arg3 = 0 ;

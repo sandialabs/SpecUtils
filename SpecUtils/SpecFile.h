@@ -1141,6 +1141,9 @@ protected:
                                  const rapidxml::xml_node<char> *gross_count_measu_node );
 
   
+public:
+  float spar1_;
+  float spar2_;
   
 protected:
   
@@ -1405,6 +1408,11 @@ public:
   //  cleanup_after_load() are NOT called.
   const SpecFile &operator=( const SpecFile &rhs );
 
+  bool load_file(const std::string &filename)
+  {
+    return load_file(filename, ParserType::Auto, "pcf");
+  }
+
   //load_file(...): returns true when file is successfully loaded, false
   //  otherwise. Calling this function with parser_type==Auto is
   //  the easiest way to load a spectrum file when you dont know the type of
@@ -1472,7 +1480,13 @@ public:
   const std::string &instrument_model() const;
   const std::string &instrument_id() const;
   std::vector< std::shared_ptr<const Measurement> > measurements() const;
+
+  /// @deprecated
   std::vector< std::shared_ptr<Measurement> >& measurements_mutable()
+  {
+    return measurements_;
+  }
+  std::vector< std::shared_ptr<Measurement> >& mutable_measurements()
   {
     return measurements_;
   }
@@ -2129,6 +2143,10 @@ public:
   std::set<int> detector_names_to_numbers( const std::vector<std::string> &det_names ) const;
   
   //Functions to export to various file formats
+
+  /// 
+  void write_to_file( const std::string filename );
+
 
   //write_to_file(...): Writes the contents of this object to the specified
   //  file in the specified format.  For file formats such as CHN and SPC files

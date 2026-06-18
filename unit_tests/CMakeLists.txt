@@ -48,6 +48,7 @@ set_target_properties( test_spec_file PROPERTIES
  
 add_test( NAME test_spec_file
           COMMAND $<TARGET_FILE:test_spec_file> 
+          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_executable( test_energy_calibration test_energy_calibration.cpp )

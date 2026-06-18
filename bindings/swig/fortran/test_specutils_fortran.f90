@@ -8,6 +8,7 @@ program TestSpecUtils
     integer, parameter :: maxCol = 4
 
     call SpecUtilsRoundTrip()
+    call TestMeasurementVector()
     !call DerivationPairMap()
     print *, "Success!"
     contains
@@ -45,6 +46,9 @@ subroutine SpecUtilsRoundTrip()
     call check(error, m%rpm_panel_number(), 2-1 )
     call check(error, m%rpm_column_number(), 1-1 )
     call check(error, m%rpm_mca_number(), 2-1 )
+
+    call m%set_spar1_(.5987)
+    call m%set_spar2_(.22872)
 
     allocate( spectrum(128) )
     DO i = 1, 128
@@ -176,11 +180,59 @@ subroutine SpecUtilsRoundTrip_Read(expectedSpecFile, filePath)
         call check(error, devPairAct%get_second(), devPairExp%get_second())
     end do
 
+    call check(error, actM%get_spar1_(), expM%get_spar1_())
+    call check(error, actM%get_spar2_(), expM%get_spar2_())
+
     call ecalAct%release()
     call ecalExp%release()
     call expM%release()
     call actM%release()
     call actualSpecFile%release()
+end subroutine
+
+subroutine TestMeasurementVector()
+    type(error_type), allocatable :: error
+    type(SpecFile) :: sf
+    type(Measurement) :: m, m1, m25, m24, m28
+    type(MeasurementPtrVector) :: measurements
+    character(len=:), allocatable :: filePath
+    character(len=:), allocatable :: title
+    integer :: istat, i
+    real :: sum
+    logical :: success
+    real, dimension(:), allocatable :: spectrum
+
+    filePath = "/mnt/c/NSS/SensorCat/Explorer/RSU_205_20240312203809.pcf"
+
+    sf = SpecFile()
+    success = sf%load_file(filePath, ParserType_Pcf)
+
+    call check(error, success)
+
+    ! !measurements = MeasurementPtrVector()
+    measurements = sf%measurements_mutable()
+
+    call check(error, measurements%size(), 1203)
+
+
+    m25 = measurements%get(25)
+
+    call check(error, m25%title(), 'Foreground #142')
+
+    call m25%set_title('Foreground #142 XXXXXX1234554321 :-)')
+
+    m28 = measurements%get(28)
+    call measurements%set(28, m25)
+
+    call measurements%set(25, m28)
+
+    !call measurements%set(25,m)
+
+    filePath = "/mnt/c/NSS/SensorCat/Explorer/RSU_205_20240312203809-2.pcf"
+    call sf%write_to_file(filePath, SaveSpectrumAsType_Pcf)
+
+
+
 end subroutine
 
 subroutine getExpectedDeviationPair(col, panel, mca, devPair, first, second)
@@ -231,57 +283,5 @@ subroutine getDetectorName(panel, column, mca, isNeutron, detectorName)
     end if
 
 end subroutine
-
-! subroutine DerivationPairMap()
-!     type(error_type), allocatable :: error
-!     type(SpecFile) :: sf
-!     type(EnergyCalibrationExt) :: ecal
-!     type(Measurement) :: m
-!     type(DeviationPairs) :: devPairs
-!     type(DevPair) :: devPairAct, devPairExp, dp
-!     character(len=20) :: detectorName
-!     real :: devPairArray(2, maxDevPairs, maxMCA, maxPanel, maxCol)
-!     integer :: col_i, panel_j, mca_k, p
-!     real :: first, second
-!     integer :: pairVal
-!     integer :: col, panel, mca, devPair_i
-
-!     sf = SpecFile()
-!     pairVal = 0
-!     do col = 1, maxCol
-!         do panel = 1, maxPanel
-!             do mca = 1, maxMCA
-!                 m = Measurement()
-!                 devPairs = DeviationPairs()
-!                 call getDetectorName(panel,col,mca,.false.,detectorName)
-!                 call m%set_detector_name(detectorName)
-!                 do devPair_i = 1, maxDevPairs
-!                     dp = DevPair()
-!                     pairVal = pairVal + 1
-!                     call dp%set_first(real(pairVal))
-!                     pairVal = pairVal + 1
-!                     call dp%set_second(real(pairVal))
-!                     call devPairs%push_back(dp)                      
-!                 end do
-!                 ecal = EnergyCalibrationExt()
-!                 call ecal%set_dev_pairs(devPairs)
-!                 call m%set_ecal(ecal)
-!                 call sf%add_measurement(m)
-!             end do
-!         end do
-!     end do
-
-!     call mapDevPairsToArray2(sf, devPairArray)
-
-!     col =3
-!     panel = 2
-!     mca = 7
-!     devPair_i = 19
-!     call getExpectedDeviationPair(col, panel, mca, devPair_i, first, second)
-
-!     call check( error, devPairArray(1,devPair_i,mca,panel,col), first)
-!     call check( error, devPairArray(2,devPair_i,mca,panel,col), second)
-    
-! end subroutine
 
 end program

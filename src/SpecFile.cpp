@@ -1611,6 +1611,9 @@ void Measurement::reset()
   measurement_description_.clear();
   
   location_.reset();
+
+  spar1_ =0.0F;
+  spar2_ =0.0F;
 }//void reset()
 
   
@@ -8825,7 +8828,40 @@ void SpecFile::write_to_file( const std::string filename,
   write_to_file( newname, samples, detectors, format );
 }//void write_to_file(...)
 
+void SpecFile::write_to_file( const std::string filename )
+{
+  std::string extension = filename;
+  auto period_pos = extension.find_last_of('.');
+  if (period_pos != std::string::npos)
+    extension = extension.substr(period_pos + 1);
 
+  to_lower_ascii(extension);
+
+  auto type = SaveSpectrumAsType::Pcf;
+
+  if (extension == "spc")
+    type = SaveSpectrumAsType::SpcAscii;
+  else if (extension == "n42")
+    type = SaveSpectrumAsType::N42_2012;
+  else if (extension == "xml")
+    type = SaveSpectrumAsType::N42_2006;
+  else if (extension == "chn")
+    type = SaveSpectrumAsType::Chn;
+  else if (extension == "spe")
+    type = SaveSpectrumAsType::SpeIaea;
+  else if (extension == "tka" || extension == "jac")
+    type = SaveSpectrumAsType::Tka;
+  else if (extension == "txt")
+    type = SaveSpectrumAsType::Txt;
+  else if (extension == "csv")
+    type = SaveSpectrumAsType::Csv;
+  else if (extension == "cnf")
+    type = SaveSpectrumAsType::Cnf;
+  else if (extension == "dat")
+    type = SaveSpectrumAsType::ExploraniumGr130v0;  
+
+  this->write_to_file(filename, type);
+}
 
 void SpecFile::write_to_file( const std::string name,
                    const std::set<int> sample_nums,

@@ -1072,8 +1072,8 @@ bool SpecFile::write_pcf( std::ostream &outputstrm ) const
       ostr.write( &character_tag, 1 );
       ostr.write( (char *)&live_time, 4 );
       ostr.write( (char *)&true_time, 4 );
-      ostr.write( (char *)&halflife, 4 );
-      ostr.write( (char *)&molecular_weight, 4 );
+      ostr.write( (char *)&meas->spar1_, 4 );
+      ostr.write( (char *)&meas->spar2_, 4 );
       ostr.write( (char *)&spectrum_multiplier, 4 );
       ostr.write( (char *)&offset, 4 );
       ostr.write( (char *)&gain, 4 );
@@ -1469,21 +1469,23 @@ bool SpecFile::load_from_pcf( std::istream &input )
       vector<float> energy_cal_terms( 5, 0.0f );
       float live_time, true_time, halflife, molecular_weight,
       spectrum_multiplier, unused_float, neutron_counts;
+
+      float spar1 =0.0F, spar2=0.0F;
       
-      input.read( &character_tag, 1 );                            //204
-      input.read( (char *)&live_time, 4 );                        //208
-      input.read( (char *)&true_time, 4 );                        //212
-      input.read( (char *)&halflife, 4 );                         //216
-      input.read( (char *)&molecular_weight, 4 );                 //220
-      input.read( (char *)&spectrum_multiplier, 4 );              //224
-      input.read( (char *)&energy_cal_terms[0], 4 );              //228
-      input.read( (char *)&energy_cal_terms[1], 4 );              //232
-      input.read( (char *)&energy_cal_terms[2], 4 );              //236
-      input.read( (char *)&energy_cal_terms[3], 4 );              //240
-      input.read( (char *)&energy_cal_terms[4], 4 );              //244
-      input.read( (char *)&unused_float, 4 );                     //248
-      input.read( (char *)&neutron_counts, 4 );                   //252
-      input.read( (char *)&num_channel, 4 );                      //256
+      input.read( &character_tag, 1 );                            //203
+      input.read( (char *)&live_time, 4 );                        //204
+      input.read( (char *)&true_time, 4 );                        //218
+      input.read( (char *)&spar1, 4 );                         //212
+      input.read( (char *)&spar2, 4 );                 //216
+      input.read( (char *)&spectrum_multiplier, 4 );              //220
+      input.read( (char *)&energy_cal_terms[0], 4 );              //224
+      input.read( (char *)&energy_cal_terms[1], 4 );              //228
+      input.read( (char *)&energy_cal_terms[2], 4 );              //232
+      input.read( (char *)&energy_cal_terms[3], 4 );              //236
+      input.read( (char *)&energy_cal_terms[4], 4 );              //240
+      input.read( (char *)&unused_float, 4 );                     //244
+      input.read( (char *)&neutron_counts, 4 );                   //248
+      input.read( (char *)&num_channel, 4 );                      //252
       
       //we have now read 256 bytes for this record
       
@@ -1584,6 +1586,8 @@ bool SpecFile::load_from_pcf( std::istream &input )
       //If we're here, were keeping meas.
       
       measurements_.push_back( meas );
+      meas->spar1_ = spar1;
+      meas->spar2_ = spar2;
       meas->live_time_ = live_time;
       meas->real_time_ = true_time;
       
