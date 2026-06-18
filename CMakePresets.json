@@ -114,7 +114,7 @@
             "hidden": false,
             "configurePreset": "NMake-Debug",
             "configuration": "Debug",
-
+            "execution": {"jobs": 10},
             "output": {
                 "verbosity": "verbose"
             }
@@ -141,7 +141,7 @@
         {
             "name": "package-gcc-release",
             "configurePreset": "GCC-Release",
-            "packageVersion": "2026.1",
+            "packageVersion": "2026.2",
             "generators": [
                 "TGZ",
                 "TZ"
@@ -188,6 +188,11 @@
                     "name": "win-x64-debug"
                 },
                 {
+                    "type": "test",
+                    
+                    "name": "run-tests-debug"
+                },
+                {
                     "type": "package",
                     "name": "zip-file-debug"
                 }                                    
@@ -195,7 +200,7 @@
         },
         {
             "name": "all-release",
-            "description": "you can run like this: cmake --workflow --preset all-debug",
+            "description": "you can run like this: cmake --workflow --preset all-release",
             "steps" : [
                 
                 {
