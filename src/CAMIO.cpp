@@ -734,6 +734,7 @@ void CAMIO::ReadBlock(CAMBlock block) {
           case CAMBlock::PROC:
           case CAMBlock::DISP:
           case CAMBlock::SPEC:
+          case CAMBlock::K_EDGE_CONFIG:
             // Add other block types as needed
             break;
         }
