@@ -292,7 +292,7 @@ namespace SpecUtils
     while( tpos != string::npos )
     {
       if( (tpos > 0) && ((tpos + 1) < time_string.size())
-         && isdigit( time_string[tpos - 1] ) && isdigit( time_string[tpos + 1] ) )
+         && isdigit( static_cast<unsigned char>(time_string[tpos - 1]) ) && isdigit( static_cast<unsigned char>(time_string[tpos + 1]) ) )
         time_string[tpos] = ' ';
       tpos = time_string.find( 'T', tpos + 1 );
     }
@@ -372,7 +372,7 @@ namespace SpecUtils
       bool aftertime = false;
       for( size_t pos = period; pos!=string::npos && period; --pos )
       {
-        if( isspace(time_string[pos]) )
+        if( isspace(static_cast<unsigned char>(time_string[pos])) )
         {
           aftertime = ((period-pos) > 5);
           break;
@@ -383,7 +383,7 @@ namespace SpecUtils
       if( period > (fraccolon+1)
           && aftertime
           && period != string::npos && period > 0 && (period+1) < time_string.size()
-          && isdigit(time_string[period-1]) && isdigit(time_string[period+1]) )
+          && isdigit(static_cast<unsigned char>(time_string[period-1])) && isdigit(static_cast<unsigned char>(time_string[period+1])) )
       {
         // Check if we need to truncate the precision down to microseconds
         const size_t last = time_string.find_first_not_of( "0123456789", period+1 );
@@ -645,14 +645,14 @@ namespace SpecUtils
     
     while( duration_str < end )
     {
-      while( (duration_str < end) && !isdigit(*duration_str) )
+      while( (duration_str < end) && !isdigit(static_cast<unsigned char>(*duration_str)) )
         ++duration_str;
       
       if( duration_str >= end )
         break;
       
       const char *num_start = duration_str;
-      while( (duration_str < end) && (isdigit(*duration_str) || duration_str[0]=='.') )
+      while( (duration_str < end) && (isdigit(static_cast<unsigned char>(*duration_str)) || duration_str[0]=='.') )
         ++duration_str;
       const char *num_end = duration_str;
       
@@ -689,12 +689,12 @@ namespace SpecUtils
     
     //Trim string end
     size_t str_len = input.size();
-    while( str_len > 0 && isspace(input[str_len-1]) )
+    while( str_len > 0 && isspace(static_cast<unsigned char>(input[str_len-1])) )
       --str_len;
     
     //Trim string begining
     size_t field_start = 0;
-    while( field_start < input.size() && isspace(input[field_start]) )
+    while( field_start < input.size() && isspace(static_cast<unsigned char>(input[field_start])) )
       ++field_start;
     
     const bool is_neg = (field_start < str_len) && (input[field_start] == '-');
@@ -702,7 +702,7 @@ namespace SpecUtils
     if( is_neg || has_plus )
     {
       ++field_start;
-      while( field_start < input.size() && isspace( input[field_start] ) )
+      while( field_start < input.size() && isspace( static_cast<unsigned char>(input[field_start]) ) )
         ++field_start;
     }
 
@@ -736,7 +736,7 @@ namespace SpecUtils
         {   
           for( const char *ch = str_start; ch != str_end; ++ch )
           {
-            if( !isdigit(*ch) && ((*ch) != '-') && ((*ch) != '+') )
+            if( !isdigit(static_cast<unsigned char>(*ch)) && ((*ch) != '-') && ((*ch) != '+') )
               throw runtime_error( string("Invalid character ('") + (*ch) + string("')") );
           }
           

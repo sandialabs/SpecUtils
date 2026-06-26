@@ -5,10 +5,13 @@ project( SpecUtilsFuzz VERSION 1 )
 
 add_executable( file_parse_fuzz file_parse_fuzz.cpp fuzz_interface.h fuzz_interface.cpp )
 
-# spirit float parser can assert with inputs like 
-#  ".000000000000000000000000000000000000000000000000000000000000000000000000000" 
-#  when we compile as RelWithDebInfo; so we'll disable this asserting for fuzzing
-target_compile_definitions( SpecUtils PUBLIC BOOST_DISABLE_ASSERTS )
+# spirit float parser can assert with inputs like
+#  ".000000000000000000000000000000000000000000000000000000000000000000000000000"
+#  when we compile as RelWithDebInfo; so we'll disable this asserting for fuzzing.
+# Scope this PRIVATE to SpecUtils' own translation units (which is where boost::spirit is
+#  compiled) rather than PUBLIC, so we don't strip boost asserts from the fuzz harness or any
+#  other consumer in the build tree - that would reduce the coverage fuzzing is meant to provide.
+target_compile_definitions( SpecUtils PRIVATE BOOST_DISABLE_ASSERTS )
 
 target_compile_options( file_parse_fuzz PRIVATE $<$<CXX_COMPILER_ID:Clang>:-g -O1 -fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )
 target_compile_options( SpecUtils PRIVATE $<$<CXX_COMPILER_ID:Clang>:-g -O1 -fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )

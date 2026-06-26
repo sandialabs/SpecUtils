@@ -87,6 +87,13 @@ public:
         ptrs_.reserve(n);
         for (jsize i = 0; i < n; i++) {
             jstring js = (jstring) env->GetObjectArrayElement(arr, i);
+            // If a JNI call raised a pending exception (e.g. OutOfMemoryError), stop touching
+            //  the JVM; further JNI calls with a pending exception are undefined.
+            if (env->ExceptionCheck()) {
+                if (js) env->DeleteLocalRef(js);
+                owned_.clear();
+                return;
+            }
             if (js) {
                 const char *c = env->GetStringUTFChars(js, nullptr);
                 owned_.emplace_back(c ? c : "");
@@ -294,6 +301,41 @@ Java_gov_sandia_specutils_internal_Native_specFileGetMeasurementBySampleDet
         handle_as<SpecUtils_SpecFile>(h), sampleNumber, det.c_str()));
 }
 
+// Reference-counted measurement handles: these keep the underlying measurement alive independent of
+// the SpecFile, so the wrapper cannot dangle if the file is later modified or destroyed.
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_specutils_internal_Native_specFileGetMeasurementRefByIndex
+  (JNIEnv *env, jclass, jlong h, jint index) {
+    if (check_handle(env, h, "specFileGetMeasurementRefByIndex")) return 0;
+    return to_handle(SpecUtils_SpecFile_get_measurement_ref_by_index(
+        handle_as<SpecUtils_SpecFile>(h), static_cast<uint32_t>(index)));
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_specutils_internal_Native_specFileGetMeasurementRefBySampleDet
+  (JNIEnv *env, jclass, jlong h, jint sampleNumber, jstring jdet) {
+    if (check_handle(env, h, "specFileGetMeasurementRefBySampleDet")) return 0;
+    JStringUtf8 det(env, jdet);
+    return to_handle(SpecUtils_SpecFile_get_measurement_ref_by_sample_det(
+        handle_as<SpecUtils_SpecFile>(h), sampleNumber, det.c_str()));
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_gov_sandia_specutils_internal_Native_measurementPtrFromRef
+  (JNIEnv *env, jclass, jlong refHandle) {
+    if (check_handle(env, refHandle, "measurementPtrFromRef")) return 0;
+    return to_handle(SpecUtils_Measurement_ptr_from_ref(
+        handle_as<const SpecUtils_CountedRef_Measurement>(refHandle)));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_gov_sandia_specutils_internal_Native_countedRefMeasurementDestroy
+  (JNIEnv *, jclass, jlong refHandle) {
+    if (refHandle != 0)
+        SpecUtils_CountedRef_Measurement_destroy(
+            handle_as<const SpecUtils_CountedRef_Measurement>(refHandle));
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_gov_sandia_specutils_internal_Native_specFileDetectorName
   (JNIEnv *env, jclass, jlong h, jint index) {
@@ -353,9 +395,11 @@ Java_gov_sandia_specutils_internal_Native_specFileSumMeasurements
     jsize ns = jsamples ? env->GetArrayLength(jsamples) : 0;
     std::vector<jint> samples(ns);
     if (ns > 0) env->GetIntArrayRegion(jsamples, 0, ns, samples.data());
+    if (env->ExceptionCheck()) return 0;
     std::vector<int> samples_i(samples.begin(), samples.end());
 
     JStringArrayUtf8 dets(env, jdets);
+    if (env->ExceptionCheck()) return 0;
     return to_handle(SpecUtils_SpecFile_sum_measurements(
         handle_as<SpecUtils_SpecFile>(h),
         samples_i.data(), static_cast<uint32_t>(samples_i.size()),
@@ -828,6 +872,7 @@ Java_gov_sandia_specutils_internal_Native_measurementSetGammaCounts
     jsize n = jcounts ? env->GetArrayLength(jcounts) : 0;
     std::vector<jfloat> buf(n);
     if (n > 0) env->GetFloatArrayRegion(jcounts, 0, n, buf.data());
+    if (env->ExceptionCheck()) return;
     SpecUtils_Measurement_set_gamma_counts(handle_as<SpecUtils_Measurement>(h),
         buf.data(), static_cast<uint32_t>(n), lt, rt);
 }
@@ -839,6 +884,7 @@ Java_gov_sandia_specutils_internal_Native_measurementSetNeutronCounts
     jsize n = jcounts ? env->GetArrayLength(jcounts) : 0;
     std::vector<jfloat> buf(n);
     if (n > 0) env->GetFloatArrayRegion(jcounts, 0, n, buf.data());
+    if (env->ExceptionCheck()) return;
     SpecUtils_Measurement_set_neutron_counts(handle_as<SpecUtils_Measurement>(h),
         buf.data(), static_cast<uint32_t>(n), nlt);
 }
@@ -1042,6 +1088,7 @@ Java_gov_sandia_specutils_internal_Native_energyCalSetPolynomial
     std::vector<jfloat> cbuf(nc), dbuf(nd);
     if (nc > 0) env->GetFloatArrayRegion(jcoeffs, 0, nc, cbuf.data());
     if (nd > 0) env->GetFloatArrayRegion(jdev, 0, nd, dbuf.data());
+    if (env->ExceptionCheck()) return JNI_FALSE;
     return SpecUtils_EnergyCal_set_polynomial(
         handle_as<SpecUtils_EnergyCal>(h),
         static_cast<uint32_t>(numChannels),
@@ -1060,6 +1107,7 @@ Java_gov_sandia_specutils_internal_Native_energyCalSetFullRangeFraction
     std::vector<jfloat> cbuf(nc), dbuf(nd);
     if (nc > 0) env->GetFloatArrayRegion(jcoeffs, 0, nc, cbuf.data());
     if (nd > 0) env->GetFloatArrayRegion(jdev, 0, nd, dbuf.data());
+    if (env->ExceptionCheck()) return JNI_FALSE;
     return SpecUtils_EnergyCal_set_full_range_fraction(
         handle_as<SpecUtils_EnergyCal>(h),
         static_cast<uint32_t>(numChannels),
@@ -1075,6 +1123,7 @@ Java_gov_sandia_specutils_internal_Native_energyCalSetLowerChannelEnergy
     jsize ne = jenergies ? env->GetArrayLength(jenergies) : 0;
     std::vector<jfloat> buf(ne);
     if (ne > 0) env->GetFloatArrayRegion(jenergies, 0, ne, buf.data());
+    if (env->ExceptionCheck()) return JNI_FALSE;
     return SpecUtils_EnergyCal_set_lower_channel_energy(
         handle_as<SpecUtils_EnergyCal>(h),
         static_cast<uint32_t>(numChannels),

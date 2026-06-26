@@ -28,13 +28,13 @@ jobs:
             dotnet-label: dotnet10
             target-framework: net10.0
             platform-label: macos-arm64
-          - os: windows-latest
+          - os: windows-2022
             flt-parse-method: FromChars
             dotnet-version: '10.0.x'
             dotnet-label: dotnet10
             target-framework: net10.0
             platform-label: windows-x86_64
-          - os: windows-latest
+          - os: windows-2022
             flt-parse-method: FromChars
             dotnet-version: '7.0.x'
             dotnet-label: dotnet7
@@ -197,8 +197,8 @@ jobs:
         [
           {"artifact-name": "csharp-bindings-dotnet10-ubuntu-latest", "release-asset-name": "specutils-csharp_dotnet10-linux-x86_64.zip"},
           {"artifact-name": "csharp-bindings-dotnet10-macos-latest", "release-asset-name": "specutils-csharp_dotnet10-macos-arm64.zip"},
-          {"artifact-name": "csharp-bindings-dotnet10-windows-latest", "release-asset-name": "specutils-csharp_dotnet10-windows-x86_64.zip"},
-          {"artifact-name": "csharp-bindings-dotnet7-windows-latest", "release-asset-name": "specutils-csharp_dotnet7-windows-x86_64.zip"}
+          {"artifact-name": "csharp-bindings-dotnet10-windows-2022", "release-asset-name": "specutils-csharp_dotnet10-windows-x86_64.zip"},
+          {"artifact-name": "csharp-bindings-dotnet7-windows-2022", "release-asset-name": "specutils-csharp_dotnet7-windows-x86_64.zip"}
         ]
     permissions:
       contents: write

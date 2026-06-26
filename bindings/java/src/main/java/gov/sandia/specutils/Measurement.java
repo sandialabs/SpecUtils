@@ -9,11 +9,12 @@ import gov.sandia.specutils.internal.Native;
  * {@link SpecFile}.
  *
  * <p>Instances may be <i>owned</i> (created via {@link #Measurement()} or
- * via {@link SpecFile#sumMeasurements}) or <i>borrowed</i> (returned by
- * {@link SpecFile#measurement(int)}). Borrowed measurements have
- * {@link #close()} as a no-op — their lifetime is managed by the parent
- * SpecFile. Transferring ownership to a SpecFile (via
- * {@link SpecFile#addMeasurement}) flips an owned measurement to
+ * via {@link SpecFile#sumMeasurements}) or obtained from a SpecFile via
+ * {@link SpecFile#measurement(int)}. The latter are <i>reference-counted</i>:
+ * they keep the underlying measurement alive independent of the SpecFile, so
+ * they remain valid even after the SpecFile is modified or closed. Either kind
+ * should be {@link #close()}d when done. Transferring ownership to a SpecFile
+ * (via {@link SpecFile#addMeasurement}) flips an owned measurement to
  * non-owning on success.
  */
 public final class Measurement implements AutoCloseable {
@@ -22,7 +23,11 @@ public final class Measurement implements AutoCloseable {
 
     long handle;
     private boolean ownsHandle;
-    // Kept to prevent GC of a parent SpecFile while we hold a borrowed handle.
+    // For measurements obtained from a SpecFile: an owning reference-counted handle that keeps the
+    // underlying measurement alive (0 for owned measurements).  `handle` is then a view into it.
+    private long refHandle;
+    // Held to keep the parent SpecFile from being GC'd while in use (not required for lifetime
+    // safety any more - the ref handle owns the measurement - but harmless and convenient).
     @SuppressWarnings("unused")
     private final SpecFile parent;
     private Registration cleanerRegistration;
@@ -39,19 +44,48 @@ public final class Measurement implements AutoCloseable {
         this.cleanerRegistration = registerCleaner();
     }
 
-    /** Internal: wraps an existing handle. */
+    /** Internal: wraps an existing owned handle (e.g. from clone or sum). */
     Measurement(long handle, boolean ownsHandle, SpecFile parent) {
         this.handle = handle;
         this.ownsHandle = ownsHandle;
+        this.refHandle = 0L;
         this.parent = parent;
         this.cleanerRegistration = ownsHandle ? registerCleaner() : null;
     }
 
+    /** Internal: wraps a reference-counted handle obtained from a SpecFile. */
+    private Measurement(long viewHandle, long refHandle, SpecFile parent) {
+        this.handle = viewHandle;
+        this.ownsHandle = false;
+        this.refHandle = refHandle;
+        this.parent = parent;
+        this.cleanerRegistration = registerCleaner();
+    }
+
+    /**
+     * Wraps a reference-counted measurement handle (from Native.specFileGetMeasurementRef*).
+     * The ref keeps the underlying measurement alive, so this wrapper stays valid even after the
+     * parent SpecFile is modified or closed.
+     */
+    static Measurement fromRef(long refHandle, SpecFile parent) {
+        final long view = Native.measurementPtrFromRef(refHandle);
+        if (view == 0L) {
+            Native.countedRefMeasurementDestroy(refHandle);
+            throw new SpecUtilsException("measurementPtrFromRef returned null");
+        }
+        return new Measurement(view, refHandle, parent);
+    }
+
     private Registration registerCleaner() {
-        final long h = this.handle;
+        // Capture what this wrapper is responsible for freeing: a reference-counted handle (for
+        // measurements from a SpecFile) or, for owned measurements, the measurement itself.
+        final long ref = this.refHandle;
+        final long ownedHandle = this.ownsHandle ? this.handle : 0L;
         return HandleCleaner.register(cleanerOwner, () -> {
-            if (h != 0L) {
-                Native.measurementDestroy(h);
+            if (ref != 0L) {
+                Native.countedRefMeasurementDestroy(ref);
+            } else if (ownedHandle != 0L) {
+                Native.measurementDestroy(ownedHandle);
             }
         });
     }
@@ -304,10 +338,15 @@ public final class Measurement implements AutoCloseable {
             cleanerRegistration.deregister();
             cleanerRegistration = null;
         }
-        if (ownsHandle) {
+        if (refHandle != 0L) {
+            // Measurement obtained from a SpecFile: release our reference-counted handle (the
+            // underlying measurement is freed once all references and the SpecFile are gone).
+            Native.countedRefMeasurementDestroy(refHandle);
+        } else if (ownsHandle) {
             Native.measurementDestroy(handle);
         }
         handle = 0L;
+        refHandle = 0L;
         ownsHandle = false;
     }
 

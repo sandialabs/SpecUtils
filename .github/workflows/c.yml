@@ -22,7 +22,7 @@ jobs:
           - os: macos-latest
             flt-parse-method: FastFloat
             artifact-name: specutils-c-macos-arm64
-          - os: windows-latest
+          - os: windows-2022
             flt-parse-method: FromChars
             artifact-name: specutils-c-windows-x86_64
 

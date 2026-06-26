@@ -3,8 +3,10 @@ using System.Runtime.InteropServices;
 namespace SpecUtils;
 
 /// <summary>
-/// Represents a single spectrum measurement/record within a SpecFile.
-/// May be owned (caller must dispose) or borrowed (lifetime tied to parent SpecFile).
+/// Represents a single spectrum measurement/record.
+/// May be owned (created directly or via Clone) or obtained from a SpecFile via GetMeasurement;
+/// the latter is reference-counted and keeps the underlying measurement alive independent of the
+/// SpecFile, so it stays valid even after the SpecFile is modified or disposed. Dispose either kind.
 /// </summary>
 public class Measurement : IDisposable
 {
@@ -12,8 +14,11 @@ public class Measurement : IDisposable
     private bool _ownsHandle;
     private bool _disposed;
 
-    // Hold a reference to parent SpecFile to prevent GC when we have borrowed pointers
-    private readonly SpecFile? _parent;
+    // For measurements obtained from a SpecFile, this is an owning native
+    // shared_ptr<const Measurement> handle (SpecUtils_CountedRef_Measurement) that keeps the
+    // underlying measurement alive independent of the SpecFile.  `Handle` above is then just a
+    // (stable, non-owning) view pointer into it.  IntPtr.Zero for owned measurements.
+    private IntPtr _refHandle;
 
     /// <summary>Creates a new empty owned Measurement.</summary>
     public Measurement()
@@ -22,11 +27,26 @@ public class Measurement : IDisposable
         _ownsHandle = true;
     }
 
-    internal Measurement(IntPtr handle, bool ownsHandle, SpecFile? parent = null)
+    internal Measurement(IntPtr handle, bool ownsHandle)
     {
         Handle = handle;
         _ownsHandle = ownsHandle;
-        _parent = parent;
+    }
+
+    /// <summary>
+    /// Wraps a reference-counted measurement handle returned by SpecFile.GetMeasurement.
+    /// The ref keeps the underlying measurement alive, so this wrapper stays valid even if the
+    /// parent SpecFile is later modified or disposed.
+    /// </summary>
+    internal static Measurement FromRef(IntPtr refHandle)
+    {
+        IntPtr view = NativeMethods.SpecUtils_Measurement_ptr_from_ref(refHandle);
+        if (view == IntPtr.Zero)
+        {
+            NativeMethods.SpecUtils_CountedRef_Measurement_destroy(refHandle);
+            throw new InvalidOperationException("Reference-counted measurement had a null view pointer.");
+        }
+        return new Measurement(view, ownsHandle: false) { _refHandle = refHandle };
     }
 
     /// <summary>Creates a deep copy (owned by caller).</summary>
@@ -357,11 +377,19 @@ public class Measurement : IDisposable
     {
         if (!_disposed)
         {
-            if (_ownsHandle && Handle != IntPtr.Zero)
+            if (_refHandle != IntPtr.Zero)
+            {
+                // Measurement obtained from a SpecFile: release our reference-counted handle.  The
+                // underlying measurement is freed only once all such references (and the SpecFile)
+                // are gone.  `Handle` is just a view into it and must not be destroyed directly.
+                NativeMethods.SpecUtils_CountedRef_Measurement_destroy(_refHandle);
+            }
+            else if (_ownsHandle && Handle != IntPtr.Zero)
             {
                 NativeMethods.SpecUtils_Measurement_destroy(Handle);
             }
             Handle = IntPtr.Zero;
+            _refHandle = IntPtr.Zero;
             _disposed = true;
         }
     }

@@ -419,9 +419,10 @@ namespace // - private functions for this file
       if( m.get() == meas )
         return m;
     }
-    
-    assert( 0 );
-    
+
+    // The measurement is not (or no longer) part of this file - e.g. a reference-counted measurement
+    //  (SpecUtils_CountedRef_Measurement) that outlived its removal/replacement, passed to a setter.
+    //  This is a safe no-op for the caller, not a programming error, so just report "not found".
     return nullptr;
   }//get_shared_ptr(...)
 }//namespace - private functions for this file
@@ -577,8 +578,20 @@ SpecUtils_SpecFile_get_measurement_by_index( const SpecUtils_SpecFile * const in
   const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
   if( !ptr )
     return nullptr;
-  std::shared_ptr<const SpecUtils::Measurement> meas = ptr->measurement( size_t(index) );
-  return reinterpret_cast<const SpecUtils_Measurement *>( meas.get() );
+
+  // `SpecFile::measurement(size_t)` throws on an out-of-range index; the C ABI contract is to
+  //  return NULL instead, and a C++ exception must never propagate across the boundary.
+  if( size_t(index) >= ptr->num_measurements() )
+    return nullptr;
+
+  try
+  {
+    std::shared_ptr<const SpecUtils::Measurement> meas = ptr->measurement( size_t(index) );
+    return reinterpret_cast<const SpecUtils_Measurement *>( meas.get() );
+  }catch( std::exception & )
+  {
+    return nullptr;
+  }
 }
   
 
@@ -594,10 +607,78 @@ SpecUtils_SpecFile_get_measurement_by_sample_det( const SpecUtils_SpecFile * con
   
   const string det_name_str = det_name;
   shared_ptr<const SpecUtils::Measurement> meas = ptr->measurement( sample_number, det_name_str );
-  
+
   return reinterpret_cast<const SpecUtils_Measurement *>( meas.get() );
 }
-  
+
+
+const SpecUtils_CountedRef_Measurement *
+SpecUtils_SpecFile_get_measurement_ref_by_index( const SpecUtils_SpecFile * const instance,
+                                          const uint32_t index )
+{
+  assert( instance );
+  const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
+  if( !ptr )
+    return nullptr;
+
+  // `SpecFile::measurement(size_t)` throws on an out-of-range index; honor the NULL contract and
+  //  never let a C++ exception cross the C ABI.
+  if( size_t(index) >= ptr->num_measurements() )
+    return nullptr;
+
+  try
+  {
+    shared_ptr<const SpecUtils::Measurement> meas = ptr->measurement( size_t(index) );
+    if( !meas )
+      return nullptr;
+    auto ref = new shared_ptr<const SpecUtils::Measurement>( meas );
+    return reinterpret_cast<const SpecUtils_CountedRef_Measurement *>( ref );
+  }catch( std::exception & )
+  {
+    return nullptr;
+  }
+}
+
+
+const SpecUtils_CountedRef_Measurement *
+SpecUtils_SpecFile_get_measurement_ref_by_sample_det( const SpecUtils_SpecFile * const instance,
+                                          const int sample_number,
+                                          const char * const det_name )
+{
+  assert( instance && det_name );
+  const SpecUtils::SpecFile *ptr = reinterpret_cast<const SpecUtils::SpecFile *>( instance );
+  if( !ptr || !det_name )
+    return nullptr;
+
+  try
+  {
+    shared_ptr<const SpecUtils::Measurement> meas = ptr->measurement( sample_number, string(det_name) );
+    if( !meas )
+      return nullptr;
+    auto ref = new shared_ptr<const SpecUtils::Measurement>( meas );
+    return reinterpret_cast<const SpecUtils_CountedRef_Measurement *>( ref );
+  }catch( std::exception & )
+  {
+    return nullptr;
+  }
+}
+
+
+const SpecUtils_Measurement *
+SpecUtils_Measurement_ptr_from_ref( const SpecUtils_CountedRef_Measurement * const instance )
+{
+  auto ref = reinterpret_cast<const shared_ptr<const SpecUtils::Measurement> *>( instance );
+  return ref ? reinterpret_cast<const SpecUtils_Measurement *>( ref->get() ) : nullptr;
+}
+
+
+void SpecUtils_CountedRef_Measurement_destroy( const SpecUtils_CountedRef_Measurement *instance )
+{
+  auto ref = reinterpret_cast<const shared_ptr<const SpecUtils::Measurement> *>( instance );
+  assert( ref );
+  delete ref;  //deleting a pointer-to-const is well-defined; releases this reference
+}
+
 
 uint32_t SpecUtils_SpecFile_number_detectors( const SpecUtils_SpecFile * const instance )
 {
@@ -1327,8 +1408,8 @@ bool SpecUtils_SpecFile_set_measurement_start_time_str( SpecUtils_SpecFile *inst
     return false;
   
   const SpecUtils::time_point_t tp = SpecUtils::time_from_string( date_time );
-  const bool valid_dt = SpecUtils::is_special(tp);
-  
+  const bool valid_dt = !SpecUtils::is_special(tp);
+
   if( m && valid_dt )
     specfile->set_start_time( tp, m );
   

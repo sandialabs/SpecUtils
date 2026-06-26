@@ -1732,7 +1732,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
         const char * const title_end = title_start + spectrum_title.size();
         
         const auto char_iequal = [](char ch1, char ch2) -> bool {
-          return std::toupper( (int)ch1 ) == std::toupper( (int)ch2 );
+          return std::toupper( static_cast<unsigned char>(ch1) ) == std::toupper( static_cast<unsigned char>(ch2) );
         };
         
         const char *occ_str = "OCC=";
@@ -1752,7 +1752,7 @@ bool SpecFile::load_from_pcf( std::istream &input )
           occ_pos += occ_str_len;
           
           // Skip any whitespace
-          while( (occ_pos != title_end) && std::isspace( (int) *occ_pos ) )
+          while( (occ_pos != title_end) && std::isspace( static_cast<unsigned char>(*occ_pos) ) )
             ++occ_pos;
           
           // To avoid allocating a string, and not making an override of istarts_with (like I

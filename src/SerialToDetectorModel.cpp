@@ -248,11 +248,11 @@ namespace SerialToDetectorModel
     
     for( size_t i = 0; i < instrument_id.size(); ++i )
     {
-      if( !isdigit(instrument_id[i]) || (instrument_id[i]=='0') )  //get rid of leading zeros on serial numbers, so like "S023143" will become "23143"
+      if( !isdigit(static_cast<unsigned char>(instrument_id[i])) || (instrument_id[i]=='0') )  //get rid of leading zeros on serial numbers, so like "S023143" will become "23143"
         continue;
-      
+
       size_t j = 1;
-      while( isdigit(instrument_id[i+j]) && (i+j)< instrument_id.size() )
+      while( ((i+j) < instrument_id.size()) && isdigit(static_cast<unsigned char>(instrument_id[i+j])) )
         ++j;
       const std::string strval = instrument_id.substr(i,j);
       i += (j-1);

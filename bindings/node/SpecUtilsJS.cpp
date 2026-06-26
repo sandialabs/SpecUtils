@@ -491,6 +491,8 @@ Napi::Value SpecRecord::real_time(const Napi::CallbackInfo& info)
 /** Returns String detector name. */
 Napi::Value SpecRecord::detector_name(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::String::New( info.Env(), m_meas->detector_name() );
 }
 
@@ -498,6 +500,8 @@ Napi::Value SpecRecord::detector_name(const Napi::CallbackInfo& info)
 /** Returns Number detector name. */
 Napi::Value SpecRecord::detector_number(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::Number::New( info.Env(), m_meas->detector_number() );
 }
 
@@ -505,6 +509,8 @@ Napi::Value SpecRecord::detector_number(const Napi::CallbackInfo& info)
 /** Returns the integer sample number. */
 Napi::Value SpecRecord::sample_number(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::Number::New( info.Env(), m_meas->sample_number() );
 }
 
@@ -516,6 +522,8 @@ Napi::Value SpecRecord::sample_number(const Napi::CallbackInfo& info)
  */
 Napi::Value SpecRecord::source_type(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::String::New( info.Env(), to_str(m_meas->source_type()) );
 }
 
@@ -523,6 +531,8 @@ Napi::Value SpecRecord::source_type(const Napi::CallbackInfo& info)
 /** Returns start time, as a Date object of measurement start, if avaialble, otherwise null. */
 Napi::Value SpecRecord::start_time(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   if( SpecUtils::is_special(m_meas->start_time()) )
     return Napi::Value();
   
@@ -536,12 +546,16 @@ Napi::Value SpecRecord::start_time(const Napi::CallbackInfo& info)
 /** Returns the String title.  Not supported by all input spectrum file formats. */
 Napi::Value SpecRecord::title(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::String::New( info.Env(), m_meas->title() );
 }
 
 /** Returns an array of strings representing the 'remarks' for this specific spectrum record. */
 Napi::Value SpecRecord::remarks(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   const auto &rem = m_meas->remarks();
   if( rem.empty() )
     return Napi::Value();
@@ -557,8 +571,11 @@ Napi::Value SpecRecord::remarks(const Napi::CallbackInfo& info)
 /** Returns a string thats one of the follwoing: "NotOccupied", "Occupied", "UnknownOccupancyStatus" */
 Napi::Value SpecRecord::occupied(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
+
   const char *val = nullptr;
-  
+
   switch( m_meas->occupied() )
   {
     case SpecUtils::OccupancyStatus::Occupied:    val = "Occupied"; break;
@@ -575,6 +592,8 @@ Napi::Value SpecRecord::occupied(const Napi::CallbackInfo& info)
 /** Returns float sum of gamma counts. */
 Napi::Value SpecRecord::gamma_count_sum(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::Number::New( info.Env(), m_meas->gamma_count_sum() );
 }
 
@@ -582,15 +601,17 @@ Napi::Value SpecRecord::gamma_count_sum(const Napi::CallbackInfo& info)
 /** Returns boolean indicating if neutron data is available. */
 Napi::Value SpecRecord::contained_neutron(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::Boolean::New( info.Env(), m_meas->contained_neutron() );
 }
 
 /** Returns float sum of neutron counts. Will return null if neutron data not avaiable. */
 Napi::Value SpecRecord::neutron_counts_sum(const Napi::CallbackInfo& info)
 {
-  if( !m_meas->contained_neutron() )
+  if( !m_meas || !m_meas->contained_neutron() )
     return Napi::Value();
-  
+
   return Napi::Number::New( info.Env(), m_meas->neutron_counts_sum() );
 }
 
@@ -598,15 +619,17 @@ Napi::Value SpecRecord::neutron_counts_sum(const Napi::CallbackInfo& info)
 /** Returns boolean indicating if GPS is available. */
 Napi::Value SpecRecord::has_gps_info(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::Boolean::New( info.Env(), m_meas->has_gps_info() );
 }
 
 /** Returns Number latitidue if available, otherwise null. */
 Napi::Value SpecRecord::latitude(const Napi::CallbackInfo& info)
 {
-  if( !m_meas->has_gps_info() )
+  if( !m_meas || !m_meas->has_gps_info() )
     return Napi::Value();
-  
+
   return Napi::Number::New( info.Env(), m_meas->latitude() );
 }
 
@@ -614,9 +637,9 @@ Napi::Value SpecRecord::latitude(const Napi::CallbackInfo& info)
 /** Returns Number longitude if available, otherwise null. */
 Napi::Value SpecRecord::longitude(const Napi::CallbackInfo& info)
 {
-  if( !m_meas->has_gps_info() )
+  if( !m_meas || !m_meas->has_gps_info() )
     return Napi::Value();
-  
+
   return Napi::Number::New( info.Env(), m_meas->longitude() );
 }
 
@@ -624,7 +647,7 @@ Napi::Value SpecRecord::longitude(const Napi::CallbackInfo& info)
 /** Returns Date object of GPS fix.  Null if not avaialble. */
 Napi::Value SpecRecord::position_time(const Napi::CallbackInfo& info)
 {
-  if( !m_meas->has_gps_info() || SpecUtils::is_special(m_meas->position_time()) )
+  if( !m_meas || !m_meas->has_gps_info() || SpecUtils::is_special(m_meas->position_time()) )
     return Napi::Value();
   
   auto duration = m_meas->position_time().time_since_epoch();
@@ -639,6 +662,8 @@ Napi::Value SpecRecord::position_time(const Napi::CallbackInfo& info)
  */
 Napi::Value SpecRecord::gamma_channel_energies(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   const auto &energies = m_meas->channel_energies();
   
   if( !energies || energies->empty() )
@@ -659,6 +684,8 @@ Napi::Value SpecRecord::gamma_channel_energies(const Napi::CallbackInfo& info)
  */
 Napi::Value SpecRecord::gamma_channel_contents(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   const auto &counts = m_meas->gamma_counts();
   
   if( !counts || counts->empty() )
@@ -679,6 +706,8 @@ Napi::Value SpecRecord::gamma_channel_contents(const Napi::CallbackInfo& info)
  */
 Napi::Value SpecRecord::energy_calibration_model(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
   return Napi::String::New(info.Env(), to_str(m_meas->energy_calibration_model()) );
 }
 
@@ -688,8 +717,11 @@ Napi::Value SpecRecord::energy_calibration_model(const Napi::CallbackInfo& info)
  */
 Napi::Value SpecRecord::energy_calibration_coeffs(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
+
   auto arr = Napi::Array::New( info.Env() );
-  
+
   const auto coefs = m_meas->calibration_coeffs();
   for( uint32_t i = 0; i < coefs.size(); ++i )
     arr.Set( i, Napi::Number::New(info.Env(), coefs[i]) );
@@ -702,8 +734,11 @@ Napi::Value SpecRecord::energy_calibration_coeffs(const Napi::CallbackInfo& info
  */
 Napi::Value SpecRecord::deviation_pairs(const Napi::CallbackInfo& info)
 {
+  if( !m_meas )
+    return info.Env().Null();
+
   auto arr = Napi::Array::New( info.Env() );
-  
+
   const auto coefs = m_meas->deviation_pairs();
   for( uint32_t i = 0; i < coefs.size(); ++i )
   {
@@ -784,21 +819,29 @@ SpecFile::SpecFile(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   Napi::HandleScope scope(env);
   
-  int length = info.Length();
-  
+  const int length = info.Length();
+
+  // Always leave m_spec pointing at a valid (possibly empty) SpecFile.  The accessors below only
+  //  `assert( m_spec )` before dereferencing it, so if any of the JS exceptions scheduled below are
+  //  ignored (ThrowAsJavaScriptException only schedules a JS exception; it does not stop C++
+  //  execution), a method call must not dereference a null m_spec in a release build.
+  // We load through a non-const local because `load_file` is non-const, but `m_spec` is a
+  //  `shared_ptr<const SpecFile>`; the assignment keeps `m_spec` valid at all times.
+  std::shared_ptr<SpecUtils::SpecFile> spec = std::make_shared<SpecUtils::SpecFile>();
+  m_spec = spec;
+
+  // Note: because of the above, we still `return` after each throw to avoid further work.
   if (length != 1 || !info[0].IsString() ) {
     Napi::TypeError::New(env, "Expected String Path To File").ThrowAsJavaScriptException();
+    return;
   }
-  
+
   const std::string path = info[0].ToString().Utf8Value();
-  
-  auto ptr = std::make_shared<SpecUtils::SpecFile>();
-  const bool loaded = ptr->load_file( path, SpecUtils::ParserType::Auto );
-  if( !loaded ){
+
+  if( !spec->load_file( path, SpecUtils::ParserType::Auto ) ){
     Napi::TypeError::New(env, "Could not decode as a spectrum file.").ThrowAsJavaScriptException();
+    return;
   }
-  
-  m_spec = ptr;
 }//SpecFile constructor
 
 SpecFile::~SpecFile()
@@ -945,8 +988,11 @@ Napi::Value SpecFile::sample_numbers(const Napi::CallbackInfo& info)
   const int nargs = info.Length();
   
   if( nargs != 0 && nargs != 1 )
+  {
     Napi::TypeError::New(info.Env(), "SpecFile.sampleNumbers only accepts 0 or 1 arguments").ThrowAsJavaScriptException();
-  
+    return info.Env().Null();
+  }
+
   //Convert std::set<int> to Napi::Array
   auto tojsarr = [&]( const std::set<int> &input ) -> Napi::Array {
     auto arr = Napi::Array::New( info.Env() );
@@ -962,7 +1008,10 @@ Napi::Value SpecFile::sample_numbers(const Napi::CallbackInfo& info)
   
   std::set<int> samplenums;
   const std::set<std::string> sourcetypes = to_valid_source_types( info[0], info.Env() );
-  
+
+  if( info.Env().IsExceptionPending() )
+    return info.Env().Null();
+
   std::vector< std::shared_ptr<const SpecUtils::Measurement> > meass = m_spec->measurements();
   for( const auto &m : meass )
   {
@@ -1010,17 +1059,21 @@ std::set<std::string> SpecFile::to_valid_det_names( Napi::Value value, const Nap
     Napi::TypeError::New(env, "First argument to SpecFile.measurements must be null,"
                          " a string that is a detector name, or an array of strings"
                          " giving detector names.").ThrowAsJavaScriptException();
+    return {};
   }
-  
+
   std::set<std::string> detnames;
   Napi::Array arr = Napi::Array( env, value );
-  
+
   for( uint32_t i = 0; i < arr.Length(); ++i )
   {
     if( !arr.Get(i).IsString() )
+    {
       Napi::TypeError::New(env, "First argument to SpecFile.measurements must be null,"
                             " a string that is a detector name, or an array of strings"
                             " giving detector names.").ThrowAsJavaScriptException();
+      return {};
+    }
     const std::string det = arr.Get(i).ToString().Utf8Value();
     
     check_name( det );
@@ -1059,16 +1112,20 @@ std::set<int> SpecFile::to_valid_sample_numbers( Napi::Value value, const Napi::
   {
     Napi::TypeError::New(env, "Second argument to SpecFile.measurements must be null,"
                          " a integer sample number, or an array of integer sample numbers.").ThrowAsJavaScriptException();
+    return {};
   }
-  
+
   std::set<int> samplenums;
   Napi::Array arr = Napi::Array( env, value );
-  
+
   for( uint32_t i = 0; i < arr.Length(); ++i )
   {
     if( !arr.Get(i).IsNumber() )
+    {
       Napi::TypeError::New(env, "Second argument to SpecFile.measurements must be null,"
                             " a integer sample number, or an array of integer sample numbers.").ThrowAsJavaScriptException();
+      return {};
+    }
     const int32_t sample = arr.Get(i).ToNumber().Int32Value();
     check_sample_num( sample );
     samplenums.insert( sample );
@@ -1119,17 +1176,21 @@ std::set<std::string> SpecFile::to_valid_source_types( Napi::Value value, const 
     Napi::TypeError::New(env, "Third argument to SpecFile.measurements must be null,"
                          " a string that is a SourceType, or an array of strings"
                          " giving SourceType's.").ThrowAsJavaScriptException();
+    return {};
   }
-  
+
   std::set<std::string> source_types;
   Napi::Array arr = Napi::Array( env, value );
-    
+
   for( uint32_t i = 0; i < arr.Length(); ++i )
   {
     if( !arr.Get(i).IsString() )
+    {
       Napi::TypeError::New(env, "Third argument to SpecFile.measurements must be null,"
                              " a string that is a SourceType, or an array of strings"
                              " giving SourceType's.").ThrowAsJavaScriptException();
+      return {};
+    }
     const std::string source_type = arr.Get(i).ToString().Utf8Value();
       
     check_source_type( source_type );
@@ -1150,8 +1211,12 @@ Napi::Value SpecFile::measurements(const Napi::CallbackInfo& info)
   const std::set<std::string> detnames = SpecFile::to_valid_det_names( (nargs >= 1 ? info[0]  : Napi::Value()), info.Env() );
   const std::set<int> samplenums = SpecFile::to_valid_sample_numbers( (nargs >= 2 ? info[1]  : Napi::Value()), info.Env() );
   const std::set<std::string> source_types = SpecFile::to_valid_source_types( (nargs >= 3 ? info[2]  : Napi::Value()), info.Env() );
-  
-  
+
+  // If any of the above input-validation helpers scheduled a JS exception, bail out before
+  //  operating on (possibly partial/invalid) filter sets.
+  if( info.Env().IsExceptionPending() )
+    return info.Env().Null();
+
   auto arr = Napi::Array::New( info.Env() );
   
   std::vector< std::shared_ptr<const SpecUtils::Measurement> > meass = m_spec->measurements();
@@ -1194,7 +1259,10 @@ Napi::Value SpecFile::sum_measurements(const Napi::CallbackInfo& info)
   const std::set<std::string> input_detnames = SpecFile::to_valid_det_names( (nargs >= 1 ? info[0]  : Napi::Value()), info.Env() );
   const std::set<int> input_samplenums = SpecFile::to_valid_sample_numbers( (nargs >= 2 ? info[1]  : Napi::Value()), info.Env() );
   const std::set<std::string> input_source_types = SpecFile::to_valid_source_types( (nargs >= 3 ? info[2]  : Napi::Value()), info.Env() );
-  
+
+  if( info.Env().IsExceptionPending() )
+    return info.Env().Null();
+
   /* Super slow and inefficient.
    If any {DetectorName,SampleNumber} has a SourceType in input_source_types,
    then all detectors for the SampleNumber will be included in the sum, even if one
@@ -1224,11 +1292,15 @@ Napi::Value SpecFile::sum_measurements(const Napi::CallbackInfo& info)
   {
     Napi::Error::New( info.Env(), "Failed summing SpecRecords: "
                          + std::string(e.what())).ThrowAsJavaScriptException();
+    return info.Env().Null();
   }
-  
+
   if( !meas )
+  {
     Napi::Error::New( info.Env(), "There were no SpecRecords to sum with input filters." ).ThrowAsJavaScriptException();
-  
+    return info.Env().Null();
+  }
+
   Napi::Object obj = SpecRecord::constructor.New( {} );
   SpecRecord *record = SpecRecord::Unwrap(obj);
   record->m_meas = meas;
@@ -1283,18 +1355,22 @@ Napi::Value SpecFile::write_to_file(const Napi::CallbackInfo& info)
   
   if (length < 2 || !info[0].IsString() || !info[1].IsString() || (length>=6 && !info[5].IsBoolean()) ) {
     Napi::TypeError::New(info.Env(), "Expected path to save to, and format").ThrowAsJavaScriptException();
+    return info.Env().Null();
   }
-  
+
   const std::string path = info[0].ToString().Utf8Value();
   const std::string format = info[1].ToString().Utf8Value();
-  
+
   const std::set<std::string> detnames = SpecFile::to_valid_det_names( (length >= 3 ? info[2]  : Napi::Value()), info.Env() );
   const std::vector<std::string> detnamesvec( std::begin(detnames), std::end(detnames) );
   const std::set<int> samplenums = SpecFile::to_valid_sample_numbers( (length >= 4 ? info[3]  : Napi::Value()), info.Env() );
   const std::set<std::string> source_types = SpecFile::to_valid_source_types( (length >= 5 ? info[4]  : Napi::Value()), info.Env() );
-  
-  
-  const bool force = length>=6 ? false : info[5].ToBoolean().Value();
+
+  if( info.Env().IsExceptionPending() )
+    return info.Env().Null();
+
+  // The optional 6th argument (index 5) is a boolean "force overwrite" flag; only read it when present.
+  const bool force = (length>=6) ? info[5].ToBoolean().Value() : false;
   
   
   SpecUtils::SaveSpectrumAsType type = SpecUtils::SaveSpectrumAsType::NumTypes;

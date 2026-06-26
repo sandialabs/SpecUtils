@@ -95,7 +95,7 @@ jobs:
             java-version: '17'
             java-label: java17
             java-extra-flags: '--enable-native-access=ALL-UNNAMED'
-          - os: windows-latest
+          - os: windows-2022
             lib-name: SpecUtilsJava.dll
             artifact-name: jni_java_java11-windows-x86_64
             platform-label: windows-x86_64

@@ -203,4 +203,66 @@ public class SmokeTests
         Assert.Equal(sampleNum, byKey.SampleNumber);
         Assert.Equal(detName, byKey.DetectorName);
     }
+
+    [Fact]
+    public void Measurement_OutlivesSpecFile()
+    {
+        Measurement meas;
+        double gammaSumBefore;
+        string detNameBefore;
+
+        using (var spec = new SpecFile())
+        {
+            spec.LoadFile(TestDataPath("passthrough.n42"));
+            Assert.True(spec.NumberMeasurements > 0);
+
+            meas = spec.GetMeasurement(0)!;
+            Assert.NotNull(meas);
+            gammaSumBefore = meas.GammaCountSum;
+            detNameBefore = meas.DetectorName;
+        } // SpecFile disposed here
+
+        // The reference-counted measurement co-owns the underlying data, so reading it after the
+        // parent SpecFile is disposed must still succeed and return the same values (no UAF, no throw).
+        Assert.Equal(gammaSumBefore, meas.GammaCountSum, precision: 0);
+        Assert.Equal(detNameBefore, meas.DetectorName);
+        Assert.True(meas.NumberGammaChannels > 0);
+
+        meas.Dispose();
+    }
+
+    [Fact]
+    public void Measurement_SurvivesParentStructuralChange()
+    {
+        using var spec = new SpecFile();
+        spec.LoadFile(TestDataPath("passthrough.n42"));
+        Assert.True(spec.NumberMeasurements > 0);
+
+        using var meas = spec.GetMeasurement(0)!;
+        Assert.NotNull(meas);
+        double before = meas.GammaCountSum;
+
+        // Reset/Cleanup previously invalidated borrowed measurement pointers; with the counted ref
+        // the measurement stays valid and unchanged.
+        spec.Reset();
+        Assert.Equal(0u, spec.NumberMeasurements);
+
+        Assert.Equal(before, meas.GammaCountSum, precision: 0);
+    }
+
+    [Fact]
+    public void Measurement_FromFile_DisposeIsIdempotentAndGuards()
+    {
+        using var spec = new SpecFile();
+        spec.LoadFile(TestDataPath("passthrough.n42"));
+        Assert.True(spec.NumberMeasurements > 0);
+
+        var meas = spec.GetMeasurement(0)!;
+        Assert.NotNull(meas);
+
+        meas.Dispose();
+        meas.Dispose(); // disposing twice must be safe (no double-free)
+
+        Assert.Throws<ObjectDisposedException>(() => _ = meas.GammaCountSum);
+    }
 }

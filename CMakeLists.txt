@@ -30,7 +30,6 @@ option( SpecUtils_USE_SIMD "Use SIMD operations; i386/x64 only right now, and ve
 option( SpecUtils_ENABLE_EQUALITY_CHECKS "Enables the equal_enough(...) functions for comparing two spectrum files." OFF )  #code size is only reason to default to off, I think
 option( PERFORM_DEVELOPER_CHECKS "Performs additional computationally expensive tests during execution (requires linking to boost)" OFF )
 option( SpecUtils_SHARED_LIB "Whether to compile a shared, or static library" OFF )
-option( SpecUtils_C_BINDINGS "Creates C bindings to the c++ code" OFF )
 
 
 set( SpecUtils_FLT_PARSE_METHOD "default_value" CACHE STRING [[How to parse lists of numbers.
@@ -205,7 +204,10 @@ if( SpecUtils_ENABLE_D3_CHART )
       set( ${D3_SUPPORT_FILE_MACRO_NAME}_LEN "const size_t ${D3_SUPPORT_FILE_MACRO_NAME}_SIZE = ${arraySize};")
     else( SpecUtils_D3_SUPPORT_FILE_STATIC )
        set( SpecUtils_D3_SCRIPTS_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "Directory to read D3 JS and CSS files from at runtime" )
-       set( D3_SUPPORT_FILE_RUNTIME_DIR "const char * const D3_SCRIPT_RUNTIME_DIR = \"${SpecUtils_D3_SCRIPTS_RUNTIME_DIR}\";" )
+       # Normalize to forward slashes so the path embeds cleanly in a C string literal; a Windows
+       #  path with backslashes would otherwise create invalid escape sequences (e.g. \U, \b).
+       file( TO_CMAKE_PATH "${SpecUtils_D3_SCRIPTS_RUNTIME_DIR}" SpecUtils_D3_SCRIPTS_RUNTIME_DIR_CSTR )
+       set( D3_SUPPORT_FILE_RUNTIME_DIR "const char * const D3_SCRIPT_RUNTIME_DIR = \"${SpecUtils_D3_SCRIPTS_RUNTIME_DIR_CSTR}\";" )
        set( ${D3_SUPPORT_FILE_MACRO_NAME}_FILE "const char * const ${D3_SUPPORT_FILE_MACRO_NAME}_FILENAME = \"${D3_SUPPORT_FILE_NAME}\";" )
     endif( SpecUtils_D3_SUPPORT_FILE_STATIC )
   endforeach()
@@ -213,8 +215,8 @@ if( SpecUtils_ENABLE_D3_CHART )
 #We will create D3SpectrumExportResources.h that holds all the js/css, but this
 #  is only done at CMake generation time, not build time, so can get out of date
 #  See https://cmake.org/pipermail/cmake/2012-May/050221.html for a potential fix
-  configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/D3SpectrumExportResources.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/D3SpectrumExportResources.h
+  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/D3SpectrumExportResources.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/D3SpectrumExportResources.h"
   )
 
   list( APPEND OTHER_SUPPORT_FILES
@@ -282,13 +284,15 @@ if( SpecUtils_USE_FAST_FLOAT )
   find_file(FAST_FLOAT_FILE_PATH fast_float.h HINTS ${CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH}/include )
  
   if( FAST_FLOAT_FILE_PATH )
-    # Extract the parent directory of the found file
-    get_filename_component(PARENT_DIR ${FAST_FLOAT_PATH} DIRECTORY)
-    
-    message(STATUS "fast_float.h found at: ${FAST_FLOAT_PATH}")
-    message(STATUS "Parent directory: ${FAST_FLOAT_PATH}")
-    
-    target_include_directories( SpecUtils PUBLIC ${FAST_FLOAT_PATH} )
+    # `find_file` returns the full path to fast_float.h; the include directory is its parent.
+    #  (Previously this referenced the undefined variable FAST_FLOAT_PATH, so the include
+    #   directory was never actually added and the FastFloat build path was silently broken.)
+    get_filename_component( FAST_FLOAT_INCLUDE_DIR "${FAST_FLOAT_FILE_PATH}" DIRECTORY )
+
+    message( STATUS "fast_float.h found at: ${FAST_FLOAT_FILE_PATH}" )
+    message( STATUS "Adding fast_float include directory: ${FAST_FLOAT_INCLUDE_DIR}" )
+
+    target_include_directories( SpecUtils PUBLIC "${FAST_FLOAT_INCLUDE_DIR}" )
   endif( FAST_FLOAT_FILE_PATH )
   
   if( NOT FAST_FLOAT_FILE_PATH )
@@ -392,8 +396,8 @@ if( ANDROID )
   target_link_libraries( SpecUtils PUBLIC log )
 endif( ANDROID )
 
-target_include_directories( SpecUtils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
-                            PRIVATE ${THIRD_PARTY_DIR} )
+target_include_directories( SpecUtils PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}"
+                            PRIVATE "${THIRD_PARTY_DIR}" )
 
 if( SpecUtils_BUILD_REGRESSION_TEST )
   if( NOT SpecUtils_ENABLE_EQUALITY_CHECKS )
@@ -416,8 +420,8 @@ if( SpecUtils_BUILD_FUZZING_TESTS )
 endif( SpecUtils_BUILD_FUZZING_TESTS )
 
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h
+    "${CMAKE_CURRENT_SOURCE_DIR}/SpecUtils/SpecUtils_config.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/SpecUtils_config.h"
 )
 
 

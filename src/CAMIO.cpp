@@ -407,8 +407,8 @@ static float convert_from_CAM_duration(std::vector<uint8_t>& data, size_t pos)
         std::memcpy(&value, &data[pos], sizeof(int32_t));
         //if the flag is set, duration is in millions of years
         span = data[pos + 4] == 0x01 ? value * 1e6 : value;
-        //convert to seconds
-        span *= 3157600.0;
+        //convert to seconds (Julian year = 365.25 days)
+        span *= 31557600.0;
     }
 
     return span;

@@ -118,6 +118,36 @@ public class SpecUtilsTest {
             }
         }
 
+        // Reference-counted measurements must remain valid after their parent SpecFile is closed.
+        if (testFile != null) {
+            System.out.println("\nTest: measurement outlives its SpecFile (reference counted)");
+            Measurement held = null;
+            double gammaSumBefore = 0.0;
+            String detNameBefore = null;
+
+            SpecFile sf = new SpecFile();
+            sf.loadFile(testFile);
+            if (sf.numberMeasurements() > 0) {
+                held = sf.measurement(0);
+                check("Got measurement to hold", held != null);
+            }
+            if (held != null) {
+                gammaSumBefore = held.gammaCountSum();
+                detNameBefore = held.detectorName();
+            }
+
+            // Close the parent file while still holding the measurement.
+            sf.close();
+
+            if (held != null) {
+                check("Measurement readable after SpecFile closed",
+                      held.gammaCountSum() == gammaSumBefore
+                      && detNameBefore.equals(held.detectorName())
+                      && held.numberGammaChannels() > 0);
+                held.close();
+            }
+        }
+
         // Exercise error handling: loadFile of missing path should throw
         System.out.println("\nTest: loadFile throws on missing path");
         boolean threw = false;

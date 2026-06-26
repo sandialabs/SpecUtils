@@ -1653,8 +1653,16 @@ EncodedSpectraInfo get_spectrum_url_info( std::string url )
 }//EncodedSpectraInfo get_spectrum_url_info( const std::string &url )
 
 
-std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, const EncodedSpectraInfo &info )
+std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url,
+                                                    const EncodedSpectraInfo &info,
+                                                    const size_t recursion_depth = 0 )
 {
+  // Guard against unbounded recursion (and hence stack exhaustion) from a crafted URI that
+  //  contains more `:0A:`-delimited spectra than declared.  `m_num_spectra` is itself capped at
+  //  16 in `get_spectrum_url_info`, so this bounds the recursion to a small, safe depth.
+  if( recursion_depth >= info.m_num_spectra )
+    throw runtime_error( "spectrum_decode_first_url: more embedded spectra than declared." );
+
   size_t pos = url.find( " S:" );
   
   if( pos == string::npos )
@@ -1698,7 +1706,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
     // Look for the next string like " X:", where X can be any upper-case letter
     while( (end_pos < metainfo.size())
           && ((metainfo[end_pos] != ' ')
-              || ((end_pos >= metainfo.size()) || ( (metainfo[end_pos+1] < 'A') && (metainfo[end_pos+1] > 'Z') ))
+              || (((end_pos+1) >= metainfo.size()) || ( (metainfo[end_pos+1] < 'A') || (metainfo[end_pos+1] > 'Z') ))
               || (((end_pos+1) >= metainfo.size()) ||(metainfo[end_pos + 2] != ':')) ) )
     {
       ++end_pos;
@@ -1927,7 +1935,7 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url, cons
   {
     try
     {
-      vector<UrlSpectrum> the_rest = spectrum_decode_first_url( next_spec_info, info );
+      vector<UrlSpectrum> the_rest = spectrum_decode_first_url( next_spec_info, info, recursion_depth + 1 );
       answer.insert( end(answer), begin(the_rest), end(the_rest) );
     }catch( std::exception &e )
     {

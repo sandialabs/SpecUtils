@@ -699,12 +699,12 @@ namespace
         if( len >= 2 )
         {
           const char c = name[1];
-          matches_convention |= (isdigit(c) || c=='a' || c=='b' || c=='c' || c=='d' );
+          matches_convention |= (isdigit(static_cast<unsigned char>(c)) || c=='a' || c=='b' || c=='c' || c=='d' );
         }
         if( len >= 3 )
         {
           const char c = name[2];
-          matches_convention |= (isdigit(c) || c=='n');
+          matches_convention |= (isdigit(static_cast<unsigned char>(c)) || c=='n');
         }
         
         if( matches_convention )
@@ -714,7 +714,7 @@ namespace
         {
           const char c = name[name.size()-1];
           is_nuetron = (c == 'n');
-          is_gamma = (isdigit(c) != 0);
+          is_gamma = (isdigit(static_cast<unsigned char>(c)) != 0);
         }//if( matches_convention )
       }//if( !is_nuetron && !is_gamma ) //try to match the name
     }//if( detector_attrib )
@@ -2252,11 +2252,12 @@ bool N42CalibrationCache2006::parse_calibration_node( const rapidxml::xml_node<c
     type = SpecUtils::EnergyCalType::Polynomial;
     coefs = {0.0f, points[0].second*units };
     return true;
-  }if( npoints == 1 && (points[0].second*units > 100.0f) )
+  }else if( npoints == 1 && (points[0].second*units > 100.0f) )
   {
     //This is a guess - I havent encountered it
     type = SpecUtils::EnergyCalType::FullRangeFraction;
     coefs = {0.0f, points[0].second*units };
+    return true;  //without this the computed coefs/type fell through to the clear() below
   }else if( npoints > 6 ) //The files I've seen have (npoints==nchannel)
   {
     //We also need to make sure the 'x' values are monotonically increasing channel numbers

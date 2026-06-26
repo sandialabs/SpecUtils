@@ -3976,8 +3976,8 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
   
   // Find the spectrum to be used if we are drawing a `w.drawRegion==="BelowData"` region
   //  TODO: allow the region to specify which spectrum to use - right now just using the last foreground
-  const spectra = self.rawData ? self.rawData.spectra : null;
-  let spectrum = (spectra && (spectra.length > 0)) ? spectra[0] : null;
+  const spectra = (self.rawData && self.rawData.spectra) ? self.rawData.spectra : [];
+  let spectrum = (spectra.length > 0) ? spectra[0] : null;
   for( let j = 0; j < spectra.length; ++j ){
     if( spectra[j].type === "FOREGROUND" ){
       spectrum = spectra[j];

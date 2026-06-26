@@ -52,12 +52,33 @@ namespace
 {
   bool simple_isdigit(const char d)
   {
-    // Debug versions of std::isdigit on MSVC will abort on negative 
+    // Debug versions of std::isdigit on MSVC will abort on negative
     //  character values, so well just use this function all the time
     //  (which is probably better anyway since it avoids locale, which
     //  is what we should probably do)
     return ((d >= '0') && (d <= '9'));
   }//simple_isdigit
+
+
+  /** Returns true if `s` starts a plausible number literal: a digit, or a leading sign / decimal
+   point that is followed by a digit. Used to identify CSV/TXT data rows whose first field is a
+   number (e.g. `-0.2463`) without falsely accepting comment lines starting with `-`.
+   */
+  bool starts_with_number(const std::string &s)
+  {
+    if( s.empty() )
+      return false;
+    if( simple_isdigit(s[0]) )
+      return true;
+    if( (s[0] == '-' || s[0] == '+' || s[0] == '.') && s.size() > 1 )
+    {
+      if( simple_isdigit(s[1]) )
+        return true;
+      if( s[0] != '.' && s[1] == '.' && s.size() > 2 && simple_isdigit(s[2]) )
+        return true;
+    }
+    return false;
+  }//starts_with_number
 }//namespace
 
 
@@ -349,7 +370,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
         throw runtime_error( "No 'Bin Number' in first line before first comma." );
       
       
-      for( pos += 1; (pos < first_line.size()) && std::isspace(first_line[pos]); ++pos )
+      for( pos += 1; (pos < first_line.size()) && std::isspace(static_cast<unsigned char>(first_line[pos])); ++pos )
       {
       }
       
@@ -375,7 +396,7 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       if( !icontains(second_line.substr(0,pos), "Energy[keV]" ) )
         throw runtime_error( "No 'Energy[keV]' in second line before first comma." );
       
-      for( pos += 1; (pos < second_line.size()) && std::isspace(second_line[pos]); ++pos )
+      for( pos += 1; (pos < second_line.size()) && std::isspace(static_cast<unsigned char>(second_line[pos])); ++pos )
       {
       }
       
@@ -524,7 +545,9 @@ bool SpecFile::load_from_D3S_raw( std::istream &input )
       double gamma_sum = 0.0;
       const size_t nchannel = energy_cal->num_channels();
       auto channel_counts = make_shared<vector<float>>( nchannel, 0.0f );
-      const size_t end_bin = std::min( static_cast<size_t>(bin_last_index),
+      // bin_last_index is the index of the *last* Bin(...) field, so the exclusive upper bound is
+      //  one past it; without the +1 the final gamma channel was silently dropped.
+      const size_t end_bin = std::min( static_cast<size_t>(bin_last_index) + 1,
                                        std::min( bin_start_index + nchannel, fields.size() ) );
       for( size_t i = bin_start_index; i < end_bin; ++i )
       {
@@ -826,7 +849,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
     if( !nfields )
       continue;
     
-    if( simple_isdigit(fields[0][0]) )
+    if( starts_with_number(fields[0]) )
     {
       //Check if we have a valid column map defined yet, either because it is empty, or it has one
       //  entry that is not counts.  This can happen if there was a header that was only partially
@@ -1014,7 +1037,7 @@ void Measurement::set_info_from_txt_or_csv( std::istream& istr )
         if( fields.empty() )
           continue;
         
-        if( !simple_isdigit( fields.at(0).at(0) ) )
+        if( !starts_with_number( fields.at(0) ) )
         {
           istr.seekg( position, ios::beg );
           break;

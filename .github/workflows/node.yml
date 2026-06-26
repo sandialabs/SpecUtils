@@ -24,7 +24,7 @@ jobs:
             flt-parse-method: FastFloat
             artifact-name: specutils-node_node20-macos-arm64
             platform-label: macos-arm64
-          - os: windows-latest
+          - os: windows-2022
             flt-parse-method: FromChars
             artifact-name: specutils-node_node20-windows-x86_64
             platform-label: windows-x86_64

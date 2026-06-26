@@ -223,24 +223,26 @@ public class SpecFile : IDisposable
 
     /// <summary>
     /// Gets the measurement at the specified index.
-    /// The returned Measurement is borrowed and must not outlive this SpecFile.
+    /// The returned Measurement is reference-counted: it keeps the underlying measurement alive,
+    /// so it stays valid even if this SpecFile is later modified or disposed.  Dispose it when done.
     /// </summary>
     public Measurement? GetMeasurement(int index)
     {
         ThrowIfDisposed();
-        IntPtr ptr = NativeMethods.SpecUtils_SpecFile_get_measurement_by_index(Handle, (uint)index);
-        return ptr == IntPtr.Zero ? null : new Measurement(ptr, ownsHandle: false, parent: this);
+        IntPtr refHandle = NativeMethods.SpecUtils_SpecFile_get_measurement_ref_by_index(Handle, (uint)index);
+        return refHandle == IntPtr.Zero ? null : Measurement.FromRef(refHandle);
     }
 
     /// <summary>
     /// Gets the measurement for the given sample number and detector name.
+    /// The returned Measurement is reference-counted (see <see cref="GetMeasurement(int)"/>).
     /// </summary>
     public Measurement? GetMeasurement(int sampleNumber, string detectorName)
     {
         ThrowIfDisposed();
-        IntPtr ptr = NativeMethods.SpecUtils_SpecFile_get_measurement_by_sample_det(
+        IntPtr refHandle = NativeMethods.SpecUtils_SpecFile_get_measurement_ref_by_sample_det(
             Handle, sampleNumber, detectorName);
-        return ptr == IntPtr.Zero ? null : new Measurement(ptr, ownsHandle: false, parent: this);
+        return refHandle == IntPtr.Zero ? null : Measurement.FromRef(refHandle);
     }
 
     public string GetDetectorName(int index)

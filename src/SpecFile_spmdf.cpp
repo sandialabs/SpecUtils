@@ -163,6 +163,8 @@ namespace
           p.name = p.name.substr( 0, spacepos );
         }//if( equalpos != string::npos )
       }//if( spacepos != string::npos )
+
+      info.parameters.push_back( p );
     }//for( size_t i = 5; i < (s1fields.size()-1); i += 2 )
     
     // It appears energy calibration parameters are not provided by the file.  It does however
@@ -198,7 +200,7 @@ namespace
         continue;
       }
       
-      if( isdigit(field[0]) )
+      if( isdigit(static_cast<unsigned char>(field[0])) )
       {
         float energy = 0.0f, offset = 0.0f;
         SpecUtils::parse_float( field.c_str(), field.size(), energy );

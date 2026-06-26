@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-2022]
         include:
           - os: ubuntu-latest
             num-parse-method: boost
@@ -26,9 +26,9 @@ jobs:
             num-parse-method: strtod
           - os: macos-latest
             num-parse-method: FastFloat
-          - os: windows-latest
+          - os: windows-2022
             num-parse-method: FromChars
-          - os: windows-latest
+          - os: windows-2022
             num-parse-method: strtod
 
     steps:

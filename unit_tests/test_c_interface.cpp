@@ -52,18 +52,17 @@ int main(int argc, char** argv)
 
 
 
-TEST_CASE( "TestCWrapperOpenFile" )
+// Helper: locate a test spectrum file (with at least one measurement) from the various places the
+//  tests might be run from.  Tries a few candidate files since not every checkout has the same data.
+static std::string find_test_spectrum_file()
 {
-  // "datetimes.txt" contains a lot of date/times that could be seen in spectrum files
-  std::string indir, input_filename = "";
-
-  for( size_t i = 1; i < g_cl_args.size()-1; ++i )
+  std::string indir;
+  for( size_t i = 1; (i + 1) < g_cl_args.size(); ++i )
   {
     if( g_cl_args[i] == std::string("--indir") )
       indir = g_cl_args[i+1];
   }
-  
-  // We will look for "datetimes.txt", in a not-so-elegant way
+
   const std::string potential_input_paths[] = {
     indir,
     "",
@@ -72,25 +71,34 @@ TEST_CASE( "TestCWrapperOpenFile" )
     "../../unit_tests/test_data",
     "../../../unit_tests/test_data"
   };
-  
-  const std::string rel_file_name = "spectra/drf_cal_HPGe_Am241.pcf";
-  
-  for( const std::string dir : potential_input_paths )
+
+  const std::string rel_file_names[] = {
+    "spectra/drf_cal_HPGe_Am241.pcf",
+    "spectra/Mn56_DetX_Shielded.n42"
+  };
+
+  for( const std::string &dir : potential_input_paths )
   {
-    const std::string potential = SpecUtils::append_path( dir, rel_file_name );
-    if( SpecUtils::is_file(potential) )
-      input_filename = potential;
+    for( const std::string &rel_file_name : rel_file_names )
+    {
+      const std::string potential = SpecUtils::append_path( dir, rel_file_name );
+      if( SpecUtils::is_file(potential) )
+        return potential;
+    }
   }
-  
+
+  return std::string();
+}//find_test_spectrum_file()
+
+
+TEST_CASE( "TestCWrapperOpenFile" )
+{
+  const std::string input_filename = find_test_spectrum_file();
   REQUIRE( !input_filename.empty() );
-  
-  // Create a SpecUtils::SpecFile object, that we will use
-  //  to open a spectrum file.
+
+  // Create a SpecUtils::SpecFile object, that we will use to open a spectrum file.
   SpecUtils_SpecFile *specfile = SpecUtils_SpecFile_create();
-  
-  // The filename to open
-  const char * const filename = "unit_tests/test_data/spectra/drf_cal_HPGe_Am241.pcf";
-  
+
   // Parse file into memory
   const bool success = SpecFile_load_file( specfile, input_filename.c_str() );
 
@@ -98,20 +106,79 @@ TEST_CASE( "TestCWrapperOpenFile" )
     SpecUtils_SpecFile_destroy( specfile );
 
   REQUIRE( success );
-  
-  // The file should only have a single record in it.
+
+  // This is just a smoke test that we can open a file and it has at least one measurement.
   const uint32_t num_meas = SpecUtils_SpecFile_number_measurements( specfile );
-  if( num_meas == 0 )
-    SpecUtils_SpecFile_destroy( specfile );
-  
-  REQUIRE( num_meas >= 0 );
-  CHECK( num_meas == 1 );
-  
-  // This is just a smoke test that we can open a file.
-  //  We wont go into any more detail here.
-  
+  CHECK( num_meas >= 1 );
+
   SpecUtils_SpecFile_destroy( specfile );
 }//TEST_CASE( "TestCWrapperOpenFile" )
+
+
+TEST_CASE( "TestCWrapperCountedRefMeasurement" )
+{
+  const std::string input_filename = find_test_spectrum_file();
+  REQUIRE( !input_filename.empty() );
+
+  SpecUtils_SpecFile *specfile = SpecUtils_SpecFile_create();
+  REQUIRE( specfile );
+
+  const bool success = SpecFile_load_file( specfile, input_filename.c_str() );
+  if( !success )
+    SpecUtils_SpecFile_destroy( specfile );
+  REQUIRE( success );
+
+  const uint32_t num_meas = SpecUtils_SpecFile_number_measurements( specfile );
+  REQUIRE( num_meas >= 1 );
+
+  // Out-of-range index returns NULL (and must not throw a C++ exception across the C ABI).
+  CHECK( SpecUtils_SpecFile_get_measurement_ref_by_index( specfile, num_meas ) == NULL );
+  CHECK( SpecUtils_SpecFile_get_measurement_ref_by_index( specfile, 1000000u ) == NULL );
+
+  // Get a reference-counted handle to the first measurement, and a view pointer into it.
+  const SpecUtils_CountedRef_Measurement *meas_ref
+                  = SpecUtils_SpecFile_get_measurement_ref_by_index( specfile, 0 );
+  REQUIRE( meas_ref );
+
+  const SpecUtils_Measurement *meas = SpecUtils_Measurement_ptr_from_ref( meas_ref );
+  REQUIRE( meas );
+
+  // The ref's view should point at the same underlying object as the raw borrowed accessor.
+  const SpecUtils_Measurement *borrowed = SpecUtils_SpecFile_get_measurement_by_index( specfile, 0 );
+  CHECK_EQ( meas, borrowed );
+
+  // Capture values to compare after the file is gone.
+  const double gamma_sum_before = SpecUtils_Measurement_gamma_count_sum( meas );
+  const float real_time_before = SpecUtils_Measurement_real_time( meas );
+  const int sample_num = SpecUtils_Measurement_sample_number( meas );
+  const char * const det_name_c = SpecUtils_Measurement_detector_name( meas );
+  REQUIRE( det_name_c );
+  const std::string det_name_before = det_name_c;
+
+  // The by-sample-and-detector ref should resolve to the same measurement object.
+  const SpecUtils_CountedRef_Measurement *meas_ref2
+       = SpecUtils_SpecFile_get_measurement_ref_by_sample_det( specfile, sample_num, det_name_before.c_str() );
+  REQUIRE( meas_ref2 );
+  CHECK_EQ( SpecUtils_Measurement_ptr_from_ref(meas_ref2), meas );
+  SpecUtils_CountedRef_Measurement_destroy( meas_ref2 );
+
+  // A non-existent sample/detector returns NULL.
+  CHECK( SpecUtils_SpecFile_get_measurement_ref_by_sample_det( specfile, sample_num, "NoSuchDetector" ) == NULL );
+
+  // The whole point of the counted ref: destroy the SpecFile while still holding the ref.  The
+  //  measurement must remain alive and readable (no use-after-free), returning the same data.
+  SpecUtils_SpecFile_destroy( specfile );
+  specfile = NULL;
+
+  CHECK_EQ( gamma_sum_before, SpecUtils_Measurement_gamma_count_sum( meas ) );
+  CHECK_EQ( real_time_before, SpecUtils_Measurement_real_time( meas ) );
+  const char * const det_name_after_c = SpecUtils_Measurement_detector_name( meas );
+  REQUIRE( det_name_after_c );
+  CHECK_EQ( det_name_before, std::string(det_name_after_c) );
+
+  // Releasing the ref drops the last reference and frees the measurement.
+  SpecUtils_CountedRef_Measurement_destroy( meas_ref );
+}//TEST_CASE( "TestCWrapperCountedRefMeasurement" )
 
 
 SpecUtils_Measurement *make_measurement( int id, const char *det_name, char tag )

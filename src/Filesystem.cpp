@@ -1050,8 +1050,11 @@ int check_if_symlink_is_to_parent( const string &filename )
   
   vector<char> linkname( sb.st_size + 1 );
   const ssize_t r = readlink( filename.c_str(), &(linkname[0]), sb.st_size + 1 );
-  linkname[linkname.size()-1] = '\0';  //JIC
-  if( r > sb.st_size )
+
+  // `readlink` does not NUL-terminate, returns the number of bytes written, and returns -1 on
+  //  error.  Reject errors and a link that grew since lstat (r > st_size), and terminate the
+  //  buffer at the actual length so we never read uninitialized bytes as part of the path.
+  if( (r < 0) || (r > sb.st_size) )
   {
 #if(PERFORM_DEVELOPER_CHECKS)
     char errormsg[1024];
@@ -1059,7 +1062,9 @@ int check_if_symlink_is_to_parent( const string &filename )
     log_developer_error( __func__, errormsg );
 #endif
     return -1;
-  }//if( r > sb.st_size )
+  }//if( (r < 0) || (r > sb.st_size) )
+
+  linkname[r] = '\0';
   
   //Check if symlink is relative or absolute, and if relative
   string linkfull;
