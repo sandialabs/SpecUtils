@@ -8795,8 +8795,12 @@ namespace SpecUtils
     
     if( measurements_.empty() )
       throw runtime_error( "No valid measurements in 2012 N42 file." );
-    
-    cleanup_after_load();
+
+    unsigned int cleanup_flags = SpecUtils::SpecFile::StandardCleanup;
+    if( (measurements_.size() > 10) && SpecUtils::icontains(manufacturer_, "BTI") ) //&& SpecUtils::icontains(instrument_model_,"FlexSpec")
+      cleanup_flags = SpecUtils::SpecFile::ReorderSamplesByTime;
+
+    cleanup_after_load( cleanup_flags );
   }//bool load_2012_N42_from_doc( rapidxml::xml_node<char> *document_node )
   
   
