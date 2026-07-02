@@ -106,6 +106,7 @@ enum SpecUtils_ParserType
   SpecUtils_Parser_OrtecListMode, SpecUtils_Parser_LsrmSpe, SpecUtils_Parser_Tka,
   SpecUtils_Parser_MultiAct, SpecUtils_Parser_Phd, SpecUtils_Parser_Lzs,
   SpecUtils_Parser_ScanDataXml, SpecUtils_Parser_Json, SpecUtils_Parser_CaenHexagonGXml,
+  SpecUtils_Parser_AspectSpc,
   #if( SpecUtils_ENABLE_URI_SPECTRA )
   SpecUtils_Parser_Uri,
   #endif

@@ -89,6 +89,8 @@ static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Json) == 
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_CaenHexagonGXml) == static_cast<int>(SpecUtils::ParserType::CaenHexagonGXml),
               "SpecUtils_ParserType needs updating" );
+static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_AspectSpc) == static_cast<int>(SpecUtils::ParserType::AspectSpc),
+              "SpecUtils_ParserType needs updating" );
 #if( SpecUtils_ENABLE_URI_SPECTRA )
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Uri) == static_cast<int>(SpecUtils::ParserType::Uri),
               "SpecUtils_ParserType needs updating" );
