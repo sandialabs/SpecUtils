@@ -694,10 +694,14 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     if( filesize > 512*1024 )
       throw runtime_error( "File to large to be LSRM SPE" );
     
-    const size_t initial_read = std::min( filesize, size_t(2048) );
-    string data( initial_read, '\0' );
-    input.read( &(data[0]), initial_read );
-    
+    // Read the whole file up front: the KEY=VALUE header can exceed a couple kB
+    // (large CALC_* / declared-nuclide blocks push the "SPECTR=" marker well past
+    // any fixed initial window), and the file is size-capped above regardless.
+    string data( filesize, '\0' );
+    input.read( &(data[0]), filesize );
+    if( static_cast<size_t>(input.gcount()) != filesize )
+      throw runtime_error( "Failed to read LSRM SPE" );
+
     const size_t spec_tag_pos = data.find("SPECTR=");
     if( spec_tag_pos == string::npos )
       throw runtime_error( "Couldnt find SPECTR" );
@@ -713,18 +717,21 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     //We could have the next test, but lets be loose right now.
     //if( ((filesize - spec_start_pos) % 4) != 0 )
     //  throw runtime_error( "Spec size not multiple of 4" );
-    
-    auto getval = [&data]( const string &tag ) -> string {
-      const size_t pos = data.find( tag );
+
+    // Parse KEY=VALUE fields only from the text header preceding "SPECTR=" so raw
+    // int32 spectrum bytes can never masquerade as a header line.
+    const string header = data.substr( 0, spec_tag_pos );
+    auto getval = [&header]( const string &tag ) -> string {
+      const size_t pos = header.find( tag );
       if( pos == string::npos )
         return "";
       
       const size_t value_start = pos + tag.size();
-      const size_t endline = data.find_first_of( "\r\n", value_start );
+      const size_t endline = header.find_first_of( "\r\n", value_start );
       if( endline == string::npos )
         return "";
-      
-      const string value = data.substr( pos+tag.size(), endline - value_start );
+
+      const string value = header.substr( pos+tag.size(), endline - value_start );
       return SpecUtils::trim_copy( value );
     };//getval
     
@@ -750,10 +757,14 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     
     instrument_id_ = getval( "DETECTOR=" );
     
+    // ENERGY=order,c0,c1,...  The leading value is the polynomial order, not a
+    // coefficient (matches load_from_spectraline_spe); drop it before use.
+    // Trailing zero coefficients (padding) are harmless higher-order terms.
     const string energy = getval( "ENERGY=" );
     vector<float> cal_coeffs;
-    if( SpecUtils::split_to_floats( energy, cal_coeffs ) )
+    if( SpecUtils::split_to_floats( energy, cal_coeffs ) && (cal_coeffs.size() >= 2) )
     {
+      cal_coeffs.erase( cal_coeffs.begin() );
       try
       {
         auto newcal = make_shared<EnergyCalibration>();
@@ -777,12 +788,6 @@ bool SpecFile::load_from_lsrm_spe( std::istream &input )
     //"SHIFR=", "NOMER=", "CONFIGNAME=", "PREPBEGIN=", "PREPEND=", "OPERATOR=",
     //"GEOMETRY=", "SETTYPE=", "CONTTYPE=", "MATERIAL=", "DISTANCE=", "VOLUME="
     //"WEIGHT=", "R_I_D=", "FILE_SPE="
-    
-    if( initial_read < filesize )
-    {
-      data.resize( filesize, '\0' );
-      input.read( &(data[initial_read]), filesize-initial_read );
-    }
     
     vector<int32_t> spectrumint( nchannel, 0 );
     memcpy( &(spectrumint[0]), &(data[spec_start_pos]), 4*nchannel );
