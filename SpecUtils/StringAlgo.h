@@ -387,7 +387,16 @@ namespace  SpecUtils
   If input is improperly encoded, or other error, will return empty string.
   */
   std::wstring convert_from_utf8_to_utf16( const std::string &str );
- 
+
+
+  /** Converts a Windows-1251 (Cyrillic) encoded byte string to UTF-8.
+
+   Bytes below 0x80 are passed through unchanged; bytes 0x80..0xFF are mapped through the
+   Windows-1251 code page.  The single undefined cp1251 slot (0x98) becomes U+FFFD.  Used by
+   parsers of Russian-origin formats (LSRM/SpectraLine, ASPECT) whose text fields are cp1251.
+   */
+  std::string cp1251_to_utf8( const std::string &str );
+
 
   /** \brief Prints the floating point value into its most compact form, for the specified
    number of significant figures.

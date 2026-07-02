@@ -185,6 +185,8 @@ enum class ParserType : int
   Json,
   /** CAEN Hexagon MCA gxml format. */
   CaenHexagonGXml,
+  /** ASPECT (NPC "Aspect", Dubna, Russia) binary .spc format, unrelated to ORTEC/IAEA formats handled by #Spc. */
+  AspectSpc,
 #if( SpecUtils_ENABLE_URI_SPECTRA )
   /** The URI defined format; e.g., from a QR-code */
   Uri,
@@ -1776,6 +1778,7 @@ public:
   virtual bool load_N42_file( const std::string &filename );
   bool load_pcf_file( const std::string &filename );
   bool load_spc_file( const std::string &filename );
+  bool load_aspect_spc_file( const std::string &filename );
   bool load_chn_file( const std::string &filename );
   bool load_iaea_file( const std::string &filename );
   bool load_binary_exploranium_file( const std::string &file_name );
@@ -1830,7 +1833,12 @@ public:
   //  spectrum (I didnt have any multi-spectrum files to view structure)
   bool load_from_iaea_spc( std::istream &input );
   bool load_from_binary_spc( std::istream &input );
-  
+
+  /** Loads a single spectrum from the ASPECT binary .spc format.  On failure,
+   resets the stream to its original position and sets *this to the reset state.
+   */
+  bool load_from_aspect_spc( std::istream &input );
+
   //load_from_N42_document(...): loads information from the N42 document, either
   //  2006 or 2012 variants.
   //  May throw.  Returns success status.

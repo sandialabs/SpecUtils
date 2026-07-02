@@ -4570,9 +4570,13 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_spectraline_file( filename );
     break;
 
+    case ParserType::AspectSpc:
+      success = load_aspect_spc_file( filename );
+    break;
+
     case ParserType::Auto:
     {
-      bool triedPcf = false, triedSpc = false,
+      bool triedPcf = false, triedSpc = false, triedAspectSpc = false,
           triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
           triedChn = false, triedIaea = false, triedLsrmSpe = false,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
@@ -4611,7 +4615,11 @@ bool SpecFile::load_file( const std::string &filename,
           triedSpc = true;
           success = load_spc_file( filename );
           if( success ) break;
-        }//if( orig_file_ending=="dat")
+
+          triedAspectSpc = true;
+          success = load_aspect_spc_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending=="spc")
 
         if( orig_file_ending=="n42" || orig_file_ending=="xml"
             || orig_file_ending=="icd1" || orig_file_ending=="icd")
@@ -4844,6 +4852,9 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !tried_gxml )
         success = load_caen_gxml_file( filename );
       
+      if( !success && !triedAspectSpc )
+        success = load_aspect_spc_file( filename );
+
 #if( SpecUtils_ENABLE_URI_SPECTRA )
       if( !success && !tried_uri )
         success = load_uri_file( filename );
