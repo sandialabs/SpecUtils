@@ -3589,8 +3589,8 @@ void Measurement::equal_enough( const Measurement &lhs, const Measurement &rhs )
   
   if( lhs.pcf_tag_ != rhs.pcf_tag_ )
   {
-    issues.push_back( string("Measurement: The PCF tag of LHS is ") + lhs.pcf_tag_
-                     + " while RHS is " + std::to_string(rhs.pcf_tag_) );
+    issues.push_back( string("Measurement: The PCF tag of LHS is '") + lhs.pcf_tag_
+                     + "' while RHS is '" + std::to_string(rhs.pcf_tag_) + "'" );
   }
   
   if( (!lhs.location_) != (!rhs.location_) )
@@ -3802,7 +3802,7 @@ void SpecFile::equal_enough( const SpecFile &lhs, const SpecFile &rhs )
   if( leftoperator != rightoperator )
     issues.push_back( "SpecFile: Measurement operator of LHS ('"
                          + lhs.measurement_operator_ + "') doesnt match RHS ('"
-                         + rhs.measurement_operator_ + ")" );
+                         + rhs.measurement_operator_ + "')" );
 
   if( lhs.sample_numbers_.size() != rhs.sample_numbers_.size() )
   {
@@ -7010,6 +7010,7 @@ void SpecFile::set_detector_type_from_other_info()
        && !(manufacturer_=="Canberra Industries, Inc." && instrument_model_=="ASP EDM")
        && !(manufacturer_=="Raytheon" && instrument_model_=="Variant C")
        && !(manufacturer_=="Unknown" && instrument_model_=="Unknown")
+       && !(manufacturer_=="Aspect" && instrument_model_=="")
        && !icontains( manufacturer_, "RIDs R Us")
        && !icontains( manufacturer_, "SRPMs R Us")
        && !icontains( manufacturer_, "RIIDs R Us")

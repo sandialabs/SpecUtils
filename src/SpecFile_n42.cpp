@@ -130,7 +130,59 @@ namespace
       return false;
     return SpecUtils::parse_float( node->value(), node->value_size(), val );
   }
-  
+
+  char pcf_tag_val_from_remark( std::string remark )
+  {
+    if( SpecUtils::istarts_with( remark, "Tag:") )
+      remark = remark.substr(4);
+
+    if( remark.size() == 1 )
+      return remark[0];
+
+    if( (remark.size() == 2) && (remark[0] == ' ') )
+      return remark[1];
+
+    SpecUtils::trim( remark );
+    if( remark.empty() )
+      return '\0';
+
+    if( remark.size() == 1 )
+      return remark[0];
+
+    if( (remark.size() > 3) && (remark[0] == '&') && (remark[1] == '#') && (remark.back() == ';') )
+    {
+      const std::string num = remark.substr(2, remark.size() - 3);
+
+      int value = 0;
+      if( SpecUtils::parse_int(num.c_str(), num.size(), value) && (value >= 0) && (value <= 255) )
+        return static_cast<char>(static_cast<unsigned char>(value));
+    }//
+
+#if( PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS )
+    const string errmsg = "Found invalid PCF tag value '" + remark + "'";
+    log_developer_error( __func__, errmsg.c_str() );
+#endif  //#if( PERFORM_DEVELOPER_CHECKS )
+
+    return '\0';
+  }//char pcf_tag_val_from_remark( std::string remark )
+
+  std::string remark_value_for_pcf_tag( const char tag )
+  {
+    std::string tag_remark = "Tag: ";
+    if( (tag >= '0' && tag <= '9')
+         || (tag >= 'A' && tag <= 'Z')
+         || (tag >= 'a' && tag <= 'z') )
+    {
+      tag_remark += tag;
+    }else
+    {
+      tag_remark += "&#" + std::to_string(static_cast<unsigned int>(static_cast<unsigned char>(tag))) + ";";
+    }
+
+    return tag_remark;
+  }//std::string remark_value_for_pcf_tag( const char tag )
+
+
   std::string get_n42_xmlns( const rapidxml::xml_node<char> *node )
   {
     const char * const default_xmlns = "dndons:"; //or maybe "n42:"
@@ -1287,7 +1339,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         
         if( m->pcf_tag() != '\0' )
         {
-          const string tag_remark = string("Tag: ") + m->pcf_tag();
+          string tag_remark = remark_value_for_pcf_tag( m->pcf_tag() );
           val = doc->allocate_string( tag_remark.c_str(), tag_remark.size()+1 );
           xml_node<char> *remark = doc->allocate_node( node_element, "Remark", val );
           Spectrum->append_node( remark );
@@ -1374,7 +1426,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
           
           if( m->pcf_tag() != '\0' )
           {
-            const string tag_remark = string("Tag: ") + m->pcf_tag();
+            const string tag_remark = remark_value_for_pcf_tag( m->pcf_tag() );
             val = doc->allocate_string( tag_remark.c_str(), tag_remark.size()+1 );
             xml_node<char> *remark = doc->allocate_node( node_element, "Remark", val );
             GrossCounts->append_node( remark );
@@ -2658,8 +2710,7 @@ struct N42DecodeHelper2006
         
         if( SpecUtils::istarts_with( remark, "Tag:") )
         {
-          const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
-          meas.pcf_tag_ = tag_str.empty() ? '\0' : tag_str[0];
+          meas.pcf_tag_ = pcf_tag_val_from_remark( remark );
           continue;
         }
           
@@ -3686,8 +3737,7 @@ public:
               */
             }else if( SpecUtils::istarts_with( remark, "Tag:") )
             {
-              const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
-              meas->pcf_tag_ = tag_str.empty() ? '\0' : tag_str[0];
+              meas->pcf_tag_ = pcf_tag_val_from_remark( remark );
             }else if( remark.size() )
             {
               meas->remarks_.emplace_back( std::move(remark) );
@@ -4091,8 +4141,7 @@ public:
             }else if( SpecUtils::istarts_with( remark, "Tag:") )
             {
               //See notes in equivalent portion of code for the <Spectrum> tag
-              const string tag_str = SpecUtils::trim_copy( remark.substr(4) );
-              meas->pcf_tag_ = tag_str.empty() ? '\0' : tag_str.front();
+              meas->pcf_tag_ = pcf_tag_val_from_remark( remark );
             }else if( !remark.empty() )
             {
               meas->remarks_.push_back( remark );
@@ -7012,7 +7061,7 @@ namespace SpecUtils
         }
       }//if( result.nuclide_.size() )
       
-      if( result.dose_rate_ > 0.0f )
+      if( result.dose_rate_ >= 0.0f )
       {
         xml_node<char> *DoseAnalysisResults = doc->allocate_node( node_element, "DoseAnalysisResults" );
         AnalysisResults->append_node( DoseAnalysisResults );
@@ -9498,8 +9547,8 @@ namespace SpecUtils
       remarks.push_back( "Title: " + title_ );
     
     if( pcf_tag_ != '\0' )
-      remarks.push_back( string("Tag: ") + pcf_tag_ );
-    
+      remarks.push_back( remark_value_for_pcf_tag( pcf_tag_ ) );
+
     bool wroteSurvey = false, wroteName = false, wroteSpeed = false;
     
     for( size_t i = 0; i < remarks_.size(); ++i )
