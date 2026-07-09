@@ -394,6 +394,10 @@ namespace  SpecUtils
    Bytes below 0x80 are passed through unchanged; bytes 0x80..0xFF are mapped through the
    Windows-1251 code page.  The single undefined cp1251 slot (0x98) becomes U+FFFD.  Used by
    parsers of Russian-origin formats (LSRM/SpectraLine, ASPECT) whose text fields are cp1251.
+
+   As a safeguard, if the input is already valid UTF-8 and contains at least one non-ASCII
+   (multi-byte) sequence, it is assumed to already be UTF-8 (not cp1251) and returned
+   unchanged - this avoids corrupting files that store their text as UTF-8 rather than cp1251.
    */
   std::string cp1251_to_utf8( const std::string &str );
 
