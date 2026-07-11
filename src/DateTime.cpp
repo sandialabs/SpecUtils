@@ -416,7 +416,12 @@ namespace SpecUtils
     //  missing a PM (a non-AM/PM aware format flag will just ignore the PM, and be
     //  successful), we'll only use format flags that match `has_am_pm`.  I'm not crazy
     //  about this, but seems to work, for now
-    static const std::pair<bool, const char *> formats[] =
+    //
+    //  Note: this array must NOT be `static` - several format strings are selected
+    //  via the `middle`/`only` flags above, which depend on the `endian` argument;
+    //  a `static` array would freeze those choices to whatever the first call used
+    //  and silently ignore the endian hint on every subsequent call.
+    const std::pair<bool, const char *> formats[] =
     {
       {true, "%Y-%m-%d%n%I:%M:%S%n%p"},  // 2010-01-15 06:21:15 PM
       {false, "%Y-%m-%d%n%H:%M:%SZ"},    // 2010-01-15T23:21:15Z    //I think this is the most common format in N42-2012 files, so try it early on.
@@ -508,8 +513,10 @@ namespace SpecUtils
       {false, "%b.%n%d%n%Y%n%H%M%S"}, //'May. 21 2013 070642'
       {false, "%d.%m.%y%n%H:%ML%s"}, //'22.3.99 5:06:01'
       {false, "%d.%m.%y%n%H:%M"}, //'22.3.99 5:06'
-      {false, "%m-%d-%y%n%H:%M:%S"}, //'03-22-99 05:06:01'
-      {false, "%m-%d-%y%n%H:%M"}, //'03-22-99 05:06'
+      {false, (middle ? "%m-%d-%y%n%H:%M:%S" : "%d-%m-%y%n%H:%M:%S")}, //'03-22-99 05:06:01' or '22-03-99 05:06:01'
+      {false, (only ? "" : (middle ? "%d-%m-%y%n%H:%M:%S" : "%m-%d-%y%n%H:%M:%S" ))},
+      {false, (middle ? "%m-%d-%y%n%H:%M" : "%d-%m-%y%n%H:%M")}, //'03-22-99 05:06' or '22-03-99 05:06'
+      {false, (only ? "" : (middle ? "%d-%m-%y%n%H:%M" : "%m-%d-%y%n%H:%M" ))},
       {false, "%y-%m-%d%n%H:%M"}, //'99-03-22 05:06'
       {false, "%d/%b/%y%n%H.%M.%S"}, //'22/Mar/99 5.06.07'
       {false, "%d/%m/%y%n%H.%M"}, //'22/03/99 5.06'
@@ -578,7 +585,7 @@ namespace SpecUtils
           const int year = static_cast<int>( ymd.year() );
           if( year < 1000 )
             continue;
-            
+
           return tp;
         }//if( we parsed the string )
       }catch( std::exception & )

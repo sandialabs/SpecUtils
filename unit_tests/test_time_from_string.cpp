@@ -511,3 +511,34 @@ TEST_CASE( "Time From String" )
 
   MESSAGE( "Tested " << original_string.size() << " input strings" );
 }
+
+
+TEST_CASE( "Time From String dash endian" )
+{
+  using SpecUtils::time_from_string;
+  using SpecUtils::DateParseEndianType;
+
+  // Numeric dash dates with a 2-digit year (e.g. LSRM/SpectraLine `DD-MM-YY`) are
+  // ambiguous.  The endian hint must be honored: LittleEndianFirst -> day first,
+  // MiddleEndianFirst (the default) -> month first.
+  const auto le = time_from_string( "11-04-26 18:02:13.346",
+                                    DateParseEndianType::LittleEndianFirst );
+  const auto le_truth = time_from_string( "2026-04-11T18:02:13.346" );
+  CHECK_MESSAGE( le == le_truth,
+    "Little-endian '11-04-26 18:02:13.346' should parse as 2026-04-11, got '"
+    << SpecUtils::to_extended_iso_string(le) << "'" );
+
+  const auto me = time_from_string( "11-04-26 18:02:13.346",
+                                    DateParseEndianType::MiddleEndianFirst );
+  const auto me_truth = time_from_string( "2026-11-04T18:02:13.346" );
+  CHECK_MESSAGE( me == me_truth,
+    "Middle-endian '11-04-26 18:02:13.346' should parse as 2026-11-04, got '"
+    << SpecUtils::to_extended_iso_string(me) << "'" );
+
+  // A day/month value >12 is unambiguous and must resolve the same regardless of hint.
+  const auto unambig_truth = time_from_string( "1999-12-25T08:30:00" );
+  CHECK( time_from_string( "25-12-99 08:30:00",
+                           DateParseEndianType::LittleEndianFirst ) == unambig_truth );
+  CHECK( time_from_string( "12-25-99 08:30:00",
+                           DateParseEndianType::MiddleEndianFirst ) == unambig_truth );
+}

@@ -4520,10 +4520,6 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_ortec_listmode_file( filename );
     break;
       
-    case ParserType::LsrmSpe:
-      success = load_lsrm_spe_file( filename );
-      break;
-      
     case ParserType::Tka:
       success = load_tka_file( filename );
       break;
@@ -4578,7 +4574,7 @@ bool SpecFile::load_file( const std::string &filename,
     {
       bool triedPcf = false, triedSpc = false, triedAspectSpc = false,
           triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
-          triedChn = false, triedIaea = false, triedLsrmSpe = false,
+          triedChn = false, triedIaea = false,
           triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
           triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
           triedTka = false, triedMultiAct = false, triedPhd = false,
@@ -4644,10 +4640,6 @@ bool SpecFile::load_file( const std::string &filename,
 
           triedSpectraLine = true;
           success = load_spectraline_file( filename );
-          if( success ) break;
-
-          triedLsrmSpe = true;
-          success = load_lsrm_spe_file( filename );
           if( success ) break;
         }//if( orig_file_ending=="spe" )
 
@@ -4825,9 +4817,6 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedSpectraLine )
         success = load_spectraline_file( filename );
 
-      if( !success && !triedLsrmSpe )
-        success = load_lsrm_spe_file( filename );
-
       if( !success && !triedTka )
         success = load_tka_file( filename );
       
@@ -4922,19 +4911,24 @@ void SpecFile::set_sample_numbers_by_time_stamp( const bool sort_meas_types_sepa
     {
       if( !m )
         continue;
-      
-      if( !sort_meas_types_separately )
-      {
-        sorted_foreground.push_back( m );
-        continue;
-      }
-      
+
+      //Derived data is always ordered after non-derived data by
+      //  compare_by_derived_sample_det_time (used for the final sort below), so we must
+      //  always segregate it here - even when not sorting measurement types separately -
+      //  otherwise it would be assigned time-interleaved sample numbers that arent
+      //  monotonic once the final sort moves derived data to the end.
       if( m->derived_data_properties() )
       {
         sorted_derived.push_back( m );
         continue;
       }
-      
+
+      if( !sort_meas_types_separately )
+      {
+        sorted_foreground.push_back( m );
+        continue;
+      }
+
       switch( m->source_type_ )
       {
         case SourceType::IntrinsicActivity:
@@ -5016,16 +5010,21 @@ void SpecFile::set_sample_numbers_by_time_stamp( const bool sort_meas_types_sepa
         continue;
       
       const int detnum = m->detector_number_;
-      
-      if( !sort_meas_types_separately )
+
+      //Derived data is always ordered after non-derived data by
+      //  compare_by_derived_sample_det_time (used for the final sort below), so we must
+      //  always segregate it here - even when not sorting measurement types separately -
+      //  otherwise it would be assigned time-interleaved sample numbers that arent
+      //  monotonic once the final sort moves derived data to the end.
+      if( m->derived_data_properties() )
+      {
+        derived_data[detnum].push_back( m );
+      }else if( !sort_meas_types_separately )
       {
         if( is_special(m->start_time_) )
           invalid_times[detnum].push_back( m );
         else
           time_meas_map[m->start_time_][detnum].push_back( m );
-      }else if( m->derived_data_properties() )
-      {
-        derived_data[detnum].push_back( m );
       }else if( m->source_type() == SourceType::IntrinsicActivity )
       {
         intrinsics[detnum].push_back( m );
