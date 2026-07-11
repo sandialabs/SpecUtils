@@ -4523,7 +4523,11 @@ bool SpecFile::load_file( const std::string &filename,
     case ParserType::Tka:
       success = load_tka_file( filename );
       break;
-      
+
+    case ParserType::Asc:
+      success = load_asc_file( filename );
+      break;
+
     case ParserType::MultiAct:
       success = load_multiact_file( filename );
       break;
@@ -4580,7 +4584,7 @@ bool SpecFile::load_file( const std::string &filename,
           triedTka = false, triedMultiAct = false, triedPhd = false,
           triedLzs = false, triedXmlScanData = false, triedJson = false,
           tried_gxml = false, triedRadiaCode = false, tried_uri = false,
-          triedSpectraLine = false;
+          triedSpectraLine = false, triedAsc = false;
       
       if( orig_file_ending.empty() )
         orig_file_ending = filename;
@@ -4658,6 +4662,13 @@ bool SpecFile::load_file( const std::string &filename,
           if( success ) break;
         }//if( orig_file_ending=="chn" )
         
+        if( orig_file_ending=="asc" )
+        {
+          triedAsc = true;
+          success = load_asc_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending=="asc" )
+
         if( orig_file_ending=="spm" )
         {
           triedMultiAct = true;
@@ -4793,9 +4804,12 @@ bool SpecFile::load_file( const std::string &filename,
       if( !success && !triedIaea )
         success = load_iaea_file( filename );
 
+      if( !success && !triedAsc )
+        success = load_asc_file( filename );
+
       if( !success && !triedSPM )
         success = load_spectroscopic_daily_file( filename );
-      
+
       if( !success && !triedTxt )
         success = load_txt_or_csv_file( filename );
 

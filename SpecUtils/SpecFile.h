@@ -185,6 +185,8 @@ enum class ParserType : int
   CaenHexagonGXml,
   /** ASPECT (NPC "Aspect", Dubna, Russia) binary .spc format, unrelated to ORTEC/IAEA formats handled by #Spc. */
   AspectSpc,
+  /** GADRAS-lineage ASCII (.asc/.ASC) format; related to the PCF format. */
+  Asc,
 #if( SpecUtils_ENABLE_URI_SPECTRA )
   /** The URI defined format; e.g., from a QR-code */
   Uri,
@@ -1789,6 +1791,8 @@ public:
   bool load_amptek_file( const std::string &filename );
   bool load_ortec_listmode_file( const std::string &filename );
   bool load_tka_file( const std::string &filename );
+  /** Load a GADRAS-lineage ASCII (.asc/.ASC) file. */
+  bool load_asc_file( const std::string &filename );
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
@@ -1899,7 +1903,16 @@ public:
 
   /** Load TKA file */
   bool load_from_tka( std::istream &input );
-  
+
+  /** Load a GADRAS-lineage ASCII (.asc/.ASC) file from a stream.
+   Handles the three known variants: a plain single-column
+   "<nchan> <live> <real> -1" header, a bare channel-count header with one or
+   more "! Record #" delimited records, and the "<nchan> ECAL ..." header
+   (optionally with a PCF-style fixed-width metadata block).  Returns false and
+   makes no changes to this SpecFile if the input is not a recognized ASC file.
+   */
+  bool load_from_asc( std::istream &input );
+
   /** Load MultiAct SPM file - only barely supported (currently only extracts
    channel counts)
    */

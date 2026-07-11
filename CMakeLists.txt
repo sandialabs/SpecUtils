@@ -117,6 +117,7 @@ set( sources
      src/SpecFile_lzs.cpp
      src/SpecFile_phd.cpp
      src/SpecFile_tka.cpp
+     src/SpecFile_asc.cpp
      src/SpecFile_lsrm.cpp
      src/SpecFile_mca.cpp
      src/SpecFile_spmdf.cpp
