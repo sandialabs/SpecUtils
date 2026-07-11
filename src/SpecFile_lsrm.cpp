@@ -220,7 +220,7 @@ namespace
     std::string title;                   // SHIFR (cp1251 -> utf8)
     std::string detector_id;             // DETECTOR
     std::string instrument_model;        // CONFIGNAME
-    std::vector<float> energy_poly_coeffs; // ENERGY (after stripping leading order)
+    std::vector<float> energy_poly_coeffs; // ENERGY (after potentually stripping leading order)
     bool has_dose_rate = false;
     float dose_rate = 0.0f;
     int spectrsize = -1;                 // SPECTRSIZE if declared
@@ -301,10 +301,23 @@ namespace
       if( !energy.empty() )
       {
         std::vector<float> coeffs;
-        if( SpecUtils::split_to_floats( energy, coeffs ) && coeffs.size() >= 2 )
+        if( SpecUtils::split_to_floats( energy, coeffs ) && (coeffs.size() >= 2) )
         {
           // First value is polynomial order; remaining values are coefficients.
-          p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
+          if( (std::floor(coeffs[0]) == coeffs[0])
+             && (coeffs.size() >= 3)
+             && (coeffs[0] > 0.0f)
+             && (coeffs[2] > 0.0f) //positive gain
+             && ((static_cast<size_t>(coeffs[0]) + 2) == coeffs.size()) )
+          {
+            p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
+          }else
+          {
+            if( coeffs[1] > 0.0f )
+              p.energy_poly_coeffs.assign( coeffs.begin(), coeffs.end() );
+            else
+              p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
+          }
         }
       }
     }
