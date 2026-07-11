@@ -27,7 +27,6 @@ public enum ParserType {
     RadiaCode,
     SpectraLine,
     OrtecListMode,
-    LsrmSpe,
     Tka,
     MultiAct,
     Phd,
@@ -35,6 +34,7 @@ public enum ParserType {
     ScanDataXml,
     Json,
     CaenHexagonGXml,
+    AspectSpc,
     Uri,
     Auto;
 

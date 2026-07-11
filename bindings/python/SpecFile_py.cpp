@@ -462,7 +462,6 @@ private:
         case SpecUtils::ParserType::SpectraLine: type = "SpectraLine"; break;
         case SpecUtils::ParserType::Aram: type = "Aram"; break;
         case SpecUtils::ParserType::OrtecListMode: type = "Ortec Listmode"; break;
-        case SpecUtils::ParserType::LsrmSpe: type = "LSRM"; break;
         case SpecUtils::ParserType::Tka: type = "TKA"; break;
         case SpecUtils::ParserType::MultiAct: type = "MultiAct"; break;
         case SpecUtils::ParserType::Lzs: type = "LZS"; break;
@@ -554,7 +553,7 @@ private:
     bool success = false;
     bool triedPcf = false, triedSpc = false,
          triedNativeIcd1 = false, triedTxt = false, triedGR135 = false,
-         triedChn = false, triedIaea = false, triedLsrmSpe = false,
+         triedChn = false, triedIaea = false, triedSpectraLine = false,
          triedCnf = false, triedMps = false, triedSPM = false, triedMCA = false,
          triedOrtecLM = false, triedMicroRaider = false, triedAram = false,
          triedTka = false, triedMultiAct = false, triedPhd = false,
@@ -639,8 +638,8 @@ private:
         success = try_parser( [&]() { return info->load_from_iaea( input ); } );
         if( success ) goto done;
 
-        triedLsrmSpe = true;
-        success = try_parser( [&]() { return info->load_from_lsrm_spe( input ); } );
+        triedSpectraLine = true;
+        success = try_parser( [&]() { return info->load_from_spectraline_spe( input ); } );
         if( success ) goto done;
       }
 
@@ -809,8 +808,8 @@ private:
     if( !success && !triedAram )
       success = try_parser( [&]() { return info->load_from_aram( input ); } );
 
-    if( !success && !triedLsrmSpe )
-      success = try_parser( [&]() { return info->load_from_lsrm_spe( input ); } );
+    if( !success && !triedSpectraLine )
+      success = try_parser( [&]() { return info->load_from_spectraline_spe( input ); } );
 
     if( !success && !triedTka )
       success = try_parser( [&]() { return info->load_from_tka( input ); } );
@@ -919,9 +918,9 @@ bool loadFromOrtecListmode_wrapper(SpecUtils::SpecFile* info, py::object pystrea
     return info->load_from_ortec_listmode(input);
 }
 
-bool loadFromLsrmSpe_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
+bool loadFromSpectralineSpe_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
     PythonInputStream input(pystream);
-    return info->load_from_lsrm_spe(input);
+    return info->load_from_spectraline_spe(input);
 }
 
 bool loadFromTka_wrapper(SpecUtils::SpecFile* info, py::object pystream) {
@@ -1770,20 +1769,21 @@ NB_MODULE(SpecUtils, m) {
   .value("TxtOrCsv", SpecUtils::ParserType::TxtOrCsv)
   .value("Cnf", SpecUtils::ParserType::Cnf)
   .value("TracsMps", SpecUtils::ParserType::TracsMps)
+  .value("Aram", SpecUtils::ParserType::Aram)
   .value("SPMDailyFile", SpecUtils::ParserType::SPMDailyFile)
   .value("AmptekMca", SpecUtils::ParserType::AmptekMca)
   .value("MicroRaider", SpecUtils::ParserType::MicroRaider)
   .value("RadiaCode", SpecUtils::ParserType::RadiaCode)
+  .value("SpectraLine", SpecUtils::ParserType::SpectraLine)
   .value("OrtecListMode", SpecUtils::ParserType::OrtecListMode)
-  .value("LsrmSpe", SpecUtils::ParserType::LsrmSpe)
   .value("Tka", SpecUtils::ParserType::Tka)
   .value("MultiAct", SpecUtils::ParserType::MultiAct)
   .value("Phd", SpecUtils::ParserType::Phd)
   .value("Lzs", SpecUtils::ParserType::Lzs)
-  .value("Aram", SpecUtils::ParserType::Aram)
   .value("ScanDataXml", SpecUtils::ParserType::ScanDataXml)
   .value("Json", SpecUtils::ParserType::Json)
   .value("CaenHexagonGXml", SpecUtils::ParserType::CaenHexagonGXml)
+  .value("AspectSpc", SpecUtils::ParserType::AspectSpc)
   #if( SpecUtils_ENABLE_URI_SPECTRA )
   .value("Uri", SpecUtils::ParserType::Uri)
 #endif
@@ -2179,8 +2179,8 @@ m.def("polynomialCoefToFullRangeFraction",
          "Load Amptek MCA format data from input stream")
     .def("loadFromOrtecListmode", &loadFromOrtecListmode_wrapper, "input"_a,
          "Load Ortec listmode format data from input stream")
-    .def("loadFromLsrmSpe", &loadFromLsrmSpe_wrapper, "input"_a,
-         "Load LSRM SPE format data from input stream")
+    .def("loadFromSpectralineSpe", &loadFromSpectralineSpe_wrapper, "input"_a,
+         "Load SpectraLine/LSRM .spe format data from input stream")
     .def("loadFromTka", &loadFromTka_wrapper, "input"_a,
          "Load TKA format data from input stream")
     .def("loadFromMultiact", &loadFromMultiact_wrapper, "input"_a,

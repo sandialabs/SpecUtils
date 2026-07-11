@@ -169,8 +169,6 @@ enum class ParserType : int
   SpectraLine,
   /** ORTEC list mode (.lis) from at least digiBASE(-E) detectors. */
   OrtecListMode,
-  /** LSRM text based format. */
-  LsrmSpe,
   /** TKA text based format. */
   Tka,
   /** MultiAct binary format - only partially supported. */
@@ -1790,7 +1788,6 @@ public:
   bool load_spectroscopic_daily_file( const std::string &filename );
   bool load_amptek_file( const std::string &filename );
   bool load_ortec_listmode_file( const std::string &filename );
-  bool load_lsrm_spe_file( const std::string &filename );
   bool load_tka_file( const std::string &filename );
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
@@ -1885,9 +1882,6 @@ public:
   //load_from_ortec_listmode(...): listmode data from ORTEC digiBASE (digibase-E
   //  and PRO list format not supported yet).
   bool load_from_ortec_listmode( std::istream &input );
-  
-  /** Load LSRM SPE file. */
-  bool load_from_lsrm_spe( std::istream &input );
 
   /** Load SpectraLine .spe (extended LSRM Windows-1251 ASCII + raw int32-LE
    spectrum) from a stream. */

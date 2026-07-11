@@ -73,8 +73,6 @@ static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_SpectraLi
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_OrtecListMode) == static_cast<int>(SpecUtils::ParserType::OrtecListMode),
               "SpecUtils_ParserType needs updating" );
-static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_LsrmSpe) == static_cast<int>(SpecUtils::ParserType::LsrmSpe),
-              "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Tka) == static_cast<int>(SpecUtils::ParserType::Tka),
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_MultiAct) == static_cast<int>(SpecUtils::ParserType::MultiAct),

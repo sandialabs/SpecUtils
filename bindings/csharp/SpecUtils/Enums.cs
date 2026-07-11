@@ -21,8 +21,8 @@ public enum ParserType
     AmptekMca = 12,
     MicroRaider = 13,
     RadiaCode = 14,
-    OrtecListMode = 15,
-    LsrmSpe = 16,
+    SpectraLine = 15,
+    OrtecListMode = 16,
     Tka = 17,
     MultiAct = 18,
     Phd = 19,
@@ -30,11 +30,12 @@ public enum ParserType
     ScanDataXml = 21,
     Json = 22,
     CaenHexagonGXml = 23,
+    AspectSpc = 24,
 
     /// <summary>Requires SpecUtils_ENABLE_URI_SPECTRA compile flag.</summary>
-    Uri = 24,
+    Uri = 25,
 
-    Auto = 25
+    Auto = 26
 }
 
 /// <summary>

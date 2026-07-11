@@ -1775,6 +1775,23 @@ namespace
 
 std::string cp1251_to_utf8( const std::string &src )
 {
+  // If the input is already valid UTF-8 AND contains at least one non-ASCII (multi-byte)
+  // sequence, it is almost certainly genuine UTF-8, not cp1251 - real cp1251 Cyrillic text
+  // interpreted as UTF-8 is (essentially always) invalid, because cp1251 lowercase letters
+  // (0xE0-0xFF) form UTF-8 lead bytes that need continuation bytes that Cyrillic text does
+  // not supply.  Passing such input through unchanged avoids corrupting already-UTF-8 text.
+  // (Pure-ASCII input is identical under either interpretation, so the multi-byte check just
+  //  keeps the intent explicit; a single stray cp1251 byte is invalid UTF-8 and still gets
+  //  converted below.)
+  bool has_non_ascii = false;
+  for( unsigned char b : src )
+  {
+    if( b >= 0x80 ){ has_non_ascii = true; break; }
+  }
+
+  if( has_non_ascii && valid_utf8( src.data(), src.size() ) )
+    return src;
+
   std::string out;
   out.reserve( src.size() );
   for( unsigned char b : src )
