@@ -7910,7 +7910,7 @@ namespace SpecUtils
       string::size_type locationpos = val.find( "Location " );
       if( locationpos != string::npos )
         measurement_location_name_ = val.substr(locationpos+9);
-      else if( (locationpos = val.find( " at " ))==string::npos )
+      else if( ((locationpos = val.find( " at " )) == string::npos) && (lanepos == string::npos) )
         measurement_location_name_ = val.substr(locationpos+4);
       
       if( measurement_location_name_.find("Inspection:") != string::npos )
