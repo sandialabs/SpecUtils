@@ -7166,10 +7166,7 @@ namespace SpecUtils
     string original_creator;
     for( size_t i = 0; i < remarks_.size(); ++i )
     {
-      if( remarks_[i].empty()
-         || SpecUtils::starts_with(remarks_[i], "InstrumentVersion:")
-         || SpecUtils::starts_with(remarks_[i], "Instrument ")
-         )
+      if( remarks_[i].empty() )
         continue;
       
       if( SpecUtils::starts_with(remarks_[i], "N42 file created by: " ) )
