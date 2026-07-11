@@ -31,11 +31,12 @@ public enum ParserType
     Json = 22,
     CaenHexagonGXml = 23,
     AspectSpc = 24,
+    Asc = 25,
 
     /// <summary>Requires SpecUtils_ENABLE_URI_SPECTRA compile flag.</summary>
-    Uri = 25,
+    Uri = 26,
 
-    Auto = 26
+    Auto = 27
 }
 
 /// <summary>

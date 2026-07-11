@@ -469,6 +469,8 @@ private:
         case SpecUtils::ParserType::ScanDataXml: type = "ScanData"; break;
         case SpecUtils::ParserType::Json: type = "JSON"; break;
         case SpecUtils::ParserType::CaenHexagonGXml: type = "GXml"; break;
+        case SpecUtils::ParserType::AspectSpc: type = "Aspect SPC"; break;
+        case SpecUtils::ParserType::Asc: type = "ASC"; break;
         case SpecUtils::ParserType::Auto: type = ""; break;
       }//switch( parser_type )
       
@@ -1784,6 +1786,7 @@ NB_MODULE(SpecUtils, m) {
   .value("Json", SpecUtils::ParserType::Json)
   .value("CaenHexagonGXml", SpecUtils::ParserType::CaenHexagonGXml)
   .value("AspectSpc", SpecUtils::ParserType::AspectSpc)
+  .value("Asc", SpecUtils::ParserType::Asc)
   #if( SpecUtils_ENABLE_URI_SPECTRA )
   .value("Uri", SpecUtils::ParserType::Uri)
 #endif

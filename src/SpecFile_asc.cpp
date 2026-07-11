@@ -76,7 +76,9 @@ namespace
   //Reasonable bounds on channel count so we neither reject real files nor try to
   //  allocate absurd amounts of memory from a corrupt/hostile file.
   const size_t sm_min_channels = 1;
-  const size_t sm_max_channels = 131073;
+  //Keep in sync with EnergyCalibration::sm_max_channels so a channel count that
+  //  passes our bounds check can't later be rejected by set_full_range_fraction().
+  const size_t sm_max_channels = 131072;
 
   //Max plausible live/real time.  GADRAS simulations use very long times (e.g.
   //  1e7 seconds), so this is generous while still rejecting obvious garbage.
@@ -86,25 +88,22 @@ namespace
   /** Returns true if the (trimmed) line is a record delimiter.  Accepts the
    "! Record # 1", "!\tRecord #1", and "! Record #: 1" variants, as well as a
    bare "!" line (used by some files that put the title on the following line).
-   Note that empty metadata fields trim to "! <FieldName>" (e.g. "! UUID"); those
-   are not treated as record markers because text other than "Record" follows. */
+
+   Empty PCF-style metadata fields trim to "! <FieldName>" (e.g. "! UUID") once
+   their NUL padding is stripped, so we must NOT treat every line beginning with
+   '!' as a marker; a non-empty, non-"Record" remainder is a metadata field, not
+   a record delimiter. */
   bool is_record_marker( const string &line )
   {
-    if( line.empty() )
-      return false;
-    // A '!' in the first column is a record delimiter; this covers "! Record #1",
-    //  "!\tRecord #1", "! Record #: 1", a bare "!", and "! <some label>".  Empty
-    //  metadata fields trim to "! <FieldName>" but keep their leading padding, so
-    //  they are (correctly) not matched here.
-    if( line[0] == '!' )
-      return true;
-    // Also accept an indented "! Record..." just in case a file pads the marker.
     string t = trim_copy( line );
     if( t.empty() || (t[0] != '!') )
       return false;
     string rest = t.substr( 1 );
     trim( rest );
-    return SpecUtils::istarts_with( rest, "Record" );
+    // A bare "!" (title on the following line) is a record marker; otherwise the
+    //  remainder must actually be the "Record" token, so empty metadata fields
+    //  like "! UUID" are not mistaken for delimiters.
+    return rest.empty() || SpecUtils::istarts_with( rest, "Record" );
   }//is_record_marker(...)
 
 
@@ -219,7 +218,7 @@ bool SpecFile::load_from_asc( std::istream &input )
     const bool is_format_c = !is_format_a && (hdr_tokens.size() == 4);
 
     // --- Format C: plain single-column spectrum -----------------------------
-    if( !is_format_a && is_format_c )
+    if( is_format_c )
     {
       int nchan_i = 0;
       float livetime = 0.0f, realtime = 0.0f, neutron = -1.0f;
@@ -240,7 +239,11 @@ bool SpecFile::load_from_asc( std::istream &input )
       double countssum = 0.0;
 
       // Counts may be one-per-line or multiple whitespace-separated values per line.
-      for( size_t i = 1; (i < lines.size()) && (channel_counts->size() < nchan); ++i )
+      //  Require the file to contain EXACTLY nchan values (ignoring blank lines);
+      //  otherwise a generic whitespace-separated numeric table whose first row
+      //  merely looks like "<int> <float> <float> <float>" would be silently
+      //  truncated to its first nchan values and mis-claimed as an ASC spectrum.
+      for( size_t i = 1; i < lines.size(); ++i )
       {
         const string val = trim_copy( lines[i] );
         if( val.empty() )
@@ -252,9 +255,9 @@ bool SpecFile::load_from_asc( std::istream &input )
         {
           channel_counts->push_back( f );
           countssum += f;
-          if( channel_counts->size() >= nchan )
-            break;
         }
+        if( channel_counts->size() > nchan )
+          throw runtime_error( "Format-C ASC file contained more than the declared number of channels" );
       }//for( each data line )
 
       if( channel_counts->size() != nchan )
@@ -283,6 +286,11 @@ bool SpecFile::load_from_asc( std::istream &input )
     vector<float> ecal_coeffs;
     size_t line_idx = 1;
 
+    // File-level declared channel count (Formats A & B).  The per-record timing
+    //  line is what actually drives parsing, but we keep this to cross-check each
+    //  record and emit a parse warning on a mismatch (a sign of a corrupt file).
+    int file_nchan = -1;
+
     if( is_format_a )
     {
       // Header: "<nchan> ECAL <c0> <c1> <c2> <c3> <c4>"
@@ -291,6 +299,7 @@ bool SpecFile::load_from_asc( std::istream &input )
          || hdr_nchan < static_cast<int>(sm_min_channels)
          || hdr_nchan > static_cast<int>(sm_max_channels) )
         throw runtime_error( "Invalid ECAL header channel count" );
+      file_nchan = hdr_nchan;
 
       for( size_t i = 2; i < hdr_tokens.size(); ++i )
       {
@@ -358,6 +367,7 @@ bool SpecFile::load_from_asc( std::istream &input )
          || hdr_nchan < static_cast<int>(sm_min_channels)
          || hdr_nchan > static_cast<int>(sm_max_channels) )
         throw runtime_error( "Not an ASC channel-count header" );
+      file_nchan = hdr_nchan;
 
       size_t peek = 1;
       while( peek < lines.size() && trim_copy(lines[peek]).empty() )
@@ -516,6 +526,14 @@ bool SpecFile::load_from_asc( std::istream &input )
       //  not spectra.
       if( nchan < 7 )
         continue;
+
+      // Cross-check the record's channel count against the file-level declared
+      //  count; a mismatch suggests a corrupt or unusual file, but we still keep
+      //  the record (the timing-line count is authoritative).
+      if( (file_nchan >= 0) && (static_cast<size_t>(file_nchan) != nchan) )
+        meas->parse_warnings_.push_back( "Record channel count (" + std::to_string(nchan)
+          + ") differs from file-level declared channel count ("
+          + std::to_string(file_nchan) + ")." );
 
       auto channel_counts = make_shared<vector<float>>( all_vals.end() - static_cast<ptrdiff_t>(nchan), all_vals.end() );
       double countssum = 0.0;
