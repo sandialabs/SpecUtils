@@ -7152,8 +7152,16 @@ namespace SpecUtils
     
     attr = doc->allocate_attribute( "xmlns", "http://physics.nist.gov/N42/2011/N42" );
     RadInstrumentData->append_attribute( attr );
-    
-    
+
+    // Declare the "InterSpec" namespace prefix.  Some elements we write (e.g.
+    //  <InterSpec:DetectorType> inside <RadInstrumentInformationExtension>) use this prefix;
+    //  without the declaration strict parsers (lxml/libxml2) reject the file with
+    //  "Namespace prefix InterSpec on ... is not defined".  The URI is an opaque identifier
+    //  (never network-resolved) and does not affect reading the file back.
+    attr = doc->allocate_attribute( "xmlns:InterSpec", "https://github.com/sandialabs/InterSpec" );
+    RadInstrumentData->append_attribute( attr );
+
+
     {
       const time_point_t t = chrono::time_point_cast<chrono::microseconds>( chrono::system_clock::now() );
       const string datetime = SpecUtils::to_extended_iso_string(t) + "Z";
