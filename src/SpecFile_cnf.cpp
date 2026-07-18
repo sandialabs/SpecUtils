@@ -78,7 +78,7 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   // get the sample ID
   try
   {
-    string sampleid= reader.GetSampleTitle();
+    const string sampleid = SpecUtils::trim_copy( reader.GetSampleTitle() );
     meas->title_ = sampleid;
     if( sampleid.size() )
       meas->remarks_.push_back( "Sample ID: " + sampleid );
@@ -163,15 +163,15 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
     const CAMInputOutput::DetInfo &det_info = reader.GetDetectorInfo();
 
     if( det_info.MCAType.size() )
-      remarks_.push_back( "MCA Type: " + det_info.MCAType );
+      remarks_.push_back( "MCA Type: " + SpecUtils::trim_copy(det_info.MCAType) );
 
     if( det_info.Type.size() )
       remarks_.push_back( "Detector Type: " + det_info.Type );
 
     if( !det_info.SerialNo.empty() )
-      instrument_id_ = det_info.SerialNo;
+      instrument_id_ = SpecUtils::trim_copy( det_info.SerialNo );
 
-    det_name = det_info.Name;
+    det_name = SpecUtils::trim_copy( det_info.Name );
     if( !det_name.empty() )
       meas->detector_name_ = det_name;
   }catch( std::exception & )
@@ -251,7 +251,7 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
         if (activity > 1e-6) 
         {
           result.activity_ = activity;
-          result.nuclide_ = cam_results[i].Name;
+          result.nuclide_ = SpecUtils::trim_copy( cam_results[i].Name );
           result.real_time_ = meas->real_time_;
           result.detector_ = det_name;
 

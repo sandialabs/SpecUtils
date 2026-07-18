@@ -878,3 +878,31 @@ TEST_CASE( "testValidUtf8" )
   std::string large_invalid_utf8(10000, '\x80'); // A large string of invalid bytes
   CHECK(!valid_utf8(large_invalid_utf8.c_str(), large_invalid_utf8.size()));
 }//TEST_CASE( "testValidUtf8" )
+
+
+TEST_CASE( "testCp1251ToUtf8" )
+{
+  using namespace SpecUtils;
+
+  // Genuine cp1251-encoded "Привет" (single bytes 0xCF 0xF0 0xE8 0xE2 0xE5 0xF2) - this is
+  // NOT valid UTF-8, so it should be converted to the correct UTF-8 encoding.
+  const std::string privet_cp1251 = "\xCF\xF0\xE8\xE2\xE5\xF2";
+  const std::string privet_utf8   = "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82"; // "Привет"
+  CHECK_EQ( cp1251_to_utf8( privet_cp1251 ), privet_utf8 );
+
+  // Input that is ALREADY valid UTF-8 (with non-ASCII bytes) must be passed through
+  // unchanged, otherwise it would be double-encoded / corrupted.
+  CHECK_EQ( cp1251_to_utf8( privet_utf8 ), privet_utf8 );
+  CHECK_EQ( cp1251_to_utf8( "こんにちは" ), std::string("こんにちは") );
+  CHECK_EQ( cp1251_to_utf8( "\xE2\x82\xAC" ), std::string("\xE2\x82\xAC") ); // Euro sign U+20AC
+
+  // Pure ASCII is identical under either interpretation.
+  CHECK_EQ( cp1251_to_utf8( "Detector 1" ), std::string("Detector 1") );
+
+  // Empty string.
+  CHECK_EQ( cp1251_to_utf8( std::string() ), std::string() );
+
+  // A single high cp1251 byte is not valid UTF-8 on its own, so it is still converted.
+  // cp1251 0xC0 -> U+0410 (Cyrillic capital A) -> UTF-8 0xD0 0x90.
+  CHECK_EQ( cp1251_to_utf8( "\xC0" ), std::string("\xD0\x90") );
+}//TEST_CASE( "testCp1251ToUtf8" )

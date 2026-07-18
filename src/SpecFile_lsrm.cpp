@@ -1,17 +1,17 @@
 /**
  SpecUtils: a library to parse, save, and manipulate gamma spectrum data files.
  Copyright (C) 2016 William Johnson
- 
+
  This library is free software; you can redistribute it and/or
  modify it under the terms of the GNU Lesser General Public
  License as published by the Free Software Foundation; either
  version 2.1 of the License, or (at your option) any later version.
- 
+
  This library is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  Lesser General Public License for more details.
- 
+
  You should have received a copy of the GNU Lesser General Public
  License along with this library; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -42,6 +42,9 @@
 
 using namespace std;
 
+// cp1251_to_utf8() lives in SpecUtils::StringAlgo (shared with the ASPECT parser).
+using SpecUtils::cp1251_to_utf8;
+
 namespace
 {
   // Endian-independent little-endian readers.  Compile to plain unaligned loads on
@@ -60,27 +63,6 @@ namespace
                      | (static_cast<uint32_t>( static_cast<uint8_t>(p[3]) ) << 24);
     return static_cast<int32_t>( u );
   }
-
-  // Windows-1251 (Cyrillic) -> Unicode codepoint table for bytes 0x80..0xFF.
-  // 0xFFFF marks an undefined slot (only 0x98 in cp1251).
-  static const uint16_t kCp1251Hi[128] = {
-    0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021, // 80-87
-    0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F, // 88-8F
-    0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 90-97
-    0xFFFF, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F, // 98-9F
-    0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7, // A0-A7
-    0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407, // A8-AF
-    0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7, // B0-B7
-    0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457, // B8-BF
-    0x0410, 0x0411, 0x0412, 0x0413, 0x0414, 0x0415, 0x0416, 0x0417, // C0-C7
-    0x0418, 0x0419, 0x041A, 0x041B, 0x041C, 0x041D, 0x041E, 0x041F, // C8-CF
-    0x0420, 0x0421, 0x0422, 0x0423, 0x0424, 0x0425, 0x0426, 0x0427, // D0-D7
-    0x0428, 0x0429, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F, // D8-DF
-    0x0430, 0x0431, 0x0432, 0x0433, 0x0434, 0x0435, 0x0436, 0x0437, // E0-E7
-    0x0438, 0x0439, 0x043A, 0x043B, 0x043C, 0x043D, 0x043E, 0x043F, // E8-EF
-    0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447, // F0-F7
-    0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F, // F8-FF
-  };
 
   // Encode a Unicode code point into UTF-8, appending to `out`.
   void utf8_append( std::string &out, uint32_t cp )
@@ -104,27 +86,6 @@ namespace
       out.push_back( static_cast<char>( 0x80 | ((cp >> 6) & 0x3F) ) );
       out.push_back( static_cast<char>( 0x80 | (cp & 0x3F) ) );
     }
-  }
-
-  // Convert a Windows-1251 byte string to UTF-8.  Bytes < 0x80 pass through; bytes
-  // 0x80..0xFF go through kCp1251Hi.  The single undefined slot 0x98 is replaced
-  // with U+FFFD.
-  std::string cp1251_to_utf8( const std::string &src )
-  {
-    std::string out;
-    out.reserve( src.size() );
-    for( unsigned char b : src )
-    {
-      if( b < 0x80 )
-      {
-        out.push_back( static_cast<char>(b) );
-      }else
-      {
-        const uint16_t cp = kCp1251Hi[b - 0x80];
-        utf8_append( out, (cp == 0xFFFF) ? 0xFFFD : cp );
-      }
-    }
-    return out;
   }
 
   // Convert a buffer of UTF-16LE bytes (NOT terminated) to UTF-8.  Surrogate pairs
@@ -259,7 +220,7 @@ namespace
     std::string title;                   // SHIFR (cp1251 -> utf8)
     std::string detector_id;             // DETECTOR
     std::string instrument_model;        // CONFIGNAME
-    std::vector<float> energy_poly_coeffs; // ENERGY (after stripping leading order)
+    std::vector<float> energy_poly_coeffs; // ENERGY (after potentually stripping leading order)
     bool has_dose_rate = false;
     float dose_rate = 0.0f;
     int spectrsize = -1;                 // SPECTRSIZE if declared
@@ -305,6 +266,23 @@ namespace
         p.has_start_time = !SpecUtils::is_special( p.start_time );
       }
 
+      // Older LSRM SPE files use separate DATE= and TIME= fields instead of
+      // MEASBEGIN=; fall back to those if MEASBEGIN was absent or unparsable.
+      if( !p.has_start_time )
+      {
+        const std::string date = get("DATE");
+        if( !date.empty() )
+        {
+          const std::string time = get("TIME");
+          std::string combined = normalize_lsrm_date(date);
+          if( !time.empty() )
+            combined += " " + time;
+          p.start_time = SpecUtils::time_from_string(
+              combined, SpecUtils::DateParseEndianType::LittleEndianFirst );
+          p.has_start_time = !SpecUtils::is_special( p.start_time );
+        }
+      }
+
       const std::string tlive = get("TLIVE");
       float v = 0.0f;
       if( !tlive.empty() && SpecUtils::parse_float( tlive.c_str(), tlive.size(), v ) )
@@ -340,10 +318,23 @@ namespace
       if( !energy.empty() )
       {
         std::vector<float> coeffs;
-        if( SpecUtils::split_to_floats( energy, coeffs ) && coeffs.size() >= 2 )
+        if( SpecUtils::split_to_floats( energy, coeffs ) && (coeffs.size() >= 2) )
         {
           // First value is polynomial order; remaining values are coefficients.
-          p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
+          if( (std::floor(coeffs[0]) == coeffs[0])
+             && (coeffs.size() >= 3)
+             && (coeffs[0] > 0.0f)
+             && (coeffs[2] > 0.0f) //positive gain
+             && ((static_cast<size_t>(coeffs[0]) + 2) == coeffs.size()) )
+          {
+            p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
+          }else
+          {
+            if( coeffs[1] > 0.0f )
+              p.energy_poly_coeffs.assign( coeffs.begin(), coeffs.end() );
+            else
+              p.energy_poly_coeffs.assign( coeffs.begin() + 1, coeffs.end() );
+          }
         }
       }
     }
@@ -697,160 +688,6 @@ namespace
 
 namespace SpecUtils
 {
-bool SpecFile::load_lsrm_spe_file( const std::string &filename )
-{
-#ifdef _WIN32
-  ifstream input( convert_from_utf8_to_utf16(filename).c_str(), ios_base::binary|ios_base::in );
-#else
-  ifstream input( filename.c_str(), ios_base::binary|ios_base::in );
-#endif
-  
-  if( !input.is_open() )
-    return false;
-  
-  const bool success = load_from_lsrm_spe( input );
-  
-  if( success )
-    filename_ = filename;
-  
-  return success;
-}//bool load_lsrm_spe_file( const std::string &filename );
-
-  
-bool SpecFile::load_from_lsrm_spe( std::istream &input )
-{
-  if( !input.good() )
-    return false;
-  
-  const istream::pos_type orig_pos = input.tellg();
-  
-  try
-  {
-    input.seekg( 0, ios::end );
-    const istream::pos_type eof_pos = input.tellg();
-    input.seekg( orig_pos, ios::beg );
-    const size_t filesize = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    if( filesize > 512*1024 )
-      throw runtime_error( "File to large to be LSRM SPE" );
-    
-    const size_t initial_read = std::min( filesize, size_t(2048) );
-    string data( initial_read, '\0' );
-    input.read( &(data[0]), initial_read );
-    
-    const size_t spec_tag_pos = data.find("SPECTR=");
-    if( spec_tag_pos == string::npos )
-      throw runtime_error( "Couldnt find SPECTR" );
-    
-    const size_t spec_start_pos = spec_tag_pos + 7;
-    const size_t nchannel = (filesize - spec_start_pos) / 4;
-    if( nchannel < 128 )
-      throw runtime_error( "Not enough channels" );
-    
-    if( nchannel > 68000 )
-      throw runtime_error( "To many channels" );
-    
-    //We could have the next test, but lets be loose right now.
-    //if( ((filesize - spec_start_pos) % 4) != 0 )
-    //  throw runtime_error( "Spec size not multiple of 4" );
-    
-    auto getval = [&data]( const string &tag ) -> string {
-      const size_t pos = data.find( tag );
-      if( pos == string::npos )
-        return "";
-      
-      const size_t value_start = pos + tag.size();
-      const size_t endline = data.find_first_of( "\r\n", value_start );
-      if( endline == string::npos )
-        return "";
-      
-      const string value = data.substr( pos+tag.size(), endline - value_start );
-      return SpecUtils::trim_copy( value );
-    };//getval
-    
-    auto meas = make_shared<Measurement>();
-    
-    string startdate = getval( "MEASBEGIN=" );
-    if( startdate.empty() )
-    {
-      startdate = getval( "DATE=" );
-      startdate += " " + getval( "TIME=" );
-    }
-    
-    meas->start_time_ = SpecUtils::time_from_string( startdate.c_str() );
-    
-    {
-      const string tlive = getval("TLIVE=");
-      if( !SpecUtils::parse_float( tlive.c_str(), tlive.size(), meas->live_time_ ) )
-        meas->live_time_ = 0.0f;
-      const string treal = getval("TREAL=");
-      if( !SpecUtils::parse_float( treal.c_str(), treal.size(), meas->real_time_ ) )
-        meas->real_time_ = 0.0f;
-    }
-    
-    instrument_id_ = getval( "DETECTOR=" );
-    
-    const string energy = getval( "ENERGY=" );
-    vector<float> cal_coeffs;
-    if( SpecUtils::split_to_floats( energy, cal_coeffs ) )
-    {
-      try
-      {
-        auto newcal = make_shared<EnergyCalibration>();
-        newcal->set_polynomial( nchannel, cal_coeffs, {} );
-        meas->energy_calibration_ = newcal;
-      }catch( std::exception &e )
-      {
-        meas->parse_warnings_.push_back( "Energy calibration invalid: " + string(e.what()) );
-      }
-    }//if( parsed energy cal coefficients )
-    
-    const string comment = getval( "COMMENT=" );
-    if( !comment.empty() )
-      remarks_.push_back( comment );
-    
-    const string fwhm = getval( "FWHM=" );
-    if( !fwhm.empty() )
-      remarks_.push_back( "FWHM=" + fwhm );
-    
-    //Other things we could look for:
-    //"SHIFR=", "NOMER=", "CONFIGNAME=", "PREPBEGIN=", "PREPEND=", "OPERATOR=",
-    //"GEOMETRY=", "SETTYPE=", "CONTTYPE=", "MATERIAL=", "DISTANCE=", "VOLUME="
-    //"WEIGHT=", "R_I_D=", "FILE_SPE="
-    
-    if( initial_read < filesize )
-    {
-      data.resize( filesize, '\0' );
-      input.read( &(data[initial_read]), filesize-initial_read );
-    }
-    
-    vector<int32_t> spectrumint( nchannel, 0 );
-    memcpy( &(spectrumint[0]), &(data[spec_start_pos]), 4*nchannel );
-    
-    meas->gamma_count_sum_ = 0.0f;
-    auto channel_counts = make_shared<vector<float>>(nchannel);
-    for( size_t i = 0; i < nchannel; ++i )
-    {
-      (*channel_counts)[i] = static_cast<float>( spectrumint[i] );
-      meas->gamma_count_sum_ += (*channel_counts)[i];
-    }
-    meas->gamma_counts_ = channel_counts;
-    
-    measurements_.push_back( meas );
-
-    cleanup_after_load();
-
-    return true;
-  }catch( std::exception & )
-  {
-    reset();
-    input.clear();
-    input.seekg( orig_pos, ios::beg );
-  }//try / catch to parse
-
-  return false;
-}//bool load_from_lsrm_spe( std::istream &input );
-
-
 // =============================================================================
 //  SpectraLine (LSRM, Russia) family parsers.
 //
@@ -1017,6 +854,7 @@ bool SpecFile::load_from_spectraline_spe( std::istream &input )
       if( !line_starts_with("PROGVERSION=", 12)
           && !line_starts_with("SHIFR=",      6)
           && !line_starts_with("MEASBEGIN=", 10)
+          && !line_starts_with("DATE=",       5)
           && !line_starts_with("TLIVE=",      6) )
       {
         throw runtime_error( "Not an LSRM/SpectraLine SPE header" );

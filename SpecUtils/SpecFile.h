@@ -169,8 +169,6 @@ enum class ParserType : int
   SpectraLine,
   /** ORTEC list mode (.lis) from at least digiBASE(-E) detectors. */
   OrtecListMode,
-  /** LSRM text based format. */
-  LsrmSpe,
   /** TKA text based format. */
   Tka,
   /** MultiAct binary format - only partially supported. */
@@ -185,6 +183,10 @@ enum class ParserType : int
   Json,
   /** CAEN Hexagon MCA gxml format. */
   CaenHexagonGXml,
+  /** ASPECT (NPC "Aspect", Dubna, Russia) binary .spc format, unrelated to ORTEC/IAEA formats handled by #Spc. */
+  AspectSpc,
+  /** GADRAS-lineage ASCII (.asc/.ASC) format; related to the PCF format. */
+  Asc,
 #if( SpecUtils_ENABLE_URI_SPECTRA )
   /** The URI defined format; e.g., from a QR-code */
   Uri,
@@ -1776,6 +1778,7 @@ public:
   virtual bool load_N42_file( const std::string &filename );
   bool load_pcf_file( const std::string &filename );
   bool load_spc_file( const std::string &filename );
+  bool load_aspect_spc_file( const std::string &filename );
   bool load_chn_file( const std::string &filename );
   bool load_iaea_file( const std::string &filename );
   bool load_binary_exploranium_file( const std::string &file_name );
@@ -1787,8 +1790,9 @@ public:
   bool load_spectroscopic_daily_file( const std::string &filename );
   bool load_amptek_file( const std::string &filename );
   bool load_ortec_listmode_file( const std::string &filename );
-  bool load_lsrm_spe_file( const std::string &filename );
   bool load_tka_file( const std::string &filename );
+  /** Load a GADRAS-lineage ASCII (.asc/.ASC) file. */
+  bool load_asc_file( const std::string &filename );
   bool load_multiact_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
@@ -1830,7 +1834,12 @@ public:
   //  spectrum (I didnt have any multi-spectrum files to view structure)
   bool load_from_iaea_spc( std::istream &input );
   bool load_from_binary_spc( std::istream &input );
-  
+
+  /** Loads a single spectrum from the ASPECT binary .spc format.  On failure,
+   resets the stream to its original position and sets *this to the reset state.
+   */
+  bool load_from_aspect_spc( std::istream &input );
+
   //load_from_N42_document(...): loads information from the N42 document, either
   //  2006 or 2012 variants.
   //  May throw.  Returns success status.
@@ -1877,9 +1886,6 @@ public:
   //load_from_ortec_listmode(...): listmode data from ORTEC digiBASE (digibase-E
   //  and PRO list format not supported yet).
   bool load_from_ortec_listmode( std::istream &input );
-  
-  /** Load LSRM SPE file. */
-  bool load_from_lsrm_spe( std::istream &input );
 
   /** Load SpectraLine .spe (extended LSRM Windows-1251 ASCII + raw int32-LE
    spectrum) from a stream. */
@@ -1897,7 +1903,16 @@ public:
 
   /** Load TKA file */
   bool load_from_tka( std::istream &input );
-  
+
+  /** Load a GADRAS-lineage ASCII (.asc/.ASC) file from a stream.
+   Handles the three known variants: a plain single-column
+   "<nchan> <live> <real> -1" header, a bare channel-count header with one or
+   more "! Record #" delimited records, and the "<nchan> ECAL ..." header
+   (optionally with a PCF-style fixed-width metadata block).  Returns false and
+   makes no changes to this SpecFile if the input is not a recognized ASC file.
+   */
+  bool load_from_asc( std::istream &input );
+
   /** Load MultiAct SPM file - only barely supported (currently only extracts
    channel counts)
    */

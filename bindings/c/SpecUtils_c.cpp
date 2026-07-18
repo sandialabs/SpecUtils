@@ -73,8 +73,6 @@ static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_SpectraLi
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_OrtecListMode) == static_cast<int>(SpecUtils::ParserType::OrtecListMode),
               "SpecUtils_ParserType needs updating" );
-static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_LsrmSpe) == static_cast<int>(SpecUtils::ParserType::LsrmSpe),
-              "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Tka) == static_cast<int>(SpecUtils::ParserType::Tka),
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_MultiAct) == static_cast<int>(SpecUtils::ParserType::MultiAct),
@@ -88,6 +86,10 @@ static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_ScanDataX
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Json) == static_cast<int>(SpecUtils::ParserType::Json),
               "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_CaenHexagonGXml) == static_cast<int>(SpecUtils::ParserType::CaenHexagonGXml),
+              "SpecUtils_ParserType needs updating" );
+static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_AspectSpc) == static_cast<int>(SpecUtils::ParserType::AspectSpc),
+              "SpecUtils_ParserType needs updating" );
+static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Asc) == static_cast<int>(SpecUtils::ParserType::Asc),
               "SpecUtils_ParserType needs updating" );
 #if( SpecUtils_ENABLE_URI_SPECTRA )
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Uri) == static_cast<int>(SpecUtils::ParserType::Uri),

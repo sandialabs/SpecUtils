@@ -107,6 +107,7 @@ set( sources
      src/SpecFile_cnf.cpp
      src/SpecFile_n42.cpp
      src/SpecFile_spc.cpp
+     src/SpecFile_aspect.cpp
      src/SpecFile_chn.cpp
      src/SpecFile_spe.cpp
      src/SpecFile_csv.cpp
@@ -116,6 +117,7 @@ set( sources
      src/SpecFile_lzs.cpp
      src/SpecFile_phd.cpp
      src/SpecFile_tka.cpp
+     src/SpecFile_asc.cpp
      src/SpecFile_lsrm.cpp
      src/SpecFile_mca.cpp
      src/SpecFile_spmdf.cpp

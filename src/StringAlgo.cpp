@@ -1724,6 +1724,91 @@ namespace SpecUtils
   }//vector<float> split_to_floats( ... )
   
 
+namespace
+{
+  // Windows-1251 (Cyrillic) -> Unicode code point for bytes 0x80..0xFF.
+  // 0xFFFF marks the single undefined cp1251 slot (0x98).
+  const uint16_t kCp1251Hi[128] = {
+    0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021, // 80-87
+    0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F, // 88-8F
+    0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 90-97
+    0xFFFF, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F, // 98-9F
+    0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7, // A0-A7
+    0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407, // A8-AF
+    0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7, // B0-B7
+    0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457, // B8-BF
+    0x0410, 0x0411, 0x0412, 0x0413, 0x0414, 0x0415, 0x0416, 0x0417, // C0-C7
+    0x0418, 0x0419, 0x041A, 0x041B, 0x041C, 0x041D, 0x041E, 0x041F, // C8-CF
+    0x0420, 0x0421, 0x0422, 0x0423, 0x0424, 0x0425, 0x0426, 0x0427, // D0-D7
+    0x0428, 0x0429, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F, // D8-DF
+    0x0430, 0x0431, 0x0432, 0x0433, 0x0434, 0x0435, 0x0436, 0x0437, // E0-E7
+    0x0438, 0x0439, 0x043A, 0x043B, 0x043C, 0x043D, 0x043E, 0x043F, // E8-EF
+    0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447, // F0-F7
+    0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F, // F8-FF
+  };
+
+  // Encode a Unicode code point into UTF-8, appending to `out`.
+  void append_utf8_codepoint( std::string &out, uint32_t cp )
+  {
+    if( cp < 0x80 )
+    {
+      out.push_back( static_cast<char>(cp) );
+    }else if( cp < 0x800 )
+    {
+      out.push_back( static_cast<char>( 0xC0 | (cp >> 6) ) );
+      out.push_back( static_cast<char>( 0x80 | (cp & 0x3F) ) );
+    }else if( cp < 0x10000 )
+    {
+      out.push_back( static_cast<char>( 0xE0 | (cp >> 12) ) );
+      out.push_back( static_cast<char>( 0x80 | ((cp >> 6) & 0x3F) ) );
+      out.push_back( static_cast<char>( 0x80 | (cp & 0x3F) ) );
+    }else
+    {
+      out.push_back( static_cast<char>( 0xF0 | (cp >> 18) ) );
+      out.push_back( static_cast<char>( 0x80 | ((cp >> 12) & 0x3F) ) );
+      out.push_back( static_cast<char>( 0x80 | ((cp >> 6) & 0x3F) ) );
+      out.push_back( static_cast<char>( 0x80 | (cp & 0x3F) ) );
+    }
+  }//void append_utf8_codepoint( std::string &out, uint32_t cp )
+}//namespace
+
+
+std::string cp1251_to_utf8( const std::string &src )
+{
+  // If the input is already valid UTF-8 AND contains at least one non-ASCII (multi-byte)
+  // sequence, it is almost certainly genuine UTF-8, not cp1251 - real cp1251 Cyrillic text
+  // interpreted as UTF-8 is (essentially always) invalid, because cp1251 lowercase letters
+  // (0xE0-0xFF) form UTF-8 lead bytes that need continuation bytes that Cyrillic text does
+  // not supply.  Passing such input through unchanged avoids corrupting already-UTF-8 text.
+  // (Pure-ASCII input is identical under either interpretation, so the multi-byte check just
+  //  keeps the intent explicit; a single stray cp1251 byte is invalid UTF-8 and still gets
+  //  converted below.)
+  bool has_non_ascii = false;
+  for( unsigned char b : src )
+  {
+    if( b >= 0x80 ){ has_non_ascii = true; break; }
+  }
+
+  if( has_non_ascii && valid_utf8( src.data(), src.size() ) )
+    return src;
+
+  std::string out;
+  out.reserve( src.size() );
+  for( unsigned char b : src )
+  {
+    if( b < 0x80 )
+    {
+      out.push_back( static_cast<char>(b) );
+    }else
+    {
+      const uint16_t cp = kCp1251Hi[b - 0x80];
+      append_utf8_codepoint( out, (cp == 0xFFFF) ? 0xFFFD : cp );
+    }
+  }
+  return out;
+}//std::string cp1251_to_utf8( const std::string &src )
+
+
 std::string convert_from_utf16_to_utf8(const std::wstring &winput)
 {
 #ifdef _WIN32
