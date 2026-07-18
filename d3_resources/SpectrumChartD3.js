@@ -4019,18 +4019,20 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   if( self.refLines ){
     self.refLines.forEach( function(input) {
       let lines = getLinesInRange(self.xScale.domain(),input.lines);
-      input.maxVisibleAmp = d3.max(lines, function(d){return d.h;});  /*same as lines[0].parent.maxVisibleAmp = ... */
+      /* Include the uncorrected height (d.hu, cascade summing-out) so the shaded
+         "lost" segment never overflows the top of the chart. */
+      input.maxVisibleAmp = d3.max(lines, function(d){return Math.max(d.h, d.hu||0);});  /*same as lines[0].parent.maxVisibleAmp = ... */
       const threshold = disp_thresh * input.maxVisibleAmp;
-      lines = lines.filter(function(d) { return (d.h >= threshold) || d.major; });
+      lines = lines.filter(function(d) { return (Math.max(d.h, d.hu||0) >= threshold) || d.major; });
       reflines = reflines.concat( lines );
     });
   }
 
   if( !is_zoomming && self.currentKineticRefLine ){
     let lines = getLinesInRange(self.xScale.domain(),self.currentKineticRefLine.lines);
-    self.currentKineticRefLine.maxVisibleAmp = d3.max(lines, function(d){return d.h;});
+    self.currentKineticRefLine.maxVisibleAmp = d3.max(lines, function(d){return Math.max(d.h, d.hu||0);});
     const threshold = disp_thresh * self.currentKineticRefLine.maxVisibleAmp;
-    lines = lines.filter(function(d) { return (d.h >= threshold) || d.major; });
+    lines = lines.filter(function(d) { return (Math.max(d.h, d.hu||0) >= threshold) || d.major; });
     reflines = reflines.concat( lines );
   }
 
@@ -4073,7 +4075,18 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   // Reference-line heights scale linearly with branching ratio. A log mapping was tried
   // (using yScale on a scaled-data equivalent) but gave poor visual results.
   const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp,h-2); };
-  
+  // The no-summing (uncorrected) top, when cascade summing changed the height.
+  const y2Hu = function(d){ return Math.min(h - (h-m)*d.hu/d.parent.maxVisibleAmp,h-2); };
+  // Cascade summing effects (d.hu = the height WITHOUT summing):
+  //  - summing-OUT (d.hu > d.h): the line is shorter than no-summing; the solid
+  //    line stops at d.h and a translucent segment shows the amplitude LOST up to d.hu.
+  //  - summing-IN  (d.h > d.hu): the line is taller than no-summing; the solid line
+  //    stops at the no-summing height d.hu and a dashed segment shows the amplitude
+  //    GAINED up to d.h.
+  const isGain = function(d){ return (typeof d.hu === "number") && (d.h > d.hu*1.0001); };
+  const isLoss = function(d){ return (typeof d.hu === "number") && (d.hu > d.h*1.0001); };
+  const y2Solid = function(d){ return isGain(d) ? y2Hu(d) : y2Lin(d); };
+
   /*
   const y2Log = function(d){
     // Map so that b.r. of zero will give a value at the bottom of the y-axis, and
@@ -4083,12 +4096,40 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     return Math.min( self.yScale( equiv_data ), h-2 );
   };
   */
-  
+
   gy.select("line")
     .attr("stroke-width", self.options.refLineWidth )
-    .attr("y2", y2Lin )
+    .attr("y2", y2Solid )
     //.attr("y2", y2Log )
     .attr("y1", h );  //needed for initial load sometimes
+
+  // Summing-OUT: translucent "lost" segment from the shrunk top (d.h) up to the
+  //  no-summing top (d.hu).
+  gy.select("line.sumout-lost").remove();
+  gy.filter( isLoss )
+    .append("line")
+    .attr("class", "sumout-lost")
+    .style("opacity", 0.35)
+    .attr("stroke", stroke )
+    .attr("stroke-width", self.options.refLineWidth )
+    .attr("y1", y2Hu )
+    .attr("y2", y2Lin )
+    .attr("x1", 0)
+    .attr("x2", 0);
+
+  // Summing-IN: dashed "gained" segment from the no-summing top (d.hu) up to the
+  //  enhanced top (d.h), so a peak boosted by coincidence summing stands out.
+  gy.select("line.sumin-gain").remove();
+  gy.filter( isGain )
+    .append("line")
+    .attr("class", "sumin-gain")
+    .style("stroke-dasharray", "3,2")
+    .attr("stroke", stroke )
+    .attr("stroke-width", self.options.refLineWidth )
+    .attr("y1", y2Hu )
+    .attr("y2", y2Lin )
+    .attr("x1", 0)
+    .attr("x2", 0);
 
   // Add dotted extension lines for major reference lines (only if refLineVerbosity >= 2)
   if( self.options.refLineVerbosity >= 2 ) {
@@ -4507,7 +4548,22 @@ SpectrumChartD3.prototype.updateRefLineDisplay = function( linedata, refLineSour
     if( detector )
       attTxt = (attTxt ? (attTxt + ' with a ' + detector) : 'Assuming a ' + detector);
   }
-  
+
+  // Coincidence (cascade) summing effect.  A pure sum peak is labelled as such; a
+  //  real line whose height was pulled down by summing-out (d.hu = uncorrected
+  //  height) shows the fractional amplitude lost.
+  let sumTxt = "";
+  if( linedata.particle === 'cascade-sum' ) {
+    sumTxt = "Coincidence sum peak";
+  } else if( (typeof linedata.hu === "number") && (linedata.hu > 0) ) {
+    // pct > 0 => summing-in gain; pct < 0 => summing-out loss.
+    const pct = Math.round( 100.0 * ((sf / linedata.hu) - 1.0) );
+    if( pct > 0 )
+      sumTxt = "Coincidence summing: +" + pct + "% of amplitude";
+    else if( pct < 0 )
+      sumTxt = "Coincidence summing: −" + (-pct) + "% of amplitude";
+  }
+
   const svgtxt = self.refLineInfoTxt.select("text")
                    .attr("dy", "1em")
                    .attr("fill", refLineSource.color || "#000");
@@ -4519,6 +4575,8 @@ SpectrumChartD3.prototype.updateRefLineDisplay = function( linedata, refLineSour
     svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( textdescrip );
     if( txt )
       svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( txt );
+    if( sumTxt )
+      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( sumTxt );
     if( attTxt )
       svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( attTxt );
   }
