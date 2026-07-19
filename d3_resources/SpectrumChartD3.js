@@ -346,37 +346,89 @@ SpectrumChartD3 = function(elem, options) {
   /*
   DOM nesting, event listeners, and coordinate frames:
 
-   _________________________________________________
-  |                    <body>                       |
-  |   ___________________________________________   |
-  |  |             this.chart <div>              |  |
-  |  |   _____________________________________   |  |
-  |  |  |           this.svg <svg>            |  |  |
-  |  |  |   title / x-axis labels / y-axis    |  |  |
-  |  |  |   labels live in the gap between    |  |  |
-  |  |  |   svg edges and the vis g below.    |  |  |
-  |  |  |   _______________________________   |  |  |
-  |  |  |  |   this.vis <g>  (plot area)   |  |  |  |
-  |  |  |  |    this.plot rect + peaks +   |  |  |  |
-  |  |  |  |    ref-lines + drag visuals   |  |  |  |
-  |  |  |  |_______________________________|  |  |  |
-  |  |  |_____________________________________|  |  |
-  |  |___________________________________________|  |
-  |_________________________________________________|
+   ____________________________________________________________________________
+  |                                  <body>                                    |
+  |   ______________________________________________________________________   |
+  |  |                          this.chart <div>                            |  |
+  |  |   ________________________________________________________________   |  |
+  |  |  |                        this.svg <svg>                          |  |  |
+  |  |  |  svg-level <g>/<text> siblings of vis (in the padding gap or   |  |  |
+  |  |  |  overlaid): chart title, x/y-axis titles, this.legend,         |  |  |
+  |  |  |  this.scalerWidget (y-scale sliders), this.sliderChart         |  |  |
+  |  |  |  (x-axis slider: slider-plot rect, sliderChartBody with        |  |  |
+  |  |  |  sliderLine{i} paths, sliderBox, drag handles, close btn)      |  |  |
+  |  |  |   ____________________________________________________________ |  |  |
+  |  |  |  | this.vis <g>  (the plot area), children in paint order:    ||  |  |
+  |  |  |  |   this.plot bg rect ("chartarea")                          ||  |  |
+  |  |  |  |   this.chartBody <g, clipped>: spectrumline{i} +           ||  |  |
+  |  |  |  |     templatepath{i} paths                                  ||  |  |
+  |  |  |  |   this.peakVis <g, clipped>: peak fill/outline/continuum   ||  |  |
+  |  |  |  |     paths (each carrying node.__peakInfo) + peak labels    ||  |  |
+  |  |  |  |   yAxisBody / xAxisBody <g> (tick marks + numbers)         ||  |  |
+  |  |  |  |   xGridBody / yGridBody <g> (when grid on; inserted        ||  |  |
+  |  |  |  |     before .refLineInfo)                                   ||  |  |
+  |  |  |  |   g.ref reference lines, this.refLineInfo readout          ||  |  |
+  |  |  |  |   this.mouseInfo (bottom-right readout), this.peakInfo     ||  |  |
+  |  |  |  |   transient gesture visuals: #zoomInXBox/#zoomInYBox +     ||  |  |
+  |  |  |  |     texts, #deletePeaksBox, #countGammasBox, touch lines,  ||  |  |
+  |  |  |  |     #createPeakTouch* lines, recalibration* lines/clone,   ||  |  |
+  |  |  |  |     ROI drag boxes/lines                                   ||  |  |
+  |  |  |  |____________________________________________________________||  |  |
+  |  |  |________________________________________________________________|  |  |
+  |  |______________________________________________________________________|  |
+  |____________________________________________________________________________|
 
   this.vis is translated by (padding.leftComputed, padding.topComputed) inside
-  this.svg, which in turn fills this.chart.
+  this.svg, which fills this.chart.  this.sliderChart is translated to the strip
+  below the x-axis and its contents use their own full-data-range x mapping with
+  a scale(1, sliderChartHeight/size.height) squish on the line paths.
 
-  Event listeners are attached at TWO levels — chart catches events outside the
-  inner plot area (e.g. on axis labels), vis catches events on the plot itself:
-    chart : mousemove, mouseleave, mouseup, wheel, touch{start,end}
-    vis   : mousedown,            mouseup, wheel, touch{start,move,end,cancel}
-  Plus window.blur is routed through handleChartMouseLeave for alt-tab cleanup.
+  Event listeners:
+    vis     : mousedown, mouseup, wheel, touch{start,move,end,cancel}, mouseout
+              (kinetic ref-line cleanup) - the pointer gestures themselves
+    chart   : mousemove, mouseleave, mouseup, wheel, touch{start,end} - move/up
+              dispatch keeps working when the pointer leaves the plot area (e.g.
+              over the axes), and gesture-mode moves route from here
+    peakVis : mouseover/mousemove/mouseout/contextmenu, DELEGATED once for all
+              peak paths - handlers key off event.target.__peakInfo (paths
+              without it, e.g. the multi-peak continuum line, are ignored)
+    axis bodies + titles: mousedown.drag/touchstart.drag (axis drag-rescale),
+              dblclick / click (log-lin toggle), hover bolding
+    sliderChart parts: mousedown/touchstart/touchmove on the box + handles;
+              document-level mousemove/mouseup namespaced
+              ".sliderdrag"+chart.id while a slider drag is active
+    scalerWidget: mousedown/touchstart per slider + document-level tracking via
+              handleMouseMoveScaleFactorSlider through the chart mousemove
+    chart (roi drag): mousemove.roidrag/touchmove.roidrag installed only while
+              dragging a ROI edge
+    document.body + window: "mouseup.chart"+id -> handleCancelAllMouseEvents
+              (mouse released outside the chart), "blur.chart"+id ->
+              handleChartMouseLeave (alt-tab cleanup), "keydown.chart"+id
+    window CAPTURE-phase safety nets: touchend/touchcancel + pointerup/
+              pointercancel (Android WebView drops touchend on SVG paths); see
+              chartTouchEndSafety above
+  All document/window listeners are namespaced by chart.id (multi-chart safety)
+  and removed in destroy().
+
+  Gesture dispatch: pointer gestures resolve to one of the modes in
+  this._gestureModes (fitPeak/deletePeaks/countGammas/recalibrate/zoomX/zoomY);
+  mouse picks the mode once at mousedown from modifier keys (sticky in
+  leftDragMode), touch re-recognizes from finger geometry each touchmove (except
+  fitPeak, which latches).  See _initGestureModes for the per-mode move/up/
+  cancel slots and the order arrays.
 
   Coordinate frames:
-    d3.mouse(document.body)  -> page coords (used by right-click drag tracking)
-    d3.mouse(this.vis[0][0]) -> vis frame; (0,0) at top-left of plot area
-    getMousePos() returns [x_vis, y_vis, x_svg, y_svg]
+    d3.mouse(document.body)   -> page coords (right-click / one-finger pan track)
+    d3.mouse(this.vis[0][0])  -> vis frame; (0,0) at top-left of the plot area
+    d3.touches(this.vis[0][0])-> vis frame, one [x,y] per active touch
+    this.touchesOnChart       -> map of Touch objects keyed by identifier; their
+                                 pageX/pageY + recorded startX/startY are PAGE
+                                 coords (only differences are comparable against
+                                 vis-frame values)
+    getMousePos() returns [x_vis, y_vis, x_svg, y_svg] (svg values are stable
+    against mid-gesture y-axis-width changes; used by the zoom-out direction test)
+    xScale/yScale map energy/counts <-> vis-frame px; the slider chart positions
+    its box with a local full-range copy of xScale
   */
 
 
