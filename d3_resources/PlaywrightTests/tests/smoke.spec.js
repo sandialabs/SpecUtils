@@ -25,4 +25,34 @@ test.describe('smoke', () => {
     const back = await chart.energyAt( p.x );
     expect( Math.abs( back - e0 ) ).toBeLessThan( 1 );
   });
+
+  // PERF-07: the grids update in place (no remove/re-insert); tick nodes are reused by
+  // value, so minor/major classes are re-stamped and must never go stale or duplicate.
+  test('grid updates in place across zooms with correct minor/major styling', async ({ chart, page }) => {
+    await page.evaluate( () => { window.graph.setGridX( true ); window.graph.setGridY( true ); } );
+    await page.waitForTimeout( 60 );
+    await chart.mouseDrag( 300, 700, { yFrac: 0.5 } );    // zoom -> tick sets change, nodes reused
+    const info = await page.evaluate( () => {
+      const res = { bad: 0, major: 0, minor: 0, dupes: 0, majColor: null, minColor: null };
+      ['xgrid','ygrid'].forEach( cls => {
+        const seen = {};
+        document.querySelectorAll( 'g.' + cls + ' > g' ).forEach( t => {
+          const c = t.getAttribute('class');
+          if( c === 'tick' ){ res.major++; res.majColor = getComputedStyle(t).stroke; }
+          else if( c === 'tick minorgrid' ){ res.minor++; res.minColor = getComputedStyle(t).stroke; }
+          else res.bad++;
+          const key = cls + ':' + t.__data__;
+          if( seen[key] ) res.dupes++;
+          seen[key] = true;
+        } );
+      } );
+      return res;
+    } );
+    expect( info.bad, 'every grid tick classed tick or tick minorgrid' ).toBe( 0 );
+    expect( info.major ).toBeGreaterThan( 0 );
+    expect( info.minor ).toBeGreaterThan( 0 );
+    expect( info.dupes, 'no duplicated tick nodes after in-place updates' ).toBe( 0 );
+    expect( info.minColor, 'minor color differs from major' ).not.toBe( info.majColor );
+    expect( await chart.errors() ).toEqual( [] );
+  });
 });

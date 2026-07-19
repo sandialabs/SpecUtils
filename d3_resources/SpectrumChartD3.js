@@ -5640,20 +5640,20 @@ SpectrumChartD3.prototype.drawYTicks = function() {
     if( this.yGridBody ) {
       this.yGrid.tickValues( ytickvalues );
 
-      /*Since the number of grid lines might change (but call(self.yGrid) expects the same number) */
-      /*  we will remove, and re-add back in the grid... kinda a hack. */
-      /*  Could probably go back to manually drawing the grid lined and get rid */
-      /*  of yGrid and yGridBody... */
-      this.yGridBody.remove();
-      this.yGridBody = this.vis.insert("g", ".refLineInfo")
+      /* Update the grid in place (PERF-07): d3's axis join handles a changing tick count;
+         we just re-stamp the minor/major class on every tick BY VALUE, since the axis
+         reuses tick nodes keyed by value (so both index-based stamping and stale classes
+         would be wrong - the old code removed and re-created the whole <g> instead). */
+      const majorYVals = {};
+      ytick.forEach( function(t){ if( t.major ) majorYVals[t.value] = true; } );
+      this.yGridBody
         .attr("width", this.size.width )
         .attr("height", this.size.height )
-        .attr("class", "ygrid" )
-        .attr("transform", "translate(0,0)")
         .call( this.yGrid );
+      /* Minors keep the "tick" token - d3's axis join selects .tick, and dropping it
+         would orphan those nodes (duplicated ticks on the next update). */
       this.yGridBody.selectAll('g.tick')
-        .filter(function(d,i){return !ytick[i].major;} )
-        .attr("class","minorgrid");
+        .attr("class", function(d){ return majorYVals[d] ? "tick" : "tick minorgrid"; });
     }
 }
 
@@ -5916,16 +5916,17 @@ SpectrumChartD3.prototype.drawXTicks = function() {
 
   if( self.xGridBody ) {
     self.xGrid.tickValues( xtickvalues );
-    self.xGridBody.remove();
-    self.xGridBody = self.vis.insert("g", ".refLineInfo")
+
+    /* Update in place; re-stamp minor/major BY VALUE (see the y-grid note, PERF-07). */
+    const majorXVals = {};
+    xticks.forEach( function(t){ if( t.major ) majorXVals[t.value] = true; } );
+    self.xGridBody
           .attr("width", self.size.width )
           .attr("height", self.size.height )
-          .attr("class", "xgrid" )
           .attr("transform", "translate(0," + self.size.height + ")")
           .call( self.xGrid );
     self.xGridBody.selectAll('g.tick')
-      .filter(function(d,i){ return !xticks[i].major; } )
-      .attr("class","minorgrid");
+      .attr("class", function(d){ return majorXVals[d] ? "tick" : "tick minorgrid"; });
   }
 }//SpectrumChartD3.prototype.drawXTicks
 

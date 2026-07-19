@@ -132,7 +132,9 @@ svg.SpectrumChartD3 {
   stroke: var(--d3spec-grid-major-color, #b3b3b3);
 }
 
-.minorgrid {
+/* Minor grid ticks carry class "tick minorgrid" (the tick token is required by d3's axis
+   join); the extra .tick here outweighs the ".xgrid > .tick" major-color rule above. */
+.xgrid > .tick.minorgrid, .ygrid > .tick.minorgrid, .minorgrid {
   /* stroke-opacity: 50%; */
   stroke: var(--d3spec-grid-minor-color, #e6e6e6);
 }
