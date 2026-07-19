@@ -545,10 +545,39 @@ SpectrumChartD3 = function(elem, options) {
   this.chartBody = this.vis.append("g")
     .attr("clip-path", "url(#clip" + this.chart.id + ")");
 
+  /* Peak hover/context-menu listeners are DELEGATED here (PERF-01a): drawPeaks re-creates
+     the individual peak paths on every redraw, so per-path listeners meant four bindings +
+     closures per path per frame.  Each peak path carries its info object on `__peakInfo`
+     (set in draw_roi); events targeting paths without it (the multi-peak continuum line)
+     or non-outline fills are ignored, matching the old per-path attachment. */
+  const movePeakHandler = self.handleMouseMovePeak();
   self.peakVis = this.vis.append("g")
     .attr("class", "peakVis")
     .attr("transform","translate(0,0)")
-    .attr("clip-path", "url(#clip" + this.chart.id + ")");
+    .attr("clip-path", "url(#clip" + this.chart.id + ")")
+    .on("mouseover", function(){
+      const info = d3.event.target.__peakInfo;
+      if( info && info.isOutline )
+        self.highlightPeak( d3.event.target, true );
+    })
+    .on("mousemove", function(){
+      const info = d3.event.target.__peakInfo;
+      if( info && info.isOutline )
+        movePeakHandler();
+    })
+    .on("mouseout", function(){
+      const info = d3.event.target.__peakInfo;
+      if( info && info.isOutline )
+        self.handleMouseOutPeak( d3.event.target, undefined, info.paths );
+    })
+    .on("contextmenu", function(){
+      /* Suppress the WebView's native long-press menu on a peak path; our touchHold
+         timer handles the rightclicked emit. */
+      if( d3.event && d3.event.target.__peakInfo ){
+        d3.event.preventDefault();
+        d3.event.stopPropagation();
+      }
+    });
 
   /* add Chart Title */
   var title = this.options.txt.title;
@@ -7493,14 +7522,6 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
       var path = self.peakVis.append("path").attr("d", p );
 
-      function onRightClickOnPeak() {
-        // Suppress the WebView's native long-press menu on a peak path; our touchHold timer handles the rightclicked emit.
-        if (d3.event) {
-          d3.event.preventDefault();
-          d3.event.stopPropagation();
-        }
-      }
-
       var peakind = (num-1) % roi.peaks.length;
       var peak = roi.peaks[peakind];
       var peakColor = peak && peak.lineColor && peak.lineColor.length ? peak.lineColor : spectrum.peakColor;
@@ -7537,16 +7558,10 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       } else if( isOutline ) {
         path.attr("class", "peakOutline" )
       }
-      
-      if( isOutline ){
-        path.on("mouseover", function(){ self.highlightPeak(this,true); } )
-            .on("mousemove", self.handleMouseMovePeak())
-            .on("mouseout", function(d, peak) { self.handleMouseOutPeak(this, peak, pathsAndRange.paths); } )
-             ;
-      }
-    
-      /* For right-clicking on a peak */
-      path.on("contextmenu", onRightClickOnPeak);
+
+      /* Hover + context-menu handling is delegated to the peakVis group (see constructor);
+         the info object on the node is what the delegated handlers key off of. */
+      path.node().__peakInfo = info;
     });//pathsAndRange.paths.forEach( function(p,num){
 
     const p0 = (pathsAndRange.paths.length && roi.peaks.length) ? pathsAndRange.paths[0] : null;
