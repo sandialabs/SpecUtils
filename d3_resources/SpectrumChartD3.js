@@ -222,6 +222,13 @@ SpectrumChartD3 = function(elem, options) {
                    || (rd.templates && rd.templates.length));
   };
 
+  // True when at least one normal spectrum is loaded (templates dont count) - the
+  // common "is there anything to operate on" guard used throughout.
+  this.hasSpectrumData = function(){
+    const rd = self.rawData;
+    return !!( rd && rd.spectra && rd.spectra.length );
+  };
+
   this.min_max_x_values = function() {
     if( !self.hasAnyData() )
       return [-1,-1];
@@ -704,6 +711,17 @@ SpectrumChartD3.prototype.destroy = function() {
 SpectrumChartD3.prototype._bisecX = d3.bisector( function(d){ return d.x; } );
 SpectrumChartD3.prototype._bisecE = d3.bisector( function(d){ return d.e; } );
 SpectrumChartD3.prototype._bisecRaw = d3.bisector( function(d){ return d; } );
+
+/* Maps a point in a peak-label <text>'s local (untranslated/unrotated) coordinates into
+   peakVis coordinates: through the label's CTM, then back out of peakVis's (pass the
+   already-inverted matrix - callers reuse it across several corner points).
+   Shared by drawPeakLabels and highlightLabel. */
+SpectrumChartD3.prototype._txtToVisCoords = function( svgCtm, visCtmInv, x, y ){
+  const pt = this.svg.node().createSVGPoint(); //TODO: createSVGPoint() is deprecated
+  pt.x = x;
+  pt.y = y;
+  return pt.matrixTransform( svgCtm ).matrixTransform( visCtmInv );
+};
 
 /**
  * elem: The element can be a DOM element, or the object ID of a WObject
@@ -1251,7 +1269,7 @@ SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
   let self = this;
   let hasset = false;
   
-  if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra.length )
+  if( !this.hasSpectrumData() )
     return;
 
   this.rawData.spectra.forEach( function(spectrum) {
@@ -1699,7 +1717,7 @@ SpectrumChartD3.prototype.handlePanChart = function () {
   var self = this;
 
   var minx, maxx, bounds;
-  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length ){
+  if( !self.hasSpectrumData() ){
     minx = 0;
     maxx = 3000;
   }else {
@@ -1979,7 +1997,7 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     self.mousemove()();
 
     // If no data is loaded, then stop updating other mouse move parameters
-    if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
+    if( !self.hasSpectrumData()
         || self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown ){
       return;
     }
@@ -3066,7 +3084,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     }
 
     /*Dont do anything if there is no data */
-    if( !self.rawData || !self.rawData.spectra || self.rawData.spectra.length < 1 ){
+    if( !self.hasSpectrumData() ){
       return;
     }
 
@@ -4195,20 +4213,9 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   const isLoss = function(d){ return (typeof d.hu === "number") && (d.hu > d.h*1.0001); };
   const y2Solid = function(d){ return isGain(d) ? y2Hu(d) : y2Lin(d); };
 
-  /*
-  const y2Log = function(d){
-    // Map so that b.r. of zero will give a value at the bottom of the y-axis, and
-    //  the max visible b.r. will give a value at the maximum of the y-axis.  Doesnt give good results.
-    const ydomain = self.yScale.domain();
-    const equiv_data = ydomain[1] + (ydomain[0] - ydomain[1]) * (d.h / d.parent.maxVisibleAmp);
-    return Math.min( self.yScale( equiv_data ), h-2 );
-  };
-  */
-
   gy.select("line")
     .attr("stroke-width", self.options.refLineWidth )
     .attr("y2", y2Solid )
-    //.attr("y2", y2Log )
     .attr("y1", h );  //needed for initial load sometimes
 
   // Summing-OUT: translucent "lost" segment from the shrunk top (d.h) up to the
@@ -4240,29 +4247,29 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("x2", 0);
 
   // Add dotted extension lines for major reference lines (only if refLineVerbosity >= 2)
+  gy.select("line.major-extension").remove();
   if( self.options.refLineVerbosity >= 2 ) {
     const majorLines = gy.filter(function(d) { return d.major; });
-    
-    // Remove any existing major line extensions
-    gy.select("line.major-extension").remove();
-    
-    // Add dotted extension lines for major lines
-    const extension_dash = "" + self.options.refLineWidthHover + "," + 2*self.options.refLineWidthHover;
-    majorLines.append("line")
-      .attr("class", "major-extension")
-      .style("stroke-dasharray", extension_dash)
-      .style("opacity", 0.5)
-      .attr("stroke", stroke)
-      .attr("stroke-width", self.options.refLineWidth)
-      .attr("y1", function(d) { return y2Lin(d); })
-      .attr("y2", self.options.refLineTopPad)
-      .attr("x1", 0)
-      .attr("x2", 0);
-  } else {
-    // Remove any existing major line extensions if verbosity < 2
-    gy.select("line.major-extension").remove();
+    self._appendRefLineExtension( majorLines, "major-extension", stroke,
+                                  self.options.refLineWidth, function(d){ return y2Lin(d); } )
+        .style("opacity", 0.5);
   }
 }
+
+/* Appends the dotted vertical extension line drawn above a reference line; shared by the
+   always-on major-line extensions and the hover-only temp extension. */
+SpectrumChartD3.prototype._appendRefLineExtension = function( sel, cls, stroke, width, y1 ){
+  const dash = "" + this.options.refLineWidthHover + "," + 2*this.options.refLineWidthHover;
+  return sel.append("line")
+    .attr("class", cls)
+    .style("stroke-dasharray", dash)
+    .attr("stroke", stroke)
+    .attr("stroke-width", width)
+    .attr("y1", y1)
+    .attr("y2", this.options.refLineTopPad)
+    .attr("x1", 0)
+    .attr("x2", 0);
+};
 
 
 SpectrumChartD3.prototype.clearReferenceLines = function() {
@@ -4715,18 +4722,11 @@ SpectrumChartD3.prototype.applyLineStyling = function( lineElement, linedata, is
       const h = self.size.height;
       const m = self.options.refLineTopPad;
       const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp, h-2); };
-      const extension_dash = "" + self.options.refLineWidthHover + "," + 2*self.options.refLineWidthHover;
-      
+
       lineSelection.selectAll("line.temp-extension").remove();
-      lineSelection.append("line")
-        .attr("class", "temp-extension")
-        .style("stroke-dasharray", extension_dash) 
-        .attr("stroke", linedata.color ? linedata.color : linedata.parent.color)
-        .attr("stroke-width", self.options.refLineWidthHover)
-        .attr("y1", y2Lin(linedata))
-        .attr("y2", self.options.refLineTopPad)
-        .attr("x1", 0)
-        .attr("x2", 0);
+      self._appendRefLineExtension( lineSelection, "temp-extension",
+                                    (linedata.color ? linedata.color : linedata.parent.color),
+                                    self.options.refLineWidthHover, y2Lin(linedata) );
     } else if( !isHovered ) {
       lineSelection.selectAll("line.temp-extension").remove();
     }
@@ -4837,7 +4837,7 @@ SpectrumChartD3.prototype.addMouseInfoBox = function(){
 SpectrumChartD3.prototype.updateMouseCoordText = function() {
   var self = this;
 
-  if ( !d3.event || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+  if ( !d3.event || !self.hasSpectrumData() )
     return;
 
   const p = self.getMousePos();
@@ -5846,7 +5846,7 @@ SpectrumChartD3.prototype.drawXAxisArrows = function(show_arrow) {
 
     max_x = self.min_max_x_values()[1];
 
-    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || self.xScale.domain()[1] === max_x || (typeof show_arrow == 'boolean' && !show_arrow))            /* should be a better way to determine if can still pan */
+    if (!self.hasSpectrumData() || self.xScale.domain()[1] === max_x || (typeof show_arrow == 'boolean' && !show_arrow))            /* should be a better way to determine if can still pan */
       self.xAxisBody.select("path").attr("marker-end", null);
     else
       self.xAxisBody.select("path").attr("marker-end", "url(#arrowhead)");
@@ -5995,8 +5995,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   var self = this;
 
   // Cancel if the chart or raw data are not present
-  if (!self.chart || d3.select(self.chart).empty() || !self.rawData
-    || !self.rawData.spectra || !self.rawData.spectra.length || self.size.height<=0 ) {
+  if (!self.chart || d3.select(self.chart).empty() || !self.hasSpectrumData() || self.size.height<=0 ) {
     self.cancelXAxisSliderChart();
     return;
   }
@@ -6093,13 +6092,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
         .attr("x", 0)
         .attr("y", 0);
 
-    // For adding peaks into slider chart 
-    // self.sliderPeakVis = self.sliderChart.append('g')
-    //   .attr("id", "sliderPeakVis")
-    //   .attr("class", "peakVis")
-    //   .attr("transform", "translate(0,0)")
-    //   .attr("clip-path", "url(#sliderclip" + this.chart.id + ")");
-
     if( self.options.showSliderCloseBtn ){
       // Add a close icon in upper right-hand side of self.sliderChart 
       //  Note: we define a close button for the legend using a path instead - should probably unify which method we want to use
@@ -6129,21 +6121,6 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       .attr("height", self.size.sliderChartHeight);
   self.sliderChart
       .attr("transform", "translate(" + 0.5*(self.cx - self.size.sliderChartWidth) + "," + (this.chart.clientHeight - self.size.sliderChartHeight) + ")");
-  
-  // Commented out for adding peaks into slider chart sometime later
-  // self.sliderPeakVis.selectAll('*').remove();
-  // self.peakVis.select(function() {
-  //   this.childNodes.forEach(function(path) {
-  //     path = d3.select(path);
-  //     self.sliderPeakVis.append('path')
-  //       .attr("d", path.attr('d'))
-  //       .attr("class", path.attr('class'))
-  //       .attr("fill-opacity", path.attr('fill-opacity'))
-  //       .attr("stroke-width", path.attr('stroke-width'))
-  //       .attr("stroke", path.attr("stroke"))
-  //       .attr("transform", "translate(0," + (self.size.height + extraPadding + self.padding.sliderChart) + ")");
-  //   });
-  // });
 
   // Add the slider draggable box and edges
   if (!self.sliderBox) {
@@ -6856,7 +6833,7 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
   }
 
   return function() {
-    if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+    if (!self.hasSpectrumData() )
       return;
     if (!self.currentlyAdjustingSpectrumScale)
       return;
@@ -7756,19 +7733,14 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
     const svgCtm = label.node().getCTM();  // Get the transformation matrix (CTM) of the text element
     const labelBBox = label.node().getBBox();
       
-    const fromTxtToVisCoords = function(x,y){
-      const pt = self.svg.node().createSVGPoint(); //TODO: createSVGPoint() is depreciated
-      pt.x = x;
-      pt.y = y;
-      const svgPoint = pt.matrixTransform(svgCtm); // Apply the transformation matrix to the point
-      return svgPoint.matrixTransform( visCtm.inverse() ); // Get coordinates relative to self.peakVis
-    };
-    
+    const visCtmInv = visCtm.inverse();
+    const toVis = function(x,y){ return self._txtToVisCoords( svgCtm, visCtmInv, x, y ); };
+
     let data = {};
-    data.initialPos = [ fromTxtToVisCoords( 0, 0 ), //bottom-left of text
-      fromTxtToVisCoords( labelBBox.width, 0 ), //bottom right of text
-      fromTxtToVisCoords( labelBBox.width, -labelBBox.height ), //top-right of text
-      fromTxtToVisCoords( 0, -labelBBox.height ) //top-left of text
+    data.initialPos = [ toVis( 0, 0 ), //bottom-left of text
+      toVis( labelBBox.width, 0 ), //bottom right of text
+      toVis( labelBBox.width, -labelBBox.height ), //top-right of text
+      toVis( 0, -labelBBox.height ) //top-left of text
     ];
     
     data.offset = [0, -10];
@@ -7970,7 +7942,7 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   const self = this;
 
   /* If no spectra - bail */
-  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
+  if( !self.hasSpectrumData()
       || self.rawData.spectra[0].y.length < 10 ) {
     return;
   }
@@ -8978,7 +8950,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
 SpectrumChartD3.prototype.handleMouseUpZoomX = function () {
   var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length || !self.zooming_plot)
+  if (!self.hasSpectrumData() || !self.zooming_plot)
     return;
 
   if( self.zooming_plot && self.lastMouseMovePos ) {
@@ -9292,7 +9264,7 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInX = function() {
 
   //Now need to make sure we arent zooming in too much or going past range of data.
   var minx, maxx, bounds, foreground;
-  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length ){
+  if( !self.hasSpectrumData() ){
     minx = 0;
     maxx = 3000;
   }else {
@@ -9460,7 +9432,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   /* (other modes' visuals were cancelled by the gesture-mode dispatch) */
   if (!self.leftMouseDown)
     return;
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) 
+  if (!self.hasSpectrumData()) 
     return;
 
   /* Clamp the mouse move position to the bounds of the vis */
@@ -9818,7 +9790,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     return;
   }
   
-  if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+  if( !self.hasSpectrumData() )
     return;
   
   let isMouseEvent = true;
@@ -10166,7 +10138,7 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
 SpectrumChartD3.prototype.updatePeakInfo = function() {
   const self = this;
   
-  if (!this.rawData || !this.rawData.spectra || !this.rawData.spectra.length)
+  if (!this.hasSpectrumData())
     return;
   
   const energy = this.xScale.invert( this.getMousePos()[0] );
@@ -10402,24 +10374,19 @@ SpectrumChartD3.prototype.highlightLabel = function( labelEl, isFromPeakBeingHig
   const svgCtm = thislabel.node().getCTM();  // Get the transformation matrix (CTM) of the text element
   const visCtm = self.peakVis.node().getCTM(); // Get x-form for self.peakVis, which we need coordinates relative to
   
-  const fromTxtToVisCoords = function(x,y){
-    const pt = self.svg.node().createSVGPoint(); //TODO: createSVGPoint() is depreciated
-    pt.x = x;
-    pt.y = y;
-    const svgPoint = pt.matrixTransform(svgCtm); // Apply the transformation matrix to the point
-    return svgPoint.matrixTransform( visCtm.inverse() ); // Get coordinates relative to self.peakVis
-  };
+  const visCtmInv = visCtm.inverse();
+  const toVis = function(x,y){ return self._txtToVisCoords( svgCtm, visCtmInv, x, y ); };
   
   const labelbbox = thislabel.node().getBBox(); // This is untranslated/unrotated
   
-  const labelEndpoints = [ fromTxtToVisCoords( 0, 0 ), //bottom-left of text
-    fromTxtToVisCoords( 0, -0.5*labelbbox.height ), //mid-height-left of text
-    fromTxtToVisCoords( 0.5*labelbbox.width, 0 ), //bottom, middle-x of text
-    fromTxtToVisCoords( labelbbox.width, 0 ), //bottom right of text
-    fromTxtToVisCoords( labelbbox.width, -0.5*labelbbox.height ), //mid-height-right of text
-    fromTxtToVisCoords( labelbbox.width, -labelbbox.height ), //top-right of text
-    fromTxtToVisCoords( 0.5*labelbbox.width, -labelbbox.height ), //top middle-x of text
-    fromTxtToVisCoords( 0, -labelbbox.height ) //top-left of text
+  const labelEndpoints = [ toVis( 0, 0 ), //bottom-left of text
+    toVis( 0, -0.5*labelbbox.height ), //mid-height-left of text
+    toVis( 0.5*labelbbox.width, 0 ), //bottom, middle-x of text
+    toVis( labelbbox.width, 0 ), //bottom right of text
+    toVis( labelbbox.width, -0.5*labelbbox.height ), //mid-height-right of text
+    toVis( labelbbox.width, -labelbbox.height ), //top-right of text
+    toVis( 0.5*labelbbox.width, -labelbbox.height ), //top middle-x of text
+    toVis( 0, -labelbbox.height ) //top-left of text
   ];
   
   const visPt = labelEndpoints[0];
@@ -10513,7 +10480,7 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   var self = this;
 
   // Don't do anything if no data exists
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+  if (!self.hasSpectrumData())
     return;
 
   // Don't do anything else if option is not toggled
@@ -10574,7 +10541,7 @@ SpectrumChartD3.prototype.isTouchDevice = function() {
 SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
   var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+  if (!self.hasSpectrumData())
     return false;
 
   let numberOfSpectraPeaks = 0;
@@ -10594,7 +10561,7 @@ SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
 SpectrumChartD3.prototype.getSpectrumByID = function(id) {
   var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+  if (!self.hasSpectrumData())
     return;
 
   for (let i = 0; i < self.rawData.spectra.length; i++) {
@@ -10611,7 +10578,7 @@ SpectrumChartD3.prototype.getSpectrumByID = function(id) {
 SpectrumChartD3.prototype.getSpectrumTitles = function() {
   var self = this;
 
-  if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length)
+  if (!self.hasSpectrumData())
     return;
 
   var result = [];
