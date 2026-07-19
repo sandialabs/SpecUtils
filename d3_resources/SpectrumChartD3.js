@@ -621,6 +621,8 @@ SpectrumChartD3 = function(elem, options) {
   this.kineticRefLineCycleTimer = null;
   
   d3.select(window).on("keydown.chart" + this.chart.id, this.keydown());
+
+  this._initGestureModes();
 }
 
 /** Destructor method to properly clean up global event handlers. Call this before removing/destroying a chart. */
@@ -1683,6 +1685,56 @@ SpectrumChartD3.prototype.handlePanChart = function () {
 }
 
 
+/** -------------- Gesture-mode dispatch --------------
+ The chart has six pointer "drag modes": fitPeak, deletePeaks, countGammas, recalibrate,
+ zoomX and zoomY.  For MOUSE the mode is chosen once from the modifier keys at mousedown
+ (sticky in this.leftDragMode until mouseup / ESC); for TOUCH it is re-recognized from
+ finger geometry every touchmove (except fitPeak, which latches via leftDragMode).
+ This table is the single source of truth for what runs per mode.  ROI-edge dragging and
+ the y-scaler sliders are deliberately NOT modes - they preempt mode dispatch entirely. */
+SpectrumChartD3.prototype._initGestureModes = function() {
+  const self = this;
+  this._gestureModes = {
+    fitPeak: {
+      mouseMove: function(){ self.handleMouseMovePeakFit(); },
+      cancelMouse: null,              /* no mouse-side transient visuals of its own */
+      cancelOthersOnMove: false       /* committed gesture - never cancels others mid-move */
+    },
+    deletePeaks: {
+      mouseMove: function(){ self.handleMouseMoveDeletePeak(); },
+      extraMoveCancel: function(){ self.handleCancelRoiDrag(); },
+      cancelMouse: function(){ self.handleCancelMouseDeletePeak(); }
+    },
+    countGammas: {
+      mouseMove: function(){ self.updateGammaSum(); },
+      cancelMouse: function(){ self.handleCancelMouseCountGammas(); }
+    },
+    recalibrate: {
+      mouseMove: function(){ self.handleMouseMoveRecalibration(); },
+      cancelMouse: function(){ self.handleCancelMouseRecalibration(); }
+    },
+    zoomX: {
+      mouseMove: function(){ self.handleMouseMoveZoomX(); },
+      cancelMouse: function(){ self.handleCancelMouseZoomInX(); }
+    },
+    zoomY: {
+      mouseMove: function(){ self.handleMouseMoveZoomY(); },
+      cancelMouse: function(){ self.handleCancelMouseZoomY(); }
+    }
+  };
+};
+
+/* Cancels the mouse-side transient visuals/state of every mode except `activeName`.
+   Replaces the cancel-others boilerplate that used to head each mouse move handler.
+   (The cancels touch disjoint DOM/state, so their relative order is not significant.) */
+SpectrumChartD3.prototype._cancelOtherMouseModes = function( activeName ){
+  for( const name in this._gestureModes ){
+    const mode = this._gestureModes[name];
+    if( (name !== activeName) && mode.cancelMouse )
+      mode.cancelMouse();
+  }
+};
+
 /** -------------- Chart Event Handlers --------------
  *  Mouse-move / mouse-up dispatch on the outer chart element. */
 SpectrumChartD3.prototype.handleChartMouseMove = function() {
@@ -1739,15 +1791,16 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
          drag do NOT change the mode; ESC cancels by clearing leftDragMode to 'none'
          via handleCancelAllMouseEvents. ROI drag preempts mode dispatch. */
       if( !self.roiIsBeingDragged ){
-        switch( self.leftDragMode ){
-          case 'fitPeak':     self.handleMouseMovePeakFit(); break;
-          case 'deletePeaks': self.handleMouseMoveDeletePeak(); break;
-          case 'countGammas': self.updateGammaSum(); break;
-          case 'recalibrate': self.handleMouseMoveRecalibration(); break;
-          case 'zoomY':       self.handleMouseMoveZoomY(); break;
-          case 'zoomX':       self.handleMouseMoveZoomX(); break;
+        const mode = self._gestureModes[self.leftDragMode];
+        if( !mode ){
           /* 'altOnly' (reserved) or 'none' (no mode / ESC-cancelled) -> ensure visuals are torn down */
-          default:            self.handleCancelAllMouseEvents()(); break;
+          self.handleCancelAllMouseEvents()();
+        }else{
+          if( mode.cancelOthersOnMove !== false )
+            self._cancelOtherMouseModes( self.leftDragMode );
+          if( mode.extraMoveCancel )
+            mode.extraMoveCancel();
+          mode.mouseMove();
         }
       }
 
@@ -8720,14 +8773,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
   var zoomInXBox = self.vis.select("#zoomInXBox"),
       zoomInXText = self.vis.select("#zoomInXText");
 
-  /* Cancel erase peaks mode, we're zooming in */
-  self.handleCancelMouseDeletePeak();
-  /* Cancel recalibration mode, we're zooming in */
-  self.handleCancelMouseRecalibration();
-  /* Cancel the zooming in y mode */
-  self.handleCancelMouseZoomY();
-  /* Cancel the count gammas mode */
-  self.handleCancelMouseCountGammas();
+  /* (other modes' visuals were cancelled by the gesture-mode dispatch) */
   if( !self.leftMouseDown )
     return;
 
@@ -8949,17 +8995,7 @@ SpectrumChartD3.prototype.handleMouseMoveZoomY = function () {
   var zoomInYBox = self.vis.select("#zoomInYBox"),
       zoomInYText = self.vis.select("#zoomInYText");
 
-  /* Cancel the zooming mode */
-  self.handleCancelMouseZoomInX();
-
-  /* Cancel erase peaks mode, we're zooming in */
-  self.handleCancelMouseDeletePeak();
-
-  /* Cancel recalibration mode, we're zooming in */
-  self.handleCancelMouseRecalibration();
-
-  /* Cancel the count gammas mode */
-  self.handleCancelMouseCountGammas();
+  /* (other modes' visuals were cancelled by the gesture-mode dispatch) */
 
   /* Now zooming in y mode */
   self.zoomingYPlot = true;
@@ -9320,18 +9356,7 @@ SpectrumChartD3.prototype.handleTouchCancelZoomY = function() {
 SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
   var self = this;
 
-  /* Clear the zoom, we're recalibrating the chart */
-  self.handleCancelMouseZoomInX();
-
-  /* Cancel erase peaks mode, we're recalibrating the chart */
-  self.handleCancelMouseDeletePeak();
-
-  /* Cancel the zooming in y mode */
-  self.handleCancelMouseZoomY();
-
-  /* Cancel the count gammas mode */
-  self.handleCancelMouseCountGammas();
-
+  /* (other modes' visuals were cancelled by the gesture-mode dispatch) */
   if (!self.leftMouseDown)
     return;
   if (!self.rawData || !self.rawData.spectra || !self.rawData.spectra.length) 
@@ -9493,21 +9518,7 @@ SpectrumChartD3.prototype.handleMouseMoveDeletePeak = function() {
   d3.event.preventDefault();
   d3.event.stopPropagation();
 
-  /* Cancel the zooming mode */
-  self.handleCancelMouseZoomInX();
-
-  /* Cancel the recalibration mode */
-  self.handleCancelMouseRecalibration();
-
-  /* Cancel the zooming in y mode */
-  self.handleCancelMouseZoomY();
-
-  /* Cancel the count gammas mode */
-  self.handleCancelMouseCountGammas();
-
-  self.handleCancelRoiDrag();
-
-
+  /* (other modes' visuals + any ROI drag were cancelled by the gesture-mode dispatch) */
   if (!self.leftMouseDown)
     return;
 
@@ -9731,11 +9742,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
   
   let startx_px, nowx_px;
   if( isMouseEvent ){
-    self.handleCancelMouseZoomInX();
-    self.handleCancelMouseRecalibration();
-    self.handleCancelMouseZoomY();
-    self.handleCancelMouseDeletePeak();
-    
+    /* (other modes' visuals were cancelled by the gesture-mode dispatch) */
     if (!self.leftMouseDown || !self.lastMouseMovePos )
     return;
     

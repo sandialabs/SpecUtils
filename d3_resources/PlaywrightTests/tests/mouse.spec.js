@@ -149,6 +149,33 @@ test.describe('mouse: count gammas (Shift+Alt-drag)', () => {
   });
 });
 
+// REF-52: mouse gestures dispatch through the shared mode table; these pin the two
+// semantics the table must preserve - ESC-cancel and modifier-key stickiness.
+test.describe('mouse: gesture-mode dispatch', () => {
+  test('ESC mid-Shift-drag cancels: box gone, no emit, mode reset', async ({ chart, page }) => {
+    await chart.mouseDragWithMid( 400, 700, { modifiers: ['Shift'] }, async () => {
+      expect( await chart.boxRect( '#deletePeaksBox' ), 'box should exist mid-drag' ).not.toBeNull();
+      await page.keyboard.press( 'Escape' );
+    });
+    expect( await chart.boxRect( '#deletePeaksBox' ), 'ESC should remove the box' ).toBeNull();
+    expect( (await chart.emits('shiftkeydragged')).length, 'no delete emit after ESC' ).toBe( 0 );
+    expect( await chart.dragMode() ).toBe( 'none' );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+
+  test('mode is sticky: releasing Ctrl mid-fit-drag stays fitPeak, no zoom box', async ({ chart, page }) => {
+    const p900 = await chart.client( 900, { yFrac: 0.30 } );
+    await chart.mouseDragWithMid( 500, 800, { modifiers: ['Control'], yFrac: 0.30 }, async () => {
+      await page.keyboard.up( 'Control' );
+      await page.mouse.move( p900.x, p900.y, { steps: 4 } );
+      expect( await chart.dragMode(), 'mode captured at mousedown is sticky' ).toBe( 'fitPeak' );
+      expect( await chart.boxRect( '#zoomInXBox' ), 'no zoom box while stuck in fitPeak' ).toBeNull();
+    });
+    expect( (await chart.emits('fitRoiDrag')).length ).toBeGreaterThan( 0 );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+});
+
 test.describe('mouse: energy recalibrate (Ctrl+Alt-drag)', () => {
   test('rightmousedragged emitted', async ({ chart }) => {
     await chart.mouseDrag( 356, 380, { modifiers: ['Control','Alt'], yFrac: 0.5, holdMs: 120 } );
