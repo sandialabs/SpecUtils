@@ -1058,6 +1058,10 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   const self = this;
 
+  /* New/changed data invalidates the cached slider-chart lines (see _sliderChartSignature) */
+  this._dataGeneration = (this._dataGeneration|0) + 1;
+  this._sliderPathSig = null;
+
   //Remove all the lines for the current drawn histograms
   this.vis.selectAll(".speclinepath").remove();
   this.vis.selectAll(".templatepath").remove();
@@ -5925,9 +5929,31 @@ SpectrumChartD3.prototype.setCompactXAxis = function( compact ) {
 
 /** -------------- X-axis Pan Slider Chart --------------
  *  Mini slider chart at the bottom that pans/zooms the main x-axis range. */
+/* Everything the slider-chart LINES depend on; when unchanged, drawXAxisSliderChart skips
+   their expensive rebuild (which costs two full-spectrum rebins) and only repositions the
+   slider box/handles.  The current zoom domain is deliberately NOT an input - the lines
+   always show the full data range. */
+SpectrumChartD3.prototype._sliderChartSignature = function(){
+  const b = this.min_max_x_values();
+  let sig = b[0] + "," + b[1]
+            + "," + this.size.sliderChartWidth + "," + this.size.sliderChartHeight
+            + "," + this.size.width + "," + this.size.height   /* feed do_rebin + the line y-transform */
+            + "," + this.options.yscale + "," + (!!this.options.backgroundSubtract)
+            + "," + this.options.spectrumLineWidth
+            + "," + this.options.logYFracTop + "," + this.options.logYAxisMin
+            + "," + (this._dataGeneration|0);
+  const spec = (this.rawData && this.rawData.spectra) ? this.rawData.spectra : [];
+  for( let i = 0; i < spec.length; ++i )
+    sig += ";" + spec[i].yScaleFactor + "," + (spec[i].y ? spec[i].y.length : 0) + "," + spec[i].lineColor;
+  const tmpl = (this.rawData && this.rawData.templates) ? this.rawData.templates : [];
+  for( let i = 0; i < tmpl.length; ++i )
+    sig += ";t" + ((tmpl[i] && tmpl[i].y) ? tmpl[i].y.length : 0);
+  return sig;
+};
+
 SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   var self = this;
-  
+
   // Cancel if the chart or raw data are not present
   if (!self.chart || d3.select(self.chart).empty() || !self.rawData
     || !self.rawData.spectra || !self.rawData.spectra.length || self.size.height<=0 ) {
@@ -5991,21 +6017,15 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
     }
   };//function drawDragRegionLines()
 
-  // Store the original x and y-axis domain (we'll use these to draw the slider lines and position the slider box)
   var origdomain = self.xScale.domain();
-  var origdomainrange = self.xScale.range();
-  var origrange = self.yScale.domain();
   var bounds = self.min_max_x_values();
   var maxX = bounds[1];
   var minX = bounds[0];
 
-  // Change the x and y-axis domain to the full range (for slider lines)
-  self.xScale.domain([minX, maxX]);
-  self.xScale.range([0, self.size.sliderChartWidth]);
-  self.do_rebin();
-  self.rebinForBackgroundSubtract();
-  self.yScale.domain(self.getYAxisDomain());
-  
+  /* Scale used to POSITION the slider box/handles: full data range across the slider
+     width.  A local copy - the live xScale is only swapped inside the rebuild branch. */
+  const sliderX = self.xScale.copy().domain([minX, maxX]).range([0, self.size.sliderChartWidth]);
+
   // Draw the elements for the slider chart
   if( !self.sliderChart ) {
     // G element of the slider chart
@@ -6117,8 +6137,8 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
       .on("touchmove", self.handleTouchMoveRightSliderDrag(false));
   }
 
-  var sliderBoxX = self.xScale(origdomain[0]);
-  var sliderBoxWidth = self.xScale(origdomain[1]) - sliderBoxX;
+  var sliderBoxX = sliderX(origdomain[0]);
+  var sliderBoxWidth = sliderX(origdomain[1]) - sliderBoxX;
 
   // Adjust the position of the slider box to the particular zoom region
   self.sliderBox.attr("x", sliderBoxX)
@@ -6140,15 +6160,36 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   if( self.sliderClose )
     self.sliderClose.attr("transform","translate(" + (self.size.width + 11) + ",0)");
 
-  self.drawSliderChartLines();
-  drawDragRegionLines();
+  /* Rebuild the slider LINES only when one of their inputs changed (see
+     _sliderChartSignature).  This is the expensive part: the live scales are swapped to
+     the full data range, every spectrum is rebinned, the paths rebuilt, then everything
+     is swapped back and rebinned again.  On ordinary pan/zoom redraws the signature is
+     unchanged and spectrum.points are never touched. */
+  const sig = self._sliderChartSignature();
+  if( sig !== self._sliderPathSig ){
+    self._sliderPathSig = sig;
 
-  // Restore the original x and y-axis domain
-  self.xScale.domain(origdomain);
-  self.xScale.range(origdomainrange);
-  self.do_rebin();
-  self.rebinForBackgroundSubtract();
-  self.yScale.domain(origrange);
+    const origdomainrange = self.xScale.range();
+    const origrange = self.yScale.domain();
+
+    // Change the x and y-axis domain to the full range (for slider lines)
+    self.xScale.domain([minX, maxX]);
+    self.xScale.range([0, self.size.sliderChartWidth]);
+    self.do_rebin();
+    self.rebinForBackgroundSubtract();
+    self.yScale.domain(self.getYAxisDomain());
+
+    self.drawSliderChartLines();
+
+    // Restore the original x and y-axis domain
+    self.xScale.domain(origdomain);
+    self.xScale.range(origdomainrange);
+    self.do_rebin();
+    self.rebinForBackgroundSubtract();
+    self.yScale.domain(origrange);
+  }
+
+  drawDragRegionLines();
 }
 
 SpectrumChartD3.prototype.drawSliderChartLines = function()  {
@@ -6214,6 +6255,7 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
   }
 
   self._resetSliderDragFlags();
+  self._sliderPathSig = null;   /* so re-showing the slider rebuilds its lines */
 
   this.handleResize( false );
 }
