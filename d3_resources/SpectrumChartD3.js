@@ -1703,11 +1703,14 @@ SpectrumChartD3.prototype._initGestureModes = function() {
       touchMove: function(){ self.handleMouseMovePeakFit(); },
       cancelTouch: function(){ self.handleCancelTouchPeakFit(); },  /* emits the final fitRoiDrag if a fit was in flight */
       touchEnd: function(){ self.handleCancelTouchPeakFit(); }
+      /* mouseup: fitPeak completion runs explicitly FIRST in handleVisMouseUp - it must
+         precede the ROI-drag mouseup, whose handleCancelRoiDrag would clear the latch. */
     },
     deletePeaks: {
       mouseMove: function(){ self.handleMouseMoveDeletePeak(); },
       extraMoveCancel: function(){ self.handleCancelRoiDrag(); },
       cancelMouse: function(){ self.handleCancelMouseDeletePeak(); },
+      visUp: function(){ self.handleMouseUpDeletePeak(); },
       recognize: function(){ return self._isDeletePeakSwipe(); },
       touchMove: function(t){ self.handleTouchMoveDeletePeak(t); },
       cancelTouch: function(){ self.handleCancelTouchDeletePeak(); },
@@ -1716,6 +1719,7 @@ SpectrumChartD3.prototype._initGestureModes = function() {
     countGammas: {
       mouseMove: function(){ self.updateGammaSum(); },
       cancelMouse: function(){ self.handleCancelMouseCountGammas(); },
+      visUp: function(){ self.handleMouseUpCountGammas(); },
       recognize: function(){ return self._isAltShiftSwipe(); },
       touchMove: function(){ self.updateGammaSum(); },
       cancelTouch: function(){ self.handleCancelTouchCountGammas(); },
@@ -1723,11 +1727,20 @@ SpectrumChartD3.prototype._initGestureModes = function() {
     },
     recalibrate: {                    /* mouse-only - no touch gesture maps to it */
       mouseMove: function(){ self.handleMouseMoveRecalibration(); },
-      cancelMouse: function(){ self.handleCancelMouseRecalibration(); }
+      cancelMouse: function(){ self.handleCancelMouseRecalibration(); },
+      visUp: function(){ self.handleMouseUpRecalibration(); }
     },
     zoomX: {
       mouseMove: function(){ self.handleMouseMoveZoomX(); },
       cancelMouse: function(){ self.handleCancelMouseZoomInX(); },
+      /* vis mouseup requires the button to have been down >75ms - suppresses zooms from
+         accidental micro-drags; the sub-75ms path still tears the zoom box down. */
+      visUp: function(nowtime){
+        if( (nowtime - self.mousedowntime) > 75 )
+          self.handleMouseUpZoomX();
+        else
+          self.handleCancelMouseZoomInX();
+      },
       recognize: function(){ return self._isZoomInPinch(false); },
       touchMove: function(){ self.handleTouchMoveZoomInX(); }
       /* the pinch applies live and draws nothing -> no cancelTouch/touchEnd */
@@ -1735,6 +1748,10 @@ SpectrumChartD3.prototype._initGestureModes = function() {
     zoomY: {
       mouseMove: function(){ self.handleMouseMoveZoomY(); },
       cancelMouse: function(){ self.handleCancelMouseZoomY(); },
+      visUp: function(){
+        if( self.zoomingYPlot || self.zoomInYMouse )
+          self.handleMouseUpZoomY();
+      },
       recognize: function(){ return self._isZoomInPinch(true); },
       touchMove: function(){ self.handleTouchMoveZoomY(); },
       cancelTouch: function(){ self.handleTouchCancelZoomY(); },
@@ -1750,6 +1767,31 @@ SpectrumChartD3.prototype._initGestureModes = function() {
   /* Historical teardown order for touch-end and for no-gesture touchmoves.  Note the
      fitPeak entry can emit (its teardown funnels through handleMouseUpPeakFit). */
   this._touchEndOrder = ['countGammas','deletePeaks','fitPeak','zoomY'];
+
+  /* Mouse-up completion order in handleVisMouseUp, run AFTER the explicit fitPeak and
+     ROI-drag completions (fitPeak must precede the ROI-drag mouseup - see its entry). */
+  this._visUpOrder = ['deletePeaks','recalibrate','zoomY','zoomX','countGammas'];
+};
+
+/* Cancels the touch-side transient visuals of every mode except `activeName` (pass null to
+   cancel all).  Iterates _touchEndOrder since fitPeak's cancel can emit a final fitRoiDrag
+   and the historical order is kept for that reason. */
+SpectrumChartD3.prototype._cancelOtherTouchModes = function( activeName ){
+  const self = this;
+  this._touchEndOrder.forEach( function(name){
+    const mode = self._gestureModes[name];
+    if( (name !== activeName) && mode.cancelTouch )
+      mode.cancelTouch();
+  } );
+};
+
+/* Clears the slider-chart drag-in-progress flags/pointers; shared by several teardown paths. */
+SpectrumChartD3.prototype._resetSliderDragFlags = function(){
+  this.sliderBoxDown = false;
+  this.leftDragRegionDown = false;
+  this.rightDragRegionDown = false;
+  this.sliderChartPointer = null;
+  this.savedSliderPointer = null;
 };
 
 /** -------------- Touch gesture recognizers --------------
@@ -2519,11 +2561,7 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
           || d3.event.toElement.nodeName === "HTML"
           || d3.event.toElement.nodeName === "DIV"
           || d3.event.toElement.offsetParent === document.body) {
-        self.handleCancelMouseDeletePeak();
-        self.handleCancelMouseRecalibration();
-        self.handleCancelMouseZoomInX();
-        self.handleCancelMouseZoomY();
-        self.handleCancelMouseCountGammas();
+        self._cancelOtherMouseModes( null );   /* null -> every mode */
         self.handleCancelRoiDrag();
         self._resetTransientPointerState();
       }
@@ -2620,11 +2658,7 @@ SpectrumChartD3.prototype.handleChartTouchEnd = function() {
   return function() {
     d3.event.preventDefault();
     d3.event.stopPropagation();
-    self.sliderBoxDown = false;
-    self.leftDragRegionDown = false;
-    self.rightDragRegionDown = false;
-    self.sliderChartPointer = null;
-    self.savedSliderPointer = null;
+    self._resetSliderDragFlags();
   }
 }
 
@@ -2921,30 +2955,19 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
     if( self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown )
       return;
 
-    /* Handle fitting peaks (if needed) */
+    /* Handle fitting peaks (if needed); must run before the ROI-drag mouseup, whose
+       handleCancelRoiDrag would clear the fitPeak latch. */
     if (self.leftDragMode === 'fitPeak')
       self.handleMouseUpPeakFit();
 
     /* Handle altering ROI mouse up. */
     self.handleMouseUpDraggingRoi(m);
 
-    /* Handle deleting peaks (if needed) */
-    self.handleMouseUpDeletePeak();
-    
-    /* Handle recalibration (if needed) */
-    self.handleMouseUpRecalibration();
-    
-    if( self.zoomingYPlot || self.zoomInYMouse )
-      self.handleMouseUpZoomY();
-
-    /* Handle zooming in x-axis (if needed); We'll require the mouse having been down for at least 75 ms - if its less than this its probably unintented. */
-    if( (nowtime - self.mousedowntime) > 75 )
-      self.handleMouseUpZoomX();
-    else
-      self.handleCancelMouseZoomInX(); // sub-75ms: suppress accidental zoom, but still tear down the zoom-in box
-
-    /* HAndle counting gammas (if needed) */
-    self.handleMouseUpCountGammas();
+    /* Complete whichever gesture mode was active (each visUp is internally guarded, so
+       inactive modes no-op; zoomX carries the 75ms anti-accidental-zoom gate). */
+    self._visUpOrder.forEach( function(name){
+      self._gestureModes[name].visUp( nowtime );
+    } );
 
     self.endYAxisScalingAction()();
 
@@ -3287,6 +3310,9 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     }
 
     if( activeMode ){
+      /* Tear down the other modes' visuals before running the winner (the head of each
+         touch handler used to do this itself). */
+      self._cancelOtherTouchModes( activeMode );
       self._gestureModes[activeMode].touchMove( t );
     }else if( self.currentlyAdjustingSpectrumScale ){
       self.handleMouseMoveScaleFactorSlider()();
@@ -3294,11 +3320,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
       self.handleRoiDrag( t[0] );
     }else{
       /* No gesture recognized -> tear down any touch-gesture visuals */
-      self._touchEndOrder.forEach( function(name){
-        const cancel = self._gestureModes[name].cancelTouch;
-        if( cancel )
-          cancel();
-      } );
+      self._cancelOtherTouchModes( null );
     }
 
     /* Clear the touch-hold signal on multi-touch, missing touchPageStart, or movement > 10 px (Material/iOS slop). */
@@ -3498,11 +3520,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
 
     self.countGammasStartTouches = null;
 
-    self.sliderBoxDown = false;
-    self.leftDragRegionDown = false;
-    self.rightDragRegionDown = false;
-    self.sliderChartPointer = null;
-    self.savedSliderPointer = null;
+    self._resetSliderDragFlags();
 
     if (visTouches.length === 0) {
       self.handleCancelAllMouseEvents()();
@@ -3656,11 +3674,7 @@ SpectrumChartD3.prototype.mouseup = function () {
       /*d3.event.stopPropagation(); */
     }
 
-    self.sliderBoxDown = false;
-    self.leftDragRegionDown = false;
-    self.rightDragRegionDown = false;
-    self.sliderChartPointer = null;
-    self.savedSliderPointer = null;
+    self._resetSliderDragFlags();
     self.currentlyAdjustingSpectrumScale = null;
   }
 }
@@ -3807,11 +3821,7 @@ SpectrumChartD3.prototype._resetTransientPointerState = function() {
   this.rightClickDown = null;
   this.is_panning = false;
   this.zooming_plot = false;
-  this.sliderBoxDown = false;
-  this.leftDragRegionDown = false;
-  this.rightDragRegionDown = false;
-  this.sliderChartPointer = null;
-  this.savedSliderPointer = null;
+  this._resetSliderDragFlags();
   this.legdown = null;
 };
 
@@ -3825,11 +3835,7 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
     self.yaxisdown = Math.NaN;
 
     /* Cancel mode-specific helpers (these clean up DOM / cursor). */
-    self.handleCancelMouseRecalibration();
-    self.handleCancelMouseDeletePeak();
-    self.handleCancelMouseZoomInX();
-    self.handleCancelMouseZoomY();
-    self.handleCancelMouseCountGammas();
+    self._cancelOtherMouseModes( null );   /* null -> every mode */
     self.handleCancelRoiDrag();
 
     /* Items not in _resetTransientPointerState because they live longer than a pointer gesture. */
@@ -6201,11 +6207,7 @@ SpectrumChartD3.prototype.cancelXAxisSliderChart = function() {
     self.sliderClose = null;
   }
 
-  self.sliderBoxDown = false;
-  self.leftDragRegionDown = false;
-  self.rightDragRegionDown = false;
-  self.sliderChartPointer = null;
-  self.savedSliderPointer = null;
+  self._resetSliderDragFlags();
 
   this.handleResize( false );
 }
@@ -6229,11 +6231,7 @@ SpectrumChartD3.prototype.installSliderDragListeners = function() {
   /* Namespaced by chart id so multiple charts on one page cannot clobber each other. */
   const upName = "mouseup.sliderdrag" + this.chart.id, moveName = "mousemove.sliderdrag" + this.chart.id;
   d3.select(document).on(upName, function() {
-    self.sliderBoxDown = false;
-    self.leftDragRegionDown = false;
-    self.rightDragRegionDown = false;
-    self.sliderChartPointer = null;
-    self.savedSliderPointer = null;
+    self._resetSliderDragFlags();
     d3.select(document.body).style("cursor", "default");
     d3.select(document).on(upName, null);
     d3.select(document).on(moveName, null);
@@ -7913,10 +7911,7 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
       return;
     }
 
-    /* Cancel the other touch gesture modes - once a fit starts we are committed to it */
-    self.handleCancelTouchDeletePeak();
-    self.handleCancelTouchCountGammas();
-    self.handleTouchCancelZoomY();
+    /* (other touch modes' visuals were cancelled by the gesture-mode dispatch) */
 
     /* Latch the mode: the touch recognizer keeps selecting peak-fit from here on */
     self.leftDragMode = 'fitPeak';
@@ -9180,10 +9175,7 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInX = function() {
   if (!self.touchesOnChart)
     return;
 
-  self.handleCancelTouchDeletePeak();
-  self.handleCancelTouchPeakFit();
-  self.handleCancelTouchCountGammas();
-
+  /* (other touch modes' visuals were cancelled by the gesture-mode dispatch) */
   var t = d3.touches(self.vis[0][0]);
   var keys = Object.keys(self.touchesOnChart);
 
@@ -9278,10 +9270,7 @@ SpectrumChartD3.prototype.handleTouchMoveZoomY = function() {
   if( !this.touchesOnChart )
     return;
 
-  this.handleCancelTouchDeletePeak();
-  this.handleCancelTouchPeakFit();
-  this.handleCancelTouchCountGammas();
-
+  /* (other touch modes' visuals were cancelled by the gesture-mode dispatch) */
   const t = d3.touches(this.vis[0][0]);
   const keys = Object.keys(this.touchesOnChart);
 
@@ -9653,15 +9642,7 @@ SpectrumChartD3.prototype.handleTouchMoveDeletePeak = function(t) {
     return;
   }
 
-  /* Cancel the count gammas mode */
-  self.handleCancelTouchCountGammas();
-
-  /* Cancel the create peaks mode */
-  self.handleCancelTouchPeakFit();
-
-  /* Cancel the zoom-in y mode */
-  self.handleTouchCancelZoomY();
-
+  /* (other touch modes' visuals were cancelled by the gesture-mode dispatch) */
   var leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
       rightTouch = leftTouch === t[0] ? t[1] : t[0];
 
@@ -9782,10 +9763,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     if( startx_px > nowx_px )
       [startx_px, nowx_px] = [nowx_px, startx_px];
   }else{
-    self.handleCancelTouchDeletePeak();
-    self.handleCancelTouchPeakFit();
-    self.handleTouchCancelZoomY();
-    
+    /* (other touch modes' visuals were cancelled by the gesture-mode dispatch) */
     const t = d3.touches(self.vis[0][0]);
     const startT = self.countGammasStartTouches;
     console.assert( !startT || (startT.length === 2) );

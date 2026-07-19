@@ -163,6 +163,19 @@ test.describe('mouse: gesture-mode dispatch', () => {
     expect( await chart.errors() ).toEqual( [] );
   });
 
+  test('mouseleave mid-drag tears down: box gone, mode reset, no emit', async ({ chart, page }) => {
+    await chart._down( 400, { modifiers: ['Shift'] } );
+    await chart._moveTo( 700, { modifiers: ['Shift'] } );
+    expect( await chart.boxRect( '#deletePeaksBox' ), 'box exists mid-drag' ).not.toBeNull();
+    await page.mouse.move( 500, 600, { steps: 4 } );   // off the 1000x520 chart, onto the body
+    expect( await chart.boxRect( '#deletePeaksBox' ), 'mouseleave should remove the box' ).toBeNull();
+    expect( await chart.dragMode() ).toBe( 'none' );
+    await page.mouse.up();
+    await page.keyboard.up( 'Shift' );
+    expect( (await chart.emits('shiftkeydragged')).length ).toBe( 0 );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+
   test('mode is sticky: releasing Ctrl mid-fit-drag stays fitPeak, no zoom box', async ({ chart, page }) => {
     const p900 = await chart.client( 900, { yFrac: 0.30 } );
     await chart.mouseDragWithMid( 500, 800, { modifiers: ['Control'], yFrac: 0.30 }, async () => {
