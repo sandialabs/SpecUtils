@@ -88,6 +88,13 @@
           return graph.xScale.invert( (clientX - m.e) / m.a );
         };
 
+        // Inverse of the y part: client Y -> counts (with the *current* y scale).
+        window.clientToCount = function( clientY ){
+          var node = graph.vis[0][0];
+          var m = node.getScreenCTM();
+          return graph.yScale.invert( (clientY - m.f) / m.d );
+        };
+
         window.xDomain   = function(){ return graph.xScale.domain().slice(); };
         window.yDomain   = function(){ return graph.yScale.domain().slice(); };
         window.fullXRange = function(){ return graph.min_max_x_values(); };

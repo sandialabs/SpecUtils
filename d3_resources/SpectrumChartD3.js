@@ -9304,36 +9304,36 @@ SpectrumChartD3.prototype.handleTouchMoveZoomY = function() {
   let zoomInYBottomLine = this.vis.select("#zoomInYBottomLine");
   let zoomInYText = this.vis.select("#zoomInYText");
 
-  let touch1 = this.touchesOnChart[keys[0]];
-  let touch2 = this.touchesOnChart[keys[1]];
+  /* Guide lines follow the current finger positions (vis coords); on touch-end the
+     zoom-in range is read back from them. */
+  const topY = Math.min( t[0][1], t[1][1] );
+  const bottomY = Math.max( t[0][1], t[1][1] );
 
-  if (!touch1.visY)
-    touch1.visY = t[0][1];
-  if (!touch2.visY)
-    touch2.visY = t[1][1];
-
-  const topTouch = touch1.pageY < touch2.pageY ? touch1 : touch2;
-  const bottomTouch = topTouch == touch1 ? touch2 : touch1;
+  /* Spread-apart = zoom in, pinch-together = zoom out.  Decide from the change in
+     inter-finger separation: start positions are page coords and current d3.touches
+     are vis coords, but separations are offset-invariant so they compare directly. */
+  const touch1 = this.touchesOnChart[keys[0]];
+  const touch2 = this.touchesOnChart[keys[1]];
+  const startSep = Math.abs( touch1.startY - touch2.startY );
+  const nowSep = bottomY - topY;
 
   if( zoomInYTopLine.empty() ) {
     zoomInYTopLine = this.vis.append("line")
       .attr("id", "zoomInYTopLine")
       .attr("class", "mouseLine")
       .attr("x1", 0)
-      .attr("x2", this.size.width)
-      .attr("y1", topTouch.visY)
-      .attr("y2", topTouch.visY);
+      .attr("x2", this.size.width);
   }
+  zoomInYTopLine.attr("y1", topY).attr("y2", topY);
 
   if( zoomInYBottomLine.empty() ) {
     zoomInYBottomLine = this.vis.append("line")
       .attr("id", "zoomInYBottomLine")
       .attr("class", "mouseLine")
       .attr("x1", 0)
-      .attr("x2", this.size.width)
-      .attr("y1", bottomTouch.visY)
-      .attr("y2", bottomTouch.visY);
+      .attr("x2", this.size.width);
   }
+  zoomInYBottomLine.attr("y1", bottomY).attr("y2", bottomY);
 
   if( zoomInYText.empty() ) {
     zoomInYText = this.vis.append("text")
@@ -9341,19 +9341,14 @@ SpectrumChartD3.prototype.handleTouchMoveZoomY = function() {
       .attr("class", "mouseLineText");
   }
 
-  zoomInYText.text(function() {
-    if (topTouch.visY > topTouch.startY && bottomTouch.visY < bottomTouch.startY)
-      return self.options.txt.zoomOutY;
-    else if (topTouch.visY == topTouch.startY && bottomTouch.visY == bottomTouch.startY)
-      return "";
-    else
-      return self.options.txt.zoomInY;
-  });
+  /* +-10 px deadband; in practice the pinch recognizer requires >20 px separation
+     change before we are called, so the text is never blank mid-gesture. */
+  zoomInYText.text( (nowSep > startSep + 10) ? self.options.txt.zoomInY
+                    : ((nowSep < startSep - 10) ? self.options.txt.zoomOutY : "") );
 
-  
   const textBB = zoomInYText.node().getBoundingClientRect();
   zoomInYText.attr("x", 0.5*this.size.width - 0.5*textBB.width );
-  zoomInYText.attr("y", 0.5*((Number(zoomInYTopLine.attr("y1")) + Number(zoomInYBottomLine.attr("y1"))) + textBB.height) );
+  zoomInYText.attr("y", 0.5*(topY + bottomY + textBB.height) );
 }//SpectrumChartD3.prototype.handleTouchMoveZoomY
 
 

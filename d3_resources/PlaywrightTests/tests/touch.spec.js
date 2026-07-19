@@ -60,12 +60,41 @@ test.describe('touch: two-finger zoom (bounds)', () => {
     expect( await chart.errors() ).toEqual( [] );
   });
 
-  test('vertical spread zooms y (y-domain changes), no error', async ({ chart }) => {
+  // BUG-25: the guide lines must track the fingers, so the committed zoom range is the
+  // FINAL finger span (pre-fix they froze at the initial positions), and the in/out
+  // decision must not mix page- and vis-coordinates.
+  test('BUG-25: vertical spread zooms y to the final finger span', async ({ chart }) => {
     const before = await chart.yDomain();
+    // pinch() ends with the fingers 320px apart around the yFrac=0.45 row: find the
+    // counts at those final rows with the PRE-zoom scale; after the zoom they should
+    // sit at the top/bottom edges of the plot.
+    const c = await chart.client( 1000, { yFrac: 0.45 } );
+    const expTop = await chart.countAt( c.y - 160 );
+    const expBot = await chart.countAt( c.y + 160 );
     await chart.pinch( 1000, 60, 320, 'y' );
     const after = await chart.yDomain();
     const changed = Math.abs(after[0]-before[0]) > 1e-6 || Math.abs(after[1]-before[1]) > 1e-6;
     expect( changed, 'y-domain should change' ).toBeTruthy();
+    const edges = await chart.page.evaluate(
+      v => [ window.graph.yScale(v[0]), window.graph.yScale(v[1]), window.graph.size.height ],
+      [expTop, expBot] );
+    expect( Math.abs(edges[0]), 'final top-finger count at plot top' ).toBeLessThan( 8 );
+    expect( Math.abs(edges[1] - edges[2]), 'final bottom-finger count at plot bottom' ).toBeLessThan( 8 );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+
+  test('BUG-25: vertical pinch-together zooms y back out to the full range', async ({ chart }) => {
+    await chart.pinch( 1000, 60, 320, 'y' );        // spread -> zoom in first
+    const zoomed = await chart.yDomain();
+    await chart.pinch( 1000, 320, 60, 'y' );        // pinch together -> zoom out
+    const after = await chart.yDomain();
+    const full = await chart.page.evaluate( () => window.graph.getYAxisDomain() );
+    expect( Math.abs(after[0]-zoomed[0]) > 1e-6 || Math.abs(after[1]-zoomed[1]) > 1e-6,
+            'pinch-together should change the y-domain' ).toBeTruthy();
+    expect( Math.abs(after[0]-full[0]) / Math.max(1, Math.abs(full[0])),
+            'zoom-out should restore the full y range (max)' ).toBeLessThan( 0.01 );
+    expect( Math.abs(after[1]-full[1]) / Math.max(1e-6, Math.abs(full[1])),
+            'zoom-out should restore the full y range (min)' ).toBeLessThan( 0.01 );
     expect( await chart.errors() ).toEqual( [] );
   });
 });

@@ -49,6 +49,7 @@ class ChartDriver {
   // energy[, {count|yFrac}] -> {x,y} viewport pixels
   client( energy, opts ){ return this.page.evaluate( a => window.toClient(a.e, a.o), { e: energy, o: opts || {} } ); }
   energyAt( clientX ){ return this.page.evaluate( x => window.clientToEnergy(x), clientX ); }
+  countAt( clientY )  { return this.page.evaluate( y => window.clientToCount(y), clientY ); }
 
   // ---- mouse primitives (Playwright native) ------------------------------
   async _down( energy, opts ){
