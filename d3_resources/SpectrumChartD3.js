@@ -9141,25 +9141,19 @@ SpectrumChartD3.prototype.handleMouseUpZoomY = function () {
       /* This represents how much of the y-axis we will be zooming out */
       const mult = (zoomInYText.text().endsWith("x2") ? 2 : 4);
 
-      /* Get the old values of the current y-domain */
+      /* Current y-domain is [max,min]; expand about its center */
       const domain = self.yScale.domain();
-      const oldRange = Math.abs(domain[1] - domain[0]);
-      const centroid = domain[0] + 0.5*oldRange;
+      const oldRange = Math.abs(domain[0] - domain[1]);
+      const centroid = domain[1] + 0.5*oldRange;
 
-      /* Values for the minimum and maximum y values */
-      let minY = 0.1, maxY = 3000;
-
-      if( self.rawData && self.rawData.y ){
-        /* Get the min, max y values from the data */
-        const ydomain = self.getYAxisDomain();
-        minY = ydomain[1];
-        maxY = ydomain[0];
-      }
+      /* Full auto y-range for the current data, also [max,min] (handles no-data itself) */
+      const ydomain = self.getYAxisDomain();
+      const minY = ydomain[1], maxY = ydomain[0];
 
       /* Set the values for the new y-domain */
       let newY0 = centroid - 0.5*mult*oldRange;
       let newY1 = newY0 + mult*oldRange;
-      
+
       if( newY0 < minY )
         newY1 += (minY - newY0);
       if( newY1 > maxY )

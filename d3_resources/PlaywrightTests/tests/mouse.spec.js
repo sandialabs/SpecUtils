@@ -73,6 +73,37 @@ test.describe('mouse: y-axis zoom (Meta-drag)', () => {
       expect( await chart.errors() ).toEqual( [] );
     });
   }
+
+  // BUG-26: partial zoom-out clamped to a hardcoded [0.1,3000] (dead rawData.y branch) and
+  // centered on the domain MAX instead of the middle, shifting the window up a full range.
+  test('BUG-26: x2 zoom-out doubles the range about the center, clamped to the data', async ({ chart, page }) => {
+    // Zoom into a mid-plot band first so an x2 expansion has room on both sides.
+    await chart.mouseDragV( 661, 0.30, 0.60, { modifiers: ['Meta'] } );
+    const zoomed = await chart.yDomain();          // [max,min]
+
+    const expected = await page.evaluate( () => {
+      const d = window.graph.yScale.domain();      // [max,min]
+      const full = window.graph.getYAxisDomain();  // [max,min]
+      const R = Math.abs( d[0] - d[1] );
+      const c = d[1] + 0.5*R;
+      let y0 = c - R, y1 = y0 + 2*R;
+      if( y0 < full[1] ) y1 += (full[1] - y0);
+      if( y1 > full[0] ) y0 -= (y1 - full[0]);
+      return [ Math.min(y1, full[0]), Math.max(y0, full[1]) ];
+    });
+
+    // A small upward Meta-drag (>10 px but <5% of the plot height) selects "x2".
+    const H = await page.evaluate( () => window.graph.size.height );
+    const dyFrac = Math.max( 12/H, 0.03 );
+    await chart.mouseDragV( 661, 0.60, 0.60 - dyFrac, { modifiers: ['Meta'] } );
+    const after = await chart.yDomain();
+
+    expect( after[0], 'max should not shrink on zoom-out' ).toBeGreaterThanOrEqual( zoomed[0] - 1e-9 );
+    expect( after[1], 'min should not grow on zoom-out' ).toBeLessThanOrEqual( zoomed[1] + 1e-9 );
+    expect( Math.abs(after[0]-expected[0]) / Math.max(1, Math.abs(expected[0])) ).toBeLessThan( 0.02 );
+    expect( Math.abs(after[1]-expected[1]) / Math.max(1, Math.abs(expected[1])) ).toBeLessThan( 0.02 );
+    expect( await chart.errors() ).toEqual( [] );
+  });
 });
 
 test.describe('mouse: peak fit (Ctrl-drag)', () => {
