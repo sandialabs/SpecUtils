@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SpectrumChartD3 Playwright Harness</title>
+<script>
+  // ---- Instrumentation, installed BEFORE the chart loads -------------------
+
+  // Collect any uncaught error / rejection. Several recent fixes were "stop throwing"
+  // (BUG-01 y-zoom ReferenceError, BUG-09 global-var leak), so a clean list is an assertion.
+  window.__errors = [];
+  window.addEventListener('error', function(e){ window.__errors.push( String(e.message || e.error || e) ); });
+  window.addEventListener('unhandledrejection', function(e){ window.__errors.push( 'unhandledrejection: ' + String(e.reason) ); });
+
+  // Stub Wt so SpectrumChartD3.WtEmit() records every server-bound signal instead of
+  // calling a real Wt session. This is the primary behavioral assertion surface:
+  // each gesture should produce the expected emit (name + args).
+  window.__emits = [];
+  window.Wt = {
+    emit: function( elem, event ){
+      var args = Array.prototype.slice.call( arguments, 2 );
+      var name = (event && event.name) ? event.name : String(event);
+      window.__emits.push({ name: name, args: args, t: (window.performance ? performance.now() : 0) });
+    }
+  };
+</script>
+<script src="../../d3.v3.min.js"></script>
+<script src="../../SpectrumChartD3.js"></script>
+<link rel="stylesheet" type="text/css" href="../../SpectrumChartD3.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  /* Fixed, known size keeps energy<->pixel mapping stable across runs. */
+  #chart1 { width: 1000px; height: 520px; }
+</style>
+</head>
+<body oncontextmenu="return false;">
+  <div id="chart1" class="chart"></div>
+  <script>
+    window.__ready = false;
+    window.__loadError = null;
+
+    (function(){
+
+      // Build a {spectra:[...]} payload from the example file (Ba-133 FOREGROUND + BACKGROUND).
+      // Add a SECONDARY (clone of background) so legend/scaler tests have three spectra.
+      function buildData( records ){
+        var back = null;
+        records.forEach( function(r){ if( r.type === 'BACKGROUND' ) back = r; } );
+
+        var spectra = records.slice();
+        if( back ){
+          var sec = JSON.parse( JSON.stringify(back) );
+          sec.type = 'SECONDARY';
+          sec.title = 'Secondary';
+          sec.id = 9901;
+          spectra.push( sec );
+        }
+
+        var colors = { FOREGROUND: 'black', BACKGROUND: 'steelblue', SECONDARY: 'green' };
+        spectra.forEach( function(s){ s.lineColor = colors[s.type] || 'black'; } );
+        return { spectra: spectra };
+      }
+
+      function installHelpers( graph ){
+        // Map (energy[, count]) -> viewport(client) pixel coords using the vis group's
+        // screen CTM. Exact regardless of chart size / margins / scroll. When `count` is
+        // not given, place the point at a vertical fraction of the plot (default upper
+        // third — usually empty space, so touch points don't land on peak paths).
+        window.toClient = function( energy, opts ){
+          opts = opts || {};
+          var node = graph.vis[0][0];
+          var m = node.getScreenCTM();
+          var x = graph.xScale( energy );
+          var y;
+          if( typeof opts.count === 'number' ){
+            y = graph.yScale( opts.count );
+          } else {
+            var f = (typeof opts.yFrac === 'number') ? opts.yFrac : 0.30;
+            y = graph.size.height * f;
+          }
+          return { x: m.e + m.a*x + m.c*y, y: m.f + m.b*x + m.d*y };
+        };
+
+        // Inverse of the x part: client X -> energy. Handy to assert where an emit landed.
+        window.clientToEnergy = function( clientX ){
+          var node = graph.vis[0][0];
+          var m = node.getScreenCTM();
+          return graph.xScale.invert( (clientX - m.e) / m.a );
+        };
+
+        window.xDomain   = function(){ return graph.xScale.domain().slice(); };
+        window.yDomain   = function(){ return graph.yScale.domain().slice(); };
+        window.fullXRange = function(){ return graph.min_max_x_values(); };
+        window.dragMode  = function(){ return graph.leftDragMode; };
+
+        window.emits = function( name ){
+          return name ? window.__emits.filter( function(e){ return e.name === name; } )
+                      : window.__emits.slice();
+        };
+        window.lastEmit = function( name ){
+          var a = window.emits( name );
+          return a.length ? a[a.length - 1] : null;
+        };
+        window.errors = function(){ return window.__errors.slice(); };
+
+        // Clear recorded emits/errors before a gesture. Returns to a known full x-range too.
+        window.testReset = function(){
+          window.__emits.length = 0;
+          window.__errors.length = 0;
+        };
+
+        // Reset the visible x-range to the full data range (no emit, no user-action flag).
+        window.resetView = function(){
+          var b = graph.min_max_x_values();
+          graph.setXAxisRange( b[0], b[1], false, false );
+          graph.redraw()();
+        };
+
+        // Peak centroids (keV) discovered from the loaded data — pick targets for fit/delete.
+        window.peakEnergies = function(){
+          var out = [];
+          var spec = (graph.rawData && graph.rawData.spectra) ? graph.rawData.spectra : [];
+          spec.forEach( function(s){
+            (s.peaks || []).forEach( function(roi){
+              (roi.peaks || []).forEach( function(p){ if( p.Centroid ) out.push( p.Centroid[0] ); } );
+            });
+          });
+          return out.sort( function(a,b){ return a - b; } );
+        };
+
+        // Synthetic mouse drag dispatched as native MouseEvents on the chart's own nodes.
+        // With holdMs <= 0 the whole down->move->up happens in one JS tick, so the chart sees
+        // (mouseup - mousedown) ~= 0 ms — the deterministic way to exercise the 75 ms
+        // anti-accidental-zoom gate (BUG-03) that wall-clock Playwright drags can't hit reliably.
+        window.synthMouseDrag = async function( fromEnergy, toEnergy, opts ){
+          opts = opts || {};
+          var yFrac = (typeof opts.yFrac === 'number') ? opts.yFrac : 0.5;
+          var visNode = graph.vis[0][0];
+          var a = window.toClient( fromEnergy, { yFrac: yFrac } );
+          var b = window.toClient( toEnergy,   { yFrac: yFrac } );
+          var mods = { ctrlKey: !!opts.ctrlKey, shiftKey: !!opts.shiftKey, altKey: !!opts.altKey, metaKey: !!opts.metaKey };
+          function fire( type, c ){
+            visNode.dispatchEvent( new MouseEvent( type, Object.assign({
+              bubbles: true, cancelable: true, view: window, button: 0,
+              clientX: c.x, clientY: c.y
+            }, mods ) ) );
+          }
+          fire( 'mousedown', a );
+          var steps = opts.steps || 4;
+          for( var i = 1; i <= steps; ++i ){
+            var t = i / steps;
+            fire( 'mousemove', { x: a.x + (b.x-a.x)*t, y: a.y + (b.y-a.y)*t } );
+          }
+          if( opts.holdMs && opts.holdMs > 0 )
+            await new Promise( function(r){ setTimeout( r, opts.holdMs ); } );
+          fire( 'mouseup', b );
+        };
+
+        // Geometry (viewport coords) of a transient drag-box element, or null if absent.
+        // Used for "bounds" assertions: deletePeaksBox / countGammasBox / leftbuttonzoombox.
+        window.boxRect = function( selector ){
+          var el = document.querySelector( selector );
+          if( !el ) return null;
+          var r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+        };
+      }
+
+      function init( records ){
+        var graph = new SpectrumChartD3( 'chart1', { title: 'Harness', xlabel: 'Energy (keV)', ylabel: 'Counts' } );
+        window.graph = graph;
+        graph.setData( buildData(records), true );
+        graph.setLogY();
+        graph.handleResize();
+        installHelpers( graph );
+        window.__ready = true;
+      }
+
+      fetch( '../../example_json_with_peaks.json' )
+        .then( function(r){ return r.json(); } )
+        .then( function(d){ init( Array.isArray(d) ? d : [d] ); } )
+        .catch( function(e){ window.__loadError = String(e); window.__errors.push( 'fixture load failed: ' + e ); } );
+    })();
+  </script>
+</body>
+</html>
