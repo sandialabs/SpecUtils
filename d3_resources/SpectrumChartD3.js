@@ -2557,7 +2557,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       if( !self.roiDragLines) {
         /* Create the initial zoom box if we are not fitting peaks */
         if( self.leftDragMode !== 'fitPeak' && !self.roiIsBeingDragged ) {
-          var zoomInXBox = self.vis.select("#zoomInXBox")
+          var zoomInXBox = self.vis.select("#zoomInXBox"),
               zoomInXText = self.vis.select("#zoomInXText");
 
           zoomInXBox.remove();
@@ -9490,7 +9490,7 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       .attr("clip-path", "url(#clip" + this.chart.id + ")");
 
     self.peakVis.selectAll("path").each(function() {
-      path = d3.select(this);
+      const path = d3.select(this);
       recalibrationPeakVis.append("path")
         .attr("class", path.attr("class"))
         .attr("d", path.attr("d"))

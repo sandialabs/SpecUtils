@@ -22,6 +22,8 @@ test.describe('mouse: x-axis zoom (no modifier)', () => {
 
     const after = await chart.xDomain();
     expect( after[1] - after[0] ).toBeLessThan( before[1] - before[0] );
+    // BUG-27: the mousedown zoom-box setup leaked `zoomInXText` to window (missing comma).
+    expect( await chart.globalLeaked( 'zoomInXText' ) ).toBe( false );
     expect( await chart.errors() ).toEqual( [] );
   });
 
@@ -152,6 +154,8 @@ test.describe('mouse: energy recalibrate (Ctrl+Alt-drag)', () => {
     await chart.mouseDrag( 356, 380, { modifiers: ['Control','Alt'], yFrac: 0.5, holdMs: 120 } );
     const emit = await chart.emits( 'rightmousedragged' );
     expect( emit.length, 'recalibrate should emit rightmousedragged' ).toBeGreaterThan( 0 );
+    // BUG-27: the recalibration peak-clone loop leaked `path` to window (missing var).
+    expect( await chart.globalLeaked( 'path' ) ).toBe( false );
     expect( await chart.errors() ).toEqual( [] );
   });
 });
