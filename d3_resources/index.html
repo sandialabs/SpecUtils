@@ -253,10 +253,7 @@
     var setShowXAxisSliderChart = function(sel) { graph.setShowXAxisSliderChart(sel.checked); }
     var setBackgroundSubtract = function(sel){ graph.setBackgroundSubtract(sel.checked); }
 
-    var setSpectrumScaleFactorWidget = function(sel) { graph.setSpectrumScaleFactorWidget(sel.checked); }
-    var setDropDownSpectrumScaleFactor = function(sel) { graph.setDropDownSpectrumScaleFactor(sel.value); }
-    var setSpectrumScaleFactor = function(sel) { graph.setSpectrumScaleFactor(sel.value); }
-    var setMaxScaleFactor = function(sel) { graph.setMaxScaleFactor(sel.value); }
+    var setSpectrumScaleFactorWidget = function(sel) { graph.setShowSpectrumScaleFactorWidget(sel.checked); }
 
     graph.setShowPeaks('FOREGROUND',true);
     graph.setShowPeaks('BACKGROUND',false);
@@ -347,27 +344,9 @@
 <label><input type="checkbox" onchange="setXRangeArrows(this)" checked>Show x-axis range continuse arrows</label>
 
 <br />
-<label>Choose Spectrum to Scale: <select id="current-sf-title" onchange="setDropDownSpectrumScaleFactor(this)">
-  <option value="None">none</option>
-</select>
-</label>
-<label>Current Scale Factor: <input type="number" min="0" size="4" id="current-sf" oninput="setSpectrumScaleFactor(this);"></label>
-<label>Max Scale Factor: <input id="max-sf" type="number" min="0.1" id="bg-msf" oninput="setMaxScaleFactor(this);"></label>
-
-<br />
 
 </div>
   <script type="text/javascript">
-    if (currentsftitle = document.getElementById("current-sf-title")) {
-      var titles = graph.getSpectrumTitles();
-      currentsftitle.options.length = titles.length;
-      titles.forEach(function(title,i) {
-        if (i == 0)
-          currentsftitle.options[i] = new Option("None", "", true, false);
-        else
-          currentsftitle.options[i] = new Option(title, title, false, false);
-      });
-    }
     graph.redraw()();
   </script>
   </body>

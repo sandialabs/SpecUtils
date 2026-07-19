@@ -630,6 +630,9 @@ SpectrumChartD3.prototype.destroy = function() {
   d3.select(window).on("mouseup.chart" + this.chart.id, null);
   d3.select(window).on("blur.chart" + this.chart.id, null);
   d3.select(document.body).on("mouseup.chart" + this.chart.id, null);
+  // Transient slider-drag listeners, in case we are destroyed mid-drag.
+  d3.select(document).on("mouseup.sliderdrag" + this.chart.id, null);
+  d3.select(document).on("mousemove.sliderdrag" + this.chart.id, null);
 
   // Window-capture touchend/touchcancel + pointerup/pointercancel safety nets (see constructor).
   if( this._touchEndSafetyHandler ){
@@ -1029,12 +1032,6 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
  * passing null/undefined or an object with no templates array clears the templates.
  * Re-runs the full setData path so creation, legend, rebin, and y-domain code all re-execute.
  */
-SpectrumChartD3.prototype.setTemplates = function( data ){
-  if( !this.rawData ) this.rawData = { spectra: [] };
-  this.rawData.templates = (data && Array.isArray(data.templates)) ? data.templates : [];
-  this.setData( this.rawData, false );
-};
-
 /** Removes all spectra seen with the passed-in type in the raw data. */
 SpectrumChartD3.prototype.removeSpectrumDataByType = function( resetdomain, spectrumType ) {
   var self = this;
@@ -1182,10 +1179,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
   /* + 10 to add at least some padding for scale */
   self.options.maxScaleFactor = maxYScaleFactor + 10;
-  var maxsfinput;
-  if (maxsfinput = document.getElementById("max-sf")) {
-    maxsfinput.value = self.options.maxScaleFactor;
-  }
 
   if( this.options.gridx )
     this.setGridX(this.options.gridx,true);
@@ -1628,6 +1621,14 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
 }
 
 /* Pan chart is called when right-click dragging */
+/* Records the pan-gesture start state; shared by right-mouse-down and one-finger touch pan. */
+SpectrumChartD3.prototype._startPanState = function(){
+  this.rightClickDown = d3.mouse(document.body);
+  this.is_panning = false;
+  this.origdomain = this.xScale.domain();
+  this.zooming_plot = false;   /* panning, not zooming */
+};
+
 /* Clamps [x0,x1] to [minx,maxx] preserving the requested width where possible: the window is
    shifted rather than shrunk, until it hits both edges.  Returns [newX0,newX1].
    Shared by pan, wheel, x-axis drag and drag-zoom-out. */
@@ -2570,12 +2571,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       }
       return false;
     } else if ( d3.event.button === 2 ) {    /* listen to right-click mouse down event */
-      self.rightClickDown = d3.mouse(document.body);
-      self.is_panning = false;
-      self.origdomain = self.xScale.domain();
-
-      /* Since this is the right-mouse button, we are not zooming in */
-      self.zooming_plot = false;
+      self._startPanState();
     } else{
 
     }
@@ -3241,12 +3237,8 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
     // Update mouse coordinates, feature markers on a touch pan action
     //  TODO: should we put this into the if/else above?
     if( touchPan ) {
-      if( !self.rightClickDown ){
-        self.rightClickDown = d3.mouse(document.body);
-        self.is_panning = false;
-        self.origdomain = self.xScale.domain();
-        self.zooming_plot = false;
-      }
+      if( !self.rightClickDown )
+        self._startPanState();
 
       if( self.roiDragBoxes )
         self.handleCancelRoiDrag();
@@ -3263,8 +3255,6 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
 
     // Delete the touch line */
     self.deleteTouchLine();
-
-    self.lastTouches = t;
   };//function() that gets returned from handleVisTouchMove
 };//SpectrumChartD3.prototype.handleVisTouchMove
 
@@ -3419,7 +3409,6 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     self.handleCancelTouchPeakFit();
     self.handleTouchEndZoomY();
 
-    self.touchZoom = false;
     self.touchStart = null;
     self.touchHoldEmitted = false;
 
@@ -6153,17 +6142,19 @@ SpectrumChartD3.prototype.setShowXAxisSliderChart = function(d) {
    handle), which previously inlined identical 11-line blocks. */
 SpectrumChartD3.prototype.installSliderDragListeners = function() {
   var self = this;
-  d3.select(document).on("mouseup.sliderdrag", function() {
+  /* Namespaced by chart id so multiple charts on one page cannot clobber each other. */
+  const upName = "mouseup.sliderdrag" + this.chart.id, moveName = "mousemove.sliderdrag" + this.chart.id;
+  d3.select(document).on(upName, function() {
     self.sliderBoxDown = false;
     self.leftDragRegionDown = false;
     self.rightDragRegionDown = false;
     self.sliderChartPointer = null;
     self.savedSliderPointer = null;
     d3.select(document.body).style("cursor", "default");
-    d3.select(document).on("mouseup.sliderdrag", null);
-    d3.select(document).on("mousemove.sliderdrag", null);
+    d3.select(document).on(upName, null);
+    d3.select(document).on(moveName, null);
   });
-  d3.select(document).on("mousemove.sliderdrag", self.handleMouseMoveSliderChart());
+  d3.select(document).on(moveName, self.handleMouseMoveSliderChart());
 };
 
 /** -------------- Slider Chart Pointer Helpers --------------
