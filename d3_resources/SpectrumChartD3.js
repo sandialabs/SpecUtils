@@ -251,7 +251,7 @@ SpectrumChartD3 = function(elem, options) {
     if( !self.hasAnyData() )
       return -1;
     const xstart = self.xScale.domain()[0];
-    const bisector = d3.bisector(function(d, x) { return d - x; });
+    const bisector = self._bisecRaw;   /* numeric comparator == raw accessor */
     const src = spectrum ? spectrum.x : self.defaultXSource();
     if( !src ) return -1;
     return bisector.left(src, xstart);
@@ -261,7 +261,7 @@ SpectrumChartD3 = function(elem, options) {
     if( !self.hasAnyData() )
       return -1;
     const xend = self.xScale.domain()[1];
-    const bisector = d3.bisector(function(d, x) { return d - x; });
+    const bisector = self._bisecRaw;   /* numeric comparator == raw accessor */
     const src = spectrum ? spectrum.x : self.defaultXSource();
     if( !src ) return -1;
     return bisector.right(src, xend);
@@ -685,7 +685,8 @@ SpectrumChartD3.prototype.destroy = function() {
   window.clearTimeout(this.adjustLabelTimeout);
   window.clearInterval(this.kineticRefLineCycleTimer);  // created with setInterval
   window.cancelAnimationFrame(this.zoomAnimationID);
-  this.mousewait = this.touchHold = this.wheeltimer = this.roiDragRequestTimeout = this.adjustLabelTimeout = this.kineticRefLineCycleTimer = this.zoomAnimationID = null;
+  window.cancelAnimationFrame(this._legendUpdateRaf);
+  this.mousewait = this.touchHold = this.wheeltimer = this.roiDragRequestTimeout = this.adjustLabelTimeout = this.kineticRefLineCycleTimer = this.zoomAnimationID = this._legendUpdateRaf = null;
   
   d3.select(document.body).style("cursor", "default"); // Reset global cursor style
   
@@ -695,6 +696,15 @@ SpectrumChartD3.prototype.destroy = function() {
 
 /** -------------- Data Handlers --------------
  *  setData / addSpectrumDataByType / removeSpectrumDataByType and supporting plumbing. */
+/* Shared bisector instances (PERF-06): d3.bisector objects are stateless, and constructing
+   them inside per-mousemove / per-redraw code (mouse readout, peak drawing, rebinning,
+   template lookups) wastes allocations on hot paths.
+   _bisecX: arrays of {x:...} points;  _bisecE: arrays of {e:...} ref-line energies;
+   _bisecRaw: plain numeric arrays. */
+SpectrumChartD3.prototype._bisecX = d3.bisector( function(d){ return d.x; } );
+SpectrumChartD3.prototype._bisecE = d3.bisector( function(d){ return d.e; } );
+SpectrumChartD3.prototype._bisecRaw = d3.bisector( function(d){ return d; } );
+
 /**
  * elem: The element can be a DOM element, or the object ID of a WObject
  * event: must be an object which indicates also the JavaScript event and event target
@@ -1295,7 +1305,7 @@ SpectrumChartD3.prototype.update = function() {
  */
 SpectrumChartD3.prototype._templateLookupStepAfter = function( points, xVal ){
   if( !points || !points.length ) return 0;
-  let idx = d3.bisector(function(d){ return d.x; }).right(points, xVal) - 1;
+  let idx = this._bisecX.right(points, xVal) - 1;
   if( idx < 0 ) return 0;
   if( idx >= points.length ) idx = points.length - 1;
   return points[idx].y;
@@ -3119,7 +3129,7 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
       self.scroll_start_x = self.xScale.invert(m[0]);
       self.scroll_start_y = self.yScale.invert(m[1]);
       self.scroll_start_domain = self.xScale.domain();
-      self.scroll_start_raw_channel = d3.bisector(function(d){return d;}).left(foreground.x, self.scroll_start_x);
+      self.scroll_start_raw_channel = self._bisecRaw.left(foreground.x, self.scroll_start_x);
       self.scroll_start_raw_channel = Math.max(0,self.scroll_start_raw_channel);
       self.scroll_start_raw_channel = Math.min(foreground.x.length-1,self.scroll_start_raw_channel);
       self.scroll_total_x = 0;
@@ -4017,7 +4027,7 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
 
     const le = Math.max( lx, region.lowerEnergy );
     const ue = Math.min( ux, region.upperEnergy );
-    const bi = d3.bisector(function(d){return d.x;});
+    const bi = self._bisecX;
 
     const lowerIndex = bi.left(points,le,1) - 1;
     const upperIndex = bi.right(points,ue,1);
@@ -4107,7 +4117,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   const disp_thresh = is_zoomming ? 0.025 : 0.0001;
 
   function getLinesInRange(xrange,lines) {
-    var bisector = d3.bisector(function(d){return d.e;});
+    var bisector = self._bisecE;
     var lindex = bisector.left( lines, xrange[0] );
     var rindex = bisector.right( lines, xrange[1] );
     return lines.slice(lindex,rindex);
@@ -4370,7 +4380,7 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
   const domain = this.xScale.domain();
   
   // Create bisector for efficient range finding (lines are sorted by energy)
-  const energyBisector = d3.bisector(function(d) { return d.e; }).left;
+  const energyBisector = this._bisecE.left;
 
   // Find the line with the lowest weight across all reference line groups
   let minWeight = Number.MAX_VALUE;
@@ -4846,8 +4856,8 @@ SpectrumChartD3.prototype.updateMouseCoordText = function() {
   var channel, lowerchanval, counts = null, backgroundSubtractCounts = null;
   var foreground = self.rawData.spectra[0];
   var background = self.getSpectrumByID(foreground.backgroundID);
-  var bisector = d3.bisector(function(d){return d.x;});
-  channel = (foreground.x && foreground.x.length) ? d3.bisector(function(d){return d;}).right(foreground.x, energy) : -1;
+  var bisector = self._bisecX;
+  channel = (foreground.x && foreground.x.length) ? self._bisecRaw.right(foreground.x, energy) : -1;
   if( foreground.points && foreground.points.length ){
     lowerchanval = bisector.left(foreground.points,energy,1) - 1;
     counts = foreground.points[lowerchanval].y; 
@@ -6828,7 +6838,14 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
     specific to changing the scale factors for spectrums. 
   */
   function scaleFactorChangeRedraw() {
-    self.updateLegend();
+    /* The legend rebuild costs ~15 getBBox reflows; coalesce it to once per animation
+       frame instead of once per mousemove during the drag (PERF-05). */
+    if( !self._legendUpdateRaf ){
+      self._legendUpdateRaf = requestAnimationFrame( function(){
+        self._legendUpdateRaf = null;
+        self.updateLegend();
+      } );
+    }
     self.do_rebin();  // re-scales the adjusted spectrum's points (do_rebin's scaledBy guard)
     self.rebinForBackgroundSubtract();
     self.setYAxisDomain();
@@ -6947,7 +6964,7 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
       return 0.0;
     }
 
-    let bisector = d3.bisector(function(d){return d;});
+    let bisector = self._bisecRaw;
     let cstartind = bisector.left( energies, Math.max(roi.lowerEnergy,x0) );
     let cendind = bisector.right( energies, Math.min(roi.upperEnergy,x1) );
     
@@ -7011,7 +7028,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
   function roiPath(roi,points,scaleFactor,background){
     var paths = [];
     var labels = showlabels ? [] : null;
-    var bisector = d3.bisector(function(d){return d.x;});
+    var bisector = self._bisecX;
     
     let roiLB = Math.max(roi.lowerEnergy,minx);
     let roiUB = Math.min(roi.upperEnergy,maxx);
@@ -8993,7 +9010,7 @@ SpectrumChartD3.prototype.handleMouseUpZoomX = function () {
         
         /* Make sure the new scale will span at least one bin , if not  */
         /*  make it just less than one bin, centered on that bin. */
-        var rawbi = d3.bisector(function(d){return d;}); 
+        var rawbi = self._bisecRaw;
         var lbin = rawbi.left(foreground.x, x0+(x1-x0));
         if( lbin > 1 && lbin < (foreground.x.length-1) && lbin === rawbi.left(foreground.x,x1+(x1-x0)) ) {
           // Sub-bin selection: show exactly that one bin, inset 1% on each edge.
@@ -9303,7 +9320,7 @@ SpectrumChartD3.prototype.handleTouchMoveZoomInX = function() {
 
     // Make sure the new scale will span ~3 channels
     if( xrange < 4*avrg_channel_width ){
-      var rawbi = d3.bisector(function(d){return d;}); 
+      var rawbi = self._bisecRaw;
       var lbin = rawbi.left(foreground.x, new_lower_energy);
       var channel_width = (lbin < (foreground.x.length-1)) ? foreground.x[lbin+1] - foreground.x[lbin] : 0;
       
@@ -9753,8 +9770,8 @@ SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
   }
   
   var maxChannel = spectrum.x.length - 1;
-  var lowerChannel = d3.bisector(function(d){return d;}).left(spectrum.x,lowerX,1) - 1;
-  var upperChannel = d3.bisector(function(d){return d;}).left(spectrum.x,upperX,1) - 1;
+  var lowerChannel = self._bisecRaw.left(spectrum.x,lowerX,1) - 1;
+  var upperChannel = self._bisecRaw.left(spectrum.x,upperX,1) - 1;
   
   var lowerLowEdge = spectrum.x[lowerChannel];
   var lowerBinWidth = lowerChannel < maxChannel ? spectrum.x[lowerChannel+1] - spectrum.x[lowerChannel]
@@ -10502,7 +10519,7 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   if (!self.options.backgroundSubtract)
     return;
   
-  var bisector = d3.bisector(function(point) { return point.x });
+  var bisector = self._bisecX;
 
   self.rawData.spectra.forEach(function(spectrum) {
     
