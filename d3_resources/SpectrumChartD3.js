@@ -1628,6 +1628,21 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
 }
 
 /* Pan chart is called when right-click dragging */
+/* Clamps [x0,x1] to [minx,maxx] preserving the requested width where possible: the window is
+   shifted rather than shrunk, until it hits both edges.  Returns [newX0,newX1].
+   Shared by pan, wheel, x-axis drag and drag-zoom-out. */
+SpectrumChartD3.prototype._clampXRangeToData = function( x0, x1, minx, maxx ){
+  if( x0 < minx ){
+    x1 += (minx - x0);
+    x0 = minx;
+  }
+  if( x1 > maxx ){
+    x0 = Math.max( minx, x0 - (x1 - maxx) );
+    x1 = maxx;
+  }
+  return [x0, x1];
+};
+
 SpectrumChartD3.prototype.handlePanChart = function () {
   var self = this;
 
@@ -1652,45 +1667,14 @@ SpectrumChartD3.prototype.handlePanChart = function () {
 
   d3.select(document.body).attr("cursor", "pointer");
 
-  /* Set the pan right / pan left booleans */
-  var panRight = docMouse[0] < self.rightClickDown[0],   /* pan right if current mouse position to the left from previous mouse position */
-      panLeft = docMouse[0] > self.rightClickDown[0],    /* pan left if current mouse position to the right from previous mouse position */
-      dx = 0;
-
-  function newXDomain() {
-    var currentX = docMouse[0],
-        delta = currentX - self.rightClickDown[0],
-        oldMin = self.xScale.range()[0],
-        oldMax = self.xScale.range()[1];
-
-    /* Declare new x domain members */
-    var newXMin = oldMin, 
-        newXMax = oldMax;
-
-    newXMin = oldMin - delta;
-    newXMax = oldMax - delta;
-
-    newXMin = self.xScale.invert(newXMin);
-    newXMax = self.xScale.invert(newXMax);
-
-    /* Make sure we don't go set the domain out of bounds from the data */
-    if( newXMin < minx ){
-     newXMax += (minx - newXMin);
-     newXMin = minx; 
-    }
-    if( newXMax > maxx ){
-     newXMin = Math.max(minx,newXMin-(newXMax-maxx));
-     newXMax = maxx;
-    }
-    return [newXMin, newXMax];
-  }
-
-  /* Get the new x values */
-  var newXMin = newXDomain()[0],
-      newXMax = newXDomain()[1];
+  const delta = docMouse[0] - self.rightClickDown[0];
+  const range = self.xScale.range();
+  const newX = self._clampXRangeToData( self.xScale.invert( range[0] - delta ),
+                                        self.xScale.invert( range[1] - delta ),
+                                        minx, maxx );
 
   /* Pan the chart */
-  self.setXAxisRange(newXMin, newXMax, false, true);
+  self.setXAxisRange(newX[0], newX[1], false, true);
   self.redraw()();
 
   /* New mouse position set to current moue position */
@@ -2935,15 +2919,9 @@ SpectrumChartD3.prototype.handleVisWheel = function () {
     new_x_min += mouse_dx_wheel;
     new_x_max += mouse_dx_wheel;
 
-    if( new_x_min < mindatax ){
-     new_x_max += (mindatax - new_x_min);
-     new_x_min = mindatax; 
-    }
-
-    if( new_x_max > maxdatax ){
-     new_x_min = Math.max(mindatax,new_x_min-(new_x_max-maxdatax));
-     new_x_max = maxdatax;
-    }
+    const clamped = self._clampXRangeToData( new_x_min, new_x_max, mindatax, maxdatax );
+    new_x_min = clamped[0];
+    new_x_max = clamped[1];
    
    /*Set a timeout to call wheelcleanup after a little time of not resieving  */
    /*  any user wheel actions. */
@@ -3513,19 +3491,11 @@ SpectrumChartD3.prototype.mousemove = function () {
  
         let lowerData = self.rawData.spectra[0].x[0];
         let upperData = self.rawData.spectra[0].x[self.rawData.spectra[0].x.length-1];
-       
-        if( newX0 < lowerData ){
-          newX1 = Math.min( upperData, newX1 + (lowerData - newX0) );
-          newX0 = lowerData;
-        }
-       
-        if( newX1 > upperData ){
-          newX0 = Math.max( lowerData, newX0 - (newX1 - upperData) );
-          newX1 = upperData;
-        }
-       
+
+        const clamped = self._clampXRangeToData( newX0, newX1, lowerData, upperData );
+
         //we'll emit on mouse up - ToDo: set a timer to periodically emit 'xrangechanged' while dragging.
-        self.setXAxisRange(newX0, newX1, false, true);
+        self.setXAxisRange(clamped[0], clamped[1], false, true);
         self.redraw()();
       }
 
@@ -8810,21 +8780,12 @@ SpectrumChartD3.prototype.handleMouseMoveZoomX = function () {
         newdx = origdx + frac*(maxdx - origdx);
 
     const deltadx = newdx - origdx;
-    let newxmin = self.origdomain[0] - 0.5*deltadx;
-    let newxmax = self.origdomain[1] + 0.5*deltadx;
-    
-    if( newxmin < xaxismin ){
-      newxmax += (xaxismin - newxmin);
-      newxmin = xaxismin;
-    }
-    if( newxmax > xaxismax ){
-      newxmin -= (newxmax - xaxismax);
-      newxmin = Math.max( newxmin, xaxismin );
-      newxmax = xaxismax;
-    }
-    
+    const clamped = self._clampXRangeToData( self.origdomain[0] - 0.5*deltadx,
+                                             self.origdomain[1] + 0.5*deltadx,
+                                             xaxismin, xaxismax );
+
     /* TODO: periodically send the xrangechanged signal during zooming out.  Right now only sent when mouse goes up. */
-    self.setXAxisRange(newxmin,newxmax,false,true);
+    self.setXAxisRange(clamped[0],clamped[1],false,true);
     self.redraw()();
   } else {
     /* Restore the zoom-in box */
