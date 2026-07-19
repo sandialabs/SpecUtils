@@ -3211,7 +3211,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
       //  we dont want to switch to doing something else, since we have to complete the
       //  operation, so the user can decide to cancel the peak fit, or add the peak as a keeper,
       //  or else there could be a phantom peak displayed on the chart, that isnt tracked by the c++
-      self.handleTouchMovePeakFit();
+      self.handleMouseMovePeakFit();
     }else if( deletePeakSwipe ){
       self.handleTouchMoveDeletePeak(t);
     }else if( altShiftSwipe ){
@@ -7827,42 +7827,67 @@ SpectrumChartD3.prototype.setShowNuclideEnergies = function(d) {
 }
 
 
-SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
-/* ToDo:
+/** Handles a peak-fit ("define ROI") drag for BOTH input types: a Ctrl-left-mouse drag, or a
+ two-finger rightward swipe (the touch path draws two vertical guide lines as extra feedback).
+ ToDo:
      - implement if you hit the 1,2,3,4,... key while doing this, then it will force that many peaks to be fit for.
      - implement choosing different order polynomials while fitting, maybe l,c,q?
      - implement returning zero amplitude peak when fit fails in c++
      - cleanup naming of the temporary ROI and such to be consistent with handleRoiDrag and updateRoiBeingDragged
      - could maybe generalize the debounce mechanism
-     - get this code working with touches (and in fact get touch code to just call this function)
-     - remove/cleanup a number of functions like: handleTouchMovePeakFit, handleCancelTouchPeakFit
  */
+SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   const self = this;
-  
+
   /* If no spectra - bail */
   if( !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length
-      || self.rawData.spectra[0].y.length == 0 || this.rawData.spectra[0].y.length < 10 ) {
+      || self.rawData.spectra[0].y.length < 10 ) {
     return;
   }
-  
+
   d3.select('body').style("cursor", "ew-resize");
-  
+
   self.peakFitMouseMove = d3.mouse(self.vis[0][0]);
   self.peakFitTouchMove = d3.touches(self.vis[0][0]);
-  
+
   let leftpospx, rightpospx;
   if( self.peakFitTouchMove.length > 0 ) {
-    let startTouchs = self.createPeaksStartTouches;
-    if( !startTouchs )
-      startTouchs = self.peakFitTouchMove
-    const nowTouchs = self.peakFitTouchMove;
-    leftpospx = (startTouchs[0][0] < startTouchs[1][0]) ? startTouchs[0][0] : startTouchs[1][0];
-    rightpospx = (nowTouchs[0][0] > nowTouchs[1][0]) ? nowTouchs[0][0] : nowTouchs[1][0];
+    const t = self.peakFitTouchMove;
+    const startTouchs = self.createPeaksStartTouches;
+
+    /* Need this to be a two-finger gesture; if a finger lifted mid-fit, or a stray single
+       touch got us here, tear down rather than read the missing second touch (BUG-29). */
+    if( (t.length !== 2) || !startTouchs || (startTouchs.length !== 2) ) {
+      self.handleCancelTouchPeakFit();
+      return;
+    }
+
+    /* Cancel the other touch gesture modes - once a fit starts we are committed to it */
+    self.handleCancelTouchDeletePeak();
+    self.handleCancelTouchCountGammas();
+    self.handleTouchCancelZoomY();
+
+    /* Latch the mode: the touch recognizer keeps selecting peak-fit from here on */
+    self.leftDragMode = 'fitPeak';
+
+    /* In case jitter caused a little zooming before we got into fit-peak mode, restore the x-domain */
+    if( self.origdomain ){
+      const currX = self.xScale.domain(), prevX = self.origdomain;
+      if( (currX[0] != prevX[0]) || (currX[1] != prevX[1]) ){
+        self.xScale.domain( prevX );
+        self.redraw()();
+      }
+    }
+
+    leftpospx = Math.min( startTouchs[0][0], startTouchs[1][0] );
+    rightpospx = Math.min( Math.max( t[0][0], t[1][0] ), self.xScale.range()[1] );
+
+    self._updateTouchPeakFitLines( leftpospx, rightpospx );
   } else {
     if( !self.leftMouseDown || !self.peakFitMouseMove ) {
       return;
     }
-    
+
     leftpospx = self.leftMouseDown[0];
     rightpospx = self.peakFitMouseMove[0];
     if( rightpospx < leftpospx )
@@ -7897,116 +7922,54 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
 
 
 
-SpectrumChartD3.prototype.handleTouchMovePeakFit = function() {
-  var self = this;
+/* Draws/updates the two vertical guide lines + label shown during a two-finger peak-fit
+   gesture (no equivalent is drawn for the mouse path - the fitted ROI itself is the feedback). */
+SpectrumChartD3.prototype._updateTouchPeakFitLines = function( leftPx, rightPx ){
+  const self = this;
+  let currentLine = self.vis.select("#createPeakTouchCurrentLine"),
+      touchText = self.vis.select("#createPeakTouchText");
 
-  if (!self.rawData || !self.rawData.spectra)
-    return;
- 
-  /* Clear the delete peaks mode */
-  self.handleCancelTouchDeletePeak();
-
-  /* Clear the count gammas mode */
-  self.handleCancelTouchCountGammas();
-
-  /* Cancel the zoom-in y mode */
-  self.handleTouchCancelZoomY();
-
-
-  var t = d3.touches(self.vis[0][0]);
-
-  /* Cancel the function if no two-finger swipes detected */
-  if (!t || t.length !== 2 || !self.createPeaksStartTouches) {
-    self.handleCancelTouchPeakFit();
-    return;
-  }
-
-  /* Set the touch variables */
-  var leftStartTouch = self.createPeaksStartTouches[0][0] < self.createPeaksStartTouches[1][0] ? self.createPeaksStartTouches[0] : self.createPeaksStartTouches[1];
-
-  let leftTouch = t[0][0] < t[1][0] ? t[0] : t[1],
-      rightTouch = leftTouch === t[0] ? t[1] : t[0];
-
-  rightTouch[0] = Math.min(rightTouch[0], self.xScale.range()[1]);
-
-  self.leftDragMode = 'fitPeak';
-
-  // Incase there was some jitter and a little zooming happened before we got into fit peak mode, restore to original x-domain
-  if( self.origdomain ){
-    const currX = self.xScale.domain(), prevX = self.origdomain;
-    if( (currX[0] != prevX[0]) || (currX[1] != prevX[1]) ){
-      self.xScale.domain( prevX );
-      self.redraw()();
-    }
-  }
-
-  self.handleMouseMovePeakFit();
-
-  /* To keep track of some of the line objects being drawn */
-  let createPeakTouchCurrentLine = self.vis.select("#createPeakTouchCurrentLine"),
-      createPeakTouchText = self.vis.select("#createPeakTouchText");
-
-  /* Create the leftmost starting point line  */
-  if (self.vis.select("#createPeakTouchStartLine").empty()) {
+  /* The leftmost line marks the gesture start, so it is only ever created, not moved */
+  if( self.vis.select("#createPeakTouchStartLine").empty() ) {
     self.vis.append("line")
       .attr("id", "createPeakTouchStartLine")
       .attr("class", "createPeakMouseLine")
-      .attr("x1", leftStartTouch[0])
-      .attr("x2", leftStartTouch[0])
+      .attr("x1", leftPx)
+      .attr("x2", leftPx)
       .attr("y1", 0)
       .attr("y2", self.size.height);
   }
 
-  /* Create/refer the rightmost current point line */
-  if (createPeakTouchCurrentLine.empty()) {
-    createPeakTouchCurrentLine = self.vis.append("line")
+  if( currentLine.empty() ) {
+    currentLine = self.vis.append("line")
       .attr("id", "createPeakTouchCurrentLine")
       .attr("class", "createPeakMouseLine")
       .attr("y1", 0)
       .attr("y2", self.size.height);
   }
+  currentLine.attr("x1", rightPx).attr("x2", rightPx);
 
-  createPeakTouchCurrentLine
-    .attr("x1", rightTouch[0])
-    .attr("x2", rightTouch[0]);
-
-  /* Create the text for the touch level */
-  if (createPeakTouchText.empty())
-    createPeakTouchText = self.vis.append("text")
+  if( touchText.empty() )
+    touchText = self.vis.append("text")
       .attr("id", "createPeakTouchText")
       .attr("class", "createPeakTouchText")
       .attr("y", 10)
       .text( self.options.txt.touchDefineRoi );
-  createPeakTouchText
-      .attr("x", 0.5*(leftStartTouch[0] + rightTouch[0] - createPeakTouchText.node().getBoundingClientRect().width ) );
-}
-
+  touchText.attr("x", 0.5*(leftPx + rightPx - touchText.node().getBoundingClientRect().width) );
+};
 
 SpectrumChartD3.prototype.handleCancelTouchPeakFit = function() {
   const self = this;
-  
-  const touchStartLines = self.vis.selectAll("#createPeakTouchStartLine");
-  if( (self.leftDragMode !== 'fitPeak') && (touchStartLines.length === 0) )
+
+  const touchStartLine = self.vis.select("#createPeakTouchStartLine");
+  if( (self.leftDragMode !== 'fitPeak') && touchStartLine.empty() )
     return;
-  
+
   self.handleMouseUpPeakFit();
 
-  /* Delete the leftmost start line */
-  touchStartLines.remove();
-  
-  /* Delete the right most current mouse line */
-  self.vis.selectAll("#createPeakTouchCurrentLine").remove();
-
-
-  /* Delete the arrows pointing to the mouse lines */
-  d3.selectAll(".createPeakArrow").each(function () {
-    d3.select(this).remove();
-  });
-
-  /* Delete the reference text for the create peak */
-  self.vis.selectAll(".createPeakTouchText").each(function () {
-    d3.select(this).remove();
-  });
+  touchStartLine.remove();
+  self.vis.select("#createPeakTouchCurrentLine").remove();
+  self.vis.select("#createPeakTouchText").remove();
 
   self.leftDragMode = 'none';
 }
