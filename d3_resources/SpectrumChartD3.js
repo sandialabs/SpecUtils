@@ -6960,12 +6960,14 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         }//if( the centroid of this peak is in this bin )
         
         if( roi.peaks.length===1 || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1])) ){
-          // This next index looks suspect, should it be `j+1+roi.peaks.length`
-          if( !paths[j+1].length ){
-            paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
-          }else{
-            paths[j+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
-          }
+          /* Anchor the outline at this bin's continuum height; each later qualifying bin
+             overwrites it, so after this loop the anchor is the RIGHT base of the peak.
+             The right-to-left pass below appends the top edge, and the final fixup appends
+             the left base - tracing rightBase -> top edge -> leftBase.
+             (Historical note: this was `if(!paths[j+1].length){ assign }else{ append }`,
+             but the fill path paths[j+1] is always empty during this loop, so the append
+             branch was dead and the net effect was exactly this overwrite.) */
+          paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
         }
       }
     }//for( var i = xstartind; i < xendind; ++i )
