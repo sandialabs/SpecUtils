@@ -2629,6 +2629,28 @@ SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, 
   };
 };//handleSingleFingerUp
 
+/* Clears a pending deferred single-click/tap emit (see _scheduleSingleClickEmit). */
+SpectrumChartD3.prototype._clearPendingClickEmit = function(){
+  if( this.mousewait ){
+    window.clearTimeout(this.mousewait);
+    this.mousewait = null;
+  }
+};
+
+/** Schedules the deferred single-click/tap emit (getMouseUpOrSingleFingerUpHandler) to fire
+ after doubleClickDelay, unless a second click/tap upgrades the gesture to a double first.
+ Shared by the mouse-up and touch-end classifiers.
+ When replacePending is false, an already-pending emit is kept: Android WebView fires touchend
+ twice for many taps, and replacing would lose the original tap's coordinates. */
+SpectrumChartD3.prototype._scheduleSingleClickEmit = function( coords, modKeyDown, isTouch, replacePending ){
+  if( !replacePending && this.mousewait )
+    return;
+  this.mousewait = window.setTimeout(
+    this.getMouseUpOrSingleFingerUpHandler( coords, modKeyDown, isTouch ),
+    this.options.doubleClickDelay
+  );
+};
+
 SpectrumChartD3.prototype.currentRefLineInfoStr = function () {
   let ref_line = "";
   if( this.mousedOverRefLine && this.mousedOverRefLine.__data__ && this.mousedOverRefLine.__data__.parent )
@@ -2695,8 +2717,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
         if( self.lastClickEvent && ((nowtime - self.lastClickEvent) < self.options.doubleClickDelay) ) {
           // This is a double-click
           if( self.mousewait ) {
-            window.clearTimeout(self.mousewait);
-            self.mousewait = null;
+            self._clearPendingClickEmit();
             self.mouseDownRoi = null;
           }
           
@@ -2714,10 +2735,7 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
               self.cycleKineticRefLine(1);
           }//if( self.candidateKineticRefLines && (self.candidateKineticRefLines.length > 1) )
 
-          self.mousewait = window.setTimeout(
-            self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],modKeyPressed,false),
-            self.options.doubleClickDelay
-          );
+          self._scheduleSingleClickEmit( [x,y,pageX,pageY,energy,count], modKeyPressed, false, true );
         }
         self.lastClickEvent = new Date();
       }
@@ -3041,11 +3059,8 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
         if( keys.length !== 1 )
           return;
 
-        if( self.mousewait ) {
-          window.clearTimeout(self.mousewait);
-          self.mousewait = null;
-        }
-          
+        self._clearPendingClickEmit();
+
         var touch = self.touchesOnChart[keys[0]];
         var dx = Math.abs(origTouch.pageX - touch.pageX);
         var dy = Math.abs(origTouch.pageY - touch.pageY);
@@ -3386,22 +3401,13 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
           // Emit the double-tap signal, clear any touch lines/highlighted peaks in chart
 
           // Cancel any pending single-tap timer; we're emitting doubleclicked instead.
-          if( self.mousewait ){
-            window.clearTimeout(self.mousewait);
-            self.mousewait = null;
-          }
+          self._clearPendingClickEmit();
 
           self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr());
           self.deleteTouchLine();
           self.unhighlightPeak(null);
         } else {
-          // Don't replace a still-pending mousewait: Android fires touchend twice for many taps and the second would cancel-and-replace the first's timer, losing the original tap coordinates.
-          if( !self.mousewait ){
-            self.mousewait = window.setTimeout(
-              self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],false,true),
-              self.options.doubleClickDelay
-            );
-          }
+          self._scheduleSingleClickEmit( [x,y,pageX,pageY,energy,count], false, true, false );
         }//if( we have last tap event ) / else
 
         /* Set last tap event to current one */
