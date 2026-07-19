@@ -10523,21 +10523,28 @@ SpectrumChartD3.prototype.rebinForBackgroundSubtract = function() {
   var bisector = self._bisecX;
 
   self.rawData.spectra.forEach(function(spectrum) {
-    
-    if( 'bgsubtractpoints' in spectrum )
-      delete spectrum.bgsubtractpoints;
-    
+
     // We don't need to generate the points for background subtract for a background spectrum
     if (spectrum.type === self.spectrumTypes.BACKGROUND) return;
 
     const background = self.getSpectrumByID(spectrum.backgroundID);
 
     // Don't add any points if there is no associated background with this spectrum
-    if (!background) return;
+    if (!background){
+      if( 'bgsubtractpoints' in spectrum )
+        delete spectrum.bgsubtractpoints;
+      return;
+    }
 
-    // Initialize background subtract points for this spectrum to be empty
-    spectrum.bgsubtractpoints = [];
-    
+    /* Rebinning REPLACES points arrays (do_rebin assigns a fresh array whenever anything
+       changed), so array identity tells us whether this subtraction is already current -
+       skip the per-channel rebuild on the redraws where nothing rebinned (PERF-08). */
+    if( spectrum.bgsubtractpoints && (spectrum.__bgSubSrc === spectrum.points)
+        && (spectrum.__bgSubBkg === background.points) )
+      return;
+    spectrum.__bgSubSrc = spectrum.points;
+    spectrum.__bgSubBkg = background.points;
+
     // Get points for background subtract for this spectrum by getting the nearest background point and subtracting y-values
     spectrum.bgsubtractpoints = spectrum.points.map(function(point) {
       const x = point.x;
