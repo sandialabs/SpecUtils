@@ -99,6 +99,66 @@ test.describe('touch: two-finger zoom (bounds)', () => {
   });
 });
 
+// REF-52: touch gestures are re-recognized every move through the shared mode table.
+// These pin the two dispatch semantics: non-latched gestures may morph mid-gesture,
+// and fitPeak latches against later re-recognition.
+test.describe('touch: gesture-mode dispatch (REF-52)', () => {
+  test('delete-swipe morphs into pinch-x: box removed, no delete emit, domain narrows', async ({ chart }) => {
+    const before = await chart.xDomain();
+    const p1 = await chart.client( 500, { yFrac: 0.55 } );
+    const p2 = await chart.client( 700, { yFrac: 0.55 } );
+    const mt = await chart.touchInit();
+    await mt.start( [ { id: 0, x: p1.x, y: p1.y }, { id: 1, x: p2.x, y: p2.y } ] );
+    // Phase 1: two-finger upward swipe -> delete-peak mode, box appears.
+    for( let i = 1; i <= 6; ++i ){
+      const dy = -10 * i;
+      await mt.move( [ { id: 0, x: p1.x, y: p1.y + dy }, { id: 1, x: p2.x, y: p2.y + dy } ] );
+      await chart.page.waitForTimeout( 8 );
+    }
+    expect( await chart.boxRect( '#deletePeaksBox' ), 'delete box mid-swipe' ).not.toBeNull();
+    // Phase 2: fingers spread horizontally -> morphs into an x pinch-zoom.
+    for( let i = 1; i <= 6; ++i ){
+      const dx = 15 * i;
+      await mt.move( [ { id: 0, x: p1.x - dx, y: p1.y - 60 }, { id: 1, x: p2.x + dx, y: p2.y - 60 } ] );
+      await chart.page.waitForTimeout( 8 );
+    }
+    expect( await chart.boxRect( '#deletePeaksBox' ), 'morph should remove the delete box' ).toBeNull();
+    await mt.end();
+    await chart.page.waitForTimeout( 250 );
+    expect( (await chart.emits('shiftkeydragged')).length, 'no delete emit after morph' ).toBe( 0 );
+    const after = await chart.xDomain();
+    expect( after[1]-after[0], 'pinch-out should zoom in' ).toBeLessThan( before[1]-before[0] );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+
+  test('fitPeak latch: vertical spread after a fit starts stays fitPeak', async ({ chart }) => {
+    const p1 = await chart.client( 600, { yFrac: 0.40 } );
+    const p2 = await chart.client( 760, { yFrac: 0.40 } );
+    const mt = await chart.touchInit();
+    await mt.start( [ { id: 0, x: p1.x, y: p1.y }, { id: 1, x: p2.x, y: p2.y } ] );
+    // Phase 1: level rightward swipe -> peak-fit starts and latches.
+    for( let i = 1; i <= 6; ++i ){
+      const dx = 12 * i;
+      await mt.move( [ { id: 0, x: p1.x + dx, y: p1.y }, { id: 1, x: p2.x + dx, y: p2.y } ] );
+      await chart.page.waitForTimeout( 8 );
+    }
+    expect( await chart.dragMode() ).toBe( 'fitPeak' );
+    // Phase 2: a vertical spread that would otherwise be recognized as a y pinch-zoom.
+    for( let i = 1; i <= 6; ++i ){
+      const dy = 12 * i;
+      await mt.move( [ { id: 0, x: p1.x + 72, y: p1.y - dy }, { id: 1, x: p2.x + 72, y: p2.y + dy } ] );
+      await chart.page.waitForTimeout( 8 );
+    }
+    expect( await chart.dragMode(), 'latch holds against the y-pinch' ).toBe( 'fitPeak' );
+    expect( await chart.boxRect( '#zoomInYTopLine' ), 'no y-zoom line while latched' ).toBeNull();
+    await mt.end();
+    await chart.page.waitForTimeout( 250 );
+    expect( (await chart.emits('fitRoiDrag')).length ).toBeGreaterThan( 0 );
+    expect( await chart.dragMode() ).toBe( 'none' );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+});
+
 test.describe('touch: two-finger peak fit (BUG-04)', () => {
   test('two fingers swiping right emit fitRoiDrag (live); mode resets after lift', async ({ chart }) => {
     // Both fingers move right ~200 keV (~60 px), staying level, constant separation.

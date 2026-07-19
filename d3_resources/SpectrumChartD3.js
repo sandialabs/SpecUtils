@@ -1698,30 +1698,174 @@ SpectrumChartD3.prototype._initGestureModes = function() {
     fitPeak: {
       mouseMove: function(){ self.handleMouseMovePeakFit(); },
       cancelMouse: null,              /* no mouse-side transient visuals of its own */
-      cancelOthersOnMove: false       /* committed gesture - never cancels others mid-move */
+      cancelOthersOnMove: false,      /* committed gesture - never cancels others mid-move */
+      recognize: function(){ return self._isControlDragSwipe(); },
+      touchMove: function(){ self.handleMouseMovePeakFit(); },
+      cancelTouch: function(){ self.handleCancelTouchPeakFit(); },  /* emits the final fitRoiDrag if a fit was in flight */
+      touchEnd: function(){ self.handleCancelTouchPeakFit(); }
     },
     deletePeaks: {
       mouseMove: function(){ self.handleMouseMoveDeletePeak(); },
       extraMoveCancel: function(){ self.handleCancelRoiDrag(); },
-      cancelMouse: function(){ self.handleCancelMouseDeletePeak(); }
+      cancelMouse: function(){ self.handleCancelMouseDeletePeak(); },
+      recognize: function(){ return self._isDeletePeakSwipe(); },
+      touchMove: function(t){ self.handleTouchMoveDeletePeak(t); },
+      cancelTouch: function(){ self.handleCancelTouchDeletePeak(); },
+      touchEnd: function(){ self.handleTouchEndDeletePeak(); }
     },
     countGammas: {
       mouseMove: function(){ self.updateGammaSum(); },
-      cancelMouse: function(){ self.handleCancelMouseCountGammas(); }
+      cancelMouse: function(){ self.handleCancelMouseCountGammas(); },
+      recognize: function(){ return self._isAltShiftSwipe(); },
+      touchMove: function(){ self.updateGammaSum(); },
+      cancelTouch: function(){ self.handleCancelTouchCountGammas(); },
+      touchEnd: function(){ self.handleTouchEndCountGammas(); }
     },
-    recalibrate: {
+    recalibrate: {                    /* mouse-only - no touch gesture maps to it */
       mouseMove: function(){ self.handleMouseMoveRecalibration(); },
       cancelMouse: function(){ self.handleCancelMouseRecalibration(); }
     },
     zoomX: {
       mouseMove: function(){ self.handleMouseMoveZoomX(); },
-      cancelMouse: function(){ self.handleCancelMouseZoomInX(); }
+      cancelMouse: function(){ self.handleCancelMouseZoomInX(); },
+      recognize: function(){ return self._isZoomInPinch(false); },
+      touchMove: function(){ self.handleTouchMoveZoomInX(); }
+      /* the pinch applies live and draws nothing -> no cancelTouch/touchEnd */
     },
     zoomY: {
       mouseMove: function(){ self.handleMouseMoveZoomY(); },
-      cancelMouse: function(){ self.handleCancelMouseZoomY(); }
+      cancelMouse: function(){ self.handleCancelMouseZoomY(); },
+      recognize: function(){ return self._isZoomInPinch(true); },
+      touchMove: function(){ self.handleTouchMoveZoomY(); },
+      cancelTouch: function(){ self.handleTouchCancelZoomY(); },
+      touchEnd: function(){ self.handleTouchEndZoomY(); }
     }
   };
+
+  /* Touch recognizer priority: peak fit first, because once started it must run to
+     completion (the user decides keep/cancel; otherwise a phantom peak could be left
+     on the chart that the C++ doesn't know about). */
+  this._touchModeOrder = ['fitPeak','deletePeaks','countGammas','zoomX','zoomY'];
+
+  /* Historical teardown order for touch-end and for no-gesture touchmoves.  Note the
+     fitPeak entry can emit (its teardown funnels through handleMouseUpPeakFit). */
+  this._touchEndOrder = ['countGammas','deletePeaks','fitPeak','zoomY'];
+};
+
+/** -------------- Touch gesture recognizers --------------
+ All are pure reads of this.touchesOnChart (page-coordinate start/current positions)
+ and this.leftDragMode; called from the touch-move dispatch every touchmove. */
+
+/* Delete-peak = two fingers, separated horizontally, swiping upward together. */
+SpectrumChartD3.prototype._isDeletePeakSwipe = function(){
+  if (!this.touchesOnChart)
+    return false;
+
+  var keys = Object.keys(this.touchesOnChart);
+
+  if (keys.length !== 2)
+    return false;
+
+  var maxDyDiff = 15,
+      minDxDiff = 25;
+
+  var t1 = this.touchesOnChart[keys[0]],
+      t2 = this.touchesOnChart[keys[1]];
+
+  var dy1 = t1.startY - t1.pageY,
+      dy2 = t2.startY - t2.pageY,
+      dyDiff = Math.abs(dy2 - dy1);
+
+  if (dyDiff > maxDyDiff || Math.abs(t1.pageX - t2.pageX) < minDxDiff)
+    return false;
+
+  var dy = Math.min(dy1,dy2),
+      dx1 = t1.startX - t1.pageX,
+      dx2 = t2.startX - t2.pageX,
+      dx = Math.abs(dx1 - dx2);
+
+  return dy > dx && dy > maxDyDiff;
+};
+
+/* Peak-fit = two fingers roughly level, constant separation, moving right; latches once started. */
+SpectrumChartD3.prototype._isControlDragSwipe = function(){
+  if (!this.touchesOnChart)
+    return false;
+
+  if( this.leftDragMode === 'fitPeak' )   /* the latch */
+    return true;
+
+  var keys = Object.keys(this.touchesOnChart);
+
+  if (keys.length !== 2)
+    return false;
+
+  var t1 = this.touchesOnChart[keys[0]],
+      t2 = this.touchesOnChart[keys[1]];
+
+  if (t1.startX > t1.pageX || t2.startX > t2.pageX)
+    return false;
+
+  if( !isFinite(t1.startX) || !isFinite(t1.pageX)
+  || !isFinite(t2.startX) || !isFinite(t2.pageX)
+  || !isFinite(t1.startY) || !isFinite(t1.pageY)
+  || !isFinite(t2.startY) || !isFinite(t2.pageY) )
+    return false;
+
+  var startdx = t1.startX - t2.startX,
+      nowdx = t1.pageX - t2.pageX,
+      yavrg = 0.5*(t1.startY+t2.startY);
+
+  if( Math.abs(yavrg-t1.pageY) > 20 ||
+      Math.abs(yavrg-t2.pageY) > 20 ||
+      Math.abs(startdx-nowdx) > 20 )
+    return false;
+
+  return Math.abs(t1.pageX - t1.startX) > 30;
+};
+
+/* Count-gammas = two fingers stacked vertically (~same x), swiping right together. */
+SpectrumChartD3.prototype._isAltShiftSwipe = function(){
+  if( !this.touchesOnChart )
+    return false;
+
+  var keys = Object.keys(this.touchesOnChart);
+
+  if( keys.length !== 2 )
+    return false;
+
+  var t1 = this.touchesOnChart[keys[0]],
+      t2 = this.touchesOnChart[keys[1]];
+
+  if( Math.abs(t1.startX-t2.startX) > 20 || Math.abs(t1.pageX-t2.pageX) > 25 )
+    return false;
+
+  return ( (t1.pageX - t1.startX) > 30 );
+};
+
+/* Pinch zoom: y_direction=false -> horizontal separation change (zoom x);
+   y_direction=true -> vertical separation change (zoom y). */
+SpectrumChartD3.prototype._isZoomInPinch = function( y_direction ){
+  if (!this.touchesOnChart)
+    return false;
+
+  const keys = Object.keys(this.touchesOnChart);
+
+  if (keys.length !== 2)
+    return false;
+
+  var touch1 = this.touchesOnChart[keys[0]];
+  var touch2 = this.touchesOnChart[keys[1]];
+  var adx1 = Math.abs( touch1.startX - touch2.startX );
+  var adx2 = Math.abs( touch1.pageX  - touch2.pageX );
+  var ady1 = Math.abs( touch1.startY - touch2.startY );
+  var ady2 = Math.abs( touch1.pageY  - touch2.pageY );
+  var ddx = Math.abs( adx2 - adx1 );
+  var ddy = Math.abs( ady2 - ady1 );
+
+  if( y_direction )
+    return ((ddx < 0.5*ddy) && (ddy > 20));
+  return ((ddy < ddx) && (ddx > 5));
 };
 
 /* Cancels the mouse-side transient visuals/state of every mode except `activeName`.
@@ -3116,119 +3260,6 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
 
 SpectrumChartD3.prototype.handleVisTouchMove = function() {
   var self = this;
-  
-  /* Touch interaction helpers */
-  function isDeletePeakSwipe() {
-
-    if (!self.touchesOnChart)
-      return false;
-
-    var keys = Object.keys(self.touchesOnChart);
-
-    /* Delete peak swipe = two-finger vertical swipe */
-    if (keys.length !== 2)
-      return false;
-
-    var maxDyDiff = 15,
-        minDxDiff = 25;
-
-    var t1 = self.touchesOnChart[keys[0]],
-        t2 = self.touchesOnChart[keys[1]];
-
-    var dy1 = t1.startY - t1.pageY,
-        dy2 = t2.startY - t2.pageY,
-        dyDiff = Math.abs(dy2 - dy1);
-
-    if (dyDiff > maxDyDiff || Math.abs(t1.pageX - t2.pageX) < minDxDiff) {
-      return false;
-    }
-
-    var dy = Math.min(dy1,dy2),
-        dx1 = t1.startX - t1.pageX,
-        dx2 = t2.startX - t2.pageX,
-        dx = Math.abs(dx1 - dx2);
-
-    return dy > dx && dy > maxDyDiff;
-  }
-
-  function isControlDragSwipe() {
-
-    if (!self.touchesOnChart)
-      return false;
-
-    if( (self.leftDragMode === 'fitPeak') )
-      return true;
-      
-    var keys = Object.keys(self.touchesOnChart);
-
-    if (keys.length !== 2)
-      return false;
-
-    var t1 = self.touchesOnChart[keys[0]],
-        t2 = self.touchesOnChart[keys[1]];
-
-    if (t1.startX > t1.pageX || t2.startX > t2.pageX)
-      return false;
-
-    if( !isFinite(t1.startX) || !isFinite(t1.pageX)
-    || !isFinite(t2.startX) || !isFinite(t2.pageX)
-    || !isFinite(t1.startY) || !isFinite(t1.pageY)
-    || !isFinite(t2.startY) || !isFinite(t2.pageY) )
-      return false;
-
-    var startdx = t1.startX - t2.startX,
-        nowdx = t1.pageX - t2.pageX,
-        yavrg = 0.5*(t1.startY+t2.startY);
-
-    if( Math.abs(yavrg-t1.pageY) > 20 || 
-        Math.abs(yavrg-t2.pageY) > 20 || 
-        Math.abs(startdx-nowdx) > 20 ) 
-      return false;
-
-    return Math.abs(t1.pageX - t1.startX) > 30;
-  }
-
-  function isAltShiftSwipe() {
-    if( !self.touchesOnChart )
-      return false;
-
-    var keys = Object.keys(self.touchesOnChart);
-
-    if( keys.length !== 2 ) 
-      return false;
-
-    var t1 = self.touchesOnChart[keys[0]],
-        t2 = self.touchesOnChart[keys[1]];
-
-    if( Math.abs(t1.startX-t2.startX) > 20 || Math.abs(t1.pageX-t2.pageX) > 25 )
-      return false;
-
-    return ( (t1.pageX - t1.startX) > 30 );
-  }
-
-  function isZoomInPinch( y_direction ){
-    if (!self.touchesOnChart)
-      return false;
-
-    const keys = Object.keys(self.touchesOnChart);
-
-    if (keys.length !== 2)
-      return false;
-
-    var touch1 = self.touchesOnChart[keys[0]];
-    var touch2 = self.touchesOnChart[keys[1]];
-    var adx1 = Math.abs( touch1.startX - touch2.startX );
-    var adx2 = Math.abs( touch1.pageX  - touch2.pageX );
-    var ady1 = Math.abs( touch1.startY - touch2.startY );
-    var ady2 = Math.abs( touch1.pageY  - touch2.pageY );
-    var ddx = Math.abs( adx2 - adx1 );
-    var ddy = Math.abs( ady2 - ady1 );
-    
-    if( y_direction )
-      return ((ddx < 0.5*ddy) && (ddy > 20));
-    return ((ddy < ddx) && (ddx > 5));
-  }
-  
 
   return function() {
     /* Prevent default event actions from occurring (eg. zooming into page when trying to zoom into graph) */
@@ -3237,40 +3268,37 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
 
     // Update our map of touches on the chart
     self.updateTouchesOnChart(d3.event);
-    
+
     // Get the touches on the chart
     const t = d3.touches(self.vis[0][0]);
 
     const touchPan = ((t.length === 1) && !self.roiIsBeingDragged); // Panning = one finger drag
-    const deletePeakSwipe = isDeletePeakSwipe() && !self.currentlyAdjustingSpectrumScale; //two horizantal fingers swiping up
-    const controlDragSwipe = isControlDragSwipe() && !self.currentlyAdjustingSpectrumScale; // Fit peak(s) by specyinf ROI (two horizantal finers moving from right to left)
-    const altShiftSwipe = isAltShiftSwipe() && !self.currentlyAdjustingSpectrumScale; //Define region to sum gammas
-    const zoomInXPinch = isZoomInPinch(false) && !self.currentlyAdjustingSpectrumScale; // Two horizantal fingers pinching in
-    const zoomInYPinch = isZoomInPinch(true) && !self.currentlyAdjustingSpectrumScale; // Two horizantal fingers spreading out
 
-    if( controlDragSwipe ){
-      // We check for fitting a peak by specifying a ROI first, because once we start this
-      //  we dont want to switch to doing something else, since we have to complete the
-      //  operation, so the user can decide to cancel the peak fit, or add the peak as a keeper,
-      //  or else there could be a phantom peak displayed on the chart, that isnt tracked by the c++
-      self.handleMouseMovePeakFit();
-    }else if( deletePeakSwipe ){
-      self.handleTouchMoveDeletePeak(t);
-    }else if( altShiftSwipe ){
-      self.updateGammaSum();
-    }else if( zoomInXPinch ){
-      self.handleTouchMoveZoomInX();
-    }else if( zoomInYPinch ){
-      self.handleTouchMoveZoomY();
+    /* Pick the touch gesture: first recognizer in _touchModeOrder to match wins (peak fit
+       first - see the order array).  Two-finger gestures are disabled while the y-scaler
+       slider is being adjusted. */
+    let activeMode = null;
+    if( !self.currentlyAdjustingSpectrumScale ){
+      for( let i = 0; !activeMode && (i < self._touchModeOrder.length); ++i ){
+        const name = self._touchModeOrder[i];
+        if( self._gestureModes[name].recognize() )
+          activeMode = name;
+      }
+    }
+
+    if( activeMode ){
+      self._gestureModes[activeMode].touchMove( t );
     }else if( self.currentlyAdjustingSpectrumScale ){
       self.handleMouseMoveScaleFactorSlider()();
     }else if( self.roiIsBeingDragged ){
       self.handleRoiDrag( t[0] );
     }else{
-      self.handleCancelTouchCountGammas();
-      self.handleCancelTouchDeletePeak();
-      self.handleCancelTouchPeakFit();
-      self.handleTouchCancelZoomY();
+      /* No gesture recognized -> tear down any touch-gesture visuals */
+      self._touchEndOrder.forEach( function(name){
+        const cancel = self._gestureModes[name].cancelTouch;
+        if( cancel )
+          cancel();
+      } );
     }
 
     /* Clear the touch-hold signal on multi-touch, missing touchPageStart, or movement > 10 px (Material/iOS slop). */
@@ -3457,10 +3485,13 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
     self.updateMouseCoordText();
     self.updatePeakInfo();
 
-    self.handleTouchEndCountGammas();
-    self.handleTouchEndDeletePeak();
-    self.handleCancelTouchPeakFit();
-    self.handleTouchEndZoomY();
+    /* Complete/tear down whichever gesture was in flight (order preserved from the
+       historical explicit calls; these emit their range signals where applicable). */
+    self._touchEndOrder.forEach( function(name){
+      const end = self._gestureModes[name].touchEnd;
+      if( end )
+        end();
+    } );
 
     self.touchStart = null;
     self.touchHoldEmitted = false;
