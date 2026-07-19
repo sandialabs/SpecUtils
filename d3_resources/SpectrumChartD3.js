@@ -648,9 +648,10 @@ SpectrumChartD3.prototype.destroy = function() {
   window.clearTimeout(this.touchHold);
   window.clearTimeout(this.wheeltimer);
   window.clearTimeout(this.roiDragRequestTimeout);
-  window.clearTimeout(this.kineticRefLineCycleTimer);
+  window.clearTimeout(this.adjustLabelTimeout);
+  window.clearInterval(this.kineticRefLineCycleTimer);  // created with setInterval
   window.cancelAnimationFrame(this.zoomAnimationID);
-  this.mousewait = this.touchHold = this.wheeltimer = this.roiDragRequestTimeout = this.kineticRefLineCycleTimer = this.zoomAnimationID = null;
+  this.mousewait = this.touchHold = this.wheeltimer = this.roiDragRequestTimeout = this.adjustLabelTimeout = this.kineticRefLineCycleTimer = this.zoomAnimationID = null;
   
   d3.select(document.body).style("cursor", "default"); // Reset global cursor style
   
@@ -1209,9 +1210,9 @@ SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
   let self = this;
   let hasset = false;
   
-  if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra )
+  if( !this.rawData || !this.rawData.spectra || !this.rawData.spectra.length )
     return;
-  
+
   this.rawData.spectra.forEach( function(spectrum) {
     if( hasset || !spectrum || spectrum.type !== spectrumType )
       return;
@@ -2260,7 +2261,8 @@ SpectrumChartD3.prototype.handleCancelRoiDrag = function(){
   self.roiDragRequestTimeoutFcn = null;
   d3.select('body').style("cursor", "default");
   d3.select(self.chart).on("mousemove.roidrag", null );
-  
+  d3.select(self.chart).on("touchmove.roidrag", null );
+
   // If we were drawing a modified ROI, lets put it back to original state
   if( wasBeingDrug )
     self.redraw()();
@@ -2537,7 +2539,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       self.zoominaltereddomain = false;
       self.zoominx0 = self.xScale.invert(m[0]);
 
-      self.recalibrationStartEnergy = [ self.xScale.invert(m[0]), self.xScale.invert(m[1]) ];
+      self.recalibrationStartEnergy = self.xScale.invert(m[0]);
 
       /* Capture the drag mode ONCE from the current modifier-key state. Sticky for
          the gesture lifetime — releasing modifier keys mid-drag has no effect. ESC
@@ -2576,8 +2578,11 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
 
         self.updateFeatureMarkers(-1);
 
-        // Add in a little debounce; i.e., check to make sure we arent in the middle of a zoom-in animation, or equiv time frame if animation turned off
-        self.zooming_plot = (!self.startAnimationZoomTime && ((self.mousedowntime - self.mouseUpTime) > 500) );
+        // An intended "no re-zoom within 500ms of last mouseup" debounce here never worked
+        // (mouseUpTime was never assigned, so the expression was always false).  zooming_plot
+        // is armed by the first zoom-X mousemove instead, and the 75ms gate in handleVisMouseUp
+        // suppresses accidental zooms.
+        self.zooming_plot = false;
       }
       return false;
     } else if ( d3.event.button === 2 ) {    /* listen to right-click mouse down event */
@@ -3913,14 +3918,13 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
       return [];
       
     const points = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? spectrum.bgsubtractpoints : spectrum.points;
-    if( !points || !spectrum.points.length )
+    if( !points || !points.length )
       return [];
-    
+
     const le = Math.max( lx, region.lowerEnergy );
     const ue = Math.min( ux, region.upperEnergy );
     const bi = d3.bisector(function(d){return d.x;});
-    const pl = spectrum.points.length;
-     
+
     const lowerIndex = bi.left(points,le,1) - 1;
     const upperIndex = bi.right(points,ue,1);
     
@@ -9432,7 +9436,9 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
       .attr("y2", self.size.height);
   }
 
-  const start = recalibrationText.empty() ? self.lastMouseMovePos[0] : recalibrationStartLine.attr("x1");
+  /* recalibrationStartLine was just created above if it didnt exist, so its x1 (the
+     drag-start pixel) is always available - including on the first move. */
+  const start = Number( recalibrationStartLine.attr("x1") );
   const now = self.lastMouseMovePos[0];
 
   const txt = self.options.txt.recalFromTo.replace("{1}",String(self.xScale.invert(start).toFixed(2))).replace("{2}",self.xScale.invert(now).toFixed(2) );
@@ -9519,7 +9525,7 @@ SpectrumChartD3.prototype.handleMouseUpRecalibration = function() {
 
     /* Emit the signal here */
     if (self.leftDragMode === 'recalibrate') {
-      self.WtEmit(self.chart.id, {name: 'rightmousedragged'}, self.recalibrationStartEnergy[0], self.xScale.invert(self.lastMouseMovePos[0]));
+      self.WtEmit(self.chart.id, {name: 'rightmousedragged'}, self.recalibrationStartEnergy, self.xScale.invert(self.lastMouseMovePos[0]));
     }
 
     self.handleCancelMouseRecalibration();
@@ -9717,8 +9723,10 @@ SpectrumChartD3.prototype.handleCancelTouchDeletePeak = function() {
 SpectrumChartD3.prototype.gammaIntegral = function(spectrum, lowerX, upperX) {
   let self = this;
   var sum = 0.0;
-  
-  if( !spectrum || !spectrum.x || !spectrum.y )
+
+  // Need at least two channel edges for a bin width (the x[channel-1] fallbacks below
+  // would read x[-1] for a single-channel spectrum).
+  if( !spectrum || !spectrum.x || !spectrum.y || (spectrum.x.length < 2) )
     return sum;
   
   var bounds = self.min_max_x_values();
@@ -9918,9 +9926,11 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     }
     
     /* Get the text to be displayed from the spectrum information */
+    const title = spectrum.title ? spectrum.title : ("Spectrum " + (i+1));
     if (spectrumScaleFactor != null && spectrumScaleFactor !== -1)
-      countsText = spectrum.title + ": " + spectrumGammaCount.toFixed(2);
-    if (spectrumScaleFactor != 1) {
+      countsText = title + ": " + spectrumGammaCount.toFixed(2);
+    /* A missing (undefined) or sentinel (-1) scale factor has no meaningful "scaled by" note. */
+    if ((typeof spectrumScaleFactor === "number") && (spectrumScaleFactor !== -1) && (spectrumScaleFactor !== 1)) {
       asterickText += "*";
       if (countsText)
       countsText += asterickText;
@@ -10154,7 +10164,7 @@ SpectrumChartD3.prototype.updatePeakInfo = function() {
 
   // Find a peak that our mouse energy point is overlapping with
   this.rawData.spectra.forEach(function(spectrum, i) {
-    if( resultROI || !self.options.drawPeaksFor[spectrum.type] ) // we found a peak already, or we didnt draw these peaks, skip the rest
+    if( resultROI || !spectrum.peaks || !self.options.drawPeaksFor[spectrum.type] ) // we found a peak already, or theres no peaks, or we didnt draw them, skip the rest
       return;
 
     spectrum.peaks.forEach(function(peak, j) {
