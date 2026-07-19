@@ -981,12 +981,15 @@ SpectrumChartD3.prototype.setLocalizations = function( input, isInitialDef ) {
     else
       self.setXAxisTitle( self.options.txt.xAxisTitle, true );
   }
-    
+
   if( input.hasOwnProperty("yAxisTitle") || input.hasOwnProperty("yAxisTitleMulti") )
     self.updateYAxisTitleText();
 
   if( !notDefined )
+  {
+    self.updateLegend();   /* legend text (live/real/dead time, scaled-by, ...) uses options.txt */
     self.handleResize( false );
+  }
 }//SpectrumChartD3.prototype.setLocalizations = ...
 
 
@@ -1617,7 +1620,10 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.drawScalerBackgroundSecondary();
 
   if( !dontRedraw ) {
-    this.setData( this.rawData, false );
+    /* Re-rendering is enough on a pure geometry change: the spectrum-line generators
+       read this.xScale/yScale at call time and update()/redraw() re-set every path's
+       'd', so the full setData teardown/rebuild (sort, dataSum, path re-append) this
+       used to do was wasted work - notably on every ResizeObserver firing. */
     this.redraw()();
   }
 }
