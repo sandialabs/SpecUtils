@@ -1620,6 +1620,14 @@ std::vector<byte_type>& CAMIO::CreateFile() {
         blockList.push_back(specBlockData);
         loc += specBlockData.size();
     }
+
+    if (!writeEfficiencyPoints.empty())
+    {
+        auto geomBlockData = GenerateGeometryBlock(loc);
+        blockList.push_back(geomBlockData);
+        loc += geomBlockData.size();
+    }
+
     size_t startRecord = 0;
     size_t numRecords = 125;
     uint16_t blockNo = 0;
@@ -1668,6 +1676,8 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     nucs.clear();
     specData.clear();
     writeNuclides.clear();
+    writeEfficiencyPoints.clear();
+    writeEfficiencyModel = EfficiencyModel::Unknown;
 
     return writebytes;
 }
@@ -1889,6 +1899,104 @@ void CAMIO::AddDetectorType(const std::string& detector_type)
         enter_CAM_value(1.0, acqpCommon, 0x3C6, cam_type::cam_float);
         enter_CAM_value(0.035, acqpCommon,  0x3CA, cam_type::cam_float);
     }
+}
+
+// Write a real FWHM = fwhmOffset + fwhmSlope*sqrt(energy) shape calibration, overwriting
+// whatever AddDetectorType(...) may have set.
+void CAMIO::AddShapeCalibration(const float fwhmOffset, const float fwhmSlope)
+{
+    enter_CAM_value("SQRT", acqpCommon, 0x464, cam_type::cam_string);
+    enter_CAM_value(fwhmOffset, acqpCommon, 0x3C6, cam_type::cam_float); //FWHMOFF
+    enter_CAM_value(fwhmSlope, acqpCommon, 0x3CA, cam_type::cam_float);  //FWHMSLOPE
+}
+
+void CAMIO::AddEfficiencyModel(const EfficiencyModel model)
+{
+    writeEfficiencyModel = model;
+}
+
+void CAMIO::AddEfficiencyPoint(const float energy, const float efficiency, const float efficiencyUncertainty)
+{
+    EfficiencyPoint pt;
+    pt.Index = static_cast<int>(writeEfficiencyPoints.size());
+    pt.Energy = energy;
+    pt.Efficiency = efficiency;
+    pt.EfficiencyUncertainty = efficiencyUncertainty;
+    writeEfficiencyPoints.push_back(pt);
+}
+
+void CAMIO::AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points)
+{
+    for (const EfficiencyPoint &pt : points)
+        AddEfficiencyPoint(pt.Energy, pt.Efficiency, pt.EfficiencyUncertainty);
+}
+
+// Generates the GEOM (efficiency) block from `writeEfficiencyModel`/`writeEfficiencyPoints`.
+//
+// EXPERIMENTAL: the field layout mirrors ReadGeometryBlock()'s interpretation (which has been
+// used successfully against real Genie 2000 CNF files for reading), but this write path has only
+// been round-tripped against this same class's read implementation - not validated against real
+// Canberra/Mirion Genie 2000 software.
+std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
+{
+    const uint16_t entOffset = 0x00C0;
+    const uint16_t entSize = 0x0010;
+    const uint16_t numPoints = static_cast<uint16_t>(writeEfficiencyPoints.size());
+
+    const size_t blockSize = static_cast<size_t>(block_header_size) +
+                              static_cast<size_t>(entOffset) +
+                              static_cast<size_t>(entSize) * numPoints;
+
+    std::vector<uint8_t> block(blockSize, 0);
+
+    // numRec=1: all efficiency points are written as entries of a single logical "record"
+    // (matching ReadGeometryBlock()'s per-record entry-tag loop with the record index i=0).
+    // The numLines parameter is repurposed here to carry the point count for block-size bookkeeping.
+    const std::vector<uint8_t> header = GenerateBlockHeader(CAMBlock::GEOM, loc, 1, numPoints, 0, true);
+
+    if( header.size() > block.size() )
+      throw std::out_of_range( "GenerateGeometryBlock: header larger than block" );
+    std::copy(header.begin(), header.end(), block.begin());
+
+    std::string modelStr;
+    switch (writeEfficiencyModel)
+    {
+        case EfficiencyModel::SPLINE:    modelStr = "SPLINE";    break;
+        case EfficiencyModel::EMPIRICAL: modelStr = "EMPIRICAL"; break;
+        case EfficiencyModel::AVERAGE:   modelStr = "AVERAGE";   break;
+        case EfficiencyModel::DUAL:      modelStr = "DUAL";      break;
+        case EfficiencyModel::LINEAR:    modelStr = "LINEAR";    break;
+        case EfficiencyModel::Unknown:
+        case EfficiencyModel::NotReadin:
+        default:
+          modelStr = "SPLINE";
+          break;
+    }
+
+    // With commonFlag (values[0]) == 0x0700, ReadGeometryBlock() forces recOffset to 0, so the
+    // model-name string (read at pos+recOffset+222) lands at block-relative offset 222.
+    const size_t typeStrPos = 222;
+    if( (typeStrPos + 8) > block.size() )
+      throw std::out_of_range( "GenerateGeometryBlock: block too small for model type string" );
+    for( size_t i = 0; i < 8 && i < modelStr.size(); ++i )
+      block[typeStrPos + i] = static_cast<uint8_t>(modelStr[i]);
+
+    const size_t entStart = static_cast<size_t>(block_header_size) + entOffset;
+    for( size_t i = 0; i < numPoints; ++i )
+    {
+        const size_t entPos = entStart + i * static_cast<size_t>(entSize);
+        if( (entPos + entSize) > block.size() )
+          throw std::out_of_range( "GenerateGeometryBlock: entry destination out of bounds" );
+
+        block[entPos] = static_cast<uint8_t>(1); // entry tag: record index (0) + 1, per ReadGeometryBlock()
+
+        const EfficiencyPoint &pt = writeEfficiencyPoints[i];
+        enter_CAM_value(pt.Energy, block, entPos + static_cast<size_t>(EfficiencyPointParameterLocation::Energy), cam_type::cam_float);
+        enter_CAM_value(pt.Efficiency, block, entPos + static_cast<size_t>(EfficiencyPointParameterLocation::Efficiency), cam_type::cam_float);
+        enter_CAM_value(pt.EfficiencyUncertainty, block, entPos + static_cast<size_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty), cam_type::cam_float);
+    }
+
+    return block;
 }
 
 // Add the count start time
@@ -2319,11 +2427,35 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
     // Modify values based on block type
     switch (block) {
       case CAMBlock::ACQP:
-      case CAMBlock::GEOM:
       case CAMBlock::DISP:
       case CAMBlock::PEAK:
         // No action
         break;
+
+        case CAMBlock::GEOM:
+        {
+            // numRec is always 1 (a single logical "record" holding all efficiency-point
+            // entries); numLines is repurposed to carry the efficiency point count.
+            const uint16_t entOffsetGeom = 0x00C0;
+            const uint16_t entSizeGeom = 0x0010;
+            const uint16_t numPointsGeom = numLines;
+
+            values[0] = 0x0700;          // commonFlag - forces recOffset to 0 on read
+            values[11] = 1;              // numRec
+            values[12] = entSizeGeom;    // recSize (unused for a single record)
+            values[13] = 0x0000;         // recOffset
+            values[14] = 0x7FFF;
+            values[15] = 0x0000;
+            values[16] = entOffsetGeom;  // entOffset
+            values[17] = entSizeGeom;    // entSize
+
+            const uint32_t totalSize = static_cast<uint32_t>(values[4]) +
+                                        static_cast<uint32_t>(entOffsetGeom) +
+                                        static_cast<uint32_t>(entSizeGeom) * numPointsGeom;
+            values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
+            values[19] = static_cast<uint16_t>(totalSize & 0xFFFF);
+            break;
+        }
 
         case CAMBlock::PROC:
             values[0] = 0x0100;

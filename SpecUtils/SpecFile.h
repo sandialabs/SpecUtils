@@ -98,7 +98,7 @@ namespace SpecUtils
 namespace D3SpectrumExport{ struct D3SpectrumChartOptions; }
 #endif
 
-namespace CAMInputOutput{ class CAMIO; }
+namespace CAMInputOutput{ class CAMIO; struct CnfGenieExtras; }
 
 
 namespace SpecUtils
@@ -2329,11 +2329,11 @@ public:
                                const std::set<int> &det_nums ) const;
 
   /** Write a CNF file to the output stream.
-  
+
    CNF files can only contain a single spectrum and single neutron count, so you
    must specify which samples numbers and detectors to sum to create the single
    spectrum.
-   
+
    @param output Stream to write the output to.
    @param sample_nums The sample numbers to sum to make the one output spectrum;
          if empty will use all sample numbers.  If any invalid values are specified, will throw
@@ -2341,11 +2341,14 @@ public:
    @param det_nums The detector numbers to sum over to make the one output
          spectrum; if empty will use all detectors. If any invalid values are specified, will throw
          exception.
+   @param genie_extras If non-null, additional GENIE nuclide-library/FWHM/efficiency data to
+         write into the file; see `CAMInputOutput::CnfGenieExtras`.
    @returns if file was successfully written to the output stream.
   */
   virtual bool write_cnf( std::ostream &output,
                           std::set<int> sample_nums,
-                          const std::set<int> &det_nums ) const;
+                          const std::set<int> &det_nums,
+                          const CAMInputOutput::CnfGenieExtras *genie_extras = nullptr ) const;
   
   /** Write a TKA file to the output stream.
    

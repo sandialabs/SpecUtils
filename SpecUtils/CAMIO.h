@@ -25,6 +25,8 @@
 #include <map>
 #include <memory>
 #include <chrono>
+#include <optional>
+#include <utility>
 #include "DateTime.h"
 
 namespace 
@@ -261,6 +263,10 @@ private:
     std::vector<EfficiencyPoint> efficiencyPoints;
     std::vector<Peak> peaks;
 
+    // Data staged for writing a GEOM (efficiency) block; see `AddEfficiencyModel`/`AddEfficiencyPoint(s)`.
+    EfficiencyModel writeEfficiencyModel = EfficiencyModel::Unknown;
+    std::vector<EfficiencyPoint> writeEfficiencyPoints;
+
     DetInfo det_info;
     uint32_t num_channels =0;
 
@@ -359,6 +365,27 @@ public:
         const float enUnc = -1, const float yieldUnc = -1, const float halfLifeUnc = -1 );
     void AddEnergyCalibration(const std::vector<float> coefficients);
     void AddDetectorType(const std::string& detector_type);
+
+    /** Writes a real FWHM = fwhmOffset + fwhmSlope*sqrt(energy) shape calibration,
+     overwriting whatever `AddDetectorType(...)` may have set as a default.
+     */
+    void AddShapeCalibration(const float fwhmOffset, const float fwhmSlope);
+
+    /** Sets the efficiency model tag (e.g. "DUAL", "SPLINE") that will be written
+     with the efficiency points added via `AddEfficiencyPoint(s)(...)`.
+     */
+    void AddEfficiencyModel(const EfficiencyModel model);
+
+    /** Adds a single energy/efficiency/efficiency-uncertainty point to be written
+     into the file's GEOM block.  See also `AddEfficiencyPoints(...)`.
+
+     EXPERIMENTAL: this write path mirrors the field layout used by `ReadGeometryBlock()`/
+     `GetEfficiencyPoints()` (which has been used against real Genie 2000 CNF files), but the
+     GEOM-block write path itself has NOT been validated against real Canberra/Mirion Genie 2000
+     software - only round-tripped against this same class's read implementation.
+     */
+    void AddEfficiencyPoint(const float energy, const float efficiency, const float efficiencyUncertainty);
+    void AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points);
     void AddAcquitionTime(const SpecUtils::time_point_t& start_time);
     void AddRealTime(const float real_time);
     void AddLiveTime(const float live_time);
@@ -388,7 +415,8 @@ protected:
     std::vector<uint8_t> AddLinesToNuclide(const std::vector<uint8_t>& nuc, 
                                           const std::vector<uint8_t>& lineNums);
     std::vector<uint8_t> GenerateLine(const Line line);
-    void AssignKeyLines(); 
+    void AssignKeyLines();
+    std::vector<uint8_t> GenerateGeometryBlock(size_t loc);
 
 protected:
     // Add block reading function declarations
@@ -402,6 +430,47 @@ protected:
 
     float ComputeUncertainty(float value);
 };
+
+
+/** Additional GENIE-specific data (nuclide library, FWHM shape calibration, and/or
+ efficiency curve) that `SpecUtils::SpecFile::write_cnf(...)` can write into a CNF file, in
+ addition to the normal spectrum data.  See `ExportSpecFileCAM` in InterSpec for how these are
+ built up from a spectrum's fitted peaks and detector response function.
+ */
+struct CnfGenieExtras
+{
+    /** One nuclide/x-ray line to write into the library, in the form accepted by
+     `CAMIO::AddLineAndNuclide(...)`; lines sharing the same `nuclide_name` are automatically
+     grouped into a single library nuclide entry, and Genie's key-line selection
+     (`CAMIO::AssignKeyLines()`) runs automatically when the file is created - there is no
+     explicit per-line "is key line" input.
+     */
+    struct LibraryLine
+    {
+        std::string nuclide_name;
+        float half_life_seconds = 0.0f;
+        /** Negative (the default) leaves the half-life uncertainty for `CAMIO` to estimate. */
+        float half_life_uncert_seconds = -1.0f;
+        float energy = 0.0f;
+        /** Negative (the default) leaves the energy uncertainty for `CAMIO` to estimate. */
+        float energy_uncert = -1.0f;
+        float yield = 0.0f;
+        /** Negative (the default) leaves the yield uncertainty for `CAMIO` to estimate. */
+        float yield_uncert = -1.0f;
+        /** Excludes this line from Genie's weighted-mean activity determination; set true for x-ray lines. */
+        bool no_weight_mean = false;
+    };
+    std::vector<LibraryLine> library_lines;
+
+    /** {FWHMOFF, FWHMSLOPE} for `FWHM = FWHMOFF + FWHMSLOPE*sqrt(energy)`; if not set,
+     `write_cnf` falls back to its normal hardcoded HPGe/NaI default shape calibration.
+     */
+    std::optional<std::pair<float,float>> shape_cal;
+
+    std::optional<CAMIO::EfficiencyModel> eff_model;
+    std::vector<EfficiencyPoint> eff_points;
+};//struct CnfGenieExtras
+
 
 // Helper class for comparing lines
 class LineComparer {

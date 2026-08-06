@@ -38,6 +38,7 @@
 
 #include "3rdparty/date/include/date/date.h"
 
+#include "SpecUtils/CAMIO.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
@@ -339,7 +340,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
 
 
 bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
-                          const std::set<int> &det_nums ) const
+                          const std::set<int> &det_nums,
+                          const CAMInputOutput::CnfGenieExtras *genie_extras ) const
 {
   //First, lets take care of some boilerplate code.
   std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
@@ -464,13 +466,37 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             cam_obj.AddSampleTitle(expectsString);
         }
         
- //TODO: implement converted shape calibration information into CNF files 
-        //shape calibration, just use the default values for NaI detectors if the type cotains any NaI, if not use Ge defaults
+        //shape calibration: use the real FWHM equation if one was supplied via genie_extras,
+        //  otherwise fall back to the default values for NaI/Ge detectors, based on detector type.
         const string& detector_type = summed->detector_type();
         cam_obj.AddDetectorType(detector_type);
+        if( genie_extras && genie_extras->shape_cal )
+          cam_obj.AddShapeCalibration( genie_extras->shape_cal->first, genie_extras->shape_cal->second );
 
         //energy calibration
         cam_obj.AddEnergyCalibration(energy_cal_coeffs);
+
+        // GENIE nuclide library and efficiency curve, if provided.
+        if( genie_extras )
+        {
+          // AddLineAndNuclide(...) defers actually creating each nuclide's library record until
+          // CreateFile() runs (after all lines have been added), and Genie's key-line selection
+          // (AssignKeyLines()) runs automatically at that point too - so this is the only safe,
+          // well-exercised way to build up a nuclide library (see CAMIO::AddLine(...) for why
+          // adding already-created nuclide records and lines separately is not safe).
+          for( const CAMInputOutput::CnfGenieExtras::LibraryLine &ll : genie_extras->library_lines )
+          {
+            cam_obj.AddLineAndNuclide( ll.energy, ll.yield, ll.nuclide_name,
+                                       ll.half_life_seconds, "S", ll.no_weight_mean,
+                                       ll.energy_uncert, ll.yield_uncert, ll.half_life_uncert_seconds );
+          }
+
+          if( genie_extras->eff_model )
+            cam_obj.AddEfficiencyModel( *genie_extras->eff_model );
+
+          if( !genie_extras->eff_points.empty() )
+            cam_obj.AddEfficiencyPoints( genie_extras->eff_points );
+        }//if( genie_extras )
 
         //times
         if (!SpecUtils::is_special(start_time)) {
